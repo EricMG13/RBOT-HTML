@@ -534,7 +534,7 @@ function renderRoute() {
       const report=isReportRoute(next.module,next.section),library=appDestinations.has(next.module)||!contexts[next.context];
       const restored=!report&&!library&&focusId&&$(focusId);
       const link=window.innerWidth>720&&focused?.classList.contains('section-item')&&focusHref&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
-      const destination=report?$('report-select'):next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('analysis'):$('section-title');
+      const destination=report?$('report-select'):next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('canvas'):$('section-title');
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
@@ -553,7 +553,7 @@ function renderRoute() {
     if(previous?.evidence&&!changed) {
       $('content').scrollTop=returnContentScroll;
       if(window.innerWidth<=1050) window.scrollTo(0,returnScroll);
-      if(returnTrigger?.isConnected)returnTrigger.focus({preventScroll:true});else $('analysis').focus({preventScroll:true});
+      if(returnTrigger?.isConnected)returnTrigger.focus({preventScroll:true});else $('canvas').focus({preventScroll:true});
     }
   }
   if(hashed&&!changed)updateLibrary(true);
@@ -575,11 +575,11 @@ document.addEventListener('change',event=>{
 document.addEventListener('click',event=>{
   if(event.target.closest('#rail-search')){focusSearch();return;}
   const searchHit=event.target.closest('.search-hit');
-  if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('analysis').focus();}
+  if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
   const summary=event.target.closest('summary');
   if(summary?.parentElement.dataset.group)expandedGroups.set(summary.parentElement.dataset.group,!summary.parentElement.open);
   if(libraryClick(event.target))return;
-  if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('analysis');go(current.module,current.section);}else $('analysis').focus();return;}
+  if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,current.section);}else $('canvas').focus();return;}
   const chip=event.target.closest('[data-chip]');
   if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
   const audit=event.target.closest('.audit-open');

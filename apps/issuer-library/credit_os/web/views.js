@@ -210,10 +210,10 @@ function readerCharts(id,section) {
   return (data[id].charts||[]).filter(c=>lines.has(c.table)).map(c=>readerChart(id,c)).join('');
 }
 
-// ---- The module report: six parts in one scroll. Python resolves every citation into window.CREDIT_OS_DATA.chips;
+// ---- The module report: seven parts in one scroll. Python resolves every citation into window.CREDIT_OS_DATA.chips;
 // nothing below infers a page, a class or a date.
-const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['limits','Limits & monitoring'],['audit','Evidence & audit']];
-const EMPTY_PART={'bottom-line':'No bottom line in this handoff.',numbers:'No chart data or key-number table in this handoff.',findings:'No findings table in this handoff.',limits:'No gap, limit or monitoring section in this handoff.'};
+const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['analysis','Analysis'],['limits','Limits & monitoring'],['audit','Evidence & audit']];
+const EMPTY_PART={'bottom-line':'No bottom line in this handoff.',numbers:'No chart data or key-number table in this handoff.',findings:'No findings table in this handoff.',analysis:'No further analysis sections in this handoff.',limits:'No gap, limit or monitoring section in this handoff.'};
 const SHORT_CODES={'CP-1':'C1','CP-1A':'A','CP-0':'C0','CP-2':'C2'};
 const shortCode=module=>SHORT_CODES[module]||String(module).replace(/^CP-/,'');
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
@@ -252,22 +252,35 @@ const cellView=(cell,numeric)=>{
   return `<td${numeric?' class="num"':''}>${rich(text)}</td>`;
 };
 const isFindingsTable=b=>b.type==='table'&&b.headers[0]==='Finding'&&b.headers[1]==='Creditor impact';
+// The sections of the analysis groups (neither limits nor evidence, whatever the module names them), in handoff order.
+const analysisSections=id=>sectionGroups(id).filter(([group])=>group!=='Limits & monitoring'&&group!=='Evidence & audit').flatMap(([,sections])=>sections);
 // The first reader table of the findings-and-analysis sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).
-function keyNumbers(id) {
-  // The analysis groups are all those that are neither limits nor evidence, whatever the module names them, in order.
-  const reader=sectionGroups(id).filter(([group])=>group!=='Limits & monitoring'&&group!=='Evidence & audit').flatMap(([,sections])=>sections).flatMap(([sectionId])=>sectionData(id,sectionId));
-  for(const section of reader) {
+function keyNumbersChoice(id) {
+  for(const section of analysisSections(id).flatMap(([sectionId])=>sectionData(id,sectionId))) {
     if(section.heading.startsWith('Chart data'))continue;
     for(const block of section.blocks) {
       if(block.type!=='table'||isFindingsTable(block)||block.headers[0]==='Bottom line')continue;
       const numeric=block.headers.map((_,c)=>numericColumn(block,c));
       if(numeric.filter(Boolean).length<2)continue;
       const short=block.headers.map((_,c)=>c===0||numeric[c]||block.rows.every(r=>(r.cells[c]??'').length<=24));
-      const columns=block.headers.map((_,c)=>c).filter(c=>short[c]).slice(0,5),rows=block.rows.slice(0,8);
-      return `<div class="table-card"><table><caption class="sr-only">${esc(plain(section.heading))}</caption><thead><tr>${columns.map(c=>`<th scope="col"${numeric[c]?' class="num"':''}>${esc(block.headers[c])}</th>`).join('')}<th scope="col">Source</th></tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>cellView(row.cells[c],numeric[c])).join('')}<td>${chipsMarkup(`${id}:${row.line}`)}</td></tr>`).join('')}</tbody></table>${block.rows.length>rows.length?`<p class="table-more">${block.rows.length-rows.length} more rows are under Evidence &amp; audit.</p>`:''}</div>`;
+      return {section,block,numeric,columns:block.headers.map((_,c)=>c).filter(c=>short[c]).slice(0,5),rows:block.rows.slice(0,8)};
     }
   }
-  return '';
+  return null;
+}
+const sourceTable=(id,caption,block,numeric,columns,rows)=>`<div class="table-card"><table><caption class="sr-only">${esc(plain(caption))}</caption><thead><tr>${columns.map(c=>`<th scope="col"${numeric[c]?' class="num"':''}>${esc(block.headers[c])}</th>`).join('')}<th scope="col">Source</th></tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>cellView(row.cells[c],numeric[c])).join('')}<td>${chipsMarkup(`${id}:${row.line}`)}</td></tr>`).join('')}</tbody></table>`;
+function keyNumbers(id) {
+  const pick=keyNumbersChoice(id);
+  if(!pick)return '';
+  const {section,block,numeric,columns,rows}=pick;
+  return `${sourceTable(id,section.heading,block,numeric,columns,rows)}${block.rows.length>rows.length?`<p class="table-more">${block.rows.length-rows.length} more rows are under Evidence &amp; audit.</p>`:''}</div>`;
+}
+// What parts 2 to 4 print: the bottom-line table, the findings tables, every chart-data table and the key-numbers table. The key-numbers section whose table is cut stays in the audit list, where the rest of its rows are.
+const isBottomLine=b=>b.type==='table'&&b.headers[0]==='Bottom line';
+function analysisBlocks(id) {
+  const pick=keyNumbersChoice(id);
+  const consumed=(section,block)=>block.type==='table'&&(isBottomLine(block)||isFindingsTable(block)||section.heading.startsWith('Chart data')||block===pick?.block);
+  return analysisSections(id).map(([sectionId])=>({sectionId,sections:sectionData(id,sectionId).map(section=>({section,blocks:section.blocks.filter(block=>!consumed(section,block))})).filter(item=>item.blocks.length)})).filter(item=>item.sections.length);
 }
 const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div>';
 function reportHead(id) {
@@ -296,6 +309,16 @@ function reportFindings(id) {
   });
   return `<section class="part" id="findings"><h3>Findings</h3>${articles.join('')||`<p class="part-empty">${EMPTY_PART.findings}</p>`}</section>`;
 }
+function reportAnalysis(id) {
+  const body=analysisBlocks(id).flatMap(({sections})=>sections).map(({section,blocks})=>{
+    const tag=section.level<=2?'h3':'h4';
+    return `<div class="analysis-section"><${tag}>${rich(section.heading)}</${tag}>${blocks.map(block=>{
+      if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
+      return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))} ${chipsMarkup(`${id}:${block.line}`)}</p>`;
+    }).join('')}</div>`;
+  });
+  return `<section class="part" id="analysis"><h3>Analysis</h3>${body.join('')||`<p class="part-empty">${EMPTY_PART.analysis}</p>`}</section>`;
+}
 function limitsGroup(id) {return sectionGroups(id).find(([group])=>group==='Limits & monitoring')?.[1]||[];}
 function reportLimits(id) {
   const line=(key,html)=>`<p>${html} ${chipsMarkup(key)}</p>`;
@@ -304,13 +327,14 @@ function reportLimits(id) {
 }
 // Every section the parts above do not print in full, as a line-numbered list; a section's content is drawn when it is opened (screen.js).
 function reportAudit(id) {
-  const shown=new Set(limitsGroup(id).map(s=>s[0])),rest=modules[id].sections.filter(s=>!shown.has(s[0]));
+  const cut=keyNumbersChoice(id),keptForRows=cut&&cut.block.rows.length>cut.rows.length?cut.section:null;
+  const shown=new Set([...limitsGroup(id).map(s=>s[0]),...analysisBlocks(id).filter(({sections})=>!sections.some(({section})=>section===keptForRows)).map(item=>item.sectionId)]),rest=modules[id].sections.filter(s=>!shown.has(s[0]));
   return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(data[id].sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${rest.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
   }).join('')}</ul></details>`;
 }
-const moduleReport=id=>reportHead(id)+reportBand(id)+reportNumbers(id)+reportFindings(id)+reportLimits(id)+reportAudit(id);
+const moduleReport=id=>reportHead(id)+reportBand(id)+reportNumbers(id)+reportFindings(id)+reportAnalysis(id)+reportLimits(id)+reportAudit(id);
 function galleryVisual(module,section) {
   const out=data[module],v=out.visual;
   if(!v||!sectionData(module,section).some(s=>s.blocks.some(b=>b.line===v.table)))return '';

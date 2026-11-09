@@ -141,7 +141,7 @@ function report(overrides = {}, modSections = null) {
   const data = { [OUT]: out };
   const modules = { [OUT]: { sections: modSections || [['liquidity', 'Liquidity table', ['Liquidity table']], ['leverage', 'Chart data', ['Chart data']], ['gaps', 'Gaps & limitations', ['Gaps']], ['sources', 'Sources', ['Sources']], ['audit', 'Technical audit', ['Request']]] } };
   const evidence = new Map();
-  for (const s of SECTIONS) for (const b of s.blocks) {
+  for (const s of out.sections) for (const b of s.blocks) {
     if (b.type === 'table') for (const r of b.rows) evidence.set(`${OUT}:${r.line}`, { module: 'CP-1', line: r.line });
     else evidence.set(`${OUT}:${b.line}`, { module: 'CP-1', line: b.line });
   }
@@ -149,21 +149,21 @@ function report(overrides = {}, modSections = null) {
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
   const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile'];
   const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, { 'CP-1': 'Financial foundation' }, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head' }, id => !id.startsWith('W-'), sectionData, new Map()];
-  return new Function(...names, `${text}; return {moduleReport, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, availability, unavailableView};`)(...args);
+  return new Function(...names, `${text}; return {moduleReport, reportAnalysis, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, availability, unavailableView};`)(...args);
 }
 
-test('the module report has the six anchors, in order', () => {
+test('the module report has the seven anchors, in order', () => {
   const html = report().moduleReport(OUT);
-  const ids = [...html.matchAll(/\bid="(head|bottom-line|numbers|findings|limits|audit)"/g)].map(m => m[1]);
-  assert.deepEqual(ids, ['head', 'bottom-line', 'numbers', 'findings', 'limits', 'audit']);
+  const ids = [...html.matchAll(/\bid="(head|bottom-line|numbers|findings|analysis|limits|audit)"/g)].map(m => m[1]);
+  assert.deepEqual(ids, ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'audit']);
   assert.ok(html.includes('Candidate · not accepted') && html.includes('Current methodology') && html.includes('<code>CP-1.md</code> · 5 sections'));
   assert.ok(html.includes('Quoted from the handoff') && html.includes('CP-1.md · line 13'));
 });
 
 test('an empty part keeps its anchor and says so once', () => {
   const html = report({ summary: null, call: null, charts: [], sections: [] }).moduleReport(OUT);
-  const ids = [...html.matchAll(/\bid="(head|bottom-line|numbers|findings|limits|audit)"/g)].map(m => m[1]);
-  assert.deepEqual(ids, ['head', 'bottom-line', 'numbers', 'findings', 'limits', 'audit']);
+  const ids = [...html.matchAll(/\bid="(head|bottom-line|numbers|findings|analysis|limits|audit)"/g)].map(m => m[1]);
+  assert.deepEqual(ids, ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'audit']);
   assert.ok(html.includes('No bottom line in this handoff.'));
 });
 
@@ -223,9 +223,9 @@ test('limits come from the Limits group with chips; audit lists the rest by line
   assert.ok(audit.includes('<details class="audit" id="audit">') && audit.includes('hidden'));
 });
 
-test('the outline is the six anchors under On this page', () => {
+test('the outline is the seven anchors under On this page', () => {
   const html = report().outlineMarkup(OUT);
-  assert.equal(html.match(/class="section-item"/g).length, 6);
+  assert.equal(html.match(/class="section-item"/g).length, 7);
   assert.ok(html.includes('aria-label="On this page"') && html.includes('aria-current="location"'));
 });
 
@@ -417,4 +417,58 @@ test('the head and the audit summary give the store\'s one section count', () =>
   assert.ok(html.includes('<code>CP-1.md</code> · 7 sections'));
   assert.ok(html.includes('<span>7 sections · unchanged from the handoff</span>'));
   assert.ok(!/\b(?:5|6) sections\b/.test(html));
+});
+
+// ---- Part 5, Analysis: narrative sections and registers the parts above did not print, open, in handoff order.
+const NARRATIVE = [
+  { heading: 'Debt structure', level: 2, line: 70, blocks: [
+    { type: 'text', line: 72, text: 'Debt is **mostly secured**.\nSecond line.' },
+    table(74, ['Instrument', 'Maturity', 'Amount', 'Note'], [[75, 'Term loan', '2028', '1,200', 'first'], [76, 'Notes', '2030', 'Not supplied', ''], [77, 'Revolver', '2027', '300', 'undrawn']]),
+    { type: 'text', line: 79, text: 'Closing remark.' },
+  ] },
+  { heading: 'Sub topic', level: 3, line: 80, blocks: [{ type: 'text', line: 82, text: 'Nested text.' }] },
+];
+const NARRATIVE_MODULES = [['liquidity', 'Liquidity table', ['Liquidity table']], ['leverage', 'Chart data', ['Chart data']], ['debt', 'Debt structure', ['Debt structure']], ['sub', 'Sub topic', ['Sub topic']], ['gaps', 'Gaps & limitations', ['Gaps']], ['sources', 'Sources', ['Sources']], ['audit', 'Technical audit', ['Request']]];
+const withNarrative = () => report({ sections: [...SECTIONS, ...NARRATIVE] }, NARRATIVE_MODULES);
+test('a narrative section and a register render open under #analysis, in order, whole, with chips', () => {
+  const r = withNarrative();
+  const html = r.reportAnalysis(OUT);
+  // Answer key from NARRATIVE: h3 for a level-2 heading, h4 for level 3; the text before the table before the closing remark.
+  const at = s => html.indexOf(s);
+  assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>'));
+  assert.ok(at('<h3>Debt structure</h3>') > 0 && at('<h4>Sub topic</h4>') > at('<h3>Debt structure</h3>'));
+  assert.ok(at('Debt is <strong>mostly secured</strong>. Second line.') > at('Debt structure') && at('Term loan') > at('mostly secured') && at('Closing remark.') > at('Revolver'));
+  assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
+  assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
+  assert.ok(html.includes('aria-label="Handoff row, line 72"') && html.includes('aria-label="Handoff row, line 75"') && html.includes('aria-label="Handoff row, line 77"') && html.includes('aria-label="Handoff row, line 79"') && html.includes('aria-label="Handoff row, line 82"'));
+  assert.ok(html.includes('class="table-card"') && !html.includes('<details'));
+  const page = r.moduleReport(OUT);
+  assert.ok(page.indexOf('id="findings"') < page.indexOf('id="analysis"') && page.indexOf('id="analysis"') < page.indexOf('id="limits"'));
+});
+
+test('a section fully consumed by the parts above does not appear in Analysis; consumed blocks of a mixed section are dropped', () => {
+  const html = report().reportAnalysis(OUT);
+  assert.ok(!html.includes('Reader summary') && !html.includes('Chart data') && !html.includes('Liquidity table'));
+  assert.ok(html.includes('No further analysis sections in this handoff.'));
+  const mixed = { heading: 'Findings extra', level: 2, line: 90, blocks: [table(92, ['Finding', 'Creditor impact', 'Confidence'], [[93, 'Consumed claim.', 'x', 'High']]), { type: 'text', line: 95, text: 'Kept note.' }] };
+  const out = report({ sections: [...SECTIONS, mixed] }, [...NARRATIVE_MODULES.slice(0, 2), ['extra', 'Findings extra', ['Findings extra']], ...NARRATIVE_MODULES.slice(4)]).reportAnalysis(OUT);
+  assert.ok(out.includes('Findings extra') && out.includes('Kept note.') && !out.includes('Consumed claim.'));
+});
+
+test('the audit list no longer lists a section shown in Analysis', () => {
+  const audit = withNarrative().reportAudit(OUT);
+  assert.ok(!audit.includes('Debt structure') && !audit.includes('Sub topic'));
+  assert.ok(audit.includes('Sources') && audit.includes('Technical audit') && audit.includes('Liquidity table')); // consumed-only and cut-table sections stay
+});
+
+test('a handoff with no output still reads one sentence on the canvas', () => {
+  const text = read('views.js');
+  assert.equal([...text.matchAll(/No output found/g)].length, 1);
+  assert.ok(text.includes('analysis:\'No further analysis sections in this handoff.\''));
+});
+
+test('the shell landmark does not take the id of the Analysis part', () => {
+  const shell = read('index.html');
+  assert.ok(!/\bid="analysis"/.test(shell) && !shell.includes('href="#analysis"'));
+  assert.ok(!read('screen.js').includes("$('analysis')"));
 });

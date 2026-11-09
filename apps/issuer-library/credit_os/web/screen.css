@@ -401,6 +401,15 @@ section.part>.part-empty{margin:0}
 .table-card td.num,.table-card th.num{text-align:right;font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums;font-weight:500}
 .table-card .na{color:var(--muted);font-style:normal}
 .table-more{margin:0;padding:8px 14px;font-size:var(--fs-label);color:var(--muted);border-top:1px solid var(--rule)}
+/* Part 5: narrative and registers, open. Long registers scroll inside their table-card, never the page. */
+.analysis-section{min-width:0;margin:0 0 22px}
+.analysis-section>h3,.analysis-section>h4{margin:0 0 6px;font-weight:700}
+.analysis-section>h3{font-size:var(--fs-control)}
+.analysis-section>h4{font-size:var(--fs-compact)}
+.analysis-text{max-width:75ch;margin:0 0 10px;line-height:1.65}
+.analysis-text .chips{margin-left:6px;vertical-align:middle}
+.analysis-section .table-card{max-width:100%;margin:8px 0 12px}
+.analysis-section .table-card td{vertical-align:top}
 /* Chips: Untitled UI tag anatomy in the Credit OS tokens; the avatar names the source, the dot the kind. */
 .chips{display:inline-flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 4px;border:1px solid var(--rule);border-radius:var(--radius-inline);background:#fff;font:500 var(--fs-label)/1 'Red Hat Mono',monospace;color:#3a4056;white-space:nowrap;box-shadow:0 1px 2px rgba(0,5,51,.05)}

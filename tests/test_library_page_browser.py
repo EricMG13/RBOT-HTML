@@ -192,6 +192,52 @@ def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width
     assert seen["anchor"]["current"] == "Key numbers" and seen["anchor"]["chipStillThere"] is True
 
 
+# A narrative section and a register wider than the canvas, appended to the CP-1 handoff.
+LONG = "A long note that keeps the register wider than the canvas"
+ANALYSIS_ROWS = f"""
+### Debt structure
+
+Debt is mostly secured, K, page:123 states the figure.
+
+| Instrument | Maturity | Amount | Note | Covenants | Security | Guarantors | Call schedule |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Term loan | 2028 | 1,200 | {LONG} | Not supplied | First lien | Parent | Non-call 2y |
+| Notes | 2030 | 700 | {LONG} | Incurrence | None | Parent | Make-whole |
+"""
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_analysis_part_fits_the_page(tmp_path, width):
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp1_extra=CITED + REPORT_ROWS + ANALYSIS_ROWS,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    dom, console = visit(tmp_path / "library/index.html", "#CP-1/analysis?c=run-a", width)
+    assert console == []
+    found = re.search(r'<section class="part" id="analysis">(.*?)</section>', dom, re.DOTALL)
+    analysis = found[1]
+    assert "Debt structure" in analysis and "Term loan" in analysis and "Call schedule" in analysis
+    assert (
+        analysis.count('class="chip') >= 4
+    )  # Row and page chips on the paragraph and the register.
+    probe = Path(__file__).with_name("browser_probe_fits.js")
+    (tmp_path / "library/probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page = tmp_path / "library/index.html"
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/analysis?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    # Cited rows and the Debt structure register are the two tables parts 2-4 did not consume.
+    assert seen["pageFits"] is True and seen["tablesInCards"] is True and seen["tables"] == 2
+
+
 @pytest.mark.parametrize("width", [1440, 1280])
 def test_the_overview_chart_values_stay_inside_their_cards(tmp_path, width):
     page = report_library(tmp_path)
@@ -208,8 +254,8 @@ def test_the_report_canvas_and_old_section_links(tmp_path):
     page = report_library(tmp_path)
     dom, console = visit(page, "#CP-1/s54?c=run-a")  # A section id from before the report.
     assert console == []
-    ids = re.findall(r'\bid="(head|bottom-line|numbers|findings|limits|audit)"', dom)
-    assert ids == ["head", "bottom-line", "numbers", "findings", "limits", "audit"]
+    ids = re.findall(r'\bid="(head|bottom-line|numbers|findings|analysis|limits|audit)"', dom)
+    assert ids == ["head", "bottom-line", "numbers", "findings", "analysis", "limits", "audit"]
     assert (
         "Candidate · not accepted" in dom and "Reader summary" in dom
     )  # The summary stays in the audit list.

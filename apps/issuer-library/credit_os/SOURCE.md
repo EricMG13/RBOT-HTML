@@ -166,3 +166,12 @@ Low-findings batch: `web/views.js` `comparisonChart` prints `n.a.` (full cell te
 | `web/views.js` | `chipView` prints `chip.avatar` (falls back to the source key); `numericColumn` makes a key-numbers column numeric only when every cell with a value parses (empty, dash, `n.a.` and `Not supplied...` cells are skipped); the head and the audit summary both print `data[id].sections.length` sections | R23 avatar; R26; R27 |
 | `web/screen.js` | `chipSection` marks `chip.match` at `chip.match_at` (no search for the quote) and prints `Cited as <key>` for a chip with a file | R25; the inspector shows the full key |
 | `web/static.test.cjs` | tests for the marked span, the avatar, the full key, the numeric rule and the one section count | covers the above |
+
+R28 (owner, 2026-11-09): part 5 "Analysis" between Findings and Limits.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/views.js` | `REPORT_PARTS` gains `analysis` (seven parts); `keyNumbersChoice`/`sourceTable` split out of `keyNumbers`; `analysisBlocks` lists unconsumed blocks of the analysis-group sections (consumed: Bottom line, Finding, `Chart data` tables and the key-numbers table); `reportAnalysis` draws them open with `rich()`, `cellView` and `chipsMarkup`; `reportAudit` drops sections shown in Analysis (a section whose key-numbers table is cut stays, for its extra rows) | R28 |
+| `web/screen.css` | `.analysis-section`, `.analysis-text`; tables reuse `.table-card` (scrolls inside) | R28 |
+| `web/index.html`, `web/screen.js` | the `<main>` landmark id `analysis` becomes `canvas` (skip link and focus calls), freeing `#analysis` for the part | the deep link `#<module>/analysis` scrolls with `getElementById` |
+| `web/static.test.cjs`, `tests/test_library_page_browser.py`, `tests/browser_probe_fits.js` | seven-anchor tests, narrative/register, consumed-section, audit and no-duplicate-id tests; overflow check of the analysis part at 1440 and 1280 | R28 |
