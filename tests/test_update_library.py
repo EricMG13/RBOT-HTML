@@ -88,7 +88,7 @@ def test_presented_report_keeps_original(tmp_path):
     assert hashlib.sha256(original.read_bytes()).hexdigest() == digest
     (copy,) = (tmp_path / "library/reports").rglob("report.html")
     shown = copy.read_bytes()
-    assert shown.startswith(raw)  # The fixture report has no </body>, so the parts follow it.
+    assert shown.startswith(raw[: raw.rindex(b"</body>")])
     assert b"<style data-library-presentation>" in shown
     assert b"<script data-library-presentation>" in shown
     assert shown.count(b"data-library-presentation") == 2

@@ -86,11 +86,7 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     delivery = re.search(r'href="#W-Reports/([0-9a-f]{64})\?c=run-a"', dom)
     assert delivery, "the Reports tab lists the run's report"
     dom, console = visit(page, f"#W-Reports/{delivery[1]}?c=run-a")
-    # The synthetic report is one paragraph, not a CP-OS report, so the adapter script finds no
-    # report data in it and throws inside the frame. That is the fixture; what this asserts is that
-    # the page's own policy allowed the frame and the presented script (no policy violation).
-    assert [line for line in console if "Content Security Policy" in line] == []
-    assert all("/reports/run-a/" in line for line in console)
+    assert console == []  # The presented report ran its adapter and the policy allowed it.
     frame = re.search(r'<iframe id="report-preview"[^>]*src="([^"]*)"', dom)
     assert frame and frame[1] == f"reports/run-a/{delivery[1]}/report.html"
     assert (page.parent / frame[1]).is_file()
