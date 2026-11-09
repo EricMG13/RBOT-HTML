@@ -74,6 +74,7 @@ class RunSpec:
     version: str = ""
     settled: tuple[str | None, ...] = ("0.10", "0.20")
     view_issuer: str | None = None
+    cp0_extra: str = ""  # Text appended to the CP-0 handoff, such as a source inventory.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
 
@@ -110,6 +111,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         answer = HANDOFF.format(
             module=module, name=issuer_name, as_of=as_of, bottom=f"{module} bottom line."
         )
+        if module == "CP-0":
+            answer += spec.cp0_extra
         if module == "CP-1":
             answer += spec.cp1_extra
         # As CP-OS keeps it: the folder is named by the sha256 of the request's inputs.
@@ -201,3 +204,39 @@ def rewrite_completion(run_dir: Path, change) -> None:
     old.unlink()
     raw = json.dumps(record, indent=2).encode()
     put(run_dir / f"completed-{sha(raw)}.json", raw)
+
+
+# Cited handoff text and its source-text file, for tests/test_credit_os_chips.py.
+SOURCE_PAGES = (
+    b'{"page": 122, "text": "Other note text."}\n'
+    b'{"page": 123, "text": "Cash paid during the period for interest, net $ 1,158 and more."}\n'
+    b'{"page": "124", "text": "Interest paid was lower."}\n'
+)
+SOURCE_NAME = "NBG_2024-12-31_10-K_fixture.htm.jsonl"
+
+
+def inventory_text(digest: str) -> str:
+    """A CP-0 inventory section, the sha256 of the supplied K source being `digest`."""
+    return f"""
+### Complete supplied inventory and provenance
+
+| Label | Exact supplied source name | Exact sha256 | Source disposition |
+| --- | --- | --- | --- |
+| K | {SOURCE_NAME} | {digest} | Primary annual source. |
+| Settings | context | {"0" * 64} | Dated settings only. |
+"""
+
+
+CITED = """
+### Cited rows
+
+| Item | Value | Basis |
+| --- | --- | --- |
+| Cash interest | 1,158 | K, page:123 states the figure. D1, D3. |
+| Wrong interest | 1,159 | K, page:123 states the figure. |
+| Quoted interest | 7 | K, page:123 says “Cash paid during the period”. |
+| Upstream | 2 | [CP-1: D4, F1] |
+| Absent | n/a | Not supplied: no covenant package. |
+
+A paragraph citing K, page:124 only.
+"""

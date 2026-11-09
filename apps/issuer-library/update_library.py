@@ -34,6 +34,7 @@ if str(HERE) not in sys.path:
 from credit_os.store import workspace_store
 
 from deploy_workflow.credit_os_catalogue import catalogue
+from deploy_workflow.credit_os_chips import chips
 from deploy_workflow.library_index import (
     Library,
     Refused,
@@ -134,7 +135,15 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
         "excluded": [[name, reason] for name, reason in library.excluded],
         "issues": list(dict.fromkeys([*cat["issues"], *store["issues"]])),
     }
-    data = relocate({"catalogue": cat, "workspace": store, "activity": activity}, presented)
+    data = relocate(
+        {
+            "catalogue": cat,
+            "workspace": store,
+            "activity": activity,
+            "chips": chips(workspace, store),
+        },
+        presented,
+    )
     (folder / "data.js").write_text(
         "window.CREDIT_OS_DATA=" + embedded_json(data) + ";\n", encoding="utf-8", newline="\n"
     )
