@@ -131,7 +131,7 @@ const CHIPS = {
   [`${OUT}:43`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }],
   [`${OUT}:52`]: [{ kind: 'gap', label: 'Not supplied', reason: 'the row says so', codes: [] }, { kind: 'gap', label: 'no page', codes: [] }, { kind: 'gap', label: 'p.145 · no key', codes: [] }],
 };
-function report(overrides = {}) {
+function report(overrides = {}, modSections = null) {
   const text = read('views.js');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const plain = v => String(v).replace(/\*\*|`/g, '');
@@ -139,7 +139,7 @@ function report(overrides = {}) {
   const out = { module: 'CP-1', run: 'run-a', source: 'deliveries/d1/CP-1.md', href: '../runs/run-a/deliveries/d1/CP-1.md', label: 'CP-1', sections: SECTIONS,
     summary: { bottomLine: 'Cash up.', confidence: 'Medium', limitation: 'Synthetic.', line: 13 }, charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }], ...overrides };
   const data = { [OUT]: out };
-  const modules = { [OUT]: { sections: [['liquidity', 'Liquidity table', ['Liquidity table']], ['leverage', 'Chart data', ['Chart data']], ['gaps', 'Gaps & limitations', ['Gaps']], ['sources', 'Sources', ['Sources']], ['audit', 'Technical audit', ['Request']]] } };
+  const modules = { [OUT]: { sections: modSections || [['liquidity', 'Liquidity table', ['Liquidity table']], ['leverage', 'Chart data', ['Chart data']], ['gaps', 'Gaps & limitations', ['Gaps']], ['sources', 'Sources', ['Sources']], ['audit', 'Technical audit', ['Request']]] } };
   const evidence = new Map();
   for (const s of SECTIONS) for (const b of s.blocks) {
     if (b.type === 'table') for (const r of b.rows) evidence.set(`${OUT}:${r.line}`, { module: 'CP-1', line: r.line });
@@ -242,4 +242,31 @@ test('screen.css sets no font-size below 11px and the report styles exist', () =
   const css = read('screen.css');
   for (const m of css.matchAll(/font(?:-size)?\s*:\s*(?:[^;}]*?\s)?(\d+(?:\.\d+)?)px/g)) assert.ok(Number(m[1]) >= 11, m[0]);
   for (const sel of ['.chip{', '.chip .av{', '.dot{', 'article.finding{', '.limits{', 'details.audit{', '.band{', '.panel-card{', '.table-card{']) assert.ok(css.includes(sel), sel);
+});
+
+test('key numbers read the analysis group whatever its name (CP-2E: Rates, FX & hedges)', () => {
+  // Answer key from the fixture: the T2F section groups under 'Rates, FX & hedges' for CP-2E, its first non-limits group.
+  const sections = [{ heading: 'T2F.4 Hedge register', line: 70, blocks: [table(72, ['Instrument', 'Amount', 'Margin / Coupon'], [[73, 'Swap', '500', '3.1'], [74, 'Collar', '250', '2.4']])] }];
+  const html = report({ module: 'CP-2E', sections }, [['hedges', 'Hedge register', ['T2F.4']]]).keyNumbers(OUT);
+  assert.equal(html.match(/<tr>/g).length, 3);
+  assert.ok(html.includes('>Amount<') && html.includes('>Margin / Coupon<') && html.includes('>500<'));
+});
+
+test('the chart-row button is a real box, not display:contents', () => {
+  const css = read('screen.css');
+  assert.ok(!/\.chart-open\{[^}]*display:contents/.test(css));
+  assert.ok(/\.panel-card \.chart-open\{display:grid/.test(css));
+});
+
+test('Open source file is omitted when the build says the source text is missing', () => {
+  const text = read('screen.js');
+  const start = text.indexOf('function chipSection('), end = text.indexOf('function showInspector(');
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const section = new Function('esc', 'icon', `${text.slice(start, end)}; return chipSection;`)(esc, n => `<img src="${n}">`);
+  const output = { href: '../runs/r/deliveries/d/CP-1.md', source: 'deliveries/d/CP-1.md' };
+  const base = { kind: 'issuer_page', source: 'PDF', file: 'a.pdf', page: 1, page_end: null, sha256: 'ab', quote: null, quote_found: null, excerpt: null, hash_matches_inventory: null };
+  const gone = section({ ...base, reason: 'source text file not found' }, output);
+  assert.ok(!gone.includes('Open source file') && gone.includes('source text file not found'));
+  const there = section({ ...base, excerpt: 'text', hash_matches_inventory: true, reason: null }, output);
+  assert.ok(there.includes('href="../runs/r/source-text/a.pdf"') && there.includes('Open source file'));
 });

@@ -175,6 +175,7 @@ def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width
         assert seen[state] == {"fits": True, "valueInCard": True, "chipsInCard": True, "rows": 2}, (
             state
         )
+    assert seen["rowFocus"] == {"focused": True, "box": True}  # The row button takes focus.
     opened = seen["open"]
     assert opened["hidden"] is False and "chip=" in opened["hash"] and "e=" in opened["hash"]
     assert opened["excerpt"] and "Cash paid during the period" in opened["excerpt"]

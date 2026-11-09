@@ -217,7 +217,7 @@ function chipView(chip,rowModule) {
   }
   if(chip.kind==='upstream') {
     const codes=chip.codes.join(' · ');
-    return {label:chip.module?`${chip.module} · ${codes}`:codes,av:shortCode(chip.module||rowModule),avClass:'q',dot:'up',cls:''};
+    return {label:chip.module?`${chip.module} · ${codes}`:codes,av:chip.module||rowModule?shortCode(chip.module||rowModule):'?',avClass:'q',dot:'up',cls:''};
   }
   return {label:chip.label||'no page',av:'?',avClass:'gap',dot:'gap',cls:'gap'};
 }
@@ -240,7 +240,8 @@ const cellView=(cell,numeric)=>{
 const isFindingsTable=b=>b.type==='table'&&b.headers[0]==='Finding'&&b.headers[1]==='Creditor impact';
 // The first reader table of the findings-and-analysis sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).
 function keyNumbers(id) {
-  const reader=(sectionGroups(id).find(([group])=>group==='Findings & analysis')?.[1]||[]).flatMap(([sectionId])=>sectionData(id,sectionId));
+  // The analysis group is the first group that is neither limits nor evidence, whatever the module names it.
+  const reader=(sectionGroups(id).find(([group])=>group!=='Limits & monitoring'&&group!=='Evidence & audit')?.[1]||[]).flatMap(([sectionId])=>sectionData(id,sectionId));
   for(const section of reader) {
     if(section.heading.startsWith('Chart data'))continue;
     for(const block of section.blocks) {
@@ -276,8 +277,8 @@ function reportNumbers(id) {
 }
 function reportFindings(id) {
   const articles=data[id].sections.flatMap(s=>s.blocks).filter(isFindingsTable).flatMap(block=>{
-    const confidence=Math.max(2,block.headers.indexOf('Confidence'));
-    return block.rows.map(row=>`<article class="finding"><div><h4>${rich(row.cells[0])}</h4><p class="impact"><b>Creditor impact</b>${rich(row.cells[1])}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.cells[confidence]??''))}</span></span>${chipsMarkup(`${id}:${row.line}`)}</aside></article>`);
+    const confidence=block.headers.indexOf('Confidence');
+    return block.rows.map(row=>`<article class="finding"><div><h4>${rich(row.cells[0])}</h4><p class="impact"><b>Creditor impact</b>${rich(row.cells[1])}</p></div><aside>${confidence<0?'':`<span class="conf">Confidence<span class="pill">${esc(plain(row.cells[confidence]??''))}</span></span>`}${chipsMarkup(`${id}:${row.line}`)}</aside></article>`);
   });
   return `<section class="part" id="findings"><h3>Findings</h3>${articles.join('')||`<p class="part-empty">${EMPTY_PART.findings}</p>`}</section>`;
 }

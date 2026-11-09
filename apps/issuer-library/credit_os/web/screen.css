@@ -386,8 +386,9 @@ section.part>.part-empty{margin:0}
 .panel-card>.section-heading h2{font-size:var(--fs-control)}
 .panel-card>.chart-reading,.panel-card>.source-footer,.panel-card>.matrix-note{margin-left:16px;margin-right:16px}
 .panel-card .horizontal-chart{margin:6px 16px 8px}
-.panel-card .chart-row{grid-template-columns:minmax(110px,1fr) minmax(80px,1.6fr) 72px minmax(120px,1fr);gap:12px;cursor:default;text-align:left}
-.panel-card .chart-open{display:contents;cursor:pointer;text-align:left}
+.panel-card .chart-row{grid-template-columns:minmax(0,3fr) minmax(120px,1fr);gap:12px;cursor:default;text-align:left;padding:0}
+/* The row button is a real box (focusable, with a focus ring); it holds the label, bar and value, and the chips are the row's second cell. */
+.panel-card .chart-open{display:grid;grid-template-columns:minmax(110px,1fr) minmax(80px,1.6fr) 72px;gap:12px;align-items:center;padding:10px 0;width:100%;cursor:pointer;text-align:left;min-width:0;border-radius:var(--radius-inline)}
 .panel-card .chart-row strong{overflow-wrap:normal;white-space:nowrap}
 .panel-card .chart-row .chips{justify-self:start}
 .legend{display:flex;gap:16px;padding:10px 16px;border-top:1px solid var(--rule);font-size:var(--fs-label);color:var(--muted)}
@@ -448,4 +449,4 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 /* On this page */
 .section-outline ol{list-style:none;margin:0;padding:0}
 @media(max-width:900px){.band{grid-template-columns:minmax(0,1fr)}article.finding{grid-template-columns:minmax(0,1fr)}.limits,.audit-list{grid-template-columns:1fr}}
-@media(max-width:720px){.panel-card .chart-row{grid-template-columns:1fr 72px}.panel-card .chart-row .chips{grid-column:1/-1}}
+@media(max-width:720px){.panel-card .chart-row{grid-template-columns:minmax(0,1fr)}.panel-card .chart-open{grid-template-columns:1fr 72px}.panel-card .chart-open .chart-label{grid-column:1/-1}.panel-card .chart-row .chips{padding-bottom:8px}}

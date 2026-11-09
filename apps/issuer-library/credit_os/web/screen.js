@@ -346,7 +346,9 @@ function chipSection(chip,output) {
   }
   // The output's href points into runs/<run>/...; the retained source text sits beside the handoff's folder tree in the same run.
   const root=output.href.split('/').slice(0,-output.source.split('/').length).join('/');
-  const open=chip.file?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
+  // A source text the build could not read has no file to open; the reason stands instead.
+  const absent=/not found|missing/i.test(chip.reason||'')||(chip.hash_matches_inventory===null&&!chip.excerpt);
+  const open=chip.file&&!absent?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
   return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }
 function showInspector(key,chipIndex=null) {
@@ -491,7 +493,7 @@ function renderRoute() {
     // The pager names what it steps through on the pages where the sections are models or reports.
     const pagerNoun={'W-Forecast':'model','W-Reports':'report'}[next.module]||'section';
     const report=reportPage(next);
-    const title=`<h3 id="section-title" tabindex="-1" ${only||report?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</h3>`;
+    const title=`<h3 id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</h3>`;
     // The bar sticks at narrow widths, so it names the run and the module (or destination) it belongs to.
     $('section-nav').innerHTML=contextPrefix(next)+(only||report||(isAnalytical(next.module)&&!next.output)?title:`${title}<span>${index+1} / ${sections.length}</span><button id="previous-section" ${index===0?'disabled':''} aria-label="Previous ${pagerNoun}">${icon('arrow-left')}</button><button id="next-section" ${index===sections.length-1?'disabled':''} aria-label="Next ${pagerNoun}">${icon('arrow-right')}</button>`);
     if(!showsCodes(next))nameCodes($('section-nav'));
