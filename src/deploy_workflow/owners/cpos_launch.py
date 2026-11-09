@@ -999,6 +999,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, help="run folder; default runs/<run id>")
     parser.add_argument("--live", action="store_true", help="make paid provider calls")
     parser.add_argument("--ruling", type=Path, help="docs/rulings/<file>.md naming this config")
+    parser.add_argument(
+        "--no-library",
+        action="store_true",
+        help="do not rebuild the library; the inbox watcher does",
+    )
     return parser
 
 
@@ -1093,7 +1098,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     spent = Budget(prepared.plan.provider_cap_usd, prepared.directory / "live").spent
     print(f"Report:   {report}\nCharged:  USD {spent}")
-    _refresh_library(prepared.directory)
+    if not args.no_library:
+        _refresh_library(prepared.directory)
     print("Automated checks only: review the handoffs against the sources before relying on this.")
     return 0
 

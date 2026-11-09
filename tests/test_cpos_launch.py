@@ -18,7 +18,12 @@ from deploy_workflow.handoff_delivery import (
     verify_delivery,
 )
 from deploy_workflow.markdown_delivery import markdown_files
-from deploy_workflow.model.adapter import AdapterReply, LiveAdapter
+from deploy_workflow.model.adapter import (
+    AdapterReply,
+    LiveAdapter,
+    LivePauseInForce,
+    check_ruling,
+)
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import ToolCall, Turn, Usage
@@ -1871,3 +1876,16 @@ def test_odd_driver_values_end_in_value_error_not_type_error(values):
 def test_a_non_object_driver_ends_in_value_error():
     with pytest.raises(ValueError):
         cpos_forecast.parse(forecast_block(base_drivers={"revenue_growth": 5}), "1000")
+
+
+def test_no_library_flag_is_accepted_and_defaults_off():
+    base = ["--context", "c.json", "--sources", "s", "--config", "sol-medium", "--cap", "20"]
+    assert cpos_launch._parser().parse_args(base).no_library is False
+    assert cpos_launch._parser().parse_args([*base, "--no-library"]).no_library is True
+
+
+def test_standing_ruling_lifts_the_pause_for_sol_medium_only():
+    ruling = cpos_launch.ROOT / "docs/rulings/2026-11-09-inbox-automation.md"
+    check_ruling("sol-medium", ruling)
+    with pytest.raises(LivePauseInForce):
+        check_ruling("sol-high", ruling)
