@@ -1,87 +1,120 @@
-"""Update the Issuer Library: one static page of completed runs on the current methodology.
+"""Update the Issuer Library: the static Credit OS library and issuer pages of completed runs.
 
     python apps/issuer-library/update_library.py [--workspace FOLDER]
 
 Reads ``FOLDER/runs`` (default: this checkout; the Windows package needs ``--workspace``, which
-``Update library.cmd`` supplies) and writes only ``FOLDER/library/index.html``. The
-page holds its data, styles, script and fonts, links to the runs' original reports and handoffs by
-relative path, and opens from disk: no server, no network access. Which runs it lists is decided
-by ``deploy_workflow.library_index``. No analysis is run and no provider is called.
+``Update library.cmd`` supplies) and writes only ``FOLDER/library/``: ``index.html`` with its
+scripts, styles, fonts and icons, ``data.js`` (the catalogue and the workspace store, as data),
+and ``reports/<run>/<delivery>/report.html``, each run's delivered report with the library's
+presentation added. The delivered reports themselves are never changed. The page opens from disk:
+no server, no network access. Which runs it lists is decided by ``deploy_workflow.library_index``.
+No analysis is run and no provider is called.
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import json
-import os
-import re
+import shutil
 import sys
 import tempfile
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, unquote, urlsplit
 
 HERE = Path(__file__).resolve().parent
-STATIC = HERE / "static"
+WEB = HERE / "credit_os" / "web"
 PACKAGED = (HERE / "src").is_dir()  # The Windows package keeps the engine's src beside this file.
 ROOT = HERE if PACKAGED else HERE.parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 
-from deploy_workflow.library_index import Library, build_library
+from credit_os.store import workspace_store
 
-SCHEMA = "issuer-library/2"
-FONTS = (
-    ("Red Hat Display", "RedHatDisplay-SemiBold.woff2", 600),
-    ("Red Hat Display", "RedHatDisplay-Bold.woff2", 700),
-    ("Red Hat Text", "RedHatText-Regular.woff2", 400),
-    ("Red Hat Text", "RedHatText-Medium.woff2", 500),
-    ("Red Hat Text", "RedHatText-SemiBold.woff2", 600),
-    ("Red Hat Mono", "RedHatMono-Medium.woff2", 500),
-    ("Red Hat Mono", "RedHatMono-SemiBold.woff2", 600),
+from deploy_workflow.credit_os_catalogue import catalogue
+from deploy_workflow.library_index import (
+    Library,
+    build_library,
+    delivery_folder,
+    read_pinned,
 )
-_PLACEHOLDER = re.compile(r"/\*(DATA|STYLE|LOGIC|APP|FONTS|LOGO|LICENSE)\*/")
+
+# Nothing is fetched: the page and the reports it frames come from its own folder, and no request
+# can leave it.
+POLICY = (
+    "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; "
+    "img-src 'self' data:; frame-src 'self'; connect-src 'none'; base-uri 'none'; "
+    "form-action 'none'"
+)
+CSP_META = f'<meta http-equiv="Content-Security-Policy" content="{POLICY}">'
+FILES = "/files/"
 
 
-def deliverable_assets() -> Path:
-    """The deliverables' own design assets, wherever the engine's packages are installed."""
-    import deploy_vii
-
-    return Path(deploy_vii.__file__).resolve().parent / "assets"
-
-
-def assets() -> dict[str, str]:
-    shared = deliverable_assets()
-    fonts = []
-    for family, file, weight in FONTS:
-        encoded = base64.b64encode((shared / "fonts" / file).read_bytes()).decode()
-        fonts.append(
-            f'@font-face{{font-family:"{family}";font-weight:{weight};font-display:swap;'
-            f'src:url(data:font/woff2;base64,{encoded}) format("woff2")}}'
-        )
-    logo = (shared / "brand/ssim-logo-stacked-black-trim.png").read_bytes()
-    return {
-        "FONTS": "\n".join(fonts),
-        "STYLE": "".join(
-            (path).read_text(encoding="utf-8")
-            for path in (shared / "tokens.css", shared / "app.css", STATIC / "library.css")
-        ),
-        "LOGIC": (STATIC / "logic.js").read_text(encoding="utf-8"),
-        "APP": (STATIC / "app.js").read_text(encoding="utf-8"),
-        "LOGO": "data:image/png;base64," + base64.b64encode(logo).decode(),
-        "LICENSE": (shared / "fonts/OFL.txt").read_text(encoding="utf-8").replace("--", "—"),
-    }
+def last_body_close(html: bytes) -> int:
+    """Offset of the final ``</body>`` in html, len(html) when there is none (ASCII case-fold)."""
+    found = html.lower().rfind(b"</body>")
+    return len(html) if found < 0 else found
 
 
-def page_data(library: Library, workspace: Path, built_at: str) -> dict[str, Any]:
-    return {
-        "schema": SCHEMA,
-        "built_at": built_at,
-        "workspace": str(workspace),
-        "runs": library.runs,
-        "not_shown": [{"folder": name, "reason": reason} for name, reason in library.excluded],
-    }
+def present_report(original: bytes) -> bytes:
+    """The delivered report with the library's presentation inserted before its last ``</body>``."""
+    style = (WEB / "report-adapter.css").read_bytes()
+    brand = (WEB / "brand.css").read_bytes()
+    script = (WEB / "report-adapter.js").read_bytes()
+    position = last_body_close(original)
+    return b"".join(
+        [
+            original[:position],
+            b"<style data-library-presentation>",
+            style,
+            brand,
+            b"</style><script data-library-presentation>",
+            script,
+            b"</script>",
+            original[position:],
+        ]
+    )
+
+
+def write_presented_reports(workspace: Path, library: Library, folder: Path) -> set[str]:
+    """Each listed run's verified report, presented, under ``folder/reports``.
+
+    Returns the workspace-relative paths of the originals that have a presented copy."""
+    presented = set()
+    for run in library.runs:
+        run_dir = workspace / "runs" / run["id"]
+        relative, files = delivery_folder(run_dir, run["report"]["sha256"])
+        original = read_pinned(run_dir, f"{relative}/report.html", files["report.html"])
+        target = folder / "reports" / run["id"] / relative.split("/", 1)[1] / "report.html"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(present_report(original))
+        presented.add(f"runs/{run['id']}/{relative}/report.html")
+    return presented
+
+
+def relative_href(href: str, presented: set[str]) -> str:
+    """A server ``/files/...`` href as a path from ``library/index.html``, query removed.
+
+    A report opened for reading points at its presented copy; a download keeps the original."""
+    parts = urlsplit(href)
+    path = unquote(parts.path)[len(FILES) :]
+    if "download=1" not in parts.query and path in presented:
+        _, run, _, delivery, name = path.split("/")
+        return quote(f"reports/{run}/{delivery}/{name}", safe="/")
+    return "../" + quote(path, safe="/")
+
+
+def relocate(value: Any, presented: set[str]) -> Any:
+    """``value`` with every ``/files/...`` string rewritten by ``relative_href``."""
+    if isinstance(value, str):
+        return relative_href(value, presented) if value.startswith(FILES) else value
+    if isinstance(value, list):
+        return [relocate(item, presented) for item in value]
+    if isinstance(value, dict):
+        return {key: relocate(item, presented) for key, item in value.items()}
+    return value
 
 
 def embedded_json(value: object) -> str:
@@ -89,39 +122,50 @@ def embedded_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=True, allow_nan=False).replace("<", "\\u003c")
 
 
-def render_page(template: str, data: dict[str, Any], parts: dict[str, str]) -> str:
-    """Fill each placeholder once; inserted text is never searched for placeholders again."""
-    replacements = parts | {"DATA": embedded_json(data)}
-    return _PLACEHOLDER.sub(lambda match: replacements[match[1]], template)
+def build_into(folder: Path, workspace: Path, library: Library) -> None:
+    shutil.copytree(WEB, folder, ignore=shutil.ignore_patterns("*.test.cjs"), dirs_exist_ok=True)
+    cat = catalogue(workspace, library)
+    store = workspace_store(workspace, cat)
+    presented = write_presented_reports(workspace, library, folder)
+    data = relocate({"catalogue": cat, "workspace": store}, presented)
+    (folder / "data.js").write_text(
+        "window.CREDIT_OS_DATA=" + embedded_json(data) + ";\n", encoding="utf-8", newline="\n"
+    )
+    page = folder / "index.html"
+    html = page.read_text(encoding="utf-8")
+    if "<head>" not in html:
+        raise SystemExit("Not written: the page template has no <head> to hold its policy")
+    page.write_text(html.replace("<head>", "<head>\n  " + CSP_META, 1), encoding="utf-8")
 
 
-def write_page(page_dir: Path, html: str) -> Path:
-    """Replace ``page_dir/index.html`` whole, through a temporary file beside it."""
-    if page_dir.is_symlink() or (page_dir.exists() and not page_dir.is_dir()):
-        raise SystemExit(f"Not written: {page_dir} is a link or a file, not the library folder")
-    page_dir.mkdir(exist_ok=True)
-    target = page_dir / "index.html"
-    descriptor, name = tempfile.mkstemp(dir=page_dir, prefix=".index-", suffix=".tmp")
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
-            stream.write(html)
-        os.chmod(name, 0o644)  # mkstemp makes it owner-only; the page is shared like the reports.
-        os.replace(name, target)
-    finally:
-        Path(name).unlink(missing_ok=True)
-    return target
-
-
-def update(workspace: Path, built_at: str | None = None) -> tuple[Path, Library]:
+def update_library(workspace: Path) -> Library:
+    """Rebuild ``workspace/library`` whole: built beside it, then swapped in."""
     workspace = workspace.resolve()
     if not workspace.is_dir():
         raise SystemExit(f"Workspace not found: {workspace}")
-    page_dir = workspace / "library"
-    library = build_library(workspace, page_dir)
-    stamp = built_at or datetime.now(UTC).strftime("%d %b %Y, %H:%M UTC")
-    template = (STATIC / "template.html").read_text(encoding="utf-8")
-    html = render_page(template, page_data(library, workspace, stamp), assets())
-    return write_page(page_dir, html), library
+    target = workspace / "library"
+    if target.is_symlink() or (target.exists() and not target.is_dir()):
+        raise SystemExit(f"Not written: {target} is a link or a file, not the library folder")
+    library = build_library(workspace, target)
+    staging = Path(tempfile.mkdtemp(dir=workspace, prefix=".library-new-"))
+    old = workspace / ".library-old"
+    try:
+        build_into(staging, workspace, library)
+        staging.chmod(0o755)  # mkdtemp makes it owner-only; the page is shared like the reports.
+        shutil.rmtree(old, ignore_errors=True)
+        had_library = target.exists()
+        if had_library:
+            target.rename(old)
+        try:
+            staging.rename(target)
+        except OSError:
+            if had_library:
+                old.rename(target)  # The previous library stays if the new one cannot be placed.
+            raise
+        shutil.rmtree(old, ignore_errors=True)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return library
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -132,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.workspace is None:
         parser.error("give --workspace: the folder holding runs/")
-    target, library = update(args.workspace)
+    library = update_library(args.workspace)
     print(f"Listed {len(library.runs)} run(s) on the current methodology.")
     for run in library.runs:
         print(f"  {run['id']}: {run['issuer_name']}, as of {run['as_of']}")
@@ -140,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Not shown: {len(library.excluded)} run folder(s).")
         for name, reason in library.excluded:
             print(f"  {name}: {reason}")
-    print(f"Open {target}")
+    print(f"Open {args.workspace.resolve() / 'library' / 'index.html'}")
     return 0
 
 
