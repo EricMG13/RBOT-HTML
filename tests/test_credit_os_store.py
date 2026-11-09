@@ -100,3 +100,90 @@ def test_structured_accepts_front_matter():
     sections, error = store.structured(FRONT.encode(), strict=False)
     assert error is None
     assert sections[0]["heading"] == "Front matter"
+
+
+def _text(text):
+    return {"type": "text", "text": text}
+
+
+def _table(*cells):
+    """A table block of one row."""
+    return {"type": "table", "headers": ["A", "B", "C"], "rows": [{"cells": list(cells)}]}
+
+
+def _section(heading, level, *blocks):
+    return {"heading": heading, "level": level, "line": 1, "blocks": list(blocks)}
+
+
+SECTIONS = [
+    _section("CP-1 handoff", 1),
+    _section("Front matter", 1, _text("module: CP-1\ncommittee_status: Requires More Work")),
+    _section("Request", 2, _text("What is asked.")),
+    _section("Sources", 2, _text("K is the annual filing.")),
+    _section("Findings", 2),
+    _section("Reader summary", 3, _table("x", "Medium", "y")),
+    _section("Chart data: leverage", 3, _table("x", "y", "z")),
+    _section("Liquidity view", 3, _text("Cash covers two years of interest.")),
+    _section("Debt register", 3, _text("Drawn amounts."), _table("Term loan", "100")),
+    _section("Source register", 3, _table("K", "Annual filing")),
+    _section("Source notes", 4, _text("One two.")),
+    _section("Calculations", 2, _text("EBITDA 10 less capex 4 is 6.")),
+    _section("Bridge", 3, _table("10", "4", "6")),
+    _section("Gaps", 2, _text("Not supplied: the credit agreement.")),
+    _section("Extra notes", 2, _text("One two three.")),
+    _section("Next module", 2, _text("CP-2.")),
+]
+EXPECTED_PLACEMENT = [
+    "audit", "audit", "audit", "audit", "view", "consumed", "consumed", "view", "reference",
+    "audit", "audit", "calculations", "calculations", "limits", "audit", "audit",
+]  # fmt: skip
+
+
+def test_sections_are_placed_by_their_level_two_parent():
+    assert store.placements(SECTIONS) == EXPECTED_PLACEMENT
+
+
+def test_words_count_cells_and_prose_not_headings_or_headers():
+    assert store.report_fields(SECTIONS, {"confidence": "Medium"})["words"] == {
+        "view": 6,
+        "reference": 5,
+        "calculations": 10,
+        "limits": 5,
+        "audit": 23,
+    }
+
+
+@pytest.mark.parametrize(
+    "cell, expected",
+    [
+        ("Medium", True),
+        ("Not assessable", False),
+        ("not assessable.", False),
+        (" Not Assessable", False),
+    ],
+)
+def test_established_reads_the_confidence_cell(cell, expected):
+    fields = store.report_fields(SECTIONS, {"confidence": cell})
+    assert fields["state"]["established"] is expected
+
+
+def test_no_reader_summary_is_neither():
+    assert store.report_fields(SECTIONS, None)["state"]["established"] is None
+
+
+def test_declared_is_the_front_matter_status_verbatim():
+    fields = store.report_fields(SECTIONS, {"confidence": "Medium"})
+    assert fields["state"]["declared"] == "Requires More Work"
+
+
+def test_declared_is_none_without_front_matter():
+    sections = [s for s in SECTIONS if s["heading"] != "Front matter"]
+    assert store.report_fields(sections, {"confidence": "Medium"})["state"]["declared"] is None
+
+
+def test_every_built_output_carries_the_three_fields(tmp_path):
+    data = read_store(tmp_path)
+    (output,) = [o for o in data["outputs"].values() if o["module"] == "CP-1"]
+    assert output["state"] == {"established": True, "declared": None}
+    assert len(output["placement"]) == len(data["handoffs"][output["sha256"]])
+    assert set(output["words"]) == {"view", "reference", "calculations", "limits", "audit"}

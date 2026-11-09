@@ -75,6 +75,7 @@ class RunSpec:
     settled: tuple[str | None, ...] = ("0.10", "0.20")
     view_issuer: str | None = None
     cp0_extra: str = ""  # Text appended to the CP-0 handoff, such as a source inventory.
+    cp1_findings: str = ""  # Text inserted into the CP-1 handoff just before its Sources section.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
 
@@ -114,7 +115,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         if module == "CP-0":
             answer += spec.cp0_extra
         if module == "CP-1":
-            answer += spec.cp1_extra
+            head, heading, tail = answer.rpartition("## Sources")
+            answer = head + spec.cp1_findings + heading + tail + spec.cp1_extra
         # As CP-OS keeps it: the folder is named by the sha256 of the request's inputs.
         inputs = {
             "run": run,

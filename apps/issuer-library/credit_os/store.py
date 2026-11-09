@@ -525,6 +525,96 @@ def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
     return {"summary": summary, "charts": charts, "issue": "; ".join(problems) or None}
 
 
+# Evidence & audit by heading (R31a); the same pattern as EVIDENCE_HEADING in web/views.js.
+EVIDENCE_HEADING = re.compile(
+    r"^front matter$|^request$|^sources?$|source register|source-context"
+    r"|supplied (current )?handoffs?|technical audit",
+    re.IGNORECASE,
+)
+LEVEL_TWO_PLACEMENT = {"Calculations": "calculations", "Gaps": "limits"}
+CONFIDENCE_NOT_ASSESSABLE = "not assessable"
+COMMITTEE_STATUS = re.compile(r"^committee_status:\s*(.+)$", re.MULTILINE)
+WORD_GROUPS = ("view", "reference", "calculations", "limits", "audit")
+
+
+def _is_evidence(sections: list[dict[str, Any]], index: int) -> bool:
+    """The section's own heading, or an ancestor heading at level 2 or more, is evidence."""
+    section = sections[index]
+    level = section["level"]
+    if EVIDENCE_HEADING.search(section["heading"].strip()):
+        return True
+    for earlier in reversed(sections[:index]):
+        if earlier["level"] >= level or earlier["level"] < 2:
+            continue
+        if EVIDENCE_HEADING.search(earlier["heading"].strip()):
+            return True
+        level = earlier["level"]
+    return False
+
+
+def placements(sections: list[dict[str, Any]]) -> list[str]:
+    """Where each section is read: consumed, view, reference, calculations, limits or audit.
+
+    By the section's level-2 parent (itself when it is one). Only Findings is split further, and a
+    section under any other level-2 heading, or under none, is audit (R34).
+    """
+    result: list[str] = []
+    parent = ""
+    for index, section in enumerate(sections):
+        if section["level"] <= 2:
+            parent = section["heading"] if section["level"] == 2 else ""
+        heading = section["heading"]
+        if parent in LEVEL_TWO_PLACEMENT:
+            result.append(LEVEL_TWO_PLACEMENT[parent])
+        elif parent != "Findings":
+            result.append("audit")
+        elif heading == "Reader summary" or heading.startswith(CHART_PREFIX):
+            result.append("consumed")
+        elif _is_evidence(sections, index):
+            result.append("audit")
+        elif any(block["type"] == "table" for block in section["blocks"]):
+            result.append("reference")
+        else:
+            result.append("view")
+    return result
+
+
+def section_words(section: dict[str, Any]) -> int:
+    """Whitespace-separated words of the section's prose and table cells; not its heading."""
+    total = 0
+    for block in section["blocks"]:
+        if block["type"] == "text":
+            total += len(block["text"].split())
+        elif block["type"] == "table":
+            total += sum(len(cell.split()) for row in block["rows"] for cell in row["cells"])
+    return total
+
+
+def report_fields(sections: list[dict[str, Any]], summary: dict[str, Any] | None) -> dict[str, Any]:
+    """An output's state, section placement and word count per placement, for the run report."""
+    established = None
+    if summary is not None:
+        confidence = str(summary["confidence"]).strip().casefold()
+        established = not confidence.startswith(CONFIDENCE_NOT_ASSESSABLE)
+    declared = None
+    for section in sections:
+        if section["heading"] == "Front matter" and section["level"] == 1:
+            text = "\n".join(b["text"] for b in section["blocks"] if b["type"] == "text")
+            match = COMMITTEE_STATUS.search(text)
+            declared = match.group(1).strip() if match else None
+            break
+    placement = placements(sections)
+    words = dict.fromkeys(WORD_GROUPS, 0)
+    for where, section in zip(placement, sections, strict=True):
+        if where in words:
+            words[where] += section_words(section)
+    return {
+        "state": {"established": established, "declared": declared},
+        "placement": placement,
+        "words": words,
+    }
+
+
 def sections_of(text: str) -> list[dict[str, Any]]:
     """parse_source, typed as a list of section dicts."""
     sections: list[dict[str, Any]] = parse_source(text)
@@ -672,6 +762,7 @@ def collect_runs(
                     "firstHeading": config.get("firstHeading"),
                 }
                 record.update(reader_fields(sections))
+                record.update(report_fields(sections, record["summary"]))
                 if record["issue"]:
                     issues.append(f"{output_id}: {record['issue']}")
                 if problem:
