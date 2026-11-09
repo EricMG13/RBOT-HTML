@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "tiny-text",
+        "value": "*",
+        "files": [
+          "docs/design/mockups/module-report.html"
+        ],
+        "createdAt": "2026-11-09T18:01:48.426Z",
+        "reason": "Credit OS DESIGN.md at Final-workflow-PY 07e14eca fixes the type ramp: label 11px, compact 12px, body 13px; the mockup follows the committed design"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "docs/design/mockups/module-report.html"
+        ],
+        "createdAt": "2026-11-09T18:03:57.111Z",
+        "reason": "Untitled UI Tag-with-avatar anatomy: the leading avatar tile sits 4px inside the chip border by design; text keeps 8px"
+      }
+    ]
+  }
+}
