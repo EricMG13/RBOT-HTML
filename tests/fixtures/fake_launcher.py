@@ -13,8 +13,8 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))  # the package is not installed
-
+from deploy_workflow.model.adapter import KEY_VARIABLES, LivePauseInForce, check_ruling
+from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.run_events import append_event
 
 
@@ -27,6 +27,19 @@ def main() -> int:
     parser.add_argument("--no-library", action="store_true")
     args = parser.parse_args()
     plan = json.loads(os.environ.get("FAKE_PLAN", "{}"))
+    if args.live and args.ruling is None:
+        print(f"--live needs --ruling docs/rulings/<file>.md naming {args.config}", file=sys.stderr)
+        return 2
+    try:  # the real launcher's checks, run before any work
+        if args.ruling is not None:
+            check_ruling(args.config, Path(args.ruling))
+    except (ValueError, OSError, LivePauseInForce) as error:
+        print(error, file=sys.stderr)
+        return 2
+    key = KEY_VARIABLES[CONFIGS[args.config].provider]
+    if args.live and not os.environ.get(key):
+        print(f"--live needs {key} in the launching environment", file=sys.stderr)
+        return 2
     if not args.live:
         if plan.get("prepare_error"):
             print(plan["prepare_error"], file=sys.stderr)
