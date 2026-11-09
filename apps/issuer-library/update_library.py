@@ -138,6 +138,16 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
     page.write_text(html.replace("<head>", "<head>\n  " + CSP_META, 1), encoding="utf-8")
 
 
+def remove_folder(folder: Path) -> None:
+    """Remove a leftover build folder; a failure is reported on stderr, not hidden."""
+
+    def report(function: Any, path: str, error: BaseException) -> None:
+        print(f"Could not remove {path}: {error}", file=sys.stderr)
+
+    if folder.exists():
+        shutil.rmtree(folder, onexc=report)
+
+
 def update_library(workspace: Path) -> Library:
     """Rebuild ``workspace/library`` whole: built beside it, then swapped in."""
     workspace = workspace.resolve()
@@ -152,7 +162,7 @@ def update_library(workspace: Path) -> Library:
     try:
         build_into(staging, workspace, library)
         staging.chmod(0o755)  # mkdtemp makes it owner-only; the page is shared like the reports.
-        shutil.rmtree(old, ignore_errors=True)
+        remove_folder(old)
         had_library = target.exists()
         if had_library:
             target.rename(old)
@@ -162,9 +172,9 @@ def update_library(workspace: Path) -> Library:
             if had_library:
                 old.rename(target)  # The previous library stays if the new one cannot be placed.
             raise
-        shutil.rmtree(old, ignore_errors=True)
+        remove_folder(old)
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        remove_folder(staging)
     return library
 
 

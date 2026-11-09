@@ -133,7 +133,18 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
     manifest_sha = sha(manifest)
     put(run_dir / f"delivery-{manifest_sha}.json", manifest)
     view_run = dict(run, issuer_id=spec.view_issuer or issuer_id)
-    report = f"<!doctype html><title>{issuer_name} report</title><p>Report</p>".encode()
+    # The parts of a CP-OS report that the library's report-adapter.js reads: the report data, the
+    # view root, and the evidence inspector with its head and content.
+    payload = json.dumps(
+        {"run": {"issuer_name": issuer_name}, "report": {"pathway": {"title": "Credit snapshot"}}}
+    ).replace("<", "\\u003c")
+    report = (
+        f'<!doctype html><title>{issuer_name} report</title><body><main id="view-root">'
+        f'<div class="page-head"><h1>Report</h1></div></main>'
+        f'<aside id="inspector"><div class="insp-head"></div>'
+        f'<div id="inspector-content" role="tabpanel"><p>Select a figure or source</p></div>'
+        f'</aside><script id="report-data" type="application/json">{payload}</script></body>'
+    ).encode()
     files = {
         "report.html": report,
         "view.json": json.dumps({"run": view_run}).encode(),
