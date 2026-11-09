@@ -361,3 +361,60 @@ test('an audit item that cannot be drawn says so instead of staying silent', () 
   } finally { console.error = log; }
   assert.ok(body.innerHTML.includes('Couldn’t present this item') && errors.length === 1 && body.hidden === false && !body.dataset.drawn);
 });
+
+// ---- Final fix round: avatar and match come from the build (R23, R25); one numeric rule (R26); one section count (R27).
+function inspectorSection(chip) {
+  const text = read('screen.js');
+  const start = text.indexOf('function chipSection('), end = text.indexOf('function showInspector(');
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const section = new Function('esc', 'icon', `${text.slice(start, end)}; return chipSection;`)(esc, n => `<img src="${n}">`);
+  return section(chip, { href: '../runs/r/deliveries/d/CP-1.md', source: 'deliveries/d/CP-1.md' });
+}
+const found = { kind: 'issuer_page', source: 'Annual filing', avatar: 'AF', file: 'a.jsonl', page: 3, page_end: null, sha256: 'ab', quote: '3472', quote_found: true, hash_matches_inventory: true };
+
+test('the inspector marks the span the build matched, not the quote', () => {
+  const html = inspectorSection({ ...found, excerpt: 'Net sales were 3,472 in the year', match: '3,472', match_at: 15 });
+  assert.ok(html.includes('<mark>3,472</mark>') && !html.includes('<mark>3472</mark>') && html.includes('Quote found on page'));
+  assert.ok(html.includes('Net sales were <mark>3,472</mark> in the year'));
+  const bracket = inspectorSection({ ...found, quote: '-11', excerpt: 'loss of (11) before tax', match: '(11)', match_at: 8 });
+  assert.ok(bracket.includes('loss of <mark>(11)</mark> before tax'));
+});
+
+test('the inspector marks where the build says, and nowhere else, and never searches for the quote', () => {
+  const twice = inspectorSection({ ...found, excerpt: 'a 11 and 211 and 11', quote: '11', match: '11', match_at: 17 });
+  assert.ok(twice.includes('a 11 and 211 and <mark>11</mark>'));
+  const none = inspectorSection({ ...found, excerpt: 'Net sales were 3,472', quote_found: true });
+  assert.ok(!none.includes('<mark>') && none.includes('Net sales were 3,472'));
+  const missing = inspectorSection({ ...found, quote_found: false, excerpt: 'Net sales were 3,472' });
+  assert.ok(!missing.includes('<mark>') && missing.includes('Quote not found'));
+});
+
+test('the avatar is the build avatar and the inspector names the full key', () => {
+  assert.equal(chipViewOf(found).av, 'AF');
+  assert.equal(chipViewOf({ ...found, avatar: undefined, source: 'K' }).av, 'K');
+  assert.ok(inspectorSection({ ...found, excerpt: 'x' }).includes('Cited as Annual filing'));
+});
+function chipViewOf(chip) { return report().chipView(chip, 'CP-1'); }
+
+test('a key-numbers column with a prose cell is not numeric; "Not supplied" and n.a. do not count against it', () => {
+  const prose = 'Drawn loan principal not separately printed in retained summary; 910 commitment, 843 available';
+  const sections = [{ heading: 'Register', line: 90, blocks: [table(92, ['Item', 'Amount', 'Limit', 'Note'], [
+    [93, 'Revolver', prose, '910', 'x'], [94, 'Term loan', '1,200', 'Not supplied: not printed', 'y'], [95, 'Notes', '500', 'n.a.', 'z'], [96, 'Other', '', '12', 'w'],
+  ])] }];
+  const html = report({ sections }, [['register', 'Register', ['Register']]]).keyNumbers(OUT);
+  assert.equal(html, '');
+  const both = [{ heading: 'Register', line: 90, blocks: [table(92, ['Item', 'Amount', 'Limit'], [
+    [93, 'Term loan', '1,200', '910'], [94, 'Notes', 'Not supplied: not printed', '500'], [95, 'Other', 'n.a.', '12'], [96, 'Bonds', '', '7'],
+  ])] }];
+  const shown = report({ sections: both }, [['register', 'Register', ['Register']]]).keyNumbers(OUT);
+  assert.equal(shown.match(/<th scope="col" class="num">/g).length, 2);
+});
+
+test('the head and the audit summary give the store\'s one section count', () => {
+  const sections = [...SECTIONS, { heading: 'Empty', line: 70, blocks: [] }, { heading: 'Also empty', line: 72, blocks: [] }];
+  const html = report({ sections }).moduleReport(OUT);
+  assert.equal(sections.length, 7);
+  assert.ok(html.includes('<code>CP-1.md</code> · 7 sections'));
+  assert.ok(html.includes('<span>7 sections · unchanged from the handoff</span>'));
+  assert.ok(!/\b(?:5|6) sections\b/.test(html));
+});

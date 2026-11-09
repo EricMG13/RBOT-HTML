@@ -341,15 +341,16 @@ function chipSection(chip,output) {
   const pages=chip.page_end!=null&&chip.page_end!==chip.page?`${chip.page}–${chip.page_end}`:chip.page;
   let excerpt='';
   if(chip.excerpt) {
-    const at=chip.quote_found===true&&chip.quote?chip.excerpt.indexOf(chip.quote):-1;
-    excerpt=`<div class="excerpt">${at<0?esc(chip.excerpt):`${esc(chip.excerpt.slice(0,at))}<mark>${esc(chip.quote)}</mark>${esc(chip.excerpt.slice(at+chip.quote.length))}`}</div>`;
+    // The build says what it matched (`match`, at `match_at` in the excerpt); the page marks that and judges nothing.
+    const at=chip.match?(Number.isInteger(chip.match_at)?chip.match_at:chip.excerpt.indexOf(chip.match)):-1,marked=at>=0&&chip.excerpt.startsWith(chip.match,at);
+    excerpt=`<div class="excerpt">${marked?`${esc(chip.excerpt.slice(0,at))}<mark>${esc(chip.match)}</mark>${esc(chip.excerpt.slice(at+chip.match.length))}`:esc(chip.excerpt)}</div>`;
   }
   // The output's href points into runs/<run>/...; the retained source text sits beside the handoff's folder tree in the same run.
   const root=output.href.split('/').slice(0,-output.source.split('/').length).join('/');
   // A source text the build could not read (no hash match result, no excerpt) has no file to open; the reason stands instead.
   const absent=chip.hash_matches_inventory===null&&!chip.excerpt;
   const open=chip.file&&!absent?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
-  return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
+  return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${chip.file&&chip.source?`<p class="small chip-key">Cited as ${esc(chip.source)}</p>`:''}${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }
 function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], chip=chipIndex===null?null:window.CREDIT_OS_DATA.chips[key][chipIndex];

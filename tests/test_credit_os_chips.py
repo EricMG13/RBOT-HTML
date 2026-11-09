@@ -8,13 +8,27 @@ import sys
 from pathlib import Path
 
 import pytest
-from library_fixtures import CITED, SOURCE_NAME, SOURCE_PAGES, inventory_text, make_run, method
+from library_fixtures import (
+    ALIAS_CITED,
+    ALIAS_FILING_NAME,
+    ALIAS_FILING_PAGES,
+    ALIAS_PDF_NAME,
+    ALIAS_PDF_PAGES,
+    CITED,
+    SOURCE_NAME,
+    SOURCE_PAGES,
+    alias_inventory_text,
+    inventory_text,
+    make_run,
+    method,
+)
 
 from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.credit_os_chips import (
     chips,
     chips_for_output,
     inventory,
+    inventory_alternates,
     parse_locators,
 )
 from deploy_workflow.library_index import build_library
@@ -24,27 +38,29 @@ sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
 from credit_os.store import workspace_store
 
+KEYS = ("K", "M", "J", "PDF", "Settings")
+
 
 def loc(kind, source=None, page=None, page_end=None, **rest):
-    base = {"module": None, "codes": (), "label": None}
+    base = {"module": None, "codes": (), "label": None, "note": None}
     return {"kind": kind, "source": source, "page": page, "page_end": page_end, **base, **rest}
 
 
 def test_single_page():
-    assert parse_locators("K, page:118 states the opinion") == [loc("issuer_page", "K", 118)]
+    assert parse_locators("K, page:118 states the opinion", KEYS) == [loc("issuer_page", "K", 118)]
 
 
 def test_page_range():
-    assert parse_locators("M, pages 31-32") == [loc("issuer_page", "M", 31, 32)]
+    assert parse_locators("M, pages 31-32", KEYS) == [loc("issuer_page", "M", 31, 32)]
 
 
 def test_two_keyed_pages_and_a_bare_one_inherits_the_last_key():
-    got = parse_locators("Cash K, page:120 and later page:123")
+    got = parse_locators("Cash K, page:120 and later page:123", KEYS)
     assert got == [loc("issuer_page", "K", 120), loc("issuer_page", "K", 123)]
 
 
 def test_keys_switch_between_sources():
-    got = parse_locators("M, page:3, and J, pages 2-3")
+    got = parse_locators("M, page:3, and J, pages 2-3", KEYS)
     assert got == [loc("issuer_page", "M", 3), loc("issuer_page", "J", 2, 3)]
 
 
@@ -67,11 +83,11 @@ def test_trailing_register_codes_belong_to_the_module_itself():
 
 def test_a_trailing_code_after_a_word_or_a_semicolon_is_found():
     assert parse_locators("Derived from calculation E1.") == [loc("upstream", codes=("E1",))]
-    assert parse_locators("K, page:120; D2.") == [
+    assert parse_locators("K, page:120; D2.", KEYS) == [
         loc("issuer_page", "K", 120),
         loc("upstream", codes=("D2",)),
     ]
-    assert parse_locators("K, page:120;D2.")[1] == loc("upstream", codes=("D2",))
+    assert parse_locators("K, page:120;D2.", KEYS)[1] == loc("upstream", codes=("D2",))
 
 
 def test_a_quarter_label_ending_a_sentence_is_not_a_register_code():
@@ -357,7 +373,8 @@ def test_gap_labels_are_short_and_carry_a_reason(tmp_path):
         ("c", "1", "page:3"),
     )
     (unresolved,) = got["x/CP-1.md:4"]
-    assert (unresolved["label"], unresolved["reason"]) == ("K p.10 · unresolved", "no inventory")
+    # R24: with no inventory no key is read, so the page is unkeyed (was "K p.10 · unresolved").
+    assert (unresolved["label"], unresolved["reason"]) == ("p.10 · no key", "no inventory")
     assert got["x/CP-1.md:5"][0]["label"] == "Not supplied" and got["x/CP-1.md:5"][0]["reason"]
     assert got["x/CP-1.md:6"][0]["label"] == "p.3 · no key" and got["x/CP-1.md:6"][0]["reason"]
 
@@ -380,7 +397,7 @@ def test_no_false_locators(text):
 
 
 def test_a_bare_page_does_not_inherit_a_key_from_an_earlier_sentence():
-    got = parse_locators("K, page:118. Proxy page:7 says so.")
+    got = parse_locators("K, page:118. Proxy page:7 says so.", KEYS)
     assert got[0] == loc("issuer_page", "K", 118)
     assert got[1]["kind"] == "gap" and got[1]["page"] == 7
 
@@ -470,3 +487,238 @@ def test_a_positive_number_is_found_inside_a_range_but_not_as_a_negative(tmp_pat
     assert in_range["quote_found"] is True
     (negative,) = run_chips(run, inv, ("a", "2024", "K, page:2"))["x/CP-1.md:4"]
     assert negative["quote_found"] is False
+
+
+# --- Final fix round: R24 (inventory keys), R23 (aliases, page forms), R25 (match) ------------
+
+ALIASES = ("March filing", "June filing", "Annual filing", "Annual PDF", "Settings")
+ALTERNATE_PDF = ("Annual PDF",)
+NOTE_ANNUAL = "alias 'Annual' → 'Annual filing' (Annual PDF marked alternate in CP-0)"
+
+
+def aliased(text):
+    return parse_locators(text, ALIASES, ALTERNATE_PDF)
+
+
+def pages_of(got):
+    return [(g["source"], g["page"], g["page_end"]) for g in got]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("K, page:121 and PDF, page:106 each contain it", [("K", 121, None), ("PDF", 106, None)]),
+        (
+            "Settings, page:1 has a blank cutoff; K, page:120",
+            [("Settings", 1, None), ("K", 120, None)],
+        ),
+        ("K p.5", [("K", 5, None)]),
+        ("PDF pages 7–9", [("PDF", 7, 9)]),
+    ],
+)
+def test_keys_are_the_inventorys_not_one_capital_letter(text, expected):
+    assert pages_of(parse_locators(text, ("K", "PDF", "Settings"))) == expected
+
+
+def test_a_key_the_inventory_lacks_leaves_a_gap_and_inherits_nothing():
+    got = parse_locators("K, page:1 and X, page:2", ("K", "M"))
+    assert got[0] == loc("issuer_page", "K", 1)
+    assert got[1]["kind"] == "gap" and got[1]["label"] == "p.2 · no key" and got[1]["page"] == 2
+    (alone,) = parse_locators("Settings, page:9", ("K",))
+    assert alone["kind"] == "gap" and alone["source"] is None and alone["page"] == 9
+
+
+def test_the_longest_key_wins_and_keys_are_matched_exactly():
+    got = parse_locators("PDF, page:3 and PDFX, page:4", ("P", "PDF"))
+    assert pages_of(got[:1]) == [("PDF", 3, None)]
+    assert got[1]["kind"] == "gap"
+    assert parse_locators("K, page:5", ("k",))[0]["kind"] == "gap"
+    assert parse_locators("a.b, page:5", ("a.b",))[0]["source"] == "a.b"
+    assert parse_locators("axb, page:5", ("a.b",))[0]["kind"] == "gap"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Annual page:71", [(71, None)]),
+        ("Annual pages 71, 123", [(71, None), (123, None)]),
+        ("Annual pages 63, 71, 120, 144-145", [(63, None), (71, None), (120, None), (144, 145)]),
+        ("Annual p. 71", [(71, None)]),
+        ("Annual p.59", [(59, None)]),
+        ("Annual pp.55,123", [(55, None), (123, None)]),
+        ("Annual pp.62–63", [(62, 63)]),
+        ("Annual pages 13, 24–25, 31", [(13, None), (24, 25), (31, None)]),
+        ("Annual pages: 4", [(4, None)]),
+        ("Annual PAGE 8", [(8, None)]),
+    ],
+)
+def test_every_page_form_of_a_leading_word_resolves_to_the_primary_alias(text, expected):
+    got = aliased(text)
+    assert [(g["page"], g["page_end"]) for g in got] == expected
+    assert {g["source"] for g in got} == {"Annual filing"}
+    assert {g["note"] for g in got} == {NOTE_ANNUAL}
+
+
+def test_the_alias_in_full_and_a_unique_leading_word():
+    (full,) = aliased("Annual filing page:71")
+    assert full == loc("issuer_page", "Annual filing", 71)
+    (pdf,) = aliased("Annual PDF pp.3–4")
+    assert pdf == loc("issuer_page", "Annual PDF", 3, 4)
+    (march,) = aliased("March pages 31-32")
+    assert march == loc(
+        "issuer_page", "March filing", 31, 32, note="alias 'March' → 'March filing'"
+    )
+    (june,) = aliased("June filing p.2")
+    assert june["source"] == "June filing" and june["note"] is None
+
+
+def test_a_leading_word_that_fits_two_non_alternate_aliases_is_a_gap():
+    (got,) = parse_locators("Annual p.71", ALIASES, ())
+    assert got["kind"] == "gap" and got["source"] is None and got["page"] == 71
+    assert got["label"] == "Annual p.71 · ambiguous"
+    assert "Annual filing" in got["note"] and "Annual PDF" in got["note"]
+    both = parse_locators("Annual pp.5–6", ALIASES, ("Annual filing", "Annual PDF"))
+    assert [g["label"] for g in both] == ["Annual p.5-6 · ambiguous"]
+
+
+def test_an_exact_alias_beats_a_leading_word():
+    (got,) = parse_locators("Annual page:3", ("Annual", "Annual filing"), ())
+    assert got == loc("issuer_page", "Annual", 3)
+
+
+def test_a_bare_page_after_an_aliased_one_inherits_the_resolved_alias():
+    got = aliased("Annual p.71 and later page:72")
+    assert pages_of(got) == [("Annual filing", 71, None), ("Annual filing", 72, None)]
+
+
+def test_a_listed_item_that_is_not_a_page_is_not_read():
+    assert pages_of(aliased("Annual page:71, 2024 results")) == [("Annual filing", 71, None)]
+
+
+def test_inventory_alternates_reads_the_role_column():
+    headers = ["Alias", "Exact supplied source name", "Exact sha256", "Role in this review"]
+    sections = inventory_section("Supplied source inventory", headers)
+    rows = [
+        ["Annual filing", "a", "ab" * 32, "Primary annual authority"],
+        ["Annual PDF", "b", "cd" * 32, "Sampled alternate annual representation"],
+        ["Quarter", "c", "ef" * 32, "Alternate quarterly copy"],
+    ]
+    sections[0]["blocks"][0]["rows"] = [{"line": 5 + i, "cells": r} for i, r in enumerate(rows)]
+    assert inventory_alternates(sections) == {"Annual PDF", "Quarter"}
+    plain = inventory_section("Inventory", ["Alias", "Name", "Exact sha256", "Source disposition"])
+    plain[0]["blocks"][0]["rows"][0]["cells"] = ["K", "k.jsonl", "ab" * 32, "alternate"]
+    assert inventory_alternates(plain) == frozenset()
+
+
+def alias_run(tmp_path):
+    filing = hashlib.sha256(ALIAS_FILING_PAGES).hexdigest()
+    pdf = hashlib.sha256(ALIAS_PDF_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-b",
+        cp0_extra=alias_inventory_text(filing, pdf),
+        cp1_extra=ALIAS_CITED,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / ALIAS_FILING_NAME).write_bytes(ALIAS_FILING_PAGES)
+    (run / "source-text" / ALIAS_PDF_NAME).write_bytes(ALIAS_PDF_PAGES)
+    library = build_library(tmp_path, tmp_path / "library", method())
+    return run, workspace_store(tmp_path, catalogue(tmp_path, library))
+
+
+def test_alias_run_end_to_end(tmp_path):
+    run, store = alias_run(tmp_path)
+    got = chips(tmp_path, store)
+    (short,) = got[line_of(run, store, "| Short form")]
+    assert (short["source"], short["file"], short["avatar"]) == (
+        "Annual filing",
+        ALIAS_FILING_NAME,
+        "AF",
+    )
+    assert (short["page"], short["quote"], short["quote_found"]) == (71, "3472", True)
+    assert short["reason"] == NOTE_ANNUAL and short["hash_matches_inventory"] is True
+    assert short["match"] == "3,472" and short["excerpt"][short["match_at"] :].startswith("3,472")
+    (bracket,) = got[line_of(run, store, "| Bracketed")]
+    assert (bracket["quote"], bracket["quote_found"], bracket["match"]) == ("-11", True, "(11)")
+    first, second, third = got[line_of(run, store, "| Listed")]
+    assert [(c["source"], c["page"], c["page_end"]) for c in (first, second)] == [
+        ("Annual filing", 71, None),
+        ("Annual filing", 72, None),
+    ]
+    assert (third["source"], third["page"], third["page_end"]) == ("Annual filing", 71, 72)
+    assert third["avatar"] == "AF" and third["reason"] is None
+    assert first["reason"] == NOTE_ANNUAL and second["reason"] == NOTE_ANNUAL
+
+
+def test_a_pdf_alias_chip_reads_the_pdf_text(tmp_path):
+    run, _ = alias_run(tmp_path)
+    (pdf,) = chips_for_output(
+        run,
+        "x/CP-1.md",
+        "CP-1",
+        table(("a", "9999", "Annual PDF p.71")),
+        {"Annual PDF": (ALIAS_PDF_NAME, hashlib.sha256(ALIAS_PDF_PAGES).hexdigest())},
+    )["x/CP-1.md:4"]
+    assert (pdf["avatar"], pdf["quote_found"], pdf["match"]) == ("AP", True, "9,999")
+
+
+def test_a_single_letter_key_keeps_its_letter_as_avatar(tmp_path):
+    run, inv = one_run(tmp_path)
+    (got,) = run_chips(run, inv, ("a", "1", "K, page:10"))["x/CP-1.md:4"]
+    assert got["avatar"] == "K"
+
+
+def test_an_alias_first_cell_names_the_source_of_a_bare_page(tmp_path):
+    run, inv = one_run(tmp_path)
+    inv = {"Annual filing": inv["K"]}
+    (got,) = run_chips(run, inv, ("Annual", "page 10", "n/a"))["x/CP-1.md:4"]
+    assert (got["source"], got["page"], got["reason"]) == (
+        "Annual filing",
+        10,
+        "alias 'Annual' → 'Annual filing'",
+    )
+
+
+def test_match_is_the_exact_page_span_of_a_tolerant_number(tmp_path):
+    pages = b'{"page": 3, "text": "Net sales were 3,472 and the loss was (11) before tax."}\n'
+    run, inv = one_run(tmp_path, pages=pages)
+    (comma,) = run_chips(run, inv, ("a", "3472", "K, page:3"))["x/CP-1.md:4"]
+    assert comma["quote_found"] is True and comma["match"] == "3,472"
+    assert comma["excerpt"][comma["match_at"] : comma["match_at"] + 5] == "3,472"
+    (bracket,) = run_chips(run, inv, ("a", "-11", "K, page:3"))["x/CP-1.md:4"]
+    assert bracket["match"] == "(11)"
+    (text,) = run_chips(run, inv, ("a", "-", "K, page:3 says “Net sales”"))["x/CP-1.md:4"]
+    assert text["match"] == "Net sales" and text["match_at"] == 0
+    (miss,) = run_chips(run, inv, ("a", "999", "K, page:3"))["x/CP-1.md:4"]
+    assert (miss["quote_found"], miss["match"], miss["match_at"]) == (False, None, None)
+    (none,) = run_chips(run, inv, ("a", "-", "K, page:3"))["x/CP-1.md:4"]
+    assert (none["quote"], none["match"]) == (None, None)
+
+
+def test_match_stays_inside_a_clipped_excerpt(tmp_path):
+    long = "x" * 900
+    pages = ('{"page": 1, "text": "' + long + '"}\n').encode()
+    run, inv = one_run(tmp_path, pages=pages)
+    (got,) = run_chips(run, inv, ("a", "-", f"K, page:1 says “{long}”"))["x/CP-1.md:4"]
+    assert got["quote_found"] is True
+    assert got["match"] in got["excerpt"] and len(got["match"]) <= 600
+    assert got["excerpt"][got["match_at"] :].startswith(got["match"])
+
+
+def test_an_ambiguous_alias_becomes_a_gap_chip_with_its_reason(tmp_path):
+    headers = ["Alias", "Exact supplied source name", "Exact sha256", "Role in this review"]
+    sections = inventory_section("Supplied source inventory", headers)
+    rows = [
+        ["Annual filing", "a.jsonl", "ab" * 32, "Primary"],
+        ["Annual PDF", "b.jsonl", "cd" * 32, "Primary as well"],
+    ]
+    sections[0]["blocks"][0]["rows"] = [{"line": 5 + i, "cells": r} for i, r in enumerate(rows)]
+    inv = inventory(sections)
+    assert inv.alternates == frozenset()
+    run, _ = one_run(tmp_path)
+    (got,) = chips_for_output(run, "x/CP-1.md", "CP-1", table(("a", "1", "Annual p.5")), inv)[
+        "x/CP-1.md:4"
+    ]
+    assert (got["kind"], got["source"], got["label"]) == ("gap", None, "Annual p.5 · ambiguous")
+    assert got["reason"].startswith("alias 'Annual' fits 'Annual filing', 'Annual PDF'")
+    assert got["avatar"] is None and got["excerpt"] is None

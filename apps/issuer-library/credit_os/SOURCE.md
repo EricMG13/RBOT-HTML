@@ -156,3 +156,13 @@ Low-findings batch: `web/views.js` `comparisonChart` prints `n.a.` (full cell te
 | --- | --- | --- |
 | `store.py` | new `front_matter(lines)`; `parse_source` starts with it: a first nonblank line of exactly `---` and a later line of exactly `---` become a level-1 "Front matter" section holding the lines between, verbatim, as one text block; any other body before the first heading still raises | 13 of the 20 real handoffs open with YAML front matter and were flattened to one "Unstructured handoff" block; nothing is parsed or inferred |
 | `tests/test_credit_os_store.py` | four tests: section shape, other preamble still raises, unterminated `---` raises, `structured(strict=False)` has no error | covers the above |
+
+## Final fix round (module-report plan, rulings R23-R27)
+
+`window.CREDIT_OS_DATA.chips` is produced by `src/deploy_workflow/credit_os_chips.py`, called from the `chips(...)` line of `update_library.py` (`apps/issuer-library/update_library.py`). Besides the existing fields each `issuer_page` chip carries `avatar` (the key, or the initials of a multi-word key such as `AF` for `Annual filing`), `match` (the page text the quote matched, a substring of `excerpt`) and `match_at` (its offset in `excerpt`); the resolver reads the run's CP-0 inventory keys and aliases, and the page prints what it is given.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/views.js` | `chipView` prints `chip.avatar` (falls back to the source key); `numericColumn` makes a key-numbers column numeric only when every cell with a value parses (empty, dash, `n.a.` and `Not supplied...` cells are skipped); the head and the audit summary both print `data[id].sections.length` sections | R23 avatar; R26; R27 |
+| `web/screen.js` | `chipSection` marks `chip.match` at `chip.match_at` (no search for the quote) and prints `Cited as <key>` for a chip with a file | R25; the inspector shows the full key |
+| `web/static.test.cjs` | tests for the marked span, the avatar, the full key, the numeric rule and the one section count | covers the above |

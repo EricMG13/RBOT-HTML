@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable, Iterator
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, TypedDict, cast
 
@@ -19,10 +21,18 @@ NO_PAGE = "no page"
 NUMBER = re.compile(r"[-−]?\d[\d,]*(?:\.\d+)?")
 QUOTE = re.compile(r"“([^”]+)”")
 BRACKET = re.compile(r"\[(CP-[0-9A-Z]+):\s*([A-Z]\d{1,2}(?:\s*[,;]\s*[A-Z]\d{1,2})*)\s*\]")
-PAGE = re.compile(
-    r"(?:(?P<key>\b[A-Z])\s*,\s*)?(?<![\w?&=/#.:-])[Pp]ages?\s*:?\s*(?P<a>\d+)(?!\d|\.\d)"
-    r"(?:\s*[-–]\s*(?P<b>\d+)(?!\d|\.\d))?"
+# A page marker: ``page``, ``pages``, ``page:``, ``p.``, ``pp.`` (any case), then the first number
+# or range, then (for a plural marker) more after commas. The source key, when the run has any, is
+# built from CP-0's inventory in ``key_index``.
+MARKER = r"(?<![\w?&=/#.:-])(?P<marker>(?i:pages?|pp?\.))\s*:?\s*"
+NUMBERS = (
+    r"(?P<a>\d+)(?!\d|\.\d)(?:\s*[-–]\s*(?P<b>\d+)(?!\d|\.\d))?"
+    r"(?P<more>(?:\s*,\s*\d+(?!\d|\.\d)(?:\s*[-–]\s*\d+(?!\d|\.\d))?)*)"
 )
+ITEM = re.compile(r"(\d+)(?:\s*[-–]\s*(\d+))?")
+# A capitalised word and a comma right before a bare page: a source key the inventory does not hold.
+UNKNOWN_KEY = re.compile(r"\b[A-Z]\w*\s*,\s*$")
+ALTERNATE = re.compile(r"\balternate\b", re.IGNORECASE)
 # Register letters exclude A, B, H and Q, which also open rating grades ("B2"), halves and quarters.
 CODE = r"[CD-GI-PR-Z]\d{1,2}"
 TRAILING = re.compile(rf"(?:\.\s+|;\s*|(?<=[A-Za-z])\s+)({CODE}(?:\s*[,;]\s*{CODE})*)\.?\s*$")
@@ -39,6 +49,7 @@ class Locator(TypedDict):
     module: str | None
     codes: tuple[str, ...]
     label: str | None
+    note: str | None
 
 
 def locator(kind: Literal["issuer_page", "upstream", "gap"], **fields: Any) -> Locator:
@@ -51,6 +62,7 @@ def locator(kind: Literal["issuer_page", "upstream", "gap"], **fields: Any) -> L
         "module": None,
         "codes": (),
         "label": None,
+        "note": None,
     }
     unknown = set(fields) - set(base)
     if unknown:
@@ -70,6 +82,7 @@ def as_gap(loc: Locator) -> Locator:
         page=loc["page"],
         page_end=loc["page_end"],
         label=f"{loc['source']} p.{span_text(loc['page'], loc['page_end'])} · unresolved",
+        note=loc["note"],
     )
 
 
@@ -77,31 +90,104 @@ def split_codes(text: str) -> tuple[str, ...]:
     return tuple(c.strip() for c in re.split(r"[,;]", text) if c.strip())
 
 
-def page_locator(match: re.Match[str], last_key: str | None) -> Locator:
-    first = int(match["a"])
-    last = int(match["b"]) if match["b"] else None
-    key = match["key"] or last_key
-    if key is None:
-        return locator(
-            "gap", page=first, page_end=last, label=f"p.{span_text(first, last)} · no key"
-        )
-    return locator("issuer_page", source=key, page=first, page_end=last)
+class Resolved(NamedTuple):
+    """The source a written key names: ``source`` is None when the key is ambiguous."""
+
+    source: str | None
+    note: str | None
+    word: str
 
 
-def scan(text: str, row_key: str | None = None) -> list[tuple[int, Locator]]:
+class KeyIndex(NamedTuple):
+    pattern: re.Pattern[str]
+    exact: dict[str, str]  # written key (single spaces) -> inventory key
+    prefixes: dict[str, tuple[str, ...]]  # leading words -> the multi-word keys they begin
+    alternates: frozenset[str]
+
+    def lookup(self, written: str) -> Resolved | None:
+        """What a written key means in this run: an alias in full, or by its leading words."""
+        word = " ".join(written.split())
+        if word in self.exact:
+            return Resolved(self.exact[word], None, word)
+        candidates = self.prefixes.get(word, ())
+        if not candidates:
+            return None
+        chosen = [c for c in candidates if c not in self.alternates]
+        if len(chosen) != 1:
+            left = ", ".join(repr(c) for c in chosen) or "none"
+            fits = ", ".join(repr(c) for c in candidates)
+            note = f"alias '{word}' fits {fits}; CP-0 roles leave {left}"
+            return Resolved(None, note, word)
+        skipped = [c for c in candidates if c != chosen[0]]
+        note = f"alias '{word}' → '{chosen[0]}'"
+        if skipped:
+            note += f" ({', '.join(skipped)} marked alternate in CP-0)"
+        return Resolved(chosen[0], note, word)
+
+
+@lru_cache(maxsize=32)
+def key_index(keys: tuple[str, ...], alternates: frozenset[str] = frozenset()) -> KeyIndex:
+    """The page-citation pattern for one run: keys are the inventory's, longest first, exact."""
+    exact: dict[str, str] = {}
+    prefixes: dict[str, list[str]] = {}
+    for key in keys:
+        words = key.split()
+        if not words:
+            continue
+        exact[" ".join(words)] = key
+        for n in range(1, len(words)):
+            prefixes.setdefault(" ".join(words[:n]), []).append(key)
+    phrases = sorted({*exact, *prefixes}, key=len, reverse=True)
+    spaced = [r"\s+".join(re.escape(w) for w in phrase.split()) for phrase in phrases]
+    keyed = rf"(?:(?<!\w)(?P<key>{'|'.join(spaced)})(?:\s*,\s*|\s+))?" if spaced else ""
+    pattern = re.compile(keyed + MARKER + NUMBERS)
+    return KeyIndex(pattern, exact, {k: tuple(v) for k, v in prefixes.items()}, alternates)
+
+
+def page_locators(match: re.Match[str], key: Resolved | None) -> list[Locator]:
+    """One locator per page or range the citation lists; a plural marker may list several."""
+    items = [(match["a"], match["b"])]
+    if match["marker"].lower() in ("pages", "pp."):
+        items += ITEM.findall(match["more"])
+    result = []
+    for first_text, last_text in items:
+        first, last = int(first_text), int(last_text) if last_text else None
+        if key is None:
+            loc = locator(
+                "gap", page=first, page_end=last, label=f"p.{span_text(first, last)} · no key"
+            )
+        elif key.source is None:
+            label = f"{key.word} p.{span_text(first, last)} · ambiguous"
+            loc = locator("gap", page=first, page_end=last, label=label, note=key.note)
+        else:
+            loc = locator(
+                "issuer_page", source=key.source, page=first, page_end=last, note=key.note
+            )
+        result.append(loc)
+    return result
+
+
+def scan(
+    text: str, index: KeyIndex | None = None, row_key: Resolved | None = None
+) -> list[tuple[int, Locator]]:
     """Every citation in ``text`` with its position; what no pattern matches is not guessed.
     ``row_key`` is the source key the row itself names, for a page with no key of its own."""
     found: list[tuple[int, Locator]] = []
     for m in BRACKET.finditer(text):
         found.append((m.start(), locator("upstream", module=m[1], codes=split_codes(m[2]))))
-    last_key: str | None = None
+    last_key: Resolved | None = None
     previous = 0
-    for m in PAGE.finditer(text):
+    for m in (index or key_index(())).pattern.finditer(text):
         if SENTENCE_END.search(text, previous, m.start()):
             last_key = None
-        last_key = m["key"] or last_key
+        spelled = m.groupdict().get("key")
+        written = index.lookup(spelled) if index and spelled else None
+        last_key = written or last_key
         previous = m.end()
-        found.append((m.start(), page_locator(m, last_key or row_key)))
+        # A bare page after an unknown capitalised key ("X, page:3") is a gap, not the last key's.
+        stray = written is None and UNKNOWN_KEY.search(text, 0, m.start())
+        key = written or (None if stray else last_key or row_key)
+        found.extend((m.start(), loc) for loc in page_locators(m, key))
     if (at := text.find(NOT_SUPPLIED)) >= 0:
         found.append((at, locator("gap", label=NOT_SUPPLIED)))
     if (tail := TRAILING.search(text)) and not BRACKET.search(text[tail.start(1) :]):
@@ -109,15 +195,20 @@ def scan(text: str, row_key: str | None = None) -> list[tuple[int, Locator]]:
     return sorted(found, key=lambda pair: pair[0])
 
 
-def parse_locators(text: str) -> list[Locator]:
-    """Every citation in ``text``, in reading order."""
-    return [loc for _, loc in scan(text)]
+def parse_locators(
+    text: str, keys: Iterable[str] = (), alternates: Iterable[str] = ()
+) -> list[Locator]:
+    """Every citation in ``text``, in reading order. ``keys`` are the run's inventory keys and
+    ``alternates`` those its CP-0 roles mark alternate; without keys no page names a source."""
+    index = key_index(tuple(keys), frozenset(alternates))
+    return [loc for _, loc in scan(text, index)]
 
 
-def inventory(cp0_sections: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
-    """key -> (file, sha256) from the CP-0 inventory table: any section headed "...inventory..."
-    holding a table with a sha256 column; the key is column 0 and the file name column 1."""
-    result: dict[str, tuple[str, str]] = {}
+def inventory_tables(
+    cp0_sections: list[dict[str, Any]],
+) -> Iterator[tuple[list[str], list[list[str]], int]]:
+    """(headers, rows' cells, index of the sha256 column) of every inventory table: a section
+    headed "...inventory..." holding a table of three or more columns with a sha256 column."""
     for section in cp0_sections:
         if "inventory" not in section["heading"].lower():
             continue
@@ -125,12 +216,37 @@ def inventory(cp0_sections: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
             if block["type"] != "table":
                 continue
             hashes = [i for i, h in enumerate(block["headers"]) if "sha256" in h.lower()]
-            if len(block["headers"]) < 3 or not hashes:
-                continue
-            for row in block["rows"]:
-                cells = row["cells"]
-                result[cells[0]] = (cells[1], cells[hashes[0]])
+            if len(block["headers"]) >= 3 and hashes:
+                yield block["headers"], [r["cells"] for r in block["rows"]], hashes[0]
+
+
+class Inventory(dict[str, tuple[str, str]]):
+    """key -> (file, sha256), with the keys CP-0's roles mark alternate."""
+
+    alternates: frozenset[str] = frozenset()
+
+
+def inventory(cp0_sections: list[dict[str, Any]]) -> Inventory:
+    """key -> (file, sha256) from the CP-0 inventory table: the key is column 0 and the file
+    name column 1; ``alternates`` are the keys whose role marks them alternate."""
+    result = Inventory()
+    result.alternates = inventory_alternates(cp0_sections)
+    for _, rows, sha_column in inventory_tables(cp0_sections):
+        for cells in rows:
+            result[cells[0]] = (cells[1], cells[sha_column])
     return result
+
+
+def inventory_alternates(cp0_sections: list[dict[str, Any]]) -> frozenset[str]:
+    """The keys whose "Role" cell (the column headed with "role") marks them alternate; runs
+    whose inventory has no such column have none."""
+    result: set[str] = set()
+    for headers, rows, _ in inventory_tables(cp0_sections):
+        roles = [i for i, h in enumerate(headers) if re.search("role", h, re.IGNORECASE)]
+        for cells in rows if roles else []:
+            if roles[0] < len(cells) and ALTERNATE.search(cells[roles[0]]):
+                result.add(cells[0])
+    return frozenset(result)
 
 
 def read_pages(raw: bytes) -> tuple[dict[int, str], str | None]:
@@ -192,11 +308,28 @@ def quote_span(quote: str, text: str) -> tuple[int, int] | None:
     return found.span() if found else None
 
 
+def excerpt_start(span: tuple[int, int] | None) -> int:
+    return 0 if span is None else max(0, span[0] - (EXCERPT - (span[1] - span[0])) // 2)
+
+
 def excerpt_around(text: str, span: tuple[int, int] | None) -> str:
-    if span is None:
-        return text[:EXCERPT]
-    start = max(0, span[0] - (EXCERPT - (span[1] - span[0])) // 2)
+    start = excerpt_start(span)
     return text[start : start + EXCERPT]
+
+
+def match_in_excerpt(text: str, span: tuple[int, int] | None) -> tuple[str | None, int | None]:
+    """The page text the quote matched, as printed, and where it sits in ``excerpt_around``."""
+    if span is None:
+        return None, None
+    start = excerpt_start(span)
+    first, last = max(span[0], start), min(span[1], start + EXCERPT, len(text))
+    return (text[first:last], first - start) if first < last else (None, None)
+
+
+def avatar(key: str) -> str:
+    """What the 18px chip avatar prints: the key, or the initials of a multi-word key."""
+    words = key.split()
+    return "".join(w[0].upper() for w in words) if len(words) > 1 else key
 
 
 def chip(loc: Locator, line: int, **fields: Any) -> dict[str, Any]:
@@ -216,6 +349,9 @@ def chip(loc: Locator, line: int, **fields: Any) -> dict[str, Any]:
         "line": line,
         "label": loc["label"],
         "reason": None,
+        "avatar": None,
+        "match": None,
+        "match_at": None,
     }
     base.update(fields)
     return base
@@ -226,6 +362,7 @@ class Pages:
 
     def __init__(self, run_dir: Path, inv: dict[str, tuple[str, str]]) -> None:
         self.inv = inv
+        self.index = key_index(tuple(inv), getattr(inv, "alternates", frozenset()))
         self.folder = run_dir / "source-text"
         self.cache: dict[str, tuple[dict[int, str], str | None, str | None]] = {}
 
@@ -269,12 +406,14 @@ def issuer_chip(loc: Locator, line: int, quote: str | None, pages: Pages) -> dic
         "hash_matches_inventory": None if actual is None else actual == expected,
         "quote": quote,
         "reason": problem,
+        "avatar": avatar(loc["source"] or ""),
     }
     first = loc["page"] or 0
     wanted = range(first, (loc["page_end"] or first) + 1)
     here = [(n, texts[n]) for n in wanted if n in texts]
     if problem is None and not here:
         fields["reason"] = "page not in source text"
+    fields["reason"] = "; ".join(r for r in (fields["reason"], loc["note"]) if r) or None
     span, shown = None, here[0] if here else None
     for number, text in here:
         if quote and (span := quote_span(quote, text)):
@@ -283,6 +422,7 @@ def issuer_chip(loc: Locator, line: int, quote: str | None, pages: Pages) -> dic
     fields["quote_found"] = (span is not None) if quote and here else None
     if shown:
         fields["excerpt"] = excerpt_around(shown[1], span)
+        fields["match"], fields["match_at"] = match_in_excerpt(shown[1], span)
     return chip(loc, line, **fields)
 
 
@@ -291,12 +431,13 @@ GAP_REASONS = {
 }
 
 
-def other_chip(loc: Locator, line: int, module: str) -> dict[str, Any]:
+def other_chip(loc: Locator, line: int, module: str, has_inventory: bool) -> dict[str, Any]:
     """A chip that needs no source text: upstream codes, or a gap the patterns left open."""
     if loc["kind"] == "upstream":
         # Register codes with no module named belong to the citing module itself.
         return chip(loc, line, module=loc["module"] or module)
-    reason = GAP_REASONS.get(loc["label"] or "", "page cited without a source key")
+    unkeyed = "page cited without a source key" if has_inventory else "no inventory"
+    reason = loc["note"] or GAP_REASONS.get(loc["label"] or "", unkeyed)
     return chip(loc, line, reason=reason)
 
 
@@ -313,16 +454,16 @@ def chips_for_cells(row: Row, module: str, pages: Pages) -> list[dict[str, Any]]
     row's first cell names. A claim row that cites nothing gets one ``no page`` gap."""
     number = numeric_cell(row.cells, row.headers)
     first = row.cells[0].strip()
-    named = first if row.headers and first in pages.inv else None
+    named = pages.index.lookup(first) if row.headers else None
     result = []
     for index, cell in enumerate(row.cells):
-        found = scan(cell, named if index else None)
+        found = scan(cell, pages.index, named if index else None)
         quotes = bound_quotes(cell, found)
         for pos, loc in found:
             if loc["kind"] == "issuer_page":
                 result.append(issuer_chip(loc, row.line, quotes.get(pos) or number, pages))
             else:
-                result.append(other_chip(loc, row.line, module))
+                result.append(other_chip(loc, row.line, module, bool(pages.inv)))
     if row.claim and not result:
         result.append(
             chip(

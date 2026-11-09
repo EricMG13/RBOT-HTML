@@ -220,7 +220,7 @@ const shortCode=module=>SHORT_CODES[module]||String(module).replace(/^CP-/,'');
 function chipView(chip,rowModule) {
   if(chip.kind==='issuer_page') {
     const pages=chip.page_end!=null&&chip.page_end!==chip.page?`p.${chip.page}–${chip.page_end}`:`p.${chip.page}`;
-    return {label:pages,av:chip.source,avClass:'',dot:'',cls:''};
+    return {label:pages,av:chip.avatar||chip.source,avClass:'',dot:'',cls:''};
   }
   if(chip.kind==='upstream') {
     const codes=chip.codes.join(' · ');
@@ -239,6 +239,13 @@ function chipsMarkup(key) {
   })].filter(Boolean));
 }
 const MISSING_CELL=/^(|[—–-]|Not supplied)$/i;
+// A cell that says there is no value; it neither makes a column numeric nor stops it being numeric.
+const NO_VALUE=/^(|[—–-]|n\.?a\.?|Not supplied\b[\s\S]*)$/i;
+// A column is numeric when every cell that has a value parses as a number, and at least one does.
+function numericColumn(block,c) {
+  const cells=block.rows.map(r=>plain(r.cells[c]??'').trim()).filter(text=>!NO_VALUE.test(text));
+  return c>0&&cells.length>0&&cells.every(text=>chartNumber(text)!==null);
+}
 const cellView=(cell,numeric)=>{
   const text=plain(cell??'').trim();
   if(MISSING_CELL.test(text))return `<td${numeric?' class="num"':''}><span class="na" title="${esc(text||'Empty in the handoff')}">n.a.</span></td>`;
@@ -253,7 +260,7 @@ function keyNumbers(id) {
     if(section.heading.startsWith('Chart data'))continue;
     for(const block of section.blocks) {
       if(block.type!=='table'||isFindingsTable(block)||block.headers[0]==='Bottom line')continue;
-      const numeric=block.headers.map((_,c)=>c>0&&block.rows.some(r=>chartNumber(r.cells[c]??'')!==null));
+      const numeric=block.headers.map((_,c)=>numericColumn(block,c));
       if(numeric.filter(Boolean).length<2)continue;
       const short=block.headers.map((_,c)=>c===0||numeric[c]||block.rows.every(r=>(r.cells[c]??'').length<=24));
       const columns=block.headers.map((_,c)=>c).filter(c=>short[c]).slice(0,5),rows=block.rows.slice(0,8);
@@ -269,7 +276,7 @@ function reportHead(id) {
   // No catalogue field says "accepted"; a run shows a checklist only when one is recorded (none is today), and that is not acceptance.
   const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===ctx.folder);
   const acceptance=record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
-  const count=out.sections.filter(s=>s.blocks.length).length;
+  const count=out.sections.length;
   return `<div class="module-head" id="head"><div><h2 title="${esc(module)}">${esc(moduleNames[module])}</h2><div class="sub"><span>${esc(module)}</span><span>·</span><span>Current methodology</span><span>·</span><span>Handoff <code>${esc(out.source.split('/').pop())}</code> · ${plural(count,'section')}</span></div></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${meta}${usedIn}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
@@ -298,7 +305,7 @@ function reportLimits(id) {
 // Every section the parts above do not print in full, as a line-numbered list; a section's content is drawn when it is opened (screen.js).
 function reportAudit(id) {
   const shown=new Set(limitsGroup(id).map(s=>s[0])),rest=modules[id].sections.filter(s=>!shown.has(s[0]));
-  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(rest.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${rest.map(([sectionId,label])=>{
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(data[id].sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${rest.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
   }).join('')}</ul></details>`;

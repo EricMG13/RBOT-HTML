@@ -266,3 +266,38 @@ REPORT_ROWS = """
 | --- | --- | --- |
 | Cash interest was paid. | K, page:123 says “Cash paid during the period”. | High |
 """
+
+
+# An inventory keyed by multi-word aliases with a "Role in this review" column, as one real run
+# writes it, and a CP-1 section citing them by leading word. `alias_inventory_text` takes the
+# sha256 of the annual filing and of the annual PDF.
+ALIAS_FILING_NAME = "NBG_FY2024_10-K_alias.htm.jsonl"
+ALIAS_PDF_NAME = "NBG_FY2024_annual-report_alias.pdf.jsonl"
+ALIAS_FILING_PAGES = (
+    b'{"page": 71, "text": "Revenue was 3,472 in the year and (11) of other items."}\n'
+    b'{"page": 72, "text": "Second page of the filing."}\n'
+)
+ALIAS_PDF_PAGES = b'{"page": 71, "text": "Revenue was 9,999 in the PDF."}\n'
+
+
+def alias_inventory_text(filing_digest: str, pdf_digest: str) -> str:
+    return f"""
+### Supplied source inventory and integrity
+
+| Alias | Exact supplied source name | Exact sha256 | Role in this review |
+| --- | --- | --- | --- |
+| Annual filing | {ALIAS_FILING_NAME} | {filing_digest} | Primary annual authority |
+| Annual PDF | {ALIAS_PDF_NAME} | {pdf_digest} | Sampled alternate annual representation |
+| Settings | context | {"0" * 64} | Dated settings only |
+"""
+
+
+ALIAS_CITED = """
+### Alias rows
+
+| Item | Value | Basis |
+| --- | --- | --- |
+| Short form | 3472 | Annual page:71 states the figure. |
+| Bracketed | -11 | Annual p.71 prints it. |
+| Listed | 1 | Annual pages 71, 72 and Annual filing pp.71–72. |
+"""
