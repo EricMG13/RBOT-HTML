@@ -34,8 +34,8 @@ def offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     app, root, cache = tmp_path / "repo/apps/issuer-library", tmp_path / "repo", tmp_path / "cache"
     for name in [
         *("engine/bridge.py", "engine/store.py", "engine/catalog.json", "engine/run_workflow.py"),
-        *("update_library.py", "static/template.html", "static/app.js"),
-        *("static/logic.test.cjs", "static/browser_check.cjs"),
+        *("update_library.py", "credit_os/store.py", "credit_os/catalog.json"),
+        *("credit_os/web/index.html", "credit_os/web/static.test.cjs"),
     ]:
         (app / name).parent.mkdir(parents=True, exist_ok=True)
         (app / name).write_text("x")
@@ -144,7 +144,13 @@ def test_the_package_ships_the_static_library_and_its_two_windows_wrappers(
     runtime.bundle(target, None)
     engine = target / "engine"
     assert (engine / "update_library.py").is_file() and (engine / "run_workflow.py").is_file()
-    assert sorted(p.name for p in (engine / "static").iterdir()) == ["app.js", "template.html"]
+    shipped = sorted(
+        p.relative_to(engine / "credit_os").as_posix()
+        for p in (engine / "credit_os").rglob("*")
+        if p.is_file()
+    )
+    assert shipped == ["catalog.json", "store.py", "web/index.html"]  # Not the node tests.
+    assert not (engine / "static").exists()
     assert not (engine / "bridge.py").exists()  # The lean package has no server bridge.
     assert list((engine / "docs/rulings").iterdir()) == []  # No ruling is shipped.
     for name in ["Run workflow.cmd", "Update library.cmd"]:

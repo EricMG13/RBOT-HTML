@@ -1,4 +1,4 @@
-# Issuer Library: two Python steps and a static page
+# Issuer Library: two Python steps and static pages
 
 No server, no port, no compiled executable. Both steps run with a checkout's Python
 (`uv sync --locked`) or the Windows package's bundled Python.
@@ -9,13 +9,20 @@ No server, no port, no compiled executable. Both steps run with a checkout's Pyt
    the paid run, which publishes the report inside the run folder.
 2. **Update the library**: `Update library.cmd [workspace]` in the package, or
    `python apps/issuer-library/update_library.py --workspace <folder>`. It rebuilds
-   `<workspace>/library/index.html` and the wrapper opens it. Without an argument the wrapper uses
-   `FINAL_WORKFLOW_WORKSPACE`, else `Documents\FinalWorkflow`. The script writes nothing but
-   `library/index.html`, and refuses to write through a `library` link.
+   `<workspace>/library/` and the wrapper opens `library/index.html`. Without an argument the
+   wrapper uses `FINAL_WORKFLOW_WORKSPACE`, else `Documents\FinalWorkflow`. The script writes
+   nothing but `library/` (built beside it, then swapped in whole), and refuses to write through a
+   `library` link.
 
-The page holds its data, styles, script and fonts, opens from disk (`file://`), blocks every
-network request through its content security policy, and opens reports and handoffs as their
-original files in a new tab. Its hashes are checked when it is built: update it after new runs.
+`library/` is the Credit OS library (one row per listed run) and, for each run, its issuer report
+with tabs for Overview, Modules, Calendar, Forecast, Reports and Evidence. It has no run controls:
+runs are made by step 1 and shown by step 2. `data.js` holds the catalogue and the workspace store
+as data; `reports/<run>/<delivery>/report.html` is each run's delivered report with the library's
+presentation added before its last `</body>` (the original in the run folder is never changed;
+downloads point at it). Links to run files are relative (`../runs/...`). The page opens from disk
+(`file://`) and blocks every network request through its content security policy. Its hashes are
+checked when it is built: update it after new runs. The page parts are `credit_os/web/`; the
+store and its sources are listed in `credit_os/SOURCE.md`.
 
 ## Which runs are listed
 
@@ -46,7 +53,7 @@ is per issuer by evidence date; runs sharing that date are all marked and counte
 `python apps/issuer-library/packaging/build.py` makes `artifacts/issuer-library/Issuer-Library-<arch>.zip`
 for amd64 and arm64: the official embeddable Python 3.13.15 and the pinned wheels, each verified
 against its SHA-256 digest at build time; the engine's `src`, methods and prompts; the update
-script and page parts; `Run workflow.cmd`, `Update library.cmd` and `Smoke-test.ps1`. It ships
+script, the Credit OS store and page parts; `Run workflow.cmd`, `Update library.cmd` and `Smoke-test.ps1`. It ships
 no ruling: a paid run needs one written in `engine\docs\rulings`. It ships no Copilot SDK or
 runtime either, so run the Copilot configurations from a checkout.
 

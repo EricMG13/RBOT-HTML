@@ -138,3 +138,40 @@
 1. Global rule caps a PR at 800 changed lines. Task 1 copies about 4,600 lines verbatim (store.py 2,874; views/screen/screening JS ~1,500; CSS). Accept the copied files as excluded from the count (as RBOT's own import commit `5c6e61b` was), or split into two PRs?
 
    **Answer (owner, 2026-11-09):** "Exclude copied files" — files copied verbatim from Credit OS (listed in `SOURCE.md`) do not count toward the 800-line cap; edits to them and all new code do.
+
+## Amendments (owner rulings relayed 2026-11-09)
+
+### Task 7: Owner fixes — catalogue period, legacy pins, excluded runs in data
+
+**Files:** Modify `src/deploy_workflow/credit_os_catalogue.py` (`chart_row`), `apps/issuer-library/credit_os/catalog.json`, `apps/issuer-library/credit_os/SOURCE.md`, `apps/issuer-library/update_library.py` (data.js payload); Test: `tests/test_credit_os_catalogue.py`, `tests/test_credit_os_store.py`, `tests/test_update_library.py`
+
+**Interfaces:** Produces `window.CREDIT_OS_DATA.activity = {"excluded": [[run_folder, reason], ...], "issues": [str, ...]}` (library_index `Library.excluded` plus catalogue and store issues), consumed by Task 8.
+
+- [ ] Failing tests: `test_metrics_take_the_latest_period_not_the_last_row` (chart tables listed newest first: FY2024 row above FY2023 → metrics are FY2024's values and quote the FY2024 row); `test_store_has_no_legacy_routes` adds `result["pins"] == {}` and `set(result["runs"]) == {"run-a"}`; `test_data_js_carries_excluded_runs` (one unlisted run → `activity.excluded` names it with library_index's reason).
+- [ ] Implement: latest period chosen by the period value (fiscal year / date in the Period cell), not row position; a table whose periods cannot be ordered gives no metric and an issue. Remove every legacy run path from catalog.json, keeping the 20 module IDs and what the navigator needs; record in SOURCE.md.
+- [ ] Gates: quality gate 0; the three test files pass. Commit.
+
+### Task 8: Read-only Run activity; Forecast not-run state
+
+**Files:** Modify `apps/issuer-library/credit_os/web/index.html` (rail link), `views.js`, `screen.js`, `static.test.cjs`; `SOURCE.md`
+
+- [ ] Failing tests (`static.test.cjs`): installDestinations keys are exactly `W-Library W-Overview W-Calendar W-Reports W-Evidence W-Forecast CP-OS`; the CP-OS destination has the single section `activity`; no `fetch(`, `setInterval(`, form, button that starts/resumes a run, or `run-strip` in the shell; the Run activity view renders `activity.excluded` rows (folder + reason) and `activity.issues`, and an empty-state line when both are empty; Forecast for a run with no CP-2G output renders "No forecast model was published from this run's files".
+- [ ] Implement as read-only views over `window.CREDIT_OS_DATA.activity`. Record edits in SOURCE.md.
+- [ ] Gates: node tests pass; headless Chrome file:// check of Run activity and Forecast. Commit.
+
+
+### Task 9: Publish the CP-2G model delivery from the launcher (owner: "Add it to the plan")
+
+Owner rulings binding this task: "forecast only works when cp-2g is present. that is part of its requirements. all calculations should be done by python and not the LLM." No paid run (owner: "List all, no new run").
+
+**Files:** Modify `src/deploy_workflow/owners/cpos_launch.py` (manifest `model` when CP-2G is in the plan; publish step), and where needed `src/deploy_workflow/owners/cpos.py` / `src/deploy_workflow/markdown_delivery.py` (the delivery already calls `model_handoff_delivery.build_model` when `request.model` is set — reuse it); Test: `tests/test_cpos_launch.py` (and a delivery test beside the existing model-delivery tests)
+
+**Interfaces:**
+- Consumes: CP-OS `request.model` (`ModelDelivery`: `extra_handoffs`, `forecast_exact`, see `handoff_delivery.py:98` and `cpos.py:382-384, 445-460`); `build_model(run, inputs, raw_inputs, layout)` roles `annual` (CP-1), `current_synthesis` (CP-2), optional `quarter`, and `forecast` + `forecast_exact` together (`model_handoff_delivery.py:1073-1077`); CP-2G's Python calculation (`owners/cp2g.py` `forecast()` and the module's exact calculation JSON).
+- Produces: for a completed run whose plan includes CP-2G, a model delivery beside the report (`deliveries/<id>/` with the files `credit_os/store.py` reads: `forecast_exact.json`, `calculation.json`, `annual.md`, `quarter.md` where present — `CASHFLOW_FILES`), listed in the delivery receipt and hash-checked like the report, so the static library's Forecast tab fills from it (Task 5's build already passes deliveries through `workspace_store`).
+
+- [ ] **Step 1: Failing tests** with a synthetic CP-2G fixture labelled "synthetic; not analytical review" (no provider call): `test_cp2g_run_publishes_model_delivery` — a run whose accepted handoffs include CP-1, CP-2 and CP-2G plus CP-2G's exact calculation publishes the model files beside the report, and every forecast figure in `forecast_exact.json`/`calculation.json` equals the Python calculation for the fixture's inputs (answer key computed independently in the test from the fixture's stated operands, not by calling the production function); `test_no_cp2g_publishes_no_model` — without CP-2G nothing model-related is published and the store reports no model for the run; `test_model_publish_failure_keeps_the_report` — a failing model build leaves exit 0, the report published, and stderr naming the failure (documented fail-open, as for the library rebuild).
+- [ ] **Step 2:** Run → FAIL.
+- [ ] **Step 3:** Implement: populate the manifest's `model` only when CP-2G is in the plan; take every figure from Python calculation output, never from LLM handoff prose; the forecast handoff and its unchanged exact calculation go together or not at all.
+- [ ] **Step 4:** Tests pass; quality gate 0; build the library for a fixture workspace containing the CP-2G run and confirm (headless Chrome, file://) that Forecast shows the model, and that a run without CP-2G shows "No forecast model was published from this run's files".
+- [ ] **Step 5:** Commit `feat(launch): publish the CP-2G model delivery beside the report`.

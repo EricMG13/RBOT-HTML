@@ -65,7 +65,7 @@ While working, run the targeted tests for what changed, each run within a few mi
 
 ```bash
 uv run pytest tests/test_library_index.py tests/test_update_library.py tests/test_cpos_launch.py -q
-node --test apps/issuer-library/static/logic.test.cjs
+node --test apps/issuer-library/credit_os/web/static.test.cjs apps/issuer-library/credit_os/web/calendar.test.cjs
 ```
 
 - `checks.yml`, on every pull request and by hand: the changed-code gate above; the fast tests

@@ -1,5 +1,6 @@
-"""The update script: one self-contained page, written only to library/, from synthetic runs."""
+"""The update script: the static Credit OS library, written only to library/, from fixtures."""
 
+import hashlib
 import json
 import re
 import sys
@@ -12,22 +13,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
 
-HOSTILE = '</script><script>alert(1)</script><!-- & "quoted"  '
-STAMP = "09 Nov 2026, 12:00 UTC"
+PREFIX = "window.CREDIT_OS_DATA="
+HOSTILE = '</script><script>alert(1)</script><!-- & "quoted"  '
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def stand_in_method(monkeypatch):
     """The synthetic runs' method stands in for the launcher's current one."""
     monkeypatch.setattr("deploy_workflow.library_index.current_method", lambda: method())
-
-
-def page_data(html: str) -> dict:
-    match = re.search(
-        r'<script id="library-data" type="application/json">(.*?)</script>', html, re.DOTALL
-    )
-    assert match, "the data block must end at its own closing tag"
-    return json.loads(match[1])
 
 
 def tree(folder: Path) -> dict[str, bytes]:
@@ -38,56 +31,143 @@ def tree(folder: Path) -> dict[str, bytes]:
     }
 
 
-def test_the_page_is_written_only_to_library_and_holds_everything_it_needs(
-    tmp_path, stand_in_method
-):
-    make_run(tmp_path, "run-a")
+def data_of(workspace: Path) -> dict:
+    text = (workspace / "library/data.js").read_text(encoding="utf-8")
+    assert text.startswith(PREFIX) and text.rstrip().endswith(";")
+    return json.loads(text.removeprefix(PREFIX).rstrip().removesuffix(";"))
+
+
+def delivered_report(run_dir: Path) -> Path:
+    (report,) = run_dir.glob("deliveries/*/report.html")
+    return report
+
+
+def strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list):
+        for item in value:
+            yield from strings(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from strings(item)
+
+
+def test_writes_static_library(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
     before = tree(tmp_path)
-    target, _ = update_library.update(tmp_path, built_at=STAMP)
+    library = update_library.update_library(tmp_path)
     after = tree(tmp_path)
-    assert target == tmp_path.resolve() / "library/index.html"
+    assert [r["id"] for r in library.runs] == ["run-a"]
+    # Only library/ is written; nothing else in the workspace changes, no temporary folder is left.
     assert {k: v for k, v in after.items() if not k.startswith("library/")} == before
-    assert [k for k in after if k.startswith("library/")] == ["library/index.html"]
-    html = target.read_text(encoding="utf-8")
-    # Nothing is fetched: no src other than data:, no remote href, url() or @import.
-    assert "connect-src 'none'" in html
-    assert re.findall(r'\bsrc="(?!data:)', html) == []
-    assert re.findall(r'(?:href=["\']?|url\(["\']?|@import\s+["\']?)(?:https?:)?//', html) == []
-    data = page_data(html)
-    assert data["built_at"] == STAMP
-    assert [r["id"] for r in data["runs"]] == ["run-a"]
-    assert data["runs"][0]["report"]["href"].startswith("../runs/run-a/deliveries/")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["library", "runs"]
+    for name in ("index.html", "data.js", "static-boot.js", "screen.css", "fonts/OFL.txt"):
+        assert (tmp_path / "library" / name).is_file()
+    assert not [k for k in after if k.endswith(".test.cjs")]
+    presented = [k for k in after if k.startswith("library/reports/")]
+    delivery = delivered_report(run_dir).parent.name
+    assert presented == [f"library/reports/run-a/{delivery}/report.html"]
+    data = data_of(tmp_path)
+    assert data["catalogue"]["real"][0]["id"] == "run-a"
+    assert data["workspace"]["reports"][0]["href"] == (f"reports/run-a/{delivery}/report.html")
+    assert not [s for s in strings(data) if s.startswith("/files/")]
+    assert "../runs/run-a/" in "\n".join(strings(data))
+    assert not [s for s in strings(data) if "sha256=" in s and s.startswith(("../", "reports/"))]
+    page = (tmp_path / "library/index.html").read_text(encoding="utf-8")
+    assert "default-src 'none'" in page and "connect-src 'none'" in page
+    assert re.findall(r'\b(?:src|href)="(?:https?:)?//', page) == []
 
 
-def test_same_inputs_give_the_same_page(tmp_path, stand_in_method):
-    make_run(tmp_path, "run-a")
-    make_run(tmp_path, "run-b", issuer_id="zzz", issuer_name="Zeta Synthetic")
-    first = update_library.update(tmp_path, built_at=STAMP)[0].read_bytes()
-    second = update_library.update(tmp_path, built_at=STAMP)[0].read_bytes()
-    assert first == second
+def test_presented_report_keeps_original(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    original = delivered_report(run_dir)
+    raw = original.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    update_library.update_library(tmp_path)
+    assert hashlib.sha256(original.read_bytes()).hexdigest() == digest
+    (copy,) = (tmp_path / "library/reports").rglob("report.html")
+    shown = copy.read_bytes()
+    assert shown.startswith(raw[: raw.rindex(b"</body>")])
+    assert b"<style data-library-presentation>" in shown
+    assert b"<script data-library-presentation>" in shown
+    assert shown.count(b"data-library-presentation") == 2
 
 
-def test_hostile_run_text_cannot_leave_the_data_block(tmp_path, stand_in_method):
-    make_run(tmp_path, "run-a", issuer_name=HOSTILE)
-    (tmp_path / "runs" / "<script>alert(1)<!--").mkdir(parents=True)
-    html = update_library.update(tmp_path, built_at=STAMP)[0].read_text(encoding="utf-8")
-    template = (ROOT / "apps/issuer-library/static/template.html").read_text(encoding="utf-8")
-    assert html.count("</script>") == template.count("</script>")
-    assert html.count("<!--") == template.count("<!--")
-    data = page_data(html)
-    assert data["runs"][0]["issuer_name"] == HOSTILE
-    assert {n["folder"] for n in data["not_shown"]} == {"<script>alert(1)<!--"}
+def test_presentation_goes_before_the_last_body_close():
+    html = b"<body>a</body><p>b</P></BODY>tail"
+    shown = update_library.present_report(html)
+    start = shown.index(b"<style data-library-presentation>")
+    assert shown[:start] == b"<body>a</body><p>b</P>"
+    assert shown.endswith(b"</script></BODY>tail")
 
 
-def test_an_empty_workspace_still_gets_a_page_that_says_so(tmp_path, stand_in_method):
-    target, library = update_library.update(tmp_path, built_at=STAMP)
+def test_refuses_library_symlink(tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    workspace = tmp_path / "workspace"
+    (workspace / "runs").mkdir(parents=True)
+    (workspace / "library").symlink_to(elsewhere)
+    with pytest.raises(SystemExit, match="is a link or a file"):
+        update_library.update_library(workspace)
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_empty_workspace(tmp_path):
+    library = update_library.update_library(tmp_path)
     assert library.runs == [] and library.excluded == []
-    assert page_data(target.read_text(encoding="utf-8"))["runs"] == []
+    assert data_of(tmp_path)["catalogue"]["real"] == []
+    assert (tmp_path / "library/index.html").is_file()
 
 
-def test_the_command_reports_what_it_listed_and_why_others_are_not_shown(
-    tmp_path, stand_in_method, capsys
-):
+def test_unlisted_run_contributes_nothing(tmp_path):
+    make_run(tmp_path, "run-a")
+    half = make_run(tmp_path, "run-half", issuer_id="zzz", issuer_name="Zeta Synthetic")
+    next(half.glob("completed-*.json")).unlink()  # Not complete, so library_index does not list it.
+    (tmp_path / "runs/legacy").mkdir()
+    library = update_library.update_library(tmp_path)
+    assert [r["id"] for r in library.runs] == ["run-a"]
+    assert {name for name, _ in library.excluded} == {"run-half", "legacy"}
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    assert "run-half" not in text and "Zeta Synthetic" not in text
+    assert not (tmp_path / "library/reports/run-half").exists()
+    assert [p.name for p in (tmp_path / "library/reports").iterdir()] == ["run-a"]
+
+
+def test_hostile_run_text_cannot_leave_the_data_file(tmp_path):
+    make_run(tmp_path, "run-a", issuer_name=HOSTILE)
+    update_library.update_library(tmp_path)
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    assert "</script" not in text and "<!--" not in text
+    assert data_of(tmp_path)["catalogue"]["real"][0]["name"] == HOSTILE
+
+
+def test_a_rebuild_replaces_the_library_whole(tmp_path):
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    (tmp_path / "library/stale.txt").write_text("old")
+    update_library.update_library(tmp_path)
+    assert not (tmp_path / "library/stale.txt").exists()
+    assert (tmp_path / "library/index.html").is_file()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["library", "runs"]
+
+
+def test_a_failed_build_keeps_the_previous_library(tmp_path, monkeypatch):
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    before = tree(tmp_path / "library")
+
+    def broken(*args):
+        raise RuntimeError("cannot build")
+
+    monkeypatch.setattr(update_library, "workspace_store", broken)
+    with pytest.raises(RuntimeError, match="cannot build"):
+        update_library.update_library(tmp_path)
+    assert tree(tmp_path / "library") == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["library", "runs"]
+
+
+def test_the_command_reports_what_it_listed_and_why_others_are_not_shown(tmp_path, capsys):
     make_run(tmp_path, "run-a")
     (tmp_path / "runs/legacy").mkdir()
     assert update_library.main(["--workspace", str(tmp_path)]) == 0
@@ -97,17 +177,6 @@ def test_the_command_reports_what_it_listed_and_why_others_are_not_shown(
     assert str(tmp_path.resolve() / "library/index.html") in out
 
 
-def test_a_linked_library_folder_is_not_written_through(tmp_path, stand_in_method):
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    workspace = tmp_path / "workspace"
-    (workspace / "runs").mkdir(parents=True)
-    (workspace / "library").symlink_to(elsewhere)
-    with pytest.raises(SystemExit, match="is a link or a file"):
-        update_library.update(workspace, built_at=STAMP)
-    assert list(elsewhere.iterdir()) == []
-
-
 def test_a_missing_workspace_is_refused(tmp_path):
     with pytest.raises(SystemExit, match="Workspace not found"):
-        update_library.update(tmp_path / "absent")
+        update_library.update_library(tmp_path / "absent")
