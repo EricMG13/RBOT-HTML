@@ -41,7 +41,7 @@ const unnamed=[...new Set(Object.values(data).map(output=>output.module))].filte
 if(unnamed.length)groups.push(['Other modules',unnamed.map(id=>[id,id])]);
 const moduleNames = Object.fromEntries(groups.flatMap(g=>g[1]));
 delete modules.undefined; // A pin this workspace does not hold.
-const isAnalytical = id => !id.startsWith('W-');
+const isAnalytical = id => !id.startsWith('W-')&&id!=='CP-OS';
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"'\r]/g, c => ({'\r':'&#13;','&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const plain = value => String(value).replace(/\*\*|`/g,'');
@@ -57,7 +57,7 @@ const libraryFilters = {...LIBRARY_DEFAULTS};
 const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:''};
 let current = null, returnTrigger = null, returnScroll = 0, returnContentScroll = 0;
 installDestinations();
-const appDestinations=new Set(['W-Library']); // These need no selected run.
+const appDestinations=new Set(['W-Library','CP-OS']); // These need no selected run.
 const aliases = {'CP-MODEL':'W-Forecast','CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
 for(const visual of window.DESIGN_WORKSPACE.visuals)for(const alias of String(visual.aliases||'').split(/[;,\s]+/).filter(Boolean))aliases[alias]??=visual.module;
 // Reader pages show names; the audit, inspector and evidence pages keep exact codes. Text only, so
@@ -486,7 +486,7 @@ function renderRoute() {
   }
   if(hashed&&!changed)updateLibrary(true);
   if(next.module==='W-Library')writeLibraryHash();
-  const named=contexts[next.context]?`${contexts[next.context].title}, ${contexts[next.context].run}, `:'';
+  const named=contexts[next.context]&&!appDestinations.has(next.module)?`${contexts[next.context].title}, ${contexts[next.context].run}, `:'';
   $('announcement').textContent=`${named}${moduleNames[next.module]}, ${namedText(navigationSections(next.module,next.context,next.output).find(s=>s[0]===next.section)[1])}${next.evidence?', evidence open':''}`;
 }
 document.addEventListener('change',event=>{
