@@ -252,6 +252,7 @@ def parse_source(text: str) -> list[dict[str, Any]]:
                     }
                 )
             sections.append(current)
+            current = None  # a stray body line after the marker is not front matter: it raises
             i = close + 1
     while i < len(lines):
         line = lines[i]

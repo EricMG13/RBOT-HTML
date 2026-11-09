@@ -84,3 +84,8 @@ def test_yaml_front_matter_is_kept_as_a_leading_section():
 def test_an_unclosed_front_matter_marker_still_raises():
     with pytest.raises(ValueError, match="Body before first heading"):
         store.parse_source("---\nissuer_id: tdg\n\n## Request\n")
+
+
+def test_body_after_the_front_matter_and_before_a_heading_still_raises():
+    with pytest.raises(ValueError, match="Body before first heading"):
+        store.parse_source("---\na: 1\n---\nstray body\n# T\n")

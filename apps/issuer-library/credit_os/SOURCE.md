@@ -142,4 +142,4 @@ Handoffs that open with YAML front matter (`---` ... `---`) raised "Body before 
 
 | File | Edit | Why |
 | --- | --- | --- |
-| `store.py` | `parse_source` keeps a leading `---` ... `---` block as its own first section headed `Front matter` (level 2, one text block of the lines between the markers, locators from the source). No closing marker: unchanged, still raises | keep every nonblank body line, as the docstring promises; found by the first real CP-2G run |
+| `store.py` | `parse_source` keeps a leading `---` ... `---` block as its own first section headed `Front matter` (level 2, one text block of the lines between the markers, locators from the source). No closing marker, or a body line between the closing marker and the first heading: unchanged, still raises "Body before first heading" (owner ruling R28) | keep every nonblank body line, as the docstring promises; found by the first real CP-2G run |

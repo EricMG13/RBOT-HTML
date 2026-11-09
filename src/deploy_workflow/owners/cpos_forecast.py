@@ -109,7 +109,10 @@ def _declined(document: dict[str, object]) -> None:
     if not isinstance(drivers, dict) or not drivers:
         return
     if not all(
-        isinstance(d, dict) and isinstance(d.get("values"), list) and set(d["values"]) == {None}
+        isinstance(d, dict)
+        and isinstance(d.get("values"), list)
+        and bool(d["values"])
+        and all(v is None for v in d["values"])
         for d in drivers.values()
     ):
         return

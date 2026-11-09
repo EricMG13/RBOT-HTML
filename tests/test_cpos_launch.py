@@ -1854,3 +1854,20 @@ def test_the_forecast_instructions_name_every_allowed_category_and_the_value_for
         assert f"`{value}`" in cpos_launch.FORECAST_BLOCK
     assert "three decimal strings" in cpos_launch.FORECAST_BLOCK
     assert "[null, null, null]" in cpos_launch.FORECAST_BLOCK
+
+
+@pytest.mark.parametrize(
+    "values", [[{"low": "0.05"}, None, None], [["0.05"], None, None], "null", [], 5, None]
+)
+def test_odd_driver_values_end_in_value_error_not_type_error(values):
+    drivers = json.loads(forecast_block().split("```json\n")[1].split("\n```")[0])["base_drivers"]
+    for driver in drivers.values():
+        driver["values"] = [None, None, None]
+    drivers["dividends"]["values"] = values
+    with pytest.raises(ValueError):
+        cpos_forecast.parse(forecast_block(base_drivers=drivers), "1000 300")
+
+
+def test_a_non_object_driver_ends_in_value_error():
+    with pytest.raises(ValueError):
+        cpos_forecast.parse(forecast_block(base_drivers={"revenue_growth": 5}), "1000")
