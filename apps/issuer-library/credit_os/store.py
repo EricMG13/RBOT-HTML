@@ -233,6 +233,26 @@ def parse_source(text: str) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
     i = 0
+    first = next((n for n, line in enumerate(lines) if line.strip()), None)
+    if first is not None and lines[first] == "---":
+        close = next((n for n in range(first + 1, len(lines)) if lines[n] == "---"), None)
+        if close is not None:
+            # YAML front matter: kept whole as the leading section, never dropped.
+            body = [line for line in lines[first + 1 : close] if line.strip()]
+            current = {"heading": "Front matter", "level": 2, "line": first + 1, "blocks": []}
+            if body:
+                start = next(n for n in range(first + 1, close) if lines[n].strip())
+                end = max(n for n in range(first + 1, close) if lines[n].strip()) + 1
+                current["blocks"].append(
+                    {
+                        "type": "text",
+                        "line": start + 1,
+                        "end": end,
+                        "text": "\n".join(lines[start:end]),
+                    }
+                )
+            sections.append(current)
+            i = close + 1
     while i < len(lines):
         line = lines[i]
         heading = re.match(r"^(#{1,4}) (.+)$", line)
