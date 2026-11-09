@@ -65,6 +65,15 @@ def test_trailing_register_codes_belong_to_the_module_itself():
     assert got == [loc("upstream", codes=("D1", "D3", "E1"))]
 
 
+def test_a_trailing_code_after_a_word_or_a_semicolon_is_found():
+    assert parse_locators("Derived from calculation E1.") == [loc("upstream", codes=("E1",))]
+    assert parse_locators("K, page:120; D2.") == [
+        loc("issuer_page", "K", 120),
+        loc("upstream", codes=("D2",)),
+    ]
+    assert parse_locators("K, page:120;D2.")[1] == loc("upstream", codes=("D2",))
+
+
 def test_a_quarter_label_ending_a_sentence_is_not_a_register_code():
     assert parse_locators("Reported in Q4.") == []
 
@@ -438,3 +447,26 @@ def test_a_period_column_never_becomes_the_quote(tmp_path):
     got = chips_for_output(run, "x/CP-1.md", "CP-1", sections, inv)
     (found,) = got["x/CP-1.md:4"]
     assert found["quote"] == "1158" and found["quote_found"] is True
+
+
+def test_a_header_only_containing_period_letters_is_not_a_period_column(tmp_path):
+    run, inv = one_run(tmp_path)
+    for header, expected in (("Update", "1158"), ("Candidates", "1158"), ("Fiscal year", None)):
+        sections = table(("1158", "x", "K, page:10"))
+        sections[0]["blocks"][0]["headers"] = [header, "Cash interest", "Basis"]
+        got = chips_for_output(run, "x/CP-1.md", "CP-1", sections, inv)
+        (found,) = got["x/CP-1.md:4"]
+        assert found["quote"] == expected, header
+
+
+RANGE_PAGES = (
+    b'{"page": 1, "text": "fiscal 2023-2024 results"}\n{"page": 2, "text": "loss -2024 only"}\n'
+)
+
+
+def test_a_positive_number_is_found_inside_a_range_but_not_as_a_negative(tmp_path):
+    run, inv = one_run(tmp_path, pages=RANGE_PAGES)
+    (in_range,) = run_chips(run, inv, ("a", "2024", "K, page:1"))["x/CP-1.md:4"]
+    assert in_range["quote_found"] is True
+    (negative,) = run_chips(run, inv, ("a", "2024", "K, page:2"))["x/CP-1.md:4"]
+    assert negative["quote_found"] is False

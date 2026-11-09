@@ -282,26 +282,41 @@ test('key numbers look past the first analysis group (CP-2E: numeric register in
 });
 
 // ---- The hedge chart: views.js evaluated over a hand-written CP-2E table and a run whose as-of is 2024-09-30.
-function hedgeHtml(headers, rows, asOf = '2024-09-30') {
+function chartFn(name, headers, rows, asOf = '2024-09-30') {
   const text = read('views.js');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const id = 'run-a/deliveries/d1/CP-2E.md';
   const out = { module: 'CP-2E', run: 'run-a', period: '', sections: [{ heading: 'T2F.4', line: 1, blocks: [table(80, headers, rows)] }] };
   const names = ['data', 'contexts', 'esc', 'rich', 'plain', 'evidence', 'modules', 'moduleNames', 'current', 'icon', 'window', 'store', 'pins', 'lastFile', 'isAnalytical', 'sectionData'];
-  const fn = new Function(...names, `${text}; return hedgeChart;`)({ [id]: out }, { 'run-a': { asOf } }, esc, esc, esc, new Map(), {}, {}, {}, () => '', { CREDIT_OS_DATA: { chips: {} } }, {}, {}, new Map(), () => true, () => []);
+  const fn = new Function(...names, `${text}; return ${name};`)({ [id]: out }, { 'run-a': { asOf } }, esc, esc, esc, new Map(), {}, {}, {}, () => '', { CREDIT_OS_DATA: { chips: {} } }, {}, {}, new Map(), () => true, () => []);
+  return [fn, id];
+}
+function hedgeHtml(headers, rows, asOf) {
+  const [fn, id] = chartFn('hedgeChart', headers, rows, asOf);
   return fn(id, { kind: 'hedges', table: 80, title: 'Hedges', unit: null });
 }
+test('a chart row whose value is text prints n.a., keeps the text in title, draws no bar and keeps its evidence key', () => {
+  const [fn, id] = chartFn('comparisonChart', ['Item', 'Value'], [[81, 'Prior availability', 'Not supplied: prior-year facility availability not extracted'], [82, 'Cash', '1,200']]);
+  const html = fn(id, { kind: 'bars', table: 80, column: 1, title: 'Liquidity', unit: 'USDm' });
+  const [text, num] = [...html.matchAll(/<button class="chart-row"[^>]*>.*?<\/button>/g)].map(m => m[0]);
+  assert.ok(text.includes('data-evidence="run-a/deliveries/d1/CP-2E.md:81"'));
+  assert.ok(text.includes('<strong title="Not supplied: prior-year facility availability not extracted">n.a.</strong>'));
+  assert.ok(text.includes('class="track missing"'));
+  assert.ok(!text.includes('<i ') && !text.includes('—'));
+  assert.ok(num.includes('<strong>1,200</strong>') && num.includes('<i class="series-0" style="width:100%"'));
+});
 const HEDGE_ROWS = [
-  [81, 'Swap', '500', '2022-12-31 to 2025-06-30', 'USDm'],
-  [82, 'Cap', '250', '2025-01-31 to 2028-03-31', 'EURm'],
-  [83, 'FX forwards', '90', 'Up to 12 months', ''],
+  [81, 'Swap', '500', '2022-12-31 to 2025-06-30', 'USDm', 'Reviewed 2019-05-01'],
+  [82, 'Cap', '250', '2025-01-31 to 2028-03-31', 'EURm', '2030-01-01'],
+  [83, 'FX forwards', '90', 'Up to 12 months', '', '2019-05-01'],
 ];
 const leftOf = (html, cls) => [...html.matchAll(new RegExp(`class="${cls}[^"]*" style="left:([\\d.]+)%(?:;width:([\\d.]+)%)?`, 'g'))].map(m => [Number(m[1]), m[2] === undefined ? null : Number(m[2])]);
 
 test('hedge chart axis, base rule, forward flag and units come from the table and the as-of', () => {
   // Hand-computed: start 2022-12-31 (earlier than as-of minus 18 months), end 2028-03-31 (later than as-of plus 36 months); 1917 days.
   // As-of 2024-09-30 is day 639 (1/3); Swap spans days 0-912; Cap starts day 762.
-  const html = hedgeHtml(['Instrument', 'Amount', 'Window', 'Unit'], HEDGE_ROWS);
+  // The 'Reviewed' column holds dates (2019-05-01, 2030-01-01) outside that range; they are not in the date column, so the axis and the two-date rows ignore them.
+  const html = hedgeHtml(['Instrument', 'Amount', 'Maturity window', 'Unit', 'Reviewed'], HEDGE_ROWS);
   assert.deepEqual([...html.matchAll(/<span style="left:[^"]*">([^<]*)<\/span>/g)].map(m => m[1]), ['Dec 2022', 'Sep 2024 base', 'Mar 2028']);
   assert.ok(Math.abs(leftOf(html, 'base-rule')[0][0] - 100 / 3) < 0.001);
   const [swap, cap] = leftOf(html, 'hedge-span');

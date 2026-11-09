@@ -25,8 +25,8 @@ PAGE = re.compile(
 )
 # Register letters exclude A, B, H and Q, which also open rating grades ("B2"), halves and quarters.
 CODE = r"[CD-GI-PR-Z]\d{1,2}"
-TRAILING = re.compile(rf"[.;]\s+({CODE}(?:\s*[,;]\s*{CODE})*)\.?\s*$")
-PERIOD_HEADER = re.compile(r"period|year|date", re.IGNORECASE)
+TRAILING = re.compile(rf"(?:\.\s+|;\s*|(?<=[A-Za-z])\s+)({CODE}(?:\s*[,;]\s*{CODE})*)\.?\s*$")
+PERIOD_HEADER = re.compile(r"\b(?:period|year|date)s?\b", re.IGNORECASE)
 SENTENCE_END = re.compile(r"[.;]\s")
 CLAIM_HEADERS = ("finding", "bottom line")
 
@@ -179,7 +179,8 @@ def number_pattern(quote: str) -> str:
         body += r"\." + fraction
     if negative:
         return rf"(?:[-−]{body}|\({body}\))"
-    return rf"(?<![-−(]){body}"
+    # A positive may follow a hyphen only as the end of a range ("2023-2024"): a digit before it.
+    return rf"(?:(?<![-−(])|(?<=\d-)|(?<=\d−)){body}"
 
 
 def quote_span(quote: str, text: str) -> tuple[int, int] | None:
