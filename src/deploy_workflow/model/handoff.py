@@ -417,6 +417,7 @@ class HandoffExecutor:
                     "max_turns": max_turns,
                     "max_output_tokens": max_output_tokens,
                     "execution": "live-provider" if adapter.ruling is not None else "offline",
+                    **({"auth": auth} if (auth := getattr(adapter, "auth", None)) else {}),
                 }
             ).encode(),
         )

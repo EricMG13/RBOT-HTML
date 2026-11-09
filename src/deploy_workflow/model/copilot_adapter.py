@@ -10,6 +10,7 @@ import concurrent.futures
 import dataclasses
 import os
 import re
+import shutil
 import threading
 import time
 from collections.abc import Awaitable, Callable, Mapping
@@ -20,6 +21,7 @@ from typing import Any, Protocol, cast
 from deploy_workflow.model.adapter import (
     _REFLECTED_RAW,
     _UNPARSABLE_RAW,
+    COPILOT_GH_LOGIN_VARIABLE,
     COPILOT_RUNTIME_VARIABLE,
     KEY_VARIABLES,
     AdapterReply,
@@ -89,7 +91,6 @@ _WINDOWS_PATH = re.compile(
     rf"|{_ROOT}/(?:[^\s\\/:*?\"<>|()']+/)*[^\s\\/:*?\"<>|()']*"
 )
 _TOKEN_VARIABLE = KEY_VARIABLES["copilot"]
-_CLI_LOGIN_VARIABLE = "COPILOT_USE_CLI_LOGIN"  # exactly "1" opts in to the CLI sign-in
 _DIGEST = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _TOOL_FINISH = ("tool_calls", "tool_use")
 # Bounds of the release of one exchange. STOP_S covers the SDK's own stop: shutdown RPC 10 s,
@@ -147,7 +148,9 @@ def runtime_environment(environ: Mapping[str, str]) -> dict[str, str]:
 @dataclass(frozen=True)
 class ClientOptions:
     runtime: str
-    token: str | None = field(repr=False)  # None: the Copilot CLI sign-in (opt-in)
+    # None: the opt-in gh login. The runtime then runs `gh auth token`, so the account and OAuth
+    # token of the gh CLI (not the Copilot CLI's own sign-in; `gh auth switch` changes who pays).
+    token: str | None = field(repr=False)
     home: str
     env: Mapping[str, str] = field(default_factory=dict, repr=False)
     private_paths: tuple[str, ...] = field(default=(), repr=False)  # also scrubbed from errors
@@ -283,7 +286,8 @@ class _ToolCallLost(Exception):
 class _Creds:
     redactor: Redactor
     token: str | None = field(repr=False)
-    cli_login: bool
+    gh_login: bool
+    gh_dir: str | None
     runtime: str | None
     env: Mapping[str, str] = field(repr=False)
 
@@ -462,6 +466,11 @@ class CopilotAdapter:
         return self._ruling
 
     @property
+    def auth(self) -> str:
+        """Which credential this adapter uses: ``token`` or ``gh-login`` (never a value)."""
+        return "token" if self._credentials().token is not None else "gh-login"
+
+    @property
     def gate(self) -> GateResult:
         return self._gate
 
@@ -475,12 +484,25 @@ class CopilotAdapter:
             runtime = environ.get(COPILOT_RUNTIME_VARIABLE) or None
             if runtime is not None and not Path(runtime).is_file():
                 runtime = None
+            token = environ.get(_TOKEN_VARIABLE) or None
+            gh_login = token is None and environ.get(COPILOT_GH_LOGIN_VARIABLE) == "1"
+            runtime_env = runtime_environment(environ)
+            gh_dir = None
+            if gh_login:
+                # ponytail: resolved once from the launching PATH; a gh planted earlier on that
+                # PATH is still the one found (ceiling: the launching environment is trusted).
+                gh = shutil.which("gh", path=environ.get("PATH"))
+                if gh is not None:
+                    gh_dir = str(Path(gh).parent)
+                    path = runtime_env.get("PATH")
+                    runtime_env["PATH"] = gh_dir + (os.pathsep + path if path else "")
             self._cached = _Creds(
                 Redactor.from_environ(environ),
-                environ.get(_TOKEN_VARIABLE) or None,
-                environ.get(_CLI_LOGIN_VARIABLE) == "1",
+                token,
+                gh_login,
+                gh_dir,
                 runtime,
-                runtime_environment(environ),
+                runtime_env,
             )
         return self._cached
 
@@ -511,10 +533,15 @@ class CopilotAdapter:
         creds: _Creds, request: TurnRequest, digest: str, reservation_id: str
     ) -> tuple[str, str] | None:
         """The (error class, message) of a refusal before anything is sent, or None."""
-        if creds.token is None and not creds.cli_login:
+        if creds.token is None and not creds.gh_login:
             return (
                 "KeyMissing",
-                f"{_TOKEN_VARIABLE} is not set or empty, and {_CLI_LOGIN_VARIABLE} is not 1",
+                f"{_TOKEN_VARIABLE} is not set or empty, and {COPILOT_GH_LOGIN_VARIABLE} is not 1",
+            )
+        if creds.token is None and creds.gh_dir is None:
+            return (
+                "KeyMissing",
+                f"{COPILOT_GH_LOGIN_VARIABLE}=1 but gh is not on PATH; or set {_TOKEN_VARIABLE}",
             )
         if not _DIGEST.fullmatch(digest) or not _DIGEST.fullmatch(reservation_id):
             return "InvalidDigest", "the invocation digest or reservation id is not a name"

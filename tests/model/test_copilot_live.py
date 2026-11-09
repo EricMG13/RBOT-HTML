@@ -29,11 +29,11 @@ pytestmark = [
         not (
             (
                 os.environ.get("COPILOT_GITHUB_TOKEN")
-                or os.environ.get("COPILOT_USE_CLI_LOGIN") == "1"
+                or os.environ.get("COPILOT_USE_GH_LOGIN") == "1"
             )
             and os.environ.get("COPILOT_CLI_PATH")
         ),
-        reason="needs COPILOT_GITHUB_TOKEN (or COPILOT_USE_CLI_LOGIN=1) and COPILOT_CLI_PATH",
+        reason="needs COPILOT_GITHUB_TOKEN (or COPILOT_USE_GH_LOGIN=1) and COPILOT_CLI_PATH",
     ),
 ]
 

@@ -48,6 +48,7 @@ from deploy_workflow.markdown_delivery import (
     require_issuer,
 )
 from deploy_workflow.model.adapter import (
+    COPILOT_GH_LOGIN_VARIABLE,
     COPILOT_RUNTIME_VARIABLE,
     KEY_VARIABLES,
     LivePauseInForce,
@@ -1055,11 +1056,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             check_ruling(args.config, args.ruling)
         key = KEY_VARIABLES[CONFIGS[args.config].provider]
         cli_login = CONFIGS[args.config].provider == "copilot" and (
-            os.environ.get("COPILOT_USE_CLI_LOGIN") == "1"
+            os.environ.get(COPILOT_GH_LOGIN_VARIABLE) == "1"
         )
         if args.live and not (os.environ.get(key) or cli_login):
             extra = (
-                " (or COPILOT_USE_CLI_LOGIN=1)"
+                f" (or {COPILOT_GH_LOGIN_VARIABLE}=1)"
                 if CONFIGS[args.config].provider == "copilot"
                 else ""
             )

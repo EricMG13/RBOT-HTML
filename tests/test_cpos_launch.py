@@ -1102,18 +1102,18 @@ def test_launcher_names_both_copilot_credentials_when_neither_is_set(
     tmp_path, monkeypatch, capsys, copilot_ruling
 ):
     monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
-    monkeypatch.setenv("COPILOT_USE_CLI_LOGIN", "true")
+    monkeypatch.setenv("COPILOT_USE_GH_LOGIN", "true")
     argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
     assert main(argv) == 2
     err = capsys.readouterr().err
-    assert "COPILOT_GITHUB_TOKEN" in err and "COPILOT_USE_CLI_LOGIN" in err
+    assert "COPILOT_GITHUB_TOKEN" in err and "COPILOT_USE_GH_LOGIN" in err
 
 
-def test_copilot_cli_login_opt_in_passes_the_key_check(
+def test_copilot_gh_login_opt_in_passes_the_key_check(
     tmp_path, monkeypatch, capsys, copilot_ruling
 ):
     monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
-    monkeypatch.setenv("COPILOT_USE_CLI_LOGIN", "1")
+    monkeypatch.setenv("COPILOT_USE_GH_LOGIN", "1")
     runtime = tmp_path / "copilot-runtime"
     runtime.write_text("#!/bin/sh\n")
     monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))

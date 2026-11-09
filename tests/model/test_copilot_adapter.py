@@ -1107,26 +1107,54 @@ def test_relative_or_root_values_do_not_erase_ordinary_text(rig: Rig, tmp_path: 
     assert "after 3/4 retries at step 1.2" in str(rec["error"])
 
 
-def test_cli_login_opt_in_sends_no_token(rig: Rig) -> None:
-    env = {"COPILOT_USE_CLI_LOGIN": "1", "COPILOT_CLI_PATH": str(rig.runtime)}
-    reply = call(rig.make(text_script(), environ=env), request())
+def gh_env(rig: Rig, tmp_path: Path, **extra: str) -> dict[str, str]:
+    """An environment whose PATH holds a real executable file named gh."""
+    bin_dir = tmp_path / "ghbin"
+    bin_dir.mkdir(exist_ok=True)
+    gh = bin_dir / "gh"
+    gh.write_text("#!/bin/sh\n")
+    gh.chmod(0o755)
+    return {
+        "COPILOT_USE_GH_LOGIN": "1",
+        "COPILOT_CLI_PATH": str(rig.runtime),
+        "PATH": f"{bin_dir}:/usr/bin",
+        **extra,
+    }
+
+
+def test_gh_login_opt_in_sends_no_token_and_pins_gh(rig: Rig, tmp_path: Path) -> None:
+    adapter = rig.make(text_script(), environ=gh_env(rig, tmp_path))
+    reply = call(adapter, request())
     assert reply.kind == "ok" and [o.token for o in rig.options] == [None]
+    assert rig.options[0].env["PATH"].startswith(str(tmp_path / "ghbin") + ":")
+    assert adapter.auth == "gh-login"
 
 
-@pytest.mark.parametrize("value", ["true", "0", "", "yes"])
-def test_other_opt_in_values_are_key_missing(rig: Rig, value: str) -> None:
-    env = {"COPILOT_USE_CLI_LOGIN": value, "COPILOT_CLI_PATH": str(rig.runtime)}
+def test_gh_not_found_is_key_missing_before_any_runtime(rig: Rig, tmp_path: Path) -> None:
+    env = {**gh_env(rig, tmp_path), "PATH": str(tmp_path / "nowhere")}
     reply = call(rig.make(text_script(), environ=env), request())
     assert reply.kind == "not_sent" and reply.error_class == "KeyMissing"
     assert reply.message is not None
-    assert "COPILOT_GITHUB_TOKEN" in reply.message and "COPILOT_USE_CLI_LOGIN" in reply.message
+    assert "COPILOT_GITHUB_TOKEN" in reply.message and "COPILOT_USE_GH_LOGIN" in reply.message
+    assert "gh" in reply.message and rig.options == []
+
+
+@pytest.mark.parametrize("value", ["true", "0", "", "yes", " 1"])
+def test_other_opt_in_values_are_key_missing(rig: Rig, tmp_path: Path, value: str) -> None:
+    env = {**gh_env(rig, tmp_path), "COPILOT_USE_GH_LOGIN": value}
+    reply = call(rig.make(text_script(), environ=env), request())
+    assert reply.kind == "not_sent" and reply.error_class == "KeyMissing"
+    assert reply.message is not None
+    assert "COPILOT_GITHUB_TOKEN" in reply.message and "COPILOT_USE_GH_LOGIN" in reply.message
     assert rig.options == []
 
 
-def test_token_wins_over_the_opt_in(rig: Rig) -> None:
-    env = {**rig.environ, "COPILOT_USE_CLI_LOGIN": "1"}
-    call(rig.make(text_script(), environ=env), request())
-    assert [o.token for o in rig.options] == [TOKEN]
+def test_token_wins_over_the_opt_in(rig: Rig, tmp_path: Path) -> None:
+    env = {**gh_env(rig, tmp_path), "COPILOT_GITHUB_TOKEN": TOKEN}
+    adapter = rig.make(text_script(), environ=env)
+    call(adapter, request())
+    assert [o.token for o in rig.options] == [TOKEN] and adapter.auth == "token"
+    assert rig.options[0].env["PATH"] == env["PATH"]  # no gh pin when a token is set
 
 
 @pytest.mark.parametrize(("token", "logged_in"), [(None, True), (TOKEN, False)])
