@@ -26,13 +26,19 @@ library table, any change to module prompts except an optional locator column (b
    print `n.a.` with a `title` reason; never `—`.
 4. Findings: each row of the `Finding | Creditor impact | Confidence` table: claim, creditor
    impact, confidence pill, chip row.
-5. Limits and contrary evidence: the module's gap/limitation/monitoring sections, two columns;
+5. Analysis (owner, 2026-11-09: "Yes, show narrative"): every section of the analysis groups
+   (not Limits & monitoring, not Evidence & audit) that parts 2–4 did not consume — Bottom line,
+   Finding, chart-data and the chosen key-numbers table are consumed — renders open, in handoff
+   order, with its heading, prose blocks as paragraphs and tables as compact tables, every block
+   carrying its chip set. Nothing is truncated; a register of many rows renders whole.
+6. Limits and contrary evidence: the module's gap/limitation/monitoring sections, two columns;
    `Not supplied` items get gap chips.
-6. Evidence & audit: `<details>` closed; every remaining section as a line-number list; the
-   technical audit last.
+7. Evidence & audit: `<details>` closed; Front matter, Request, source-context assessments, the
+   extra rows of consumed tables, and the technical audit last, each as a line-number list.
 
 The navigator keeps the module groups; the section outline becomes "On this page" anchors to
-the six parts. Hash routes stay `#<module>/<anchor>?c=<run>&e=<chip-id>`.
+the seven parts (`head`, `bottom-line`, `numbers`, `findings`, `analysis`, `limits`, `audit`).
+Hash routes stay `#<module>/<anchor>?c=<run>&e=<chip-id>`.
 
 ## Chips
 
@@ -70,7 +76,12 @@ Resolver rules (`src/deploy_workflow/credit_os_catalogue.py` or a sibling module
 - Source keys and hashes come only from the run's CP-0 `Complete supplied inventory` table;
   `hash_matches_inventory` compares with `runs/<run>/source-text/<file>` on disk.
 - `quote_found`: the quoted string in the cell (text inside “ ” or the numeric cell value with
-  thousands separators tolerated) occurs in that page's `text`. Never fuzzier than that.
+  thousands separators tolerated; a negative `-n` also matches the accounting form `(n)`, ruling
+  R3) occurs in that page's `text`; the chip carries `match`, the exact page span matched, and
+  the page marks only that. Never fuzzier than that.
+- Source keys are the run's CP-0 inventory keys verbatim (single letters or multi-word aliases
+  such as `Annual filing`); a citation may use an alias's leading word when CP-0's "Role in this
+  review" column leaves one non-"Alternate" candidate (ruling R23); otherwise `… · ambiguous`.
 - A claim with no parseable locator → one `gap` chip, label `no page`. A `Not supplied: …`
   cell → `gap` chip labelled `Not supplied`.
 - The resolver adds nothing analytical: no inferred pages, no inferred classes. Provenance
@@ -98,7 +109,8 @@ Source page excerpt with the quote in `<mark>` · Hash · actions `Open source f
   `[CP-1: D4]` → upstream; a cell with no locator → one `gap`; `quote_found` true for
   `Cash paid during the period for interest, net` on page 123 of the TDG 10-K fixture and
   false for a changed digit; `hash_matches_inventory` false when the file is altered.
-- Rendering (`node --test`, static): the module canvas has exactly the six anchors in order;
+- Rendering (`node --test`, static): the module canvas has exactly the seven anchors in order;
+  a fixture narrative section renders open under `analysis` with its chips;
   no `—` text node in a table cell; every `.chart-row strong` has a non-empty value; no
   `font-size` below 11px in `screen.css`; the no-output state renders one sentence.
 - Browser (`file://`, 1440 and 1280): no horizontal overflow; the value column of every chart
