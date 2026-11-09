@@ -667,32 +667,40 @@ function activityView(activity,live) {
 // then nothing live is shown. Each value passes through esc; a report path becomes a link only when it is a plain relative path.
 const ACTIVITY_RELOAD_MS=30000;
 const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
+// Report links stay under issuers/<folder>/<file>.html: the one place only the watcher writes. Nothing else becomes a link.
 function reportHref(report) {
   if(typeof report!=='string'||!report||report.startsWith('/')||/^[a-z][a-z0-9+.-]*:/i.test(report)||report.includes('\\'))return null;
   const parts=report.split('/');
-  if(parts.some(p=>p===''||p==='.'||p==='..'))return null;
-  return '../../'+parts.map(encodeURIComponent).join('/');
+  if(parts.length!==3||parts[0]!=='issuers'||!/\.html$/i.test(parts[2])||parts.some(p=>p===''||p==='.'||p==='..'))return null;
+  try {return '../../'+parts.map(encodeURIComponent).join('/');}
+  catch(error) {if(error instanceof URIError)return null;throw error;} // a lone surrogate cannot be a link; the path is still shown as text
 }
+// Only strings and finite numbers reach the page; any other value in a field renders as empty text.
+function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
+const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted'];
 function liveRunSpend(run,cap) {
   if(run.spent===null)return '<span class="run-spend">spend could not be read</span>';
   if(typeof run.spent!=='string')return '';
-  return `<span class="run-spend">USD ${esc(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${esc(cap)}`}</span>`;
+  return `<span class="run-spend">USD ${liveText(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${liveText(cap)}`}</span>`;
 }
 function liveRunRow(run,cap) {
   const ended=run.status!=='running'&&run.status!=='queued',files=Array.isArray(run.files)?run.files:[];
-  const chips=Array.isArray(run.modules)?run.modules.filter(Array.isArray).map(([name,state])=>`<span class="chip chip-${['done','running','waiting'].includes(state)?state:'waiting'}">${esc(name)}</span>`).join(''):'';
+  const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
+  const chips=Array.isArray(run.modules)?run.modules.filter(Array.isArray).map(([name,state])=>`<span class="chip chip-${['done','running','waiting'].includes(state)?state:'waiting'}">${liveText(name)}</span>`).join(''):'';
   const href=run.status==='finished'?reportHref(run.report):null;
-  const report=run.status==='finished'&&run.report?(href?`<a class="text-action" href="${esc(href)}">${esc(run.report)}</a>`:`<span class="code">${esc(run.report)}</span>`):'';
-  return `<li class="report-row live-run live-${esc(run.status)}"><strong>${esc(run.issuer_name||run.folder||run.id)}</strong><span>${esc(run.pathway)}</span><span class="code">${esc(run.folder)}</span>${ended?`<span class="run-status">${esc(run.status)}</span>`:''}${run.started_at?`<span class="run-time">started ${esc(run.started_at)}</span>`:''}${ended&&run.ended_at?`<span class="run-time">ended ${esc(run.ended_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${esc(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${report}${files.length?`<details class="run-files"><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></details>`:''}</li>`;
+  const report=run.status==='finished'&&run.report?(href?`<a class="text-action"${tag} href="${esc(href)}">${liveText(run.report)}</a>`:`<span class="code">${liveText(run.report)}</span>`):'';
+  const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
+  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${ended?`<span class="run-status">${liveText(run.status)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${ended&&run.ended_at?`<span class="run-time">ended ${liveText(run.ended_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${report}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
 }
 function liveActivityView(live) {
   if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
   const runs=live.runs.filter(r=>r&&typeof r==='object'&&!Array.isArray(r));
   const section=(title,cls,list,note='')=>list.length||note?`<section class="${cls}"><h2>${title}</h2>${note}${list.length?`<ul class="report-list">${list.map(r=>liveRunRow(r,live.cap)).join('')}</ul>`:''}</section>`:'';
   const waiting=runs.filter(r=>r.status==='queued');
-  const held=live.held?`<p class="run-held">${esc(live.held)}</p>`:'';
+  const held=live.held&&liveText(live.held)?`<p class="run-held">${liveText(live.held)}</p>`:'';
   const ended=runs.filter(r=>r.status!=='running'&&r.status!=='queued');
-  return section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held)+section('Ended','activity-ended',ended);
+  const stamp=`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`;
+  return stamp+section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held)+section('Ended','activity-ended',ended);
 }
 // The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
 function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}
