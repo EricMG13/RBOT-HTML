@@ -227,12 +227,33 @@ def text_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
     return {"type": "text", "line": start, "end": i, "text": "\n".join(parts)}, i
 
 
+def front_matter(lines: list[str]) -> tuple[dict[str, Any] | None, int]:
+    """The leading `---` block as a "Front matter" section, and the index after its closing `---`.
+
+    Only a first nonblank line of exactly `---` with a later line of exactly `---` is accepted. The
+    lines between are kept verbatim; nothing is parsed or inferred. Any other shape is (None, 0).
+    """
+    first = next((n for n, line in enumerate(lines) if line.strip()), None)
+    if first is None or lines[first] != "---":
+        return None, 0
+    close = next((n for n in range(first + 1, len(lines)) if lines[n] == "---"), None)
+    if close is None:
+        return None, 0
+    block = {
+        "type": "text",
+        "line": first + 1,
+        "end": close + 1,
+        "text": "\n".join(lines[first + 1 : close]),
+    }
+    return {"heading": "Front matter", "level": 1, "line": first + 1, "blocks": [block]}, close + 1
+
+
 def parse_source(text: str) -> list[dict[str, Any]]:
     """Keep every nonblank body line in one typed block with its source locator."""
     lines = physical_lines(text)
-    sections: list[dict[str, Any]] = []
+    leading, i = front_matter(lines)
+    sections: list[dict[str, Any]] = [leading] if leading else []
     current: dict[str, Any] | None = None
-    i = 0
     while i < len(lines):
         line = lines[i]
         heading = re.match(r"^(#{1,4}) (.+)$", line)

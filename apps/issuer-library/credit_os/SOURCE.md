@@ -149,3 +149,10 @@ The Modules tab draws one report per analytical output (head, band, key numbers,
 Task 3 fix round 1: `web/screen.css` Overview `.chart-row` columns lowered to `minmax(96px,1.1fr) minmax(72px,2fr) 56px auto` (also in the 1300px override) so the value stays inside the 349px three-up card at 1440 (ruling R19); `.panel-card .chart-row` chip column is `minmax(min-content,1fr)` with `.chips{min-width:0;max-width:100%;flex-wrap:wrap}` so chips wrap, never clip (R20). `web/screen.js` `openAuditSection` catches a drawing failure, logs it and says so in the item (documented fail-open, as `moduleBody`; R21). `web/static.test.cjs` adds the audit-failure test.
 
 Low-findings batch: `web/views.js` `comparisonChart` prints `n.a.` (full cell text in `title`) and draws no bar for a non-numeric value, where it printed the text in the 56px value column; `hedgeChart` reads dates only from columns headed date, expiry, maturity, period or tenor (every cell when no header matches). `web/static.test.cjs`: text-value chart row test; the hedge fixture gains a non-date column holding dates and its window header becomes "Maturity window".
+
+## Front matter section (module-report plan, Task 4a, ruling R22)
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `store.py` | new `front_matter(lines)`; `parse_source` starts with it: a first nonblank line of exactly `---` and a later line of exactly `---` become a level-1 "Front matter" section holding the lines between, verbatim, as one text block; any other body before the first heading still raises | 13 of the 20 real handoffs open with YAML front matter and were flattened to one "Unstructured handoff" block; nothing is parsed or inferred |
+| `tests/test_credit_os_store.py` | four tests: section shape, other preamble still raises, unterminated `---` raises, `structured(strict=False)` has no error | covers the above |

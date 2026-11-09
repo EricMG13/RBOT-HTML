@@ -4,6 +4,7 @@ import hashlib
 import sys
 from pathlib import Path
 
+import pytest
 from library_fixtures import make_run
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,3 +60,43 @@ def test_store_has_no_legacy_routes(tmp_path):
         links += [report["href"], report["download"], *(f["href"] for f in report["files"])]
     for link in links:
         assert link.startswith("/files/runs/run-a/"), link
+
+
+FRONT = "---\nmodule: CP-2A\nas_of: 2026-01-01\n---\n\n## Request\nWhat is asked.\n"
+
+
+def test_front_matter_is_the_first_section_verbatim():
+    sections = store.parse_source(FRONT)
+    assert sections[0] == {
+        "heading": "Front matter",
+        "level": 1,
+        "line": 1,
+        "blocks": [
+            {"type": "text", "line": 1, "end": 4, "text": "module: CP-2A\nas_of: 2026-01-01"}
+        ],
+    }
+    assert sections[1] == {
+        "heading": "Request",
+        "level": 2,
+        "line": 6,
+        "blocks": [{"type": "text", "line": 7, "end": 7, "text": "What is asked."}],
+    }
+    assert len(sections) == 2
+
+
+def test_other_body_before_the_first_heading_still_raises():
+    with pytest.raises(ValueError, match="Body before first heading"):
+        store.parse_source("preamble\n## Request\nx\n")
+    with pytest.raises(ValueError, match="Body before first heading"):
+        store.parse_source("---\nkey: v\n---\nstray\n## Request\nx\n")
+
+
+def test_unterminated_front_matter_raises():
+    with pytest.raises(ValueError, match="Body before first heading"):
+        store.parse_source("---\nkey: v\n\n## Request\nx\n")
+
+
+def test_structured_accepts_front_matter():
+    sections, error = store.structured(FRONT.encode(), strict=False)
+    assert error is None
+    assert sections[0]["heading"] == "Front matter"
