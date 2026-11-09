@@ -12,12 +12,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 from deploy_vii.contracts import PATHWAY_MODULES
+from deploy_vii.preparation import MAX_BYTES
 from deploy_workflow.context import SCHEMA, ContextRefused, RunContext, load_context
 from deploy_workflow.owners.cpos_launch import SOURCE_SUFFIXES
 
@@ -85,19 +87,27 @@ def ensure_layout(root: Path) -> Layout:
     return layout
 
 
+def _is_link(path: Path) -> bool:
+    """A symlink, or a Windows junction (which ``is_symlink`` does not report)."""
+    return path.is_symlink() or os.path.isjunction(path)
+
+
+def _raise(exc: OSError) -> None:
+    raise exc
+
+
 def _files(entry: Path) -> list[Path]:
-    """The regular files of an entry; a symlink (the entry or inside it) is never followed."""
-    if entry.is_symlink():
+    """The files of an entry that are not links (special files included, to be refused later).
+
+    A link is never followed. A listing error is raised, not hidden. A missing entry has none."""
+    if not os.path.lexists(entry) or _is_link(entry):
         return []
-    if entry.is_file():
+    if not entry.is_dir():
         return [entry]
     found: list[Path] = []
-    for here, dirs, names in os.walk(entry, followlinks=False):
-        dirs.sort()
-        for name in sorted(names):
-            path = Path(here) / name
-            if not path.is_symlink():
-                found.append(path)
+    for here, dirs, names in os.walk(entry, followlinks=False, onerror=_raise):
+        dirs[:] = sorted(d for d in dirs if not _is_link(Path(here) / d))
+        found += [Path(here) / n for n in sorted(names) if not _is_link(Path(here) / n)]
     return found
 
 
@@ -105,14 +115,22 @@ def signature(entry: Path) -> Signature:
     """Sorted (relative posix path, size, mtime_ns) per file; a file is one row."""
     rows = []
     for path in _files(entry):
-        stat = path.stat()
+        stat_result = path.lstat()
         rel = path.name if path == entry else path.relative_to(entry).as_posix()
-        rows.append((rel, stat.st_size, stat.st_mtime_ns))
+        rows.append((rel, stat_result.st_size, stat_result.st_mtime_ns))
     return tuple(sorted(rows))
 
 
 def unlocked(path: Path) -> bool:
-    """False only when another process holds the file open (Windows sharing or lock violation)."""
+    """False only when another process holds the file open (Windows sharing or lock violation).
+
+    Anything that is not a regular file (a FIFO, a device) is never opened: opening it can block
+    forever. ``check`` refuses such a file once the drop has settled."""
+    try:
+        if not stat.S_ISREG(path.lstat().st_mode):
+            return True
+    except OSError:
+        return False
     try:
         with path.open("r+b"):
             return True
@@ -138,8 +156,9 @@ class ReadyTracker:
 
     def ready(self, entry: Path) -> bool:
         try:
+            entry.lstat()
             sig = signature(entry)
-        except OSError:  # Vanished or being moved while we looked.
+        except OSError:  # Vanished, unreadable or being moved while we looked.
             self._seen.pop(entry, None)
             return False
         now = self.clock()
@@ -149,24 +168,55 @@ class ReadyTracker:
             return False
         if now - before[1] < self.settle_seconds:
             return False
-        return all(unlocked(path) for path in _files(entry))
+        try:
+            files = _files(entry)
+        except OSError:
+            return False
+        if not all(unlocked(path) for path in files):
+            return False
+        del self._seen[
+            entry
+        ]  # Once handed out, a folder dropped again under this name starts over.
+        return True
+
+
+def _is_noise(name: str) -> bool:
+    """Finder and Explorer bookkeeping and Office lock files are not drops."""
+    return name.casefold() in ("thumbs.db", "desktop.ini") or name.startswith((".", "~$"))
+
+
+def _real_folder_under(folder: Path, parent: Path) -> bool:
+    """A real folder (no symlink, no junction) whose resolved parent is ``parent``."""
+    return not _is_link(folder) and folder.is_dir() and folder.resolve().parent == parent.resolve()
 
 
 def candidates(layout: Layout) -> list[tuple[str, Path]]:
-    """(pathway, entry) for each entry in a pathway folder; strays directly in the inbox get ""."""
+    """(pathway, entry) for each entry in a pathway folder; strays directly in the inbox get "".
+
+    A pathway folder that is a link, or that resolves outside the inbox, is not listed."""
     found: list[tuple[str, Path]] = []
     for pathway in PATHWAYS:
         folder = layout.inbox / pathway
-        if folder.is_dir():
-            found += [(pathway, e) for e in sorted(folder.iterdir()) if e.name != TEMPLATE]
-    skip = {*PATHWAYS, FAILED}
-    found += [("", e) for e in sorted(layout.inbox.iterdir()) if e.name not in skip]
+        if _real_folder_under(folder, layout.inbox):
+            found += [
+                (pathway, e)
+                for e in sorted(folder.iterdir())
+                if e.name.casefold() != TEMPLATE and not _is_noise(e.name)
+            ]
+    skip = {*(p.casefold() for p in PATHWAYS), FAILED}
+    found += [
+        ("", e)
+        for e in sorted(layout.inbox.iterdir())
+        if e.name.casefold() not in skip and not _is_noise(e.name)
+    ]
     return found
 
 
 def claim(layout: Layout, entry: Path, claim_id: str) -> Path | None:
     """Move ``entry`` to ``drops/<claim_id>`` in one rename; None if it is held open or taken."""
     target = layout.drops / claim_id
+    if os.path.lexists(target):  # POSIX would replace an empty folder.
+        return None
     try:
         os.rename(entry, target)
     except OSError:
@@ -189,10 +239,27 @@ def _is_context(path: Path) -> bool:
     if path.suffix.lower() != ".json" or path.is_symlink() or not path.is_file():
         return False
     try:
-        body = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):  # Not JSON (or not text): an ordinary source, not the context.
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_BYTES + 1)
+        if len(raw) > MAX_BYTES:  # Too large to be a context: an ordinary source.
+            return False
+        body = json.loads(raw.decode("utf-8-sig"))
+    except (OSError, ValueError, RecursionError):  # Not JSON, not text or absurdly nested.
         return False
     return isinstance(body, dict) and body.get("schema") == SCHEMA
+
+
+def _first_link_or_special(drop: Path) -> str | None:
+    """Relative posix path of the first (sorted) link, junction or non-regular file, if any."""
+    odd: list[str] = []
+    for here, dirs, names in os.walk(drop, followlinks=False, onerror=_raise):
+        for name in (*dirs, *names):
+            path = Path(here) / name
+            mode = path.lstat().st_mode
+            if _is_link(path) or not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
+                odd.append(path.relative_to(drop).as_posix())
+        dirs[:] = [d for d in dirs if not _is_link(Path(here) / d)]
+    return min(odd) if odd else None
 
 
 def check(drop: Path, pathway: str) -> Checked:
@@ -201,6 +268,9 @@ def check(drop: Path, pathway: str) -> Checked:
         raise DropRejected("not inside a pathway folder")
     if drop.is_symlink() or not drop.is_dir():
         raise DropRejected("not a folder")
+    odd = _first_link_or_special(drop)
+    if odd is not None:
+        raise DropRejected(f"contains a link or special file: {odd}")
     contexts = sorted(p for p in drop.iterdir() if _is_context(p))
     if not contexts:
         raise DropRejected("no context file")
@@ -231,8 +301,29 @@ def _safe_name(name: str) -> str:
     return cleaned or "drop"
 
 
+def _write_note(folder: Path, text: str) -> None:
+    """Create ``WHY.txt`` (or ``WHY (2).txt``...) as a new file; never open an existing name."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    number = 1
+    while True:
+        name = "WHY.txt" if number == 1 else f"WHY ({number}).txt"
+        try:
+            fd = os.open(folder / name, flags, 0o644)
+        except FileExistsError:  # A file, link or folder the analyst put there.
+            number += 1
+            continue
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(text.encode("utf-8", errors="backslashreplace"))
+        return
+
+
 def reject(layout: Layout, drop: Path, name: str, reason: str, now: datetime) -> Path:
     """Move ``drop`` to ``inbox/failed/<date time> <name>/`` and write ``WHY.txt`` beside it."""
+    if not _real_folder_under(layout.failed, layout.inbox):
+        raise OSError(
+            f"{layout.failed} is not a real folder directly under the inbox "
+            "(a link, a junction or missing); nothing was moved"
+        )
     base = f"{now:%Y-%m-%d %H%M%S} {_safe_name(name)}"
     dest = layout.failed / base
     number = 2
@@ -244,7 +335,5 @@ def reject(layout: Layout, drop: Path, name: str, reason: str, now: datetime) ->
     else:  # A stray file or link: give it a folder of its own to sit in beside WHY.txt.
         dest.mkdir()
         os.rename(drop, dest / _safe_name(drop.name))
-    (dest / "WHY.txt").write_text(
-        f"{reason}\n\nFix the folder and drop it again.\n", encoding="utf-8"
-    )
+    _write_note(dest, f"{reason}\n\nFix the folder and drop it again.\n")
     return dest
