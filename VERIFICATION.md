@@ -23,6 +23,7 @@ Scope: what this repository holds and runs; Linux, offline. No provider was call
   `logic.test.cjs` 5; the browser check 2 (Chromium over `file://`, no request, no script error);
   the quality gate against `5c6e61b`, 0 findings. The offline run review and a library update
   were run as `Smoke-test.ps1` does them, with the checkout's Python on Linux.
-- Not verified: `test_financial_workflow.py` and `test_handoff_loop.py` (slow; the weekly job runs
-  them); anything on Windows (wrappers, package, Edge over `file://`); a live model run (the owner
-  runs the Copilot test locally).
+- Also passed: `test_handoff_loop.py` 30. `test_financial_workflow.py` passed its first 11 tests
+  and was stopped at the 15-minute limit with no failure; the weekly job runs it whole.
+- Not verified: anything on Windows (wrappers, package, Edge over `file://`); a live model run (the
+  owner runs the Copilot test locally).
