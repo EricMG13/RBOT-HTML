@@ -15,13 +15,19 @@ from typing import Any, Literal, TypedDict, cast
 
 EXCERPT = 600
 NOT_SUPPLIED = "Not supplied"
-NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+NO_PAGE = "no page"
+NUMBER = re.compile(r"[-−]?\d[\d,]*(?:\.\d+)?")
 QUOTE = re.compile(r"“([^”]+)”")
 BRACKET = re.compile(r"\[(CP-[0-9A-Z]+):\s*([A-Z]\d{1,2}(?:\s*[,;]\s*[A-Z]\d{1,2})*)\s*\]")
 PAGE = re.compile(
-    r"(?:(?P<key>\b[A-Z])\s*,\s*)?[Pp]ages?\s*:?\s*(?P<a>\d+)(?:\s*[-–]\s*(?P<b>\d+))?"
+    r"(?:(?P<key>\b[A-Z])\s*,\s*)?(?<![\w?&=/#.:-])[Pp]ages?\s*:?\s*(?P<a>\d+)(?!\d|\.\d)"
+    r"(?:\s*[-–]\s*(?P<b>\d+)(?!\d|\.\d))?"
 )
-TRAILING = re.compile(r"(?:^|[.;]\s+)([A-Z]\d{1,2}(?:\s*,\s*[A-Z]\d{1,2})*)\.?\s*$")
+# Register letters exclude A, B, H and Q, which also open rating grades ("B2"), halves and quarters.
+CODE = r"[CD-GI-PR-Z]\d{1,2}"
+TRAILING = re.compile(rf"[.;]\s+({CODE}(?:\s*[,;]\s*{CODE})*)\.?\s*$")
+SENTENCE_END = re.compile(r"[.;]\s")
+CLAIM_HEADERS = ("finding", "bottom line")
 
 
 class Locator(TypedDict):
@@ -51,6 +57,10 @@ def locator(kind: Literal["issuer_page", "upstream", "gap"], **fields: Any) -> L
     return cast(Locator, base | fields)
 
 
+def span_text(page: int | None, page_end: int | None) -> str:
+    return f"{page}-{page_end}" if page_end else f"{page}"
+
+
 def as_gap(loc: Locator) -> Locator:
     """The same citation, unresolved: kept with its key and pages so the reader sees what failed."""
     return locator(
@@ -58,7 +68,7 @@ def as_gap(loc: Locator) -> Locator:
         source=loc["source"],
         page=loc["page"],
         page_end=loc["page_end"],
-        label=f"Source {loc['source']} page {loc['page']}",
+        label=f"{loc['source']} p.{span_text(loc['page'], loc['page_end'])} · unresolved",
     )
 
 
@@ -71,31 +81,43 @@ def page_locator(match: re.Match[str], last_key: str | None) -> Locator:
     last = int(match["b"]) if match["b"] else None
     key = match["key"] or last_key
     if key is None:
-        return locator("gap", page=first, page_end=last, label="Page without a source key")
+        return locator(
+            "gap", page=first, page_end=last, label=f"p.{span_text(first, last)} · no key"
+        )
     return locator("issuer_page", source=key, page=first, page_end=last)
 
 
-def parse_locators(text: str) -> list[Locator]:
-    """Every citation in ``text``, in reading order; what no pattern matches is not guessed."""
+def scan(text: str) -> list[tuple[int, Locator]]:
+    """Every citation in ``text`` with its position; what no pattern matches is not guessed."""
     found: list[tuple[int, Locator]] = []
     for m in BRACKET.finditer(text):
         found.append((m.start(), locator("upstream", module=m[1], codes=split_codes(m[2]))))
     last_key: str | None = None
+    previous = 0
     for m in PAGE.finditer(text):
+        if SENTENCE_END.search(text, previous, m.start()):
+            last_key = None
         last_key = m["key"] or last_key
+        previous = m.end()
         found.append((m.start(), page_locator(m, last_key)))
     if (at := text.find(NOT_SUPPLIED)) >= 0:
         found.append((at, locator("gap", label=NOT_SUPPLIED)))
     if (tail := TRAILING.search(text)) and not BRACKET.search(text[tail.start(1) :]):
         found.append((tail.start(1), locator("upstream", codes=split_codes(tail[1]))))
-    return [loc for _, loc in sorted(found, key=lambda pair: pair[0])]
+    return sorted(found, key=lambda pair: pair[0])
+
+
+def parse_locators(text: str) -> list[Locator]:
+    """Every citation in ``text``, in reading order."""
+    return [loc for _, loc in scan(text)]
 
 
 def inventory(cp0_sections: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
-    """key -> (file, sha256) from CP-0's "Complete supplied inventory" table."""
+    """key -> (file, sha256) from the CP-0 inventory table: any section headed "...inventory..."
+    holding a table with a sha256 column; the key is column 0 and the file name column 1."""
     result: dict[str, tuple[str, str]] = {}
     for section in cp0_sections:
-        if not section["heading"].startswith("Complete supplied inventory"):
+        if "inventory" not in section["heading"].lower():
             continue
         for block in section["blocks"]:
             if block["type"] != "table":
@@ -109,34 +131,43 @@ def inventory(cp0_sections: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
     return result
 
 
-def read_pages(path: Path) -> tuple[dict[int, str], str | None]:
+def read_pages(raw: bytes) -> tuple[dict[int, str], str | None]:
     """The page texts of one source-text file, or the reason it could not be read."""
     pages: dict[int, str] = {}
     try:
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if not line.strip():
-                continue
-            record = json.loads(line)
-            pages[int(record["page"])] = str(record["text"])
-    except (OSError, ValueError, KeyError, TypeError) as error:
+        for line in raw.decode("utf-8").splitlines():
+            if line.strip():
+                record = json.loads(line)
+                pages[int(record["page"])] = str(record["text"])
+    except (ValueError, KeyError, TypeError) as error:
         return {}, f"source text unreadable: {type(error).__name__}: {error}"
     return pages, None
 
 
-def quote_of(cells: list[str]) -> str | None:
-    """The first “…” span among the cells, else the first purely numeric cell."""
-    for cell in cells:
-        if m := QUOTE.search(cell):
-            return m[1]
-    return next((c for c in cells if NUMBER.fullmatch(c.strip())), None)
+def numeric_cell(cells: list[str]) -> str | None:
+    """The first purely numeric cell: the number is the claim for every page the row cites."""
+    return next((c.strip() for c in cells if NUMBER.fullmatch(c.strip())), None)
+
+
+def bound_quotes(cell: str, found: list[tuple[int, Locator]]) -> dict[int, str]:
+    """Each “…” quote, bound to the nearest page locator before it (the first quote wins)."""
+    bound: dict[int, str] = {}
+    for m in QUOTE.finditer(cell):
+        before = [pos for pos, loc in found if pos < m.start() and loc["page"] is not None]
+        if before:
+            bound.setdefault(max(before), m[1])
+    return bound
 
 
 def quote_span(quote: str, text: str) -> tuple[int, int] | None:
-    """Where ``quote`` occurs in ``text``; a number matches whole, ignoring thousands commas."""
+    """Where ``quote`` occurs in ``text``. A number matches whole, ignoring thousands commas; a
+    negative also matches its accounting form in brackets."""
     if NUMBER.fullmatch(quote.strip()):
-        digits = quote.strip().replace(",", "")
-        body = ",?".join(re.escape(ch) for ch in digits)
-        found = re.search(rf"(?<!\d)(?<!\d,){body}(?!\d)(?!\.\d)", text)
+        digits = quote.strip().replace(",", "").replace("−", "-")
+        body = ",?".join(re.escape(ch) for ch in digits.lstrip("-"))
+        sign = r"[-−]" if digits.startswith("-") else ""
+        form = rf"(?:{sign}{body}|\({body}\))" if sign else body
+        found = re.search(rf"(?<!\d)(?<!\d,){form}(?!\d)(?!\.\d)", text)
     else:
         found = re.search(re.escape(quote), text)
     return found.span() if found else None
@@ -172,38 +203,51 @@ def chip(loc: Locator, line: int, **fields: Any) -> dict[str, Any]:
 
 
 class Pages:
-    """Source-text files of one run, read once each."""
+    """Source-text files of one run, read once each, with the run's inventory."""
 
-    def __init__(self, run_dir: Path) -> None:
+    def __init__(self, run_dir: Path, inv: dict[str, tuple[str, str]]) -> None:
+        self.inv = inv
         self.folder = run_dir / "source-text"
         self.cache: dict[str, tuple[dict[int, str], str | None, str | None]] = {}
 
     def get(self, name: str) -> tuple[dict[int, str], str | None, str | None]:
-        """(pages, actual sha256 or None, problem or None)."""
+        """(pages, actual sha256 or None when nothing was read, problem or None)."""
         if name not in self.cache:
-            path = self.folder / name
-            if not path.is_file():
-                self.cache[name] = ({}, None, "source text file not found")
-            else:
-                pages, problem = read_pages(path)
-                self.cache[name] = (pages, hashlib.sha256(path.read_bytes()).hexdigest(), problem)
+            self.cache[name] = self.read(self.folder / name)
         return self.cache[name]
 
+    @staticmethod
+    def read(path: Path) -> tuple[dict[int, str], str | None, str | None]:
+        if not path.is_file():
+            return {}, None, "source text file not found"
+        try:
+            raw = path.read_bytes()
+        except OSError as error:
+            return {}, None, f"source text unreadable: {type(error).__name__}: {error}"
+        pages, problem = read_pages(raw)
+        return pages, hashlib.sha256(raw).hexdigest(), problem
 
-def issuer_chip(
-    loc: Locator, line: int, quote: str | None, inv: dict[str, tuple[str, str]], pages: Pages
-) -> dict[str, Any]:
+
+def is_file_name(name: str) -> bool:
+    """An inventory name is a bare file name: it cannot leave source-text/."""
+    return bool(name) and not any(part in name for part in ("/", "\\", "\x00")) and ".." not in name
+
+
+def issuer_chip(loc: Locator, line: int, quote: str | None, pages: Pages) -> dict[str, Any]:
+    inv = pages.inv
+    entry = inv.get(loc["source"] or "")
     if not inv:
         return chip(as_gap(loc), line, reason="no inventory")
-    entry = inv.get(loc["source"] or "")
     if entry is None:
         return chip(as_gap(loc), line, reason="key not in inventory")
     file, expected = entry
+    if not is_file_name(file):
+        return chip(as_gap(loc), line, reason="source name not a file name")
     texts, actual, problem = pages.get(file)
     fields: dict[str, Any] = {
         "file": file,
         "sha256": expected,
-        "hash_matches_inventory": actual == expected if actual else False,
+        "hash_matches_inventory": None if actual is None else actual == expected,
         "quote": quote,
         "reason": problem,
     }
@@ -223,20 +267,51 @@ def issuer_chip(
     return chip(loc, line, **fields)
 
 
+GAP_REASONS = {
+    NOT_SUPPLIED: "the cell says Not supplied",
+}
+
+
+def other_chip(loc: Locator, line: int, module: str) -> dict[str, Any]:
+    """A chip that needs no source text: upstream codes, or a gap the patterns left open."""
+    if loc["kind"] == "upstream":
+        # Register codes with no module named belong to the citing module itself.
+        return chip(loc, line, module=loc["module"] or module)
+    reason = GAP_REASONS.get(loc["label"] or "", "page cited without a source key")
+    return chip(loc, line, reason=reason)
+
+
 def chips_for_cells(
-    cells: list[str], line: int, module: str, inv: dict[str, tuple[str, str]], pages: Pages
+    cells: list[str],
+    line: int,
+    module: str,
+    pages: Pages,
+    claim: bool = False,
 ) -> list[dict[str, Any]]:
-    quote = quote_of(cells)
+    """Chips of one row or paragraph. A “…” quote is tested only against the page it follows;
+    a numeric cell is tested against every page of the row. A claim row that cites nothing gets
+    one ``no page`` gap."""
+    number = numeric_cell(cells)
     result = []
     for cell in cells:
-        for loc in parse_locators(cell):
+        found = scan(cell)
+        quotes = bound_quotes(cell, found)
+        for pos, loc in found:
             if loc["kind"] == "issuer_page":
-                result.append(issuer_chip(loc, line, quote, inv, pages))
+                result.append(issuer_chip(loc, line, quotes.get(pos) or number, pages))
             else:
-                # Register codes with no module named belong to the citing module itself.
-                owner = module if loc["kind"] == "upstream" else None
-                result.append(chip(loc, line, module=loc["module"] or owner))
+                result.append(other_chip(loc, line, module))
+    if claim and not result:
+        result.append(
+            chip(locator("gap", label=NO_PAGE), line, reason="the row cites no page or register")
+        )
     return result
+
+
+def is_claim_table(findings: bool, heading: str, headers: list[str]) -> bool:
+    """A claim table: under ## Findings, chart data, or headed Finding or Bottom line."""
+    first = headers[0].strip().lower() if headers else ""
+    return findings or heading.startswith("Chart data") or first in CLAIM_HEADERS
 
 
 def chips_for_output(
@@ -247,17 +322,21 @@ def chips_for_output(
     inv: dict[str, tuple[str, str]],
 ) -> dict[str, list[dict[str, Any]]]:
     """Chips of one handoff, keyed ``<output id>:<line>`` for each row or paragraph with any."""
-    pages = Pages(run_dir)
+    pages = Pages(run_dir, inv)
     result: dict[str, list[dict[str, Any]]] = {}
+    findings = False
     for section in sections:
+        if section["level"] == 2:
+            findings = section["heading"].strip().lower().startswith("findings")
         for block in section["blocks"]:
+            claim = False
             if block["type"] == "table":
+                claim = is_claim_table(findings, section["heading"], block["headers"])
                 units = [(r["line"], r["cells"]) for r in block["rows"]]
             else:
                 units = [(block["line"], [block["text"]])]
             for line, cells in units:
-                found = chips_for_cells(cells, line, module, inv, pages)
-                if found:
+                if found := chips_for_cells(cells, line, module, pages, claim):
                     result[f"{output_id}:{line}"] = found
     return result
 

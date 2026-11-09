@@ -3,6 +3,7 @@ Expected locators and flags are written here from the fixture text, not read fro
 
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -10,7 +11,12 @@ import pytest
 from library_fixtures import CITED, SOURCE_NAME, SOURCE_PAGES, inventory_text, make_run, method
 
 from deploy_workflow.credit_os_catalogue import catalogue
-from deploy_workflow.credit_os_chips import chips, inventory, parse_locators
+from deploy_workflow.credit_os_chips import (
+    chips,
+    chips_for_output,
+    inventory,
+    parse_locators,
+)
 from deploy_workflow.library_index import build_library
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +51,7 @@ def test_keys_switch_between_sources():
 def test_bare_page_with_no_key_is_a_gap():
     (got,) = parse_locators("page:145 only")
     assert got["kind"] == "gap" and got["page"] == 145 and got["source"] is None
+    assert got["label"] == "p.145 · no key"
 
 
 def test_upstream_bracket():
@@ -166,7 +173,7 @@ def test_a_missing_source_file_is_reported_on_the_chip(tmp_path):
     (run / "source-text" / SOURCE_NAME).unlink()
     (k, _) = chips(tmp_path, store)[line_of(run, store, "| Cash interest")]
     assert k["reason"] == "source text file not found"
-    assert k["hash_matches_inventory"] is False and k["quote_found"] is None
+    assert k["hash_matches_inventory"] is None and k["quote_found"] is None
 
 
 def test_update_library_writes_chips_into_data_js(tmp_path):
@@ -176,3 +183,194 @@ def test_update_library_writes_chips_into_data_js(tmp_path):
     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
     key = line_of(run, store, "| Cash interest")
     assert data["chips"][key][0]["quote_found"] is True
+
+
+# --- Fix round 1: rulings R1-R7 ---------------------------------------------------------------
+
+PAGES_TWO = (
+    b'{"page": 10, "text": "alpha is here. Receivables (165) and total 1,158."}\n'
+    b'{"page": 20, "text": "beta only."}\n'
+)
+
+
+def one_run(tmp_path, pages=PAGES_TWO, name="K.jsonl", file="K.jsonl", digest=None):
+    """A run folder with one source-text file and the inventory naming it; returns both."""
+    run = tmp_path / "run"
+    (run / "source-text").mkdir(parents=True)
+    (run / "source-text" / name).write_bytes(pages)
+    return run, {"K": (file, digest or hashlib.sha256(pages).hexdigest())}
+
+
+def table(*rows):
+    return [
+        {
+            "heading": "H",
+            "level": 3,
+            "line": 1,
+            "blocks": [
+                {
+                    "type": "table",
+                    "line": 2,
+                    "headers": ["Item", "Value", "Basis"],
+                    "rows": [{"line": 4 + i, "cells": list(r)} for i, r in enumerate(rows)],
+                }
+            ],
+        }
+    ]
+
+
+def run_chips(run, inv, *rows):
+    return chips_for_output(run, "x/CP-1.md", "CP-1", table(*rows), inv)
+
+
+def test_each_quote_binds_to_the_page_cited_before_it(tmp_path):
+    run, inv = one_run(tmp_path)
+    inv["M"] = inv["K"]
+    got = run_chips(run, inv, ("a", "-", "K, page:10 says “alpha” and M, page:20 differs"))
+    first, second = got["x/CP-1.md:4"]
+    assert (first["page"], first["quote"], first["quote_found"]) == (10, "alpha", True)
+    assert (second["page"], second["quote"], second["quote_found"]) == (20, None, None)
+
+
+def test_a_numeric_cell_binds_to_every_page_of_the_row(tmp_path):
+    run, inv = one_run(tmp_path)
+    got = run_chips(run, inv, ("a", "1158", "K, page:10 and K, page:20"))
+    first, second = got["x/CP-1.md:4"]
+    assert (first["quote"], first["quote_found"]) == ("1158", True)
+    assert (second["quote"], second["quote_found"]) == ("1158", False)
+
+
+def test_an_accounting_negative_matches_its_bracketed_page_form(tmp_path):
+    run, inv = one_run(tmp_path)
+    (found,) = run_chips(run, inv, ("a", "-165", "K, page:10"))["x/CP-1.md:4"]
+    assert found["quote_found"] is True
+    (other,) = run_chips(run, inv, ("a", "-166", "K, page:10"))["x/CP-1.md:4"]
+    assert other["quote_found"] is False
+
+
+def test_unseparated_number_matches_the_separated_page_text(tmp_path):
+    run, inv = one_run(tmp_path)
+    (found,) = run_chips(run, inv, ("a", "1158", "K, page:10"))["x/CP-1.md:4"]
+    assert found["quote_found"] is True
+    (other,) = run_chips(run, inv, ("a", "158", "K, page:10"))["x/CP-1.md:4"]
+    assert other["quote_found"] is False
+
+
+def test_a_missing_source_file_has_no_hash_verdict(tmp_path):
+    run, inv = one_run(tmp_path, file="P.jsonl")
+    (got,) = run_chips(run, inv, ("a", "1", "K, page:10"))["x/CP-1.md:4"]
+    assert got["hash_matches_inventory"] is None
+    assert got["reason"] == "source text file not found"
+
+
+def test_inventory_names_that_leave_source_text_are_refused(tmp_path):
+    run, inv = one_run(tmp_path)
+    (run / "secret.jsonl").write_bytes(PAGES_TWO)
+    inv["K"] = ("../secret.jsonl", inv["K"][1])
+    (got,) = run_chips(run, inv, ("a", "1", "K, page:10"))["x/CP-1.md:4"]
+    assert got["kind"] == "gap" and got["reason"] == "source name not a file name"
+    assert got["excerpt"] is None
+
+
+def test_an_unreadable_source_file_becomes_the_chip_reason(tmp_path):
+    run, inv = one_run(tmp_path)
+    path = run / "source-text" / "K.jsonl"
+    path.chmod(0)
+    try:
+        if os.access(path, os.R_OK):
+            pytest.skip("permissions are not enforced for this user")
+        (got,) = run_chips(run, inv, ("a", "1", "K, page:10"))["x/CP-1.md:4"]
+    finally:
+        path.chmod(0o644)
+    assert got["reason"].startswith("source text unreadable")
+    assert got["hash_matches_inventory"] is None
+
+
+def inventory_section(heading, headers):
+    return [
+        {
+            "heading": heading,
+            "level": 3,
+            "line": 1,
+            "blocks": [
+                {
+                    "type": "table",
+                    "line": 3,
+                    "headers": headers,
+                    "rows": [{"line": 5, "cells": ["K", "k.jsonl", "cd" * 32] + ["x"] * 0}],
+                }
+            ],
+        }
+    ]
+
+
+def test_inventory_heading_variants():
+    variant = inventory_section(
+        "Supplied inventory and frozen source roster",
+        ["Alias", "Exact source name / source ID", "Exact sha256"],
+    )
+    assert inventory(variant) == {"K": ("k.jsonl", "cd" * 32)}
+    no_hash = inventory_section("Inventory", ["Alias", "Name", "Note"])
+    assert inventory(no_hash) == {}
+
+
+def claim_sections(heading_level_two, table_heading, headers):
+    row = {"line": 6, "cells": ["No locator here", "x", "y"]}
+    block = {"type": "table", "line": 4, "headers": headers, "rows": [row]}
+    return [
+        {"heading": heading_level_two, "level": 2, "line": 1, "blocks": []},
+        {"heading": table_heading, "level": 3, "line": 3, "blocks": [block]},
+    ]
+
+
+def test_claim_rows_without_a_locator_get_a_no_page_gap(tmp_path):
+    h = ["Finding", "Creditor impact", "Confidence"]
+    for sections in (
+        claim_sections("Findings", "Reader summary", ["Item", "B", "C"]),
+        claim_sections("Other", "Reader summary", h),
+        claim_sections("Other", "Chart data: leverage", ["Period", "B", "C"]),
+        claim_sections("Other", "Reader", ["Bottom line", "B", "C"]),
+    ):
+        got = chips_for_output(tmp_path, "x/CP-1.md", "CP-1", sections, {})
+        (gap,) = got["x/CP-1.md:6"]
+        assert gap["kind"] == "gap" and gap["label"] == "no page" and gap["reason"]
+    register = claim_sections("Sources", "Register", ["Item", "B", "C"])
+    assert chips_for_output(tmp_path, "x/CP-1.md", "CP-1", register, {}) == {}
+
+
+def test_gap_labels_are_short_and_carry_a_reason(tmp_path):
+    run, _ = one_run(tmp_path)
+    got = run_chips(
+        run,
+        {},
+        ("a", "1", "K, page:10"),
+        ("b", "1", "Not supplied"),
+        ("c", "1", "page:3"),
+    )
+    (unresolved,) = got["x/CP-1.md:4"]
+    assert (unresolved["label"], unresolved["reason"]) == ("K p.10 · unresolved", "no inventory")
+    assert got["x/CP-1.md:5"][0]["label"] == "Not supplied" and got["x/CP-1.md:5"][0]["reason"]
+    assert got["x/CP-1.md:6"][0]["label"] == "p.3 · no key" and got["x/CP-1.md:6"][0]["reason"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Q4",
+        "B3",
+        "Corporate family rating. B2.",
+        "See the webpage 3 times",
+        "https://example.com/report?page:12",
+        "homepage:7",
+        "K, page 1.5",
+        "D1.",
+    ],
+)
+def test_no_false_locators(text):
+    assert parse_locators(text) == []
+
+
+def test_a_bare_page_does_not_inherit_a_key_from_an_earlier_sentence():
+    got = parse_locators("K, page:118. Proxy page:7 says so.")
+    assert got[0] == loc("issuer_page", "K", 118)
+    assert got[1]["kind"] == "gap" and got[1]["page"] == 7
