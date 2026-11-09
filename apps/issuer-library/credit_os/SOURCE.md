@@ -123,3 +123,5 @@ Task 5 edit: `REPO` also resolves to `credit_os`'s parent when that folder holds
 | `web/screen.js` | `isAnalytical` excludes `CP-OS`; `appDestinations` adds `CP-OS` (needs no selected run); the screen-reader announcement omits the run name for app destinations | Run activity is not a module and belongs to no run |
 | `web/static-boot.js` | Reads `window.CREDIT_OS_DATA.activity` (`{excluded: [[folder, reason], ...], issues: [...]}`, missing = a stated problem) into the global `window.DESIGN_ACTIVITY` | how the view gets its data; a global beside `DESIGN_DATA`, `DESIGN_WORKSPACE`, `DESIGN_CATALOGUE` |
 | `web/index.html` | Rail link "Run activity" (`#CP-OS/activity`, `icons/activity.svg`) | navigation |
+
+Task 8 fix: `web/static-boot.js` no longer defaults `activity` to an empty list. `window.DESIGN_ACTIVITY` is `null` unless `CREDIT_OS_DATA.activity` holds arrays `excluded` and `issues`; the catalogue/workspace check now names what is missing (`catalogue`, `workspace`) and activity is read apart, so a data file that lacks only `activity` keeps the rest working. `web/views.js` `activityView(null)` says Run activity could not be read, never the all-clear.

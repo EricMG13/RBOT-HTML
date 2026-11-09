@@ -70,6 +70,14 @@ test('Run activity says so when there is nothing to report', () => {
   assert.ok(html.includes('Nothing to report') && !html.includes('<li'));
 });
 
+test('Run activity never shows the all-clear when its data is missing', () => {
+  const html = activityView()(null);
+  assert.ok(html.includes('could not be read'));
+  assert.ok(!html.includes('Nothing to report') && !html.includes('raised no issues'));
+  const boot = read('static-boot.js');
+  assert.ok(boot.includes('activity=null') && !boot.includes('activity={excluded:[],issues:[]}'));
+});
+
 test('Forecast for a run with no CP-2G output says no model was published', () => {
   const views = read('views.js');
   assert.ok(views.includes('if(!models.length)return forecastEmpty(context);'));
