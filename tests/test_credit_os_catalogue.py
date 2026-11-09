@@ -251,3 +251,36 @@ def test_store_joins_the_catalogue(tmp_path):
     (report,) = joined["reports"]
     assert report["href"].split("?")[0].endswith("/report.html")
     assert joined["issues"] == []
+
+
+def combined_periods(first: str, second: str) -> str:
+    """CHARTS with the leverage table's Period cells as real runs write them."""
+    return CHARTS.replace("| FY2023 | 6.33", f"| {first} | 6.33").replace(
+        "| FY2024 | 6.57", f"| {second} | 6.57"
+    )
+
+
+def test_fiscal_year_with_its_date_is_ordered_by_the_date(tmp_path):
+    charts = combined_periods("FY2023 / 2023-09-30", "FY2024 / 2024-09-30")
+    make_run(tmp_path, "run-a", cp1_extra=charts)
+    result = built(tmp_path)
+    metrics = result["real"][0]["metrics"]
+    assert metrics["leverage"]["value"] == "6.57"
+    assert metrics["leverage"]["period"] == "FY2024 / 2024-09-30"
+    assert metrics["net_leverage"]["value"] == "4.93"
+    assert result["issues"] == []
+
+
+def test_fiscal_year_and_date_that_disagree_give_no_metric_and_an_issue(tmp_path):
+    charts = combined_periods("FY2023 / 2023-09-30", "FY2024 / 2023-09-30")
+    make_run(tmp_path, "run-a", cp1_extra=charts)
+    result = built(tmp_path)
+    assert "leverage" not in result["real"][0]["metrics"]
+    assert [i for i in result["issues"] if "leverage table has no metric" in i]
+
+
+def test_an_impossible_date_is_not_ordered(tmp_path):
+    make_run(tmp_path, "run-a", cp1_extra=CHARTS.replace("| 2024-09-30 |", "| 2024-13-45 |"))
+    result = built(tmp_path)
+    assert "cash" not in result["real"][0]["metrics"]
+    assert [i for i in result["issues"] if "liquidity table has no metric" in i]
