@@ -5,6 +5,7 @@ import json
 import os
 import re
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,7 @@ from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import ToolCall, Turn, Usage
 from deploy_vii.registry import plan
-from deploy_workflow.owners import cpos_launch
+from deploy_workflow.owners import cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos import HandoffTask, _checked_handoff
 from deploy_workflow.run_expectations import Item
 from deploy_workflow.owners.cpos_launch import (
@@ -1416,3 +1417,364 @@ def test_refresh_library_reports_a_real_refusal_and_keeps_going(tmp_path, capsys
     cpos_launch._refresh_library(tmp_path / "runs" / "x")
     err = capsys.readouterr().err
     assert "is a link or a file" in err and f"--workspace {tmp_path}" in err
+
+
+# --- the CP-2G forecast delivery. Synthetic; not analytical review. -------------------------------
+# Inputs the fake CP-2G handoff states. Every literal terminates in decimal, so the answer key
+# below is exact in fractions; it re-expresses the lease's arithmetic and calls no production code.
+BASE = {
+    "revenue": "1000",
+    "ebitda": "300",
+    "interest": "36",
+    "taxes": "20",
+    "wc": "10",
+    "capex": "40",
+    "fcf": "194",
+    "debt": "600",
+    "cash": "100",
+    "undrawn": "50",
+}
+PATHS = {
+    "revenue_growth": ("0.05", "0.04", "0.03"),
+    "ebitda_margin": ("0.30", "0.31", "0.32"),
+    "capex_pct_revenue": ("0.04", "0.04", "0.04"),
+    "tax_wc_pct_revenue": ("0.10", "0.10", "0.10"),
+    "interest_rate": ("0.06", "0.06", "0.06"),
+    "dividends": ("20", "20", "20"),
+    "debt_repayment": ("50", "50", "50"),
+}
+# The launcher names a run folder by its run ID; the library shows a model under that run.
+RUN_ID = "nbg-2025-03-31-distressed_restructuring-sol-medium"
+SHOCK = {"ebitda_decline": "0.20", "rate_increase": "0.10"}
+RATIOS = {"total_leverage", "net_leverage", "coverage", "fcf_to_debt"}
+
+
+def forecast_block(**changes) -> str:
+    inputs = {
+        "schema_version": "cpos-forecast-inputs/1",
+        "base": {k: {"amount": v, "reason": None} for k, v in BASE.items()},
+        "base_drivers": {
+            name: {
+                "values": list(values),
+                "category": "Analyst Interpretation",
+                "rationale": "Synthetic.",
+                "limitation": None,
+            }
+            for name, values in PATHS.items()
+        },
+        "downside_shock": SHOCK,
+        "years": [
+            {"year": 2025 + i, "start": f"{2025 + i}-04-01", "end": f"{2026 + i}-03-31"}
+            for i in range(3)
+        ],
+        "scope_limits": ["Synthetic; not analytical review."],
+        **changes,
+    }
+    return f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(inputs)}\n```\n"
+
+
+def forecast_answer(context: dict, routes: list, block: str | None = None) -> str:
+    """CP-1 prints the base amounts; CP-2G ends its findings with the inputs block."""
+    text = answer(context, routes)
+    if context["module_id"] == "CP-1":
+        rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items())
+        return text.replace(
+            "## Calculations", f"| Base | USD m |\n| --- | --- |\n{rows}\n\n## Calculations", 1
+        )
+    if context["module_id"] == "CP-2G" and block is not None:
+        return text.replace("## Calculations", f"{block}\n## Calculations", 1)
+    return text
+
+
+def key_case(shock: dict | None) -> list[dict[str, Fraction]]:
+    """The three forecast years from the stated inputs, in exact fractions."""
+    p = {name: [Fraction(v) for v in values] for name, values in PATHS.items()}
+    s, k = (
+        (Fraction(shock["ebitda_decline"]), Fraction(shock["rate_increase"])) if shock else (0, 0)
+    )
+    revenue, debt, cash, undrawn = Fraction(1000), Fraction(600), Fraction(100), Fraction(50)
+    years = []
+    for t in range(3):
+        revenue *= 1 + p["revenue_growth"][t]
+        ebitda = revenue * p["ebitda_margin"][t] * (1 - s)
+        interest = debt * p["interest_rate"][t] * (1 + k)
+        tax_wc = revenue * p["tax_wc_pct_revenue"][t]
+        capex = revenue * p["capex_pct_revenue"][t]
+        cfo = ebitda - interest - tax_wc
+        fcf = cfo - capex
+        closing_debt = debt - p["debt_repayment"][t]
+        closing_cash = cash + fcf - p["dividends"][t] - p["debt_repayment"][t]
+        net_debt = closing_debt - closing_cash
+        years.append(
+            {
+                "revenue": revenue,
+                "ebitda": ebitda,
+                "interest": interest,
+                "tax_wc": tax_wc,
+                "capex": capex,
+                "cfo": cfo,
+                "fcf": fcf,
+                "opening_debt": debt,
+                "repayment": p["debt_repayment"][t],
+                "closing_debt": closing_debt,
+                "opening_cash": cash,
+                "dividends": p["dividends"][t],
+                "closing_cash": closing_cash,
+                "undrawn": undrawn,
+                "liquidity": closing_cash + undrawn,
+                "total_leverage": closing_debt / ebitda,
+                "net_debt": net_debt,
+                "net_leverage": net_debt / ebitda,
+                "coverage": ebitda / interest,
+                "fcf_to_debt": fcf / closing_debt,
+            }
+        )
+        debt, cash = closing_debt, closing_cash
+    return years
+
+
+def forecast_run(tmp_path, provider, capsys, block, modules=("CP-2G",)):
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="distressed_restructuring")
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+    argv += ["--modules", *modules]
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+            modules=modules,
+        ).plan.layout.routes
+    )
+    provider.answer = lambda context: forecast_answer(context, routes, block)
+    code = main(argv)
+    return code, tmp_path / "runs" / RUN_ID, capsys.readouterr()
+
+
+def test_cp2g_run_publishes_model_delivery(tmp_path, provider, capsys):
+    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    receipt = json.loads((folder / "delivery.json").read_text())
+    files = {"annual.md", "forecast.md", "forecast_exact.json", "calculation.json", "quarter.md"}
+    assert receipt["cp_forecast_published"] is True and receipt["cp_model_published"] is False
+    assert files <= set(receipt["files"])
+    for name in files:  # hash-checked like the report
+        assert receipt["files"][name] == hashlib.sha256((folder / name).read_bytes()).hexdigest()
+    assert verify_delivery(next(out.glob("delivery-*.json")), folder) == folder / "report.html"
+    exact = json.loads((folder / "forecast_exact.json").read_text())
+    assert (
+        exact["consumed"]["CP-1.md"]
+        == hashlib.sha256((folder / "CP-1.md").read_bytes()).hexdigest()
+    )
+    assert (folder / "annual.md").read_bytes() == (folder / "CP-1.md").read_bytes()
+    assert (folder / "forecast.md").read_bytes() == (folder / "CP-2G.md").read_bytes()
+    calculation = json.loads((folder / "calculation.json").read_text())
+    assert (
+        calculation["forecast_exact_sha256"]
+        == hashlib.sha256((folder / "forecast_exact.json").read_bytes()).hexdigest()
+    )
+    for case, shock in (("REFERENCE", None), ("DOWNSIDE", SHOCK)):
+        published = exact["outputs"][case]["years"]
+        for year, expected in zip(published, key_case(shock), strict=True):
+            for name, want in expected.items():
+                got = Fraction(year[name]["amount"])
+                tolerance = abs(want) * Fraction(1, 10**30) if name in RATIOS else 0
+                assert abs(got - want) <= tolerance, (case, year["year"], name)
+    first = exact["outputs"]["REFERENCE"]["years"][0]  # hand-written year 1, base case
+    for name, text in {
+        "revenue": "1050",
+        "ebitda": "315",
+        "interest": "36",
+        "tax_wc": "105",
+        "capex": "42",
+        "cfo": "174",
+        "fcf": "132",
+        "closing_debt": "550",
+        "closing_cash": "162",
+        "liquidity": "212",
+    }.items():
+        assert first[name]["amount"] == text, name
+    down = exact["outputs"]["DOWNSIDE"]["years"][0]  # EBITDA x 0.8, interest x 1.1
+    assert [down[n]["amount"] for n in ("ebitda", "interest", "fcf", "closing_cash")] == [
+        "252",
+        "39.6",
+        "65.4",
+        "95.4",
+    ]
+    assert (first["year"], first["planning_start"], first["planning_end"]) == (
+        2025,
+        "2025-04-01",
+        "2026-03-31",
+    )
+    assert "Model not published" not in seen.err
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
+
+
+def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
+    code, out, seen = forecast_run(tmp_path, provider, capsys, None, modules=("CP-2A",))
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    assert not {"forecast_exact.json", "calculation.json", "annual.md"} & {
+        p.name for p in folder.iterdir()
+    }
+    receipt = json.loads((folder / "delivery.json").read_text())
+    assert receipt["cp_forecast_published"] is False
+    assert "publish_forecast" not in json.loads((out / "workflow.json").read_text())
+    assert (
+        json.loads(next(out.glob("completed-*.json")).read_text())["cp_forecast_published"] is False
+    )
+    assert "Model not published" not in seen.err
+
+
+def test_model_publish_failure_keeps_the_report(tmp_path, provider, capsys, monkeypatch):
+    def refuse(cp1, handoff):
+        raise ValueError("synthetic failure")
+
+    monkeypatch.setattr(cpos_forecast, "model_files", refuse)
+    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0
+    (folder,) = (out / "deliveries").iterdir()
+    assert (folder / "report.html").is_file() and not (folder / "forecast_exact.json").exists()
+    assert "Model not published: synthetic failure" in seen.err
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is False
+    assert completed["forecast_failure"] == "synthetic failure"
+    assert f"Report:   {folder / 'report.html'}" in seen.out
+
+
+@pytest.mark.parametrize(
+    ("block", "reason"),
+    [
+        (None, "needs exactly one `### Forecast inputs (machine-readable)` heading"),
+        (
+            "### Forecast inputs (machine-readable)\n\nnone\n",
+            "`### Forecast inputs (machine-readable)` needs exactly one fenced json block",
+        ),
+        (
+            forecast_block().replace('"1000"', '"1001"', 1),
+            "base revenue 1001 is not printed in CP-1",
+        ),
+        (forecast_block(years=[]), "forecast inputs: years"),
+    ],
+)
+def test_an_invalid_or_missing_inputs_block_publishes_no_model_and_names_why(
+    tmp_path, provider, capsys, block, reason
+):
+    code, out, seen = forecast_run(tmp_path, provider, capsys, block)
+    assert code == 0
+    (folder,) = (out / "deliveries").iterdir()
+    assert (folder / "report.html").is_file() and not (folder / "forecast_exact.json").exists()
+    assert f"Model not published: CP-2G: {reason}" in seen.err
+
+
+def test_without_a_shock_only_the_reference_case_is_published(tmp_path, provider, capsys):
+    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block(downside_shock=None))
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    assert list(json.loads((folder / "forecast_exact.json").read_text())["outputs"]) == [
+        "REFERENCE"
+    ]
+
+
+def test_the_forecast_request_does_not_change_the_identity_of_other_plans(
+    tmp_path, provider, capsys
+):
+    """Existing plans keep their identity.json: the flag is not part of it, and a plan without
+    CP-2G does not even carry it."""
+    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0, seen.err
+    identity = json.loads((out / "identity.json").read_text())
+    assert "publish_forecast" not in identity and "forecast" not in identity
+
+
+def test_the_forecast_instructions_come_before_the_method_block_and_leave_it_unchanged(tmp_path):
+    prepared = prepare(
+        tmp_path / "context.json"
+        if (tmp_path / "context.json").exists()
+        else context_file(tmp_path, "distressed_restructuring"),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
+        modules=("CP-2G",),
+    )
+    text = (tmp_path / "out/instructions/CP-2G.md").read_text()
+    before, _, method = text.partition(cpos_launch.METHOD_MARK)
+    assert "### Forecast inputs (machine-readable)" in before
+    assert method == cpos_launch.method_text("CP-2G") + "\n"
+    other = (tmp_path / "out/instructions/CP-1.md").read_text()
+    assert "Forecast inputs" not in other
+    assert prepared.plan.publish_forecast is True
+
+
+def test_the_library_lists_the_published_forecast_as_a_model(tmp_path, provider, capsys):
+    """The launcher's own refresh builds the library: its real methodology check accepts the
+    CP-2G instructions and the Forecast data carries the published figures."""
+    code, _, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0 and "Library not updated" not in seen.err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
+    grid = model["cashflow"]
+    assert [c["label"] for c in grid["columns"]] == ["FY2025E", "FY2026E", "FY2027E"] * 2
+    assert [c["group"] for c in grid["columns"]][::3] == [
+        "Base case (reference illustration)",
+        "Downside",
+    ]
+    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
+    assert [c["exact"] for c in revenue["cells"][:3]] == ["1050", "1092", "1124.76"]
+    assert grid["limits"][0].startswith("Every figure is Python's arithmetic")
+
+
+def test_a_run_without_cp2g_lists_no_model(tmp_path, provider, capsys):
+    code, _, seen = forecast_run(tmp_path, provider, capsys, None, modules=("CP-2A",))
+    assert code == 0 and "Library not updated" not in seen.err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    assert data["workspace"]["models"] == []
+
+
+def test_delivery_fails_closed_when_the_pinned_handoff_no_longer_yields_the_forecast(
+    tmp_path, provider, capsys
+):
+    """The publish step fails open; a delivery that asks for the forecast never does."""
+    code, out, _ = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0
+    manifest = next(out.glob("delivery-*.json"))
+    request = DeliveryRequest.model_validate_json(manifest.read_text())
+    assert request.forecast is True
+    handoff = out / request.handoffs["CP-2G"].path
+    handoff.write_text(handoff.read_text().replace('"1000"', '"1001"'))
+    with pytest.raises(ValueError, match="Changed handoff: CP-2G"):
+        markdown_files(request, out)
+    for module in ("CP-1", "CP-2G"):  # the exact files are built from both handoffs, bytes equal
+        assert module in request.handoffs
+
+
+@pytest.mark.browser
+def test_the_forecast_tab_shows_the_model_only_for_the_run_that_published_one(
+    tmp_path, provider, capsys
+):
+    """Headless Chrome over file://: Forecast shows the Python-computed model, and a run without
+    CP-2G shows the not-published notice."""
+    from test_library_page_browser import visit
+
+    code, _, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0 and "Library not updated" not in seen.err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    (model,) = data["workspace"]["models"]
+    dom, console = visit(tmp_path / "library/index.html", f"#W-Forecast/{model['id']}?c={RUN_ID}")
+    assert console == []
+    assert "FY2025E" in dom and "1,050" in dom and "Downside" in dom
+    assert "No forecast model was published" not in dom
+    other = tmp_path / "other"
+    other.mkdir()
+    code, _, seen = forecast_run(other, provider, capsys, None, modules=("CP-2A",))
+    assert code == 0 and "Library not updated" not in seen.err
+    dom, console = visit(other / "library/index.html", f"#W-Forecast/none?c={RUN_ID}")
+    assert console == []
+    assert "No forecast model was published from this run’s files" in dom
