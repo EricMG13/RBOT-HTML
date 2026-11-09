@@ -195,6 +195,8 @@ def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width
 # A narrative section and a register wider than the canvas, appended to the CP-1 handoff.
 LONG = "A long note that keeps the register wider than the canvas"
 ANALYSIS_ROWS = f"""
+## Credit analysis
+
 ### Debt structure
 
 Debt is mostly secured, K, page:123 states the figure.
@@ -234,8 +236,8 @@ def test_the_analysis_part_fits_the_page(tmp_path, width):
     dom, console = visit(page, "#CP-1/analysis?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    # Cited rows and the Debt structure register are the two tables parts 2-4 did not consume.
-    assert seen["pageFits"] is True and seen["tablesInCards"] is True and seen["tables"] == 2
+    # The fixture's earlier rows sit under its Sources parent (Evidence & audit); the Debt structure register is the one analysis table.
+    assert seen["pageFits"] is True and seen["tablesInCards"] is True and seen["tables"] == 1
 
 
 @pytest.mark.parametrize("width", [1440, 1280])

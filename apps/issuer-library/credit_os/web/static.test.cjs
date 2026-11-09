@@ -433,10 +433,11 @@ const withNarrative = () => report({ sections: [...SECTIONS, ...NARRATIVE] }, NA
 test('a narrative section and a register render open under #analysis, in order, whole, with chips', () => {
   const r = withNarrative();
   const html = r.reportAnalysis(OUT);
-  // Answer key from NARRATIVE: h3 for a level-2 heading, h4 for level 3; the text before the table before the closing remark.
+  // Answer key from NARRATIVE: h4 for a level-2 heading, h5 for level 3; the text before the table before the closing remark.
   const at = s => html.indexOf(s);
   assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>'));
-  assert.ok(at('<h3>Debt structure</h3>') > 0 && at('<h4>Sub topic</h4>') > at('<h3>Debt structure</h3>'));
+  assert.ok(at('<h4>Debt structure</h4>') > 0 && at('<h5>Sub topic</h5>') > at('<h4>Debt structure</h4>'));
+  assert.equal(html.match(/<h3>/g).length, 1); // R33: the part heading is the only h3
   assert.ok(at('Debt is <strong>mostly secured</strong>. Second line.') > at('Debt structure') && at('Term loan') > at('mostly secured') && at('Closing remark.') > at('Revolver'));
   assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
@@ -471,4 +472,33 @@ test('the shell landmark does not take the id of the Analysis part', () => {
   const shell = read('index.html');
   assert.ok(!/\bid="analysis"/.test(shell) && !shell.includes('href="#analysis"'));
   assert.ok(!read('screen.js').includes("$('analysis')"));
+});
+
+test('R31: a section under a Sources parent, front matter and the request stay out of Analysis and in the audit list', () => {
+  const extra = [
+    { heading: 'Front matter', level: 1, line: 1, blocks: [{ type: 'text', line: 2, text: 'title: x' }] },
+    { heading: 'Request', level: 2, line: 3, blocks: [{ type: 'text', line: 4, text: 'asked' }] },
+    { heading: 'Sources', level: 2, line: 100, blocks: [{ type: 'text', line: 101, text: 'Parent text.' }] },
+    { heading: 'Alpha register', level: 3, line: 102, blocks: [table(103, ['Name', 'Hash'], [[104, 'K', 'abc']])] },
+    { heading: 'Beta analysis', level: 2, line: 110, blocks: [{ type: 'text', line: 111, text: 'Real analysis.' }] },
+  ];
+  const mods = [['front', 'Front matter', ['Front matter']], ['req', 'Request', ['Request']], ['alpha', 'Alpha register', ['Alpha register']], ['beta', 'Beta analysis', ['Beta analysis']], ['srcs', 'Sources', ['Sources']], ['gaps', 'Gaps & limitations', ['Gaps']]];
+  const r = report({ sections: [...SECTIONS, ...extra] }, mods);
+  const html = r.reportAnalysis(OUT), audit = r.reportAudit(OUT);
+  // Answer key from the fixture: only Beta analysis is analysis; the register's parent heading is Sources.
+  assert.ok(html.includes('Beta analysis') && html.includes('Real analysis.'));
+  for (const name of ['Front matter', 'Request', 'Alpha register', 'Sources', 'Parent text.']) assert.ok(!html.includes(name), name);
+  for (const name of ['Front matter', 'Request', 'Alpha register', 'Sources']) assert.ok(audit.includes(name), name);
+  assert.ok(!audit.includes('Beta analysis'));
+});
+
+test('R32: Analysis sections follow the handoff line order, not the group order', () => {
+  const sections = [
+    { heading: 'T2G.1 — Later group', level: 2, line: 140, blocks: [{ type: 'text', line: 141, text: 'Second by line.' }] },
+    { heading: 'Plain earlier', level: 2, line: 120, blocks: [{ type: 'text', line: 121, text: 'First by line.' }] },
+  ];
+  // CP-2E puts T2G. sections in 'ESG & credit effects' and the rest in 'Credit conclusion'; the module list names ESG first.
+  const mods = [['esg', 'T2G.1 — Later group', ['T2G.1 — Later group']], ['plain', 'Plain earlier', ['Plain earlier']]];
+  const html = report({ module: 'CP-2E', sections, summary: null, charts: [] }, mods).reportAnalysis(OUT);
+  assert.ok(html.indexOf('First by line.') > 0 && html.indexOf('First by line.') < html.indexOf('Second by line.'));
 });

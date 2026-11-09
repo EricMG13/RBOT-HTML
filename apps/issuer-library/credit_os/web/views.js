@@ -277,10 +277,25 @@ function keyNumbers(id) {
 }
 // What parts 2 to 4 print: the bottom-line table, the findings tables, every chart-data table and the key-numbers table. The key-numbers section whose table is cut stays in the audit list, where the rest of its rows are.
 const isBottomLine=b=>b.type==='table'&&b.headers[0]==='Bottom line';
+// Evidence & audit by heading (R31): the section's own heading or any ancestor heading, found by walking up the levels of the handoff.
+const EVIDENCE_HEADING=/front matter|^request$|source|supplied handoff|lineage|technical audit/i;
+function isEvidenceSection(id,section) {
+  const all=data[id].sections;
+  let level=section.level;
+  if(EVIDENCE_HEADING.test(plain(section.heading)))return true;
+  for(let i=all.indexOf(section)-1;i>=0;i--) {
+    if(!(all[i].level<level)||all[i].level<2)continue; // a level-1 heading is the title or the front matter, not a parent section
+    if(EVIDENCE_HEADING.test(plain(all[i].heading)))return true;
+    level=all[i].level;
+  }
+  return false;
+}
 function analysisBlocks(id) {
   const pick=keyNumbersChoice(id);
   const consumed=(section,block)=>block.type==='table'&&(isBottomLine(block)||isFindingsTable(block)||section.heading.startsWith('Chart data')||block===pick?.block);
-  return analysisSections(id).map(([sectionId])=>({sectionId,sections:sectionData(id,sectionId).map(section=>({section,blocks:section.blocks.filter(block=>!consumed(section,block))})).filter(item=>item.blocks.length)})).filter(item=>item.sections.length);
+  const items=analysisSections(id).flatMap(([sectionId])=>sectionData(id,sectionId).filter(section=>!isEvidenceSection(id,section)).map(section=>({sectionId,section,blocks:section.blocks.filter(block=>!consumed(section,block))}))).filter(item=>item.blocks.length);
+  // Handoff order (R32), whatever the groups.
+  return items.sort((a,b)=>a.section.line-b.section.line).map(item=>({sectionId:item.sectionId,sections:[{section:item.section,blocks:item.blocks}]}));
 }
 const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div>';
 function reportHead(id) {
@@ -311,7 +326,7 @@ function reportFindings(id) {
 }
 function reportAnalysis(id) {
   const body=analysisBlocks(id).flatMap(({sections})=>sections).map(({section,blocks})=>{
-    const tag=section.level<=2?'h3':'h4';
+    const tag=section.level<=2?'h4':'h5';
     return `<div class="analysis-section"><${tag}>${rich(section.heading)}</${tag}>${blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
       return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))} ${chipsMarkup(`${id}:${block.line}`)}</p>`;
