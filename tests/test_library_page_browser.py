@@ -5,10 +5,12 @@ policy blocks every network request, so a violation is a request the page tried 
 it needs but is not allowed. Needs Google Chrome or Chromium; skipped where there is none."""
 
 import html
+import json
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -129,3 +131,35 @@ def test_a_policy_violation_is_seen(tmp_path):
     page.write_text(page.read_text().replace("script-src 'self'", "script-src 'none'"))
     _, console = visit(page)
     assert any("Content Security Policy" in line for line in console)
+
+
+PROBE = """<script>
+document.querySelector('[data-k="run_type"][value="secondary"]').checked = true;
+document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
+const sel = document.getElementById('s1-pathway');
+const out = document.createElement('pre');
+out.id = 'probe';
+out.textContent = JSON.stringify({value: sel.value, disabled: sel.disabled, built: build()});
+document.body.append(out);
+</script>
+</body>"""
+
+
+def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
+    from deploy_workflow.inbox.drops import ensure_layout, write_templates
+
+    short = tempfile.mkdtemp(prefix="ib", dir="/tmp")  # tmp_path is over the 80-character limit.
+    shutil.rmtree(short)
+    layout = ensure_layout(Path(short))
+    write_templates(layout, ROOT / "docs/templates/context-form.html")
+    form = layout.inbox / "earnings_update/_template/context-form.html"
+    page = tmp_path / "probe.html"  # The form with a probe that changes the run type, then reads.
+    text = form.read_text(encoding="utf-8")
+    page.write_text(text.replace("</body>", PROBE, 1), encoding="utf-8")
+    dom, console = visit(page)
+    assert console == []
+    probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert probe["value"] == "earnings_update" and probe["disabled"] is True
+    assert probe["built"]["run"]["run_type"] == "secondary"  # The run type did change ...
+    assert probe["built"]["run"]["pathway"] == "earnings_update"  # ... the pathway did not.
+    shutil.rmtree(layout.root)

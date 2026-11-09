@@ -24,8 +24,11 @@ from deploy_workflow.inbox.drops import (
     reject,
     signature,
     unlocked,
+    write_templates,
 )
 
+ROOT = Path(__file__).resolve().parents[1]
+FORM = ROOT / "docs/templates/context-form.html"
 _BASE = json.loads(Path("cases/context/research-minimal.json").read_text(encoding="utf-8"))
 
 
@@ -417,3 +420,43 @@ def test_l11_finder_and_explorer_files_are_not_drops(layout):
     (layout.inbox / "Desktop.ini").write_bytes(b"x")
     (layout.inbox / "~$lock.xlsx").write_bytes(b"x")
     assert candidates(layout) == []
+
+
+def test_each_pathway_gets_a_form_fixed_to_it(layout):
+    write_templates(layout, FORM)
+    for pathway in PATHWAYS:
+        html = (layout.inbox / pathway / "_template/context-form.html").read_text(encoding="utf-8")
+        assert f'data-pathway="{pathway}"' in html and html.count("data-pathway=") == 1
+
+
+def test_a_form_already_there_is_kept(layout):
+    target = layout.inbox / "earnings_update/_template/context-form.html"
+    target.parent.mkdir()
+    target.write_bytes(b"analyst edit")
+    write_templates(layout, FORM)
+    assert target.read_bytes() == b"analyst edit"
+    assert (layout.inbox / "credit_snapshot/_template/context-form.html").is_file()
+
+
+def test_templates_refuse_links(layout):
+    elsewhere = layout.root / "elsewhere"
+    elsewhere.mkdir()
+    (layout.inbox / "credit_snapshot/_template").symlink_to(elsewhere)
+    with pytest.raises(OSError, match="link"):
+        write_templates(layout, FORM)
+    assert list(elsewhere.iterdir()) == []
+    (layout.inbox / "credit_snapshot/_template").unlink()
+    target = layout.inbox / "credit_snapshot/_template/context-form.html"
+    target.parent.mkdir()
+    target.symlink_to(elsewhere / "missing")
+    with pytest.raises(OSError, match="link"):
+        write_templates(layout, FORM)
+    assert not (elsewhere / "missing").exists()
+
+
+def test_an_unmarkable_form_is_refused(layout, tmp_path):
+    form = tmp_path / "context-form.html"
+    form.write_text("<html><body></body></html>", encoding="utf-8")
+    with pytest.raises(ValueError, match="html lang"):
+        write_templates(layout, form)
+    assert not (layout.inbox / "credit_snapshot/_template").exists()

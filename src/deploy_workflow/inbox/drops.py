@@ -337,3 +337,32 @@ def reject(layout: Layout, drop: Path, name: str, reason: str, now: datetime) ->
         os.rename(drop, dest / _safe_name(drop.name))
     _write_note(dest, f"{reason}\n\nFix the folder and drop it again.\n")
     return dest
+
+
+_HTML_TAG = b'<html lang="en">'
+
+
+def write_templates(layout: Layout, form: Path) -> None:
+    """Give each pathway folder a ``_template/context-form.html`` fixed to that pathway.
+
+    The copy is the form's bytes with ``data-pathway`` added to the opening ``<html>`` tag. A copy
+    already there is left alone. A link at ``_template`` or at the copy is refused with ``OSError``;
+    a form with no ``<html lang="en">`` tag raises ``ValueError`` before anything is written."""
+    original = form.read_bytes()
+    if original.count(_HTML_TAG) != 1:
+        raise ValueError(f"{form} must contain exactly one {_HTML_TAG.decode()} tag to mark")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    for pathway in PATHWAYS:
+        folder = layout.inbox / pathway / TEMPLATE
+        if _is_link(folder):
+            raise OSError(f"{folder} is a link; no form was written")
+        folder.mkdir(exist_ok=True)
+        target = folder / form.name
+        if os.path.lexists(target):
+            if _is_link(target):
+                raise OSError(f"{target} is a link; no form was written")
+            continue
+        marked = original.replace(_HTML_TAG, f'<html lang="en" data-pathway="{pathway}">'.encode())
+        fd = os.open(target, flags, 0o644)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(marked)
