@@ -135,3 +135,11 @@ A launcher run's folder is usually not its run ID (`--out runs/my-first-run`), s
 | --- | --- | --- |
 | `store.py` | New `run_folder_of(folder)` (the `x` of `runs/<x>/deliveries/<id>`); `read_model` adds `runFolder`; `run_shows` also accepts a run whose folder equals it | match a model to the run folder that holds its delivery, not only to the run ID in its `view.json` |
 | `web/views.js` | `runModels` adds `m.runFolder===run.folder`; `modelOwnRun` accepts `contexts[key].folder===model.runFolder` | same rule in the page, with the same issuer-key check |
+
+## Follow-up fix: YAML front matter is kept, not rejected
+
+Handoffs that open with YAML front matter (`---` ... `---`) raised "Body before first heading" and were shown unstructured.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `store.py` | `parse_source` keeps a leading `---` ... `---` block as its own first section headed `Front matter` (level 2, one text block of the lines between the markers, locators from the source). No closing marker, or a body line between the closing marker and the first heading: unchanged, still raises "Body before first heading" (owner ruling R28) | keep every nonblank body line, as the docstring promises; found by the first real CP-2G run |

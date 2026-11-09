@@ -4,6 +4,7 @@ import hashlib
 import sys
 from pathlib import Path
 
+import pytest
 from library_fixtures import make_run
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,3 +60,32 @@ def test_store_has_no_legacy_routes(tmp_path):
         links += [report["href"], report["download"], *(f["href"] for f in report["files"])]
     for link in links:
         assert link.startswith("/files/runs/run-a/"), link
+
+
+# Copied verbatim from the 2026-11-09 sol-medium run (runs/cpos-tdg-sol-medium-all-001, delivery
+# abd687ca...c2baa, CP-1C.md): the head of a handoff that opens with YAML front matter.
+REAL_FRONT_MATTER_HEAD = (
+    Path(__file__).parent / "fixtures/sol_medium_run_2026_11_09/CP-1C-head.md"
+).read_text(encoding="utf-8")
+
+
+def test_yaml_front_matter_is_kept_as_a_leading_section():
+    sections = store.parse_source(REAL_FRONT_MATTER_HEAD + "\nBody line.\n")
+    lines = REAL_FRONT_MATTER_HEAD.split("\n")
+    close = lines.index("---", 1)
+    first, second = sections[0], sections[1]
+    assert (first["heading"], first["level"], first["line"]) == ("Front matter", 2, 1)
+    (block,) = first["blocks"]
+    assert block["type"] == "text" and block["line"] == 2 and block["end"] == close
+    assert block["text"] == "\n".join(lines[1:close])
+    assert second["heading"] == "Request" and second["level"] == 2
+
+
+def test_an_unclosed_front_matter_marker_still_raises():
+    with pytest.raises(ValueError, match="Body before first heading"):
+        store.parse_source("---\nissuer_id: tdg\n\n## Request\n")
+
+
+def test_body_after_the_front_matter_and_before_a_heading_still_raises():
+    with pytest.raises(ValueError, match="Body before first heading"):
+        store.parse_source("---\na: 1\n---\nstray body\n# T\n")
