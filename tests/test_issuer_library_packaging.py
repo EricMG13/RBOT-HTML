@@ -145,6 +145,8 @@ def test_the_package_ships_the_static_library_and_its_two_windows_wrappers(
     engine = target / "engine"
     assert (engine / "update_library.py").is_file() and (engine / "run_workflow.py").is_file()
     assert sorted(p.name for p in (engine / "static").iterdir()) == ["app.js", "template.html"]
+    assert not (engine / "bridge.py").exists()  # The lean package has no server bridge.
+    assert list((engine / "docs/rulings").iterdir()) == []  # No ruling is shipped.
     for name in ["Run workflow.cmd", "Update library.cmd"]:
         raw = (target / name).read_bytes()
         assert raw.startswith(b"@echo off\r\n") and b"\n" not in raw.replace(b"\r\n", b"")

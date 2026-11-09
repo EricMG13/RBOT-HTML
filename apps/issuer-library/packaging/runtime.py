@@ -83,8 +83,7 @@ WRAPPERS = {
 def bundle(target: Path, architecture: str | None) -> None:
     engine = target / "engine"
     engine.mkdir(exist_ok=True)
-    for name in ["bridge.py", "store.py", "catalog.json", "run_workflow.py"]:
-        shutil.copyfile(APP / "engine" / name, engine / name)
+    shutil.copyfile(APP / "engine/run_workflow.py", engine / "run_workflow.py")
     # The static library: its update script and page parts (not their tests), and the two
     # double-click wrappers that run the launcher and the update with the bundled Python.
     shutil.copyfile(APP / "update_library.py", engine / "update_library.py")
@@ -102,12 +101,14 @@ def bundle(target: Path, architecture: str | None) -> None:
         ROOT / "src", engine / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
     )
     # The launcher reads each module's method from these, relative to the engine folder.
-    for name in ["docs/reuse/selected-methods", "docs/visualisations", "prompts"]:
+    for name in ["docs/reuse/selected-methods", "prompts"]:
         if (engine / name).exists():
             shutil.rmtree(engine / name)
         shutil.copytree(
             ROOT / name, engine / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
         )
+    # A paid run needs a ruling the person writes here; none is shipped (docs/COPILOT.md).
+    (engine / "docs/rulings").mkdir(parents=True, exist_ok=True)
     if architecture is None:
         return
     runtime = engine / "runtime"

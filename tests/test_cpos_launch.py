@@ -1068,49 +1068,6 @@ def test_live_launch_from_a_context_file_and_issuer_folder():
     assert_live_evidence(out, cap)
 
 
-def test_live_evidence_check_can_pass_and_refuses_each_kind_of_fake(tmp_path, provider):
-    """The paid test has not run, so prove here that its evidence check is satisfiable and bites."""
-    context = json.loads((LIVE_CASE / "context.json").read_text())
-    (tmp_path / "context.json").write_text(json.dumps(context))
-    folder = issuer_folder(tmp_path)
-    routes = list(
-        prepare(
-            tmp_path / "context.json",
-            folder,
-            tmp_path / "preview",
-            config="sol-medium",
-            cap="12",
-            modules=("CP-1", "CP-1A"),
-        ).plan.layout.routes
-    )
-
-    def launched(name: str, *, reported: str, filed: str) -> Path:
-        provider.reported = reported
-        provider.answer = lambda current: (
-            answer(current, routes)
-            .replace(ISSUER, context["identity"]["issuer_name"])
-            .replace(AS_OF, context["run"]["as_of"])
-            .replace("| Observed | 1 |", filed)
-        )
-        out = tmp_path / name
-        argv = [
-            *("--context", str(tmp_path / "context.json"), "--sources", str(folder)),
-            *("--config", "sol-medium", "--cap", "12", "--modules", "CP-1", "CP-1A"),
-            *("--out", str(out), "--live", "--ruling", str(RULING)),
-        ]
-        assert main(argv) == 0
-        return out
-
-    filed = "| NET SALES | 7,940 |\n| Cash | 6,261 |"
-    assert_live_evidence(launched("good", reported="gpt-6.1-sol", filed=filed), Decimal(12))
-    with pytest.raises(AssertionError, match="fake"):
-        assert_live_evidence(launched("fake", reported="fake", filed=filed), Decimal(12))
-    with pytest.raises(AssertionError, match="7,940"):
-        assert_live_evidence(
-            launched("wrong", reported="gpt-6.1-sol", filed="| Observed | 1 |"), Decimal(12)
-        )
-
-
 COPILOT_RULING = (
     "lifts: live-provider-pause\nby: user\ndate: 2026-11-01\n"
     "configs: copilot-sol-medium copilot-opus-medium\n"

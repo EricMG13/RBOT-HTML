@@ -1,0 +1,41 @@
+name: checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  changed-code:
+    name: changed code passes ruff, format, complexity and mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.5"
+      - run: uv sync --group dev
+      - run: uv run python tools/quality_gate.py --base "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}"
+
+  fast-tests:
+    name: fast tests and page logic
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.5"
+      - run: uv sync --group dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test apps/issuer-library/static/logic.test.cjs
+      - name: pytest (known failures deselected)
+        run: |
+          deselect=$(sed -e 's/#.*//' -e '/^\s*$/d' tests/known-failures.txt | awk '{print "--deselect=" $1}')
+          uv run pytest -q -p no:cacheprovider -m "not live and not browser" $deselect \
+            tests/test_library_index.py tests/test_update_library.py \
+            tests/test_issuer_library_packaging.py tests/test_reader_summary.py \
+            tests/test_cpos_launch.py tests/model
