@@ -106,3 +106,5 @@ New file `web/calendar.js` (pure `eventTable`, `eventOrder`, `orderEvents`; test
 | `web/views.js` | `availability` says `Not run in this run` where it said `No output found` (module absent from the run) | navigator wording; all 20 `catalog.json` modules already sit in the `groups` list |
 | `web/screen.js` | `eventTimeline(id, table)` rewritten: ordered by `orderEvents`, row text shown as retained, columns labelled from the table headers; the five hard-coded TDG dates and the FY / combined split removed; `renderContent` uses it for the pinned CP-1A `events` section only when that section holds an event table | the fixed `order` map only fit one run's table |
 | `web/static-boot.js` | `calendar.js` added first in the script list | views.js and screen.js call its functions |
+
+Task 5 edit: `REPO` also resolves to `credit_os`'s parent when that folder holds `src` (the Windows package ships `engine/credit_os` beside `engine/src`).

@@ -64,9 +64,13 @@ order and publishes `deliveries/<id>/report.html` inside the run folder.
 uv run python apps/issuer-library/update_library.py --workspace "$PWD"
 ```
 
-It writes only `library/index.html` (git-ignored), which opens from disk. It lists only runs CP-OS
-completed with a verified report in which every module ran on the current methodology, and says
-why each other run folder is left out.
+It rebuilds `library/` (git-ignored) as static files that open from disk: the Credit OS library
+and, for each listed run, an issuer report with its tabs (Overview, Modules, Calendar, Forecast,
+Reports, Evidence). There are no run controls; new runs are made by the launcher, and
+`update_library.py` is the step that shows them. Each run's report is shown from a presented copy
+under `library/reports/`; the delivered report in the run folder is never changed. It lists only
+runs CP-OS completed with a verified report in which every module ran on the current methodology,
+and says why each other run folder is left out.
 
 ## Current limits
 
@@ -88,5 +92,5 @@ why each other run folder is left out.
 | `src/deploy_vii/` | Analytical code, report renderers and design assets reused by delivery |
 | `prompts/`, `docs/reuse/selected-methods/` | The method each module is sent |
 | `docs/templates/`, `docs/rulings/` | The context form; rulings that lift the paid-run pause |
-| `apps/issuer-library/` | `update_library.py`, the page parts in `static/`, the package's `engine/run_workflow.py` and `packaging/` |
+| `apps/issuer-library/` | `update_library.py`, the Credit OS store and page parts in `credit_os/`, the package's `engine/run_workflow.py` and `packaging/` |
 | `tests/`, `cases/`, `tools/` | Tests, their synthetic fixtures, and the quality gate |

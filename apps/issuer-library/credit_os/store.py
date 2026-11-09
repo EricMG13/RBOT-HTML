@@ -20,7 +20,7 @@ from typing import Any, NamedTuple, NotRequired, TypedDict
 from urllib.parse import quote
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE if (HERE / "src").is_dir() else HERE.parents[2]
+REPO = next((p for p in (HERE, HERE.parent) if (p / "src").is_dir()), HERE.parents[2])
 OUTPUT_SKIP = re.compile(r"instructions|prompt|calculations|verification")
 INPUT_NAME = re.compile(r"selected-input|peer-inputs|delivery|-request\.md")
 HANDOFF_NAME = re.compile(r"CP-[A-Z0-9]+")

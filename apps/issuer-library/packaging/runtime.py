@@ -1,4 +1,5 @@
 """Bundle official Python and pinned wheels; verify every downloaded SHA-256."""
+
 import hashlib
 import json
 import shutil
@@ -8,12 +9,22 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1]
 ROOT = APP.parents[1]
-CACHE = ROOT / 'artifacts/issuer-library/runtime-cache'
-PINS = {'pydantic':'2.14.1','pydantic-core':'2.50.1','annotated-types':'0.8.0',
-        'typing-extensions':'4.16.0','typing-inspection':'0.4.4','pypdf':'6.21.2',
-        'openpyxl':'3.1.5','et-xmlfile':'2.0.0'}
-PYTHON = {'amd64':'d1f04d990aee1253d8569e8e5104e30fa9f5fa830899f14843448872d936a2cf',
-          'arm64':'cd992cbfb33be433ff20f150691595efb2862e56f4f1bec684c6077d4775af8e'}
+CACHE = ROOT / "artifacts/issuer-library/runtime-cache"
+PINS = {
+    "pydantic": "2.14.1",
+    "pydantic-core": "2.50.1",
+    "annotated-types": "0.8.0",
+    "typing-extensions": "4.16.0",
+    "typing-inspection": "0.4.4",
+    "pypdf": "6.21.2",
+    "openpyxl": "3.1.5",
+    "et-xmlfile": "2.0.0",
+}
+PYTHON = {
+    "amd64": "d1f04d990aee1253d8569e8e5104e30fa9f5fa830899f14843448872d936a2cf",
+    "arm64": "cd992cbfb33be433ff20f150691595efb2862e56f4f1bec684c6077d4775af8e",
+}
+
 
 def download(url: str, sha: str, name: str) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
@@ -84,13 +95,13 @@ def bundle(target: Path, architecture: str | None) -> None:
     engine = target / "engine"
     engine.mkdir(exist_ok=True)
     shutil.copyfile(APP / "engine/run_workflow.py", engine / "run_workflow.py")
-    # The static library: its update script and page parts (not their tests), and the two
-    # double-click wrappers that run the launcher and the update with the bundled Python.
+    # The static library: its update script, the Credit OS store and page parts (not their tests),
+    # and the two double-click wrappers that run the launcher and the update (bundled Python).
     shutil.copyfile(APP / "update_library.py", engine / "update_library.py")
-    if (engine / "static").exists():
-        shutil.rmtree(engine / "static")
-    tests = shutil.ignore_patterns("*.test.cjs", "*_check.cjs")
-    shutil.copytree(APP / "static", engine / "static", ignore=tests)
+    if (engine / "credit_os").exists():
+        shutil.rmtree(engine / "credit_os")
+    tests = shutil.ignore_patterns("*.test.cjs", "*_check.cjs", "__pycache__", "*.pyc")
+    shutil.copytree(APP / "credit_os", engine / "credit_os", ignore=tests)
     for name, lines in WRAPPERS.items():
         (target / name).write_text("\n".join(lines) + "\n", encoding="ascii", newline="\r\n")
     shutil.copyfile(ROOT / "cases/context/research-minimal.json", engine / "smoke-context.json")
