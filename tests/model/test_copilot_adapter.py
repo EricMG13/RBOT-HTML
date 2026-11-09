@@ -38,6 +38,7 @@ from deploy_workflow.model.copilot_adapter import (
 from deploy_workflow.model.handoff import HandoffExecutor
 from deploy_workflow.model.record import CallLog, export_recording
 from deploy_workflow.model.redact import Redactor
+from deploy_workflow.model.transport import IDLE_S, OVERALL_S
 from deploy_workflow.model.turn import (
     Message,
     ModelSpec,
@@ -1184,3 +1185,10 @@ def test_auth_is_none_without_a_credential(rig: Rig, value: str | None) -> None:
     if value is not None:
         env["COPILOT_USE_GH_LOGIN"] = value
     assert rig.make(text_script(), environ=env).auth == "none"
+
+
+def test_default_idle_bound_is_the_overall_bound(rig: Rig) -> None:
+    # the reply is not streamed: the runtime is silent while the model writes
+    adapter = rig.make(text_script())
+    assert adapter._idle_s == adapter._overall_s == OVERALL_S
+    assert adapter._idle_s > IDLE_S

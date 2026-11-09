@@ -59,7 +59,7 @@ from deploy_workflow.model.reply_classes import (
     TOOL_CALL_LOST,
     TOOL_CALL_MISMATCH,
 )
-from deploy_workflow.model.transport import IDLE_S, OVERALL_S
+from deploy_workflow.model.transport import OVERALL_S
 from deploy_workflow.model.turn import (
     Message,
     ModelSpec,
@@ -91,6 +91,10 @@ _WINDOWS_PATH = re.compile(
     rf"|{_ROOT}/(?:[^\s\\/:*?\"<>|()']+/)*[^\s\\/:*?\"<>|()']*"
 )
 _TOKEN_VARIABLE = KEY_VARIABLES["copilot"]
+# The reply is not streamed (streaming=False): the runtime emits no event while the model writes,
+# so the HTTP idle bound would cut long answers. ponytail: a hung runtime is now caught only by
+# the overall bound (30 min); switch to streaming=True if that matters.
+IDLE_S = OVERALL_S  # this adapter's idle bound (not transport.IDLE_S, which is for streamed HTTP)
 _DIGEST = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _TOOL_FINISH = ("tool_calls", "tool_use")
 # Bounds of the release of one exchange. STOP_S covers the SDK's own stop: shutdown RPC 10 s,
