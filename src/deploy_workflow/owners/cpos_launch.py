@@ -986,15 +986,15 @@ def _refresh_library(directory: Path) -> None:
     """Rebuild the library once a run's report is published. Fail-open, by design: the report is
     already published and the run complete, so a library failure is printed to stderr with the
     manual command and never changes the exit code or the report. Only the failures a refused or
-    failed build raises are caught: update_library refuses with SystemExit, and the build can raise
-    OSError, ValueError (including library_index.Refused) or ImportError if it cannot load."""
+    failed build raises are caught: update_library refuses with library_index.Refused (a
+    ValueError), and the build can raise OSError, ValueError or ImportError if it cannot load."""
     if directory.parent.name != "runs":
         print(f"Library not updated: {directory} is not inside a runs folder.")
         return
     workspace = directory.parent.parent
     try:
         library = _update_library(workspace)
-    except (OSError, ValueError, ImportError, SystemExit) as error:
+    except (OSError, ValueError, ImportError) as error:
         print(
             f"Library not updated: {error or type(error).__name__}\n{_library_command(workspace)}",
             file=sys.stderr,
