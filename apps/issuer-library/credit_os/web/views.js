@@ -31,11 +31,7 @@ function installDestinations() {
     'W-Calendar':['Event calendar',[['unavailable','Calendar availability',[]]]],
     'W-Reports':['Reports',[['list','Reports',[]]]],
     'W-Evidence':['Evidence library',[['sources','Retained outputs',[]]]],
-    'W-Forecast':['Forecast',[['forecast','Forecast',[]]]],
-    'CP-OS':['Run activity',[['activity','Run record',[]],['delivery','Delivery scope',[]]]],
-    'W-NewRun':['New run',[['run','New run',[]]]],
-    'W-Settings':['Settings',[['workspace','Workspace',[]]]],
-    'W-Help':['Help',[['help','Using the library',[]]]]
+    'W-Forecast':['Forecast',[['forecast','Forecast',[]]]]
   };
   for(const [id,[name,sections]] of Object.entries(destinations)) {
     modules[id]={name,sections,first:sections[0][0]};
@@ -52,10 +48,9 @@ function resolveOutput(module,context,file) {
 }
 function availability(module,context) {
   const entry=moduleEntry(module,context);
-  return !entry?'No output found':entry.outputs.length?'Output available':'Inputs only';
+  return !entry?'Not run in this run':entry.outputs.length?'Output available':'Inputs only';
 }
 const contextModules=context=>Object.keys(contexts[context].modules).filter(id=>contexts[context].modules[id].outputs.length);
-const outputCount=context=>contextModules(context).reduce((sum,id)=>sum+contexts[context].modules[id].outputs.length,0);
 // One issuer is one issuerKey, whatever names its runs were recorded under; an unrecorded issuer (null) equals nothing.
 const sameIssuer=(a,b)=>a!=null&&a===b;
 const issuerReports=context=>window.DESIGN_WORKSPACE.reports.filter(r=>!context||sameIssuer(r.issuerKey,contexts[context]?.issuerKey));
@@ -80,11 +75,9 @@ function modelRelationship(model,models) {
 const tracedRun=report=>report.builtFrom.find(b=>b.run)?.run||null;
 const reportName=report=>report.build?`Build ${report.build} · ${report.label.trim()}`:report.label.trim();
 const byBuild=(a,b)=>(b.build||0)-(a.build||0)||a.label.trim().localeCompare(b.label.trim());
-// A run being prepared lives only in this page, so whatever reloads it asks first (boot.js keeps its own copy).
-const mayDiscardDraft=()=>document.body.dataset.draft!=='1'||window.confirm('Reload now? The run you are preparing will be cleared.');
 // A frame has no error event for a page that never arrives, so a missing load within the timeout is the failure.
 const frameTimeout=()=>Number.isFinite(window.DESIGN_FRAME_TIMEOUT_MS)?window.DESIGN_FRAME_TIMEOUT_MS:6000;
-function watchFrame(frame,status,loadingText,failedText,link,missingText) {
+function watchFrame(frame,status,loadingText,failedText,link) {
   let timer=null;
   const loaded=()=>{clearTimeout(timer);status.hidden=true;};
   const wait=()=>{clearTimeout(timer);status.hidden=false;status.textContent=loadingText;timer=setTimeout(fail,frameTimeout());};
@@ -96,18 +89,8 @@ function watchFrame(frame,status,loadingText,failedText,link,missingText) {
     if(link)status.append(link(),' ');
     status.append(retry);
   }
-  // A frame fires load for a 404 page too, so a deliverable that has gone is found by asking for it first.
-  function missing() {
-    if(!frame.isConnected)return;
-    clearTimeout(timer);frame.removeEventListener('load',loaded);
-    const reload=document.createElement('button');
-    reload.type='button';reload.className='text-button';reload.textContent='Reload';
-    reload.addEventListener('click',()=>{if(mayDiscardDraft())location.reload();});
-    status.hidden=false;status.textContent=missingText+' ';status.append(reload);
-  }
   frame.addEventListener('load',loaded);
   wait();
-  if(missingText)fetch(frame.getAttribute('src'),{method:'HEAD',cache:'no-store'}).then(response=>{if(!response.ok)missing();},missing);
   return loaded;
 }
 const isReportRoute=(module,section)=>module==='W-Reports'&&window.DESIGN_WORKSPACE.reports.some(r=>r.id===section);
@@ -281,10 +264,20 @@ function outputChooser(module) {
   const ctx=contexts[current.context],files=moduleEntry(module,current.context).outputs;
   return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Choose a saved output</h2><p>${files.length} versions of this analysis. Choose one to read.</p></div><div class="output-choices">${files.map(id=>`<a class="text-action" href="${routeHref(module,modules[id].first,null,current.context,data[id].source)}">${esc(data[id].label)}${icon('arrow-right')}</a>`).join('')}</div>`;
 }
-// The calendar reads two curated tables; a run has one only if it holds that pinned output.
-const calendarRun=module=>data[pins[module]]?.run;
+// Events come from the run's own CP-1A event table (calendar.js eventTable); no dates are inferred from other runs.
+// The CP-1A output holding that table, default output first, or null.
+function eventsOutput(context) {
+  const entry=moduleEntry('CP-1A',context);
+  return entry?[entry.default,...entry.outputs].find(id=>id&&eventTable(data[id].sections))||null:null;
+}
+const hedgesOutput=context=>{const entry=moduleEntry('CP-2E',context);return entry?.default||entry?.outputs[0]||null;};
+// The first run that has the module's calendar source (route fallback when no run is chosen).
+const calendarRun=module=>Object.keys(contexts).find(context=>module==='CP-1A'?eventsOutput(context):hedgesOutput(context));
 function calendarSections(context) {
-  return context===calendarRun('CP-1A')?[['tdg','Issuer events',[]]]:context===calendarRun('CP-2E')?[['hedges','Hedge schedule',[]]]:[['unavailable','Calendar availability',[]]];
+  const sections=[];
+  if(eventsOutput(context))sections.push(['tdg','Issuer events',[]]);
+  if(hedgesOutput(context))sections.push(['hedges','Hedge schedule',[]]);
+  return sections.length?sections:[['unavailable','Calendar availability',[]]];
 }
 function forecastSections(context) {
   const models=runModels(context);
@@ -496,7 +489,7 @@ function libraryRow(run,selected,skipped) {
   return `<tr${selected?' class="selected"':''}>${identity}<td>${esc(run.sector)}</td>${libraryCell(libraryDate(run.date),run.period)}${libraryMetricCell(run,'leverage')}${libraryMetricCell(run,'coverage')}${libraryCompletion(run)}${libraryMetricCell(run,'net_leverage')}${libraryRatingCell(run)}${deliverable}</tr>`;
 }
 function libraryResults({runs,rows,skipped,hidden}) {
-  if(!runs.length)return window.DESIGN_APP?.problem?`<div class="library-empty"><h2>The library could not read this workspace</h2><p>Nothing can be listed until it can be read. Check the workspace folder in Settings, or quit and reopen the library.</p><a class="text-action" href="#W-Settings/workspace">Open Settings${icon('arrow-right')}</a></div>`:`<div class="library-empty"><h2>No runs in this workspace yet</h2><p>Start a new run, or choose another workspace folder in Settings.</p><a class="text-action" href="#W-Settings/workspace">Open Settings${icon('arrow-right')}</a></div>`;
+  if(!runs.length)return window.DESIGN_APP?.problem?`<div class="library-empty"><h2>The library could not read this workspace</h2><p>Nothing can be listed until its data file loads. Rebuild the data file and open this page again.</p></div>`:`<div class="library-empty"><h2>No runs in this workspace yet</h2><p>The data file holds no retained runs.</p></div>`;
   if(!rows.length)return '<div class="library-empty"><h2>No runs match these filters</h2><p>Try a wider range or include unavailable values. Workflow completeness is not assessed for retained runs.</p><button id="library-empty-reset" class="primary-action" type="button">Reset filters</button></div>';
   const sort=key=>libraryState.sortKey===key?libraryState.direction==='asc'?'ascending':'descending':'none';
   const head=LIBRARY_COLUMNS.map(([key,label])=>key?`<th scope="col" aria-sort="${sort(key)}"><button type="button" data-library-sort="${key}">${label} <span aria-hidden="true">↕</span></button></th>`:`<th scope="col">${label}</th>`).join('');
@@ -608,11 +601,6 @@ function reportView(report,context) {
   const status=[report.status,ctx?'':'No matching run'].filter(Boolean).join(' · ');
   return `<div class="report-tools"><label for="report-select">Report</label><select id="report-select">${[...runReports(context)].sort(byBuild).map(r=>`<option value="${esc(r.id)}" ${r.id===report.id?'selected':''}>${esc(reportName(r))}</option>`).join('')}</select>${status?`<span>${esc(status)}</span><i class="tool-sep" aria-hidden="true"></i>`:''}${reportAcceptance(report).html}<a href="${esc(report.download)}" download>Download original HTML</a><a href="${routeHref('W-Reports','list')}">All reports</a><a href="#W-Library/cases">Return to library</a></div><details class="built-from"><summary>Built from ${handoffs} handoffs · ${unmatched?`${unmatched} with no matching run file`:'byte-identical by SHA-256'}</summary><div class="table-scroll"><table><thead><tr><th scope="col">Module</th><th scope="col">Run</th><th scope="col">File</th><th scope="col">SHA-256 prefix</th></tr></thead><tbody>${rows}</tbody></table></div></details>${files}<div class="frame-host"><p class="frame-status" role="status">Loading report…</p><iframe id="report-preview" title="${esc(reportName(report))} · ${esc(report.issuer)} report" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer" src="${esc(report.href)}"></iframe></div>`;
 }
-function settingsView() {
-  const app=window.DESIGN_APP||{},issues=app.issues||[];
-  return `<div class="settings"><section><h2>Workspace folder</h2><label class="run-field">Folder holding runs and deliverables<input id="workspace-path" value="${esc(app.workspace)}" ${app.policy_locked?'disabled':''} autocomplete="off"></label><p class="hint">${app.policy_locked?'This location is managed by your IT configuration.':'Use a local folder for offline access. Network shares and cloud placeholders need a connection.'}</p><div class="step-actions"><button id="save-workspace" class="primary-action" type="button" ${app.policy_locked?'disabled':''}>Save and reload</button><button id="refresh-library" class="secondary-action" type="button">Refresh library</button><button id="quit-library" class="tertiary-action" type="button">Quit library</button></div><p id="settings-status" role="status" aria-live="polite"></p></section><section><h2>Workspace issues · ${issues.length}</h2>${issues.length?`<ul class="issue-list">${issues.map(issue=>{const at=String(issue).indexOf(': ');return `<li>${at<0?`<span>${esc(issue)}</span>`:`<span class="code">${esc(String(issue).slice(0,at))}</span><span>${esc(String(issue).slice(at+2))}</span>`}</li>`;}).join('')}</ul>`:'<p>None found.</p>'}</section></div>`;
-}
-const HELP=`<div class="help-copy"><h2>Find and read a run</h2><p>The library screens every retained run and deliverable by sector, workflow, leverage and coverage. Search, Runs, Sector, Workflow, Completeness and Deliverables filters narrow the table. Classification, rating &amp; currency, Credit metrics &amp; period, Facilities &amp; quotes and Accepted limitations add credit and market filters: classification, currency, a rating range, leverage basis, financial period, minimum and maximum for leverage, coverage, net leverage, cash and undrawn facilities, and for spread talk, margin, coupon, price and yield, and an accepted limitation. Search also matches the issuer names recorded in the store. Reset filters clears them, and a column heading sorts the table with missing values last. A missing value never matches a numeric filter. Only a few retained runs carry metrics, so most rows show — for Leverage and Coverage and Not assessed. Choose a run in the library. The Overview, Modules, Calendar, Forecast, Reports and Evidence tabs keep that run selected. Forecast shows the model published from the run’s files, the assumptions behind it and the handoffs it was built from. Browse by credit question or press / to search a name, section or module code, including absorbed aliases.</p><p>Select a finding’s View source action or a chart mark to open the evidence inspector. Escape returns to your reading position and source trigger.</p><h2>Screening credit and market data</h2><p>In the run detail each figure shows value, unit, period and basis (the table shows value and basis). In the run detail, View source opens its pinned line in the evidence inspector when the run’s handoff line is loaded, otherwise the Sources &amp; definitions entry with path, line and quote.</p><p>Leverage and Coverage read the figure recorded for the run and show the basis it states; choose a basis to compare like with like (All bases · definitions differ). Net leverage is separate and never fills Leverage.</p><p>A blank, missing or negative figure never satisfies a minimum or maximum. Each active filter says how many runs record the figure and how many it hid; Show them lists those runs without counting them as matches.</p><p>Latest run per issuer, the default, screens the latest as-of date among runs with a report; runs tied on that date all stay in. A run without a report that is not older than the issuer’s latest reported run is listed as not screened, and drops out once a credit or market filter is active. Any run screens every run.</p><p>Ratings use the lowest at issuer scope by default. (P) and (EXP) read through and keep their text; SD, RD and /LD place as D; NR, WD and WR are off the scale. A rating without a scope, or at facility scope, counts only under Any rating.</p><p>Facility and quote filters match within one facility; two never combine. Spread talk and bid–ask match by overlap; a margin is not spread talk. A negative spread-talk side is treated as missing, a bid without an ask, or an ask without a bid, gives no price range (a quote’s own price still counts), and the Private-side tag appears only on a run marked private-side.</p><p>User values are shown as entered, with their digits and unit, never calculated, converted or rescaled. Completeness comes only from a verified checklist, so most retained runs show Not assessed. Filters are kept in the page address, so a bookmarked Library opens with them.</p><h2>Move between the app and deliverables</h2><p>Reports lists every report in the workspace. A report opens inside the app, with this navigation beside it; its Built from list opens the module outputs it used, and a module output names the deliverables that used it.</p><h2>Start a new run</h2><p>Choose New run. Enter the issuer, workflow and dates, or load a saved context file. Choose the issuer folder, model and maximum USD spend. Validating is offline: the review shows the modules in order, the files no module can read and the report sections this run will not produce. Only Start run can call a model, after you approve the review, and only when the provider key is set in the environment that launched the app. If a module is rejected the run stops, keeps its work and makes no automatic paid retry.</p><p>A finished report has automated checks only: review the handoffs against the sources before relying on it.</p><h2>Runs stay separate</h2><p>Each run lists its own saved outputs. A module without one says so and offers other runs of the same issuer; another issuer is reached through the library. Reports list the runs they were built from, traced by SHA-256. Evidence is dated research, not current underwriting. Missing observations are not zero.</p><h2>Run notices</h2><p>The notice strip names the latest run and its state in words: running with the modules accepted so far, complete with a link to its reports, or stopped, failed or interrupted with the reason and the spend. View activity opens the run’s record. Resume appears on stopped, failed or interrupted notices, except a run stopped by a provider ruling. Dismiss hides the notice in that state on this computer; it never changes the run or its files, and the notice returns when the run reaches another state.</p><h2>Resuming a stopped run</h2><p>A run started from New run that stopped, failed or was interrupted can be resumed from its notice, from Run activity or from Recent runs. The resumed run is a new run: it keeps the accepted modules without a new model call and has its own spending cap, and what the stopped run spent is not counted against it. A run stopped by a provider ruling cannot be resumed.</p><h2>n.a. and n.m. in the cash flow model</h2><p>n.a. means not available: the calculation record has no value for that cell, and the reason is on the cell and under Why cells show n.a. It is never zero. n.m. means not modelled: the record does not model that line.</p><h2>Colour has a job</h2><div class="signal-key"><span><i class="series-0"></i>Blue · data and action</span><span><i class="series-1"></i>Navy · comparison</span><span><i class="signal-conditional"></i>Amber · conditional / attention</span><span>Grey · absent / unassessed</span></div><p>Dashed paths are conditional scenarios. Outflows use direction and signed values, not an adverse credit grade.</p><h2>Work offline, close or reopen</h2><p>The application, fonts and scripts are bundled; workspace files must also be available locally. Reports are sandboxed with external network requests blocked. Closing a tab leaves the library running; Quit library in Settings stops it.</p></div>`;
 // Modules most likely to state the run's overall credit view come first.
 const CALL_ORDER=['CP-6','CP-2','CP-3','CP-2D','CP-1','CP-0'];
 function firstFinding(id) {
@@ -666,20 +654,15 @@ function summaryView(context) {
   const questions=groups.map(([title,items])=>[title,items.filter(([id])=>available.includes(id)&&id!==led)]).filter(([,items])=>items.length);
   return `${summaryLead(lead)}${summaryCharts(available,context)}<div class="question-map">${questions.map(([title,items])=>`<section><h2>${esc(title)}</h2><div>${items.map(([id])=>summaryCard(id,context)).join('')}</div></section>`).join('')}</div>${built.length?`<section class="summary-deliverables"><h2>Deliverables from this run</h2>${built.map(r=>`<div class="deliverable"><a class="text-action" href="${routeHref('W-Reports',r.id,null,context)}">${esc(reportName(r))}${icon('arrow-right')}</a>${reportAcceptance(r).html}</div>`).join('')}</section>`:''}`;
 }
-// The retained-record wording for a run with no live record: the heading, and the note and link that follow the flow.
-function retainedRecordHtml(ctx,withRecord=false) {
-  return {head:`<div class="missing-state"><h2>Retained record · ${esc(ctx.run)}</h2>${withRecord?'':'<p>No live progress is recorded for this run in this workspace.</p>'}</div>`,tail:`<p class="caution">Live progress and spend are recorded only for runs started from New run in this workspace.</p>${moduleLink('W-NewRun','Open New run')}`};
-}
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
   if(module==='W-Library')return libraryView();
-  if(module==='W-NewRun')return '';
-  if(module==='W-Settings')return settingsView();
   if(module==='W-Overview')return summaryView(context);
   if(module==='W-Calendar') {
-    const events=context===calendarRun('CP-1A'),hedges=context===calendarRun('CP-2E');
+    const events=eventsOutput(context),hedges=hedgesOutput(context),showHedges=hedges&&(section==='hedges'||!events);
     if(!events&&!hedges)return `<div class="missing-state"><h2>No calendar retained for this run</h2><p>No dates are inferred from other cases.</p></div>${moduleLink('W-Evidence','Review available evidence')}<a class="text-action switch-case" href="#W-Library/cases">Choose another case</a>`;
-    return `${events?eventTimeline():hedgeChart(pins['CP-2E'],data[pins['CP-2E']].visual)}${moduleLink(events?'CP-1A':'CP-2E','Open owning module')}`;
+    const hedgeView=hedges&&(data[hedges].visual?.kind==='hedges'?hedgeChart(hedges,data[hedges].visual):`<div class="missing-state"><h2>No hedge schedule view for this output</h2><p>The retained CP-2E output is available in its module.</p></div>`);
+    return `${showHedges?hedgeView:eventTimeline(events,eventTable(data[events].sections))}${moduleLink(showHedges?'CP-2E':'CP-1A','Open owning module')}`;
   }
   if(module==='W-Evidence')return `<p class="intro">Source PDFs aren’t included; page references point to the originals.</p>${sourceInventory(context)}`;
   if(module==='W-Reports') {
@@ -687,20 +670,13 @@ function workspaceView(module,section) {
     return report?reportView(report,context):reportList(context);
   }
   if(module==='W-Forecast')return forecastView(context,section);
-  if(module==='CP-OS') {
-    const flow=`<ol class="activity-flow"><li><h3>Analytical outputs</h3><p>${plural(outputCount(context),'saved output')}</p>${outputCount(context)?moduleLink('W-Evidence','Inspect retained outputs'):''}</li><li><h3>Delivery</h3><p>${reportsBuiltFrom(context).length?`${plural(reportsBuiltFrom(context).length,'report')} built from this run’s files.`:'No report was built from this run’s files.'}</p>${reportsBuiltFrom(context).length?moduleLink('W-Reports','View reports'):''}</li></ol>`;
-    if(/^web-[a-f0-9]{32}$/.test(context||''))return `<section id="run-activity" data-run="${esc(context)}"><h2>Run record · ${esc(ctx.run)}</h2><p class="hint">Loading run activity…</p></section>${flow}`;
-    const retained=retainedRecordHtml(ctx);
-    return `${retained.head}${flow}${retained.tail}`;
-  }
-  if(module==='W-Help')return HELP;
   return '';
 }
 function updateWorkspaceChrome(module) {
   const ctx=contexts[current.context],isHome=!ctx||appDestinations.has(module);
   const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first),period=current.output?data[current.output].period:ctx?.period;
   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
-  document.querySelector('.issuer').innerHTML=`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${isHome?'':`<div class="issuer-meta"><span class="code">${esc(ctx.run)}</span><a href="#W-Library/cases">Change case</a></div>`}</div>${module==='W-Library'?`<div class="page-actions"><a class="secondary-action" href="#W-Reports/list">${icon('files')}All reports</a><a class="primary-action" id="library-new-run" href="#W-NewRun/run">${icon('plus')}New run</a></div>`:''}${isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`}`;
+  document.querySelector('.issuer').innerHTML=`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${isHome?'':`<div class="issuer-meta"><span class="code">${esc(ctx.run)}</span><a href="#W-Library/cases">Change case</a></div>`}</div>${module==='W-Library'?`<div class="page-actions"><a class="secondary-action" href="#W-Reports/list">${icon('files')}All reports</a></div>`:''}${isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`}`;
   document.querySelector('.workspace-tabs').hidden=isHome;
   if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Overview','Overview','layout-grid'],[moduleId,'Modules','layers'],['W-Calendar','Calendar','calendar-days'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Reports','Reports','files'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
@@ -714,17 +690,14 @@ function updateWorkspaceChrome(module) {
   $('content').classList.toggle('report-content',report);
   // The rail shows where you are, and its run-level links keep the selected run.
   const rail=label=>document.querySelector(`.rail [data-place="${label}"]`);
-  const place={'W-Library':'Issuer library','W-NewRun':'New run','W-Settings':'Settings','W-Help':'Help','W-Reports':'Reports','CP-OS':'Run activity'}[module]||'Research workspace';
+  const place={'W-Library':'Issuer library','W-Reports':'Reports'}[module];
   document.querySelectorAll('.rail a[data-place]').forEach(link=>{
     const here=link.dataset.place===place;
     link.classList.toggle('rail-active',here);
     if(here)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
-  rail('Research workspace').hidden=rail('Run activity').hidden=!Object.keys(contexts).length;
   rail('Reports').hidden=!window.DESIGN_WORKSPACE.reports.length&&!Object.keys(contexts).length;
   if(ctx) {
-    rail('Research workspace').href=routeHref('W-Overview','overview');
-    rail('Run activity').href=(typeof shownRunHref==='function'&&shownRunHref())||routeHref('CP-OS','activity');
     rail('Reports').href=routeHref('W-Reports','list');
   }
   const app=window.DESIGN_APP||{};

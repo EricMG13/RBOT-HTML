@@ -41,7 +41,7 @@ const unnamed=[...new Set(Object.values(data).map(output=>output.module))].filte
 if(unnamed.length)groups.push(['Other modules',unnamed.map(id=>[id,id])]);
 const moduleNames = Object.fromEntries(groups.flatMap(g=>g[1]));
 delete modules.undefined; // A pin this workspace does not hold.
-const isAnalytical = id => !id.startsWith('W-')&&id!=='CP-OS';
+const isAnalytical = id => !id.startsWith('W-');
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"'\r]/g, c => ({'\r':'&#13;','&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const plain = value => String(value).replace(/\*\*|`/g,'');
@@ -57,7 +57,7 @@ const libraryFilters = {...LIBRARY_DEFAULTS};
 const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:''};
 let current = null, returnTrigger = null, returnScroll = 0, returnContentScroll = 0;
 installDestinations();
-const appDestinations=new Set(['W-Library','W-NewRun','W-Settings','W-Help']); // These need no selected run.
+const appDestinations=new Set(['W-Library']); // These need no selected run.
 const aliases = {'CP-MODEL':'W-Forecast','CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
 for(const visual of window.DESIGN_WORKSPACE.visuals)for(const alias of String(visual.aliases||'').split(/[;,\s]+/).filter(Boolean))aliases[alias]??=visual.module;
 // Reader pages show names; the audit, inspector and evidence pages keep exact codes. Text only, so
@@ -70,7 +70,7 @@ const moduleLabel=code=>{
   return (own!==code&&own)||moduleNames[aliases[code]]||own||(code==='CP-MEMO'?'Credit memo':null);
 };
 const namedText=text=>text.replace(new RegExp(MODULE_CODE,'g'),code=>moduleLabel(code)||code);
-const showsCodes=({module,section})=>section==='audit'||['W-Evidence','W-Forecast','CP-OS','W-Help','W-Settings','W-NewRun'].includes(module);
+const showsCodes=({module,section})=>section==='audit'||['W-Evidence','W-Forecast'].includes(module);
 function readerMark(token) {
   if(!MODULE_CODE.test(token))return Object.assign(document.createElement('small'),{className:'ref',textContent:token});
   const label=moduleLabel(token);
@@ -193,20 +193,13 @@ function performanceView() {
   const retainedNotes=sectionData(id,'performance').flatMap(s=>s.blocks.filter(b=>b.type==='text')).map(b=>narrativeMarkup(id,b)).join('');
   return `<div class="section-heading"><h2>Performance</h2><span>${esc(table.headers[3])}–${esc(table.headers[1])}</span></div>${trendChart(id,'Net sales')}<div class="section-heading compact"><h3>Exact financial measures</h3></div>${tableMarkup(id,table)}${retainedNotes}`;
 }
-function eventTimeline() {
-  const id=pins['CP-1A'],section=sectionData(id,'events')[0], block=section.blocks.find(b=>b.type==='table');
-  const calendar=block.rows.filter(r=>!r.cells[0].includes('FY')&&!r.cells[0].includes(' / ')&&!r.cells[0].includes(' and '));
-  const order={'1993':0,'May 8, 2023':1,'July 12, 2024':2,'September 19, 2024':3,'October 2024':4};
-  calendar.sort((a,b)=>order[a.cells[0]]-order[b.cells[0]]);
-  const periods=block.rows.filter(r=>!calendar.includes(r));
-  const calendarDate=cell=>{
-    const m=/^([A-Z][a-z]+) (\d{1,2}), (\d{4})$/.exec(cell),month=m?DISPLAY_MONTHS.indexOf(m[1]):-1;
-    if(month<0) return cell;
-    const iso=`${m[3]}-${String(month+1).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
-    return displayDate(iso)===iso?cell:displayDate(iso);
+function eventTimeline(id,table) {
+  const rowMarkup=row=>{
+    const order=eventOrder(row.cells[0]),precision=order===null?'No year stated':order[1]===0?'Year only':'';
+    const details=table.headers.slice(1).map((header,i)=>row.cells[i+1]?`<div class="event-detail"><strong>${esc(header)}</strong> ${rich(row.cells[i+1])}</div>`:'').join('');
+    return `<li><div class="event-date"><strong>${esc(row.cells[0])}</strong>${precision?`<span>${precision}</span>`:''}</div><div class="event-body">${details}${sourceFooter(`${id}:${row.line}`)}</div></li>`;
   };
-  const rowMarkup=row=>{const shown=calendarDate(row.cells[0]);return `<li><div class="event-date"${shown&&shown!==row.cells[0]?` title="${esc(row.cells[0])}"`:''}><strong>${esc(shown)}</strong><span>${/^\d{4}$/.test(row.cells[0])?'Year only':/^\w+ \d{4}$/.test(row.cells[0])?'Month only':row.cells[0].includes('FY')||row.cells[0].includes(' / ')||row.cells[0].includes(' and ')?'Fiscal / combined dates':'Exact day'}</span></div><div class="event-body"><p>${rich(row.cells[1])}</p><div class="event-detail">${rich(row.cells[2])}</div>${sourceFooter(`${id}:${row.line}`)}</div></li>`;};
-  return `<div class="section-heading"><h2>Issuer event timeline</h2><span>Historical record</span></div><p class="intro">Calendar events retain their actual date precision. Fiscal periods and grouped dates stay in a separate register.</p><ol class="timeline">${calendar.map(rowMarkup).join('')}</ol><h2>Fiscal periods & grouped events</h2><ol class="timeline periods">${periods.map(rowMarkup).join('')}</ol>`;
+  return `<div class="section-heading"><h2>Issuer events</h2><span>Historical record</span></div><p class="intro">Events are ordered by the first year and month named in each date cell; rows with no year follow. Row text is shown as retained.</p><ol class="timeline">${orderEvents(table.rows).map(rowMarkup).join('')}</ol>`;
 }
 function businessVisual() {
   const row=findRow(pins['CP-1A'],'Company, business','End markets / concentration');
@@ -241,7 +234,7 @@ function renderContent(id,section) {
   if(!isAnalytical(id))return workspaceView(id,section);
   const band=callBand(id,section);
   if(id===pins['CP-1']&&section==='performance')return band+performanceView();
-  if(id===pins['CP-1A']&&section==='events')return band+eventTimeline();
+  if(id===pins['CP-1A']&&section==='events'){const table=eventTable(sectionData(id,section));if(table)return band+eventTimeline(id,table);}
   if(id===pins['CP-2']&&section==='assessment')return band+assessment();
   if(id===pins['CP-8']&&section==='comparison')return band+comparisonView();
   let visual=band+(id===pins['CP-1A']&&section==='business'?businessVisual():id===pins['CP-1']&&section==='cash'?trendChart(id,'Net cash provided by operating activities'):id===pins['CP-2']&&section==='outlook'?downside():'');
@@ -282,7 +275,7 @@ function renderNavigator(module) {
   const query=$('module-search').value.trim().toLowerCase(),context=current.context;
   let count=0;
   const sectionsOf=id=>navigationSections(id,context).filter(s=>s[0]!=='status');
-  const catalogue=groups.concat([['Workspace tools',[['W-Forecast','Published model'],['CP-OS','Run activity']]]]).map(([title,items])=>{
+  const catalogue=groups.concat([['Workspace tools',[['W-Forecast','Published model']]]]).map(([title,items])=>{
     const matches=items.filter(([id,name])=>`${id} ${Object.keys(aliases).filter(k=>aliases[k]===id).join(' ')} ${name} ${sectionsOf(id).map(s=>s[1]).join(' ')} ${isAnalytical(id)?availability(id,context):''}`.toLowerCase().includes(query));
     count+=matches.length;
     if(!matches.length)return '';
@@ -450,7 +443,6 @@ function renderRoute() {
     if(!showsCodes(next))nameCodes($('section-nav'));
     updateWorkspaceChrome(next.module);
     $('content').innerHTML=moduleBody(next);
-    const activity=$('run-activity');if(activity)loadRunActivity(activity);
     // watchFrame returns the callback that stops its timer; the previous report's timer must not fire against a detached element.
     if(cancelReportFrame)cancelReportFrame();
     cancelReportFrame=null;
@@ -461,11 +453,11 @@ function renderRoute() {
       const openModel=()=>{
         if(!disclosure.open||modelFrame.getAttribute('src'))return;
         modelFrame.setAttribute('src',modelFrame.dataset.src);
-        cancelReportFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;},'This model\'s file could not be found. Reload the library to refresh the list.');
+        cancelReportFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;});
       };
       disclosure.addEventListener('toggle',openModel);
     }
-    if(frame)cancelReportFrame=watchFrame(frame,$('content').querySelector('.frame-status'),'Loading report…','The report did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',window.DESIGN_WORKSPACE.reports.find(r=>r.id===next.section).download);link.download='';link.textContent='Download original HTML';return link;},'This report\'s file could not be found. Reload the library to refresh the list.');
+    if(frame)cancelReportFrame=watchFrame(frame,$('content').querySelector('.frame-status'),'Loading report…','The report did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',window.DESIGN_WORKSPACE.reports.find(r=>r.id===next.section).download);link.download='';link.textContent='Download original HTML';return link;});
     if(!showsCodes(next))nameCodes($('content'));
     $('content').scrollTop=readingPositions.get(`${next.context}:${next.output||next.module}:${next.section}`)||0;
     showNavigator(false);
@@ -473,19 +465,14 @@ function renderRoute() {
     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';
     renderNavigator(next.module);
     titleBase=moduleNames[next.module];applyTitle();
-    const creating=next.module==='W-NewRun';
-    $('content').hidden=creating;
-    $('new-run').hidden=!creating;
-    if(typeof presentRun==='function')presentRun();
     if(previous) {
       const report=isReportRoute(next.module,next.section),library=appDestinations.has(next.module)||!contexts[next.context];
       const restored=!report&&!library&&focusId&&$(focusId);
       const link=window.innerWidth>720&&focused?.classList.contains('section-item')&&focusHref&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
       const destination=report?$('report-select'):next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('analysis'):$('section-title');
-      if(!creating)(restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
+      (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
-    if(creating)newRun.show();
   }
   if(next.evidence) showInspector(next.evidence);
   else {
@@ -576,6 +563,4 @@ window.addEventListener('hashchange',renderRoute);
   document.documentElement.addEventListener('pointerleave',leave);
   rail.addEventListener('pointerleave',leave);
 })();
-const newRun=installNewRun();
-installSettings();
 renderRoute();

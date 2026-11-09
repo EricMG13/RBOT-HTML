@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Credit OS</title>
+  <link rel="icon" href="brand/symbol.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="screen.css">
+  <script src="hydrate.js" defer></script>
+  <script src="screening.js" defer></script>
+  <script src="data.js"></script>
+  <script src="static-boot.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#analysis">Skip to analysis</a>
+  <aside class="rail" aria-label="Application"><img class="symbol" src="brand/symbol.svg" alt=""><span class="rail-rule"></span><a href="#W-Library/cases" data-place="Issuer library"><img src="icons/layout-grid.svg" alt=""><span class="rail-label">Issuer library</span></a><a href="#W-Reports/list" data-place="Reports"><img src="icons/files.svg" alt=""><span class="rail-label">Reports</span></a><button type="button" id="rail-search" class="rail-search" data-place="Search" aria-keyshortcuts="/"><img src="icons/search.svg" alt=""><span class="rail-label">Search</span></button></aside>
+  <div class="app">
+    <p id="app-problem" class="app-problem" role="alert" hidden></p>
+    <header class="issuer"></header>
+    <div class="workspace-tabs" aria-label="Run sections"></div>
+    <div class="workbench" id="workbench">
+      <button class="mobile-modules" id="module-toggle" aria-expanded="false" aria-controls="navigator"><img src="icons/panel-left.svg" alt="">Browse modules</button>
+      <nav class="navigator" id="navigator" aria-label="Analytical modules"><div class="navigator-head"><label class="search"><input id="module-search" type="search" placeholder="Find a module, figure or source" aria-label="Find a module, figure or source" aria-keyshortcuts="/" autocomplete="off"><button type="button" id="module-search-clear" class="search-clear" aria-label="Clear search" hidden><img src="icons/x.svg" alt=""></button><kbd aria-hidden="true">/</kbd></label><div class="nav-filter">All modules <span>22</span></div></div><div id="search-results" class="search-results" aria-live="polite"></div><div id="module-list"></div></nav>
+      <main id="analysis" tabindex="-1"><div id="module-head"></div><nav id="section-nav" aria-label="Module sections"></nav><article id="content"></article>
+      </main>
+      <aside class="inspector" id="inspector" aria-label="Evidence inspector" hidden></aside>
+    </div>
+  </div>
+  <div class="sr-only" role="status" id="announcement"></div>
+  <noscript>The library requires JavaScript. Existing reports remain in the workspace’s folders.</noscript>
+</body></html>

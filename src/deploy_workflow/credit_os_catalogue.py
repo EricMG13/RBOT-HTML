@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from deploy_workflow.context import CONTEXT_SOURCE_ID, ContextRefused, load_context
 from deploy_workflow.library_index import (
     Library,
     Refused,
@@ -80,27 +82,32 @@ def chart_row(lines: list[str], chart: str) -> tuple[dict[str, str], int] | None
 
 
 def context_values(folder: Path, issues: list[str]) -> dict[str, str]:
-    """Ticker, sector, country, currency and period the run's ``context.json`` states, if any."""
-    if not os.path.lexists(folder / "context.json"):
-        return {}  # Not every run folder keeps the context form; its fields stay empty.
+    """Ticker, sector, country, currency and period of the context CP-OS pinned for the run.
+
+    ``workflow.json`` names the context by hash (``sources["context"]``); its bytes are under
+    ``inputs/<sha256>``. Bytes that fail the hash or the context rules leave every field empty
+    and are recorded as an issue.
+    """
     try:
-        record = json_object(read_inside(folder, "context.json"), "context.json")
-    except Refused as error:
-        issues.append(f"{folder.name}: context.json not used ({error})")
+        workflow = json_object(read_inside(folder, "workflow.json"), "workflow.json")
+        sources = workflow.get("sources")
+        pin = sources.get(CONTEXT_SOURCE_ID) if isinstance(sources, dict) else None
+        if not isinstance(pin, dict):
+            return {}  # This run was launched without a context form; its fields stay empty.
+        digest = pin.get("sha256")
+        raw = read_pinned(folder, f"inputs/{digest}", digest)
+        context = load_context(raw)
+    except (Refused, ContextRefused) as error:
+        issues.append(f"{folder.name}: context not used ({error})")
         return {}
-    found: dict[str, str] = {}
-    for section, key in (
-        ("identity", "ticker"),
-        ("identity", "sector"),
-        ("identity", "country"),
-        ("run", "reporting_currency"),
-        ("run", "current_period"),
-    ):
-        part = record.get(section)
-        value = part.get(key) if isinstance(part, dict) else None
-        if isinstance(value, str) and value.strip():
-            found[key] = value.strip()
-    return found
+    found = {
+        "ticker": context.identity.ticker,
+        "sector": context.identity.sector,
+        "country": context.identity.country,
+        "reporting_currency": context.run.reporting_currency,
+        "current_period": context.run.current_period,
+    }
+    return {key: value.strip() for key, value in found.items() if value.strip()}
 
 
 def period_fields(context: dict[str, str]) -> tuple[str, str]:
@@ -201,6 +208,7 @@ def delivery_fields(
         "label": relative.rsplit("/", 1)[-1],
         "state": mode if isinstance(mode, str) and mode else "candidate",
         "relationship": "direct",
+        "issue": "",
         "available": True,
         "href": pinned_url(f"{delivered}/report.html", files["report.html"]),
     }
@@ -237,6 +245,18 @@ def run_record(
         "metrics": metrics,
         "artifacts": artifacts,
         "files": run_files(workspace / "runs" / name, name, issues),
+        "completion": None,
+        "checkpoints": None,
+        "ratings": [],
+        "classification": "",
+        "classification_source": "",
+        "private_side": False,
+        "private_side_source": "",
+        "facilities": [],
+        "identity_source": "",
+        "sector_source": "",
+        "handoff": "",
+        "handoff_href": "",
         "checklist": None,
     }
 
@@ -246,4 +266,13 @@ def catalogue(workspace: Path, library: Library) -> dict[str, Any]:
     sources: dict[str, Any] = {}
     issues: list[str] = []
     real = [run_record(workspace, run, sources, issues) for run in library.runs]
-    return {"real": real, "sources": sources, "workspace": str(workspace), "issues": issues}
+    return {
+        "real": real,
+        "illustrative": [],
+        "sources": sources,
+        "built_at": datetime.now(UTC).strftime("%d %b %Y, %H:%M:%S UTC"),
+        "issues": issues,
+        "workspace": str(workspace),
+        "live": False,
+        "policy_locked": False,
+    }
