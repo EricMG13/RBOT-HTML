@@ -1360,3 +1360,42 @@ def test_without_follows_required_dependencies_transitively_and_in_run_order():
     assert result["CP-2A"] == [m for m in ordered if m in expected]
     inherited = Item(**{**refused, "id": "CP-2G:from:CP-2A", "inherited_from": ["CP-2A"]})
     assert without_for(ordered, [inherited]) == {}
+
+
+def library_launch(tmp_path, monkeypatch, copilot_ruling, update):
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_" + "Z" * 36)
+    runtime = tmp_path / "copilot-runtime"
+    runtime.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
+    monkeypatch.setattr(
+        cpos_launch, "run_live_handoffs", lambda manifest, directory, **k: directory / "report.html"
+    )
+    monkeypatch.setattr(cpos_launch, "_update_library", update)
+    argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / "x")
+    return main(argv)
+
+
+def test_completed_run_updates_the_library(tmp_path, monkeypatch, capsys, copilot_ruling):
+    calls = []
+
+    class Built:
+        runs = ({"id": "x"},)
+
+    def update(workspace):
+        calls.append(workspace)
+        return Built()
+
+    assert library_launch(tmp_path, monkeypatch, copilot_ruling, update) == 0
+    assert calls == [tmp_path] and "Library:" in capsys.readouterr().out
+
+
+def test_library_failure_keeps_the_run(tmp_path, monkeypatch, capsys, copilot_ruling):
+    def update(workspace):
+        raise OSError("disk full")
+
+    assert library_launch(tmp_path, monkeypatch, copilot_ruling, update) == 0
+    captured = capsys.readouterr()
+    assert "disk full" in captured.err
+    assert f"python apps/issuer-library/update_library.py --workspace {tmp_path}" in captured.err
+    assert f"Report:   {tmp_path / 'runs' / 'x' / 'report.html'}" in captured.out
