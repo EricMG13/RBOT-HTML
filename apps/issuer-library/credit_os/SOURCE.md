@@ -125,3 +125,12 @@ Task 5 edit: `REPO` also resolves to `credit_os`'s parent when that folder holds
 | `web/index.html` | Rail link "Run activity" (`#CP-OS/activity`, `icons/activity.svg`) | navigation |
 
 Task 8 fix: `web/static-boot.js` no longer defaults `activity` to an empty list. `window.DESIGN_ACTIVITY` is `null` unless `CREDIT_OS_DATA.activity` holds arrays `excluded` and `issues`; the catalogue/workspace check now names what is missing (`catalogue`, `workspace`) and activity is read apart, so a data file that lacks only `activity` keeps the rest working. `web/views.js` `activityView(null)` says Run activity could not be read, never the all-clear.
+
+## Task 9 fix: a model shows under the run folder it was delivered in (R25)
+
+A launcher run's folder is usually not its run ID (`--out runs/my-first-run`), so a published forecast was listed under no run.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `store.py` | New `run_folder_of(folder)` (the `x` of `runs/<x>/deliveries/<id>`); `read_model` adds `runFolder`; `run_shows` also accepts a run whose folder equals it | match a model to the run folder that holds its delivery, not only to the run ID in its `view.json` |
+| `web/views.js` | `runModels` adds `m.runFolder===run.folder`; `modelOwnRun` accepts `contexts[key].folder===model.runFolder` | same rule in the page, with the same issuer-key check |

@@ -11,7 +11,7 @@ import hashlib
 import json
 import re
 from dataclasses import fields
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Annotated
 
@@ -70,6 +70,11 @@ class ForecastInputs(Contract):
             raise ValueError("years must be three consecutive fiscal years")
         if any(date.fromisoformat(s.start) > date.fromisoformat(s.end) for s in self.years):
             raise ValueError("a year starts after it ends")
+        if any(
+            date.fromisoformat(b.start) != date.fromisoformat(a.end) + timedelta(days=1)
+            for a, b in zip(self.years, self.years[1:], strict=False)
+        ):
+            raise ValueError("each year must start the day after the previous one ends")
         return self
 
 

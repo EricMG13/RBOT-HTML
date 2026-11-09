@@ -1443,8 +1443,9 @@ PATHS = {
     "dividends": ("20", "20", "20"),
     "debt_repayment": ("50", "50", "50"),
 }
-# The launcher names a run folder by its run ID; the library shows a model under that run.
-RUN_ID = "nbg-2025-03-31-distressed_restructuring-sol-medium"
+# The usual `--out runs/<name>`: the folder name is not the run ID, and the library still shows the
+# model under that run.
+RUN_ID = "my-first-run"
 SHOCK = {"ebitda_decline": "0.20", "rate_increase": "0.10"}
 RATIOS = {"total_leverage", "net_leverage", "coverage", "fcf_to_debt"}
 
@@ -1621,7 +1622,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
         p.name for p in folder.iterdir()
     }
     receipt = json.loads((folder / "delivery.json").read_text())
-    assert receipt["cp_forecast_published"] is False
+    assert "cp_forecast_published" not in receipt
     assert "publish_forecast" not in json.loads((out / "workflow.json").read_text())
     assert (
         json.loads(next(out.glob("completed-*.json")).read_text())["cp_forecast_published"] is False
@@ -1658,6 +1659,17 @@ def test_model_publish_failure_keeps_the_report(tmp_path, provider, capsys, monk
             "base revenue 1001 is not printed in CP-1",
         ),
         (forecast_block(years=[]), "forecast inputs: years"),
+        (
+            forecast_block(
+                years=[
+                    {"year": 2025 + i, "start": "2025-04-01", "end": "2028-03-31"} for i in range(3)
+                ]
+            ),
+            (
+                "forecast inputs: (root): Value error, each year must start the day after "
+                "the previous one ends"
+            ),
+        ),
     ],
 )
 def test_an_invalid_or_missing_inputs_block_publishes_no_model_and_names_why(
@@ -1778,3 +1790,14 @@ def test_the_forecast_tab_shows_the_model_only_for_the_run_that_published_one(
     dom, console = visit(other / "library/index.html", f"#W-Forecast/none?c={RUN_ID}")
     assert console == []
     assert "No forecast model was published from this run’s files" in dom
+
+
+def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(
+    tmp_path, provider, capsys
+):
+    """Existing deliveries reproduce byte for byte: the key is written only when true."""
+    code, out, _ = forecast_run(tmp_path, provider, capsys, None, modules=("CP-2A",))
+    assert code == 0
+    (folder,) = (out / "deliveries").iterdir()
+    assert "cp_forecast_published" not in json.loads((folder / "delivery.json").read_text())
+    assert "forecast" not in json.loads(next(out.glob("delivery-*.json")).read_text())
