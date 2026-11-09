@@ -270,3 +270,67 @@ test('Open source file is omitted when the build says the source text is missing
   const there = section({ ...base, excerpt: 'text', hash_matches_inventory: true, reason: null }, output);
   assert.ok(there.includes('href="../runs/r/source-text/a.pdf"') && there.includes('Open source file'));
 });
+
+test('key numbers look past the first analysis group (CP-2E: numeric register in the second group)', () => {
+  // Answer key from the fixture: T2G.1 (first group) holds only a text table; the T2F.4 register in the second group is the one shown.
+  const sections = [
+    { heading: 'T2G.1 ESG notes', line: 60, blocks: [table(62, ['Topic', 'View'], [[63, 'Governance', 'Stable']])] },
+    { heading: 'T2F.4 Hedge register', line: 70, blocks: [table(72, ['Instrument', 'Amount', 'Margin / Coupon'], [[73, 'Swap', '500', '3.1']])] },
+  ];
+  const html = report({ module: 'CP-2E', sections }, [['esg', 'ESG notes', ['T2G.1']], ['hedges', 'Hedge register', ['T2F.4']]]).keyNumbers(OUT);
+  assert.ok(html.includes('>Amount<') && html.includes('>500<') && !html.includes('>Governance<'));
+});
+
+// ---- The hedge chart: views.js evaluated over a hand-written CP-2E table and a run whose as-of is 2024-09-30.
+function hedgeHtml(headers, rows, asOf = '2024-09-30') {
+  const text = read('views.js');
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const id = 'run-a/deliveries/d1/CP-2E.md';
+  const out = { module: 'CP-2E', run: 'run-a', period: '', sections: [{ heading: 'T2F.4', line: 1, blocks: [table(80, headers, rows)] }] };
+  const names = ['data', 'contexts', 'esc', 'rich', 'plain', 'evidence', 'modules', 'moduleNames', 'current', 'icon', 'window', 'store', 'pins', 'lastFile', 'isAnalytical', 'sectionData'];
+  const fn = new Function(...names, `${text}; return hedgeChart;`)({ [id]: out }, { 'run-a': { asOf } }, esc, esc, esc, new Map(), {}, {}, {}, () => '', { CREDIT_OS_DATA: { chips: {} } }, {}, {}, new Map(), () => true, () => []);
+  return fn(id, { kind: 'hedges', table: 80, title: 'Hedges', unit: null });
+}
+const HEDGE_ROWS = [
+  [81, 'Swap', '500', '2022-12-31 to 2025-06-30', 'USDm'],
+  [82, 'Cap', '250', '2025-01-31 to 2028-03-31', 'EURm'],
+  [83, 'FX forwards', '90', 'Up to 12 months', ''],
+];
+const leftOf = (html, cls) => [...html.matchAll(new RegExp(`class="${cls}[^"]*" style="left:([\\d.]+)%(?:;width:([\\d.]+)%)?`, 'g'))].map(m => [Number(m[1]), m[2] === undefined ? null : Number(m[2])]);
+
+test('hedge chart axis, base rule, forward flag and units come from the table and the as-of', () => {
+  // Hand-computed: start 2022-12-31 (earlier than as-of minus 18 months), end 2028-03-31 (later than as-of plus 36 months); 1917 days.
+  // As-of 2024-09-30 is day 639 (1/3); Swap spans days 0-912; Cap starts day 762.
+  const html = hedgeHtml(['Instrument', 'Amount', 'Window', 'Unit'], HEDGE_ROWS);
+  assert.deepEqual([...html.matchAll(/<span style="left:[^"]*">([^<]*)<\/span>/g)].map(m => m[1]), ['Dec 2022', 'Sep 2024 base', 'Mar 2028']);
+  assert.ok(Math.abs(leftOf(html, 'base-rule')[0][0] - 100 / 3) < 0.001);
+  const [swap, cap] = leftOf(html, 'hedge-span');
+  assert.ok(Math.abs(swap[0]) < 0.001 && Math.abs(swap[1] - 912 / 1917 * 100) < 0.001);
+  assert.ok(Math.abs(cap[0] - 762 / 1917 * 100) < 0.001);
+  assert.equal([...html.matchAll(/hedge-span future/g)].length, 1);
+  assert.ok(html.includes('500 USDm') && html.includes('250 EURm') && html.includes('Duration only'));
+  assert.ok(!/90 [A-Za-z]/.test(html.replace(/<[^>]+>/g, ' ').replace(/Up to 12 months/, '')));
+});
+
+test('hedge chart falls back to as-of minus 18 and plus 36 months and prints no unit without a unit column', () => {
+  // As-of 2025-03-31: 2023-09-30 .. 2028-03-31; dates inside that window do not move the ends.
+  const html = hedgeHtml(['Instrument', 'Amount', 'Window'], [[81, 'Swap', '500', '2024-01-31 to 2026-06-30']], '2025-03-31');
+  assert.deepEqual([...html.matchAll(/<span style="left:[^"]*">([^<]*)<\/span>/g)].map(m => m[1]), ['Sep 2023', 'Mar 2025 base', 'Mar 2028']);
+  assert.ok(html.includes('<small>500 </small>') || html.includes('<small>500</small>'));
+  assert.ok(!html.includes('USDm'));
+});
+
+test('views.js holds no hard-coded hedge dates, labels or units', () => {
+  const text = read('views.js');
+  for (const literal of ['2024-09-30', 'Mar 2023', 'Sep 2027', "'FX forwards'", 'USDm']) assert.ok(!text.includes(literal), literal);
+});
+
+test('Open source file is hidden by the structural condition only, not by the reason text', () => {
+  const text = read('screen.js');
+  const start = text.indexOf('function chipSection('), end = text.indexOf('function showInspector(');
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const section = new Function('esc', 'icon', `${text.slice(start, end)}; return chipSection;`)(esc, n => `<img src="${n}">`);
+  const output = { href: '../runs/r/deliveries/d/CP-1.md', source: 'deliveries/d/CP-1.md' };
+  const withFile = { kind: 'issuer_page', source: 'PDF', file: 'a.pdf', page: 1, page_end: null, sha256: 'ab', quote: null, quote_found: null, excerpt: 'text', hash_matches_inventory: true };
+  assert.ok(section({ ...withFile, reason: 'the line is missing from page 1' }, output).includes('Open source file'));
+});

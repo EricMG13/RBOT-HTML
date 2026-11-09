@@ -346,8 +346,8 @@ function chipSection(chip,output) {
   }
   // The output's href points into runs/<run>/...; the retained source text sits beside the handoff's folder tree in the same run.
   const root=output.href.split('/').slice(0,-output.source.split('/').length).join('/');
-  // A source text the build could not read has no file to open; the reason stands instead.
-  const absent=/not found|missing/i.test(chip.reason||'')||(chip.hash_matches_inventory===null&&!chip.excerpt);
+  // A source text the build could not read (no hash match result, no excerpt) has no file to open; the reason stands instead.
+  const absent=chip.hash_matches_inventory===null&&!chip.excerpt;
   const open=chip.file&&!absent?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
   return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }

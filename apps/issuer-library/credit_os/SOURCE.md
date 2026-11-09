@@ -136,3 +136,12 @@ The Modules tab draws one report per analytical output (head, band, key numbers,
 | `web/screen.js` | `renderContent` returns `moduleReport`, the old body is `sectionView` (opened from Evidence & audit); `showInspector(key, chip)` adds the source-page part (`chipSection`); `parseRoute` reads `chip` and maps any unknown section to the head; `renderRoute` scrolls between parts without redrawing (`scrollToPart`, `positionKey`); click handlers for chips, audit items and anchor links; `nameCodes` skips chips, the audit list and the head's code; arrow-key chart navigation ignores chips | chips, inspector and navigation for the report |
 | `web/screen.css` | appended `.module-head`, `.band`, `.panel-card`, `.chart-row` chip column, `.table-card`, `.chip`, `.av`, `.dot`, `article.finding`, `.limits`, `details.audit`, inspector chip part | the mockup's styles in the existing tokens |
 | `web/static.test.cjs` | report, chip, key-number, anchor, wording and font-size tests; the "Not run in this run" assertion now pins `NO_OUTPUT` | covers the above; the wording was ruled |
+
+## Overview chart widths, hedge-chart constants, key-numbers groups (module-report plan, Task 3)
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/views.js` | `hedgeChart` reads its axis from the table's `YYYY-MM-DD` dates and the run's `asOf` (start = earliest date or as-of minus 18 months, end = latest or as-of plus 36 months, month-end clamped; labels formatted from those dates; base rule = as-of; forward = start after as-of; unit from the table's unit column, none if absent); `keyNumbers` takes the first qualifying table from all analysis groups, not only the first | hard-coded dates, labels and `USDm` belonged to one case; the real CP-2E register sits in the second group |
+| `web/screen.js` | `chipSection` hides "Open source file" on the structural condition only (`hash_matches_inventory === null` and no excerpt) | a text match on the reason could hide a working link |
+| `web/screen.css` | `.chart-row` columns `minmax(150px,1.1fr) minmax(140px,2fr) 72px auto`; `.summary-chart` loses `overflow:hidden` | the value no longer clips; the Overview card shows its row in full |
+| `web/static.test.cjs` | key numbers in the second group, hedge chart axis/base/forward/unit tests, no-literals test, structural-hide test | covers the above |
