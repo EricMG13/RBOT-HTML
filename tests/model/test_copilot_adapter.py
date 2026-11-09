@@ -29,10 +29,16 @@ from deploy_workflow.model.adapter import (
     recorded_adapter,
 )
 from deploy_workflow.model.copilot import event_record
-from deploy_workflow.model.copilot_adapter import ClientOptions, CopilotAdapter, _Call
+from deploy_workflow.model.copilot_adapter import (
+    ClientOptions,
+    CopilotAdapter,
+    _Call,
+    real_client,
+)
 from deploy_workflow.model.handoff import HandoffExecutor
 from deploy_workflow.model.record import CallLog, export_recording
 from deploy_workflow.model.redact import Redactor
+from deploy_workflow.model.transport import IDLE_S, OVERALL_S
 from deploy_workflow.model.turn import (
     Message,
     ModelSpec,
@@ -1100,3 +1106,89 @@ def test_relative_or_root_values_do_not_erase_ordinary_text(rig: Rig, tmp_path: 
     run, _ = _run_and_export(rig, tmp_path, adapter)
     (rec,) = CallLog(run, Redactor()).records()
     assert "after 3/4 retries at step 1.2" in str(rec["error"])
+
+
+def gh_env(rig: Rig, tmp_path: Path, **extra: str) -> dict[str, str]:
+    """An environment whose PATH holds a real executable file named gh."""
+    bin_dir = tmp_path / "ghbin"
+    bin_dir.mkdir(exist_ok=True)
+    gh = bin_dir / "gh"
+    gh.write_text("#!/bin/sh\n")
+    gh.chmod(0o755)
+    return {
+        "COPILOT_USE_GH_LOGIN": "1",
+        "COPILOT_CLI_PATH": str(rig.runtime),
+        "PATH": f"{bin_dir}:/usr/bin",
+        **extra,
+    }
+
+
+def test_gh_login_opt_in_sends_no_token_and_pins_gh(rig: Rig, tmp_path: Path) -> None:
+    adapter = rig.make(text_script(), environ=gh_env(rig, tmp_path))
+    reply = call(adapter, request())
+    assert reply.kind == "ok" and [o.token for o in rig.options] == [None]
+    assert rig.options[0].env["PATH"].startswith(str(tmp_path / "ghbin") + ":")
+    assert adapter.auth == "gh-login"
+
+
+def test_gh_not_found_is_key_missing_before_any_runtime(rig: Rig, tmp_path: Path) -> None:
+    env = {**gh_env(rig, tmp_path), "PATH": str(tmp_path / "nowhere")}
+    reply = call(rig.make(text_script(), environ=env), request())
+    assert reply.kind == "not_sent" and reply.error_class == "KeyMissing"
+    assert reply.message is not None
+    assert "COPILOT_GITHUB_TOKEN" in reply.message and "COPILOT_USE_GH_LOGIN" in reply.message
+    assert "gh" in reply.message and rig.options == []
+
+
+@pytest.mark.parametrize("value", ["true", "0", "", "yes", " 1"])
+def test_other_opt_in_values_are_key_missing(rig: Rig, tmp_path: Path, value: str) -> None:
+    env = {**gh_env(rig, tmp_path), "COPILOT_USE_GH_LOGIN": value}
+    reply = call(rig.make(text_script(), environ=env), request())
+    assert reply.kind == "not_sent" and reply.error_class == "KeyMissing"
+    assert reply.message is not None
+    assert "COPILOT_GITHUB_TOKEN" in reply.message and "COPILOT_USE_GH_LOGIN" in reply.message
+    assert rig.options == []
+
+
+def test_token_wins_over_the_opt_in(rig: Rig, tmp_path: Path) -> None:
+    env = {**gh_env(rig, tmp_path), "COPILOT_GITHUB_TOKEN": TOKEN}
+    adapter = rig.make(text_script(), environ=env)
+    call(adapter, request())
+    assert [o.token for o in rig.options] == [TOKEN] and adapter.auth == "token"
+    assert rig.options[0].env["PATH"] == env["PATH"]  # no gh pin when a token is set
+
+
+@pytest.mark.parametrize(("token", "logged_in"), [(None, True), (TOKEN, False)])
+def test_real_client_builds_the_sdk_client_from_the_credential(
+    monkeypatch: pytest.MonkeyPatch, token: str | None, logged_in: bool
+) -> None:
+    import copilot
+
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(copilot, "CopilotClient", lambda **kw: seen.update(kw))
+    real_client(ClientOptions("/opt/copilot", token, "/tmp/home"))
+    assert seen["github_token"] == token and seen["use_logged_in_user"] is logged_in
+
+
+def test_relative_path_entry_pins_an_absolute_gh_dir(rig: Rig, tmp_path: Path) -> None:
+    gh = tmp_path / "gh"  # the rig's cwd is tmp_path
+    gh.write_text("#!/bin/sh\n")
+    gh.chmod(0o755)
+    env = {**gh_env(rig, tmp_path), "PATH": ".:/usr/bin"}
+    call(rig.make(text_script(), environ=env), request())
+    assert rig.options[0].env["PATH"].startswith(str(tmp_path) + ":")
+
+
+@pytest.mark.parametrize("value", [None, "true", "0", ""])
+def test_auth_is_none_without_a_credential(rig: Rig, value: str | None) -> None:
+    env = {"COPILOT_CLI_PATH": str(rig.runtime)}
+    if value is not None:
+        env["COPILOT_USE_GH_LOGIN"] = value
+    assert rig.make(text_script(), environ=env).auth == "none"
+
+
+def test_default_idle_bound_is_the_overall_bound(rig: Rig) -> None:
+    # the reply is not streamed: the runtime is silent while the model writes
+    adapter = rig.make(text_script())
+    assert adapter._idle_s == adapter._overall_s == OVERALL_S
+    assert adapter._idle_s > IDLE_S

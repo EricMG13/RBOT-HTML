@@ -592,3 +592,17 @@ def test_a_post_reply_exception_whose_str_raises_still_settles_and_stops(
     assert marker.status is not None and loop.budget.spent == marker.usd > 0
     (row,) = [json.loads(n) for n in (tmp_path / "calls.jsonl").read_text().splitlines()]
     assert row["cost_status"] == "unknown"
+
+
+def test_loop_json_records_the_adapters_auth_only_when_it_has_one(tmp_path: Path) -> None:
+    import json
+
+    class Authed(Adapter):
+        auth = "gh-login"
+
+    with_auth, without = tmp_path / "a", tmp_path / "b"
+    with_auth.mkdir(), without.mkdir()
+    HandoffExecutor(with_auth, adapter=Authed(), cap_usd=Decimal(10), check=check)
+    HandoffExecutor(without, adapter=Adapter(), cap_usd=Decimal(10), check=check)
+    assert json.loads((with_auth / "loop.json").read_text())["auth"] == "gh-login"
+    assert "auth" not in json.loads((without / "loop.json").read_text())

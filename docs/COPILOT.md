@@ -23,8 +23,14 @@ uv run python -m copilot download-runtime
 
 The second command is run once. It prints the cached runtime path; set `COPILOT_CLI_PATH` to the
 runtime executable it prints (on Windows, the `.exe`). Set `COPILOT_GITHUB_TOKEN` from a
-fine-grained token for your seat, in the launching environment only (no credential file). The CLI
-login is never used (`use_logged_in_user=False`), so a logged-in `gh` or Copilot CLI does nothing here.
+fine-grained token for your seat, in the launching environment only (no credential file). A
+token, when set, always wins (`use_logged_in_user=False`). Opt-in alternative: with no token, set
+`COPILOT_USE_GH_LOGIN=1` (exactly `1`) and the runtime authenticates with the account and OAuth
+token of the **gh CLI** (`gh auth token`), found once on the launching PATH; `gh auth switch`
+changes who pays. The Copilot CLI's own sign-in is not used. Any other value changes nothing, and a
+token, when set, wins. The runtime's gh does not see `GH_TOKEN`, `GITHUB_TOKEN` or `GH_CONFIG_DIR` from the launching
+shell (allowlist), so the payer is gh's stored active account (`gh auth status`), not a `GH_TOKEN`
+set in that shell. Each run's `loop.json` records `auth` (`token`, `gh-login` or `none`).
 
 ## 3. The ruling
 
@@ -44,7 +50,7 @@ configs: copilot-sol-medium copilot-opus-medium
 uv run pytest tests/model/test_copilot_live.py -m live -q -s
 ```
 
-It skips unless `COPILOT_GITHUB_TOKEN` and `COPILOT_CLI_PATH` are both set, and it never runs
+It skips unless `COPILOT_CLI_PATH` and `COPILOT_GITHUB_TOKEN` (or `COPILOT_USE_GH_LOGIN=1`) are set, and it never runs
 in the normal suite or CI. It lists the models, runs one tool exchange through the real
 adapter and prints each reply's `finishReason` and its `billed_usd` against the price of the
 reply's own tokens (a unit error in the AI-unit conversion would be a 100x miss).
@@ -56,7 +62,8 @@ uv run python -m deploy_workflow.owners.cpos_launch --context ... --sources ... 
   --config copilot-sol-medium --cap 50 --live --ruling docs/rulings/<file>.md
 ```
 
-Without `--live` nothing is sent. The launcher reports `COPILOT_GITHUB_TOKEN` as the key variable.
+Without `--live` nothing is sent. The launcher reports `COPILOT_GITHUB_TOKEN` as the key variable; `--live` also accepts
+`COPILOT_USE_GH_LOGIN=1` in its place (the gh CLI login, see section 2).
 Each exchange creates one working directory, `.copilot-home/<invocation>/<reservation>` (git-ignored),
 at its first call, named after that call's reservation; later calls of the exchange reuse it.
 

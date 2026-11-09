@@ -1098,6 +1098,30 @@ def test_launcher_reports_copilot_key_variable(tmp_path, monkeypatch, capsys, co
     assert "COPILOT_GITHUB_TOKEN" in capsys.readouterr().err
 
 
+def test_launcher_names_both_copilot_credentials_when_neither_is_set(
+    tmp_path, monkeypatch, capsys, copilot_ruling
+):
+    monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+    monkeypatch.setenv("COPILOT_USE_GH_LOGIN", "true")
+    argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
+    assert main(argv) == 2
+    err = capsys.readouterr().err
+    assert "COPILOT_GITHUB_TOKEN" in err and "COPILOT_USE_GH_LOGIN" in err
+
+
+def test_copilot_gh_login_opt_in_passes_the_key_check(
+    tmp_path, monkeypatch, capsys, copilot_ruling
+):
+    monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+    monkeypatch.setenv("COPILOT_USE_GH_LOGIN", "1")
+    runtime = tmp_path / "copilot-runtime"
+    runtime.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", lambda m, d, **k: d / "report.html")
+    argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
+    assert main(argv) == 0
+
+
 def test_copilot_config_without_live_sends_nothing_and_shows_the_plan(
     tmp_path, capsys, monkeypatch
 ):

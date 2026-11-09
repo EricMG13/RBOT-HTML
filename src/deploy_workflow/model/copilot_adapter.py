@@ -10,6 +10,7 @@ import concurrent.futures
 import dataclasses
 import os
 import re
+import shutil
 import threading
 import time
 from collections.abc import Awaitable, Callable, Mapping
@@ -20,6 +21,7 @@ from typing import Any, Protocol, cast
 from deploy_workflow.model.adapter import (
     _REFLECTED_RAW,
     _UNPARSABLE_RAW,
+    COPILOT_GH_LOGIN_VARIABLE,
     COPILOT_RUNTIME_VARIABLE,
     KEY_VARIABLES,
     AdapterReply,
@@ -57,7 +59,7 @@ from deploy_workflow.model.reply_classes import (
     TOOL_CALL_LOST,
     TOOL_CALL_MISMATCH,
 )
-from deploy_workflow.model.transport import IDLE_S, OVERALL_S
+from deploy_workflow.model.transport import OVERALL_S
 from deploy_workflow.model.turn import (
     Message,
     ModelSpec,
@@ -89,6 +91,10 @@ _WINDOWS_PATH = re.compile(
     rf"|{_ROOT}/(?:[^\s\\/:*?\"<>|()']+/)*[^\s\\/:*?\"<>|()']*"
 )
 _TOKEN_VARIABLE = KEY_VARIABLES["copilot"]
+# The reply is not streamed (streaming=False): the runtime emits no event while the model writes,
+# so the HTTP idle bound would cut long answers. ponytail: a hung runtime is now caught only by
+# the overall bound (30 min); switch to streaming=True if that matters.
+IDLE_S = OVERALL_S  # this adapter's idle bound (not transport.IDLE_S, which is for streamed HTTP)
 _DIGEST = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _TOOL_FINISH = ("tool_calls", "tool_use")
 # Bounds of the release of one exchange. STOP_S covers the SDK's own stop: shutdown RPC 10 s,
@@ -146,7 +152,9 @@ def runtime_environment(environ: Mapping[str, str]) -> dict[str, str]:
 @dataclass(frozen=True)
 class ClientOptions:
     runtime: str
-    token: str = field(repr=False)
+    # None: the opt-in gh login. The runtime then runs `gh auth token`, so the account and OAuth
+    # token of the gh CLI (not the Copilot CLI's own sign-in; `gh auth switch` changes who pays).
+    token: str | None = field(repr=False)
     home: str
     env: Mapping[str, str] = field(default_factory=dict, repr=False)
     private_paths: tuple[str, ...] = field(default=(), repr=False)  # also scrubbed from errors
@@ -241,7 +249,7 @@ def real_client(options: ClientOptions) -> ClientLike:
     client = CopilotClient(
         connection=RuntimeConnection.for_stdio(path=options.runtime),
         github_token=options.token,
-        use_logged_in_user=False,
+        use_logged_in_user=options.token is None,
         mode="empty",
         base_directory=options.home,
         log_level="none",
@@ -282,6 +290,8 @@ class _ToolCallLost(Exception):
 class _Creds:
     redactor: Redactor
     token: str | None = field(repr=False)
+    gh_login: bool
+    gh_dir: str | None
     runtime: str | None
     env: Mapping[str, str] = field(repr=False)
 
@@ -423,7 +433,8 @@ def _home_free(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 class CopilotAdapter:
-    """Every construction runs the R2 gate; the environment is read at the first ``complete``."""
+    """Every construction runs the R2 gate; the environment is read when ``auth`` is first read
+    (executor init) or at the first ``complete``, whichever comes first."""
 
     def __init__(
         self,
@@ -460,6 +471,14 @@ class CopilotAdapter:
         return self._ruling
 
     @property
+    def auth(self) -> str:
+        """The credential in use: ``token``, ``gh-login`` or ``none`` (never a value)."""
+        creds = self._credentials()
+        if creds.token is not None:
+            return "token"
+        return "gh-login" if creds.gh_login else "none"
+
+    @property
     def gate(self) -> GateResult:
         return self._gate
 
@@ -473,11 +492,25 @@ class CopilotAdapter:
             runtime = environ.get(COPILOT_RUNTIME_VARIABLE) or None
             if runtime is not None and not Path(runtime).is_file():
                 runtime = None
+            token = environ.get(_TOKEN_VARIABLE) or None
+            gh_login = token is None and environ.get(COPILOT_GH_LOGIN_VARIABLE) == "1"
+            runtime_env = runtime_environment(environ)
+            gh_dir = None
+            if gh_login:
+                # ponytail: resolved once from the launching PATH; a gh planted earlier on that
+                # PATH is still the one found (ceiling: the launching environment is trusted).
+                gh = shutil.which("gh", path=environ.get("PATH"))
+                if gh is not None:
+                    gh_dir = os.path.dirname(os.path.abspath(gh))  # absolute; symlinks not followed
+                    path = runtime_env.get("PATH")
+                    runtime_env["PATH"] = gh_dir + (os.pathsep + path if path else "")
             self._cached = _Creds(
                 Redactor.from_environ(environ),
-                environ.get(_TOKEN_VARIABLE) or None,
+                token,
+                gh_login,
+                gh_dir,
                 runtime,
-                runtime_environment(environ),
+                runtime_env,
             )
         return self._cached
 
@@ -503,6 +536,30 @@ class CopilotAdapter:
         asyncio.set_event_loop(loop)
         loop.run_forever()
 
+    @staticmethod
+    def _refusal(
+        creds: _Creds, request: TurnRequest, digest: str, reservation_id: str
+    ) -> tuple[str, str] | None:
+        """The (error class, message) of a refusal before anything is sent, or None."""
+        if creds.token is None and not creds.gh_login:
+            return (
+                "KeyMissing",
+                f"{_TOKEN_VARIABLE} is not set or empty, and {COPILOT_GH_LOGIN_VARIABLE} is not 1",
+            )
+        if creds.token is None and creds.gh_dir is None:
+            return (
+                "KeyMissing",
+                f"{COPILOT_GH_LOGIN_VARIABLE}=1 but gh is not on PATH; or set {_TOKEN_VARIABLE}",
+            )
+        if not _DIGEST.fullmatch(digest) or not _DIGEST.fullmatch(reservation_id):
+            return "InvalidDigest", "the invocation digest or reservation id is not a name"
+        if not 1 <= request.max_output_tokens <= MAX_OUTPUT_TOKENS:
+            return (
+                "MaxOutputTooLarge",
+                f"max_output_tokens {request.max_output_tokens} outside 1..{MAX_OUTPUT_TOKENS}",
+            )
+        return None
+
     def complete(
         self,
         request: TurnRequest,
@@ -517,22 +574,14 @@ class CopilotAdapter:
         redactor, token, runtime = creds.redactor, creds.token, creds.runtime
         if self._closed:
             return self._not_sent(PRE_SEND_FAILURE, "AdapterClosed: the adapter is closed", started)
-        if token is None:
-            return self._not_sent("KeyMissing", f"{_TOKEN_VARIABLE} is not set or empty", started)
+        if (
+            refusal := self._refusal(creds, request, invocation_digest, reservation_id)
+        ) is not None:
+            return self._not_sent(*refusal, started)
         if runtime is None:
             return self._not_sent(
                 "RuntimeMissing",
                 f"{COPILOT_RUNTIME_VARIABLE} is not set to an existing file",
-                started,
-            )
-        if not _DIGEST.fullmatch(invocation_digest) or not _DIGEST.fullmatch(reservation_id):
-            return self._not_sent(
-                "InvalidDigest", "the invocation digest or reservation id is not a name", started
-            )
-        if not 1 <= request.max_output_tokens <= MAX_OUTPUT_TOKENS:
-            return self._not_sent(
-                "MaxOutputTooLarge",
-                f"max_output_tokens {request.max_output_tokens} outside 1..{MAX_OUTPUT_TOKENS}",
                 started,
             )
         try:
