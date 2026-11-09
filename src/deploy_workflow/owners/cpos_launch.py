@@ -56,6 +56,7 @@ from deploy_workflow.model.budget import Budget
 from deploy_workflow.model.handoff import Check, _pages
 from deploy_workflow.model.pricing import price_of, request_reservation_usd
 from deploy_workflow.model_testing.configs import CONFIGS
+from deploy_workflow.owners import cp2g, cpos_forecast
 from deploy_workflow.owners.cpos import (
     HandoffPlan,
     HandoffTask,
@@ -462,6 +463,14 @@ def _front_routes(ordered: tuple[str, ...]) -> tuple[MarkdownRoute, ...]:
     return tuple(routes)
 
 
+HTML_MODEL_SCOPE = "The HTML Model and calculation JSON are not published by this launcher."
+FORECAST_SCOPE = (
+    "The HTML Model is not published by this launcher. A forecast table is published beside the "
+    "report when the CP-2G handoff's inputs block validates; Python computes its figures from the "
+    "inputs the handoff states, and the inputs are not independently reviewed."
+)
+
+
 def _layout(
     run: Run, ordered: tuple[str, ...], aliases: tuple[str, ...], config: str
 ) -> tuple[MarkdownLayout, tuple[str, ...]]:
@@ -494,8 +503,9 @@ def _layout(
         f"User-launched {preset.title} run for {run.issuer_name} as of {run.as_of}, using {config} "
         "on the selected issuer folder. Automated checks cover handoff structure, issuer and date "
         "anchors, source and upstream references and report selectors; analytical accuracy has "
-        "not been independently reviewed. The HTML Model and calculation JSON are not published "
-        f"by this launcher. Sections not produced: {', '.join(omitted) or 'none'}."
+        "not been independently reviewed. "
+        + (FORECAST_SCOPE if {"CP-1", "CP-2G"} <= set(ordered) else HTML_MODEL_SCOPE)
+        + f" Sections not produced: {', '.join(omitted) or 'none'}."
     )
     layout = MarkdownLayout(
         blocks=tuple(dict.fromkeys(r.block_id for r in routes)),
@@ -518,6 +528,26 @@ READER_SECTION_RULES = (
     f"impact at most {FINDING_WORDS} words). Confidence is one of {', '.join(CONFIDENCE)}.\n\n"
     "| Bottom line | Confidence | Main limitation |\n| --- | --- | --- |\n\n"
     "| Finding | Creditor impact | Confidence |\n| --- | --- | --- |\n\n"
+)
+
+
+# Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
+FORECAST_BLOCK = (
+    f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
+    "one fenced json block and no other fence. You state "
+    "inputs only; Python computes every forecast figure, so put no forecast figure in the block. "
+    '`base` holds exactly these ten operands in USD millions, each `{"amount": "<decimal>", '
+    '"reason": null}` copied exactly as CP-1 prints it (outflows as positive magnitudes), or '
+    '`{"amount": null, "reason": "<why CP-1 does not state it>"}`: '
+    f"{', '.join(cp2g.OPERAND_METRIC)}. `base_drivers` is the method's base-case driver "
+    "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
+    "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
+    "`category`, `rationale` and `limitation`). `downside_shock` is "
+    '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}` from the CP-2A '
+    "scenario, or null when no shock was supplied. `years` is three consecutive fiscal years, each "
+    '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
+    "`scope_limits` is a list of text limits. Set `schema_version` to "
+    f"`{cpos_forecast.SCHEMA_VERSION}`.\n\n"
 )
 
 
@@ -739,6 +769,10 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting; retained is the res
         )
         for m in ordered
     }
+    forecast = {"CP-1", "CP-2G"} <= set(ordered)
+    if forecast:
+        head, mark, method = texts["CP-2G"].partition(METHOD_MARK.encode())
+        texts["CP-2G"] = head + FORECAST_BLOCK.encode() + mark + method
     guesses = {key: guess_kind(name, pages) for key, (name, pages) in covers.items()}
     items = expectations(
         ordered, tuple(guesses.values()), settings, edges_for(ordered), omitted=omitted
@@ -766,6 +800,7 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting; retained is the res
             for m, text in texts.items()
         },
         layout=layout,
+        publish_forecast=forecast,
         execution="live-provider",
         max_attempts=1,
         provider_cap_usd=Decimal(cap),

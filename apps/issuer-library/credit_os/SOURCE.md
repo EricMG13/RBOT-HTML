@@ -104,6 +104,7 @@ New file `web/calendar.js` (pure `eventTable`, `eventOrder`, `orderEvents`; test
 | --- | --- | --- |
 | `web/views.js` | `calendarRun`/`calendarSections` replaced by `eventsOutput`, `hedgesOutput`, `calendarRun` (first run with the source) and `calendarSections`; the `W-Calendar` branch of `workspaceView` renders the run's own CP-1A event table, or the hedge chart only when a CP-2E output exists and carries a `hedges` visual | the `pins['CP-1A']` lookup tied the calendar to one pinned legacy run |
 | `web/views.js` | `availability` says `Not run in this run` where it said `No output found` (module absent from the run) | navigator wording; all 20 `catalog.json` modules already sit in the `groups` list |
+| `web/views.js` | `unavailableView` body for a module with no entry now ends `The run did not produce this module.`, where it said `That alone does not show the module was not run or not applicable.` | the old sentence contradicted the `Not run in this run` heading (final review L2) |
 | `web/screen.js` | `eventTimeline(id, table)` rewritten: ordered by `orderEvents`, row text shown as retained, columns labelled from the table headers; the five hard-coded TDG dates and the FY / combined split removed; `renderContent` uses it for the pinned CP-1A `events` section only when that section holds an event table | the fixed `order` map only fit one run's table |
 | `web/static-boot.js` | `calendar.js` added first in the script list | views.js and screen.js call its functions |
 
@@ -125,3 +126,12 @@ Task 5 edit: `REPO` also resolves to `credit_os`'s parent when that folder holds
 | `web/index.html` | Rail link "Run activity" (`#CP-OS/activity`, `icons/activity.svg`) | navigation |
 
 Task 8 fix: `web/static-boot.js` no longer defaults `activity` to an empty list. `window.DESIGN_ACTIVITY` is `null` unless `CREDIT_OS_DATA.activity` holds arrays `excluded` and `issues`; the catalogue/workspace check now names what is missing (`catalogue`, `workspace`) and activity is read apart, so a data file that lacks only `activity` keeps the rest working. `web/views.js` `activityView(null)` says Run activity could not be read, never the all-clear.
+
+## Task 9 fix: a model shows under the run folder it was delivered in (R25)
+
+A launcher run's folder is usually not its run ID (`--out runs/my-first-run`), so a published forecast was listed under no run.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `store.py` | New `run_folder_of(folder)` (the `x` of `runs/<x>/deliveries/<id>`); `read_model` adds `runFolder`; `run_shows` also accepts a run whose folder equals it | match a model to the run folder that holds its delivery, not only to the run ID in its `view.json` |
+| `web/views.js` | `runModels` adds `m.runFolder===run.folder`; `modelOwnRun` accepts `contexts[key].folder===model.runFolder` | same rule in the page, with the same issuer-key check |

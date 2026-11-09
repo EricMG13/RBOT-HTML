@@ -987,6 +987,12 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
         sources.extend(publication.sources)
         files.update(publication.files)
         metadata["CP-MODEL"] = {t.table_id: (t.title, "table") for t in publication.module.tables}
+    if request.forecast:
+        from deploy_workflow.owners.cpos_forecast import model_files
+
+        if not {"CP-1", "CP-2G"} <= set(request.handoffs):
+            raise ValueError("markdown_forecast: CP-1 and CP-2G handoffs required")
+        files.update(model_files(files["CP-1.md"], files["CP-2G.md"]))
     entries: dict[str, list[Binding]] = {m.module_id: [] for m in module_views}
     used: set[tuple[str, str]] = set()
     source_of: dict[tuple[str, str], str] = {}  # typed chart copy -> its source table
@@ -1325,6 +1331,7 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
         "scope": layout.scope,
         "analytical_runtime_executed": False,
         "cp_model_published": request.model is not None,
+        **({"cp_forecast_published": True} if request.forecast else {}),
         "excel_output": False,
         "files": {name: hashlib.sha256(raw).hexdigest() for name, raw in files.items()},
     }

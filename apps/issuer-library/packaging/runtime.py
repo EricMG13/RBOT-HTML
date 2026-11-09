@@ -118,6 +118,11 @@ def bundle(target: Path, architecture: str | None) -> None:
         shutil.copytree(
             ROOT / name, engine / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
         )
+    # store.REPO is engine/ in the package; the store reads the visualisation catalogue from it.
+    (engine / "docs/visualisations").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(
+        ROOT / "docs/visualisations/catalogue.csv", engine / "docs/visualisations/catalogue.csv"
+    )
     # A paid run needs a ruling the person writes here; none is shipped (docs/COPILOT.md).
     (engine / "docs/rulings").mkdir(parents=True, exist_ok=True)
     if architecture is None:

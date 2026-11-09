@@ -2371,6 +2371,12 @@ def shown_models(
     return shown, issues
 
 
+def run_folder_of(folder: str) -> str | None:
+    """x of a runs/<x>/deliveries/<id> folder, else None."""
+    parts = PurePosixPath(folder).parts
+    return parts[1] if len(parts) == 4 and parts[0] == "runs" and parts[2] == "deliveries" else None
+
+
 SourcesOf = Callable[[str, dict[str, Any]], tuple[list[dict[str, Any]], list[str]]]
 
 
@@ -2434,6 +2440,7 @@ def read_model(
         "mode": mode if isinstance(mode, str) else None,
         "qualification": qualification if isinstance(qualification, str) else None,
         "runId": run_id if isinstance(run_id, str) else None,
+        "runFolder": run_folder_of(folder),
         "scope": text_or_none(delivery.get("scope")),
         "inputContract": text_or_none(delivery.get("input_contract")),
         "revisionNote": text_or_none(delivery.get("presentation_repair")),
@@ -2471,7 +2478,8 @@ def run_shows(
         if key is None:
             return False
         held = {route for route, run in runs.items() if run["issuerKey"] == key}
-        if any(runs[route]["folder"] == identity["run_id"] for route in held):
+        own = (identity["run_id"], run_folder_of(folder))
+        if any(runs[route]["folder"] in own for route in held):
             return True
         return any(row["run"] in held for row in sources_of(folder, delivery)[0])
     except MANIFEST_ERRORS:

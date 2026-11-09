@@ -26,6 +26,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -43,6 +44,7 @@ from deploy_vii.registry import idle_statuses, plan
 from deploy_vii.render import render
 from deploy_vii.report_view import navigator
 from deploy_workflow import platform_io
+from deploy_workflow.owners import cpos_forecast
 from deploy_workflow.handoff_delivery import (
     HEADINGS,
     DeliveryRequest,
@@ -86,6 +88,7 @@ class HandoffPlan(Contract):
     instructions: dict[str, HandoffInput]
     retained_handoffs: dict[str, RetainedHandoff] = Field(default_factory=dict)
     model: ModelDelivery | None = None
+    publish_forecast: bool = Field(default=False, exclude_if=lambda v: not v)
     layout: MarkdownLayout | None = None
     execution: Literal["host-session", "retained-response-replay", "synthetic", "live-provider"]
     max_attempts: int = Field(default=2, ge=1, le=3)
@@ -365,6 +368,10 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 "cpos_layout: route selected modules to unique blocks of the requested pathway"
             )
     ordered = tuple(m for m in planned if m != "CP-MODEL")
+    if request.publish_forecast and (
+        request.layout is None or not {"CP-1", "CP-2G"} <= set(ordered)
+    ):
+        raise ValueError("cpos_forecast: a forecast needs a layout and the CP-1 and CP-2G modules")
     if set(request.instructions) != set(ordered):
         raise ValueError("cpos_instructions: exactly one pinned instruction per analytical module")
     if set(request.retained_handoffs) - set(ordered):
@@ -384,7 +391,15 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
         model_inputs["forecast_exact"] = request.model.forecast_exact
     model_raws = _pinned_inputs(manifest.parent, model_inputs)
     identity = request.model_dump(
-        mode="json", exclude={"sources", "instructions", "retained_handoffs", "model", "layout"}
+        mode="json",
+        exclude={
+            "sources",
+            "instructions",
+            "retained_handoffs",
+            "model",
+            "layout",
+            "publish_forecast",
+        },
     )
     directory.mkdir(parents=True, exist_ok=True)
     with _single_writer(directory):
@@ -428,6 +443,18 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 append_event(events, "module_accepted", module=module_id)
             if on_handoff is not None:
                 on_handoff(task, raw)
+        forecast, failure = request.publish_forecast, None
+        if forecast:
+            try:
+                cpos_forecast.model_files(handoffs["CP-1"], handoffs["CP-2G"])
+            except ValueError as error:
+                # Fail-open, by design and only for ValueError (the inputs block is missing or
+                # invalid): the report is complete without the forecast, so the run still
+                # delivers, and the reason is logged here, in the completion record and on stderr.
+                forecast, failure = False, str(error)
+                print(f"Model not published: {failure}", file=sys.stderr)
+                if events is not None:
+                    append_event(events, "model_not_published", reason=failure)
         if events is not None:
             append_event(events, "delivery_started")
         delivery_request = DeliveryRequest(
@@ -437,6 +464,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 for m in (ordered if request.layout is not None else ("CP-1", "CP-1A", "CP-2"))
             },
             layout=request.layout,
+            forecast=forecast,
             module_execution=_module_execution(ordered, retained, request)
             if request.layout is not None
             else None,
@@ -493,6 +521,8 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             "modules": selected,
             "module_execution": _module_execution(ordered, retained, request),
             "cp_model_published": request.model is not None,
+            "cp_forecast_published": forecast,
+            "forecast_failure": failure,
             "delivery_manifest_sha256": manifest_id,
             "report_sha256": _sha(report.read_bytes()),
         }

@@ -46,6 +46,7 @@ def offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     for name in ["src", "docs/reuse/selected-methods", "docs/visualisations", "prompts"]:
         (root / name).mkdir(parents=True)
         (root / name / "keep.txt").write_text("x")
+    (root / "docs/visualisations/catalogue.csv").write_text("id\nV1\n")
     cache.mkdir()
     downloaded: list[str] = []
 
@@ -150,6 +151,8 @@ def test_the_package_ships_the_static_library_and_its_two_windows_wrappers(
         if p.is_file()
     )
     assert shipped == ["catalog.json", "store.py", "web/index.html"]  # Not the node tests.
+    # store.REPO is engine/ in the package, so visual_catalogue() reads this exact path.
+    assert (engine / "docs/visualisations/catalogue.csv").read_text() == "id\nV1\n"
     assert not (engine / "static").exists()
     assert not (engine / "bridge.py").exists()  # The lean package has no server bridge.
     assert list((engine / "docs/rulings").iterdir()) == []  # No ruling is shipped.

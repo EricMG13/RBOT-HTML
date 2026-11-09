@@ -161,6 +161,7 @@ class DeliveryRequest(Contract):
     run: Run
     handoffs: dict[str, HandoffInput]
     model: ModelDelivery | None = None
+    forecast: bool = Field(default=False, exclude_if=lambda v: not v)
     layout: MarkdownLayout | None = None
     module_execution: (
         dict[str, Literal["host-session", "retained-response-replay", "synthetic", "live-provider"]]
