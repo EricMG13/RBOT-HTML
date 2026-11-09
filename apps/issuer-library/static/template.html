@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Issuer Library</title>
+<style>/*FONTS*/
+/*STYLE*/</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to issuer runs</a>
+<div class="app-shell library-shell" data-shell="direction-c">
+<nav class="icon-rail" aria-label="Library destinations">
+<div class="brand-mark" aria-hidden="true">IL</div>
+<div class="rail-dests">
+<a class="rail-btn" href="#main" aria-current="page" aria-label="Issuer runs" title="Issuer runs"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></a>
+<a class="rail-btn" href="#screening" aria-label="Search and filter runs" title="Search and filter runs"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5h18l-7 8v6l-4 2v-8Z"/></svg></a>
+</div>
+</nav>
+<aside class="navigator sidebar" aria-label="Library navigation">
+<header class="nav-head">
+<div class="logo-block"><img class="logo-img" alt="State Street Investment Management" src="/*LOGO*/"><span class="logo-word">Issuer Library</span></div>
+<h2>Issuer library</h2><p class="muted">Completed runs on the current methodology</p>
+</header>
+<p class="eyebrow">WORKSPACE</p>
+<button id="all-runs" class="nav-choice active" type="button">All runs <span id="all-count"></span></button>
+<button id="latest-only" class="nav-choice" type="button">Latest per issuer <span id="latest-count"></span></button>
+<div class="sidebar-heading"><p class="eyebrow">ISSUERS</p><span id="issuer-count"></span></div>
+<div id="issuer-nav"></div>
+<div class="sidebar-note"><span class="note-mark" aria-hidden="true">i</span><strong>A dated view of the evidence</strong><p>Each run keeps its own evidence date. Automated checks are not analytical review.</p></div>
+</aside>
+<main id="main" class="workbench" tabindex="-1">
+<header class="call-band library-band"><div class="call-top"><h2>Research library</h2><span class="tag">LOCAL FILE</span><span id="build-date" class="library-build-date num"></span></div><p class="call-note">Open the original deliverables and module handoffs of completed runs.</p></header>
+<div class="view-root">
+<div class="page-head page-heading"><div><p class="eyebrow">ISSUER LIBRARY / CURRENT METHODOLOGY</p><h1>Issuer runs</h1><p class="intro">Only runs that CP-OS completed with a verified report, and in which every module ran on the current methodology.</p></div></div>
+<div id="library-note" class="banner dataset-note" role="note"></div>
+<section id="screening" class="block screening" aria-label="Search and filter runs">
+<header class="block-head"><h2>Find a run</h2><span class="meta">Combined filters</span></header>
+<div class="search-row"><div class="search-wrap"><span aria-hidden="true">⌕</span><label class="sr-only" for="search">Search issuer, run, pathway or module</label><input id="search" type="search" placeholder="Search issuer, run, pathway or module…" autocomplete="off"><kbd aria-hidden="true">/</kbd></div><button id="clear" class="text-button" type="button">Reset filters</button></div>
+<div class="filters">
+<label>Pathway<select id="pathway"><option value="">All pathways</option></select></label>
+<label>Model<select id="model"><option value="">All models</option></select></label>
+<label>Evidence date<select id="latest"><option value="">All dates</option><option value="latest">Latest per issuer</option></select></label>
+</div>
+</section>
+<section class="block results-panel" aria-label="Run results"><div class="block-head results-bar"><p id="results-count" role="status" aria-live="polite"></p><span>Evidence date is the run's as-of date, not when it ran</span></div>
+<div class="table-scroll" role="region" aria-label="Issuer runs table; scroll horizontally for all columns" tabindex="0"><table><caption class="sr-only">Completed issuer runs on the current methodology</caption><thead><tr>
+<th scope="col" data-sort="issuer_name" aria-sort="none"><button type="button">Issuer / run <span aria-hidden="true">↕</span></button></th>
+<th scope="col" data-sort="as_of" aria-sort="none"><button type="button">Evidence date <span aria-hidden="true">↕</span></button></th>
+<th scope="col">Pathway</th>
+<th scope="col">Model</th>
+<th scope="col" data-sort="started_at" aria-sort="none"><button type="button">Run on <span aria-hidden="true">↕</span></button></th>
+<th scope="col" data-sort="spend" aria-sort="none"><button type="button">Spend <span aria-hidden="true">↕</span></button></th>
+<th scope="col">Report</th>
+</tr></thead><tbody id="run-rows"></tbody></table></div>
+<div id="empty-state" class="empty-state" hidden></div>
+<p class="table-footnote">Select an issuer to read its module summaries. Reports and handoffs open as their original files in a new tab.</p></section>
+<section id="run-detail" class="block run-detail" aria-label="Selected run details" tabindex="-1" hidden></section>
+<details id="not-shown" class="block not-shown"><summary id="not-shown-summary"></summary><div class="table-scroll"><table><caption class="sr-only">Run folders not shown, with the reason</caption><thead><tr><th scope="col">Run folder</th><th scope="col">Why it is not shown</th></tr></thead><tbody id="not-shown-rows"></tbody></table></div></details>
+<footer class="page-footer"><span>ISSUER LIBRARY <span aria-hidden="true">/</span> LOCAL FILE</span><span id="footer-note"></span></footer>
+</div></main></div>
+<noscript>The library requires JavaScript. Completed runs remain in the workspace's runs folder.</noscript>
+<script id="library-data" type="application/json">/*DATA*/</script><script>/*LOGIC*/
+/*APP*/</script>
+<!-- Font license: /*LICENSE*/ -->
+</body></html>
