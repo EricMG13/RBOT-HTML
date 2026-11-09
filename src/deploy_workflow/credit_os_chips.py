@@ -11,7 +11,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, NamedTuple, TypedDict, cast
 
 EXCERPT = 600
 NOT_SUPPLIED = "Not supplied"
@@ -26,6 +26,7 @@ PAGE = re.compile(
 # Register letters exclude A, B, H and Q, which also open rating grades ("B2"), halves and quarters.
 CODE = r"[CD-GI-PR-Z]\d{1,2}"
 TRAILING = re.compile(rf"[.;]\s+({CODE}(?:\s*[,;]\s*{CODE})*)\.?\s*$")
+PERIOD_HEADER = re.compile(r"period|year|date", re.IGNORECASE)
 SENTENCE_END = re.compile(r"[.;]\s")
 CLAIM_HEADERS = ("finding", "bottom line")
 
@@ -87,8 +88,9 @@ def page_locator(match: re.Match[str], last_key: str | None) -> Locator:
     return locator("issuer_page", source=key, page=first, page_end=last)
 
 
-def scan(text: str) -> list[tuple[int, Locator]]:
-    """Every citation in ``text`` with its position; what no pattern matches is not guessed."""
+def scan(text: str, row_key: str | None = None) -> list[tuple[int, Locator]]:
+    """Every citation in ``text`` with its position; what no pattern matches is not guessed.
+    ``row_key`` is the source key the row itself names, for a page with no key of its own."""
     found: list[tuple[int, Locator]] = []
     for m in BRACKET.finditer(text):
         found.append((m.start(), locator("upstream", module=m[1], codes=split_codes(m[2]))))
@@ -99,7 +101,7 @@ def scan(text: str) -> list[tuple[int, Locator]]:
             last_key = None
         last_key = m["key"] or last_key
         previous = m.end()
-        found.append((m.start(), page_locator(m, last_key)))
+        found.append((m.start(), page_locator(m, last_key or row_key)))
     if (at := text.find(NOT_SUPPLIED)) >= 0:
         found.append((at, locator("gap", label=NOT_SUPPLIED)))
     if (tail := TRAILING.search(text)) and not BRACKET.search(text[tail.start(1) :]):
@@ -144,9 +146,14 @@ def read_pages(raw: bytes) -> tuple[dict[int, str], str | None]:
     return pages, None
 
 
-def numeric_cell(cells: list[str]) -> str | None:
-    """The first purely numeric cell: the number is the claim for every page the row cites."""
-    return next((c.strip() for c in cells if NUMBER.fullmatch(c.strip())), None)
+def numeric_cell(cells: list[str], headers: list[str]) -> str | None:
+    """The first purely numeric cell outside a period, year or date column: the number is the
+    claim for every page the row cites."""
+    for i, cell in enumerate(cells):
+        label = headers[i] if i < len(headers) else ""
+        if NUMBER.fullmatch(cell.strip()) and not PERIOD_HEADER.search(label):
+            return cell.strip()
+    return None
 
 
 def bound_quotes(cell: str, found: list[tuple[int, Locator]]) -> dict[int, str]:
@@ -159,15 +166,26 @@ def bound_quotes(cell: str, found: list[tuple[int, Locator]]) -> dict[int, str]:
     return bound
 
 
+def number_pattern(quote: str) -> str:
+    """A number as the page may print it: thousands commas only between 3-digit groups; a
+    negative also as its bracketed accounting form; a positive never as either."""
+    text = quote.strip().replace(",", "").replace("−", "-")
+    negative = text.startswith("-")
+    whole, _, fraction = text.lstrip("-").partition(".")
+    body = ""
+    for i, digit in enumerate(whole):
+        body += digit + (",?" if i < len(whole) - 1 and (len(whole) - i - 1) % 3 == 0 else "")
+    if fraction:
+        body += r"\." + fraction
+    if negative:
+        return rf"(?:[-−]{body}|\({body}\))"
+    return rf"(?<![-−(]){body}"
+
+
 def quote_span(quote: str, text: str) -> tuple[int, int] | None:
-    """Where ``quote`` occurs in ``text``. A number matches whole, ignoring thousands commas; a
-    negative also matches its accounting form in brackets."""
+    """Where ``quote`` occurs in ``text``; a number matches as ``number_pattern`` says."""
     if NUMBER.fullmatch(quote.strip()):
-        digits = quote.strip().replace(",", "").replace("−", "-")
-        body = ",?".join(re.escape(ch) for ch in digits.lstrip("-"))
-        sign = r"[-−]" if digits.startswith("-") else ""
-        form = rf"(?:{sign}{body}|\({body}\))" if sign else body
-        found = re.search(rf"(?<!\d)(?<!\d,){form}(?!\d)(?!\.\d)", text)
+        found = re.search(rf"(?<!\d)(?<!\d,){number_pattern(quote)}(?!\d)(?!\.\d)", text)
     else:
         found = re.search(re.escape(quote), text)
     return found.span() if found else None
@@ -218,10 +236,10 @@ class Pages:
 
     @staticmethod
     def read(path: Path) -> tuple[dict[int, str], str | None, str | None]:
-        if not path.is_file():
-            return {}, None, "source text file not found"
         try:
             raw = path.read_bytes()
+        except FileNotFoundError:
+            return {}, None, "source text file not found"
         except OSError as error:
             return {}, None, f"source text unreadable: {type(error).__name__}: {error}"
         pages, problem = read_pages(raw)
@@ -281,29 +299,34 @@ def other_chip(loc: Locator, line: int, module: str) -> dict[str, Any]:
     return chip(loc, line, reason=reason)
 
 
-def chips_for_cells(
-    cells: list[str],
-    line: int,
-    module: str,
-    pages: Pages,
-    claim: bool = False,
-) -> list[dict[str, Any]]:
+class Row(NamedTuple):
+    line: int
+    cells: list[str]
+    headers: list[str]  # empty for a paragraph
+    claim: bool
+
+
+def chips_for_cells(row: Row, module: str, pages: Pages) -> list[dict[str, Any]]:
     """Chips of one row or paragraph. A “…” quote is tested only against the page it follows;
-    a numeric cell is tested against every page of the row. A claim row that cites nothing gets
-    one ``no page`` gap."""
-    number = numeric_cell(cells)
+    a numeric cell is tested against every page of the row. A bare page takes the source key the
+    row's first cell names. A claim row that cites nothing gets one ``no page`` gap."""
+    number = numeric_cell(row.cells, row.headers)
+    first = row.cells[0].strip()
+    named = first if row.headers and first in pages.inv else None
     result = []
-    for cell in cells:
-        found = scan(cell)
+    for index, cell in enumerate(row.cells):
+        found = scan(cell, named if index else None)
         quotes = bound_quotes(cell, found)
         for pos, loc in found:
             if loc["kind"] == "issuer_page":
-                result.append(issuer_chip(loc, line, quotes.get(pos) or number, pages))
+                result.append(issuer_chip(loc, row.line, quotes.get(pos) or number, pages))
             else:
-                result.append(other_chip(loc, line, module))
-    if claim and not result:
+                result.append(other_chip(loc, row.line, module))
+    if row.claim and not result:
         result.append(
-            chip(locator("gap", label=NO_PAGE), line, reason="the row cites no page or register")
+            chip(
+                locator("gap", label=NO_PAGE), row.line, reason="the row cites no page or register"
+            )
         )
     return result
 
@@ -329,15 +352,15 @@ def chips_for_output(
         if section["level"] == 2:
             findings = section["heading"].strip().lower().startswith("findings")
         for block in section["blocks"]:
-            claim = False
             if block["type"] == "table":
-                claim = is_claim_table(findings, section["heading"], block["headers"])
-                units = [(r["line"], r["cells"]) for r in block["rows"]]
+                head = block["headers"]
+                claim = is_claim_table(findings, section["heading"], head)
+                rows = [Row(r["line"], r["cells"], head, claim) for r in block["rows"]]
             else:
-                units = [(block["line"], [block["text"]])]
-            for line, cells in units:
-                if found := chips_for_cells(cells, line, module, pages, claim):
-                    result[f"{output_id}:{line}"] = found
+                rows = [Row(block["line"], [block["text"]], [], False)]
+            for row in rows:
+                if found := chips_for_cells(row, module, pages):
+                    result[f"{output_id}:{row.line}"] = found
     return result
 
 

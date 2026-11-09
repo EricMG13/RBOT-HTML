@@ -374,3 +374,67 @@ def test_a_bare_page_does_not_inherit_a_key_from_an_earlier_sentence():
     got = parse_locators("K, page:118. Proxy page:7 says so.")
     assert got[0] == loc("issuer_page", "K", 118)
     assert got[1]["kind"] == "gap" and got[1]["page"] == 7
+
+
+# --- Fix round 2: R6 (stat errors), R8, R9 -----------------------------------------------------
+
+
+def test_an_overlong_inventory_name_becomes_the_chip_reason(tmp_path):
+    run, inv = one_run(tmp_path)
+    inv["K"] = ("x" * 300 + ".jsonl", inv["K"][1])
+    (got,) = run_chips(run, inv, ("a", "1", "K, page:10"))["x/CP-1.md:4"]
+    assert got["reason"] and got["hash_matches_inventory"] is None
+
+
+def test_an_unsearchable_source_text_folder_becomes_the_chip_reason(tmp_path):
+    run, inv = one_run(tmp_path)
+    folder = run / "source-text"
+    folder.chmod(0o600)
+    try:
+        if os.access(folder / "K.jsonl", os.R_OK):
+            pytest.skip("permissions are not enforced for this user")
+        (got,) = run_chips(run, inv, ("a", "1", "K, page:10"))["x/CP-1.md:4"]
+    finally:
+        folder.chmod(0o700)
+    assert got["reason"]
+
+
+def test_a_bare_page_inherits_the_key_named_by_the_rows_first_cell(tmp_path):
+    run, inv = one_run(tmp_path)
+    got = run_chips(run, inv, ("K", "pages 10, pages 20", "n/a"), ("Z", "page 10", "n/a"))
+    first, second = got["x/CP-1.md:4"]
+    assert (first["kind"], first["source"], first["page"]) == ("issuer_page", "K", 10)
+    assert (second["kind"], second["source"], second["page"]) == ("issuer_page", "K", 20)
+    (stray,) = got["x/CP-1.md:5"]
+    assert stray["kind"] == "gap" and stray["label"] == "p.10 · no key"
+
+
+def thousands_pages():
+    return (
+        b'{"page": 1, "text": "odd 1,6,5 and 16,5 here"}\n'
+        b'{"page": 2, "text": "loss -165 and (165) here"}\n'
+        b'{"page": 3, "text": "gain 165 here"}\n'
+    )
+
+
+def test_thousands_commas_only_in_three_digit_groups(tmp_path):
+    run, inv = one_run(tmp_path, pages=thousands_pages())
+    (got,) = run_chips(run, inv, ("a", "165", "K, page:1"))["x/CP-1.md:4"]
+    assert got["quote_found"] is False
+
+
+def test_a_positive_number_does_not_match_a_negative_or_bracketed_value(tmp_path):
+    run, inv = one_run(tmp_path, pages=thousands_pages())
+    (got,) = run_chips(run, inv, ("a", "165", "K, page:2"))["x/CP-1.md:4"]
+    assert got["quote_found"] is False
+    (plain,) = run_chips(run, inv, ("a", "165", "K, page:3"))["x/CP-1.md:4"]
+    assert plain["quote_found"] is True
+
+
+def test_a_period_column_never_becomes_the_quote(tmp_path):
+    run, inv = one_run(tmp_path)
+    sections = table(("2024", "1158", "K, page:10"))
+    sections[0]["blocks"][0]["headers"] = ["Fiscal year", "Cash interest", "Basis"]
+    got = chips_for_output(run, "x/CP-1.md", "CP-1", sections, inv)
+    (found,) = got["x/CP-1.md:4"]
+    assert found["quote"] == "1158" and found["quote_found"] is True
