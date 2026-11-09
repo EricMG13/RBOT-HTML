@@ -31,6 +31,7 @@ LISTED = {".md", ".txt", ".pdf", ".html", ".htm", ".json", ".csv", ".xlsx"}
 RUN_FILE_LIMIT = 5000
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 _FISCAL_YEAR = re.compile(r"FY(\d{4})")
+_DATED_YEAR = re.compile(r"FY(\d{4}) / (\d{4}-\d{2}-\d{2})")
 _ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _PERIOD = re.compile(r"^(q[1-4]|h[12]|fy)-\d{4}$")
 _PERIOD_KINDS = {"f": "Annual", "h": "Half-year", "q": "Quarterly"}  # By first letter.
@@ -65,14 +66,20 @@ def cells(line: str) -> list[str]:
 
 
 def period_order(cell: str) -> tuple[int, ...] | None:
-    """Sort key of a Period cell: ``FY2024`` or ``2024-09-30``; None for any other text."""
+    """Sort key of a Period cell: ``FY2024``, ``2024-09-30`` or ``FY2024 / 2024-09-30`` (ordered
+    by its date); None for any other text, an impossible date, or a year that disagrees."""
     year = _FISCAL_YEAR.fullmatch(cell)
     if year:
         return (1, int(year[1]))
-    date = _ISO_DATE.fullmatch(cell)
-    if date:
-        return (2, int(date[1]), int(date[2]), int(date[3]))
-    return None
+    both = _DATED_YEAR.fullmatch(cell)
+    date = _ISO_DATE.fullmatch(both[2] if both else cell)
+    if date is None or (both and both[1] != date[1]):
+        return None
+    try:
+        day = datetime(int(date[1]), int(date[2]), int(date[3]))
+    except ValueError:
+        return None
+    return (2, day.year, day.month, day.day)
 
 
 def chart_row(lines: list[str], chart: str) -> tuple[dict[str, str], int] | None:
