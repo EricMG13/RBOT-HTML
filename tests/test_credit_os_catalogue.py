@@ -1,6 +1,7 @@
 """The Credit OS catalogue over synthetic library runs (tests/library_fixtures.py). Expected values
 are written here from the fixture text, not read back from the code under test."""
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -40,9 +41,67 @@ CHARTS = f"""
 {LIQUIDITY}
 """
 CONTEXT = {
-    "identity": {"ticker": "NBG", "sector": "Industrials", "country": "United States"},
-    "run": {"reporting_currency": "USD", "current_period": "fy-2024"},
+    "schema": "context/1",
+    "run": {
+        "run_type": "research",
+        "pathway": "credit_snapshot",
+        "case_kind": "public",
+        "as_of": "2025-03-31",
+        "cutoff": "",
+        "current_period": "fy-2024",
+        "prior_period": "fy-2023",
+        "reporting_currency": "USD",
+    },
+    "identity": {
+        "issuer_name": "Northbridge Synthetic Group",
+        "issuer_id": "nbg",
+        "borrower_name": "",
+        "parent_name": "",
+        "guarantors": [],
+        "aliases": [],
+        "listed_equity": True,
+        "ticker": "NBG",
+        "sector": "Industrials",
+        "country": "United States",
+        "sponsor": "",
+    },
+    "deal_terms": [],
+    "quotes": [],
+    "ratings": [],
+    "valuation": {
+        "peer_source": "cp_dr_public",
+        "basis": "auto",
+        "issuer_market": {
+            "market_cap_m": "",
+            "net_debt_m": "",
+            "ev_m": "",
+            "ebitda_basis": "LTM",
+            "as_of": "",
+            "source": "",
+        },
+        "peers": [],
+        "precedents": [],
+        "user_multiple": {"value": "", "basis": "LTM", "rationale": ""},
+    },
+    "assumptions": {k: None for k in ("cp2a", "cp2d", "cp2e", "cp3c", "cp3d", "cp4c")},
+    "attachments": {
+        "portfolio_workbook": False,
+        "prior_case": False,
+        "management_bridge": False,
+        "legal_documents": "executed",
+    },
+    "research_questions": [],
 }
+
+
+def pin_context(run_dir: Path, raw: bytes, pinned_sha: str | None = None) -> None:
+    """Pin the context as CP-OS does: workflow.json sources["context"], bytes at inputs/<sha256>."""
+    digest = hashlib.sha256(raw).hexdigest()
+    (run_dir / "inputs").mkdir(exist_ok=True)
+    (run_dir / "inputs" / (pinned_sha or digest)).write_bytes(raw)
+    workflow = json.loads((run_dir / "workflow.json").read_text())
+    workflow["sources"] = {"context": {"path": "context.json", "sha256": pinned_sha or digest}}
+    (run_dir / "workflow.json").write_text(json.dumps(workflow))
 
 
 def built(workspace: Path) -> dict:
@@ -99,7 +158,7 @@ def test_not_supplied_is_absent(tmp_path):
 
 def test_identity_from_context(tmp_path):
     run_dir = make_run(tmp_path, "run-a")
-    (run_dir / "context.json").write_text(json.dumps(CONTEXT))
+    pin_context(run_dir, json.dumps(CONTEXT).encode())
     run = built(tmp_path)["real"][0]
     assert (run["issuer"], run["name"], run["sector"], run["country"]) == (
         "NBG",
@@ -115,6 +174,24 @@ def test_identity_from_context(tmp_path):
     )
     assert run["summary"] == "CP-1 bottom line."
     assert run["gaps"] == ["Synthetic fixture only."]
+
+
+def test_context_not_matching_its_pin_is_an_issue_with_empty_fields(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    pin_context(run_dir, json.dumps(CONTEXT).encode(), pinned_sha="0" * 64)
+    result = built(tmp_path)
+    run = result["real"][0]
+    assert run["issuer"] == "NBG"  # issuer_id upper, not the unpinned ticker
+    assert (run["sector"], run["country"], run["currency"], run["period"]) == ("", "", "", "")
+    assert any(i.startswith("run-a: context not used") for i in result["issues"])
+
+
+def test_context_the_rules_refuse_is_an_issue_with_empty_fields(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    pin_context(run_dir, json.dumps({**CONTEXT, "schema": "other"}).encode())
+    result = built(tmp_path)
+    assert result["real"][0]["sector"] == ""
+    assert any("context not used" in i for i in result["issues"])
 
 
 def test_run_without_context_leaves_fields_empty(tmp_path):
