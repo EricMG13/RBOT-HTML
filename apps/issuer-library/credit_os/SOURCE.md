@@ -175,3 +175,13 @@ R28 (owner, 2026-11-09): part 5 "Analysis" between Findings and Limits.
 | `web/screen.css` | `.analysis-section`, `.analysis-text`; tables reuse `.table-card` (scrolls inside) | R28 |
 | `web/index.html`, `web/screen.js` | the `<main>` landmark id `analysis` becomes `canvas` (skip link and focus calls), freeing `#analysis` for the part | the deep link `#<module>/analysis` scrolls with `getElementById` |
 | `web/static.test.cjs`, `tests/test_library_page_browser.py`, `tests/browser_probe_fits.js` | seven-anchor tests, narrative/register, consumed-section, audit and no-duplicate-id tests; overflow check of the analysis part at 1440 and 1280 | R28 |
+
+## Run report, Phase A (rulings R34, R35, R37, R38, R40)
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `store.py` (Task 1) | new `EVIDENCE_HEADING`, `placements`, `section_words` and `report_fields`; `collect_runs` calls them and stores `placement` on the output record, parallel to its sections | R34 (a section under a heading outside the level-2 skeleton is `audit`), R35 (not established = the Confidence cell starts with `not assessable`), R37 (ancestor evidence rule under `Findings` only), R38 (placement lives on the output record, not on the shared sections) |
+| `web/views.js` (Task 2) | `chipView` marks an `issuer_page` chip with `quote_found: true` as `verified` with `title="Quote found on page"`; `chipsMarkup` skips gap chips other than `Not supplied` (`unresolvedGap`) and ends with one `chip-count` button (`data-gaps`) reading `N citation(s) without a page` | R40: count route and wording; the spec draws no single `no page` chip |
+| `web/screen.js` (Task 2) | `parseRoute` accepts `chip=gaps` only when the key has an unresolved chip; `showInspector(key,'gaps')` lists every unresolved chip with `chipSection`; the document click handler opens it from `[data-gaps]` and records the button as the Esc focus target | R40 |
+| `web/screen.css` (Task 2) | `.chip.verified`, `.chip-count` | R40 |
+| `web/static.test.cjs`, `tests/test_library_page_browser.py`, `tests/browser_probe_gaps.js` (Task 2) | verified, fold and singular tests; browser test for the count click, list size and Esc focus | covers the above |

@@ -324,8 +324,9 @@ function parseRoute() {
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
   const permitted=item&&item.run===context&&(item.output===output||module==='W-Calendar'||module==='W-Overview');
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
-  // A chip index names one of the key's chips; one that is not there opens the row alone.
-  const chip=/^\d+$/.test(params.get('chip')??'')&&Number(params.get('chip'))<(window.CREDIT_OS_DATA?.chips?.[key]?.length||0)?Number(params.get('chip')):null;
+  // A chip index names one of the key's chips, and `gaps` its citations without a page; one that is not there opens the row alone.
+  const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
+  const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':null;
   return {module,output,file,section:selected[0],context,evidence:permitted?key:null,chip:permitted?chip:null};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
@@ -353,9 +354,10 @@ function chipSection(chip,output) {
   return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${chip.file&&chip.source?`<p class="small chip-key">Cited as ${esc(chip.source)}</p>`:''}${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }
 function showInspector(key,chipIndex=null) {
-  const item=evidence.get(key), output=data[item.output], chip=chipIndex===null?null:window.CREDIT_OS_DATA.chips[key][chipIndex];
+  const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
+  const chipHtml=chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
   $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleNames[item.module]&&moduleNames[item.module]!==item.module?`${moduleNames[item.module]} (${item.module})`:item.module)}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${item.fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chip?chipSection(chip,output):''}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(output.file)}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>These are exact retained fields from this historical case. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleNames[item.module]&&moduleNames[item.module]!==item.module?`${moduleNames[item.module]} (${item.module})`:item.module)}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${item.fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(output.file)}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>These are exact retained fields from this historical case. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
   document.querySelectorAll('.chip').forEach(el=>{
     const pressed=el.dataset.chip===key?Number(el.dataset.index)===chipIndex:el.dataset.evidence===key&&chipIndex===null;
@@ -582,6 +584,8 @@ document.addEventListener('click',event=>{
   if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,current.section);}else $('canvas').focus();return;}
   const chip=event.target.closest('[data-chip]');
   if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
+  const gaps=event.target.closest('[data-gaps]');
+  if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,gaps.dataset.gaps,undefined,'gaps');return;}
   const audit=event.target.closest('.audit-open');
   if(audit){openAuditSection(audit);return;}
   const part=event.target.closest('a.section-item');

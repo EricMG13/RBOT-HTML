@@ -130,6 +130,8 @@ const CHIPS = {
   ],
   [`${OUT}:43`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }],
   [`${OUT}:52`]: [{ kind: 'gap', label: 'Not supplied', reason: 'the row says so', codes: [] }, { kind: 'gap', label: 'no page', codes: [] }, { kind: 'gap', label: 'p.145 · no key', codes: [] }],
+  [`${OUT}:53`]: [{ kind: 'gap', label: 'no page', codes: [] }, { kind: 'gap', label: 'p.7 · no key', codes: [] }],
+  [`${OUT}:54`]: [{ kind: 'gap', label: 'Annual p.9 · ambiguous', codes: [] }],
 };
 function report(overrides = {}, modSections = null) {
   const text = read('views.js');
@@ -175,11 +177,29 @@ test('chip labels and avatars follow the data, one chip per dict', () => {
   assert.ok(html.includes('data-chip="run-a/deliveries/d1/CP-1.md:16" data-index="3"') && html.includes('data-evidence="run-a/deliveries/d1/CP-1.md:16"'));
 });
 
-test('gap chips read Not supplied, no page, or the build label, and are dashed', () => {
+test('Not supplied renders as a gap chip; other gaps fold into one count', () => {
   const html = report().chipsMarkup(`${OUT}:52`);
-  for (const label of ['Not supplied', 'no page', 'p.145 · no key']) assert.ok(html.includes(`</span>${label}<span`), label);
-  assert.equal(html.match(/class="chip gap"/g).length, 3);
-  assert.ok(html.includes('<span class="av gap">?</span>') && html.includes('title="the row says so"'));
+  assert.ok(html.includes('</span>Not supplied<span') && html.includes('<span class="av gap">?</span>') && html.includes('title="the row says so"'));
+  assert.equal(html.match(/class="chip gap"/g).length, 1);
+  assert.equal(html.includes('no page<span') || html.includes('no key<span'), false);
+  assert.equal(html.match(/class="chip-count"/g).length, 1);
+  assert.ok(html.includes(`data-gaps="${OUT}:52"`) && html.includes('>2 citations without a page</button>'));
+});
+
+test('a key of only unresolved chips has no gap chip and one count; one reads in the singular', () => {
+  const { chipsMarkup } = report();
+  const two = chipsMarkup(`${OUT}:53`);
+  assert.equal(two.includes('class="chip gap"'), false);
+  assert.equal(two.match(/class="chip-count"/g).length, 1);
+  assert.ok(two.includes('>2 citations without a page</button>'));
+  assert.ok(chipsMarkup(`${OUT}:54`).includes('>1 citation without a page</button>'));
+});
+
+test('a quote found on the page marks the chip verified', () => {
+  const html = report().chipsMarkup(`${OUT}:16`);
+  assert.ok(html.includes('class="chip verified"') && html.includes('title="Quote found on page"'));
+  assert.equal(html.match(/class="chip verified"/g).length, 1);
+  assert.equal(html.includes('chip-count'), false);
 });
 
 test('a key with no chips and no evidence draws nothing', () => {

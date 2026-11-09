@@ -425,6 +425,9 @@ section.part>.part-empty{margin:0}
 .dot.up{background:#5b6a8c}
 .dot.gap{background:transparent;border:1px solid #9aa2b8}
 .chip.gap{border-style:dashed;color:var(--muted)}
+.chip.verified{border-color:#9fc7ac}
+.chip-count{display:inline-flex;align-items:center;height:24px;padding:0 8px;border:1px dashed var(--rule);border-radius:var(--radius-inline);background:transparent;font:500 var(--fs-label)/1 'Red Hat Text',sans-serif;color:var(--muted);white-space:nowrap;cursor:pointer}
+.chip-count:hover{border-color:#b9c0d6;background:var(--quiet)}
 .chip.source-selected{background:var(--selection)!important}
 article.finding{max-width:none;margin:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:6px 28px;padding:16px 0;border-top:1px solid var(--rule);border-bottom:0}
 article.finding:first-of-type{border-top:0;padding-top:4px}

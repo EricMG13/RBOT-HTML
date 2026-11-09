@@ -220,7 +220,8 @@ const shortCode=module=>SHORT_CODES[module]||String(module).replace(/^CP-/,'');
 function chipView(chip,rowModule) {
   if(chip.kind==='issuer_page') {
     const pages=chip.page_end!=null&&chip.page_end!==chip.page?`p.${chip.page}–${chip.page_end}`:`p.${chip.page}`;
-    return {label:pages,av:chip.avatar||chip.source,avClass:'',dot:'',cls:''};
+    const verified=chip.quote_found===true;
+    return {label:pages,av:chip.avatar||chip.source,avClass:'',dot:'',cls:verified?'verified':'',title:verified?'Quote found on page':null};
   }
   if(chip.kind==='upstream') {
     const codes=chip.codes.join(' · ');
@@ -229,14 +230,20 @@ function chipView(chip,rowModule) {
   return {label:chip.label||'no page',av:'?',avClass:'gap',dot:'gap',cls:'gap'};
 }
 const chipSet=chips=>chips.length?`<span class="chips">${chips.join('')}</span>`:'';
-// The "handoff row" chip comes from the evidence key itself; the others from the chips map, by index.
+// A gap chip that is not a plain "Not supplied" is a citation with no page: it is counted, not drawn.
+const unresolvedGap=chip=>chip.kind==='gap'&&chip.label!=='Not supplied';
+const gapCount=n=>`${n} citation${n===1?'':'s'} without a page`;
+// The "handoff row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
 function chipsMarkup(key) {
   const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
   const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" aria-label="Handoff row, line ${item.line}"><span class="av cp">${esc(shortCode(item.module))}</span>L${item.line}<span class="dot row"></span></button>`:'';
+  const gaps=found.filter(unresolvedGap).length;
+  const count=gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
   return chipSet([row,...found.map((chip,index)=>{
-    const view=chipView(chip,item?.module);
-    return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${chip.reason?`title="${esc(chip.reason)}"`:''}><span class="av ${view.avClass}">${esc(view.av)}</span>${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
-  })].filter(Boolean));
+    if(unresolvedGap(chip))return '';
+    const view=chipView(chip,item?.module),title=view.title||chip.reason;
+    return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${title?`title="${esc(title)}"`:''}><span class="av ${view.avClass}">${esc(view.av)}</span>${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
+  }),count].filter(Boolean));
 }
 const MISSING_CELL=/^(|[—–-]|Not supplied)$/i;
 // A cell that says there is no value; it neither makes a column numeric nor stops it being numeric.

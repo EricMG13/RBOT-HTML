@@ -192,6 +192,43 @@ def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width
     assert seen["anchor"]["current"] == "Key numbers" and seen["anchor"]["chipStillThere"] is True
 
 
+GAPS_PROBE = Path(__file__).with_name("browser_probe_gaps.js").read_text(encoding="utf-8")
+# Two citations whose key no inventory knows: each resolves to a gap chip with no page.
+UNKEYED = "\n### Unkeyed citations\n\nThe figure is printed in Z, page:9 and in Y, page:8.\n"
+
+
+def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_returns(tmp_path):
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp1_extra=CITED + REPORT_ROWS,
+        cp1_findings=UNKEYED,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(GAPS_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/head?c=run-a")
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert re.fullmatch(r"\d+ citations? without a page", seen["count"]), seen
+    assert seen["verified"] >= 1 and seen["singleGaps"] == 0
+    opened = seen["open"]
+    assert opened["hidden"] is False and "chip=gaps" in opened["hash"]
+    assert opened["items"] == opened["expected"] >= 1
+    assert opened["focusInInspector"] is True
+    assert seen["escaped"] == {
+        "hidden": True,
+        "focusOnCount": True,
+        "hash": "#CP-1/head?c=run-a",
+    }
+
+
 # A narrative section and a register wider than the canvas, appended to the CP-1 handoff.
 LONG = "A long note that keeps the register wider than the canvas"
 ANALYSIS_ROWS = f"""
