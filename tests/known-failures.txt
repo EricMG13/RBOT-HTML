@@ -1,0 +1,5 @@
+# Failures carried over from EricMG13/final-workflow (tests/nightly-known-failures.txt there).
+# One pytest node id per line; text after '#' is the reason. Remove a line once its test passes.
+tests/model/test_o5_done_when.py::test_the_live_pause_refuses_and_touches_no_environment  # docs/rulings/2026-10-31-context-plan.md missing
+tests/model/test_gate.py::test_only_the_model_testing_ruling_lifts_the_pause  # same
+tests/model/test_gate.py::test_good_ruling_construction_touches_nothing_and_complete_reads_the_three_key_variables_once  # same

@@ -1,6 +1,6 @@
 """Which runs the Issuer Library lists. Synthetic run folders (tests/library_fixtures.py) prove the
-admission rules; one CP-OS run with a fake provider proves the rules accept what CP-OS writes; one
-copy of a retained live run proves the hash chain on real CP-OS output."""
+admission rules; one CP-OS run with a fake provider proves the rules accept what CP-OS writes. The
+check on a retained live run stays in EricMG13/final-workflow, which keeps the retained runs."""
 
 import json
 import os
@@ -425,29 +425,3 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
         "fake-run": "CP-1: not on the current methodology (STEP_CONTRACTS[quality] no longer "
         "selected)"
     }
-
-
-def test_the_hash_chain_holds_on_a_retained_live_run(tmp_path):
-    """Retained data: a copy of a live gpt-6.1-sol run (2026-11-06). Its own recorded method text
-    stands in for the current one, so this proves the completion and delivery checks on real CP-OS
-    output; it says nothing about which methodology is current today."""
-    name = "web-04cd5a5d02ea7d1dea714a8a6632cd21"
-    shutil.copytree(ROOT / "runs" / name, tmp_path / "runs" / name)
-    run_dir = tmp_path / "runs" / name
-
-    def recorded(module):
-        path = run_dir / "instructions" / f"{module}.md"
-        text = path.read_text(encoding="utf-8")
-        return text.split("Selected method, verbatim:\n\n", 1)[1][:-1]
-
-    library = build_library(tmp_path, tmp_path / "library", (recorded, lambda m: []))
-    (run,) = library.runs
-    assert (run["issuer_id"], run["as_of"], run["execution"]["config"]) == (
-        "tdg",
-        "2024-09-30",
-        "sol-medium",
-    )
-    assert run["report"]["sha256"] == (
-        "7bf8a4821cec15071c9ecd72e2191bfdfca28b060d1747b1b4ac004d53bd3c54"
-    )
-    assert [m["summary"] is not None for m in run["modules"]] == [True, True, True]
