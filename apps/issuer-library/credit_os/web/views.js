@@ -47,9 +47,10 @@ function resolveOutput(module,context,file) {
   const entry=moduleEntry(module,context);
   return entry?.outputs.find(id=>data[id].source===file)||entry?.default||null;
 }
+const NO_OUTPUT='No output found';
 function availability(module,context) {
   const entry=moduleEntry(module,context);
-  return !entry?'Not run in this run':entry.outputs.length?'Output available':'Inputs only';
+  return entry?.outputs.length?'Output available':NO_OUTPUT;
 }
 const contextModules=context=>Object.keys(contexts[context].modules).filter(id=>contexts[context].modules[id].outputs.length);
 // One issuer is one issuerKey, whatever names its runs were recorded under; an unrecorded issuer (null) equals nothing.
@@ -97,15 +98,21 @@ function watchFrame(frame,status,loadingText,failedText,link) {
 const isReportRoute=(module,section)=>module==='W-Reports'&&window.DESIGN_WORKSPACE.reports.some(r=>r.id===section);
 function firstSection(module,context) {
   const output=defaultOutput(module,context);
-  return output?modules[output].first:navigationSections(module,context)[0][0];
+  return output?REPORT_PARTS[0][0]:navigationSections(module,context)[0][0];
 }
 const plural=(n,word)=>`${n} ${word}${n===1?'':'s'}`;
-function moduleHead({module,context,output}) {
+// The saved-output selector, the "Used in" link and the parse flag a module's head carries.
+function headTools(module,context,output) {
   const files=moduleEntry(module,context)?.outputs||[],out=output&&data[output];
   const meta=!out?'':files.length>1?`<label class="output-meta output-select">Saved output <select id="output-select">${files.map(id=>`<option value="${esc(data[id].source)}" ${id===output?'selected':''}>${esc(data[id].label)}</option>`).join('')}</select></label>`:`<span class="output-meta">Saved output${out.label===module?'':` · ${esc(out.label)}`}</span>`;
   const used=output?reportsUsing(output):[];
   const usedIn=used.length===1?`<a class="output-meta" href="${routeHref('W-Reports',used[0].id)}">Used in ${esc(reportName(used[0]))}</a>`:used.length?`<a class="output-meta" href="${routeHref('W-Reports','list')}">Used in ${used.length} deliverables</a>`:'';
   const flag=out?.parseError?`<span class="output-meta">Shown unstructured: ${esc(out.parseError)}</span>`:'';
+  return {meta,usedIn,flag};
+}
+function moduleHead({module,context,output}) {
+  if(output&&isAnalytical(module))return ''; // The module report draws its own head.
+  const {meta,usedIn,flag}=headTools(module,context,output);
   return `<div class="module-title"><h2 ${module.startsWith('W-')?'':`title="${esc(module)}"`}>${esc(moduleNames[module])}</h2>${meta}${usedIn}${flag}</div>`;
 }
 function fixtureTable(module,line) {
@@ -124,7 +131,7 @@ function chartIntro(id,v) {
   return `<div class="section-heading"><h2>${esc(v.title)}</h2>${label?`<span>${esc(label)}</span>`:''}</div>${v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>${sourceFooter(`${id}:${v.quote.line}`)}`:''}`;
 }
 const evidenceHref=(id,line)=>routeHref(data[id].module,current?.output===id?current.section:modules[id].first,`${id}:${line}`,data[id].run);
-function comparisonChart(module,v,selection=0) {
+function comparisonChart(module,v,selection=0,chips=false) {
   const table=fixtureTable(module,v.table),selected=table.rows[v.rows?.[selection]??0];
   const selectable=['paired','peers'].includes(v.kind)&&!['CP-4C','CP-2A'].includes(data[module].module);
   const rows=selectable?[selected]:(v.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
@@ -133,7 +140,9 @@ function comparisonChart(module,v,selection=0) {
   const hasNegative=points.some(p=>(chartNumber(p.value)??0)<0);
   return `${chartIntro(module,v)}${selectable&&!v.fixed?`<label class="metric-control">Measure <select id="chart-metric">${v.rows.map((idx,i)=>`<option value="${i}" ${i===selection?'selected':''}>${esc(plain(table.rows[idx].cells[0]))}</option>`).join('')}</select></label>`:''}<div class="horizontal-chart ${hasNegative?'diverging':''}">${points.map((p,i)=>{
     const n=chartNumber(p.value),width=n===null?0:Math.abs(n)/max*100;
-    return `<button class="chart-row" data-evidence="${esc(`${module}:${p.row.line}`)}"><span class="chart-label">${i&&points[i-1].label===p.label?`<span class="sr-only">${esc(p.label)}</span>`:esc(p.label)}${v.columns&&v.kind!=='peers'?`<small>${esc(table.headers[p.column])}</small>`:''}</span><span class="track ${n===null?'missing':''}">${hasNegative?`<span class="zero-rule"></span><i class="series-${p.series} ${n<0?'negative':''}" style="left:${n<0?50-width/2:50}%;width:${width/2}%"></i>`:`<i class="series-${p.series}" style="width:${width}%"></i>`}</span><strong>${/[\p{L}\p{N}]/u.test(String(p.value??''))?esc(p.value):'Not available'}</strong></button>`;
+    const key=`${module}:${p.row.line}`,cells=`<span class="chart-label">${i&&points[i-1].label===p.label?`<span class="sr-only">${esc(p.label)}</span>`:esc(p.label)}${v.columns&&v.kind!=='peers'?`<small>${esc(table.headers[p.column])}</small>`:''}</span><span class="track ${n===null?'missing':''}">${hasNegative?`<span class="zero-rule"></span><i class="series-${p.series} ${n<0?'negative':''}" style="left:${n<0?50-width/2:50}%;width:${width/2}%"></i>`:`<i class="series-${p.series}" style="width:${width}%"></i>`}</span><strong>${/[\p{L}\p{N}]/u.test(String(p.value??''))?esc(p.value):'Not available'}</strong>`;
+    // With chips the row is a group: the button opens the row, each chip opens its own source (a chip cannot sit inside a button).
+    return chips?`<div class="chart-row" role="group"><button class="chart-open" data-evidence="${esc(key)}">${cells}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}">${cells}</button>`;
   }).join('')}</div><p class="matrix-note">Missing values have no bar.</p>`;
 }
 // A label of two or more words breaks at the space nearest its middle (ties: the earlier one).
@@ -188,11 +197,105 @@ function qualitativeVisual(module,v) {
 }
 const CHART_RENDERERS={paired:comparisonChart,peers:comparisonChart,bars:comparisonChart,bridge:bridgeChart,waterfall:bridgeChart,paths:pathChart,hedges:hedgeChart};
 const visualMarkup=(module,v)=>(CHART_RENDERERS[v.kind]||qualitativeVisual)(module,v);
-const readerChart=(id,chart)=>comparisonChart(id,{kind:'bars',...chart});
+const readerChart=(id,chart,chips=false)=>comparisonChart(id,{kind:'bars',...chart},0,chips);
 function readerCharts(id,section) {
   const lines=new Set(sectionData(id,section).flatMap(s=>s.blocks).map(b=>b.line));
   return (data[id].charts||[]).filter(c=>lines.has(c.table)).map(c=>readerChart(id,c)).join('');
 }
+
+// ---- The module report: six parts in one scroll. Python resolves every citation into window.CREDIT_OS_DATA.chips;
+// nothing below infers a page, a class or a date.
+const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['limits','Limits & monitoring'],['audit','Evidence & audit']];
+const EMPTY_PART={'bottom-line':'No bottom line in this handoff.',numbers:'No chart data or key-number table in this handoff.',findings:'No findings table in this handoff.',limits:'No gap, limit or monitoring section in this handoff.'};
+const SHORT_CODES={'CP-1':'C1','CP-1A':'A','CP-0':'C0','CP-2':'C2'};
+const shortCode=module=>SHORT_CODES[module]||String(module).replace(/^CP-/,'');
+// What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
+function chipView(chip,rowModule) {
+  if(chip.kind==='issuer_page') {
+    const pages=chip.page_end!=null&&chip.page_end!==chip.page?`p.${chip.page}–${chip.page_end}`:`p.${chip.page}`;
+    return {label:pages,av:chip.source,avClass:'',dot:'',cls:''};
+  }
+  if(chip.kind==='upstream') {
+    const codes=chip.codes.join(' · ');
+    return {label:chip.module?`${chip.module} · ${codes}`:codes,av:shortCode(chip.module||rowModule),avClass:'q',dot:'up',cls:''};
+  }
+  return {label:chip.label||'no page',av:'?',avClass:'gap',dot:'gap',cls:'gap'};
+}
+const chipSet=chips=>chips.length?`<span class="chips">${chips.join('')}</span>`:'';
+// The "handoff row" chip comes from the evidence key itself; the others from the chips map, by index.
+function chipsMarkup(key) {
+  const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
+  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" aria-label="Handoff row, line ${item.line}"><span class="av cp">${esc(shortCode(item.module))}</span>L${item.line}<span class="dot row"></span></button>`:'';
+  return chipSet([row,...found.map((chip,index)=>{
+    const view=chipView(chip,item?.module);
+    return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${chip.reason?`title="${esc(chip.reason)}"`:''}><span class="av ${view.avClass}">${esc(view.av)}</span>${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
+  })].filter(Boolean));
+}
+const MISSING_CELL=/^(|[—–-]|Not supplied)$/i;
+const cellView=(cell,numeric)=>{
+  const text=plain(cell??'').trim();
+  if(MISSING_CELL.test(text))return `<td${numeric?' class="num"':''}><span class="na" title="${esc(text||'Empty in the handoff')}">n.a.</span></td>`;
+  return `<td${numeric?' class="num"':''}>${rich(text)}</td>`;
+};
+const isFindingsTable=b=>b.type==='table'&&b.headers[0]==='Finding'&&b.headers[1]==='Creditor impact';
+// The first reader table of the findings-and-analysis sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).
+function keyNumbers(id) {
+  const reader=(sectionGroups(id).find(([group])=>group==='Findings & analysis')?.[1]||[]).flatMap(([sectionId])=>sectionData(id,sectionId));
+  for(const section of reader) {
+    if(section.heading.startsWith('Chart data'))continue;
+    for(const block of section.blocks) {
+      if(block.type!=='table'||isFindingsTable(block)||block.headers[0]==='Bottom line')continue;
+      const numeric=block.headers.map((_,c)=>c>0&&block.rows.some(r=>chartNumber(r.cells[c]??'')!==null));
+      if(numeric.filter(Boolean).length<2)continue;
+      const short=block.headers.map((_,c)=>c===0||numeric[c]||block.rows.every(r=>(r.cells[c]??'').length<=24));
+      const columns=block.headers.map((_,c)=>c).filter(c=>short[c]).slice(0,5),rows=block.rows.slice(0,8);
+      return `<div class="table-card"><table><caption class="sr-only">${esc(plain(section.heading))}</caption><thead><tr>${columns.map(c=>`<th scope="col"${numeric[c]?' class="num"':''}>${esc(block.headers[c])}</th>`).join('')}<th scope="col">Source</th></tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>cellView(row.cells[c],numeric[c])).join('')}<td>${chipsMarkup(`${id}:${row.line}`)}</td></tr>`).join('')}</tbody></table>${block.rows.length>rows.length?`<p class="table-more">${block.rows.length-rows.length} more rows are under Evidence &amp; audit.</p>`:''}</div>`;
+    }
+  }
+  return '';
+}
+const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div>';
+function reportHead(id) {
+  const out=data[id],{module,run:context}=out,ctx=contexts[context];
+  const {meta,usedIn,flag}=headTools(module,context,id);
+  // No catalogue field says "accepted"; a run shows a checklist only when one is recorded (none is today), and that is not acceptance.
+  const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===ctx.folder);
+  const acceptance=record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
+  const count=out.sections.filter(s=>s.blocks.length).length;
+  return `<div class="module-head" id="head"><div><h2 title="${esc(module)}">${esc(moduleNames[module])}</h2><div class="sub"><span>${esc(module)}</span><span>·</span><span>Current methodology</span><span>·</span><span>Handoff <code>${esc(out.source.split('/').pop())}</code> · ${plural(count,'section')}</span></div></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${meta}${usedIn}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+}
+function reportBand(id) {
+  const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
+  if(!quoted)return `<p class="part-empty" id="bottom-line">${EMPTY_PART['bottom-line']}</p>`;
+  const facts=summary?`<dl><span class="row"><dt>Confidence</dt><dd>${esc(summary.confidence)}</dd></span><span class="row"><dt>Main limitation</dt><dd>${rich(summary.limitation)}</dd></span></dl>`:'';
+  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}">${esc(source.split('/').pop())} · line ${quoted.line}</button></div></div>`;
+}
+function reportNumbers(id) {
+  const charts=(data[id].charts||[]).map(c=>`<div class="panel-card">${readerChart(id,c,true)}${LEGEND}</div>`).join(''),table=keyNumbers(id);
+  return `<section class="part" id="numbers"><h3>Key numbers</h3>${charts||table?charts+table:`<p class="part-empty">${EMPTY_PART.numbers}</p>`}</section>`;
+}
+function reportFindings(id) {
+  const articles=data[id].sections.flatMap(s=>s.blocks).filter(isFindingsTable).flatMap(block=>{
+    const confidence=Math.max(2,block.headers.indexOf('Confidence'));
+    return block.rows.map(row=>`<article class="finding"><div><h4>${rich(row.cells[0])}</h4><p class="impact"><b>Creditor impact</b>${rich(row.cells[1])}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.cells[confidence]??''))}</span></span>${chipsMarkup(`${id}:${row.line}`)}</aside></article>`);
+  });
+  return `<section class="part" id="findings"><h3>Findings</h3>${articles.join('')||`<p class="part-empty">${EMPTY_PART.findings}</p>`}</section>`;
+}
+function limitsGroup(id) {return sectionGroups(id).find(([group])=>group==='Limits & monitoring')?.[1]||[];}
+function reportLimits(id) {
+  const line=(key,html)=>`<p>${html} ${chipsMarkup(key)}</p>`;
+  const cards=limitsGroup(id).map(([sectionId,label])=>`<div><h4>${esc(label)}</h4>${sectionData(id,sectionId).flatMap(s=>s.blocks).flatMap(block=>block.type==='table'?block.rows.map(row=>line(`${id}:${row.line}`,`<strong>${rich(row.cells[0])}</strong> ${row.cells.slice(1).map(rich).join(' · ')}`)):[line(`${id}:${block.line}`,rich(block.text.replace(/\n/g,' ')))]).join('')}</div>`);
+  return `<section class="part" id="limits"><h3>Limits &amp; monitoring</h3>${cards.length?`<div class="limits">${cards.join('')}</div>`:`<p class="part-empty">${EMPTY_PART.limits}</p>`}</section>`;
+}
+// Every section the parts above do not print in full, as a line-numbered list; a section's content is drawn when it is opened (screen.js).
+function reportAudit(id) {
+  const shown=new Set(limitsGroup(id).map(s=>s[0])),rest=modules[id].sections.filter(s=>!shown.has(s[0]));
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(rest.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${rest.map(([sectionId,label])=>{
+    const first=sectionData(id,sectionId)[0];
+    return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
+  }).join('')}</ul></details>`;
+}
+const moduleReport=id=>reportHead(id)+reportBand(id)+reportNumbers(id)+reportFindings(id)+reportLimits(id)+reportAudit(id);
 function galleryVisual(module,section) {
   const out=data[module],v=out.visual;
   if(!v||!sectionData(module,section).some(s=>s.blocks.some(b=>b.line===v.table)))return '';
@@ -225,11 +328,12 @@ function comparisonView() {
     return `<section class="debate regression-row"><header><h3>${rich(row.cells[0])}</h3><span class="grade neutral">${esc(plain(after.cells[2]))}</span></header>${field(regressions,row,1)}${field(regressions,row,2)}<div class="record-field"><h4>Recheck · ${esc(recheckFindings.find(b=>b.type==='table').headers[1])}</h4><div>${rich(after.cells[1])}</div></div>${sourceFooter(`${id}:${row.line}`)}</section>`;
   }).join('')}${notes('Unresolved regressions')}`;
 }
-function routeHref(module,section,key=null,context=current?.context,file=lastFile.get(`${context}:${module}`)) {
+function routeHref(module,section,key=null,context=current?.context,file=lastFile.get(`${context}:${module}`),chip=null) {
   const params=new URLSearchParams();
   if(context)params.set('c',context);
   if(file&&`${contexts[context].folder}/${file}`!==defaultOutput(module,context))params.set('o',file);
   if(key)params.set('e',key);
+  if(key&&chip!==null)params.set('chip',String(chip));
   // A report id is a folder name: encoded, it can hold quotes, angle brackets, ? or # and still route back.
   return `#${encodeURIComponent(module)}/${encodeURIComponent(section)}${params.size?'?'+params:''}`;
 }
@@ -250,16 +354,12 @@ function sectionGroups(id) {
 }
 function outlineMarkup(id) {
   const module=data[id].module||id;
-  return `<div class="section-outline" aria-label="${esc(moduleNames[module])} sections">${sectionGroups(id).map(([group,sections])=>{
-    const key=`${id}:${group}`,open=expandedGroups.get(key)??true;
-    return `<details class="outline-group" data-group="${esc(key)}" ${open?'open':''}><summary>${esc(group)}</summary>${sections.map(([sectionId,label])=>`<a class="section-item" href="${routeHref(module,sectionId)}" ${current.section===sectionId?'aria-current="location"':''}>${esc(label)}</a>`).join('')}</details>`;
-  }).join('')}</div>`;
+  return `<nav class="section-outline" aria-label="On this page"><ol>${REPORT_PARTS.map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
 }
 function unavailableView(module) {
-  const ctx=contexts[current.context],entry=moduleEntry(module,current.context),label=availability(module,current.context);
+  const ctx=contexts[current.context];
   const others=Object.entries(contexts).filter(([key,run])=>key!==current.context&&sameIssuer(run.issuerKey,ctx.issuerKey)&&run.modules[module]?.outputs.length);
-  const given=(entry?.inputs||[]).map(id=>store.inputs[id]);
-  return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>${label}</h2><p>${entry?`This run keeps ${plural(given.length,'input file')} for ${esc(moduleNames[module])} and no saved output.`:`No ${esc(moduleNames[module])} output file was found in this run. That alone does not show the module was not run or not applicable.`}</p>${given.map(f=>`<p><a href="${esc(f.href)}" download>${esc(f.source)}</a></p>`).join('')}</div>${others.length?`<div class="available-case"><h3>Other ${esc(ctx.issuer)} runs with this module</h3>${others.map(([key,run])=>`<p><a class="text-action" href="${routeHref(module,firstSection(module,key),null,key)}">${esc(run.run)}${icon('arrow-right')}</a></p>`).join('')}</div>`:''}`;
+  return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>${NO_OUTPUT}</h2></div>${others.length?`<div class="available-case"><h3>Other ${esc(ctx.issuer)} runs with this module</h3>${others.map(([key,run])=>`<p><a class="text-action" href="${routeHref(module,firstSection(module,key),null,key)}">${esc(run.run)}${icon('arrow-right')}</a></p>`).join('')}</div>`:''}`;
 }
 function outputChooser(module) {
   const ctx=contexts[current.context],files=moduleEntry(module,current.context).outputs;
@@ -298,8 +398,8 @@ function navigationSections(module,context,output=defaultOutput(module,context))
   if(module==='W-Evidence')return [['sources','Retained outputs',[]]];
   if(module==='W-Reports')return reportSections(context);
   if(module==='W-Forecast')return forecastSections(context);
+  if(isAnalytical(module)&&output)return REPORT_PARTS.map(([part,label])=>[part,label,[]]);
   if(Object.hasOwn(modules,module))return modules[module].sections;
-  if(output)return modules[output].sections;
   return [['status',moduleEntry(module,context)?.outputs.length?'Choose a saved output':availability(module,context),[]]];
 }
 function moduleLink(id,label){return `<a class="text-action" href="${routeHref(id,lastSection.get(current?.context+':'+id)||firstSection(id,current?.context))}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}

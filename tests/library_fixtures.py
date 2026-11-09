@@ -240,3 +240,29 @@ CITED = """
 
 A paragraph citing K, page:124 only.
 """
+
+
+# What a module report shows beyond the plain fixture: a cited chart row, a finding whose
+# citation quotes the page, and a reader table with two numeric columns. Appended to the CP-1
+# handoff with CITED.
+REPORT_ROWS = """
+### Chart data: interest paid
+
+| Period | Cash interest | Reporting unit | Basis and limitation |
+| --- | --- | --- | --- |
+| FY2024 | 1158 | US$m | K, page:123 states the figure. D1. |
+| FY2023 | 1160 | US$m | K, page:122 does not state it. |
+
+### Cash table
+
+| Measure | FY2023 | FY2024 | Unit |
+| --- | --- | --- | --- |
+| Cash interest | 1,160 | 1,158 | US$m |
+| Gross coupons | Not supplied | Not supplied | US$m |
+
+### Quoted findings
+
+| Finding | Creditor impact | Confidence |
+| --- | --- | --- |
+| Cash interest was paid. | K, page:123 says “Cash paid during the period”. | High |
+"""

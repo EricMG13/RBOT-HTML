@@ -356,3 +356,96 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .model-original{margin:20px 0}.model-original>summary{cursor:pointer;font-weight:600;font-size:var(--fs-control);color:var(--text-secondary);min-height:32px;padding:6px 0}
 .model-original[open]>summary{margin-bottom:8px}
 .summary-line{display:block}
+/* Module report (the Modules canvas): head, band, panel, findings, limits and audit, after docs/design/mockups/module-report.html. */
+#module-head:empty{display:none}
+.module-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.module-head h2{font-size:21px;font-weight:700;line-height:1.25}
+.module-head .sub{font-size:var(--fs-compact);color:var(--muted);margin-top:3px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.head-tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.head-tools .output-meta{display:inline-flex;flex-direction:row;padding:0;text-align:left}
+.btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff;font-size:var(--fs-compact);font-weight:600;color:var(--navy);text-decoration:none}
+.btn img{width:14px;height:14px;opacity:.7}
+.btn:hover{background:var(--quiet)}
+.badge.on-navy{background:transparent;border-color:rgba(255,255,255,.4);color:#fff}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:var(--fs-label);font-weight:600;border:1px solid var(--rule);background:var(--quiet);color:var(--muted)}
+.band{margin-top:20px;background:var(--navy);color:#fff;border-radius:var(--radius-card);padding:18px 22px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,300px);gap:10px 28px}
+.band p{margin:0;font-size:15px;line-height:1.55;font-weight:500;text-wrap:pretty}
+.band dl{margin:0;font-size:var(--fs-compact);line-height:1.5}
+.band dt{color:#c9cfee;display:inline}
+.band dd{display:inline;margin:0 0 0 6px;color:#fff}
+.band .row{display:block;margin-top:4px}
+.band .src{grid-column:1/-1;display:flex;gap:8px;align-items:center;margin-top:4px;font-size:var(--fs-label);color:#c9cfee;flex-wrap:wrap}
+.band-link{color:#c9cfee;text-decoration:underline;text-underline-offset:3px;font-size:var(--fs-label);padding:0;background:none;border:0}
+.band-link:hover{color:#fff}
+section.part{margin-top:30px}
+section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
+.part-empty{margin:30px 0 0;color:var(--muted);font-size:var(--fs-compact)}
+section.part>.part-empty{margin:0}
+.panel-card{border:1px solid var(--rule);border-radius:var(--radius-card);overflow:hidden;margin-bottom:14px}
+.panel-card>.section-heading{margin:0;padding:12px 16px;background:var(--quiet);border-bottom:1px solid var(--rule)}
+.panel-card>.section-heading h2{font-size:var(--fs-control)}
+.panel-card>.chart-reading,.panel-card>.source-footer,.panel-card>.matrix-note{margin-left:16px;margin-right:16px}
+.panel-card .horizontal-chart{margin:6px 16px 8px}
+.panel-card .chart-row{grid-template-columns:minmax(110px,1fr) minmax(80px,1.6fr) 72px minmax(120px,1fr);gap:12px;cursor:default;text-align:left}
+.panel-card .chart-open{display:contents;cursor:pointer;text-align:left}
+.panel-card .chart-row strong{overflow-wrap:normal;white-space:nowrap}
+.panel-card .chart-row .chips{justify-self:start}
+.legend{display:flex;gap:16px;padding:10px 16px;border-top:1px solid var(--rule);font-size:var(--fs-label);color:var(--muted)}
+.legend .dot{display:inline-block;margin:0 2px 0 4px;vertical-align:1px}
+.table-card{margin-top:14px;border:1px solid var(--rule);border-radius:var(--radius-card);overflow:auto}
+.table-card table{width:100%;border-collapse:collapse;font-size:var(--fs-compact)}
+.table-card thead th{background:var(--quiet);text-align:left;font-weight:600;color:var(--muted);padding:9px 14px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.table-card tbody td{padding:9px 14px;border-bottom:1px solid var(--rule);vertical-align:middle}
+.table-card tbody tr:last-child td{border-bottom:0}
+.table-card td.num,.table-card th.num{text-align:right;font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums;font-weight:500}
+.table-card .na{color:var(--muted);font-style:normal}
+.table-more{margin:0;padding:8px 14px;font-size:var(--fs-label);color:var(--muted);border-top:1px solid var(--rule)}
+/* Chips: Untitled UI tag anatomy in the Credit OS tokens; the avatar names the source, the dot the kind. */
+.chips{display:inline-flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 4px;border:1px solid var(--rule);border-radius:var(--radius-inline);background:#fff;font:500 var(--fs-label)/1 'Red Hat Mono',monospace;color:#3a4056;white-space:nowrap;box-shadow:0 1px 2px rgba(0,5,51,.05)}
+.chip:hover{border-color:#b9c0d6;background:var(--quiet)}
+.chip[aria-pressed=true]{border-color:var(--blue);background:var(--blue-50);color:var(--blue-700)}
+.chip .av{width:18px;height:18px;border-radius:3px;display:grid;place-items:center;font:600 var(--fs-label)/1 'Red Hat Text',sans-serif;letter-spacing:.02em;background:var(--navy);color:#fff}
+.chip .av.q{background:#5b6a8c}
+.chip .av.cp{background:var(--blue-100);color:var(--blue-700)}
+.chip .av.gap{background:transparent;border:1px dashed #b9c0d6;color:var(--muted)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block}
+.dot.row{background:var(--navy)}
+.dot.up{background:#5b6a8c}
+.dot.gap{background:transparent;border:1px solid #9aa2b8}
+.chip.gap{border-style:dashed;color:var(--muted)}
+.chip.source-selected{background:var(--selection)!important}
+article.finding{max-width:none;margin:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:6px 28px;padding:16px 0;border-top:1px solid var(--rule);border-bottom:0}
+article.finding:first-of-type{border-top:0;padding-top:4px}
+article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;text-wrap:pretty}
+article.finding .impact{margin:6px 0 0;color:#3a4056;text-wrap:pretty}
+article.finding .impact b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
+article.finding aside{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding-top:2px}
+article.finding .conf{font-size:var(--fs-label);color:var(--muted)}
+article.finding .conf .pill{margin-left:6px}
+.limits{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.limits>div{padding:14px 16px;border:1px solid var(--rule);border-radius:var(--radius-card);background:var(--quiet);min-width:0}
+.limits h4{margin:0 0 6px;font:600 var(--fs-compact)/1.3 'Red Hat Text',sans-serif;color:#3a4056}
+.limits p{margin:0 0 8px;text-wrap:pretty}
+.limits p:last-child{margin:0}
+details.audit{margin-top:30px;border-top:1px solid var(--rule);padding-top:12px}
+details.audit>summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;font:700 16px/1.3 'Red Hat Display',sans-serif;letter-spacing:-.02em}
+details.audit>summary::-webkit-details-marker{display:none}
+details.audit>summary img{width:16px;opacity:.6;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+details.audit[open]>summary img{transform:rotate(90deg)}
+details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-serif;color:var(--muted);margin-left:auto}
+.audit-list{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:var(--fs-compact)}
+.audit-list>li{border-bottom:1px solid var(--rule);min-width:0}
+.audit-list>li:has(.audit-body:not([hidden])){grid-column:1/-1}
+.audit-open{display:flex;justify-content:space-between;gap:10px;width:100%;padding:7px 0;text-align:left;background:none;border:0}
+.audit-open span{color:var(--muted);font-family:'Red Hat Mono',monospace;font-size:var(--fs-label)}
+.audit-body{padding:4px 0 14px}
+/* Evidence inspector, chip part. */
+.chip-source .chip-flags{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.chip-source .excerpt{background:var(--quiet);border:1px solid var(--rule);border-radius:var(--radius-control);padding:10px 12px;font:var(--fs-label)/1.6 'Red Hat Mono',monospace;color:#3a4056;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:6px}
+.chip-source .excerpt mark{background:var(--selection);color:var(--navy);padding:1px 2px;border-radius:2px;font-weight:600}
+.chip-source p{margin:8px 0 0}
+/* On this page */
+.section-outline ol{list-style:none;margin:0;padding:0}
+@media(max-width:900px){.band{grid-template-columns:minmax(0,1fr)}article.finding{grid-template-columns:minmax(0,1fr)}.limits,.audit-list{grid-template-columns:1fr}}
+@media(max-width:720px){.panel-card .chart-row{grid-template-columns:1fr 72px}.panel-card .chart-row .chips{grid-column:1/-1}}

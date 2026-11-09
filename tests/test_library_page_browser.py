@@ -4,7 +4,9 @@ Chrome's console is read for errors, including Content Security Policy violation
 policy blocks every network request, so a violation is a request the page tried to make or a source
 it needs but is not allowed. Needs Google Chrome or Chromium; skipped where there is none."""
 
+import hashlib
 import html
+import json
 import re
 import shutil
 import subprocess
@@ -12,7 +14,15 @@ import sys
 from pathlib import Path
 
 import pytest
-from library_fixtures import make_run, method
+from library_fixtures import (
+    CITED,
+    REPORT_ROWS,
+    SOURCE_NAME,
+    SOURCE_PAGES,
+    inventory_text,
+    make_run,
+    method,
+)
 from test_credit_os_catalogue import CHARTS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,13 +53,14 @@ def chrome() -> str:
     return found
 
 
-def visit(page: Path, route: str = "") -> tuple[str, list[str]]:
+def visit(page: Path, route: str = "", width: int = 1280) -> tuple[str, list[str]]:
     """The page's DOM after it ran, and its console messages."""
     done = subprocess.run(
         [
             chrome(),
             "--headless=new",
             "--disable-gpu",
+            f"--window-size={width},900",
             "--enable-logging=stderr",
             "--v=0",
             "--virtual-time-budget=10000",
@@ -129,3 +140,70 @@ def test_a_policy_violation_is_seen(tmp_path):
     page.write_text(page.read_text().replace("script-src 'self'", "script-src 'none'"))
     _, console = visit(page)
     assert any("Content Security Policy" in line for line in console)
+
+
+# A script the test adds beside the generated page (the page's policy allows its own folder):
+# it drives the module report as a reader would and writes what it saw into the DOM, where
+# --dump-dom returns it.
+PROBE = Path(__file__).with_name("browser_probe_module_report.js").read_text(encoding="utf-8")
+
+
+def report_library(tmp_path: Path) -> Path:
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp1_extra=CITED + REPORT_ROWS,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    return tmp_path / "library/index.html"
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width):
+    page = report_library(tmp_path)
+    (page.parent / "probe.js").write_text(PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/head?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    for state in ("closed", "inspector"):  # With the inspector open the canvas is narrower still.
+        assert seen[state] == {"fits": True, "valueInCard": True, "chipsInCard": True, "rows": 2}, (
+            state
+        )
+    opened = seen["open"]
+    assert opened["hidden"] is False and "chip=" in opened["hash"] and "e=" in opened["hash"]
+    assert opened["excerpt"] and "Cash paid during the period" in opened["excerpt"]
+    assert opened["mark"] == "Cash paid during the period"
+    assert "Matches publication" in opened["text"] and "Quote found on page" in opened["text"]
+    assert f"Source page · {SOURCE_NAME} p.123" in opened["text"]
+    assert opened["pressed"] == "true" and opened["focusInInspector"] is True
+    assert opened["open"] == f"../runs/run-a/source-text/{SOURCE_NAME}"
+    assert seen["escaped"] == {"hidden": True, "focusOnChip": True, "hash": "#CP-1/head?c=run-a"}
+    assert seen["anchor"]["hash"] == "#CP-1/numbers?c=run-a"
+    assert seen["anchor"]["current"] == "Key numbers" and seen["anchor"]["chipStillThere"] is True
+
+
+def test_the_report_canvas_and_old_section_links(tmp_path):
+    page = report_library(tmp_path)
+    dom, console = visit(page, "#CP-1/s54?c=run-a")  # A section id from before the report.
+    assert console == []
+    ids = re.findall(r'\bid="(head|bottom-line|numbers|findings|limits|audit)"', dom)
+    assert ids == ["head", "bottom-line", "numbers", "findings", "limits", "audit"]
+    assert (
+        "Candidate · not accepted" in dom and "Reader summary" in dom
+    )  # The summary stays in the audit list.
+    assert dom.count('<td><span class="na"') == 0  # No bare dash or empty cell.
+    assert "n.a." in dom
+    dom, console = visit(page, "#CP-1/findings?c=run-a")
+    assert console == []
+    assert re.search(r'aria-current="location"[^>]*>Findings<', dom)
+    dom, console = visit(page, "#CP-0/head?c=run-a")
+    assert console == []
+    dom, console = visit(page, "#CP-1A/head?c=run-a")  # No CP-1A output in this run.
+    assert console == []
+    assert "No output found" in dom and "Not run in this run" not in dom

@@ -125,3 +125,14 @@ Task 5 edit: `REPO` also resolves to `credit_os`'s parent when that folder holds
 | `web/index.html` | Rail link "Run activity" (`#CP-OS/activity`, `icons/activity.svg`) | navigation |
 
 Task 8 fix: `web/static-boot.js` no longer defaults `activity` to an empty list. `window.DESIGN_ACTIVITY` is `null` unless `CREDIT_OS_DATA.activity` holds arrays `excluded` and `issues`; the catalogue/workspace check now names what is missing (`catalogue`, `workspace`) and activity is read apart, so a data file that lacks only `activity` keeps the rest working. `web/views.js` `activityView(null)` says Run activity could not be read, never the all-clear.
+
+## Module report with source chips (module-report plan, Task 2)
+
+The Modules tab draws one report per analytical output (head, band, key numbers, findings, limits, Evidence & audit) from the handoff and `window.CREDIT_OS_DATA.chips`. Design: `docs/design/mockups/module-report.html`, spec `docs/design/2026-11-09-module-report-spec.md`.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/views.js` | `moduleHead` split into `headTools` and an empty head for outputs; `comparisonChart` and `readerChart` take a `chips` flag (row becomes a group holding the row button and its chips); new `moduleReport` and its parts, `chipView`, `chipsMarkup`, `keyNumbers`, `REPORT_PARTS`; `outlineMarkup` is the six "On this page" anchors; `navigationSections` and `firstSection` return those parts for an output; `routeHref` takes a `chip` index (`&chip=`); `availability` and `unavailableView` say "No output found" | the report replaces the per-section canvas; the owner ruled one wording for no output |
+| `web/screen.js` | `renderContent` returns `moduleReport`, the old body is `sectionView` (opened from Evidence & audit); `showInspector(key, chip)` adds the source-page part (`chipSection`); `parseRoute` reads `chip` and maps any unknown section to the head; `renderRoute` scrolls between parts without redrawing (`scrollToPart`, `positionKey`); click handlers for chips, audit items and anchor links; `nameCodes` skips chips, the audit list and the head's code; arrow-key chart navigation ignores chips | chips, inspector and navigation for the report |
+| `web/screen.css` | appended `.module-head`, `.band`, `.panel-card`, `.chart-row` chip column, `.table-card`, `.chip`, `.av`, `.dot`, `article.finding`, `.limits`, `details.audit`, inspector chip part | the mockup's styles in the existing tokens |
+| `web/static.test.cjs` | report, chip, key-number, anchor, wording and font-size tests; the "Not run in this run" assertion now pins `NO_OUTPUT` | covers the above; the wording was ruled |
