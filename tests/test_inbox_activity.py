@@ -13,7 +13,7 @@ import pytest
 from deploy_workflow.inbox.activity import module_states, snapshot, spent, write
 from deploy_workflow.inbox.drops import Layout, ensure_layout
 from deploy_workflow.inbox.runs import Record
-from deploy_workflow.model.budget import Budget
+from deploy_workflow.model.budget import Budget, OverrunStop
 from deploy_workflow.run_events import append_event
 
 
@@ -111,3 +111,100 @@ def test_written_script_cannot_close_its_element(layout):
     text = (layout.engine / "activity.js").read_text(encoding="utf-8")
     assert text.startswith("window.RUN_ACTIVITY=") and "<" not in text
     assert not list(layout.engine.glob("*.tmp"))
+
+
+def test_spend_of_an_unreadable_run_folder_is_unknown(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    run.chmod(0o000)
+    try:
+        assert spent(run) is None
+    finally:
+        run.chmod(0o755)
+
+
+def test_spend_matches_the_budget_over_every_kind_of_call(tmp_path):
+    live = tmp_path / "run" / "live"
+    budget = Budget(Decimal(20), live)
+    budget.reserve("a", Decimal("1.50"), config_id="sol-medium")
+    budget.settle("a", Decimal("1.25"))  # settled 1.25
+    budget.reserve("c", Decimal("2.00"), config_id="sol-medium")
+    budget.release("c")  # released 0
+    budget.reserve("d", Decimal("2.00"), config_id="sol-medium")
+    budget.settle("d", None, retryable=True)  # unknown, full hold 2.00
+    budget.reserve("e", Decimal("2.00"), retry_of="d", config_id="sol-medium")
+    budget.settle("e", Decimal("1.10"))  # retry settled 1.10
+    budget.reserve("f", Decimal("3.00"), config_id="sol-medium")  # open hold 3.00
+    budget.reserve("b", Decimal("1.00"), config_id="sol-medium")
+    with pytest.raises(OverrunStop):
+        budget.settle("b", Decimal("1.75"))  # overrun 1.75
+    # 1.25 + 1.75 + 0 + 2.00 + 1.10 + 3.00 = 9.10
+    assert spent(tmp_path / "run") == Decimal("9.10")
+
+
+def test_spend_keeps_digits_a_28_digit_context_would_round(tmp_path):
+    budget = Budget(Decimal(20), tmp_path / "run" / "live")
+    budget.reserve("a", Decimal(2), config_id="sol-medium")
+    budget.settle("a", Decimal(1))
+    budget.reserve("b", Decimal(1), config_id="sol-medium")
+    budget.settle("b", Decimal("0.0000000000000000000000000001"))  # 1E-28
+    assert spent(tmp_path / "run") == Decimal("1.0000000000000000000000000001")
+
+
+def test_a_zero_charge_is_shown_without_an_exponent(layout):
+    run = layout.runs / "z"
+    budget = Budget(Decimal(20), run / "live")
+    budget.reserve("a", Decimal(1), config_id="sol-medium")
+    budget.settle("a", Decimal("0E-8"))
+    record = Record("z", "credit_snapshot", "x", "running", "t", started_at="2026-11-09T11:59:00Z")
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    assert snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]["spent"] == "0.00000000"
+
+
+def test_write_does_not_follow_a_planted_temporary_name_and_leaves_no_temporary(layout):
+    outside = layout.engine.parent / "outside.txt"
+    outside.write_text("precious\n")
+    (layout.engine / "activity.js.tmp").symlink_to(outside)
+    write(layout, {"runs": []})
+    assert outside.read_text() == "precious\n"
+    assert (layout.engine / "activity.js").read_text().startswith("window.RUN_ACTIVITY=")
+
+
+def test_write_removes_its_temporary_file_when_the_replace_fails(layout, monkeypatch):
+    def refuse(*_a, **_k):
+        raise OSError("no")
+
+    monkeypatch.setattr("deploy_workflow.inbox.activity.os.replace", refuse)
+    with pytest.raises(OSError):
+        write(layout, {"runs": []})
+    assert not list(layout.engine.glob("*.tmp"))
+
+
+def test_stall_check_accepts_other_time_formats_and_a_naive_now(layout):
+    record = Record(
+        "t1", "credit_snapshot", "x", "running", "t", started_at="2026-11-09 09:00:00+00:00"
+    )
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    assert snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]["stalled"] is True
+    naive = datetime(2026, 11, 9, 12, 0, 0)
+    assert "runs" in snapshot(layout, [record], cap=Decimal(20), now=naive)
+
+
+def test_an_unparsable_time_is_logged_not_silent(layout, caplog):
+    record = Record("t2", "credit_snapshot", "x", "running", "t", started_at="yesterday")
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    assert "stalled" not in entry and "yesterday" in caplog.text
+
+
+def test_only_200_ended_records_are_kept_and_the_running_one_leads(layout):
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    records = [
+        Record(f"e{i:03}", "credit_snapshot", "f", "finished", "t", ended_at="2026-11-09T08:00:00Z")
+        for i in range(205)
+    ]
+    records.append(
+        Record("r", "credit_snapshot", "f", "running", "t", started_at="2026-11-09T11:59:00Z")
+    )
+    runs = snapshot(layout, records, cap=Decimal(20), now=now)["runs"]
+    assert len(runs) == 201 and runs[0]["id"] == "r"
