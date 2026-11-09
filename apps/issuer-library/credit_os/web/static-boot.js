@@ -13,7 +13,7 @@
   window.DESIGN_WORKSPACE={reports:store.reports,models:store.models,visuals:store.visuals};
   window.DESIGN_CATALOGUE={real:catalogue.real||[],sources:catalogue.sources||{}};
   window.DESIGN_APP={workspace:catalogue.workspace||'',policy_locked:!!catalogue.policy_locked,issues:problem?catalogue.issues||[]:store.issues,problem};
-  for(const name of ['views.js','shared.js','screen.js'])await new Promise((resolve,reject)=>{
+  for(const name of ['calendar.js','views.js','shared.js','screen.js'])await new Promise((resolve,reject)=>{
     const script=document.createElement('script');
     script.src=name;script.onload=resolve;script.onerror=()=>reject(new Error(`${name} did not load`));
     document.head.append(script);

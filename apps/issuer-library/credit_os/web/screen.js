@@ -193,20 +193,13 @@ function performanceView() {
   const retainedNotes=sectionData(id,'performance').flatMap(s=>s.blocks.filter(b=>b.type==='text')).map(b=>narrativeMarkup(id,b)).join('');
   return `<div class="section-heading"><h2>Performance</h2><span>${esc(table.headers[3])}–${esc(table.headers[1])}</span></div>${trendChart(id,'Net sales')}<div class="section-heading compact"><h3>Exact financial measures</h3></div>${tableMarkup(id,table)}${retainedNotes}`;
 }
-function eventTimeline() {
-  const id=pins['CP-1A'],section=sectionData(id,'events')[0], block=section.blocks.find(b=>b.type==='table');
-  const calendar=block.rows.filter(r=>!r.cells[0].includes('FY')&&!r.cells[0].includes(' / ')&&!r.cells[0].includes(' and '));
-  const order={'1993':0,'May 8, 2023':1,'July 12, 2024':2,'September 19, 2024':3,'October 2024':4};
-  calendar.sort((a,b)=>order[a.cells[0]]-order[b.cells[0]]);
-  const periods=block.rows.filter(r=>!calendar.includes(r));
-  const calendarDate=cell=>{
-    const m=/^([A-Z][a-z]+) (\d{1,2}), (\d{4})$/.exec(cell),month=m?DISPLAY_MONTHS.indexOf(m[1]):-1;
-    if(month<0) return cell;
-    const iso=`${m[3]}-${String(month+1).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
-    return displayDate(iso)===iso?cell:displayDate(iso);
+function eventTimeline(id,table) {
+  const rowMarkup=row=>{
+    const order=eventOrder(row.cells[0]),precision=order===null?'No year stated':order[1]===0?'Year only':'';
+    const details=table.headers.slice(1).map((header,i)=>row.cells[i+1]?`<div class="event-detail"><strong>${esc(header)}</strong> ${rich(row.cells[i+1])}</div>`:'').join('');
+    return `<li><div class="event-date"><strong>${esc(row.cells[0])}</strong>${precision?`<span>${precision}</span>`:''}</div><div class="event-body">${details}${sourceFooter(`${id}:${row.line}`)}</div></li>`;
   };
-  const rowMarkup=row=>{const shown=calendarDate(row.cells[0]);return `<li><div class="event-date"${shown&&shown!==row.cells[0]?` title="${esc(row.cells[0])}"`:''}><strong>${esc(shown)}</strong><span>${/^\d{4}$/.test(row.cells[0])?'Year only':/^\w+ \d{4}$/.test(row.cells[0])?'Month only':row.cells[0].includes('FY')||row.cells[0].includes(' / ')||row.cells[0].includes(' and ')?'Fiscal / combined dates':'Exact day'}</span></div><div class="event-body"><p>${rich(row.cells[1])}</p><div class="event-detail">${rich(row.cells[2])}</div>${sourceFooter(`${id}:${row.line}`)}</div></li>`;};
-  return `<div class="section-heading"><h2>Issuer event timeline</h2><span>Historical record</span></div><p class="intro">Calendar events retain their actual date precision. Fiscal periods and grouped dates stay in a separate register.</p><ol class="timeline">${calendar.map(rowMarkup).join('')}</ol><h2>Fiscal periods & grouped events</h2><ol class="timeline periods">${periods.map(rowMarkup).join('')}</ol>`;
+  return `<div class="section-heading"><h2>Issuer events</h2><span>Historical record</span></div><p class="intro">Events are ordered by the first year and month named in each date cell; rows with no year follow. Row text is shown as retained.</p><ol class="timeline">${orderEvents(table.rows).map(rowMarkup).join('')}</ol>`;
 }
 function businessVisual() {
   const row=findRow(pins['CP-1A'],'Company, business','End markets / concentration');
@@ -241,7 +234,7 @@ function renderContent(id,section) {
   if(!isAnalytical(id))return workspaceView(id,section);
   const band=callBand(id,section);
   if(id===pins['CP-1']&&section==='performance')return band+performanceView();
-  if(id===pins['CP-1A']&&section==='events')return band+eventTimeline();
+  if(id===pins['CP-1A']&&section==='events'){const table=eventTable(sectionData(id,section));if(table)return band+eventTimeline(id,table);}
   if(id===pins['CP-2']&&section==='assessment')return band+assessment();
   if(id===pins['CP-8']&&section==='comparison')return band+comparisonView();
   let visual=band+(id===pins['CP-1A']&&section==='business'?businessVisual():id===pins['CP-1']&&section==='cash'?trendChart(id,'Net cash provided by operating activities'):id===pins['CP-2']&&section==='outlook'?downside():'');

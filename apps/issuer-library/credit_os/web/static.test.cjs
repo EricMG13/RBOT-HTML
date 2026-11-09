@@ -30,3 +30,20 @@ test('installDestinations keys are exactly the six library and issuer pages', ()
   const keys = [...text.slice(start, end).matchAll(/^\s*'([^']+)':\[/gm)].map(m => m[1]);
   assert.deepEqual(keys, ['W-Library', 'W-Overview', 'W-Calendar', 'W-Reports', 'W-Evidence', 'W-Forecast']);
 });
+
+test('calendar.js loads before the screens and screen.js carries no hard-coded event dates', () => {
+  const boot = read('static-boot.js');
+  assert.ok(boot.indexOf("'calendar.js'") >= 0 && boot.indexOf("'calendar.js'") < boot.indexOf("'views.js'"));
+  assert.ok(!read('screen.js').includes('May 8, 2023'));
+  assert.ok(!read('screen.js').includes('const order={') && !read('views.js').includes('data[pins[module]]?.run'));
+});
+
+test('the navigator names every module in catalog.json', () => {
+  const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'catalog.json'), 'utf8'));
+  const text = read('screen.js');
+  const start = text.indexOf('const groups = ['), end = text.indexOf('const unnamed');
+  const listed = new Set([...text.slice(start, end).matchAll(/\['(CP-[A-Z0-9]+)',/g)].map(m => m[1]));
+  assert.equal(Object.keys(catalog).length, 20);
+  for (const id of Object.keys(catalog)) assert.ok(listed.has(id), `${id} missing from the navigator groups`);
+  assert.ok(read('views.js').includes("'Not run in this run'"));
+});

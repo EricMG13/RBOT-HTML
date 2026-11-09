@@ -95,3 +95,14 @@ Edits to copied files:
 | `web/views.js` | `updateWorkspaceChrome`: rail `place` map is Issuer library and Reports only; removed the Research workspace and Run activity rail lines (incl. `shownRunHref`) | those rail links no longer exist |
 | `web/screen.js` | `isAnalytical`, `appDestinations`, `showsCodes`, the "Workspace tools" group lose `CP-OS`, `W-NewRun`, `W-Settings`, `W-Help` | removed destinations |
 | `web/screen.js` | Removed `loadRunActivity` call, the `creating`/`#new-run` toggling, `presentRun()`, `newRun.show()`, `installNewRun()`, `installSettings()`; `watchFrame` calls drop the `missingText` argument | removed screens and server features |
+
+## Calendar from any run's CP-1A (Task 4)
+
+New file `web/calendar.js` (pure `eventTable`, `eventOrder`, `orderEvents`; tests in `web/calendar.test.cjs`) is not a copy. Edits to copied files:
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/views.js` | `calendarRun`/`calendarSections` replaced by `eventsOutput`, `hedgesOutput`, `calendarRun` (first run with the source) and `calendarSections`; the `W-Calendar` branch of `workspaceView` renders the run's own CP-1A event table, or the hedge chart only when a CP-2E output exists and carries a `hedges` visual | the `pins['CP-1A']` lookup tied the calendar to one pinned legacy run |
+| `web/views.js` | `availability` says `Not run in this run` where it said `No output found` (module absent from the run) | navigator wording; all 20 `catalog.json` modules already sit in the `groups` list |
+| `web/screen.js` | `eventTimeline(id, table)` rewritten: ordered by `orderEvents`, row text shown as retained, columns labelled from the table headers; the five hard-coded TDG dates and the FY / combined split removed; `renderContent` uses it for the pinned CP-1A `events` section only when that section holds an event table | the fixed `order` map only fit one run's table |
+| `web/static-boot.js` | `calendar.js` added first in the script list | views.js and screen.js call its functions |

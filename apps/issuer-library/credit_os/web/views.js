@@ -48,7 +48,7 @@ function resolveOutput(module,context,file) {
 }
 function availability(module,context) {
   const entry=moduleEntry(module,context);
-  return !entry?'No output found':entry.outputs.length?'Output available':'Inputs only';
+  return !entry?'Not run in this run':entry.outputs.length?'Output available':'Inputs only';
 }
 const contextModules=context=>Object.keys(contexts[context].modules).filter(id=>contexts[context].modules[id].outputs.length);
 // One issuer is one issuerKey, whatever names its runs were recorded under; an unrecorded issuer (null) equals nothing.
@@ -264,10 +264,20 @@ function outputChooser(module) {
   const ctx=contexts[current.context],files=moduleEntry(module,current.context).outputs;
   return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Choose a saved output</h2><p>${files.length} versions of this analysis. Choose one to read.</p></div><div class="output-choices">${files.map(id=>`<a class="text-action" href="${routeHref(module,modules[id].first,null,current.context,data[id].source)}">${esc(data[id].label)}${icon('arrow-right')}</a>`).join('')}</div>`;
 }
-// The calendar reads two curated tables; a run has one only if it holds that pinned output.
-const calendarRun=module=>data[pins[module]]?.run;
+// Events come from the run's own CP-1A event table (calendar.js eventTable); no dates are inferred from other runs.
+// The CP-1A output holding that table, default output first, or null.
+function eventsOutput(context) {
+  const entry=moduleEntry('CP-1A',context);
+  return entry?[entry.default,...entry.outputs].find(id=>id&&eventTable(data[id].sections))||null:null;
+}
+const hedgesOutput=context=>{const entry=moduleEntry('CP-2E',context);return entry?.default||entry?.outputs[0]||null;};
+// The first run that has the module's calendar source (route fallback when no run is chosen).
+const calendarRun=module=>Object.keys(contexts).find(context=>module==='CP-1A'?eventsOutput(context):hedgesOutput(context));
 function calendarSections(context) {
-  return context===calendarRun('CP-1A')?[['tdg','Issuer events',[]]]:context===calendarRun('CP-2E')?[['hedges','Hedge schedule',[]]]:[['unavailable','Calendar availability',[]]];
+  const sections=[];
+  if(eventsOutput(context))sections.push(['tdg','Issuer events',[]]);
+  if(hedgesOutput(context))sections.push(['hedges','Hedge schedule',[]]);
+  return sections.length?sections:[['unavailable','Calendar availability',[]]];
 }
 function forecastSections(context) {
   const models=runModels(context);
@@ -649,9 +659,10 @@ function workspaceView(module,section) {
   if(module==='W-Library')return libraryView();
   if(module==='W-Overview')return summaryView(context);
   if(module==='W-Calendar') {
-    const events=context===calendarRun('CP-1A'),hedges=context===calendarRun('CP-2E');
+    const events=eventsOutput(context),hedges=hedgesOutput(context),showHedges=hedges&&(section==='hedges'||!events);
     if(!events&&!hedges)return `<div class="missing-state"><h2>No calendar retained for this run</h2><p>No dates are inferred from other cases.</p></div>${moduleLink('W-Evidence','Review available evidence')}<a class="text-action switch-case" href="#W-Library/cases">Choose another case</a>`;
-    return `${events?eventTimeline():hedgeChart(pins['CP-2E'],data[pins['CP-2E']].visual)}${moduleLink(events?'CP-1A':'CP-2E','Open owning module')}`;
+    const hedgeView=hedges&&(data[hedges].visual?.kind==='hedges'?hedgeChart(hedges,data[hedges].visual):`<div class="missing-state"><h2>No hedge schedule view for this output</h2><p>The retained CP-2E output is available in its module.</p></div>`);
+    return `${showHedges?hedgeView:eventTimeline(events,eventTable(data[events].sections))}${moduleLink(showHedges?'CP-2E':'CP-1A','Open owning module')}`;
   }
   if(module==='W-Evidence')return `<p class="intro">Source PDFs aren’t included; page references point to the originals.</p>${sourceInventory(context)}`;
   if(module==='W-Reports') {
