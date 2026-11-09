@@ -403,9 +403,10 @@ section.part>.part-empty{margin:0}
 .table-more{margin:0;padding:8px 14px;font-size:var(--fs-label);color:var(--muted);border-top:1px solid var(--rule)}
 /* Part 5: narrative and registers, open. Long registers scroll inside their table-card, never the page. */
 .analysis-section{min-width:0;margin:0 0 22px}
-.analysis-section>h3,.analysis-section>h4{margin:0 0 6px;font-weight:700}
-.analysis-section>h3{font-size:var(--fs-control)}
-.analysis-section>h4{font-size:var(--fs-compact)}
+.analysis-section>h4,.analysis-section>h5,.analysis-section>h6{margin:0 0 6px;font-weight:700;line-height:1.45}
+.analysis-section>h4{font-size:var(--fs-control)}
+.analysis-section>h5{font-size:var(--fs-compact)}
+.analysis-section>h6{font-size:var(--fs-label)}
 .analysis-text{max-width:75ch;margin:0 0 10px;line-height:1.65}
 .analysis-text .chips{margin-left:6px;vertical-align:middle}
 .analysis-section .table-card{max-width:100%;margin:8px 0 12px}

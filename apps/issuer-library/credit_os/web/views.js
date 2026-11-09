@@ -277,15 +277,15 @@ function keyNumbers(id) {
 }
 // What parts 2 to 4 print: the bottom-line table, the findings tables, every chart-data table and the key-numbers table. The key-numbers section whose table is cut stays in the audit list, where the rest of its rows are.
 const isBottomLine=b=>b.type==='table'&&b.headers[0]==='Bottom line';
-// Evidence & audit by heading (R31): the section's own heading or any ancestor heading, found by walking up the levels of the handoff.
-const EVIDENCE_HEADING=/front matter|^request$|source|supplied handoff|lineage|technical audit/i;
+// Evidence & audit by heading (R31a): the section's own heading or any ancestor heading, found by walking up the levels of the handoff.
+const EVIDENCE_HEADING=/^front matter$|^request$|^sources?$|source register|source-context|supplied (current )?handoffs?|technical audit/i;
 function isEvidenceSection(id,section) {
   const all=data[id].sections;
   let level=section.level;
-  if(EVIDENCE_HEADING.test(plain(section.heading)))return true;
+  if(EVIDENCE_HEADING.test(plain(section.heading).trim()))return true;
   for(let i=all.indexOf(section)-1;i>=0;i--) {
     if(!(all[i].level<level)||all[i].level<2)continue; // a level-1 heading is the title or the front matter, not a parent section
-    if(EVIDENCE_HEADING.test(plain(all[i].heading)))return true;
+    if(EVIDENCE_HEADING.test(plain(all[i].heading).trim()))return true;
     level=all[i].level;
   }
   return false;
@@ -325,8 +325,10 @@ function reportFindings(id) {
   return `<section class="part" id="findings"><h3>Findings</h3>${articles.join('')||`<p class="part-empty">${EMPTY_PART.findings}</p>`}</section>`;
 }
 function reportAnalysis(id) {
-  const body=analysisBlocks(id).flatMap(({sections})=>sections).map(({section,blocks})=>{
-    const tag=section.level<=2?'h4':'h5';
+  const shown=analysisBlocks(id).flatMap(({sections})=>sections),top=Math.min(...shown.map(({section})=>section.level));
+  const body=shown.map(({section,blocks})=>{
+    // R33a: relative to the shallowest analysis section (h4), one step per level, capped at h6; the part heading stays the only h3.
+    const tag='h'+Math.min(6,4+(section.level-top||0));
     return `<div class="analysis-section"><${tag}>${rich(section.heading)}</${tag}>${blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
       return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))} ${chipsMarkup(`${id}:${block.line}`)}</p>`;

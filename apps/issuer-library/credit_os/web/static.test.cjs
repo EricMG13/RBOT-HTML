@@ -421,23 +421,23 @@ test('the head and the audit summary give the store\'s one section count', () =>
 
 // ---- Part 5, Analysis: narrative sections and registers the parts above did not print, open, in handoff order.
 const NARRATIVE = [
-  { heading: 'Debt structure', level: 2, line: 70, blocks: [
+  { heading: 'Debt structure', level: 3, line: 70, blocks: [
     { type: 'text', line: 72, text: 'Debt is **mostly secured**.\nSecond line.' },
     table(74, ['Instrument', 'Maturity', 'Amount', 'Note'], [[75, 'Term loan', '2028', '1,200', 'first'], [76, 'Notes', '2030', 'Not supplied', ''], [77, 'Revolver', '2027', '300', 'undrawn']]),
     { type: 'text', line: 79, text: 'Closing remark.' },
   ] },
-  { heading: 'Sub topic', level: 3, line: 80, blocks: [{ type: 'text', line: 82, text: 'Nested text.' }] },
+  { heading: 'Sub topic', level: 4, line: 80, blocks: [{ type: 'text', line: 82, text: 'Nested text.' }] },
 ];
 const NARRATIVE_MODULES = [['liquidity', 'Liquidity table', ['Liquidity table']], ['leverage', 'Chart data', ['Chart data']], ['debt', 'Debt structure', ['Debt structure']], ['sub', 'Sub topic', ['Sub topic']], ['gaps', 'Gaps & limitations', ['Gaps']], ['sources', 'Sources', ['Sources']], ['audit', 'Technical audit', ['Request']]];
 const withNarrative = () => report({ sections: [...SECTIONS, ...NARRATIVE] }, NARRATIVE_MODULES);
 test('a narrative section and a register render open under #analysis, in order, whole, with chips', () => {
   const r = withNarrative();
   const html = r.reportAnalysis(OUT);
-  // Answer key from NARRATIVE: h4 for a level-2 heading, h5 for level 3; the text before the table before the closing remark.
+  // Answer key from NARRATIVE (real handoffs are level 3): the shallowest section is h4, its level-4 child h5; the text before the table before the closing remark.
   const at = s => html.indexOf(s);
   assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>'));
   assert.ok(at('<h4>Debt structure</h4>') > 0 && at('<h5>Sub topic</h5>') > at('<h4>Debt structure</h4>'));
-  assert.equal(html.match(/<h3>/g).length, 1); // R33: the part heading is the only h3
+  assert.equal(html.match(/<h3>/g).length, 1); // R33a: the part heading is the only h3, tags are relative
   assert.ok(at('Debt is <strong>mostly secured</strong>. Second line.') > at('Debt structure') && at('Term loan') > at('mostly secured') && at('Closing remark.') > at('Revolver'));
   assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
@@ -501,4 +501,23 @@ test('R32: Analysis sections follow the handoff line order, not the group order'
   const mods = [['esg', 'T2G.1 — Later group', ['T2G.1 — Later group']], ['plain', 'Plain earlier', ['Plain earlier']]];
   const html = report({ module: 'CP-2E', sections, summary: null, charts: [] }, mods).reportAnalysis(OUT);
   assert.ok(html.indexOf('First by line.') > 0 && html.indexOf('First by line.') < html.indexOf('Second by line.'));
+});
+
+test('R31a: the audit set by heading, answer key from the ruling', () => {
+  const toAudit = ['Exact source register', 'Exact relied-on source register', 'Supplied handoff', 'Supplied handoffs', 'All supplied current handoffs and lineage', 'Source-context assessments', 'Front matter', 'Request'];
+  const toAnalysis = ['Resource bridge and competing uses', 'Source-gate reasoning and strongest contrary evidence', 'Financing-source sufficiency boundary', 'Calculation conventions and lineage', 'Exact arithmetic and financial-lineage trace'];
+  const all = [...toAudit, ...toAnalysis];
+  const sections = all.map((heading, i) => ({ heading, level: 3, line: 200 + 10 * i, blocks: [{ type: 'text', line: 201 + 10 * i, text: `Body ${i}.` }] }));
+  const r = report({ sections }, all.map((h, i) => [`s${i}`, h, [h]]));
+  const html = r.reportAnalysis(OUT);
+  for (const h of toAnalysis) assert.ok(html.includes(`>${h}</h4>`), `${h} should be Analysis`);
+  for (const h of toAudit) assert.ok(!html.includes(`>${h}</h4>`), `${h} should be audit`);
+});
+
+test('R33a: heading tags are relative and capped at h6; the style sheet sets h4, h5 and h6 at 11px or more', () => {
+  const sections = [3, 4, 5, 6, 7].map((level, i) => ({ heading: `Level ${level}`, level, line: 300 + 10 * i, blocks: [{ type: 'text', line: 301 + 10 * i, text: 'x' }] }));
+  const html = report({ sections }, sections.map((s, i) => [`l${i}`, s.heading, [s.heading]])).reportAnalysis(OUT);
+  assert.deepEqual([...html.matchAll(/<(h[3-6])>(Analysis|Level \d)</g)].map(m => m[1]), ['h3', 'h4', 'h5', 'h6', 'h6', 'h6']);
+  const css = read('screen.css');
+  for (const tag of ['h4', 'h5', 'h6']) assert.ok(css.includes(`.analysis-section>${tag}{font-size:`), tag);
 });
