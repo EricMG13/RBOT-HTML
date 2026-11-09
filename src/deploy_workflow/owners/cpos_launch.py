@@ -25,8 +25,9 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, get_args
 
+from deploy_vii.business_context import Category
 from deploy_vii.contracts import PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
@@ -542,7 +543,11 @@ FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. `base_drivers` is the method's base-case driver "
     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
-    "`category`, `rationale` and `limitation`). `downside_shock` is "
+    "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
+    'one per forecast year (for example ["0.05", "0.04", "0.03"]); `category` is exactly one of '
+    f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
+    "(for example a blocked dependency), still write the block, with every driver's `values` as "
+    "`[null, null, null]`. `downside_shock` is "
     '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}` from the CP-2A '
     "scenario, or null when no shock was supplied. `years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '

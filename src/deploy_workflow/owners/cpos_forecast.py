@@ -103,15 +103,40 @@ def _printed(text: str, amount: str) -> bool:
     )
 
 
+def _declined(document: dict[str, object]) -> None:
+    """A block whose every driver has all-null values is the method declining to forecast."""
+    drivers = document.get("base_drivers")
+    if not isinstance(drivers, dict) or not drivers:
+        return
+    if not all(
+        isinstance(d, dict) and isinstance(d.get("values"), list) and set(d["values"]) == {None}
+        for d in drivers.values()
+    ):
+        return
+    limits = document.get("scope_limits")
+    why = limits[0] if isinstance(limits, list) and limits and isinstance(limits[0], str) else ""
+    why = why if len(why) <= 200 else why[:197] + "..."
+    raise ValueError(
+        "CP-2G: the handoff gives no forecast drivers, so no forecast was computed"
+        + (f" ({why})" if why else "")
+    )
+
+
 def parse(cp2g_text: str, cp1_text: str) -> ForecastInputs:
     """The validated inputs block; ValueError names the first thing wrong with it."""
     document = json_object(_block(cp2g_text))
     if document is None:
         raise ValueError("CP-2G: the forecast inputs block is not a bounded JSON object")
+    _declined(document)
     try:
         inputs = ForecastInputs.model_validate_json(exact_json(document))
     except ValidationError as error:
-        raise ValueError(f"CP-2G: forecast inputs: {'; '.join(shape_issues(error))}") from error
+        issues = shape_issues(error)
+        if len(issues) <= 3:
+            raise ValueError(f"CP-2G: forecast inputs: {'; '.join(issues)}") from error
+        raise ValueError(
+            f"CP-2G: forecast inputs: {len(issues)} problems; first: {'; '.join(issues[:3])}"
+        ) from error
     for key, operand in inputs.base.items():
         if operand.amount is not None and not _printed(cp1_text, operand.amount):
             raise ValueError(f"CP-2G: base {key} {operand.amount} is not printed in CP-1")

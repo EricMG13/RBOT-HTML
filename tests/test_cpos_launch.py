@@ -1801,3 +1801,56 @@ def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(
     (folder,) = (out / "deliveries").iterdir()
     assert "cp_forecast_published" not in json.loads((folder / "delivery.json").read_text())
     assert "forecast" not in json.loads(next(out.glob("delivery-*.json")).read_text())
+
+
+# Copied verbatim from the 2026-11-09 sol-medium run (runs/cpos-tdg-sol-medium-all-001, delivery
+# abd687ca...c2baa, CP-2G.md): the model declined to forecast, so every driver is all null.
+REAL_DECLINED_BLOCK = (
+    Path(__file__).parent / "fixtures/sol_medium_run_2026_11_09/CP-2G-forecast-block.md"
+).read_text(encoding="utf-8")
+
+
+def test_a_handoff_that_declines_to_forecast_gets_one_plain_sentence():
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(REAL_DECLINED_BLOCK, "CP-1 prints 7,940")
+    assert str(caught.value) == (
+        "CP-2G: the handoff gives no forecast drivers, so no forecast was computed "
+        "(Blocked interface only: CP-2A is explicitly blocked and supplies no scenario; "
+        "no forecast figures are submitted.)"
+    )
+
+
+def test_other_contract_failures_report_a_count_and_at_most_three_issues():
+    bad = json.loads(forecast_block().split("```json\n")[1].split("\n```")[0])
+    for driver in bad["base_drivers"].values():
+        driver["category"] = "analyst_judgment"
+    block = forecast_block(base_drivers=bad["base_drivers"])
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(block, "CP-1 prints 1000 300 36 20 10 40 194 600 100 50")
+    message = str(caught.value)
+    assert message.startswith("CP-2G: forecast inputs: 7 problems; first: ")
+    assert message.count("category") == 3
+
+
+def test_a_few_problems_are_listed_whole_without_a_count():
+    drivers = json.loads(forecast_block().split("```json\n")[1].split("\n```")[0])["base_drivers"]
+    drivers["dividends"]["category"] = "analyst_judgment"
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(
+            forecast_block(base_drivers=drivers), "1000 300 36 20 10 40 194 600 100 50"
+        )
+    assert str(caught.value).startswith("CP-2G: forecast inputs: base_drivers.dividends.category: ")
+    assert "problems" not in str(caught.value)
+
+
+def test_the_forecast_instructions_name_every_allowed_category_and_the_value_format():
+    from typing import get_args
+
+    from deploy_vii.business_context import Category
+
+    allowed = get_args(Category)
+    assert len(allowed) == 4
+    for value in allowed:
+        assert f"`{value}`" in cpos_launch.FORECAST_BLOCK
+    assert "three decimal strings" in cpos_launch.FORECAST_BLOCK
+    assert "[null, null, null]" in cpos_launch.FORECAST_BLOCK
