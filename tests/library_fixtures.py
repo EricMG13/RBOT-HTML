@@ -74,6 +74,7 @@ class RunSpec:
     version: str = ""
     settled: tuple[str | None, ...] = ("0.10", "0.20")
     view_issuer: str | None = None
+    cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
 
 
@@ -109,6 +110,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         answer = HANDOFF.format(
             module=module, name=issuer_name, as_of=as_of, bottom=f"{module} bottom line."
         )
+        if module == "CP-1":
+            answer += spec.cp1_extra
         # As CP-OS keeps it: the folder is named by the sha256 of the request's inputs.
         inputs = {
             "run": run,
