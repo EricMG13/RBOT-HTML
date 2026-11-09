@@ -236,7 +236,7 @@ def test_the_analysis_part_fits_the_page(tmp_path, width):
     dom, console = visit(page, "#CP-1/analysis?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    # The fixture's earlier rows sit under its Sources parent (Evidence & audit); the Debt structure register is the one analysis table.
+    # Earlier fixture rows sit under Sources (audit); Debt structure is the one analysis table.
     assert seen["pageFits"] is True and seen["tablesInCards"] is True and seen["tables"] == 1
 
 
