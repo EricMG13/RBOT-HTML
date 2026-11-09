@@ -28,7 +28,9 @@ token, when set, always wins (`use_logged_in_user=False`). Opt-in alternative: w
 `COPILOT_USE_GH_LOGIN=1` (exactly `1`) and the runtime authenticates with the account and OAuth
 token of the **gh CLI** (`gh auth token`), found once on the launching PATH; `gh auth switch`
 changes who pays. The Copilot CLI's own sign-in is not used. Any other value changes nothing, and a
-token, when set, wins. Each run's `loop.json` records `auth` (`token` or `gh-login`).
+token, when set, wins. The runtime's gh does not see `GH_TOKEN`, `GITHUB_TOKEN` or `GH_CONFIG_DIR` from the launching
+shell (allowlist), so the payer is gh's stored active account (`gh auth status`), not a `GH_TOKEN`
+set in that shell. Each run's `loop.json` records `auth` (`token`, `gh-login` or `none`).
 
 ## 3. The ruling
 

@@ -1167,3 +1167,20 @@ def test_real_client_builds_the_sdk_client_from_the_credential(
     monkeypatch.setattr(copilot, "CopilotClient", lambda **kw: seen.update(kw))
     real_client(ClientOptions("/opt/copilot", token, "/tmp/home"))
     assert seen["github_token"] == token and seen["use_logged_in_user"] is logged_in
+
+
+def test_relative_path_entry_pins_an_absolute_gh_dir(rig: Rig, tmp_path: Path) -> None:
+    gh = tmp_path / "gh"  # the rig's cwd is tmp_path
+    gh.write_text("#!/bin/sh\n")
+    gh.chmod(0o755)
+    env = {**gh_env(rig, tmp_path), "PATH": ".:/usr/bin"}
+    call(rig.make(text_script(), environ=env), request())
+    assert rig.options[0].env["PATH"].startswith(str(tmp_path) + ":")
+
+
+@pytest.mark.parametrize("value", [None, "true", "0", ""])
+def test_auth_is_none_without_a_credential(rig: Rig, value: str | None) -> None:
+    env = {"COPILOT_CLI_PATH": str(rig.runtime)}
+    if value is not None:
+        env["COPILOT_USE_GH_LOGIN"] = value
+    assert rig.make(text_script(), environ=env).auth == "none"

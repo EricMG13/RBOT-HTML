@@ -429,7 +429,8 @@ def _home_free(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 class CopilotAdapter:
-    """Every construction runs the R2 gate; the environment is read at the first ``complete``."""
+    """Every construction runs the R2 gate; the environment is read when ``auth`` is first read
+    (executor init) or at the first ``complete``, whichever comes first."""
 
     def __init__(
         self,
@@ -467,8 +468,11 @@ class CopilotAdapter:
 
     @property
     def auth(self) -> str:
-        """Which credential this adapter uses: ``token`` or ``gh-login`` (never a value)."""
-        return "token" if self._credentials().token is not None else "gh-login"
+        """The credential in use: ``token``, ``gh-login`` or ``none`` (never a value)."""
+        creds = self._credentials()
+        if creds.token is not None:
+            return "token"
+        return "gh-login" if creds.gh_login else "none"
 
     @property
     def gate(self) -> GateResult:
@@ -493,7 +497,7 @@ class CopilotAdapter:
                 # PATH is still the one found (ceiling: the launching environment is trusted).
                 gh = shutil.which("gh", path=environ.get("PATH"))
                 if gh is not None:
-                    gh_dir = str(Path(gh).parent)
+                    gh_dir = os.path.dirname(os.path.abspath(gh))  # absolute; symlinks not followed
                     path = runtime_env.get("PATH")
                     runtime_env["PATH"] = gh_dir + (os.pathsep + path if path else "")
             self._cached = _Creds(
