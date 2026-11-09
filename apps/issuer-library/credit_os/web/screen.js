@@ -41,7 +41,7 @@ const unnamed=[...new Set(Object.values(data).map(output=>output.module))].filte
 if(unnamed.length)groups.push(['Other modules',unnamed.map(id=>[id,id])]);
 const moduleNames = Object.fromEntries(groups.flatMap(g=>g[1]));
 delete modules.undefined; // A pin this workspace does not hold.
-const isAnalytical = id => !id.startsWith('W-')&&id!=='CP-OS';
+const isAnalytical = id => !id.startsWith('W-');
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"'\r]/g, c => ({'\r':'&#13;','&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const plain = value => String(value).replace(/\*\*|`/g,'');
@@ -57,7 +57,7 @@ const libraryFilters = {...LIBRARY_DEFAULTS};
 const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:''};
 let current = null, returnTrigger = null, returnScroll = 0, returnContentScroll = 0;
 installDestinations();
-const appDestinations=new Set(['W-Library','W-NewRun','W-Settings','W-Help']); // These need no selected run.
+const appDestinations=new Set(['W-Library']); // These need no selected run.
 const aliases = {'CP-MODEL':'W-Forecast','CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
 for(const visual of window.DESIGN_WORKSPACE.visuals)for(const alias of String(visual.aliases||'').split(/[;,\s]+/).filter(Boolean))aliases[alias]??=visual.module;
 // Reader pages show names; the audit, inspector and evidence pages keep exact codes. Text only, so
@@ -70,7 +70,7 @@ const moduleLabel=code=>{
   return (own!==code&&own)||moduleNames[aliases[code]]||own||(code==='CP-MEMO'?'Credit memo':null);
 };
 const namedText=text=>text.replace(new RegExp(MODULE_CODE,'g'),code=>moduleLabel(code)||code);
-const showsCodes=({module,section})=>section==='audit'||['W-Evidence','W-Forecast','CP-OS','W-Help','W-Settings','W-NewRun'].includes(module);
+const showsCodes=({module,section})=>section==='audit'||['W-Evidence','W-Forecast'].includes(module);
 function readerMark(token) {
   if(!MODULE_CODE.test(token))return Object.assign(document.createElement('small'),{className:'ref',textContent:token});
   const label=moduleLabel(token);
@@ -282,7 +282,7 @@ function renderNavigator(module) {
   const query=$('module-search').value.trim().toLowerCase(),context=current.context;
   let count=0;
   const sectionsOf=id=>navigationSections(id,context).filter(s=>s[0]!=='status');
-  const catalogue=groups.concat([['Workspace tools',[['W-Forecast','Published model'],['CP-OS','Run activity']]]]).map(([title,items])=>{
+  const catalogue=groups.concat([['Workspace tools',[['W-Forecast','Published model']]]]).map(([title,items])=>{
     const matches=items.filter(([id,name])=>`${id} ${Object.keys(aliases).filter(k=>aliases[k]===id).join(' ')} ${name} ${sectionsOf(id).map(s=>s[1]).join(' ')} ${isAnalytical(id)?availability(id,context):''}`.toLowerCase().includes(query));
     count+=matches.length;
     if(!matches.length)return '';
@@ -450,7 +450,6 @@ function renderRoute() {
     if(!showsCodes(next))nameCodes($('section-nav'));
     updateWorkspaceChrome(next.module);
     $('content').innerHTML=moduleBody(next);
-    const activity=$('run-activity');if(activity)loadRunActivity(activity);
     // watchFrame returns the callback that stops its timer; the previous report's timer must not fire against a detached element.
     if(cancelReportFrame)cancelReportFrame();
     cancelReportFrame=null;
@@ -461,11 +460,11 @@ function renderRoute() {
       const openModel=()=>{
         if(!disclosure.open||modelFrame.getAttribute('src'))return;
         modelFrame.setAttribute('src',modelFrame.dataset.src);
-        cancelReportFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;},'This model\'s file could not be found. Reload the library to refresh the list.');
+        cancelReportFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;});
       };
       disclosure.addEventListener('toggle',openModel);
     }
-    if(frame)cancelReportFrame=watchFrame(frame,$('content').querySelector('.frame-status'),'Loading report…','The report did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',window.DESIGN_WORKSPACE.reports.find(r=>r.id===next.section).download);link.download='';link.textContent='Download original HTML';return link;},'This report\'s file could not be found. Reload the library to refresh the list.');
+    if(frame)cancelReportFrame=watchFrame(frame,$('content').querySelector('.frame-status'),'Loading report…','The report did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',window.DESIGN_WORKSPACE.reports.find(r=>r.id===next.section).download);link.download='';link.textContent='Download original HTML';return link;});
     if(!showsCodes(next))nameCodes($('content'));
     $('content').scrollTop=readingPositions.get(`${next.context}:${next.output||next.module}:${next.section}`)||0;
     showNavigator(false);
@@ -473,19 +472,14 @@ function renderRoute() {
     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';
     renderNavigator(next.module);
     titleBase=moduleNames[next.module];applyTitle();
-    const creating=next.module==='W-NewRun';
-    $('content').hidden=creating;
-    $('new-run').hidden=!creating;
-    if(typeof presentRun==='function')presentRun();
     if(previous) {
       const report=isReportRoute(next.module,next.section),library=appDestinations.has(next.module)||!contexts[next.context];
       const restored=!report&&!library&&focusId&&$(focusId);
       const link=window.innerWidth>720&&focused?.classList.contains('section-item')&&focusHref&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
       const destination=report?$('report-select'):next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('analysis'):$('section-title');
-      if(!creating)(restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
+      (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
-    if(creating)newRun.show();
   }
   if(next.evidence) showInspector(next.evidence);
   else {
@@ -576,6 +570,4 @@ window.addEventListener('hashchange',renderRoute);
   document.documentElement.addEventListener('pointerleave',leave);
   rail.addEventListener('pointerleave',leave);
 })();
-const newRun=installNewRun();
-installSettings();
 renderRoute();

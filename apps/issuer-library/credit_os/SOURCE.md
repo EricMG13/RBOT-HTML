@@ -52,9 +52,9 @@ without it.
 | `web/report-adapter.css` | `web/report-adapter.css` | `8819ac13bef113ea3a3f8ebdef58b92493c87b80e88ea3e96e1770b527787601` | yes |
 | `web/report-adapter.js` | `web/report-adapter.js` | `d581bcc5aaf9eda65f885651a08d40d64b6a09c0482f9c098b89615a02f5577a` | yes |
 | `web/screen.css` | `web/screen.css` | `b6d3a1d6ccd9a38b323553c385fb3919c08446859a5aad5d309f9fceffd19402` | yes |
-| `web/screen.js` | `web/screen.js` | `3f2b152ab197e4191bffb006188d15a303da3b092cf15e96c107713db314a80b` | yes |
+| `web/screen.js` | `web/screen.js` | `3f2b152ab197e4191bffb006188d15a303da3b092cf15e96c107713db314a80b` | NO, edited (see below) |
 | `web/screening.js` | `web/screening.js` | `f46f679ab376e57ce238f69d420591b7c9c923ac91c7915d07999e0c8406292c` | yes |
-| `web/views.js` | `web/views.js` | `087bd61b814e4d8bcf1be4f6cc3a926ce8aba643b6ee919e9937360f602aee45` | yes |
+| `web/views.js` | `web/views.js` | `087bd61b814e4d8bcf1be4f6cc3a926ce8aba643b6ee919e9937360f602aee45` | NO, edited (see below) |
 
 ## Edits after copying (store.py only; lines are in the edited file; no behaviour change)
 
@@ -71,3 +71,27 @@ Made to pass `tools/quality_gate.py` (ruff with tools/ruff-gate.toml, strict myp
 | 472 | `_chart_table` annotated `(dict[str, Any]) -> dict[str, Any] | None` | mypy no-untyped-def |
 | 489-490 | `reader_fields` annotated `(list[dict[str, Any]]) -> dict[str, Any]`; docstring shortened | mypy no-untyped-def; ruff E501 (105 > 100) |
 | 653, 661, 684 | Removed three `# type: ignore[no-untyped-call]  # legacy untyped ...` comments | the callees are now typed, so mypy reports them as unused-ignore |
+
+## Static shell (Task 3): edited and derived web files
+
+The pages are static: library and issuer screens only, data from `window.CREDIT_OS_DATA` (set by `data.js`), no server calls, no polling. Edited files count against the 800-line cap.
+
+Files created from Credit OS files (source path relative to Final-workflow-PY apps/issuer-library; source sha256):
+
+| File | Source | sha256 at source | What changed, why |
+| --- | --- | --- | --- |
+| `web/index.html` | `web/index.html` | `246830bf3578f1c7c5c4b5238ff7fd90055220e71b58c8fc6d777f2bbc3787b4` | Rail reduced to Issuer library, Reports, Search; removed the workspace-updated and service-down notices, `#run-strip` and the `#new-run` section; scripts are `data.js` then `static-boot.js` (was `boot.js`). No run controls, no server. |
+| `web/static-boot.js` | `web/boot.js` | `303ff7ffbee04488dbc09aee7d3ef7791d3f29f5c259d656d5cf27fb4a0a3581` | Reads `window.CREDIT_OS_DATA` instead of `/api/catalogue` and `/api/workspace`; calls `hydrate(workspace)`; sets the same `DESIGN_*` globals; a missing or unreadable data file is stated in `DESIGN_APP.problem` and the console. Dropped the 30 s discovery poll, reload buttons, `watchRuns`, and `actions.js` from the script list. |
+| `web/shared.js` | `web/actions.js` | `31c83561213c309843d1f13a17ddca53988f81005cbd9f754ee6644b476469c7` (lines 168-170 only) | Keeps `titleBase` and `applyTitle` (without the `runMark` prefix, which only the run watcher set). `shownRunHref` and `presentRun` are not moved: they only served the run watcher and strip, so their call sites are deleted (a copy would be a stub). `loadRunActivity`, `installNewRun`, `installSettings` are deleted. |
+
+Edits to copied files:
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/views.js` | `destinations` table keeps six keys (W-Library W-Overview W-Calendar W-Reports W-Evidence W-Forecast); `CP-OS`, `W-NewRun`, `W-Settings`, `W-Help` removed | run, settings and help screens need a server |
+| `web/views.js` | Deleted `mayDiscardDraft`, `settingsView`, `HELP`, `retainedRecordHtml`, `outputCount` and the `CP-OS`, `W-NewRun`, `W-Settings`, `W-Help` branches of `workspaceView` | only served the removed screens |
+| `web/views.js` | `watchFrame`: dropped the `missingText` parameter, `missing()` and the HEAD `fetch`; frame `load` event and timeout message kept | no server calls; file:// pages cannot HEAD a file |
+| `web/views.js` | Library "New run" button removed; empty-state text no longer links to Settings | New run and Settings are gone |
+| `web/views.js` | `updateWorkspaceChrome`: rail `place` map is Issuer library and Reports only; removed the Research workspace and Run activity rail lines (incl. `shownRunHref`) | those rail links no longer exist |
+| `web/screen.js` | `isAnalytical`, `appDestinations`, `showsCodes`, the "Workspace tools" group lose `CP-OS`, `W-NewRun`, `W-Settings`, `W-Help` | removed destinations |
+| `web/screen.js` | Removed `loadRunActivity` call, the `creating`/`#new-run` toggling, `presentRun()`, `newRun.show()`, `installNewRun()`, `installSettings()`; `watchFrame` calls drop the `missingText` argument | removed screens and server features |
