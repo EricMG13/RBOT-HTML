@@ -4,6 +4,15 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-09 — TDG live runs on sol-high, compared with medium
+
+Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
+Sources were read from Final-workflow-PY `data/public-corpus/v1/TDG` (not modified).
+- `runs/cpos-tdg-sol-high-001` (CP-0, CP-1, CP-1A): accepted, USD 1.38, 41 calls, no repairs.
+- `runs/cpos-tdg-sol-high-cp2-001` (CP-0 to CP-2): accepted, USD 1.63, no repairs; report published.
+- Comparison with the retained medium runs is in `runs/tdg-effort-comparison.md`; only automated
+  checks plus a spot check of the tabled figures against the 10-K were applied, not an analytical review.
+
 ## 2026-11-09 — Lean copy of final-workflow `ffb75ba` (branch `claude/busy-bell-obfret`)
 
 Scope: what this repository holds and runs; Linux, offline. No provider was called.
