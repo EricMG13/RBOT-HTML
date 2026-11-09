@@ -4,6 +4,7 @@ Chrome's console is read for errors, including Content Security Policy violation
 policy blocks every network request, so a violation is a request the page tried to make or a source
 it needs but is not allowed. Needs Google Chrome or Chromium; skipped where there is none."""
 
+import html
 import re
 import shutil
 import subprocess
@@ -91,6 +92,27 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     assert frame and frame[1] == f"reports/run-a/{delivery[1]}/report.html"
     assert (page.parent / frame[1]).is_file()
     assert re.search(r'frame-status"[^>]*hidden', dom)  # Loaded: the loading notice is gone.
+
+
+def test_run_activity_and_forecast_not_run_from_disk(tmp_path):
+    make_run(tmp_path, "run-a")  # No CP-2G output, so no forecast model.
+    half = make_run(tmp_path, "run-half", issuer_id="zzz", issuer_name="Zeta Synthetic")
+    next(half.glob("completed-*.json")).unlink()
+    library = update_library.update_library(tmp_path)
+    reason = dict(library.excluded)["run-half"]
+    assert reason
+    page = tmp_path / "library/index.html"
+    dom, console = visit(page, "#CP-OS/activity")
+    assert console == []
+    assert "Run folders not shown" in dom and "run-half" in dom
+    assert html.escape(reason, quote=False) in dom
+    assert (
+        'data-place="Run activity"' in dom
+        and "<button" not in dom.split('id="content"', 1)[1].split("</article>")[0]
+    )
+    dom, console = visit(page, "#W-Forecast/none?c=run-a")
+    assert console == []
+    assert "No forecast model was published from this run’s files" in dom
 
 
 def test_an_empty_library_says_so(tmp_path):
