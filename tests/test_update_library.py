@@ -131,7 +131,7 @@ def test_unlisted_run_contributes_nothing(tmp_path):
     assert {name for name, _ in library.excluded} == {"run-half", "legacy"}
     data = data_of(tmp_path)
     # Run activity names the excluded folder and its reason; nothing else carries it.
-    assert [name for name, _ in data["activity"]["excluded"]] == ["run-half", "legacy"]
+    assert [name for name, _ in data["activity"]["excluded"]] == ["legacy", "run-half"]
     listed = json.dumps({k: v for k, v in data.items() if k != "activity"})
     assert "run-half" not in listed and "Zeta Synthetic" not in json.dumps(data)
     assert not (tmp_path / "library/reports/run-half").exists()
