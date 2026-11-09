@@ -89,6 +89,7 @@ _WINDOWS_PATH = re.compile(
     rf"|{_ROOT}/(?:[^\s\\/:*?\"<>|()']+/)*[^\s\\/:*?\"<>|()']*"
 )
 _TOKEN_VARIABLE = KEY_VARIABLES["copilot"]
+_CLI_LOGIN_VARIABLE = "COPILOT_USE_CLI_LOGIN"  # exactly "1" opts in to the CLI sign-in
 _DIGEST = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _TOOL_FINISH = ("tool_calls", "tool_use")
 # Bounds of the release of one exchange. STOP_S covers the SDK's own stop: shutdown RPC 10 s,
@@ -146,7 +147,7 @@ def runtime_environment(environ: Mapping[str, str]) -> dict[str, str]:
 @dataclass(frozen=True)
 class ClientOptions:
     runtime: str
-    token: str = field(repr=False)
+    token: str | None = field(repr=False)  # None: the Copilot CLI sign-in (opt-in)
     home: str
     env: Mapping[str, str] = field(default_factory=dict, repr=False)
     private_paths: tuple[str, ...] = field(default=(), repr=False)  # also scrubbed from errors
@@ -241,7 +242,7 @@ def real_client(options: ClientOptions) -> ClientLike:
     client = CopilotClient(
         connection=RuntimeConnection.for_stdio(path=options.runtime),
         github_token=options.token,
-        use_logged_in_user=False,
+        use_logged_in_user=options.token is None,
         mode="empty",
         base_directory=options.home,
         log_level="none",
@@ -282,6 +283,7 @@ class _ToolCallLost(Exception):
 class _Creds:
     redactor: Redactor
     token: str | None = field(repr=False)
+    cli_login: bool
     runtime: str | None
     env: Mapping[str, str] = field(repr=False)
 
@@ -476,6 +478,7 @@ class CopilotAdapter:
             self._cached = _Creds(
                 Redactor.from_environ(environ),
                 environ.get(_TOKEN_VARIABLE) or None,
+                environ.get(_CLI_LOGIN_VARIABLE) == "1",
                 runtime,
                 runtime_environment(environ),
             )
@@ -503,6 +506,25 @@ class CopilotAdapter:
         asyncio.set_event_loop(loop)
         loop.run_forever()
 
+    @staticmethod
+    def _refusal(
+        creds: _Creds, request: TurnRequest, digest: str, reservation_id: str
+    ) -> tuple[str, str] | None:
+        """The (error class, message) of a refusal before anything is sent, or None."""
+        if creds.token is None and not creds.cli_login:
+            return (
+                "KeyMissing",
+                f"{_TOKEN_VARIABLE} is not set or empty, and {_CLI_LOGIN_VARIABLE} is not 1",
+            )
+        if not _DIGEST.fullmatch(digest) or not _DIGEST.fullmatch(reservation_id):
+            return "InvalidDigest", "the invocation digest or reservation id is not a name"
+        if not 1 <= request.max_output_tokens <= MAX_OUTPUT_TOKENS:
+            return (
+                "MaxOutputTooLarge",
+                f"max_output_tokens {request.max_output_tokens} outside 1..{MAX_OUTPUT_TOKENS}",
+            )
+        return None
+
     def complete(
         self,
         request: TurnRequest,
@@ -517,22 +539,14 @@ class CopilotAdapter:
         redactor, token, runtime = creds.redactor, creds.token, creds.runtime
         if self._closed:
             return self._not_sent(PRE_SEND_FAILURE, "AdapterClosed: the adapter is closed", started)
-        if token is None:
-            return self._not_sent("KeyMissing", f"{_TOKEN_VARIABLE} is not set or empty", started)
+        if (
+            refusal := self._refusal(creds, request, invocation_digest, reservation_id)
+        ) is not None:
+            return self._not_sent(*refusal, started)
         if runtime is None:
             return self._not_sent(
                 "RuntimeMissing",
                 f"{COPILOT_RUNTIME_VARIABLE} is not set to an existing file",
-                started,
-            )
-        if not _DIGEST.fullmatch(invocation_digest) or not _DIGEST.fullmatch(reservation_id):
-            return self._not_sent(
-                "InvalidDigest", "the invocation digest or reservation id is not a name", started
-            )
-        if not 1 <= request.max_output_tokens <= MAX_OUTPUT_TOKENS:
-            return self._not_sent(
-                "MaxOutputTooLarge",
-                f"max_output_tokens {request.max_output_tokens} outside 1..{MAX_OUTPUT_TOKENS}",
                 started,
             )
         try:

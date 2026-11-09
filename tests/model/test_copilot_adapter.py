@@ -29,7 +29,12 @@ from deploy_workflow.model.adapter import (
     recorded_adapter,
 )
 from deploy_workflow.model.copilot import event_record
-from deploy_workflow.model.copilot_adapter import ClientOptions, CopilotAdapter, _Call
+from deploy_workflow.model.copilot_adapter import (
+    ClientOptions,
+    CopilotAdapter,
+    _Call,
+    real_client,
+)
 from deploy_workflow.model.handoff import HandoffExecutor
 from deploy_workflow.model.record import CallLog, export_recording
 from deploy_workflow.model.redact import Redactor
@@ -1100,3 +1105,37 @@ def test_relative_or_root_values_do_not_erase_ordinary_text(rig: Rig, tmp_path: 
     run, _ = _run_and_export(rig, tmp_path, adapter)
     (rec,) = CallLog(run, Redactor()).records()
     assert "after 3/4 retries at step 1.2" in str(rec["error"])
+
+
+def test_cli_login_opt_in_sends_no_token(rig: Rig) -> None:
+    env = {"COPILOT_USE_CLI_LOGIN": "1", "COPILOT_CLI_PATH": str(rig.runtime)}
+    reply = call(rig.make(text_script(), environ=env), request())
+    assert reply.kind == "ok" and [o.token for o in rig.options] == [None]
+
+
+@pytest.mark.parametrize("value", ["true", "0", "", "yes"])
+def test_other_opt_in_values_are_key_missing(rig: Rig, value: str) -> None:
+    env = {"COPILOT_USE_CLI_LOGIN": value, "COPILOT_CLI_PATH": str(rig.runtime)}
+    reply = call(rig.make(text_script(), environ=env), request())
+    assert reply.kind == "not_sent" and reply.error_class == "KeyMissing"
+    assert reply.message is not None
+    assert "COPILOT_GITHUB_TOKEN" in reply.message and "COPILOT_USE_CLI_LOGIN" in reply.message
+    assert rig.options == []
+
+
+def test_token_wins_over_the_opt_in(rig: Rig) -> None:
+    env = {**rig.environ, "COPILOT_USE_CLI_LOGIN": "1"}
+    call(rig.make(text_script(), environ=env), request())
+    assert [o.token for o in rig.options] == [TOKEN]
+
+
+@pytest.mark.parametrize(("token", "logged_in"), [(None, True), (TOKEN, False)])
+def test_real_client_builds_the_sdk_client_from_the_credential(
+    monkeypatch: pytest.MonkeyPatch, token: str | None, logged_in: bool
+) -> None:
+    import copilot
+
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(copilot, "CopilotClient", lambda **kw: seen.update(kw))
+    real_client(ClientOptions("/opt/copilot", token, "/tmp/home"))
+    assert seen["github_token"] == token and seen["use_logged_in_user"] is logged_in
