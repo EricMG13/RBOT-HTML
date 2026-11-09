@@ -12,6 +12,7 @@ from library_fixtures import make_run, method
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
+from deploy_workflow.library_index import Refused
 
 PREFIX = "window.CREDIT_OS_DATA="
 HOSTILE = '</script><script>alert(1)</script><!-- & "quoted"  '
@@ -108,7 +109,7 @@ def test_refuses_library_symlink(tmp_path):
     workspace = tmp_path / "workspace"
     (workspace / "runs").mkdir(parents=True)
     (workspace / "library").symlink_to(elsewhere)
-    with pytest.raises(SystemExit, match="is a link or a file"):
+    with pytest.raises(Refused, match="is a link or a file"):
         update_library.update_library(workspace)
     assert list(elsewhere.iterdir()) == []
 
@@ -128,8 +129,11 @@ def test_unlisted_run_contributes_nothing(tmp_path):
     library = update_library.update_library(tmp_path)
     assert [r["id"] for r in library.runs] == ["run-a"]
     assert {name for name, _ in library.excluded} == {"run-half", "legacy"}
-    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
-    assert "run-half" not in text and "Zeta Synthetic" not in text
+    data = data_of(tmp_path)
+    # Run activity names the excluded folder and its reason; nothing else carries it.
+    assert [name for name, _ in data["activity"]["excluded"]] == ["run-half", "legacy"]
+    listed = json.dumps({k: v for k, v in data.items() if k != "activity"})
+    assert "run-half" not in listed and "Zeta Synthetic" not in json.dumps(data)
     assert not (tmp_path / "library/reports/run-half").exists()
     assert [p.name for p in (tmp_path / "library/reports").iterdir()] == ["run-a"]
 
@@ -178,5 +182,22 @@ def test_the_command_reports_what_it_listed_and_why_others_are_not_shown(tmp_pat
 
 
 def test_a_missing_workspace_is_refused(tmp_path):
-    with pytest.raises(SystemExit, match="Workspace not found"):
+    with pytest.raises(Refused, match="Workspace not found"):
         update_library.update_library(tmp_path / "absent")
+
+
+def test_the_command_turns_a_refusal_into_an_exit(tmp_path):
+    with pytest.raises(SystemExit, match="Workspace not found"):
+        update_library.main(["--workspace", str(tmp_path / "absent")])
+
+
+def test_data_js_carries_excluded_runs(tmp_path):
+    make_run(tmp_path, "run-a")
+    half = make_run(tmp_path, "run-half", issuer_id="zzz", issuer_name="Zeta Synthetic")
+    next(half.glob("completed-*.json")).unlink()
+    library = update_library.update_library(tmp_path)
+    activity = data_of(tmp_path)["activity"]
+    assert activity["excluded"] == [[name, reason] for name, reason in library.excluded]
+    assert [name for name, _ in activity["excluded"]] == ["run-half"]
+    assert activity["excluded"][0][1]  # library_index's own reason, not empty
+    assert all(isinstance(i, str) for i in activity["issues"])

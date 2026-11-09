@@ -36,6 +36,7 @@ from credit_os.store import workspace_store
 from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.library_index import (
     Library,
+    Refused,
     build_library,
     delivery_folder,
     read_pinned,
@@ -127,14 +128,20 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
     cat = catalogue(workspace, library)
     store = workspace_store(workspace, cat)
     presented = write_presented_reports(workspace, library, folder)
-    data = relocate({"catalogue": cat, "workspace": store}, presented)
+    # Run activity, as data: the folders left out and why, and every issue the build recorded
+    # (the store's list already holds the catalogue's; each is kept once, in order).
+    activity = {
+        "excluded": [[name, reason] for name, reason in library.excluded],
+        "issues": list(dict.fromkeys([*cat["issues"], *store["issues"]])),
+    }
+    data = relocate({"catalogue": cat, "workspace": store, "activity": activity}, presented)
     (folder / "data.js").write_text(
         "window.CREDIT_OS_DATA=" + embedded_json(data) + ";\n", encoding="utf-8", newline="\n"
     )
     page = folder / "index.html"
     html = page.read_text(encoding="utf-8")
     if "<head>" not in html:
-        raise SystemExit("Not written: the page template has no <head> to hold its policy")
+        raise Refused("Not written: the page template has no <head> to hold its policy")
     page.write_text(html.replace("<head>", "<head>\n  " + CSP_META, 1), encoding="utf-8")
 
 
@@ -149,13 +156,16 @@ def remove_folder(folder: Path) -> None:
 
 
 def update_library(workspace: Path) -> Library:
-    """Rebuild ``workspace/library`` whole: built beside it, then swapped in."""
+    """Rebuild ``workspace/library`` whole: built beside it, then swapped in.
+
+    Raises ``library_index.Refused`` (a ValueError) when the workspace or ``library`` cannot be
+    used; only ``main`` turns that into an exit."""
     workspace = workspace.resolve()
     if not workspace.is_dir():
-        raise SystemExit(f"Workspace not found: {workspace}")
+        raise Refused(f"Workspace not found: {workspace}")
     target = workspace / "library"
     if target.is_symlink() or (target.exists() and not target.is_dir()):
-        raise SystemExit(f"Not written: {target} is a link or a file, not the library folder")
+        raise Refused(f"Not written: {target} is a link or a file, not the library folder")
     library = build_library(workspace, target)
     staging = Path(tempfile.mkdtemp(dir=workspace, prefix=".library-new-"))
     old = workspace / ".library-old"
@@ -186,7 +196,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.workspace is None:
         parser.error("give --workspace: the folder holding runs/")
-    library = update_library(args.workspace)
+    try:
+        library = update_library(args.workspace)
+    except Refused as error:
+        raise SystemExit(str(error)) from error
     print(f"Listed {len(library.runs)} run(s) on the current methodology.")
     for run in library.runs:
         print(f"  {run['id']}: {run['issuer_name']}, as of {run['as_of']}")

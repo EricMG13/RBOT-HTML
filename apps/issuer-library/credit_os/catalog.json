@@ -1,6 +1,5 @@
 {
   "CP-1": {
-    "path": "tdg-002/CP-1-attempt-2.md",
     "period": "FY2024 historical evidence · later events separately dated",
     "firstHeading": "T4.10",
     "basis": {
@@ -15,13 +14,11 @@
     }
   },
   "CP-1A": {
-    "path": "tdg-002/CP-1A-attempt-3.md",
     "period": "FY2024 historical evidence · later events separately dated",
     "firstHeading": "Timeline",
     "scope": "Retained module output"
   },
   "CP-2": {
-    "path": "tdg-002/CP-2-attempt-2.md",
     "period": "FY2024 historical evidence · later events separately dated",
     "firstHeading": "Integrated fundamental",
     "scope": "Retained module output",
@@ -32,7 +29,6 @@
     }
   },
   "CP-0": {
-    "path": "tdg-003/CP-0.md",
     "period": "FY2024 and quarter ended 28 December 2024",
     "firstHeading": "Identity, authority",
     "scope": "Retained module output",
@@ -53,7 +49,6 @@
     }
   },
   "CP-1B": {
-    "path": "tdg-003/CP-1B-attempt-1.md",
     "period": "Fiscal Q1: 2023 and 2024 calendar windows",
     "firstHeading": "Financial performance",
     "scope": "Retained module output",
@@ -88,7 +83,6 @@
     }
   },
   "CP-1D": {
-    "path": "tdg-003/CP-1D-attempt-1.md",
     "period": "FY2024 annual; quarterly checks separate",
     "firstHeading": "T1D.4",
     "scope": "Retained module output",
@@ -107,7 +101,6 @@
     }
   },
   "CP-1C": {
-    "path": "tdg-peers-2024-001/CP-1C-attempt-2.md",
     "period": "Each company’s own FY2024 · unmatched fiscal dates",
     "firstHeading": "T4.3 /",
     "scope": "Retained module output",
@@ -137,7 +130,6 @@
     }
   },
   "CP-2D": {
-    "path": "tdg-002/CP-2D-attempt-1.md",
     "period": "FY2024 cash bridge · historical opening basis",
     "firstHeading": "Historical sources",
     "scope": "Retained module output",
@@ -163,7 +155,6 @@
     }
   },
   "CP-2A": {
-    "path": "tdg-002/CP-2A-attempt-1.md",
     "period": "FY2024 static base · conditional sensitivities",
     "firstHeading": "Findings",
     "scope": "Retained module output",
@@ -195,7 +186,6 @@
     }
   },
   "CP-2E": {
-    "path": "tdg-003/CP-2E-attempt-2.md",
     "period": "30 September 2024 base · forward hedge dates",
     "firstHeading": "T2F.3",
     "scope": "Retained module output",
@@ -216,7 +206,6 @@
     }
   },
   "CP-2G": {
-    "path": "tdg-003/CP-2G-attempt-2.md",
     "period": "FY2025–2027 conditional paths · FY2024 base",
     "firstHeading": "T2H.5",
     "scope": "Retained module output",
@@ -239,7 +228,6 @@
     }
   },
   "CP-2H": {
-    "path": "ford-otosan-2024-001/CP-2H-attempt-2.md",
     "period": "11 April 2024 · historical agency publications",
     "firstHeading": "T2R.1",
     "scope": "Retained module output",
@@ -261,7 +249,6 @@
     }
   },
   "CP-3": {
-    "path": "frontier-2020-001/CP-3-recovery-consumer.md",
     "period": "29 June 2020 disclosure · historical recovery cases",
     "firstHeading": "Findings",
     "scope": "Bounded recovery consumer · not full security selection",
@@ -282,7 +269,6 @@
     }
   },
   "CP-3C": {
-    "path": "ford-otosan-2024-001/CP-3C-consumer.md",
     "period": "2024 published funding plan · as of 11 April 2024",
     "firstHeading": "Findings",
     "scope": "Bounded funding-plan consumer · not full refinancing / LME",
@@ -305,7 +291,6 @@
     }
   },
   "CP-4": {
-    "path": "tdg-004/CP-4-attempt-2.md",
     "period": "19 September 2024 indenture · 6% secured notes due 2033",
     "firstHeading": "T4.3",
     "scope": "Retained module output",
@@ -326,7 +311,6 @@
     }
   },
   "CP-4C": {
-    "path": "frontier-2020-001/CP-4C-attempt-1.md",
     "period": "29 June 2020 disclosure · conditional liquidation",
     "firstHeading": "T4E.5",
     "scope": "Retained module output",
@@ -357,7 +341,6 @@
     }
   },
   "CP-5": {
-    "path": "ford-otosan-2024-001/CP-5-attempt-1.md",
     "period": "11 April 2024 case · five upstream handoffs",
     "firstHeading": "T5B.3",
     "scope": "Retained module output",
@@ -378,7 +361,6 @@
     }
   },
   "CP-6": {
-    "path": "ford-otosan-2024-001/CP-6-attempt-1.md",
     "period": "11 April 2024 case · historical decision exercise",
     "firstHeading": "T6A.7",
     "scope": "Retained module output",
@@ -401,7 +383,6 @@
     }
   },
   "CP-DR": {
-    "path": "tdg-guidance-001/CP-DR-attempt-1.md",
     "period": "7 November 2024 guidance · FY2025 outlook",
     "firstHeading": "TDR.2",
     "scope": "Retained module output",
@@ -422,16 +403,9 @@
     }
   },
   "CP-8": {
-    "path": "tdg-run-comparison-001/CP-8.md",
     "period": "Build 2 compared with build 6 · 30 September 2024 financial base",
     "firstHeading": "Findings",
     "scope": "Retained module output",
-    "compare": {
-      "prior": "tdg-fy2024-snapshot-2",
-      "current": "tdg-fy2024-snapshot-6",
-      "repaired": "tdg-fy2024-snapshot-7",
-      "recheck": "tdg-run-comparison-001/CP-8-recheck.md"
-    },
     "call": {
       "heading": "Findings",
       "startsWith": "The newer deliverable",

@@ -1399,3 +1399,20 @@ def test_library_failure_keeps_the_run(tmp_path, monkeypatch, capsys, copilot_ru
     assert "disk full" in captured.err
     assert f"python apps/issuer-library/update_library.py --workspace {tmp_path}" in captured.err
     assert f"Report:   {tmp_path / 'runs' / 'x' / 'report.html'}" in captured.out
+
+
+def test_refresh_library_loads_the_checkout_update_library(tmp_path, capsys):
+    """The real file-location loader, no stand-in: an empty workspace gets its library page."""
+    (tmp_path / "runs" / "x").mkdir(parents=True)
+    cpos_launch._refresh_library(tmp_path / "runs" / "x")
+    assert (tmp_path / "library" / "index.html").is_file()
+    assert f"Library:  {tmp_path / 'library' / 'index.html'} (0 run(s))" in capsys.readouterr().out
+
+
+def test_refresh_library_reports_a_real_refusal_and_keeps_going(tmp_path, capsys):
+    (tmp_path / "runs" / "x").mkdir(parents=True)
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "library").symlink_to(tmp_path / "elsewhere")
+    cpos_launch._refresh_library(tmp_path / "runs" / "x")
+    err = capsys.readouterr().err
+    assert "is a link or a file" in err and f"--workspace {tmp_path}" in err

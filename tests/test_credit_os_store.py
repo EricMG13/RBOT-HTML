@@ -1,5 +1,6 @@
 """Credit OS's store reads a synthetic workspace built by tests/library_fixtures.py."""
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -17,12 +18,14 @@ def read_store(tmp_path: Path) -> dict:
     run_dir = make_run(tmp_path, "run-a")
     (delivery,) = (run_dir / "deliveries").iterdir()
     folder = f"runs/run-a/deliveries/{delivery.name}"
+    (report,) = delivery.glob("report.html")
+    digest = hashlib.sha256(report.read_bytes()).hexdigest()
     artifact = {
         "folder": folder,
         "label": "Synthetic report",
         "state": "final",
         "available": True,
-        "href": f"/files/{folder}/report.html?sha256=r",
+        "href": f"/files/{folder}/report.html?sha256={digest}",
     }
     row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
     return store.workspace_store(tmp_path, {"real": [row], "issues": []})
@@ -35,6 +38,11 @@ def test_store_reads_a_listed_run(tmp_path):
     for output in by_module.values():
         assert output["run"] == "run-a"
         assert output["sha256"] in result["handoffs"]
+    handoff_digests = {
+        hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in (tmp_path / "runs/run-a/deliveries").glob("*/CP-*.md")
+    }
+    assert {o["sha256"] for o in result["outputs"].values()} == handoff_digests
     (report,) = result["reports"]
     assert "/files/runs/run-a/deliveries/" in report["href"]
     assert report["href"].split("?")[0].endswith("/report.html")
@@ -43,6 +51,8 @@ def test_store_reads_a_listed_run(tmp_path):
 
 def test_store_has_no_legacy_routes(tmp_path):
     result = read_store(tmp_path)
+    assert result["pins"] == {}
+    assert set(result["runs"]) == {"run-a"}
     assert result["outputs"] and result["reports"]
     links = [o["href"] for o in result["outputs"].values()]
     for report in result["reports"]:
