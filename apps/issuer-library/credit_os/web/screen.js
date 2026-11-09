@@ -563,4 +563,22 @@ window.addEventListener('hashchange',renderRoute);
   document.documentElement.addEventListener('pointerleave',leave);
   rail.addEventListener('pointerleave',leave);
 })();
+// Live run activity: re-load activity.js every 30 s while Run activity is the view showing. The script calls onRunActivity, which re-renders
+// that view through the same moduleBody path as a route change and only when it is still the one showing.
+let activityTimer=null;
+function syncActivityTimer() {
+  const wait=nextActivityReload(current);
+  if(wait===null){clearTimeout(activityTimer);activityTimer=null;return;}
+  if(activityTimer!==null)return;
+  activityTimer=setTimeout(()=>{activityTimer=null;if(nextActivityReload(current)===null)return;swapActivityScript(document,Date.now());syncActivityTimer();},wait);
+}
+window.onRunActivity=()=>{
+  if(nextActivityReload(current)===null)return;
+  const content=$('content'),top=content.scrollTop;
+  content.innerHTML=moduleBody(current);
+  if(!showsCodes(current))nameCodes(content);
+  content.scrollTop=top;
+};
+window.addEventListener('hashchange',syncActivityTimer);
 renderRoute();
+syncActivityTimer();
