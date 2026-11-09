@@ -148,6 +148,9 @@ def test_a_policy_violation_is_seen(tmp_path):
 PROBE = Path(__file__).with_name("browser_probe_module_report.js").read_text(encoding="utf-8")
 
 
+OVERVIEW_PROBE = Path(__file__).with_name("browser_probe_overview.js").read_text(encoding="utf-8")
+
+
 def report_library(tmp_path: Path) -> Path:
     digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
     run = make_run(
@@ -187,6 +190,18 @@ def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width
     assert seen["escaped"] == {"hidden": True, "focusOnChip": True, "hash": "#CP-1/head?c=run-a"}
     assert seen["anchor"]["hash"] == "#CP-1/numbers?c=run-a"
     assert seen["anchor"]["current"] == "Key numbers" and seen["anchor"]["chipStillThere"] is True
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_overview_chart_values_stay_inside_their_cards(tmp_path, width):
+    page = report_library(tmp_path)
+    (page.parent / "probe.js").write_text(OVERVIEW_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["rows"] > 0, "the Overview drew no chart rows"
+    assert seen["valueInCard"] is True and seen["fits"] is True
 
 
 def test_the_report_canvas_and_old_section_links(tmp_path):

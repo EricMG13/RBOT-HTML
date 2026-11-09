@@ -334,3 +334,15 @@ test('Open source file is hidden by the structural condition only, not by the re
   const withFile = { kind: 'issuer_page', source: 'PDF', file: 'a.pdf', page: 1, page_end: null, sha256: 'ab', quote: null, quote_found: null, excerpt: 'text', hash_matches_inventory: true };
   assert.ok(section({ ...withFile, reason: 'the line is missing from page 1' }, output).includes('Open source file'));
 });
+
+test('an audit item that cannot be drawn says so instead of staying silent', () => {
+  const text = read('screen.js');
+  const start = text.indexOf('function openAuditSection('), end = text.indexOf('function showNavigator(');
+  const body = { hidden: true, dataset: {}, innerHTML: '' }, button = { dataset: { audit: 'x' }, getAttribute: () => 'b', setAttribute() {} };
+  const errors = [], log = console.error;
+  console.error = e => errors.push(e);
+  try {
+    new Function('$', 'current', 'sectionView', `${text.slice(start, end)}; openAuditSection(arguments[3]);`)(() => body, { output: 'o' }, () => { throw new Error('boom'); }, button);
+  } finally { console.error = log; }
+  assert.ok(body.innerHTML.includes('Couldn’t present this item') && errors.length === 1 && body.hidden === false && !body.dataset.drawn);
+});

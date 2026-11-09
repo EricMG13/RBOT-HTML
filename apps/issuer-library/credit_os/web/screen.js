@@ -446,7 +446,14 @@ function libraryClick(target) {
 // An Evidence & audit item opens its section in place, drawn the first time it is opened.
 function openAuditSection(button) {
   const body=$(button.getAttribute('aria-controls')),open=body.hidden;
-  if(open&&!body.dataset.drawn){body.innerHTML=sectionView(current.output,button.dataset.audit);body.dataset.drawn='1';}
+  if(open&&!body.dataset.drawn) {
+    try {body.innerHTML=sectionView(current.output,button.dataset.audit);body.dataset.drawn='1';}
+    catch(error) {
+      // Documented fail-open, as in moduleBody: logged, and the item says it could not be drawn; the saved file is unchanged.
+      console.error(error);
+      body.innerHTML='<p class="small">Couldn’t present this item. The saved file is unchanged.</p>';
+    }
+  }
   body.hidden=!open;
   button.setAttribute('aria-expanded',String(open));
 }
