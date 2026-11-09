@@ -104,6 +104,7 @@ New file `web/calendar.js` (pure `eventTable`, `eventOrder`, `orderEvents`; test
 | --- | --- | --- |
 | `web/views.js` | `calendarRun`/`calendarSections` replaced by `eventsOutput`, `hedgesOutput`, `calendarRun` (first run with the source) and `calendarSections`; the `W-Calendar` branch of `workspaceView` renders the run's own CP-1A event table, or the hedge chart only when a CP-2E output exists and carries a `hedges` visual | the `pins['CP-1A']` lookup tied the calendar to one pinned legacy run |
 | `web/views.js` | `availability` says `Not run in this run` where it said `No output found` (module absent from the run) | navigator wording; all 20 `catalog.json` modules already sit in the `groups` list |
+| `web/views.js` | `unavailableView` body for a module with no entry now ends `The run did not produce this module.`, where it said `That alone does not show the module was not run or not applicable.` | the old sentence contradicted the `Not run in this run` heading (final review L2) |
 | `web/screen.js` | `eventTimeline(id, table)` rewritten: ordered by `orderEvents`, row text shown as retained, columns labelled from the table headers; the five hard-coded TDG dates and the FY / combined split removed; `renderContent` uses it for the pinned CP-1A `events` section only when that section holds an event table | the fixed `order` map only fit one run's table |
 | `web/static-boot.js` | `calendar.js` added first in the script list | views.js and screen.js call its functions |
 
