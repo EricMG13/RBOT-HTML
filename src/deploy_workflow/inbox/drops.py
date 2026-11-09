@@ -13,7 +13,7 @@ import json
 import os
 import re
 import stat
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -153,6 +153,12 @@ class ReadyTracker:
     settle_seconds: float
     clock: Callable[[], float]
     _seen: dict[Path, tuple[Signature, float]] = field(default_factory=dict, init=False)
+
+    def forget_missing(self, listed: Iterable[Path]) -> None:
+        """Drop every tracked entry that is not in ``listed`` (what the last scan found)."""
+        keep = set(listed)
+        for entry in [e for e in self._seen if e not in keep]:
+            del self._seen[entry]
 
     def ready(self, entry: Path) -> bool:
         try:

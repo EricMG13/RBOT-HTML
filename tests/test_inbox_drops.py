@@ -460,3 +460,28 @@ def test_an_unmarkable_form_is_refused(layout, tmp_path):
     with pytest.raises(ValueError, match="html lang"):
         write_templates(layout, form)
     assert not (layout.inbox / "credit_snapshot/_template").exists()
+
+
+def test_a_drop_removed_before_it_settled_and_dropped_again_waits_the_full_time(layout):
+    now = [0.0]
+    tracker = ReadyTracker(120, lambda: now[0])
+    entry = drop(layout, "credit_snapshot", "acme", {"a.pdf": b"1"})
+    assert tracker.ready(entry) is False
+    now[0] = 100
+    entry.rename(layout.inbox / "gone")  # the analyst took it back
+    tracker.forget_missing([])  # the scan listed nothing
+    (layout.inbox / "gone").rename(entry)  # and dropped the identical folder again
+    now[0] = 130
+    assert tracker.ready(entry) is False  # 130 s after the first sight, 30 s after this one
+    now[0] = 250
+    assert tracker.ready(entry) is True
+
+
+def test_forget_missing_keeps_what_is_still_listed(layout):
+    now = [0.0]
+    tracker = ReadyTracker(120, lambda: now[0])
+    entry = drop(layout, "credit_snapshot", "acme", {"a.pdf": b"1"})
+    tracker.ready(entry)
+    tracker.forget_missing([entry])
+    now[0] = 120
+    assert tracker.ready(entry) is True

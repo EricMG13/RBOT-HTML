@@ -1376,7 +1376,7 @@ def library_launch(tmp_path, monkeypatch, copilot_ruling, update):
     monkeypatch.setattr(
         cpos_launch, "run_live_handoffs", lambda manifest, directory, **k: directory / "report.html"
     )
-    monkeypatch.setattr(cpos_launch, "_update_library", update)
+    monkeypatch.setattr(cpos_launch, "update_library_at", update)
     argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
     argv[argv.index("--out") + 1] = str(tmp_path / "runs" / "x")
     return main(argv)
