@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -222,6 +223,16 @@ def handoff_metrics(
     return metrics
 
 
+# The files `credit_os/store.py` reads for a model (its CASHFLOW_FILES).
+MODEL_FILES = ("forecast_exact.json", "calculation.json", "annual.md", "quarter.md")
+
+
+def forecast_published(folder: Path, relative: str, files: Mapping[str, str]) -> bool:
+    """Whether the verified delivery's receipt says it carries the Python-computed forecast."""
+    receipt = json_object(read_inside(folder, f"{relative}/delivery.json"), "delivery.json")
+    return receipt.get("cp_forecast_published") is True and set(MODEL_FILES) <= set(files)
+
+
 def delivery_fields(
     workspace: Path, run: dict[str, Any], sources: dict[str, Any], issues: list[str]
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
@@ -231,6 +242,7 @@ def delivery_fields(
     try:
         relative, files = delivery_folder(folder, run["report"]["sha256"])
         view = json_object(read_inside(folder, f"{relative}/view.json"), "view.json")
+        published = forecast_published(folder, relative, files)
         cp1 = next((m for m in run["modules"] if m["id"] == "CP-1"), None)
         text = ""
         if cp1 is not None:
@@ -255,7 +267,10 @@ def delivery_fields(
     if cp1 is not None:
         pin = {"path": f"{delivered}/CP-1.md", "sha256": cp1["sha256"]}
         metrics = handoff_metrics(name, pin, text, sources, issues)
-    return [artifact], metrics
+    artifacts = [artifact]
+    if published:
+        artifacts.append({**artifact, "kind": "model", "label": "Forecast"})
+    return artifacts, metrics
 
 
 def run_record(

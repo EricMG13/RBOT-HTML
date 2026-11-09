@@ -1,0 +1,185 @@
+"""The CP-2G forecast files a launcher run publishes beside its report. Pure: bytes in, bytes out.
+
+The CP-2G handoff states inputs only, in one fenced JSON block under ``HEADING``: the CP-1 base
+amounts, the seven driver paths, an optional downside shock and the three forecast years. Python
+(``cp2g.forecast``, 38-digit exact) computes every figure; no figure is read from the handoff's
+prose. A block that is missing, malformed or states a base amount CP-1 does not print raises
+ValueError; the caller decides what that means (the run fails open, see cpos.run_handoffs).
+"""
+
+import hashlib
+import json
+import re
+from dataclasses import fields
+from datetime import date
+from decimal import Decimal
+from typing import Annotated
+
+from pydantic import Field, ValidationError, model_validator
+
+from deploy_vii.contracts import Contract
+from deploy_vii.live.schema import exact_json, json_object
+from deploy_vii.readiness import shape_issues
+from deploy_workflow.owners import cp2g
+
+HEADING = "### Forecast inputs (machine-readable)"
+SCHEMA_VERSION = "cpos-forecast-inputs/1"
+LIMIT = (
+    "Every figure is Python's arithmetic over inputs the CP-2G handoff stated; the inputs, not "
+    "the arithmetic, are unreviewed. Not analytical review."
+)
+Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
+
+
+class Operand(Contract):
+    amount: Signed | None
+    reason: str | None
+
+    @model_validator(mode="after")
+    def one_of(self) -> "Operand":
+        if (self.amount is None) == (self.reason is None):
+            raise ValueError("an operand states an amount or a reason, never both or neither")
+        return self
+
+
+class Shock(Contract):
+    ebitda_decline: cp2g.Share
+    rate_increase: cp2g.Share
+
+
+class Span(Contract):
+    year: int
+    start: str
+    end: str
+
+
+class ForecastInputs(Contract):
+    schema_version: str = Field(pattern=re.escape(SCHEMA_VERSION))
+    base: dict[str, Operand]
+    base_drivers: cp2g.BaseDrivers
+    downside_shock: Shock | None
+    years: tuple[Span, Span, Span]
+    scope_limits: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def consistent(self) -> "ForecastInputs":
+        if set(self.base) != set(cp2g.OPERAND_METRIC):
+            raise ValueError(f"base must state exactly {', '.join(cp2g.OPERAND_METRIC)}")
+        first = self.years[0].year
+        if [s.year for s in self.years] != [first, first + 1, first + 2]:
+            raise ValueError("years must be three consecutive fiscal years")
+        if any(date.fromisoformat(s.start) > date.fromisoformat(s.end) for s in self.years):
+            raise ValueError("a year starts after it ends")
+        return self
+
+
+def _block(text: str) -> str:
+    lines = text.replace("\r\n", "\n").split("\n")
+    starts = [i for i, line in enumerate(lines) if line.strip() == HEADING]
+    if len(starts) != 1:
+        raise ValueError(f"CP-2G: needs exactly one `{HEADING}` heading, found {len(starts)}")
+    body: list[str] = []
+    for line in lines[starts[0] + 1 :]:
+        if re.match(r"#{1,6}\s", line):
+            break
+        body.append(line)
+    found = re.findall(r"^```json\n(.*?)\n```[ \t]*$", "\n".join(body), re.DOTALL | re.MULTILINE)
+    if len(found) != 1 or "\n".join(body).count("```") != 2:
+        raise ValueError(f"CP-2G: `{HEADING}` needs exactly one fenced json block")
+    return str(found[0])
+
+
+def _printed(text: str, amount: str) -> bool:
+    """Whether CP-1 prints the amount as a whole number token, with or without thousands commas."""
+    whole, dot, fraction = amount.lstrip("-").partition(".")
+    forms = {f"{whole}{dot}{fraction}", f"{int(whole):,}{dot}{fraction}"}
+    return any(
+        re.search(rf"(?<![0-9.,]){re.escape(form)}(?![0-9]|[.,][0-9])", text) for form in forms
+    )
+
+
+def parse(cp2g_text: str, cp1_text: str) -> ForecastInputs:
+    """The validated inputs block; ValueError names the first thing wrong with it."""
+    document = json_object(_block(cp2g_text))
+    if document is None:
+        raise ValueError("CP-2G: the forecast inputs block is not a bounded JSON object")
+    try:
+        inputs = ForecastInputs.model_validate_json(exact_json(document))
+    except ValidationError as error:
+        raise ValueError(f"CP-2G: forecast inputs: {'; '.join(shape_issues(error))}") from error
+    for key, operand in inputs.base.items():
+        if operand.amount is not None and not _printed(cp1_text, operand.amount):
+            raise ValueError(f"CP-2G: base {key} {operand.amount} is not printed in CP-1")
+    return inputs
+
+
+def _cell(value: cp2g.Val) -> dict[str, str | None]:
+    amount = None if value.amount is None else format(value.amount, "f")
+    return {"amount": amount, "reason": value.reason}
+
+
+def _sha(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _json(document: object) -> bytes:
+    return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+
+
+def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
+    """The five files `credit_os/store.py` reads for a model, from the CP-1 and CP-2G handoffs."""
+    inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"))
+    operands = cp2g.Operands(
+        **{
+            key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
+            for key, o in inputs.base.items()
+        }
+    )
+    drivers = cp2g.Drivers.from_submission(inputs.base_drivers)
+    shocks: dict[str, tuple[Decimal, Decimal] | None] = {"REFERENCE": None}
+    if inputs.downside_shock is not None:
+        shock = inputs.downside_shock
+        shocks["DOWNSIDE"] = (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase))
+    outputs = {}
+    for case, shock_pair in shocks.items():
+        result = cp2g.forecast(operands=operands, drivers=drivers, shock=shock_pair)
+        outputs[case] = {
+            "years": [
+                {
+                    "year": span.year,
+                    "planning_start": span.start,
+                    "planning_end": span.end,
+                    **{f.name: _cell(getattr(year, f.name)) for f in fields(cp2g.Year)},
+                }
+                for span, year in zip(inputs.years, result.years, strict=True)
+            ]
+        }
+    exact = _json(
+        {
+            "schema_version": "cpos-forecast-exact/1",
+            "consumed": {"CP-1.md": _sha(cp1), "CP-2G.md": _sha(handoff)},
+            "base": {key: _cell(value) for key, value in operands.items()},
+            "reference_drivers": inputs.base_drivers.model_dump(mode="json"),
+            "downside_shock": None
+            if inputs.downside_shock is None
+            else inputs.downside_shock.model_dump(mode="json"),
+            "outputs": outputs,
+            "scope_limits": [LIMIT, *inputs.scope_limits],
+        }
+    )
+    calculation = _json(
+        {
+            "schema_version": "cpos-model/1",
+            "annual_periods": [],
+            "values": {},
+            "forecast_exact_file": "forecast_exact.json",
+            "forecast_exact_sha256": _sha(exact),
+        }
+    )
+    return {
+        "annual.md": cp1,
+        "forecast.md": handoff,
+        "forecast_exact.json": exact,
+        "calculation.json": calculation,
+        "quarter.md": b"No quarter handoff in this run.\n",
+    }
