@@ -146,6 +146,45 @@ def test_metrics_quote_the_handoff_row(tmp_path):
         assert source["path"] == path
 
 
+def newest_first(charts: str) -> str:
+    """CHARTS with each table's earlier-year row moved below the latest one."""
+    lines = charts.split("\n")
+    for index in range(len(lines) - 2, -1, -1):
+        if "Earlier year." in lines[index]:
+            lines[index], lines[index + 1] = lines[index + 1], lines[index]
+    return "\n".join(lines)
+
+
+def test_metrics_take_the_latest_period_not_the_last_row(tmp_path):
+    run_dir = make_run(tmp_path, "run-a", cp1_extra=newest_first(CHARTS))
+    _, lines = delivered_cp1(run_dir)
+    result = built(tmp_path)
+    metrics = result["real"][0]["metrics"]
+    assert {k: m["value"] for k, m in metrics.items()} == {
+        "leverage": "6.57",
+        "net_leverage": "4.93",
+        "coverage": "3.29",
+        "cash": "6261",
+        "undrawn": "843",
+    }
+    assert {m["period"] for m in metrics.values()} == {"FY2024", "2024-09-30"}
+    for row in (LEVERAGE, COVER, LIQUIDITY):
+        quoted = [s for s in result["sources"].values() if s["quote"] == row]
+        assert quoted and all(s["line"] == lines.index(row) + 1 for s in quoted)
+    assert result["issues"] == []
+
+
+def test_periods_that_cannot_be_ordered_give_no_metric_and_an_issue(tmp_path):
+    charts = CHARTS.replace("| FY2023 | 6.33", "| Q1 FY2023 | 6.33")
+    make_run(tmp_path, "run-a", cp1_extra=charts)
+    result = built(tmp_path)
+    metrics = result["real"][0]["metrics"]
+    assert "leverage" not in metrics and "net_leverage" not in metrics
+    assert {"coverage", "cash", "undrawn"} <= set(metrics)
+    (issue,) = [i for i in result["issues"] if "leverage" in i]
+    assert issue.startswith("run-a: CP-1 leverage table has no metric")
+
+
 def test_not_supplied_is_absent(tmp_path):
     charts = CHARTS.replace("| 3.29 |", "| Not supplied: no cash interest line |")
     charts = charts.replace("| 4.93 |", "| Not supplied: no net debt |")
@@ -212,3 +251,36 @@ def test_store_joins_the_catalogue(tmp_path):
     (report,) = joined["reports"]
     assert report["href"].split("?")[0].endswith("/report.html")
     assert joined["issues"] == []
+
+
+def combined_periods(first: str, second: str) -> str:
+    """CHARTS with the leverage table's Period cells as real runs write them."""
+    return CHARTS.replace("| FY2023 | 6.33", f"| {first} | 6.33").replace(
+        "| FY2024 | 6.57", f"| {second} | 6.57"
+    )
+
+
+def test_fiscal_year_with_its_date_is_ordered_by_the_date(tmp_path):
+    charts = combined_periods("FY2023 / 2023-09-30", "FY2024 / 2024-09-30")
+    make_run(tmp_path, "run-a", cp1_extra=charts)
+    result = built(tmp_path)
+    metrics = result["real"][0]["metrics"]
+    assert metrics["leverage"]["value"] == "6.57"
+    assert metrics["leverage"]["period"] == "FY2024 / 2024-09-30"
+    assert metrics["net_leverage"]["value"] == "4.93"
+    assert result["issues"] == []
+
+
+def test_fiscal_year_and_date_that_disagree_give_no_metric_and_an_issue(tmp_path):
+    charts = combined_periods("FY2023 / 2023-09-30", "FY2024 / 2023-09-30")
+    make_run(tmp_path, "run-a", cp1_extra=charts)
+    result = built(tmp_path)
+    assert "leverage" not in result["real"][0]["metrics"]
+    assert [i for i in result["issues"] if "leverage table has no metric" in i]
+
+
+def test_an_impossible_date_is_not_ordered(tmp_path):
+    make_run(tmp_path, "run-a", cp1_extra=CHARTS.replace("| 2024-09-30 |", "| 2024-13-45 |"))
+    result = built(tmp_path)
+    assert "cash" not in result["real"][0]["metrics"]
+    assert [i for i in result["issues"] if "liquidity table has no metric" in i]

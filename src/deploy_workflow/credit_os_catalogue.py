@@ -30,6 +30,9 @@ SEGMENT_SAFE = "$&+:=@"  # What url.PathEscape keeps in one path segment.
 LISTED = {".md", ".txt", ".pdf", ".html", ".htm", ".json", ".csv", ".xlsx"}
 RUN_FILE_LIMIT = 5000
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+_FISCAL_YEAR = re.compile(r"FY(\d{4})")
+_DATED_YEAR = re.compile(r"FY(\d{4}) / (\d{4}-\d{2}-\d{2})")
+_ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _PERIOD = re.compile(r"^(q[1-4]|h[12]|fy)-\d{4}$")
 _PERIOD_KINDS = {"f": "Annual", "h": "Half-year", "q": "Quarterly"}  # By first letter.
 _NOT_SUPPLIED = "Not supplied"
@@ -62,8 +65,27 @@ def cells(line: str) -> list[str]:
     return [cell.strip() for cell in re.split(r"(?<!\\)\|", line.strip()[1:-1])]
 
 
+def period_order(cell: str) -> tuple[int, ...] | None:
+    """Sort key of a Period cell: ``FY2024``, ``2024-09-30`` or ``FY2024 / 2024-09-30`` (ordered
+    by its date); None for any other text, an impossible date, or a year that disagrees."""
+    year = _FISCAL_YEAR.fullmatch(cell)
+    if year:
+        return (1, int(year[1]))
+    both = _DATED_YEAR.fullmatch(cell)
+    date = _ISO_DATE.fullmatch(both[2] if both else cell)
+    if date is None or (both and both[1] != date[1]):
+        return None
+    try:
+        day = datetime(int(date[1]), int(date[2]), int(date[3]))
+    except ValueError:
+        return None
+    return (2, day.year, day.month, day.day)
+
+
 def chart_row(lines: list[str], chart: str) -> tuple[dict[str, str], int] | None:
-    """The last row of ``### Chart data: <chart>`` as {column: cell}, with its 1-based line."""
+    """The latest-period row of ``### Chart data: <chart>`` as {column: cell}, with its 1-based
+    line. The latest is chosen by the Period value, whatever the row order. None when the table
+    is absent; ValueError when its periods cannot be ordered (never a guess)."""
     try:
         start = lines.index(f"### Chart data: {chart}")
     except ValueError:
@@ -76,9 +98,19 @@ def chart_row(lines: list[str], chart: str) -> tuple[dict[str, str], int] | None
             break
     if len(table) < 3:  # header, separator, at least one row
         return None
-    header, last = cells(lines[table[0]]), table[-1]
-    row = cells(lines[last])
-    return (dict(zip(header, row, strict=False)), last + 1) if len(row) == len(header) else None
+    header = cells(lines[table[0]])
+    ranked: list[tuple[tuple[int, ...], dict[str, str], int]] = []
+    for number in table[2:]:
+        values = cells(lines[number])
+        key = period_order(dict(zip(header, values, strict=False)).get("Period", ""))
+        if len(values) != len(header) or key is None:
+            raise ValueError("a row has no period that can be ordered")
+        ranked.append((key, dict(zip(header, values, strict=True)), number + 1))
+    keys = [key for key, _, _ in ranked]
+    if len({key[0] for key in keys}) != 1 or len(set(keys)) != len(keys):
+        raise ValueError("the periods mix forms or repeat")
+    _, row, number = max(ranked, key=lambda item: item[0])
+    return row, number
 
 
 def context_values(folder: Path, issues: list[str]) -> dict[str, str]:
@@ -150,8 +182,15 @@ def handoff_metrics(
     """Metrics quoted from the CP-1 chart tables' latest rows; a cell not supplied gives no key."""
     lines = text.replace("\r\n", "\n").split("\n")
     metrics: dict[str, dict[str, str]] = {}
+    unordered: set[str] = set()
     for chart, key, column in _METRICS:
-        found = chart_row(lines, chart)
+        try:
+            found = chart_row(lines, chart)
+        except ValueError as error:
+            if chart not in unordered:
+                unordered.add(chart)
+                issues.append(f"{name}: CP-1 {chart} table has no metric ({error})")
+            continue
         if found is None:
             continue
         row, number = found

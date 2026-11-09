@@ -12,6 +12,7 @@ needs issuer-specific row selectors; add it when a run can derive those from CP-
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -961,6 +962,48 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _update_library(workspace: Path) -> Any:
+    """Rebuild ``workspace/library`` with the library app's ``update_library``, loaded by file
+    location: the checkout keeps it in ``apps/issuer-library``, the Windows package beside the
+    engine's ``src``. Returns None, after a note, when neither exists."""
+    for path in (ROOT / "update_library.py", ROOT / "apps/issuer-library/update_library.py"):
+        if path.is_file():
+            spec = importlib.util.spec_from_file_location("update_library", path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"cannot load {path}")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module.update_library(workspace)
+    print(f"Library not updated: update_library.py not found. {_library_command(workspace)}")
+    return None
+
+
+def _library_command(workspace: Path) -> str:
+    return f"Run: python apps/issuer-library/update_library.py --workspace {workspace}"
+
+
+def _refresh_library(directory: Path) -> None:
+    """Rebuild the library once a run's report is published. Fail-open, by design: the report is
+    already published and the run complete, so a library failure is printed to stderr with the
+    manual command and never changes the exit code or the report. Only the failures a refused or
+    failed build raises are caught: update_library refuses with library_index.Refused (a
+    ValueError), and the build can raise OSError, ValueError or ImportError if it cannot load."""
+    if directory.parent.name != "runs":
+        print(f"Library not updated: {directory} is not inside a runs folder.")
+        return
+    workspace = directory.parent.parent
+    try:
+        library = _update_library(workspace)
+    except (OSError, ValueError, ImportError) as error:
+        print(
+            f"Library not updated: {error or type(error).__name__}\n{_library_command(workspace)}",
+            file=sys.stderr,
+        )
+        return
+    if library is not None:
+        print(f"Library:  {workspace / 'library' / 'index.html'} ({len(library.runs)} run(s))")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -1010,6 +1053,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     spent = Budget(prepared.plan.provider_cap_usd, prepared.directory / "live").spent
     print(f"Report:   {report}\nCharged:  USD {spent}")
+    _refresh_library(prepared.directory)
     print("Automated checks only: review the handoffs against the sources before relying on this.")
     return 0
 

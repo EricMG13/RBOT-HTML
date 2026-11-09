@@ -13,7 +13,7 @@ without it.
 
 | File | Source | sha256 at source | Identical now |
 | --- | --- | --- | --- |
-| `catalog.json` | `engine/catalog.json` | `246632c321c6bd9b54119295b1b336a7826fec9ae8c34eae882574be85ff36a2` | yes |
+| `catalog.json` | `engine/catalog.json` | `246632c321c6bd9b54119295b1b336a7826fec9ae8c34eae882574be85ff36a2` | NO, edited (see Task 7) |
 | `store.py` | `engine/store.py` | `7e616ca5d4865dc5ff9d0bd9588761acba898d7aa47ce4d8b416646a25e4424d` | NO, edited (see below) |
 | `web/brand/symbol.svg` | `web/brand/symbol.svg` | `67d73e1e8a6700b1528dabb1ad4c2e91963325bbde625cc4f84be5e294430dfd` | yes |
 | `web/brand.css` | `web/brand.css` | `f32514f93805caeee3c910fc019683d405e98a0860140d839b4ac242d1e52e4f` | yes |
@@ -108,3 +108,20 @@ New file `web/calendar.js` (pure `eventTable`, `eventOrder`, `orderEvents`; test
 | `web/static-boot.js` | `calendar.js` added first in the script list | views.js and screen.js call its functions |
 
 Task 5 edit: `REPO` also resolves to `credit_os`'s parent when that folder holds `src` (the Windows package ships `engine/credit_os` beside `engine/src`).
+
+## Legacy run pins removed from catalog.json (Task 7, owner ruling: "remove them")
+
+`catalog.json` now sha256 `9dae11282c931c50a7c662aab50e0d4e0a14c168677df1af0667f4b7a5b46d34`. Edit: deleted every `path` key (20; each pinned a legacy run file under tdg-002, tdg-003, tdg-004, tdg-guidance-001, tdg-peers-2024-001, tdg-run-comparison-001, ford-otosan-2024-001 or frontier-2020-001) and the CP-8 `compare` object (its `prior`/`current`/`repaired`/`recheck` named legacy builds and a legacy run file). The 20 module IDs and the other fields (`period`, `firstHeading`, `scope`, `basis`, `call`, `visual`) stay. `store.py` pins a module only when `catalog[module]["path"]` equals an output id, so `workspace_store` now returns `pins == {}` and the navigator, which lists modules from its own groups, is unchanged.
+
+## Read-only Run activity (Task 8, owner ruling: lean version, low governance risk)
+
+`CP-OS` returns as a destination with the single section `activity`, over data built at build time. The original Run activity view (`web/views.js`, `web/actions.js` at 07e14eca) is a live view over a server and is not copied: the new `activityView` is written for this library, reuses Credit OS's `missing-state`, `report-list`, `report-row` and `code` classes, and has no control, form, polling, fetch or write. Forecast needs no change: `forecastView` already shows "No forecast model was published from this run's files" when a run has no CP-2G model (now pinned by tests).
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/views.js` | `destinations` table gains `'CP-OS':['Run activity',[['activity','Run activity',[]]]]` (seven keys); new `activityView(activity)`; `workspaceView` renders it for `CP-OS`; `updateWorkspaceChrome` rail `place` map adds `CP-OS`: Run activity | owner ruling amends the earlier six-destination list |
+| `web/screen.js` | `isAnalytical` excludes `CP-OS`; `appDestinations` adds `CP-OS` (needs no selected run); the screen-reader announcement omits the run name for app destinations | Run activity is not a module and belongs to no run |
+| `web/static-boot.js` | Reads `window.CREDIT_OS_DATA.activity` (`{excluded: [[folder, reason], ...], issues: [...]}`, missing = a stated problem) into the global `window.DESIGN_ACTIVITY` | how the view gets its data; a global beside `DESIGN_DATA`, `DESIGN_WORKSPACE`, `DESIGN_CATALOGUE` |
+| `web/index.html` | Rail link "Run activity" (`#CP-OS/activity`, `icons/activity.svg`) | navigation |
+
+Task 8 fix: `web/static-boot.js` no longer defaults `activity` to an empty list. `window.DESIGN_ACTIVITY` is `null` unless `CREDIT_OS_DATA.activity` holds arrays `excluded` and `issues`; the catalogue/workspace check now names what is missing (`catalogue`, `workspace`) and activity is read apart, so a data file that lacks only `activity` keeps the rest working. `web/views.js` `activityView(null)` says Run activity could not be read, never the all-clear.
