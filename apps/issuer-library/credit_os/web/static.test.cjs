@@ -725,7 +725,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
     for (const r of b.type === 'table' ? b.rows : [b]) evidence.set(`${id}:${r.line}`, { module: out.module, line: r.line });
   }
   const groups = [['Business and evidence', [['CP-0', 'Source readiness']]], ['Financial performance', [['CP-1', 'Financial foundation'], ['CP-1B', 'Cash flow']]], ['Outlook and downside', [['CP-2A', 'Downside']]],
-    ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'CP-X']]]];
+    ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'Unnamed module']]]];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
   const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
@@ -752,7 +752,7 @@ test('run report: the count line reads from state, with the unsummarised module 
 test('run report: coverage is four links in group order, the module name as label, only the established one filled', () => {
   const html = runPage().runReport(RUN);
   const cells = [...html.matchAll(/<a class="cov( filled)?" href="([^"]*)"[^>]*>(.*?)<\/a>/g)].map(m => [m[3], !!m[1], m[2]]);
-  assert.deepEqual(cells.map(c => c[0]), ['Financial foundation', 'Downside', 'Committee decision', 'CP-X']);
+  assert.deepEqual(cells.map(c => c[0]), ['Financial foundation', 'Downside', 'Committee decision', 'Unnamed module']);
   assert.deepEqual(cells.map(c => c[1]), [true, false, false, false]);
   assert.deepEqual(cells.map(c => c[2].split('/')[0]), ['#CP-1', '#CP-2A', '#CP-6', '#CP-X'], 'the route still carries the code');
 });
@@ -821,10 +821,10 @@ test('run report: a module under Other modules with a summary has its register r
   }).runReport(RUN);
   const register = /<table class="register">.*?<\/table>/s.exec(html)[0];
   const row = /<tr data-group="Other modules"[^>]*>.*?<\/tr>/s.exec(register)[0];
-  assert.deepEqual([...row.matchAll(/<td>(.*?)<\/td>/gs)].map(m => strip(m[1]).trim()), ['Other modules', 'CP-X', 'Other finding.', 'Other impact.', 'Medium']);
+  assert.deepEqual([...row.matchAll(/<td>(.*?)<\/td>/gs)].map(m => strip(m[1]).trim()), ['Other modules', 'Unnamed module', 'Other finding.', 'Other impact.', 'Medium']);
   assert.ok(!row.includes(' hidden'));
   const items = /<h2>Open items<\/h2>.*?<\/section>/s.exec(html)[0];
-  assert.ok(/<tr><td>Other modules<\/td><th scope="row"><a[^>]*href="#CP-X\/limits[^"]*">CP-X<\/a><\/th><td>Other limit\.<\/td><\/tr>/.test(items), items);
+  assert.ok(/<tr><td>Other modules<\/td><th scope="row"><a[^>]*href="#CP-X\/limits[^"]*">Unnamed module<\/a><\/th><td>Other limit\.<\/td><\/tr>/.test(items), items);
 });
 
 test('run report: a not-assessable module is one line with name link, state, declared status and the limitation, and no finding', () => {
@@ -843,8 +843,8 @@ test('run report: a not-assessable module is one line with name link, state, dec
 test('run report: a module with no reader summary sits under Other modules as "<name> · No reader summary", counted in coverage and matrix', () => {
   const html = runPage().runReport(RUN);
   const group = groupOf(html, 'Other modules');
-  assert.equal(strip(/<p class="nosum-line">(.*?)<\/p>/s.exec(group)[1]).replace(/\s+/g, ' ').trim(), 'CP-X · No reader summary');
-  assert.ok(html.includes('>CP-X</a>') && /<th scope="row"><a[^>]*>CP-X/.test(html));
+  assert.equal(strip(/<p class="nosum-line">(.*?)<\/p>/s.exec(group)[1]).replace(/\s+/g, ' ').trim(), 'Unnamed module · No reader summary');
+  assert.ok(html.includes('>Unnamed module</a>') && /<th scope="row"><a[^>]*>Unnamed module/.test(html));
   assert.ok(!groupOf(html, 'Business and evidence'), 'a group with no output in the run is not listed');
 });
 
@@ -893,7 +893,7 @@ test('run report: the matrix has a row per module with its confidence and declar
   const mat = /<table class="matrix">.*?<\/table>/s.exec(html)[0];
   assert.deepEqual([...mat.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Module', 'Confidence', 'Declared status']);
   const rows = [...mat.matchAll(/<tr><th scope="row">(.*?)<\/th>(.*?)<\/tr>/gs)].map(m => [strip(m[1]).trim(), [...m[2].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map(c => strip(c[1]).trim())]);
-  assert.deepEqual(rows.map(r => r[0]), ['Financial foundation', 'Downside', 'Committee decision', 'CP-X']);
+  assert.deepEqual(rows.map(r => r[0]), ['Financial foundation', 'Downside', 'Committee decision', 'Unnamed module']);
   assert.deepEqual(rows[0][1], ['Medium', 'Requires More Work']);
   assert.deepEqual(rows[1][1], ['Not assessable', 'Blocked']);
   assert.deepEqual(rows[2][1], ['Not assessable', 'not declared']);
@@ -1134,12 +1134,12 @@ test('run report: every part carries an id and the label the navigator lists, in
   assert.ok(screen.includes("querySelectorAll('[data-run-part]')") && screen.includes('run-[a-z0-9-]+'), 'the navigator lists the parts and the route scrolls to one');
 });
 
-test('run report: a coverage cell is the module name, its state in the accessible label, with no title and no code', () => {
+test('run report: a coverage cell is the module name, its state in the title and the accessible label, and no code', () => {
   const html = runPage().runReport(RUN);
-  assert.ok(/<a class="cov filled" href="[^"]*" aria-label="Financial foundation, Reaches a conclusion">Financial foundation<\/a>/.test(html));
-  assert.ok(/<a class="cov" href="[^"]*" aria-label="Downside, Not assessable">Downside<\/a>/.test(html));
-  const strip = /<nav class="coverage".*?<\/nav>/s.exec(html)[0].replace(/ href="[^"]*"/g, '').replace(/CP-X/g, '');  // CP-X is the fixture's module the groups do not name
-  assert.ok(!/title=/.test(strip) && !/\bCP-[A-Z0-9]+\b/.test(strip), 'no code in the strip');
+  assert.ok(/<a class="cov filled" href="[^"]*" title="Financial foundation · Reaches a conclusion" aria-label="Financial foundation, Reaches a conclusion">Financial foundation<\/a>/.test(html));
+  assert.ok(/<a class="cov" href="[^"]*" title="Downside · Not assessable" aria-label="Downside, Not assessable">Downside<\/a>/.test(html));
+  const strip = /<nav class="coverage".*?<\/nav>/s.exec(html)[0].replace(/ href="[^"]*"/g, '');
+  assert.ok(!/\bCP-[A-Z0-9]+\b/.test(strip), 'no code in the strip');
 });
 
 test('charts: one chip-dot legend per set of charts, under the last card', () => {
@@ -1404,7 +1404,7 @@ test('names, not codes: module heads, the Evidence tab and Built-from carry no m
   assert.ok(inventory.includes('aria-label="Open output: Financial foundation"') && inventory.includes('aria-label="Download original handoff: Financial foundation"'));
   assert.ok(!inventory.includes('<p>CP-1</p>'), 'an output label equal to the module code is not shown');
   assert.ok(inventory.includes('<summary>File identity</summary><p>Financial foundation handoff</p><p class="hash">SHA-256 ' + 'c'.repeat(64)));
-  noCode(inventory.replace(/CP-X/g, ''));  // CP-X is the fixture's module the groups do not name
+  noCode(inventory);
   const built = page.reportView(zedReport(RUN), RUN);
   assert.ok(/<th scope="row">Financial foundation<\/th><td>[^<]*<\/td><td><a href="[^"]*">Handoff<\/a><\/td>/.test(built));
   noCode(built);
@@ -1460,14 +1460,14 @@ test('names, not codes: a step id becomes the step\'s own title, a range keeps i
   assert.equal(name('See T4.2 for facility access'), 'See “Peer metrics” for facility access');
   assert.equal(name('Gap noted: T4.1 — x'), 'Gap noted: “Peer universe” — x', 'an id is dropped only at the start of the text');
   assert.equal(name('T4.2'), 'Peer metrics', 'no quotes when the id is the whole text');
-  assert.equal(name('(T1–T4, T6, T8; P3/P5)'), '(method steps; P3/P5)', 'a run of untitled ids is one phrase');
-  assert.equal(name('T5/T7 readiness and T5 and T9'), 'method steps readiness and method steps');
+  assert.equal(name('(T1.1–T1.4, T6.2, T8.1; P3/P5)'), '(method steps; P3/P5)', 'a run of untitled ids is one phrase');
+  assert.equal(name('T5.1/T7.2 readiness and T5.3 and T9.1'), 'method steps readiness and method steps');
   assert.equal(name('T9.9 stands'), 'a method step stands');
   assert.equal(name('T4.D1 — Discovery source register / bounded attempt'), 'Discovery source register / bounded attempt', 'a lettered id leading its text is dropped whole');
   assert.equal(name('T2G.* remain registered; T4.D1.'), 'a method step remain registered; a method step.', 'a lettered or wildcard id is one id');
   assert.equal(name('T4.1–T4.2'), 'Peer universe to Peer metrics');
   assert.equal(name('T4.1 through T4.2'), 'Peer universe through Peer metrics');
-  assert.equal(name('Guidance retained in T9.9; T4.3 is long'), 'Guidance retained in a method step; a method step is long', 'unknown ids and descriptions are no titles');
+  assert.equal(name('Guidance retained in T9.9; T4.3 is long'), 'Guidance retained in method steps is long', 'unknown ids and descriptions are no titles');
   assert.equal(name('T1D.1 — Add-Back Register'), 'Add-Back Register', 'an id leading its own title is dropped');
   assert.equal(page.namedText('T4.1', null), 'a method step');
   const nullChip = report().chipsMarkup(`${OUT}:16`);
@@ -1513,7 +1513,7 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
 
 test('embedded report: codes are named in text, title and aria-label, the banners included', () => {
   const src = read('report-adapter.js'), last = src.slice(src.lastIndexOf('(() => {'));
-  const text = { nodeType: 3, data: 'Annual report is later. (CP-0 line 34); CP-6-GAP-002 and CP-2R-GAP-001 and CP-2R; see CP-1.md, T4.D1, T2G.* and T5/T7, T9' };
+  const text = { nodeType: 3, data: 'Annual report is later. (CP-0 line 34); CP-6-GAP-002 and CP-2R-GAP-001 and CP-2R; see CP-1.md, CP-0-a.md, CP-4_RUNBOOK.md, T4.D1, T2G.* and T5.1/T7.2, T9.1; T2 and T1.' };
   const attributes = { title: 'CP-1', 'aria-label': 'K, page:164 / CP-1: sales 3,809' };
   const element = { getAttribute: name => attributes[name] ?? null, setAttribute: (name, value) => { attributes[name] = value; } };
   const root = { querySelectorAll: selector => (selector === '.module-link' ? [] : [element]) };
@@ -1523,6 +1523,25 @@ test('embedded report: codes are named in text, title and aria-label, the banner
   new Function('document', 'MutationObserver', 'NodeFilter', 'Node', last.replace(/^\(\(\) => \{/, '').replace(/\}\)\(\);\s*$/, ''))(doc, Observer, { SHOW_TEXT: 4 }, { TEXT_NODE: 3 });
   assert.ok(selected.split(',').includes('#inspector-content'), 'the report\'s own inspector is named too');
   assert.ok(selected.split(',').includes('.banner'), 'the delivery banners are named too: they sit outside the view the pass observed');
-  assert.equal(text.data, 'Annual report is later. (Source readiness line 34); Committee decision gap 2 and unnamed module gap 1 and unnamed module; see Financial foundation handoff, method steps');
+  assert.equal(text.data, 'Annual report is later. (Source readiness line 34); Committee decision gap 2 and unnamed module gap 1 and unnamed module; see Financial foundation handoff, Source readiness handoff (a), Legal & covenants runbook, method steps; T2 and T1.');
   assert.deepEqual(attributes, { title: 'Financial foundation', 'aria-label': 'K, page:164 / Financial foundation: sales 3,809' });
+});
+
+test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; sub-rows, semicolons, ranges, files and runbooks read right', () => {
+  const page = runPage(d => {
+    d[outId('CP-1')].sections.push(ref('Steps', 80, [table(81, ['Step', 'Name'], [[82, 'T2E.2', 'Beginning register'], [83, 'T2E.4', 'Cash uses'], [84, 'T2E.3.r01', 'x']])]));
+    return d;
+  }), id = outId('CP-1'), name = text => page.namedText(text, id);
+  for (const plainText of ['T2 Biosystems', 'Tier 2 (T2) notes', 'T12M EBITDA', 'Chiffre d’affaires T1 2025', 'T1 Energy and T3M price', 'T+1 settlement']) assert.equal(name(plainText), plainText);
+  assert.equal(name('T2E.3.r01 and T9.9'), 'x and a method step', 'a sub-row id is one id, with its own title');
+  assert.equal(name('T9.1; T9.2; T9.3 limits'), 'method steps limits');
+  assert.equal(name('See T2E.2–T2E.4, T9.9 here'), 'See “Beginning register” to “Cash uses”, a method step here', 'an en dash reads "to" inside a longer run');
+  assert.equal(name('T2E.2–T2E.4'), 'Beginning register to Cash uses');
+  assert.equal(page.namedText('CP-0-a.md and CP-4_RUNBOOK.md and CP-1.md', null), 'Source readiness handoff (a) and unnamed module runbook and Financial foundation handoff');
+  assert.equal(page.handoffLabel('r--deliveries--h--CP-0-a.md'), 'Source readiness handoff (a)');
+  const files = page.reportView({ ...zedReport(RUN), files: [{ href: 'x/CP-1.md', name: 'CP-1.md' }, { href: 'x/report.json', name: 'report.json' }] }, RUN);
+  assert.ok(files.includes('>Financial foundation handoff</a>') && files.includes('>report.json</a>') && !files.includes('>CP-1.md<'));
+  const screen = read('screen.js'), adapter = read('report-adapter.js');
+  assert.ok(screen.includes("parent.closest('.ref,.excerpt')"), 'a source excerpt is the issuer\'s text, as quoted');
+  assert.ok(adapter.includes('"CP-MODEL":"Forecast"'), 'the app\'s word for the model');
 });

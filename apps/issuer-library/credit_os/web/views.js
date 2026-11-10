@@ -17,15 +17,18 @@ const moduleLabel=code=>{
 };
 const moduleTitle=code=>moduleLabel(code)??'Unnamed module';
 // "<Module name> handoff" for a file named after its module (…/CP-1.md, …--CP-1.md); any other file keeps its name.
+// A second saved output (…--CP-0-a.md) keeps its distinguishing suffix: "Source readiness handoff (a)".
+const handoffName=(code,suffix)=>`${moduleTitle(code)} handoff${suffix?` (${suffix.slice(1)})`:''}`;
 function handoffLabel(file) {
-  const code=/(?:^|[/-])(CP-[A-Z0-9]+)\.md$/.exec(file)?.[1];
-  return code?`${moduleTitle(code)} handoff`:file;
+  const found=/(?:^|[/-])(CP-[A-Z0-9]+)(-[a-z0-9]+)?\.md$/.exec(file);
+  return found?handoffName(found[1],found[2]):file;
 }
-const MODULE_REF=/\bCP-([A-Z0-9]+)-GAP-0*(\d+)\b|\bCP-[A-Z0-9]+\b/g;
-// A step id has the METHOD_CODE shape: T4.10, T1D.1, T4.D1, T2G.* (a family).
-const STEP='T\\d+[A-Z]?(?:\\.(?:[A-Z]?\\d+|\\*))?',ID=`\\b${STEP}(?![A-Za-z0-9])`;
+// A module code, its gap id, its handoff file (…CP-0-a.md) or its runbook file (CP-4_RUNBOOK.md).
+const MODULE_REF=/\bCP-(?<owner>[A-Z0-9]+)-GAP-0*(?<gap>\d+)\b|\bCP-(?<book>[A-Z0-9]+)_RUNBOOK\.md\b|\b(?<file>CP-[A-Z0-9]+)(?<suffix>-[a-z0-9]+)?\.md\b|\bCP-[A-Z0-9]+\b/g;
+// A step id carries its dot and has the METHOD_CODE shape: T4.10, T1D.1, T4.D1, T2G.* (a family), T2E.3.r01 (a sub-row). A bare T2 is ordinary text.
+const STEP='T\\d+[A-Z]?\\.(?:[A-Z]?\\d+|\\*)(?:\\.[a-z]+\\d+)?',ID=`\\b${STEP}(?![A-Za-z0-9])`;
 const STEP_ID=new RegExp(`^${STEP}$`),STEP_ANY=new RegExp(ID,'g'),STEP_LEAD=new RegExp(`^\\s*${ID}\\s+—\\s+`);
-const STEP_RUN=new RegExp(`${ID}(?:\\s*(?:,\\s*and|[–/,]|and|through)\\s*${ID})*`,'g'),STEP_PAIR=new RegExp(`^(${STEP})(?:\\s*–\\s*|\\s+(through)\\s+)(${STEP})$`);
+const STEP_RUN=new RegExp(`${ID}(?:\\s*(?:,\\s*and|[–/,;]|and|through)\\s*${ID})*`,'g');
 const STEP_HEADING=new RegExp(`^(${STEP})\\s+—\\s+(.+)$`),STEP_ROW=new RegExp(`^(${STEP})(?:\\s+—\\s+(.+))?$`);
 // A step's title is the one its own output gives it: a heading "T1D.1 — Add-Back Register", or a step-table row ["T4.1","Peer universe",…]. A longer second cell is a description, not a title.
 const stepTitleCache=new Map();
@@ -43,25 +46,26 @@ function stepTitles(output) {
   stepTitleCache.set(output,titles);
   return titles;
 }
-// A step id in prose or a cell becomes its title (in quotes inside a sentence, bare when the id is the whole text); a range keeps its joining word;
+// A step id in prose or a cell becomes its title (in quotes inside a sentence, bare when the id is the whole text); a range's dash reads "to";
 // a run of ids with no title reads "method steps" ("a method step" for one); an id leading its own title is dropped; no title found: "a method step".
 function stepText(text,output) {
   const titles=stepTitles(output),whole=text.trim();
   const lead=STEP_LEAD.exec(text);
   const body=lead?text.slice(lead[0].length):text;
   return body.replace(STEP_RUN,run=>{
-    const ids=run.match(STEP_ANY),quoted=run===whole?t=>t:t=>`“${t}”`,title=id=>titles.has(id)?quoted(titles.get(id)):'a method step';
+    const ids=run.match(STEP_ANY),quoted=run===whole?t=>t:t=>`“${t}”`;
     if(!ids.some(id=>titles.has(id)))return ids.length>1?'method steps':'a method step';
-    const pair=STEP_PAIR.exec(run);
-    if(pair)return `${title(pair[1])} ${pair[2]||'to'} ${title(pair[3])}`;
-    return run.replace(STEP_ANY,title);
+    return run.replace(/\s*–\s*/g,' to ').replace(STEP_ANY,id=>titles.has(id)?quoted(titles.get(id)):'a method step');
   });
 }
 // CP-<x>-GAP-<n> is "Gap <n>" on module x's own page and "<Name of x> gap <n>" elsewhere; a code with no known name is "unnamed module".
 function namedText(text,output=current?.output) {
-  return stepText(text.replace(MODULE_REF,(code,owner,gap)=>{
-    if(owner===undefined)return moduleLabel(code)??'unnamed module';
-    return [`CP-${owner}`,aliases[`CP-${owner}`]].includes(current?.module)?`Gap ${gap}`:`${moduleLabel(`CP-${owner}`)??'unnamed module'} gap ${gap}`;
+  return stepText(text.replace(MODULE_REF,(code,...rest)=>{
+    const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
+    if(book!==undefined)return `${name(`CP-${book}`)} runbook`;
+    if(file!==undefined)return handoffName(file,suffix);
+    if(owner===undefined)return name(code);
+    return [`CP-${owner}`,aliases[`CP-${owner}`]].includes(current?.module)?`Gap ${gap}`:`${name(`CP-${owner}`)} gap ${gap}`;
   }),output);
 }
 function installDestinations() {
@@ -872,7 +876,7 @@ function reportView(report,context) {
     return `<tr><th scope="row">${esc(moduleTitle(b.module))}</th><td>${esc(contexts[b.run].run)}</td><td><a href="${href}">Handoff</a></td><td>${b.sha256.slice(0,12)}</td></tr>`;
   }).join('');
   const handoffs=new Set(report.builtFrom.map(b=>b.module)).size,unmatched=new Set(report.builtFrom.filter(b=>!b.run).map(b=>b.module)).size;
-  const files=report.files.length?`<h3>Files in this deliverable</h3><ul>${report.files.map(f=>`<li><a href="${esc(f.href)}" download>${esc(f.name)}</a></li>`).join('')}</ul>`:'';
+  const files=report.files.length?`<h3>Files in this deliverable</h3><ul>${report.files.map(f=>`<li><a href="${esc(f.href)}" download>${esc(handoffLabel(f.name))}</a></li>`).join('')}</ul>`:'';
   const status=[report.status,ctx?'':'No matching run'].filter(Boolean).join(' · ');
   return `<div class="report-tools"><label for="report-select">Report</label><select id="report-select">${[...runReports(context)].sort(byBuild).map(r=>`<option value="${esc(r.id)}" ${r.id===report.id?'selected':''}>${esc([reportName(r),reportRunLabel(r)].filter(Boolean).join(' · '))}</option>`).join('')}</select>${status?`<span>${esc(status)}</span><i class="tool-sep" aria-hidden="true"></i>`:''}${reportAcceptance(report).html}<a href="${esc(report.download)}" download>Download original HTML</a><a href="${routeHref('W-Reports','list')}">All reports</a></div><details class="built-from"><summary>Built from ${plural(handoffs,'handoff')} · ${unmatched?`${unmatched} with no matching run file`:'each matches its run file'}${report.files.length?` · ${plural(report.files.length,'file')}`:''}</summary><div class="table-scroll"><table><thead><tr><th scope="col">Module</th><th scope="col">Run</th><th scope="col">File</th><th scope="col">SHA-256 prefix</th></tr></thead><tbody>${rows}</tbody></table></div>${files}</details><div class="frame-host"><p class="frame-status" role="status">Loading report…</p><iframe id="report-preview" title="${esc(reportName(report))} · ${esc(report.issuer)} report" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer" src="${esc(report.href)}"></iframe></div>`;
 }
@@ -894,7 +898,7 @@ function coverageStrip(entries) {
   // The fill is not the only carrier of the state: the accessible label says it in words.
   return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out,choices})=>{
     const state=out?stateWord(out.state.established):`${choices} saved outputs`;
-    return `<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" aria-label="${esc(`${moduleNames[module]}, ${state}`)}">${esc(moduleNames[module])}</a>`;
+    return `<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" title="${esc(`${moduleNames[module]} · ${state}`)}" aria-label="${esc(`${moduleNames[module]}, ${state}`)}">${esc(moduleNames[module])}</a>`;
   }).join('')}</nav>`;
 }
 function storyCharts(id,noted) {
