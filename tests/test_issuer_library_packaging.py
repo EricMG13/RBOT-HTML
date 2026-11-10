@@ -47,6 +47,11 @@ def offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
         (root / name).mkdir(parents=True)
         (root / name / "keep.txt").write_text("x")
     (root / "docs/visualisations/catalogue.csv").write_text("id\nV1\n")
+    (root / "docs/rulings").mkdir()
+    (root / "docs/rulings/2026-11-09-inbox-automation.md").write_text("ruling")
+    (root / "docs/rulings/2026-11-04-live-module-tests.md").write_text("another ruling")
+    (root / "docs/templates").mkdir()
+    (root / "docs/templates/context-form.html").write_text('<html lang="en">')
     cache.mkdir()
     downloaded: list[str] = []
 
@@ -98,7 +103,10 @@ def test_a_re_pinned_runtime_ships_only_the_new_wheels(
         "pypdf": "2"
     }
     assert (target / "engine/runtime/python.exe").is_file()
-    assert (target / "engine/runtime/python313._pth").is_file()
+    # The embeddable Python ignores PYTHONPATH: engine/src must be listed for `-m` and the
+    # launcher children to find deploy_workflow. Paths are relative to the runtime folder.
+    pth = (target / "engine/runtime/python313._pth").read_text().splitlines()
+    assert pth == ["python313.zip", ".", "Lib\\site-packages", "..\\src", "import site"]
 
 
 def test_the_same_pins_reuse_the_runtime_without_a_download(
@@ -155,8 +163,11 @@ def test_the_package_ships_the_static_library_and_its_two_windows_wrappers(
     assert (engine / "docs/visualisations/catalogue.csv").read_text() == "id\nV1\n"
     assert not (engine / "static").exists()
     assert not (engine / "bridge.py").exists()  # The lean package has no server bridge.
-    assert list((engine / "docs/rulings").iterdir()) == []  # No ruling is shipped.
-    for name in ["Run workflow.cmd", "Update library.cmd"]:
+    # Only the inbox ruling ships; the watcher passes it on every launch.
+    shipped_rulings = [p.name for p in (engine / "docs/rulings").iterdir()]
+    assert shipped_rulings == ["2026-11-09-inbox-automation.md"]
+    assert (engine / "src").is_dir() and (engine / "docs/templates/context-form.html").is_file()
+    for name in ["Run workflow.cmd", "Update library.cmd", "Start watcher.cmd"]:
         raw = (target / name).read_bytes()
         assert raw.startswith(b"@echo off\r\n") and b"\n" not in raw.replace(b"\r\n", b"")
     run = (target / "Run workflow.cmd").read_text()
@@ -165,6 +176,11 @@ def test_the_package_ships_the_static_library_and_its_two_windows_wrappers(
     update = (target / "Update library.cmd").read_text()
     assert '--workspace "%WORKSPACE%"' in update
     assert 'start "" "%WORKSPACE%\\library\\index.html"' in update
+    watch = (target / "Start watcher.cmd").read_text()
+    assert f'{python} -m deploy_workflow.inbox.watcher --root "%ROOT%"' in watch
+    assert 'set "ROOT=%~1"' in watch and "%FINAL_WORKFLOW_WORKSPACE%" in watch
+    assert "exit /b 1" in watch  # No root: the usage and a failure.
+    assert "API_KEY" not in watch and "TOKEN" not in watch  # It sets no key.
 
 
 def test_a_linked_engine_folder_is_refused_before_anything_is_deleted(tmp_path: Path) -> None:

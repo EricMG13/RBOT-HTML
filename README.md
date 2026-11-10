@@ -1,7 +1,7 @@
 # RBOT-HTML
 
-The credit workflow as two Python steps, with a static Issuer Library: no server, no open port and
-no compiled executable. This is a lean copy of the engine in
+The credit workflow as two Python steps, or one watcher that runs them for a shared folder, with a
+static Issuer Library: no web server, no open port and no compiled executable. This is a lean copy of the engine in
 [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow), with a fresh history. That
 repository keeps the retained runs, deliverables and design work, and the Go application; none of
 them are here.
@@ -13,11 +13,14 @@ delivery → runs/<run>/deliveries/<id>/report.html → Update library → libra
 
 Excel files are analytical inputs only; no deliverable is an Excel workbook.
 
+The two steps can be run by hand (sections 1 and 2) or by the inbox watcher (section 3), which
+starts a paid run for each folder an analyst drops in a shared folder.
+
 ## Start here
 
 | What | Where |
 |---|---|
-| The two steps, the library's listing rules and the Windows package | [`apps/issuer-library/README.md`](apps/issuer-library/README.md) |
+| The two steps, the inbox, the library's listing rules and the Windows package | [`apps/issuer-library/README.md`](apps/issuer-library/README.md) |
 | Project rules | [`AGENTS.md`](AGENTS.md) |
 | Which method revision each module uses | [`METHODOLOGY-REVIEW.md`](METHODOLOGY-REVIEW.md) |
 | Running the models through GitHub Copilot | [`docs/COPILOT.md`](docs/COPILOT.md) |
@@ -72,6 +75,109 @@ under `library/reports/`; the delivered report in the run folder is never change
 runs CP-OS completed with a verified report in which every module ran on the current methodology,
 and says why each other run folder is left out.
 
+## 3. Automated: the inbox
+
+One watcher process runs on one machine. Analysts only copy folders. The watcher starts a paid
+run for each folder, and the finished report appears in the issuer library.
+
+### What an analyst does
+
+1. Open `inbox\<pathway>\_template\context-form.html` (it opens from disk) and fill it in. The
+   pathway is already chosen. Download `context.json`.
+2. Make a folder. Put `context.json` and the issuer's source files in it (PDF, TXT, Markdown,
+   XLSX, CSV, JSON, JSONL or HTML).
+3. Copy the folder into `inbox\<pathway>\`. The pathways are `credit_snapshot`,
+   `earnings_update`, `relative_value`, `covenant_refinancing`, `distressed_restructuring` and
+   `portfolio_decision`.
+4. Open `library.html` in the shared folder. The run appears under Run activity. When it ends,
+   the report is in the library and in `issuers\`. If the drop is refused, it is in
+   `inbox\failed\` with a `WHY.txt` that says why.
+
+What you will see: the folder leaves the inbox about 2 minutes after the copy stops changing. The
+watcher waits that long so it never reads a half-copied folder. It also waits while another
+program holds one of the files open. Run activity re-loads every 30 seconds while it is showing.
+A running run's spend counts a call in flight at its full reserved amount, so it can read a little
+high until that call settles.
+
+A drop is refused, with the reason in `WHY.txt`, when:
+
+- it has no context file, or more than one;
+- the context file is invalid, or names another pathway than the folder it was dropped in;
+- it has no source file the launcher can read;
+- it holds a link (a shortcut or symlink) or a special file;
+- it cannot be read;
+- the launcher's offline check refuses it (the same check as a run without `--live`).
+
+A loose file, or a folder placed in `inbox\` outside a pathway folder, is refused too. Fix the
+folder and drop it again.
+
+### The shared folder
+
+```
+<root>\
+  library.html                       opens the issuer library
+  inbox\<pathway>\                   analysts drop folders here
+  inbox\<pathway>\_template\context-form.html
+  inbox\failed\<time> <name>\WHY.txt refused drops, with the reason
+  issuers\<Issuer name> (<issuer_id>)\<as-of> <pathway>[-N].html    filed reports
+  _engine\                          runs, drops, state, logs, library, activity.js, watcher.lock
+```
+
+A filed report is never overwritten: a second report for the same date and pathway is filed as
+`-2`, `-3` and so on. The path of `<root>` must be 80 characters or fewer; the watcher refuses a
+longer one.
+
+### Start the watcher
+
+From a checkout:
+
+```bash
+uv run python -m deploy_workflow.inbox.watcher --root /path/to/shared-folder
+```
+
+From the Windows package: `Start watcher.cmd <root>`. Without an argument it uses
+`FINAL_WORKFLOW_WORKSPACE`; with neither it prints the usage and exits 1.
+
+The watcher refuses to start when the provider key is missing from its environment
+(`OPENAI_API_KEY` for the default `sol-medium`), when the ruling does not allow the config, or when
+another watcher already holds `_engine\watcher.lock` for that folder. Only one watcher runs per
+shared folder. Press Ctrl-C to stop it; runs already started keep going, and a restarted watcher
+picks them up. Its log is `_engine\logs\watcher.log`.
+
+| Flag | Default |
+|---|---|
+| `--cap` | USD 20 per run |
+| `--config` | `sol-medium` |
+| `--max-running` | 3 runs at once |
+| `--max-per-day` | 30 runs started per local day |
+| `--settle-seconds` | 120 |
+| `--poll-seconds` | 10 |
+| `--ruling` | `docs/rulings/2026-11-09-inbox-automation.md` |
+
+Every live launch passes that standing ruling. The provider key comes only from the environment of
+the account that runs the watcher; nothing reads a credential file.
+
+### Start it at boot (Windows)
+
+In Task Scheduler, create a task that runs "At startup" under a service account whose environment
+holds the provider key. The action is `Start watcher.cmd <root>` from the package folder. The
+setup person sets the folder permissions:
+
+- analysts: modify on `inbox\`, read on everything else;
+- only the watcher's account writes `_engine\`, `issuers\` and `library.html`.
+
+### Limits of the inbox
+
+- Nothing has been run on Windows or over a network share.
+- A copy that fails part-way and is left in the inbox looks complete once it stops changing. The
+  files the run read are listed in Run activity.
+- Two IDs for one issuer make two folders in `issuers\`.
+- A run can end slightly above USD 20 after one call overruns the cap.
+- A report leaves the library list after a method update (see "Which runs are listed" in the
+  library README) but stays in `issuers\`.
+- The form copies in the inbox use system fonts.
+- Whether USD 20 covers a full pathway on `sol-medium` has not been measured.
+
 ## Current limits
 
 - The automated checks cover handoff structure, issuer/date/source/upstream anchors and report
@@ -82,7 +188,9 @@ and says why each other run folder is left out.
 - The Windows package carries no Copilot SDK or runtime: run Copilot configurations from a
   checkout (`docs/COPILOT.md`).
 - Nothing in this repository has been run on Windows yet; `Smoke-test.ps1` in the package is the
-  offline acceptance check.
+  offline acceptance check. The inbox watcher has been exercised only through a fake launcher on
+  macOS, with no provider called (`VERIFICATION.md`).
+- The inbox has its own limits, listed at the end of section 3.
 
 ## Repository map
 
@@ -91,6 +199,7 @@ and says why each other run folder is left out.
 | `src/deploy_workflow/` | CP-OS (`owners/cpos.py`, `owners/cpos_launch.py`), module owners, provider adapters, delivery, and the library's listing rules (`library_index.py`) |
 | `src/deploy_vii/` | Analytical code, report renderers and design assets reused by delivery |
 | `prompts/`, `docs/reuse/selected-methods/` | The method each module is sent |
-| `docs/templates/`, `docs/rulings/` | The context form; rulings that lift the paid-run pause |
+| `docs/templates/`, `docs/rulings/` | The context form; rulings that lift the paid-run pause (the inbox's standing one is `2026-11-09-inbox-automation.md`) |
+| `src/deploy_workflow/inbox/` | The inbox watcher: drops, runs, filing and run activity |
 | `apps/issuer-library/` | `update_library.py`, the Credit OS store and page parts in `credit_os/`, the package's `engine/run_workflow.py` and `packaging/` |
 | `tests/`, `cases/`, `tools/` | Tests, their synthetic fixtures, and the quality gate |

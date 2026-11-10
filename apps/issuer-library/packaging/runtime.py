@@ -63,6 +63,13 @@ _DOCUMENTS = (
     "(`powershell -NoProfile -Command \"[Environment]::GetFolderPath('MyDocuments')\"`) "
     'do set "WORKSPACE=%%D\\FinalWorkflow"'
 )
+# The embeddable Python ignores PYTHONPATH, so engine\src is listed here (paths are relative to the
+# runtime folder): `-m deploy_workflow...` and the watcher's launcher children both need it.
+PTH = "python313.zip\n.\nLib\\site-packages\n..\\src\nimport site\n"
+_ROOT_ARGUMENT = [
+    'set "ROOT=%~1"',
+    'if not defined ROOT set "ROOT=%FINAL_WORKFLOW_WORKSPACE%"',
+]
 WRAPPERS = {
     "Run workflow.cmd": [
         "@echo off",
@@ -88,7 +95,32 @@ WRAPPERS = {
         ")",
         'start "" "%WORKSPACE%\\library\\index.html"',
     ],
+    "Start watcher.cmd": [
+        "@echo off",
+        "setlocal",
+        "rem Watch the shared folder's inbox and start a paid run for each folder dropped there.",
+        "rem Folder: the first argument, else FINAL_WORKFLOW_WORKSPACE. The provider key must be",
+        "rem in the environment of the account that runs this; nothing here sets it (README.md).",
+        *_ROOT_ARGUMENT,
+        "if not defined ROOT (",
+        "  echo Usage: Start watcher.cmd ^<shared folder^>",
+        "  echo Or set FINAL_WORKFLOW_WORKSPACE to the shared folder.",
+        "  exit /b 1",
+        ")",
+        f'{_PYTHON} -m deploy_workflow.inbox.watcher --root "%ROOT%"',
+        "exit /b %errorlevel%",
+    ],
 }
+
+
+def ship_inbox_files(engine: Path) -> None:
+    """The inbox watcher's standing ruling and the context form it copies into each inbox folder.
+
+    The only ruling shipped is the watcher's; any other paid run needs a ruling the person writes
+    in docs/rulings (docs/COPILOT.md)."""
+    for name in ["docs/rulings/2026-11-09-inbox-automation.md", "docs/templates/context-form.html"]:
+        (engine / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / name, engine / name)
 
 
 def bundle(target: Path, architecture: str | None) -> None:
@@ -123,8 +155,7 @@ def bundle(target: Path, architecture: str | None) -> None:
     shutil.copyfile(
         ROOT / "docs/visualisations/catalogue.csv", engine / "docs/visualisations/catalogue.csv"
     )
-    # A paid run needs a ruling the person writes here; none is shipped (docs/COPILOT.md).
-    (engine / "docs/rulings").mkdir(parents=True, exist_ok=True)
+    ship_inbox_files(engine)
     if architecture is None:
         return
     runtime = engine / "runtime"
@@ -136,6 +167,7 @@ def bundle(target: Path, architecture: str | None) -> None:
             records["python"]["sha256"] == PYTHON[architecture]
             and {k: v["version"] for k, v in records["wheels"].items()} == PINS
         ):
+            (runtime / "python313._pth").write_text(PTH)  # An older build lacks engine\src.
             print("Reusing the pinned Python engine for", architecture, flush=True)
             return
     clear_runtime(target, runtime, manifest)
@@ -178,7 +210,7 @@ def bundle(target: Path, architecture: str | None) -> None:
             "filename": item["filename"],
             "sha256": item["digests"]["sha256"],
         }
-    (runtime / "python313._pth").write_text("python313.zip\n.\nLib\\site-packages\nimport site\n")
+    (runtime / "python313._pth").write_text(PTH)
     (engine / "runtime-manifest.json").write_text(json.dumps(records, indent=2) + "\n")
     print("Bundled pinned Python engine for", architecture, flush=True)
 
