@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Financial foundation · Credit OS — mockup</title>
+<link rel="icon" href="symbol.svg" type="image/svg+xml">
+<style>
+@font-face{font-family:'Red Hat Display';src:url(fonts/RedHatDisplay-Bold.woff2) format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Red Hat Display';src:url(fonts/RedHatDisplay-SemiBold.woff2) format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:'Red Hat Text';src:url(fonts/RedHatText-Regular.woff2) format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Red Hat Text';src:url(fonts/RedHatText-Medium.woff2) format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Red Hat Text';src:url(fonts/RedHatText-SemiBold.woff2) format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:'Red Hat Mono';src:url(fonts/RedHatMono-Medium.woff2) format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Red Hat Mono';src:url(fonts/RedHatMono-SemiBold.woff2) format('woff2');font-weight:600;font-display:swap}
+
+:root{
+  --fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;
+  --navy:#000533;--blue:#0017e5;--blue-700:#0012b3;--blue-100:#dfe3ff;--blue-50:#eef0ff;
+  --ground:#eef0f5;--panel:#fff;--quiet:#f6f7fa;--rule:#dde1ea;--selection:#e7ecff;
+  --text:#0b1030;--text-2:#3a4056;--text-3:#4f566b;--muted:#4a5068;
+  --amber:#8a5300;--amber-bg:#fff1c7;--amber-border:#f2d58a;--green:#0e7a46;--red:#b3261e;
+  --slate:#5b6a8c; /* blue-grey series */
+  --depth:0 8px 28px rgba(0,5,51,.085);--shadow-xs:0 1px 2px rgba(0,5,51,.05);
+  --ring:0 0 0 4px rgba(0,23,229,.16);
+  --r-inline:4px;--r-control:8px;--r-card:12px;
+  --display:'Red Hat Display',system-ui,sans-serif;--textf:'Red Hat Text',system-ui,sans-serif;--mono:'Red Hat Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--ground);color:var(--text);font:400 var(--fs-body)/1.65 var(--textf);-webkit-font-smoothing:antialiased}
+body{margin:0;min-height:100vh}
+::selection{background:var(--selection);color:var(--navy)}
+*{scrollbar-width:thin;scrollbar-color:#c5cad8 transparent}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--r-inline)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+img{display:block}
+h1,h2,h3{margin:0;font-family:var(--display);letter-spacing:-.02em;text-wrap:balance}
+code,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* rail */
+.rail{position:fixed;inset:0 auto 0 0;width:56px;background:var(--navy);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px}
+.rail .symbol{width:28px;margin-bottom:10px}
+.rail-rule{width:24px;height:1px;background:rgba(255,255,255,.18);margin:4px 0 8px}
+.rail a,.rail button{width:36px;height:36px;border-radius:var(--r-control);display:grid;place-items:center;opacity:.72}
+.rail a:hover,.rail button:hover{background:rgba(255,255,255,.08);opacity:1}
+.rail a[aria-current]{background:rgba(255,255,255,.14);opacity:1}
+.rail img{width:18px;filter:invert(1)}
+
+/* app */
+.app{margin-left:56px;padding:20px 24px 32px}
+.issuer{display:flex;align-items:center;gap:14px;min-height:40px}
+.issuer h1{font-size:25px;font-weight:700;line-height:1.2}
+.code{font:500 var(--fs-label)/1 var(--mono);letter-spacing:.02em;padding:6px 8px;border:1px solid var(--rule);border-radius:var(--r-inline);background:var(--panel);color:var(--text-2)}
+.issuer .change{font-size:var(--fs-compact);font-weight:600}
+.issuer .scope{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:var(--fs-compact);color:var(--text-2)}
+.issuer .scope img{width:16px;opacity:.7}
+.tabs{display:flex;gap:26px;border-bottom:1px solid var(--rule);margin:14px 0 18px}
+.tabs a{display:flex;align-items:center;gap:7px;padding:8px 2px 11px;font-size:var(--fs-control);font-weight:600;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a img{width:15px;opacity:.6}
+.tabs a:hover{text-decoration:none;color:var(--text)}
+.tabs a[aria-current]{color:var(--blue);border-color:var(--blue)}
+.tabs a[aria-current] img{opacity:1;filter:invert(14%) sepia(93%) saturate(6362%) hue-rotate(237deg) brightness(90%)}
+
+.workbench{display:grid;grid-template-columns:238px minmax(0,1fr) 280px;gap:20px;align-items:start}
+
+/* navigator */
+.navigator{position:sticky;top:20px;font-size:var(--fs-compact)}
+.search{position:relative;display:flex;align-items:center}
+.search img{position:absolute;left:10px;width:14px;opacity:.5}
+.search input{width:100%;height:36px;padding:0 34px 0 30px;border:1px solid var(--rule);border-radius:var(--r-control);background:var(--panel);font:inherit;font-size:var(--fs-compact);color:var(--text);box-shadow:var(--shadow-xs)}
+.search input::placeholder{color:var(--text-3)}
+.search kbd{position:absolute;right:9px;font:500 var(--fs-label)/1 var(--mono);padding:3px 5px;border:1px solid var(--rule);border-radius:var(--r-inline);color:var(--text-3);background:var(--quiet)}
+.nav-group{margin-top:14px}
+.nav-group>button{display:flex;width:100%;align-items:center;justify-content:space-between;padding:7px 2px;font-weight:600;font-size:var(--fs-compact);color:var(--text-2);border-top:1px solid var(--rule)}
+.nav-group>button img{width:14px;opacity:.5}
+.nav-group ul{list-style:none;margin:0;padding:0 0 6px}
+.nav-group li a{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:5px 8px;border-radius:6px;color:var(--text-2)}
+.nav-group li a:hover{background:var(--panel);text-decoration:none}
+.nav-group li a[aria-current]{background:var(--selection);color:var(--blue);font-weight:600}
+.nav-group li .state{font-size:var(--fs-label);color:var(--text-3);white-space:nowrap}
+.outline{margin-top:16px;padding:14px 0 0;border-top:1px solid var(--rule)}
+.outline h2{font:600 var(--fs-label)/1.4 var(--textf);text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin:0 2px 8px}
+.outline ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--rule)}
+.outline li a{display:block;padding:5px 10px;margin-left:-1px;border-left:2px solid transparent;color:var(--text-2)}
+.outline li a[aria-current]{border-color:var(--blue);color:var(--blue);font-weight:600}
+.outline li a:hover{text-decoration:none;color:var(--text)}
+
+/* canvas */
+.canvas{background:var(--panel);border-radius:var(--r-card);box-shadow:var(--depth);padding:24px 28px 28px;min-width:0}
+.module-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.module-head h2{font-size:21px;font-weight:700;line-height:1.25}
+.module-head .sub{font-size:var(--fs-compact);color:var(--text-3);margin-top:3px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.head-tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.select{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 10px 0 12px;border:1px solid var(--rule);border-radius:var(--r-control);background:var(--panel);box-shadow:var(--shadow-xs);font-size:var(--fs-compact);font-weight:500}
+.select img{width:14px;opacity:.6}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:999px;font-size:var(--fs-label);font-weight:600;line-height:1;border:1px solid var(--rule);background:var(--quiet);color:var(--text-2);white-space:nowrap}
+.badge.on-navy{background:transparent;border-color:rgba(255,255,255,.4);color:#fff}
+.badge.amber{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:var(--fs-label);font-weight:600;border:1px solid var(--rule);background:var(--quiet);color:var(--text-2)}
+
+.band{margin-top:20px;background:var(--navy);color:#fff;border-radius:var(--r-card);padding:18px 22px 16px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px 28px}
+.band p{margin:0;font-size:15px;line-height:1.55;font-weight:500;text-wrap:pretty}
+.band dl{margin:0;font-size:var(--fs-compact);line-height:1.5}
+.band dt{color:#c9cfee;display:inline}
+.band dd{display:inline;margin:0 0 0 6px;color:#fff}
+.band .row{display:block;margin-top:4px}
+.band .src{grid-column:1/-1;display:flex;gap:8px;align-items:center;margin-top:4px;font-size:var(--fs-label);color:#c9cfee}
+
+section.part{margin-top:30px}
+section.part>h3{font-size:16px;font-weight:700;margin-bottom:4px}
+section.part>.lede{margin:0 0 14px;color:var(--text-2);max-width:72ch;text-wrap:pretty}
+
+/* chart */
+.panel-card{border:1px solid var(--rule);border-radius:var(--r-card);overflow:hidden}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:12px 16px;background:var(--quiet);border-bottom:1px solid var(--rule)}
+.panel-head h4{margin:0;font:600 var(--fs-control)/1.3 var(--textf)}
+.panel-head span{font-size:var(--fs-label);color:var(--text-3)}
+.chart{padding:6px 16px 10px}
+.chart-row{display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(140px,2fr) 72px auto;gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--rule);width:100%;text-align:left;border-radius:var(--r-inline)}
+.chart-row:last-child{border-bottom:0}
+.chart-row:hover .track i{filter:brightness(1.12)}
+.chart-row .lab{font-size:var(--fs-compact);color:var(--text-2);line-height:1.3}
+.chart-row .lab b{display:block;font-weight:600;color:var(--text)}
+.track{position:relative;height:14px}
+.track i{position:absolute;left:0;top:1px;height:12px;border-radius:0 4px 4px 0;background:var(--blue)}
+.track i.s1{background:var(--navy)}
+.track i.s2{background:var(--slate)}
+.chart-row strong{font:600 var(--fs-control)/1 var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--text)}
+.chart-row .chips{justify-self:start}
+.legend{display:flex;gap:16px;padding:10px 16px;border-top:1px solid var(--rule);font-size:var(--fs-label);color:var(--text-3)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--blue);vertical-align:-1px;margin-right:6px}
+.legend i.s1{background:var(--navy)}.legend i.s2{background:var(--slate)}
+
+/* key numbers table */
+.table-card{margin-top:14px;border:1px solid var(--rule);border-radius:var(--r-card);overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:var(--fs-compact)}
+thead th{background:var(--quiet);text-align:left;font-weight:600;color:var(--text-2);padding:9px 14px;border-bottom:1px solid var(--rule);white-space:nowrap}
+tbody td{padding:9px 14px;border-bottom:1px solid var(--rule);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:500}
+td.delta{color:var(--text-2)}
+td .na{color:var(--text-3);font-style:normal}
+
+/* chips: Untitled UI Tag anatomy, Credit OS tokens */
+.chips{display:inline-flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 4px;border:1px solid var(--rule);border-radius:var(--r-inline);background:var(--panel);font:500 var(--fs-label)/1 var(--mono);color:var(--text-2);white-space:nowrap;box-shadow:var(--shadow-xs)}
+.chip:hover{border-color:#b9c0d6;background:var(--quiet)}
+.chip[aria-pressed=true]{border-color:var(--blue);background:var(--blue-50);color:var(--blue-700)}
+.chip .av{width:18px;height:18px;border-radius:3px;display:grid;place-items:center;font:600 11px/1 var(--textf);letter-spacing:.02em;background:var(--navy);color:#fff}
+.chip .av.q{background:var(--slate)}
+.chip .av.cp{background:var(--blue-100);color:var(--blue-700)}
+.chip .av.gap{background:transparent;border:1px dashed #b9c0d6;color:var(--text-3)}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+.chip .dot.row{background:var(--navy)}
+.chip .dot.up{background:var(--slate)}
+.chip .dot.gap{background:transparent;border:1px solid #9aa2b8}
+.chip.gap{border-style:dashed;color:var(--text-3)}
+.chip .n{color:var(--text-3)}
+
+/* findings */
+.finding{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:6px 28px;padding:16px 0;border-top:1px solid var(--rule)}
+.finding:first-of-type{border-top:0;padding-top:4px}
+.finding h4{margin:0;font:600 var(--fs-control)/1.45 var(--textf);text-wrap:pretty}
+.finding .impact{margin:0;color:var(--text-2);text-wrap:pretty}
+.finding .impact b{font-weight:600;color:var(--text-3);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
+.finding aside{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding-top:2px}
+.finding .conf{font-size:var(--fs-label);color:var(--text-3)}
+.finding .conf .pill{margin-left:6px}
+
+/* limits */
+.limits{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.limits div{padding:14px 16px;border:1px solid var(--rule);border-radius:var(--r-card);background:var(--quiet)}
+.limits h4{margin:0 0 6px;font:600 var(--fs-compact)/1.3 var(--textf);color:var(--text-2)}
+.limits p{margin:0 0 8px;text-wrap:pretty}
+.limits p:last-child{margin:0}
+
+/* evidence & audit */
+details.audit{margin-top:30px;border-top:1px solid var(--rule);padding-top:12px}
+details.audit summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;font:700 16px/1.3 var(--display);letter-spacing:-.02em}
+details.audit summary::-webkit-details-marker{display:none}
+details.audit summary img{width:16px;opacity:.6;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+details.audit[open] summary img{transform:rotate(90deg)}
+details.audit summary span{font:400 var(--fs-compact)/1 var(--textf);color:var(--text-3);margin-left:auto}
+.audit-list{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:var(--fs-compact)}
+.audit-list li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule)}
+.audit-list li span{color:var(--text-3);font-family:var(--mono);font-size:var(--fs-label)}
+
+/* inspector */
+.inspector{position:sticky;top:20px;background:var(--panel);border-radius:var(--r-card);box-shadow:var(--depth);max-height:calc(100vh - 40px);overflow:auto;font-size:var(--fs-compact)}
+.insp-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--rule)}
+.insp-bar button{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--blue);font-size:var(--fs-compact)}
+.insp-bar button img{width:14px;filter:invert(14%) sepia(93%) saturate(6362%) hue-rotate(237deg) brightness(90%)}
+.insp-bar kbd{font:500 var(--fs-label)/1 var(--mono);padding:3px 5px;border:1px solid var(--rule);border-radius:var(--r-inline);color:var(--text-3);background:var(--quiet)}
+.insp-body{padding:16px 16px 18px}
+.insp-body h2{font:600 var(--fs-label)/1.4 var(--textf);text-transform:uppercase;letter-spacing:.06em;color:var(--text-3)}
+.source-id{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:center;margin-top:12px}
+.source-id .av{width:36px;height:36px;border-radius:var(--r-control);background:var(--navy);color:#fff;display:grid;place-items:center;font:700 14px/1 var(--display)}
+.source-id b{display:block;font-size:var(--fs-control);font-weight:600;line-height:1.3}
+.source-id small{display:block;font-family:var(--mono);font-size:var(--fs-label);color:var(--text-3);margin-top:2px;overflow-wrap:anywhere}
+.insp-body h3{font:600 var(--fs-compact)/1.3 var(--textf);margin:18px 0 6px;color:var(--text-2)}
+.insp-body p{margin:0;text-wrap:pretty}
+.excerpt{background:var(--quiet);border:1px solid var(--rule);border-radius:var(--r-control);padding:10px 12px;font-family:var(--mono);font-size:var(--fs-label);line-height:1.6;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.excerpt mark{background:var(--selection);color:var(--navy);padding:1px 2px;border-radius:2px;font-weight:600}
+.hrow{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:var(--fs-label)}
+.hrow dt{color:var(--text-3)}.hrow dd{margin:0;font-family:var(--mono);color:var(--text)}
+.insp-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--rule);border-radius:var(--r-control);background:var(--panel);box-shadow:var(--shadow-xs);font-size:var(--fs-compact);font-weight:600;color:var(--text)}
+.btn img{width:14px;opacity:.7}
+.btn:hover{background:var(--quiet)}
+.note{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);font-size:var(--fs-label);color:var(--text-3);line-height:1.55}
+
+@media (max-width:1180px){.workbench{grid-template-columns:238px minmax(0,1fr)}.inspector{display:none}}
+@media (max-width:900px){.workbench{grid-template-columns:1fr}.navigator{position:static}.band{grid-template-columns:1fr}.finding{grid-template-columns:1fr}.limits{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="rail" aria-label="Application">
+  <img class="symbol" src="symbol.svg" alt="">
+  <span class="rail-rule"></span>
+  <a href="#" aria-current="page" title="Issuer library"><img src="icons/layout-grid.svg" alt="Issuer library"></a>
+  <a href="#" title="Reports"><img src="icons/files.svg" alt="Reports"></a>
+  <button type="button" title="Search"><img src="icons/search.svg" alt="Search"></button>
+</aside>
+
+<div class="app">
+  <header class="issuer">
+    <h1>TransDigm Group Incorporated</h1>
+    <span class="code">CPOS-TDG-SOL-HIGH-CP2-001</span>
+    <a class="change" href="#">Change case</a>
+    <span class="scope"><img src="icons/calendar-days.svg" alt="">As of <strong>30 September 2024</strong></span>
+  </header>
+  <nav class="tabs" aria-label="Run sections">
+    <a href="#"><img src="icons/layout-grid.svg" alt="">Overview</a>
+    <a href="#" aria-current="page"><img src="icons/layers.svg" alt="">Modules</a>
+    <a href="#"><img src="icons/calendar-days.svg" alt="">Calendar</a>
+    <a href="#"><img src="icons/chart-no-axes-combined.svg" alt="">Forecast</a>
+    <a href="#"><img src="icons/files.svg" alt="">Reports</a>
+    <a href="#"><img src="icons/folder-open.svg" alt="">Evidence</a>
+  </nav>
+
+  <div class="workbench">
+    <nav class="navigator" aria-label="Analytical modules">
+      <label class="search"><img src="icons/search.svg" alt=""><input type="search" placeholder="Find a module, figure or source" aria-label="Find a module, figure or source"><kbd>/</kbd></label>
+
+      <div class="nav-group">
+        <button type="button" aria-expanded="true">Business and evidence <img src="icons/chevron-down.svg" alt=""></button>
+        <ul>
+          <li><a href="#">Source readiness <span class="state">CP-0</span></a></li>
+          <li><a href="#">Business &amp; governance <span class="state">CP-1A</span></a></li>
+          <li><a href="#">Documentation review <span class="state">No output</span></a></li>
+        </ul>
+      </div>
+      <div class="nav-group">
+        <button type="button" aria-expanded="true">Financial performance <img src="icons/chevron-down.svg" alt=""></button>
+        <ul>
+          <li><a href="#" aria-current="location">Financial foundation <span class="state">CP-1</span></a></li>
+          <li><a href="#">Earnings update <span class="state">No output</span></a></li>
+          <li><a href="#">Earnings quality <span class="state">No output</span></a></li>
+        </ul>
+      </div>
+      <div class="nav-group">
+        <button type="button" aria-expanded="false">Liquidity and refinancing <img src="icons/chevron-right.svg" alt=""></button>
+      </div>
+      <div class="nav-group">
+        <button type="button" aria-expanded="false">Outlook and downside <img src="icons/chevron-right.svg" alt=""></button>
+      </div>
+      <div class="nav-group">
+        <button type="button" aria-expanded="false">Decision and review <img src="icons/chevron-right.svg" alt=""></button>
+      </div>
+
+      <div class="outline">
+        <h2>On this page</h2>
+        <ol>
+          <li><a href="#bottom-line" aria-current="location">Bottom line</a></li>
+          <li><a href="#numbers">Leverage and coverage</a></li>
+          <li><a href="#findings">Findings</a></li>
+          <li><a href="#limits">Limits and contrary evidence</a></li>
+          <li><a href="#audit">Evidence &amp; audit</a></li>
+        </ol>
+      </div>
+    </nav>
+
+    <main class="canvas" id="analysis">
+      <div class="module-head">
+        <div>
+          <h2>Financial foundation</h2>
+          <div class="sub"><span>CP-1</span><span>·</span><span>Current methodology</span><span>·</span><span>Handoff <code>CP-1.md</code> · 501 lines</span></div>
+        </div>
+        <div class="head-tools">
+          <span class="badge">Candidate · not accepted</span>
+          <button type="button" class="select" aria-haspopup="listbox">Saved output · 1 of 1 <img src="icons/chevron-down.svg" alt=""></button>
+          <a class="btn" href="#"><img src="icons/download.svg" alt="">Handoff</a>
+        </div>
+      </div>
+
+      <div class="band" id="bottom-line">
+        <p>Cash generation improved, but gross leverage increased and a declared distribution materially reduced the prospective liquidity cushion. Reported net deleveraging is not equivalent to retained-cash deleveraging.</p>
+        <dl>
+          <span class="row"><dt>Confidence</dt><dd>Medium</dd></span>
+          <span class="row"><dt>Main limitation</dt><dd>Retrospective reporting; adjusted earnings and legal capacity remain unverified, and the distribution had not yet been paid at year-end.</dd></span>
+        </dl>
+        <div class="src"><span class="badge on-navy">Quoted from the handoff</span><span>CP-1.md · line 60</span></div>
+      </div>
+
+      <section class="part" id="numbers">
+        <h3>Leverage and coverage</h3>
+        <p class="lede">Gross leverage rose while net leverage fell, because cash accumulated ahead of a declared distribution. Coverage improved on a net-cash-interest denominator, not on gross coupons.</p>
+        <div class="panel-card">
+          <div class="panel-head"><h4>Leverage and interest cover</h4><span>x · issuer EBITDA basis · FY2023 → FY2024</span></div>
+          <div class="chart" role="group" aria-label="Leverage and interest cover. Select a row to inspect its source.">
+            <button class="chart-row"><span class="lab"><b>Total debt / EBITDA</b>FY2023</span><span class="track"><i class="s1" style="width:96.3%"></i></span><strong>6.33</strong><span class="chips"><span class="chip"><span class="av cp">C1</span>L350<span class="dot row"></span></span></span></button>
+            <button class="chart-row"><span class="lab"><b>Total debt / EBITDA</b>FY2024</span><span class="track"><i style="width:100%"></i></span><strong>6.57</strong><span class="chips"><span class="chip"><span class="av cp">C1</span>L351<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.145<span class="dot"></span></span></span></button>
+            <button class="chart-row"><span class="lab"><b>Net debt / EBITDA</b>FY2023</span><span class="track"><i class="s1" style="width:79.5%"></i></span><strong>5.22</strong><span class="chips"><span class="chip"><span class="av cp">C1</span>L350<span class="dot row"></span></span></span></button>
+            <button class="chart-row"><span class="lab"><b>Net debt / EBITDA</b>FY2024</span><span class="track"><i style="width:75.0%"></i></span><strong>4.93</strong><span class="chips"><span class="chip"><span class="av cp">C1</span>L351<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.120<span class="dot"></span></span></span></button>
+            <button class="chart-row"><span class="lab"><b>EBITDA / cash interest</b>FY2023</span><span class="track"><i class="s2" style="width:41.2%"></i></span><strong>2.71</strong><span class="chips"><span class="chip"><span class="av cp">C1</span>L357<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.123<span class="dot"></span></span></span></button>
+            <button class="chart-row"><span class="lab"><b>EBITDA / cash interest</b>FY2024</span><span class="track"><i class="s2" style="width:50.1%"></i></span><strong>3.29</strong><span class="chips"><span class="chip"><span class="av cp">C1</span>L358<span class="dot row"></span></span><span class="chip" aria-pressed="true"><span class="av">K</span>p.123<span class="dot"></span></span></span></button>
+          </div>
+          <div class="legend"><span><i class="s1"></i>FY2023</span><span><i></i>FY2024</span><span><i class="s2"></i>Interest cover</span><span style="margin-left:auto">Chip dot: <span class="dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);vertical-align:1px"></span> issuer page · <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--navy);vertical-align:1px"></span> handoff row · <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--slate);vertical-align:1px"></span> upstream module · <span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1px solid #9aa2b8;vertical-align:1px"></span> gap</span></div>
+        </div>
+
+        <div class="table-card">
+          <table>
+            <caption class="sr-only">Key numbers, FY2023 and FY2024</caption>
+            <thead><tr><th>Measure</th><th class="num">FY2023</th><th class="num">FY2024</th><th class="num">Change</th><th>Unit</th><th>Source</th></tr></thead>
+            <tbody>
+              <tr><td>Free cash flow</td><td class="num">1,236</td><td class="num">1,880</td><td class="num delta">+644</td><td>US$m</td><td><span class="chips"><span class="chip"><span class="av cp">C1</span>L417<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.123<span class="dot"></span></span></span></td></tr>
+              <tr><td>Cash</td><td class="num">3,472</td><td class="num">6,261</td><td class="num delta">+2,789</td><td>US$m</td><td><span class="chips"><span class="chip"><span class="av cp">C1</span>L364<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.120<span class="dot"></span></span></span></td></tr>
+              <tr><td>Undrawn committed facilities</td><td class="num">755</td><td class="num">843</td><td class="num delta">+88</td><td>US$m</td><td><span class="chips"><span class="chip"><span class="av cp">C1</span>L365<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.59<span class="dot"></span></span></span></td></tr>
+              <tr><td>Dividend-only pro forma liquidity</td><td class="num"><span class="na" title="Not calculated for FY2023 in the handoff">n.a.</span></td><td class="num">2,919</td><td class="num delta"><span class="na" title="No FY2023 value to compare">n.a.</span></td><td>US$m</td><td><span class="chips"><span class="chip"><span class="av cp">C1</span>L66<span class="dot row"></span></span><span class="chip gap"><span class="av gap">?</span>no page<span class="dot gap"></span></span></span></td></tr>
+              <tr><td>Gross cash coupons</td><td class="num"><span class="na">n.a.</span></td><td class="num"><span class="na">n.a.</span></td><td class="num delta"><span class="na" title="No FY2023 value to compare">n.a.</span></td><td>US$m</td><td><span class="chips"><span class="chip gap"><span class="av gap">?</span>Not supplied<span class="dot gap"></span></span></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="part" id="findings">
+        <h3>Findings</h3>
+        <p class="lede">Each claim as the handoff states it, with its creditor impact and the rows and pages it rests on.</p>
+
+        <article class="finding">
+          <div><h4>Gross debt / issuer EBITDA increased from 6.33x to 6.57x.</h4><p class="impact"><b>Creditor impact</b>Higher gross leverage offsets the improvement in reported net leverage.</p></div>
+          <aside><span class="conf">Confidence<span class="pill">High</span></span><span class="chips"><span class="chip"><span class="av cp">C1</span>L350–351<span class="dot row"></span></span><span class="chip"><span class="av cp">C1</span>D1 · D3 · E1<span class="dot up"></span></span><span class="chip"><span class="av">K</span>p.145<span class="dot"></span></span></span></aside>
+        </article>
+        <article class="finding">
+          <div><h4>EBITDA / net cash interest improved from 2.71x to 3.29x.</h4><p class="impact"><b>Creditor impact</b>Cash debt-service coverage improved, but the denominator is net interest, not gross contractual coupons.</p></div>
+          <aside><span class="conf">Confidence<span class="pill">High</span></span><span class="chips"><span class="chip"><span class="av cp">C1</span>L357–358<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.123<span class="dot"></span></span><span class="chip"><span class="av">K</span>p.73<span class="dot"></span></span></span></aside>
+        </article>
+        <article class="finding">
+          <div><h4>Free cash flow increased from US$1,236 million to US$1,880 million.</h4><p class="impact"><b>Creditor impact</b>Internal cash generation improved but did not fund acquisitions and distributions together.</p></div>
+          <aside><span class="conf">Confidence<span class="pill">High</span></span><span class="chips"><span class="chip"><span class="av cp">C1</span>L417<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.123<span class="dot"></span></span></span></aside>
+        </article>
+        <article class="finding">
+          <div><h4>Dividend-only pro forma liquidity is US$2,919 million, against US$7,267 million reported at year-end.</h4><p class="impact"><b>Creditor impact</b>Credit assessment should not treat the pre-payment balance as durable cash protection.</p></div>
+          <aside><span class="conf">Confidence<span class="pill">Medium</span></span><span class="chips"><span class="chip"><span class="av cp">C1</span>L313<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.120<span class="dot"></span></span><span class="chip"><span class="av">K</span>p.59<span class="dot"></span></span><span class="chip"><span class="av q">A</span>CP-1A · E2<span class="dot up"></span></span></span></aside>
+        </article>
+        <article class="finding">
+          <div><h4>Issuer EBITDA As Defined exceeds unadjusted issuer EBITDA.</h4><p class="impact"><b>Creditor impact</b>Accepted add-backs materially influence leverage; normalization remains restricted.</p></div>
+          <aside><span class="conf">Confidence<span class="pill">Medium</span></span><span class="chips"><span class="chip"><span class="av cp">C1</span>L242<span class="dot row"></span></span><span class="chip"><span class="av">K</span>p.70–71<span class="dot"></span></span></span></aside>
+        </article>
+      </section>
+
+      <section class="part" id="limits">
+        <h3>Limits and contrary evidence</h3>
+        <div class="limits">
+          <div>
+            <h4>What this module does not establish</h4>
+            <p>Gross contractual coupons are not supplied, so coverage is on net cash interest only. <span class="chips"><span class="chip gap"><span class="av gap">?</span>Not supplied<span class="dot gap"></span></span></span></p>
+            <p>Legal capacity and guarantor-only coverage are unverified; consolidated figures are not borrower-only results. <span class="chips"><span class="chip"><span class="av cp">C0</span>CP-0 · L68<span class="dot up"></span></span></span></p>
+            <p>EBITDA As Defined excludes integration cash costs; add-backs are the issuer's definitions, not accepted credit earnings. <span class="chips"><span class="chip"><span class="av">K</span>p.70<span class="dot"></span></span></span></p>
+          </div>
+          <div>
+            <h4>Watch after the as-of date</h4>
+            <p>The special dividend was declared but unpaid at 30 September 2024; year-end cash overstates the retained cushion. <span class="chips"><span class="chip"><span class="av">K</span>p.59<span class="dot"></span></span></span></p>
+            <p>About 77% of gross debt is fixed-rate; a one-point rate rise adds about US$30m of annual interest, by the issuer's own sensitivity. <span class="chips"><span class="chip"><span class="av">K</span>p.73<span class="dot"></span></span></span></p>
+          </div>
+        </div>
+      </section>
+
+      <details class="audit" id="audit">
+        <summary><img src="icons/chevron-right.svg" alt="">Evidence &amp; audit<span>12 registers · unchanged from the handoff</span></summary>
+        <ul class="audit-list">
+          <li>Pinned inventory and supplied handoff <span>L9</span></li><li>Source-context assessments <span>L26</span></li>
+          <li>Inspection and extraction boundary <span>L46</span></li><li>Reported income statement and quantity controls <span>L101</span></li>
+          <li>Reported balance sheet and funding review <span>L130</span></li><li>Reported cash-flow statement <span>L189</span></li>
+          <li>Earnings definition and add-back register <span>L242</span></li><li>Debt and facility register <span>L258</span></li>
+          <li>Calculation conventions <span>L397</span></li><li>Ratio register <span>L449</span></li>
+          <li>Balance-sheet and component checks <span>L467</span></li><li>Technical audit <span>report-view.json</span></li>
+        </ul>
+      </details>
+    </main>
+
+    <aside class="inspector" aria-label="Evidence inspector">
+      <div class="insp-bar"><button type="button"><img src="icons/arrow-left.svg" alt="">Back to analysis</button><kbd>Esc</kbd></div>
+      <div class="insp-body">
+        <h2>Evidence inspector</h2>
+        <div class="source-id">
+          <span class="av" aria-hidden="true">K</span>
+          <div><b>Form 10-K, FY2024</b><small>TDG_2024-09-30_10-K_…_tdg-20240930.htm.jsonl · page 123</small></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><span class="badge"><img src="icons/check.svg" alt="" style="width:11px;opacity:.7">Matches publication</span><span class="badge">Quote found on page</span><span class="badge">Not classified</span></div>
+
+        <h3>Claim</h3>
+        <p>EBITDA / cash interest, FY2024: <code>3.29</code> x</p>
+
+        <h3>Handoff row · CP-1.md line 358</h3>
+        <dl class="hrow"><dt>Period</dt><dd>FY2024</dd><dt>EBITDA / cash interest</dt><dd>3.29</dd><dt>Unit</dt><dd>x</dd></dl>
+        <p style="margin-top:6px;font-size:var(--fs-label);color:var(--text-2)">Basis: issuer EBITDA / cash paid for interest, net; denominator 1158, K, page:123. Not gross or forward interest coverage.</p>
+
+        <h3>Source page · 10-K p.123</h3>
+        <div class="excerpt">CASH AND CASH EQUIVALENTS, END OF PERIOD $ 6,261 $ 3,472 $ 3,001
+SUPPLEMENTAL DISCLOSURE OF CASH FLOW INFORMATION:
+<mark>Cash paid during the period for interest, net $ 1,158 $ 1,160 $ 1,057</mark>
+Cash paid during the period for income taxes, net of refunds $ 539 $ 260 $ 220</div>
+
+        <h3>Hash</h3>
+        <p class="mono" style="font-size:var(--fs-label);color:var(--text-3);overflow-wrap:anywhere">d75c469fdb1966dd895c0f6faa6d5179b380d3ed95aa00aca99aa258059edab6 · equals CP-0 inventory</p>
+
+        <div class="insp-actions"><a class="btn" href="#"><img src="icons/file-text.svg" alt="">Open source file</a><a class="btn" href="#"><img src="icons/download.svg" alt="">Handoff</a></div>
+        <p class="note">Exact retained fields from this run. The page text is the retained extraction of the filing; the library checks its hash against CP-0's inventory and does not authenticate the original PDF.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

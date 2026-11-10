@@ -4,6 +4,7 @@ Chrome's console is read for errors, including Content Security Policy violation
 policy blocks every network request, so a violation is a request the page tried to make or a source
 it needs but is not allowed. Needs Google Chrome or Chromium; skipped where there is none."""
 
+import hashlib
 import html
 import json
 import re
@@ -14,7 +15,15 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from library_fixtures import make_run, method
+from library_fixtures import (
+    CITED,
+    REPORT_ROWS,
+    SOURCE_NAME,
+    SOURCE_PAGES,
+    inventory_text,
+    make_run,
+    method,
+)
 from test_credit_os_catalogue import CHARTS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,13 +54,14 @@ def chrome() -> str:
     return found
 
 
-def visit(page: Path, route: str = "") -> tuple[str, list[str]]:
+def visit(page: Path, route: str = "", width: int = 1280) -> tuple[str, list[str]]:
     """The page's DOM after it ran, and its console messages."""
     done = subprocess.run(
         [
             chrome(),
             "--headless=new",
             "--disable-gpu",
+            f"--window-size={width},900",
             "--enable-logging=stderr",
             "--v=0",
             "--virtual-time-budget=10000",
@@ -83,8 +93,8 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     dom, console = visit(page, "#W-Overview/overview?c=run-a")
     assert console == []
     assert (
-        len(re.findall(r'class="summary-chart"', dom)) == 4
-    )  # Leverage, cover, liquidity, maturities.
+        len(re.findall(r'<div class="panel-card">', dom)) == 4
+    )  # Leverage, cover, liquidity, maturities, each under the module that owns it.
     dom, console = visit(page, "#W-Reports/list?c=run-a")
     delivery = re.search(r'href="#W-Reports/([0-9a-f]{64})\?c=run-a"', dom)
     assert delivery, "the Reports tab lists the run's report"
@@ -117,6 +127,54 @@ def test_run_activity_and_forecast_not_run_from_disk(tmp_path):
     assert "No forecast model was published from this run’s files" in dom
 
 
+LIVE_CHIPS_PROBE = """addEventListener('load',()=>setTimeout(()=>{
+  const out={};
+  for(const state of ['running','done','waiting']){
+    const s=getComputedStyle(document.querySelector('.chip-'+state));
+    out[state]=[s.backgroundColor,s.color];
+  }
+  document.body.insertAdjacentHTML('beforeend','<pre id="chips">'+JSON.stringify(out)+'</pre>');
+},500));
+"""
+
+
+def test_live_run_chips_show_their_state_colours(tmp_path):
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    activity = {
+        "updated": "2026-11-10T00:00:00Z",
+        "runs": [
+            {
+                "id": "r1",
+                "status": "running",
+                "issuer_name": "Northbridge Synthetic Group",
+                "modules": [["CP-1", "running"], ["CP-0", "done"], ["CP-2", "waiting"]],
+            }
+        ],
+    }
+    # The page loads ../activity.js, the file the watcher writes beside the library folder.
+    (tmp_path / "activity.js").write_text(
+        f"window.RUN_ACTIVITY={json.dumps(activity)};\n", encoding="utf-8"
+    )
+    page = tmp_path / "library/index.html"
+    probe = tmp_path / "library/probe.html"
+    (tmp_path / "library/probe.js").write_text(
+        LIVE_CHIPS_PROBE, encoding="utf-8"
+    )  # CSP: self only.
+    probe.write_text(
+        page.read_text(encoding="utf-8").replace(
+            "</body>", '<script src="probe.js"></script></body>', 1
+        ),
+        encoding="utf-8",
+    )
+    dom, console = visit(probe, "#CP-OS/activity")
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="chips">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["running"] == ["rgb(0, 5, 51)", "rgb(255, 255, 255)"]
+    assert seen["done"][0] == "rgb(246, 247, 250)"
+    assert seen["waiting"][1] == "rgb(74, 80, 104)"
+
+
 def test_an_empty_library_says_so(tmp_path):
     update_library.update_library(tmp_path)
     dom, console = visit(tmp_path / "library/index.html")
@@ -133,7 +191,297 @@ def test_a_policy_violation_is_seen(tmp_path):
     assert any("Content Security Policy" in line for line in console)
 
 
-PROBE = """<script>
+# A script the test adds beside the generated page (the page's policy allows its own folder):
+# it drives the module report as a reader would and writes what it saw into the DOM, where
+# --dump-dom returns it.
+PROBE = Path(__file__).with_name("browser_probe_module_report.js").read_text(encoding="utf-8")
+
+
+OVERVIEW_PROBE = Path(__file__).with_name("browser_probe_overview.js").read_text(encoding="utf-8")
+
+
+def report_library(tmp_path: Path, cp0_confidence: str = "Medium") -> Path:
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp0_confidence=cp0_confidence,
+        # Under Findings: the tables are Reference, not audit (R39).
+        cp1_finding=CITED_FINDING,
+        cp1_findings=CITED + REPORT_ROWS,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    return tmp_path / "library/index.html"
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width):
+    page = report_library(tmp_path)
+    (page.parent / "probe.js").write_text(PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/head?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    for state in ("closed", "inspector"):  # With the inspector open the canvas is narrower still.
+        assert seen[state] == {"fits": True, "valueInCard": True, "chipsInCard": True, "rows": 2}, (
+            state
+        )
+    assert seen["rowFocus"] == {"focused": True, "box": True}  # The row button takes focus.
+    opened = seen["open"]
+    assert opened["hidden"] is False and "chip=" in opened["hash"] and "e=" in opened["hash"]
+    assert opened["excerpt"] and "Cash paid during the period" in opened["excerpt"]
+    assert opened["mark"] == "Cash paid during the period"
+    assert "Matches publication" in opened["text"] and "Quote found on page" in opened["text"]
+    assert f"Source page · {SOURCE_NAME} p.123" in opened["text"]
+    assert opened["pressed"] == "true" and opened["focusInInspector"] is True
+    assert opened["open"] == f"../runs/run-a/source-text/{SOURCE_NAME}"
+    assert seen["escaped"] == {"hidden": True, "focusOnChip": True, "hash": "#CP-1/head?c=run-a"}
+    assert seen["anchor"]["hash"] == "#CP-1/numbers?c=run-a"
+    assert seen["anchor"]["current"] == "Key numbers" and seen["anchor"]["chipStillThere"] is True
+
+
+# A Reader summary finding whose impact cites a page: the Findings part draws a page chip.
+CITED_FINDING = (
+    "| Interest was paid in cash. | K, page:123 says “Cash paid during the period”. | High |"
+)
+GAPS_PROBE = Path(__file__).with_name("browser_probe_gaps.js").read_text(encoding="utf-8")
+# Two citations whose key no inventory knows: each resolves to a gap chip with no page.
+UNKEYED = "\n### Unkeyed citations\n\nThe figure is printed in Z, page:9 and in Y, page:8.\n"
+
+
+def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_returns(tmp_path):
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp1_finding=CITED_FINDING,
+        cp1_findings=CITED + REPORT_ROWS + UNKEYED,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(GAPS_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/head?c=run-a")
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    # The count under the UNKEYED paragraph (two citations), not the first count on the page (one).
+    assert seen["count"] == "2 citations without a page", seen
+    assert seen["verified"] >= 1 and seen["singleGaps"] == 0
+    opened = seen["open"]
+    assert opened["hidden"] is False and "chip=gaps" in opened["hash"]
+    assert opened["items"] == opened["expected"] == 2
+    assert opened["focusInInspector"] is True
+    assert seen["escaped"] == {
+        "hidden": True,
+        "focusOnCount": True,
+        "hash": "#CP-1/head?c=run-a",
+    }
+
+
+# A narrative section and a register wider than the canvas, inserted under Findings. A section with
+# a table is Reference, so the register sits in the closed Statements and registers part.
+LONG = "A long note that keeps the register wider than the canvas"
+ANALYSIS_ROWS = f"""
+### Credit analysis
+
+### Debt structure
+
+Debt is mostly secured, K, page:123 states the figure.
+
+| Instrument | Maturity | Amount | Note | Covenants | Security | Guarantors | Call schedule |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Term loan | 2028 | 1,200 | {LONG} | Not supplied | First lien | Parent | Non-call 2y |
+| Notes | 2030 | 700 | {LONG} | Incurrence | None | Parent | Make-whole |
+"""
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_reference_part_fits_the_page(tmp_path, width):
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp1_findings=ANALYSIS_ROWS,
+        cp1_extra=CITED + REPORT_ROWS,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    dom, console = visit(tmp_path / "library/index.html", "#CP-1/reference?c=run-a", width)
+    assert console == []
+    found = re.search(r'<details class="fold" id="reference"[^>]*>(.*?)</details>', dom, re.DOTALL)
+    assert found and re.search(r'<details class="fold" id="reference" open', dom)
+    reference = found[1]
+    assert "Debt structure" in reference and "Term loan" in reference
+    assert "Call schedule" in reference
+    # Row and page chips on the paragraph and the register.
+    assert reference.count('class="chip') >= 4
+    probe = Path(__file__).with_name("browser_probe_fits.js")
+    (tmp_path / "library/probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page = tmp_path / "library/index.html"
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/reference?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    # The fixture rows after Sources are audit; Debt structure is the one reference table.
+    assert seen["pageFits"] is True and seen["tablesInCards"] is True and seen["tables"] == 1
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width):
+    page = report_library(tmp_path, cp0_confidence="Not assessable")
+    (page.parent / "probe.js").write_text(OVERVIEW_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["rows"] > 0, "the run report drew no chart rows"
+    assert seen["valueInCard"] is True and seen["fits"] is True
+    assert 0 < seen["established"] < seen["total"], "the run has no not-assessable row"
+    assert seen["before"] == seen["established"]  # Not-assessable rows start hidden.
+    assert seen["after"] == seen["total"]  # Ticking the checkbox shows every row.
+    assert seen["emptyBefore"] is False  # Rows are shown, so the empty row is not.
+    # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
+    assert seen["filtered"] == {"shown": 0, "emptyShown": True}
+
+
+# A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then
+# Calculations and Gaps sections, inserted before Sources.
+CALC_AND_GAPS = """
+## Calculations
+
+### Net debt trace
+
+Net debt is 1,200 less 3,472, K, page:123 states the figure.
+
+## Gaps
+
+### Coverage gaps
+
+Coupons are not supplied.
+"""
+SECTIONS_PROBE = Path(__file__).with_name("browser_probe_sections.js").read_text(encoding="utf-8")
+
+
+def nine_part_library(tmp_path: Path) -> Path:
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp1_finding=CITED_FINDING,
+        cp1_findings=CITED + REPORT_ROWS + UNKEYED + CALC_AND_GAPS,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    return tmp_path / "library/index.html"
+
+
+def line_of(tmp_path: Path, heading: str) -> int:
+    handoff = next(tmp_path.glob("runs/run-a/deliveries/*/CP-1.md"))
+    return handoff.read_text().splitlines().index(heading) + 1
+
+
+def probe_route(page: Path, route: str, width: int = 1280) -> dict:
+    (page.parent / "probe.js").write_text(SECTIONS_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, route, width)
+    assert console == []
+    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_nine_part_module_page_has_no_horizontal_overflow(tmp_path, width):
+    seen = probe_route(nine_part_library(tmp_path), "#CP-1/head?c=run-a", width)
+    # Closed on arrival; the page fits with every fold open.
+    assert seen["fits"] is True and seen["referenceOpen"] is False
+
+
+def test_a_section_route_opens_the_reference_part_and_scrolls_to_it(tmp_path):
+    page = nine_part_library(tmp_path)
+    line = line_of(tmp_path, "### Cash table")
+    seen = probe_route(page, f"#CP-1/s-{line}?c=run-a")
+    assert seen["referenceOpen"] is True
+    assert seen["target"] == {"found": True, "inReference": True, "topInside": True}
+    assert seen["inspectorHidden"] is True
+
+
+def test_a_row_route_into_the_reference_part_opens_it_and_escape_returns_to_the_row_chip(tmp_path):
+    page = nine_part_library(tmp_path)
+    row = line_of(tmp_path, "### Cash table") + 4  # The "Cash interest" row of the table.
+    seen = probe_route(page, f"#CP-1/reference?c=run-a&e={row}")
+    assert seen["referenceOpen"] is True and seen["inspectorHidden"] is False
+    assert seen["escaped"]["hidden"] is True and seen["escaped"]["onChip"] is True
+    assert seen["escaped"]["key"].endswith(f"CP-1.md:{row}")
+
+
+def test_a_row_route_from_the_head_opens_the_fold_holding_the_row(tmp_path):
+    page = nine_part_library(tmp_path)
+    row = (
+        line_of(tmp_path, "### Quoted findings") + 4
+    )  # In Reference only; Key numbers does not draw it.
+    # The section is the head, so only the trigger can open the closed Reference part.
+    seen = probe_route(page, f"#CP-1/head?c=run-a&e={row}")
+    assert seen["referenceOpen"] is True and seen["inspectorHidden"] is False
+
+
+def test_chip_gaps_on_a_row_without_a_gap_opens_the_row_alone(tmp_path):
+    page = nine_part_library(tmp_path)
+    row = (
+        line_of(tmp_path, "### Quoted findings") + 4
+    )  # In Reference only; Key numbers does not draw it.
+    seen = probe_route(page, f"#CP-1/head?c=run-a&e={row}&chip=gaps")
+    assert seen["inspectorHidden"] is False
+    assert seen["rowPressed"] == 1  # The row's own chip is pressed; no gap list was asked for.
+
+
+def test_the_report_canvas_and_old_section_links(tmp_path):
+    page = nine_part_library(tmp_path)
+    dom, console = visit(page, "#CP-1/s54?c=run-a")  # A section id from before the report.
+    assert console == []
+    ids = re.findall(
+        r'\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"',
+        dom,
+    )
+    assert ids == [
+        "head",
+        "bottom-line",
+        "numbers",
+        "findings",
+        "analysis",
+        "limits",
+        "reference",
+        "calculations",
+        "audit",
+    ]
+    assert (
+        "Candidate · not accepted" in dom and "Reader summary" in dom
+    )  # The summary stays in the audit list.
+    assert dom.count('<td><span class="na"') == 0  # No bare dash or empty cell.
+    assert "n.a." in dom
+    dom, console = visit(page, "#CP-1/findings?c=run-a")
+    assert console == []
+    assert re.search(r'aria-current="location"[^>]*>Findings<', dom)
+    dom, console = visit(page, "#CP-0/head?c=run-a")
+    assert console == []
+    dom, console = visit(page, "#CP-1A/head?c=run-a")  # No CP-1A output in this run.
+    assert console == []
+    assert "No output found" in dom and "Not run in this run" not in dom
+
+
+FORM_PROBE = """<script>
 document.querySelector('[data-k="run_type"][value="secondary"]').checked = true;
 document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
 const sel = document.getElementById('s1-pathway');
@@ -163,7 +511,7 @@ def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
             tmp_path / "probe.html"
         )  # The form with a probe that changes the run type, then reads.
         text = form.read_text(encoding="utf-8")
-        page.write_text(text.replace("</body>", PROBE, 1), encoding="utf-8")
+        page.write_text(text.replace("</body>", FORM_PROBE, 1), encoding="utf-8")
         dom, console = visit(page)
         assert console == []
         probe = json.loads(

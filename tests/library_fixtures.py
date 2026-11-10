@@ -42,6 +42,7 @@ def put(path: Path, raw: bytes) -> str:
     return sha(raw)
 
 
+FINDING_ROW = "| One observed item. | None assessed. | Low |"
 HANDOFF = """# {module} handoff
 
 ## Request
@@ -53,11 +54,11 @@ HANDOFF = """# {module} handoff
 
 | Bottom line | Confidence | Main limitation |
 | --- | --- | --- |
-| {bottom} | Medium | Synthetic fixture only. |
+| {bottom} | {confidence} | Synthetic fixture only. |
 
 | Finding | Creditor impact | Confidence |
 | --- | --- | --- |
-| One observed item. | None assessed. | Low |
+{finding}
 
 ## Sources
 - fixture
@@ -74,6 +75,10 @@ class RunSpec:
     version: str = ""
     settled: tuple[str | None, ...] = ("0.10", "0.20")
     view_issuer: str | None = None
+    cp0_extra: str = ""  # Text appended to the CP-0 handoff, such as a source inventory.
+    cp0_confidence: str = "Medium"  # The Confidence cell of the CP-0 Reader summary.
+    cp1_finding: str = FINDING_ROW  # The one row of the CP-1 Reader summary's findings table.
+    cp1_findings: str = ""  # Text inserted into the CP-1 handoff just before its Sources section.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
 
@@ -108,10 +113,18 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
             "sha256": put(run_dir / f"instructions/{module}.md", text.encode()),
         }
         answer = HANDOFF.format(
-            module=module, name=issuer_name, as_of=as_of, bottom=f"{module} bottom line."
+            module=module,
+            name=issuer_name,
+            as_of=as_of,
+            bottom=f"{module} bottom line.",
+            confidence=spec.cp0_confidence if module == "CP-0" else "Medium",
+            finding=spec.cp1_finding if module == "CP-1" else FINDING_ROW,
         )
+        if module == "CP-0":
+            answer += spec.cp0_extra
         if module == "CP-1":
-            answer += spec.cp1_extra
+            head, heading, tail = answer.rpartition("## Sources")
+            answer = head + spec.cp1_findings + heading + tail + spec.cp1_extra
         # As CP-OS keeps it: the folder is named by the sha256 of the request's inputs.
         inputs = {
             "run": run,
@@ -201,3 +214,100 @@ def rewrite_completion(run_dir: Path, change) -> None:
     old.unlink()
     raw = json.dumps(record, indent=2).encode()
     put(run_dir / f"completed-{sha(raw)}.json", raw)
+
+
+# Cited handoff text and its source-text file, for tests/test_credit_os_chips.py.
+SOURCE_PAGES = (
+    b'{"page": 122, "text": "Other note text."}\n'
+    b'{"page": 123, "text": "Cash paid during the period for interest, net $ 1,158 and more."}\n'
+    b'{"page": "124", "text": "Interest paid was lower."}\n'
+)
+SOURCE_NAME = "NBG_2024-12-31_10-K_fixture.htm.jsonl"
+
+
+def inventory_text(digest: str) -> str:
+    """A CP-0 inventory section, the sha256 of the supplied K source being `digest`."""
+    return f"""
+### Complete supplied inventory and provenance
+
+| Label | Exact supplied source name | Exact sha256 | Source disposition |
+| --- | --- | --- | --- |
+| K | {SOURCE_NAME} | {digest} | Primary annual source. |
+| Settings | context | {"0" * 64} | Dated settings only. |
+"""
+
+
+CITED = """
+### Cited rows
+
+| Item | Value | Basis |
+| --- | --- | --- |
+| Cash interest | 1,158 | K, page:123 states the figure. D1, D3. |
+| Wrong interest | 1,159 | K, page:123 states the figure. |
+| Quoted interest | 7 | K, page:123 says “Cash paid during the period”. |
+| Upstream | 2 | [CP-1: D4, F1] |
+| Absent | n/a | Not supplied: no covenant package. |
+
+A paragraph citing K, page:124 only.
+"""
+
+
+# What a module report shows beyond the plain fixture: a cited chart row, a finding whose
+# citation quotes the page, and a reader table with two numeric columns. Appended to the CP-1
+# handoff with CITED.
+REPORT_ROWS = """
+### Chart data: interest paid
+
+| Period | Cash interest | Reporting unit | Basis and limitation |
+| --- | --- | --- | --- |
+| FY2024 | 1158 | US$m | K, page:123 states the figure. D1. |
+| FY2023 | 1160 | US$m | K, page:122 does not state it. |
+
+### Cash table
+
+| Measure | FY2023 | FY2024 | Unit |
+| --- | --- | --- | --- |
+| Cash interest | 1,160 | 1,158 | US$m |
+| Gross coupons | Not supplied | Not supplied | US$m |
+
+### Quoted findings
+
+| Finding | Creditor impact | Confidence |
+| --- | --- | --- |
+| Cash interest was paid. | K, page:123 says “Cash paid during the period”. | High |
+"""
+
+
+# An inventory keyed by multi-word aliases with a "Role in this review" column, as one real run
+# writes it, and a CP-1 section citing them by leading word. `alias_inventory_text` takes the
+# sha256 of the annual filing and of the annual PDF.
+ALIAS_FILING_NAME = "NBG_FY2024_10-K_alias.htm.jsonl"
+ALIAS_PDF_NAME = "NBG_FY2024_annual-report_alias.pdf.jsonl"
+ALIAS_FILING_PAGES = (
+    b'{"page": 71, "text": "Revenue was 3,472 in the year and (11) of other items."}\n'
+    b'{"page": 72, "text": "Second page of the filing."}\n'
+)
+ALIAS_PDF_PAGES = b'{"page": 71, "text": "Revenue was 9,999 in the PDF."}\n'
+
+
+def alias_inventory_text(filing_digest: str, pdf_digest: str) -> str:
+    return f"""
+### Supplied source inventory and integrity
+
+| Alias | Exact supplied source name | Exact sha256 | Role in this review |
+| --- | --- | --- | --- |
+| Annual filing | {ALIAS_FILING_NAME} | {filing_digest} | Primary annual authority |
+| Annual PDF | {ALIAS_PDF_NAME} | {pdf_digest} | Sampled alternate annual representation |
+| Settings | context | {"0" * 64} | Dated settings only |
+"""
+
+
+ALIAS_CITED = """
+### Alias rows
+
+| Item | Value | Basis |
+| --- | --- | --- |
+| Short form | 3472 | Annual page:71 states the figure. |
+| Bracketed | -11 | Annual p.71 prints it. |
+| Listed | 1 | Annual pages 71, 72 and Annual filing pp.71–72. |
+"""

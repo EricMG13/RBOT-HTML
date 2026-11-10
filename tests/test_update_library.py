@@ -201,3 +201,13 @@ def test_data_js_carries_excluded_runs(tmp_path):
     assert [name for name, _ in activity["excluded"]] == ["run-half"]
     assert activity["excluded"][0][1]  # library_index's own reason, not empty
     assert all(isinstance(i, str) for i in activity["issues"])
+
+
+def test_data_js_carries_state_placement_and_words(tmp_path):
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    workspace = data_of(tmp_path)["workspace"]
+    (output,) = [o for o in workspace["outputs"].values() if o["module"] == "CP-1"]
+    assert output["state"] == {"established": True, "declared": None}
+    assert len(output["placement"]) == len(workspace["handoffs"][output["sha256"]])
+    assert set(output["words"]) == {"view", "reference", "calculations", "limits", "audit"}
