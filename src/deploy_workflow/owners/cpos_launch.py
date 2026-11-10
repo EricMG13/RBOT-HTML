@@ -48,6 +48,7 @@ from deploy_workflow.markdown_delivery import (
     require_issuer,
 )
 from deploy_workflow.model.adapter import (
+    COPILOT_GH_LOGIN_VARIABLE,
     COPILOT_RUNTIME_VARIABLE,
     KEY_VARIABLES,
     LivePauseInForce,
@@ -1059,8 +1060,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.ruling is not None:
             check_ruling(args.config, args.ruling)
         key = KEY_VARIABLES[CONFIGS[args.config].provider]
-        if args.live and not os.environ.get(key):
-            raise LaunchRefused(f"--live needs {key} in the launching environment")
+        cli_login = CONFIGS[args.config].provider == "copilot" and (
+            os.environ.get(COPILOT_GH_LOGIN_VARIABLE) == "1"
+        )
+        if args.live and not (os.environ.get(key) or cli_login):
+            extra = (
+                f" (or {COPILOT_GH_LOGIN_VARIABLE}=1)"
+                if CONFIGS[args.config].provider == "copilot"
+                else ""
+            )
+            raise LaunchRefused(f"--live needs {key}{extra} in the launching environment")
         copilot_live = args.live and CONFIGS[args.config].provider == "copilot"
         if copilot_live and not Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, "")).is_file():
             raise LaunchRefused(f"--live needs {COPILOT_RUNTIME_VARIABLE} to name an existing file")

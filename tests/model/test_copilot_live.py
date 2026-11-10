@@ -26,8 +26,14 @@ from deploy_workflow.model.turn import Message, ModelSpec, ToolSpec, TurnRequest
 pytestmark = [
     pytest.mark.live,
     pytest.mark.skipif(
-        not (os.environ.get("COPILOT_GITHUB_TOKEN") and os.environ.get("COPILOT_CLI_PATH")),
-        reason="needs COPILOT_GITHUB_TOKEN and COPILOT_CLI_PATH in the environment",
+        not (
+            (
+                os.environ.get("COPILOT_GITHUB_TOKEN")
+                or os.environ.get("COPILOT_USE_GH_LOGIN") == "1"
+            )
+            and os.environ.get("COPILOT_CLI_PATH")
+        ),
+        reason="needs COPILOT_GITHUB_TOKEN (or COPILOT_USE_GH_LOGIN=1) and COPILOT_CLI_PATH",
     ),
 ]
 
@@ -48,7 +54,7 @@ USER = Message(
 )
 
 
-async def listed_models(runtime: str, token: str, home: Path) -> list[dict[str, Any]]:
+async def listed_models(runtime: str, token: str | None, home: Path) -> list[dict[str, Any]]:
     client = real_client(ClientOptions(runtime, token, str(home), runtime_environment(os.environ)))
     try:
         await client.start()
@@ -61,7 +67,9 @@ def test_the_runtime_lists_both_pinned_models_with_medium(tmp_path: Path) -> Non
     home = tmp_path / "list-home"
     home.mkdir()
     models = asyncio.run(
-        listed_models(os.environ["COPILOT_CLI_PATH"], os.environ["COPILOT_GITHUB_TOKEN"], home)
+        listed_models(
+            os.environ["COPILOT_CLI_PATH"], os.environ.get("COPILOT_GITHUB_TOKEN") or None, home
+        )
     )
     by_id = {m.get("id"): m for m in models}
     for model in ("gpt-6.1-sol", "claude-opus-5.5"):

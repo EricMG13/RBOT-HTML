@@ -58,7 +58,7 @@ uv run python -m deploy_workflow.owners.cpos_launch \
 
 Add `--live --ruling docs/rulings/<file>.md` to start the paid run. The ruling must name the
 selected config, and the provider key must be in the launching environment (for Copilot,
-`COPILOT_GITHUB_TOKEN` and `COPILOT_CLI_PATH`; see `docs/COPILOT.md`). CP-OS runs the modules in
+`COPILOT_GITHUB_TOKEN`, or `COPILOT_USE_GH_LOGIN=1` to use the gh CLI login (its account pays), and `COPILOT_CLI_PATH`; see `docs/COPILOT.md`). CP-OS runs the modules in
 order and publishes `deliveries/<id>/report.html` inside the run folder.
 
 ## 2. Update the library
