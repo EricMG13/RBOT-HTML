@@ -34,6 +34,11 @@ __all__ = ["Settings", "StartupRefused", "Watcher", "main"]
 ROOT = Path(__file__).resolve().parents[3]
 _TIME = "%Y-%m-%dT%H:%M:%SZ"
 _REBUILD_FAILED = "the library could not be rebuilt ({}); ended runs wait for it"
+_KEPT = "_engine/drops/"
+_NO_RECORD = (
+    "the watcher stopped while taking this folder in; its files are in _engine/drops/{}"
+    " \N{EM DASH} drop it again"
+)
 _CUT_SHORT = (
     "the watcher stopped while starting this run; its process may still be running"
     " \N{EM DASH} check before dropping the folder again"
@@ -84,6 +89,8 @@ class Watcher:
         self._tracker = drops.ReadyTracker(settings.settle_seconds, clock)
         self._unreadable: dict[Path, tuple[float, str]] = {}
         self._rebuild_error = ""
+        self._logged_rebuild_error = ""  # the last rebuild error written to the log
+        self._stopped: dict[str, str] = {}  # run ID -> why the watcher stopped its process
         self._limit_held = ""
         startup.write_pages(self.layout)
         self._recover()
@@ -96,7 +103,7 @@ class Watcher:
             startup.release_lock(handle)
 
     def _recover(self) -> None:
-        """A run recorded as started but with no process ID was cut short while starting."""
+        """Decide what an earlier stop left: runs cut short while starting, unrecorded folders."""
         for record in self._with_status("running"):
             if record.pid == 0:
                 with self._guard(f"run {record.id}"):
@@ -108,6 +115,27 @@ class Watcher:
                             ended_at=self._utc(self.now()),
                         )
                     )
+        self._reject_unrecorded_folders()
+
+    def _reject_unrecorded_folders(self) -> None:
+        """A folder in ``_engine/drops`` with no record was cut short between claim and record.
+
+        Nothing is moved or deleted; the record says where the files are."""
+        for folder in sorted(self.layout.drops.iterdir()):
+            if folder.name in self._records or not folder.is_dir():
+                continue
+            with self._guard(f"folder {folder}"):
+                self._put(
+                    Record(
+                        folder.name,
+                        "",
+                        folder.name,
+                        "rejected",
+                        self._utc(self.now()),
+                        reason=_NO_RECORD.format(folder.name),
+                        ended_at=self._utc(self.now()),
+                    )
+                )
 
     # -- shared helpers ---------------------------------------------------------------------
 
@@ -133,17 +161,29 @@ class Watcher:
         try:
             library = cpos_launch.update_library_at(self.layout.engine)
         except (OSError, ValueError, ImportError) as error:
-            self._logger.exception("library rebuild failed")
-            self._rebuild_error = (
-                f"the library could not be rebuilt ({error}); ended runs wait for it"
-            )
+            self._rebuild_failed(f"library rebuild failed: {error}", f"{error}", exc=True)
             return None
         if library is None:
-            self._logger.error("library rebuild skipped: update_library.py not found")
-            self._rebuild_error = _REBUILD_FAILED.format("update_library.py not found")
+            self._rebuild_failed(
+                "library rebuild skipped: update_library.py not found",
+                "update_library.py not found",
+            )
             return None
         self._rebuild_error = ""
+        if self._logged_rebuild_error:
+            self._logged_rebuild_error = ""
+            self._logger.info("library rebuild works again")
         return library
+
+    def _rebuild_failed(self, log_text: str, error: str, *, exc: bool = False) -> None:
+        """Keep the page notice; write the log line only when the error differs from the last."""
+        self._rebuild_error = _REBUILD_FAILED.format(error)
+        if log_text != self._logged_rebuild_error:
+            self._logged_rebuild_error = log_text
+            if exc:
+                self._logger.exception("library rebuild failed")
+            else:
+                self._logger.error("%s", log_text)
 
     # -- one poll ---------------------------------------------------------------------------
 
@@ -196,8 +236,12 @@ class Watcher:
             with self._guard(f"run {record.id}"):
                 self._put(self._decide(record, code, library))
                 self._children.pop(record.id, None)
+                self._stopped.pop(record.id, None)
 
     def _decide(self, record: Record, code: int | None, library: Any) -> Record:
+        if record.id in self._stopped:  # its process was stopped because its record failed to save
+            reason = self._stopped[record.id]
+            return replace(record, status="failed", reason=reason, ended_at=self._utc(self.now()))
         state, reason = runs.outcome(self.layout, record, code)
         ended = replace(record, status=state, reason=reason, ended_at=self._utc(self.now()))
         if state != "finished":
@@ -291,19 +335,27 @@ class Watcher:
                 os.rename(folder, entry)
 
     def _reject(self, record: Record, reason: str) -> None:
-        """Move the drop to ``inbox/failed`` and record why. The drop never returns to the inbox."""
+        """Record the drop as rejected, then move it to ``inbox/failed``; it never goes back.
+
+        The record comes first: if saving it fails nothing has moved and the next poll retries."""
+        ended = replace(record, status="rejected", reason=reason, ended_at=self._utc(self.now()))
+        drop = self.layout.drops / record.id
+        if not os.path.lexists(drop):
+            self._put(
+                replace(ended, reason=f"{reason}; its folder was not found in {_KEPT}{record.id}")
+            )
+            return
+        self._put(ended)
         try:
             self.layout.failed.mkdir(parents=True, exist_ok=True)
-            drops.reject(
-                self.layout, self.layout.drops / record.id, record.folder, reason, self.now()
-            )
+            drops.reject(self.layout, drop, record.folder, reason, self.now())
         except OSError as error:
             self._logger.exception("run %s could not be moved to inbox/failed", record.id)
-            reason = (
+            why = (
                 f"{reason} (the folder could not be moved to inbox/failed: {error}; "
-                f"it is kept in _engine/drops/{record.id})"
+                f"it is kept in {_KEPT}{record.id})"
             )
-        self._put(replace(record, status="rejected", reason=reason, ended_at=self._utc(self.now())))
+            self._put(replace(ended, reason=why))
 
     # -- prepare ----------------------------------------------------------------------------
 
@@ -416,6 +468,9 @@ class Watcher:
                 self._children.pop(record.id, None)
                 raise
             # The process has ended; the next poll reaps it through the Popen kept in _children.
+            self._stopped[record.id] = (
+                f"stopped by the watcher: its record could not be saved ({error})"
+            )
             self._logger.exception("run %s: its process ID could not be saved", record.id)
         return True
 

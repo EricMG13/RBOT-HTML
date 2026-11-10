@@ -884,3 +884,179 @@ def test_f6_a_cap_that_is_not_a_finite_positive_amount_exits_2_with_one_line(cap
     assert main(["--root", "/tmp/x", f"--cap={cap}"]) == 2
     err = capsys.readouterr().err
     assert "--cap" in err and "Traceback" not in err and len(err.strip().splitlines()) == 1
+
+
+# -- fix round 2 ---------------------------------------------------------------------------------
+
+
+def _windows_locking(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run startup's Windows branch here: an ``msvcrt`` stand-in with Windows' rules.
+
+    ``locking`` locks ``n`` bytes from the descriptor's current position, a second lock on a byte
+    another descriptor holds fails with ``PermissionError``, and unlocking bytes that descriptor
+    does not hold fails too."""
+    held: dict[tuple[int, int], int] = {}
+
+    def locking(fd: int, mode: int, nbytes: int) -> None:
+        assert nbytes == 1
+        key = (os.fstat(fd).st_ino, os.lseek(fd, 0, os.SEEK_CUR))
+        if mode == 0:  # LK_UNLCK
+            if held.get(key) != fd:
+                raise PermissionError(13, "unlock of a byte this handle did not lock")
+            del held[key]
+        elif key in held:
+            raise PermissionError(13, "the byte is locked by another handle")
+        else:
+            held[key] = fd
+
+    fake = SimpleNamespace(locking=locking, LK_NBLCK=2, LK_UNLCK=0)
+    monkeypatch.setitem(sys.modules, "msvcrt", fake)
+    monkeypatch.setattr(watcher_module.startup, "sys", SimpleNamespace(platform="win32"))
+
+
+def test_m1_on_windows_the_lock_is_the_same_byte_whatever_text_the_file_holds(root, monkeypatch):
+    _windows_locking(monkeypatch)
+    (root / "_engine").mkdir()
+    (root / "_engine/watcher.lock").write_text("old-host 12345678901234567890", encoding="utf-8")
+    first = Watcher(settings(root))
+    try:
+        with pytest.raises(StartupRefused, match="another watcher is running on this folder"):
+            Watcher(settings(root))
+    finally:
+        first.close()  # unlocks the byte it locked: raises nothing
+    Watcher(settings(root)).close()
+    text = (root / "_engine/watcher.lock").read_text(encoding="utf-8")
+    assert text == f"{socket.gethostname()} {os.getpid()}"
+
+
+def _fail_rejected_saves(monkeypatch: pytest.MonkeyPatch, times: int) -> list[int]:
+    real = _runs().save
+    left = [times]
+
+    def save(layout_: Layout, record: Record) -> None:
+        if record.status == "rejected" and left[0] > 0:
+            left[0] -= 1
+            raise PermissionError(13, "Access is denied (injected)")
+        real(layout_, record)
+
+    monkeypatch.setattr(_runs(), "save", save)
+    return left
+
+
+@pytest.mark.parametrize("failures", [1, 5])
+def test_l1_a_failed_rejected_save_is_retried_and_nothing_is_moved_until_it_holds(
+    root, monkeypatch, failures
+):
+    _fail_rejected_saves(monkeypatch, failures)
+    drop = root / "inbox/credit_snapshot/no-context"
+    drop.mkdir(parents=True)
+    (drop / "a.pdf").write_bytes(b"%PDF")
+    w = Watcher(settings(root))
+    try:
+        for _ in range(failures + 4):
+            w.step()
+    finally:
+        w.close()
+    record = _only(root)
+    assert record.status == "rejected" and record.reason.startswith("no context file")
+    [failed] = (root / "inbox/failed").iterdir()
+    assert sorted(p.name for p in failed.iterdir()) == ["WHY.txt", "a.pdf"]
+
+
+def test_l1_a_drop_folder_that_is_missing_is_rejected_saying_so_without_a_stray_folder(root):
+    lay = layout(root)
+    w = Watcher(settings(root))
+    try:
+        gone = Record(
+            "20260101-000000-01", "credit_snapshot", "gone", "queued", "2026-01-01T00:00:00Z"
+        )
+        from deploy_workflow.inbox import runs as runs_module
+
+        runs_module.save(lay, gone)
+        w._records[gone.id] = gone
+        for _ in range(3):
+            w.step()
+    finally:
+        w.close()
+    record = _only(root)
+    assert record.status == "rejected"
+    assert record.reason.endswith(f"; its folder was not found in _engine/drops/{record.id}")
+    assert "kept in _engine" not in record.reason
+    assert list((root / "inbox/failed").iterdir()) == []
+
+
+def test_l2_a_folder_in_engine_drops_with_no_record_is_rejected_at_start_up(root):
+    lay = ensure_layout(root)
+    orphan = lay.drops / "20260101-000000-01"
+    orphan.mkdir()
+    (orphan / "context.json").write_text("{}", encoding="utf-8")
+    Watcher(settings(root)).close()
+    record = _only(root)
+    assert (record.id, record.folder, record.pathway, record.status) == (
+        orphan.name,
+        orphan.name,
+        "",
+        "rejected",
+    )
+    assert record.reason == (
+        "the watcher stopped while taking this folder in; its files are in "
+        f"_engine/drops/{orphan.name} \N{EM DASH} drop it again"
+    )
+    assert (orphan / "context.json").is_file()
+    again = Watcher(settings(root))
+    again.step()
+    again.close()
+    assert len(load_all(lay)) == 1 and status(root) == ["rejected"]
+
+
+def test_l4_a_rebuild_error_is_logged_once_until_it_changes_and_the_recovery_once(
+    root, monkeypatch
+):
+    problem = ["share unavailable"]
+
+    def broken(_workspace: Path) -> None:
+        raise OSError(5, problem[0])
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", broken)
+    w = Watcher(settings(root))
+    try:
+        for _ in range(20):
+            w.step()
+        assert _log(root).count("library rebuild failed") == 1
+        problem[0] = "share unplugged"
+        for _ in range(20):
+            w.step()
+        assert _log(root).count("library rebuild failed") == 2
+        monkeypatch.setattr(
+            cpos_launch, "update_library_at", lambda ws: SimpleNamespace(runs=[], excluded=[])
+        )
+        for _ in range(3):
+            w.step()
+        assert _log(root).count("library rebuild works again") == 1
+        assert "could not be rebuilt" not in activity_js(root)
+    finally:
+        w.close()
+
+
+def test_l6_a_run_stopped_because_its_record_cannot_be_saved_says_so(root, fake_env, monkeypatch):
+    fake_env({"events": DELIVERED, "sleep": 1})
+    started = _track_starts(monkeypatch)
+    _once(
+        monkeypatch,
+        "save",
+        OSError("state folder is full"),
+        lambda lay, r: r.status == "running" and r.pid,
+    )
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))
+    try:
+        go(w)
+        pump(w, lambda: status(root) not in (["running"], ["queued"]), limit=10)
+        record = _only(root)
+        assert record.status == "failed"
+        assert record.reason == (
+            "stopped by the watcher: its record could not be saved (state folder is full)"
+        )
+    finally:
+        _wait_all(started)
+        w.close()

@@ -60,12 +60,17 @@ def check_launchable(config_id: str, ruling: Path) -> None:
 
 
 def take_lock(layout: Layout) -> IO[str]:
-    """Hold an operating-system lock on ``_engine/watcher.lock`` for the watcher's lifetime.
+    """Hold an operating-system lock on byte 0 of ``_engine/watcher.lock`` for the watcher's life.
 
     The lock goes with the process, however it ends, so no stale lock can block a restart and
-    two watchers can never both hold it. The file holds ``<host> <pid>`` for the message."""
-    handle = (layout.engine / "watcher.lock").open("a+", encoding="utf-8")
+    two watchers can never both hold it. Both platforms lock the same byte of the same kind of
+    handle: the file is opened without truncating or appending and rewound first, so whatever
+    text an earlier holder left cannot move the locked byte. Once the lock is held the file gets
+    ``<host> <pid>`` for the message."""
+    descriptor = os.open(layout.engine / "watcher.lock", os.O_RDWR | os.O_CREAT, 0o644)
+    handle = os.fdopen(descriptor, "r+", encoding="utf-8")
     try:
+        handle.seek(0)
         if sys.platform == "win32":
             import msvcrt
 
@@ -78,7 +83,7 @@ def take_lock(layout: Layout) -> IO[str]:
         try:
             handle.seek(0)
             holder = handle.read().strip() or "no details"
-        except OSError:
+        except (OSError, UnicodeDecodeError):  # Windows: the locked byte cannot be read
             holder = "no details"
         handle.close()
         raise StartupRefused(f"another watcher is running on this folder ({holder})") from None
@@ -90,12 +95,14 @@ def take_lock(layout: Layout) -> IO[str]:
 
 
 def release_lock(handle: IO[str]) -> None:
-    if sys.platform == "win32":
-        import msvcrt
+    try:
+        if sys.platform == "win32":
+            import msvcrt
 
-        handle.seek(0)
-        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-    handle.close()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    finally:
+        handle.close()
 
 
 def write_pages(layout: Layout) -> None:
