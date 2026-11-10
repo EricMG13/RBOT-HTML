@@ -376,3 +376,15 @@ def test_s1_a_failed_run_started_but_with_no_saved_pid_is_read_again(layout, rea
     never_started = replace(record, started_at="")  # refused before launch: nothing can change
     snapshot(layout, [never_started], cap=Decimal(20), now=_NOW, kept=kept)
     assert set(kept) == {"k1"}
+
+
+def test_s1_a_settled_run_whose_folder_was_not_visible_is_read_again(layout):
+    record = _ended(layout)
+    hidden = layout.runs / "k1-away"
+    kept: dict = {}
+    (layout.runs / "k1").rename(hidden)  # the share dropped for one poll
+    first = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert "modules" not in first and kept == {}
+    hidden.rename(layout.runs / "k1")
+    second = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert second["modules"] and second["spent"] == "0"

@@ -248,7 +248,7 @@ def count_work(monkeypatch) -> dict[str, int]:
     monkeypatch.setattr(cat, "read_inside", reading(cat.read_inside))
     monkeypatch.setattr(store, "listed_bytes", listing(store.listed_bytes))
     real_check = index.delivery_folder
-    for module in (index, cat, update_library):
+    for module in (index, cat):
         monkeypatch.setattr(module, "delivery_folder", checking(real_check))
     return counts
 

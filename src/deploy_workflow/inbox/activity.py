@@ -114,12 +114,13 @@ def _age_seconds(
 
 
 def _entry(layout: Layout, record: Record, now: datetime) -> tuple[dict[str, Any], bool]:
-    """The run's entry, and whether it is complete (no fail-open was taken)."""
+    """The run's entry, and whether it is complete: a rejected run reads nothing, and any other
+    run is complete only when its folder was visible and neither fail-open below was taken."""
     entry: dict[str, Any] = asdict(record)
     entry["files"] = list(record.files)
     run_dir = layout.runs / record.id
     events: list[dict[str, Any]] = []
-    complete = True
+    complete = record.status == "rejected"
     if record.status != "rejected" and run_dir.is_dir():
         events, readable = _events(run_dir, record.id)
         entry["modules"] = module_states(record.pathway, events)
