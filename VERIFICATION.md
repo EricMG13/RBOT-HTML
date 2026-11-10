@@ -25,6 +25,11 @@ and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
 - Merge ruling: front matter follows `main` (dc2320c): a level-2 `Front matter` section whose
   locator covers only the lines between the `---` markers. Placements of the 20 real handoffs are
   identical before and after.
+- Second merge 85d47f6 of `origin/main` 2ecfc8f (inbox automation), then fix 4abfb18: the review of
+  that merge found the live Run activity chips had lost their running, done and waiting colours to
+  the run report's `.chip` rule; fixed test-first. On 4abfb18, exit 0: node (93 pass), pytest on the
+  affected files with the inbox tests (409 passed, 1 skipped, run on 85d47f6; the two page files
+  re-run on 4abfb18, 34 passed), the quality gate, and the same real-run rebuild.
 - Not verified: runs other than `cpos-tdg-sol-medium-all-001` were only built without error; widths
   below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
   Confidence cell reads as established (neither occurs in retained data); the Overview opened with
