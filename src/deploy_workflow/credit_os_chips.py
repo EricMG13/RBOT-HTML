@@ -30,6 +30,7 @@ NUMBERS = (
     r"(?P<more>(?:\s*,\s*\d+(?!\d|\.\d)(?:\s*[-–]\s*\d+(?!\d|\.\d))?)*)"
 )
 ITEM = re.compile(r"(\d+)(?:\s*[-–]\s*(\d+))?")
+MAX_PAGE_DIGITS = 9  # a longer number is no page (and int() refuses thousands of digits)
 # A capitalised word and a comma right before a bare page: a source key the inventory does not hold.
 UNKNOWN_KEY = re.compile(r"\b[A-Z]\w*\s*,\s*$")
 ALTERNATE = re.compile(r"\balternate\b", re.IGNORECASE)
@@ -151,6 +152,10 @@ def page_locators(match: re.Match[str], key: Resolved | None) -> list[Locator]:
         items += ITEM.findall(match["more"])
     result = []
     for first_text, last_text in items:
+        if max(len(first_text), len(last_text or "")) > MAX_PAGE_DIGITS:
+            label = f"p.{first_text[:12]}… · not a page number"
+            result.append(locator("gap", label=label, note="the cited number is not a page"))
+            continue
         first, last = int(first_text), int(last_text) if last_text else None
         if key is None:
             loc = locator(
@@ -411,8 +416,9 @@ def issuer_chip(loc: Locator, line: int, quote: str | None, pages: Pages) -> dic
         "avatar": avatar(loc["source"] or ""),
     }
     first = loc["page"] or 0
-    wanted = range(first, (loc["page_end"] or first) + 1)
-    here = [(n, texts[n]) for n in wanted if n in texts]
+    last = loc["page_end"] or first
+    # From the pages the source has: the cited range is model output and can be any size.
+    here = sorted((n, text) for n, text in texts.items() if first <= n <= last)
     if problem is None and not here:
         fields["reason"] = "page not in source text"
     fields["reason"] = "; ".join(r for r in (fields["reason"], loc["note"]) if r) or None
