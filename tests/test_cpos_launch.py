@@ -1537,9 +1537,9 @@ def forecast_answer(context: dict, routes: list, block: str | None = None) -> st
     return text
 
 
-def key_case(shock: dict | None) -> list[dict[str, Fraction]]:
+def key_case(shock: dict | None, paths: dict = PATHS) -> list[dict[str, Fraction]]:
     """The three forecast years from the stated inputs, in exact fractions."""
-    p = {name: [Fraction(v) for v in values] for name, values in PATHS.items()}
+    p = {name: [Fraction(v) for v in values] for name, values in paths.items()}
     s, k = (
         (Fraction(shock["ebitda_decline"]), Fraction(shock["rate_increase"])) if shock else (0, 0)
     )
@@ -1772,6 +1772,119 @@ def test_the_forecast_instructions_come_before_the_method_block_and_leave_it_unc
     assert prepared.plan.publish_forecast is True
 
 
+UPSIDE = {"revenue_growth": ("0.10", "0.10", "0.10"), "ebitda_margin": ("0.35", "0.35", "0.35")}
+DOWNSIDE = {"revenue_growth": ("0", "0", "0"), "dividends": ("0", "0", "0")}
+
+
+def case_drivers(paths: dict) -> dict:
+    return {
+        name: {
+            "values": list(values),
+            "category": "Analyst Interpretation",
+            "rationale": "Synthetic case.",
+            "limitation": None,
+        }
+        for name, values in paths.items()
+    }
+
+
+def cased_block(**changes) -> str:
+    return forecast_block(
+        upside_drivers=case_drivers(UPSIDE), downside_drivers=case_drivers(DOWNSIDE), **changes
+    )
+
+
+def test_cp2g_upside_and_downside_drivers_are_computed_as_their_own_cases(
+    tmp_path, provider, capsys
+):
+    """Owner, 2026-11-10 ("Yes, compute them"): CP-2G's own upside and downside cases are
+    computed from the drivers it changes, the rest inherited from base; CP-2A's shock stays a
+    separate case on base drivers, never compounded with them."""
+    code, out, seen = forecast_run(tmp_path, provider, capsys, cased_block())
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    exact = json.loads((folder / "forecast_exact.json").read_text())
+    assert sorted(exact["outputs"]) == ["DOWNSIDE", "DOWNSIDE_DRIVERS", "REFERENCE", "UPSIDE"]
+    for case, shock, paths in (
+        ("REFERENCE", None, PATHS),
+        ("UPSIDE", None, {**PATHS, **UPSIDE}),
+        ("DOWNSIDE_DRIVERS", None, {**PATHS, **DOWNSIDE}),
+        ("DOWNSIDE", SHOCK, PATHS),
+    ):
+        for year, expected in zip(
+            exact["outputs"][case]["years"], key_case(shock, paths), strict=True
+        ):
+            for name, want in expected.items():
+                got = Fraction(year[name]["amount"])
+                tolerance = abs(want) * Fraction(1, 10**30) if name in RATIOS else 0
+                assert abs(got - want) <= tolerance, (case, year["year"], name)
+    names = ("revenue", "ebitda", "interest", "tax_wc", "capex", "cfo", "fcf", "closing_cash")
+    up = exact["outputs"]["UPSIDE"]["years"][0]  # hand-written: growth 0.10, margin 0.35
+    assert [up[n]["amount"] for n in names] == [
+        "1100",
+        "385",
+        "36",
+        "110",
+        "44",
+        "239",
+        "195",
+        "225",
+    ]
+    down = exact["outputs"]["DOWNSIDE_DRIVERS"]["years"][0]  # hand-written: no growth, no dividends
+    assert [down[n]["amount"] for n in names] == [
+        "1000",
+        "300",
+        "36",
+        "100",
+        "40",
+        "164",
+        "124",
+        "174",
+    ]
+    assert exact["upside_drivers"]["revenue_growth"]["values"] == ["0.10", "0.10", "0.10"]
+    assert exact["downside_drivers"]["dividends"]["values"] == ["0", "0", "0"]
+
+
+def test_without_case_drivers_the_forecast_record_is_unchanged(tmp_path, provider, capsys):
+    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    exact = json.loads((folder / "forecast_exact.json").read_text())
+    assert sorted(exact["outputs"]) == ["DOWNSIDE", "REFERENCE"]
+    assert "upside_drivers" not in exact and "downside_drivers" not in exact
+
+
+@pytest.mark.parametrize(
+    ("changes", "complaint"),
+    [
+        ({"upside_drivers": {}}, "upside_drivers"),
+        ({"downside_drivers": {"ebitda_margin": None}}, "downside_drivers"),
+        (
+            {"upside_drivers": case_drivers({"ebitda_margin": ("0.48022670", "0.4", "0.4")})},
+            "upside_drivers.ebitda_margin",
+        ),
+        (
+            {"upside_drivers": case_drivers({"leverage": ("1", "1", "1")})},
+            "upside_drivers.leverage",
+        ),
+        (
+            {"downside_drivers": case_drivers({"dividends": (None, None, None)})},
+            "downside_drivers.dividends",
+        ),
+    ],
+)
+def test_a_case_override_must_name_a_driver_with_valid_values(changes, complaint):
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(forecast_block(**changes), " ".join(BASE.values()))
+    assert complaint in str(caught.value)
+
+
+def test_the_forecast_instructions_ask_for_the_cases_as_driver_overrides():
+    block = cpos_launch.FORECAST_BLOCK
+    assert "`upside_drivers`" in block and "`downside_drivers`" in block
+    assert "only the drivers that differ from base" in block
+
+
 def test_the_library_lists_the_published_forecast_as_a_model(tmp_path, provider, capsys):
     """The launcher's own refresh builds the library: its real methodology check accepts the
     CP-2G instructions and the Forecast data carries the published figures."""
@@ -1784,8 +1897,26 @@ def test_the_library_lists_the_published_forecast_as_a_model(tmp_path, provider,
     assert [c["label"] for c in grid["columns"]] == ["FY2025E", "FY2026E", "FY2027E"] * 2
     assert [c["group"] for c in grid["columns"]][::3] == [
         "Base case (reference illustration)",
-        "Downside",
+        "Downside stress (shock on base drivers)",
     ]
+
+
+def test_the_library_shows_every_computed_case_in_order(tmp_path, provider, capsys):
+    code, _, seen = forecast_run(tmp_path, provider, capsys, cased_block())
+    assert code == 0 and "Library not updated" not in seen.err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
+    grid = model["cashflow"]
+    assert [c["group"] for c in grid["columns"]][::3] == [
+        "Base case (reference illustration)",
+        "Upside",
+        "Downside (CP-2G drivers)",
+        "Downside stress (shock on base drivers)",
+    ]
+    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
+    assert [c["exact"] for c in revenue["cells"][3:6]] == ["1100", "1210", "1331"]
+    assert [c["exact"] for c in revenue["cells"][6:9]] == ["1000", "1000", "1000"]
     revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
     assert [c["exact"] for c in revenue["cells"][:3]] == ["1050", "1092", "1124.76"]
     assert grid["limits"][0].startswith("Every figure is Python's arithmetic")

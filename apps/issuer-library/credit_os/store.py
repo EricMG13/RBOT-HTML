@@ -1079,7 +1079,12 @@ ADD_BACK_ROW_LIMIT = 200
 TABLE_ROW_LIMIT = 2000
 QUARTER_DAYS = 100
 QUARTER_LENGTH_SLACK = 7
-FORECAST_CASES = (("REFERENCE", "Base case (reference illustration)"), ("DOWNSIDE", "Downside"))
+FORECAST_CASES = (
+    ("REFERENCE", "Base case (reference illustration)"),
+    ("UPSIDE", "Upside"),
+    ("DOWNSIDE_DRIVERS", "Downside (CP-2G drivers)"),
+    ("DOWNSIDE", "Downside stress (shock on base drivers)"),
+)
 NO_VALUE = "the model's source table has no value for this period"
 PRINTED_DASH = "printed as \u2014 in the source"
 PRIOR_MISSING = "prior-year period not in the handoffs"

@@ -256,6 +256,7 @@ def test_every_built_output_carries_the_three_fields(tmp_path):
     assert len(output["placement"]) == len(data["handoffs"][output["sha256"]])
     assert set(output["words"]) == {"view", "reference", "calculations", "limits", "audit"}
 
+
 # Copied verbatim from the 2026-11-09 sol-medium run (runs/cpos-tdg-sol-medium-all-001, delivery
 # abd687ca...c2baa, CP-1C.md): the head of a handoff that opens with YAML front matter.
 REAL_FRONT_MATTER_HEAD = (
@@ -306,6 +307,6 @@ def test_the_assumption_register_is_found_by_its_register_id(heading):
     assert register["rows"] == [["B1", "Revenue growth", "0.1"]]
 
 
-def test_the_forecast_notes_claim_no_upside_case():
-    """No producer writes an UPSIDE case; the model has REFERENCE and, with a shock, DOWNSIDE."""
-    assert not any("upside" in note.casefold() for note in store.CASHFLOW_NOTES)
+def test_the_forecast_notes_send_no_case_elsewhere():
+    """The notes do not claim a case lives elsewhere: every computed case is shown."""
+    assert not any("stays in the calculation" in note for note in store.CASHFLOW_NOTES)
