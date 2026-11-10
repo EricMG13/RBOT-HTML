@@ -4,12 +4,16 @@ Takes the real launcher's flags. Without --live: exits 0, or 2 when the sources 
 With --live: writes a completed run folder (``tests/library_fixtures.make_run``), one settled
 charge through the real ``Budget`` and the real ``delivered`` event, so the real library rebuild
 lists the run.
+
+``DEPLOY_WORKFLOW_PID_FILE``: like the real launcher, writes its own process ID there first.
+``REAL_SHAPE_HOLD``: a path; on a live run, stays alive until that file exists.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from decimal import Decimal
@@ -23,6 +27,9 @@ from deploy_workflow.run_events import append_event
 
 
 def main() -> int:
+    pid_file = os.environ.get("DEPLOY_WORKFLOW_PID_FILE")
+    if pid_file:
+        Path(pid_file).write_text(str(os.getpid()), encoding="utf-8")
     parser = argparse.ArgumentParser()
     for flag in ("--context", "--sources", "--config", "--cap", "--out", "--ruling"):
         parser.add_argument(flag)
@@ -37,6 +44,9 @@ def main() -> int:
     if not args.ruling:
         print("a live launch must carry the ruling", file=sys.stderr)
         return 2
+    hold = os.environ.get("REAL_SHAPE_HOLD")
+    while hold and not Path(hold).exists():
+        time.sleep(0.05)
     context = json.loads(Path(args.context).read_text(encoding="utf-8"))
     out = Path(args.out)
     append_event(out, "module_started", module="CP-0")

@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -672,7 +672,9 @@ def test_m1_an_interrupt_after_start_leaves_one_process_at_most_and_no_second_st
         assert len(started) == 1 and started[0].poll() is not None  # the child was stopped
         record = _only(root)
         assert (record.status, record.pid) == ("running", 0) and record.started_at
-        second = Watcher(settings(root))
+        # No PID file exists (the fake launcher never writes one): past the 60 s grace the
+        # run is cut short. Inside the grace it stays running (see test_c_...).
+        second = Watcher(settings(root), now=lambda: datetime.now(UTC) + timedelta(seconds=61))
         for _ in range(3):
             second.step()
         assert len(started) == 1
@@ -1084,7 +1086,7 @@ def test_m1_a_drop_the_watcher_cannot_move_is_logged_once_and_shown_as_held(root
             w.step()
         assert load_all(layout(root)) == [] and drop.is_dir()
         log = (root / "_engine/logs/watcher.log").read_text()
-        assert log.count("acme") == 1 and "Permission denied" in log
+        assert log.count("acme is ready but cannot be moved") == 1 and "Permission denied" in log
         held = activity_js(root)
         assert "acme" in held and "Permission denied" in held
         pathway.chmod(0o755)
@@ -1250,3 +1252,142 @@ def test_a_cap_above_the_standing_rulings_usd_20_is_refused_at_start_up(root, ca
     Watcher(settings(root, cap=Decimal(20))).close()
     with pytest.raises(StartupRefused, match="above USD 20"):
         Watcher(settings(root, cap=Decimal("NaN")))
+
+
+# -- a run started just before a hard kill: its own PID file --------------------------------
+
+REAL_SHAPE = str(HERE / "fixtures" / "real_shape_launcher.py")
+PID_RUN = "20261109-000001-01"
+T0 = datetime(2026, 11, 10, 12, 0, 0, tzinfo=UTC)
+
+
+def _stamp(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _save_running(root: Path, started_at: str, run_id: str = PID_RUN) -> Path:
+    """A record as left by a watcher killed after it started the child, before the PID save."""
+    lay = ensure_layout(root)
+    watcher_module.runs.save(
+        lay,
+        Record(
+            run_id, "credit_snapshot", "acme", "running", "t",
+            issuer_id="acme", issuer_name="Acme Corp", as_of="2026-11-09",
+            started_at=started_at, prepared=True,
+        ),
+    )  # fmt: skip
+    return lay.state / f"{run_id}.pid"
+
+
+class _Clock:
+    def __init__(self, moment: datetime) -> None:
+        self.moment = moment
+
+    def __call__(self) -> datetime:
+        return self.moment
+
+
+def test_a_a_run_whose_pid_was_never_saved_is_adopted_from_its_own_pid_file(root, tmp_path):
+    pid_file = _save_running(root, _stamp(datetime.now(UTC)))
+    hold = tmp_path / "release"
+    context = tmp_path / "context.json"
+    context.write_text(json.dumps(CONTEXT), encoding="utf-8")
+    env = {**os.environ, "DEPLOY_WORKFLOW_PID_FILE": str(pid_file), "REAL_SHAPE_HOLD": str(hold)}
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(HERE.parent / "src"), *filter(None, [env.get("PYTHONPATH")])]
+    )
+    child = subprocess.Popen(
+        [
+            sys.executable, REAL_SHAPE, "--context", str(context), "--config", "sol-medium",
+            "--cap", "20", "--out", str(root / "_engine/runs" / PID_RUN), "--live",
+            "--ruling", "r", "--no-library",
+        ],
+        env=env,
+    )  # fmt: skip
+    w = None
+    try:
+        deadline = time.monotonic() + 30
+        while not pid_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        make_drop(root, "credit_snapshot", "other", issuer="other")
+        w = Watcher(settings(root, max_running=1))
+        w.step()
+        go(w)
+        by_id = {r.id: r for r in load_all(layout(root))}
+        assert by_id[PID_RUN].status == "running" and by_id[PID_RUN].pid == child.pid
+        assert [r.status for i, r in sorted(by_id.items()) if i != PID_RUN] == ["queued"]
+        hold.write_text("go", encoding="utf-8")
+        pump(w, lambda: {r.id: r.status for r in load_all(layout(root))}[PID_RUN] == "finished", 30)
+        record = {r.id: r for r in load_all(layout(root))}[PID_RUN]
+        assert record.report.startswith("issuers/Acme Corp (acme)/")
+        assert [f.name for f in (root / "issuers").rglob("*.html")] == [
+            "2026-11-09 credit_snapshot.html"
+        ]  # exactly one report filed
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait(timeout=10)
+        if w is not None:
+            _wait_all(list(w._children.values()))
+            w.close()
+
+
+def test_b_a_run_with_no_pid_file_after_the_grace_is_interrupted_and_nothing_starts(
+    root, monkeypatch
+):
+    started = _track_starts(monkeypatch)
+    _save_running(root, _stamp(T0 - timedelta(seconds=61)))
+    w = Watcher(settings(root), now=_Clock(T0))
+    try:
+        w.step()
+    finally:
+        w.close()
+    record = _only(root)
+    assert record.status == "interrupted" and "may still be running" in record.reason
+    assert started == []  # no process was started
+
+
+def test_c_a_run_with_no_pid_file_inside_the_grace_stays_running_then_is_interrupted(root):
+    _save_running(root, _stamp(T0 - timedelta(seconds=10)))
+    clock = _Clock(T0)
+    w = Watcher(settings(root), now=clock)
+    try:
+        w.step()
+        assert _only(root).status == "running"
+        clock.moment = T0 + timedelta(seconds=51)  # 61 s after the start
+        w.step()
+    finally:
+        w.close()
+    assert _only(root).status == "interrupted"
+
+
+@pytest.mark.parametrize("text", ["abc", "0", "-5", "", b"\xff\xfe", "1" * 5000])
+def test_d_a_pid_file_that_is_not_a_positive_integer_is_no_pid_file_and_logged_once(root, text):
+    pid_file = _save_running(root, _stamp(T0 - timedelta(seconds=10)))
+    if isinstance(text, bytes):
+        pid_file.write_bytes(text)
+    else:
+        pid_file.write_text(text, encoding="utf-8")
+    clock = _Clock(T0)
+    w = Watcher(settings(root), now=clock)
+    try:
+        w.step()
+        w.step()
+        assert _only(root).status == "running" and _only(root).pid == 0
+        clock.moment = T0 + timedelta(seconds=51)
+        w.step()
+    finally:
+        w.close()
+    assert _only(root).status == "interrupted"
+    assert _log(root).count(f"run {PID_RUN}: PID file") == 1
+    assert not pid_file.exists()
+
+
+def test_e_the_pid_file_is_gone_once_the_run_has_ended(root):
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root, launcher=(sys.executable, REAL_SHAPE)))
+    try:
+        pump(w, lambda: status(root) == ["finished"], limit=30)
+    finally:
+        w.close()
+    assert list((root / "_engine/state").glob("*.pid")) == []
