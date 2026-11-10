@@ -695,13 +695,23 @@ EVENT_SHAPES = {
 }
 
 
+EVENT_STATUS = re.compile(r"(?:Historical|Scheduled|Scenario) \u2014 \S")
+
+
 def _event_row_ok(cells: list[str]) -> bool:
     """Mirrors the launcher's check: every cell stated, the date in the form its precision names."""
     when, precision, published = cells[:3]
     shape = EVENT_SHAPES.get(precision)
     dated = valid_date(when) if precision == "day" else bool(shape and shape.fullmatch(when))
     stated = all(c and not STATED_GAP.match(c) for c in cells)
-    return dated and stated and (published == "\u2014" or valid_date(published))
+    kind = EVENT_STATUS.match(cells[4])
+    return bool(
+        dated
+        and stated
+        and kind
+        and (published == "\u2014" or valid_date(published))
+        and published != when
+    )
 
 
 def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:

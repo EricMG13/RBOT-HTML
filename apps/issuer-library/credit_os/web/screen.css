@@ -562,3 +562,4 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 .event-table caption{text-align:left;font-weight:600;padding-bottom:6px}
 .event-table th,.event-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
 @media(max-width:720px){.event-lanes .lane-row{grid-template-columns:1fr}.lane-axis{margin-left:8px}}
+.lane-event.scenario{border:2px dashed var(--navy);background:var(--quiet);box-shadow:none}

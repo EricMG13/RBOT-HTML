@@ -714,10 +714,10 @@ EVENT_HEADER = (
     "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
 )
 EVENT_ROWS = (
-    "| 2025-03-31 | day | — | Note matures | Scheduled | Indenture p.1 | Wall |",
-    "| 2025-06 | month | 2025-05-01 | Call window | Announced | Notice | Cost |",
-    "| 2025-Q3 | quarter | — | Review | Expected | Memo | Rating |",
-    "| 2026 | year | — | Maturity | Scheduled | Filing p.2 | Wall |",
+    "| 2025-03-31 | day | — | Note matures | Scheduled — due | Indenture p.1 | Wall |",
+    "| 2025-06 | month | 2025-05-01 | Call window | Historical — announced | Notice | Cost |",
+    "| 2025-Q3 | quarter | — | Review | Scenario — modelled | Memo | Rating |",
+    "| 2026 | year | — | Maturity | Scheduled — due | Filing p.2 | Wall |",
 )
 
 
@@ -763,3 +763,15 @@ def test_an_event_table_with_a_changed_header_is_named_not_drawn():
     header = EVENT_HEADER.replace("Event date", "Date")
     fields = synthetic_charts(chart_section("Events: Legal", header, EVENT_ROWS[0]))
     assert fields["events"] == [] and "Events: Legal is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| 2025-03-31 | day | — | E | Scheduled | Src | R |",
+        "| 2025-03-31 | day | — | E | Expected — due | Src | R |",
+        "| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |",
+    ],
+)
+def test_an_event_without_a_status_kind_or_with_a_redundant_published_date_is_not_drawn(row):
+    assert lane_fields(EVENT_ROWS[0], row)["events"] == []

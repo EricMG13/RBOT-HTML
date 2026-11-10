@@ -299,10 +299,10 @@ EVENT_HEAD = (
     "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
 )
 EVENT_ROWS = (
-    "| 2025-03-31 | day | — | Synthetic note matures | Scheduled | Synthetic filing p.1 | Wall |",
-    "| 2025-06 | month | 2025-05-01 | Synthetic call window | Announced | Synthetic memo | Cost |",
-    "| 2025-Q3 | quarter | — | Synthetic review | Expected | Synthetic memo | Rating |",
-    "| 2026 | year | — | Synthetic maturity | Scheduled | Synthetic filing p.2 | Wall |",
+    "| 2025-03-31 | day | — | Synthetic note | Scheduled — matures | Synthetic filing p.1 | Wall |",
+    "| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — noted | Memo | Cost |",
+    "| 2025-Q3 | quarter | — | Synthetic review | Scenario — modelled | Synthetic memo | Rating |",
+    "| 2026 | year | — | Synthetic maturity | Scheduled — maturity | Synthetic filing p.2 | Wall |",
 )
 EVENT_LANES = {  # module -> (lane name, a phrase of its catalogue guard the instructions carry)
     "CP-0": ("Sources", "import timestamp"),
@@ -2847,7 +2847,7 @@ def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tm
         # The page carries its data JSON-escaped, so an em dash in a heading reads `\u2014` there.
         assert heading.replace("—", "\\u2014") in page
         for cell in table.splitlines()[2].strip("|").split("|"):
-            assert cell.strip() in page
+            assert cell.strip().replace("—", "\\u2014") in page
 
 
 # ---- Package 2 (2026-11-10): the credit-structure tables. Every value is synthetic.
@@ -3246,3 +3246,36 @@ def test_the_checker_sends_back_a_handoff_with_a_bad_event_precision(tmp_path):
     issues = _checked_handoff(task, bad.encode(), checker(prepared.layout))
     assert any("must be YYYY-MM-DD" in issue for issue in issues), issues
     assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+@pytest.mark.parametrize(
+    ("status", "ok"),
+    [
+        ("Historical — completed", True),
+        ("Scheduled — due", True),
+        ("Scenario — modelled downgrade trigger", True),
+        ("Scheduled", False),
+        ("Scheduled - due", False),
+        ("Expected — due", False),
+        ("scheduled — due", False),
+        ("Scenario — ", False),
+    ],
+)
+def test_an_event_status_starts_with_its_kind_and_a_dash(status, ok):
+    issues = event_issues(f"| 2025-03-31 | day | — | E | {status} | Src | R |")
+    assert (issues == ()) is ok, issues
+    assert ok or any("Status" in i for i in issues), issues
+
+
+def test_a_published_date_equal_to_the_event_date_is_sent_back():
+    issues = event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |")
+    assert any("write \u2014" in i for i in issues), issues
+    assert event_issues("| 2025-03-31 | day | 2025-03-30 | E | Scheduled — due | Src | R |") == ()
+    assert event_issues("| 2025-03 | month | 2025-03-31 | E | Scheduled — due | Src | R |") == ()
+
+
+def test_the_event_rules_say_record_once_and_the_status_kinds():
+    text = cpos_launch._selector(event_spec("CP-2H"))
+    assert "Record each event once, in the lane of the module that owns it" in text
+    assert "another module refers to it in Credit relevance" in text
+    assert "`Historical`, `Scheduled` or `Scenario`" in text

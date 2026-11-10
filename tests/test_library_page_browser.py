@@ -122,10 +122,10 @@ EVENTS = """
 
 | Event date | Date precision | Published | Event | Status | Source | Credit relevance |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2025-03-31 | day | \u2014 | Synthetic note matures | Scheduled | Synthetic indenture p.1 | Wall |
-| 2025-06 | month | 2025-05-01 | Synthetic call window | Announced | Synthetic notice | Cost |
-| 2025-Q3 | quarter | \u2014 | Synthetic rating review | Expected | Synthetic memo | Rating |
-| 2025 | year | \u2014 | Synthetic maturity year | Scheduled | Synthetic filing p.2 | Wall |
+| 2025-03-31 | day | \u2014 | Synthetic note | Scheduled — due | Synthetic filing p.1 | Wall |
+| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — announced | Synthetic memo | Cost |
+| 2025-Q3 | quarter | \u2014 | Synthetic review | Scenario — modelled | Synthetic memo | Rating |
+| 2025 | year | \u2014 | Synthetic maturity year | Scheduled — due | Synthetic filing p.2 | Wall |
 """
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -855,3 +855,8 @@ def test_the_calendar_draws_the_event_lane_with_its_table_and_fits_the_page(tmp_
     assert (seen["lanes"], seen["points"], seen["spans"], seen["tableRows"]) == (1, 1, 3, 4)
     assert seen["laneName"] == "Financing" and seen["focusable"] is True
     assert seen["tableAfterLanes"] is True and seen["fits"] is True
+    # The Overview draws the same lanes compactly, linked to the Calendar tab, with no table.
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert console == [] and (seen["lanes"], seen["tableRows"], seen["fits"]) == (1, 0, True)
+    assert 'class="event-lanes compact"' in dom and "Open the Calendar tab" in dom

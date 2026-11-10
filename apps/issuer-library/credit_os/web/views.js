@@ -668,13 +668,16 @@ function eventLanes(context) {
   });
 }
 // A day is a point; a month, quarter or year is drawn across its whole span (calendar.js eventSpan), never on a day the source does not state.
-function eventLanesView(context) {
-  const lanes=eventLanes(context).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
+// `module` keeps one module's lane (the Sources page); `compact` is the lanes alone with a link to the Calendar tab (Overview, Sources). A Scenario event is outlined, not only coloured.
+function eventLanesView(context,{module=null,compact=false}={}) {
+  const lanes=eventLanes(context).filter(lane=>!module||data[lane.id].module===module).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
+  if(!lanes.length)return '';
+  const scenario=row=>/^Scenario — /.test(row.cells[4]);
   const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
   const link=(lane,row)=>`href="${evidenceHref(lane.id,row.line)}" data-evidence="${esc(`${lane.id}:${row.line}`)}"`;
   const marker=(lane,{row,span})=>{
     const [date,precision,,event]=row.cells,at=eventPlace(span,axis);
-    return `<a class="lane-event ${span.point?'point':'span'}" ${link(lane,row)} aria-label="${esc(`${lane.lane}: ${event}, ${date} (${precision}). View source`)}" style="left:${at.left}%${span.point?'':`;width:${at.width}%`}"></a>`;
+    return `<a class="lane-event ${span.point?'point':'span'}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="left:${at.left}%${span.point?'':`;width:${at.width}%`}"></a>`;
   };
   const rows=lanes.map(lane=>`<div class="lane-row"><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track">${lane.events.filter(e=>e.span).map(e=>marker(lane,e)).join('')}</span>`}</div>`).join('');
   const day=n=>new Date(n*86400000).toISOString().slice(0,10);
@@ -683,7 +686,9 @@ function eventLanesView(context) {
     return `<tr><td>${esc(lane.lane)}</td><td>${esc(date)}</td><td>${esc(precision)}</td><td>${esc(published)}</td><td><a class="event-link" ${link(lane,row)}>${rich(event)}</a></td><td>${rich(status)}</td><td>${rich(source)}</td><td>${rich(relevance)}</td></tr>`;
   })).join('');
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
-  return `<div class="event-lanes"><div class="section-heading"><h2>Event lanes</h2><span>Dated events by module</span></div><p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state.</p>${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
+  const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
+  const open=compact?`<p class="run-inventory"><a class="text-action" href="${routeHref('W-Calendar','lanes',null,context)}">Open the Calendar tab${icon('arrow-right')}</a></p>`:'';
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><h2>Event lanes</h2><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${compact?open:''}${!compact&&body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
 }
 function calendarSections(context) {
   const sections=[];
@@ -1106,7 +1111,7 @@ function runReport(context) {
   const unsummarised=count(null),unchosen=entries.filter(entry=>!entry.out).length,line=`${count(true)} of ${entries.length} modules reach a conclusion · ${count(false)} not assessable${unsummarised?` · ${unsummarised} without a reader summary`:''}${unchosen?` · ${unchosen} without a chosen output`:''}`;
   const committee=entries.find(entry=>entry.module===COMMITTEE&&entry.out?.state.established===true);
   const deliverables=built.length?`<section class="summary-deliverables" id="run-deliverables" data-run-part="Deliverables from this run"><h2>Deliverables from this run</h2>${built.map(r=>`<div class="deliverable"><a class="text-action" href="${routeHref('W-Reports',r.id,null,context)}">${esc(reportName(r))}${icon('arrow-right')}</a>${reportAcceptance(r).html}</div>`).join('')}</section>`:'';
-  return `<div class="run-summary"><p class="run-count">${esc(line)}</p>${runAcceptance(context)}</div>${coverageStrip(entries)}${committee?reportBand(committee.id):''}${creditStory(grouped)}${findingsRegister(grouped)}${openItems(grouped)}${moduleMatrix(grouped)}${deliverables}${inventory}`;
+  return `<div class="run-summary"><p class="run-count">${esc(line)}</p>${runAcceptance(context)}</div>${coverageStrip(entries)}${committee?reportBand(committee.id):''}${creditStory(grouped)}${findingsRegister(grouped)}${openItems(grouped)}${moduleMatrix(grouped)}${deliverables}${eventLanesView(context,{compact:true})}${inventory}`;
 }
 // Read-only: the folders the library does not show (with the reason) and the issues found when it was built.
 function activityView(activity,live) {
@@ -1176,7 +1181,7 @@ function workspaceView(module,section) {
     const hedgeView=hedges&&(data[hedges].visual?.kind==='hedges'?hedgeChart(hedges,data[hedges].visual):`<div class="missing-state"><h2>No hedge schedule view for this output</h2><p>The retained CP-2E output is available in its module.</p></div>`);
     return `${showHedges?hedgeView:eventTimeline(events,eventTable(data[events].sections))}${moduleLink(showHedges?'CP-2E':'CP-1A','Open owning module')}`;
   }
-  if(module==='W-Evidence')return `<p class="intro">Source PDFs aren’t included; page references point to the originals.</p>${sourceInventory(context)}`;
+  if(module==='W-Evidence')return `<p class="intro">Source PDFs aren’t included; page references point to the originals.</p>${eventLanesView(context,{module:'CP-0',compact:true})}${sourceInventory(context)}`;
   if(module==='W-Reports') {
     const report=window.DESIGN_WORKSPACE.reports.find(r=>r.id===section);
     return report?reportView(report,context):reportList(context);

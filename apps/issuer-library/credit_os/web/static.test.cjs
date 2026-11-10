@@ -1846,16 +1846,16 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
 
 // ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.
 const LANE_HEAD = ['Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance'];
-const laneRow = (line, date, precision, published, event) => [line, date, precision, published, event, 'Scheduled', 'Synthetic filing', 'Synthetic relevance'];
+const laneRow = (line, date, precision, published, event, status = 'Scheduled — due') => [line, date, precision, published, event, status, 'Synthetic filing', 'Synthetic relevance'];
 const LANE_GAP = 'Not supplied: the handoff states no dated event';
 const withLanes = d => {
-  d[outId('CP-1')].sections.push(sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures'), laneRow(304, '2025-06', 'month', '2025-05-01', 'Call window'), laneRow(305, '2025-Q3', 'quarter', '—', 'Rating review'), laneRow(306, '2025', 'year', '—', 'Maturity year')])]));
+  d[outId('CP-1')].sections.push(sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures'), laneRow(304, '2025-06', 'month', '2025-05-01', 'Call window'), laneRow(305, '2025-Q3', 'quarter', '—', 'Rating review', 'Scenario — modelled review'), laneRow(306, '2025', 'year', '—', 'Maturity year')])]));
   d[outId('CP-1')].events = [{ lane: 'Financing', table: 302, gap: null }];
   d[outId('CP-6')].sections.push(sec('Events: Decision and watch', 3, 310, 'consumed', [table(312, LANE_HEAD, [[313, ...Array(7).fill(LANE_GAP)]])]));
   d[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 312, gap: 'the handoff states no dated event' }];
   return d;
 };
-const markers = html => [...html.matchAll(/class="lane-event (point|span)"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?"/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
+const markers = html => [...html.matchAll(/class="lane-event (point|span)(?: scenario)?"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?"/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
 
 test('calendar lanes: one lane per module that supplied events, placed on one axis at each date precision', () => {
   const html = runPage(withLanes).eventLanesView(RUN);
@@ -1882,7 +1882,7 @@ test('calendar lanes: every event is a keyboard-reachable link naming its lane, 
   const rows = [...html.split('<tbody>')[1].matchAll(/<tr>(.*?)<\/tr>/gs)].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
   assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Lane', 'Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance']);
   assert.equal(rows.length, 4, 'the lane with no event adds no row');
-  assert.deepEqual(rows[1], ['Financing', '2025-06', 'month', '2025-05-01', 'Call window', 'Scheduled', 'Synthetic filing', 'Synthetic relevance']);
+  assert.deepEqual(rows[1], ['Financing', '2025-06', 'month', '2025-05-01', 'Call window', 'Scheduled — due', 'Synthetic filing', 'Synthetic relevance']);
   assert.deepEqual(rows[2].slice(0, 4), ['Financing', '2025-Q3', 'quarter', '—']);
 });
 
@@ -1899,4 +1899,32 @@ test('calendar lanes: the new rules use only existing tokens, no amber or red, a
   assert.ok(css.length >= 3, 'the new rules are found');
   for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b/i.test(rule), rule);  // the font name Red Hat is not a colour
   assert.ok(css.some(rule => /\.lane-event\.point/.test(rule)) && css.some(rule => /\.lane-event\.span/.test(rule)));
+});
+
+test('calendar lanes: a Scenario event is drawn with a dashed outline, not by colour alone, and says so in its name and its table row', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  const marker = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]);
+  assert.deepEqual(marker.map(m => m.includes('scenario')), [false, false, true, false]);
+  assert.ok(marker[2].includes('Scenario event') && !marker[1].includes('Scenario event'));
+  assert.ok(strip(html).includes('Scenario — modelled review'));
+  const rule = read('screen.css').split('\n').find(line => /\.lane-event\.scenario/.test(line));
+  assert.ok(rule && /dashed/.test(rule) && !/amber|--red/.test(rule));
+});
+
+test('calendar lanes: the Overview shows the same lanes compactly with a link to the Calendar tab, and nothing without lanes', () => {
+  const page = runPage(withLanes), compact = page.eventLanesView(RUN, { compact: true });
+  assert.equal(countOf(compact, /<div class="lane-row">/g), 2);
+  assert.ok(!compact.includes('event-table') && compact.includes('href="#W-Calendar') && strip(compact).includes('Open the Calendar'));
+  const overview = page.runReport(RUN);
+  assert.ok(overview.includes('class="event-lanes compact"') && overview.indexOf('event-lanes') < overview.indexOf('run-inventory'));
+  assert.ok(!runPage().runReport(RUN).includes('event-lanes'));
+});
+
+test('calendar lanes: a module filter draws only that module lane, and the Sources page draws the Sources lane', () => {
+  const sources = d => { d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [laneRow(403, '2025-02-14', 'day', '—', 'Filing published', 'Historical — filed')])])], events: [{ lane: 'Sources', table: 402, gap: null }] }); return withLanes(d); };
+  const page = runPage(sources), only = page.eventLanesView(RUN, { module: 'CP-0', compact: true });
+  assert.equal(countOf(only, /<div class="lane-row">/g), 1);
+  assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
+  const text = read('views.js');
+  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*eventLanesView\(context,\{module:'CP-0',compact:true\}\)/.test(text));
 });

@@ -786,8 +786,12 @@ EVENT_RULES = (
     "source gives and Date precision names it: `day` YYYY-MM-DD, `month` YYYY-MM, `quarter` "
     "YYYY-Qn, `year` YYYY. Never write a day the source does not state, and infer no day from a "
     "coarser date. Published is the publication date (YYYY-MM-DD) when it differs from the event "
-    "date, else `\u2014`. Status is the source's own words. Source names the document and "
-    "locator; Credit relevance says why the event matters. An event with no stated date has no "
+    "date, else `\u2014` (never repeat the event date there). Status starts with `Historical`, "
+    "`Scheduled` or `Scenario`, then ` \u2014 ` and the source's own words, e.g. `Scenario \u2014 "
+    "modelled downgrade trigger`. Record each event once, in the lane of the module that owns "
+    "it; another module refers to it in Credit relevance, it does not repeat the row. Source "
+    "names the document and locator; Credit relevance says why the event matters. An event "
+    "with no stated date has no "
     "row. If the handoff supplies no dated event, write one row in which every cell is "
     "`Not supplied: <reason>`. "
 )
@@ -1007,6 +1011,8 @@ def _dates_issue(spec: OwnerTable, header: list[str], row: list[str]) -> str | N
 
 
 EVENT_SHAPES = {"month": r"\d{4}-(?:0[1-9]|1[0-2])", "quarter": r"\d{4}-Q[1-4]", "year": r"\d{4}"}
+EVENT_STATUS = re.compile(r"(?:Historical|Scheduled|Scenario) \u2014 \S")
+EVENT_KINDS = "Historical, Scheduled or Scenario"
 EVENT_FORMS = {"day": "YYYY-MM-DD", "month": "YYYY-MM", "quarter": "YYYY-Qn", "year": "YYYY"}
 
 
@@ -1029,6 +1035,10 @@ def _event_issues(spec: OwnerTable, header: list[str], row: list[str]) -> list[s
             )
     if published != "\u2014" and not _stated_gap(published) and not _iso_date(published):
         issues.append(f"Published `{published}` must be YYYY-MM-DD or \u2014.")
+    if published == stated:
+        issues.append("Published repeats the event date: write \u2014 when it is the event date.")
+    if not _stated_gap(cells["Status"]) and not EVENT_STATUS.match(cells["Status"]):
+        issues.append(f"Status `{cells['Status']}` must start with {EVENT_KINDS} and ` \u2014 `.")
     return issues
 
 
