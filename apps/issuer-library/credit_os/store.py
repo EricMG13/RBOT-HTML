@@ -514,7 +514,8 @@ def _unsupplied_bridge(section: dict[str, Any]) -> bool:
     tables = [b for b in section["blocks"] if b["type"] == "table"]
     return (
         len(tables) == 1
-        and tables[0]["headers"][:2] == ["Step", "Amount"]
+        and tables[0]["headers"] == STEP_HEADERS
+        and len(tables[0]["rows"]) > 0
         and all(STATED_GAP.match(row["cells"][1]) for row in tables[0]["rows"])
     )
 

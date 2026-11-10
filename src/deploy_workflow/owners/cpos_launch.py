@@ -412,6 +412,7 @@ class OwnerTable:
     value_columns: tuple[str, ...]
     chart_unit: str
     steps: bool = False
+    rules: str = ""  # The catalogue guard for the view, sent to the module with the table.
 
 
 # The catalogue's launcher-asked figures (docs/visualisations/catalogue.csv) that are not report
@@ -420,12 +421,35 @@ class OwnerTable:
 OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     "CP-1": (
         OwnerTable(
-            "CP-1", "S.5", "Chart data: revenue and EBITDA", ("Revenue", "Adjusted EBITDA"), "US$m"
+            "CP-1",
+            "S.5",
+            "Chart data: revenue and EBITDA",
+            ("Revenue", "Adjusted EBITDA"),
+            "US$m",
+            rules=(
+                "The Adjusted EBITDA column is the EBITDA measure the method specifies; name its "
+                "identity (reported, issuer-adjusted or house-adjusted) in Basis and "
+                "limitation, and do not mix identities across rows. Every row is a comparable "
+                "period of the same duration; one table must not mix durations (annual with "
+                "quarterly or half-year); a period of another duration is "
+                "`Not supplied: <reason>`."
+            ),
         ),
     ),
     "CP-2D": (
         OwnerTable(
-            "CP-2D", "CR.2", "Chart data: liquidity bridge", ("Amount",), "US$m", steps=True
+            "CP-2D",
+            "CR.2",
+            "Chart data: liquidity bridge",
+            ("Amount",),
+            "US$m",
+            steps=True,
+            rules=(
+                "Only accessible liquidity is bridged: restricted or trapped cash and uncertain "
+                "facility access are not accessible liquidity, so exclude them or state each as "
+                "its own step. Use the method's signed values and timing; name the basis in "
+                "Basis and limitation."
+            ),
         ),
     ),
     "CP-3C": (
@@ -435,6 +459,11 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
             "Chart data: refinancing need",
             ("Debt maturing", "Committed resources"),
             "US$m",
+            rules=(
+                "Committed resources exclude a refinancing that is only a suggested path; a "
+                "resource shared by more than one need is counted once, never a double-counting. "
+                "Name the maturity and funding basis in Basis and limitation."
+            ),
         ),
     ),
 }
@@ -483,6 +512,8 @@ def _bridge_issues(heading: str, rows: list[list[str]]) -> list[str]:
     unsupplied = [
         a.startswith(NOT_SUPPLIED) and a.removeprefix(NOT_SUPPLIED).strip() for a in amounts
     ]
+    if not rows:
+        return [f"`{heading}` needs an opening and a closing row."]
     if all(unsupplied):
         return []
     if len(rows) < 2:
@@ -779,7 +810,9 @@ def _selector(route: MarkdownRoute | OwnerTable) -> str:
             f"Value cells are plain numbers in {spec.chart_unit}, with that as the Reporting unit, "
             "or `Not supplied: <reason>`. An issuer reporting in another currency or scale writes "
             "`Not supplied: reported in <unit>` in monetary cells. Basis and limitation is never "
-            "blank." + (BRIDGE_RULES if spec.steps else "")
+            "blank."
+            + (BRIDGE_RULES if spec.steps else "")
+            + (f" {spec.rules}" if spec.rules else "")
         )
     what = (
         "exactly one populated Markdown table under it." if route.kind == "table" else "prose only."

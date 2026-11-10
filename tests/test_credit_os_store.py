@@ -395,3 +395,16 @@ def test_a_step_table_with_no_amount_stated_is_not_drawn_and_not_an_error():
 def test_a_bridge_stated_to_one_decimal_reconciles_exactly():
     assert synthetic_charts(bridge("0.1", "0.2", "0.3"))["charts"]
     assert not synthetic_charts(bridge("0.1", "0.2", "0.4"))["charts"]
+
+
+def test_a_step_table_with_a_header_and_no_rows_is_named_not_drawn():
+    fields = synthetic_charts(chart_section("Chart data: liquidity bridge", BRIDGE_HEADER))
+    assert fields["charts"] == []
+    assert "Chart data: liquidity bridge is not in its fixed table" in fields["issue"]
+
+
+def test_a_step_table_with_another_header_is_not_taken_as_an_unsupplied_bridge():
+    header = "| Step | Amount | Note | Reporting unit | Basis and limitation |"
+    gap = "| Step 0 | Not supplied: none | n | US$m | Synthetic. |"
+    fields = synthetic_charts(chart_section("Chart data: liquidity bridge", header, gap))
+    assert fields["charts"] == [] and fields["issue"]

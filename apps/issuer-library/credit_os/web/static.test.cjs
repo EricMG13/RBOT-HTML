@@ -1332,6 +1332,34 @@ test('reader charts: revenue and EBITDA and the refinancing need are columns per
   for (const html of [revenue, need]) assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
 });
 
+test('reader charts: a bridge whose running position dips below zero is drawn inside its frame on a zero rule', () => {
+  const rows = [[63, 'Opening accessible liquidity', '100'], [64, 'Debt repayment', '-300'], [65, 'New notes', '250'], [66, 'Closing accessible liquidity', '50']].map(([n, s, a]) => [n, s, a, 'US$m', 'Synthetic.']);
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; });
+  const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
+  const rects = [...html.matchAll(/<rect class="(\w+)" x="[^"]*" y="([^"]*)" width="[^"]*" height="([^"]*)"/g)].map(m => ({ cls: m[1], top: Number(m[2]), bottom: Number(m[2]) + Number(m[3]) }));
+  assert.equal(rects.length, 4);
+  for (const r of rects) assert.ok(r.top >= -12 && r.bottom <= 210.001, JSON.stringify(r));
+  // The zero rule sits where the opening and closing bars stand; the deepest point (-200) reaches the floor.
+  const zero = Number(/<line x1="0" y1="([^"]*)" x2="660" y2="\1" class="axis zero-axis"\/>/.exec(html)[1]);
+  assert.ok(zero < 210 && Math.abs(rects[0].bottom - zero) < 0.01 && Math.abs(rects[3].bottom - zero) < 0.01);
+  assert.ok(Math.abs(rects[1].bottom - 210) < 0.01, 'the outflow ends at the lowest running position');
+});
+
+test('the "Missing values have no bar" note prints under the last period chart, not the bridge after it', () => {
+  const page = runPage(d => {
+    withBridge(d);
+    return d;
+  });
+  // CP-1's charts are Leverage, Cover, then the bridge; the note is under Cover.
+  const mod = storyModule(page.runReport(RUN), 'CP-1');
+  assert.equal(countOf(mod, /Missing values have no bar/g), 1);
+  const cards = mod.split('<div class="panel-card">').slice(1);
+  assert.deepEqual(cards.map(c => c.includes('Missing values have no bar')), [false, true, false]);
+  // A module with only a bridge prints no note, and leaves it for the next module that has period charts.
+  const alone = runPage(d => { d[outId('CP-1')].charts = [BRIDGE_CHART]; return withBridge(d); });
+  assert.equal(countOf(storyModule(alone.runReport(RUN), 'CP-1'), /Missing values have no bar/g), 0);
+});
+
 test('run report: the bridge is drawn in its module story beside the module\'s other charts', () => {
   const mod = storyModule(runPage(withBridge).runReport(RUN), 'CP-1');
   assert.ok(mod.includes('<div class="vector-chart">') && mod.includes('<div class="column-chart"'));

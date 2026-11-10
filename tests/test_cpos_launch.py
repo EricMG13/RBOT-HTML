@@ -2620,3 +2620,50 @@ def test_a_bridge_with_every_amount_not_supplied_is_accepted_and_a_mixed_one_is_
 def test_a_bridge_check_names_the_stated_and_summed_amounts():
     (issue,) = bridge_issues("900", "-300", "700")
     assert "600" in issue and "700" in issue
+
+
+@pytest.mark.parametrize(
+    ("module", "phrases"),
+    [
+        ("CP-1", ("issuer-adjusted or house-adjusted", "must not mix durations")),
+        ("CP-2D", ("restricted or trapped cash", "uncertain facility access", "own step")),
+        ("CP-3C", ("only a suggested path", "double-counting")),
+    ],
+)
+def test_each_owner_table_carries_its_catalogue_guard(tmp_path, module, phrases):
+    prepared, *_ = good_task(tmp_path, module, "covenant_refinancing")
+    text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+    for phrase in phrases:
+        assert phrase in text, phrase
+    assert "in Basis and limitation" in text
+
+
+def test_a_bridge_with_a_header_and_no_rows_is_sent_back():
+    (table,) = cpos_launch.OWNER_TABLES["CP-2D"]
+    text = "### Chart data: liquidity bridge\n\n" + synthetic_table(
+        "| Step | Amount | Reporting unit | Basis and limitation |"
+    )
+    assert any("opening and a closing" in i for i in cpos_launch.chart_issues(text, table))
+
+
+@pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
+def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tmp_path, module):
+    """Owner tables are not report charts: delivery lists them as evidence tables, no new chart."""
+    prepared, _, context = good_task(tmp_path, module, "covenant_refinancing")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    routes = tuple(r for r in prepared.layout.routes if r.module_id == module)
+    blocks = tuple(dict.fromkeys(r.block_id for r in routes))
+    own = prepared.layout.model_copy(update={"blocks": blocks, "routes": routes, "front": ()})
+    (tmp_path / "h.md").write_text(raw)
+    handoff = HandoffInput(path="h.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={module: handoff}, layout=own)
+    files = markdown_files(request, tmp_path)
+    ((heading, table),) = OWNER_TABLES[module].items()
+    listed = [
+        e for e in json.loads(files["coverage.json"])["modules"][module] if e["heading"] == heading
+    ]
+    assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
+    page = files["report.html"].decode()
+    assert heading in page
+    for cell in table.splitlines()[2].strip("|").split("|"):
+        assert cell.strip() in page
