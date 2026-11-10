@@ -579,15 +579,15 @@ const MODULES = {
   'CP-5': ['Evidence validation', 'Traces every figure back to its source.'],
   'CP-6': ['Committee decision', 'Challenges the thesis as an investment committee would.'],
   'CP-8': ['Deliverable comparison', 'Compares this run with an earlier one (not run from the inbox).'],
-  'CP-DR': ['Research questions', 'Builds the peer pack and answers your research questions, from files in the folder.']
+  'CP-DR': ['Research questions', 'Finds the peers and their figures, and answers your research questions.']
 };
 const mname = m => (MODULES[m] || [m])[0];
 const PATHS = {
   credit_snapshot: {label:'Credit Snapshot', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
   earnings_update: {label:'Earnings Update', q:'What changed since the last reporting period?', needs:'Filings for both periods and the management EBITDA bridge.'},
-  relative_value: {label:'Relative Value', q:'Is this instrument cheap or rich?', needs:"Observed quotes and the peers' filings."},
+  relative_value: {label:'Relative Value', q:'Is this instrument cheap or rich?', needs:'Observed quotes.'},
   covenant_refinancing: {label:'Covenant & Refinancing', q:'What do the documents allow, and can it refinance?', needs:'The executed credit agreement or indenture.'},
-  distressed_restructuring: {label:'Distressed & Restructuring', q:'How bad can it get, and who recovers what?', needs:"Executed documents, ratings, the peers' filings and a fiscal-year base period."},
+  distressed_restructuring: {label:'Distressed & Restructuring', q:'How bad can it get, and who recovers what?', needs:'Executed documents, ratings and a fiscal-year base period.'},
   portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'}
 };
 const RUN_LABEL = {primary:'New issue', secondary:'Trading', research:'No market view', earnings:'Earnings update'};
@@ -621,9 +621,9 @@ const OPTIONS = {
     {v:'yes', label:'Yes', text:"The issuer's own trading multiple becomes available."}
   ],
   peer_source: [
-    {v:'cp_dr_public', label:'Research finds public peers', def:true, text:"The research module joins the run, builds a peer pack and the peer benchmark reads it. It has no web access in this run: it finds peers only in files in the folder, such as the peers' own filings."},
+    {v:'cp_dr_public', label:'Research finds public peers', def:true, text:"The research module joins the run and finds the peers and their figures; the peer benchmark reads them. Supplying peers is optional: it also reads any peers' filings you add to the folder."},
     {v:'user_list', label:"I'll name the peers", planned:true, text:'Names and tickers only. Nothing looks up their figures (the research module joins only when it finds the peers), so the benchmark records "No peer figures".'},
-    {v:'user_comps', label:"I'll give peer figures", text:"Each peer's EV, EBITDA, date and source. Your figures replace any sourced set and are labelled user-supplied."},
+    {v:'user_comps', label:"I'll give peer figures", text:"Only if you want your own set: each peer's EV, EBITDA, date and source. Your figures are labelled user-supplied, and the research module does not look for peers."},
     {v:'none', label:'No peers', text:'No peer universe and no peer multiple.'}
   ],
   basis: [
@@ -686,8 +686,6 @@ const CHECKS = [
     without:'Forecast drivers rest on labelled analyst judgment, anchored to stated figures.'},
   {id:'ratingsfile', c:'ratingsfile', title:'Rating agency report or rating action', text:'Including any rating-linked trigger terms.', uses:['CP-2H'], when:has => has('CP-2H'),
     without:'Trigger terms are not found; with no ratings entered under Market either, Ratings & triggers states Insufficient Information.'},
-  {id:'peerfiles', c:'peerfiles', title:"Peers' filings or a peer data file", text:'Annual or quarterly reports of the peers, or a table of their EV and EBITDA with sources. In this run the research module reads only the folder.', uses:['CP-DR','CP-1C'], when:has => has('CP-DR'),
-    without:'The research module has nothing to build the peer pack from, and the peer benchmark has no peers: both refuse.'},
   {id:'quotesfile', c:'quotesfile', title:'Dealer runs or a quotes file', text:'Prices dated within 30 days of the as-of date. You can type quotes in the next stage instead.', uses:['CP-3','CP-3D'], when:has => has('CP-3') || has('CP-3D'),
     without:'Relative value and market-implied risk show gaps unless you enter quotes.'},
   {id:'portfolio', k:'portfolio_workbook', title:'Portfolio workbook', text:'The fund workbook, in the layout of the portfolio template. A workbook that does not follow it is not read.', uses:['CP-0','CP-3','CP-6'], when:(has, o) => o.run.pathway === 'portfolio_decision',
@@ -1159,11 +1157,11 @@ const RULES = [
   {s:'CP-1', o:'check', c:f => f.chk.fin === 'no' || f.chk.fin === '' && f.scan && !f.scan.has.financial, r:'No filed financial report in the folder: financials would rest on management claims.', fix:'Add the annual or quarterly report.', go:'sources'},
   {s:'CP-1', o:'limited', np:true, c:f => /^[A-Z]{3}$/.test(f.o.run.reporting_currency) && f.o.run.reporting_currency !== 'USD', r:'Not USD: the report\'s chart strip is US$ millions only; its money cells read "Not supplied".', fix:'Nothing to add; the report states the limit.', go:'dates'},
   {s:'CP-1B', o:'gap', c:f => f.chk.periods === 'no', r:'The reports for both periods are not in the folder: the periods cannot be compared.', fix:'Add the report for the missing period.', go:'sources'},
-  {s:'CP-DR', o:'check', c:f => f.chk.peerfiles === '', r:'The research module has no web access in this run: it finds peers only in files in the folder.', fix:"Say under Source files whether the peers' filings are in the folder.", go:'sources'},
-  // Live run tdg-all-001 (2026-11-10): with no peers' filings in the folder both came back Blocked.
-  {s:'CP-DR', o:'will_refuse', c:f => f.chk.peerfiles === 'no', r:"No peers' filings in the folder: the research module has no web access in this run, so it has nothing to build the peer pack from (a TDG run came back Blocked this way).", fix:"Add the peers' filings or a peer data file, or give peer figures under Valuation.", go:'sources'},
-  {s:'CP-1C', o:'will_refuse', c:f => f.has('CP-DR') && f.chk.peerfiles === 'no', r:'No peer files in the folder: the peer pack is empty, so the benchmark has no peers (a TDG run came back Blocked this way).', fix:"Add the peers' filings or a peer data file, or give peer figures under Valuation.", go:'sources'},
-  {s:'CP-1C', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "I\'ll give peer figures" and enter each peer\'s EV, EBITDA, date and source.', go:'valuation'},
+  // Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they specifically
+  // want to in the context file." This transport gives no module a web search tool (model/handoff.py
+  // TOOLS); in live run tdg-all-001 the research module came back Blocked and the peer benchmark had none.
+  {s:'CP-DR', o:'information', c:() => true, r:'This environment gives the research module no web search tool, so it cannot reach public sources: in a TDG run it came back Blocked and the peer benchmark had no peers. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
+  {s:'CP-1C', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
   {s:'CP-1C', o:'gap', c:f => f.o.valuation.basis === 'auto' && f.o.valuation.peer_source === 'user_comps' && f.peersIn < MIN_ADMITTED && f.precIn < MIN_ADMITTED,
     r:f => `Automatic basis: ${f.peersIn} peer${f.peersIn === 1 ? '' : 's'} admitted (needs ${MIN_ADMITTED}, at most ${PEER_MONTHS} months old) and ${f.precIn} precedent${f.precIn === 1 ? '' : 's'} (needs ${MIN_ADMITTED}, at most ${PRECEDENT_MONTHS} months old): no multiple is selected.`, fix:'Add peers or precedents, or choose another basis.', go:'valuation'},
   {s:'CP-1D', o:'check', c:f => f.raw.bridge === '', r:'Waiting for your answer: is the management EBITDA bridge in the folder?', fix:'Answer under Source files.', go:'sources'},
@@ -1193,7 +1191,7 @@ function readiness(o) {
   const vq = o.quotes;
   const ss = $('st-sources');
   const f = {o, has, scan, raw: {legal: o.attachments.legal_documents, bridge: getV(ss, 'management_bridge'), workbook: getV(ss, 'portfolio_workbook')},
-    chk: {fin: getC('fin'), periods: getC('periods'), guidance: getC('guidance'), ratingsfile: getC('ratingsfile'), quotesfile: getC('quotesfile'), peerfiles: getC('peerfiles')},
+    chk: {fin: getC('fin'), periods: getC('periods'), guidance: getC('guidance'), ratingsfile: getC('ratingsfile'), quotesfile: getC('quotesfile')},
     talk: o.deal_terms.some(d => d.talk_spread_bps_low || d.talk_spread_bps_high || d.talk_oid_low || d.talk_oid_high) || vq.some(q => q.kind === 'indicative_talk'),
     observed: vq.some(q => q.kind === 'observed') || getC('quotesfile') === 'yes',
     fresh: vq.filter(q => q.kind === 'observed' && validDate(q.as_of) && validDate(o.run.as_of) && daysBetween(q.as_of, o.run.as_of) <= STALE_DAYS).length + (getC('quotesfile') === 'yes' ? 1 : 0),
@@ -1597,7 +1595,7 @@ function renderChecklist() {
 }
 const FOUND = {fin: s => s.kinds.financial_report, periods: s => s.kinds.financial_report.concat(s.kinds.earnings_release), legal: s => s.agreement,
   bridge: s => s.kinds.management_bridge, guidance: s => s.kinds.guidance.concat(s.kinds.earnings_release, s.kinds.lender_presentation), ratingsfile: s => s.kinds.ratings,
-  quotesfile: s => s.kinds.market_quotes, peerfiles: s => s.kinds.peer_data, portfolio: s => s.kinds.portfolio, prior: s => s.kinds.prior_decision};
+  quotesfile: s => s.kinds.market_quotes, portfolio: s => s.kinds.portfolio, prior: s => s.kinds.prior_decision};
 
 /* ======================================================================= Folder check (local only) */
 // Mirrors what the launcher and the inbox skip (cpos_launch._issuer_files, inbox/drops.check); the
@@ -1738,7 +1736,7 @@ function vis() {
   peers.hidden = !(ps === 'user_list' || ps === 'user_comps');
   peers.dataset.mode = ps;
   $('peers-intro').textContent = ps === 'user_list' ? 'Name each peer. Nothing looks up their figures in this run, so the benchmark records "No peer figures".' : 'One row per peer, figures at most 12 months old. At least 3 are needed for the automatic basis.';
-  $('vallead').textContent = has('CP-1C') ? 'The peer benchmark (CP-1C) forms the valuation multiple from these peers' + (has('CP-4C') ? ', and Recovery & fulcrum (CP-4C) values the business with it' : '') + '. ' + (has('CP-DR') ? 'By default the research module finds the peers, from files in the folder only: it has no web access in this run.' : 'Nothing is looked up for you.') : 'No module in this pathway forms a valuation multiple from these entries; they stay in the file.';
+  $('vallead').textContent = has('CP-1C') ? 'The peer benchmark (CP-1C) forms the valuation multiple from these peers' + (has('CP-4C') ? ', and Recovery & fulcrum (CP-4C) values the business with it' : '') + '. ' + (has('CP-DR') ? "By default the research module finds the peers and their figures, and it also reads any peers' filings you add to the folder. Your own set is optional: choose \u201cI'll give peer figures\u201d." : 'Nothing is looked up for you.') : 'No module in this pathway forms a valuation multiple from these entries; they stay in the file.';
   $('rows-peer').querySelectorAll('[data-row]').forEach(r => {
     const ev = getV(r, 'ev_m'), eb = getV(r, 'ebitda_m');
     r.querySelector('[data-mult]').textContent = NUM.test(ev) && NUM.test(eb) && Number(eb) > 0 ? (Number(ev) / Number(eb)).toFixed(1) + 'x' : 'n/a';
@@ -1751,7 +1749,7 @@ function vis() {
   });
   $('cp2a-note').textContent = has('CP-2G') ? 'The forward model takes its downside shock from the downside module\'s scenario, so a scenario you set here can also reach the forecast.' : '';
   $('asmlead').textContent = 'Optional. Leave each module on "Let the module choose" unless you have a house view. Your values reach the module as user-supplied assumptions, with your rationale.';
-  $('qlead').textContent = has('CP-DR') ? 'The research module runs in this run and answers your questions before its own, from files in the folder: it has no web access here. A question goes to the module you name (Peer benchmark or Fundamental credit); any other choice, or none, sends it to both. Items published after the research cutoff are refused.' : 'The research module does not run in this pathway (it joins Relative Value and Distressed & Restructuring when it finds the peers), so these questions are not answered. They stay in the file.';
+  $('qlead').textContent = has('CP-DR') ? 'The research module runs in this run and answers your questions before its own. A question goes to the module you name (Peer benchmark or Fundamental credit); any other choice, or none, sends it to both. Items published after the research cutoff are refused.' : 'The research module does not run in this pathway (it joins Relative Value and Distressed & Restructuring when it finds the peers), so these questions are not answered. They stay in the file.';
 
   CHECKS.forEach(c => {
     const row = document.querySelector(`[data-chk="${c.id}"]`);

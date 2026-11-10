@@ -51,7 +51,7 @@ CP-8 are not launched.
 | CP-3C, CP-3D, CP-4C | their pins; quotes (CP-3D) | No quotes: CP-3D has nothing to read. |
 | CP-4 Legal & covenants | legal_documents | `none`: the method stops ("No executed governing document"). `draft`: Provisional. |
 | CP-6 Committee decision | portfolio_workbook (Portfolio Decision) | Gap. |
-| CP-DR | research_questions, cutoff, peer_source | Joins Relative Value and Distressed when the peer source is `cp_dr_public` (main `a2f5e8e`): builds the peer pack CP-1C reads and answers the context's questions first. No web access in this transport: only files in the folder. |
+| CP-DR | research_questions, cutoff, peer_source | Joins Relative Value and Distressed when the peer source is `cp_dr_public` (main `a2f5e8e`): finds the peers for the peer pack CP-1C reads and answers the context's questions first. This transport gives it no web search tool (section 8). |
 | CP-2E | the cp2e pin | In no pathway, so an inbox run never uses it. |
 
 Stale wording in the current form:
@@ -80,7 +80,7 @@ Stale wording in the current form:
 3. **Peer data.** CP-1C was blocked at the peer-data gate in the all-modules run.
    - As proposed: no default where CP-1C runs, and "I'll give peer figures" marked as the only
      working choice. Superseded at adoption (section 7): `cp_dr_public` is the default again, CP-DR
-     joins the run, and the form asks whether the peers' filings are in the folder.
+     joins the run. Section 8 removed the question on whether the peers' filings are in the folder.
    - Stale peers and precedents are flagged on the row.
    - Fewer than 3 admitted makes CP-1C a Gap.
 4. **Periods.** Nothing ties the run type to the pathway: a Research run on Earnings Update leaves
@@ -224,10 +224,9 @@ the peer source is `cp_dr_public`. The form follows:
   gone.
 - **Run order.** It depends on the peer source (`RUN_ORDER`, `WITH_RESEARCH`); main also moved CP-2A
   after CP-2. The readiness panel lists CP-DR where it joins.
-- **Peer files.** CP-DR has no web access in this transport (main's own verification note), so a new
-  Source files item asks whether the peers' filings or a peer data file are in the folder. Unanswered
-  makes CP-DR a Check; "Not available" made CP-1C a Gap, and since run tdg-all-001 makes both
-  Will refuse (section 8).
+- **Peer files.** A Source files item asked whether the peers' filings or a peer data file were in
+  the folder, because CP-DR has no web access in this transport. Section 8 removed it on the owner's
+  ruling: CP-DR supplies the peers.
 - **Questions.** The Questions stage is shown where CP-DR runs. CP-DR answers the context's questions
   first (`cpdr.md`) and routes each to CP-1C, CP-2 or both.
 - `Named peers` (`user_list`) keeps its Gap: nothing looks up their figures, and CP-DR joins only for
@@ -284,20 +283,39 @@ bridge, no guidance, no rating report, no quotes.
 - The run lists no other module as Blocked but does not say which of the rest were Ready or
   Restricted. CP-5 stopped before its call (a size check, fixed in #27), and CP-6 did not run.
 
-**Changed in the form**, only where the module's own source reads worked in that run:
-- CP-DR: "Not available" for the peers' filings is now Will refuse; it was Ready.
-- CP-1C: the same answer is now Will refuse; it was Gap.
-- CP-1D: no bridge is now Limited; it was Gap.
-- Test: `test_the_forecast_for_missing_sources_is_what_the_tdg_run_returned`. Its expected outcomes
-  come from the run record, and it failed before the change.
-- Through the registry edges, CP-2 and CP-2D now read Limited when the peers are missing. The run
-  did not record their outcome.
+**Changed in the form.**
+- **CP-1D Earnings quality.** No bridge is now Limited; it was Gap. CP-1D's source reads worked in the
+  run.
+- **CP-DR Research questions.** Owner: "Cp-dr supplies the peers, the user does not provide them
+  unless they specifically want to in the context file. By default cp-dr always provides the peers or
+  1C and 2 can never run", then "User can provide peers but it is optional". The form no longer asks
+  whether the peers' filings are in the folder, and nothing it forecasts depends on that.
+  - The default peer source says the research module finds the peers. Peers are optional: the
+    analyst may add the peers' filings to the folder, which CP-DR is told to read (`PEER_PACK_BLOCK`:
+    "every source this run holds that is not the issuer's own document"), or choose "I'll give peer
+    figures".
+  - The run's CP-DR block is a Note on CP-DR, not counted and not the analyst's to fix. CP-OS gives
+    modules no web search tool (`model/handoff.py` `TOOLS`: list_sources, read_pages,
+    search_source, calculate, write_handoff, edit_handoff, score_governance).
+- **Which CP-DR version runs.** CP-OS sends two (`cpos_launch._SELECTED`): cp-os's
+  `cp-dr-deep-research` SKILL v1.1 (2026-07-22) with its steps and `CP_DR_RESEARCH_BRIEF_V1`, and
+  Deploy Workflow's `cpdr.md` (cp-dr/2026-10-31). The SKILL finds public sources in web or hybrid
+  mode, and stops Blocked where web research is required and unavailable. `cpdr.md` is LOCAL:
+  supplied items, the run's sources and user URLs only. METHODOLOGY-REVIEW: "Open-ended source
+  discovery is not demonstrated". In this transport neither can reach public peers.
+- **Test.** `test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run`. It
+  fails on the first version of this change, which asked about the peers' files and said CP-DR and
+  CP-1C would refuse.
 
 **Left for the rerun of #27's fixes** (owner, for now: "Not now"):
 - CP-2H, CP-3D and CP-3 came back Blocked where the form says Gap. Every source read of theirs was
   refused by the reads cap #27 raised, so this run cannot tell a missing source from nothing read.
 - Making CP-3 Will refuse would also forecast CP-6 Blocked through its required edge, which no run
   has shown.
+- For CP-1C and CP-2, the registry treats CP-DR as optional ("order and supply, never a block",
+  METHODOLOGY-REVIEW), so CP-OS runs them whatever CP-DR returns; in the run CP-1C blocked on its own
+  and CP-2 was accepted. The owner's "1C and 2 can never run" without CP-DR's peers is not what the
+  registry says yet; making CP-DR required for them is a registry decision, not a form change.
 - The launcher's `run_expectations` has none of the form's rules for CP-1C, CP-1D, CP-2A and CP-2G.
   CP-2A's and CP-1D's could move as written: `legal_documents` and `management_bridge` are in the
-  context file. The guidance and peer-file answers are not, so those rules cannot move as they stand.
+  context file. The guidance answer is not, so that rule cannot move as it stands.

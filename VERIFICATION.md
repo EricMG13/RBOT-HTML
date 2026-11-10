@@ -6,25 +6,29 @@ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflo
 
 ## 2026-11-10 — Context form against live run tdg-all-001 (branch `claude/optimistic-johnson-bmnwip`, after main `53a5632`)
 
-Owner: "Yes do that" (compare tdg-all-001 with the form's forecast), then "Your recommendation".
-Design note section 8. Compared against the run's record below. The run folder was not read.
+Owner: "Yes do that" (compare tdg-all-001 with the form's forecast), "Your recommendation", then
+"Cp-dr supplies the peers, the user does not provide them unless they specifically want to in the
+context file…" and "User can provide peers but it is optional". Design note section 8. Compared
+against the run's record below. The run folder was not read.
 
 - Forecasts were made before the run reported. Of the 10 modules with a recorded outcome, the form
   flagged 9 and the launcher's `run_expectations` 5. The form's miss was CP-DR: Ready, but Blocked.
   The form's 4 Gaps for a missing source (CP-1C, CP-2H, CP-3D, CP-3) came back Blocked.
   CP-1D's Gap came back Restricted.
-- Changed (`docs/templates/context-form.html` rules only): with no peers' filings, CP-DR and CP-1C
-  are now Will refuse; with no bridge, CP-1D is now Limited. Only modules whose source reads worked
-  in that run were changed. CP-2H, CP-3D and CP-3 had every read refused, so they wait for a rerun.
-- Knock-on effect for the same TDG answers: CP-2 and CP-2D now read Limited through the registry
-  edges. The run did not record their outcome. Recomputed offline in Chromium, no page errors.
-- Tests: `test_the_forecast_for_missing_sources_is_what_the_tdg_run_returned` uses the run record's
-  outcomes. It failed before the change (`('ready', 'gap')`) and passes after.
-  `tests/test_library_page_browser.py`, `tests/test_context_form.py` and `tests/test_inbox_drops.py`:
-  100 passed, 3 failed. The 3 failures are the inbox permission tests, which also fail on main
-  `53a5632` here because the sandbox runs as root. Quality gate: 0 findings.
-- Not verified: no live run of the changed forecast. The run's other modules' outcomes (Ready or
-  Restricted) are unrecorded. One issuer, one date.
+- CP-1D: no bridge is now Limited (its reads worked in the run).
+- CP-DR: the form no longer asks for the peers' filings. Supplying peers is optional: add the
+  peers' filings to the folder, which CP-DR is told to read, or give your own peer figures. CP-DR
+  carries a Note, not counted: CP-OS gives no module a web search tool (`model/handoff.py`
+  `TOOLS`). CP-OS sends CP-DR both cp-os's SKILL v1.1 (2026-07-22, web or hybrid research; blocks
+  without web) and `cpdr.md` (2026-10-31, LOCAL). Neither reaches public peers here.
+- Not changed: CP-2H, CP-3D and CP-3 had every read refused in the run, so they wait for a rerun.
+  The registry keeps CP-DR optional for CP-1C and CP-2. That is a registry decision, not a form
+  one.
+- Tests: `test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run` fails on
+  the first version of this change, which asked about peer files, and passes now.
+  `tests/test_library_page_browser.py` and `tests/test_context_form.py`: 45 passed. Quality gate: 0
+  findings.
+- Not verified: no live run of the changed forecast; one issuer, one date.
 
 ## 2026-11-10 — All-modules live run tdg-all-001 and its corrections (branch `claude/all-modules-live-fixes`)
 

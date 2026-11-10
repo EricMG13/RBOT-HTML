@@ -639,17 +639,20 @@ const pick = (attr, value) => {
   document.querySelector(`[${attr}][value="${value}"]`).checked = true;
   document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
 };
-const forecast = (pathway, attr, value) => {
-  pick('data-k="pathway"', pathway);
-  pick(attr, value);  // The checklist is drawn for the pathway first.
-  return Object.fromEntries(readiness(build()).mods.map(m => [m.id, m.status]));
-};
+const forecast = () => Object.fromEntries(readiness(build()).mods.map(m => [m.id, m]));
+pick('data-k="pathway"', 'distressed_restructuring');
+const peers = forecast();
+const asked = [...document.querySelectorAll('[data-chk]')].map(c => c.dataset.chk);
+pick('data-k="pathway"', 'earnings_update');
+pick('data-k="management_bridge"', 'no');  // The checklist is drawn for the pathway first.
 const out = document.createElement('pre');
 out.id = 'probe';
 out.textContent = JSON.stringify({
-  nopeers: forecast('distressed_restructuring', 'data-c="peerfiles"', 'no'),
-  peers: forecast('distressed_restructuring', 'data-c="peerfiles"', 'yes'),
-  nobridge: forecast('earnings_update', 'data-k="management_bridge"', 'no'),
+  source: build().valuation.peer_source,
+  asked,
+  research: peers['CP-DR'],
+  benchmark: peers['CP-1C'].status,
+  nobridge: forecast()['CP-1D'].status,
 });
 document.body.append(out);
 })();
@@ -657,21 +660,24 @@ document.body.append(out);
 </body>"""
 
 
-def test_the_forecast_for_missing_sources_is_what_the_tdg_run_returned(tmp_path):
-    # Live run tdg-all-001 (2026-11-10, TDG as of 2024-09-30; VERIFICATION.md): with no peers'
-    # filings in the folder the research module and the peer benchmark came back Blocked, and with
-    # no management bridge Earnings quality came back Restricted. The form had said Ready, Gap and
-    # Gap. Only modules whose source reads were not refused in that run are held to it here.
+def test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run(tmp_path):
+    # Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they
+    # specifically want to in the context file." So the form never asks for peers' filings, and the
+    # research module's block in live run tdg-all-001 (no web search in this transport) is a note,
+    # not the analyst's to fix. That run's Earnings quality came back Restricted with no bridge.
     page = tmp_path / "sources.html"
     text = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
     page.write_text(text.replace("</body>", SOURCES_PROBE, 1), encoding="utf-8")
     dom, console = visit(page)
     assert console == []
     probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    nopeers, peers = probe["nopeers"], probe["peers"]
-    assert (nopeers["CP-DR"], nopeers["CP-1C"]) == ("will_refuse", "will_refuse")
-    assert (peers["CP-DR"], peers["CP-1C"]) == ("ready", "ready")  # The peers' filings answer it.
-    assert probe["nobridge"]["CP-1D"] == "limited"
+    assert probe["source"] == "cp_dr_public"  # The research module finds the peers by default ...
+    assert probe["asked"] and not any("peer" in item for item in probe["asked"])  # ... unasked.
+    research = probe["research"]
+    assert research["status"] == "information" and len(research["items"]) == 1
+    assert "web search" in research["items"][0]["reason"]
+    assert probe["benchmark"] == "ready"
+    assert probe["nobridge"] == "limited"
 
 
 def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
