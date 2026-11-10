@@ -580,3 +580,16 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 .map-state{stroke:var(--navy);stroke-width:2;fill:transparent}.map-state.shape-established{fill:var(--navy)}.map-state.shape-unsummarised{stroke-dasharray:2 2}.map-state.shape-none{stroke:var(--muted);stroke-dasharray:3 2}
 .timeline-table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:12px;font-size:var(--fs-compact)}.timeline-table caption{text-align:left;font-weight:600;padding-bottom:6px}
 .timeline-table th,.timeline-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
+/* Package 7: the run/file context bar, the chart index and the report manifest. Existing tokens only. */
+.context-bar{position:relative;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 22px;padding:4px 18px;background:var(--gray-25);border-bottom:1px solid var(--border-secondary);font-size:var(--fs-label);color:var(--text-secondary)}
+.context-bar[hidden]{display:none}
+.context-run{margin:0;min-width:0;max-width:100%;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;overflow-wrap:anywhere}.context-run>*{min-width:0}.context-revision{margin:0;min-width:0;overflow-wrap:anywhere}.context-run strong{color:var(--text-primary)}
+.context-pop{min-width:0;max-width:100%}.context-pop>summary{display:flex;align-items:center;min-height:28px;cursor:pointer;font-weight:600;color:var(--blue-700)}.context-pop>summary:focus-visible{outline:none;box-shadow:var(--ring)}
+.context-list{position:absolute;z-index:4;left:18px;right:18px;top:100%;box-sizing:border-box;max-height:50vh;overflow:auto;overflow-wrap:anywhere;padding:8px 14px;background:var(--gray-50);border:1px solid var(--border-secondary);border-radius:var(--radius-card);box-shadow:var(--shadow-sm)}
+.context-list ul{margin:0;padding:0;list-style:none}.context-list li{padding:3px 0;overflow-wrap:anywhere}.context-list a{color:var(--blue-700)}.context-role h3{margin:8px 0 2px;font-size:var(--fs-label);color:var(--text-primary)}
+.context-none{color:var(--text-tertiary)}
+@media(max-width:720px){.context-bar{padding:4px 15px}.context-list{position:static}}
+.index-table{font-size:var(--fs-label)}.index-table th,.index-table td{vertical-align:top;font-family:'Red Hat Text',sans-serif}.index-table .index-limit{min-width:220px;overflow-wrap:anywhere}
+.chart-index .table-scroll{overflow-x:auto}
+.manifest-fold{flex-shrink:0;max-height:38dvh;overflow:auto;padding:7px 16px;border-bottom:1px solid var(--rule);font-size:var(--fs-compact)}.manifest-fold summary{cursor:pointer;font-weight:600}
+.report-manifest{padding:4px 0}.report-manifest table{margin:8px 0}.report-manifest .hash{font-family:'Red Hat Mono',monospace}
