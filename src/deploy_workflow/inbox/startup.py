@@ -6,6 +6,7 @@ import logging
 import os
 import socket
 import sys
+from decimal import Decimal
 from pathlib import Path
 from typing import IO
 
@@ -34,6 +35,8 @@ class StartupRefused(ValueError):
 
 
 PACKAGE_LOGGER = "deploy_workflow.inbox"
+# USD per run the standing ruling allows (docs/rulings/2026-11-09-inbox-automation.md; AGENTS.md).
+RULED_RUN_CAP = Decimal(20)
 
 
 class _RootHandler(logging.FileHandler):
@@ -71,7 +74,12 @@ def close_log(layout: Layout) -> None:
             handler.close()
 
 
-def check_launchable(config_id: str, ruling: Path) -> None:
+def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
+    if cap > RULED_RUN_CAP:
+        raise StartupRefused(
+            f"cap {cap} is above USD {RULED_RUN_CAP} per run, the limit of the standing ruling "
+            "docs/rulings/2026-11-09-inbox-automation.md"
+        )
     config = CONFIGS.get(config_id)
     if config is None:
         raise StartupRefused(f"unknown config {config_id!r}")

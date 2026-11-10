@@ -87,7 +87,7 @@ class Watcher:
     ) -> None:
         self.settings, self.clock, self.now = settings, clock, now
         self.layout = drops.ensure_layout(settings.root)
-        startup.check_launchable(settings.config, settings.ruling)
+        startup.check_launchable(settings.config, settings.ruling, settings.cap)
         self._lock: IO[str] | None = startup.take_lock(self.layout)
         self._logger = startup.open_log(self.layout, __name__)  # only the lock holder logs
         self._records = {r.id: r for r in runs.load_all(self.layout)}
@@ -98,6 +98,7 @@ class Watcher:
         self._rebuild_error = ""
         self._logged_rebuild_error = ""  # the last rebuild error written to the log
         self._stopped: dict[str, str] = {}  # run ID -> why the watcher stopped its process
+        self._kept_activity: dict[str, tuple[runs.Record, dict[str, Any]]] = {}
         self._limit_held = ""
         startup.write_pages(self.layout)
         self._recover()
@@ -206,6 +207,7 @@ class Watcher:
                 list(self._records.values()),
                 cap=self.settings.cap,
                 now=self.now(),
+                kept=self._kept_activity,
                 held="; ".join(
                     t
                     for t in (self._rebuild_error, self._limit_held, *self._unmovable_notes())
