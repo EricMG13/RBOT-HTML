@@ -188,7 +188,39 @@ YIELD_HEAD = (
     "| Instrument | Maturity date | Yield | Spread | Quote date | Source class | Reporting unit "
     "| Basis and limitation |"
 )
+RECOVERY_HEAD = (
+    "| Class | Scenario | Claim | Recovery | Recovery % | Reporting unit | Basis and limitation |"
+)
+ALLOCATION_HEAD = "| Step | Amount | Reporting unit | Basis and limitation |"
+ALLOCATION_ONE = "Chart data: value allocation \u2014 scenario 1"
+ALLOCATION_TWO = "Chart data: value allocation \u2014 scenario 2"
 OWNER_TABLES = {
+    "CP-4C": {
+        "Chart data: recovery by class": synthetic_table(
+            RECOVERY_HEAD,
+            "| Senior secured | Base | 1,200 | 1,080 | 90 | US$m | Synthetic. |",
+            "| Senior secured | Downside | 1,200 | 720 | 60 | US$m | Synthetic. |",
+            "| Unsecured | Base | 800 | 120 | 15 | US$m | Synthetic. |",
+            "| Unsecured | Downside | 800 | Not supplied: no downside value "
+            "| Not supplied: no downside value | US$m | Synthetic. |",
+        ),
+        ALLOCATION_ONE: synthetic_table(
+            ALLOCATION_HEAD,
+            "| Enterprise value | 2,000 | US$m | Synthetic base case. |",
+            "| Restructuring costs | -100 | US$m | Synthetic. Available value 1,900. |",
+            "| Senior secured distribution | -1,080 | US$m | Synthetic. |",
+            "| Unsecured distribution | -120 | US$m | Synthetic. |",
+            "| Value not distributed | 700 | US$m | Synthetic. |",
+        ),
+        ALLOCATION_TWO: synthetic_table(
+            ALLOCATION_HEAD,
+            "| Enterprise value | 1,500 | US$m | Synthetic downside case. |",
+            "| Restructuring costs | -100 | US$m | Synthetic. Available value 1,400. |",
+            "| Senior secured distribution | -720 | US$m | Synthetic. |",
+            "| Unsecured distribution | -80 | US$m | Synthetic. |",
+            "| Value not distributed | 600 | US$m | Synthetic. |",
+        ),
+    },
     "CP-1B": {
         "Chart data: prior and current results": synthetic_table(
             PAIR_HEAD,
@@ -263,6 +295,7 @@ OWNER_TABLES = {
     },
 }
 OWNER_PATHWAY = {
+    "CP-4C": "distressed_restructuring",
     "CP-2H": "distressed_restructuring",
     "CP-6": "portfolio_decision",
     "CP-1B": "earnings_update",
@@ -270,6 +303,7 @@ OWNER_PATHWAY = {
     "CP-3D": "relative_value",
 }
 OWNER_HEADERS = {
+    "CP-4C": RECOVERY_HEAD,
     "CP-1B": PAIR_HEAD,
     "CP-1C": PEER_HEAD,
     "CP-3D": YIELD_HEAD,
@@ -2967,3 +3001,97 @@ def test_a_stated_gap_is_accepted_for_a_maturity_date_and_for_a_peer_bound(
     prepared, task, context = good_task(tmp_path, module)
     raw = answer(context, list(prepared.plan.layout.routes)).replace(old, new, 1)
     assert new in raw and _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+# ---- Package 4 (2026-11-10): recovery by class and the value allocation waterfalls. Synthetic.
+RECOVERY = "Chart data: recovery by class"
+SCENARIO_THREE = "Chart data: value allocation \u2014 scenario 3"
+
+
+def test_each_recovery_table_is_asked_of_cp_4c_and_only_supplied_scenarios_are(tmp_path):
+    text = instruction_text(tmp_path, "CP-4C")
+    for heading in (RECOVERY, ALLOCATION_ONE, ALLOCATION_TWO, SCENARIO_THREE):
+        assert f"`### {heading}`" in text
+    assert text.count("only if the handoff supplies") == 2  # Scenarios 2 and 3, not 1.
+
+
+@pytest.mark.parametrize(
+    "phrases",
+    [
+        (
+            "never worked out here",
+            "Recovery %",
+            "only as the method caps it",
+            "entity and collateral",
+        ),
+        (
+            "not a complete multi-entity waterfall",
+            "do not invent an absent downside or stress case",
+        ),
+        ("Scenario identity", "first row is the enterprise value", "no legal pool order"),
+        ("last row is the value not distributed", "Available value", "negative change"),
+    ],
+)
+def test_the_recovery_tables_carry_their_catalogue_guard(tmp_path, phrases):
+    text = instruction_text(tmp_path, "CP-4C")
+    for phrase in phrases:
+        assert phrase in text, phrase
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "complaint"),
+    [
+        ("| 90 |", "| 90% |", "90%"),
+        ("| 1,200 | 1,080 |", "| 1.2bn | 1,080 |", "1.2bn"),
+        ("| Class | Scenario |", "| Tranche | Scenario |", "Class"),
+        ("| Senior secured | Base |", "| Senior secured |  |", "Scenario"),
+        ("| 120 | 15 | US$m |", "| 120 | 15 | % |", "one Reporting unit"),
+        ("| -1,080 |", "| -1,070 |", "does not equal"),
+        ("| Value not distributed | 700 |", "| Value not distributed | 0 |", "does not equal"),
+        (
+            "| Senior secured distribution | -1,080 | US$m | Synthetic. |\n",
+            "",
+            "does not equal",
+        ),
+        ("| Enterprise value | 2,000 |", "| Enterprise value | 2bn |", "2bn"),
+        ("| Step | Amount |", "| Item | Amount |", "Step"),
+    ],
+)
+def test_checker_sends_back_each_malformed_recovery_table(tmp_path, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, "CP-4C")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def allocation_spec(scenario: int):
+    return next(
+        t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading.endswith(f"scenario {scenario}")
+    )
+
+
+def test_an_unsupplied_scenario_is_not_required_but_the_first_is():
+    absent = "### Findings\n\nNo table."
+    assert cpos_launch.chart_issues(absent, allocation_spec(2)) == ()
+    assert cpos_launch.chart_issues(absent, allocation_spec(3)) == ()
+    assert cpos_launch.chart_issues(absent, allocation_spec(1)) != ()
+
+
+def test_a_scenario_table_that_is_present_is_checked_even_when_optional():
+    text = f"### {ALLOCATION_TWO}\n\n" + synthetic_table(
+        ALLOCATION_HEAD, "| Enterprise value | 1 | US$m | S. |"
+    )
+    assert any(
+        "opening and a closing" in i for i in cpos_launch.chart_issues(text, allocation_spec(2))
+    )
+
+
+def test_a_scenario_with_every_amount_not_supplied_is_accepted():
+    gap = "Not supplied: no valuation row"
+    text = f"### {ALLOCATION_ONE}\n\n" + synthetic_table(
+        ALLOCATION_HEAD,
+        f"| Enterprise value | {gap} | US$m | S. |",
+        f"| Value not distributed | {gap} | US$m | S. |",
+    )
+    assert cpos_launch.chart_issues(text, allocation_spec(1)) == ()

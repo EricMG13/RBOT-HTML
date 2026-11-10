@@ -9,7 +9,7 @@
   out.textContent = JSON.stringify({
     segments: count('.stack-seg'), bulletRows: count('.bullet-row'), limitRows: count('.limit-row'),
     markers: count('.bullet-row .marker'), ticks: count('.bullet-row .tick, .limit-row .tick'),
-    dumbbells: count('.dumbbell-dot'), bands: count('.range-band'), scatterDots: count('.scatter-dot'),
+    dumbbells: count('.dumbbell-dot'), bands: count('.range-band'), scatterDots: count('.scatter-dot'), recoveryGroups: count('.recovery-group'), recoveryBars: count('.recovery-group .col i'),
     forms: count('details.chart-table'), formsClosed: story ? [...story.querySelectorAll('details.chart-table')].every(d => !d.open) : false,
     fits: de.scrollWidth <= de.clientWidth && content.scrollWidth <= content.clientWidth,
   });

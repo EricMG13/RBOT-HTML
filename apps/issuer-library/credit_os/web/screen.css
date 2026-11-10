@@ -545,3 +545,6 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 .range-track .marker{position:absolute;top:4px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--blue)}
 .range-key{background:var(--selection);box-shadow:inset 0 0 0 1px var(--navy)}
 .scatter-dot{fill:var(--blue)}
+.column-chart .recovery-group{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:0;padding:0 4px 10px;text-align:center}
+.recovery-group .chart-label small{display:block;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);overflow-wrap:anywhere}
+.recovery-group a.col{color:inherit;text-decoration:none}.recovery-group a.col:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
