@@ -321,6 +321,50 @@ for _module, (_lane, _) in EVENT_LANES.items():
     OWNER_TABLES.setdefault(_module, {})[f"Events: {_lane}"] = synthetic_table(
         EVENT_HEAD, *EVENT_ROWS
     )
+# Package 6 (2026-11-10): the node/edge maps. Synthetic rows; vocabularies are the owner's ruling.
+EDGE_HEAD = "| From | Relationship | Edge type | To | Evidence |"
+FACT_TYPES = ("Documentary Fact", "Management Language", "Analyst Interpretation")
+MAPS = {  # heading -> (owner, edge types, phrases of its catalogue guard the instructions carry)
+    "Map: ownership and control": (
+        "CP-1A",
+        ("Ownership", "Legal control", "Guarantee", "Other stated"),
+        ("Undisclosed percentages stay unknown", "No inferred sponsor willingness"),
+    ),
+    "Map: operating model to credit": (
+        "CP-1A",
+        (*FACT_TYPES, "Insufficient Information"),
+        ("No weighted cash-flow arrows without amounts",),
+    ),
+    "Map: credit-risk transmission": (
+        "CP-2",
+        (*FACT_TYPES, "Insufficient Information"),
+        ("Only stated causal links", "likelihood or impact coordinates"),
+    ),
+    "Map: stress scenario": (
+        "CP-2A",
+        ("Assumption", "Test outcome", "Explanation"),
+        ("not probabilities", "No forecast date from a static stress"),
+    ),
+    "Map: legal entities": (
+        "CP-4",
+        ("Ownership", "Guarantee", "Security", "Structural claim"),
+        ("narrow registers alone do not establish a complete", "applicable document"),
+    ),
+    "Map: intercreditor": (
+        "CP-4",
+        ("Payment rank", "Security rank", "Enforcement control", "Standstill", "Release"),
+        ("narrow registers alone do not establish a complete", "no numerical recovery"),
+    ),
+    "Map: support and contradiction": (
+        "CP-5",
+        ("Supports", "Contradicts", "Unresolved"),
+        ("edge count",),
+    ),
+}
+for _heading, (_module, _types, _) in MAPS.items():
+    OWNER_TABLES.setdefault(_module, {})[_heading] = synthetic_table(
+        EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
+    )
 OWNER_PATHWAY = {
     "CP-3": "portfolio_decision",
     "CP-DR": "relative_value",
@@ -3279,3 +3323,67 @@ def test_the_event_rules_say_record_once_and_the_status_kinds():
     assert "Record each event once, in the lane of the module that owns it" in text
     assert "another module refers to it in Credit relevance" in text
     assert "`Historical`, `Scheduled` or `Scenario`" in text
+
+
+# ---- Package 6 (2026-11-10): the node/edge maps. Every value is synthetic.
+def map_spec(heading: str):
+    module = MAPS[heading][0]
+    return next(t for t in cpos_launch.OWNER_TABLES[module] if t.heading == heading)
+
+
+def map_issues(heading: str, *rows: str) -> tuple[str, ...]:
+    text = f"### {heading}\n\n" + synthetic_table(EDGE_HEAD, *rows)
+    return cpos_launch.chart_issues(text, map_spec(heading))
+
+
+@pytest.mark.parametrize("heading", sorted(MAPS))
+def test_every_map_owner_is_asked_for_its_edge_table_with_its_vocabulary_and_guard(heading):
+    _, types, guards = MAPS[heading]
+    text = cpos_launch._selector(map_spec(heading))
+    assert f"`### {heading}`" in text and f"`{EDGE_HEAD}`" in text
+    assert all(t in text for t in types) and all(g in text for g in guards)
+    assert "Not supplied: <reason>" in text and "Basis and limitation" not in text
+
+
+@pytest.mark.parametrize("heading", sorted(MAPS))
+def test_a_good_edge_table_is_accepted_and_an_edge_type_outside_the_vocabulary_is_sent_back(
+    heading,
+):
+    _, types, _ = MAPS[heading]
+    good = [f"| A | rel | {t} | B | Src |" for t in types]
+    assert map_issues(heading, *good) == ()
+    (issue,) = map_issues(heading, "| A | rel | Weighted | B | Src |")
+    assert "Edge type `Weighted` must be one of" in issue
+    assert any("Edge type" in i for i in map_issues(heading, "| A | rel | ownership | B | Src |"))
+
+
+def test_an_edge_table_of_only_not_supplied_is_valid_and_a_mixed_or_blank_one_is_not():
+    heading = "Map: stress scenario"
+    gap = "Not supplied: no scenario stated"
+    assert map_issues(heading, f"| {gap} |" + f" {gap} |" * 4) == ()
+    assert map_issues(heading, f"| {gap} |" + f" {gap} |" * 4, "| A | r | Assumption | B | S |")
+    assert any("From is blank" in i for i in map_issues(heading, "| | r | Assumption | B | S |"))
+    assert any(
+        "Evidence is blank" in i for i in map_issues(heading, "| A | r | Assumption | B | |")
+    )
+    assert any("at least one row" in i for i in map_issues(heading))
+
+
+def test_an_edge_table_needs_its_exact_header_and_a_misheaded_one_names_the_heading():
+    heading = "Map: legal entities"
+    wrong = f"### {heading}\n\n" + synthetic_table(EDGE_HEAD.replace("From", "Source"), "")
+    assert any(
+        "needs the table headed" in i for i in cpos_launch.chart_issues(wrong, map_spec(heading))
+    )
+    missing = cpos_launch.chart_issues("x", map_spec(heading))
+    assert any(f"Add `### {heading}`" in i for i in missing)
+    near = "### map: Legal entities\n\n" + synthetic_table(
+        EDGE_HEAD, "| A | r | Ownership | B | S |"
+    )
+    (issue,) = cpos_launch.chart_issues(near, map_spec(heading))
+    assert f"`### {heading}`" in issue
+
+
+def test_the_cp4_map_rules_say_the_narrow_registers_alone_do_not_make_a_graph():
+    for heading in ("Map: legal entities", "Map: intercreditor"):
+        assert "narrow registers alone do not establish" in map_spec(heading).rules

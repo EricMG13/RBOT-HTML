@@ -432,6 +432,12 @@ class OwnerTable:
     series: str = ""  # A column whose distinct words are the figure's series, at most MAX_SERIES.
     optional: bool = False  # The module writes the table only if the handoff supplies its case.
     events: bool = False  # A dated-event table: no unit or basis columns; dates by precision.
+    edges: bool = False  # A node/edge map table: no unit or basis columns; an edge type's words.
+
+    @property
+    def bare(self) -> bool:
+        """A table with no Reporting unit or Basis and limitation columns."""
+        return self.events or self.edges
 
 
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
@@ -894,6 +900,97 @@ for _module, (_lane, _guard) in EVENT_LANES.items():
     )
 
 
+EDGE_COLUMNS = ("From", "Relationship", "Edge type", "To", "Evidence")
+EDGE_RULES = (
+    "One row per edge the handoff states, From and To each one named node: the same name for the "
+    "same node in every row. Edge type is exactly one of the words listed; Relationship and "
+    "Evidence are stated in your own words from the source, never blank. No weights, "
+    "probabilities, coordinates or likelihoods; no edge the handoff does not state. If it "
+    "states none, write `Not supplied: <reason>` in every cell of one row. "
+)
+FACTS = ("Documentary Fact", "Management Language", "Analyst Interpretation")
+NARROW = (
+    "The current narrow registers alone do not establish a complete graph: draw an edge only "
+    "from the broader handoff, with the applicable document and jurisdiction in Evidence. "
+)
+# Heading, owner, edge types, the catalogue guard (docs/visualisations/catalogue.csv).
+MAPS: tuple[tuple[str, str, tuple[str, ...], str], ...] = (
+    (
+        "Map: ownership and control",
+        "CP-1A",
+        ("Ownership", "Legal control", "Guarantee", "Other stated"),
+        (
+            "Undisclosed percentages stay unknown. Ownership, legal control and guarantees use "
+            "different labelled edges. No inferred sponsor willingness."
+        ),
+    ),
+    (
+        "Map: operating model to credit",
+        "CP-1A",
+        (*FACTS, "Insufficient Information"),
+        (
+            "Evidence to mechanism to credit implication; every edge stated in the handoff. No "
+            "weighted cash-flow arrows without amounts."
+        ),
+    ),
+    (
+        "Map: credit-risk transmission",
+        "CP-2",
+        (*FACTS, "Insufficient Information"),
+        (
+            "Driver to mechanism to creditor outcome. Only stated causal links, in qualitative "
+            "categories. Do not invent likelihood or impact coordinates."
+        ),
+    ),
+    (
+        "Map: stress scenario",
+        "CP-2A",
+        ("Assumption", "Test outcome", "Explanation"),
+        (
+            "Branches describe computed conditions, not probabilities. No forecast date from a "
+            "static stress."
+        ),
+    ),
+    (
+        "Map: legal entities",
+        "CP-4",
+        ("Ownership", "Guarantee", "Security", "Structural claim"),
+        NARROW + "Require explicit edges, applicable document and jurisdiction.",
+    ),
+    (
+        "Map: intercreditor",
+        "CP-4",
+        ("Payment rank", "Security rank", "Enforcement control", "Standstill", "Release"),
+        NARROW + "Economic ranking and enforcement control are different edges; no numerical "
+        "recovery without CP-4C inputs.",
+    ),
+    (
+        "Map: support and contradiction",
+        "CP-5",
+        ("Supports", "Contradicts", "Unresolved"),
+        (
+            "Labelled edges for support, contradiction and unresolved between claim, source and "
+            "derived-fact identities. No automatic causal or confidence weight based on edge count."
+        ),
+    ),
+)
+for _heading, _module, _types, _guard in MAPS:
+    OWNER_TABLES[_module] = (
+        *OWNER_TABLES.get(_module, ()),
+        OwnerTable(
+            _module,
+            "MAP",
+            _heading,
+            (),
+            "",
+            rules=f"{EDGE_RULES}Edge type words: {', '.join(_types)}. {_guard}",
+            columns=EDGE_COLUMNS,
+            choices=(("Edge type", _types),),
+            edges=True,
+        ),
+    )
+
+
 def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
     if isinstance(table, OwnerTable):
         return table
@@ -910,7 +1007,7 @@ def _chart_header(table: MarkdownRoute | OwnerTable) -> list[str]:
     spec = _owner_table(table)
     first = "Step" if spec.steps else "Period"
     leading = list(spec.columns) or [first, *spec.value_columns]
-    if spec.events:
+    if spec.bare:
         return leading
     return [*leading, "Reporting unit", "Basis and limitation"]
 
@@ -1074,8 +1171,8 @@ def _row_table_issues(
     """A row table's rows against its fixed header, cell by cell, in the order stated."""
     issues = []
     ranks = []
-    if spec.events and rows and all(_stated_gap(c) for row in rows for c in row):
-        return []  # The module states it has no dated event: valid, and no lane is drawn.
+    if spec.bare and rows and all(_stated_gap(c) for row in rows for c in row):
+        return []  # The module states it has no dated event or edge: valid, and nothing is drawn.
     for row in rows:
         if len(row) != len(header):
             issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
@@ -1128,7 +1225,7 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
     spec = _owner_table(table)
     heading = f"### {spec.heading}"
     if heading not in text.splitlines():
-        near = _misheaded(text, spec.heading) if spec.optional or spec.events else ()
+        near = _misheaded(text, spec.heading) if spec.optional or spec.bare else ()
         if spec.optional or near:  # An optional case not supplied is not asked for, nor drawn.
             return near
         return (f"Add `{heading}` inside ## Findings, with its table.",)
@@ -1392,10 +1489,11 @@ BRIDGE_RULES = (
 def _selector(route: MarkdownRoute | OwnerTable) -> str:
     if isinstance(route, OwnerTable) or route.kind == "chart":
         spec = _owner_table(route)
-        if spec.events:
+        if spec.bare:
             return (
                 f"- `### {spec.heading}`: exactly one Markdown table headed "
-                f"`| {' | '.join(_chart_header(spec))} |`, one row per dated event. "
+                f"`| {' | '.join(_chart_header(spec))} |`, one row per "
+                f"{'edge' if spec.edges else 'dated event'}. "
                 f"Every cell is stated, never blank. {spec.rules}"
             )
         others = [n for n in spec.numbers if spec.in_unit and n not in spec.in_unit]

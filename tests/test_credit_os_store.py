@@ -775,3 +775,56 @@ def test_an_event_table_with_a_changed_header_is_named_not_drawn():
 )
 def test_an_event_without_a_status_kind_or_with_a_redundant_published_date_is_not_drawn(row):
     assert lane_fields(EVENT_ROWS[0], row)["events"] == []
+
+
+# ---- Package 6 (2026-11-10): the node/edge maps. Every value is synthetic.
+EDGE_HEADER = "| From | Relationship | Edge type | To | Evidence |"
+
+
+def map_fields(*rows: str, name: str = "stress scenario") -> dict:
+    return synthetic_charts(chart_section(f"Map: {name}", EDGE_HEADER, *rows))
+
+
+def test_an_edge_table_is_a_map_named_by_its_heading_and_is_not_a_chart():
+    fields = map_fields(
+        "| A | rel | Assumption | B | p.1 |", "| B | rel | Test outcome | C | p.2 |"
+    )
+    (drawn,) = fields["maps"]
+    assert fields["issue"] is None and fields["charts"] == []
+    assert drawn["name"] == "stress scenario" and drawn["gap"] is None
+    assert isinstance(drawn["table"], int)
+
+
+def test_an_edge_table_of_only_not_supplied_is_a_map_with_its_reason():
+    gap = "Not supplied: no scenario stated"
+    fields = map_fields(f"| {gap} |" + f" {gap} |" * 4)
+    assert fields["issue"] is None and fields["maps"][0]["gap"] == "no scenario stated"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| A | rel | Weighted | B | p.1 |",
+        "| A | rel | assumption | B | p.1 |",
+        "| | rel | Assumption | B | p.1 |",
+        "| A | rel | Assumption | B | |",
+        "| A | Not supplied: none | Assumption | B | p.1 |",
+    ],
+)
+def test_an_edge_table_out_of_shape_is_named_not_drawn(row):
+    fields = map_fields("| A | rel | Assumption | B | p.1 |", row)
+    assert (
+        fields["maps"] == [] and "Map: stress scenario is not in its fixed table" in fields["issue"]
+    )
+
+
+def test_an_edge_type_belongs_to_its_own_map_and_an_unknown_map_is_not_drawn():
+    assert map_fields("| A | r | Ownership | B | p |", name="stress scenario")["maps"] == []
+    assert map_fields("| A | r | Ownership | B | p |", name="legal entities")["maps"]
+    assert map_fields("| A | r | Ownership | B | p |", name="unknown")["maps"] == []
+
+
+def test_the_store_vocabulary_is_the_launchers():
+    from deploy_workflow.owners.cpos_launch import MAPS
+
+    assert {f"Map: {k}": v for k, v in store.MAP_EDGES.items()} == {h: t for h, _, t, _ in MAPS}

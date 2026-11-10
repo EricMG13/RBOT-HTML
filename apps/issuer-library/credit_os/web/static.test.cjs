@@ -733,7 +733,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace'];
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name])];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, calendarSections};`)(...args);
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, calendarSections, mapLayers, mapsView, mapsPlaced, statusMapView};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1927,4 +1927,95 @@ test('calendar lanes: a module filter draws only that module lane, and the Sourc
   assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
   const text = read('views.js');
   assert.ok(/if\(module==='W-Evidence'\)return[^\n]*eventLanesView\(context,\{module:'CP-0',compact:true\}\)/.test(text));
+});
+
+// ---- Package 6 views (2026-11-10): node/edge maps and the run status map. Every value is synthetic.
+const MAP_HEAD = ['From', 'Relationship', 'Edge type', 'To', 'Evidence'];
+const edgeRow = (line, from, link, type, to) => [line, from, link, type, to, 'Synthetic p.1'];
+const LONG = 'Synthetic holding company with a deliberately very long registered name Limited';
+const withMaps = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(sec('Map: credit-risk transmission', 3, 400, 'consumed', [table(402, MAP_HEAD, [
+    edgeRow(403, 'Synthetic driver', 'drives', 'Documentary Fact', 'Synthetic mechanism'),
+    edgeRow(404, 'Synthetic mechanism', 'squeezes', 'Management Language', 'Synthetic outcome'),
+    edgeRow(405, 'Synthetic driver', 'also hits', 'Analyst Interpretation', 'Synthetic outcome'),
+    edgeRow(406, 'Synthetic outcome', 'feeds back', 'Insufficient Information', 'Synthetic driver'),
+    edgeRow(407, LONG, 'owns', 'Documentary Fact', 'Synthetic driver'),
+  ])]));
+  cp1.sections.push(sec('Map: stress scenario', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, ...Array(5).fill('Not supplied: no scenario stated')]])]));
+  cp1.maps = [{ name: 'credit-risk transmission', table: 402, gap: null }, { name: 'stress scenario', table: 412, gap: 'no scenario stated' }];
+  return d;
+};
+
+test('maps: a layer is the longest path from a node with no incoming edge, and a cycle is cut at its last row', () => {
+  const page = runPage();
+  const ab = (from, to) => ({ from, to });
+  const diamond = page.mapLayers([ab('A', 'B'), ab('B', 'C'), ab('A', 'C')]);
+  assert.deepEqual([...diamond.layer], [['A', 0], ['B', 1], ['C', 2]]);
+  const loop = page.mapLayers([ab('A', 'B'), ab('B', 'C'), ab('C', 'A'), ab('C', 'C')]);
+  assert.deepEqual(loop.cut, [false, false, true, true]);
+  assert.deepEqual([...loop.layer], [['A', 0], ['B', 1], ['C', 2]]);
+  assert.deepEqual(page.mapLayers([ab('B', 'A'), ab('A', 'B')]).cut, [false, true], 'the first stated row is kept');
+});
+
+test('maps: one SVG, a box per node, a word and a line style per edge type, and the edge table beneath with the full text', () => {
+  const html = runPage(withMaps).mapsView(outId('CP-1'), 'h3');
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0];
+  assert.equal(countOf(svg, /<g class="map-node"/g), 4, 'driver, mechanism, outcome and the long holding company: the loop adds no node');
+  for (const word of ['Documentary Fact', 'Management Language', 'Analyst Interpretation', 'Insufficient Information']) assert.ok(strip(svg).includes(word), word);
+  const dashes = [...svg.matchAll(/<path class="map-edge[^"]*"[^>]*>/g)].map(m => /stroke-dasharray="([^"]*)"/.exec(m[0])?.[1] ?? '');
+  assert.equal(dashes.length, 5);
+  assert.ok(new Set(dashes).size >= 4, 'each edge type has its own line style');
+  assert.ok(!/stroke-width|opacity|weight/.test(svg), 'no weight, thickness or probability is drawn');
+  assert.ok(!svg.replace(/<title>.*?<\/title>/g, '').includes(LONG) && svg.includes('…') && svg.includes(`<title>${LONG}</title>`), 'a long name is cut in the box and whole in its title');
+  const table = /<table class="map-table".*?<\/table>/s.exec(html)[0];
+  assert.ok(html.indexOf('<svg') < html.indexOf('<table class="map-table"'));
+  assert.deepEqual([...table.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), MAP_HEAD);
+  assert.equal(countOf(table, /<tr>/g), 6);
+  assert.ok(table.includes(LONG) && table.includes('feeds back'));
+  assert.ok(/<div class="map-scroll" role="region" aria-label="[^"]+" tabindex="0">/.test(html), 'the diagram scrolls inside its card and can be reached by keyboard');
+  assert.ok(!/CP-\d/.test(strip(html)));
+});
+
+test('maps: a map of only Not supplied draws no diagram and says why', () => {
+  const html = runPage(withMaps).mapsView(outId('CP-1'), 'h3');
+  const gap = html.slice(html.indexOf('Stress scenario'));
+  assert.ok(gap.includes('Not established for this run') && gap.includes('no scenario stated'));
+  assert.ok(!gap.includes('<svg') && !gap.includes('Not supplied'));
+});
+
+test('maps: placement is by the map, so credit-risk transmission reaches the Overview and no other map does', () => {
+  const page = runPage(withMaps);
+  const overview = page.runReport(RUN);
+  assert.ok(overview.includes('Credit-risk transmission') && !overview.includes('Stress scenario'));
+  assert.equal(page.mapsPlaced(RUN, { module: 'CP-1' }).includes('Stress scenario'), true);
+  assert.equal(page.mapsPlaced(RUN, { module: 'CP-5' }), '');
+  const text = read('views.js');
+  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*statusMapView\(context\)[^\n]*mapsPlaced\(context,\{module:'CP-5'\}\)/.test(text));
+  assert.ok(/if\(module==='CP-OS'\)return[^\n]*statusMapView\(context,\{timeline:true\}\)/.test(text));
+  assert.ok(/\['maps',reportMaps\(id\)\]/.test(text) && /anchor==='maps'\?'Maps'/.test(text), 'the owning module page draws its maps');
+});
+
+test('status map: each module by word and shape from its own record, in run order, with no time or score invented', () => {
+  const html = runPage().statusMapView(RUN);
+  const item = word => html.split('<li class="status-item').find(chunk => chunk.includes(word)) ?? '';
+  assert.ok(/state-shape shape-established/.test(item('Reaches a conclusion')));
+  assert.ok(/state-shape shape-open/.test(item('Not assessable')) && item('Not assessable').includes('Downside inputs are missing.'));
+  assert.ok(/state-shape shape-unsummarised/.test(item('No reader summary')));
+  assert.equal(countOf(html, /<li class="status-item/g), 4);
+  assert.ok(html.indexOf('Financial foundation') < html.indexOf('Downside') && html.indexOf('Downside') < html.indexOf('Committee decision'));
+  assert.ok(html.includes('No dependency or time record is held for this run'));
+  assert.ok(!/<time|\d{2}:\d{2}|score|%/.test(strip(html)) && !/CP-\d/.test(strip(html)));
+  assert.ok(!runPage().statusMapView(RUN, { timeline: true }).includes('<svg'));
+});
+
+test('maps: the new rules use only existing tokens, no amber or red', () => {
+  const css = read('screen.css').split('\n').filter(line => /\.map-|\.state-shape|\.status-/.test(line));
+  assert.ok(css.length >= 4, 'the new rules are found');
+  for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b/i.test(rule), rule);
+  assert.ok(css.some(rule => /\.map-edge/.test(rule)) && css.some(rule => /shape-open/.test(rule)));
+});
+
+test('status map: no run chosen draws nothing and does not throw', () => {
+  assert.equal(runPage().statusMapView(undefined, { timeline: true }), '');
 });
