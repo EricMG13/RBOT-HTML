@@ -19,7 +19,7 @@ Before this sweep, the watcher tests used stand-in launchers and a stubbed libra
 |---|---|---|
 | W1 | Screens copy run statuses, classification and rating scope from Python with no test tying them | fixed: `test_the_library_screens_value_lists_are_the_codes` (fails when a status is dropped from `views.js`) |
 | W3 | No committed journey across launcher → library → screens per pathway, or inbox → real launcher → library | fixed: the two journey tests above; `test_context_form.py` and `test_handoff_loop.py` added to the per-PR CI list |
-| W2 | `prepare(retained=)` and its resume helpers (`Accepted`, `_Now`, `_mismatch`, `_retained_prefix`, ~100 lines) have no production caller | decision: wire a `--resume-from <stopped run>` flag, or remove the path |
+| W2 | `prepare(retained=)` and its resume helpers (`Accepted`, `_Now`, `_mismatch`, `_retained_prefix`) have no production caller | removed on the owner's ruling ("Remove it"): 127 lines out of `cpos_launch.py`. Prepared run folders are byte-identical before and after for all six pathways. CP-OS's own replay of pinned answers stays, and its test now pins the answers in the manifest directly. |
 | F1 | Form output vs reader | not-a-defect |
 | W1b | `TERM_LABELS` in `views.js` (deal-term and quote figures) | open: values match `DealTerm`/`Quote` today; the builder of `run.facilities` was not traced, so no tie was written |
 

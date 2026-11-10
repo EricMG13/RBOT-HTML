@@ -28,14 +28,17 @@ and end to end wiring." Contract and report: `docs/sweeps/2026-11-10-wiring/`. R
 - Performance, median of 5 after one warm-up, noise = max − min. `prepare()` over all 20 modules:
   23.8 ms (noise 18.0). Library rebuild of 10 run folders: 372.9 ms (noise 37.0), with no single
   hot spot. Nothing above the floor; page render unmeasured.
-- Owner decision: `prepare(retained=)` and its resume helpers (~100 lines) have no production
-  caller. Wire a `--resume-from` flag, or remove them.
+- `prepare(retained=)` and its resume helpers had no production caller. Owner: "Remove it". 127
+  lines are gone from `cpos_launch.py`. The prepared run folder (manifest and instructions) hashes
+  the same before and after for all six pathways. CP-OS's replay of pinned answers stays, and its
+  test now pins them in the manifest directly. Reverting the producers pin check still fails it.
 - Gates on the final tree, all exit 0:
   - quality gate: 0 findings.
   - `node --test` static and calendar.
-  - CI pytest list plus the two added files: 1531 passed, 13 deselected (7 known failures, 6
-    browser).
-  - Browser (`test_library_page_browser.py`, `test_cpos_launch.py`): 29 passed.
+  - CI pytest list plus the two added files: 1529 passed, 13 deselected (7 known failures, 6
+    browser), after the removal took out two tests.
+  - Browser (`test_library_page_browser.py`, `test_cpos_launch.py`): 29 passed. After the
+    removal, `test_cpos_launch.py`'s 7 browser tests passed again.
   - Base logs: the same commands at `53a5632`, all exit 0.
 - Not verified:
   - a live run of the journeys;
