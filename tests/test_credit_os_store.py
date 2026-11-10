@@ -1,6 +1,7 @@
 """Credit OS's store reads a synthetic workspace built by tests/library_fixtures.py."""
 
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -318,6 +319,126 @@ def synthetic_charts(*chart_sections: str) -> dict:
     return store.reader_fields(store.sections_of(text))
 
 
+def test_every_owner_row_table_can_state_none_without_a_chart_or_problem():
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    gap = "Not supplied: no sourced quantity"
+    for specs in launcher.OWNER_TABLES.values():
+        for spec in specs:
+            if not spec.columns or spec.bare:
+                continue
+            headers = [*spec.columns, "Reporting unit", "Basis and limitation"]
+            cells = [gap] * len(spec.columns) + ["US$m", "Synthetic absence."]
+            text = chart_section(
+                spec.heading, "| " + " | ".join(headers) + " |", "| " + " | ".join(cells) + " |"
+            )
+            fields = synthetic_charts(text)
+            assert launcher.chart_issues(text, spec) == ()
+            assert fields["charts"] == [] and fields["issue"] is None, spec.heading
+            assert fields["chartGaps"][0]["gap"] == "no sourced quantity"
+            invalid = text.replace("Synthetic absence.", "")
+            assert launcher.chart_issues(invalid, spec)
+            assert synthetic_charts(invalid)["issue"], spec.heading
+
+
+@pytest.mark.parametrize(
+    "name,rows",
+    [
+        (
+            "debt stack",
+            [
+                ["Loan", "1", "Yes", "500", "2", "US$m", "S"],
+                ["Notes", "2", "No", "400", "3", "EURm", "S"],
+            ],
+        ),
+        (
+            "liquidity bridge",
+            [
+                ["Open", "100", "US$m", "S"],
+                ["Draw", "50", "EURm", "S"],
+                ["Close", "150", "US$m", "S"],
+            ],
+        ),
+        ("liquidity bridge", [["Open", "100", "EURm", "S"], ["Close", "100", "EURm", "S"]]),
+        ("peer range — multiples", [["Leverage", "4", "6", "5", "3", "5", "x", "S"]]),
+        (
+            "recovery by class",
+            [["Senior", f"S{n}", "100", "50", "50", "US$m", "S"] for n in range(4)],
+        ),
+        (
+            "recovery by class",
+            [
+                ["Senior", "Base", "100", "50", "50", "US$m", "S"],
+                ["Senior", "Base", "100", "20", "20", "US$m", "S"],
+            ],
+        ),
+        (
+            "yield against maturity",
+            [["Notes", "2020-01-01", "7.5", "450 bp", "2025-01-01", "Dealer quote", "%", "S"]],
+        ),
+        ("revenue and EBITDA", [["FY2024", "100", "20", "EURm", "S"]]),
+    ],
+)
+def test_the_store_refuses_the_launchers_invalid_chart_tables(name, rows):
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    spec = next(
+        t for ts in launcher.OWNER_TABLES.values() for t in ts if t.heading == f"Chart data: {name}"
+    )
+    text = chart_section(
+        spec.heading,
+        "| " + " | ".join(launcher._chart_header(spec)) + " |",
+        *("| " + " | ".join(row) + " |" for row in rows),
+    )
+    assert launcher.chart_issues(text, spec), name
+    fields = synthetic_charts(text)
+    assert not fields["charts"] and fields["issue"], name
+
+
+def test_the_calendar_draws_the_cp6_user_reminder_status():
+    fields = lane_fields("| 2026-01-15 | day | — | Review | User reminder | Analyst note | Due |")
+    assert fields["events"] and fields["issue"] is None
+
+
+def test_launcher_and_store_accept_every_independently_written_owner_fixture():
+    from test_cpos_launch import OWNER_TABLES as examples
+
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    specs = {s.heading: s for ts in launcher.OWNER_TABLES.values() for s in ts}
+    fixtures = {heading: body for tables in examples.values() for heading, body in tables.items()}
+    fixtures["Chart data: value allocation — scenario 3"] = (
+        f"{BRIDGE_HEADER}\n| --- | --- | --- | --- |\n"
+        "| Opening value | 400 | US$m | Synthetic third scenario. |\n"
+        "| Closing value | 400 | US$m | Synthetic third scenario. |\n"
+    )
+    assert fixtures.keys() == specs.keys()
+    for heading, body in fixtures.items():
+        text = f"### {heading}\n\n{body}\n"
+        assert launcher.chart_issues(text, specs[heading]) == (), heading
+        fields = synthetic_charts(text)
+        assert fields["issue"] is None, heading
+        assert len(fields["charts"] + fields["maps"] + fields["events"]) == 1, heading
+    assert store.EVENT_HEADERS == list(launcher.EVENT_COLUMNS)
+    assert store.EVENT_STATUS.pattern == launcher.EVENT_STATUS.pattern
+    assert store.DIRECTIONS == launcher.DIRECTIONS
+
+
+def test_a_period_gap_in_another_currency_does_not_relabel_the_numeric_values():
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    text = chart_section(
+        "Chart data: revenue and EBITDA",
+        "| Period | Revenue | Adjusted EBITDA | Reporting unit | Basis and limitation |",
+        "| FY2023 | Not supplied: reported in EURm | Not supplied: reported in EURm | EURm | S |",
+        "| FY2024 | 100 | 20 | US$m | S |",
+    )
+    spec = launcher.OWNER_TABLES["CP-1"][0]
+    assert launcher.chart_issues(text, spec) == ()
+    fields = synthetic_charts(text)
+    assert fields["issue"] is None and fields["charts"][0]["unit"] == "US$m"
+
+
 def chart_section(heading: str, header: str, *rows: str) -> str:
     cells = header.count("|") - 1
     body = "\n".join(rows)
@@ -408,3 +529,628 @@ def test_a_step_table_with_another_header_is_not_taken_as_an_unsupplied_bridge()
     gap = "| Step 0 | Not supplied: none | n | US$m | Synthetic. |"
     fields = synthetic_charts(chart_section("Chart data: liquidity bridge", header, gap))
     assert fields["charts"] == [] and fields["issue"]
+
+
+# ---- Package 2 (2026-11-10): the credit-structure tables. Every value is synthetic.
+STACK_HEADER = (
+    "| Facility | Ranking | Secured | Amount | Cumulative leverage | Reporting unit "
+    "| Basis and limitation |"
+)
+COVENANT_HEADER = (
+    "| Test | Threshold | Current | Headroom | Direction | Reporting unit | Basis and limitation |"
+)
+TRIGGER_HEADER = (
+    "| Agency | Trigger | Threshold | Current | Direction | Reporting unit | Basis and limitation |"
+)
+LIMITS_HEADER = (
+    "| Limit | Current exposure | Proposed exposure | Limit value | Reporting unit "
+    "| Basis and limitation |"
+)
+
+
+def stack(*rows: str) -> str:
+    return chart_section("Chart data: debt stack", STACK_HEADER, *rows)
+
+
+def test_a_debt_stack_is_a_stack_chart_with_its_amount_and_leverage_columns():
+    fields = synthetic_charts(
+        stack(
+            "| Term loan | 1 | Yes | 1,200 | 2.4 | US$m | Synthetic. |",
+            "| Notes | 2 | No | Not supplied: not stated | Not supplied: no balance | US$m | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None
+    assert chart["kind"] == "stack" and chart["title"] == "Debt stack" and chart["unit"] == "US$m"
+    assert (chart["label"], chart["rank"], chart["secured"]) == (0, 1, 2)
+    assert (chart["amount"], chart["leverage"]) == (3, 4)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        ("| A | senior | Yes | 100 | 1.0 | US$m | S. |",),
+        ("| A | 2 | Yes | 100 | 1.0 | US$m | S. |", "| B | 1 | Yes | 100 | 2.0 | US$m | S. |"),
+        ("| A | 1 | Yes | 1.2bn | 1.0 | US$m | S. |",),
+        ("| A | 1 | Yes | 100 | 1x | US$m | S. |",),
+    ],
+)
+def test_a_debt_stack_out_of_shape_is_named_not_drawn(rows):
+    fields = synthetic_charts(stack(*rows))
+    assert fields["charts"] == []
+    assert "Chart data: debt stack is not in its fixed table" in fields["issue"]
+
+
+def test_a_covenant_table_is_a_bullet_chart_whose_unit_is_shared_only_when_it_is():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: covenant headroom",
+            COVENANT_HEADER,
+            "| Net leverage | 5.0 | 4.2 | 0.8x | Passes at or below | x | S. |",
+            "| Liquidity | 100 | 150 | 50 | Passes at or above | US$m | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert chart["kind"] == "bullet" and chart["title"] == "Covenant headroom"
+    assert chart["unit"] == ""  # Rows state their own units; none is claimed for the figure.
+    assert (chart["label"], chart["threshold"], chart["current"]) == ([0], 1, 2)
+    assert (chart["headroom"], chart["direction"]) == (3, 4)
+
+
+def test_a_rating_trigger_table_is_the_same_bullet_chart_with_no_stated_headroom():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: rating triggers",
+            TRIGGER_HEADER,
+            "| Agency A | Net leverage review | 5.5 | 4.2 | Passes below | x | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert chart["kind"] == "bullet" and chart["unit"] == "x"
+    assert (chart["label"], chart["threshold"], chart["current"]) == ([0, 1], 2, 3)
+    assert chart["headroom"] is None and chart["direction"] == 4
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| T | 5.0x | 4.2 | 0.8x | Passes at or below | x | S. |",
+        "| T | 5.0 | 4.2 | 0.8x | Under | x | S. |",
+        "| T | 5.0 | 4.2 | 0.8x | Passes at or below |  | S. |",
+    ],
+)
+def test_a_covenant_row_out_of_shape_is_named_not_drawn(row):
+    fields = synthetic_charts(chart_section("Chart data: covenant headroom", COVENANT_HEADER, row))
+    assert fields["charts"] == []
+    assert "Chart data: covenant headroom is not in its fixed table" in fields["issue"]
+
+
+def test_a_portfolio_limit_table_is_a_limits_chart_and_a_gap_is_allowed():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: portfolio limits",
+            LIMITS_HEADER,
+            "| Single issuer | 3.0 | Not supplied: no proposal | 5.0 | % NAV | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None
+    assert chart["kind"] == "limits" and chart["unit"] == "% NAV"
+    assert (chart["label"], chart["current"], chart["proposed"], chart["limit"]) == (0, 1, 2, 3)
+
+
+# ---- Package 3 (2026-11-10): the comparison tables. Every value is synthetic.
+PAIR_HEADER = (
+    "| Measure | Prior period | Prior | Current period | Current | Reporting unit "
+    "| Basis and limitation |"
+)
+PEER_HEADER = (
+    "| Metric | Issuer | Peer low | Peer median | Peer high | Peer count | Reporting unit "
+    "| Basis and limitation |"
+)
+YIELD_HEADER = (
+    "| Instrument | Maturity date | Yield | Spread | Quote date | Source class | Reporting unit "
+    "| Basis and limitation |"
+)
+RESULTS = "Chart data: prior and current results"
+KPIS = "Chart data: margin and KPI changes"
+RESULT_ROWS = (
+    "| Revenue | FY2023 | 2,100 | FY2024 | 2,250 | US$m | S. |",
+    "| EBITDA | FY2023 | Not supplied: not stated | FY2024 | 410 | US$m | S. |",
+)
+
+
+def test_prior_and_current_results_are_grouped_columns_over_one_unit():
+    (chart,) = synthetic_charts(chart_section(RESULTS, PAIR_HEADER, *RESULT_ROWS))["charts"]
+    assert chart["kind"] == "grouped" and chart["title"] == "Prior and current results"
+    assert (chart["columns"], chart["sub"], chart["unit"]) == ([2, 4], [1, 3], "US$m")
+
+
+def test_prior_and_current_results_in_two_units_are_named_not_drawn():
+    rows = (RESULT_ROWS[0], RESULT_ROWS[1].replace("US$m", "%"))
+    fields = synthetic_charts(chart_section(RESULTS, PAIR_HEADER, *rows))
+    assert fields["charts"] == [] and f"{RESULTS} is not in its fixed table" in fields["issue"]
+
+
+def test_margin_and_kpi_changes_are_a_dumbbell_whose_rows_state_their_own_unit():
+    rows = ("| EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 | % | S. |", RESULT_ROWS[0])
+    (chart,) = synthetic_charts(chart_section(KPIS, PAIR_HEADER, *rows))["charts"]
+    assert chart["kind"] == "dumbbell" and chart["unit"] == ""
+    assert (chart["label"], chart["periods"], chart["prior"], chart["current"]) == (0, [1, 3], 2, 4)
+
+
+@pytest.mark.parametrize(
+    ("heading", "row"),
+    [
+        ("Chart data: another pair table", RESULT_ROWS[0]),
+        (RESULTS, "| Revenue | FY2023 | 2.1bn | FY2024 | 2,250 | US$m | S. |"),
+        (KPIS, "| EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 |  | S. |"),
+    ],
+)
+def test_a_pair_table_out_of_shape_is_named_not_drawn(heading, row):
+    fields = synthetic_charts(chart_section(heading, PAIR_HEADER, row))
+    assert fields["charts"] == [] and f"{heading} is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize(
+    "heading", ["Chart data: peer range — percent metrics", "Chart data: peer range — multiples"]
+)
+def test_a_peer_range_is_a_range_chart_and_a_gap_is_allowed(heading):
+    fields = synthetic_charts(
+        chart_section(
+            heading,
+            PEER_HEADER,
+            "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 7 | % | S. |",
+            "| FFO / debt | Not supplied: not stated | 8.0 | 15.0 | 22.0 | 6 | % | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None and chart["kind"] == "range" and chart["unit"] == "%"
+    roles = (chart["label"], chart["issuer"], chart["low"], chart["median"], chart["high"])
+    assert roles == (0, 1, 2, 3, 4) and chart["count"] == 5
+
+
+def test_a_peer_range_with_a_percent_sign_in_a_number_is_named_not_drawn():
+    row = "| EBITDA margin | 21% | 12.0 | 18.5 | 26.0 | 7 | % | S. |"
+    heading = "Chart data: peer range — percent metrics"
+    fields = synthetic_charts(chart_section(heading, PEER_HEADER, row))
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+def test_yield_against_maturity_is_a_scatter_with_its_date_yield_and_text_columns():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: yield against maturity",
+            YIELD_HEADER,
+            "| 2028 note | 2028-06-15 | 6.4 | +310 bp | 2024-12-31 | Dealer quote | % | S. |",
+            "| 2031 note | 2031-03-01 | Not supplied: no quote | Not supplied: no quote "
+            "| 2024-12-31 | Dealer quote | % | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None and chart["kind"] == "scatter" and chart["unit"] == "%"
+    assert (chart["label"], chart["date"], chart["yield"]) == (0, 1, 2)
+    assert (chart["spread"], chart["quoted"], chart["source"]) == (3, 4, 5)
+
+
+def test_a_yield_that_is_not_a_plain_number_is_named_not_drawn():
+    row = "| 2028 note | 2028-06-15 | 6.4% | +310 bp | 2024-12-31 | Dealer quote | % | S. |"
+    fields = synthetic_charts(
+        chart_section("Chart data: yield against maturity", YIELD_HEADER, row)
+    )
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize("when", ["2028-13-01", "2028-00-10", "9999-99-99", "2028-02-31"])
+@pytest.mark.parametrize("column", [1, 4])
+def test_a_yield_row_with_an_invalid_calendar_date_is_named_not_drawn(when, column):
+    cells = ["2028 note", "2028-06-15", "6.4", "+310 bp", "2024-12-31", "Dealer quote", "%", "S."]
+    cells[column] = when
+    row = "| " + " | ".join(cells) + " |"
+    fields = synthetic_charts(
+        chart_section("Chart data: yield against maturity", YIELD_HEADER, row)
+    )
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize("count", ["-3", "2.5", "1,0", "seven"])
+def test_a_peer_count_that_is_not_a_whole_number_is_named_not_drawn(count):
+    row = f"| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | {count} | % | S. |"
+    heading = "Chart data: peer range \u2014 percent metrics"
+    fields = synthetic_charts(chart_section(heading, PEER_HEADER, row))
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+def test_a_peer_count_of_zero_is_a_stated_count():
+    row = "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 0 | % | S. |"
+    heading = "Chart data: peer range \u2014 percent metrics"
+    assert len(synthetic_charts(chart_section(heading, PEER_HEADER, row))["charts"]) == 1
+
+
+# ---- Package 4 (2026-11-10): recovery by class and the value allocation. Every value is synthetic.
+RECOVERY_HEADER = (
+    "| Class | Scenario | Claim | Recovery | Recovery % | Reporting unit | Basis and limitation |"
+)
+RECOVERY = "Chart data: recovery by class"
+RECOVERY_ROWS = (
+    "| Senior | Base | 1,200 | 1,080 | 90 | US$m | S. |",
+    "| Senior | Downside | 1,200 | Not supplied: no value | Not supplied: no value | US$m | S. |",
+)
+ALLOCATION = "Chart data: value allocation — scenario 2"
+
+
+def test_recovery_by_class_is_a_recovery_chart_over_one_unit_and_a_gap_is_allowed():
+    fields = synthetic_charts(chart_section(RECOVERY, RECOVERY_HEADER, *RECOVERY_ROWS))
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None and chart["kind"] == "recovery" and chart["unit"] == "US$m"
+    roles = (chart["label"], chart["scenario"], chart["claim"], chart["recovery"], chart["percent"])
+    assert roles == (0, 1, 2, 3, 4) and chart["title"] == "Recovery by class"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| Senior | Base | 1,200 | 1,080 | 90% | US$m | S. |",
+        "| Senior | Base | 1,200 | 1,080 | 90 | EUR m | S. |",
+        "| Senior |  | 1,200 | 1,080 | 90 | US$m | S. |",
+    ],
+)
+def test_a_recovery_table_out_of_shape_or_in_two_units_is_named_not_drawn(row):
+    fields = synthetic_charts(chart_section(RECOVERY, RECOVERY_HEADER, RECOVERY_ROWS[0], row))
+    if "EUR" not in row:
+        fields = synthetic_charts(chart_section(RECOVERY, RECOVERY_HEADER, row))
+    assert fields["charts"] == [] and f"{RECOVERY} is not in its fixed table" in fields["issue"]
+
+
+def test_a_value_allocation_is_a_waterfall_from_enterprise_value_to_the_value_not_distributed():
+    fields = synthetic_charts(
+        chart_section(
+            ALLOCATION,
+            BRIDGE_HEADER,
+            "| Enterprise value | 1,500 | US$m | S. |",
+            "| Costs | -100 | US$m | S. |",
+            "| Senior distribution | -720 | US$m | S. |",
+            "| Value not distributed | 680 | US$m | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert chart["kind"] == "waterfall" and chart["title"] == "Value allocation — scenario 2"
+
+
+def test_a_value_allocation_that_does_not_reconcile_is_named_not_drawn_and_a_gap_draws_nothing():
+    rows = (
+        "| Enterprise value | 1,500 | US$m | S. |",
+        "| Value not distributed | 700 | US$m | S. |",
+    )
+    fields = synthetic_charts(chart_section(ALLOCATION, BRIDGE_HEADER, *rows))
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+    gap = "| {} | Not supplied: no valuation row | US$m | S. |"
+    gaps = (gap.format("Enterprise value"), gap.format("Value not distributed"))
+    fields = synthetic_charts(chart_section(ALLOCATION, BRIDGE_HEADER, *gaps))
+    assert fields["charts"] == [] and fields["issue"] is None
+
+
+# ---- Package 5 (2026-11-10): the calendar lanes. Every value is synthetic.
+EVENT_HEADER = (
+    "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
+)
+EVENT_ROWS = (
+    "| 2025-03-31 | day | — | Note matures | Scheduled — due | Indenture p.1 | Wall |",
+    "| 2025-06 | month | 2025-05-01 | Call window | Historical — announced | Notice | Cost |",
+    "| 2025-Q3 | quarter | — | Review | Scenario — modelled | Memo | Rating |",
+    "| 2026 | year | — | Maturity | Scheduled — due | Filing p.2 | Wall |",
+)
+
+
+def lane_fields(*rows: str, lane: str = "Financing") -> dict:
+    return synthetic_charts(chart_section(f"Events: {lane}", EVENT_HEADER, *rows))
+
+
+def test_an_event_table_is_a_lane_named_by_its_heading_and_is_not_a_chart():
+    fields = lane_fields(*EVENT_ROWS)
+    (lane,) = fields["events"]
+    assert fields["issue"] is None and fields["charts"] == []
+    assert lane["lane"] == "Financing" and lane["gap"] is None and isinstance(lane["table"], int)
+
+
+def test_an_event_table_of_only_not_supplied_is_a_lane_with_its_reason():
+    gap = "Not supplied: the handoff states no dated event"
+    fields = lane_fields(f"| {gap} |" + f" {gap} |" * 6)
+    assert fields["issue"] is None
+    assert fields["events"][0]["gap"] == "the handoff states no dated event"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| 2025-03 | day | — | E | S | Src | R |",
+        "| 2025-02-30 | day | — | E | S | Src | R |",
+        "| 2025-03-31 | month | — | E | S | Src | R |",
+        "| 2025-Q5 | quarter | — | E | S | Src | R |",
+        "| 2025 | week | — | E | S | Src | R |",
+        "| 2025-03-31 | day | May 2025 | E | S | Src | R |",
+        "| 2025-03-31 | day | — | | S | Src | R |",
+        "| Not supplied: undated | day | — | E | S | Src | R |",
+    ],
+)
+def test_an_event_table_out_of_shape_is_named_not_drawn(row):
+    fields = lane_fields(EVENT_ROWS[0], row)
+    assert (
+        fields["events"] == [] and "Events: Financing is not in its fixed table" in fields["issue"]
+    )
+
+
+def test_an_event_table_with_a_changed_header_is_named_not_drawn():
+    header = EVENT_HEADER.replace("Event date", "Date")
+    fields = synthetic_charts(chart_section("Events: Legal", header, EVENT_ROWS[0]))
+    assert fields["events"] == [] and "Events: Legal is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| 2025-03-31 | day | — | E | Scheduled | Src | R |",
+        "| 2025-03-31 | day | — | E | Expected — due | Src | R |",
+        "| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |",
+    ],
+)
+def test_an_event_without_a_status_kind_or_with_a_redundant_published_date_is_not_drawn(row):
+    assert lane_fields(EVENT_ROWS[0], row)["events"] == []
+
+
+# ---- Package 6 (2026-11-10): the node/edge maps. Every value is synthetic.
+EDGE_HEADER = "| From | Relationship | Edge type | To | Evidence |"
+
+
+def map_fields(*rows: str, name: str = "stress scenario") -> dict:
+    return synthetic_charts(chart_section(f"Map: {name}", EDGE_HEADER, *rows))
+
+
+def test_an_edge_table_is_a_map_named_by_its_heading_and_is_not_a_chart():
+    fields = map_fields(
+        "| A | rel | Assumption | B | p.1 |", "| B | rel | Test outcome | C | p.2 |"
+    )
+    (drawn,) = fields["maps"]
+    assert fields["issue"] is None and fields["charts"] == []
+    assert drawn["name"] == "stress scenario" and drawn["gap"] is None
+    assert isinstance(drawn["table"], int)
+
+
+def test_an_edge_table_of_only_not_supplied_is_a_map_with_its_reason():
+    gap = "Not supplied: no scenario stated"
+    fields = map_fields(f"| {gap} |" + f" {gap} |" * 4)
+    assert fields["issue"] is None and fields["maps"][0]["gap"] == "no scenario stated"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| A | rel | Weighted | B | p.1 |",
+        "| A | rel | assumption | B | p.1 |",
+        "| | rel | Assumption | B | p.1 |",
+        "| A | rel | Assumption | B | |",
+        "| A | Not supplied: none | Assumption | B | p.1 |",
+    ],
+)
+def test_an_edge_table_out_of_shape_is_named_not_drawn(row):
+    fields = map_fields("| A | rel | Assumption | B | p.1 |", row)
+    assert (
+        fields["maps"] == [] and "Map: stress scenario is not in its fixed table" in fields["issue"]
+    )
+
+
+def test_an_edge_type_belongs_to_its_own_map_and_an_unknown_map_is_not_drawn():
+    assert map_fields("| A | r | Ownership | B | p |", name="stress scenario")["maps"] == []
+    assert map_fields("| A | r | Ownership | B | p |", name="legal entities")["maps"]
+    assert map_fields("| A | r | Ownership | B | p |", name="unknown")["maps"] == []
+
+
+def test_the_store_vocabulary_is_the_launchers():
+    from deploy_workflow.owners.cpos_launch import MAPS
+
+    assert {f"Map: {k}": v for k, v in store.MAP_EDGES.items()} == {h: t for h, _, t, _ in MAPS}
+
+
+@pytest.mark.parametrize("dash", ["—", "-", "–"])
+def test_an_edge_whose_evidence_is_a_dash_is_not_drawn(dash):
+    fields = map_fields(f"| A | rel | Assumption | B | {dash} |")
+    assert fields["maps"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+# ---- Package 7 fix round: report-view.json figures and revisions (synthetic values).
+SYNTHETIC_VIEW = {
+    "blocks": [
+        {
+            "block_id": "intro",
+            "kind": "prose",
+            "title": "Intro",
+            "figures": [],
+            "rows": [],
+            "note": None,
+        },
+        {
+            "block_id": "strip",
+            "kind": "chart",
+            "title": "Strip",
+            "note": "Synthetic note.",
+            "rows": [],
+            "figures": [
+                {
+                    "fig_id": "S.1",
+                    "title": "Chart data: synthetic leverage — Period",
+                    "summary": "Synthetic summary.",
+                    "chart": {
+                        "unit": "x",
+                        "unit_class": "multiple",
+                        "table_twin": {
+                            "scale": "x",
+                            "rows": [
+                                {
+                                    "label": "Debt · FY2023 / 2023-09-30",
+                                    "cells": [{"text": "6.3x", "ref_id": "C1"}],
+                                },
+                                {
+                                    "label": "Debt · FY2024 / 2024-09-30",
+                                    "cells": [{"text": "5.9x", "ref_id": "C2"}],
+                                },
+                            ],
+                        },
+                    },
+                }
+            ],
+        },
+        {
+            "block_id": "grid",
+            "kind": "period_grid",
+            "title": "Synthetic grid",
+            "scale": None,
+            "note": None,
+            "columns": ["FY2024", "FY2023", "Unit"],
+            "figures": [],
+            "rows": [
+                {
+                    "cells": [
+                        {"text": "1", "ref_id": "C1"},
+                        {"text": "2", "ref_id": "C3"},
+                        {"text": "US$m", "ref_id": "C1"},
+                    ]
+                }
+            ],
+        },
+    ],
+    "passports": [
+        {
+            "ref_id": "C1",
+            "fields": [{"name": "Source", "value": "CP-0"}, {"name": "SHA-256", "value": "a" * 64}],
+        },
+        {
+            "ref_id": "C2",
+            "fields": [{"name": "Source", "value": "CP-0"}, {"name": "SHA-256", "value": "a" * 64}],
+        },
+        {
+            "ref_id": "C3",
+            "fields": [{"name": "Source", "value": "CP-1"}, {"name": "SHA-256", "value": "b" * 64}],
+        },
+    ],
+}
+
+
+def listed(folder, view_bytes, listed_hash=None):
+    (folder / "report-view.json").write_bytes(view_bytes)
+    return {"files": {"report-view.json": listed_hash or hashlib.sha256(view_bytes).hexdigest()}}
+
+
+def test_report_figures_are_read_as_stated_from_the_listed_report_view(tmp_path):
+    raw = json.dumps(SYNTHETIC_VIEW).encode()
+    figures, issue = store.report_figures(tmp_path, listed(tmp_path, raw))
+    assert issue is None
+    assert [f["title"] for f in figures] == [
+        "Chart data: synthetic leverage — Period",
+        "Synthetic grid",
+    ]
+    figure, table = figures
+    assert (
+        figure["kind"],
+        figure["periods"],
+        figure["unit"],
+        figure["unitClass"],
+        figure["points"],
+    ) == ("Figure", ["FY2023 / 2023-09-30", "FY2024 / 2024-09-30"], "x", "multiple", 2)
+    assert figure["note"] == "Synthetic note."
+    assert figure["sources"] == [{"source": "CP-0", "pin": "a" * 64}]
+    assert (table["kind"], table["periods"], table["unit"], table["note"]) == (
+        "Table",
+        ["FY2024", "FY2023"],
+        "Stated per row",
+        None,
+    )
+    assert table["sources"] == [
+        {"source": "CP-0", "pin": "a" * 64},
+        {"source": "CP-1", "pin": "b" * 64},
+    ]
+
+
+def test_a_delivery_that_lists_no_report_view_has_no_figures_and_no_issue(tmp_path):
+    assert store.report_figures(tmp_path, {"files": {"report.html": "x"}}) == (None, None)
+
+
+@pytest.mark.parametrize("hash_wrong", [True, False])
+def test_a_report_view_that_does_not_match_or_cannot_be_read_is_an_issue_not_silence(
+    tmp_path, hash_wrong
+):
+    raw = json.dumps(SYNTHETIC_VIEW).encode()
+    delivery = listed(tmp_path, raw, "0" * 64 if hash_wrong else None)
+    if not hash_wrong:
+        (tmp_path / "report-view.json").unlink()
+    figures, issue = store.report_figures(tmp_path, delivery)
+    assert figures is None and issue and "report-view.json" in issue
+
+
+def test_recorded_revisions_read_the_cap_and_attachments_files(tmp_path):
+    (tmp_path / "research").mkdir()
+    (tmp_path / "cap.json").write_text(
+        json.dumps({"cap_usd": "1", "replayed_from_run": "run-id-1"})
+    )
+    (tmp_path / "research/attachments.json").write_text(json.dumps({"supersedes": "run-id-2"}))
+    issues = []
+    assert store.recorded_revisions(tmp_path, issues) == [
+        ("Rerun of", "run-id-1"),
+        ("Supersedes", "run-id-2"),
+    ]
+    assert issues == []
+    assert store.recorded_revisions(tmp_path / "none", issues) == [] and issues == []
+
+
+def test_an_unreadable_revision_record_is_named(tmp_path):
+    (tmp_path / "cap.json").write_text("{not json")
+    issues = []
+    assert store.recorded_revisions(tmp_path, issues) == []
+    assert len(issues) == 1 and "cap.json" in issues[0]
+
+
+def test_a_rerun_links_to_the_run_it_replays_through_the_store(tmp_path):
+    rows = []
+    for name, as_of in (("run-a", "2025-12-31"), ("run-b", "2025-06-30")):
+        run_dir = make_run(tmp_path, name, as_of=as_of)
+        (delivery,) = (run_dir / "deliveries").iterdir()
+        folder = f"runs/{name}/deliveries/{delivery.name}"
+        digest = hashlib.sha256((delivery / "report.html").read_bytes()).hexdigest()
+        artifact = {
+            "folder": folder,
+            "label": name,
+            "state": "final",
+            "available": True,
+            "href": f"/files/{folder}/report.html?sha256={digest}",
+        }
+        rows.append({"id": name, "name": name, "sector": "", "period": "", "artifacts": [artifact]})
+    earlier = json.loads((tmp_path / "runs/run-a/workflow.json").read_text())["run"]["run_id"]
+    (tmp_path / "runs/run-b/cap.json").write_text(json.dumps({"replayed_from_run": earlier}))
+    built = store.workspace_store(tmp_path, {"real": rows, "issues": []})
+    assert built["runs"]["run-b"]["revisions"] == [
+        {"word": "Rerun of", "id": earlier, "run": "run-a"}
+    ]
+    assert built["runs"]["run-a"]["revisions"] == []
+    assert all("figures" in report for report in built["reports"])
+
+
+def test_a_listed_report_view_that_fails_is_told_apart_from_an_unlisted_one(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivery,) = (run_dir / "deliveries").iterdir()
+    record = json.loads((delivery / "delivery.json").read_text())
+    folder = f"runs/run-a/deliveries/{delivery.name}"
+    digest = hashlib.sha256((delivery / "report.html").read_bytes()).hexdigest()
+    artifact = {
+        "folder": folder,
+        "label": "r",
+        "state": "final",
+        "available": True,
+        "href": f"/files/{folder}/report.html?sha256={digest}",
+    }
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
+    plain = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
+    assert (plain["figures"], plain["figuresIssue"]) == (None, None)
+    (delivery / "report-view.json").write_text("{}")
+    record["files"]["report-view.json"] = "0" * 64
+    (delivery / "delivery.json").write_text(json.dumps(record))
+    failed = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
+    assert failed["figures"] is None and "report-view.json" in failed["figuresIssue"]

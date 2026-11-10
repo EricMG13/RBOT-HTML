@@ -35,4 +35,35 @@ function orderEvents(rows) {
   return keyed.map(item => item.row);
 }
 
-if (typeof module !== 'undefined') module.exports = {eventTable, eventOrder, orderEvents};
+// ---- Lane placement. A lane event is placed from its stated date at its stated precision: a day is a point, a month, quarter or year
+// spans its whole length. A date that does not match its precision has no place (it stays in the event table); no day is ever chosen for it.
+const DAY_MS = 86400000;
+const utcDay = (year, month, day) => Date.UTC(year, month - 1, day) / DAY_MS;
+function eventSpan(date, precision) {
+  const forms = {day: /^(\d{4})-(\d{2})-(\d{2})$/, month: /^(\d{4})-(\d{2})$/, quarter: /^(\d{4})-Q([1-4])$/, year: /^(\d{4})$/};
+  const found = Object.hasOwn(forms, precision) ? forms[precision].exec(String(date)) : null;
+  if (!found) return null;
+  const [year, part, dayOfMonth] = found.slice(1).map(Number);
+  if (precision === 'year') return {from: utcDay(year, 1, 1), to: utcDay(year, 12, 31), point: false};
+  if (precision === 'quarter') return {from: utcDay(year, 3 * part - 2, 1), to: utcDay(year, 3 * part + 1, 0), point: false};
+  if (part < 1 || part > 12) return null;
+  if (precision === 'month') return {from: utcDay(year, part, 1), to: utcDay(year, part + 1, 0), point: false};
+  const day = new Date(Date.UTC(year, part - 1, dayOfMonth));
+  if (day.getUTCMonth() !== part - 1 || day.getUTCDate() !== dayOfMonth) return null;
+  return {from: utcDay(year, part, dayOfMonth), to: utcDay(year, part, dayOfMonth), point: true};
+}
+
+// The shared date axis: earliest start to latest end in UTC days (one day wide when everything is a single day), or null with no span.
+function eventAxis(spans) {
+  if (!spans.length) return null;
+  const start = Math.min(...spans.map(s => s.from)), end = Math.max(...spans.map(s => s.to));
+  return {start, end: end > start ? end : start + 1};
+}
+
+// Left edge and width of a span on the axis, in percent to two decimals; a point has no width.
+function eventPlace(span, axis) {
+  const percent = days => Math.round(days / (axis.end - axis.start) * 10000) / 100;
+  return {left: percent(span.from - axis.start), width: percent(span.to - span.from)};
+}
+
+if (typeof module !== 'undefined') module.exports = {eventTable, eventOrder, orderEvents, eventSpan, eventAxis, eventPlace};

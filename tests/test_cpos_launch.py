@@ -136,13 +136,146 @@ def synthetic_table(header: str, *rows: str) -> str:
 
 
 PERIOD_HEAD = "| Period | {} | Reporting unit | Basis and limitation |"
+DEBT_STACK_HEAD = (
+    "| Facility | Ranking | Secured | Amount | Cumulative leverage | Reporting unit "
+    "| Basis and limitation |"
+)
+DEBT_STACK_ROWS = (
+    "| Senior secured term loan | 1 | Yes | 1,200 | 2.4 | US$m | Synthetic. |",
+    "| Senior notes | 2 | No | 800 | 4.0 | US$m | Synthetic. |",
+    (
+        "| Subordinated notes | 3 | No | Not supplied: balance not stated "
+        "| Not supplied: no balance | US$m | Synthetic. |"
+    ),
+)
+COVENANT_HEAD = (
+    "| Test | Threshold | Current | Headroom | Direction | Reporting unit | Basis and limitation |"
+)
+COVENANT_ROWS = (
+    "| Net leverage | 5.0 | 4.2 | 0.8x | Passes at or below | x | Synthetic. |",
+    "| Interest cover | 2.0 | 2.6 | 0.6x | Passes at or above | x | Synthetic. |",
+    (
+        "| Minimum liquidity | 100 | Not supplied: not stated | Not supplied: no current "
+        "| Passes at or above | US$m | Synthetic. |"
+    ),
+)
+TRIGGER_HEAD = (
+    "| Agency | Trigger | Threshold | Current | Direction | Reporting unit | Basis and limitation |"
+)
+TRIGGER_ROWS = (
+    (
+        "| Synthetic agency | Downgrade review: net leverage | 5.5 | 4.2 | Passes below | x "
+        "| Synthetic. |"
+    ),
+)
+LIMITS_HEAD = (
+    "| Limit | Current exposure | Proposed exposure | Limit value | Reporting unit "
+    "| Basis and limitation |"
+)
+LIMITS_ROWS = (
+    "| Single-issuer limit | 3.0 | 4.0 | 5.0 | % NAV | Synthetic. |",
+    "| High-yield bucket | 12.0 | Not supplied: no proposal | 15.0 | % NAV | Synthetic. |",
+)
+PAIR_HEAD = (
+    "| Measure | Prior period | Prior | Current period | Current | Reporting unit "
+    "| Basis and limitation |"
+)
+PEER_HEAD = (
+    "| Metric | Issuer | Peer low | Peer median | Peer high | Peer count | Reporting unit "
+    "| Basis and limitation |"
+)
+YIELD_HEAD = (
+    "| Instrument | Maturity date | Yield | Spread | Quote date | Source class | Reporting unit "
+    "| Basis and limitation |"
+)
+RECOVERY_HEAD = (
+    "| Class | Scenario | Claim | Recovery | Recovery % | Reporting unit | Basis and limitation |"
+)
+ALLOCATION_HEAD = "| Step | Amount | Reporting unit | Basis and limitation |"
+ALLOCATION_ONE = "Chart data: value allocation \u2014 scenario 1"
+ALLOCATION_TWO = "Chart data: value allocation \u2014 scenario 2"
 OWNER_TABLES = {
+    "CP-4C": {
+        "Chart data: recovery by class": synthetic_table(
+            RECOVERY_HEAD,
+            "| Senior secured | Base | 1,200 | 1,080 | 90 | US$m | Synthetic. |",
+            "| Senior secured | Downside | 1,200 | 720 | 60 | US$m | Synthetic. |",
+            "| Unsecured | Base | 800 | 120 | 15 | US$m | Synthetic. |",
+            "| Unsecured | Downside | 800 | Not supplied: no downside value "
+            "| Not supplied: no downside value | US$m | Synthetic. |",
+        ),
+        ALLOCATION_ONE: synthetic_table(
+            ALLOCATION_HEAD,
+            "| Enterprise value | 2,000 | US$m | Synthetic base case. |",
+            "| Restructuring costs | -100 | US$m | Synthetic. Available value 1,900. |",
+            "| Senior secured distribution | -1,080 | US$m | Synthetic. |",
+            "| Unsecured distribution | -120 | US$m | Synthetic. |",
+            "| Value not distributed | 700 | US$m | Synthetic. |",
+        ),
+        ALLOCATION_TWO: synthetic_table(
+            ALLOCATION_HEAD,
+            "| Enterprise value | 1,500 | US$m | Synthetic downside case. |",
+            "| Restructuring costs | -100 | US$m | Synthetic. Available value 1,400. |",
+            "| Senior secured distribution | -720 | US$m | Synthetic. |",
+            "| Unsecured distribution | -80 | US$m | Synthetic. |",
+            "| Value not distributed | 600 | US$m | Synthetic. |",
+        ),
+    },
+    "CP-1B": {
+        "Chart data: prior and current results": synthetic_table(
+            PAIR_HEAD,
+            "| Revenue | FY2023 | 2,100 | FY2024 | 2,250 | US$m | Synthetic. |",
+            "| Adjusted EBITDA | FY2023 | 410 | FY2024 | Not supplied: not stated | US$m "
+            "| Synthetic. |",
+        ),
+        "Chart data: margin and KPI changes": synthetic_table(
+            PAIR_HEAD,
+            "| EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 | % | Synthetic. |",
+            "| Subscribers | FY2023 | 1.2 | FY2024 | 1.4 | m | Synthetic. |",
+        ),
+    },
+    "CP-1C": {
+        "Chart data: peer range — percent metrics": synthetic_table(
+            PEER_HEAD,
+            "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 7 | % | Synthetic. |",
+            "| FFO / debt | Not supplied: not stated | 8.0 | 15.0 | 22.0 | 6 | % | Synthetic. |",
+        ),
+        "Chart data: peer range — multiples": synthetic_table(
+            PEER_HEAD, "| Total debt / EBITDA | 4.2 | 2.5 | 3.4 | 5.1 | 7 | x | Synthetic. |"
+        ),
+    },
+    "CP-3D": {
+        "Chart data: yield against maturity": synthetic_table(
+            YIELD_HEAD,
+            "| Synthetic 2028 note | 2028-06-15 | 6.4 | +310 bp | 2024-12-31 | Dealer quote "
+            "| % | Synthetic. |",
+            "| Synthetic 2031 note | 2031-03-01 | Not supplied: no quote "
+            "| Not supplied: no quote | 2024-12-31 | Dealer quote | % | Synthetic. |",
+        ),
+    },
     "CP-1": {
         "Chart data: revenue and EBITDA": synthetic_table(
             PERIOD_HEAD.format("Revenue | Adjusted EBITDA"),
             "| FY2023 | 2,100 | 410 | US$m | Synthetic. |",
             "| FY2024 | 2,250 | Not supplied: the measure is not stated | US$m | Synthetic. |",
         ),
+        "Chart data: debt stack": synthetic_table(DEBT_STACK_HEAD, *DEBT_STACK_ROWS),
+        "Chart data: EBITDA bridge": synthetic_table(
+            "| Step | Amount | Reporting unit | Basis and limitation |",
+            "| Reported EBITDA | 410 | US$m | Synthetic. |",
+            "| Restructuring add-back | 30 | US$m | Synthetic. |",
+            "| Disposal | -10 | US$m | Synthetic. |",
+            "| Issuer-adjusted EBITDA | 430 | US$m | Synthetic. |",
+        ),
+    },
+    "CP-2H": {
+        "Chart data: rating triggers": synthetic_table(TRIGGER_HEAD, *TRIGGER_ROWS),
+    },
+    "CP-4": {
+        "Chart data: covenant headroom": synthetic_table(COVENANT_HEAD, *COVENANT_ROWS),
+    },
+    "CP-6": {
+        "Chart data: portfolio limits": synthetic_table(LIMITS_HEAD, *LIMITS_ROWS),
     },
     "CP-2D": {
         "Chart data: liquidity bridge": synthetic_table(
@@ -161,10 +294,98 @@ OWNER_TABLES = {
         ),
     },
 }
+# Package 5 (2026-11-10): every lane's dated-event table. Synthetic rows; the answer key is here.
+EVENT_HEAD = (
+    "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
+)
+EVENT_ROWS = (
+    "| 2025-03-31 | day | — | Synthetic note | Scheduled — matures | Synthetic filing p.1 | Wall |",
+    "| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — noted | Memo | Cost |",
+    "| 2025-Q3 | quarter | — | Synthetic review | Scenario — modelled | Synthetic memo | Rating |",
+    "| 2026 | year | — | Synthetic maturity | Scheduled — maturity | Synthetic filing p.2 | Wall |",
+)
+EVENT_LANES = {  # module -> (lane name, a phrase of its catalogue guard the instructions carry)
+    "CP-0": ("Sources", "import timestamp"),
+    "CP-1A": ("Issuer history", "never fold a later payment"),
+    "CP-1B": ("Earnings and guidance", "No guessed next earnings date"),
+    "CP-DR": ("Research catalysts", "date-free themes"),
+    "CP-2D": ("Financing", "Maturity is not a refinancing commitment"),
+    "CP-2E": ("Hedges", "not effectiveness or fair value"),
+    "CP-2H": ("Ratings", "modelled trigger"),
+    "CP-3": ("Instruments", "option-exercise"),
+    "CP-3C": ("Refinancing", "analyst milestones"),
+    "CP-4": ("Legal", "relative condition"),
+    "CP-6": ("Decision and watch", "user-entered reminder"),
+}
+for _module, (_lane, _) in EVENT_LANES.items():
+    OWNER_TABLES.setdefault(_module, {})[f"Events: {_lane}"] = synthetic_table(
+        EVENT_HEAD, *EVENT_ROWS
+    )
+# Package 6 (2026-11-10): the node/edge maps. Synthetic rows; vocabularies are the owner's ruling.
+EDGE_HEAD = "| From | Relationship | Edge type | To | Evidence |"
+FACT_TYPES = ("Documentary Fact", "Management Language", "Analyst Interpretation")
+MAPS = {  # heading -> (owner, edge types, phrases of its catalogue guard the instructions carry)
+    "Map: ownership and control": (
+        "CP-1A",
+        ("Ownership", "Legal control", "Guarantee", "Other stated"),
+        ("Undisclosed percentages stay unknown", "No inferred sponsor willingness"),
+    ),
+    "Map: operating model to credit": (
+        "CP-1A",
+        (*FACT_TYPES, "Insufficient Information"),
+        ("No weighted cash-flow arrows without amounts",),
+    ),
+    "Map: credit-risk transmission": (
+        "CP-2",
+        (*FACT_TYPES, "Insufficient Information"),
+        ("Only stated causal links", "likelihood or impact coordinates"),
+    ),
+    "Map: stress scenario": (
+        "CP-2A",
+        ("Assumption", "Test outcome", "Explanation"),
+        ("not probabilities", "No forecast date from a static stress"),
+    ),
+    "Map: legal entities": (
+        "CP-4",
+        ("Ownership", "Guarantee", "Security", "Structural claim"),
+        ("narrow registers alone do not establish a complete", "applicable document"),
+    ),
+    "Map: intercreditor": (
+        "CP-4",
+        ("Payment rank", "Security rank", "Enforcement control", "Standstill", "Release"),
+        ("narrow registers alone do not establish a complete", "no numerical recovery"),
+    ),
+    "Map: support and contradiction": (
+        "CP-5",
+        ("Supports", "Contradicts", "Unresolved"),
+        ("edge count",),
+    ),
+}
+for _heading, (_module, _types, _) in MAPS.items():
+    OWNER_TABLES.setdefault(_module, {})[_heading] = synthetic_table(
+        EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
+    )
+OWNER_PATHWAY = {
+    "CP-3": "portfolio_decision",
+    "CP-DR": "relative_value",
+    "CP-4C": "distressed_restructuring",
+    "CP-2H": "distressed_restructuring",
+    "CP-6": "portfolio_decision",
+    "CP-1B": "earnings_update",
+    "CP-1C": "relative_value",
+    "CP-3D": "relative_value",
+}
 OWNER_HEADERS = {
+    "CP-4C": RECOVERY_HEAD,
+    "CP-1B": PAIR_HEAD,
+    "CP-1C": PEER_HEAD,
+    "CP-3D": YIELD_HEAD,
     "CP-1": PERIOD_HEAD.format("Revenue | Adjusted EBITDA"),
     "CP-2D": "| Step | Amount | Reporting unit | Basis and limitation |",
     "CP-3C": PERIOD_HEAD.format("Debt maturing | Committed resources"),
+    "CP-2H": TRIGGER_HEAD,
+    "CP-4": COVENANT_HEAD,
+    "CP-6": LIMITS_HEAD,
 }
 
 
@@ -825,7 +1046,8 @@ def test_run_directory_inside_the_issuer_folder_is_refused(tmp_path, capsys):
     assert not (tmp_path / "issuer/run").exists()
 
 
-def good_task(tmp_path: Path, module: str = "CP-2", pathway: str = "covenant_refinancing"):
+def good_task(tmp_path: Path, module: str = "CP-2", pathway: str | None = None):
+    pathway = pathway or OWNER_PATHWAY.get(module, "covenant_refinancing")
     prepared = prepare(
         context_file(tmp_path, pathway),
         issuer_folder(tmp_path),
@@ -2542,15 +2764,16 @@ def test_web_search_follows_the_ruling_and_reaches_only_the_research_module(
 
 @pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
 def test_the_instructions_ask_each_owner_for_its_own_chart_table(tmp_path, module):
-    prepared, *_ = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, *_ = good_task(tmp_path, module)
     text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
     assert f"`{OWNER_HEADERS[module]}`" in text
-    assert "Not supplied: reported in <unit>" in text
+    constrained = module in {"CP-1", "CP-2D", "CP-3C", "CP-4C"}
+    assert ("Not supplied: reported in <unit>" in text) is constrained
 
 
 def test_a_module_with_no_owner_table_is_not_asked_for_one(tmp_path):
-    prepared, *_ = good_task(tmp_path, "CP-4", "covenant_refinancing")
-    text = (tmp_path / "out" / prepared.plan.instructions["CP-4"].path).read_text()
+    prepared, *_ = good_task(tmp_path, "CP-5", "covenant_refinancing")
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-5"].path).read_text()
     assert "Chart data:" not in text
 
 
@@ -2563,7 +2786,7 @@ def test_the_bridge_instruction_states_the_opening_closing_and_sign_rules(tmp_pa
 
 @pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
 def test_checker_accepts_each_owner_chart_table(tmp_path, module):
-    prepared, task, context = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, task, context = good_task(tmp_path, module)
     raw = answer(context, list(prepared.plan.layout.routes)).encode()
     assert _checked_handoff(task, raw, checker(prepared.layout)) == ()
 
@@ -2593,7 +2816,7 @@ def test_checker_accepts_each_owner_chart_table(tmp_path, module):
     ],
 )
 def test_checker_sends_back_each_malformed_owner_chart_table(tmp_path, module, old, new, complaint):
-    prepared, task, context = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, task, context = good_task(tmp_path, module)
     raw = answer(context, list(prepared.plan.layout.routes))
     assert old in raw
     issues = _checked_handoff(task, raw.replace(old, new).encode(), checker(prepared.layout))
@@ -2613,7 +2836,7 @@ def bridge_table(*amounts: str, unit: str = "US$m") -> str:
 
 
 def bridge_issues(*amounts: str, unit: str = "US$m") -> tuple[str, ...]:
-    (table,) = cpos_launch.OWNER_TABLES["CP-2D"]
+    table = cpos_launch.OWNER_TABLES["CP-2D"][0]
     return cpos_launch.chart_issues(bridge_table(*amounts, unit=unit), table)
 
 
@@ -2649,7 +2872,7 @@ def test_a_bridge_check_names_the_stated_and_summed_amounts():
     ],
 )
 def test_each_owner_table_carries_its_catalogue_guard(tmp_path, module, phrases):
-    prepared, *_ = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, *_ = good_task(tmp_path, module)
     text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
     for phrase in phrases:
         assert phrase in text, phrase
@@ -2657,7 +2880,7 @@ def test_each_owner_table_carries_its_catalogue_guard(tmp_path, module, phrases)
 
 
 def test_a_bridge_with_a_header_and_no_rows_is_sent_back():
-    (table,) = cpos_launch.OWNER_TABLES["CP-2D"]
+    table = cpos_launch.OWNER_TABLES["CP-2D"][0]
     text = "### Chart data: liquidity bridge\n\n" + synthetic_table(
         "| Step | Amount | Reporting unit | Basis and limitation |"
     )
@@ -2667,7 +2890,7 @@ def test_a_bridge_with_a_header_and_no_rows_is_sent_back():
 @pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
 def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tmp_path, module):
     """Owner tables are not report charts: delivery lists them as evidence tables, no new chart."""
-    prepared, _, context = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, _, context = good_task(tmp_path, module)
     raw = answer(context, list(prepared.plan.layout.routes))
     routes = tuple(r for r in prepared.layout.routes if r.module_id == module)
     blocks = tuple(dict.fromkeys(r.block_id for r in routes))
@@ -2676,12 +2899,591 @@ def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tm
     handoff = HandoffInput(path="h.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
     request = DeliveryRequest(run=prepared.plan.run, handoffs={module: handoff}, layout=own)
     files = markdown_files(request, tmp_path)
-    ((heading, table),) = OWNER_TABLES[module].items()
-    listed = [
-        e for e in json.loads(files["coverage.json"])["modules"][module] if e["heading"] == heading
-    ]
-    assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
-    page = files["report.html"].decode()
-    assert heading in page
-    for cell in table.splitlines()[2].strip("|").split("|"):
-        assert cell.strip() in page
+    for heading, table in OWNER_TABLES[module].items():
+        listed = [
+            e
+            for e in json.loads(files["coverage.json"])["modules"][module]
+            if e["heading"] == heading
+        ]
+        assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
+        page = files["report.html"].decode()
+        # The page carries its data JSON-escaped, so an em dash in a heading reads `\u2014` there.
+        assert heading.replace("—", "\\u2014") in page
+        for cell in table.splitlines()[2].strip("|").split("|"):
+            assert cell.strip().replace("—", "\\u2014") in page
+
+
+# ---- Package 2 (2026-11-10): the credit-structure tables. Every value is synthetic.
+STRUCTURE_HEADERS = {
+    "Chart data: debt stack": DEBT_STACK_HEAD,
+    "Chart data: EBITDA bridge": "| Step | Amount | Reporting unit | Basis and limitation |",
+    "Chart data: covenant headroom": COVENANT_HEAD,
+    "Chart data: rating triggers": TRIGGER_HEAD,
+    "Chart data: portfolio limits": LIMITS_HEAD,
+}
+STRUCTURE_OWNERS = [
+    ("CP-1", "Chart data: debt stack"),
+    ("CP-1", "Chart data: EBITDA bridge"),
+    ("CP-4", "Chart data: covenant headroom"),
+    ("CP-2H", "Chart data: rating triggers"),
+    ("CP-6", "Chart data: portfolio limits"),
+]
+
+
+def instruction_text(tmp_path: Path, module: str) -> str:
+    prepared, *_ = good_task(tmp_path, module)
+    return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+
+
+@pytest.mark.parametrize(("module", "heading"), STRUCTURE_OWNERS)
+def test_each_credit_structure_table_is_asked_of_its_owner_with_its_fixed_header(
+    tmp_path, module, heading
+):
+    text = instruction_text(tmp_path, module)
+    assert f"`### {heading}`" in text
+    assert f"`{STRUCTURE_HEADERS[heading]}`" in text
+
+
+@pytest.mark.parametrize(
+    ("module", "phrases"),
+    [
+        ("CP-1", ("legal rank", "positive common EBITDA denominator", "enterprise value")),
+        ("CP-1", ("do not manufacture", "specified adjusted measure", "reconcile")),
+        ("CP-4", ("strictness", "legal compliance opinion", "which side passes")),
+        ("CP-2H", ("rating probability", "synthetic-source limitation", "agency")),
+        ("CP-6", ("NAV denominator", "invented holdings", "interpretation")),
+    ],
+)
+def test_each_credit_structure_table_carries_its_catalogue_guard(tmp_path, module, phrases):
+    text = instruction_text(tmp_path, module)
+    for phrase in phrases:
+        assert phrase in text, phrase
+
+
+@pytest.mark.parametrize(("module", "heading"), STRUCTURE_OWNERS)
+def test_checker_accepts_each_credit_structure_table(tmp_path, module, heading):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert heading in raw
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+@pytest.mark.parametrize(
+    ("module", "old", "new", "complaint"),
+    [
+        ("CP-1", "| Facility | Ranking |", "| Tranche | Ranking |", "Facility"),
+        ("CP-1", "| Senior notes | 2 |", "| Senior notes | senior |", "Ranking"),
+        (
+            "CP-1",
+            "| Senior secured term loan | 1 |",
+            "| Senior secured term loan | 3 |",
+            "rank order",
+        ),
+        ("CP-1", "| 1 | Yes |", "| 1 | Maybe |", "Secured"),
+        ("CP-1", "| 1,200 |", "| 1.2bn |", "1.2bn"),
+        ("CP-1", "| 800 | 4.0 | US$m |", "| 800 | 4.0 | EUR m |", "EUR m"),
+        ("CP-1", "| 800 | 4.0 | US$m | Synthetic. |", "| 800 | 4.0 | US$m |  |", "Basis"),
+        ("CP-1", "| 430 |", "| 440 |", "does not equal"),
+        ("CP-4", "| Test | Threshold |", "| Covenant | Threshold |", "Test"),
+        ("CP-4", "| 5.0 | 4.2 |", "| 5.0x | 4.2 |", "5.0x"),
+        ("CP-4", "| Passes at or below |", "| Under |", "Direction"),
+        ("CP-4", "| 0.8x |", "|  |", "Headroom"),
+        (
+            "CP-4",
+            "| x | Synthetic. |\n| Interest",
+            "|  | Synthetic. |\n| Interest",
+            "Reporting unit",
+        ),
+        ("CP-2H", "| Passes below |", "| Passes sometimes |", "Direction"),
+        ("CP-6", "| 5.0 |", "| 5% |", "5%"),
+        ("CP-6", "| 3.0 | 4.0 |", "| 3.0 | 0.04 bn |", "0.04 bn"),
+    ],
+)
+def test_checker_sends_back_each_malformed_credit_structure_table(
+    tmp_path, module, old, new, complaint
+):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def test_the_debt_stack_instruction_keeps_leverage_out_of_the_money_unit(tmp_path):
+    text = instruction_text(tmp_path, "CP-1")
+    assert "(Amount) are plain numbers in US$m" in text
+    assert "Cumulative leverage is a plain number in the unit its rule states" in text
+    assert "(Amount, Cumulative leverage) are plain numbers in US$m" not in text
+
+
+# ---- Package 3 (2026-11-10): the comparison tables. Every value is synthetic.
+COMPARISON_OWNERS = [
+    ("CP-1B", "Chart data: prior and current results"),
+    ("CP-1B", "Chart data: margin and KPI changes"),
+    ("CP-1C", "Chart data: peer range — percent metrics"),
+    ("CP-1C", "Chart data: peer range — multiples"),
+    ("CP-3D", "Chart data: yield against maturity"),
+]
+
+
+@pytest.mark.parametrize(("module", "heading"), COMPARISON_OWNERS)
+def test_each_comparison_table_is_asked_of_its_owner(tmp_path, module, heading):
+    assert f"`### {heading}`" in instruction_text(tmp_path, module)
+
+
+@pytest.mark.parametrize(
+    ("module", "phrases"),
+    [
+        ("CP-1B", ("Pair only compatible quantities", "comparable perimeter", "percent panel")),
+        ("CP-1B", ("percentage-point change", "not worked out here", "one pair")),
+        ("CP-1C", ("excluded peers", "never zero", "settled observations")),
+        ("CP-1C", ("do not calendarise", "multiples stay out of the percent table", "Peer count")),
+        ("CP-3D", ("never mixed", "YTM, discount margin and spread", "source class")),
+    ],
+)
+def test_each_comparison_table_carries_its_catalogue_guard(tmp_path, module, phrases):
+    text = instruction_text(tmp_path, module)
+    for phrase in phrases:
+        assert phrase in text, phrase
+
+
+@pytest.mark.parametrize(
+    ("module", "old", "new", "complaint"),
+    [
+        ("CP-1B", "| 2,100 |", "| 2.1bn |", "2.1bn"),
+        ("CP-1B", "| Measure | Prior period |", "| Item | Prior period |", "Measure"),
+        (
+            "CP-1B",
+            "| Not supplied: not stated | US$m |",
+            "| Not supplied: not stated | EUR m |",
+            "one Reporting unit",
+        ),
+        ("CP-1B", "| 19.5 | FY2024 |", "| 19.5 | |", "Current period"),
+        ("CP-1C", "| 12.0 | 18.5 | 26.0 |", "| 30.0 | 18.5 | 26.0 |", "order"),
+        ("CP-1C", "| 7 | % |", "| seven | % |", "seven"),
+        ("CP-1C", "| 2.5 | 3.4 | 5.1 |", "| 2.5 | 3.4 | 5.1x |", "5.1x"),
+        ("CP-3D", "| 2028-06-15 |", "| June 2028 |", "June 2028"),
+        ("CP-3D", "| 2028-06-15 |", "| 2028-02-31 |", "2028-02-31"),
+        ("CP-3D", "| 6.4 |", "| 6.4% |", "6.4%"),
+        ("CP-3D", "| 2028-06-15 |", "| 2024-01-01 |", "is before Quote date"),
+        ("CP-1C", "| 7 | % |", "| -3 | % |", "whole number"),
+        ("CP-1C", "| 7 | % |", "| 2.5 | % |", "whole number"),
+        ("CP-3D", "| +310 bp |", "|  |", "Spread"),
+        ("CP-3D", "| Dealer quote | % | Synthetic. |", "|  | % | Synthetic. |", "Source class"),
+    ],
+)
+def test_checker_sends_back_each_malformed_comparison_table(tmp_path, module, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+@pytest.mark.parametrize(
+    ("module", "old", "new"),
+    [
+        ("CP-3D", "| 2028-06-15 |", "| Not supplied: no maturity stated |"),
+        ("CP-1C", "| 12.0 | 18.5 | 26.0 |", "| Not supplied: none | 18.5 | 26.0 |"),
+    ],
+)
+def test_a_stated_gap_is_accepted_for_a_maturity_date_and_for_a_peer_bound(
+    tmp_path, module, old, new
+):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes)).replace(old, new, 1)
+    assert new in raw and _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+# ---- Package 4 (2026-11-10): recovery by class and the value allocation waterfalls. Synthetic.
+RECOVERY = "Chart data: recovery by class"
+SCENARIO_THREE = "Chart data: value allocation \u2014 scenario 3"
+
+
+def test_each_recovery_table_is_asked_of_cp_4c_and_only_supplied_scenarios_are(tmp_path):
+    text = instruction_text(tmp_path, "CP-4C")
+    for heading in (RECOVERY, ALLOCATION_ONE, ALLOCATION_TWO, SCENARIO_THREE):
+        assert f"`### {heading}`" in text
+    assert text.count("only if the handoff supplies") == 2  # Scenarios 2 and 3, not 1.
+
+
+@pytest.mark.parametrize(
+    "phrases",
+    [
+        (
+            "never worked out here",
+            "Recovery %",
+            "only as the method caps it",
+            "entity and collateral",
+        ),
+        (
+            "not a complete multi-entity waterfall",
+            "do not invent an absent downside or stress case",
+        ),
+        ("Scenario identity", "first row is the enterprise value", "no legal pool order"),
+        ("last row is the value not distributed", "Available value", "negative change"),
+    ],
+)
+def test_the_recovery_tables_carry_their_catalogue_guard(tmp_path, phrases):
+    text = instruction_text(tmp_path, "CP-4C")
+    for phrase in phrases:
+        assert phrase in text, phrase
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "complaint"),
+    [
+        ("| 90 |", "| 90% |", "90%"),
+        ("| 1,200 | 1,080 |", "| 1.2bn | 1,080 |", "1.2bn"),
+        ("| Class | Scenario |", "| Tranche | Scenario |", "Class"),
+        ("| Senior secured | Base |", "| Senior secured |  |", "Scenario"),
+        ("| 120 | 15 | US$m |", "| 120 | 15 | % |", "one Reporting unit"),
+        ("| -1,080 |", "| -1,070 |", "does not equal"),
+        ("| Value not distributed | 700 |", "| Value not distributed | 0 |", "does not equal"),
+        (
+            "| Senior secured distribution | -1,080 | US$m | Synthetic. |\n",
+            "",
+            "does not equal",
+        ),
+        ("| Enterprise value | 2,000 |", "| Enterprise value | 2bn |", "2bn"),
+        ("| Step | Amount |", "| Item | Amount |", "Step"),
+    ],
+)
+def test_checker_sends_back_each_malformed_recovery_table(tmp_path, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, "CP-4C")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def allocation_spec(scenario: int):
+    return next(
+        t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading.endswith(f"scenario {scenario}")
+    )
+
+
+def test_an_unsupplied_scenario_is_not_required_but_the_first_is():
+    absent = "### Findings\n\nNo table."
+    assert cpos_launch.chart_issues(absent, allocation_spec(2)) == ()
+    assert cpos_launch.chart_issues(absent, allocation_spec(3)) == ()
+    assert cpos_launch.chart_issues(absent, allocation_spec(1)) != ()
+
+
+def test_a_scenario_table_that_is_present_is_checked_even_when_optional():
+    text = f"### {ALLOCATION_TWO}\n\n" + synthetic_table(
+        ALLOCATION_HEAD, "| Enterprise value | 1 | US$m | S. |"
+    )
+    assert any(
+        "opening and a closing" in i for i in cpos_launch.chart_issues(text, allocation_spec(2))
+    )
+
+
+def test_a_scenario_with_every_amount_not_supplied_is_accepted():
+    gap = "Not supplied: no valuation row"
+    text = f"### {ALLOCATION_ONE}\n\n" + synthetic_table(
+        ALLOCATION_HEAD,
+        f"| Enterprise value | {gap} | US$m | S. |",
+        f"| Value not distributed | {gap} | US$m | S. |",
+    )
+    assert cpos_launch.chart_issues(text, allocation_spec(1)) == ()
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "Chart data: value allocation - scenario 2",
+        "Chart data: value allocation \u2013 scenario 2",
+        "chart data: Value Allocation \u2014  Scenario 2",
+    ],
+)
+def test_a_misheaded_optional_scenario_is_sent_back_naming_the_exact_heading(heading):
+    text = f"### {heading}\n\n" + synthetic_table(
+        ALLOCATION_HEAD,
+        "| Enterprise value | 1 | US$m | S. |",
+        "| Value not distributed | 1 | US$m | S. |",
+    )
+    (issue,) = cpos_launch.chart_issues(text, allocation_spec(2))
+    assert f"`### {ALLOCATION_TWO}`" in issue
+
+
+def test_the_exact_heading_and_an_absent_one_are_not_a_misheading():
+    absent = "### Chart data: value allocation \u2014 scenario 1\n\nx"
+    assert cpos_launch.chart_issues(absent, allocation_spec(2)) == ()
+
+
+def test_a_recovery_table_with_more_than_three_scenarios_is_sent_back():
+    head = RECOVERY_HEAD
+    rows = [f"| Senior | S{n} | 10 | 5 | 50 | US$m | S. |" for n in range(4)]
+    text = f"### {RECOVERY}\n\n" + synthetic_table(head, *rows)
+    spec = next(t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading == RECOVERY)
+    assert any("at most 3" in i for i in cpos_launch.chart_issues(text, spec))
+    assert cpos_launch.chart_issues(text.replace(rows[-1], ""), spec) == ()
+
+
+# ---- Package 5 (2026-11-10): the calendar lanes. Every value is synthetic.
+def event_spec(module: str):
+    heading = f"Events: {EVENT_LANES[module][0]}"
+    return next(t for t in cpos_launch.OWNER_TABLES[module] if t.heading == heading)
+
+
+def event_text(module: str, *rows: str) -> str:
+    return f"### Events: {EVENT_LANES[module][0]}\n\n" + synthetic_table(EVENT_HEAD, *rows)
+
+
+def event_issues(*rows: str, module: str = "CP-1A") -> tuple[str, ...]:
+    return cpos_launch.chart_issues(event_text(module, *rows), event_spec(module))
+
+
+@pytest.mark.parametrize("module", sorted(EVENT_LANES))
+def test_every_lane_owner_is_asked_for_its_event_table_with_its_guard(tmp_path, module):
+    lane, guard = EVENT_LANES[module]
+    if module in OWNER_PATHWAY or module in COVENANT_MODULES:
+        prepared, *_ = good_task(tmp_path, module)
+        text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+    else:  # CP-2E is in no pathway: only an explicit --modules run reaches it.
+        text = cpos_launch._selector(event_spec(module))
+    assert f"`### Events: {lane}`" in text and f"`{EVENT_HEAD}`" in text
+    assert guard in text and "YYYY-Qn" in text and "Not supplied: <reason>" in text
+
+
+@pytest.mark.parametrize("module", sorted(EVENT_LANES))
+def test_a_good_event_table_is_accepted_for_each_lane(module):
+    assert event_issues(*EVENT_ROWS, module=module) == ()
+
+
+@pytest.mark.parametrize(
+    ("row", "complaint"),
+    [
+        ("| 2025-03 | day | — | E | S | Src | R |", "Event date `2025-03` must be YYYY-MM-DD"),
+        ("| 2025-02-30 | day | — | E | S | Src | R |", "must be YYYY-MM-DD"),
+        ("| 2025-03-31 | month | — | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-13 | month | — | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-Q5 | quarter | — | E | S | Src | R |", "must be YYYY-Qn"),
+        ("| 2025-Q2 | year | — | E | S | Src | R |", "must be YYYY"),
+        ("| 2025 | week | — | E | S | Src | R |", "Date precision `week` must be one of"),
+        ("| 2025-03-31 | day | May 2025 | E | S | Src | R |", "Published `May 2025`"),
+        ("| 2025-03-31 | day | 2025-02-30 | E | S | Src | R |", "Published `2025-02-30`"),
+        ("| 2025-03-31 | day | — | | S | Src | R |", "Event is blank"),
+        ("| 2025-03-31 | day | — | E | S | Not supplied: none | R |", "Source is blank or not"),
+        ("| Not supplied: undated | day | — | E | S | Src | R |", "Event date is blank or not"),
+    ],
+)
+def test_a_malformed_event_row_is_sent_back(row, complaint):
+    issues = event_issues(EVENT_ROWS[0], row)
+    assert any(complaint in i for i in issues), issues
+
+
+def test_an_event_table_of_only_not_supplied_is_valid_and_a_mixed_one_is_not():
+    gap = "Not supplied: the handoff states no dated event"
+    assert event_issues(f"| {gap} |" + f" {gap} |" * 6) == ()
+    assert event_issues(f"| {gap} |" + f" {gap} |" * 6, EVENT_ROWS[0]) != ()
+    assert event_issues(f"| {gap} | day | — | E | S | Src | R |") != ()
+
+
+def test_an_event_table_needs_its_exact_header_and_a_row():
+    wrong = "### Events: Legal\n\n" + synthetic_table(
+        EVENT_HEAD.replace("Event date", "Date"), EVENT_ROWS[0]
+    )
+    assert any(
+        "needs the table headed" in i for i in cpos_launch.chart_issues(wrong, event_spec("CP-4"))
+    )
+    assert any("at least one row" in i for i in event_issues())
+    assert any(
+        "Add `### Events: Legal`" in i for i in cpos_launch.chart_issues("x", event_spec("CP-4"))
+    )
+
+
+@pytest.mark.parametrize("heading", ["events: legal", "Events:  Legal", "EVENTS: LEGAL"])
+def test_a_misheaded_event_table_is_sent_back_naming_the_exact_heading(heading):
+    text = f"### {heading}\n\n" + synthetic_table(EVENT_HEAD, EVENT_ROWS[0])
+    (issue,) = cpos_launch.chart_issues(text, event_spec("CP-4"))
+    assert "`### Events: Legal`" in issue and heading in issue
+
+
+def test_the_checker_sends_back_a_handoff_with_a_bad_event_precision(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-4")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert "| 2025-Q3 | quarter |" in raw
+    bad = raw.replace("| 2025-Q3 | quarter |", "| 2025-Q3 | day |", 1)
+    issues = _checked_handoff(task, bad.encode(), checker(prepared.layout))
+    assert any("must be YYYY-MM-DD" in issue for issue in issues), issues
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+@pytest.mark.parametrize(
+    ("status", "ok"),
+    [
+        ("Historical — completed", True),
+        ("Scheduled — due", True),
+        ("Scenario — modelled downgrade trigger", True),
+        ("Scheduled", False),
+        ("Scheduled - due", False),
+        ("Expected — due", False),
+        ("scheduled — due", False),
+        ("Scenario — ", False),
+    ],
+)
+def test_an_event_status_starts_with_its_kind_and_a_dash(status, ok):
+    issues = event_issues(f"| 2025-03-31 | day | — | E | {status} | Src | R |")
+    assert (issues == ()) is ok, issues
+    assert ok or any("Status" in i for i in issues), issues
+
+
+def test_a_published_date_equal_to_the_event_date_is_sent_back():
+    issues = event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |")
+    assert any("write \u2014" in i for i in issues), issues
+    assert event_issues("| 2025-03-31 | day | 2025-03-30 | E | Scheduled — due | Src | R |") == ()
+    assert event_issues("| 2025-03 | month | 2025-03-31 | E | Scheduled — due | Src | R |") == ()
+
+
+def test_the_event_rules_say_record_once_and_the_status_kinds():
+    text = cpos_launch._selector(event_spec("CP-2H"))
+    assert "Record each event once, in the lane of the module that owns it" in text
+    assert "another module refers to it in Credit relevance" in text
+    assert "`Historical`, `Scheduled` or `Scenario`" in text
+
+
+# ---- Package 6 (2026-11-10): the node/edge maps. Every value is synthetic.
+def map_spec(heading: str):
+    module = MAPS[heading][0]
+    return next(t for t in cpos_launch.OWNER_TABLES[module] if t.heading == heading)
+
+
+def map_issues(heading: str, *rows: str) -> tuple[str, ...]:
+    text = f"### {heading}\n\n" + synthetic_table(EDGE_HEAD, *rows)
+    return cpos_launch.chart_issues(text, map_spec(heading))
+
+
+@pytest.mark.parametrize("heading", sorted(MAPS))
+def test_every_map_owner_is_asked_for_its_edge_table_with_its_vocabulary_and_guard(heading):
+    _, types, guards = MAPS[heading]
+    text = cpos_launch._selector(map_spec(heading))
+    assert f"`### {heading}`" in text and f"`{EDGE_HEAD}`" in text
+    assert all(t in text for t in types) and all(g in text for g in guards)
+    assert "Not supplied: <reason>" in text and "Basis and limitation" not in text
+
+
+@pytest.mark.parametrize("heading", sorted(MAPS))
+def test_a_good_edge_table_is_accepted_and_an_edge_type_outside_the_vocabulary_is_sent_back(
+    heading,
+):
+    _, types, _ = MAPS[heading]
+    good = [f"| A | rel | {t} | B | Src |" for t in types]
+    assert map_issues(heading, *good) == ()
+    (issue,) = map_issues(heading, "| A | rel | Weighted | B | Src |")
+    assert "Edge type `Weighted` must be one of" in issue
+    assert any("Edge type" in i for i in map_issues(heading, "| A | rel | ownership | B | Src |"))
+
+
+def test_an_edge_table_of_only_not_supplied_is_valid_and_a_mixed_or_blank_one_is_not():
+    heading = "Map: stress scenario"
+    gap = "Not supplied: no scenario stated"
+    assert map_issues(heading, f"| {gap} |" + f" {gap} |" * 4) == ()
+    assert map_issues(heading, f"| {gap} |" + f" {gap} |" * 4, "| A | r | Assumption | B | S |")
+    assert any("From is blank" in i for i in map_issues(heading, "| | r | Assumption | B | S |"))
+    assert any(
+        "Evidence is blank" in i for i in map_issues(heading, "| A | r | Assumption | B | |")
+    )
+    assert any("at least one row" in i for i in map_issues(heading))
+
+
+def test_an_edge_table_needs_its_exact_header_and_a_misheaded_one_names_the_heading():
+    heading = "Map: legal entities"
+    wrong = f"### {heading}\n\n" + synthetic_table(EDGE_HEAD.replace("From", "Source"), "")
+    assert any(
+        "needs the table headed" in i for i in cpos_launch.chart_issues(wrong, map_spec(heading))
+    )
+    missing = cpos_launch.chart_issues("x", map_spec(heading))
+    assert any(f"Add `### {heading}`" in i for i in missing)
+    near = "### map: Legal entities\n\n" + synthetic_table(
+        EDGE_HEAD, "| A | r | Ownership | B | S |"
+    )
+    (issue,) = cpos_launch.chart_issues(near, map_spec(heading))
+    assert f"`### {heading}`" in issue
+
+
+def test_the_cp4_map_rules_say_the_narrow_registers_alone_do_not_make_a_graph():
+    for heading in ("Map: legal entities", "Map: intercreditor"):
+        assert "narrow registers alone do not establish" in map_spec(heading).rules
+
+
+@pytest.mark.parametrize("dash", ["—", "-", "–"])
+def test_a_dash_is_not_edge_evidence_and_is_sent_back(dash):
+    issues = map_issues("Map: stress scenario", f"| A | r | Assumption | B | {dash} |")
+    assert any("Evidence" in i and "names its source" in i for i in issues), issues
+
+
+# ---- Package 8 (2026-11-10): one "states none" escape for every row table. Synthetic values.
+ROW_SPECS = [
+    t for tables in cpos_launch.OWNER_TABLES.values() for t in tables if t.columns and not t.bare
+]
+NONE_GAP = "Not supplied: the handoff states none"
+
+
+def none_text(spec, *, unit: str = "US$m", basis: str = "Synthetic.") -> str:
+    header = cpos_launch._chart_header(spec)
+    cells = [NONE_GAP] * (len(header) - 2) + [unit, basis]
+    return f"### {spec.heading}\n\n" + synthetic_table(
+        "| " + " | ".join(header) + " |", "| " + " | ".join(cells) + " |"
+    )
+
+
+@pytest.mark.parametrize("spec", ROW_SPECS, ids=lambda s: s.heading)
+def test_every_row_table_accepts_one_all_gap_row_as_the_module_stating_none(spec):
+    assert cpos_launch.chart_issues(none_text(spec), spec) == ()
+    assert cpos_launch._selector(spec).count("states none") == 1
+
+
+@pytest.mark.parametrize("spec", ROW_SPECS, ids=lambda s: s.heading)
+def test_an_all_gap_row_still_states_its_unit_and_basis_and_is_not_mixed_with_real_rows(spec):
+    assert cpos_launch.chart_issues(none_text(spec, basis=""), spec)
+    assert cpos_launch.chart_issues(none_text(spec, unit=""), spec)
+    mixed = none_text(spec)
+    row = mixed.splitlines()[-1].replace(NONE_GAP, "x", 1)
+    assert cpos_launch.chart_issues(mixed + "\n" + row, spec)
+
+
+def test_a_debt_stack_left_with_no_ranked_facility_may_state_none():
+    spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
+    assert cpos_launch.chart_issues(none_text(spec), spec) == ()
+    assert "left out" in spec.rules and "states none" in cpos_launch._selector(spec)
+
+
+def test_a_repeated_class_and_scenario_row_is_sent_back_but_a_repeated_class_is_not():
+    spec = next(t for t in ROW_SPECS if t.heading == RECOVERY)
+    one = "| Senior | Base | 100 | 50 | 50 | US$m | S. |"
+    other = "| Senior | Downside | 100 | 20 | 20 | US$m | S. |"
+    duplicate = f"### {RECOVERY}\n\n" + synthetic_table(RECOVERY_HEAD, one, one)
+    assert any("Senior" in i and "twice" in i for i in cpos_launch.chart_issues(duplicate, spec))
+    distinct = f"### {RECOVERY}\n\n" + synthetic_table(RECOVERY_HEAD, one, other)
+    assert cpos_launch.chart_issues(distinct, spec) == ()
+
+
+def test_a_user_reminder_status_the_cp6_guard_names_is_accepted_and_a_lookalike_is_not():
+    row = "| 2026-01-15 | day | — | Review | {} | Analyst note | Review date |"
+    for status in ("User reminder", "User reminder — due"):
+        assert event_issues(row.format(status), module="CP-6") == (), status
+    for status in ("User reminders", "user reminder", "User reminder -"):
+        assert event_issues(row.format(status), module="CP-6"), status
+    guard = cpos_launch.EVENT_LANES["CP-6"][1]
+    assert "labelled `User reminder` in Status" in guard
+
+
+def test_the_currency_sentence_is_sent_only_with_a_unit_constraint():
+    sentence = "reported in <unit>"
+    for spec in ROW_SPECS:
+        assert (sentence in cpos_launch._selector(spec)) is bool(spec.chart_unit), spec.heading
+    bridge = next(t for ts in cpos_launch.OWNER_TABLES.values() for t in ts if t.steps)
+    assert sentence in cpos_launch._selector(bridge)
+
+
+def test_the_value_allocation_rules_are_sent_once_to_their_module(tmp_path):
+    text = instruction_text(tmp_path, "CP-4C")
+    assert text.count("Scenario identity is the label of its source valuation row") == 1
+
+
+@pytest.mark.parametrize("module", ["CP-1A", "CP-4"])
+def test_shared_edge_rules_are_sent_once_per_module(tmp_path, module):
+    text = instruction_text(tmp_path, module)
+    assert text.count(cpos_launch.EDGE_RULES) == 1

@@ -122,6 +122,14 @@ MONTHS = (
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 
 
+def valid_date(text: str) -> bool:
+    """A real YYYY-MM-DD calendar date (not merely that shape)."""
+    try:
+        return bool(ISO_DATE.fullmatch(text)) and bool(datetime.date.fromisoformat(text))
+    except ValueError:
+        return False
+
+
 def display_date(iso: Any) -> Any:
     """`31 December 2024` for a valid YYYY-MM-DD calendar date; any other text unchanged."""
     if not isinstance(iso, str) or not ISO_DATE.fullmatch(iso):
@@ -144,6 +152,81 @@ CHART_PREFIX = "Chart data: "
 CHART_LAST_COLUMNS = ["Reporting unit", "Basis and limitation"]
 CHART_FIRST_COLUMNS = ("Period", "Step")  # Periods are columns over time; steps are a bridge.
 STEP_HEADERS = ["Step", "Amount", *CHART_LAST_COLUMNS]
+DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
+# Row tables the launcher asks for (cpos_launch.py OWNER_TABLES with `columns`): the exact leading
+# header, the drawn kind with its column roles, the numeric columns and the columns of fixed words.
+BULLET = {"kind": "bullet", "direction": 4}  # Direction is the last column before the unit.
+ROW_CHARTS: tuple[tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[int, Any]], ...] = (
+    (
+        ("Facility", "Ranking", "Secured", "Amount", "Cumulative leverage"),
+        {"kind": "stack", "label": 0, "rank": 1, "secured": 2, "amount": 3, "leverage": 4},
+        (3, 4),
+        {2: ("Yes", "No")},
+    ),
+    (
+        ("Test", "Threshold", "Current", "Headroom", "Direction"),
+        {**BULLET, "label": [0], "threshold": 1, "current": 2, "headroom": 3},
+        (1, 2),
+        {3: "gap", 4: DIRECTIONS},
+    ),
+    (
+        ("Agency", "Trigger", "Threshold", "Current", "Direction"),
+        {**BULLET, "label": [0, 1], "threshold": 2, "current": 3, "headroom": None},
+        (2, 3),
+        {4: DIRECTIONS},
+    ),
+    (
+        ("Limit", "Current exposure", "Proposed exposure", "Limit value"),
+        {"kind": "limits", "label": 0, "current": 1, "proposed": 2, "limit": 3},
+        (1, 2, 3),
+        {},
+    ),
+    (
+        ("Measure", "Prior period", "Prior", "Current period", "Current"),
+        {"kind": None, "label": 0, "sub": [1, 3], "periods": [1, 3], "prior": 2, "current": 4},
+        (2, 4),
+        {1: "gap", 3: "gap"},
+    ),
+    (
+        ("Metric", "Issuer", "Peer low", "Peer median", "Peer high", "Peer count"),
+        {"kind": "range", "label": 0, "issuer": 1, "low": 2, "median": 3, "high": 4, "count": 5},
+        (1, 2, 3, 4),
+        {5: "count"},
+    ),
+    (
+        ("Instrument", "Maturity date", "Yield", "Spread", "Quote date", "Source class"),
+        {
+            "kind": "scatter",
+            "label": 0,
+            "date": 1,
+            "yield": 2,
+            "spread": 3,
+            "quoted": 4,
+            "source": 5,
+        },
+        (2,),
+        {1: "date", 3: "gap", 4: "date"},
+    ),
+    (
+        ("Class", "Scenario", "Claim", "Recovery", "Recovery %"),
+        {
+            "kind": "recovery",
+            "label": 0,
+            "scenario": 1,
+            "claim": 2,
+            "recovery": 3,
+            "percent": 4,
+        },
+        (2, 3, 4),
+        {},
+    ),
+)
+# The two tables of the pair header differ only by heading: the results are grouped columns (one
+# unit, so one scale), the margin and KPI changes a dumbbell per row.
+PAIR_KINDS = {
+    f"{CHART_PREFIX}prior and current results": "grouped",
+    f"{CHART_PREFIX}margin and KPI changes": "dumbbell",
+}
 
 
 def physical_lines(text: str) -> list[str]:
@@ -345,6 +428,108 @@ def listed_bytes(folder: Path, delivery: dict[str, Any], name: str) -> bytes | N
     return data if hashlib.sha256(data).hexdigest() == delivery["files"][name] else None
 
 
+def _passport_sources(
+    refs: list[str], passports: dict[str, dict[str, str]]
+) -> list[dict[str, str]]:
+    """The distinct (source, pin) pairs the report's passports state for these cell references."""
+    pairs: list[dict[str, str]] = []
+    for ref in refs:
+        fields = passports.get(ref, {})
+        pair = {"source": fields.get("Source", ""), "pin": fields.get("SHA-256", "")}
+        if pair["source"] and pair["pin"] and pair not in pairs:
+            pairs.append(pair)
+    return pairs
+
+
+def _view_figures(view: dict[str, Any]) -> list[dict[str, Any]]:
+    """One entry per figure and per table of a report-view.json, as it states them: title, periods,
+    unit, note, point count and the sources its cells cite. Nothing is recomputed."""
+    passports = {
+        p["ref_id"]: {f["name"]: f["value"] for f in p["fields"]} for p in view["passports"]
+    }
+
+    def refs(rows: list[dict[str, Any]]) -> list[str]:
+        return [c["ref_id"] for r in rows for c in r["cells"] if c.get("ref_id")]
+
+    found: list[dict[str, Any]] = []
+    for block in view["blocks"]:
+        for figure in block["figures"]:
+            chart = figure["chart"]
+            rows = chart["table_twin"]["rows"]
+            periods = [
+                r["label"].partition(" \u00b7 ")[2] for r in rows if " \u00b7 " in r["label"]
+            ]
+            found.append(
+                {
+                    "title": figure["title"],
+                    "kind": "Figure",
+                    "periods": list(dict.fromkeys(periods)),
+                    "unit": chart.get("unit") or chart["table_twin"].get("scale"),
+                    "unitClass": chart.get("unit_class"),
+                    "note": block.get("note") or figure.get("summary"),
+                    "points": len(rows),
+                    "sources": _passport_sources(refs(rows), passports),
+                }
+            )
+        if block["kind"] in ("period_grid", "dense", "keyvalue") and block["rows"]:
+            found.append(
+                {
+                    "title": block["title"],
+                    "kind": "Table",
+                    "periods": [c for c in block["columns"] if re.search(r"\d{4}", c)]
+                    if block["kind"] == "period_grid"
+                    else [],
+                    "unit": block.get("scale")
+                    or ("Stated per row" if "Unit" in block["columns"] else None),
+                    "unitClass": None,
+                    "note": block.get("note"),
+                    "points": len(block["rows"]),
+                    "sources": _passport_sources(refs(block["rows"]), passports),
+                }
+            )
+    return found
+
+
+def report_figures(
+    folder: Path, delivery: dict[str, Any]
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """The figures and tables of folder/report-view.json when delivery.json lists it with a hash
+    that matches, read only. (None, None) when the delivery lists none; (None, issue) when the
+    listed file does not match or cannot be read: named, never silent."""
+    files = delivery.get("files")
+    if not isinstance(files, dict) or "report-view.json" not in files:
+        return None, None
+    try:
+        raw = listed_bytes(folder, delivery, "report-view.json")
+        if raw is None:
+            return None, f"{folder.name}: report-view.json is not the plain file its delivery lists"
+        return _view_figures(json.loads(raw.decode("utf-8"))), None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as error:
+        return None, f"{folder.name}: report-view.json could not be read ({describe(error)})"
+
+
+def recorded_revisions(run_dir: Path, issues: list[str]) -> list[tuple[str, str]]:
+    """The earlier run ids this run records: cap.json `replayed_from_run` (a rerun of it) and
+    research/attachments.json `supersedes`. Read only. A missing file records nothing; one that
+    cannot be read is named in `issues`."""
+    found: list[tuple[str, str]] = []
+    for name, key, word in (
+        ("cap.json", "replayed_from_run", "Rerun of"),
+        ("research/attachments.json", "supersedes", "Supersedes"),
+    ):
+        try:
+            raw = b"".join(regular_chunks(run_dir / name, follow=False))
+            earlier = json.loads(raw.decode("utf-8")).get(key)
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError, AttributeError, TypeError, RecursionError) as error:
+            issues.append(f"{run_dir.name}: {name} could not be read ({describe(error)})")
+            continue
+        if isinstance(earlier, str) and earlier:
+            found.append((word, earlier))
+    return found
+
+
 def describe(error: BaseException) -> str:
     """An error as its type and a short reason; never the repr, which can hold file bytes."""
     if isinstance(error, UnicodeDecodeError):
@@ -509,14 +694,110 @@ def _bridge_amounts(table: dict[str, Any]) -> list[decimal.Decimal] | None:
     return values if sum(values[:-1], decimal.Decimal(0)) == values[-1] else None
 
 
-def _unsupplied_bridge(section: dict[str, Any]) -> bool:
-    """A step table whose every Amount is a stated `Not supplied: <reason>`: nothing to draw."""
+def _chart_gap(section: dict[str, Any]) -> dict[str, Any] | None:
+    """A fixed owner table explicitly stating no data; preserve its reason without a chart."""
     tables = [b for b in section["blocks"] if b["type"] == "table"]
-    return (
-        len(tables) == 1
-        and tables[0]["headers"] == STEP_HEADERS
-        and len(tables[0]["rows"]) > 0
-        and all(STATED_GAP.match(row["cells"][1]) for row in tables[0]["rows"])
+    if len(tables) != 1 or not tables[0]["rows"]:
+        return None
+    table = tables[0]
+    headers, rows = table["headers"], [r["cells"] for r in table["rows"]]
+    step = headers == STEP_HEADERS
+    known = tuple(headers[:-2]) in {leading for leading, *_ in ROW_CHARTS}
+    if not (step or known) or headers[-2:] != CHART_LAST_COLUMNS:
+        return None
+    if any(len(row) != len(headers) or not all(row[-2:]) for row in rows):
+        return None
+    cells = [c for row in rows for c in (row[1:2] if step else row[:-2])]
+    if not all(STATED_GAP.match(c) for c in cells):
+        return None
+    reasons = list(dict.fromkeys(c.partition(":")[2].strip() for c in cells))
+    return {**_chart_head(section, table), "gap": "; ".join(reasons)}
+
+
+def _row_relations_ok(rows: list[dict[str, Any]], kind: str | None) -> bool:
+    """Cross-cell constraints mirrored from the launcher; no value is filled or recomputed."""
+    cells = [r["cells"] for r in rows]
+    if kind == "range":
+        values = [
+            [decimal.Decimal(c.replace(",", "")) for c in row[2:5] if PLAIN_AMOUNT.fullmatch(c)]
+            for row in cells
+        ]
+        return all(v == sorted(v) for v in values)
+    if kind == "scatter":
+        return all(not (valid_date(r[1]) and valid_date(r[4])) or r[1] >= r[4] for r in cells)
+    if kind == "recovery":
+        keys = [(r[0], r[1]) for r in cells]
+        return len({r[1] for r in cells}) <= 3 and len(keys) == len(set(keys))
+    return True
+
+
+def _row_cell_ok(cell: str, column: int, numeric: tuple[int, ...], words: dict[int, Any]) -> bool:
+    """Mirrors the launcher's cell check for a row table: a plain number or a stated gap in a
+    numeric column, one of the fixed words in a word column, anything stated elsewhere."""
+    if column in numeric:
+        return bool(PLAIN_AMOUNT.fullmatch(cell) or STATED_GAP.match(cell))
+    if words.get(column) == "date":
+        return bool(valid_date(cell) or STATED_GAP.match(cell))
+    if words.get(column) == "count":  # A whole number of peers, zero included.
+        return bool(re.fullmatch(r"\d+", cell) or STATED_GAP.match(cell))
+    if words.get(column) == "gap":
+        return bool(cell)
+    if column in words:
+        return cell in words[column]
+    return bool(cell and not STATED_GAP.match(cell))
+
+
+def _ranks_in_order(rows: list[dict[str, Any]], column: int) -> bool:
+    """Legal rank is a positive whole number that never falls down the rows (as the launcher)."""
+    ranks = [row["cells"][column] for row in rows]
+    if not all(re.fullmatch(r"[1-9]\d*", rank) for rank in ranks):
+        return False
+    return [int(r) for r in ranks] == sorted(int(r) for r in ranks)
+
+
+def _row_chart(table: dict[str, Any]) -> dict[str, Any] | None:
+    """A debt stack, headroom or portfolio-limit table that is in its fixed shape, else None."""
+    headers, rows = table["headers"], table["rows"]
+    for leading, roles, numeric, words in ROW_CHARTS:
+        if tuple(headers[:-2]) != leading or headers[-2:] != CHART_LAST_COLUMNS:
+            continue
+        if any(len(row["cells"]) != len(headers) for row in rows):
+            return None
+        stated = all(
+            _row_cell_ok(cell, at, numeric, words)
+            for row in rows
+            for at, cell in enumerate(row["cells"][:-2])
+        ) and all(row["cells"][-2] and row["cells"][-1] for row in rows)
+        if not stated or ("rank" in roles and not _ranks_in_order(rows, roles["rank"])):
+            return None
+        if not _row_relations_ok(rows, roles["kind"]):
+            return None
+        if roles["kind"] == "stack" and any(
+            not STATED_GAP.match(r["cells"][3]) and r["cells"][-2] != "US$m" for r in rows
+        ):
+            return None
+        units = {row["cells"][-2] for row in rows}
+        # A single stated unit is the figure's; rows in different units each state their own.
+        return {**roles, "unit": units.pop() if len(units) == 1 else "", "columns": list(numeric)}
+    return None
+
+
+def _chart_head(section: dict[str, Any], table: dict[str, Any]) -> dict[str, Any]:
+    # Only the first letter is raised: an acronym in the heading keeps its case.
+    title = section["heading"].removeprefix(CHART_PREFIX)
+    return {"title": title[:1].upper() + title[1:], "table": table["line"]}
+
+
+def _period_cells_ok(section: dict[str, Any], table: dict[str, Any]) -> bool:
+    """Owner period and step tables use US$m, except cells explicitly stating a gap."""
+    fixed = table["headers"][0] == "Step" or section["heading"] in (
+        "Chart data: revenue and EBITDA",
+        "Chart data: refinancing need",
+    )
+    return not fixed or all(
+        STATED_GAP.match(c) or (PLAIN_AMOUNT.fullmatch(c) and r["cells"][-2] == "US$m")
+        for r in table["rows"]
+        for c in r["cells"][1:-2]
     )
 
 
@@ -527,18 +808,28 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
         return None
     table = tables[0]
     headers = table["headers"]
+    if any(len(r["cells"]) != len(headers) or not all(r["cells"][-2:]) for r in table["rows"]):
+        return None
+    if headers[0] not in CHART_FIRST_COLUMNS:
+        head = _chart_head(section, table)
+        drawn = _row_chart(table)
+        if drawn and drawn["kind"] is None:  # The pair header: its heading says how it is drawn.
+            kind = PAIR_KINDS.get(section["heading"])
+            grouped = kind == "grouped" and not drawn["unit"]  # One scale needs one unit.
+            drawn = None if kind is None or grouped else {**drawn, "kind": kind}
+        if drawn and drawn["kind"] == "recovery" and not drawn["unit"]:
+            drawn = None  # The recoveries share one scale, so one unit.
+        return drawn and {**head, **drawn}
     if (
         len(headers) < 4
-        or headers[0] not in CHART_FIRST_COLUMNS
         or headers[-2:] != CHART_LAST_COLUMNS
+        or not _period_cells_ok(section, table)
     ):
         return None
-    chart: dict[str, Any] = {
-        # Only the first letter is raised: an acronym in the heading keeps its case.
-        "title": section["heading"].removeprefix(CHART_PREFIX)[:1].upper()
-        + section["heading"].removeprefix(CHART_PREFIX)[1:],
-        "unit": table["rows"][0]["cells"][-2],
-        "table": table["line"],
+    valued = [r for r in table["rows"] if any(PLAIN_AMOUNT.fullmatch(c) for c in r["cells"][1:-2])]
+    chart = {
+        **_chart_head(section, table),
+        "unit": (valued or table["rows"])[0]["cells"][-2],
         "columns": list(range(1, len(headers) - 2)),
     }
     if headers[0] == "Step":
@@ -548,22 +839,128 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
     return chart
 
 
+EVENT_PREFIX = "Events: "
+EVENT_HEADERS = [
+    *("Event date", "Date precision", "Published", "Event"),
+    *("Status", "Source", "Credit relevance"),
+]
+EVENT_SHAPES = {
+    "month": re.compile(r"\d{4}-(?:0[1-9]|1[0-2])", re.ASCII),
+    "quarter": re.compile(r"\d{4}-Q[1-4]", re.ASCII),
+    "year": re.compile(r"\d{4}", re.ASCII),
+}
+
+
+EVENT_STATUS = re.compile(
+    r"(?:Historical|Scheduled|Scenario) \u2014 \S|User reminder(?: \u2014 \S|$)"
+)
+
+
+def _event_row_ok(cells: list[str]) -> bool:
+    """Mirrors the launcher's check: every cell stated, the date in the form its precision names."""
+    when, precision, published = cells[:3]
+    shape = EVENT_SHAPES.get(precision)
+    dated = valid_date(when) if precision == "day" else bool(shape and shape.fullmatch(when))
+    stated = all(c and not STATED_GAP.match(c) for c in cells)
+    kind = EVENT_STATUS.match(cells[4])
+    return bool(
+        dated
+        and stated
+        and kind
+        and (published == "\u2014" or valid_date(published))
+        and published != when
+    )
+
+
+def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:
+    """A calendar lane from an `Events: <lane>` table in its fixed shape, else None. A table of
+    only stated gaps is a lane with its reason and no events."""
+    tables = [b for b in section["blocks"] if b["type"] == "table"]
+    if len(tables) != 1 or tables[0]["headers"] != EVENT_HEADERS or not tables[0]["rows"]:
+        return None
+    rows = [row["cells"] for row in tables[0]["rows"]]
+    lane = {"lane": section["heading"].removeprefix(EVENT_PREFIX), "table": tables[0]["line"]}
+    if all(STATED_GAP.match(c) for cells in rows for c in cells):
+        return {**lane, "gap": rows[0][0].partition(":")[2].strip()}
+    return {**lane, "gap": None} if all(_event_row_ok(cells) for cells in rows) else None
+
+
+MAP_PREFIX = "Map: "
+MAP_HEADERS = ["From", "Relationship", "Edge type", "To", "Evidence"]
+_FACTS = ("Documentary Fact", "Management Language", "Analyst Interpretation")
+# Mirrors the launcher's MAPS (cpos_launch.py): each map's own words for an edge type.
+MAP_EDGES = {
+    "ownership and control": ("Ownership", "Legal control", "Guarantee", "Other stated"),
+    "operating model to credit": (*_FACTS, "Insufficient Information"),
+    "credit-risk transmission": (*_FACTS, "Insufficient Information"),
+    "stress scenario": ("Assumption", "Test outcome", "Explanation"),
+    "legal entities": ("Ownership", "Guarantee", "Security", "Structural claim"),
+    "intercreditor": (
+        "Payment rank",
+        "Security rank",
+        "Enforcement control",
+        "Standstill",
+        "Release",
+    ),
+    "support and contradiction": ("Supports", "Contradicts", "Unresolved"),
+}
+
+
+def _edge_map(section: dict[str, Any]) -> dict[str, Any] | None:
+    """A node/edge map from a `Map: <name>` table in its fixed shape, else None. Every edge type is
+    one of the map's own words and every other cell is stated; a table of only stated gaps is a
+    map with its reason and no edge."""
+    name = section["heading"].removeprefix(MAP_PREFIX)
+    tables = [b for b in section["blocks"] if b["type"] == "table"]
+    if name not in MAP_EDGES or len(tables) != 1 or tables[0]["headers"] != MAP_HEADERS:
+        return None
+    rows = [row["cells"] for row in tables[0]["rows"]]
+    drawn = {"name": name, "table": tables[0]["line"]}
+    if rows and all(STATED_GAP.match(c) for cells in rows for c in cells):
+        return {**drawn, "gap": rows[0][0].partition(":")[2].strip()}
+    stated = all(c and not STATED_GAP.match(c) for cells in rows for c in cells)
+    stated = stated and all(cells[4] not in ("\u2014", "-", "\u2013") for cells in rows)
+    legal = stated and all(cells[2] in MAP_EDGES[name] for cells in rows)
+    return {**drawn, "gap": None} if rows and legal else None
+
+
 def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
     """A handoff's reader section and chart tables; a malformed one is named, the handoff reads."""
-    summary, charts, problems = None, [], []
+    charts: list[dict[str, Any]] = []
+    gaps: list[dict[str, Any]] = []
+    summary, events, maps, problems = None, [], [], []
     for section in sections:
         heading = section["heading"]
         if heading == "Reader summary":
             summary = _reader_summary(section)
             if summary is None:
                 problems.append("Reader summary is not in its two tables")
-        elif heading.startswith(CHART_PREFIX):
-            chart = _chart_table(section)
-            if chart:
-                charts.append(chart)
-            elif not _unsupplied_bridge(section):
+        elif heading.startswith(EVENT_PREFIX):
+            lane = _event_lane(section)
+            if lane:
+                events.append(lane)
+            else:
                 problems.append(f"{heading} is not in its fixed table")
-    return {"summary": summary, "charts": charts, "issue": "; ".join(problems) or None}
+        elif heading.startswith(MAP_PREFIX):
+            edge_map = _edge_map(section)
+            if edge_map:
+                maps.append(edge_map)
+            else:
+                problems.append(f"{heading} is not in its fixed table")
+        elif heading.startswith(CHART_PREFIX):
+            chart = _chart_gap(section) or _chart_table(section)
+            if chart:
+                (gaps if "gap" in chart else charts).append(chart)
+            else:
+                problems.append(f"{heading} is not in its fixed table")
+    return {
+        "summary": summary,
+        "charts": charts,
+        "chartGaps": gaps,
+        "events": events,
+        "maps": maps,
+        "issue": "; ".join(problems) or None,
+    }
 
 
 # Evidence & audit by heading (R31a); Python decides it and the page reads the placement.
@@ -844,6 +1241,11 @@ def collect_runs(
         with_outputs = [module for module in modules if modules[module]["outputs"]]
         recorded = recorded_run(run_dir, issues)
         runs[key] = {
+            "runId": recorded.get("run_id"),
+            "revisions": [
+                {"word": word, "id": run_id, "run": None}
+                for word, run_id in recorded_revisions(run_dir, issues)
+            ],
             "folder": folder,
             "issuer": issuer,
             "title": title,
@@ -971,15 +1373,15 @@ def catalogue_reports(
             seen.add(name)
             # Documented fail-open: reported in Settings; the other deliverables stay readable.
             try:
-                reports.append(
-                    report_record(
-                        folder,
-                        artifact,
-                        sources,
-                        keys,
-                        delivery_and_view(root, folder, manifests),
-                    )
-                )
+                read = delivery_and_view(root, folder, manifests)
+                record = report_record(folder, artifact, sources, keys, read)
+                record["figures"], figure_issue = report_figures(root / folder, read[0])
+                # Set exactly when the delivery lists report-view.json and it failed: the page
+                # tells that apart from a delivery that lists none.
+                record["figuresIssue"] = figure_issue
+                if figure_issue:
+                    issues.append(figure_issue)
+                reports.append(record)
             except (
                 OSError,
                 ValueError,
@@ -3030,6 +3432,11 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
             sources.setdefault(digest, []).extend(matches)
         pins |= part[4]
         found += part[5]
+    # A recorded earlier run is linked only when the library holds a run with that id.
+    by_id = {run["runId"]: key for key, run in runs.items() if run["runId"]}
+    for run in runs.values():
+        for revision in run["revisions"]:
+            revision["run"] = by_id.get(revision["id"])
     fields, keys = issuer_groups({key: recorded[key] for key in runs}, found)
     for key, identity in fields.items():
         runs[key].update(identity)
