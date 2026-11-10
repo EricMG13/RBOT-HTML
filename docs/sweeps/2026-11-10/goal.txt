@@ -1,0 +1,5 @@
+Sweep (refactoring, then optimisation) of the Python code against origin/main c145b16.
+Contract: docs/sweeps/2026-11-10/CONTRACT.md. Bounds: 6 landed items, 2 fix rounds each, 800 changed lines.
+Do not edit apps/issuer-library/credit_os/web/, docs/design/, .impeccable/, tests/test_library_page_browser.py, tests/browser_probe_*.js.
+Done: register dispositioned, affected tests and tools/quality_gate.py exit 0, REPORT.md written, one VERIFICATION.md entry, PR open and unmerged.
+Resume from .superpowers/sdd/sweep-2026-11-10/progress.md and register.md, and the actual tree.

@@ -4,6 +4,25 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Refactoring and optimisation sweep (branch `claude/refactor-optimisation-sweep-01c49e`, tip `dc90974`)
+
+Scope: synthetic tests, scratch harnesses and a scratch copy of four retained runs on macOS. No
+provider was called and nothing ran on Windows. Report with all measurements and the open rows:
+`docs/sweeps/2026-11-10/REPORT.md`.
+- Fixed test-first: `state.declared` was `None` for every real handoff (now Blocked 11, Requires
+  More Work 2 on `cpos-tdg-sol-medium-all-001`); the watcher accepted a cap above the ruling's
+  USD 20; an overflowing source-text page number stopped the build; a drive-relative source name
+  was accepted.
+- Measured: watcher step at 200 ended runs 801.6 ms to 2.4 ms (16,200 file opens to 0); library
+  rebuild of four runs 0.777 s to 0.576 s, bytes read 185.4 MB to 65.7 MB, built library identical
+  (build time masked).
+- Gates on `dc90974`, exit 0: the quality gate (0 findings in 19 files); the `checks.yml` pytest
+  command plus the chips and inbox tests (1,392 passed, 7 deselected); node page logic (97 pass).
+- Reviews: per task and whole branch; one Medium (a "failed" run with a live launcher kept its
+  empty activity entry) fixed in `f28523a` and re-reviewed.
+- Not verified: Windows; a live watcher or provider path; the browser tests and the page's
+  rendering of the declared statuses; the full suite; ten open or decision rows listed in the report.
+
 ## 2026-11-10 — Run report Phase A (library Overview and module pages)
 
 Scope: the library page Overview is now a run report (what the run establishes, credit story by
