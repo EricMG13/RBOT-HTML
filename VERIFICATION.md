@@ -46,6 +46,14 @@ the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `orig
   included), quality gate exit 0. Known: on portrait A4 the printed library table runs 8px past
   its card edge (nine columns of whole words); nothing is cut. Module tables with hostile cell text
   scroll sideways in their own box, as before.
+- Library simplification (owner: one item per column; `/impeccable` distill): ten single-value
+  columns, issuer rail replaced by an Issuer select, filters as a toolbar. Headless Chrome on the
+  built TDG library: rows 41px at 1440 and 1280 (one 31-character run id wraps at 1280); six routes
+  × six widths without overflow; hostile text contained at 1280 and 500px; a flow probe with a
+  synthetic second issuer covered `?issuer=zzz` in the address, the select, Reset, Any run, sort,
+  row selection and the panel heading, with no script error. Printed to PDF and read (the run id
+  column wraps to several lines on portrait A4). 106 node tests; 103 pytest (library set, browser
+  included). Superseded by this: the basis clamp and its focus rule above.
 - Not verified: a real print dialog and printers; Safari and Firefox; a screen reader; Windows
   forced colours (rule written, not rendered); touch input; the inbox-built library with Run
   activity; runs without charts or with a committee band; whether a keyboard-only reader finds

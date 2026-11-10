@@ -421,7 +421,7 @@ function resetLibrary() {
 }
 // Clicks inside the Library screen; true when one was handled.
 function libraryClick(target) {
-  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),nav=target.closest('[data-library-nav],[data-library-issuer]'),source=target.closest('[data-library-source]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
+  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),source=target.closest('[data-library-source]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
   if(choose) {
     libraryState.selected=choose.dataset.librarySelect;updateLibrary();
     $('run-detail').focus({preventScroll:true});$('run-detail').scrollIntoView({block:'start'});
@@ -429,13 +429,6 @@ function libraryClick(target) {
     const key=sort.dataset.librarySort;
     libraryState.direction=libraryState.sortKey===key&&libraryState.direction==='asc'?'desc':'asc';libraryState.sortKey=key;
     updateLibrary();$('library-results').querySelector(`[data-library-sort="${key}"]`).focus();
-  } else if(nav) {
-    const {libraryNav:kind,libraryIssuer:issuer}=nav.dataset;
-    if(kind==='all')resetLibrary();
-    else if(kind==='reports')Object.assign(libraryFilters,{issuer:'',availability:'report'});
-    else libraryFilters.issuer=LibraryLogic.issuerKey(libraryFilters.issuer)===LibraryLogic.issuerKey(issuer)?'':issuer;
-    updateLibrary(true);
-    [...$('library-nav').querySelectorAll('button')].find(b=>b.dataset.libraryNav===kind&&b.dataset.libraryIssuer===issuer).focus();
   } else if(hide) {
     libraryState.hidden=hide.dataset.libraryHidden;updateLibrary();$('library-hidden-title').focus();
   } else if(back) {

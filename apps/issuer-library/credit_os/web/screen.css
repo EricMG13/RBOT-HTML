@@ -97,20 +97,11 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .badge-navy{background:var(--navy);border-color:var(--navy);color:#fff}
 .badge-attention{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
 .muted{color:var(--text-quaternary)}
-/* Library: issuer navigator, screening panel, results table and selected-run detail */
-.library-screen{display:grid;grid-template-columns:216px minmax(0,1fr);gap:24px;align-items:start}
-.library-nav{display:flex;flex-direction:column;gap:4px;position:sticky;top:0}
-.nav-choice{display:flex;align-items:center;gap:8px;min-height:36px;padding:6px 10px;border-radius:var(--radius-control);color:var(--text-secondary);font-weight:500;text-align:left}
-.nav-choice>span:not(.monogram):not(.count){flex:1;min-width:0;overflow-wrap:anywhere}
-.nav-choice .count,.monogram{font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
-.monogram{display:grid;place-items:center;width:30px;height:24px;border-radius:var(--radius-inline);background:var(--gray-100)}
-.nav-choice:hover{background:var(--gray-50)}
-.nav-choice.active{background:var(--blue-50);color:var(--blue-700)}
-.library-nav .eyebrow,.run-detail .eyebrow{margin:14px 10px 4px;font:600 var(--fs-label)/16px 'Red Hat Text',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary)}
+/* Library: screening toolbar, results table and selected-run detail */
 .library-main{display:flex;flex-direction:column;gap:20px;min-width:0}
-.library-panel,.run-detail{padding:16px 18px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:#fff;box-shadow:var(--shadow-xs)}
-.block-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
-.block-head h2,.run-detail h2{font-size:18px}
+/* The filters are a toolbar on the canvas, not a card: the table is the page's one framed region above the selected run. */
+.run-detail{padding:16px 18px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:#fff;box-shadow:var(--shadow-xs)}
+.run-detail h2{font-size:18px}
 .search-row{display:flex;gap:12px;align-items:center;margin-bottom:12px}
 .library-search{position:relative;flex:1;max-width:420px}
 .library-search img{position:absolute;left:12px;top:10px;width:20px;height:20px;opacity:.55;pointer-events:none}
@@ -126,30 +117,26 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 #library-filters summary{cursor:pointer;font-weight:600;margin-bottom:12px}
 #library-count{font-size:var(--fs-control);color:var(--text-tertiary);margin-bottom:8px}
 .library-coverage{font-size:var(--fs-compact);color:var(--text-tertiary);margin-bottom:8px}.library-coverage p{margin:2px 0}.hidden-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.facility h4,.facility h5{margin:12px 0 6px}
-.library-table{width:100%;border-collapse:collapse;font-size:var(--fs-control);line-height:20px}
-.library-table th,.library-table td{padding:12px 16px;border-bottom:1px solid var(--border-secondary);text-align:left;vertical-align:top;color:var(--text-primary)}
-.library-table th{font-size:var(--fs-compact);font-weight:600;color:var(--text-tertiary);white-space:nowrap}
+/* One item per column (owner, 2026-11-10): a row is one line of single values. Fixed columns: a long name, sector or run id wraps in its cell and cannot widen the table; below 1000px of room the table keeps that width and its box scrolls sideways. */
+.library-table{width:100%;min-width:1000px;table-layout:fixed;border-collapse:collapse}
+.library-table th,.library-table td{padding:10px 12px;border-bottom:1px solid var(--border-secondary);text-align:left;vertical-align:top;color:var(--text-primary);overflow-wrap:break-word}
+.library-table tbody tr:last-child td{border-bottom:0}
+.library-table th{font-size:var(--fs-compact);font-weight:600;color:var(--text-tertiary);vertical-align:middle}
 .library-table th button{font:inherit;color:inherit;padding:0}
 .library-table tr.selected>td{background:var(--blue-50)}
-.library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-control)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-.ticker{display:block;font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
-.run-id{font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;overflow-wrap:anywhere}
-/* A ratio's basis shows three lines in the row; the full sentence is the title and is in the selected-run panel. Print shows it whole. */
-.library-table .basis{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
-/* Keyboard and touch have no tooltip: while focus is in a row (its name or its Open run link), the row shows each basis whole. */
-.library-table tr:focus-within .basis{display:block;overflow:visible}
-/* The run's identity gets the room; a date stays on one line. Below 1300px the cells tighten so nine columns fit without a sideways scroll. */
-/* Fixed columns: an unbroken name, sector or basis wraps in its cell and cannot widen the table. Below 900px of room the table keeps that width and its box scrolls sideways. */
-.library-table{table-layout:fixed;min-width:900px}.library-table th,.library-table td{overflow-wrap:break-word}.library-table th{vertical-align:middle;white-space:normal}
-.library-table th:nth-child(1){width:16%}.library-table th:nth-child(2){width:11%}.library-table th:nth-child(3){width:12.5%}.library-table th:nth-child(4){width:9.5%}.library-table th:nth-child(5){width:9.5%}.library-table th:nth-child(6){width:12.5%}.library-table th:nth-child(7){width:12%}.library-table th:nth-child(8){width:7.5%}.library-table th:nth-child(9){width:9.5%}
-.library-table td:nth-child(3) .cell-primary{white-space:nowrap}
-@media(max-width:1300px){.library-table th,.library-table td{padding-left:10px;padding-right:10px}}
-/* Paper is narrower than the table's screen minimum and cannot scroll: columns size to their words again and the date may wrap. The header prints once: Chrome drops the sort buttons from a repeated header, leaving two labels of nine. */
-@media print{.library-table .basis{display:block;overflow:visible}.library-table{table-layout:auto}.library-table thead{display:table-row-group}.library-table th,.library-table td{padding-left:4px;padding-right:4px}.library-table td:nth-child(3) .cell-primary{white-space:normal}}
-.cell-primary{display:block;font-weight:600}.cell-primary.missing{color:var(--text-quaternary);font-weight:400}
+.library-table td.missing{color:var(--text-quaternary)}
+.library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-body)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.library-table td.run-id{font:400 var(--fs-compact)/20px 'Red Hat Mono',monospace;overflow-wrap:anywhere}.library-table td.run-id a{text-underline-offset:3px}
+.library-table th:nth-child(1){width:18.3%}.library-table th:nth-child(2){width:19.2%}.library-table th:nth-child(3){width:8.3%}.library-table th:nth-child(4){width:9.2%}.library-table th:nth-child(5){width:6.9%}.library-table th:nth-child(6){width:8.6%}.library-table th:nth-child(7){width:7%}.library-table th:nth-child(8){width:5.5%}.library-table th:nth-child(9){width:9.3%}.library-table th:nth-child(10){width:7.7%}
+/* The three ratios are figures: mono, right-aligned under their headings. A date stays on one line. */
+.library-table :is(th,td):nth-child(n+5):nth-child(-n+7){text-align:right}
+.library-table td:nth-child(n+5):nth-child(-n+7){font-family:'Red Hat Mono',monospace}
+.library-table td:nth-child(4){white-space:nowrap}
+@media(max-width:1300px){.library-table th,.library-table td{padding-left:8px;padding-right:8px}}
+/* Paper is narrower than the table's screen minimum and cannot scroll: columns size to their words again. The header prints once: Chrome drops the sort buttons from a repeated header. */
+@media print{.library-table{table-layout:auto}.library-table thead{display:table-row-group}.library-table th,.library-table td{padding-left:4px;padding-right:4px}}
 .cell-secondary{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}
-.run-link,.report-link{font-size:var(--fs-compact);font-weight:600}.report-link{white-space:nowrap}.library-table td{font:400 var(--fs-control)/20px 'Red Hat Text',sans-serif}
-.progress-track{display:block;height:6px;margin:4px 0;border-radius:var(--radius-inline);background:var(--gray-200)}.progress-track i{display:block;height:100%;border-radius:var(--radius-inline);background:var(--blue)}
+.report-link{font-weight:600}.library-table td{font:400 var(--fs-body)/20px 'Red Hat Text',sans-serif}
 .library-empty{padding:32px 0;max-width:68ch}.library-empty h2{margin-bottom:10px}.library-empty .primary-action{margin-top:12px}
 .detail-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.detail-head>div:first-child{min-width:0}.run-detail{overflow-wrap:anywhere}.detail-actions{display:flex;gap:12px;flex-wrap:wrap}
 .detail-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
@@ -162,7 +149,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .artifact-list{margin:0;padding-left:20px}.artifact-list li{overflow-wrap:anywhere}.artifact-list small{display:block;font-size:var(--fs-label);color:var(--text-tertiary)}
 .source-details{margin-top:14px}.source-details summary{cursor:pointer;font-weight:600}.source-details>div{margin-top:10px;padding:8px 10px;border-left:3px solid var(--gray-300);overflow-wrap:anywhere}.source-details blockquote{margin:6px 0;font:var(--fs-compact)/1.5 'Red Hat Mono',monospace;white-space:pre-wrap}
 @media(max-width:720px){.library-filters,.metric-grid,.detail-layout{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:900px){.library-screen{grid-template-columns:minmax(0,1fr)}.library-nav{position:static;flex-direction:row;flex-wrap:wrap}.search-row{flex-wrap:wrap}.library-search{max-width:none;flex-basis:100%}.page-actions{margin-top:12px}}
+@media(max-width:900px){.search-row{flex-wrap:wrap}.library-search{max-width:none;flex-basis:100%}.page-actions{margin-top:12px}}
 /* Run header and underline tabs, after Untitled UI React (MIT): one title line, then tabs. */
 .issuer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;background:#fff;border-radius:var(--radius-card) var(--radius-card) 0 0}
 .issuer-title{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-width:0;flex:1 1 auto}
@@ -500,7 +487,7 @@ table.matrix td.num{text-align:right;font-family:'Red Hat Mono',monospace;font-v
 /* An unbroken string in handoff text (a URL, a long identifier) wraps where it would otherwise widen the canvas or the inspector. Normal text is unaffected: break-word breaks a word only when it cannot fit on a line of its own. */
 #content,.inspector{overflow-wrap:break-word}
 /* Pointer targets reach 24px where they stood alone below it. */
-.run-link{display:inline-block;padding:4px 0}.library-table th button{min-height:24px}#library-filters summary{min-height:24px}details.fold>summary,details.audit>summary{min-height:24px}
+.library-table th button{min-height:24px}#library-filters summary{min-height:24px}details.fold>summary,details.audit>summary{min-height:24px}
 @media(prefers-reduced-motion:reduce){details.audit>summary img,details.fold>summary img{transition:none}}
 /* Forced colours drop backgrounds, so a filled coverage cell is restated in system colours. */
 @media(forced-colors:active){a.cov.filled{forced-color-adjust:none;background:Highlight;border-color:Highlight;color:HighlightText}}

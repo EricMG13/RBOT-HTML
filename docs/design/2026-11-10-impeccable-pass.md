@@ -50,6 +50,27 @@ Second hardening pass (same day, CSS only)
 - On paper the tables drop their minimum widths; the library table sizes to its words and prints
   its header once (Chrome drops the sort buttons from a repeated header).
 
+Simplification of the library page (owner, 2026-11-10: "too cluttered", "one item per column")
+- A row is one line of ten single values: Issuer, Run, Sector, Evidence date, Leverage, Net leverage,
+  Coverage, Rating, Completeness, Deliverable. Rows are 41px at 1440 and 1280 (were 145–161px).
+  The three ratios sit together, mono and right-aligned. This supersedes the three-line basis clamp
+  and the focus rule that lifted it.
+- What left the row and where it is now: ticker, workflow and period are in the selected-run panel's
+  heading lines; each ratio's basis and a rating's agency, scope and date are in that panel and are
+  the cell's title; "Checklist required" and the requirement count are in the panel's completeness
+  box; "Candidate HTML" is in its deliverables list. A run without a report reads "Handoffs only",
+  or "No report · not screened" when the Latest run rule did not screen it. The progress bar is gone.
+- The issuer name selects the row; the run id is the link that opens the run (it was a separate
+  "Open run" line).
+- The issuer rail is removed and Issuer is a select beside Sector. "All runs" was Reset filters and
+  "Reports available" was the Deliverables select. The table gains the rail's 240px, which is what
+  lets a row fit on one line at 1280px. Per-issuer run counts are no longer shown.
+- The filters are a toolbar on the canvas: no card, no "Screening criteria" heading, no "Combined
+  filters" label. The "Selected run" label above the panel's heading is removed.
+- One sentence of the Credit metrics hint changed, because the row no longer shows definitions:
+  "coverage definitions remain visible on each row" is now "the definition of each ratio is listed
+  for the selected run".
+
 ## Amendments to the specs
 
 - `2026-11-09-module-report-spec.md`, Chips: "Legend line under each chart panel" becomes one legend
@@ -59,9 +80,10 @@ Second hardening pass (same day, CSS only)
 
 ## Left as found
 
-- The selected-run panel stays below the table. "Selected run" above its heading, the `—` for a
-  missing rating, revenue or EBITDA, and "Open report" as plain text when the file is not linked
-  are content or pre-existing behaviour.
+- The selected-run panel stays below the table. The `—` for a missing rating, revenue or EBITDA, and
+  "Open report" as plain text when the file is not linked are content or pre-existing behaviour.
+- Latest run per issuer lists every run that shares the issuer's latest report date (four TDG rows):
+  the screening rule, not the page.
 - An opened Statements and registers part is long (16,557px on CP-1) with a summary that scrolls
   away; a sticky summary would cover routed section headings.
 - The detector's `nested-cards` findings: bordered regions inside the one app frame, not cards in cards.
