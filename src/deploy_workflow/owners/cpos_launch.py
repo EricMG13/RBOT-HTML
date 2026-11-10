@@ -552,7 +552,11 @@ FORECAST_BLOCK = (
     "(for example a blocked dependency), still write the block, with every driver's `values` as "
     "`[null, null, null]`. `downside_shock` is "
     '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}` from the CP-2A '
-    "scenario, or null when no shock was supplied. `years` is three consecutive fiscal years, each "
+    "scenario, or null when no shock was supplied; Python applies it to the base drivers. "
+    "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
+    "only the drivers that differ from base, in the same driver form (every other driver is "
+    "inherited from base), or null when you set no such case. "
+    "`years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
     "`scope_limits` is a list of text limits. Set `schema_version` to "
     f"`{cpos_forecast.SCHEMA_VERSION}`.\n\n"

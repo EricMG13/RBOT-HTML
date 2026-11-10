@@ -256,6 +256,7 @@ def test_every_built_output_carries_the_three_fields(tmp_path):
     assert len(output["placement"]) == len(data["handoffs"][output["sha256"]])
     assert set(output["words"]) == {"view", "reference", "calculations", "limits", "audit"}
 
+
 # Copied verbatim from the 2026-11-09 sol-medium run (runs/cpos-tdg-sol-medium-all-001, delivery
 # abd687ca...c2baa, CP-1C.md): the head of a handoff that opens with YAML front matter.
 REAL_FRONT_MATTER_HEAD = (
@@ -283,3 +284,29 @@ def test_an_unclosed_front_matter_marker_still_raises():
 def test_body_after_the_front_matter_and_before_a_heading_still_raises():
     with pytest.raises(ValueError, match="Body before first heading"):
         store.parse_source("---\na: 1\n---\nstray body\n# T\n")
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "T2H.3 — Assumption register",
+        "T2H.3 — assumption lock",
+        "T2H.3 — assumption disposition",
+        "T2H.3 — Assumptions and definition lock",
+    ],
+)
+def test_the_assumption_register_is_found_by_its_register_id(heading):
+    """Live runs tdg-forecast-001..005 (2026-11-10): the method fixes the id T2H.3, not the
+    heading's wording, so the Forecast tab must not depend on that wording."""
+    sections = [
+        _section("T2H.2 — Historical-to-base bridge", 3, _table("a", "b", "c")),
+        _section(heading, 3, _text("Vectors are ordered."), _table("B1", "Revenue growth", "0.1")),
+    ]
+    register = store.register_of(sections)
+    assert register is not None and register["heading"] == heading
+    assert register["rows"] == [["B1", "Revenue growth", "0.1"]]
+
+
+def test_the_forecast_notes_send_no_case_elsewhere():
+    """The notes do not claim a case lives elsewhere: every computed case is shown."""
+    assert not any("stays in the calculation" in note for note in store.CASHFLOW_NOTES)

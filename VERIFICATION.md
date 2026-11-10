@@ -4,6 +4,44 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Forecast tab: open items of run tdg-forecast-005 and CP-2G's own cases (branch `claude/forecast-tab-register`)
+
+Owner: investigate the open items; leave any that come from the sources lacking the needed files, but
+check the code would produce the output if they were there. All checks offline on retained data.
+
+- In-loop forecast check (not triggered live): replaying run 004's real CP-2G answer through
+  `_forecast_issues` gives the repair request naming `ebitda_margin`'s pattern failure (9 problems),
+  and replaying run 005's answer gives none. Verified on real model output; no provider call.
+- No downside case (sources): CP-2A's method forbids unsupported stress magnitudes, and the filings
+  give no rate path or stated stress case, so CP-2G wrote `downside_shock: null` and said why. With
+  a shock of 0.20/0.10 set in run 005's real CP-2G block, `model_files` writes REFERENCE and
+  DOWNSIDE, and the library grid shows a Downside group: Adj EBITDA 3,364 / 3,710 / 4,092, each
+  the base figure × 0.8 by hand; FY2025 interest 1,156.92 × 1.1 = 1,272.612.
+- Upside footnote (code): the cash flow notes said "The upside case stays in the calculation record".
+  CP-OS models never had one; the predecessor's models (`final-workflow` deliverables) do carry an
+  UPSIDE case, which the library hid. Sentence removed; the grid now shows UPSIDE (below).
+- No assumption register (code): `register_of` matched only headings containing "assumption
+  register", but the method fixes the id T2H.3, not the wording; runs 001–005 wrote "Assumption
+  register", "assumption lock", "assumption disposition" and "Assumptions and definition lock". It
+  now also matches a heading starting with T2H.3. Run 005's rebuilt library shows the register
+  (B1–B7, F1–F4, U1, D1–D2, L1–L2).
+- Tests written first and seen failing (4 of 5); library tests 68 passed incl. browser; gate exit 0.
+- CP-2G's own cases computed (owner, 2026-11-10, "Yes, compute them"): the inputs block takes
+  optional `upside_drivers` and `downside_drivers`, each only the drivers that differ from base
+  (the rest inherited). Python writes UPSIDE and DOWNSIDE_DRIVERS; CP-2A's shock stays DOWNSIDE on
+  base drivers (the predecessor's meaning), never compounded with CP-2G's downside. The keys are
+  written only when stated: run 005's delivery, made before this, still re-verifies byte for byte
+  (it failed with `delivery_changed: forecast_exact.json` in the first version, caught in review).
+  Grid groups: Base, Upside, Downside (CP-2G drivers), Downside stress (shock on base drivers).
+- Answer key written by hand, not by production code: upside year 1 (growth 0.10, margin 0.35)
+  revenue 1,100, EBITDA 385, CFO 239, FCF 195, closing cash 225; downside year 1 (no growth, no
+  dividends) 1,000 / 300 / 164 / 124 / 174; all three years of every case against the test's
+  fraction model. Run 005 replayed offline with its register's U1 (growth 0.2058) and D1–D2 (growth
+  0, margin 0.4781): upside revenue 9,574.052 = 7,940 × 1.2058; downside EBITDA 3,796.114 = 7,940 ×
+  0.4781. Tests first and seen failing (9); 237 passed incl. browser; node 105; gate exit 0.
+- Not verified: a live CP-2G run writing the case blocks (instructions changed, no paid run); the
+  predecessor's UPSIDE shown in this library (no such workspace built here).
+
 ## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
 
 Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
