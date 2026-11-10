@@ -1011,3 +1011,26 @@ def test_a_rerun_links_to_the_run_it_replays_through_the_store(tmp_path):
     ]
     assert built["runs"]["run-a"]["revisions"] == []
     assert all("figures" in report for report in built["reports"])
+
+
+def test_a_listed_report_view_that_fails_is_told_apart_from_an_unlisted_one(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivery,) = (run_dir / "deliveries").iterdir()
+    record = json.loads((delivery / "delivery.json").read_text())
+    folder = f"runs/run-a/deliveries/{delivery.name}"
+    digest = hashlib.sha256((delivery / "report.html").read_bytes()).hexdigest()
+    artifact = {
+        "folder": folder,
+        "label": "r",
+        "state": "final",
+        "available": True,
+        "href": f"/files/{folder}/report.html?sha256={digest}",
+    }
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
+    plain = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
+    assert (plain["figures"], plain["figuresIssue"]) == (None, None)
+    (delivery / "report-view.json").write_text("{}")
+    record["files"]["report-view.json"] = "0" * 64
+    (delivery / "delivery.json").write_text(json.dumps(record))
+    failed = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
+    assert failed["figures"] is None and "report-view.json" in failed["figuresIssue"]

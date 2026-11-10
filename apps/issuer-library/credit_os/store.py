@@ -1317,6 +1317,9 @@ def catalogue_reports(
                 read = delivery_and_view(root, folder, manifests)
                 record = report_record(folder, artifact, sources, keys, read)
                 record["figures"], figure_issue = report_figures(root / folder, read[0])
+                # Set exactly when the delivery lists report-view.json and it failed: the page
+                # tells that apart from a delivery that lists none.
+                record["figuresIssue"] = figure_issue
                 if figure_issue:
                     issues.append(figure_issue)
                 reports.append(record)

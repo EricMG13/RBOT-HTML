@@ -2131,7 +2131,7 @@ test('report manifest: the level is named, each handoff is pinned by its full ha
   const report = { ...zedReport(RUN), files: REPORT_FILES, builtFrom: [...zedReport(RUN).builtFrom, { module: 'CP-6', run: null, source: 'CP-6.md', sha256: 'b'.repeat(64), output: false }] };
   const html = runPage(d => d, [report], m => m, { runFields: { run: RUN, period: 'FY2024', asOf: '2024-09-30' } }).reportView(report, RUN);
   const manifest = /<section class="report-manifest".*?<\/section>/s.exec(html)[0];
-  assert.ok(strip(manifest).includes('lists no report-view.json, so only its handoffs are shown') && !strip(manifest).includes('not held'), 'the fallback is labelled as the handoff level');
+  assert.ok(strip(manifest).includes('lists report-view.json but no figures were read from it, so only its handoffs are shown') && !strip(manifest).includes('not held'), 'the fallback is labelled as the handoff level');
   const rows = cellsOf(manifest, 'data-pin');
   assert.deepEqual(rows.map(r => r.slice(0, 2)), [['Financial foundation', RUN], ['Committee decision', 'No matching run file']]);
   assert.ok(rows[0][2].includes('a'.repeat(64)) && rows[1][2].includes('b'.repeat(64)), 'the whole pin, not a prefix');
@@ -2214,4 +2214,18 @@ test('package 7: the new rules use only existing tokens, no amber or red', () =>
   const css = read('screen.css').split('\n').filter(line => /\.index-|\.context-|\.report-manifest/.test(line));
   assert.ok(css.length >= 4 && css.some(rule => /\.context-bar/.test(rule)) && css.some(rule => /\.index-/.test(rule)));
   for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b|badge-attention/i.test(rule), rule);
+});
+
+test('report manifest: a handoff note names its module, never codes it, and a listed-but-unreadable report-view.json is not called unlisted', () => {
+  const coded = [{ ...SYNTHETIC_FIGURES[0], note: 'CP-1 states the basis; CP-6 is not assessable.' }];
+  const report = { ...zedReport(RUN), files: REPORT_FILES, figures: coded };
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [report]).reportView(report, RUN))[0];
+  assert.ok(!/CP-\d/.test(strip(manifest)) && strip(manifest).includes('Financial foundation states the basis'));
+  const failed = { ...zedReport(RUN), files: REPORT_FILES, figures: null, figuresIssue: 'd1: report-view.json is not the plain file its delivery lists' };
+  const text = strip(/<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [failed]).reportView(failed, RUN))[0]);
+  assert.ok(text.includes('lists report-view.json but it could not be read') && text.includes('is not the plain file its delivery lists') && !text.includes('lists no report-view.json'));
+  const silent = { ...zedReport(RUN), files: REPORT_FILES, figures: null, figuresIssue: null };
+  assert.ok(!strip(runPage(d => d, [silent]).reportView(silent, RUN)).includes('lists no report-view.json'), 'a listed file is never called unlisted');
+  const unlisted = { ...zedReport(RUN), figures: null, figuresIssue: null };
+  assert.ok(strip(runPage(d => d, [unlisted]).reportView(unlisted, RUN)).includes('lists no report-view.json'));
 });
