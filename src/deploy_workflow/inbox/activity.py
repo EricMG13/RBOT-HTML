@@ -79,7 +79,8 @@ def spent(run_dir: Path) -> Decimal | None:
 
 def _events(run_dir: Path, run_id: str) -> list[dict[str, Any]]:
     try:
-        return read_events(run_dir / EVENTS)
+        # A valid JSON line need not be an event; only objects are kept.
+        return [e for e in read_events(run_dir / EVENTS) if isinstance(e, dict)]
     except (OSError, ValueError) as error:
         # Documented fail-open (display only): an unreadable log shows every module as waiting.
         log.warning("run %s: event log unreadable (%s); modules shown as waiting", run_id, error)

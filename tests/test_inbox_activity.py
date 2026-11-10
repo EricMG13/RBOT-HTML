@@ -208,3 +208,15 @@ def test_only_200_ended_records_are_kept_and_the_running_one_leads(layout):
     )
     runs = snapshot(layout, records, cap=Decimal(20), now=now)["runs"]
     assert len(runs) == 201 and runs[0]["id"] == "r"
+
+
+def test_an_event_line_that_is_not_an_object_is_dropped_not_fatal(layout):
+    record = Record("r1", "credit_snapshot", "f", "running", "t", started_at="2026-11-09T11:59:00Z")
+    run_dir = layout.runs / "r1"
+    run_dir.mkdir()
+    (run_dir / "events.jsonl").write_text(
+        '{"event": "module_started", "module": "CP-0"}\n[]\n"text"\n7\n', encoding="utf-8"
+    )
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    [entry] = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"]
+    assert dict(entry["modules"])["CP-0"] == "running"

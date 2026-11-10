@@ -6,16 +6,20 @@ spend nothing. Every wait has a limit, and the ``root`` fixture kills any run st
 
 from __future__ import annotations
 
+import gc
 import json
 import os
 import re
+import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable, Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -26,7 +30,7 @@ import pytest
 from deploy_workflow.inbox import activity
 from deploy_workflow.inbox import watcher as watcher_module
 from deploy_workflow.inbox.drops import Layout, ensure_layout
-from deploy_workflow.inbox.runs import alive, load_all
+from deploy_workflow.inbox.runs import Record, alive, load_all
 from deploy_workflow.inbox.watcher import Settings, StartupRefused, Watcher, main
 from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.model_testing.configs import CONFIGS
@@ -286,7 +290,7 @@ def test_longest_engine_path_fits_under_an_80_character_root(monkeypatch):
         root = base / ("r" * (80 - len(str(base)) - 1))
         lay = ensure_layout(root)
         library_fixtures.make_run(lay.engine, "20261109-134102-01")
-        update_library_at(lay.engine)
+        assert update_library_at(lay.engine) is not None
         assert max(len(str(p)) for p in root.rglob("*")) < 260
 
 
@@ -308,35 +312,61 @@ def test_r1_a_run_this_watcher_started_ends_by_poll_not_by_alive(root, fake_env,
     assert asked == []
 
 
-def test_r2_a_second_watcher_on_a_live_one_is_refused(root):
-    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+def test_r2_a_second_watcher_on_a_held_lock_is_refused_with_the_holders_text(root):
+    first = Watcher(settings(root))
     try:
-        ensure_layout(root)
-        (root / "_engine/watcher.lock").write_text(str(other.pid), encoding="utf-8")
-        with pytest.raises(StartupRefused, match=rf"another watcher \(pid {other.pid}\)"):
+        text = (root / "_engine/watcher.lock").read_text(encoding="utf-8")
+        assert text == f"{socket.gethostname()} {os.getpid()}"
+        with pytest.raises(StartupRefused, match=r"another watcher is running on this folder \("):
             Watcher(settings(root))
         assert main(["--root", str(root)]) == 2
-        assert (root / "_engine/watcher.lock").read_text(encoding="utf-8") == str(other.pid)
+        assert (root / "_engine/watcher.lock").read_text(encoding="utf-8") == text
     finally:
-        other.kill()
-        other.wait()
+        first.close()
 
 
-def test_r2_a_stale_lock_is_replaced_and_removed_on_a_clean_exit(root, monkeypatch):
-    gone = subprocess.Popen([sys.executable, "-c", "pass"])
-    gone.wait()
-    ensure_layout(root)
-    lock = root / "_engine/watcher.lock"
-    lock.write_text(str(gone.pid), encoding="utf-8")
+def test_r2_the_lock_dies_with_the_watcher_and_close_releases_it(root):
+    Watcher(settings(root)).close()  # a clean stop
+    again = Watcher(settings(root))
+    del again  # a crash: the operating system drops the lock with the process's handle
+    gc.collect()
+    last = Watcher(settings(root))
+    last.close()
+    last.close()  # closing twice is harmless
+
+
+def test_r2_run_forever_releases_the_lock_on_exit(root, monkeypatch):
     w = Watcher(settings(root))
-    assert lock.read_text(encoding="utf-8") == str(os.getpid())
 
     def interrupt(_seconds: float) -> None:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(watcher_module.time, "sleep", interrupt)
     w.run_forever()
-    assert not lock.exists()
+    Watcher(settings(root)).close()
+
+
+def test_f1_two_watchers_started_together_one_refuses(root):
+    gate = threading.Barrier(2)
+    results: list[str] = []
+    kept: list[Watcher] = []
+
+    def start() -> None:
+        gate.wait()
+        try:
+            kept.append(Watcher(settings(root)))
+            results.append("ran")
+        except StartupRefused:
+            results.append("refused")
+
+    threads = [threading.Thread(target=start) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=20)
+    for watcher in kept:
+        watcher.close()
+    assert sorted(results) == ["ran", "refused"]
 
 
 def test_r4_a_drop_that_cannot_be_read_is_rejected_after_the_settle_time(root):
@@ -402,32 +432,6 @@ def _log(root: Path) -> str:
     return log.read_text(encoding="utf-8") if log.is_file() else ""
 
 
-def test_r9_a_run_that_cannot_be_recorded_is_terminated_and_stays_queued(
-    root, fake_env, monkeypatch
-):
-    fake_env({"events": DELIVERED, "sleep": 20})
-    started: list[subprocess.Popen[bytes]] = []
-    real_start, real_save = watcher_module.runs.start, watcher_module.runs.save
-
-    def start(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
-        started.append(real_start(*args, **kwargs))
-        return started[-1]
-
-    def save(lay: Layout, record: Any) -> None:
-        if record.status == "running":
-            raise OSError("state folder is full")
-        real_save(lay, record)
-
-    monkeypatch.setattr(watcher_module.runs, "start", start)
-    monkeypatch.setattr(watcher_module.runs, "save", save)
-    make_drop(root, "credit_snapshot", "acme")
-    w = Watcher(settings(root))
-    go(w)
-    assert len(started) == 1 and started[0].wait(timeout=5) is not None
-    assert status(root) == ["queued"]
-    assert "state folder is full" in _log(root)
-
-
 def test_r11_main_takes_every_setting_as_a_flag(monkeypatch):
     seen: list[Settings] = []
 
@@ -465,3 +469,418 @@ def test_start_up_writes_the_library_page_and_the_forms_once(root):
     page.write_text("mine", encoding="utf-8")
     Watcher(settings(root))
     assert page.read_text() == "mine"
+
+
+# --- fix round 1: a record is written before every step that can be interrupted -------------
+
+
+def _runs() -> Any:
+    return watcher_module.runs
+
+
+def _once(monkeypatch: pytest.MonkeyPatch, name: str, fault: BaseException, when=None) -> list[Any]:
+    """Make runs.<name> raise ``fault`` on the first call where ``when(*args)`` holds."""
+    real = getattr(_runs(), name)
+    hits: list[Any] = []
+
+    def patched(*args: Any, **kwargs: Any) -> Any:
+        if not hits and (when is None or when(*args)):
+            hits.append(args)
+            raise fault
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(_runs(), name, patched)
+    return hits
+
+
+def _track_starts(monkeypatch: pytest.MonkeyPatch) -> list[subprocess.Popen[bytes]]:
+    started: list[subprocess.Popen[bytes]] = []
+    real = _runs().start
+
+    def start(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+        started.append(real(*args, **kwargs))
+        return started[-1]
+
+    monkeypatch.setattr(_runs(), "start", start)
+    return started
+
+
+def _wait_all(children: list[subprocess.Popen[bytes]]) -> None:
+    for child in children:
+        if child.poll() is None:
+            child.kill()
+        child.wait(timeout=10)
+
+
+def _only(root: Path):
+    [record] = load_all(layout(root))
+    return record
+
+
+def test_a_claim_whose_record_cannot_be_saved_goes_back_where_it_was(root, monkeypatch):
+    _once(monkeypatch, "save", OSError("state folder is full"))
+    folder = make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))
+    w.step()
+    w._scan()  # the claim happens here; its record cannot be saved
+    assert folder.is_dir() and not list((root / "_engine/drops").iterdir())
+    assert load_all(layout(root)) == []
+
+
+def test_the_claim_writes_its_record_before_anything_else_happens(root, fake_env, monkeypatch):
+    fake_env({"events": DELIVERED})
+    make_drop(root, "credit_snapshot", "acme")
+    _once(monkeypatch, "prepare", KeyboardInterrupt())
+    w = Watcher(settings(root))
+    with pytest.raises(KeyboardInterrupt):
+        go(w)
+    record = _only(root)
+    assert (record.status, record.prepared, record.folder) == ("queued", False, "acme")
+    assert len(list((root / "_engine/drops").iterdir())) == 1
+    w.close()
+
+
+def test_m2_an_interrupt_during_prepare_is_resumed_by_the_next_start(root, fake_env, monkeypatch):
+    fake_env({"events": DELIVERED})
+    make_drop(root, "credit_snapshot", "acme")
+    _once(monkeypatch, "prepare", KeyboardInterrupt())
+    w = Watcher(settings(root))
+    with pytest.raises(KeyboardInterrupt):
+        go(w)
+    w.close()
+    second = Watcher(settings(root))
+    pump(second, lambda: status(root) == ["finished"])
+    assert len(list((root / "_engine/runs").iterdir())) == 1
+
+
+def test_a_prepare_stage_fills_the_record_and_marks_it_prepared(root, fake_env):
+    fake_env({"events": DELIVERED, "sleep": 3})
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root, max_running=0))
+    go(w)
+    record = _only(root)
+    assert (record.status, record.prepared) == ("queued", True)
+    assert (record.issuer_id, record.issuer_name, record.as_of, record.files) == (
+        "acme",
+        "Acme Corp",
+        "2026-11-09",
+        ("a.pdf",),
+    )
+
+
+def test_an_oserror_while_checking_rejects_the_drop_with_that_reason(root, monkeypatch):
+    def broken(*_a: Any, **_k: Any) -> Any:
+        raise OSError("disk went away")
+
+    monkeypatch.setattr(watcher_module.drops, "check", broken)
+    make_drop(root, "credit_snapshot", "acme")
+    go(Watcher(settings(root)))
+    record = _only(root)
+    assert record.status == "rejected" and record.reason == "could not be checked: disk went away"
+    [failed] = (root / "inbox/failed").iterdir()
+    assert "could not be checked: disk went away" in (failed / "WHY.txt").read_text()
+
+
+def test_m3_a_missing_failed_folder_is_recreated_and_the_drop_prepared_once(
+    root, fake_env, monkeypatch
+):
+    fake_env({"prepare_exit": 2, "prepare_error": "no readable source"})
+    calls: list[str] = []
+    real = _runs().prepare
+
+    def prepare(layout_, record, *a, **k):
+        calls.append(record.id)
+        return real(layout_, record, *a, **k)
+
+    monkeypatch.setattr(_runs(), "prepare", prepare)
+    w = Watcher(settings(root))
+    shutil.rmtree(root / "inbox/failed")
+    make_drop(root, "credit_snapshot", "acme")
+    for _ in range(6):
+        w.step()
+    assert len(calls) == 1 and status(root) == ["rejected"]
+    [failed] = (root / "inbox/failed").iterdir()
+    assert "no readable source" in (failed / "WHY.txt").read_text()
+
+
+def test_m3_when_the_move_to_failed_fails_the_record_still_says_why(root, fake_env, monkeypatch):
+    fake_env({"prepare_exit": 2, "prepare_error": "no readable source"})
+    prepares: list[Any] = []
+    real = _runs().prepare
+
+    def counted(*a: Any, **k: Any) -> str:
+        prepares.append(a)
+        return real(*a, **k)
+
+    def refuse(*_a: Any, **_k: Any) -> Any:
+        raise OSError("failed is not a real folder")
+
+    monkeypatch.setattr(_runs(), "prepare", counted)
+    monkeypatch.setattr(watcher_module.drops, "reject", refuse)
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))
+    for _ in range(5):
+        w.step()
+    record = _only(root)
+    assert record.status == "rejected" and len(prepares) == 1
+    assert record.reason.startswith("no readable source (the folder could not be moved to ")
+    assert f"it is kept in _engine/drops/{record.id})" in record.reason
+    assert not (root / "inbox/credit_snapshot/acme").exists()
+    assert (root / "_engine/drops" / record.id).is_dir()
+
+
+def test_m1_an_interrupt_before_the_start_save_starts_nothing_and_resumes_once(
+    root, fake_env, monkeypatch
+):
+    fake_env({"events": DELIVERED})
+    started = _track_starts(monkeypatch)
+    make_drop(root, "credit_snapshot", "acme")
+    _once(monkeypatch, "save", KeyboardInterrupt(), lambda lay, r: r.status == "running")
+    w = Watcher(settings(root))
+    with pytest.raises(KeyboardInterrupt):
+        go(w)
+    w.close()
+    assert started == [] and (_only(root).status, _only(root).prepared) == ("queued", True)
+    pump(Watcher(settings(root)), lambda: status(root) == ["finished"])
+    assert len(started) == 1
+
+
+def test_m1_an_interrupt_after_start_leaves_one_process_at_most_and_no_second_start(
+    root, fake_env, monkeypatch
+):
+    fake_env({"events": DELIVERED, "sleep": 20})
+    started = _track_starts(monkeypatch)
+    make_drop(root, "credit_snapshot", "acme")
+    _once(monkeypatch, "save", KeyboardInterrupt(), lambda lay, r: r.status == "running" and r.pid)
+    w = Watcher(settings(root))
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            go(w)
+        w.close()
+        assert len(started) == 1 and started[0].poll() is not None  # the child was stopped
+        record = _only(root)
+        assert (record.status, record.pid) == ("running", 0) and record.started_at
+        second = Watcher(settings(root))
+        for _ in range(3):
+            second.step()
+        assert len(started) == 1
+        record = _only(root)
+        assert record.status == "interrupted"
+        assert record.reason == (
+            "the watcher stopped while starting this run; its process may still be running"
+            " \N{EM DASH} check before dropping the folder again"
+        )
+    finally:
+        _wait_all(started)
+
+
+def test_d6_a_running_record_without_a_pid_is_decided_before_the_first_scan(root):
+    ensure_layout(root)
+    save_record = watcher_module.runs.save
+    save_record(
+        Layout(root),
+        Record("20261109-000001-01", "credit_snapshot", "acme", "running", "t", started_at="t"),
+    )
+    Watcher(settings(root)).close()
+    assert _only(root).status == "interrupted"
+    assert "may still be running" in _only(root).reason
+
+
+def test_a_start_that_raises_oserror_fails_the_run_and_counts_toward_the_day(
+    root, fake_env, monkeypatch
+):
+    fake_env({"events": DELIVERED})
+
+    def refuse(*_a: Any, **_k: Any) -> Any:
+        raise OSError("cannot create the log")
+
+    monkeypatch.setattr(_runs(), "start", refuse)
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root, max_per_day=1))
+    for _ in range(4):
+        w.step()
+    record = _only(root)
+    assert (
+        record.status == "failed" and record.reason == "could not be started: cannot create the log"
+    )
+    assert record.started_at and record.ended_at
+    assert w._started_today() == 1
+
+
+def test_a_pid_save_that_fails_with_oserror_stops_the_child_and_never_restarts_the_run(
+    root, fake_env, monkeypatch
+):
+    fake_env({"events": DELIVERED, "sleep": 1})
+    started = _track_starts(monkeypatch)
+    hits = _once(
+        monkeypatch,
+        "save",
+        OSError("state folder is full"),
+        lambda lay, r: r.status == "running" and r.pid,
+    )
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root, max_per_day=1))
+    try:
+        pump(w, lambda: status(root) not in (["running"], ["queued"]), limit=10)
+        for _ in range(3):
+            w.step()
+        assert hits and len(started) == 1  # stopped when its record could not be completed
+        assert status(root) in (["failed"], ["interrupted"])
+    finally:
+        _wait_all(started)
+
+
+def test_runs_that_cannot_be_recorded_still_count_toward_the_daily_limit(
+    root, fake_env, monkeypatch
+):
+    fake_env({"events": DELIVERED, "sleep": 20})
+    started = _track_starts(monkeypatch)
+    real = _runs().save
+
+    def save(lay: Layout, record: Any) -> None:
+        if record.status == "running" and record.pid:
+            raise OSError("state folder is full")
+        real(lay, record)
+
+    monkeypatch.setattr(_runs(), "save", save)
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root, max_per_day=1))
+    try:
+        for _ in range(6):
+            w.step()
+        assert len(started) == 1
+    finally:
+        _wait_all(started)
+
+
+def test_l7_a_new_id_never_reuses_a_record_a_drop_folder_a_run_folder_or_a_log(root):
+    w = Watcher(settings(root), now=lambda: datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC))
+    prefix = "20261109-120000"
+    (root / f"_engine/drops/{prefix}-01").mkdir()
+    (root / f"_engine/runs/{prefix}-02").mkdir()
+    (root / f"_engine/logs/{prefix}-03.log").write_text("x", encoding="utf-8")
+    w._put(Record(f"{prefix}-04", "credit_snapshot", "f", "queued", "t"))
+    assert w._new_id() == f"{prefix}-05"
+    w.close()
+
+
+def test_f2_a_report_is_filed_once_even_when_the_finished_record_cannot_be_saved(
+    root, fake_env, monkeypatch
+):
+    fake_env({"events": DELIVERED})
+    real = _runs().save
+    failures = [3]
+
+    def save(lay: Layout, record: Any) -> None:
+        if record.status == "finished" and failures[0] > 0:
+            failures[0] -= 1
+            raise OSError("state folder briefly unwritable")
+        real(lay, record)
+
+    monkeypatch.setattr(_runs(), "save", save)
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))
+    pump(w, lambda: status(root) == ["finished"], limit=10)
+    assert [p.name for p in (root / "issuers/Acme Corp (acme)").iterdir()] == [
+        "2026-11-09 credit_snapshot.html"
+    ]
+    assert _only(root).report == "issuers/Acme Corp (acme)/2026-11-09 credit_snapshot.html"
+
+
+def test_f3_a_corrupt_issuer_registry_fails_the_run_instead_of_stopping_the_watcher(root, fake_env):
+    fake_env({"events": DELIVERED, "sleep": 1})
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))
+    go(w)
+    (root / "_engine/state/issuers.json").write_text("{", encoding="utf-8")
+    pump(w, lambda: status(root) != ["running"], limit=10)
+    record = _only(root)
+    assert record.status == "failed" and record.reason.startswith("could not be filed: ")
+    assert not (root / "issuers").exists() or not any((root / "issuers").iterdir())
+
+
+def test_f4_a_drop_with_a_file_nobody_can_open_is_rejected_after_the_settle_time(root):
+    now = [0.0]
+    drop = make_drop(root, "credit_snapshot", "acme")
+    (drop / "locked.pdf").write_bytes(b"%PDF")
+    (drop / "locked.pdf").chmod(0)
+    w = Watcher(settings(root, settle_seconds=120), clock=lambda: now[0])
+    try:
+        for t in (0, 60, 120):
+            now[0] = t
+            w.step()
+        assert load_all(layout(root)) == []
+        now[0] = 121
+        w.step()
+        record = _only(root)
+        assert record.status == "rejected" and record.reason.startswith("cannot be read: ")
+        assert "locked.pdf" in record.reason
+    finally:
+        for locked in root.rglob("locked.pdf"):
+            locked.chmod(0o644)
+
+
+def test_f5_the_page_says_why_ended_runs_wait_when_the_library_cannot_be_rebuilt(
+    root, fake_env, listed, monkeypatch
+):
+    fake_env({"events": DELIVERED})
+    started = _track_starts(monkeypatch)
+
+    def broken(_workspace: Path) -> None:
+        raise ValueError("library is a link")
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", broken)
+    make_drop(root, "credit_snapshot", "a", issuer="a")
+    w = Watcher(settings(root, max_running=1))
+    try:
+        go(w)
+        started[0].wait(timeout=10)
+        for _ in range(3):
+            w.step()
+        assert "the library could not be rebuilt (library is a link); ended runs wait for it" in (
+            activity_js(root)
+        )
+        monkeypatch.setattr(
+            cpos_launch,
+            "update_library_at",
+            lambda ws: SimpleNamespace(
+                runs=[{"id": p.name} for p in (ws / "runs").iterdir()], excluded=[]
+            ),
+        )
+        pump(w, lambda: status(root) == ["finished"])
+        w.step()
+        assert "could not be rebuilt" not in activity_js(root)
+    finally:
+        _wait_all(started)
+
+
+def test_f5_both_notices_are_joined_with_a_semicolon(root, fake_env, monkeypatch):
+    fake_env({"events": DELIVERED, "sleep": 20})
+    started = _track_starts(monkeypatch)
+    make_drop(root, "credit_snapshot", "a", issuer="a")
+    w = Watcher(settings(root, max_per_day=1))
+    try:
+        pump(w, lambda: status(root) == ["running"])
+        started[0].kill()
+        started[0].wait()
+
+        def broken(_workspace: Path) -> None:
+            raise OSError("locked")
+
+        monkeypatch.setattr(cpos_launch, "update_library_at", broken)
+        make_drop(root, "credit_snapshot", "b", issuer="b")
+        for _ in range(3):
+            w.step()
+        text = activity_js(root)
+        assert (
+            "the library could not be rebuilt (locked); ended runs wait for it; daily limit" in text
+        )
+    finally:
+        _wait_all(started)
+
+
+@pytest.mark.parametrize("cap", ["NaN", "Infinity", "-Infinity", "0", "-3"])
+def test_f6_a_cap_that_is_not_a_finite_positive_amount_exits_2_with_one_line(cap, capsys):
+    assert main(["--root", "/tmp/x", f"--cap={cap}"]) == 2
+    err = capsys.readouterr().err
+    assert "--cap" in err and "Traceback" not in err and len(err.strip().splitlines()) == 1

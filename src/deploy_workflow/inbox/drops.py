@@ -121,6 +121,30 @@ def signature(entry: Path) -> Signature:
     return tuple(sorted(rows))
 
 
+def unreadable(entry: Path) -> str | None:
+    """The error text if ``entry`` cannot be read, else None.
+
+    Unreadable means: it cannot be listed (``signature`` raises), or a regular file in it cannot be
+    opened for reading. A sharing violation (Windows error 32 or 33) is a file in use, not a fault.
+    """
+    try:
+        signature(entry)
+        files = _files(entry)
+    except OSError as error:
+        return str(error)
+    for path in files:
+        try:
+            if not stat.S_ISREG(path.lstat().st_mode):
+                continue
+            with path.open("rb"):
+                pass
+        except OSError as error:
+            if getattr(error, "winerror", None) in (32, 33):
+                continue
+            return str(error)
+    return None
+
+
 def unlocked(path: Path) -> bool:
     """False only when another process holds the file open (Windows sharing or lock violation).
 

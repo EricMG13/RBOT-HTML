@@ -319,3 +319,13 @@ def test_fake_launcher_refuses_what_the_real_one_refuses(tmp_path):
     no_key = _fake_live(tmp_path, RULING, key=False)
     assert no_key.returncode == 2 and "OPENAI_API_KEY" in no_key.stderr
     assert _fake_live(tmp_path, RULING, key=True).returncode == 0
+
+
+def test_prepared_defaults_to_false_and_an_old_record_without_it_loads(layout):
+    assert RECORD.prepared is False
+    old = {"id": "old1", "pathway": "credit_snapshot", "folder": "f", "status": "queued"}
+    old["claimed_at"] = "t"
+    (layout.state / "old1.json").write_text(json.dumps(old), encoding="utf-8")
+    save(layout, Record("new1", "credit_snapshot", "f", "queued", "t", prepared=True))
+    loaded = {r.id: r.prepared for r in load_all(layout)}
+    assert loaded == {"new1": True, "old1": False}

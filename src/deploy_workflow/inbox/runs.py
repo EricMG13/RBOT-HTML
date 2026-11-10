@@ -41,6 +41,7 @@ class Record:
     reason: str = ""
     report: str = ""  # posix path relative to the root
     name_differs: bool = False
+    prepared: bool = False  # the offline check passed; only then may the run be started
 
 
 _SRC = Path(__file__).resolve().parents[2]

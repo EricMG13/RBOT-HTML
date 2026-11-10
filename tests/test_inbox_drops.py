@@ -24,6 +24,7 @@ from deploy_workflow.inbox.drops import (
     reject,
     signature,
     unlocked,
+    unreadable,
     write_templates,
 )
 
@@ -485,3 +486,43 @@ def test_forget_missing_keeps_what_is_still_listed(layout):
     tracker.forget_missing([entry])
     now[0] = 120
     assert tracker.ready(entry) is True
+
+
+def test_unreadable_names_a_file_that_cannot_be_opened(layout):
+    entry = drop(layout, "credit_snapshot", "acme", {"context.json": CTX_SNAPSHOT, "a.pdf": b"1"})
+    assert unreadable(entry) is None
+    (entry / "a.pdf").chmod(0)
+    try:
+        assert "a.pdf" in (unreadable(entry) or "")
+    finally:
+        (entry / "a.pdf").chmod(0o644)
+
+
+def test_unreadable_names_a_folder_that_cannot_be_listed(layout):
+    entry = drop(
+        layout, "credit_snapshot", "acme", {"context.json": CTX_SNAPSHOT, "sub/b.pdf": b"2"}
+    )
+    (entry / "sub").chmod(0)
+    try:
+        assert unreadable(entry)
+    finally:
+        (entry / "sub").chmod(0o755)
+
+
+def test_unreadable_ignores_a_sharing_violation(layout, monkeypatch):
+    entry = drop(layout, "credit_snapshot", "acme", {"context.json": CTX_SNAPSHOT})
+    real_open = Path.open
+
+    def busy(self, *args, **kwargs):
+        if self.name == "context.json":
+            error = OSError("in use")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", busy)
+    assert unreadable(entry) is None
+
+
+def test_unreadable_does_not_open_a_missing_entry(layout):
+    assert unreadable(layout.inbox / "credit_snapshot" / "nothing") is None

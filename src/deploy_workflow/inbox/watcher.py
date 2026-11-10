@@ -1,14 +1,15 @@
 """The inbox watcher: the one long-running process that turns drops into filed reports.
 
-Each poll it reaps ended runs, scans the inbox, starts queued runs within the limits and publishes
-run activity. A drop leaves the inbox in one rename, a run record is saved before and after its
-process starts, and a run is shown as finished only when the library lists it.
+Each poll it reaps ended runs, scans the inbox, checks claimed drops, starts prepared runs within
+the limits and publishes run activity. A record is saved before every step that an interruption
+could cut short, so a restart always finds what to do next: a drop leaves the inbox in one rename
+and gets its record at once, is never put back, and a run is marked running (and counted) before
+its process starts. A run is shown as finished only when the library lists it.
 """
 
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 import subprocess
 import sys
@@ -19,33 +20,24 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
-from deploy_workflow.inbox import activity, drops, filing, runs
+from deploy_workflow.inbox import activity, drops, filing, runs, startup
 from deploy_workflow.inbox.drops import DropRejected
 from deploy_workflow.inbox.runs import Record
-from deploy_workflow.model.adapter import (
-    COPILOT_RUNTIME_VARIABLE,
-    KEY_VARIABLES,
-    LivePauseInForce,
-    check_ruling,
-)
+from deploy_workflow.inbox.startup import StartupRefused
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
 
+__all__ = ["Settings", "StartupRefused", "Watcher", "main"]
+
 ROOT = Path(__file__).resolve().parents[3]
 _TIME = "%Y-%m-%dT%H:%M:%SZ"
-_FORM = ROOT / "docs/templates/context-form.html"
-_PAGE = (
-    '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
-    '<meta http-equiv="refresh" content="0; url=_engine/library/index.html">'
-    "<title>Issuer library</title></head><body>"
-    '<p><a href="_engine/library/index.html">Open the issuer library</a></p></body></html>\n'
+_REBUILD_FAILED = "the library could not be rebuilt ({}); ended runs wait for it"
+_CUT_SHORT = (
+    "the watcher stopped while starting this run; its process may still be running"
+    " \N{EM DASH} check before dropping the folder again"
 )
-
-
-class StartupRefused(ValueError):
-    """The watcher cannot launch runs, or another watcher already owns this folder."""
 
 
 @dataclass(frozen=True)
@@ -84,75 +76,38 @@ class Watcher:
     ) -> None:
         self.settings, self.clock, self.now = settings, clock, now
         self.layout = drops.ensure_layout(settings.root)
-        self._logger = self._open_log()
-        self._check_launchable()
+        self._logger = startup.open_log(self.layout, __name__)
+        startup.check_launchable(settings.config, settings.ruling)
+        self._lock: IO[str] | None = startup.take_lock(self.layout)
         self._records = {r.id: r for r in runs.load_all(self.layout)}
         self._children: dict[str, subprocess.Popen[bytes]] = {}
         self._tracker = drops.ReadyTracker(settings.settle_seconds, clock)
         self._unreadable: dict[Path, tuple[float, str]] = {}
-        self._held = ""
-        self._take_lock()
-        self._write_pages()
+        self._rebuild_error = ""
+        self._limit_held = ""
+        startup.write_pages(self.layout)
+        self._recover()
         self._rebuild()
 
-    # -- start-up ---------------------------------------------------------------------------
+    def close(self) -> None:
+        """Release the folder lock. Safe to call twice."""
+        handle, self._lock = self._lock, None
+        if handle is not None:
+            startup.release_lock(handle)
 
-    def _open_log(self) -> logging.Logger:
-        logger = logging.getLogger(f"{__name__}.{self.layout.root}")
-        if not logger.handlers:
-            handler = logging.FileHandler(self.layout.logs / "watcher.log", encoding="utf-8")
-            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
-
-    def _check_launchable(self) -> None:
-        config = CONFIGS.get(self.settings.config)
-        if config is None:
-            raise StartupRefused(f"unknown config {self.settings.config!r}")
-        try:
-            check_ruling(self.settings.config, self.settings.ruling)
-        except (LivePauseInForce, ValueError, OSError) as error:
-            raise StartupRefused(f"live runs are not allowed: {error}") from error
-        key = KEY_VARIABLES[config.provider]
-        if not os.environ.get(key):
-            raise StartupRefused(f"{key} is not set in the launching environment")
-        runtime = Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, ""))
-        if config.provider == "copilot" and not runtime.is_file():
-            raise StartupRefused(f"{COPILOT_RUNTIME_VARIABLE} must name an existing file")
-
-    def _take_lock(self) -> None:
-        lock = self.layout.engine / "watcher.lock"
-        mine = str(os.getpid())
-        try:
-            descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        except FileExistsError:
-            try:
-                other = int(lock.read_text(encoding="utf-8").strip())
-            except (OSError, ValueError):
-                other = 0  # unreadable: treated as stale
-            if other != os.getpid() and runs.alive(other):
-                raise StartupRefused(
-                    f"another watcher (pid {other}) is running on this folder"
-                ) from None
-            lock.write_text(mine, encoding="utf-8")  # stale: its process is gone
-        else:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write(mine)
-
-    def _release_lock(self) -> None:
-        lock = self.layout.engine / "watcher.lock"
-        with self._guard("watcher.lock"):
-            if lock.read_text(encoding="utf-8").strip() == str(os.getpid()):
-                lock.unlink()
-
-    def _write_pages(self) -> None:
-        try:
-            with (self.layout.root / "library.html").open("xb") as page:
-                page.write(_PAGE.encode())
-        except FileExistsError:
-            pass  # never overwritten
-        drops.write_templates(self.layout, _FORM)
+    def _recover(self) -> None:
+        """A run recorded as started but with no process ID was cut short while starting."""
+        for record in self._with_status("running"):
+            if record.pid == 0:
+                with self._guard(f"run {record.id}"):
+                    self._put(
+                        replace(
+                            record,
+                            status="interrupted",
+                            reason=_CUT_SHORT,
+                            ended_at=self._utc(self.now()),
+                        )
+                    )
 
     # -- shared helpers ---------------------------------------------------------------------
 
@@ -177,11 +132,17 @@ class Watcher:
     def _rebuild(self) -> Any:
         try:
             library = cpos_launch.update_library_at(self.layout.engine)
-        except (OSError, ValueError, ImportError):
+        except (OSError, ValueError, ImportError) as error:
             self._logger.exception("library rebuild failed")
+            self._rebuild_error = (
+                f"the library could not be rebuilt ({error}); ended runs wait for it"
+            )
             return None
         if library is None:
             self._logger.error("library rebuild skipped: update_library.py not found")
+            self._rebuild_error = _REBUILD_FAILED.format("update_library.py not found")
+            return None
+        self._rebuild_error = ""
         return library
 
     # -- one poll ---------------------------------------------------------------------------
@@ -189,6 +150,7 @@ class Watcher:
     def step(self) -> None:
         self._reap()
         self._scan()
+        self._prepare_queued()
         self._start_queued()
         with self._guard("activity"):
             snapshot = activity.snapshot(
@@ -196,7 +158,7 @@ class Watcher:
                 list(self._records.values()),
                 cap=self.settings.cap,
                 now=self.now(),
-                held=self._held,
+                held="; ".join(t for t in (self._rebuild_error, self._limit_held) if t),
             )
             activity.write(self.layout, snapshot)
 
@@ -209,7 +171,7 @@ class Watcher:
         except KeyboardInterrupt:
             pass
         finally:
-            self._release_lock()
+            self.close()
 
     # -- reap and finish --------------------------------------------------------------------
 
@@ -227,7 +189,7 @@ class Watcher:
                 done, code = self._exit_of(record)
                 if done:
                     ended.append((record, code))
-        library = self._rebuild() if ended else None
+        library = self._rebuild() if ended or self._rebuild_error else None
         if library is None:
             return  # nothing is decided without a rebuild; the next poll tries again
         for record, code in ended:
@@ -247,18 +209,24 @@ class Watcher:
         if len(reports) != 1:
             reason = f"expected one deliveries/*/report.html, found {len(reports)}"
             return replace(ended, status="failed", reason=reason)
-        filed = filing.file_report(
-            self.layout,
-            reports[0],
-            issuer_id=record.issuer_id,
-            issuer_name=record.issuer_name,
-            as_of=record.as_of,
-            pathway=record.pathway,
-        )
-        _, differs = filing.issuer_folder(self.layout, record.issuer_id, record.issuer_name)
-        return replace(
-            ended, report=filed.relative_to(self.layout.root).as_posix(), name_differs=differs
-        )
+        if not (record.report and (self.layout.root / record.report).is_file()):
+            try:
+                filed = filing.file_report(
+                    self.layout,
+                    reports[0],
+                    issuer_id=record.issuer_id,
+                    issuer_name=record.issuer_name,
+                    as_of=record.as_of,
+                    pathway=record.pathway,
+                )
+                _, differs = filing.issuer_folder(self.layout, record.issuer_id, record.issuer_name)
+            except ValueError as error:  # a corrupt issuer registry; the report stays in its run
+                self._logger.exception("run %s could not be filed", record.id)
+                return replace(ended, status="failed", reason=f"could not be filed: {error}")
+            # Kept in memory at once: if the save below fails, the retry must not file it again.
+            record.report = filed.relative_to(self.layout.root).as_posix()
+            record.name_differs = differs
+        return replace(ended, report=record.report, name_differs=record.name_differs)
 
     # -- scan -------------------------------------------------------------------------------
 
@@ -267,7 +235,12 @@ class Watcher:
         number = 1
         while True:
             name = f"{stamp:%Y%m%d-%H%M%S}-{number:02d}"
-            if name not in self._records and not os.path.lexists(self.layout.drops / name):
+            taken = (
+                self.layout.drops / name,
+                self.layout.runs / name,
+                self.layout.logs / f"{name}.log",
+            )
+            if name not in self._records and not any(os.path.lexists(p) for p in taken):
                 return name
             number += 1
 
@@ -280,67 +253,95 @@ class Watcher:
             for pathway, entry in found:
                 with self._guard(f"drop {entry}"):
                     if self._tracker.ready(entry):
-                        self._admit(pathway, entry, None)
+                        self._claim(pathway, entry, None)
                     else:
                         self._watch_unreadable(pathway, entry)
 
     def _watch_unreadable(self, pathway: str, entry: Path) -> None:
-        """A drop that cannot be listed is rejected once that has lasted past the settle time."""
-        try:
-            drops.signature(entry)
-        except OSError as error:
-            first, _ = self._unreadable.setdefault(entry, (self.clock(), str(error)))
-            if self.clock() - first > self.settings.settle_seconds:
-                del self._unreadable[entry]
-                self._admit(pathway, entry, f"cannot be read: {error}")
-        else:
+        """A drop that cannot be read is rejected once that has lasted past the settle time."""
+        error = drops.unreadable(entry)
+        if error is None:
             self._unreadable.pop(entry, None)
+            return
+        first, _ = self._unreadable.setdefault(entry, (self.clock(), error))
+        if self.clock() - first > self.settings.settle_seconds:
+            del self._unreadable[entry]
+            self._claim(pathway, entry, f"cannot be read: {error}")
 
-    def _admit(self, pathway: str, entry: Path, refusal: str | None) -> None:
-        """Claim a drop, check it and queue or reject it. ``refusal`` rejects it unchecked."""
+    def _claim(self, pathway: str, entry: Path, refusal: str | None) -> None:
+        """Move a drop out of the inbox and record it at once. ``refusal`` rejects it unchecked."""
         record_id = self._new_id()
         folder = drops.claim(self.layout, entry, record_id)
         if folder is None:
             return
         record = Record(record_id, pathway, entry.name, "queued", self._utc(self.now()))
         try:
-            reason = refusal
-            if reason is None:
-                try:
-                    checked = drops.check(folder, pathway)
-                    identity = checked.run.identity
-                    record = replace(
-                        record,
-                        issuer_id=identity.issuer_id,
-                        issuer_name=identity.issuer_name,
-                        as_of=checked.run.run.as_of,
-                        files=checked.files,
-                    )
-                    reason = runs.prepare(
-                        self.layout,
-                        record,
-                        checked.context,
-                        launcher=self.settings.launcher,
-                        config=self.settings.config,
-                        cap=self.settings.cap,
-                    )
-                except DropRejected as error:
-                    reason = str(error)
-            if reason:
-                drops.reject(self.layout, folder, entry.name, reason, self.now())
-                record = replace(
-                    record, status="rejected", reason=reason, ended_at=self._utc(self.now())
-                )
             self._put(record)
-        except OSError:
+        except OSError:  # no record exists, so the drop goes back for the next poll
             self._logger.exception("drop %s (%s)", entry, record_id)
             self._put_back(folder, entry)
+            return
+        if refusal:
+            self._reject(record, refusal)
 
     def _put_back(self, folder: Path, entry: Path) -> None:
-        """Return a claimed drop to the inbox so the next poll tries it again."""
+        """Return a claimed drop whose record could not be saved to where it was."""
         if folder.exists() and not os.path.lexists(entry):
             with self._guard(f"returning {folder} to the inbox"):
                 os.rename(folder, entry)
+
+    def _reject(self, record: Record, reason: str) -> None:
+        """Move the drop to ``inbox/failed`` and record why. The drop never returns to the inbox."""
+        try:
+            self.layout.failed.mkdir(parents=True, exist_ok=True)
+            drops.reject(
+                self.layout, self.layout.drops / record.id, record.folder, reason, self.now()
+            )
+        except OSError as error:
+            self._logger.exception("run %s could not be moved to inbox/failed", record.id)
+            reason = (
+                f"{reason} (the folder could not be moved to inbox/failed: {error}; "
+                f"it is kept in _engine/drops/{record.id})"
+            )
+        self._put(replace(record, status="rejected", reason=reason, ended_at=self._utc(self.now())))
+
+    # -- prepare ----------------------------------------------------------------------------
+
+    def _prepare_queued(self) -> None:
+        for record in self._with_status("queued"):
+            if not record.prepared:
+                with self._guard(f"run {record.id}"):
+                    self._prepare(record)
+
+    def _prepare(self, record: Record) -> None:
+        """Check a claimed drop and run the offline check. An interruption leaves it unprepared."""
+        try:
+            checked = drops.check(self.layout.drops / record.id, record.pathway)
+            identity = checked.run.identity
+            record = replace(
+                record,
+                issuer_id=identity.issuer_id,
+                issuer_name=identity.issuer_name,
+                as_of=checked.run.run.as_of,
+                files=checked.files,
+            )
+            reason = runs.prepare(
+                self.layout,
+                record,
+                checked.context,
+                launcher=self.settings.launcher,
+                config=self.settings.config,
+                cap=self.settings.cap,
+            )
+        except DropRejected as error:
+            reason = str(error)
+        except OSError as error:
+            self._logger.exception("run %s could not be checked", record.id)
+            reason = f"could not be checked: {error}"
+        if reason:
+            self._reject(record, reason)
+        else:
+            self._put(replace(record, prepared=True))
 
     # -- start ------------------------------------------------------------------------------
 
@@ -364,41 +365,58 @@ class Watcher:
 
     def _start_queued(self) -> None:
         today = self._started_today()
-        self._held = ""
+        self._limit_held = ""
         for record in self._with_status("queued"):
+            if not record.prepared:
+                continue
             if len(self._with_status("running")) >= self.settings.max_running:
                 break
             if today >= self.settings.max_per_day:
                 limit = self.settings.max_per_day
-                self._held = f"daily limit of {limit} runs reached; waiting until tomorrow"
+                self._limit_held = f"daily limit of {limit} runs reached; waiting until tomorrow"
                 break
             with self._guard(f"run {record.id}"):
                 today += self._launch(record)
 
     def _launch(self, record: Record) -> bool:
+        """Start one run. True once it is recorded as started (and so counted for the day)."""
         try:
             context = drops.check(self.layout.drops / record.id, record.pathway).context
-        except DropRejected as error:
-            ended = self._utc(self.now())
-            self._put(replace(record, status="failed", reason=f"{error}", ended_at=ended))
-            return False
-        child = runs.start(
-            self.layout,
-            record,
-            context,
-            launcher=self.settings.launcher,
-            config=self.settings.config,
-            cap=self.settings.cap,
-            ruling=self.settings.ruling,
-        )
-        try:
+        except DropRejected as error:  # changed since the offline check
+            reason = str(error)
             self._put(
-                replace(record, status="running", pid=child.pid, started_at=self._utc(self.now()))
+                replace(record, status="failed", reason=reason, ended_at=self._utc(self.now()))
             )
-        except OSError:
-            _stop(child)  # a run nobody is tracking must not keep spending
-            raise
+            return False
+        running = replace(record, status="running", started_at=self._utc(self.now()), pid=0)
+        self._put(running)  # first: whatever happens next, this run is counted and never repeated
+        try:
+            child = runs.start(
+                self.layout,
+                running,
+                context,
+                launcher=self.settings.launcher,
+                config=self.settings.config,
+                cap=self.settings.cap,
+                ruling=self.settings.ruling,
+            )
+        except OSError as error:
+            self._logger.exception("run %s could not be started", record.id)
+            reason = f"could not be started: {error}"
+            self._put(
+                replace(running, status="failed", reason=reason, ended_at=self._utc(self.now()))
+            )
+            return True
         self._children[record.id] = child
+        try:
+            self._put(replace(running, pid=child.pid))
+        except BaseException as error:
+            _stop(child)  # a run nobody can track must not keep spending
+            if not isinstance(error, OSError):
+                self._children.pop(record.id, None)
+                raise
+            # The process has ended; the next poll reaps it through the Popen kept in _children.
+            self._logger.exception("run %s: its process ID could not be saved", record.id)
         return True
 
 
@@ -426,8 +444,8 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if not args.cap > 0:
-        print("--cap must be a positive amount", file=sys.stderr)
+    if not (args.cap.is_finite() and args.cap > 0):
+        print("--cap must be a finite amount above zero", file=sys.stderr)
         return 2
     settings = Settings(
         args.root,
