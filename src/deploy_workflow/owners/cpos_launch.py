@@ -427,7 +427,7 @@ class OwnerTable:
     dates: tuple[str, ...] = ()  # YYYY-MM-DD calendar dates (or a stated gap).
     ordered: tuple[str, ...] = ()  # Stated numbers that must not fall left to right.
     counts: tuple[str, ...] = ()  # Whole numbers of zero or more (or a stated gap).
-    not_before: tuple[str, str] = ()  # (later, earlier) date columns: the first may not precede.
+    not_before: tuple[str, ...] = ()  # (later, earlier) date columns: the first may not precede.
     one_unit: bool = False  # Every row states the same Reporting unit (one scale for the figure).
 
 
