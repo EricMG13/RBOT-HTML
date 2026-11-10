@@ -207,6 +207,19 @@ ROW_CHARTS: tuple[tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[i
         (2,),
         {1: "date", 4: "date"},
     ),
+    (
+        ("Class", "Scenario", "Claim", "Recovery", "Recovery %"),
+        {
+            "kind": "recovery",
+            "label": 0,
+            "scenario": 1,
+            "claim": 2,
+            "recovery": 3,
+            "percent": 4,
+        },
+        (2, 3, 4),
+        {},
+    ),
 )
 # The two tables of the pair header differ only by heading: the results are grouped columns (one
 # unit, so one scale), the margin and KPI changes a dumbbell per row.
@@ -653,6 +666,8 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
             kind = PAIR_KINDS.get(section["heading"])
             grouped = kind == "grouped" and not drawn["unit"]  # One scale needs one unit.
             drawn = None if kind is None or grouped else {**drawn, "kind": kind}
+        if drawn and drawn["kind"] == "recovery" and not drawn["unit"]:
+            drawn = None  # The recoveries share one scale, so one unit.
         return drawn and {**head, **drawn}
     if len(headers) < 4 or headers[-2:] != CHART_LAST_COLUMNS:
         return None

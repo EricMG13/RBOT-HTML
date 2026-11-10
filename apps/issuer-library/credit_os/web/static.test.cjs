@@ -1524,6 +1524,56 @@ test('comparison views: the new view rules use only the series and ink tokens, n
   for (const rule of rules) assert.ok(!/amber|--red|#b47812|#b3261e|#8a5300/i.test(rule), rule);
 });
 
+// ---- Package 4 views (2026-11-10): recovery by class and the value allocation waterfalls. Every value is synthetic.
+const RECOVERY_HEAD = ['Class', 'Scenario', 'Claim', 'Recovery', 'Recovery %', ...TAIL];
+const RECOVERY = { title: 'Recovery by class', unit: 'US$m', table: 202, kind: 'recovery', label: 0, scenario: 1, claim: 2, recovery: 3, percent: 4, columns: [2, 3, 4] };
+const ALLOCATION = { title: 'Value allocation \u2014 scenario 1', unit: 'US$m', table: 222, kind: 'waterfall', amount: 1, columns: [1] };
+const recoveryRow = (line, cls, scenario, claim, recovery, percent) => [line, cls, scenario, claim, recovery, percent, 'US$m', SYN];
+const withRecovery = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(
+    sec('Chart data: recovery by class', 3, 200, 'consumed', [table(202, RECOVERY_HEAD, [recoveryRow(203, 'Senior secured', 'Base', '1,200', '1,080', '90'), recoveryRow(204, 'Senior secured', 'Downside', '1,200', '720', '60'), recoveryRow(205, 'Unsecured', 'Base', '800', '120', '15'), recoveryRow(206, 'Unsecured', 'Downside', '800', 'Not supplied: no downside value', 'Not supplied: no downside value')])]),
+    sec('Chart data: value allocation \u2014 scenario 1', 3, 220, 'consumed', [table(222, ['Step', 'Amount', ...TAIL], [[223, 'Enterprise value', '2,000', 'US$m', SYN], [224, 'Restructuring costs', '-100', 'US$m', SYN], [225, 'Senior secured distribution', '-1,080', 'US$m', SYN], [226, 'Unsecured distribution', '-120', 'US$m', SYN], [227, 'Value not distributed', '700', 'US$m', SYN]])]));
+  cp1.charts.push(RECOVERY, ALLOCATION);
+  return d;
+};
+
+test('recovery views: recovery is columns by class, one series per scenario on one zero baseline, claim and percent as stated', () => {
+  const html = runPage(withRecovery).readerChart(outId('CP-1'), RECOVERY);
+  const [senior, unsecured] = html.split('<div class="recovery-group"').slice(1);
+  assert.ok(html.includes('<div class="chart-legend"><span><i class="series-0"></i>Base</span><span><i class="series-1"></i>Downside</span></div>'));
+  assert.ok(senior.includes('<i class="series-0" style="bottom:0%;height:100%"></i>') && senior.includes('<i class="series-1" style="bottom:0%;height:66.67%"></i>'));
+  assert.ok(strip(senior).includes('Base: claim 1,200 US$m · recovery 1,080 · 90%') && strip(senior).includes('Downside: claim 1,200 US$m · recovery 720 · 60%'));
+  assert.ok(unsecured.includes('<i class="series-0" style="bottom:0%;height:11.11%"></i>') && unsecured.includes('class="col missing"') && !unsecured.includes('series-1'), 'a recovery not stated has no bar and is never zero');
+  assert.ok(strip(unsecured).includes('Downside: claim 800 US$m · recovery n.a. · n.a.'));
+  assert.ok(senior.includes(`data-evidence="${outId('CP-1')}:203"`) && html.includes(FORM) && !/CP-\d/.test(strip(html)));
+  assert.ok(!/\bcomputed\b|\bshortfall\b/i.test(strip(html)), 'no recovery percentage or shortfall is worked out');
+});
+
+test('recovery views: scenarios keep one order in every class; a class with no row for one has an empty not-stated slot, never a zero bar', () => {
+  const rows = [recoveryRow(303, 'Senior', 'Base', '100', '90', '90'), recoveryRow(304, 'Senior', 'Downside', '100', '60', '60'), recoveryRow(305, 'Junior', 'Downside', '50', '10', '20')];
+  const chart = { ...RECOVERY, table: 302 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: recovery by class', 3, 300, 'consumed', [table(302, RECOVERY_HEAD, rows)])); d[outId('CP-1')].charts.push(chart); return d; });
+  const junior = page.readerChart(outId('CP-1'), chart).split('<div class="recovery-group"')[2];
+  assert.ok(/^[^]*?class="col missing"[^]*?not stated[^]*?series-1/.test(junior.split('<span class="chart-label">')[0]), 'the Base slot is first and empty');
+  assert.equal(countOf(junior, /<i class="series-/g), 1);
+});
+
+test('recovery views: the figure takes the missing-values note and its rules use no amber or red', () => {
+  const page = runPage(withRecovery);
+  assert.equal(page.lastPeriodChart([{ kind: 'waterfall' }, { kind: 'recovery' }, { kind: 'bullet' }]), 1);
+  const rules = read('screen.css').split('\n').filter(line => /\.recovery-/.test(line));
+  assert.ok(rules.length >= 1, 'the new rules are found');
+  for (const rule of rules) assert.ok(!/amber|--red|#b47812|#b3261e|#8a5300/i.test(rule), rule);
+});
+
+test('recovery views: a value allocation is a waterfall from enterprise value to the value not distributed', () => {
+  const html = runPage(withRecovery).readerChart(outId('CP-1'), ALLOCATION);
+  assert.equal(countOf(html, /<rect class="total"/g), 2);
+  assert.equal(countOf(html, /<rect class="outflow"/g), 3);
+  assert.ok(html.includes('aria-label="Value not distributed, 700 US$m. View source"') && html.includes('<h2>Value allocation \u2014 scenario 1</h2>') && html.includes(FORM));
+});
+
 // ---- Screens pass (2026-11-10): what a reader acts on is shown; production detail (hashes, file names, word counts) is a title or behind a disclosure.
 const HASH = 'f'.repeat(64);
 const zedRun = (extra = {}) => ({ id: RUN, name: 'Zed & Sons', issuer: 'ZED', title: 'Credit Snapshot', sector: 'Telecoms', workflow: 'Credit Snapshot', date: '2024-09-30', period: 'FY-2024', completion: null, summary: 'Leverage is high.', gaps: [], ratings: [], currency: 'USD',

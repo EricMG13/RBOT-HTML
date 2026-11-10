@@ -101,6 +101,20 @@ STRUCTURE = (
         "Note A | 2028-06-15 | 6.4 | +310 bp | 2024-12-31 | Dealer quote | % | Synthetic.",
         "Note B | 2030-06-15 | 7.0 | +350 bp | 2024-12-31 | Dealer quote | % | Synthetic.",
     )
+    + chart_table(
+        "recovery by class",
+        f"Class | Scenario | Claim | Recovery | Recovery % | {UNIT_BASIS}",
+        "Senior | Base | 1,200 | 1,080 | 90 | US$m | Synthetic.",
+        "Senior | Downside | 1,200 | 720 | 60 | US$m | Synthetic.",
+        "Junior | Base | 800 | Not supplied: no value | Not supplied: no value | US$m | Synthetic.",
+    )
+    + chart_table(
+        "value allocation \u2014 scenario 1",
+        f"Step | Amount | {UNIT_BASIS}",
+        "Enterprise value | 2,000 | US$m | Synthetic.",
+        "Senior distribution | -1,080 | US$m | Synthetic.",
+        "Value not distributed | 920 | US$m | Synthetic.",
+    )
 )
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -808,5 +822,9 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["segments"], seen["bulletRows"], seen["limitRows"]) == (2, 2, 1)
     assert (seen["markers"], seen["ticks"]) == (1, 3)  # No marker for the current value not stated.
-    assert seen["forms"] >= 7 and seen["formsClosed"] is True and seen["fits"] is True
+    assert seen["forms"] >= 9 and seen["formsClosed"] is True and seen["fits"] is True
     assert (seen["dumbbells"], seen["bands"], seen["scatterDots"]) == (2, 1, 2)
+    assert (seen["recoveryGroups"], seen["recoveryBars"]) == (
+        2,
+        2,
+    )  # No bar for a value not stated.

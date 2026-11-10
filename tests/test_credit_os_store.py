@@ -644,3 +644,66 @@ def test_a_peer_count_of_zero_is_a_stated_count():
     row = "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 0 | % | S. |"
     heading = "Chart data: peer range \u2014 percent metrics"
     assert len(synthetic_charts(chart_section(heading, PEER_HEADER, row))["charts"]) == 1
+
+
+# ---- Package 4 (2026-11-10): recovery by class and the value allocation. Every value is synthetic.
+RECOVERY_HEADER = (
+    "| Class | Scenario | Claim | Recovery | Recovery % | Reporting unit | Basis and limitation |"
+)
+RECOVERY = "Chart data: recovery by class"
+RECOVERY_ROWS = (
+    "| Senior | Base | 1,200 | 1,080 | 90 | US$m | S. |",
+    "| Senior | Downside | 1,200 | Not supplied: no value | Not supplied: no value | US$m | S. |",
+)
+ALLOCATION = "Chart data: value allocation — scenario 2"
+
+
+def test_recovery_by_class_is_a_recovery_chart_over_one_unit_and_a_gap_is_allowed():
+    fields = synthetic_charts(chart_section(RECOVERY, RECOVERY_HEADER, *RECOVERY_ROWS))
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None and chart["kind"] == "recovery" and chart["unit"] == "US$m"
+    roles = (chart["label"], chart["scenario"], chart["claim"], chart["recovery"], chart["percent"])
+    assert roles == (0, 1, 2, 3, 4) and chart["title"] == "Recovery by class"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| Senior | Base | 1,200 | 1,080 | 90% | US$m | S. |",
+        "| Senior | Base | 1,200 | 1,080 | 90 | EUR m | S. |",
+        "| Senior |  | 1,200 | 1,080 | 90 | US$m | S. |",
+    ],
+)
+def test_a_recovery_table_out_of_shape_or_in_two_units_is_named_not_drawn(row):
+    fields = synthetic_charts(chart_section(RECOVERY, RECOVERY_HEADER, RECOVERY_ROWS[0], row))
+    if "EUR" not in row:
+        fields = synthetic_charts(chart_section(RECOVERY, RECOVERY_HEADER, row))
+    assert fields["charts"] == [] and f"{RECOVERY} is not in its fixed table" in fields["issue"]
+
+
+def test_a_value_allocation_is_a_waterfall_from_enterprise_value_to_the_value_not_distributed():
+    fields = synthetic_charts(
+        chart_section(
+            ALLOCATION,
+            BRIDGE_HEADER,
+            "| Enterprise value | 1,500 | US$m | S. |",
+            "| Costs | -100 | US$m | S. |",
+            "| Senior distribution | -720 | US$m | S. |",
+            "| Value not distributed | 680 | US$m | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert chart["kind"] == "waterfall" and chart["title"] == "Value allocation — scenario 2"
+
+
+def test_a_value_allocation_that_does_not_reconcile_is_named_not_drawn_and_a_gap_draws_nothing():
+    rows = (
+        "| Enterprise value | 1,500 | US$m | S. |",
+        "| Value not distributed | 700 | US$m | S. |",
+    )
+    fields = synthetic_charts(chart_section(ALLOCATION, BRIDGE_HEADER, *rows))
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+    gap = "| {} | Not supplied: no valuation row | US$m | S. |"
+    gaps = (gap.format("Enterprise value"), gap.format("Value not distributed"))
+    fields = synthetic_charts(chart_section(ALLOCATION, BRIDGE_HEADER, *gaps))
+    assert fields["charts"] == [] and fields["issue"] is None

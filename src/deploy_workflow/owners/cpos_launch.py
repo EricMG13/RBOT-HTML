@@ -429,6 +429,8 @@ class OwnerTable:
     counts: tuple[str, ...] = ()  # Whole numbers of zero or more (or a stated gap).
     not_before: tuple[str, ...] = ()  # (later, earlier) date columns: the first may not precede.
     one_unit: bool = False  # Every row states the same Reporting unit (one scale for the figure).
+    series: str = ""  # A column whose distinct words are the figure's series, at most MAX_SERIES.
+    optional: bool = False  # The module writes the table only if the handoff supplies its case.
 
 
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
@@ -712,6 +714,65 @@ COMPARISON_TABLES: dict[str, tuple[OwnerTable, ...]] = {
 
 OWNER_TABLES |= COMPARISON_TABLES  # One registry: the instructions and the loop read this.
 
+# CP-4C (DR.2 to DR.5). A value allocation is a step table the bridge check reads unchanged: the
+# first row is the enterprise value (the opening), the costs and each class's distribution are the
+# negative changes, and the last row is the value not distributed (the closing), so the opening
+# plus the changes reconcile to it exactly. Available value is the running position after the
+# costs and is stated in the text, not as a row the check would add twice.
+MAX_SERIES = 3
+ALLOCATION_RULES = (
+    " Scenario identity is the label of its source valuation row; name it in Basis and "
+    "limitation of the first row. The first row is the enterprise value as stated. The next rows "
+    "are the costs and deductions, each a negative change. Then each class's distribution is a "
+    "negative change, in the order the method states them: assume no legal pool order. The last "
+    "row is the value not distributed after the last distribution (0 when all is allocated), so "
+    "that the first row plus the changes reconcile to it. Available value is the running position "
+    "after the costs: state it in Basis and limitation of the last cost row, not as a row. Do "
+    "not invent an absent downside or stress case."
+)
+
+
+def _allocation(scenario: int) -> OwnerTable:
+    ask = " Ask for this scenario only if the handoff supplies it." if scenario > 1 else ""
+    return OwnerTable(
+        "CP-4C",
+        f"DR.{scenario + 2}",
+        f"Chart data: value allocation \u2014 scenario {scenario}",
+        ("Amount",),
+        "US$m",
+        steps=True,
+        rules=f"Scenario {scenario} of the handoff's valuation rows.{ask}{ALLOCATION_RULES}",
+        optional=scenario > 1,
+    )
+
+
+OWNER_TABLES["CP-4C"] = (
+    OwnerTable(
+        "CP-4C",
+        "DR.2",
+        "Chart data: recovery by class",
+        (),
+        "",
+        rules=(
+            "One row per class and scenario the handoff supplies; do not invent an absent "
+            "downside or stress case. Claim and Recovery are the stated amounts in the Reporting "
+            "unit, one unit for every row. Recovery % is the recovery percentage as the owner "
+            "states it, a plain number without a percent sign, never worked out here from "
+            "Recovery and Claim. Cap a recovery only as the method caps it; keep the entity and "
+            "collateral pools and the legal limitations in Basis and limitation. This is the "
+            "single enterprise value slice, not a complete multi-entity waterfall. At most 3 "
+            "distinct scenarios, as the value allocation has three."
+        ),
+        columns=("Class", "Scenario", "Claim", "Recovery", "Recovery %"),
+        numbers=("Claim", "Recovery", "Recovery %"),
+        in_unit=("Claim", "Recovery"),
+        one_unit=True,
+        series="Scenario",
+        noun="class and scenario",
+    ),
+    *(_allocation(n) for n in (1, 2, 3)),
+)
+
 
 def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
     if isinstance(table, OwnerTable):
@@ -882,9 +943,27 @@ def _row_table_issues(
         )
     if not rows:
         issues.append(f"`{heading}` needs at least one row.")
+    seen = (
+        {row[header.index(spec.series)] for row in rows if len(row) == len(header)}
+        if spec.series
+        else ()
+    )
+    if len(seen) > MAX_SERIES:
+        issues.append(f"`{heading}`: at most {MAX_SERIES} distinct {spec.series} values are drawn.")
     if spec.one_unit and len({row[-2] for row in rows if len(row) == len(header)}) > 1:
         issues.append(f"`{heading}`: every row states one Reporting unit, as one scale is drawn.")
     return issues
+
+
+def _misheaded(text: str, heading: str) -> tuple[str, ...]:
+    """An optional table written under a near-miss heading (a hyphen for the dash, other case) is
+    sent back naming the exact heading; otherwise its absence is the module's decision."""
+
+    def plain(line: str) -> str:
+        return " ".join(re.sub("[\u2010-\u2015-]", "-", line).lower().split())
+
+    near = [line for line in text.splitlines() if plain(line) == plain(f"### {heading}")]
+    return (f"Write the heading exactly as `### {heading}`, not `{near[0]}`.",) if near else ()
 
 
 def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...]:
@@ -892,6 +971,8 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
     spec = _owner_table(table)
     heading = f"### {spec.heading}"
     if heading not in text.splitlines():
+        if spec.optional:  # A case the handoff does not supply is not asked for, nor drawn.
+            return _misheaded(text, spec.heading)
         return (f"Add `{heading}` inside ## Findings, with its table.",)
     rows = _stated_rows(text, heading)
     header = _chart_header(spec)
