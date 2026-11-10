@@ -289,6 +289,24 @@ def test_html_filings_reach_the_model_as_visible_text(tmp_path, name, raw):
     assert name in text and hashlib.sha256(original).hexdigest() in text
 
 
+def test_word_documents_reach_the_model_as_text(tmp_path):
+    from test_docx_text import docx, para
+
+    folder = issuer_folder(tmp_path)
+    original = docx(para("<w:t>Net sales were 100.</w:t>"))
+    (folder / "lender memo.docx").write_bytes(original)
+    prepared = prepare(
+        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="50"
+    )
+    key = "lender memo.docx.jsonl"
+    pinned = (tmp_path / "out" / prepared.plan.sources[key].path).read_bytes()
+    assert prepared.plan.sources[key].sha256 == hashlib.sha256(pinned).hexdigest()
+    text = "\n".join(_pages(key, pinned))
+    assert "Net sales were 100." in text and "<w:" not in text
+    assert "lender memo.docx" in text and hashlib.sha256(original).hexdigest() in text
+    assert "lender memo.docx" not in prepared.ignored
+
+
 @pytest.mark.parametrize("html", ["10-K.html", "filings/8-K.HTM"])
 def test_html_filing_and_a_file_named_like_its_text_refuse_instead_of_overwriting(tmp_path, html):
     # S01-A01/C03: an HTML filing is pinned as `<name>.jsonl`. Before the fix a real file of that

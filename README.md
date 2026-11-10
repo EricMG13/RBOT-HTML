@@ -51,7 +51,8 @@ uv run python -m deploy_workflow.owners.cpos_launch \
 
 - **Context file:** a `context/1` file, such as one from
   [the context form](docs/templates/context-form.html), which opens from disk.
-- **Issuer folder:** read recursively; PDF, TXT, Markdown, XLSX, CSV, JSON, JSONL and HTML files.
+- **Issuer folder:** read recursively; PDF, Word (.docx), TXT, Markdown, XLSX, CSV, JSON, JSONL and
+  HTML files.
 - **Model:** `--config` is `sol-medium`, `sol-high`, `opus-medium`, `deepseek-max`,
   `copilot-sol-medium` or `copilot-opus-medium`.
 - **Cap:** a USD ceiling for the run folder; a cap too small for one call is refused offline.
@@ -93,8 +94,8 @@ run for each folder, and the finished report appears in the issuer library.
    stages. The pathway is already chosen, and the form asks only for what that pathway's modules
    use. Its Run readiness panel says what each module is expected to do with your answers. Before
    the download, it asks you to acknowledge any expected limits. Download `context.json`.
-2. Make a folder. Put `context.json` and the issuer's source files in it (PDF, TXT, Markdown,
-   XLSX, CSV, JSON, JSONL or HTML).
+2. Make a folder. Put `context.json` and the issuer's source files in it (PDF, Word (.docx), TXT,
+   Markdown, XLSX, CSV, JSON, JSONL or HTML).
 3. Copy the folder into `inbox\<pathway>\`. The pathways are `credit_snapshot`,
    `earnings_update`, `relative_value`, `covenant_refinancing`, `distressed_restructuring` and
    `portfolio_decision`.

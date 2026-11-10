@@ -4,6 +4,31 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Word documents (.docx) in the issuer folder (branch `claude/optimistic-johnson-bmnwip`, after main `3ac4db6`)
+
+Owner: "Add docx compatibility too". Input only: nothing is written as Word.
+
+- How it reads them:
+  - The launcher now reads `.docx`. Like an HTML filing, a Word file is converted to text pages
+    (`docx_text.py`) and pinned as `<name>.jsonl`, headed by its name and hash.
+  - The text covers body paragraphs in order, table rows as cells joined by ` | `, and tabs and
+    line breaks. Tracked deletions and tab-stop definitions are not text. Headers, footers,
+    footnotes and comments are not read.
+  - Parsing uses the workbook reader's guarded XML parse (no DTD or entity) and its size limits.
+    A file that is not a Word document, or has no text, stops the launch naming the file.
+- Unchanged:
+  - HTML filings convert to the same bytes as before, so existing run folders still resume.
+  - Old `.doc` files are still not read; the form says to save them as PDF.
+- Also updated: the context form's file types (its copy is drift-tested against the launcher's),
+  its help text, and README. The inbox reads the same list.
+- Tests:
+  - `tests/test_docx_text.py` (7) and a launcher test, written first; the tab-stop case found a
+    defect, fixed before commit.
+  - Launcher, context-form, inbox-drops, library-page and Word tests: all pass except 3 inbox
+    permission tests that also fail on main here, because the sandbox runs as root.
+  - Quality gate: 0 findings.
+- Not verified: Word files made by Word itself; the tests build minimal files by hand.
+
 ## 2026-11-10 — Web search for the research module, offline (branch `claude/optimistic-johnson-bmnwip`, after main `1fbc57c`)
 
 Owner: "Cp-dr supplies the peers … By default cp-dr always provides the peers or 1C and 2 can never
