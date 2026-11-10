@@ -304,7 +304,7 @@ function parseRoute() {
   let module=Object.hasOwn(moduleNames,resolved)?resolved:'W-Library';
   const params=new URLSearchParams(query);
   let fallback=data[pins[module]]?.run;
-  if(!fallback&&module==='W-Calendar')fallback=calendarRun(requestedSection==='hedges'?'CP-2E':'CP-1A');
+  if(!fallback&&module==='W-Calendar')fallback=calendarRun(requestedSection==='lanes'?'lanes':requestedSection==='hedges'?'CP-2E':'CP-1A')||calendarRun('lanes');
   const requestedContext=params.get('c');
   let context=Object.hasOwn(contexts,requestedContext)?requestedContext:fallback||current?.context||Object.keys(contexts)[0]||null;
   // A deliverable opens under a run of its own issuer, or under none if no run file matches.

@@ -731,9 +731,9 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => ''];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules};`)(...args);
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name])];
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, calendarSections};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1842,4 +1842,61 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
   const screen = read('screen.js'), adapter = read('report-adapter.js');
   assert.ok(screen.includes("parent.closest('.ref,.excerpt')"), 'a source excerpt is the issuer\'s text, as quoted');
   assert.ok(adapter.includes('"CP-MODEL":"Forecast"'), 'the app\'s word for the model');
+});
+
+// ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.
+const LANE_HEAD = ['Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance'];
+const laneRow = (line, date, precision, published, event) => [line, date, precision, published, event, 'Scheduled', 'Synthetic filing', 'Synthetic relevance'];
+const LANE_GAP = 'Not supplied: the handoff states no dated event';
+const withLanes = d => {
+  d[outId('CP-1')].sections.push(sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures'), laneRow(304, '2025-06', 'month', '2025-05-01', 'Call window'), laneRow(305, '2025-Q3', 'quarter', '—', 'Rating review'), laneRow(306, '2025', 'year', '—', 'Maturity year')])]));
+  d[outId('CP-1')].events = [{ lane: 'Financing', table: 302, gap: null }];
+  d[outId('CP-6')].sections.push(sec('Events: Decision and watch', 3, 310, 'consumed', [table(312, LANE_HEAD, [[313, ...Array(7).fill(LANE_GAP)]])]));
+  d[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 312, gap: 'the handoff states no dated event' }];
+  return d;
+};
+const markers = html => [...html.matchAll(/class="lane-event (point|span)"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?"/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
+
+test('calendar lanes: one lane per module that supplied events, placed on one axis at each date precision', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  assert.equal(countOf(html, /<div class="lane-row">/g), 2);
+  assert.ok(strip(html).includes('Financing') && strip(html).includes('Decision and watch') && !/CP-\d/.test(strip(html)), 'lanes carry names, never module codes');
+  // Hand-computed: the axis is 2025-01-01 to 2025-12-31, 364 days. Mar 31 is day 89; June is days 151-180; Q3 is days 181-272; the year is the whole axis.
+  assert.deepEqual(markers(html), [['point', 24.45, null], ['span', 41.48, 7.97], ['span', 49.73, 25], ['span', 0, 100]]);
+});
+
+test('calendar lanes: a table of only Not supplied draws no event and says why', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  const gap = html.split('<div class="lane-row">')[2];
+  assert.ok(strip(gap).includes('Decision and watch') && strip(gap).includes('Not established for this run') && strip(gap).includes('the handoff states no dated event'));
+  assert.ok(!gap.includes('lane-event') && !gap.includes('Not supplied'));
+});
+
+test('calendar lanes: every event is a keyboard-reachable link naming its lane, date and precision, and the event table follows the lanes', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  const marker = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]);
+  assert.equal(marker.length, 4);
+  assert.ok(marker.every(m => /href="[^"]+"/.test(m) && m.includes('data-evidence=') && m.includes('aria-label=')));
+  assert.ok(marker[1].includes('aria-label="Financing: Call window, 2025-06 (month). View source"') && marker[1].includes(`data-evidence="${outId('CP-1')}:304"`));
+  assert.ok(html.indexOf('class="lane-row"') < html.indexOf('<table class="event-table">'));
+  const rows = [...html.split('<tbody>')[1].matchAll(/<tr>(.*?)<\/tr>/gs)].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
+  assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Lane', 'Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance']);
+  assert.equal(rows.length, 4, 'the lane with no event adds no row');
+  assert.deepEqual(rows[1], ['Financing', '2025-06', 'month', '2025-05-01', 'Call window', 'Scheduled', 'Synthetic filing', 'Synthetic relevance']);
+  assert.deepEqual(rows[2].slice(0, 4), ['Financing', '2025-Q3', 'quarter', '—']);
+});
+
+test('calendar lanes: the Calendar sections list the lanes first and leave the issuer-events calendar as it was', () => {
+  const issuer = d => { d[outId('CP-1A')] = runOutput('CP-1A', { sections: [sec('History', 3, 10, 'view', [table(11, ['Date / period', 'Category'], [[12, '1993', 'Fact']])])] }); return d; };
+  assert.deepEqual(runPage().calendarSections(RUN), [['unavailable', 'Calendar availability', []]]);
+  assert.deepEqual(runPage(issuer).calendarSections(RUN), [['tdg', 'Issuer events', []]]);
+  assert.deepEqual(runPage(withLanes).calendarSections(RUN), [['lanes', 'Event lanes', []]]);
+  assert.deepEqual(runPage(d => issuer(withLanes(d))).calendarSections(RUN), [['lanes', 'Event lanes', []], ['tdg', 'Issuer events', []]]);
+});
+
+test('calendar lanes: the new rules use only existing tokens, no amber or red, and a span is drawn differently from a day', () => {
+  const css = read('screen.css').split('\n').filter(line => /\.lane-|\.event-table|\.event-lanes/.test(line));
+  assert.ok(css.length >= 3, 'the new rules are found');
+  for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b/i.test(rule), rule);  // the font name Red Hat is not a colour
+  assert.ok(css.some(rule => /\.lane-event\.point/.test(rule)) && css.some(rule => /\.lane-event\.span/.test(rule)));
 });

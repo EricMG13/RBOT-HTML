@@ -683,22 +683,67 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
     return chart
 
 
+EVENT_PREFIX = "Events: "
+EVENT_HEADERS = [
+    *("Event date", "Date precision", "Published", "Event"),
+    *("Status", "Source", "Credit relevance"),
+]
+EVENT_SHAPES = {
+    "month": re.compile(r"\d{4}-(?:0[1-9]|1[0-2])", re.ASCII),
+    "quarter": re.compile(r"\d{4}-Q[1-4]", re.ASCII),
+    "year": re.compile(r"\d{4}", re.ASCII),
+}
+
+
+def _event_row_ok(cells: list[str]) -> bool:
+    """Mirrors the launcher's check: every cell stated, the date in the form its precision names."""
+    when, precision, published = cells[:3]
+    shape = EVENT_SHAPES.get(precision)
+    dated = valid_date(when) if precision == "day" else bool(shape and shape.fullmatch(when))
+    stated = all(c and not STATED_GAP.match(c) for c in cells)
+    return dated and stated and (published == "\u2014" or valid_date(published))
+
+
+def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:
+    """A calendar lane from an `Events: <lane>` table in its fixed shape, else None. A table of
+    only stated gaps is a lane with its reason and no events."""
+    tables = [b for b in section["blocks"] if b["type"] == "table"]
+    if len(tables) != 1 or tables[0]["headers"] != EVENT_HEADERS or not tables[0]["rows"]:
+        return None
+    rows = [row["cells"] for row in tables[0]["rows"]]
+    lane = {"lane": section["heading"].removeprefix(EVENT_PREFIX), "table": tables[0]["line"]}
+    if all(STATED_GAP.match(c) for cells in rows for c in cells):
+        return {**lane, "gap": rows[0][0].partition(":")[2].strip()}
+    return {**lane, "gap": None} if all(_event_row_ok(cells) for cells in rows) else None
+
+
 def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
     """A handoff's reader section and chart tables; a malformed one is named, the handoff reads."""
-    summary, charts, problems = None, [], []
+    summary, charts, events, problems = None, [], [], []
     for section in sections:
         heading = section["heading"]
         if heading == "Reader summary":
             summary = _reader_summary(section)
             if summary is None:
                 problems.append("Reader summary is not in its two tables")
+        elif heading.startswith(EVENT_PREFIX):
+            lane = _event_lane(section)
+            if lane:
+                events.append(lane)
+            else:
+                problems.append(f"{heading} is not in its fixed table")
         elif heading.startswith(CHART_PREFIX):
             chart = _chart_table(section)
             if chart:
                 charts.append(chart)
             elif not _unsupplied_bridge(section):
                 problems.append(f"{heading} is not in its fixed table")
-    return {"summary": summary, "charts": charts, "issue": "; ".join(problems) or None}
+    return {
+        "summary": summary,
+        "charts": charts,
+        "events": events,
+        "issue": "; ".join(problems) or None,
+    }
 
 
 # Evidence & audit by heading (R31a); Python decides it and the page reads the placement.

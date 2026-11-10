@@ -658,9 +658,36 @@ function eventsOutput(context) {
 }
 const hedgesOutput=context=>{const entry=moduleEntry('CP-2E',context);return entry?.default||entry?.outputs[0]||null;};
 // The first run that has the module's calendar source (route fallback when no run is chosen).
-const calendarRun=module=>Object.keys(contexts).find(context=>module==='CP-1A'?eventsOutput(context):hedgesOutput(context));
+const calendarRun=module=>Object.keys(contexts).find(context=>module==='lanes'?eventLanes(context).length:module==='CP-1A'?eventsOutput(context):hedgesOutput(context));
+// ---- Calendar lanes: one lane per module output that carries an `Events: <lane>` table (store.py event lanes), on one shared date axis.
+// A lane is named by the table's heading, so no module code is shown. `gap` is the stated reason when the module supplied no dated event.
+function eventLanes(context) {
+  return Object.values(contexts[context]?.modules||{}).flatMap(entry=>{
+    const id=entry.default||entry.outputs[0];
+    return (data[id]?.events||[]).map(lane=>({...lane,id}));
+  });
+}
+// A day is a point; a month, quarter or year is drawn across its whole span (calendar.js eventSpan), never on a day the source does not state.
+function eventLanesView(context) {
+  const lanes=eventLanes(context).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
+  const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
+  const link=(lane,row)=>`href="${evidenceHref(lane.id,row.line)}" data-evidence="${esc(`${lane.id}:${row.line}`)}"`;
+  const marker=(lane,{row,span})=>{
+    const [date,precision,,event]=row.cells,at=eventPlace(span,axis);
+    return `<a class="lane-event ${span.point?'point':'span'}" ${link(lane,row)} aria-label="${esc(`${lane.lane}: ${event}, ${date} (${precision}). View source`)}" style="left:${at.left}%${span.point?'':`;width:${at.width}%`}"></a>`;
+  };
+  const rows=lanes.map(lane=>`<div class="lane-row"><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track">${lane.events.filter(e=>e.span).map(e=>marker(lane,e)).join('')}</span>`}</div>`).join('');
+  const day=n=>new Date(n*86400000).toISOString().slice(0,10);
+  const body=lanes.flatMap(lane=>lane.events.map(({row})=>{
+    const [date,precision,published,event,status,source,relevance]=row.cells;
+    return `<tr><td>${esc(lane.lane)}</td><td>${esc(date)}</td><td>${esc(precision)}</td><td>${esc(published)}</td><td><a class="event-link" ${link(lane,row)}>${rich(event)}</a></td><td>${rich(status)}</td><td>${rich(source)}</td><td>${rich(relevance)}</td></tr>`;
+  })).join('');
+  const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
+  return `<div class="event-lanes"><div class="section-heading"><h2>Event lanes</h2><span>Dated events by module</span></div><p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state.</p>${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
+}
 function calendarSections(context) {
   const sections=[];
+  if(eventLanes(context).length)sections.push(['lanes','Event lanes',[]]);
   if(eventsOutput(context))sections.push(['tdg','Issuer events',[]]);
   if(hedgesOutput(context))sections.push(['hedges','Hedge schedule',[]]);
   return sections.length?sections:[['unavailable','Calendar availability',[]]];
@@ -1143,6 +1170,7 @@ function workspaceView(module,section) {
   if(module==='W-Library')return libraryView();
   if(module==='W-Overview')return runReport(context);
   if(module==='W-Calendar') {
+    if(eventLanes(context).length&&!['tdg','hedges'].includes(section))return eventLanesView(context);
     const events=eventsOutput(context),hedges=hedgesOutput(context),showHedges=hedges&&(section==='hedges'||!events);
     if(!events&&!hedges)return `<div class="missing-state"><h2>No calendar retained for this run</h2><p>No dates are inferred from other runs.</p></div>${moduleLink('W-Evidence','Review available evidence')}<a class="text-action switch-case" href="#W-Library/cases">Choose another run</a>`;
     const hedgeView=hedges&&(data[hedges].visual?.kind==='hedges'?hedgeChart(hedges,data[hedges].visual):`<div class="missing-state"><h2>No hedge schedule view for this output</h2><p>The retained CP-2E output is available in its module.</p></div>`);
