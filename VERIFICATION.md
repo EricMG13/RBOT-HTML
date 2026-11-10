@@ -20,9 +20,17 @@ scope_is_missing") that takes its values from a command qualifier the launcher n
   `tests/test_cpos_launch.py` 157 passed, 1 paid test skipped; quality gate exit 0. Offline
   prepare: CP-2G's instructions carry the paragraph; CP-0, CP-1 and CP-2A instructions are
   byte-identical; `tdg-forecast-001` is still listed as on the current methodology.
-- Not verified: that a live CP-2G run now gives drivers and publishes the forecast model, and the
-  Forecast tab with a model. No provider was called for this change. "Open primary handoff" was
-  left as it is: no run can reach it.
+- Live proof (`/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`, sol-medium, 16 minutes,
+  USD 1.3061, same four modules): the procedural block is gone. CP-2G's request now reads "FY2025,
+  FY2026 and FY2027 as the locked annual forecast horizon" and `qa_status` moved from Blocked to
+  Restricted. The forecast model is **still not published**: every driver is still null, now for
+  a stated evidential reason ("essential operating, cash-conversion, exit-interest and financing
+  assumptions cannot be supported by the supplied evidence. This is an evidence constraint, not
+  a request to reconfirm the locked entry values"). It declined even capex, where it quotes
+  management's FY2025 range of 2.5% to 3.5% of sales, because no point value or later year is given.
+- Not verified: the Forecast tab with a published model; no run has produced one. Whether CP-2G
+  should give `Analyst Interpretation` drivers when guidance is absent is a method decision, not
+  made here. "Open primary handoff" was left as it is: no run can reach it.
 
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
 

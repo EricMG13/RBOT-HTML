@@ -24,3 +24,9 @@ Neither run writes inside this repository or any retained run directory. The pro
 from the launching environment only; no credential file is read. The runs prove this dated case
 and these routes; automated checks cover handoff structure and anchors, not analytical accuracy.
 Outputs are candidates until reviewed.
+
+Second launch: `tdg-forecast-001` delivered but published no forecast (CP-2G declared a blocked
+forecast for want of entry values the launcher never gave; fixed on `claude/forecast-publication`).
+Asked "Run one more live CP-2G test (about USD 1.20, cap USD 10) to prove the fix?", the user said
+"Yes, run it": one fresh launch of the same four modules and scope, cap USD 10, in
+`/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`.
