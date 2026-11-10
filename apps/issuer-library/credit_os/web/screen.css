@@ -327,6 +327,8 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .model-original{margin:20px 0}.model-original>summary{cursor:pointer;font-weight:600;font-size:var(--fs-control);color:var(--text-secondary);min-height:32px;padding:6px 0}
 .model-original[open]>summary{margin-bottom:8px}
 .summary-line{display:block}
+/* Inbox automation: live run activity. Declared before the run report's .chips so that rule's gap wins. */
+.chips{display:inline-flex;flex-wrap:wrap;gap:4px}.chip-done,.chip-running,.chip-waiting{display:inline-block;padding:1px 8px;border:1px solid var(--rule);border-radius:10px;font-size:var(--fs-label)}.chip-done{background:var(--quiet);color:var(--navy)}.chip-running{background:var(--navy);color:#fff;border-color:var(--navy)}.chip-waiting{background:#fff;color:var(--muted)}.run-stalled{font-weight:600}.run-files{flex-basis:100%;font-size:var(--fs-compact)}.run-held,.run-reason,.run-note{color:var(--muted)}
 /* Module report (the Modules canvas): head, band, panel, findings, limits and audit, after docs/design/mockups/module-report.html. */
 #module-head:empty{display:none}
 .module-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}

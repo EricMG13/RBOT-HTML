@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -430,3 +431,52 @@ def test_the_report_canvas_and_old_section_links(tmp_path):
     dom, console = visit(page, "#CP-1A/head?c=run-a")  # No CP-1A output in this run.
     assert console == []
     assert "No output found" in dom and "Not run in this run" not in dom
+
+
+FORM_PROBE = """<script>
+document.querySelector('[data-k="run_type"][value="secondary"]').checked = true;
+document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
+const sel = document.getElementById('s1-pathway');
+const out = document.createElement('pre');
+out.id = 'probe';
+const built = build();
+const other = JSON.parse(JSON.stringify(built));
+other.run.pathway = 'credit_snapshot';
+const warned = fill(other).filter(w => w.startsWith('run.pathway'));
+const same = fill(built).filter(w => w.startsWith('run.pathway'));
+out.textContent = JSON.stringify({value: sel.value, disabled: sel.disabled, built, warned, same});
+document.body.append(out);
+</script>
+</body>"""
+
+
+def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
+    from deploy_workflow.inbox.drops import ensure_layout, write_templates
+
+    short = tempfile.mkdtemp(prefix="ib", dir="/tmp")  # tmp_path is over the 80-character limit.
+    shutil.rmtree(short)
+    layout = ensure_layout(Path(short))
+    try:
+        write_templates(layout, ROOT / "docs/templates/context-form.html")
+        form = layout.inbox / "earnings_update/_template/context-form.html"
+        page = (
+            tmp_path / "probe.html"
+        )  # The form with a probe that changes the run type, then reads.
+        text = form.read_text(encoding="utf-8")
+        page.write_text(text.replace("</body>", FORM_PROBE, 1), encoding="utf-8")
+        dom, console = visit(page)
+        assert console == []
+        probe = json.loads(
+            html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
+        )
+        assert probe["value"] == "earnings_update" and probe["disabled"] is True
+        assert probe["built"]["run"]["run_type"] == "secondary"  # The run type did change ...
+        assert probe["built"]["run"]["pathway"] == "earnings_update"  # ... the pathway did not.
+        assert probe["warned"] == [
+            'run.pathway: this form is fixed to earnings_update; "credit_snapshot" was replaced'
+        ]
+        assert (
+            probe["same"] == []
+        )  # A loaded context naming the fixed pathway gives no such warning.
+    finally:
+        shutil.rmtree(layout.root)

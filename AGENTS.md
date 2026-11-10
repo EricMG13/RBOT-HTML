@@ -51,8 +51,11 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
   consumption. Synthetic regressions and deterministic retained-data reports must
   be labeled with their actual scope.
 - No credential files. Provider keys may come only from the launching environment.
-  Paid execution is a separate, explicit action after offline readiness; the build
-  itself does not run providers.
+  Paid execution is a separate, explicit action after offline readiness. For the inbox
+  watcher (`deploy_workflow.inbox.watcher`) the explicit action is an analyst placing a
+  folder in `inbox/<pathway>/`, under the standing ruling
+  `docs/rulings/2026-11-09-inbox-automation.md` and a USD 20 cap per run (owner,
+  2026-11-09). The build itself does not run providers.
 - Run confidence-review after code changes: enumerate doubts, trace their causes,
   test adversarial cases and repair confirmed defects before completion.
 - Run rewrite-tournament in post-edit mode for nontrivial changed functions,

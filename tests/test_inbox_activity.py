@@ -1,0 +1,254 @@
+"""Activity data: module states, spend from the budget journal, the snapshot and activity.js."""
+
+from __future__ import annotations
+
+import os
+import tempfile
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+from deploy_workflow.inbox.activity import module_states, snapshot, spent, write
+from deploy_workflow.inbox.drops import Layout, ensure_layout
+from deploy_workflow.inbox.runs import Record
+from deploy_workflow.model.budget import Budget, OverrunStop
+from deploy_workflow.run_events import append_event
+
+
+@pytest.fixture
+def layout() -> Iterator[Layout]:
+    with tempfile.TemporaryDirectory(prefix="ib", dir="/tmp") as root:
+        yield ensure_layout(Path(root))
+
+
+def test_module_states_follow_the_events():
+    events = [
+        {"event": "module_started", "module": "CP-0"},
+        {"event": "module_accepted", "module": "CP-0"},
+        {"event": "module_started", "module": "CP-1"},
+    ]
+    states = dict(module_states("earnings_update", events))
+    assert (
+        states["CP-0"] == "done"
+        and states["CP-1"] == "running"
+        and states["CP-5"] == "waiting"
+        and states["Report"] == "waiting"
+    )
+
+
+def test_report_entry_follows_delivery_events():
+    running = dict(module_states("earnings_update", [{"event": "delivery_started"}]))
+    done = dict(
+        module_states("earnings_update", [{"event": "delivery_started"}, {"event": "delivered"}])
+    )
+    assert running["Report"] == "running" and done["Report"] == "done"
+
+
+def test_spend_counts_settled_charges_and_full_unknown_holds(tmp_path):
+    run_dir = tmp_path / "run" / "live"
+    budget = Budget(Decimal(20), run_dir)
+    for call_id, hold in (("a", "1.50"), ("b", "0.50"), ("c", "2.00")):
+        budget.reserve(call_id, Decimal(hold), config_id="sol-medium")
+    budget.settle("a", Decimal("1.25"))
+    budget.settle("b", Decimal("0.40"))
+    budget.settle("c", None)  # unknown charge: the full 2.00 hold stays counted
+    assert spent(tmp_path / "run") == Decimal("3.65")
+
+
+def test_spend_is_zero_before_any_call_and_unknown_when_unreadable(tmp_path):
+    assert spent(tmp_path) == Decimal(0)
+    (tmp_path / "live").write_text("not a folder")
+    assert spent(tmp_path) is None
+
+
+def test_snapshot_marks_a_silent_run_as_stalled(layout):
+    record = Record(
+        "id1", "credit_snapshot", "acme", "running", "t", started_at="2026-11-09T10:00:00Z"
+    )
+    late = snapshot(
+        layout, [record], cap=Decimal(20), now=datetime(2026, 11, 9, 11, 0, 1, tzinfo=UTC)
+    )
+    soon = snapshot(
+        layout, [record], cap=Decimal(20), now=datetime(2026, 11, 9, 10, 59, 0, tzinfo=UTC)
+    )
+    assert late["runs"][0]["stalled"] is True and "stalled" not in soon["runs"][0]
+
+
+def test_snapshot_orders_runs_and_reads_each_run_folder(layout):
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    records = [
+        Record("1", "credit_snapshot", "old", "finished", "t", ended_at="2026-11-09T08:00:00Z"),
+        Record("2", "credit_snapshot", "new", "failed", "t", ended_at="2026-11-09T09:00:00Z"),
+        Record("3", "credit_snapshot", "wait", "queued", "t"),
+        Record("4", "credit_snapshot", "go", "running", "t", started_at="2026-11-09T11:59:00Z"),
+        Record("5", "credit_snapshot", "bad", "rejected", "t", ended_at="2026-11-09T07:00:00Z"),
+    ]
+    (layout.runs / "4").mkdir()
+    append_event(layout.runs / "4", "module_started", module="CP-0")
+    data = snapshot(layout, records, cap=Decimal(20), now=now, held="paused")
+    assert [r["id"] for r in data["runs"]] == ["4", "3", "2", "1", "5"]
+    by_id = {r["id"]: r for r in data["runs"]}
+    assert data["cap"] == "20" and data["held"] == "paused" and data["updated"].endswith("Z")
+    assert dict(by_id["4"]["modules"])["CP-0"] == "running" and by_id["4"]["spent"] == "0"
+    assert "modules" not in by_id["5"] and "modules" not in by_id["3"]
+
+
+def test_unreadable_event_log_gives_waiting_and_unreadable_journal_gives_null_spend(layout):
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    record = Record("9", "credit_snapshot", "x", "running", "t", started_at="2026-11-09T11:59:00Z")
+    run = layout.runs / "9"
+    (run / "events.jsonl").mkdir(parents=True)  # reading it as a file fails
+    (run / "live").write_text("not a folder")
+    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    assert entry["spent"] is None
+    assert {s for _, s in entry["modules"]} == {"waiting"}
+
+
+def test_written_script_cannot_close_its_element(layout):
+    write(layout, {"runs": [{"folder": "</script><img src=x>"}]})
+    text = (layout.engine / "activity.js").read_text(encoding="utf-8")
+    assert text.startswith("window.RUN_ACTIVITY=") and "<" not in text
+    assert not list(layout.engine.glob("*.tmp"))
+
+
+def test_spend_of_an_unreadable_run_folder_is_unknown(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    run.chmod(0o000)
+    try:
+        assert spent(run) is None
+    finally:
+        run.chmod(0o755)
+
+
+def test_spend_matches_the_budget_over_every_kind_of_call(tmp_path):
+    live = tmp_path / "run" / "live"
+    budget = Budget(Decimal(20), live)
+    budget.reserve("a", Decimal("1.50"), config_id="sol-medium")
+    budget.settle("a", Decimal("1.25"))  # settled 1.25
+    budget.reserve("c", Decimal("2.00"), config_id="sol-medium")
+    budget.release("c")  # released 0
+    budget.reserve("d", Decimal("2.00"), config_id="sol-medium")
+    budget.settle("d", None, retryable=True)  # unknown, full hold 2.00
+    budget.reserve("e", Decimal("2.00"), retry_of="d", config_id="sol-medium")
+    budget.settle("e", Decimal("1.10"))  # retry settled 1.10
+    budget.reserve("f", Decimal("3.00"), config_id="sol-medium")  # open hold 3.00
+    budget.reserve("b", Decimal("1.00"), config_id="sol-medium")
+    with pytest.raises(OverrunStop):
+        budget.settle("b", Decimal("1.75"))  # overrun 1.75
+    # 1.25 + 1.75 + 0 + 2.00 + 1.10 + 3.00 = 9.10
+    assert spent(tmp_path / "run") == Decimal("9.10")
+
+
+def test_spend_keeps_digits_a_28_digit_context_would_round(tmp_path):
+    budget = Budget(Decimal(20), tmp_path / "run" / "live")
+    budget.reserve("a", Decimal(2), config_id="sol-medium")
+    budget.settle("a", Decimal(1))
+    budget.reserve("b", Decimal(1), config_id="sol-medium")
+    budget.settle("b", Decimal("0.0000000000000000000000000001"))  # 1E-28
+    assert spent(tmp_path / "run") == Decimal("1.0000000000000000000000000001")
+
+
+def test_a_zero_charge_is_shown_without_an_exponent(layout):
+    run = layout.runs / "z"
+    budget = Budget(Decimal(20), run / "live")
+    budget.reserve("a", Decimal(1), config_id="sol-medium")
+    budget.settle("a", Decimal("0E-8"))
+    record = Record("z", "credit_snapshot", "x", "running", "t", started_at="2026-11-09T11:59:00Z")
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    assert snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]["spent"] == "0.00000000"
+
+
+def test_write_does_not_follow_a_planted_temporary_name_and_leaves_no_temporary(layout):
+    outside = layout.engine.parent / "outside.txt"
+    outside.write_text("precious\n")
+    (layout.engine / "activity.js.tmp").symlink_to(outside)
+    write(layout, {"runs": []})
+    assert outside.read_text() == "precious\n"
+    assert (layout.engine / "activity.js").read_text().startswith("window.RUN_ACTIVITY=")
+
+
+def test_write_removes_its_temporary_file_when_the_replace_fails(layout, monkeypatch):
+    def refuse(*_a, **_k):
+        raise OSError("no")
+
+    monkeypatch.setattr("deploy_workflow.inbox.activity.os.replace", refuse)
+    with pytest.raises(OSError):
+        write(layout, {"runs": []})
+    assert not list(layout.engine.glob("*.tmp"))
+
+
+def test_stall_check_accepts_other_time_formats_and_a_naive_now(layout):
+    record = Record(
+        "t1", "credit_snapshot", "x", "running", "t", started_at="2026-11-09 09:00:00+00:00"
+    )
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    assert snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]["stalled"] is True
+    naive = datetime(2026, 11, 9, 12, 0, 0)
+    assert "runs" in snapshot(layout, [record], cap=Decimal(20), now=naive)
+
+
+def test_an_unparsable_time_is_logged_not_silent(layout, caplog):
+    record = Record("t2", "credit_snapshot", "x", "running", "t", started_at="yesterday")
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    assert "stalled" not in entry and "yesterday" in caplog.text
+
+
+def test_an_empty_start_time_and_no_events_is_not_stalled_and_logs_nothing(layout, caplog):
+    record = Record("t3", "credit_snapshot", "x", "running", "t", started_at="")
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    assert "stalled" not in entry and caplog.text == ""
+
+
+def test_only_200_ended_records_are_kept_and_the_running_one_leads(layout):
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    records = [
+        Record(f"e{i:03}", "credit_snapshot", "f", "finished", "t", ended_at="2026-11-09T08:00:00Z")
+        for i in range(205)
+    ]
+    records.append(
+        Record("r", "credit_snapshot", "f", "running", "t", started_at="2026-11-09T11:59:00Z")
+    )
+    runs = snapshot(layout, records, cap=Decimal(20), now=now)["runs"]
+    assert len(runs) == 201 and runs[0]["id"] == "r"
+
+
+def test_an_event_line_that_is_not_an_object_is_dropped_not_fatal(layout):
+    record = Record("r1", "credit_snapshot", "f", "running", "t", started_at="2026-11-09T11:59:00Z")
+    run_dir = layout.runs / "r1"
+    run_dir.mkdir()
+    (run_dir / "events.jsonl").write_text(
+        '{"event": "module_started", "module": "CP-0"}\n[]\n"text"\n7\n', encoding="utf-8"
+    )
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    [entry] = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"]
+    assert dict(entry["modules"])["CP-0"] == "running"
+
+
+def test_l4_a_run_with_no_event_log_yet_is_waiting_and_logs_nothing(layout, caplog):
+    record = Record("t4", "credit_snapshot", "x", "queued", "t")
+    (layout.runs / "t4").mkdir()  # the offline step made the folder; no events yet
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    assert {s for _, s in entry["modules"]} == {"waiting"}
+    assert "event log unreadable" not in caplog.text
+
+
+def test_m3_write_retries_a_refused_replace(layout, monkeypatch):
+    real, refusals = os.replace, [2]
+
+    def refuse_twice(source, target):
+        if refusals[0]:
+            refusals[0] -= 1
+            raise PermissionError(13, "in use", str(target))
+        real(source, target)
+
+    monkeypatch.setattr(os, "replace", refuse_twice)
+    write(layout, {"runs": []})
+    assert refusals == [0]
+    assert (layout.engine / "activity.js").read_text().startswith("window.RUN_ACTIVITY=")
