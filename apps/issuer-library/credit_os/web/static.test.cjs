@@ -1127,7 +1127,8 @@ test('run report: every part carries an id and the label the navigator lists, in
 
 test('run report: a coverage cell shows the code and carries the module name as its title; the page does not rewrite it', () => {
   const html = runPage().runReport(RUN);
-  assert.ok(/<a class="cov filled" href="[^"]*" title="Financial foundation" aria-label="CP-1, Financial foundation, Reaches a conclusion">CP-1<\/a>/.test(html));
+  assert.ok(/<a class="cov filled" href="[^"]*" title="Financial foundation · Reaches a conclusion" aria-label="CP-1, Financial foundation, Reaches a conclusion">CP-1<\/a>/.test(html));
+  assert.ok(/<a class="cov" href="[^"]*" title="Downside · Not assessable"/.test(html));
   assert.ok(/parent\.closest\('[^']*\.coverage[^']*'\)\)continue/.test(read('screen.js')), 'nameCodes leaves the coverage strip alone');
 });
 
@@ -1137,6 +1138,8 @@ test('charts: one chip-dot legend per set of charts, under the last card', () =>
   assert.equal(countOf(html, /class="panel-card"/g), 3);
   assert.ok(html.indexOf('class="legend"') > html.indexOf('<i>c</i>'));
   assert.equal(runPage().chartCards([]), '');
+  // A card's chart title is an h4 (it sits under a module's h3); the rest of the chart is untouched.
+  assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div></div>');
 });
 
 test('screen.css: run-report tables run whole in the text face; the library row shows its run id', () => {
@@ -1144,4 +1147,19 @@ test('screen.css: run-report tables run whole in the text face; the library row 
   assert.ok(css.includes('.run-section .table-scroll{max-height:none;overflow:clip}'));
   assert.ok(css.includes("table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text',sans-serif"));
   assert.ok(/<span class="cell-secondary run-id">\$\{esc\(run\.id\)\}<\/span>/.test(read('views.js')));
+});
+
+test('run report: a run with no module output says so and keeps the source inventory link; no empty strip, table or count line', () => {
+  const html = runPage(() => ({})).runReport(RUN);
+  assert.equal(strip(/<div class="missing-state">(.*?)<\/div>/.exec(html)[1]), 'No module output retained for this runThe run report is drawn from module handoffs, and this run holds none.');
+  assert.ok(html.includes('href="#W-Evidence/sources?c=run-a"'));
+  for (const gone of ['class="run-count"', 'class="coverage"', '<table']) assert.ok(!html.includes(gone), gone);
+});
+
+test('hardening: the module report\'s section title is an h2, fold arrows respect reduced motion, the page prints whole', () => {
+  const screen = read('screen.js'), css = read('screen.css');
+  assert.ok(screen.includes("const level=report?'h2':'h3';"));
+  assert.ok(/@media\(prefers-reduced-motion:reduce\)\{[^}]*details\.fold>summary img[^}]*\{transition:none\}/.test(css));
+  assert.ok(/@media print\{[^@]*#content\{[^}]*overflow:visible/.test(css));
+  assert.ok(/@media\(forced-colors:active\)\{[^@]*a\.cov\.filled\{/.test(css));
 });

@@ -313,7 +313,9 @@ function reportBand(id) {
   return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}">${esc(source.split('/').pop())} · line ${quoted.line}</button></div></div>`;
 }
 // One chip-dot legend per set of charts, under the last card.
-const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${chart}${at===charts.length-1?LEGEND:''}</div>`).join('');
+// A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
+const cardTitle=chart=>chart.replace('<div class="section-heading"><h2>','<div class="section-heading"><h4>').replace('</h2>','</h4>');
+const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   const charts=chartCards((data[id].charts||[]).map(c=>readerChart(id,c,true))),table=keyNumbers(id);
   return charts||table?`<section class="part" id="numbers"><h3>Key numbers</h3>${charts+table}</section>`:'';
@@ -794,7 +796,11 @@ function runGroups(context) {
 }
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
 function coverageStrip(entries) {
-  return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out,choices})=>`<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" title="${esc(moduleNames[module])}" aria-label="${esc(`${module}, ${moduleNames[module]}, ${out?stateWord(out.state.established):`${choices} saved outputs`}`)}">${esc(module)}</a>`).join('')}</nav>`;
+  // The fill is not the only carrier of the state: the title and the accessible label say it in words.
+  return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out,choices})=>{
+    const state=out?stateWord(out.state.established):`${choices} saved outputs`;
+    return `<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" title="${esc(`${moduleNames[module]} · ${state}`)}" aria-label="${esc(`${module}, ${moduleNames[module]}, ${state}`)}">${esc(module)}</a>`;
+  }).join('')}</nav>`;
 }
 function storyCharts(id,noted) {
   const charts=data[id].charts||[];
@@ -846,11 +852,14 @@ function moduleMatrix(grouped) {
 }
 function runReport(context) {
   const grouped=runGroups(context),entries=grouped.flatMap(([,items])=>items),built=reportsBuiltFrom(context);
+  const inventory=`<p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Source inventory${icon('arrow-right')}</a></p>`;
+  // A run that holds no module output has no report to draw: it says so and keeps the way to its sources.
+  if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The run report is drawn from module handoffs, and this run holds none.</p></div>${inventory}`;
   const count=established=>entries.filter(entry=>entry.out&&entry.out.state.established===established).length;
   const unsummarised=count(null),unchosen=entries.filter(entry=>!entry.out).length,line=`${count(true)} of ${entries.length} modules reach a conclusion · ${count(false)} not assessable${unsummarised?` · ${unsummarised} without a reader summary`:''}${unchosen?` · ${unchosen} without a chosen output`:''}`;
   const committee=entries.find(entry=>entry.module===COMMITTEE&&entry.out?.state.established===true);
   const deliverables=built.length?`<section class="summary-deliverables" id="run-deliverables" data-run-part="Deliverables from this run"><h2>Deliverables from this run</h2>${built.map(r=>`<div class="deliverable"><a class="text-action" href="${routeHref('W-Reports',r.id,null,context)}">${esc(reportName(r))}${icon('arrow-right')}</a>${reportAcceptance(r).html}</div>`).join('')}</section>`:'';
-  return `<div class="run-summary"><p class="run-count">${esc(line)}</p>${runAcceptance(context)}</div>${coverageStrip(entries)}${committee?reportBand(committee.id):''}${creditStory(grouped)}${findingsRegister(grouped)}${openItems(grouped)}${moduleMatrix(grouped)}${deliverables}<p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Source inventory${icon('arrow-right')}</a></p>`;
+  return `<div class="run-summary"><p class="run-count">${esc(line)}</p>${runAcceptance(context)}</div>${coverageStrip(entries)}${committee?reportBand(committee.id):''}${creditStory(grouped)}${findingsRegister(grouped)}${openItems(grouped)}${moduleMatrix(grouped)}${deliverables}${inventory}`;
 }
 // Read-only: the folders the library does not show (with the reason) and the issues found when it was built.
 function activityView(activity,live) {

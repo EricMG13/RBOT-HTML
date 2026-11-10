@@ -517,7 +517,9 @@ function renderRoute() {
     // The pager names what it steps through on the pages where the sections are models or reports.
     const pagerNoun={'W-Forecast':'model','W-Reports':'report'}[next.module]||'section';
     const report=reportPage(next);
-    const title=`<h3 id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</h3>`;
+    // A module report has no heading above this one but the issuer's h1, so there it is an h2; elsewhere it sits under the page's h2.
+    const level=report?'h2':'h3';
+    const title=`<${level} id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</${level}>`;
     // The bar sticks at narrow widths, so it names the run and the module (or destination) it belongs to.
     $('section-nav').innerHTML=contextPrefix(next)+(only||report||(isAnalytical(next.module)&&!next.output)?title:`${title}<span>${index+1} / ${sections.length}</span><button id="previous-section" ${index===0?'disabled':''} aria-label="Previous ${pagerNoun}">${icon('arrow-left')}</button><button id="next-section" ${index===sections.length-1?'disabled':''} aria-label="Next ${pagerNoun}">${icon('arrow-right')}</button>`);
     if(!showsCodes(next))nameCodes($('section-nav'));
