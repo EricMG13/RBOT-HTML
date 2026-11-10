@@ -597,12 +597,13 @@ def report_fields(sections: list[dict[str, Any]], summary: dict[str, Any] | None
         confidence = str(summary["confidence"]).strip().casefold()
         established = not confidence.startswith(CONFIDENCE_NOT_ASSESSABLE)
     declared = None
-    for section in sections:
-        if section["heading"] == "Front matter" and section["level"] == 1:
-            text = "\n".join(b["text"] for b in section["blocks"] if b["type"] == "text")
-            match = COMMITTEE_STATUS.search(text)
-            declared = match.group(1).strip() if match else None
-            break
+    # parse_source emits YAML front matter only as the first section, at level 2; a later heading
+    # of the same name is ordinary body, not the block.
+    lead = sections[0] if sections else None
+    if lead is not None and lead["heading"] == "Front matter" and lead["level"] == 2:
+        text = "\n".join(b["text"] for b in lead["blocks"] if b["type"] == "text")
+        match = COMMITTEE_STATUS.search(text)
+        declared = match.group(1).strip() if match else None
     placement = placements(sections)
     words = dict.fromkeys(WORD_GROUPS, 0)
     for where, section in zip(placement, sections, strict=True):
