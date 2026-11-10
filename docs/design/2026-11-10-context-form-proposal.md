@@ -246,5 +246,19 @@ the peer source is `cp_dr_public`. The form follows:
   - The inbox font limit is gone: inbox copies load the built library's fonts.
   - A copy already in a pathway's `_template` is never replaced: delete it and restart the watcher.
 
-**Still open:** decisions 2 to 5 in section 6; suggestions 1, 4 and 5 in section 5.
+**The research cutoff** (from session A's open note of 11:58, "Every module's instructions also note
+that the 'information cutoff' is blank in the run settings, which is a value you would supply";
+owner: "Your recommendation").
+- In the TDG all-modules run the models read `"cutoff": ""` in the pinned context as "Not
+  supplied", and some logged an "Information-cutoff ambiguity — Medium" for every consumer.
+- The form now writes the cutoff, following the as-of date until the analyst changes it.
+- Every reader in the code takes `min(as_of, cutoff)` (`research/intake.effective_cutoff`), so a
+  cutoff equal to the as-of date means what a blank one did.
+- Files the form writes differ from the old form's only in that field.
+
+**Still open:** decisions 2 to 5 in section 6; suggestions 1, 4 and 5 in section 5. From session A,
+not form changes: whether an upstream "Not ready" note may stop a downstream module (the route by
+which a false legal declaration blocked CP-2A in tdg-forecast-003). Also open: the library's
+selected-run panel position, and the paid run `tdg-all-001`, whose module outcomes can be compared
+with this form's readiness forecast when it reports.
 

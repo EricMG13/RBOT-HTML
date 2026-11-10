@@ -30,6 +30,14 @@ functions); no provider call and no analytical run.
   - `test_inbox_drops.py`: 55 passed, 3 failed. The three are permission tests that fail here
     because this sandbox runs as root, and they fail the same without this change.
   - Quality gate exit 0 (176 changed lines in scope, after one long line in the probe was split).
+- **Research cutoff written (owner: "Your recommendation").**
+  - New browser test `test_the_research_cutoff_follows_the_as_of_date_and_is_written`, seen
+    failing on the form before the change: the cutoff came out blank.
+  - Against the original form, the three fixture contexts differ only in `run.cutoff`. A blank one
+    becomes the as-of date (`2026-10-31`); an explicit `2025-12-31` is kept.
+  - The new downloads load and are accepted by the inbox. Each has
+    `effective_cutoff(as_of, cutoff) == effective_cutoff(as_of, "")`, so the code reads them as it
+    read a blank cutoff.
 - **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
   filings: no live run. Whether the readiness forecast matches live outcomes.
 

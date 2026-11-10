@@ -321,6 +321,12 @@ still loads; the form will not download without them:
 - The reader's own refusals, caught before download: a research question with `|`, and U+0085,
   U+2028 or U+2029 in any text.
 
+**The research cutoff is always written.** It follows the as-of date until the analyst changes it,
+and a loaded file with a blank cutoff gets the as-of date, with a note. The code reads blank as the
+as-of date, so nothing changes for it. The modules, which read the raw file, had reported a blank one
+as "information cutoff not supplied" (an ambiguity flagged for every module in the TDG
+all-modules run).
+
 **What it shows without enforcing:**
 - Notes, for example an as-of date before the newest file, a stale quote, two rows for one rating
   agency, or a peer older than 12 months.

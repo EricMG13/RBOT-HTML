@@ -379,7 +379,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
     <div class="f"><label for="d-current_period">Current period</label><input type="text" id="d-current_period" placeholder="e.g. q3-2026" data-k="current_period" aria-describedby="d-current_period-h"><p class="help" id="d-current_period-h">The latest reported period, as the filing labels it: q1-2026 to q4-2026, h1-2026, h2-2026 or fy-2025.</p></div>
     <div class="f"><label for="d-prior_period">Prior period</label><input type="text" id="d-prior_period" placeholder="e.g. q2-2026" data-k="prior_period" aria-describedby="d-prior_period-h"><p class="help" id="d-prior_period-h">Earlier than the current period, and the same kind (quarter, half or year).</p></div>
     <div class="f"><label for="d-reporting_currency">Reporting currency</label><input type="text" id="d-reporting_currency" placeholder="e.g. USD" data-k="reporting_currency" value="USD" maxlength="3" aria-describedby="d-reporting_currency-h"><p class="help" id="d-reporting_currency-h">As the filing cover states it: three uppercase letters.</p></div>
-    <div class="f"><label for="d-cutoff">Research cutoff</label><input type="date" id="d-cutoff" data-k="cutoff" aria-describedby="d-cutoff-h"><p class="help" id="d-cutoff-h">Items the research module reads that were published after it are refused. Blank means the as-of date.</p></div>
+    <div class="f"><label for="d-cutoff">Research cutoff</label><input type="date" id="d-cutoff" data-k="cutoff" aria-describedby="d-cutoff-h"><p class="help" id="d-cutoff-h">Items the research module reads that were published after it are refused. Follows the as-of date until you change it; set it earlier to leave out later research.</p></div>
   </div>
   <div class="tl" id="timeline"></div>
   <p class="help" id="tlnote"></p>
@@ -1664,7 +1664,7 @@ function renderScan() {
 }
 
 /* ======================================================================= Visibility */
-let rtTouched = false, basisTouched = false, idTouched = false;
+let rtTouched = false, basisTouched = false, idTouched = false, cutTouched = false;
 const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research'};
 function slug(s) {
   let x = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -1686,7 +1686,7 @@ function renderTimeline() {
   if (pkey(pp)) pts.push(['Prior period ends*', calEnd(pp), '']);
   if (pkey(cp)) pts.push(['Current period ends*', calEnd(cp), '']);
   if (validDate(newest)) pts.push(['Newest file', newest, '']);
-  if (validDate(cut)) pts.push(['Research cutoff', cut, 'cut']);
+  if (validDate(cut) && cut !== as_of) pts.push(['Research cutoff', cut, 'cut']);
   if (validDate(as_of)) pts.push(['As-of', as_of, 'asof']);
   pts.sort((a, b) => a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[2] === 'asof' ? 1 : -1);
   setHTML($('timeline'), pts.map(p => `<span class="pt ${p[2]}"><b>${p[0]}</b> <span class="num">${p[1]}</span></span>`).join('<span class="arrow" aria-hidden="true">→</span>'));
@@ -1706,6 +1706,9 @@ function vis() {
   const rt = getV(sp, 'run_type');
 
   if (!idTouched) $('i-issuer_id').value = slug($('i-issuer_name').value);
+  // The cutoff is written, never left blank: the code reads blank as the as-of date, but the modules read
+  // the raw file and reported "information cutoff not supplied" as an ambiguity (TDG all-modules run).
+  if (!cutTouched) $('d-cutoff').value = getV($('st-dates'), 'as_of');
   const listed = getV(si, 'listed_equity');
   $('tickerf').hidden = listed !== 'yes';
 
@@ -1797,6 +1800,7 @@ function onField(e) {
   if (t.dataset.k === 'legal_documents') $('legalok').checked = false;
   if (t.id === 'i-issuer_id') { idTouched = t.value !== ''; if (!idTouched) t.value = slug($('i-issuer_name').value); }
   if (t.id === 'i-issuer_name' && !idTouched) $('i-issuer_id').value = slug(t.value);
+  if (t.id === 'd-cutoff') cutTouched = t.value !== '' && t.value !== getV($('st-dates'), 'as_of');
   update();
 }
 $('f').addEventListener('input', onField);
@@ -1910,7 +1914,7 @@ function resetAll() {
   $('moreid').open = false;
   visited.clear(); visited.add('purpose'); tried = {}; cur = 'purpose'; loadedNotes = false; scan = null; ackKey = '';
   renderScan();
-  rtTouched = basisTouched = idTouched = false;
+  rtTouched = basisTouched = idTouched = cutTouched = false;
   $('d-as_of').value = today();
 }
 const txt = x => (x === null || x === undefined) ? '' : String(x);
@@ -1934,6 +1938,8 @@ function fill(o) {
   if (txt(run.run_type) in RUN_LABEL && getV(sp, 'run_type') !== txt(run.run_type)) warn.push(`run.run_type: "${txt(run.run_type)}" does not go with the ${PATHS[getV(sp, 'pathway')].label} pathway; changed to "${getV(sp, 'run_type')}"`);
   setV(si, 'case_kind', txt(run.case_kind), 'run.case_kind', warn);
   for (const k of ['as_of','cutoff','current_period','prior_period','reporting_currency']) if (k === 'as_of' || txt(run[k]) !== '') setV(sd, k, txt(run[k]), 'run.' + k, warn);
+  cutTouched = txt(run.cutoff) !== '' && txt(run.cutoff) !== txt(run.as_of);
+  if (txt(run.cutoff) === '') warn.push('run.cutoff: blank in this file; now the as-of date, which is what blank meant, stated for the modules');
   for (const k of ['issuer_name','issuer_id','borrower_name','parent_name','ticker','sector','country','sponsor']) setV(si, k, txt(id[k]), 'identity.' + k, warn);
   if (txt(id.issue_classification) !== '') setV(si, 'issue_classification', txt(id.issue_classification), 'identity.issue_classification', warn);
   else warn.push('identity.issue_classification: not stated in this file; choose one');
