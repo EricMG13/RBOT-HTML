@@ -40,6 +40,13 @@ scope_is_missing") that takes its values from a command qualifier the launcher n
 - Not verified: that CP-2G gives drivers under the new rule, and the Forecast tab with a published
   model; no run has produced one. CP-2A's run-to-run variation between Blocked and usable on the
   same inputs is unexamined. "Open primary handoff" was left as it is: no run can reach it.
+- Why CP-2A blocked in -003 (read from the three retained runs, no provider call): the pinned context
+  declares `attachments.legal_documents: executed`, but the pack is public filings only. In -003
+  CP-0 wrote that gap as conditioning "full downside readiness", CP-1's readiness table then marked
+  "CP-2A complete failure, covenant and funding-access sequence | Not ready", and CP-2A read that as
+  a prohibition from both predecessors. In -001 and -002 CP-0 and CP-1 did not write those lines
+  and CP-2A ran. The trigger is the context's declaration; the form's value for this pack is `none`.
+  Not tested: a run with `legal_documents: none`.
 - Spend across the four live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 = 4.6602.
 
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
