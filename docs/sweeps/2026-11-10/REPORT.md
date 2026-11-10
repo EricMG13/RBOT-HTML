@@ -55,9 +55,9 @@ Ledger: T1 `agent=mx-feature fix-rounds=0 gates-first-pass=y` · T2 `mx-feature 
 
 | # | Sev | Where | Finding | Disposition |
 |---|---|---|---|---|
-| F1b | Medium | `watcher.py` `--ruling`, `--config` | `--config sol-high` with another ruling passes start-up and launches. | decision: should the watcher accept any ruling but the standing one? |
+| F1b | Medium | `watcher.py` `--ruling`, `--config` | `--config sol-high` with another ruling passes start-up and launches. | fixed in the follow-up (`f921c9f`, `e74f2b4`): start-up refuses any other ruling and every launch cites the standing one |
 | F2 | Low | `runs.py:211-223` | `OSError` closing the log handle after `Popen` records "failed" while the child runs untracked. | open (cap reached); S1 no longer freezes its display |
-| F3 | Low | `watcher.py:168-173` | A rebuild error outside `OSError`/`ValueError`/`ImportError` stops the watcher. Root cause D2 is fixed. | decision: catch-all with a logged fail-open? |
+| F3 | Low | `watcher.py:168-173` | A rebuild error outside `OSError`/`ValueError`/`ImportError` stops the watcher. Root cause D2 is fixed. | fixed in the follow-up (`f921c9f`): any `Exception` is logged, shown and retried |
 | F4 | Low | `watcher.py:322-331` | An unreadable drop is moved to `failed` while other files still copy. | open |
 | F5 | Low | `watcher.py:459-467` | The daily-limit note is hidden while every slot is busy. | open |
 | F6 | Low | `watcher.py:67-68, 453` | On the autumn clock-change day a start in the first local hour is not counted. | open |

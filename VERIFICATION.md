@@ -22,6 +22,13 @@ provider was called and nothing ran on Windows. Report with all measurements and
   empty activity entry) fixed in `f28523a` and re-reviewed.
 - Not verified: Windows; a live watcher or provider path; the browser tests and the page's
   rendering of the declared statuses; the full suite; ten open or decision rows listed in the report.
+- Follow-up (branch `claude/sweep-followup-ruling-rebuild`, tip `e74f2b4`; owner, 2026-11-10): the
+  two decision rows are ruled and fixed test-first. The watcher starts and launches only under its
+  standing ruling; a library-rebuild error of any `Exception` type is logged, shown on the page and
+  retried instead of stopping the watcher. Exit 0 on `e74f2b4`: the quality gate; the same pytest
+  command (1,412 passed, 7 deselected). Review found the first ruling test passed without the
+  guard; it is now a cause test (fails with the check removed). The packaged layout was checked by
+  building the package into a temporary folder on macOS, not on Windows.
 
 ## 2026-11-10 — Run report Phase A (library Overview and module pages)
 
