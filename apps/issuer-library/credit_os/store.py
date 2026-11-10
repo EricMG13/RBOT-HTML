@@ -142,6 +142,8 @@ READER_TABLES = [
 ]
 CHART_PREFIX = "Chart data: "
 CHART_LAST_COLUMNS = ["Reporting unit", "Basis and limitation"]
+CHART_FIRST_COLUMNS = ("Period", "Step")  # Periods are columns over time; steps are a bridge.
+STEP_HEADERS = ["Step", "Amount", *CHART_LAST_COLUMNS]
 
 
 def physical_lines(text: str) -> list[str]:
@@ -490,6 +492,34 @@ def _reader_summary(section: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+PLAIN_AMOUNT = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+STATED_GAP = re.compile(r"Not supplied:\s*\S")
+
+
+def _bridge_amounts(table: dict[str, Any]) -> list[decimal.Decimal] | None:
+    """A step table's stated amounts when it is a bridge that reconciles, else None.
+
+    Mirrors the launcher's check (cpos_launch.py `_bridge_issues`; the store imports the standard
+    library only): every Amount a plain signed number, and the opening plus the stated changes equal
+    to the closing. Each amount has at most the table's own decimals, so the sum is exact."""
+    cells = [row["cells"][1] for row in table["rows"]]
+    if len(cells) < 2 or not all(PLAIN_AMOUNT.fullmatch(c) for c in cells):
+        return None
+    values = [decimal.Decimal(c.replace(",", "")) for c in cells]
+    return values if sum(values[:-1], decimal.Decimal(0)) == values[-1] else None
+
+
+def _unsupplied_bridge(section: dict[str, Any]) -> bool:
+    """A step table whose every Amount is a stated `Not supplied: <reason>`: nothing to draw."""
+    tables = [b for b in section["blocks"] if b["type"] == "table"]
+    return (
+        len(tables) == 1
+        and tables[0]["headers"] == STEP_HEADERS
+        and len(tables[0]["rows"]) > 0
+        and all(STATED_GAP.match(row["cells"][1]) for row in tables[0]["rows"])
+    )
+
+
 def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
     """What the app needs to draw the section's table, or None when it is not the fixed shape."""
     tables = [b for b in section["blocks"] if b["type"] == "table"]
@@ -497,14 +527,25 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
         return None
     table = tables[0]
     headers = table["headers"]
-    if len(headers) < 4 or headers[0] != "Period" or headers[-2:] != CHART_LAST_COLUMNS:
+    if (
+        len(headers) < 4
+        or headers[0] not in CHART_FIRST_COLUMNS
+        or headers[-2:] != CHART_LAST_COLUMNS
+    ):
         return None
-    return {
-        "title": section["heading"].removeprefix(CHART_PREFIX).capitalize(),
+    chart: dict[str, Any] = {
+        # Only the first letter is raised: an acronym in the heading keeps its case.
+        "title": section["heading"].removeprefix(CHART_PREFIX)[:1].upper()
+        + section["heading"].removeprefix(CHART_PREFIX)[1:],
         "unit": table["rows"][0]["cells"][-2],
         "table": table["line"],
         "columns": list(range(1, len(headers) - 2)),
     }
+    if headers[0] == "Step":
+        if headers != STEP_HEADERS or _bridge_amounts(table) is None:
+            return None
+        chart |= {"kind": "waterfall", "amount": 1}
+    return chart
 
 
 def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
@@ -520,7 +561,7 @@ def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
             chart = _chart_table(section)
             if chart:
                 charts.append(chart)
-            else:
+            elif not _unsupplied_bridge(section):
                 problems.append(f"{heading} is not in its fixed table")
     return {"summary": summary, "charts": charts, "issue": "; ".join(problems) or None}
 

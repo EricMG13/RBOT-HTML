@@ -129,6 +129,45 @@ NON_USD_TABLES = {
 }
 
 
+# Synthetic and hand-written: the tables an owner module is asked for beside the report's own
+# charts (S.5, the liquidity bridge, the refinancing need). They prove the route, not any analysis.
+def synthetic_table(header: str, *rows: str) -> str:
+    return "\n".join([header, "| --- |" + " --- |" * (header.count("|") - 2), *rows])
+
+
+PERIOD_HEAD = "| Period | {} | Reporting unit | Basis and limitation |"
+OWNER_TABLES = {
+    "CP-1": {
+        "Chart data: revenue and EBITDA": synthetic_table(
+            PERIOD_HEAD.format("Revenue | Adjusted EBITDA"),
+            "| FY2023 | 2,100 | 410 | US$m | Synthetic. |",
+            "| FY2024 | 2,250 | Not supplied: the measure is not stated | US$m | Synthetic. |",
+        ),
+    },
+    "CP-2D": {
+        "Chart data: liquidity bridge": synthetic_table(
+            "| Step | Amount | Reporting unit | Basis and limitation |",
+            "| Opening accessible liquidity | 900 | US$m | Synthetic. |",
+            "| Free cash flow | 120 | US$m | Synthetic. |",
+            "| Debt repayment | -450 | US$m | Synthetic. |",
+            "| Closing accessible liquidity | 570 | US$m | Synthetic. |",
+        ),
+    },
+    "CP-3C": {
+        "Chart data: refinancing need": synthetic_table(
+            PERIOD_HEAD.format("Debt maturing | Committed resources"),
+            "| FY2026 | 500 | 300 | US$m | Synthetic. |",
+            "| FY2027 | 1,250 | Not supplied: no commitment is stated | US$m | Synthetic. |",
+        ),
+    },
+}
+OWNER_HEADERS = {
+    "CP-1": PERIOD_HEAD.format("Revenue | Adjusted EBITDA"),
+    "CP-2D": "| Step | Amount | Reporting unit | Basis and limitation |",
+    "CP-3C": PERIOD_HEAD.format("Debt maturing | Committed resources"),
+}
+
+
 # The H3 a reader meets first in every module (owner ruling 2026-11-05; Deploy V M365 runs). A copy,
 # not an import: the answer key stays independent of cpos_launch.OPENING.
 OPENING = {
@@ -178,6 +217,8 @@ def answer(context: dict, plan_routes: list) -> str:
             lines += ["| Item | Value |", "| --- | --- |", "| Observed | 1 |", ""]
         else:
             lines += ["A located finding.", ""]
+    for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
+        lines += [f"### {heading}", "", table, ""]
     for heading in ("Calculations", "Gaps", "Next module"):
         lines += [f"## {heading}", "", "None.", ""]
     return "\n".join(lines)
@@ -1792,9 +1833,10 @@ def forecast_answer(context: dict, routes: list, block: str | None = None) -> st
     text = answer(context, routes)
     if context["module_id"] == "CP-1":
         rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items())
-        return text.replace(
-            "## Calculations", f"| Base | USD m |\n| --- | --- |\n{rows}\n\n## Calculations", 1
-        )
+        # Above the owner's chart table, so the base amounts do not read as rows of that table.
+        mark = "### Chart data: revenue and EBITDA"
+        mark = mark if mark in text else "## Calculations"
+        return text.replace(mark, f"| Base | USD m |\n| --- | --- |\n{rows}\n\n{mark}", 1)
     if context["module_id"] == "CP-2G" and block is not None:
         return text.replace("## Calculations", f"{block}\n## Calculations", 1)
     return text
@@ -2496,3 +2538,150 @@ def test_web_search_follows_the_ruling_and_reaches_only_the_research_module(
         )
         searched[name] = list(provider.searched)
     assert searched == {"on.md": ["CP-DR"], "off.md": []}
+
+
+@pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
+def test_the_instructions_ask_each_owner_for_its_own_chart_table(tmp_path, module):
+    prepared, *_ = good_task(tmp_path, module, "covenant_refinancing")
+    text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+    assert f"`{OWNER_HEADERS[module]}`" in text
+    assert "Not supplied: reported in <unit>" in text
+
+
+def test_a_module_with_no_owner_table_is_not_asked_for_one(tmp_path):
+    prepared, *_ = good_task(tmp_path, "CP-4", "covenant_refinancing")
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-4"].path).read_text()
+    assert "Chart data:" not in text
+
+
+def test_the_bridge_instruction_states_the_opening_closing_and_sign_rules(tmp_path):
+    prepared, *_ = good_task(tmp_path, "CP-2D", "covenant_refinancing")
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-2D"].path).read_text()
+    for phrase in ("first row is the opening", "last row is the closing", "signed", "reconcile"):
+        assert phrase in text, phrase
+
+
+@pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
+def test_checker_accepts_each_owner_chart_table(tmp_path, module):
+    prepared, task, context = good_task(tmp_path, module, "covenant_refinancing")
+    raw = answer(context, list(prepared.plan.layout.routes)).encode()
+    assert _checked_handoff(task, raw, checker(prepared.layout)) == ()
+
+
+@pytest.mark.parametrize(
+    ("module", "old", "new", "complaint"),
+    [
+        ("CP-1", "### Chart data: revenue and EBITDA", "### Revenue data", "revenue and EBITDA"),
+        ("CP-1", "| FY2023 | 2,100 |", "| FY2023 | 2.1bn |", "2.1bn"),
+        ("CP-1", "| 410 | US$m |", "| 410 | EUR m |", "EUR m"),
+        ("CP-3C", "| Period | Debt maturing |", "| Year | Debt maturing |", "Period"),
+        ("CP-3C", "| FY2026 | 500 | 300 |", "| FY2026 | 500 | 30% |", "30%"),
+        ("CP-3C", "| 300 | US$m | Synthetic. |", "| 300 | US$m |  |", "Basis and limitation"),
+        ("CP-2D", "### Chart data: liquidity bridge", "### Liquidity bridge", "liquidity bridge"),
+        ("CP-2D", "| Step | Amount |", "| Item | Amount |", "Step"),
+        ("CP-2D", "| -450 |", "| (450) |", "(450)"),
+        ("CP-2D", "| 120 | US$m |", "| 120 | EUR m |", "EUR m"),
+        ("CP-2D", "| 120 |", "| Not supplied: not stated |", "Not supplied"),
+        ("CP-2D", "| 570 |", "| 560 |", "does not equal"),
+        ("CP-2D", "| Debt repayment | -450 | US$m | Synthetic. |", "", "does not equal"),
+        (
+            "CP-2D",
+            "| Free cash flow | 120 | US$m | Synthetic. |",
+            "| Free cash flow | 120 | US$m |  |",
+            "Basis",
+        ),
+    ],
+)
+def test_checker_sends_back_each_malformed_owner_chart_table(tmp_path, module, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, module, "covenant_refinancing")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def bridge_table(*amounts: str, unit: str = "US$m") -> str:
+    rows = [f"| Step {i} | {a} | {unit} | Synthetic. |" for i, a in enumerate(amounts)]
+    return "\n".join(
+        [
+            "### Chart data: liquidity bridge",
+            "",
+            "| Step | Amount | Reporting unit | Basis and limitation |",
+        ]
+        + ["| --- | --- | --- | --- |", *rows]
+    )
+
+
+def bridge_issues(*amounts: str, unit: str = "US$m") -> tuple[str, ...]:
+    (table,) = cpos_launch.OWNER_TABLES["CP-2D"]
+    return cpos_launch.chart_issues(bridge_table(*amounts, unit=unit), table)
+
+
+def test_a_bridge_reconciles_at_the_precision_the_table_states():
+    assert bridge_issues("0.1", "0.2", "0.3") == ()  # Decimal, not float: 0.1 + 0.2 is 0.3.
+    assert bridge_issues("1,000.5", "-200.25", "800.25") == ()
+    assert bridge_issues("1,000", "-1", "999") == ()
+    assert bridge_issues("1,000", "-1", "998.9") != ()
+
+
+def test_a_bridge_needs_an_opening_and_a_closing_row():
+    assert any("opening and a closing" in i for i in bridge_issues("900"))
+
+
+def test_a_bridge_with_every_amount_not_supplied_is_accepted_and_a_mixed_one_is_not():
+    gap = "Not supplied: reported in EUR m"
+    assert bridge_issues(gap, gap, gap, unit="EUR m") == ()
+    mixed = bridge_issues("900", gap, "900")
+    assert any("Not supplied" in i for i in mixed), mixed
+
+
+def test_a_bridge_check_names_the_stated_and_summed_amounts():
+    (issue,) = bridge_issues("900", "-300", "700")
+    assert "600" in issue and "700" in issue
+
+
+@pytest.mark.parametrize(
+    ("module", "phrases"),
+    [
+        ("CP-1", ("issuer-adjusted or house-adjusted", "must not mix durations")),
+        ("CP-2D", ("restricted or trapped cash", "uncertain facility access", "own step")),
+        ("CP-3C", ("only a suggested path", "double-counting")),
+    ],
+)
+def test_each_owner_table_carries_its_catalogue_guard(tmp_path, module, phrases):
+    prepared, *_ = good_task(tmp_path, module, "covenant_refinancing")
+    text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+    for phrase in phrases:
+        assert phrase in text, phrase
+    assert "in Basis and limitation" in text
+
+
+def test_a_bridge_with_a_header_and_no_rows_is_sent_back():
+    (table,) = cpos_launch.OWNER_TABLES["CP-2D"]
+    text = "### Chart data: liquidity bridge\n\n" + synthetic_table(
+        "| Step | Amount | Reporting unit | Basis and limitation |"
+    )
+    assert any("opening and a closing" in i for i in cpos_launch.chart_issues(text, table))
+
+
+@pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
+def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tmp_path, module):
+    """Owner tables are not report charts: delivery lists them as evidence tables, no new chart."""
+    prepared, _, context = good_task(tmp_path, module, "covenant_refinancing")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    routes = tuple(r for r in prepared.layout.routes if r.module_id == module)
+    blocks = tuple(dict.fromkeys(r.block_id for r in routes))
+    own = prepared.layout.model_copy(update={"blocks": blocks, "routes": routes, "front": ()})
+    (tmp_path / "h.md").write_text(raw)
+    handoff = HandoffInput(path="h.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
+    request = DeliveryRequest(run=prepared.plan.run, handoffs={module: handoff}, layout=own)
+    files = markdown_files(request, tmp_path)
+    ((heading, table),) = OWNER_TABLES[module].items()
+    listed = [
+        e for e in json.loads(files["coverage.json"])["modules"][module] if e["heading"] == heading
+    ]
+    assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
+    page = files["report.html"].decode()
+    assert heading in page
+    for cell in table.splitlines()[2].strip("|").split("|"):
+        assert cell.strip() in page

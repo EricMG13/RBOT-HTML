@@ -310,3 +310,101 @@ def test_the_assumption_register_is_found_by_its_register_id(heading):
 def test_the_forecast_notes_send_no_case_elsewhere():
     """The notes do not claim a case lives elsewhere: every computed case is shown."""
     assert not any("stays in the calculation" in note for note in store.CASHFLOW_NOTES)
+
+
+# Synthetic handoff sections: the chart tables the launcher asks the owning modules for.
+def synthetic_charts(*chart_sections: str) -> dict:
+    text = "## Findings\n\n" + "\n".join(chart_sections)
+    return store.reader_fields(store.sections_of(text))
+
+
+def chart_section(heading: str, header: str, *rows: str) -> str:
+    cells = header.count("|") - 1
+    body = "\n".join(rows)
+    return f"### {heading}\n\n{header}\n|{' --- |' * cells}\n{body}\n"
+
+
+BRIDGE_HEADER = "| Step | Amount | Reporting unit | Basis and limitation |"
+
+
+def bridge(*amounts: str) -> str:
+    rows = [f"| Step {i} | {a} | US$m | Synthetic. |" for i, a in enumerate(amounts)]
+    return chart_section("Chart data: liquidity bridge", BRIDGE_HEADER, *rows)
+
+
+def test_an_owner_period_table_is_a_chart_with_its_own_title_case_and_value_columns():
+    header = "| Period | Revenue | Adjusted EBITDA | Reporting unit | Basis and limitation |"
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: revenue and EBITDA",
+            header,
+            "| FY2023 | 2,100 | 410 | US$m | Synthetic. |",
+            "| FY2024 | 2,250 | Not supplied: not stated | US$m | Synthetic. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None
+    # The acronym keeps its case; only the first letter is raised.
+    assert (chart["title"], chart["unit"], chart["columns"]) == (
+        "Revenue and EBITDA",
+        "US$m",
+        [1, 2],
+    )
+    assert "kind" not in chart
+
+
+def test_a_refinancing_need_table_is_a_two_series_period_chart():
+    header = (
+        "| Period | Debt maturing | Committed resources | Reporting unit | Basis and limitation |"
+    )
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: refinancing need",
+            header,
+            "| FY2026 | 500 | 300 | US$m | Synthetic. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert (chart["title"], chart["columns"]) == ("Refinancing need", [1, 2])
+
+
+def test_a_step_table_that_reconciles_is_a_bridge_chart():
+    fields = synthetic_charts(bridge("900", "120", "-450", "570"))
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None
+    assert chart["kind"] == "waterfall" and chart["amount"] == 1 and chart["unit"] == "US$m"
+    assert chart["title"] == "Liquidity bridge" and chart["columns"] == [1]
+
+
+@pytest.mark.parametrize(
+    "amounts",
+    [("900", "120", "-450", "560"), ("900", "(450)", "450"), ("900", "x", "900"), ("900",)],
+)
+def test_a_step_table_that_does_not_reconcile_or_is_not_numeric_is_named_not_drawn(amounts):
+    fields = synthetic_charts(bridge(*amounts))
+    assert fields["charts"] == []
+    assert "Chart data: liquidity bridge is not in its fixed table" in fields["issue"]
+
+
+def test_a_step_table_with_no_amount_stated_is_not_drawn_and_not_an_error():
+    gap = "Not supplied: reported in EUR m"
+    fields = synthetic_charts(bridge(gap, gap, gap))
+    assert fields["charts"] == [] and fields["issue"] is None
+
+
+def test_a_bridge_stated_to_one_decimal_reconciles_exactly():
+    assert synthetic_charts(bridge("0.1", "0.2", "0.3"))["charts"]
+    assert not synthetic_charts(bridge("0.1", "0.2", "0.4"))["charts"]
+
+
+def test_a_step_table_with_a_header_and_no_rows_is_named_not_drawn():
+    fields = synthetic_charts(chart_section("Chart data: liquidity bridge", BRIDGE_HEADER))
+    assert fields["charts"] == []
+    assert "Chart data: liquidity bridge is not in its fixed table" in fields["issue"]
+
+
+def test_a_step_table_with_another_header_is_not_taken_as_an_unsupplied_bridge():
+    header = "| Step | Amount | Note | Reporting unit | Basis and limitation |"
+    gap = "| Step 0 | Not supplied: none | n | US$m | Synthetic. |"
+    fields = synthetic_charts(chart_section("Chart data: liquidity bridge", header, gap))
+    assert fields["charts"] == [] and fields["issue"]
