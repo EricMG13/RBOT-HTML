@@ -1913,8 +1913,13 @@ def test_the_forecast_instructions_lock_the_entry_values_the_method_would_ask_fo
     for script in ("prepare_invocation.py", "validate_handoff.py"):
         assert script in block
     assert "is not a reason to block" in block
-    # Evidence still decides: the model may decline a driver it cannot support.
-    assert "Insufficient Information" in block and "[null, null, null]" in block
+    # Owner, 2026-11-10 ("Yes, allow judgment"): run tdg-forecast-002 left every driver null for
+    # want of numeric guidance. A driver without guidance is the analyst's labelled judgment,
+    # anchored to a stated figure; null is kept for a driver nothing stated can anchor.
+    assert "give your own judgment as `Analyst Interpretation`" in block
+    assert "anchored to a stated figure" in block
+    assert "name the anchor in `rationale`" in block and "in `limitation`" in block
+    assert "only when no stated figure can anchor it" in block
 
 
 @pytest.mark.parametrize(

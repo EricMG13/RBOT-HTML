@@ -30,3 +30,9 @@ forecast for want of entry values the launcher never gave; fixed on `claude/fore
 Asked "Run one more live CP-2G test (about USD 1.20, cap USD 10) to prove the fix?", the user said
 "Yes, run it": one fresh launch of the same four modules and scope, cap USD 10, in
 `/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`.
+
+Third launch: `tdg-forecast-002` locked the horizon but left every driver null for want of numeric
+guidance. Asked whether CP-2G should give analyst-judgment drivers, with the option described as a
+method change needing "another paid run of about USD 1.30 to prove", the user said "Yes, allow
+judgment": one fresh launch of the same four modules and scope, cap USD 10, in
+`/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`.

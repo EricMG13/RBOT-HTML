@@ -563,8 +563,16 @@ FORECAST_BLOCK = (
     "the forecast for them. The horizon is the block's `years`. The method's helper scripts "
     "(`prepare_invocation.py`, `validate_handoff.py`, the scoring script) cannot be run in this "
     "transport: record each as not run. That, and the lack of an acceptance receipt for a handoff "
-    "CP-OS supplied, is not a reason to block. Evidence still decides each driver: one the "
-    "sources and handoffs cannot support stays `Insufficient Information` with null values.\n\n"
+    "CP-OS supplied, is not a reason to block.\n\n"
+    # Owner, 2026-11-10 ("Yes, allow judgment"): run tdg-forecast-002 gave no driver at all
+    # because the filings carry no numeric three-year guidance.
+    "Drivers: give a value for every driver in every forecast year. Where the sources state a "
+    "number, use it under its category. Where they do not, give your own judgment as "
+    "`Analyst Interpretation`, anchored to a stated figure (the midpoint of a guidance range, "
+    "CP-1's latest-year ratio carried forward, a scheduled maturity or a declared payment): name "
+    "the anchor in `rationale` and what the judgment leaves out in `limitation`. A judgment is "
+    "an input to a mechanical forecast, not a finding. Leave a driver's values null, as "
+    "`Insufficient Information`, only when no stated figure can anchor it.\n\n"
 )
 
 
