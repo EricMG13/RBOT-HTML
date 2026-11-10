@@ -35,6 +35,24 @@ and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
   Confidence cell reads as established (neither occurs in retained data); the Overview opened with
   no run context; the branch diff is 2,245 lines against the 800-line cap.
 
+## 2026-11-10 — Inbox: a run started just before a hard kill is adopted (tip `6ea3a9b`)
+
+Scope: macOS, fake and real-shaped launchers, plus the real launcher started without `--live` and
+without a key. No provider was called. Nothing ran on Windows.
+- Change: the launcher writes its own process ID to a per-run file (`DEPLOY_WORKFLOW_PID_FILE`) as
+  its first step and refuses to start if it cannot; the watcher adopts a `running` record with no
+  process ID from that file, and marks it `interrupted` only after 60 s without one. This closes
+  the first item under "Known and left open" in the entry below.
+- Passed on the tip, exit 0: the eight affected pytest files (381 passed, 1 skipped: the paid
+  test); the quality gate, 0 findings in 7 changed files.
+- Review (adversarial): approved, 0 High, 0 Medium, 1 Low fixed test-first (a corrupt process-ID
+  file stopped the watcher). The reviewer killed a real watcher with SIGKILL before the start,
+  after the start and after the file was written: each time one process at most, the live run
+  adopted and one report filed, or `interrupted` after the grace with nothing started.
+- Not verified: Windows (on a virtual environment the process ID in the file may differ from the
+  one the watcher started; the file replace; liveness checks); a launcher that needs more than
+  60 s to reach its first line; process-ID reuse after a reboot; a paid run.
+
 ## 2026-11-10 — Inbox automation (branch `claude/user-journey-2939fb`, tip `f13ce44`)
 
 Scope: synthetic runs through a fake launcher on macOS. No provider was called, the real launcher
