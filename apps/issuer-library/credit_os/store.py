@@ -953,9 +953,11 @@ def catalogue_reports(
 
 
 def register_of(sections: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """The section whose heading names an assumption register: heading, intro, table rows."""
+    """The section whose heading names an assumption register, or CP-2G's register id T2H.3
+    (the method fixes the id, not the wording): heading, intro, table rows."""
     for section in sections:
-        if "assumption register" not in section["heading"].casefold():
+        heading = section["heading"].casefold()
+        if "assumption register" not in heading and not heading.startswith("t2h.3"):
             continue
         text = next((b["text"] for b in section["blocks"] if b["type"] == "text"), None)
         table = next((b for b in section["blocks"] if b["type"] == "table"), None)
@@ -1077,7 +1079,12 @@ ADD_BACK_ROW_LIMIT = 200
 TABLE_ROW_LIMIT = 2000
 QUARTER_DAYS = 100
 QUARTER_LENGTH_SLACK = 7
-FORECAST_CASES = (("REFERENCE", "Base case (reference illustration)"), ("DOWNSIDE", "Downside"))
+FORECAST_CASES = (
+    ("REFERENCE", "Base case (reference illustration)"),
+    ("UPSIDE", "Upside"),
+    ("DOWNSIDE_DRIVERS", "Downside (CP-2G drivers)"),
+    ("DOWNSIDE", "Downside stress (shock on base drivers)"),
+)
 NO_VALUE = "the model's source table has no value for this period"
 PRINTED_DASH = "printed as \u2014 in the source"
 PRIOR_MISSING = "prior-year period not in the handoffs"
@@ -1104,8 +1111,7 @@ CASHFLOW_NOTES = (
     "Pro forma: no pro forma period is recorded in the handoffs.",
     (
         "Base case is the model's reference case: a conditional illustration, not an "
-        "evidence-supported central issuer forecast. The upside case stays in the calculation "
-        "record and the published model."
+        "evidence-supported central issuer forecast."
     ),
     "n.m. \u2014 not modelled: the calculation record does not project this line.",
     (

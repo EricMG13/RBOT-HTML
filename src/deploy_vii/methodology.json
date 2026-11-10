@@ -130,7 +130,9 @@
       "CP-0",
       "CP-1"
     ],
-    "optional": [],
+    "optional": [
+      "CP-DR"
+    ],
     "purpose": "Benchmarks the issuer against a defined peer universe and flags outliers.",
     "table_ids": [
       "T1C.1",
@@ -182,7 +184,8 @@
     "optional": [
       "CP-1B",
       "CP-1C",
-      "CP-1D"
+      "CP-1D",
+      "CP-DR"
     ],
     "edge_rules": {
       "CP-1A": "restricted"
@@ -206,7 +209,10 @@
       "CP-0",
       "CP-1"
     ],
-    "optional": [],
+    "optional": [
+      "CP-1B",
+      "CP-2"
+    ],
     "purpose": "Builds the downside and stress pathway: what breaks first and how far it falls.",
     "table_ids": [
       "T2B.1",
@@ -229,7 +235,11 @@
     "required": [
       "CP-0"
     ],
-    "optional": [],
+    "optional": [
+      "CP-1",
+      "CP-1A",
+      "CP-2"
+    ],
     "purpose": "Assesses macro, FX and hedging sensitivity of the credit.",
     "table_ids": [
       "T2G.1",

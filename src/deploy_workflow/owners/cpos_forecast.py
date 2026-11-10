@@ -47,6 +47,28 @@ class Shock(Contract):
     rate_increase: cp2g.Share
 
 
+class CaseDrivers(Contract):
+    """A CP-2G case's drivers that differ from base; every other driver is inherited from base."""
+
+    revenue_growth: cp2g.GrowthDriver | None = None
+    ebitda_margin: cp2g.FractionDriver | None = None
+    capex_pct_revenue: cp2g.FractionDriver | None = None
+    tax_wc_pct_revenue: cp2g.FractionDriver | None = None
+    interest_rate: cp2g.FractionDriver | None = None
+    dividends: cp2g.AmountDriver | None = None
+    debt_repayment: cp2g.AmountDriver | None = None
+
+    @model_validator(mode="after")
+    def names_a_driver(self) -> "CaseDrivers":
+        if all(getattr(self, name) is None for name in cp2g.DRIVERS):
+            raise ValueError("a case names at least one driver; write null for no case")
+        return self
+
+    def over(self, base: cp2g.BaseDrivers) -> cp2g.BaseDrivers:
+        changed = {n: getattr(self, n) for n in cp2g.DRIVERS if getattr(self, n) is not None}
+        return base.model_copy(update=changed)
+
+
 class Span(Contract):
     year: int
     start: str
@@ -58,6 +80,8 @@ class ForecastInputs(Contract):
     base: dict[str, Operand]
     base_drivers: cp2g.BaseDrivers
     downside_shock: Shock | None
+    upside_drivers: CaseDrivers | None = None
+    downside_drivers: CaseDrivers | None = None
     years: tuple[Span, Span, Span]
     scope_limits: tuple[str, ...]
 
@@ -151,6 +175,10 @@ def _cell(value: cp2g.Val) -> dict[str, str | None]:
     return {"amount": amount, "reason": value.reason}
 
 
+def _stated(key: str, case: CaseDrivers | None) -> dict[str, object]:
+    return {} if case is None else {key: case.model_dump(mode="json", exclude_none=True)}
+
+
 def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
@@ -168,13 +196,22 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
             for key, o in inputs.base.items()
         }
     )
-    drivers = cp2g.Drivers.from_submission(inputs.base_drivers)
-    shocks: dict[str, tuple[Decimal, Decimal] | None] = {"REFERENCE": None}
+    # Owner, 2026-11-10: CP-2G's own cases are computed from their changed drivers; CP-2A's shock
+    # is a separate case on base drivers, never compounded with CP-2G's downside.
+    base = inputs.base_drivers
+    cases: dict[str, tuple[cp2g.BaseDrivers, tuple[Decimal, Decimal] | None]] = {
+        "REFERENCE": (base, None)
+    }
+    if inputs.upside_drivers is not None:
+        cases["UPSIDE"] = (inputs.upside_drivers.over(base), None)
+    if inputs.downside_drivers is not None:
+        cases["DOWNSIDE_DRIVERS"] = (inputs.downside_drivers.over(base), None)
     if inputs.downside_shock is not None:
         shock = inputs.downside_shock
-        shocks["DOWNSIDE"] = (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase))
+        cases["DOWNSIDE"] = (base, (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase)))
     outputs = {}
-    for case, shock_pair in shocks.items():
+    for case, (submitted, shock_pair) in cases.items():
+        drivers = cp2g.Drivers.from_submission(submitted)
         result = cp2g.forecast(operands=operands, drivers=drivers, shock=shock_pair)
         outputs[case] = {
             "years": [
@@ -196,6 +233,10 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
             "downside_shock": None
             if inputs.downside_shock is None
             else inputs.downside_shock.model_dump(mode="json"),
+            # Written only when stated, so a delivery made before cases existed re-derives
+            # byte for byte.
+            **_stated("upside_drivers", inputs.upside_drivers),
+            **_stated("downside_drivers", inputs.downside_drivers),
             "outputs": outputs,
             "scope_limits": [LIMIT, *inputs.scope_limits],
         }

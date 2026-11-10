@@ -4,6 +4,47 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Module method gaps: what CP-OS sends against what each method needs (branch `claude/module-method-gaps`)
+
+Owner: "review all the modules for any missing items from methodology files", then "Fix all … Keep a
+copy of the methodology in the repo" and "Cp-1c is supposed to get that information from cp-dr by
+default". Comparison: each module's method text as sent, against the retained all-modules run
+(`runs/cpos-tdg-sol-medium-all-001`, 11 of its 15 skill modules Blocked) and the 2026-11-10 inbox run.
+Offline only; no provider call.
+
+- Acceptance and scripts (CP-1D, CP-3, CP-5 blocked for want of an acceptance receipt or script
+  output): every module's instructions now carry what only CP-2G had: CP-OS's check is the
+  acceptance, helper scripts are recorded as not run, nobody can be asked, and an entry value comes
+  from the context, the handoffs, then the method's safe default.
+- Companions: the methodology is copied read-only from `~/Documents/cp-os` at `b57a344` into
+  `docs/reuse/selected-methods/` (63 files added, manifest hashes checked). Each skill is sent the
+  files its SKILL calls mandatory or binding, and the Confidence Score section of `CANON_SHARED.md`.
+  CP-4's instructions grow from 88 KB to 191 KB and CP-3's from 104 KB to 165 KB; the read budget
+  already counts instructions, so reads shrink rather than the request growing.
+- CP-1B runs Deploy V's skill; the structured-runtime step it had needs a `read_inputs` view CP-OS
+  never gives (blocked on both runs).
+- Order: CP-2A and CP-2E now run after CP-2 (CP-2A had blocked with "CP-2 is Not supplied"), CP-2A
+  after CP-1B, CP-1C and CP-2 after CP-DR. Correction to the review note: CP-1D does not need CP-2;
+  CP-2 is its consumer.
+- CP-2A stress sizes: `cp2a.md` governs over the SKILL, so CP-2A states labelled, anchored
+  scenarios, one as an EBITDA-decline and rate-increase pair CP-2G can apply.
+- CP-DR as CP-1C's peer source: no pathway lists CP-DR, so the default (`cp_dr_public`) left CP-1C
+  with no producer. CP-DR now joins a pathway that has CP-1C; it is asked for the peer pack (TDR.4
+  to TDR.6) and CP-1C is told to read it. Run activity shows the added module once it starts.
+- Tests written first and seen failing (10); CI test set plus every registry-dependent test: 1,471
+  passed, 7 known failures deselected; quality gate exit 0. Offline prepare of all 20 modules on the
+  TDG files gives the order CP-0, CP-1, CP-1A, CP-1B, CP-DR, CP-1C, CP-1D, CP-2, CP-4, CP-2A, CP-2E,
+  CP-2D, CP-2G, CP-2H, CP-3D, CP-3C, CP-4C, CP-3, CP-5, CP-6.
+- Consequence: a run made before this change that includes any skill module is no longer "on the
+  current methodology", so the library stops listing it and names the changed files (checked:
+  `tdg-forecast-005` is reported "Not shown … CP-2A: not on the current methodology").
+- Not verified: any model behaviour. No live run was made, so whether the modules now proceed past
+  their old blocks is unproven. CP-DR has no web or research tool in this transport: its peer pack
+  can only use files in the run's folder, so CP-1C on public filings alone will still lack peers
+  here. Gates for market data (CP-3, CP-3D), executed legal documents (CP-4), rating reports (CP-2H)
+  and distress (CP-4C) are unchanged and untested with such files. The skills' scripts and three
+  `.xlsx` placeholders were not copied. Output-side loss of analysis was checked for CP-2G only.
+
 ## 2026-11-10 — Library and report screens: reader value against production detail (branch `claude/forecast-publication-screens`)
 
 Scope: the static library page only (`apps/issuer-library/credit_os/web/`), on
@@ -29,6 +70,44 @@ sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-s
 - Not verified: phone and tablet widths; Windows and Edge; a library with many issuers or with an
   accepted report (fixture only); a live run's activity view; the delivered report's own layout
   inside the frame, which belongs to the delivery renderer; no independent review of this pass.
+
+## 2026-11-10 — Forecast tab: open items of run tdg-forecast-005 and CP-2G's own cases (branch `claude/forecast-tab-register`)
+
+Owner: investigate the open items; leave any that come from the sources lacking the needed files, but
+check the code would produce the output if they were there. All checks offline on retained data.
+
+- In-loop forecast check (not triggered live): replaying run 004's real CP-2G answer through
+  `_forecast_issues` gives the repair request naming `ebitda_margin`'s pattern failure (9 problems),
+  and replaying run 005's answer gives none. Verified on real model output; no provider call.
+- No downside case (sources): CP-2A's method forbids unsupported stress magnitudes, and the filings
+  give no rate path or stated stress case, so CP-2G wrote `downside_shock: null` and said why. With
+  a shock of 0.20/0.10 set in run 005's real CP-2G block, `model_files` writes REFERENCE and
+  DOWNSIDE, and the library grid shows a Downside group: Adj EBITDA 3,364 / 3,710 / 4,092, each
+  the base figure × 0.8 by hand; FY2025 interest 1,156.92 × 1.1 = 1,272.612.
+- Upside footnote (code): the cash flow notes said "The upside case stays in the calculation record".
+  CP-OS models never had one; the predecessor's models (`final-workflow` deliverables) do carry an
+  UPSIDE case, which the library hid. Sentence removed; the grid now shows UPSIDE (below).
+- No assumption register (code): `register_of` matched only headings containing "assumption
+  register", but the method fixes the id T2H.3, not the wording; runs 001–005 wrote "Assumption
+  register", "assumption lock", "assumption disposition" and "Assumptions and definition lock". It
+  now also matches a heading starting with T2H.3. Run 005's rebuilt library shows the register
+  (B1–B7, F1–F4, U1, D1–D2, L1–L2).
+- Tests written first and seen failing (4 of 5); library tests 68 passed incl. browser; gate exit 0.
+- CP-2G's own cases computed (owner, 2026-11-10, "Yes, compute them"): the inputs block takes
+  optional `upside_drivers` and `downside_drivers`, each only the drivers that differ from base
+  (the rest inherited). Python writes UPSIDE and DOWNSIDE_DRIVERS; CP-2A's shock stays DOWNSIDE on
+  base drivers (the predecessor's meaning), never compounded with CP-2G's downside. The keys are
+  written only when stated: run 005's delivery, made before this, still re-verifies byte for byte
+  (it failed with `delivery_changed: forecast_exact.json` in the first version, caught in review).
+  Grid groups: Base, Upside, Downside (CP-2G drivers), Downside stress (shock on base drivers).
+- Answer key written by hand, not by production code: upside year 1 (growth 0.10, margin 0.35)
+  revenue 1,100, EBITDA 385, CFO 239, FCF 195, closing cash 225; downside year 1 (no growth, no
+  dividends) 1,000 / 300 / 164 / 124 / 174; all three years of every case against the test's
+  fraction model. Run 005 replayed offline with its register's U1 (growth 0.2058) and D1–D2 (growth
+  0, margin 0.4781): upside revenue 9,574.052 = 7,940 × 1.2058; downside EBITDA 3,796.114 = 7,940 ×
+  0.4781. Tests first and seen failing (9); 237 passed incl. browser; node 105; gate exit 0.
+- Not verified: a live CP-2G run writing the case blocks (instructions changed, no paid run); the
+  predecessor's UPSIDE shown in this library (no such workspace built here).
 
 ## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
 
