@@ -424,6 +424,9 @@ class OwnerTable:
     may_gap: tuple[str, ...] = ()
     ranked: str = ""
     noun: str = "period"
+    dates: tuple[str, ...] = ()  # YYYY-MM-DD calendar dates (or a stated gap).
+    ordered: tuple[str, ...] = ()  # Stated numbers that must not fall left to right.
+    one_unit: bool = False  # Every row states the same Reporting unit (one scale for the figure).
 
 
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
@@ -586,6 +589,126 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
 }
 
 
+PAIR_COLUMNS = ("Measure", "Prior period", "Prior", "Current period", "Current")
+PAIR_GAPS = ("Prior period", "Current period")
+PEER_COLUMNS = ("Metric", "Issuer", "Peer low", "Peer median", "Peer high", "Peer count")
+PEER_NUMBERS = PEER_COLUMNS[1:]
+PEER_BOUNDS = PEER_COLUMNS[2:5]
+YIELD_COLUMNS = (
+    "Instrument",
+    "Maturity date",
+    "Yield",
+    "Spread",
+    "Quote date",
+    "Source class",
+)
+
+
+def _peer_range(heading: str, rules: str) -> OwnerTable:
+    return OwnerTable(
+        "CP-1C",
+        "RV.3b" if "multiples" in heading else "RV.3a",
+        heading,
+        (),
+        "",
+        rules=rules,
+        columns=PEER_COLUMNS,
+        numbers=PEER_NUMBERS,
+        in_unit=PEER_NUMBERS[:-1],
+        ordered=PEER_BOUNDS,
+        noun="metric",
+    )
+
+
+PEER_RULES = (
+    "Issuer, Peer low, Peer median and Peer high are the stated values of the method's settled "
+    "observations; Peer count is the number of included peers behind the range, a plain "
+    "number. Name the excluded peers, each with its reason, in Basis and limitation. A value "
+    "that is not settled is `Not supplied: <reason>`, never zero. No other dispersion statistic "
+    "is stated. "
+)
+# The catalogue's other launcher-asked figures: CP-1B (EU.1, EU.2), CP-1C (RV.3a, RV.3b), CP-3D
+# (RV.1, a report strip figure that delivery does not ask for as a chart).
+COMPARISON_TABLES: dict[str, tuple[OwnerTable, ...]] = {
+    "CP-1B": (
+        OwnerTable(
+            "CP-1B",
+            "EU.1",
+            "Chart data: prior and current results",
+            (),
+            "",
+            rules=(
+                "Pair only compatible quantities: Prior and Current are the same measure on a "
+                "comparable perimeter and duration, otherwise `Not supplied: <reason>`. Every "
+                "row states one Reporting unit; margin belongs on a separate percent panel, not "
+                "in this table. Name the EBITDA identity (reported, issuer-adjusted or "
+                "house-adjusted) in Basis and limitation. Prior period and Current period are "
+                "the periods as the source labels them."
+            ),
+            columns=PAIR_COLUMNS,
+            numbers=PAIR_COLUMNS[2::2],
+            may_gap=PAIR_GAPS,
+            one_unit=True,
+            noun="measure",
+        ),
+        OwnerTable(
+            "CP-1B",
+            "EU.2",
+            "Chart data: margin and KPI changes",
+            (),
+            "",
+            rules=(
+                "A margin (the method's T1B.1 margin) and any sourced segment or KPI pair the "
+                "handoff actually supplies; do not invent a KPI series. Prior and Current are "
+                "the stated values, in the Reporting unit the row states. Percent change and "
+                "percentage-point change remain distinct: no change is stated, and it is "
+                "not worked out here. One row is one pair, a comparison and not a trend."
+            ),
+            columns=PAIR_COLUMNS,
+            numbers=PAIR_COLUMNS[2::2],
+            may_gap=PAIR_GAPS,
+            noun="measure",
+        ),
+    ),
+    "CP-1C": (
+        _peer_range(
+            "Chart data: peer range \u2014 percent metrics",
+            PEER_RULES + "Percent metrics only (EBITDA margin, FFO / debt); multiples stay out "
+            "of the percent table.",
+        ),
+        _peer_range(
+            "Chart data: peer range \u2014 multiples",
+            PEER_RULES + "Multiples only (total leverage, coverage); name the issuer and peer "
+            "definitions in Basis and limitation, and do not calendarise or FX-convert peers. "
+            "Percentages stay out of this table.",
+        ),
+    ),
+    "CP-3D": (
+        OwnerTable(
+            "CP-3D",
+            "RV.1",
+            "Chart data: yield against maturity",
+            (),
+            "",
+            rules=(
+                "One row per instrument with a quote. Yield is on the one yield measure named in "
+                "Basis and limitation; YTM, discount margin and spread are never mixed in one "
+                "table, so a row on another measure is `Not supplied: <reason>` in Yield. "
+                "Spread is stated as the source gives it, with its unit. Maturity date and "
+                "Quote date are YYYY-MM-DD dates; Source class names the quote's source class."
+            ),
+            columns=YIELD_COLUMNS,
+            numbers=("Yield",),
+            may_gap=("Spread",),
+            dates=("Maturity date", "Quote date"),
+            noun="instrument",
+        ),
+    ),
+}
+
+OWNER_TABLES |= COMPARISON_TABLES  # One registry: the instructions and the loop read this.
+
+
 def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
     if isinstance(table, OwnerTable):
         return table
@@ -674,6 +797,24 @@ def _number_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | No
     return None
 
 
+def _iso_date(cell: str) -> bool:
+    try:
+        return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", cell)) and bool(date.fromisoformat(cell))
+    except ValueError:
+        return False
+
+
+def _order_issue(spec: OwnerTable, header: list[str], row: list[str]) -> str | None:
+    """The stated numbers of `ordered` columns must not fall left to right (a gap is skipped)."""
+    stated = [
+        row[header.index(n)] for n in spec.ordered if PLAIN_NUMBER.fullmatch(row[header.index(n)])
+    ]
+    values = [Decimal(cell.replace(",", "")) for cell in stated]
+    if values == sorted(values):
+        return None
+    return f"{' <= '.join(spec.ordered)} must hold in that order; stated {', '.join(stated)}."
+
+
 def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None:
     """What is wrong with one cell of a row table, or None. Nothing is repaired or worked out."""
     allowed = dict(spec.choices).get(name)
@@ -681,6 +822,10 @@ def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None
         issue = None if cell else f"{name} is blank."
     elif name in spec.numbers:
         issue = _number_issue(spec, name, cell, unit)
+    elif name in spec.dates:
+        issue = (
+            None if _stated_gap(cell) or _iso_date(cell) else f"{name} `{cell}` must be YYYY-MM-DD."
+        )
     elif allowed is not None:
         issue = None if cell in allowed else f"{name} `{cell}` must be one of {', '.join(allowed)}."
     elif name == spec.ranked:
@@ -708,6 +853,9 @@ def _row_table_issues(
             problem = _cell_issue(spec, name, cell, unit)
             if problem:
                 issues.append(f"`{heading}` {row[0] or 'row'}: {problem}")
+        order = _order_issue(spec, header, row) if spec.ordered else None
+        if order:
+            issues.append(f"`{heading}` {row[0]}: {order}")
         if spec.ranked and row[header.index(spec.ranked)].isdecimal():
             ranks.append(int(row[header.index(spec.ranked)]))
     if ranks != sorted(ranks):
@@ -716,6 +864,8 @@ def _row_table_issues(
         )
     if not rows:
         issues.append(f"`{heading}` needs at least one row.")
+    if spec.one_unit and len({row[-2] for row in rows if len(row) == len(header)}) > 1:
+        issues.append(f"`{heading}`: every row states one Reporting unit, as one scale is drawn.")
     return issues
 
 

@@ -315,7 +315,52 @@ function limitsChart(id,v,chips=false) {
     return `<div class="limit-row" role="group" aria-label="${esc(plain(cells[v.label]))}">${structureOpen(id,row,inner,`${plain(cells[v.label])}: current ${cells[v.current]}, proposed ${cells[v.proposed]}, limit ${cells[v.limit]}`,chips)}</div>`;
   }).join('')}</div>`;
 }
-const READER_FIGURES={waterfall:bridgeChart,stack:stackChart,bullet:bulletChart,limits:limitsChart};
+// ---- Comparison views: only stated numbers are placed. A change between two stated values is never worked out or written; the two points show it.
+const unitOf=row=>row.cells[row.cells.length-2];
+// Prior and current results are the period-column chart (kind grouped, `sub` periods under each label); this is the dumbbell, one scale per unit.
+function dumbbellChart(id,v,chips=false) {
+  const table=fixtureTable(id,v.table),pair=row=>[v.prior,v.current].map(c=>chartNumber(row.cells[c]));
+  const scales=new Map([...new Set(table.rows.map(unitOf))].map(unit=>[unit,trackScale(table.rows.filter(r=>unitOf(r)===unit).flatMap(pair))]));
+  const legend=`<div class="chart-legend"><span><i class="series-0"></i>${esc(table.headers[v.prior])}</span><span><i class="series-1"></i>${esc(table.headers[v.current])}</span></div>`;
+  return `${chartIntro(id,v)}${legend}<div class="dumbbell-chart">${table.rows.map(row=>{
+    const cells=row.cells,[prior,current]=pair(row),at=scales.get(unitOf(row)),label=plain(cells[v.label]);
+    const link=prior===null||current===null?'':`<i class="dumbbell-link" style="left:${Math.min(at(prior),at(current))}%;width:${roundPct(Math.abs(at(current)-at(prior)))}%"></i>`;
+    const dot=(n,series)=>n===null?'':`<i class="dumbbell-dot series-${series}" style="left:${at(n)}%"></i>`;
+    const text=`<span class="structure-text">Prior ${shown(cells[v.periods[0]])} ${stated(cells[v.prior])} · Current ${shown(cells[v.periods[1]])} ${stated(cells[v.current])} · ${esc(unitOf(row))}</span>`;
+    const inner=`<span class="chart-label">${esc(label)}</span><span class="dumbbell-track">${link}${dot(prior,0)}${dot(current,1)}</span>${text}`;
+    return `<div class="dumbbell-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,`${label}: prior ${cells[v.prior]}, current ${cells[v.current]}`,chips)}</div>`;
+  }).join('')}</div>`;
+}
+// A peer range strip per metric (each on its own scale: a metric has its own unit). The band is drawn only for a stated low that does not exceed the stated high.
+function rangeChart(id,v,chips=false) {
+  const table=fixtureTable(id,v.table);
+  const legend=`<div class="chart-legend"><span><i class="range-key"></i>Peer low to high</span><span><i class="limit-key"></i>Peer median</span><span><i class="series-0"></i>Issuer</span></div>`;
+  return `${chartIntro(id,v)}${legend}<div class="range-chart">${table.rows.map(row=>{
+    const cells=row.cells,[issuer,low,median,high]=[v.issuer,v.low,v.median,v.high].map(c=>chartNumber(cells[c])),at=trackScale([issuer,low,median,high]),label=plain(cells[v.label]);
+    const band=low===null||high===null||low>high?'':`<i class="range-band" style="left:${at(low)}%;width:${roundPct(at(high)-at(low))}%"></i>`;
+    const track=`<span class="range-track">${band}${median===null?'':`<i class="tick" style="left:${at(median)}%"></i>`}${issuer===null?'':`<i class="marker" style="left:${at(issuer)}%"></i>`}</span>`;
+    const text=`<span class="structure-text">Issuer ${stated(cells[v.issuer])} · Peer low ${stated(cells[v.low])} · Peer median ${stated(cells[v.median])} · Peer high ${stated(cells[v.high])} · Peers ${shown(cells[v.count])} · ${esc(unitOf(row))}</span>`;
+    return `<div class="range-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,`<span class="chart-label">${esc(label)}</span>${track}${text}`,`${label}: issuer ${cells[v.issuer]}, peer range ${cells[v.low]} to ${cells[v.high]}`,chips)}</div>`;
+  }).join('')}</div>`;
+}
+// Yield against maturity: x is the stated maturity date (a real YYYY-MM-DD, first to last placed), y the stated yield on a panel per unit. An instrument with no such date or yield has no point and is still listed.
+const isoDate=cell=>/^\d{4}-\d{2}-\d{2}$/.test(cell)&&new Date(Date.parse(cell)).toISOString().slice(0,10)===cell;
+function scatterChart(id,v,chips=false) {
+  const table=fixtureTable(id,v.table),placed=row=>isoDate(row.cells[v.date])&&chartNumber(row.cells[v.yield])!==null,rows=table.rows.filter(placed);
+  const dated=rows.map(r=>r.cells[v.date]).sort(),[first,last]=[Date.parse(dated[0]),Date.parse(dated.at(-1))];
+  const x=time=>last===first?345:roundPct(60+(time-first)/(last-first)*570);
+  const panels=[...new Set(rows.map(unitOf))].map(unit=>{
+    const own=rows.filter(r=>unitOf(r)===unit),values=own.map(r=>chartNumber(r.cells[v.yield])),low=Math.min(...values),high=Math.max(...values),pad=(high-low)*.1||.5,y=n=>roundPct(180-(n-low+pad)/(high-low+2*pad)*160);
+    const points=own.map(row=>{
+      const cx=x(Date.parse(row.cells[v.date])),cy=y(chartNumber(row.cells[v.yield])),name=plain(row.cells[v.label]),said=`${name}, matures ${row.cells[v.date]}, yield ${row.cells[v.yield]} ${unit}`;
+      return `<a class="plot-point" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" aria-label="${esc(said)}. View source"><title>${esc(said)}</title><circle class="point-hit" cx="${cx}" cy="${cy}" r="12"/><circle class="scatter-dot" cx="${cx}" cy="${cy}" r="5"/><text x="${cx}" y="${cy-10}" text-anchor="middle">${esc(row.cells[v.yield])}</text></a>`;
+    }).join('');
+    return `<p class="matrix-note">Yield, ${esc(unit)}</p><div class="vector-chart"><svg viewBox="0 0 680 220" role="group" aria-label="${esc(`${v.title}, yield in ${unit}. Select a point to inspect its source.`)}"><line class="axis" x1="60" x2="630" y1="190" y2="190"/>${points}<text class="axis-label" x="60" y="210" text-anchor="start">${esc(dated[0])}</text><text class="axis-label" x="630" y="210" text-anchor="end">${esc(dated.at(-1))}</text></svg></div>`;
+  }).join('');
+  const key=table.rows.map(row=>`<li><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Maturity ${shown(row.cells[v.date])} · Yield ${stated(row.cells[v.yield])} ${esc(unitOf(row))} · Spread ${shown(row.cells[v.spread])} · Quoted ${shown(row.cells[v.quoted])} · ${esc(row.cells[v.source])}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
+  return `${chartIntro(id,v)}${panels}${rows.length<table.rows.length?'<p class="matrix-note">An instrument with no stated maturity date or yield has no point.</p>':''}<ol class="stack-key">${key}</ol>`;
+}
+const READER_FIGURES={waterfall:bridgeChart,stack:stackChart,bullet:bulletChart,limits:limitsChart,dumbbell:dumbbellChart,range:rangeChart,scatter:scatterChart};
 // A reader chart is a "Chart data:" table whose first column is Period, so it is drawn over time: periods along the x axis in table order,
 // one column per series from a zero baseline (owner, 2026-11-10). Each period is one button (its handoff row) with its chips under it.
 // A step table (store.py: kind "waterfall") is a bridge: opening, stated changes and closing, drawn by bridgeChart; the row tables (kinds stack, bullet, limits) are below.
@@ -334,7 +379,7 @@ function readerChart(id,chart,chips=false,note=true) {
       return `<span class="col"><i class="series-${i}${n<0?' negative':''}" style="bottom:${bottom}%;height:${height}%"></i><strong${n<0?' class="below"':''} style="bottom:${n<0?bottom:Math.round((bottom+height)*100)/100}%">${esc(value)}</strong></span>`;
     }).join('');
     const said=series.map(c=>`${table.headers[c]} ${chartNumber(row.cells[c])===null?'n.a.':plain(row.cells[c])}`).join(', ');
-    const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}</span>`;
+    const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}${chart.sub?`<small>${chart.sub.map(c=>shown(row.cells[c])).join(' → ')}</small>`:''}</span>`;
     const label=`aria-label="${esc(`${period}: ${said}. View source`)}"`;
     return chips?`<div class="chart-row" role="group" aria-label="${esc(period)}"><button class="chart-open" data-evidence="${esc(key)}" ${label}>${inner}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}" ${label}>${inner}</button>`;
   }).join('');

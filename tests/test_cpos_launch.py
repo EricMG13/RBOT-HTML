@@ -176,7 +176,51 @@ LIMITS_ROWS = (
     "| Single-issuer limit | 3.0 | 4.0 | 5.0 | % NAV | Synthetic. |",
     "| High-yield bucket | 12.0 | Not supplied: no proposal | 15.0 | % NAV | Synthetic. |",
 )
+PAIR_HEAD = (
+    "| Measure | Prior period | Prior | Current period | Current | Reporting unit "
+    "| Basis and limitation |"
+)
+PEER_HEAD = (
+    "| Metric | Issuer | Peer low | Peer median | Peer high | Peer count | Reporting unit "
+    "| Basis and limitation |"
+)
+YIELD_HEAD = (
+    "| Instrument | Maturity date | Yield | Spread | Quote date | Source class | Reporting unit "
+    "| Basis and limitation |"
+)
 OWNER_TABLES = {
+    "CP-1B": {
+        "Chart data: prior and current results": synthetic_table(
+            PAIR_HEAD,
+            "| Revenue | FY2023 | 2,100 | FY2024 | 2,250 | US$m | Synthetic. |",
+            "| Adjusted EBITDA | FY2023 | 410 | FY2024 | Not supplied: not stated | US$m "
+            "| Synthetic. |",
+        ),
+        "Chart data: margin and KPI changes": synthetic_table(
+            PAIR_HEAD,
+            "| EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 | % | Synthetic. |",
+            "| Subscribers | FY2023 | 1.2 | FY2024 | 1.4 | m | Synthetic. |",
+        ),
+    },
+    "CP-1C": {
+        "Chart data: peer range — percent metrics": synthetic_table(
+            PEER_HEAD,
+            "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 7 | % | Synthetic. |",
+            "| FFO / debt | Not supplied: not stated | 8.0 | 15.0 | 22.0 | 6 | % | Synthetic. |",
+        ),
+        "Chart data: peer range — multiples": synthetic_table(
+            PEER_HEAD, "| Total debt / EBITDA | 4.2 | 2.5 | 3.4 | 5.1 | 7 | x | Synthetic. |"
+        ),
+    },
+    "CP-3D": {
+        "Chart data: yield against maturity": synthetic_table(
+            YIELD_HEAD,
+            "| Synthetic 2028 note | 2028-06-15 | 6.4 | +310 bp | 2024-12-31 | Dealer quote "
+            "| % | Synthetic. |",
+            "| Synthetic 2031 note | 2031-03-01 | Not supplied: no quote "
+            "| Not supplied: no quote | 2024-12-31 | Dealer quote | % | Synthetic. |",
+        ),
+    },
     "CP-1": {
         "Chart data: revenue and EBITDA": synthetic_table(
             PERIOD_HEAD.format("Revenue | Adjusted EBITDA"),
@@ -218,8 +262,17 @@ OWNER_TABLES = {
         ),
     },
 }
-OWNER_PATHWAY = {"CP-2H": "distressed_restructuring", "CP-6": "portfolio_decision"}
+OWNER_PATHWAY = {
+    "CP-2H": "distressed_restructuring",
+    "CP-6": "portfolio_decision",
+    "CP-1B": "earnings_update",
+    "CP-1C": "relative_value",
+    "CP-3D": "relative_value",
+}
 OWNER_HEADERS = {
+    "CP-1B": PAIR_HEAD,
+    "CP-1C": PEER_HEAD,
+    "CP-3D": YIELD_HEAD,
     "CP-1": PERIOD_HEAD.format("Revenue | Adjusted EBITDA"),
     "CP-2D": "| Step | Amount | Reporting unit | Basis and limitation |",
     "CP-3C": PERIOD_HEAD.format("Debt maturing | Committed resources"),
@@ -2728,7 +2781,8 @@ def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tm
         ]
         assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
         page = files["report.html"].decode()
-        assert heading in page
+        # The page carries its data JSON-escaped, so an em dash in a heading reads `\u2014` there.
+        assert heading.replace("—", "\\u2014") in page
         for cell in table.splitlines()[2].strip("|").split("|"):
             assert cell.strip() in page
 
@@ -2834,3 +2888,79 @@ def test_the_debt_stack_instruction_keeps_leverage_out_of_the_money_unit(tmp_pat
     assert "(Amount) are plain numbers in US$m" in text
     assert "Cumulative leverage is a plain number in the unit its rule states" in text
     assert "(Amount, Cumulative leverage) are plain numbers in US$m" not in text
+
+
+# ---- Package 3 (2026-11-10): the comparison tables. Every value is synthetic.
+COMPARISON_OWNERS = [
+    ("CP-1B", "Chart data: prior and current results"),
+    ("CP-1B", "Chart data: margin and KPI changes"),
+    ("CP-1C", "Chart data: peer range — percent metrics"),
+    ("CP-1C", "Chart data: peer range — multiples"),
+    ("CP-3D", "Chart data: yield against maturity"),
+]
+
+
+@pytest.mark.parametrize(("module", "heading"), COMPARISON_OWNERS)
+def test_each_comparison_table_is_asked_of_its_owner(tmp_path, module, heading):
+    assert f"`### {heading}`" in instruction_text(tmp_path, module)
+
+
+@pytest.mark.parametrize(
+    ("module", "phrases"),
+    [
+        ("CP-1B", ("Pair only compatible quantities", "comparable perimeter", "percent panel")),
+        ("CP-1B", ("percentage-point change", "not worked out here", "one pair")),
+        ("CP-1C", ("excluded peers", "never zero", "settled observations")),
+        ("CP-1C", ("do not calendarise", "multiples stay out of the percent table", "Peer count")),
+        ("CP-3D", ("never mixed", "YTM, discount margin and spread", "source class")),
+    ],
+)
+def test_each_comparison_table_carries_its_catalogue_guard(tmp_path, module, phrases):
+    text = instruction_text(tmp_path, module)
+    for phrase in phrases:
+        assert phrase in text, phrase
+
+
+@pytest.mark.parametrize(
+    ("module", "old", "new", "complaint"),
+    [
+        ("CP-1B", "| 2,100 |", "| 2.1bn |", "2.1bn"),
+        ("CP-1B", "| Measure | Prior period |", "| Item | Prior period |", "Measure"),
+        (
+            "CP-1B",
+            "| Not supplied: not stated | US$m |",
+            "| Not supplied: not stated | EUR m |",
+            "one Reporting unit",
+        ),
+        ("CP-1B", "| 19.5 | FY2024 |", "| 19.5 | |", "Current period"),
+        ("CP-1C", "| 12.0 | 18.5 | 26.0 |", "| 30.0 | 18.5 | 26.0 |", "order"),
+        ("CP-1C", "| 7 | % |", "| seven | % |", "seven"),
+        ("CP-1C", "| 2.5 | 3.4 | 5.1 |", "| 2.5 | 3.4 | 5.1x |", "5.1x"),
+        ("CP-3D", "| 2028-06-15 |", "| June 2028 |", "June 2028"),
+        ("CP-3D", "| 2028-06-15 |", "| 2028-02-31 |", "2028-02-31"),
+        ("CP-3D", "| 6.4 |", "| 6.4% |", "6.4%"),
+        ("CP-3D", "| +310 bp |", "|  |", "Spread"),
+        ("CP-3D", "| Dealer quote | % | Synthetic. |", "|  | % | Synthetic. |", "Source class"),
+    ],
+)
+def test_checker_sends_back_each_malformed_comparison_table(tmp_path, module, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+@pytest.mark.parametrize(
+    ("module", "old", "new"),
+    [
+        ("CP-3D", "| 2028-06-15 |", "| Not supplied: no maturity stated |"),
+        ("CP-1C", "| 12.0 | 18.5 | 26.0 |", "| Not supplied: none | 18.5 | 26.0 |"),
+    ],
+)
+def test_a_stated_gap_is_accepted_for_a_maturity_date_and_for_a_peer_bound(
+    tmp_path, module, old, new
+):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes)).replace(old, new, 1)
+    assert new in raw and _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()

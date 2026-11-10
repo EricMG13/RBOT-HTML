@@ -175,7 +175,39 @@ ROW_CHARTS: tuple[
         (1, 2, 3),
         {},
     ),
+    (
+        ("Measure", "Prior period", "Prior", "Current period", "Current"),
+        {"kind": None, "label": 0, "sub": [1, 3], "periods": [1, 3], "prior": 2, "current": 4},
+        (2, 4),
+        {},
+    ),
+    (
+        ("Metric", "Issuer", "Peer low", "Peer median", "Peer high", "Peer count"),
+        {"kind": "range", "label": 0, "issuer": 1, "low": 2, "median": 3, "high": 4, "count": 5},
+        (1, 2, 3, 4, 5),
+        {},
+    ),
+    (
+        ("Instrument", "Maturity date", "Yield", "Spread", "Quote date", "Source class"),
+        {
+            "kind": "scatter",
+            "label": 0,
+            "date": 1,
+            "yield": 2,
+            "spread": 3,
+            "quoted": 4,
+            "source": 5,
+        },
+        (2,),
+        {},
+    ),
 )
+# The two tables of the pair header differ only by heading: the results are grouped columns (one
+# unit, so one scale), the margin and KPI changes a dumbbell per row.
+PAIR_KINDS = {
+    f"{CHART_PREFIX}prior and current results": "grouped",
+    f"{CHART_PREFIX}margin and KPI changes": "dumbbell",
+}
 
 
 def physical_lines(text: str) -> list[str]:
@@ -605,8 +637,13 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
     table = tables[0]
     headers = table["headers"]
     if headers[0] not in CHART_FIRST_COLUMNS:
+        head = _chart_head(section, table)
         drawn = _row_chart(table)
-        return drawn and {**_chart_head(section, table), **drawn}
+        if drawn and drawn["kind"] is None:  # The pair header: its heading says how it is drawn.
+            kind = PAIR_KINDS.get(section["heading"])
+            grouped = kind == "grouped" and not drawn["unit"]  # One scale needs one unit.
+            drawn = None if kind is None or grouped else {**drawn, "kind": kind}
+        return drawn and {**head, **drawn}
     if len(headers) < 4 or headers[-2:] != CHART_LAST_COLUMNS:
         return None
     chart = {

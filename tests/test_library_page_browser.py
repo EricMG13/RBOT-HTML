@@ -80,6 +80,27 @@ STRUCTURE = (
         f"Limit | Current exposure | Proposed exposure | Limit value | {UNIT_BASIS}",
         "Single issuer | 3.0 | 4.0 | 5.0 | % NAV | Synthetic.",
     )
+    + chart_table(
+        "prior and current results",
+        f"Measure | Prior period | Prior | Current period | Current | {UNIT_BASIS}",
+        "Revenue | FY2023 | 2,100 | FY2024 | 2,250 | US$m | Synthetic.",
+    )
+    + chart_table(
+        "margin and KPI changes",
+        f"Measure | Prior period | Prior | Current period | Current | {UNIT_BASIS}",
+        "EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 | % | Synthetic.",
+    )
+    + chart_table(
+        "peer range \u2014 percent metrics",
+        f"Metric | Issuer | Peer low | Peer median | Peer high | Peer count | {UNIT_BASIS}",
+        "EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 7 | % | Synthetic.",
+    )
+    + chart_table(
+        "yield against maturity",
+        f"Instrument | Maturity date | Yield | Spread | Quote date | Source class | {UNIT_BASIS}",
+        "Note A | 2028-06-15 | 6.4 | +310 bp | 2024-12-31 | Dealer quote | % | Synthetic.",
+        "Note B | 2030-06-15 | 7.0 | +350 bp | 2024-12-31 | Dealer quote | % | Synthetic.",
+    )
 )
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -787,4 +808,5 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["segments"], seen["bulletRows"], seen["limitRows"]) == (2, 2, 1)
     assert (seen["markers"], seen["ticks"]) == (1, 3)  # No marker for the current value not stated.
-    assert seen["forms"] >= 3 and seen["formsClosed"] is True and seen["fits"] is True
+    assert seen["forms"] >= 7 and seen["formsClosed"] is True and seen["fits"] is True
+    assert (seen["dumbbells"], seen["bands"], seen["scatterDots"]) == (2, 1, 2)
