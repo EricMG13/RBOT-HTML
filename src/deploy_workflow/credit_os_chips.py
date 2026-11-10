@@ -257,7 +257,7 @@ def read_pages(raw: bytes) -> tuple[dict[int, str], str | None]:
             if line.strip():
                 record = json.loads(line)
                 pages[int(record["page"])] = str(record["text"])
-    except (ValueError, KeyError, TypeError) as error:
+    except (ValueError, KeyError, TypeError, OverflowError) as error:
         return {}, f"source text unreadable: {type(error).__name__}: {error}"
     return pages, None
 
@@ -385,8 +385,10 @@ class Pages:
 
 
 def is_file_name(name: str) -> bool:
-    """An inventory name is a bare file name: it cannot leave source-text/."""
-    return bool(name) and not any(part in name for part in ("/", "\\", "\x00")) and ".." not in name
+    """An inventory name is a bare file name: it cannot leave source-text/ (no separator, no drive
+    prefix such as C:x, which replaces the folder on Windows)."""
+    forbidden = ("/", "\\", "\x00", ":", "..")
+    return bool(name) and not any(part in name for part in forbidden)
 
 
 def issuer_chip(loc: Locator, line: int, quote: str | None, pages: Pages) -> dict[str, Any]:
