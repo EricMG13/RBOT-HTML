@@ -806,7 +806,7 @@ function storyModule({module,id,out},noted) {
 }
 // One line, no card and no findings: a module that does not reach a conclusion, or has no reader summary at all (R41).
 function storyLine({module,out,choices}) {
-  if(!out)return `<p class="choose-line">${esc(module)} ${esc(moduleNames[module])} · ${choices} saved outputs. <a class="text-action" href="#${encodeURIComponent(module)}">Choose one</a></p>`;
+  if(!out)return `<p class="choose-line">${esc(moduleNames[module])} · ${choices} saved outputs. <a class="text-action" href="#${encodeURIComponent(module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p>`;
   if(out.state.established===null)return `<p class="nosum-line">${moduleLink(module)} · ${NO_SUMMARY}</p>`;
   const {declared}=out.state,{limitation}=out.summary;
   return `<p class="na-line">${moduleLink(module)} · <span>Not assessable</span>${declared==null?'':` · <span class="badge badge-gray">${esc(declared)}</span>`}${limitation?` · ${rich(limitation)}`:''}</p>`;

@@ -877,8 +877,8 @@ test('run report: a module with outputs but no default is counted, listed as a c
   const html = runPage(d => d, [], CP0_TWO).runReport(RUN);
   assert.equal(strip(/<p class="run-count">(.*?)<\/p>/.exec(html)[1]), '1 of 5 modules reach a conclusion · 2 not assessable · 1 without a reader summary · 1 without a chosen output');
   const line = /<p class="choose-line">(.*?)<\/p>/.exec(html)[1];
-  assert.equal(strip(line), 'CP-0 Source readiness · 2 saved outputs. Choose one');
-  assert.ok(/<a [^>]*href="#CP-0"[^>]*>Choose one/.test(line));
+  assert.equal(strip(line), 'Source readiness · 2 saved outputs. Choose one');
+  assert.ok(/<a [^>]*href="#CP-0\?c=run-a"[^>]*>Choose one/.test(line));
   assert.ok(groupOf(html, 'Business and evidence').includes('choose-line'));
   assert.ok(/<a class="cov" href="[^"]*"[^>]*>CP-0<\/a>/.test(html));
   const matrix = /<table class="matrix">.*?<\/table>/s.exec(html)[0];
