@@ -64,6 +64,24 @@ scope_is_missing") that takes its values from a command qualifier the launcher n
 - Spend across the five live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 =
   5.9207.
 
+## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
+
+Owner: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
+`Chart data:` table whose first column is Period (`store.py` `_chart_table`), so `readerChart` now
+draws columns over periods: periods along the x axis in table order, one column per series from a
+zero baseline (a raised baseline when a value is negative), the exact value on each column, the
+series named once in a legend, and each period's chips under its label. Values, periods, labels and
+chips are unchanged; a value that is text still prints n.a. with the text in its title.
+
+- Tests written first and seen failing (two in `static.test.cjs`); one older test updated for the
+  new value markup. 109 node tests; `tests/test_library_page_browser.py` 20 passed; quality gate 0.
+- Built TDG library in headless Chrome, CP-1 Key numbers (Leverage, Interest cover, Liquidity, Debt
+  maturities): fits at 1440, 1280, 1024, 768 and 500px and with the inspector open; no value label
+  outside its card; no two value labels overlap; chips stay under their own period. Below about 96px
+  a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
+  charts print whole.
+- Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
+
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
 
 Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
@@ -197,6 +215,16 @@ provider was called and nothing ran on Windows. Report with all measurements and
   command (1,412 passed, 7 deselected). Review found the first ruling test passed without the
   guard; it is now a cause test (fails with the check removed). The packaged layout was checked by
   building the package into a temporary folder on macOS, not on Windows.
+- Outstanding items and a review of `main` (branch `claude/sweep-outstanding-items`, base
+  `b2ae395`; owner, 2026-11-10; written without sub-agents): the seven open rows are fixed
+  test-first (F2, F4, F5, F6, F7, D4, B1) and B3 is accepted and pinned. The review added four
+  fixes: a page range in handoff text hung the library build; one malformed line in a run folder
+  ended the watcher; `--poll-seconds 0` and like settings were accepted; the PR check ran no inbox
+  or chips test. Exit 0 on the branch: the quality gate; the PR check's pytest command with those
+  tests added (1,437 passed, 7 deselected); node page logic (107 pass). The library built from the
+  four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
+  inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
+  sub-agents), only the author's adversarial pass.
 
 ## 2026-11-10 — Run report Phase A (library Overview and module pages)
 

@@ -392,3 +392,55 @@ def test_the_pid_file_variable_is_in_the_child_environment_only_through_start(
     fake_env({})
     start(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP, ruling=RULING).wait()
     assert captured["DEPLOY_WORKFLOW_PID_FILE"] == str(layout.state / "id1.pid")
+
+
+class _CloseFails:
+    """A log handle whose close reports an I/O error after really closing."""
+
+    def __init__(self, real):
+        self._real = real
+
+    def fileno(self) -> int:
+        return self._real.fileno()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._real.close()
+        raise OSError(5, "Input/output error (injected at close)")
+
+
+def test_a_log_handle_that_fails_to_close_does_not_lose_the_started_launcher(
+    layout, fake_env, monkeypatch, caplog
+):
+    # An OSError after Popen must not read as "nothing started": the child would run untracked.
+    fake_env({})
+    real_open = Path.open
+
+    def open_(self, mode="r", *args, **kwargs):
+        handle = real_open(self, mode, *args, **kwargs)
+        return _CloseFails(handle) if self.suffix == ".log" and mode == "ab" else handle
+
+    monkeypatch.setattr(Path, "open", open_)
+    child = _live(layout, ruling=RULING)
+    try:
+        assert isinstance(child, subprocess.Popen)
+        assert "log handle" in caplog.text
+    finally:
+        child.wait(timeout=60)
+
+
+def test_a_launcher_that_cannot_be_started_still_raises(layout):
+    with pytest.raises(OSError):
+        start(
+            layout, RECORD, CTX, launcher=["/no/such/launcher"], config="sol-medium", cap=CAP,
+            ruling=RULING,
+        )  # fmt: skip
+
+
+def test_an_event_line_nested_too_deep_to_parse_leaves_the_exit_code_to_decide(layout):
+    log = layout.runs / "id1" / "events.jsonl"
+    log.parent.mkdir(parents=True)
+    log.write_text("[" * 100_000 + "]" * 100_000 + "\n{}\n", encoding="utf-8")
+    assert outcome(layout, RECORD, 3) == ("failed", "launcher exited 3; see logs/id1.log")

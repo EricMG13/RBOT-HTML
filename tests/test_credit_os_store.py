@@ -236,6 +236,14 @@ def test_a_later_front_matter_heading_is_not_the_yaml_block():
     assert store.report_fields(sections, None)["state"]["declared"] is None
 
 
+def test_a_leading_front_matter_heading_declares_like_the_yaml_block():
+    # Accepted (sweep row B3): the parser gives a leading "## Front matter" section and a YAML
+    # block the same shape, so a handoff that opens with that heading declares its status too.
+    text = "## Front matter\ncommittee_status: Refer\n\n## Request\nAsked.\n"
+    sections = store.parse_source(text)
+    assert store.report_fields(sections, None)["state"]["declared"] == "Refer"
+
+
 def test_declared_is_none_without_front_matter():
     sections = [s for s in SECTIONS if s["heading"] != "Front matter"]
     assert store.report_fields(sections, {"confidence": "Medium"})["state"]["declared"] is None

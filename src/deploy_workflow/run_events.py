@@ -54,7 +54,7 @@ def read_events(path: Path, limit: int = 4 * 1024 * 1024) -> list[dict[str, Any]
     for number, line in enumerate(lines, start=1):
         try:
             events.append(json.loads(line))
-        except ValueError as error:
+        except (ValueError, RecursionError) as error:  # nested too deep is not an event either
             if number == len(lines):
                 break
             raise ValueError(f"{path.name}: line {number} is not valid JSON") from error

@@ -61,9 +61,10 @@ def git(root: Path, *args: str) -> str:
 
 def changed_files(root: Path, base: str) -> list[str]:
     """Python files that differ from ``base`` in the working tree, plus untracked ones."""
-    tracked = git(root, "diff", "--name-only", "--diff-filter=ACMR", base, "--", "*.py")
-    untracked = git(root, "ls-files", "--others", "--exclude-standard", "--", "*.py")
-    names = set(tracked.split()) | set(untracked.split())
+    # -z: names end in NUL and are not quoted, so a space or an accent does not lose a file.
+    tracked = git(root, "diff", "--name-only", "-z", "--diff-filter=ACMR", base, "--", "*.py")
+    untracked = git(root, "ls-files", "--others", "--exclude-standard", "-z", "--", "*.py")
+    names = set((tracked + untracked).split("\0")) - {""}
     return sorted(name for name in names if (root / name).is_file())
 
 
