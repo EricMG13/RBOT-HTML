@@ -725,13 +725,13 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules) {
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] } }, DESIGN_CATALOGUE: { real: [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports } };
   const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
   const args = [win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart};`)(...args);
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
 // A story module, from its opening tag to the next story module or the end of its group (flat regex over generated markup).
 const storyModule = (html, code) => new RegExp(`<div class="story-module" data-module="${code}">.*?(?=<div class="story-module"|</section>)`, 's').exec(html)?.[0];
-const groupOf = (html, title) => new RegExp(`<section class="story-group"><h2>${title}</h2>.*?</section>`, 's').exec(html)?.[0];
+const groupOf = (html, title) => new RegExp(`<section class="story-group"[^>]*><h2>${title}</h2>.*?</section>`, 's').exec(html)?.[0];
 
 test('run report: the count line reads from state, with the unsummarised module counted apart', () => {
   const html = runPage().runReport(RUN);
@@ -1113,4 +1113,35 @@ test('rows carry the run id for restoring, and unchanged data is not re-rendered
   assert.strictEqual(content.writes, 2, 'changed runs: replaced');
   win.RUN_ACTIVITY = { updated: 'T4', cap: '20', held: '', runs: [{ id: 'a', status: 'running' }] }; fn();
   assert.strictEqual(content.writes, 3, 'a changed cap with the same runs: replaced');
+});
+
+// Design pass 2026-11-10 (docs/design/2026-11-10-impeccable-pass.md).
+test('run report: every part carries an id and the label the navigator lists, in page order', () => {
+  const html = runPage().runReport(RUN);
+  const parts = [...html.matchAll(/<section class="[^"]*" id="(run-[a-z0-9-]+)" data-run-part="([^"]*)">/g)].map(m => [m[1], m[2]]);
+  assert.deepEqual(parts, [['run-group-1', 'Financial performance'], ['run-group-2', 'Outlook and downside'], ['run-group-3', 'Decision and review'], ['run-group-4', 'Other modules'],
+    ['run-register', 'Findings register'], ['run-open-items', 'Open items'], ['run-matrix', 'Module matrix']]);
+  const screen = read('screen.js');
+  assert.ok(screen.includes("querySelectorAll('[data-run-part]')") && screen.includes('run-[a-z0-9-]+'), 'the navigator lists the parts and the route scrolls to one');
+});
+
+test('run report: a coverage cell shows the code and carries the module name as its title; the page does not rewrite it', () => {
+  const html = runPage().runReport(RUN);
+  assert.ok(/<a class="cov filled" href="[^"]*" title="Financial foundation" aria-label="CP-1, Financial foundation, Reaches a conclusion">CP-1<\/a>/.test(html));
+  assert.ok(/parent\.closest\('[^']*\.coverage[^']*'\)\)continue/.test(read('screen.js')), 'nameCodes leaves the coverage strip alone');
+});
+
+test('charts: one chip-dot legend per set of charts, under the last card', () => {
+  const html = runPage().chartCards(['<i>a</i>', '<i>b</i>', '<i>c</i>']);
+  assert.equal(countOf(html, /class="legend"/g), 1);
+  assert.equal(countOf(html, /class="panel-card"/g), 3);
+  assert.ok(html.indexOf('class="legend"') > html.indexOf('<i>c</i>'));
+  assert.equal(runPage().chartCards([]), '');
+});
+
+test('screen.css: run-report tables run whole in the text face; the library row shows its run id', () => {
+  const css = read('screen.css');
+  assert.ok(css.includes('.run-section .table-scroll{max-height:none;overflow:clip}'));
+  assert.ok(css.includes("table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text',sans-serif"));
+  assert.ok(/<span class="cell-secondary run-id">\$\{esc\(run\.id\)\}<\/span>/.test(read('views.js')));
 });

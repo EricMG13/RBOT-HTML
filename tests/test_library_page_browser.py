@@ -90,6 +90,7 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     assert console == []  # No script error and no policy violation.
     assert len(re.findall(r"<tr[ >]", dom.split("<tbody>", 1)[1].split("</tbody>")[0])) == 1
     assert "Northbridge Synthetic Group" in dom
+    assert '<span class="cell-secondary run-id">run-a</span>' in dom  # The row names its run.
     dom, console = visit(page, "#W-Overview/overview?c=run-a")
     assert console == []
     assert (
@@ -353,6 +354,20 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
     assert seen["emptyBefore"] is False  # Rows are shown, so the empty row is not.
     # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
     assert seen["filtered"] == {"shown": 0, "emptyShown": True}
+    # Design pass 2026-11-10: the parts are listed and reachable, the tables run whole in the text face.
+    assert seen["outline"][-4:] == [
+        "Findings register",
+        "Open items",
+        "Module matrix",
+        "Deliverables from this run",
+    ]
+    assert seen["jump"] == {
+        "hash": "#W-Overview/run-matrix",
+        "current": ["Module matrix"],
+        "inView": True,
+    }
+    assert seen["scrollers"] == 0 and seen["monoProse"] == 0
+    assert seen["coverage"] and all(re.fullmatch(r"CP-[0-9A-Z]+", code) for code in seen["coverage"])
 
 
 # A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then

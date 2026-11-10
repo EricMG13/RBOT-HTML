@@ -82,7 +82,7 @@ function nameCodes(root) {
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.module-ref,.built-from,.hash,.chip,details.audit,.module-head .sub'))continue;
+    if(parent.closest('.ref,.module-ref,.built-from,.hash,.chip,.coverage,details.audit,.module-head .sub'))continue;
     const parts=[...node.data.matchAll(READER_TOKEN)];
     if(!parts.length)continue;
     // A chart or a select cannot hold markup, so these only take the name.
@@ -292,9 +292,9 @@ function renderNavigator(module) {
       return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" title="${esc(id)}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
     }).join('')}</details>`;
   }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
-  // Only a module report has parts to list; Run activity (CP-OS) has no output and no outline.
-  const analytical=!module.startsWith('W-'),outline=current.output;
-  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||!analytical||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${analytical&&!query&&outline?`<div class="outline-heading">On this page</div>${outlineMarkup(outline)}`:''}`;
+  // A module report and the run report have parts to list; Run activity (CP-OS) has no output and no outline.
+  const analytical=!module.startsWith('W-'),outline=query?'':analytical&&current.output?outlineMarkup(current.output):module==='W-Overview'?runOutline():'';
+  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||!outline||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${outline&&`<div class="outline-heading">On this page</div>${outline}`}`;
   nameCodes($('module-list'));
   document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Analysis & tools'} <span>${count}</span>`;
   $('module-search-clear').hidden=!$('module-search').value;
@@ -483,6 +483,13 @@ const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
 // Scroll the canvas to one of the report's parts or sections; the head is the top. Unknown names never reach here: parseRoute maps them to the head.
 // Every closed <details> that is or holds the target is opened first, so a route into a folded part shows what it names.
+// The run report's parts are places on one page: #W-Overview/<part id> keeps the Overview route and scrolls to the part.
+const runPart=()=>{const part=/^#W-Overview\/(run-[a-z0-9-]+)/.exec(location.hash)?.[1];return part&&$('content').querySelector(`#${part}[data-run-part]`)?part:null;};
+// Read from the page as drawn: a part the run does not have has no entry.
+const runOutline=()=>{
+  const parts=[...$('content').querySelectorAll('[data-run-part]')];
+  return parts.length?`<nav class="section-outline" aria-label="On this page"><ol>${parts.map(part=>`<li><a class="section-item" href="${routeHref('W-Overview',part.id)}" ${runPart()===part.id?'aria-current="location"':''}>${esc(part.dataset.runPart)}</a></li>`).join('')}</ol></nav>`:'';
+};
 function scrollToPart(part) {
   const content=$('content'),target=part==='head'?null:$(part);
   if(target)openFolds(target);
@@ -548,8 +555,11 @@ function renderRoute() {
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
   }
-  if(partMove) {
-    scrollToPart(next.section);
+  const runMove=next.module==='W-Overview'&&runPart();
+  if(runMove)scrollToPart(runMove);
+  // A move inside the run report redraws the outline only, so its current part follows the route.
+  if(partMove||(next.module==='W-Overview'&&!changed)) {
+    if(partMove)scrollToPart(next.section);
     renderNavigator(next.module);
     const link=focused?.classList.contains('section-item')&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
     if(link)link.focus({preventScroll:true});

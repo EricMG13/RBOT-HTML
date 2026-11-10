@@ -117,10 +117,12 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .library-search input,.library-filters select,.library-filters input{width:100%;height:40px;border:1px solid var(--border-primary);border-radius:var(--radius-control);background:#fff;box-shadow:var(--shadow-xs);color:var(--text-primary);padding:0 12px}
 .library-search input{padding-left:40px;font-size:16px}
 .library-search input:focus,.library-filters select:focus,.library-filters input:focus{outline:none;border-color:var(--blue);box-shadow:var(--shadow-xs),var(--ring)}
-.library-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.library-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .library-filters label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-compact);font-weight:600;color:var(--text-tertiary)}
 .library-filters select,.library-filters input{font-size:var(--fs-control);font-weight:400}
-#library-filters details{margin-top:14px}
+/* Closed criteria groups share one line; an open group takes the full width. */
+#library-filters{display:flex;flex-wrap:wrap;column-gap:24px}#library-filters>*{flex:1 1 100%;min-width:0}#library-filters>details:not([open]){flex:0 0 auto}
+#library-filters details{margin-top:14px}#library-filters details:not([open])>summary{margin-bottom:0}
 #library-filters summary{cursor:pointer;font-weight:600;margin-bottom:12px}
 #library-count{font-size:var(--fs-control);color:var(--text-tertiary);margin-bottom:8px}
 .library-coverage{font-size:var(--fs-compact);color:var(--text-tertiary);margin-bottom:8px}.library-coverage p{margin:2px 0}.hidden-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.facility h4,.facility h5{margin:12px 0 6px}
@@ -131,6 +133,10 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .library-table tr.selected>td{background:var(--blue-50)}
 .library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-control)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 .ticker{display:block;font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
+.run-id{font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;overflow-wrap:anywhere}
+/* The run's identity gets the room; a date stays on one line. Below 1300px the cells tighten so nine columns fit without a sideways scroll. */
+.library-table th:first-child{width:13%}.library-table td:nth-child(3) .cell-primary{white-space:nowrap}
+@media(max-width:1300px){.library-table th,.library-table td{padding-left:10px;padding-right:10px}}
 .cell-primary{display:block;font-weight:600}.cell-primary.missing{color:var(--text-quaternary);font-weight:400}
 .cell-secondary{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}
 .run-link,.report-link{font-size:var(--fs-compact);font-weight:600}.report-link{white-space:nowrap}.library-table td{font:400 var(--fs-control)/20px 'Red Hat Text',sans-serif}
@@ -397,14 +403,14 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .dot.gap{background:transparent;border:1px solid #9aa2b8}
 .chip.gap{border-style:dashed;color:var(--muted)}
 .chip.verified{border-color:#9fc7ac}
-.chip-count{display:inline-flex;align-items:center;height:24px;padding:0 8px;border:1px dashed var(--rule);border-radius:var(--radius-inline);background:transparent;font:500 var(--fs-label)/1 'Red Hat Text',sans-serif;color:var(--muted);white-space:nowrap;cursor:pointer}
-.chip-count:hover{border-color:#b9c0d6;background:var(--quiet)}
+.chip-count{display:inline-flex;align-items:center;height:24px;padding:0 2px;border-radius:var(--radius-inline);background:transparent;font:400 var(--fs-label)/1 'Red Hat Text',sans-serif;color:var(--muted);white-space:nowrap;cursor:pointer;text-decoration:underline dotted #9aa2b8;text-underline-offset:3px}
+.chip-count:hover{color:var(--blue);text-decoration-color:currentColor}
 .chip.source-selected{background:var(--selection)!important}
 /* Live run chips: after the run report's .chip rule (same specificity), so their state colours win. */
 .chip-done,.chip-running,.chip-waiting{display:inline-block;padding:1px 8px;border:1px solid var(--rule);border-radius:10px;font-size:var(--fs-label)}.chip-done{background:var(--quiet);color:var(--navy)}.chip-running{background:var(--navy);color:#fff;border-color:var(--navy)}.chip-waiting{background:#fff;color:var(--muted)}
 article.finding{max-width:none;margin:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:6px 28px;padding:16px 0;border-top:1px solid var(--rule);border-bottom:0}
 article.finding:first-of-type{border-top:0;padding-top:4px}
-article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;text-wrap:pretty}
+article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;color:var(--navy);text-wrap:pretty}
 article.finding .impact{margin:6px 0 0;color:#3a4056;text-wrap:pretty}
 article.finding .impact b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
 article.finding aside{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding-top:2px}
@@ -445,17 +451,27 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 @media(max-width:720px){.panel-card .chart-row{grid-template-columns:minmax(0,1fr)}.panel-card .chart-open{grid-template-columns:1fr 72px}.panel-card .chart-open .chart-label{grid-column:1/-1}.panel-card .chart-row .chips{padding-bottom:8px}}
 /* Run report: the Overview. Cards hold only what a handoff says; the page adds no sentence. */
 .run-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:14px 0 8px}.run-count{font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif}
-.coverage{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
-a.cov{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;border:1px solid var(--blue);border-radius:var(--radius-inline);font:500 var(--fs-label)/1 'Red Hat Mono',monospace;text-decoration:none;color:var(--blue);background:#fff}
-a.cov.filled{background:var(--blue);color:#fff}a.cov:hover{background:var(--selection);color:var(--navy)}a.cov.filled:hover{background:var(--navy);color:#fff}
+/* Coverage states a fact, it is not a control row: navy for a conclusion, an outline for none, blue only under the pointer. */
+.coverage{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px}
+a.cov{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:24px;padding:0 6px;border:1px solid #b9c0d6;border-radius:var(--radius-inline);font:500 var(--fs-label)/1 'Red Hat Mono',monospace;text-decoration:none;color:var(--muted);background:#fff}
+a.cov.filled{background:var(--navy);border-color:var(--navy);color:#fff}a.cov:hover{border-color:var(--blue);color:var(--blue)}a.cov.filled:hover{background:var(--blue);border-color:var(--blue);color:#fff}
 .story-group{margin-top:26px}.story-group>h2{font-size:19px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
-.story-module{padding:14px 0;border-bottom:1px solid var(--rule);min-width:0}.story-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.story-head h3{margin:0}
-.story-module .bottom-line{margin:8px 0 4px;font-size:var(--fs-body);line-height:1.55;text-wrap:pretty}
-.story-module .main-limit{margin:6px 0 10px;color:#3a4056}.story-module .main-limit b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
+/* A module leads with its name and its bottom line; its findings sit one step below. */
+.story-module{padding:18px 0 14px;border-bottom:1px solid var(--rule);min-width:0}.story-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.story-head h3{margin:0;font-size:16px;line-height:1.3}.story-head h3 .text-action{font-size:inherit;margin:0}
+.story-module .bottom-line{margin:8px 0 6px;max-width:110ch;font-size:var(--fs-control);line-height:1.5;text-wrap:pretty}
+.story-module article.finding h4{font-size:var(--fs-body)}
+.story-module .main-limit{margin:6px 0 10px;max-width:110ch;color:#3a4056}.story-module .main-limit b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
 .na-line,.nosum-line,.choose-line{margin:0;padding:9px 0;border-bottom:1px solid var(--rule);font-size:var(--fs-compact);color:var(--muted);overflow-wrap:anywhere}.na-line .text-action,.nosum-line .text-action,.choose-line .text-action{margin-right:2px}
 .run-section{margin-top:30px}.run-section>h2{font-size:19px;margin-bottom:10px}
 .register-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 10px;font-size:var(--fs-compact)}.register-tools select{height:32px;background:var(--quiet);border:1px solid #d7dce7;border-radius:var(--radius-inline);padding:2px 6px}.register-tools input{width:16px;height:16px}
+/* The run report is one scroll: its tables run whole (no box of their own to scroll) and their headers stick to the page. */
+.run-section .table-scroll{max-height:none;overflow:clip}
+/* A sticky offset is measured inside the canvas's 12px top padding, so the header is pulled up by it; at phone widths the page scrolls, not the canvas. */
+.run-section .table-scroll thead th{top:-12px}@media(max-width:720px){.run-section .table-scroll thead th{top:0}}
 table.register,table.open-items,table.matrix{width:100%;border-collapse:collapse;font-size:var(--fs-compact)}
-table.register th,table.register td,table.open-items th,table.open-items td,table.matrix th,table.matrix td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
-table.matrix td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.register th,table.register td,table.open-items th,table.open-items td,table.matrix th,table.matrix td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:break-word}
+/* Sentences read in the text face; the mono face is kept for the numbers. */
+table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text',sans-serif;font-size:var(--fs-compact)}
+table.register{table-layout:fixed}table.register th:nth-child(1){width:15%}table.register th:nth-child(2){width:17%}table.register th:nth-child(3){width:33%}table.register th:nth-child(5){width:10%}
+table.matrix td.num{text-align:right;font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums}table.matrix thead th:nth-child(n+4){text-align:right}
 .run-inventory{margin:22px 0 8px}
