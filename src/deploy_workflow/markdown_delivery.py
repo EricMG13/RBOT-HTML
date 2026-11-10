@@ -1331,7 +1331,7 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
         "scope": layout.scope,
         "analytical_runtime_executed": False,
         "cp_model_published": request.model is not None,
-        "cp_forecast_published": request.forecast,
+        **({"cp_forecast_published": True} if request.forecast else {}),
         "excel_output": False,
         "files": {name: hashlib.sha256(raw).hexdigest() for name, raw in files.items()},
     }

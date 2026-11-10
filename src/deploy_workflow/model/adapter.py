@@ -66,6 +66,7 @@ KEY_VARIABLES: Mapping[str, str] = {
     "copilot": "COPILOT_GITHUB_TOKEN",
 }
 COPILOT_RUNTIME_VARIABLE = "COPILOT_CLI_PATH"
+COPILOT_GH_LOGIN_VARIABLE = "COPILOT_USE_GH_LOGIN"  # exactly "1": use the gh CLI login
 LIVE_RULINGS_ROOT = Path(__file__).resolve().parents[3] / "docs" / "rulings"
 _REFLECTED_RAW = b'"[redacted]"'
 _UNPARSABLE_RAW = b'"[withheld: UnparsableReply]"'
@@ -481,6 +482,7 @@ def live_adapter(
 
 
 __all__ = [
+    "COPILOT_GH_LOGIN_VARIABLE",
     "COPILOT_RUNTIME_VARIABLE",
     "KEY_VARIABLES",
     "AdapterReply",

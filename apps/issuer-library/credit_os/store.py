@@ -227,33 +227,33 @@ def text_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
     return {"type": "text", "line": start, "end": i, "text": "\n".join(parts)}, i
 
 
-def front_matter(lines: list[str]) -> tuple[dict[str, Any] | None, int]:
-    """The leading `---` block as a "Front matter" section, and the index after its closing `---`.
-
-    Only a first nonblank line of exactly `---` with a later line of exactly `---` is accepted. The
-    lines between are kept verbatim; nothing is parsed or inferred. Any other shape is (None, 0).
-    """
-    first = next((n for n, line in enumerate(lines) if line.strip()), None)
-    if first is None or lines[first] != "---":
-        return None, 0
-    close = next((n for n in range(first + 1, len(lines)) if lines[n] == "---"), None)
-    if close is None:
-        return None, 0
-    block = {
-        "type": "text",
-        "line": first + 1,
-        "end": close + 1,
-        "text": "\n".join(lines[first + 1 : close]),
-    }
-    return {"heading": "Front matter", "level": 1, "line": first + 1, "blocks": [block]}, close + 1
-
-
 def parse_source(text: str) -> list[dict[str, Any]]:
     """Keep every nonblank body line in one typed block with its source locator."""
     lines = physical_lines(text)
-    leading, i = front_matter(lines)
-    sections: list[dict[str, Any]] = [leading] if leading else []
+    sections: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
+    i = 0
+    first = next((n for n, line in enumerate(lines) if line.strip()), None)
+    if first is not None and lines[first] == "---":
+        close = next((n for n in range(first + 1, len(lines)) if lines[n] == "---"), None)
+        if close is not None:
+            # YAML front matter: kept whole as the leading section, never dropped.
+            body = [line for line in lines[first + 1 : close] if line.strip()]
+            current = {"heading": "Front matter", "level": 2, "line": first + 1, "blocks": []}
+            if body:
+                start = next(n for n in range(first + 1, close) if lines[n].strip())
+                end = max(n for n in range(first + 1, close) if lines[n].strip()) + 1
+                current["blocks"].append(
+                    {
+                        "type": "text",
+                        "line": start + 1,
+                        "end": end,
+                        "text": "\n".join(lines[start:end]),
+                    }
+                )
+            sections.append(current)
+            current = None  # a stray body line after the marker is not front matter: it raises
+            i = close + 1
     while i < len(lines):
         line = lines[i]
         heading = re.match(r"^(#{1,4}) (.+)$", line)
@@ -2483,6 +2483,12 @@ def shown_models(
     return shown, issues
 
 
+def run_folder_of(folder: str) -> str | None:
+    """x of a runs/<x>/deliveries/<id> folder, else None."""
+    parts = PurePosixPath(folder).parts
+    return parts[1] if len(parts) == 4 and parts[0] == "runs" and parts[2] == "deliveries" else None
+
+
 SourcesOf = Callable[[str, dict[str, Any]], tuple[list[dict[str, Any]], list[str]]]
 
 
@@ -2546,6 +2552,7 @@ def read_model(
         "mode": mode if isinstance(mode, str) else None,
         "qualification": qualification if isinstance(qualification, str) else None,
         "runId": run_id if isinstance(run_id, str) else None,
+        "runFolder": run_folder_of(folder),
         "scope": text_or_none(delivery.get("scope")),
         "inputContract": text_or_none(delivery.get("input_contract")),
         "revisionNote": text_or_none(delivery.get("presentation_repair")),
@@ -2583,7 +2590,8 @@ def run_shows(
         if key is None:
             return False
         held = {route for route, run in runs.items() if run["issuerKey"] == key}
-        if any(runs[route]["folder"] == identity["run_id"] for route in held):
+        own = (identity["run_id"], run_folder_of(folder))
+        if any(runs[route]["folder"] in own for route in held):
             return True
         return any(row["run"] in held for row in sources_of(folder, delivery)[0])
     except MANIFEST_ERRORS:

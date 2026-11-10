@@ -1098,6 +1098,30 @@ def test_launcher_reports_copilot_key_variable(tmp_path, monkeypatch, capsys, co
     assert "COPILOT_GITHUB_TOKEN" in capsys.readouterr().err
 
 
+def test_launcher_names_both_copilot_credentials_when_neither_is_set(
+    tmp_path, monkeypatch, capsys, copilot_ruling
+):
+    monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+    monkeypatch.setenv("COPILOT_USE_GH_LOGIN", "true")
+    argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
+    assert main(argv) == 2
+    err = capsys.readouterr().err
+    assert "COPILOT_GITHUB_TOKEN" in err and "COPILOT_USE_GH_LOGIN" in err
+
+
+def test_copilot_gh_login_opt_in_passes_the_key_check(
+    tmp_path, monkeypatch, capsys, copilot_ruling
+):
+    monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+    monkeypatch.setenv("COPILOT_USE_GH_LOGIN", "1")
+    runtime = tmp_path / "copilot-runtime"
+    runtime.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", lambda m, d, **k: d / "report.html")
+    argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
+    assert main(argv) == 0
+
+
 def test_copilot_config_without_live_sends_nothing_and_shows_the_plan(
     tmp_path, capsys, monkeypatch
 ):
@@ -1443,8 +1467,9 @@ PATHS = {
     "dividends": ("20", "20", "20"),
     "debt_repayment": ("50", "50", "50"),
 }
-# The launcher names a run folder by its run ID; the library shows a model under that run.
-RUN_ID = "nbg-2025-03-31-distressed_restructuring-sol-medium"
+# The usual `--out runs/<name>`: the folder name is not the run ID, and the library still shows the
+# model under that run.
+RUN_ID = "my-first-run"
 SHOCK = {"ebitda_decline": "0.20", "rate_increase": "0.10"}
 RATIOS = {"total_leverage", "net_leverage", "coverage", "fcf_to_debt"}
 
@@ -1621,7 +1646,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
         p.name for p in folder.iterdir()
     }
     receipt = json.loads((folder / "delivery.json").read_text())
-    assert receipt["cp_forecast_published"] is False
+    assert "cp_forecast_published" not in receipt
     assert "publish_forecast" not in json.loads((out / "workflow.json").read_text())
     assert (
         json.loads(next(out.glob("completed-*.json")).read_text())["cp_forecast_published"] is False
@@ -1658,6 +1683,17 @@ def test_model_publish_failure_keeps_the_report(tmp_path, provider, capsys, monk
             "base revenue 1001 is not printed in CP-1",
         ),
         (forecast_block(years=[]), "forecast inputs: years"),
+        (
+            forecast_block(
+                years=[
+                    {"year": 2025 + i, "start": "2025-04-01", "end": "2028-03-31"} for i in range(3)
+                ]
+            ),
+            (
+                "forecast inputs: (root): Value error, each year must start the day after "
+                "the previous one ends"
+            ),
+        ),
     ],
 )
 def test_an_invalid_or_missing_inputs_block_publishes_no_model_and_names_why(
@@ -1778,3 +1814,84 @@ def test_the_forecast_tab_shows_the_model_only_for_the_run_that_published_one(
     dom, console = visit(other / "library/index.html", f"#W-Forecast/none?c={RUN_ID}")
     assert console == []
     assert "No forecast model was published from this run’s files" in dom
+
+
+def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(
+    tmp_path, provider, capsys
+):
+    """Existing deliveries reproduce byte for byte: the key is written only when true."""
+    code, out, _ = forecast_run(tmp_path, provider, capsys, None, modules=("CP-2A",))
+    assert code == 0
+    (folder,) = (out / "deliveries").iterdir()
+    assert "cp_forecast_published" not in json.loads((folder / "delivery.json").read_text())
+    assert "forecast" not in json.loads(next(out.glob("delivery-*.json")).read_text())
+
+
+# Copied verbatim from the 2026-11-09 sol-medium run (runs/cpos-tdg-sol-medium-all-001, delivery
+# abd687ca...c2baa, CP-2G.md): the model declined to forecast, so every driver is all null.
+REAL_DECLINED_BLOCK = (
+    Path(__file__).parent / "fixtures/sol_medium_run_2026_11_09/CP-2G-forecast-block.md"
+).read_text(encoding="utf-8")
+
+
+def test_a_handoff_that_declines_to_forecast_gets_one_plain_sentence():
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(REAL_DECLINED_BLOCK, "CP-1 prints 7,940")
+    assert str(caught.value) == (
+        "CP-2G: the handoff gives no forecast drivers, so no forecast was computed "
+        "(Blocked interface only: CP-2A is explicitly blocked and supplies no scenario; "
+        "no forecast figures are submitted.)"
+    )
+
+
+def test_other_contract_failures_report_a_count_and_at_most_three_issues():
+    bad = json.loads(forecast_block().split("```json\n")[1].split("\n```")[0])
+    for driver in bad["base_drivers"].values():
+        driver["category"] = "analyst_judgment"
+    block = forecast_block(base_drivers=bad["base_drivers"])
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(block, "CP-1 prints 1000 300 36 20 10 40 194 600 100 50")
+    message = str(caught.value)
+    assert message.startswith("CP-2G: forecast inputs: 7 problems; first: ")
+    assert message.count("category") == 3
+
+
+def test_a_few_problems_are_listed_whole_without_a_count():
+    drivers = json.loads(forecast_block().split("```json\n")[1].split("\n```")[0])["base_drivers"]
+    drivers["dividends"]["category"] = "analyst_judgment"
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(
+            forecast_block(base_drivers=drivers), "1000 300 36 20 10 40 194 600 100 50"
+        )
+    assert str(caught.value).startswith("CP-2G: forecast inputs: base_drivers.dividends.category: ")
+    assert "problems" not in str(caught.value)
+
+
+def test_the_forecast_instructions_name_every_allowed_category_and_the_value_format():
+    from typing import get_args
+
+    from deploy_vii.business_context import Category
+
+    allowed = get_args(Category)
+    assert len(allowed) == 4
+    for value in allowed:
+        assert f"`{value}`" in cpos_launch.FORECAST_BLOCK
+    assert "three decimal strings" in cpos_launch.FORECAST_BLOCK
+    assert "[null, null, null]" in cpos_launch.FORECAST_BLOCK
+
+
+@pytest.mark.parametrize(
+    "values", [[{"low": "0.05"}, None, None], [["0.05"], None, None], "null", [], 5, None]
+)
+def test_odd_driver_values_end_in_value_error_not_type_error(values):
+    drivers = json.loads(forecast_block().split("```json\n")[1].split("\n```")[0])["base_drivers"]
+    for driver in drivers.values():
+        driver["values"] = [None, None, None]
+    drivers["dividends"]["values"] = values
+    with pytest.raises(ValueError):
+        cpos_forecast.parse(forecast_block(base_drivers=drivers), "1000 300")
+
+
+def test_a_non_object_driver_ends_in_value_error():
+    with pytest.raises(ValueError):
+        cpos_forecast.parse(forecast_block(base_drivers={"revenue_growth": 5}), "1000")

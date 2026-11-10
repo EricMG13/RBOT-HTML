@@ -25,8 +25,9 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, get_args
 
+from deploy_vii.business_context import Category
 from deploy_vii.contracts import PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
@@ -47,6 +48,7 @@ from deploy_workflow.markdown_delivery import (
     require_issuer,
 )
 from deploy_workflow.model.adapter import (
+    COPILOT_GH_LOGIN_VARIABLE,
     COPILOT_RUNTIME_VARIABLE,
     KEY_VARIABLES,
     LivePauseInForce,
@@ -542,7 +544,11 @@ FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. `base_drivers` is the method's base-case driver "
     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
-    "`category`, `rationale` and `limitation`). `downside_shock` is "
+    "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
+    'one per forecast year (for example ["0.05", "0.04", "0.03"]); `category` is exactly one of '
+    f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
+    "(for example a blocked dependency), still write the block, with every driver's `values` as "
+    "`[null, null, null]`. `downside_shock` is "
     '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}` from the CP-2A '
     "scenario, or null when no shock was supplied. `years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
@@ -1049,8 +1055,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.ruling is not None:
             check_ruling(args.config, args.ruling)
         key = KEY_VARIABLES[CONFIGS[args.config].provider]
-        if args.live and not os.environ.get(key):
-            raise LaunchRefused(f"--live needs {key} in the launching environment")
+        cli_login = CONFIGS[args.config].provider == "copilot" and (
+            os.environ.get(COPILOT_GH_LOGIN_VARIABLE) == "1"
+        )
+        if args.live and not (os.environ.get(key) or cli_login):
+            extra = (
+                f" (or {COPILOT_GH_LOGIN_VARIABLE}=1)"
+                if CONFIGS[args.config].provider == "copilot"
+                else ""
+            )
+            raise LaunchRefused(f"--live needs {key}{extra} in the launching environment")
         copilot_live = args.live and CONFIGS[args.config].provider == "copilot"
         if copilot_live and not Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, "")).is_file():
             raise LaunchRefused(f"--live needs {COPILOT_RUNTIME_VARIABLE} to name an existing file")

@@ -104,6 +104,7 @@ New file `web/calendar.js` (pure `eventTable`, `eventOrder`, `orderEvents`; test
 | --- | --- | --- |
 | `web/views.js` | `calendarRun`/`calendarSections` replaced by `eventsOutput`, `hedgesOutput`, `calendarRun` (first run with the source) and `calendarSections`; the `W-Calendar` branch of `workspaceView` renders the run's own CP-1A event table, or the hedge chart only when a CP-2E output exists and carries a `hedges` visual | the `pins['CP-1A']` lookup tied the calendar to one pinned legacy run |
 | `web/views.js` | `availability` says `Not run in this run` where it said `No output found` (module absent from the run) | navigator wording; all 20 `catalog.json` modules already sit in the `groups` list |
+| `web/views.js` | `unavailableView` body for a module with no entry now ends `The run did not produce this module.`, where it said `That alone does not show the module was not run or not applicable.` | the old sentence contradicted the `Not run in this run` heading (final review L2) |
 | `web/screen.js` | `eventTimeline(id, table)` rewritten: ordered by `orderEvents`, row text shown as retained, columns labelled from the table headers; the five hard-coded TDG dates and the FY / combined split removed; `renderContent` uses it for the pinned CP-1A `events` section only when that section holds an event table | the fixed `order` map only fit one run's table |
 | `web/static-boot.js` | `calendar.js` added first in the script list | views.js and screen.js call its functions |
 
@@ -198,3 +199,22 @@ R28 (owner, 2026-11-09): part 5 "Analysis" between Findings and Limits.
 | `store.py` (final fix) | `COMMITTEE_STATUS` is `^committee_status:[ \t]*(\S.*)$`, so an empty `committee_status:` is no declared status instead of the next front-matter line; the `EVIDENCE_HEADING` comment no longer points at the deleted JS constant | whole-branch review M1, I2 |
 | `web/views.js` (final fix) | finding rows come from Python's `summary.findings` (`findingRows`; `findingArticle(id,row)`) in the module page, the credit story and the register; `findingBlocks` and the header sniffing for `Confidence` are removed (`isFindingsTable` stays for Key numbers); the register no longer tests `established!==null` (a null summary has no rows) | whole-branch review L1 |
 | `web/static.test.cjs`, `tests/test_credit_os_store.py`, `tests/test_library_page_browser.py`, `tests/library_fixtures.py`, `tests/browser_probe_overview.js`, `tests/browser_probe_sections.js` (final fix) | `summary.findings` in the harness; empty-status cases; R31a key back to eight headings; row route from the head opens its fold; `chip=gaps` on a row without a gap; filtered register shows the empty row; chart note once per group with two modules; an `Other modules` module in the register and open items; `RunSpec.cp1_finding` | whole-branch review M1, L1-L6 |
+
+## Task 9 fix: a model shows under the run folder it was delivered in (R25)
+
+A launcher run's folder is usually not its run ID (`--out runs/my-first-run`), so a published forecast was listed under no run.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `store.py` | New `run_folder_of(folder)` (the `x` of `runs/<x>/deliveries/<id>`); `read_model` adds `runFolder`; `run_shows` also accepts a run whose folder equals it | match a model to the run folder that holds its delivery, not only to the run ID in its `view.json` |
+| `web/views.js` | `runModels` adds `m.runFolder===run.folder`; `modelOwnRun` accepts `contexts[key].folder===model.runFolder` | same rule in the page, with the same issuer-key check |
+
+## Follow-up fix: YAML front matter is kept, not rejected
+
+Handoffs that open with YAML front matter (`---` ... `---`) raised "Body before first heading" and were shown unstructured.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `store.py` | `parse_source` keeps a leading `---` ... `---` block as its own first section headed `Front matter` (level 2, one text block of the lines between the markers, locators from the source). No closing marker, or a body line between the closing marker and the first heading: unchanged, still raises "Body before first heading" (owner ruling R28) | keep every nonblank body line, as the docstring promises; found by the first real CP-2G run |
+
+Merge of origin/main (controller ruling): the Front matter section follows main's dc2320c contract, level 2 with block locators covering only the lines between the `---` markers (the branch's level 1 `front_matter()` helper is removed; `parse_source` holds the one implementation). `tests/test_credit_os_store.py` `test_front_matter_is_the_first_section_verbatim`: level 1 -> 2, block `line` 1 -> 2, `end` 4 -> 3.
