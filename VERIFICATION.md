@@ -4,6 +4,39 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Names, not codes, on every library screen (branch `claude/names-not-codes`)
+
+Owner: "Remove all cp-IDs and methodology step IDs from user facing screens. Replace with module
+name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hrefs, download names,
+`data.js` and the retained handoffs are unchanged. Record: `docs/design/2026-11-10-screens-pass.md`,
+"Codes off the screen".
+
+- Change: module codes read as module names everywhere, including Evidence & audit, the Evidence
+  tab, the inspector, chips, the coverage strip, the reports' "Built from" table and each delivered
+  report with its own inspector. `CP-x.md` reads "<name> handoff" and `CP-x_RUNBOOK.md` "<name>
+  runbook". A method step id (`T4.10`, `T1D.1`, `T4.D1`, `T2G.*`, `T2E.3.r01`) becomes the step's
+  title from the same output, or "a method step" / "method steps" when there is none. A column of
+  bare step ids is dropped. Kept as written: register references (`C9`, `G1`, `GAP-001`), a bare
+  `T<n>` ("T2 Biosystems", "Tier 2 (T2)"), and the quoted issuer source excerpt.
+- Answer key (scratch crawler, not shipped): every in-app route plus the delivered reports. Text,
+  option text, title, aria-label, alt and placeholder; one inspector per page. Before: 22,649
+  module-code and 1,914 step-id hits over 349 routes of the four retained TDG runs. After
+  (`54d7763`): `counted 0`. After merging main (`715f6f5`): `counted 0` over 186 routes and three
+  runs. Main's methodology change now excludes `cpos-tdg-sol-medium-all-001` from the library ("not
+  on the current methodology").
+- Tests written first and seen failing (15 static, 3 browser). On the merged tree: `node --test`
+  static + calendar 125 pass; `tests/test_library_page_browser.py` 21 passed; CI fast pytest list
+  1471 passed, 7 deselected; quality gate 0 findings. All exit 0.
+- Review: task review and fix round (mx-precise), whole-branch review (mx-architect), one fix
+  wave and its re-review; implementation by mx-feature. Parked as latent, no retained instance:
+  - step titles taken from any short second cell;
+  - a step id cited beside another module's code takes this output's title;
+  - the `;` joiner merging two untitled clauses;
+  - `CP-0-A.md`-style names in the app.
+- Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
+  model with step ids; runbook names on a rendered page (string-level test only); any issuer other
+  than TDG.
+
 ## 2026-11-10 — Context form adopted (branch `claude/optimistic-johnson-bmnwip`, after main `4ce88c2`)
 
 Owner: "Approved". The proposal below replaced `docs/templates/context-form.html` and follows main's

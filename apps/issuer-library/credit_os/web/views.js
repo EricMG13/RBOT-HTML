@@ -9,6 +9,65 @@ function displayDate(iso) {
   if(year<1||month<1||month>12||check.getUTCFullYear()!==year||check.getUTCMonth()!==month-1||check.getUTCDate()!==day) return iso;
   return `${day} ${DISPLAY_MONTHS[month-1]} ${year}`;
 }
+// ---- Names, not codes. A module code or a methodology step id is replaced by what it identifies; only register references (C9, G1, D1, GAP-001) stay.
+// A module's own name wins; a code standing in for its own label takes its parent's name when it has one.
+const moduleLabel=code=>{
+  const own=moduleNames[code];
+  return (own!==code&&own)||moduleNames[aliases[code]]||own||(code==='CP-MEMO'?'Credit memo':null);
+};
+const moduleTitle=code=>moduleLabel(code)??'Unnamed module';
+// "<Module name> handoff" for a file named after its module (…/CP-1.md, …--CP-1.md); any other file keeps its name.
+// A second saved output (…--CP-0-a.md) keeps its distinguishing suffix: "Source readiness handoff (a)".
+const handoffName=(code,suffix)=>`${moduleTitle(code)} handoff${suffix?` (${suffix.slice(1)})`:''}`;
+function handoffLabel(file) {
+  const found=/(?:^|[/-])(CP-[A-Z0-9]+)(-[a-z0-9]+)?\.md$/.exec(file);
+  return found?handoffName(found[1],found[2]):file;
+}
+// A module code, its gap id, its handoff file (…CP-0-a.md) or its runbook file (CP-4_RUNBOOK.md).
+const MODULE_REF=/\bCP-(?<owner>[A-Z0-9]+)-GAP-0*(?<gap>\d+)\b|\bCP-(?<book>[A-Z0-9]+)_RUNBOOK\.md\b|\b(?<file>CP-[A-Z0-9]+)(?<suffix>-[a-z0-9]+)?\.md\b|\bCP-[A-Z0-9]+\b/g;
+// A step id carries its dot and has the METHOD_CODE shape: T4.10, T1D.1, T4.D1, T2G.* (a family), T2E.3.r01 (a sub-row). A bare T2 is ordinary text.
+const STEP='T\\d+[A-Z]?\\.(?:[A-Z]?\\d+|\\*)(?:\\.[a-z]+\\d+)?',ID=`\\b${STEP}(?![A-Za-z0-9])`;
+const STEP_ID=new RegExp(`^${STEP}$`),STEP_ANY=new RegExp(ID,'g'),STEP_LEAD=new RegExp(`^\\s*${ID}\\s+—\\s+`);
+const STEP_RUN=new RegExp(`${ID}(?:\\s*(?:,\\s*and|[–/,;]|and|through)\\s*${ID})*`,'g');
+const STEP_HEADING=new RegExp(`^(${STEP})\\s+—\\s+(.+)$`),STEP_ROW=new RegExp(`^(${STEP})(?:\\s+—\\s+(.+))?$`);
+// A step's title is the one its own output gives it: a heading "T1D.1 — Add-Back Register", or a step-table row ["T4.1","Peer universe",…]. A longer second cell is a description, not a title.
+const stepTitleCache=new Map();
+function stepTitles(output) {
+  if(stepTitleCache.has(output))return stepTitleCache.get(output);
+  const titles=new Map(),note=(id,title)=>{if(!titles.has(id)&&title&&plain(title).length<=80)titles.set(id,plain(title));};
+  for(const section of data[output]?.sections??[]) {
+    const heading=STEP_HEADING.exec(section.heading);
+    if(heading)note(heading[1],heading[2]);
+    for(const block of section.blocks)if(block.type==='table')for(const row of block.rows) {
+      const cell=STEP_ROW.exec(plain(row.cells[0]).trim());
+      if(cell)note(cell[1],cell[2]??row.cells[1]);
+    }
+  }
+  stepTitleCache.set(output,titles);
+  return titles;
+}
+// A step id in prose or a cell becomes its title (in quotes inside a sentence, bare when the id is the whole text); a range's dash reads "to";
+// a run of ids with no title reads "method steps" ("a method step" for one); an id leading its own title is dropped; no title found: "a method step".
+function stepText(text,output) {
+  const titles=stepTitles(output),whole=text.trim();
+  const lead=STEP_LEAD.exec(text);
+  const body=lead?text.slice(lead[0].length):text;
+  return body.replace(STEP_RUN,run=>{
+    const ids=run.match(STEP_ANY),quoted=run===whole?t=>t:t=>`“${t}”`;
+    if(!ids.some(id=>titles.has(id)))return ids.length>1?'method steps':'a method step';
+    return run.replace(/\s*–\s*/g,' to ').replace(STEP_ANY,id=>titles.has(id)?quoted(titles.get(id)):'a method step');
+  });
+}
+// CP-<x>-GAP-<n> is "Gap <n>" on module x's own page and "<Name of x> gap <n>" elsewhere; a code with no known name is "unnamed module".
+function namedText(text,output=current?.output) {
+  return stepText(text.replace(MODULE_REF,(code,...rest)=>{
+    const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
+    if(book!==undefined)return `${name(`CP-${book}`)} runbook`;
+    if(file!==undefined)return handoffName(file,suffix);
+    if(owner===undefined)return name(code);
+    return [`CP-${owner}`,aliases[`CP-${owner}`]].includes(current?.module)?`Gap ${gap}`:`${name(`CP-${owner}`)} gap ${gap}`;
+  }),output);
+}
 function installDestinations() {
   const title = h => h.replace(/^Chart data: /,'').replace(/^T[\w.]+(?:\s*[–/]\s*(?:T[\w.]+|\d+))*\s*[—–]\s*/,'').replace(/^./,s=>s.toUpperCase());
   for (const [id,out] of Object.entries(data)) {
@@ -115,7 +174,7 @@ function headTools(module,context,output) {
 function moduleHead({module,context,output}) {
   if(output&&isAnalytical(module))return ''; // The module report draws its own head.
   const {meta,usedIn,flag}=headTools(module,context,output);
-  return `<div class="module-title"><h2 ${module.startsWith('W-')?'':`title="${esc(module)}"`}>${esc(moduleNames[module])}</h2>${meta}${usedIn}${flag}</div>`;
+  return `<div class="module-title"><h2>${esc(moduleNames[module])}</h2>${meta}${usedIn}${flag}</div>`;
 }
 function fixtureTable(module,line) {
   const table=data[module].sections.flatMap(s=>s.blocks).find(b=>b.type==='table'&&b.line===line);
@@ -237,20 +296,16 @@ function readerCharts(id,section) {
 // and places every section (data[id].placement, parallel to data[id].sections); nothing below infers a page, a class, a date or a placement.
 const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['analysis','Analysis'],['limits','Limits & monitoring'],['reference','Statements and registers'],['calculations','Calculations'],['audit','Evidence & audit']];
 const HANDOFF_TEXT=['handoff-text','Full handoff text'];
-// A leading method code (R36) is dropped from a displayed heading and kept in its title.
+// A leading method code (R36) is dropped from a displayed heading or caption.
 const METHOD_CODE=/^([A-Z][A-Z0-9]*\.[A-Z]?\d+|[a-z0-9]+(\.[a-z0-9_]+)+)\s+—\s+/;
-function headingView(heading,tag) {
-  const short=heading.replace(METHOD_CODE,'');
-  return `<${tag}${short===heading?'':` title="${esc(plain(heading))}"`}>${rich(short)}</${tag}>`;
-}
+const headingView=(heading,tag)=>`<${tag}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
 // The sections the store placed here that have something to draw, in handoff order.
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
 const drawnAnchors=id=>new Set(DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)).map(section=>`s-${section.line}`));
-const SHORT_CODES={'CP-1':'C1','CP-1A':'A','CP-0':'C0','CP-2':'C2'};
-const shortCode=module=>SHORT_CODES[module]||String(module).replace(/^CP-/,'');
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
+// Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
 function chipView(chip,rowModule) {
   if(chip.kind==='issuer_page') {
     const pages=chip.page_end!=null&&chip.page_end!==chip.page?`p.${chip.page}–${chip.page_end}`:`p.${chip.page}`;
@@ -259,7 +314,8 @@ function chipView(chip,rowModule) {
   }
   if(chip.kind==='upstream') {
     const codes=chip.codes.join(' · ');
-    return {label:chip.module?`${chip.module} · ${codes}`:codes,av:chip.module||rowModule?shortCode(chip.module||rowModule):'?',avClass:'q',dot:'up',cls:''};
+    const module=chip.module||rowModule;
+    return {label:module?`${moduleTitle(module)} · ${codes}`:codes,av:'',avClass:'',dot:'up',cls:''};
   }
   return {label:chip.label||'no page',av:'?',avClass:'gap',dot:'gap',cls:'gap'};
 }
@@ -270,13 +326,13 @@ const gapCount=n=>`${n} citation${n===1?'':'s'} without a page`;
 // The "handoff row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
 function chipsMarkup(key,counted=true) {
   const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
-  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" aria-label="Handoff row, line ${item.line}"><span class="av cp">${esc(shortCode(item.module))}</span>L${item.line}<span class="dot row"></span></button>`:'';
+  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" title="Handoff row, line ${item.line}" aria-label="Handoff row, line ${item.line}">Handoff<span class="dot row"></span></button>`:'';
   const gaps=found.filter(unresolvedGap).length;
   const count=counted&&gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
   return chipSet([row,...found.map((chip,index)=>{
     if(unresolvedGap(chip))return '';
     const view=chipView(chip,item?.module),title=view.title||chip.reason;
-    return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${title?`title="${esc(title)}"`:''}><span class="av ${view.avClass}">${esc(view.av)}</span>${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
+    return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${title?`title="${esc(namedText(title,item?.output))}"`:''}>${view.av?`<span class="av ${view.avClass}">${esc(view.av)}</span>`:''}${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
   }),count].filter(Boolean));
 }
 const MISSING_CELL=/^(|[—–-]|Not supplied)$/i;
@@ -307,7 +363,12 @@ function keyNumbersChoice(id) {
   }
   return null;
 }
-const sourceTable=(id,caption,block,numeric,columns,rows)=>`<div class="table-card"><table><caption class="sr-only">${esc(plain(caption))}</caption><thead><tr>${columns.map(c=>`<th scope="col"${numeric[c]?' class="num"':''}>${esc(block.headers[c])}</th>`).join('')}<th scope="col">Source</th></tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>cellView(row.cells[c],numeric[c])).join('')}<td>${chipsMarkup(`${id}:${row.line}`)}</td></tr>`).join('')}</tbody></table>`;
+// A column whose cells are all bare step ids names nothing the reader can use: it is not drawn.
+const stepColumn=(block,c)=>block.rows.length>0&&block.rows.every(r=>STEP_ID.test(plain(r.cells[c]??'').trim()));
+const sourceTable=(id,caption,block,numeric,allColumns,rows)=>{
+  const columns=allColumns.filter(c=>!stepColumn(block,c));
+  return `<div class="table-card"><table><caption class="sr-only">${esc(plain(caption).replace(METHOD_CODE,''))}</caption><thead><tr>${columns.map(c=>`<th scope="col"${numeric[c]?' class="num"':''}>${esc(block.headers[c])}</th>`).join('')}<th scope="col">Source</th></tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>cellView(row.cells[c],numeric[c])).join('')}<td>${chipsMarkup(`${id}:${row.line}`)}</td></tr>`).join('')}</tbody></table>`;
+};
 function keyNumbers(id) {
   const pick=keyNumbersChoice(id);
   if(!pick)return '';
@@ -328,13 +389,13 @@ function reportHead(id) {
   const {meta,usedIn,flag}=headTools(module,context,id);
   const acceptance=runAcceptanceText(context);
   const declared=declaredBadge(out.state.declared);
-  return `<div class="module-head" id="head"><div><h2 title="${esc(module)}">${esc(moduleNames[module])}</h2><div class="sub"><span>${esc(module)}</span></div></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${declared}${meta}${usedIn}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${declared}${meta}${usedIn}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
   if(!quoted)return '';
   const facts=summary?`<dl><span class="row"><dt>Confidence</dt><dd>${esc(summary.confidence)}</dd></span><span class="row"><dt>Main limitation</dt><dd>${rich(summary.limitation)}</dd></span></dl>`:'';
-  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${source.split('/').pop()} · line ${quoted.line}`)}">View source</button></div></div>`;
+  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${handoffLabel(source)}, line ${quoted.line}`)}">View source</button></div></div>`;
 }
 // One chip-dot legend per set of charts, under the last card.
 // A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
@@ -509,13 +570,11 @@ const moduleHref=id=>routeHref(id,lastSection.get(current?.context+':'+id)||firs
 function moduleLink(id,label){return `<a class="text-action" href="${moduleHref(id)}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}
 // Rows repeat the same two actions, so each is an icon; its accessible name and tooltip still say what it does.
 const iconAction=(action,target,href,name,download=false)=>`<a class="icon-action" href="${esc(href)}" ${download?'download':''} aria-label="${esc(`${action}: ${target}`)}" title="${action}">${icon(name)}</a>`;
-// A module with no name keeps its code alone.
-const nameThenCode=code=>moduleNames[code]&&moduleNames[code]!==code?`${moduleNames[code]} · ${code}`:code;
 function sourceInventory(context) {
-  const identity=f=>`<details><summary>File identity</summary><p>${esc(f.file)}</p><p class="hash">SHA-256 ${f.sha256}</p></details>`;
+  const identity=f=>`<details><summary>File identity</summary><p>${esc(handoffLabel(f.file))}</p><p class="hash">SHA-256 ${f.sha256}</p></details>`;
   const rows=Object.entries(contexts[context].modules).flatMap(([module,entry])=>[
-    ...entry.outputs.map(id=>{const out=data[id];return `<section><div><h3>${esc(nameThenCode(module))}</h3><p>${esc(out.label)}</p>${out.scope==='Retained module output'?'':`<span class="badge badge-gray">${esc(out.scope)}</span>`}</div><div>${iconAction('Open output',`${module} ${moduleNames[module]}, ${out.label}`,routeHref(module,modules[id].first,null,context,out.source),'arrow-right')}${iconAction('Download original handoff',`${module} ${moduleNames[module]}, ${out.label}`,out.href,'download',true)}</div>${identity(out)}</section>`;}),
-    ...entry.inputs.map(id=>{const f=store.inputs[id];return `<section><div><h3>${esc(nameThenCode(module))}</h3><p>${esc(f.source)}</p><span class="badge badge-gray">Input</span></div><div>${iconAction('Download original file',`${module} ${moduleNames[module]}, ${f.source}`,f.href,'download',true)}</div>${identity(f)}</section>`;})
+    ...entry.outputs.map(id=>{const out=data[id];const target=out.label===module?moduleTitle(module):`${moduleTitle(module)}, ${out.label}`;return `<section><div><h3>${esc(moduleTitle(module))}</h3>${out.label===module?'':`<p>${esc(out.label)}</p>`}${out.scope==='Retained module output'?'':`<span class="badge badge-gray">${esc(out.scope)}</span>`}</div><div>${iconAction('Open output',target,routeHref(module,modules[id].first,null,context,out.source),'arrow-right')}${iconAction('Download original handoff',target,out.href,'download',true)}</div>${identity(out)}</section>`;}),
+    ...entry.inputs.map(id=>{const f=store.inputs[id];return `<section><div><h3>${esc(moduleTitle(module))}</h3><p>${esc(f.source)}</p><span class="badge badge-gray">Input</span></div><div>${iconAction('Download original file',`${moduleTitle(module)}, ${f.source}`,f.href,'download',true)}</div>${identity(f)}</section>`;})
   ]);
   if(!rows.length)return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>No retained files for this run</h2><p>No module outputs or inputs were found in this run’s folder.</p></div><a class="text-action switch-case" href="#W-Library/cases">Choose another run</a>`;
   return `<div class="source-inventory">${rows.join('')}</div>`;
@@ -718,7 +777,7 @@ function librarySources(run) {
     const s=Object.hasOwn(sources,id)?sources[id]:null;
     if(!s)return `<div id="source-${esc(id)}" tabindex="-1"><p>${esc(id)} · source record not served</p></div>`;
     const quote=String(s.quote);
-    return `<div id="source-${esc(id)}" tabindex="-1"><p>${esc(`${s.path} · line ${s.line}`)}</p><blockquote>${esc(quote.length>1500?`${quote.slice(0,1500)}… [full capture in linked file]`:quote)}</blockquote>${libraryPath(s.href)?`<a href="${esc(s.href)}" target="_blank" rel="noopener">Open retained source ↗</a>`:''}</div>`;
+    return `<div id="source-${esc(id)}" tabindex="-1"><p>${esc(`${handoffLabel(s.path)} · line ${s.line}`)}</p><blockquote>${esc(quote.length>1500?`${quote.slice(0,1500)}… [full capture in linked file]`:quote)}</blockquote>${libraryPath(s.href)?`<a href="${esc(s.href)}" target="_blank" rel="noopener">Open retained source ↗</a>`:''}</div>`;
   };
   return `<details class="source-details" id="metric-sources"><summary>Sources &amp; definitions · ${ids.length} references</summary>${ids.map(block).join('')}</details>`;
 }
@@ -793,6 +852,8 @@ function updateLibrary(panel=false) {
   $('run-detail').hidden=!view.rows.some(r=>r.id===libraryState.selected);
   $('library-coverage').innerHTML=libraryCoverage(view);
   $('library-clear').hidden=!libraryFiltered();
+  // What was redrawn is named as the route's own draw names it.
+  for(const id of ['library-results','run-detail','library-coverage',...(panel?['library-filters']:[])])nameCodes($(id));
   for(const group of Object.keys(LIBRARY_GROUPS))$(`${group}-filter-count`).textContent=libraryActive(group)?`· ${libraryActive(group)} active`:'';
   writeLibraryHash();
 }
@@ -810,12 +871,12 @@ function reportList(context) {
 }
 function reportView(report,context) {
   const ctx=contexts[context],rows=report.builtFrom.map(b=>{
-    if(!b.run)return `<tr><th scope="row">${esc(b.module)}</th><td>No matching run file</td><td>${esc(b.source)}</td><td>${b.sha256.slice(0,12)}</td></tr>`;
+    if(!b.run)return `<tr><th scope="row">${esc(moduleTitle(b.module))}</th><td>No matching run file</td><td>Handoff</td><td>${b.sha256.slice(0,12)}</td></tr>`;
     const href=b.output?routeHref(b.module,modules[b.source].first,null,b.run,data[b.source].source):routeHref('W-Evidence','sources',null,b.run);
-    return `<tr><th scope="row">${esc(b.module)}</th><td>${esc(contexts[b.run].run)}</td><td><a href="${href}">${esc(b.source.split('/').at(-1))}</a></td><td>${b.sha256.slice(0,12)}</td></tr>`;
+    return `<tr><th scope="row">${esc(moduleTitle(b.module))}</th><td>${esc(contexts[b.run].run)}</td><td><a href="${href}">Handoff</a></td><td>${b.sha256.slice(0,12)}</td></tr>`;
   }).join('');
   const handoffs=new Set(report.builtFrom.map(b=>b.module)).size,unmatched=new Set(report.builtFrom.filter(b=>!b.run).map(b=>b.module)).size;
-  const files=report.files.length?`<h3>Files in this deliverable</h3><ul>${report.files.map(f=>`<li><a href="${esc(f.href)}" download>${esc(f.name)}</a></li>`).join('')}</ul>`:'';
+  const files=report.files.length?`<h3>Files in this deliverable</h3><ul>${report.files.map(f=>`<li><a href="${esc(f.href)}" download>${esc(handoffLabel(f.name))}</a></li>`).join('')}</ul>`:'';
   const status=[report.status,ctx?'':'No matching run'].filter(Boolean).join(' · ');
   return `<div class="report-tools"><label for="report-select">Report</label><select id="report-select">${[...runReports(context)].sort(byBuild).map(r=>`<option value="${esc(r.id)}" ${r.id===report.id?'selected':''}>${esc([reportName(r),reportRunLabel(r)].filter(Boolean).join(' · '))}</option>`).join('')}</select>${status?`<span>${esc(status)}</span><i class="tool-sep" aria-hidden="true"></i>`:''}${reportAcceptance(report).html}<a href="${esc(report.download)}" download>Download original HTML</a><a href="${routeHref('W-Reports','list')}">All reports</a></div><details class="built-from"><summary>Built from ${plural(handoffs,'handoff')} · ${unmatched?`${unmatched} with no matching run file`:'each matches its run file'}${report.files.length?` · ${plural(report.files.length,'file')}`:''}</summary><div class="table-scroll"><table><thead><tr><th scope="col">Module</th><th scope="col">Run</th><th scope="col">File</th><th scope="col">SHA-256 prefix</th></tr></thead><tbody>${rows}</tbody></table></div>${files}</details><div class="frame-host"><p class="frame-status" role="status">Loading report…</p><iframe id="report-preview" title="${esc(reportName(report))} · ${esc(report.issuer)} report" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer" src="${esc(report.href)}"></iframe></div>`;
 }
@@ -834,10 +895,10 @@ function runGroups(context) {
 }
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
 function coverageStrip(entries) {
-  // The fill is not the only carrier of the state: the title and the accessible label say it in words.
+  // The fill is not the only carrier of the state: the accessible label says it in words.
   return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out,choices})=>{
     const state=out?stateWord(out.state.established):`${choices} saved outputs`;
-    return `<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" title="${esc(`${moduleNames[module]} · ${state}`)}" aria-label="${esc(`${module}, ${moduleNames[module]}, ${state}`)}">${esc(module)}</a>`;
+    return `<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" title="${esc(`${moduleNames[module]} · ${state}`)}" aria-label="${esc(`${moduleNames[module]}, ${state}`)}">${esc(moduleNames[module])}</a>`;
   }).join('')}</nav>`;
 }
 function storyCharts(id,noted) {
