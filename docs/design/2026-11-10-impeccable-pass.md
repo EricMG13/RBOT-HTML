@@ -39,6 +39,17 @@ Everywhere
   motion on fold arrows, 24px minimum on small standalone targets, sideways scroll for the run
   tables at phone widths.
 
+Second hardening pass (same day, CSS only)
+- Unbroken strings (a URL, a long identifier) wrap anywhere in the canvas and the inspector; the
+  navy band and the selected-run panel no longer widen the page with one.
+- The library table has fixed columns and a 900px minimum: a long name, sector or basis wraps in
+  its cell, and below 900px of room the table scrolls sideways in its box. Focus inside a row
+  (keyboard, tap) shows that row's bases whole; a tooltip alone left keyboard and touch without them.
+- The run tables scroll sideways by their own section's width (a container query), so a desktop
+  canvas narrowed by the inspector behaves like a phone. The Confidence column is 92px, not 10%.
+- On paper the tables drop their minimum widths; the library table sizes to its words and prints
+  its header once (Chrome drops the sort buttons from a repeated header).
+
 ## Amendments to the specs
 
 - `2026-11-09-module-report-spec.md`, Chips: "Legend line under each chart panel" becomes one legend

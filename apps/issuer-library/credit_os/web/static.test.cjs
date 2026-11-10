@@ -1181,5 +1181,20 @@ test('library: a ratio basis is clamped to three lines by CSS only; the cell and
   const views = read('views.js'), css = read('screen.css');
   assert.ok(views.includes('<span class="cell-secondary basis" title="${esc(basis)}">${esc(basis)}</span>'));
   assert.ok(css.includes('.library-table .basis{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}'));
-  assert.ok(css.includes('@media print{.library-table .basis{display:block;overflow:visible}}'));
+  assert.ok(css.includes('@media print{.library-table .basis{display:block;overflow:visible}.library-table{table-layout:auto}'));
+});
+
+test('hardening: unbroken strings wrap in the canvas, the inspector and the library table; narrow run tables scroll by their own width', () => {
+  const css = read('screen.css');
+  assert.ok(css.includes('#content,.inspector{overflow-wrap:break-word}'));
+  assert.ok(css.includes('.library-table{table-layout:fixed;min-width:900px}'));
+  // The nine fixed columns account for the whole table.
+  const widths = [...css.matchAll(/\.library-table th:nth-child\(\d\)\{width:([\d.]+)%\}/g)].map((m) => Number(m[1]));
+  assert.equal(widths.length, 9);
+  assert.equal(widths.reduce((a, b) => a + b, 0), 100);
+  // Keyboard and touch have no tooltip: focus in a row lifts the clamp.
+  assert.ok(css.includes('.library-table tr:focus-within .basis{display:block;overflow:visible}'));
+  assert.ok(/\.run-section\{container-type:inline-size\}\s*@container \(max-width:600px\)\{\.run-section \.table-scroll\{overflow-x:auto\}/.test(css));
+  // Paper has no sideways scroll: the minimum widths are dropped in print.
+  assert.ok(/@media print\{[^@]*\.library-table,table\.register,table\.open-items,table\.matrix\{min-width:0\}/.test(css));
 });

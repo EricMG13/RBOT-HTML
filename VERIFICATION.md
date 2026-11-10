@@ -36,6 +36,16 @@ the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `orig
   per row. Probe at 1440 and 1280: 12 of 12 basis cells clamped, each cell's title equals its full
   text, rows 145–161px, table 922px in 922px at 1280. Node 105 pass; the three library pytest files
   70 passed.
+- Second hardening pass (CSS only, `/impeccable harden`): headless Chrome probes on the built TDG
+  library. Six routes × seven widths (1440–500px), inspector open and closed: no page or canvas
+  overflow. Hostile text (240-character unbroken words, long URLs, Arabic/Japanese/emoji) in handoff
+  fields and library rows at 1280 and 500px: none after the fix (before: band +1,194px, library
+  table 7,802px in 922px). Edge states (malformed and unknown run-part routes, nothing established,
+  no reader summaries, 400 findings, no outputs, 404 library rows in 50ms): no script errors.
+  Library and run report printed to PDF and read. 106 node tests, 94 pytest (library set, browser
+  included), quality gate exit 0. Known: on portrait A4 the printed library table runs 8px past
+  its card edge (nine columns of whole words); nothing is cut. Module tables with hostile cell text
+  scroll sideways in their own box, as before.
 - Not verified: a real print dialog and printers; Safari and Firefox; a screen reader; Windows
   forced colours (rule written, not rendered); touch input; the inbox-built library with Run
   activity; runs without charts or with a committee band; whether a keyboard-only reader finds

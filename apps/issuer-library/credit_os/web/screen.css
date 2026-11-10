@@ -136,21 +136,27 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .run-id{font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;overflow-wrap:anywhere}
 /* A ratio's basis shows three lines in the row; the full sentence is the title and is in the selected-run panel. Print shows it whole. */
 .library-table .basis{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
-@media print{.library-table .basis{display:block;overflow:visible}}
+/* Keyboard and touch have no tooltip: while focus is in a row (its name or its Open run link), the row shows each basis whole. */
+.library-table tr:focus-within .basis{display:block;overflow:visible}
 /* The run's identity gets the room; a date stays on one line. Below 1300px the cells tighten so nine columns fit without a sideways scroll. */
-.library-table th:first-child{width:18%}.library-table th{vertical-align:middle}.library-table td:nth-child(3) .cell-primary{white-space:nowrap}
+/* Fixed columns: an unbroken name, sector or basis wraps in its cell and cannot widen the table. Below 900px of room the table keeps that width and its box scrolls sideways. */
+.library-table{table-layout:fixed;min-width:900px}.library-table th,.library-table td{overflow-wrap:break-word}.library-table th{vertical-align:middle;white-space:normal}
+.library-table th:nth-child(1){width:16%}.library-table th:nth-child(2){width:11%}.library-table th:nth-child(3){width:12.5%}.library-table th:nth-child(4){width:9.5%}.library-table th:nth-child(5){width:9.5%}.library-table th:nth-child(6){width:12.5%}.library-table th:nth-child(7){width:12%}.library-table th:nth-child(8){width:7.5%}.library-table th:nth-child(9){width:9.5%}
+.library-table td:nth-child(3) .cell-primary{white-space:nowrap}
 @media(max-width:1300px){.library-table th,.library-table td{padding-left:10px;padding-right:10px}}
+/* Paper is narrower than the table's screen minimum and cannot scroll: columns size to their words again and the date may wrap. The header prints once: Chrome drops the sort buttons from a repeated header, leaving two labels of nine. */
+@media print{.library-table .basis{display:block;overflow:visible}.library-table{table-layout:auto}.library-table thead{display:table-row-group}.library-table th,.library-table td{padding-left:4px;padding-right:4px}.library-table td:nth-child(3) .cell-primary{white-space:normal}}
 .cell-primary{display:block;font-weight:600}.cell-primary.missing{color:var(--text-quaternary);font-weight:400}
 .cell-secondary{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}
 .run-link,.report-link{font-size:var(--fs-compact);font-weight:600}.report-link{white-space:nowrap}.library-table td{font:400 var(--fs-control)/20px 'Red Hat Text',sans-serif}
 .progress-track{display:block;height:6px;margin:4px 0;border-radius:var(--radius-inline);background:var(--gray-200)}.progress-track i{display:block;height:100%;border-radius:var(--radius-inline);background:var(--blue)}
 .library-empty{padding:32px 0;max-width:68ch}.library-empty h2{margin-bottom:10px}.library-empty .primary-action{margin-top:12px}
-.detail-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.detail-actions{display:flex;gap:12px;flex-wrap:wrap}
+.detail-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.detail-head>div:first-child{min-width:0}.run-detail{overflow-wrap:anywhere}.detail-actions{display:flex;gap:12px;flex-wrap:wrap}
 .detail-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
 .run-detail h3{margin:16px 0 6px}.gap-list{margin:0;padding-left:20px}
 .completion-box{margin-top:16px;padding:12px 14px;border:1px solid var(--amber-border);border-radius:var(--radius-control);background:var(--amber-bg);color:var(--amber)}.completion-box strong{display:block}
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.metric-item{padding:10px 12px;border:1px solid var(--border-secondary);border-radius:var(--radius-control)}
+.metric-item{min-width:0;padding:10px 12px;border:1px solid var(--border-secondary);border-radius:var(--radius-control)}
 .metric-label{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}.metric-value{display:block;font:700 20px/28px 'Red Hat Display',sans-serif}.metric-value small{margin-left:4px;font:400 var(--fs-compact)/16px 'Red Hat Text',sans-serif}
 .metric-item p{font-size:var(--fs-compact);color:var(--text-tertiary)}
 .artifact-list{margin:0;padding-left:20px}.artifact-list li{overflow-wrap:anywhere}.artifact-list small{display:block;font-size:var(--fs-label);color:var(--text-tertiary)}
@@ -354,7 +360,7 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .band p{margin:0;font-size:15px;line-height:1.55;font-weight:500;text-wrap:pretty}
 .band dl{margin:0;font-size:var(--fs-compact);line-height:1.5}
 .band dt{color:#c9cfee;display:inline}
-.band dd{display:inline;margin:0 0 0 6px;color:#fff}
+.band dd{display:inline;margin:0 0 0 6px;color:#fff}.band{overflow-wrap:anywhere}
 .band .row{display:block;margin-top:4px}
 .band .src{grid-column:1/-1;display:flex;gap:8px;align-items:center;margin-top:4px;font-size:var(--fs-label);color:#c9cfee;flex-wrap:wrap}
 .band-link{color:#c9cfee;text-decoration:underline;text-underline-offset:3px;font-size:var(--fs-label);padding:0;background:none;border:0}
@@ -482,20 +488,21 @@ table.register th,table.register td,table.open-items th,table.open-items td,tabl
 table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text',sans-serif;font-size:var(--fs-compact)}
 /* Fixed columns: one unbroken string (a URL in a limitation) wraps inside its cell and cannot widen the page. */
 table.register,table.open-items,table.matrix{table-layout:fixed}table.register thead th,table.open-items thead th,table.matrix thead th{white-space:normal}
-table.register th:nth-child(1){width:15%}table.register th:nth-child(2){width:17%}table.register th:nth-child(3){width:33%}table.register th:nth-child(5){width:10%}
+table.register th:nth-child(1){width:15%}table.register th:nth-child(2){width:17%}table.register th:nth-child(3){width:33%}table.register th:nth-child(5){width:92px}
 table.open-items th:nth-child(1){width:15%}table.open-items th:nth-child(2){width:19%}
 table.matrix th:nth-child(1){width:30%}table.matrix th:nth-child(2){width:20%}table.matrix th:nth-child(n+4){width:14%}
-/* At phone widths five columns cannot share the screen: the table keeps a readable width and scrolls sideways in its box. */
-@media(max-width:720px){.run-section .table-scroll{overflow-x:auto}table.register,table.open-items{min-width:640px}table.matrix{min-width:520px}}
+/* Five columns need room. The measure is the section's own width, so a phone and a desktop canvas narrowed by the inspector get the same answer: the table keeps a readable width and scrolls sideways in its box. */
+.run-section{container-type:inline-size}
+@container (max-width:600px){.run-section .table-scroll{overflow-x:auto}table.register,table.open-items{min-width:640px}table.matrix{min-width:520px}.run-section .table-scroll thead th{top:0}}
 table.matrix td.num{text-align:right;font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums}table.matrix thead th:nth-child(n+4){text-align:right}
 .run-inventory{margin:22px 0 8px}
 /* Hardening (design pass 2026-11-10). */
-/* An unbroken string in a handoff sentence wraps instead of widening the page. */
-.story-module,.na-line,.run-section{overflow-wrap:break-word}
+/* An unbroken string in handoff text (a URL, a long identifier) wraps where it would otherwise widen the canvas or the inspector. Normal text is unaffected: break-word breaks a word only when it cannot fit on a line of its own. */
+#content,.inspector{overflow-wrap:break-word}
 /* Pointer targets reach 24px where they stood alone below it. */
 .run-link{display:inline-block;padding:4px 0}.library-table th button{min-height:24px}#library-filters summary{min-height:24px}details.fold>summary,details.audit>summary{min-height:24px}
 @media(prefers-reduced-motion:reduce){details.audit>summary img,details.fold>summary img{transition:none}}
 /* Forced colours drop backgrounds, so a filled coverage cell is restated in system colours. */
 @media(forced-colors:active){a.cov.filled{forced-color-adjust:none;background:Highlight;border-color:Highlight;color:HighlightText}}
 /* Print: the canvas is the document. The app frame goes, nothing clips or scrolls, and a finding or a table row is not split across pages. Closed parts print closed. Fills print as drawn: the navy band and a filled coverage cell carry white text. */
-@media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench,.workbench.has-evidence{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}article.finding,tr,.chart-row,.na-line{break-inside:avoid}h2,h3,h4,.story-head{break-after:avoid}a{text-decoration:none}}
+@media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench,.workbench.has-evidence{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}.library-table,table.register,table.open-items,table.matrix{min-width:0}article.finding,tr,.chart-row,.na-line{break-inside:avoid}h2,h3,h4,.story-head{break-after:avoid}a{text-decoration:none}}
