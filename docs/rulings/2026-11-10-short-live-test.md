@@ -42,3 +42,9 @@ executed legal documents as a prohibition. Asked "Rerun the four modules with le
 to "none" (about USD 1.10, cap USD 10)?", the user said "Yes, rerun": one fresh launch of the same
 four modules, the context changed only in `attachments.legal_documents` (`executed` to `none`),
 cap USD 10, in `/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`.
+
+Fifth launch: `tdg-forecast-004` gave every driver, but three ratios at 38 decimal places, so the
+forecast was dropped at delivery (fixed on `claude/forecast-publication`, 31a39f9). Asked "Run one
+more paid live test to prove the forecast publishes (about USD 1.30, cap USD 10)?", the user said
+"Yes, run it": one fresh launch of the same four modules with the run-004 context, cap USD 10, in
+`/private/tmp/claude-501/rbot-live6/runs/tdg-forecast-005`.
