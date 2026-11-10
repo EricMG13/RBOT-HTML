@@ -124,9 +124,10 @@ def plan(
 ) -> tuple[str, ...]:
     remaining = dependencies(requested, retained=retained)
     if retained:
-        # Pins that are exactly the fresh order's own earlier modules (what a resume records)
-        # keep the fresh order: re-planning on them alone would let an unretained module run
-        # before a retained one. Narrower pins, or pins that pull in more modules, plan as pinned.
+        # Pins that are exactly the fresh order's own earlier modules (what a resume recorded
+        # before CP-OS sent producers only) keep the fresh order: re-planning on them alone would
+        # let an unretained module run before a retained one. Narrower pins, or pins that pull
+        # in more modules, plan as pinned; pins equal to the producers plan as fresh.
         fresh = plan(requested)
         if all(
             set(retained[m]) == set(fresh[: fresh.index(m)]) for m in retained if m in fresh

@@ -381,7 +381,8 @@
       "CP-1"
     ],
     "optional": [
-      "CP-1D"
+      "CP-1D",
+      "CP-1A"
     ],
     "edge_rules": {
       "CP-1": "restricted"
@@ -516,7 +517,10 @@
       "CP-2E",
       "CP-2D",
       "CP-3C",
-      "CP-3D"
+      "CP-3D",
+      "CP-1B",
+      "CP-1C",
+      "CP-4"
     ],
     "purpose": "Runs the investment-committee debate and challenge, producing an action bias.",
     "table_ids": [
