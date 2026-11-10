@@ -667,7 +667,7 @@ const BASIS_DEFAULT = {no:'auto', yes:'issuer_trading'};
 const SCALES = {"S&P":["AAA","AA+","AA","AA-","A+","A","A-","BBB+","BBB","BBB-","BB+","BB","BB-","B+","B","B-","CCC+","CCC","CCC-","CC","C","SD","D"],"Moody's":["Aaa","Aa1","Aa2","Aa3","A1","A2","A3","Baa1","Baa2","Baa3","Ba1","Ba2","Ba3","B1","B2","B3","Caa1","Caa2","Caa3","Ca","C"],"Fitch":["AAA","AA+","AA","AA-","A+","A","A-","BBB+","BBB","BBB-","BB+","BB","BB-","B+","B","B-","CCC+","CCC","CCC-","CC","C","RD","D"]};
 const UNRATED = ["Withdrawn", "Not rated"];
 // Files the launcher reads (cpos_launch.SOURCE_SUFFIXES) and names it skips (inbox/drops.py check).
-const SOURCE_SUFFIXES = ['.pdf','.htm','.html','.txt','.md','.xlsx','.csv','.json','.jsonl'];
+const SOURCE_SUFFIXES = ['.pdf','.htm','.html','.docx','.txt','.md','.xlsx','.csv','.json','.jsonl'];
 const MAX_ISSUER_ID = 40; // inbox/drops.py MAX_ISSUER_ID
 const STALE_DAYS = 30, PEER_MONTHS = 12, PRECEDENT_MONTHS = 36, MIN_ADMITTED = 3;
 
@@ -1563,7 +1563,7 @@ function renderReview(sq, o, R) {
   setHTML($('dropcheck'), [
     'Save <code>context.json</code> at the top of the issuer folder, beside the files. Keep exactly one context file there: the inbox refuses a folder with two, or with none at the top.',
     files.length ? 'Check that the folder holds what you declared: ' + esc(files.join(', ')) + '. Every module reads these answers.' : 'You declared no legal documents or attachments; that is what every module will be told.',
-    'The run reads PDF with selectable text (not a scan), HTML, TXT, Markdown, XLSX, CSV, JSON and JSONL. Save Word, PowerPoint, old Excel and e-mail files as PDF; an empty or scanned PDF stops the run before it starts.',
+    'The run reads PDF with selectable text (not a scan), Word (.docx), HTML, TXT, Markdown, XLSX, CSV, JSON and JSONL. Save old Word (.doc), PowerPoint, old Excel and e-mail files as PDF; an empty or scanned PDF stops the run before it starts.',
     'Names starting with <code>.</code>, <code>_</code> or <code>~$</code> are skipped, and a shortcut or link refuses the drop.',
     FIXED_PATH ? `Copy the folder back into <code>inbox\\${esc(dest)}\\</code>, where this form came from. Its progress shows under Run activity in the library.` : `Copy the folder into <code>inbox\\${esc(dest)}\\</code>: a context that names another pathway than its folder is refused.`,
     'A refused drop moves to <code>inbox\\failed\\</code> with a <code>WHY.txt</code>; it costs nothing. Once a run has started, any change to the context means a new run.'

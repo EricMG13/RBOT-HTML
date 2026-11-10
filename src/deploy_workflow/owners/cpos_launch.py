@@ -40,6 +40,7 @@ from deploy_workflow.handoff_delivery import (
     MarkdownRoute,
     section,
 )
+from deploy_workflow.docx_text import docx_text
 from deploy_workflow.html_text import convert_html
 from deploy_workflow.markdown_delivery import (
     STRIP_FIGURES,
@@ -80,9 +81,11 @@ from deploy_workflow.workflow import _put
 
 ROOT = Path(__file__).resolve().parents[3]
 HTML_SUFFIXES = frozenset({".htm", ".html"})
+# Converted to text pages, pinned as ``<name>.jsonl``: HTML filings and Word documents.
+CONVERTED_SUFFIXES = HTML_SUFFIXES | {".docx"}
 PAGE_CHARS = 3000  # cp-os's page for an HTML filing: eight pages per read is at most about 24 KB.
 SOURCE_SUFFIXES = frozenset(
-    {".pdf", ".htm", ".html", ".txt", ".md", ".xlsx", ".csv", ".json", ".jsonl"}
+    {".pdf", ".htm", ".html", ".docx", ".txt", ".md", ".xlsx", ".csv", ".json", ".jsonl"}
 )
 NOT_ANALYTICAL = frozenset({"CP-MODEL", "CP-8"})  # In the presets; each has its own route.
 FIRST_PAGES = 3  # Pages of each source kept for the offline document guess (page 1 is the cover).
@@ -299,14 +302,15 @@ def _sha(raw: bytes) -> str:
 
 
 def _html_page_rows(name: str, raw: bytes) -> bytes:
-    """An HTML filing's visible text as the page rows ``_pages`` reads, in cp-os's page size and
-    headed by the filed document's identity. As raw bytes a filing is mostly markup, and only UTF-8
-    decodes at all. Empty when the filing has no visible text."""
-    text = convert_html(raw).text
+    """An HTML filing's or Word document's text as the page rows ``_pages`` reads, in cp-os's page
+    size and headed by the file's identity. As raw bytes a filing is mostly markup and a Word file
+    a ZIP archive. Empty when the file has no text."""
+    word = name.lower().endswith(".docx")
+    text = docx_text(raw) if word else convert_html(raw).text
     if not text.strip():
         return b""
     pages: list[str] = []
-    page = f"Visible text of {name}, sha256 {_sha(raw)}.\n"
+    page = f"{'Text' if word else 'Visible text'} of {name}, sha256 {_sha(raw)}.\n"
     for line in text.splitlines():
         # convert_html runs prose together on one line, so a line alone can exceed many pages.
         for piece in textwrap.wrap(line, PAGE_CHARS - 1, replace_whitespace=False):
@@ -345,7 +349,7 @@ def _issuer_files(
             ignored.append(name)
             continue
         raw = path.read_bytes()
-        is_html = path.suffix.lower() in HTML_SUFFIXES
+        is_html = path.suffix.lower() in CONVERTED_SUFFIXES
         key = f"{name}.jsonl" if is_html else name
         if key in origins:  # An HTML filing's text is pinned as `<name>.jsonl`, a real file name.
             raise LaunchRefused(
