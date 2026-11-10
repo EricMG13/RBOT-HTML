@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unicodedata
 from collections.abc import Iterator
@@ -138,3 +139,41 @@ def test_hostile_names_and_ids_stay_under_issuers_in_separate_folders(layout, tm
         assert root in filed.resolve().parents
         assert owner.setdefault(folder.resolve(), issuer_id) == issuer_id
     assert len(owner) == len(cases)
+
+
+def test_m3_the_registry_save_waits_out_a_refused_replace(layout, monkeypatch):
+    real, refusals = os.replace, [2]
+
+    def refuse_twice(source, target):
+        if refusals[0]:
+            refusals[0] -= 1
+            raise PermissionError(13, "in use", str(target))
+        real(source, target)
+
+    monkeypatch.setattr(os, "replace", refuse_twice)
+    folder, _ = issuer_folder(layout, "acme", "Acme")
+    assert refusals == [0] and folder.name == "Acme (acme)"
+
+
+def test_l2_a_report_already_filed_with_the_same_bytes_is_reused(layout, tmp_path):
+    report = tmp_path / "report.html"
+    report.write_bytes(b"one")
+    kw = {
+        "issuer_id": "acme",
+        "issuer_name": "Acme",
+        "as_of": "2026-11-09",
+        "pathway": "earnings_update",
+    }
+    first = file_report(layout, report, **kw)
+    again = file_report(layout, report, **kw)  # after a stop before the record was saved
+    assert again == first
+    assert sorted(p.name for p in first.parent.iterdir()) == ["2026-11-09 earnings_update.html"]
+    other = file_report(layout, report, claimed=frozenset({first}), **kw)  # another run's file
+    assert other.name == "2026-11-09 earnings_update-2.html"
+    assert file_report(layout, report, claimed=frozenset({first}), **kw) == other
+
+
+def test_l5_a_long_issuer_name_is_cut_and_the_issuer_id_stays_whole(layout):
+    folder, _ = issuer_folder(layout, "x" * 40, "L" * 200)
+    assert folder.name == "L" * (80 - len(" (" + "x" * 40 + ")")) + f" ({'x' * 40})"
+    assert len(folder.name) == 80

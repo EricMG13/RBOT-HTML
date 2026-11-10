@@ -33,14 +33,42 @@ class StartupRefused(ValueError):
     """The watcher cannot launch runs, or another watcher already owns this folder."""
 
 
+PACKAGE_LOGGER = "deploy_workflow.inbox"
+
+
+class _RootHandler(logging.FileHandler):
+    """The watcher.log handler of one root, attached to the package logger."""
+
+    def __init__(self, layout: Layout, own: str) -> None:
+        super().__init__(layout.logs / "watcher.log", encoding="utf-8")
+        self.root, self._own, self._others = layout.root, own, f"{own.rsplit('.', 1)[0]}."
+        self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Another root's watcher logger is not ours; runs and activity records carry no root.
+        return record.name == self._own or not record.name.startswith(self._others)
+
+
 def open_log(layout: Layout, name: str) -> logging.Logger:
-    logger = logging.getLogger(f"{name}.{layout.root}")
-    if not logger.handlers:
-        handler = logging.FileHandler(layout.logs / "watcher.log", encoding="utf-8")
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-    return logger
+    """The watcher's logger, with one file handler on the package logger ``deploy_workflow.inbox``.
+
+    ``watcher``, ``runs`` and ``activity`` all propagate to it, so their documented fail-open
+    warnings reach ``_engine/logs/watcher.log`` as well as the watcher's own lines. One file per
+    root; ``close_log`` removes the handler."""
+    package = logging.getLogger(PACKAGE_LOGGER)
+    own = f"{name}.{layout.root}"
+    if not any(isinstance(h, _RootHandler) and h.root == layout.root for h in package.handlers):
+        package.addHandler(_RootHandler(layout, own))
+    package.setLevel(logging.INFO)
+    return logging.getLogger(own)
+
+
+def close_log(layout: Layout) -> None:
+    package = logging.getLogger(PACKAGE_LOGGER)
+    for handler in list(package.handlers):
+        if isinstance(handler, _RootHandler) and handler.root == layout.root:
+            package.removeHandler(handler)
+            handler.close()
 
 
 def check_launchable(config_id: str, ruling: Path) -> None:

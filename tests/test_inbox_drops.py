@@ -548,3 +548,54 @@ def test_unreadable_ignores_a_sharing_violation(layout, monkeypatch):
 
 def test_unreadable_does_not_open_a_missing_entry(layout):
     assert unreadable(layout.inbox / "credit_snapshot" / "nothing") is None
+
+
+def test_m1_claim_raises_an_error_that_is_not_a_busy_file(layout):
+    entry = drop(layout, "credit_snapshot", "acme", {"a.pdf": b"1"})
+    pathway = entry.parent
+    pathway.chmod(0o555)  # entries can be read but not moved out
+    try:
+        with pytest.raises(PermissionError):
+            claim(layout, entry, "c1")
+    finally:
+        pathway.chmod(0o755)
+    assert entry.exists()
+
+
+@pytest.mark.parametrize("code", [32, 33])
+def test_m1_claim_returns_none_for_a_sharing_violation(layout, monkeypatch, code):
+    entry = drop(layout, "credit_snapshot", "acme", {"a.pdf": b"1"})
+
+    def busy(source, target):
+        error = OSError("in use")
+        error.winerror = code  # type: ignore[attr-defined]
+        raise error
+
+    monkeypatch.setattr(os, "rename", busy)
+    assert claim(layout, entry, "c1") is None
+
+
+def test_m4_a_root_on_a_network_path_is_refused(tmp_path):
+    for text in ("\\\\server\\share\\inbox", "//server/share/inbox"):
+        with pytest.raises(ValueError, match="own disk"):
+            ensure_layout(Path(text))
+
+
+def test_l1_a_claimed_loose_file_keeps_its_own_name_when_rejected(layout):
+    stray = layout.inbox / "loose.pdf"
+    stray.write_bytes(b"1")
+    claimed = claim(layout, stray, "20261109-134102-01")
+    assert claimed is not None
+    dest = reject(layout, claimed, "loose.pdf", "not a folder", NOW)
+    assert sorted(p.name for p in dest.iterdir()) == ["WHY.txt", "loose.pdf"]
+
+
+def test_l5_an_issuer_id_over_40_characters_is_rejected(tmp_path):
+    body = json.loads(CTX_SNAPSHOT)
+    body["identity"]["issuer_id"] = "a" * 41
+    folder = make(tmp_path, {"context.json": json.dumps(body).encode(), "a.pdf": b"1"})
+    with pytest.raises(DropRejected, match="issuer_id is 41 characters; use at most 40"):
+        check(folder, "credit_snapshot")
+    body["identity"]["issuer_id"] = "a" * 40
+    folder = make(tmp_path, {"context.json": json.dumps(body).encode(), "a.pdf": b"1"}, "ok")
+    assert check(folder, "credit_snapshot").run.identity.issuer_id == "a" * 40

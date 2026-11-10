@@ -105,13 +105,22 @@ A drop is refused, with the reason in `WHY.txt`, when:
 - it has no context file, or more than one;
 - the context file is invalid, or names another pathway than the folder it was dropped in;
 - it has no source file the launcher can read;
+- its `issuer_id` is longer than 40 characters;
 - it holds a symbolic link or junction (Windows shortcut files are not links; they are ignored
   like any unsupported file) or a special file;
 - it cannot be read;
 - the launcher's offline check refuses it (the same check as a run without `--live`).
 
-A loose file, or a folder placed in `inbox\` outside a pathway folder, is refused too. Fix the
-folder and drop it again.
+A loose file, or a folder placed in `inbox\` outside a pathway folder, is refused too, and keeps
+its own name inside its `inbox\failed\` folder. Fix the folder and drop it again. Folders and
+files whose names start with `.` or `~$` (and `Thumbs.db`, `desktop.ini`) are ignored without a
+report. The `inbox\failed\<time>` folder names use the watcher machine's local time; Run
+activity shows UTC.
+
+A ready drop that the watcher cannot move out of the inbox (its account lacks the right to move
+it, or `_engine` is on another volume) stays where it is. It is logged once in
+`_engine\logs\watcher.log`, and Run activity shows a note naming the folder and the error until
+the drop is taken in or removed.
 
 A drop is put back in the inbox only if its first record cannot be saved, and never after that.
 If it cannot be moved to `inbox\failed\`, it stays in
@@ -159,7 +168,7 @@ The watcher refuses to start when the provider key is missing from its environme
 another watcher already holds `_engine\watcher.lock` for that folder. The watcher holds an
 operating-system file lock on that file for as long as it runs. A second watcher on the same
 folder is refused with exit code 2 and "another watcher is running on this folder (<host>
-<pid>)". Run the watcher on one machine only. The lock depends on the file system honouring file
+<pid>)" (on Windows the holder cannot be read, so the text reads "(no details)"). Run the watcher on one machine only. The lock depends on the file system honouring file
 locks: a local disk does; do not rely on it across machines. Press Ctrl-C to stop it; runs already started keep going, and a restarted watcher
 picks them up. Its log is `_engine\logs\watcher.log`.
 
@@ -179,8 +188,10 @@ the account that runs the watcher; nothing reads a credential file.
 ### Start it at boot (Windows)
 
 In Task Scheduler, create a task that runs "At startup" under a service account whose environment
-holds the provider key. The action is `Start watcher.cmd <root>` from the package folder. Use
-a full local path or a UNC path for `<root>`, not a mapped drive letter (mapped drives do not
+holds the provider key. The action is `Start watcher.cmd <root>` from the package folder. `<root>`
+must be a folder on the watcher machine's own disk, shared to analysts: the USD 20 cap depends on
+marker files that must not sit on a network or synced path, and the watcher refuses a root that
+starts with `\\` or `//`. Use a full local path, not a mapped drive letter (mapped drives do not
 exist at start-up). Put the path to `Start watcher.cmd` in quotes, because it holds a space. Do
 not end `<root>` with a backslash. The setup person sets the folder permissions:
 

@@ -55,7 +55,13 @@ class Settings:
     settle_seconds: float = 120
     poll_seconds: float = 10
     ruling: Path = ROOT / "docs/rulings/2026-11-09-inbox-automation.md"
-    launcher: tuple[str, ...] = (sys.executable, "-m", "deploy_workflow.owners.cpos_launch")
+    launcher: tuple[str, ...] = (
+        sys.executable,
+        "-X",
+        "utf8",
+        "-m",
+        "deploy_workflow.owners.cpos_launch",
+    )
 
 
 def _local_now() -> datetime:
@@ -81,13 +87,14 @@ class Watcher:
     ) -> None:
         self.settings, self.clock, self.now = settings, clock, now
         self.layout = drops.ensure_layout(settings.root)
-        self._logger = startup.open_log(self.layout, __name__)
         startup.check_launchable(settings.config, settings.ruling)
         self._lock: IO[str] | None = startup.take_lock(self.layout)
+        self._logger = startup.open_log(self.layout, __name__)  # only the lock holder logs
         self._records = {r.id: r for r in runs.load_all(self.layout)}
         self._children: dict[str, subprocess.Popen[bytes]] = {}
         self._tracker = drops.ReadyTracker(settings.settle_seconds, clock)
         self._unreadable: dict[Path, tuple[float, str]] = {}
+        self._unmovable: dict[Path, str] = {}  # ready drops the watcher cannot move -> error
         self._rebuild_error = ""
         self._logged_rebuild_error = ""  # the last rebuild error written to the log
         self._stopped: dict[str, str] = {}  # run ID -> why the watcher stopped its process
@@ -97,10 +104,11 @@ class Watcher:
         self._rebuild()
 
     def close(self) -> None:
-        """Release the folder lock. Safe to call twice."""
+        """Release the folder lock and the log file. Safe to call twice."""
         handle, self._lock = self._lock, None
         if handle is not None:
             startup.release_lock(handle)
+        startup.close_log(self.layout)
 
     def _recover(self) -> None:
         """Decide what an earlier stop left: runs cut short while starting, unrecorded folders."""
@@ -118,11 +126,11 @@ class Watcher:
         self._reject_unrecorded_folders()
 
     def _reject_unrecorded_folders(self) -> None:
-        """A folder in ``_engine/drops`` with no record was cut short between claim and record.
+        """A folder or file in ``_engine/drops`` with no record was cut short before its record.
 
         Nothing is moved or deleted; the record says where the files are."""
         for folder in sorted(self.layout.drops.iterdir()):
-            if folder.name in self._records or not folder.is_dir():
+            if folder.name in self._records:
                 continue
             with self._guard(f"folder {folder}"):
                 self._put(
@@ -198,7 +206,11 @@ class Watcher:
                 list(self._records.values()),
                 cap=self.settings.cap,
                 now=self.now(),
-                held="; ".join(t for t in (self._rebuild_error, self._limit_held) if t),
+                held="; ".join(
+                    t
+                    for t in (self._rebuild_error, self._limit_held, *self._unmovable_notes())
+                    if t
+                ),
             )
             activity.write(self.layout, snapshot)
 
@@ -262,6 +274,11 @@ class Watcher:
                     issuer_name=record.issuer_name,
                     as_of=record.as_of,
                     pathway=record.pathway,
+                    claimed=frozenset(
+                        self.layout.root / r.report
+                        for r in self._records.values()
+                        if r.report and r.id != record.id
+                    ),
                 )
                 _, differs = filing.issuer_folder(self.layout, record.issuer_id, record.issuer_name)
             except ValueError as error:  # a corrupt issuer registry; the report stays in its run
@@ -294,6 +311,7 @@ class Watcher:
             listed = {entry for _, entry in found}
             self._tracker.forget_missing(listed)
             self._unreadable = {e: v for e, v in self._unreadable.items() if e in listed}
+            self._unmovable = {e: v for e, v in self._unmovable.items() if e in listed}
             for pathway, entry in found:
                 with self._guard(f"drop {entry}"):
                     if self._tracker.ready(entry):
@@ -315,7 +333,12 @@ class Watcher:
     def _claim(self, pathway: str, entry: Path, refusal: str | None) -> None:
         """Move a drop out of the inbox and record it at once. ``refusal`` rejects it unchecked."""
         record_id = self._new_id()
-        folder = drops.claim(self.layout, entry, record_id)
+        try:
+            folder = drops.claim(self.layout, entry, record_id)
+        except OSError as error:  # it will not move (rights, another volume): say so, once
+            self._note_unmovable(entry, error)
+            return
+        self._unmovable.pop(entry, None)
         if folder is None:
             return
         record = Record(record_id, pathway, entry.name, "queued", self._utc(self.now()))
@@ -327,6 +350,21 @@ class Watcher:
             return
         if refusal:
             self._reject(record, refusal)
+
+    def _note_unmovable(self, entry: Path, error: OSError) -> None:
+        """Log a drop that cannot be moved once per distinct error; the page shows it as held."""
+        text = error.strerror or type(error).__name__  # not str(): it holds the claim ID
+        if self._unmovable.get(entry) != text:
+            self._logger.error(
+                "drop %s is ready but cannot be moved out of the inbox: %s", entry, text
+            )
+        self._unmovable[entry] = text
+
+    def _unmovable_notes(self) -> list[str]:
+        return [
+            f"{entry.name} cannot be moved out of the inbox: {text}"
+            for entry, text in sorted(self._unmovable.items())
+        ]
 
     def _put_back(self, folder: Path, entry: Path) -> None:
         """Return a claimed drop whose record could not be saved to where it was."""

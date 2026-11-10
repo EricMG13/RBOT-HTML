@@ -48,7 +48,10 @@ README (section 3) has the full steps.
   `_engine\watcher.lock` while it runs. A second watcher on the same root is refused with exit
   code 2 ("another watcher is running on this folder"). Run it on one machine only; the lock
   depends on the file system honouring file locks (a local disk does; do not rely on it across
-  machines). The root path must be 80 characters or fewer.
+  machines; on Windows the refusal reads "(no details)"). The root must be a folder on the
+  watcher machine's own disk, shared to analysts, because the USD 20 cap depends on marker files
+  that must not sit on a network or synced path; a root starting with `\\` or `//` is refused. The
+  root path must be 80 characters or fewer.
 - **Waiting and refused drops:** a drop waits in a queue when 3 runs are going or 30 have started
   today; Run activity lists the drop under Waiting and names the daily limit when that is the
   cause. A drop is put back in the inbox only if its first record cannot be saved, and never after
@@ -56,7 +59,10 @@ README (section 3) has the full steps.
   activity shows it as rejected with the reason. After a restart, a run that was being started
   when the watcher stopped is shown as interrupted and is not started again; check whether its
   process is still running before dropping the folder again. A folder the watcher was taking in
-  when it stopped is shown as rejected, with its files kept in `_engine\drops\<id>`. A file that cannot be opened makes the drop rejected ("cannot be read"). If the
+  when it stopped is shown as rejected, with its files kept in `_engine\drops\<id>`. A file that cannot be opened makes the drop rejected ("cannot be read"). A ready drop the
+  watcher cannot move out of the inbox stays there and is shown in Run activity with the error.
+  A drop whose `issuer_id` is over 40 characters is refused. Folders whose names start with `.` or
+  `~$` are ignored without a report; `inbox\failed\` folder names use local time. If the
   library cannot be rebuilt, Run activity says so and ended runs wait for it.
 - **At boot:** Task Scheduler, "At startup", under a service account whose environment holds the
   key, running `Start watcher.cmd <root>`. Give analysts modify on `inbox\` and read elsewhere;

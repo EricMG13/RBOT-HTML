@@ -25,6 +25,7 @@ from deploy_workflow.owners.cpos_launch import SOURCE_SUFFIXES
 
 PATHWAYS: tuple[str, ...] = tuple(PATHWAY_MODULES)
 MAX_ROOT = 80
+MAX_ISSUER_ID = 40
 TEMPLATE = "_template"
 FAILED = "failed"
 _SHARING_VIOLATIONS = (32, 33)  # Windows: sharing violation, lock violation.
@@ -72,7 +73,16 @@ class Layout:
 
 
 def ensure_layout(root: Path) -> Layout:
-    """Create every folder under ``root``; refuse a root so long that Windows paths would break."""
+    """Create every folder under ``root``; refuse a root so long that Windows paths would break.
+
+    A network path is refused too: the spending cap lives in marker files that must be on the
+    watcher machine's own disk."""
+    if str(root).startswith(("\\\\", "//")):
+        raise ValueError(
+            f"root {root} is a network path; use a folder on the watcher machine's own disk "
+            "(shared to analysts), because the USD 20 cap depends on marker files that must "
+            "not sit on a network or synced path"
+        )
     resolved = root.resolve()
     if len(str(resolved)) > MAX_ROOT:
         raise ValueError(
@@ -243,14 +253,26 @@ def candidates(layout: Layout) -> list[tuple[str, Path]]:
 
 
 def claim(layout: Layout, entry: Path, claim_id: str) -> Path | None:
-    """Move ``entry`` to ``drops/<claim_id>`` in one rename; None if it is held open or taken."""
+    """Move ``entry`` to ``drops/<claim_id>`` in one rename.
+
+    None only when a file in it is held open (Windows sharing violation, ``winerror`` 32 or 33),
+    the target is taken or the drop has vanished. Any other ``OSError`` (no right to move it,
+    another volume) is raised so the caller can report a drop that will never move."""
     target = layout.drops / claim_id
     if os.path.lexists(target):  # POSIX would replace an empty folder.
         return None
     try:
         os.rename(entry, target)
-    except OSError:
+    except FileExistsError:
         return None
+    except FileNotFoundError:
+        if os.path.lexists(entry):  # the target's folder is missing: not a vanished drop
+            raise
+        return None
+    except OSError as error:
+        if getattr(error, "winerror", None) in _SHARING_VIOLATIONS:
+            return None
+        raise
     return target
 
 
@@ -311,6 +333,10 @@ def check(drop: Path, pathway: str) -> Checked:
         run = load_context(context.read_bytes())
     except ContextRefused as exc:
         raise DropRejected(f"context file: {exc}") from exc
+    if len(run.identity.issuer_id) > MAX_ISSUER_ID:
+        raise DropRejected(
+            f"issuer_id is {len(run.identity.issuer_id)} characters; use at most {MAX_ISSUER_ID}"
+        )
     if run.run.pathway != pathway:
         raise DropRejected(f"context names pathway {run.run.pathway}, dropped in {pathway}")
     files = []
@@ -364,7 +390,7 @@ def reject(layout: Layout, drop: Path, name: str, reason: str, now: datetime) ->
         os.rename(drop, dest)
     else:  # A stray file or link: give it a folder of its own to sit in beside WHY.txt.
         dest.mkdir()
-        os.rename(drop, dest / _safe_name(drop.name))
+        os.rename(drop, dest / _safe_name(name))
     _write_note(dest, f"{reason}\n\nFix the folder and drop it again.\n")
     return dest
 

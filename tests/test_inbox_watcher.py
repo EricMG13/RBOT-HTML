@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gc
 import json
+import logging
 import os
 import re
 import shutil
@@ -66,6 +67,16 @@ def root(monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
             _kill_leftovers(Layout(folder))
         except ValueError:  # a test left an unreadable record on purpose
             pass
+
+
+@pytest.fixture(autouse=True)
+def _no_leaked_log_handlers() -> Iterator[None]:
+    """A test that never closes its Watcher must not leave a log file open for the next."""
+    yield
+    package = logging.getLogger("deploy_workflow.inbox")
+    for handler in list(package.handlers):
+        package.removeHandler(handler)
+        handler.close()
 
 
 @pytest.fixture
@@ -1060,3 +1071,158 @@ def test_l6_a_run_stopped_because_its_record_cannot_be_saved_says_so(root, fake_
     finally:
         _wait_all(started)
         w.close()
+
+
+def test_m1_a_drop_the_watcher_cannot_move_is_logged_once_and_shown_as_held(root, caplog):
+    drop = make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root, max_per_day=0))
+    pathway = drop.parent
+    pathway.chmod(0o555)
+    try:
+        for _ in range(6):
+            w.step()
+        assert load_all(layout(root)) == [] and drop.is_dir()
+        log = (root / "_engine/logs/watcher.log").read_text()
+        assert log.count("acme") == 1 and "Permission denied" in log
+        held = activity_js(root)
+        assert "acme" in held and "Permission denied" in held
+        pathway.chmod(0o755)
+        w.step()
+        w.step()
+        assert status(root) == ["queued"]
+        assert "cannot be moved" not in activity_js(root)
+    finally:
+        pathway.chmod(0o755)
+        w.close()
+
+
+def test_m1_the_held_note_goes_when_the_drop_disappears(root):
+    drop = make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root, max_per_day=0))
+    drop.parent.chmod(0o555)
+    try:
+        w.step()
+        w.step()
+        assert "cannot be moved" in activity_js(root)
+    finally:
+        drop.parent.chmod(0o755)
+    shutil.rmtree(drop)
+    w.step()
+    assert "cannot be moved" not in activity_js(root)
+    w.close()
+
+
+def test_m3_one_refused_replace_of_the_pid_save_does_not_stop_the_run(root, fake_env, monkeypatch):
+    fake_env({"events": DELIVERED, "sleep": 1})
+    real, seen = os.replace, []
+
+    def replace(source, target, *args, **kwargs):
+        target = Path(target)
+        if target.parent.name == "state" and target.name != "issuers.json":
+            seen.append(target.name)
+            if len(seen) in (4, 5):  # the PID save, refused twice
+                raise PermissionError(13, "in use by another process", str(target))
+        return real(source, target, *args, **kwargs)
+
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))
+    monkeypatch.setattr(os, "replace", replace)
+    pump(w, lambda: status(root) == ["finished"], limit=15)
+    w.close()
+    assert len(seen) >= 5  # the refusals were reached
+    assert _only(root).reason == ""
+
+
+def test_m2_the_fail_opens_of_runs_and_activity_reach_the_watcher_log(root):
+    layout_ = ensure_layout(root)
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    run_id = "20261109-100000-01"
+    (layout_.runs / run_id).mkdir()
+    (layout_.drops / run_id).mkdir()
+    (layout_.runs / run_id / "events.jsonl").mkdir()  # reading it as a file fails
+    (layout_.runs / run_id / "live").write_text("not a folder")
+    from deploy_workflow.inbox.runs import save
+
+    save(
+        layout_,
+        Record(
+            run_id,
+            "credit_snapshot",
+            "acme",
+            "running",
+            "2026-11-09T10:00:00Z",
+            started_at="2026-11-09T10:00:00Z",
+            pid=gone.pid,
+            prepared=True,
+        ),
+    )
+    w = Watcher(settings(root, max_per_day=0))
+    w.step()
+    w.step()
+    w.close()
+    log = (root / "_engine/logs/watcher.log").read_text(encoding="utf-8")
+    assert "event log unreadable" in log
+    assert "budget journal" in log
+    package = logging.getLogger("deploy_workflow.inbox")
+    assert not [h for h in package.handlers if getattr(h, "root", None) == layout_.root]
+
+
+def test_l1_a_claimed_loose_file_with_no_record_is_rejected_at_start_up(root):
+    lay = ensure_layout(root)
+    orphan = lay.drops / "20260101-000000-01"
+    orphan.write_bytes(b"%PDF loose")
+    Watcher(settings(root)).close()
+    record = _only(root)
+    assert (record.id, record.pathway, record.status) == (orphan.name, "", "rejected")
+    assert orphan.read_bytes() == b"%PDF loose"
+
+
+def test_l1_a_loose_file_in_the_inbox_is_rejected_under_its_own_name(root):
+    (root / "inbox").mkdir(parents=True, exist_ok=True)
+    w = Watcher(settings(root))
+    (root / "inbox/loose.pdf").write_bytes(b"%PDF loose")
+    go(w)
+    w.close()
+    [failed] = (root / "inbox/failed").iterdir()
+    assert sorted(p.name for p in failed.iterdir()) == ["WHY.txt", "loose.pdf"]
+
+
+def test_i1_the_default_launcher_command_forces_utf8():
+    assert Settings(Path(".")).launcher == (
+        sys.executable,
+        "-X",
+        "utf8",
+        "-m",
+        "deploy_workflow.owners.cpos_launch",
+    )
+
+
+def test_l9_a_run_is_filed_and_listed_through_the_real_library_rebuild(root, monkeypatch):
+    # Opts out of the autouse ``listed`` stand-in: the real rebuild decides what is listed.
+    monkeypatch.setattr(cpos_launch, "update_library_at", update_library_at)
+    # The fixture run carries the fixture's method text, so the listing compares with that.
+    monkeypatch.setattr(
+        "deploy_workflow.library_index.current_method", lambda: library_fixtures.method()
+    )
+    drop = make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(
+        settings(root, launcher=(sys.executable, str(HERE / "fixtures/real_shape_launcher.py")))
+    )
+    try:
+        pump(w, lambda: status(root) == ["finished"], limit=30)
+    finally:
+        w.close()
+    assert not drop.exists()
+    record = _only(root)
+    assert record.reason == "" and record.report.startswith("issuers/Acme Corp (acme)/")
+    filed = root / record.report
+    assert (
+        filed.read_bytes()
+        == next(
+            (root / "_engine/runs" / record.id / "deliveries").glob("*/report.html")
+        ).read_bytes()
+    )
+    library = update_library_at(root / "_engine")
+    assert record.id in [run["id"] for run in library.runs]
+    assert f'"report": "{record.report}"' in activity_js(root)

@@ -9,6 +9,7 @@ import tempfile
 import unicodedata
 from pathlib import Path
 
+from deploy_workflow import platform_io
 from deploy_workflow.inbox.drops import Layout
 
 REGISTRY_NAME = "issuers.json"
@@ -55,7 +56,7 @@ def _save(layout: Layout, registry: dict[str, str]) -> None:
             json.dump(registry, handle, ensure_ascii=False, indent=2, sort_keys=True)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temp, path)
+        platform_io.replace(temp, path)
     except BaseException:
         Path(temp).unlink(missing_ok=True)
         raise
@@ -64,7 +65,10 @@ def _save(layout: Layout, registry: dict[str, str]) -> None:
 def issuer_folder(layout: Layout, issuer_id: str, issuer_name: str) -> tuple[Path, bool]:
     """The issuer's folder, fixed by the first run for that ID; and whether the name now differs."""
     registry = _load(layout)
-    wanted = safe_name(f"{issuer_name} ({issuer_id})")
+    # Cut the name, never the ID: the ID is what keeps two issuers' folders apart. Cleaning only
+    # shortens a name, so the joined text stays within the limit.
+    room = max(0, 80 - len(f" ({issuer_id})"))
+    wanted = safe_name(f"{issuer_name[:room]} ({issuer_id})")
     fixed = registry.get(issuer_id)
     if fixed is not None:
         differs = fixed != wanted and re.fullmatch(re.escape(wanted) + r" \d+", fixed) is None
@@ -80,13 +84,34 @@ def issuer_folder(layout: Layout, issuer_id: str, issuer_name: str) -> tuple[Pat
 
 
 def file_report(  # noqa: PLR0913 - signature fixed by the build plan; callers pass keywords
-    layout: Layout, report: Path, *, issuer_id: str, issuer_name: str, as_of: str, pathway: str
+    layout: Layout,
+    report: Path,
+    *,
+    issuer_id: str,
+    issuer_name: str,
+    as_of: str,
+    pathway: str,
+    claimed: frozenset[Path] = frozenset(),
 ) -> Path:
-    """Copy ``report`` into the issuer's folder under a name that is never already in use."""
+    """Copy ``report`` into the issuer's folder under a name that is never already in use.
+
+    A file already there for this as-of date and pathway with the same bytes, and not in
+    ``claimed`` (files another run's record names), is reused: a stop between filing and saving
+    the record must not file the same report twice."""
     folder, _ = issuer_folder(layout, issuer_id, issuer_name)
     folder.mkdir(parents=True, exist_ok=True)
     stem = f"{safe_name(as_of)} {safe_name(pathway)}"
     data = report.read_bytes()
+    for name in sorted(os.listdir(folder)):
+        path = folder / name
+        if (
+            re.fullmatch(re.escape(stem) + r"(-\d+)?\.html", name)
+            and path not in claimed
+            and path.is_file()
+            and not path.is_symlink()
+            and path.read_bytes() == data
+        ):
+            return path
     number = 1
     while True:
         target = folder / (f"{stem}.html" if number == 1 else f"{stem}-{number}.html")

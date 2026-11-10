@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from deploy_vii.contracts import PATHWAY_MODULES, PathwayId
 from deploy_vii.registry import plan
+from deploy_workflow import platform_io
 from deploy_workflow.inbox.drops import Layout
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.model.budget import BudgetError, exact_sum, read_reservation_snapshot
@@ -81,6 +82,8 @@ def _events(run_dir: Path, run_id: str) -> list[dict[str, Any]]:
     try:
         # A valid JSON line need not be an event; only objects are kept.
         return [e for e in read_events(run_dir / EVENTS) if isinstance(e, dict)]
+    except FileNotFoundError:
+        return []  # no log yet (a prepared run waiting for a slot): nothing to report
     except (OSError, ValueError) as error:
         # Documented fail-open (display only): an unreadable log shows every module as waiting.
         log.warning("run %s: event log unreadable (%s); modules shown as waiting", run_id, error)
@@ -152,7 +155,7 @@ def write(layout: Layout, data: Mapping[str, Any]) -> None:
             handle.write(
                 f"window.RUN_ACTIVITY={text};window.onRunActivity&&window.onRunActivity();\n"
             )
-        os.replace(name, target)
+        platform_io.replace(name, target)
     except BaseException:
         Path(name).unlink(missing_ok=True)
         raise

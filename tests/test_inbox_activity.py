@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -227,3 +228,27 @@ def test_an_event_line_that_is_not_an_object_is_dropped_not_fatal(layout):
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
     [entry] = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"]
     assert dict(entry["modules"])["CP-0"] == "running"
+
+
+def test_l4_a_run_with_no_event_log_yet_is_waiting_and_logs_nothing(layout, caplog):
+    record = Record("t4", "credit_snapshot", "x", "queued", "t")
+    (layout.runs / "t4").mkdir()  # the offline step made the folder; no events yet
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    assert {s for _, s in entry["modules"]} == {"waiting"}
+    assert "event log unreadable" not in caplog.text
+
+
+def test_m3_write_retries_a_refused_replace(layout, monkeypatch):
+    real, refusals = os.replace, [2]
+
+    def refuse_twice(source, target):
+        if refusals[0]:
+            refusals[0] -= 1
+            raise PermissionError(13, "in use", str(target))
+        real(source, target)
+
+    monkeypatch.setattr(os, "replace", refuse_twice)
+    write(layout, {"runs": []})
+    assert refusals == [0]
+    assert (layout.engine / "activity.js").read_text().startswith("window.RUN_ACTIVITY=")

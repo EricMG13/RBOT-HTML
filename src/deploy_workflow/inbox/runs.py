@@ -14,6 +14,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Literal, get_args
 
+from deploy_workflow import platform_io
 from deploy_workflow.inbox.drops import Layout
 from deploy_workflow.run_events import EVENTS, read_events
 
@@ -69,7 +70,7 @@ def save(layout: Layout, record: Record) -> None:
             json.dump(asdict(record), handle, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, target)
+        platform_io.replace(temporary, target)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise

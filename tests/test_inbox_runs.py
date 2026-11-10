@@ -337,3 +337,18 @@ def test_prepared_defaults_to_false_and_an_old_record_without_it_loads(layout):
     save(layout, Record("new1", "credit_snapshot", "f", "queued", "t", prepared=True))
     loaded = {r.id: r.prepared for r in load_all(layout)}
     assert loaded == {"new1": True, "old1": False}
+
+
+def test_m3_save_waits_out_a_refused_replace(layout, monkeypatch):
+    real, refusals = os.replace, [2]
+
+    def refuse_twice(source, target):
+        if refusals[0]:
+            refusals[0] -= 1
+            raise PermissionError(13, "in use", str(target))
+        real(source, target)
+
+    monkeypatch.setattr(os, "replace", refuse_twice)
+    save(layout, RECORD)
+    assert refusals == [0]
+    assert [r.id for r in load_all(layout)] == ["id1"]
