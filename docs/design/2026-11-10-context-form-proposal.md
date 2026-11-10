@@ -42,7 +42,7 @@ CP-8 are not launched.
 | CP-1 Financial foundation | reporting_currency | Not USD: the chart strip reads "Not supplied" (US$m only). |
 | CP-1B Earnings changes | current_period, prior_period, currency | Owner route: an unresolved current period refuses; a missing prior period is a gap (`cp1b.py` 251-271). |
 | CP-1C Peer benchmark | valuation, as_of | `cp_dr_public` and `user_list` give "No peer figures" (`cp1c.py` 1569-1574). The automatic basis needs 3 admitted peers (at most 12 months old) or 3 precedents (at most 36 months) (`valuation_basis.py` 19-20). |
-| CP-1D Earnings quality | management_bridge; an fy/q4 base | No bridge: every bridge cell is not applicable. |
+| CP-1D Earnings quality | management_bridge; an fy/q4 base | No bridge: every bridge cell is not applicable (tdg-all-001: Restricted). |
 | CP-2A Downside | cp2a pin; legal_documents (as read by the models) | tdg-forecast-003: a false `executed` blocked it; -004 with `none` came back Restricted. |
 | CP-2D Liquidity | cp2d pin; facility currency | A facility in another currency is not calculable (no FX). |
 | CP-2G Forward model | current_period (the forecast base) | Blank: no base period. Owner route: it needs an fy or q4 base. |
@@ -226,7 +226,8 @@ the peer source is `cp_dr_public`. The form follows:
   after CP-2. The readiness panel lists CP-DR where it joins.
 - **Peer files.** CP-DR has no web access in this transport (main's own verification note), so a new
   Source files item asks whether the peers' filings or a peer data file are in the folder. Unanswered
-  makes CP-DR a Check; "Not available" makes CP-1C a Gap.
+  makes CP-DR a Check; "Not available" made CP-1C a Gap, and since run tdg-all-001 makes both
+  Will refuse (section 8).
 - **Questions.** The Questions stage is shown where CP-DR runs. CP-DR answers the context's questions
   first (`cpdr.md`) and routes each to CP-1C, CP-2 or both.
 - `Named peers` (`user_list`) keeps its Gap: nothing looks up their figures, and CP-DR joins only for
@@ -259,6 +260,44 @@ owner: "Your recommendation").
 **Still open:** decisions 2 to 5 in section 6; suggestions 1, 4 and 5 in section 5. From session A,
 not form changes: whether an upstream "Not ready" note may stop a downstream module (the route by
 which a false legal declaration blocked CP-2A in tdg-forecast-003). Also open: the library's
-selected-run panel position, and the paid run `tdg-all-001`, whose module outcomes can be compared
-with this form's readiness forecast when it reports.
+selected-run panel position. The paid run `tdg-all-001` is compared in section 8.
 
+## 8. Against live run tdg-all-001 (2026-11-10, after main `53a5632`)
+
+Owner: "Yes do that" (compare the run with the form's forecast), then "Your recommendation". The run
+(TDG as of 2024-09-30, Sol medium, 20 modules) is recorded in `VERIFICATION.md`; its folder is on the
+owner's machine and was not read here. The forecasts were made before it reported, from its pinned
+context and the checklist answers an analyst would give for that folder: no peers' filings, no
+bridge, no guidance, no rating report, no quotes.
+
+| Module | Launcher forecast | Form forecast | Run |
+|---|---|---|---|
+| CP-DR Research questions | Ready | Ready | Blocked (no external research) |
+| CP-1C Peer benchmark | Ready | Gap (no peer files) | Blocked (no peers) |
+| CP-1D Earnings quality | Ready | Gap (no bridge) | Restricted |
+| CP-2A Downside | Ready | Limited (no legal documents) | Restricted |
+| CP-2G Forward credit model | Ready | Limited (no guidance) | Restricted |
+| CP-4 Legal & covenants, CP-4C Recovery & fulcrum | Will refuse | Will refuse | Blocked |
+| CP-2H Ratings, CP-3D Market-implied risk, CP-3 Relative value | Gap | Gap | Blocked |
+
+- Of the ten modules with a recorded outcome the form flagged nine, the launcher five.
+- The run lists no other module as Blocked but does not say which of the rest were Ready or
+  Restricted. CP-5 stopped before its call (a size check, fixed in #27), and CP-6 did not run.
+
+**Changed in the form**, only where the module's own source reads worked in that run:
+- CP-DR: "Not available" for the peers' filings is now Will refuse; it was Ready.
+- CP-1C: the same answer is now Will refuse; it was Gap.
+- CP-1D: no bridge is now Limited; it was Gap.
+- Test: `test_the_forecast_for_missing_sources_is_what_the_tdg_run_returned`. Its expected outcomes
+  come from the run record, and it failed before the change.
+- Through the registry edges, CP-2 and CP-2D now read Limited when the peers are missing. The run
+  did not record their outcome.
+
+**Left for the rerun of #27's fixes** (owner, for now: "Not now"):
+- CP-2H, CP-3D and CP-3 came back Blocked where the form says Gap. Every source read of theirs was
+  refused by the reads cap #27 raised, so this run cannot tell a missing source from nothing read.
+- Making CP-3 Will refuse would also forecast CP-6 Blocked through its required edge, which no run
+  has shown.
+- The launcher's `run_expectations` has none of the form's rules for CP-1C, CP-1D, CP-2A and CP-2G.
+  CP-2A's and CP-1D's could move as written: `legal_documents` and `management_bridge` are in the
+  context file. The guidance and peer-file answers are not, so those rules cannot move as they stand.

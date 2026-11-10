@@ -4,6 +4,28 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Context form against live run tdg-all-001 (branch `claude/optimistic-johnson-bmnwip`, after main `53a5632`)
+
+Owner: "Yes do that" (compare tdg-all-001 with the form's forecast), then "Your recommendation".
+Design note section 8. Compared against the run's record below. The run folder was not read.
+
+- Forecasts were made before the run reported. Of the 10 modules with a recorded outcome, the form
+  flagged 9 and the launcher's `run_expectations` 5. The form's miss was CP-DR: Ready, but Blocked.
+  The form's 4 Gaps for a missing source (CP-1C, CP-2H, CP-3D, CP-3) came back Blocked.
+  CP-1D's Gap came back Restricted.
+- Changed (`docs/templates/context-form.html` rules only): with no peers' filings, CP-DR and CP-1C
+  are now Will refuse; with no bridge, CP-1D is now Limited. Only modules whose source reads worked
+  in that run were changed. CP-2H, CP-3D and CP-3 had every read refused, so they wait for a rerun.
+- Knock-on effect for the same TDG answers: CP-2 and CP-2D now read Limited through the registry
+  edges. The run did not record their outcome. Recomputed offline in Chromium, no page errors.
+- Tests: `test_the_forecast_for_missing_sources_is_what_the_tdg_run_returned` uses the run record's
+  outcomes. It failed before the change (`('ready', 'gap')`) and passes after.
+  `tests/test_library_page_browser.py`, `tests/test_context_form.py` and `tests/test_inbox_drops.py`:
+  100 passed, 3 failed. The 3 failures are the inbox permission tests, which also fail on main
+  `53a5632` here because the sandbox runs as root. Quality gate: 0 findings.
+- Not verified: no live run of the changed forecast. The run's other modules' outcomes (Ready or
+  Restricted) are unrecorded. One issuer, one date.
+
 ## 2026-11-10 — All-modules live run tdg-all-001 and its corrections (branch `claude/all-modules-live-fixes`)
 
 Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling

@@ -633,6 +633,47 @@ def test_the_research_cutoff_follows_the_as_of_date_and_is_written(tmp_path):
     assert probe["loaded"] == "2026-08-31" and len(probe["notes"]) == 1  # A blank file says so.
 
 
+SOURCES_PROBE = """<script>
+(() => {  // Its own scope: the form's script declares globals of its own.
+const pick = (attr, value) => {
+  document.querySelector(`[${attr}][value="${value}"]`).checked = true;
+  document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
+};
+const forecast = (pathway, attr, value) => {
+  pick('data-k="pathway"', pathway);
+  pick(attr, value);  // The checklist is drawn for the pathway first.
+  return Object.fromEntries(readiness(build()).mods.map(m => [m.id, m.status]));
+};
+const out = document.createElement('pre');
+out.id = 'probe';
+out.textContent = JSON.stringify({
+  nopeers: forecast('distressed_restructuring', 'data-c="peerfiles"', 'no'),
+  peers: forecast('distressed_restructuring', 'data-c="peerfiles"', 'yes'),
+  nobridge: forecast('earnings_update', 'data-k="management_bridge"', 'no'),
+});
+document.body.append(out);
+})();
+</script>
+</body>"""
+
+
+def test_the_forecast_for_missing_sources_is_what_the_tdg_run_returned(tmp_path):
+    # Live run tdg-all-001 (2026-11-10, TDG as of 2024-09-30; VERIFICATION.md): with no peers'
+    # filings in the folder the research module and the peer benchmark came back Blocked, and with
+    # no management bridge Earnings quality came back Restricted. The form had said Ready, Gap and
+    # Gap. Only modules whose source reads were not refused in that run are held to it here.
+    page = tmp_path / "sources.html"
+    text = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
+    page.write_text(text.replace("</body>", SOURCES_PROBE, 1), encoding="utf-8")
+    dom, console = visit(page)
+    assert console == []
+    probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    nopeers, peers = probe["nopeers"], probe["peers"]
+    assert (nopeers["CP-DR"], nopeers["CP-1C"]) == ("will_refuse", "will_refuse")
+    assert (peers["CP-DR"], peers["CP-1C"]) == ("ready", "ready")  # The peers' filings answer it.
+    assert probe["nobridge"]["CP-1D"] == "limited"
+
+
 def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
     from deploy_workflow.inbox.drops import ensure_layout, write_templates
 
