@@ -22,9 +22,10 @@ function handoffLabel(file) {
   return code?`${moduleTitle(code)} handoff`:file;
 }
 const MODULE_REF=/\bCP-([A-Z0-9]+)-GAP-0*(\d+)\b|\bCP-[A-Z0-9]+\b/g;
-const STEP='T\\d+[A-Z]?(?:\\.\\d+)?';
-const STEP_ID=new RegExp(`^${STEP}$`),STEP_ANY=new RegExp(`\\b${STEP}\\b`,'g'),STEP_LEAD=new RegExp(`\\b${STEP}\\s+—\\s+`,'g');
-const STEP_RANGE=new RegExp(`\\b(${STEP})(?:\\s*–\\s*|\\s+(through)\\s+)(${STEP})\\b`,'g');
+// A step id has the METHOD_CODE shape: T4.10, T1D.1, T4.D1, T2G.* (a family).
+const STEP='T\\d+[A-Z]?(?:\\.(?:[A-Z]?\\d+|\\*))?',ID=`\\b${STEP}(?![A-Za-z0-9])`;
+const STEP_ID=new RegExp(`^${STEP}$`),STEP_ANY=new RegExp(ID,'g'),STEP_LEAD=new RegExp(`^\\s*${ID}\\s+—\\s+`);
+const STEP_RUN=new RegExp(`${ID}(?:\\s*(?:,\\s*and|[–/,]|and|through)\\s*${ID})*`,'g'),STEP_PAIR=new RegExp(`^(${STEP})(?:\\s*–\\s*|\\s+(through)\\s+)(${STEP})$`);
 const STEP_HEADING=new RegExp(`^(${STEP})\\s+—\\s+(.+)$`),STEP_ROW=new RegExp(`^(${STEP})(?:\\s+—\\s+(.+))?$`);
 // A step's title is the one its own output gives it: a heading "T1D.1 — Add-Back Register", or a step-table row ["T4.1","Peer universe",…]. A longer second cell is a description, not a title.
 const stepTitleCache=new Map();
@@ -42,10 +43,19 @@ function stepTitles(output) {
   stepTitleCache.set(output,titles);
   return titles;
 }
-// A step id in prose or a cell becomes its title; a range keeps its joining word; an id leading its own title is dropped; no title found: "a method step".
+// A step id in prose or a cell becomes its title (in quotes inside a sentence, bare when the id is the whole text); a range keeps its joining word;
+// a run of ids with no title reads "method steps" ("a method step" for one); an id leading its own title is dropped; no title found: "a method step".
 function stepText(text,output) {
-  const titles=stepTitles(output),title=id=>titles.get(id)||'a method step';
-  return text.replace(STEP_RANGE,(all,from,through,to)=>`${title(from)} ${through||'to'} ${title(to)}`).replace(STEP_LEAD,'').replace(STEP_ANY,title);
+  const titles=stepTitles(output),whole=text.trim();
+  const lead=STEP_LEAD.exec(text);
+  const body=lead?text.slice(lead[0].length):text;
+  return body.replace(STEP_RUN,run=>{
+    const ids=run.match(STEP_ANY),quoted=run===whole?t=>t:t=>`“${t}”`,title=id=>titles.has(id)?quoted(titles.get(id)):'a method step';
+    if(!ids.some(id=>titles.has(id)))return ids.length>1?'method steps':'a method step';
+    const pair=STEP_PAIR.exec(run);
+    if(pair)return `${title(pair[1])} ${pair[2]||'to'} ${title(pair[3])}`;
+    return run.replace(STEP_ANY,title);
+  });
 }
 // CP-<x>-GAP-<n> is "Gap <n>" on module x's own page and "<Name of x> gap <n>" elsewhere; a code with no known name is "unnamed module".
 function namedText(text,output=current?.output) {
@@ -292,7 +302,7 @@ const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 const drawnAnchors=id=>new Set(DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)).map(section=>`s-${section.line}`));
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
-function chipView(chip) {
+function chipView(chip,rowModule) {
   if(chip.kind==='issuer_page') {
     const pages=chip.page_end!=null&&chip.page_end!==chip.page?`p.${chip.page}–${chip.page_end}`:`p.${chip.page}`;
     const verified=chip.quote_found===true;
@@ -300,7 +310,8 @@ function chipView(chip) {
   }
   if(chip.kind==='upstream') {
     const codes=chip.codes.join(' · ');
-    return {label:chip.module?`${moduleTitle(chip.module)} · ${codes}`:codes,av:'',avClass:'',dot:'up',cls:''};
+    const module=chip.module||rowModule;
+    return {label:module?`${moduleTitle(module)} · ${codes}`:codes,av:'',avClass:'',dot:'up',cls:''};
   }
   return {label:chip.label||'no page',av:'?',avClass:'gap',dot:'gap',cls:'gap'};
 }
@@ -316,7 +327,7 @@ function chipsMarkup(key,counted=true) {
   const count=counted&&gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
   return chipSet([row,...found.map((chip,index)=>{
     if(unresolvedGap(chip))return '';
-    const view=chipView(chip),title=view.title||chip.reason;
+    const view=chipView(chip,item?.module),title=view.title||chip.reason;
     return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${title?`title="${esc(namedText(title,item?.output))}"`:''}>${view.av?`<span class="av ${view.avClass}">${esc(view.av)}</span>`:''}${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
   }),count].filter(Boolean));
 }
@@ -837,6 +848,8 @@ function updateLibrary(panel=false) {
   $('run-detail').hidden=!view.rows.some(r=>r.id===libraryState.selected);
   $('library-coverage').innerHTML=libraryCoverage(view);
   $('library-clear').hidden=!libraryFiltered();
+  // What was redrawn is named as the route's own draw names it.
+  for(const id of ['library-results','run-detail','library-coverage',...(panel?['library-filters']:[])])nameCodes($(id));
   for(const group of Object.keys(LIBRARY_GROUPS))$(`${group}-filter-count`).textContent=libraryActive(group)?`· ${libraryActive(group)} active`:'';
   writeLibraryHash();
 }

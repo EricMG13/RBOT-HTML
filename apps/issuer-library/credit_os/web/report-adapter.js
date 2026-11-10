@@ -59,12 +59,15 @@
   new MutationObserver(title).observe(document.getElementById('view-root'),{childList:true,subtree:true});
   title();
 })();
-/* Reader text, titles and accessible labels show module names. The inspector keeps exact codes and the original download is untouched. */
+/* Reader text, titles and accessible labels show module names and method steps by what they are, the inspector included. The original download is untouched. */
 (() => {
   const MODULE_NAMES={"CP-0":"Source readiness","CP-1A":"Business & governance","CP-DR":"Research questions","CP-1":"Financial foundation","CP-1B":"Earnings changes","CP-L10":"Financial change screen","CP-1D":"Earnings quality","CP-1C":"Peer benchmark","CP-2D":"Liquidity","CP-3C":"Refinancing & LME","CP-2":"Fundamental credit","CP-2A":"Downside","CP-2G":"Forward credit model","CP-2E":"Rates, FX & hedging","CP-2H":"Ratings & triggers","CP-4":"Legal & covenants","CP-4A":"Covenant capacity","CP-4B":"Structural priority","CP-4D":"Intercreditor control","CP-4C":"Recovery & fulcrum","CP-3":"Security selection","CP-3D":"Market-implied risk","CP-6":"Committee decision","CP-5":"Evidence validation","CP-8":"Deliverable comparison","CP-MODEL":"Published model","CP-OS":"Run activity","CP-MEMO":"Credit memo","CP-PARSE":"Source readiness","CP-2C":"Business & governance","CP-1E":"Earnings quality","CP-2B":"Downside","CP-2F":"Rates, FX & hedging","CP-3A":"Security selection","CP-3B":"Security selection","CP-5A":"Evidence validation","CP-6A":"Committee decision","CP-L20":"Financial change screen","CP-L23":"Financial change screen","CP-L30":"Financial change screen","CP-L40":"Financial change screen"};
-  // CP-<x>-GAP-<n> reads "<Name of x> gap <n>"; a code with no known name reads "unnamed module".
-  const CODE=/\bCP-([A-Z0-9]+)-GAP-0*(\d+)\b|\bCP-[A-Z0-9]+\b(?![-.][A-Za-z0-9])/g;
-  const named=text=>text.replace(CODE,(code,owner,gap)=>owner===undefined?MODULE_NAMES[code]||'unnamed module':`${MODULE_NAMES[`CP-${owner}`]||'unnamed module'} gap ${gap}`);
+  // CP-<x>-GAP-<n> reads "<Name of x> gap <n>"; CP-<x>.md "<Name> handoff"; a code with no known name reads "unnamed module".
+  // This frame holds no step titles, so a run of method step ids reads "method steps" (one id: "a method step").
+  const CODE=/\bCP-([A-Z0-9]+)-GAP-0*(\d+)\b|\bCP-([A-Z0-9]+)\.md\b|\bCP-[A-Z0-9]+\b(?![-.][A-Za-z0-9])/g;
+  const STEP='\\bT\\d+[A-Z]?(?:\\.(?:[A-Z]?\\d+|\\*))?(?![A-Za-z0-9])',STEPS=new RegExp(`${STEP}(?:\\s*(?:,\\s*and|[–/,]|and|through)\\s*${STEP})*`,'g');
+  const name=code=>MODULE_NAMES[code]||'unnamed module';
+  const named=text=>text.replace(CODE,(code,owner,gap,file)=>owner!==undefined?`${name(`CP-${owner}`)} gap ${gap}`:file!==undefined?`${name(`CP-${file}`)} handoff`:name(code)).replace(STEPS,run=>run.match(new RegExp(STEP,'g')).length>1?'method steps':'a method step');
   function nameCodes(root) {
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),nodes=[];
     while(walker.nextNode())nodes.push(walker.currentNode);
@@ -82,7 +85,7 @@
     }
   }
   // Only child changes are observed, so rewriting text here cannot trigger another pass. The banners sit outside the view and carry handoff text too.
-  for(const root of document.querySelectorAll('.navigator,#view-root,#call-root,.banner')) {
+  for(const root of document.querySelectorAll('.navigator,#view-root,#call-root,.banner,#inspector-content')) {
     new MutationObserver(()=>{nameCodes(root);nameLinks(root);}).observe(root,{childList:true,subtree:true});
     nameCodes(root);nameLinks(root);
   }

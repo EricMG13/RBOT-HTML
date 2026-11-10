@@ -321,7 +321,7 @@ test('chip labels and avatars follow the data, one chip per dict', () => {
   const { chipsMarkup } = report();
   const html = chipsMarkup(`${OUT}:16`);
   const chips = [...html.matchAll(/<button[^>]*class="chip[^"]*"[^>]*>.*?<\/button>/g)].map(m => m[0].replace(/<[^>]+>/g, '|').replace(/\|+/g, '|'));
-  assert.deepEqual(chips, ['|Handoff|', '|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|D1 · D3|']);
+  assert.deepEqual(chips, ['|Handoff|', '|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|Financial foundation · D1 · D3|']);
   assert.ok(html.includes('data-chip="run-a/deliveries/d1/CP-1.md:16" data-index="3"') && html.includes('data-evidence="run-a/deliveries/d1/CP-1.md:16"'));
 });
 
@@ -1417,7 +1417,7 @@ test('names, not codes: chips name their module, the handoff chip reads Handoff,
   noCode(html);
   assert.ok(html.includes('title="Handoff row, line 16" aria-label="Handoff row, line 16">Handoff<span class="dot row">'));
   assert.ok(!html.includes('class="av cp"') && !html.includes('class="av q"'), 'no code avatar');
-  assert.ok(html.includes('<span class="av ">K</span>p.123') || html.includes('>K</span>p.123'), 'an issuer-page chip keeps its source avatar');
+  assert.ok(html.includes('<span class="av ">K</span>p.123'), 'an issuer-page chip keeps its source avatar');
   assert.ok(html.includes('title="Annual PDF marked alternate in Source readiness"'));
   assert.ok(html.includes('Unnamed module · D1'));
 });
@@ -1456,12 +1456,22 @@ test('names, not codes: a step id becomes the step\'s own title, a range keeps i
     d[outId('CP-1')].sections.push(sec('T1D.1 — Add-Back Register', 3, 70, 'reference', [text(71, 'x')]), ref('Steps', 80, [table(81, ['Step', 'Name', 'Role'], [[82, 'T4.1', 'Peer universe', 'a'], [83, 'T4.2', 'Peer metrics', 'b'], [84, 'T4.3', 'x'.repeat(90), 'c']])]));
     return d;
   }), id = outId('CP-1'), name = text => page.namedText(text, id);
-  assert.equal(name('Use T1D.1 and T4.2.'), 'Use Add-Back Register and Peer metrics.');
+  assert.equal(name('Use T1D.1 and T4.2.'), 'Use “Add-Back Register” and “Peer metrics”.', 'a title inside prose is quoted');
+  assert.equal(name('See T4.2 for facility access'), 'See “Peer metrics” for facility access');
+  assert.equal(name('Gap noted: T4.1 — x'), 'Gap noted: “Peer universe” — x', 'an id is dropped only at the start of the text');
+  assert.equal(name('T4.2'), 'Peer metrics', 'no quotes when the id is the whole text');
+  assert.equal(name('(T1–T4, T6, T8; P3/P5)'), '(method steps; P3/P5)', 'a run of untitled ids is one phrase');
+  assert.equal(name('T5/T7 readiness and T5 and T9'), 'method steps readiness and method steps');
+  assert.equal(name('T9.9 stands'), 'a method step stands');
+  assert.equal(name('T4.D1 — Discovery source register / bounded attempt'), 'Discovery source register / bounded attempt', 'a lettered id leading its text is dropped whole');
+  assert.equal(name('T2G.* remain registered; T4.D1.'), 'a method step remain registered; a method step.', 'a lettered or wildcard id is one id');
   assert.equal(name('T4.1–T4.2'), 'Peer universe to Peer metrics');
   assert.equal(name('T4.1 through T4.2'), 'Peer universe through Peer metrics');
   assert.equal(name('Guidance retained in T9.9; T4.3 is long'), 'Guidance retained in a method step; a method step is long', 'unknown ids and descriptions are no titles');
   assert.equal(name('T1D.1 — Add-Back Register'), 'Add-Back Register', 'an id leading its own title is dropped');
   assert.equal(page.namedText('T4.1', null), 'a method step');
+  const nullChip = report().chipsMarkup(`${OUT}:16`);
+  assert.ok(nullChip.includes('>Financial foundation · D1 · D3<'), 'a chip with no module names the row\'s own');
 });
 
 test('names, not codes: a table column of bare step ids is not drawn; a heading or caption loses its leading id and keeps no title', () => {
@@ -1495,12 +1505,15 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
   assert.equal(chip.data, 'Row F12 and Financial foundation', 'a chip takes the name and keeps its reference as text');
   const screen = read('screen.js');
   assert.ok(!screen.includes('showsCodes') && !screen.includes('module-ref') && !/closest\('[^']*details\.audit/.test(screen));
+  assert.ok(screen.includes('Retained fields from this historical run, with module codes and method step ids shown as names.') && !screen.includes('exact retained fields'));
+  assert.ok(/function nameCodes[^]*?nameCodes\(\$\('search-results'\),null,false\)/.test(screen), 'search hits borrow no step title');
+  assert.ok(/updateLibrary\([^]*?nameCodes\(\$\(id\)\)/.test(read('views.js')), 'a redrawn library is named');
   assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
 });
 
 test('embedded report: codes are named in text, title and aria-label, the banners included', () => {
   const src = read('report-adapter.js'), last = src.slice(src.lastIndexOf('(() => {'));
-  const text = { nodeType: 3, data: 'Annual report is later. (CP-0 line 34); CP-6-GAP-002 and CP-2R-GAP-001 and CP-2R' };
+  const text = { nodeType: 3, data: 'Annual report is later. (CP-0 line 34); CP-6-GAP-002 and CP-2R-GAP-001 and CP-2R; see CP-1.md, T4.D1, T2G.* and T5/T7, T9' };
   const attributes = { title: 'CP-1', 'aria-label': 'K, page:164 / CP-1: sales 3,809' };
   const element = { getAttribute: name => attributes[name] ?? null, setAttribute: (name, value) => { attributes[name] = value; } };
   const root = { querySelectorAll: selector => (selector === '.module-link' ? [] : [element]) };
@@ -1508,7 +1521,8 @@ test('embedded report: codes are named in text, title and aria-label, the banner
   const doc = { querySelectorAll: selector => { selected = selector; return [root]; }, createTreeWalker: () => { let done = false; return { currentNode: text, nextNode: () => !done && (done = true) }; } };
   class Observer { observe() {} }
   new Function('document', 'MutationObserver', 'NodeFilter', 'Node', last.replace(/^\(\(\) => \{/, '').replace(/\}\)\(\);\s*$/, ''))(doc, Observer, { SHOW_TEXT: 4 }, { TEXT_NODE: 3 });
+  assert.ok(selected.split(',').includes('#inspector-content'), 'the report\'s own inspector is named too');
   assert.ok(selected.split(',').includes('.banner'), 'the delivery banners are named too: they sit outside the view the pass observed');
-  assert.equal(text.data, 'Annual report is later. (Source readiness line 34); Committee decision gap 2 and unnamed module gap 1 and unnamed module');
+  assert.equal(text.data, 'Annual report is later. (Source readiness line 34); Committee decision gap 2 and unnamed module gap 1 and unnamed module; see Financial foundation handoff, method steps');
   assert.deepEqual(attributes, { title: 'Financial foundation', 'aria-label': 'K, page:164 / Financial foundation: sales 3,809' });
 });
