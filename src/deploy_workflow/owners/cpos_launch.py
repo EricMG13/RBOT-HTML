@@ -426,6 +426,8 @@ class OwnerTable:
     noun: str = "period"
     dates: tuple[str, ...] = ()  # YYYY-MM-DD calendar dates (or a stated gap).
     ordered: tuple[str, ...] = ()  # Stated numbers that must not fall left to right.
+    counts: tuple[str, ...] = ()  # Whole numbers of zero or more (or a stated gap).
+    not_before: tuple[str, str] = ()  # (later, earlier) date columns: the first may not precede.
     one_unit: bool = False  # Every row states the same Reporting unit (one scale for the figure).
 
 
@@ -616,6 +618,7 @@ def _peer_range(heading: str, rules: str) -> OwnerTable:
         numbers=PEER_NUMBERS,
         in_unit=PEER_NUMBERS[:-1],
         ordered=PEER_BOUNDS,
+        counts=("Peer count",),
         noun="metric",
     )
 
@@ -701,6 +704,7 @@ COMPARISON_TABLES: dict[str, tuple[OwnerTable, ...]] = {
             numbers=("Yield",),
             may_gap=("Spread",),
             dates=("Maturity date", "Quote date"),
+            not_before=("Maturity date", "Quote date"),
             noun="instrument",
         ),
     ),
@@ -815,11 +819,22 @@ def _order_issue(spec: OwnerTable, header: list[str], row: list[str]) -> str | N
     return f"{' <= '.join(spec.ordered)} must hold in that order; stated {', '.join(stated)}."
 
 
+def _dates_issue(spec: OwnerTable, header: list[str], row: list[str]) -> str | None:
+    """A stated maturity before its own quote date is a matured instrument, sent back."""
+    later, earlier = (row[header.index(name)] for name in spec.not_before)
+    if _iso_date(later) and _iso_date(earlier) and later < earlier:
+        return f"{spec.not_before[0]} {later} is before {spec.not_before[1]} {earlier}."
+    return None
+
+
 def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None:
     """What is wrong with one cell of a row table, or None. Nothing is repaired or worked out."""
     allowed = dict(spec.choices).get(name)
     if name in ("Basis and limitation", "Reporting unit"):
         issue = None if cell else f"{name} is blank."
+    elif name in spec.counts:
+        legal = _stated_gap(cell) or re.fullmatch(r"\d+", cell)
+        issue = None if legal else f"{name} `{cell}` must be a whole number of 0 or more."
     elif name in spec.numbers:
         issue = _number_issue(spec, name, cell, unit)
     elif name in spec.dates:
@@ -856,6 +871,9 @@ def _row_table_issues(
         order = _order_issue(spec, header, row) if spec.ordered else None
         if order:
             issues.append(f"`{heading}` {row[0]}: {order}")
+        matured = _dates_issue(spec, header, row) if spec.not_before else None
+        if matured:
+            issues.append(f"`{heading}` {row[0]}: {matured}")
         if spec.ranked and row[header.index(spec.ranked)].isdecimal():
             ranks.append(int(row[header.index(spec.ranked)]))
     if ranks != sorted(ranks):

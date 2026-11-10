@@ -618,3 +618,29 @@ def test_a_yield_that_is_not_a_plain_number_is_named_not_drawn():
         chart_section("Chart data: yield against maturity", YIELD_HEADER, row)
     )
     assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize("when", ["2028-13-01", "2028-00-10", "9999-99-99", "2028-02-31"])
+@pytest.mark.parametrize("column", [1, 4])
+def test_a_yield_row_with_an_invalid_calendar_date_is_named_not_drawn(when, column):
+    cells = ["2028 note", "2028-06-15", "6.4", "+310 bp", "2024-12-31", "Dealer quote", "%", "S."]
+    cells[column] = when
+    row = "| " + " | ".join(cells) + " |"
+    fields = synthetic_charts(
+        chart_section("Chart data: yield against maturity", YIELD_HEADER, row)
+    )
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize("count", ["-3", "2.5", "1,0", "seven"])
+def test_a_peer_count_that_is_not_a_whole_number_is_named_not_drawn(count):
+    row = f"| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | {count} | % | S. |"
+    heading = "Chart data: peer range \u2014 percent metrics"
+    fields = synthetic_charts(chart_section(heading, PEER_HEADER, row))
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+def test_a_peer_count_of_zero_is_a_stated_count():
+    row = "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 0 | % | S. |"
+    heading = "Chart data: peer range \u2014 percent metrics"
+    assert len(synthetic_charts(chart_section(heading, PEER_HEADER, row))["charts"]) == 1

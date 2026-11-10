@@ -733,7 +733,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag'];
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => ''];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules};`)(...args);
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1505,6 +1505,17 @@ test('comparison views: yield against maturity places each stated date and yield
   const key = strip(/<ol class="stack-key">(.*?)<\/ol>/s.exec(html)[1]);
   assert.ok(/No quote.*Yield n\.a\./s.test(key) && /Undated.*Maturity June 2029/s.test(key) && key.includes('Dealer quote') && key.includes('+310 bp') && key.includes('2024-12-31'));
   assert.ok(html.includes('An instrument with no stated maturity date or yield has no point.') && html.includes(FORM));
+});
+
+test('comparison views: an invalid calendar date has no point and does not break the page; a grouped chart takes the missing-values note', () => {
+  const bad = ['2028-13-01', '2028-00-10', '9999-99-99', '2028-02-31'];
+  const rows = bad.map((when, i) => [190 + i, ...note(`Bad ${i}`, when, '6.4', '%')]);
+  const chart = { ...SCATTER, table: 182 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: yield against maturity', 3, 180, 'consumed', [table(182, YIELD_HEAD, rows)])); d[outId('CP-1')].charts.push(chart); return d; });
+  const html = page.readerChart(outId('CP-1'), chart);
+  assert.equal(countOf(html, /scatter-dot/g), 0);
+  assert.ok(html.includes('An instrument with no stated maturity date or yield has no point.'));
+  assert.equal(page.lastPeriodChart([{ kind: 'dumbbell' }, { kind: 'grouped' }]), 1);
 });
 
 test('comparison views: the new view rules use only the series and ink tokens, never amber or red', () => {

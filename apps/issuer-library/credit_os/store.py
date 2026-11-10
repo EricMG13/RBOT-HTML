@@ -122,6 +122,14 @@ MONTHS = (
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 
 
+def valid_date(text: str) -> bool:
+    """A real YYYY-MM-DD calendar date (not merely that shape)."""
+    try:
+        return bool(ISO_DATE.fullmatch(text)) and bool(datetime.date.fromisoformat(text))
+    except ValueError:
+        return False
+
+
 def display_date(iso: Any) -> Any:
     """`31 December 2024` for a valid YYYY-MM-DD calendar date; any other text unchanged."""
     if not isinstance(iso, str) or not ISO_DATE.fullmatch(iso):
@@ -148,9 +156,7 @@ DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at o
 # Row tables the launcher asks for (cpos_launch.py OWNER_TABLES with `columns`): the exact leading
 # header, the drawn kind with its column roles, the numeric columns and the columns of fixed words.
 BULLET = {"kind": "bullet", "direction": 4}  # Direction is the last column before the unit.
-ROW_CHARTS: tuple[
-    tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[int, tuple[str, ...]]], ...
-] = (
+ROW_CHARTS: tuple[tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[int, Any]], ...] = (
     (
         ("Facility", "Ranking", "Secured", "Amount", "Cumulative leverage"),
         {"kind": "stack", "label": 0, "rank": 1, "secured": 2, "amount": 3, "leverage": 4},
@@ -184,8 +190,8 @@ ROW_CHARTS: tuple[
     (
         ("Metric", "Issuer", "Peer low", "Peer median", "Peer high", "Peer count"),
         {"kind": "range", "label": 0, "issuer": 1, "low": 2, "median": 3, "high": 4, "count": 5},
-        (1, 2, 3, 4, 5),
-        {},
+        (1, 2, 3, 4),
+        {5: "count"},
     ),
     (
         ("Instrument", "Maturity date", "Yield", "Spread", "Quote date", "Source class"),
@@ -199,7 +205,7 @@ ROW_CHARTS: tuple[
             "source": 5,
         },
         (2,),
-        {},
+        {1: "date", 4: "date"},
     ),
 )
 # The two tables of the pair header differ only by heading: the results are grouped columns (one
@@ -589,6 +595,10 @@ def _row_cell_ok(cell: str, column: int, numeric: tuple[int, ...], words: dict[i
     numeric column, one of the fixed words in a word column, anything stated elsewhere."""
     if column in numeric:
         return bool(PLAIN_AMOUNT.fullmatch(cell) or STATED_GAP.match(cell))
+    if words.get(column) == "date":
+        return bool(valid_date(cell) or STATED_GAP.match(cell))
+    if words.get(column) == "count":  # A whole number of peers, zero included.
+        return bool(re.fullmatch(r"\d+", cell) or STATED_GAP.match(cell))
     if column in words:
         return cell in words[column]
     return bool(cell)

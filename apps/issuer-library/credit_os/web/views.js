@@ -344,7 +344,7 @@ function rangeChart(id,v,chips=false) {
   }).join('')}</div>`;
 }
 // Yield against maturity: x is the stated maturity date (a real YYYY-MM-DD, first to last placed), y the stated yield on a panel per unit. An instrument with no such date or yield has no point and is still listed.
-const isoDate=cell=>/^\d{4}-\d{2}-\d{2}$/.test(cell)&&new Date(Date.parse(cell)).toISOString().slice(0,10)===cell;
+const isoDate=cell=>/^\d{4}-\d{2}-\d{2}$/.test(cell)&&!Number.isNaN(Date.parse(cell))&&new Date(Date.parse(cell)).toISOString().slice(0,10)===cell;
 function scatterChart(id,v,chips=false) {
   const table=fixtureTable(id,v.table),placed=row=>isoDate(row.cells[v.date])&&chartNumber(row.cells[v.yield])!==null,rows=table.rows.filter(placed);
   const dated=rows.map(r=>r.cells[v.date]).sort(),[first,last]=[Date.parse(dated[0]),Date.parse(dated.at(-1))];
@@ -499,7 +499,7 @@ function reportBand(id) {
 // A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
 const cardTitle=chart=>chart.replace(/<div class="section-heading"><h2>(.*?)<\/h2>/s,'<div class="section-heading"><h4>$1</h4>');
 // The index of the last period chart: the waterfall is not a column chart, so "Missing values have no bar" prints under the last one that is.
-const lastPeriodChart=charts=>charts.findLastIndex(c=>!c.kind);
+const lastPeriodChart=charts=>charts.findLastIndex(c=>!c.kind||c.kind==='grouped');
 const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.
