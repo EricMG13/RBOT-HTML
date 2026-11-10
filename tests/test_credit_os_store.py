@@ -143,6 +143,32 @@ def test_sections_are_placed_by_their_level_two_parent():
     assert store.placements(SECTIONS) == EXPECTED_PLACEMENT
 
 
+AUDIT_HEADINGS = [
+    "Exact source register",
+    "Exact relied-on source register",
+    "Supplied handoff",
+    "Supplied handoffs",
+    "All supplied current handoffs and lineage",
+    "Source-context assessments",
+]
+VIEW_HEADINGS = [
+    "Resource bridge and competing uses",
+    "Source-gate reasoning and strongest contrary evidence",
+    "Financing-source sufficiency boundary",
+    "Calculation conventions and lineage",
+    "Exact arithmetic and financial-lineage trace",
+]
+
+
+def test_audit_set_by_heading_under_findings_answer_key_from_the_ruling():
+    """R31a key (from the deleted node test): six headings go to audit, five do not."""
+    headings = AUDIT_HEADINGS + VIEW_HEADINGS
+    sections = [_section("Findings", 2)] + [_section(h, 3, _text("Body.")) for h in headings]
+    placed = dict(zip(headings, store.placements(sections)[1:]))
+    assert {h: placed[h] for h in AUDIT_HEADINGS} == dict.fromkeys(AUDIT_HEADINGS, "audit")
+    assert {h: placed[h] for h in VIEW_HEADINGS} == dict.fromkeys(VIEW_HEADINGS, "view")
+
+
 def test_words_count_cells_and_prose_not_headings_or_headers():
     assert store.report_fields(SECTIONS, {"confidence": "Medium"})["words"] == {
         "view": 6,
