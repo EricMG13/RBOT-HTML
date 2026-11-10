@@ -33,6 +33,16 @@ analytical run was made with it.
   size, with no horizontal scroll at 390 px.
 - **Other checks.** Start over returns the page to a fresh build. No console errors in any run.
   Quality gate exit 0, with no Python changed.
+- **Restyled in the Credit OS language after merging main `caeb622`.** All the checks above were
+  repeated on the restyled page with the same results: byte-identical output, three downloads loading
+  and accepted by the inbox, round-trips, every stage by click and by tap, and Start over.
+  - An inbox copy (from `write_templates`, beside a copy of the library's web folder at
+    `_engine/library`) loads Red Hat Display, Text and Mono from there, shows the rail links to the
+    library, and logs nothing. The repository copy loads the repository's fonts and hides those links.
+  - Compared by eye with the library built offline from the synthetic fixture run, shown in its empty
+    state because that run is not on the current methodology.
+  - Found and fixed while restyling: the yes/no inputs had no positioned parent, so their own hit
+    area sat outside their segment.
 - **Not verified:**
   - Firefox and Safari, and the folder picker in them.
   - Real issuer folders. The folder check guesses only from file names.

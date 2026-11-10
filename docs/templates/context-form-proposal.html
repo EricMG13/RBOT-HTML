@@ -4,335 +4,362 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>Run context</title>
 <style>
-/* Proposal (2026-11-10): a progressive, module-aware version of context-form.html. It writes the
-   same context/1 file; docs/design/2026-11-10-context-form-proposal.md explains each change. */
-@font-face{font-family:'Red Hat Text';font-weight:400;src:url('../../src/deploy_vii/assets/fonts/RedHatText-Regular.woff2') format('woff2')}
-@font-face{font-family:'Red Hat Text';font-weight:500;src:url('../../src/deploy_vii/assets/fonts/RedHatText-Medium.woff2') format('woff2')}
-@font-face{font-family:'Red Hat Text';font-weight:600;src:url('../../src/deploy_vii/assets/fonts/RedHatText-SemiBold.woff2') format('woff2')}
-@font-face{font-family:'Red Hat Display';font-weight:600;src:url('../../src/deploy_vii/assets/fonts/RedHatDisplay-SemiBold.woff2') format('woff2')}
-@font-face{font-family:'Red Hat Display';font-weight:700;src:url('../../src/deploy_vii/assets/fonts/RedHatDisplay-Bold.woff2') format('woff2')}
-@font-face{font-family:'Red Hat Mono';font-weight:500;src:url('../../src/deploy_vii/assets/fonts/RedHatMono-Medium.woff2') format('woff2')}
-@font-face{font-family:'Red Hat Mono';font-weight:600;src:url('../../src/deploy_vii/assets/fonts/RedHatMono-SemiBold.woff2') format('woff2')}
+/* Proposal (2026-11-10), in the Credit OS design language of apps/issuer-library/credit_os/web/screen.css:
+   its tokens, its Untitled UI component foundation (MIT) and the New run patterns it keeps (.run-stages,
+   .run-field, .step-actions, .run-strip, .badge). It writes the same context/1 file as context-form.html;
+   docs/design/2026-11-10-context-form-proposal.md explains each change. */
+/* @font-face rules are added by the script: see FONT_BASE. */
 
-/* Tokens: copied verbatim from src/deploy_vii/assets/tokens.css */
-:root {
-  --rb-navy: #000533;        --rb-blue: #0017E5;
-  --rb-blue-hover: #0012B8;  --rb-logo-field: #001AFF;
-  --rb-ground: #EEF0F5;  --rb-panel: #FFFFFF;  --rb-head: #F6F7FA;
-  --rb-rule: #DDE1EA;    --rb-rule-soft: #EEF0F5;  --rb-select: #E7ECFF;
-  --rb-ink: #000533;     --rb-ink-2: #4A5068;  --rb-ink-3: #9AA0B4;
-  --rb-on-navy: #FFFFFF; --rb-on-navy-2: #C7CBE0;
-  --rb-pos: #0E7A46;  --rb-pos-tint: #DCF5E7;  --rb-pos-navy: #7EE2A8;
-  --rb-caut: #8A5300; --rb-caut-tint: #FFF1C7; --rb-caut-navy: #FFD166;
-  --rb-neg: #B3261E;  --rb-neg-tint: #FBE0DD;  --rb-neg-navy: #FFB4B0;
-  --rb-neu: #4A5068;  --rb-neu-tint: #EEF0F5;  --rb-neu-navy: #C7CBE0;
-  --rb-ch-1: #0017E5; --rb-ch-2: #C4410C;
-  --rb-ch-3: #000533; --rb-ch-4: #4A5068; --rb-ch-5: #9AA0B4;
-  --rb-ch-grid: #DDE1EA; --rb-ch-track: #EEF0F5; --rb-ch-hatch: 45deg 2/6px;
-  --rb-font-display: 'Red Hat Display', system-ui, sans-serif;
-  --rb-font-text: 'Red Hat Text', system-ui, sans-serif;
-  --rb-font-mono: 'Red Hat Mono', ui-monospace, monospace;
-  --rb-fs-page: 20px; --rb-fs-call: 16px; --rb-fs-issuer: 15px;
-  --rb-fs-body: 13px; --rb-fs-table: 12px; --rb-fs-label: 11px;
-  --rb-fs-micro: 11px; --rb-lh-body: 1.5; --rb-lh-table: 1.45;
-  --rb-s-1: 4px; --rb-s-2: 6px; --rb-s-3: 8px; --rb-s-4: 10px;
-  --rb-s-5: 12px; --rb-s-6: 18px; --rb-s-7: 24px;
-  --rb-r-panel: 0; --rb-r-tag: 2px; --rb-r-tile: 3px; --rb-r-nav: 4px;
-  --rb-t-fast: 120ms; --rb-t-base: 180ms; --rb-t-slow: 260ms;
-  --rb-ease: cubic-bezier(.2,.7,.2,1);
-  --rb-rail: 56px; --rb-navigator: 236px; --rb-inspector: 300px;
-  --rb-call-min: 56px; --rb-target: 24px; --rb-focus: 2px solid var(--rb-blue);
-}
+/* Tokens: copied from screen.css (lines 5 and 81). */
+:root{--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#0017e5;--ground:#eef0f5;--rule:#dde1ea;--muted:#4a5068;--quiet:#f6f7fa;--selection:#e7ecff;--amber:#8a5300;--amber-bg:#fff1c7;--amber-border:#f2d58a;--red:#b3261e;--green:#0e7a46;--depth:0 8px 28px rgba(0,5,51,.085)}
+:root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--ring:0 0 0 4px rgba(0,23,229,.16);--ring-error:0 0 0 4px rgba(179,38,30,.14);--red-bg:#fef3f2;--red-border:#f6c9c4;--radius-inline:4px;--radius-control:8px;--radius-card:12px}
 
-/* Base: matches src/deploy_vii/assets/app.css lines 1-25 */
+/* Base, as screen.css. */
 *{box-sizing:border-box}
-[hidden]{display:none!important}
-body{margin:0;background:var(--rb-ground);color:var(--rb-ink);font-family:var(--rb-font-text);font-weight:400;font-size:var(--rb-fs-body);line-height:var(--rb-lh-body);font-variant-numeric:tabular-nums}
+html,body{margin:0;min-height:100%;color:var(--navy);background:var(--ground);font:var(--fs-body)/1.55 'Red Hat Text',system-ui,sans-serif;font-variant-numeric:tabular-nums}
 button,input,select,textarea{font:inherit;color:inherit}
-button,a{touch-action:manipulation}
-button{cursor:pointer}
-a{color:var(--rb-blue);text-underline-offset:3px}
-a:hover{color:var(--rb-blue-hover)}
-button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:var(--rb-focus);outline-offset:2px}
-h1,h2,h3,h4{font-family:var(--rb-font-display);font-weight:600;line-height:1.2;margin:0}
-h1{font-size:var(--rb-fs-page)}
-h2{font-size:18px}
-h3{font-size:15px}
-h4{font-size:var(--rb-fs-body)}
-p{margin:var(--rb-s-3) 0}
-.num{font-family:var(--rb-font-mono);font-weight:500}
-.muted{color:var(--rb-ink-2)}
-.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+button{cursor:pointer;border:0;background:none}
+a{color:var(--blue-700);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+::selection{background:var(--selection);color:var(--navy)}
+h1,h2,h3,h4,p{margin:0}
+h1,h2,h3{font-family:'Red Hat Display',system-ui,sans-serif}
+[hidden]{display:none!important}
+svg.i{width:16px;height:16px;flex:none}
+.sr-only,.skip{position:fixed;top:-60px;left:70px;z-index:20;background:#fff;padding:10px}.skip:focus{top:4px}
+.code{font:500 var(--fs-label)/1.5 'Red Hat Mono',monospace;color:var(--text-quaternary)}
+.muted{color:var(--text-quaternary)}
 
-/* Header: title, file actions, stages */
-.top{background:var(--rb-navy);color:var(--rb-on-navy);padding:var(--rb-s-6) var(--rb-s-7) var(--rb-s-5)}
-.topin{display:flex;flex-wrap:wrap;gap:var(--rb-s-5);justify-content:space-between;align-items:flex-start}
-.top p{margin:var(--rb-s-1) 0 0;color:var(--rb-on-navy-2);max-width:62ch}
-.tools{display:flex;gap:var(--rb-s-3);flex-wrap:wrap;align-items:center}
-.tbtn{display:inline-flex;align-items:center;min-height:32px;padding:4px var(--rb-s-5);border:1px solid var(--rb-on-navy-2);border-radius:var(--rb-r-nav);background:transparent;color:var(--rb-on-navy);font-weight:600;cursor:pointer}
-.tbtn:hover{background:rgba(255,255,255,.1)}
-.tbtn:focus-within{outline:2px solid var(--rb-on-navy);outline-offset:2px}
-.tbtn input{position:absolute;opacity:0;width:1px;height:1px}
-.stepper{display:flex;flex-wrap:wrap;gap:var(--rb-s-2);margin:var(--rb-s-5) 0 0;padding:0;list-style:none}
-.step{display:inline-flex;align-items:center;gap:var(--rb-s-2);min-height:28px;padding:2px var(--rb-s-4);border:1px solid var(--rb-on-navy-2);border-radius:var(--rb-r-tag);background:transparent;color:var(--rb-on-navy);font-size:var(--rb-fs-table)}
-.step:hover{background:rgba(255,255,255,.1)}
-.step .sn{font-family:var(--rb-font-mono);font-weight:600}
-.step .sstate{font-weight:600;color:var(--rb-on-navy-2)}
-.step.done{border-color:var(--rb-pos-navy)}
-.step.done .sstate{color:var(--rb-pos-navy)}
-.step.needs-attention{border-color:var(--rb-neg-navy)}
-.step.needs-attention .sstate{color:var(--rb-neg-navy)}
-.step[aria-current=step]{background:var(--rb-on-navy);color:var(--rb-navy)}
-.step[aria-current=step] .sstate{color:var(--rb-blue)}
-.step[aria-disabled=true]{border-style:dashed;color:var(--rb-on-navy-2);cursor:not-allowed}
-.step[aria-disabled=true]:hover{background:transparent}
-.step:focus-visible{outline:2px solid var(--rb-on-navy);outline-offset:2px}
-.stepsum{display:none;margin-top:var(--rb-s-4)}
-.stepsum .prog{height:4px;margin-top:var(--rb-s-3);background:rgba(255,255,255,.25)}
-.stepsum .prog span{display:block;height:100%;background:var(--rb-on-navy)}
+/* Frame: the library's rail, one white card (title, stages, workbench) on the ground. */
+.rail{position:fixed;left:0;top:0;width:56px;height:100dvh;background:var(--navy);display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px 8px;z-index:5}
+.symbol{width:27px;height:30px;background:center/contain no-repeat url("data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDE1MjEgMTUxNSIgd2lkdGg9IjE1MjEiIGhlaWdodD0iMTUxNSI+Cgk8dGl0bGU+c3RhdGUtc3RyZWV0LWxvZ28tZmluYWwtc3ZnPC90aXRsZT4KCTxzdHlsZT4KCQkuczAgeyBmaWxsOiAjZmZmZmZmIH0gCgk8L3N0eWxlPgoJPHBhdGggaWQ9IlN5bWJvbCIgY2xhc3M9InMwIiBkPSJtNzI0LjggMTczYzIzOC42LTgyLjQgNDg5LjktMTcyLjcgNzk1LjMtMTcyLjd2MjExYy0yNjcuMSAwLTQ4OCA3OC41LTcyNi41IDE2MC45LTIzNS43IDgyLjQtNDg4IDE3Mi43LTc5My4zIDE3Mi43di0yMTFjMjY3IDAgNDg3LjktNzguNSA3MjQuNS0xNjAuOXptLTcyNC41IDQ3Ny44aDE1MTkuOHYyMTNoLTExMS0xNDA4Ljh6bTAgNjUyLjVjMjY3IDAgNDg3LjktNzguNSA3MjQuNS0xNjEgMjM4LjYtODIuNCA0ODkuOS0xNzIuNiA3OTUuMy0xNzIuNnYyMTAuOWMtMjY3LjEgMC00ODggNzguNS03MjYuNSAxNjAuOS0yMzYuNiA4Mi41LTQ4OCAxNzIuNy03OTMuMyAxNzIuN3oiLz4KPC9zdmc+")}
+.rail-rule{width:25px;height:1px;background:#30365e;margin:10px 0}
+.rail a{width:38px;height:38px;display:grid;place-items:center;border-radius:var(--radius-control);color:#fff}
+.rail a:hover{background:#ffffff20}
+.rail a svg{width:18px;height:18px}
+.app{margin-left:56px;padding:18px;height:100dvh;display:flex;flex-direction:column;min-width:0}
+.page-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 22px;background:#fff;border-radius:var(--radius-card) var(--radius-card) 0 0}
+.page-head h1{font:600 24px/32px 'Red Hat Display',system-ui,sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
+.scope{margin-top:2px;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary)}
+.page-actions{display:flex;gap:12px;flex:none;align-items:center}
+.stagebar{background:#fff;padding:4px 22px 14px;border-bottom:1px solid var(--border-secondary)}
+.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:minmax(0,1fr) 320px;border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:var(--depth);overflow:hidden}
+#canvas{min-width:0;min-height:0;overflow:auto}
+#canvas:focus{outline:none}
+.canvas-in{max-width:820px;padding:22px 26px 32px}
 
-/* Layout: form column and sticky readiness panel; one column under 960px */
-.layout{display:flex;gap:var(--rb-s-6);align-items:flex-start;padding:var(--rb-s-6) var(--rb-s-7) 48px;max-width:1240px}
-.main{flex:1 1 auto;max-width:780px;min-width:0}
-.panel{flex:0 0 340px;width:340px;position:sticky;top:var(--rb-s-5);max-height:calc(100vh - 24px);overflow:auto;background:var(--rb-panel);border:1px solid var(--rb-rule)}
-.panel>summary{display:none}
-.panel .body{padding:var(--rb-s-5) var(--rb-s-5) var(--rb-s-6)}
-@media (max-width:959px){
-  .layout{flex-direction:column;padding:var(--rb-s-5)}
-  .panel{order:-1;position:static;width:100%;flex-basis:auto;max-height:none}
-  .panel>summary{display:flex;gap:var(--rb-s-3);align-items:center;padding:var(--rb-s-4) var(--rb-s-5);font-family:var(--rb-font-display);font-weight:600;cursor:pointer;min-height:40px}
-  .main{width:100%;max-width:none}
-  .top{padding:var(--rb-s-5)}
-  .stepper{display:none}
-  .stepsum{display:block}
-}
+/* Stages: the New run progress-bar stages (screen.css .run-stages). */
+.run-stages{display:grid;grid-template-columns:repeat(var(--n,8),minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.run-stages button{display:block;width:100%;padding:10px 0 0;border-top:4px solid var(--border-secondary);text-align:left;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.run-stages .nm{display:block}
+.run-stages .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.run-stages button:hover{color:var(--text-secondary)}
+.run-stages .done{border-top-color:var(--blue);color:var(--text-secondary)}
+.run-stages [aria-current]{border-top-color:var(--blue);color:var(--blue-700)}
+.run-stages [aria-current] .sstate{color:var(--blue-700)}
+.run-stages .needs-attention{border-top-color:var(--red);color:var(--red)}
+.run-stages .needs-attention .sstate{color:var(--red)}
+.run-stages [aria-disabled=true]{cursor:not-allowed;opacity:.55}
+.run-stages [aria-disabled=true]:hover{color:var(--text-quaternary)}
+.run-stages button:focus-visible{outline:none;box-shadow:var(--ring);border-radius:0 0 var(--radius-inline) var(--radius-inline)}
+.stepsum{display:none;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
+.stepsum .prog{height:4px;margin-top:8px;background:var(--border-secondary);border-radius:2px}
+.stepsum .prog span{display:block;height:100%;background:var(--blue);border-radius:2px}
 
-/* Stage cards */
-.sec{background:var(--rb-panel);border:1px solid var(--rb-rule);padding:var(--rb-s-6) var(--rb-s-7) var(--rb-s-7);margin-bottom:var(--rb-s-5);scroll-margin-top:var(--rb-s-5)}
-.sec>h2{display:flex;align-items:baseline;gap:var(--rb-s-3);flex-wrap:wrap}
-.sec>h2 .n{font-family:var(--rb-font-mono);color:var(--rb-ink-2);font-weight:600}
-.stepline{margin:var(--rb-s-1) 0 0;font-size:var(--rb-fs-table);font-weight:600;color:var(--rb-ink-2)}
-.lead{margin:var(--rb-s-4) 0 var(--rb-s-5);max-width:68ch}
-.why{margin:var(--rb-s-4) 0;padding:var(--rb-s-3) var(--rb-s-5);border-left:3px solid var(--rb-blue);background:var(--rb-select);font-size:var(--rb-fs-table);line-height:var(--rb-lh-table);max-width:68ch}
-.why b{font-weight:600}
-.block{border-top:1px solid var(--rb-rule);margin-top:var(--rb-s-6);padding-top:var(--rb-s-5)}
-.block>h3{display:flex;gap:var(--rb-s-3);align-items:baseline;flex-wrap:wrap}
-.uses{display:inline-flex;flex-wrap:wrap;gap:var(--rb-s-1);margin:0;padding:0;list-style:none;align-items:center}
-.uses li,.mchip{display:inline-block;padding:0 var(--rb-s-2);border:1px solid var(--rb-rule);background:var(--rb-head);border-radius:var(--rb-r-tag);font-size:var(--rb-fs-label);font-weight:500;line-height:1.7;color:var(--rb-ink-2);white-space:nowrap}
-.uses .lbl{border:0;background:none;padding:0 var(--rb-s-1) 0 0;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
-fieldset{border:0;margin:var(--rb-s-5) 0 0;padding:0;min-width:0}
-legend{padding:0;font-weight:600;margin-bottom:var(--rb-s-3)}
-.f{margin:var(--rb-s-4) 0;min-width:0}
-.f label{display:block;font-weight:500;margin-bottom:var(--rb-s-1)}
-.f input[type=text],.f input[type=date],.f select,.f textarea{width:100%;min-height:32px;padding:3px var(--rb-s-3);border:1px solid var(--rb-ink-3);border-radius:var(--rb-r-tile);background:var(--rb-panel)}
-.f textarea{resize:vertical}
-.f input[aria-invalid=true],.f select[aria-invalid=true],.f textarea[aria-invalid=true]{border-color:var(--rb-neg);background:var(--rb-neg-tint)}
-.help{margin:var(--rb-s-1) 0 0;font-size:var(--rb-fs-table);color:var(--rb-ink-2);line-height:var(--rb-lh-table)}
-.err{margin:var(--rb-s-1) 0 0;font-size:var(--rb-fs-table);font-weight:600;color:var(--rb-neg)}
-.err::before{content:'\2715  '}
-.warn{margin:var(--rb-s-2) 0 0;padding:var(--rb-s-2) var(--rb-s-4);font-size:var(--rb-fs-table);line-height:var(--rb-lh-table);background:var(--rb-caut-tint);border-left:3px solid var(--rb-caut)}
-.warn b{color:var(--rb-caut)}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--rb-s-5)}
+/* Buttons, as screen.css. */
+.primary-action,.secondary-action,.tertiary-action{position:relative;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-control);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
+.primary-action{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:var(--shadow-xs)}
+.primary-action:hover:not(:disabled){background:var(--blue-700);border-color:var(--blue-700)}
+.primary-action:disabled{background:#c8cddb;border-color:#c8cddb;color:var(--muted);cursor:not-allowed}
+.secondary-action{background:#fff;border-color:var(--border-primary);color:var(--text-secondary);box-shadow:var(--shadow-xs)}
+.secondary-action:hover:not(:disabled){background:var(--gray-50);color:var(--text-primary)}
+.secondary-action:disabled{color:var(--text-quaternary);cursor:not-allowed;opacity:.6}
+.tertiary-action{background:none;color:var(--text-tertiary)}
+.tertiary-action:hover{background:var(--gray-50);color:var(--text-secondary)}
+.sm{height:36px;padding:0 12px}
+.primary-action:focus-visible,.secondary-action:focus-visible,.tertiary-action:focus-visible,.secondary-action:focus-within{outline:none;box-shadow:var(--shadow-xs),var(--ring)}
+.file-action input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
+.text-button{padding:2px 0;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--blue-700);text-align:left}
+.text-button:hover{text-decoration:underline;text-underline-offset:3px}
+
+/* Stage content. */
+.run-step>h2{display:flex;align-items:baseline;gap:10px;font:600 18px/28px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.run-step>h2:focus{outline:0}.run-step>h2:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.run-step>h2 .n{font:500 var(--fs-control)/20px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
+.stepline{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
+.lead{max-width:68ch;margin:12px 0 4px;font-size:var(--fs-control);line-height:22px;color:var(--text-secondary)}
+.legend-req{margin:8px 0 0;font-size:var(--fs-compact);color:var(--text-quaternary)}
+.block{margin-top:28px;padding-top:20px;border-top:1px solid var(--border-secondary)}
+.block>h3{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+details.block>summary{cursor:pointer;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);min-height:28px}
+.uses{margin:2px 0 0;font-size:var(--fs-compact);line-height:18px;color:var(--text-quaternary)}
+.uses b{font-weight:600;color:var(--text-tertiary)}
+.help{max-width:62ch;margin:6px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-tertiary)}
+fieldset{border:0;margin:24px 0 0;padding:0;min-width:0}
+legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
+
+/* Fields: the New run field (screen.css .run-field). */
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
 .grid .wide{grid-column:1/-1}
-@media (max-width:599px){.grid{grid-template-columns:minmax(0,1fr)}}
-.row{border:1px solid var(--rb-rule);background:var(--rb-head);padding:var(--rb-s-4) var(--rb-s-5);margin:var(--rb-s-4) 0}
-.rowhead{display:flex;justify-content:space-between;align-items:center;gap:var(--rb-s-3)}
-.btn{min-height:32px;padding:4px var(--rb-s-5);border:1px solid var(--rb-blue);border-radius:var(--rb-r-nav);background:var(--rb-panel);color:var(--rb-blue);font-weight:600}
-.btn:hover{background:var(--rb-select)}
-.btn:disabled{border-color:var(--rb-ink-3);color:var(--rb-ink-3);cursor:not-allowed;background:var(--rb-panel)}
-.btn.primary{background:var(--rb-blue);color:var(--rb-on-navy)}
-.btn.primary:hover{background:var(--rb-blue-hover)}
-.btn.primary:disabled{background:var(--rb-ink-3);border-color:var(--rb-ink-3);color:var(--rb-on-navy);cursor:not-allowed}
-.btn.sm{min-height:var(--rb-target);padding:1px var(--rb-s-3);font-size:var(--rb-fs-table)}
-.linkbtn{background:none;border:0;padding:0 var(--rb-s-1);min-height:var(--rb-target);color:var(--rb-blue);text-decoration:underline;text-underline-offset:3px}
-.exrow{margin:var(--rb-s-3) 0;padding:var(--rb-s-2) var(--rb-s-4);border:1px dashed var(--rb-ink-3);background:var(--rb-head);color:var(--rb-ink-2);font-size:var(--rb-fs-table)}
-.exrow b{font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:var(--rb-fs-label);margin-right:var(--rb-s-3)}
-.rtag{display:inline-block;margin-left:var(--rb-s-3);padding:0 var(--rb-s-2);border-radius:var(--rb-r-tag);font-size:var(--rb-fs-label);font-weight:600;line-height:1.6}
-.rtag.req{background:var(--rb-neg-tint);color:var(--rb-neg)}
-.rtag.rec{background:var(--rb-caut-tint);color:var(--rb-caut)}
-.rtag.opt{background:var(--rb-neu-tint);color:var(--rb-ink-2)}
+.f{margin-top:20px;min-width:0}
+.f label{display:block;margin-bottom:6px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
+.f input[type=text],.f input[type=date],.f select,.f textarea{display:block;width:100%;height:40px;padding:0 12px;background:#fff;border:1px solid var(--border-primary);border-radius:var(--radius-control);box-shadow:var(--shadow-xs);font:400 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.f textarea{height:auto;min-height:72px;padding:9px 12px;resize:vertical}
+.f select{appearance:none;padding-right:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%236b7287' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E") no-repeat right 10px center}
+.f input::placeholder,.f textarea::placeholder{color:#8a90a3}
+.f :is(input,select,textarea):focus{outline:none;border-color:var(--blue);box-shadow:var(--shadow-xs),var(--ring)}
+.f :is(input,select,textarea)[aria-invalid=true]{border-color:var(--red)}
+.f :is(input,select,textarea)[aria-invalid=true]:focus{box-shadow:var(--shadow-xs),var(--ring-error)}
+.req{margin-left:2px;color:var(--blue-700)}
+.rec{display:inline-flex;align-items:center;height:20px;margin-left:8px;padding:0 6px;border:1px solid var(--border-secondary);border-radius:999px;background:var(--gray-50);font:500 var(--fs-label)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary);vertical-align:1px}
+.err,.note{display:flex;gap:6px;align-items:flex-start;max-width:62ch;margin:6px 0 0;font-size:var(--fs-body);line-height:20px}
+.err{color:var(--red)}
+.note{color:var(--amber)}
+.err svg,.note svg{width:16px;height:16px;margin-top:2px;flex:none}
+@media(max-width:640px){.grid{grid-template-columns:minmax(0,1fr)}}
 
-/* Radio cards */
-.cards{display:grid;gap:var(--rb-s-3)}
+/* Option cards (radio) and the yes/no button group. */
+.cards{display:grid;gap:10px}
 .cards.two{grid-template-columns:repeat(2,minmax(0,1fr))}
-@media (max-width:699px){.cards.two{grid-template-columns:minmax(0,1fr)}}
-.card{display:flex;gap:var(--rb-s-4);align-items:flex-start;padding:var(--rb-s-4) var(--rb-s-5);border:1px solid var(--rb-rule);border-left:4px solid var(--rb-rule);border-radius:var(--rb-r-tile);background:var(--rb-panel);cursor:pointer;transition:background var(--rb-t-fast) var(--rb-ease)}
-.card:hover{background:var(--rb-head)}
-.card input{margin:3px 0 0;flex:none;width:16px;height:16px;accent-color:var(--rb-blue)}
-.card:has(input:checked){background:var(--rb-select);border-left-color:var(--rb-blue)}
-.card:has(input:focus-visible){outline:var(--rb-focus);outline-offset:2px}
-.card:has(input:disabled){opacity:.55;cursor:not-allowed}
+.cards.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:700px){.cards.two,.cards.three{grid-template-columns:minmax(0,1fr)}}
+.card{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:#fff;box-shadow:var(--shadow-xs);cursor:pointer}
+.card:hover{border-color:var(--border-primary)}
+.card input{flex:none;width:16px;height:16px;margin:2px 0 0;accent-color:var(--blue)}
+.card:has(input:checked){border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+.card:has(input:focus-visible){box-shadow:inset 0 0 0 1px var(--blue),var(--ring)}
+.card:has(input:disabled){cursor:not-allowed;opacity:.5;box-shadow:none}
 .ct{min-width:0}
-.ctl{display:flex;gap:var(--rb-s-3);align-items:center;flex-wrap:wrap}
-.imp{display:block;margin-top:var(--rb-s-1);font-size:var(--rb-fs-table);color:var(--rb-ink-2);line-height:var(--rb-lh-table)}
-.q{display:block;margin-top:2px;font-weight:500}
-.tag{display:inline-block;padding:0 var(--rb-s-2);border-radius:var(--rb-r-tag);font-size:var(--rb-fs-label);font-weight:600;letter-spacing:.06em;text-transform:uppercase;line-height:1.7}
-.tag.def{background:var(--rb-pos-tint);color:var(--rb-pos)}
-.tag.pl{background:var(--rb-neu-tint);color:var(--rb-neu);border:1px solid var(--rb-ink-3)}
-.card .mods{display:flex;flex-wrap:wrap;gap:var(--rb-s-1);margin-top:var(--rb-s-3)}
-
-/* Source checklist */
-.chk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--rb-s-3) var(--rb-s-6);align-items:start;padding:var(--rb-s-5) 0;border-top:1px solid var(--rb-rule-soft)}
-.chk:first-child{border-top:0}
-.chk h4{font-family:var(--rb-font-text);font-weight:600;font-size:var(--rb-fs-body)}
-.chk .help{max-width:58ch}
-.chk .found{margin:var(--rb-s-2) 0 0;font-size:var(--rb-fs-table);color:var(--rb-pos)}
-.chk .found.none{color:var(--rb-caut)}
-.chk fieldset{margin:0}
-.chk .warn,.chk .err,.chk .full{grid-column:1/-1}
-@media (max-width:599px){.chk{grid-template-columns:minmax(0,1fr)}}
-.seg{display:inline-flex;border:1px solid var(--rb-ink-3);border-radius:var(--rb-r-nav);overflow:hidden;flex-wrap:wrap}
-.seg label{display:inline-flex;align-items:center;gap:var(--rb-s-2);min-height:32px;padding:3px var(--rb-s-4);border-left:1px solid var(--rb-ink-3);cursor:pointer;font-weight:500;white-space:nowrap}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.q{display:block;margin-top:2px;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary)}
+.imp{display:block;margin-top:2px;font-size:var(--fs-body);line-height:20px;color:var(--text-tertiary)}
+.mods-line{display:block;margin-top:6px;font-size:var(--fs-compact);line-height:18px;color:var(--text-quaternary)}
+.seg{display:inline-flex;border:1px solid var(--border-primary);border-radius:var(--radius-control);box-shadow:var(--shadow-xs);overflow:hidden;background:#fff}
+.seg label{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-left:1px solid var(--border-primary);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
 .seg label:first-child{border-left:0}
-.seg label:hover{background:var(--rb-head)}
-.seg label:has(input:checked){background:var(--rb-select);box-shadow:inset 0 -3px 0 var(--rb-blue);font-weight:600}
-.seg label:has(input:focus-visible){outline:var(--rb-focus);outline-offset:-2px}
-.seg input{width:14px;height:14px;margin:0;accent-color:var(--rb-blue)}
-.seg.v{flex-direction:column}
-.seg.v label{border-left:0;border-top:1px solid var(--rb-ink-3)}
-.seg.v label:first-child{border-top:0}
-fieldset[aria-invalid=true] .seg{border-color:var(--rb-neg)}
+.seg label:hover{background:var(--gray-50)}
+.seg label:has(input:checked){background:var(--blue-50);color:var(--blue-700)}
+.seg label:has(input:focus-visible){box-shadow:inset var(--ring)}
+.seg label{position:relative}
+.seg input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.seg label:has(input:checked)::before{content:'';width:14px;height:14px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/14px no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/14px no-repeat}
+fieldset[aria-invalid=true] .seg{border-color:var(--red)}
+fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
-/* Folder check */
-.scan{margin:var(--rb-s-4) 0 var(--rb-s-2);padding:var(--rb-s-4) var(--rb-s-5);background:var(--rb-head);border:1px solid var(--rb-rule)}
-.scan .btn{position:relative}
-.scan .btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.scanres{margin-top:var(--rb-s-4)}
-.scanres table{width:100%;border-collapse:collapse;font-size:var(--rb-fs-table);table-layout:fixed}
-.scanres th,.scanres td{text-align:left;padding:var(--rb-s-1) var(--rb-s-3);border-top:1px solid var(--rb-rule);vertical-align:top;overflow-wrap:anywhere}
-.scanres th{font-weight:600;color:var(--rb-ink-2);border-top:0}
-.scanres td.st{width:9.5em;font-weight:600}
-.scanres .ok{color:var(--rb-pos)}
-.scanres .no{color:var(--rb-neg)}
-.scanres .maybe{color:var(--rb-caut)}
+/* Badges and grades, as screen.css. */
+.badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border:1px solid;border-radius:999px;font:500 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;white-space:nowrap}
+.badge i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge-gray,.badge.ready,.badge.information{background:var(--gray-50);border-color:var(--border-secondary);color:var(--text-secondary)}
+.badge.ready i{background:var(--green)}
+.badge.information i{background:var(--blue)}
+.badge.check{background:var(--gray-25);border:1px dashed var(--border-primary);color:var(--text-tertiary)}
+.badge.gap,.badge.limited{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+.badge.will_refuse{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
 
-/* Dates in time order */
-.tl{display:flex;flex-wrap:wrap;gap:var(--rb-s-2);align-items:center;margin:var(--rb-s-5) 0 0}
-.tl:empty{display:none}
-.tl .pt{display:inline-flex;gap:var(--rb-s-2);align-items:baseline;padding:2px var(--rb-s-3);border:1px solid var(--rb-rule);background:var(--rb-head);border-radius:var(--rb-r-tag);font-size:var(--rb-fs-table)}
-.tl .pt b{font-weight:600}
-.tl .pt.asof{border-color:var(--rb-blue);background:var(--rb-select)}
-.tl .pt.cut{border-color:var(--rb-ch-2)}
-.tl .arrow{color:var(--rb-ink-3)}
-#rows-peers[data-mode=user_list] .comps{display:none}
+/* Alerts: the run-state strip (screen.css .run-strip). Amber carries attention with its words; grey is neutral. */
+.run-strip{display:grid;grid-template-columns:20px minmax(0,1fr);gap:12px;align-items:start;margin:0 0 16px;padding:12px 16px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50);color:var(--text-primary)}
+.run-strip>svg{width:20px;height:20px;color:var(--text-secondary)}
+.run-strip[data-tone=brand]{background:var(--blue-50);border-color:var(--blue-100)}.run-strip[data-tone=brand]>svg{color:var(--blue-700)}
+.run-strip[data-tone=amber]{background:var(--amber-bg);border-color:var(--amber-border)}.run-strip[data-tone=amber]>svg{color:var(--amber)}
+.run-strip[data-tone=error]{background:var(--red-bg);border-color:var(--red-border)}.run-strip[data-tone=error]>svg{color:var(--red)}
+.strip-title{display:block;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif}
+.strip-text{margin:2px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary);max-width:100ch}
+.run-strip ul{margin:4px 0 0;padding-left:18px;font-size:var(--fs-body);line-height:20px}
+.run-strip[data-tone=error] a{color:var(--red);font-weight:600}
+.run-step .run-strip{margin:16px 0 0}
+
+/* Repeated rows (facilities, quotes, peers…). */
+.row{margin:12px 0;padding:4px 16px 16px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-25)}
+.rowhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:8px}
+.rowhead h4{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.exrow{margin:10px 0 0;font-size:var(--fs-compact);line-height:18px;color:var(--text-quaternary)}
+.exrow b{font-weight:600;margin-right:6px;color:var(--text-tertiary)}
+.adds{margin-top:12px}
+
+/* Source checklist. */
+.chk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 24px;align-items:start;padding:18px 0;border-top:1px solid var(--border-secondary)}
+.chk:first-child{border-top:0}
+.chk h4{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
 .chk .full{grid-column:1/-1}
+.chk fieldset{margin:0}
+.chk .err,.chk .note{grid-column:1/-1}
+.found{margin:6px 0 0;font-size:var(--fs-compact);line-height:18px;color:var(--green)}
+.found.none{color:var(--text-quaternary)}
+.confirm{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50);font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
+.confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
+@media(max-width:640px){.chk{grid-template-columns:minmax(0,1fr)}}
 
-/* Navigation */
-.stepnav{display:flex;flex-wrap:wrap;gap:var(--rb-s-4);align-items:center;background:var(--rb-panel);border:1px solid var(--rb-rule);padding:var(--rb-s-5) var(--rb-s-6)}
-.stepnav .live{flex:1 1 160px;color:var(--rb-ink-2);font-weight:500}
-#loadmsg{margin:0 0 var(--rb-s-4);font-weight:500}
+/* Folder check. */
+.scan{margin:20px 0 8px;padding:16px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-25)}
+.scan h3{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.scan .secondary-action{margin-top:10px}
+.scanres:empty{display:none}
+.scanres{margin-top:14px}
+.scanres p{font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
+.scanres .no{color:var(--red)}.scanres .maybe{color:var(--amber)}.scanres .ok{color:var(--green)}
+
+/* Tables: the content table (screen.css .table-scroll). */
+.table-scroll{max-width:100%;overflow:auto;margin-top:10px;background:#fff;border:1px solid var(--border-secondary);border-radius:var(--radius-card);box-shadow:var(--shadow-xs)}
+.table-scroll table{width:100%;border-collapse:collapse;text-align:left;font-size:var(--fs-body);line-height:20px;table-layout:fixed}
+.table-scroll th,.table-scroll td{padding:10px 14px;border-bottom:1px solid var(--border-secondary);vertical-align:top;overflow-wrap:anywhere}
+.table-scroll thead th{background:var(--gray-50);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
+.table-scroll tbody tr:last-child>*{border-bottom:0}
+.table-scroll td{color:var(--text-secondary)}
+.table-scroll td.st{font-weight:600}
+.mod-name{display:block;font-weight:600;color:var(--text-primary)}
+.table-scroll td p{margin:0}.table-scroll td p+p{margin-top:8px}
+@media(max-width:720px){.table-scroll table{min-width:560px}}
+.fix{display:block;color:var(--text-tertiary)}
+.fix b{font-weight:600;color:var(--text-secondary)}
+
+/* Dates in time order. */
+.tl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:20px 0 0}
+.tl:empty{display:none}
+.tl .pt{display:inline-flex;gap:6px;align-items:baseline;height:26px;padding:0 10px;border:1px solid var(--border-secondary);border-radius:999px;background:var(--gray-50);font-size:var(--fs-compact);line-height:24px;color:var(--text-secondary)}
+.tl .pt b{font-weight:600}
+.tl .pt .num{font-family:'Red Hat Mono',monospace}
+.tl .pt.asof{border-color:var(--blue-100);background:var(--blue-50);color:var(--blue-700)}
+.tl .arrow{color:var(--text-quaternary)}
+#rows-peers[data-mode=user_list] .comps{display:none}
+
+/* Step actions: the New run footer (screen.css .step-actions). */
+.step-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:28px;padding-top:16px;border-top:1px solid var(--border-secondary)}
+.step-actions .live{flex:1 1 160px;font-size:var(--fs-control);line-height:20px;color:var(--text-tertiary)}
 #loadmsg:empty{display:none}
-#loadmsg.bad{color:var(--rb-neg)}
-.steperr{margin:0 0 var(--rb-s-5);padding:var(--rb-s-4) var(--rb-s-5);background:var(--rb-neg-tint);border:1px solid var(--rb-neg)}
-.steperr ul{margin:var(--rb-s-2) 0 0;padding-left:var(--rb-s-7)}
-.steperr a{color:var(--rb-neg);font-weight:600}
 
-/* Readiness (panel and review) */
-.panel h2{font-size:16px}
-.rsub{margin:var(--rb-s-1) 0 var(--rb-s-4);color:var(--rb-ink-2);font-size:var(--rb-fs-table)}
-.tally{display:flex;flex-wrap:wrap;gap:var(--rb-s-2);margin:0 0 var(--rb-s-4);padding:0;list-style:none}
-.badge{display:inline-flex;align-items:center;gap:var(--rb-s-1);padding:0 var(--rb-s-2);border-radius:var(--rb-r-tag);font-size:var(--rb-fs-label);font-weight:600;line-height:1.8;white-space:nowrap}
-.badge.ready{background:var(--rb-pos-tint);color:var(--rb-pos)}
-.badge.information{background:var(--rb-neu-tint);color:var(--rb-neu)}
-.badge.check{background:var(--rb-neu-tint);color:var(--rb-ink);border:1px solid var(--rb-ink-3)}
-.badge.limited,.badge.gap{background:var(--rb-caut-tint);color:var(--rb-caut)}
-.badge.will_refuse{background:var(--rb-neg-tint);color:var(--rb-neg)}
+/* Run readiness: the inspector column. */
+.inspector{min-width:0;min-height:0;overflow:auto;border-left:1px solid var(--border-secondary);background:#fcfdff}
+.inspector>summary{display:none}
+.inspector-bar{position:sticky;top:0;z-index:1;padding:16px 18px 12px;background:#fcfdff;border-bottom:1px solid var(--border-secondary)}
+.inspector-bar h2{font:600 16px/24px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.inspector-bar p{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
+.tally{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0;list-style:none}
+.inspector-body{padding:6px 18px 18px}
+.runrow{margin:10px 0 4px;padding:10px 12px;border:1px solid var(--border-secondary);border-radius:var(--radius-control);background:var(--gray-50);font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+.runrow b{display:block;font-weight:600;color:var(--text-primary)}
+.runrow ul{margin:4px 0 0;padding-left:16px}
 .mods{list-style:none;margin:0;padding:0}
-.mods>li{border-top:1px solid var(--rb-rule-soft)}
-.mods>li:first-child{border-top:0}
-.mods details>summary,.mods .mrow{display:grid;grid-template-columns:18px minmax(0,1fr) auto 10px;gap:var(--rb-s-3);align-items:center;padding:var(--rb-s-2) 0;min-height:32px;list-style:none;cursor:default}
+.mods>li{border-bottom:1px solid var(--border-secondary)}
+.mods>li:last-child{border-bottom:0}
+.mods details>summary,.mods .mrow{display:grid;grid-template-columns:minmax(0,1fr) auto 12px;gap:10px;align-items:center;padding:10px 0;list-style:none}
 .mods details>summary{cursor:pointer}
 .mods details>summary::-webkit-details-marker{display:none}
-.mods .ix{font-family:var(--rb-font-mono);font-weight:600;color:var(--rb-ink-3);font-size:var(--rb-fs-table)}
-.mods .nm{min-width:0}
-.mods .nm{font-weight:500}
-.mods .nm small{display:block;color:var(--rb-ink-2);font-size:var(--rb-fs-label);font-weight:400;line-height:1.4}
-.mods .nm .code{font-family:var(--rb-font-mono);font-weight:500}
-.mods details>summary::after{content:'\25B8';color:var(--rb-ink-3)}
-.mods details[open]>summary::after{content:'\25BE'}
-.mods .why-list{margin:0 0 var(--rb-s-3) 26px;padding:0;list-style:none;font-size:var(--rb-fs-table);line-height:var(--rb-lh-table)}
-.mods .why-list li{margin:var(--rb-s-2) 0;padding-left:var(--rb-s-3);border-left:2px solid var(--rb-rule)}
-.mods .why-list .fix{display:block;color:var(--rb-ink-2)}
-.mods .why-list .fix b{font-weight:600;color:var(--rb-ink)}
-.mods .why-list .go{margin-left:0}
-.runrow{margin:0 0 var(--rb-s-4);padding:var(--rb-s-3) var(--rb-s-4);background:var(--rb-head);border:1px solid var(--rb-rule);font-size:var(--rb-fs-table)}
-.runrow ul{margin:var(--rb-s-1) 0 0;padding-left:var(--rb-s-6)}
-.note{font-size:var(--rb-fs-table);color:var(--rb-ink-2);margin-top:var(--rb-s-4)}
+.mods details>summary::after{content:'';width:5px;height:5px;margin-left:2px;border-right:1px solid var(--text-quaternary);border-bottom:1px solid var(--text-quaternary);transform:rotate(-45deg)}
+.mods details[open]>summary::after{transform:rotate(45deg)}
+.mods .nm{min-width:0;font:600 var(--fs-compact)/1.35 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.mods .nm small{display:block;margin-top:2px;font:400 var(--fs-label)/1.4 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.mods .nm .code{font-size:var(--fs-label)}
+.why-list{margin:0 0 12px;padding:0;list-style:none;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+.why-list li{margin:6px 0;padding-left:10px;border-left:2px solid var(--border-secondary)}
+.note-foot{margin-top:14px;font-size:var(--fs-label);line-height:16px;color:var(--text-quaternary)}
 
-/* Review */
-.rv{border-top:1px solid var(--rb-rule);padding:var(--rb-s-4) 0}
-.rv header{display:flex;gap:var(--rb-s-4);align-items:baseline}
-.rv ul{margin:var(--rb-s-2) 0 0;padding-left:var(--rb-s-7)}
-.rv .skip{color:var(--rb-ink-2)}
-.ack{display:flex;gap:var(--rb-s-3);align-items:flex-start;margin:var(--rb-s-5) 0;padding:var(--rb-s-4) var(--rb-s-5);border:1px solid var(--rb-caut);background:var(--rb-caut-tint);font-weight:500}
-.ack input{margin-top:3px;width:16px;height:16px;accent-color:var(--rb-blue);flex:none}
-.dropcheck{margin:var(--rb-s-4) 0 0;padding-left:var(--rb-s-7)}
-.dropcheck li{margin:var(--rb-s-2) 0}
-.dropcheck code,.why code,.help code,.warn code{font-family:var(--rb-font-mono);font-size:.95em;background:var(--rb-head);padding:0 3px;border:1px solid var(--rb-rule-soft)}
-.dl{display:flex;flex-wrap:wrap;gap:var(--rb-s-4);align-items:center;margin-top:var(--rb-s-5)}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{.top .tools,.stepnav,.panel>summary{display:none}.layout{display:block}.panel{position:static;width:auto;max-height:none}}
+/* Review. */
+.review-summary{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:0 24px;margin:10px 0 0}
+.review-summary dt,.review-summary dd{padding:10px 0;border-top:1px solid var(--border-secondary)}
+.review-summary dt{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.review-summary dt .text-button{display:block;font-size:var(--fs-compact);font-weight:600}
+.review-summary dd{margin:0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary);overflow-wrap:anywhere}
+.review-summary dd ul{margin:0;padding-left:16px}
+.review-summary .nil{color:var(--text-quaternary)}
+.review-summary .note,.review-summary .err{margin-top:4px}
+.run-step h3.sub{margin-top:28px;font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.dropcheck{margin:8px 0 0;padding-left:20px;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
+.dropcheck li{margin:6px 0}
+.dropcheck code,.help code,.note code{font:500 var(--fs-compact) 'Red Hat Mono',monospace;color:var(--text-primary)}
+.start-confirm{display:flex;align-items:flex-start;gap:10px;margin-top:20px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
+.start-confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
+.dl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px}
+.dl .muted{font-size:var(--fs-control)}
+
+/* Narrow widths: the page scrolls, as the library does below 720px. */
+@media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 280px}}
+@media(max-width:960px){
+  body{overflow:auto}
+  .app{height:auto;min-height:100dvh}
+  .workbench{display:flex;flex-direction:column;overflow:visible}
+  #canvas{overflow:visible;order:2}
+  .inspector{order:1;border-left:0;border-bottom:1px solid var(--border-secondary);overflow:visible}
+  .inspector>summary{display:flex;gap:8px;align-items:center;padding:12px 22px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);cursor:pointer}
+  .inspector-bar{position:static}
+  .run-stages{display:none}.stepsum{display:block}
+}
+@media(max-width:720px){
+  .rail{width:46px;padding:15px 4px}.rail .symbol{width:24px}
+  .app{margin-left:46px;padding:9px}
+  .page-head{display:block;padding:12px 15px}.page-head h1{font-size:22px;line-height:30px}
+  .page-actions{margin-top:10px;flex-wrap:wrap}
+  .stagebar{padding:4px 15px 12px}
+  .canvas-in{padding:16px 15px 24px}
+  .inspector>summary{padding:12px 15px}
+  .review-summary{grid-template-columns:minmax(0,1fr)}.review-summary dd{border-top:0;padding-top:0}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(forced-colors:active){.badge,.primary-action,.secondary-action,.tertiary-action,.card,.seg{border:1px solid}.run-stages [aria-current]{outline:2px solid;outline-offset:2px}}
+@media print{.rail,.page-actions,.step-actions,.inspector>summary,.stagebar{display:none}.app{margin:0;height:auto;padding:0}.workbench{display:block;box-shadow:none}#canvas{overflow:visible}}
 </style>
 </head>
 <body>
-
-<header class="top">
-  <div class="topin">
+<a class="skip" href="#canvas">Skip to the form</a>
+<aside class="rail" aria-label="Application">
+  <span class="symbol" role="img" aria-label="Credit OS"></span><span class="rail-rule"></span>
+  <a id="rail-library" href="../../../_engine/library/index.html#W-Library/cases" title="Issuer library" hidden><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg><span class="sr-only">Issuer library</span></a>
+  <a id="rail-activity" href="../../../_engine/library/index.html#CP-OS/activity" title="Run activity" hidden><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg><span class="sr-only">Run activity</span></a>
+</aside>
+<div class="app">
+  <header class="page-head">
     <div>
       <h1>Run context</h1>
-      <p>Tell the workflow what the files can't, and see before you pay for a run which modules have what they need. Every stage explains who uses your answer.</p>
+      <p class="scope" id="scope"></p>
     </div>
-    <div class="tools">
-      <label class="tbtn">Open a saved context.json<input type="file" id="load" accept=".json,application/json"></label>
-      <button type="button" class="tbtn" id="reset">Start over</button>
+    <div class="page-actions">
+      <label class="secondary-action file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Open saved context<input type="file" id="load" accept=".json,application/json"></label>
+      <button type="button" class="tertiary-action" id="reset">Start over</button>
     </div>
-  </div>
-  <nav aria-label="Stages"><ol class="stepper" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
-</header>
-
-<div class="layout">
-<div class="main">
-<p id="loadmsg" role="status" aria-live="polite"></p>
-<div id="steperr" class="steperr" role="alert" hidden></div>
+  </header>
+  <nav class="stagebar" aria-label="Stages"><ol class="run-stages" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
+  <div class="workbench">
+  <main id="canvas" tabindex="-1"><div class="canvas-in">
+<div id="loadmsg" role="status" aria-live="polite"></div>
+<div id="steperr" class="run-strip" data-tone="error" role="alert" hidden></div>
 <form id="f" novalidate autocomplete="off">
 
 <!-- 1 Purpose -->
-<section class="sec" id="st-purpose" data-st="purpose">
+<section class="run-step" id="st-purpose" data-st="purpose">
   <h2 tabindex="-1"><span class="n"></span> <span>What do you need from this run?</span></h2>
   <p class="stepline"></p>
-  <p class="lead">Your answer picks the <b>pathway</b>: the analytical modules CP-OS runs, in order. The next stages ask only for what those modules use.</p>
+  <p class="lead">Your answer picks the pathway: the modules the run will use, in order. The next stages ask only for what those modules need.</p>
+  <p class="legend-req"><span class="req">*</span> Required. Answers are checked as you go; nothing leaves this computer.</p>
   <fieldset id="pathf"><legend>Pathway</legend><div class="cards two" id="pathcards"></div><p class="help" id="pathnote"></p></fieldset>
-  <fieldset id="rtf"><legend>What is the market situation?</legend><div data-cards="run_type"></div><p class="help" id="rtnote"></p></fieldset>
-  <div class="why"><b>Why it matters.</b> A paid run cannot be patched: if the context changes, every module runs again (a resumed run refuses changed context). Choosing the right pathway now is the cheapest fix there is.</div>
+  <fieldset id="rtf"><legend>Market situation</legend><div data-cards="run_type" data-class="two"></div><p class="help" id="rtnote"></p></fieldset>
+  <div class="run-strip" data-tone="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">A run cannot be corrected once it starts</span><p class="strip-text">If the context changes, every module runs again: a resumed run refuses changed context. The cheapest fix is the right pathway now.</p></div></div>
 </section>
 
 <!-- 2 Issuer -->
-<section class="sec" id="st-issuer" data-st="issuer" hidden>
+<section class="run-step" id="st-issuer" data-st="issuer" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Who is the issuer?</span></h2>
   <p class="stepline"></p>
-  <p class="lead">Every module is checked for naming this issuer: its handoff must name the issuer, an alias or the ID. Source readiness (CP-0) blocks the run on an unresolved identity.</p>
+  <p class="lead">Each module's answer must name the issuer, one of its other names or its ID. Source readiness stops the run when it cannot tell whose files these are.</p>
   <div class="grid">
-    <div class="f"><label for="i-issuer_name">Issuer (company name)</label><input type="text" id="i-issuer_name" placeholder="e.g. Northbridge Group" data-k="issuer_name" aria-describedby="i-issuer_name-h"><p class="help" id="i-issuer_name-h">The name the filings use for the group. Plain text.</p></div>
-    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><p class="help" id="i-issuer_id-h">Filled from the name. Lowercase letters, digits and hyphens, at most 40 characters (the inbox refuses longer). Keep the same ID for every run on this issuer: the library files runs by it.</p></div>
+    <div class="f"><label for="i-issuer_name">Issuer (company name)</label><input type="text" id="i-issuer_name" placeholder="e.g. Northbridge Group" data-k="issuer_name" aria-describedby="i-issuer_name-h"><p class="help" id="i-issuer_name-h">The name the filings use for the group.</p></div>
+    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><p class="help" id="i-issuer_id-h">Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.</p></div>
+    <div class="f wide"><label for="i-aliases">Other names in the filings</label><textarea id="i-aliases" rows="2" placeholder="e.g. Northbridge&#10;NBG" data-k="aliases" aria-describedby="i-aliases-h"></textarea><p class="help" id="i-aliases-h">One per line: the legal name if it differs, a short name, the ticker.</p></div>
   </div>
-  <div class="grid">
-    <div class="f wide"><label for="i-aliases">Other names in the filings (aliases)</label><textarea id="i-aliases" rows="3" placeholder="e.g. Northbridge&#10;NBG" data-k="aliases" aria-describedby="i-aliases-h"></textarea><p class="help" id="i-aliases-h">One per line: the legal name if it differs, the short name, the ticker. A handoff that names the issuer only by an alias you left out fails the identity check.</p></div>
-  </div>
-  <fieldset id="classf"><legend>Issue classification</legend><div data-cards="issue_classification" data-class="two"></div><p class="help">Classify by the debt this run analyses; for split-rated or unrated issuers use your firm's convention. The methods are written for high-yield and leveraged-loan credit.</p></fieldset>
-  <fieldset><legend>How does the issuer report?</legend><div data-cards="case_kind"></div></fieldset>
+  <fieldset id="classf"><legend>Issue classification</legend><div data-cards="issue_classification" data-class="two"></div><p class="help">By the debt this run analyses; for split-rated or unrated issuers, use your firm's convention.</p></fieldset>
+  <fieldset><legend>How does the issuer report?</legend><div data-cards="case_kind" data-class="three"></div></fieldset>
   <fieldset><legend>Listed equity</legend><div data-cards="listed_equity" data-class="two"></div></fieldset>
   <div class="grid">
-    <div class="f" id="tickerf" hidden><label for="i-ticker">Ticker</label><input type="text" id="i-ticker" placeholder="e.g. NBG" data-k="ticker" aria-describedby="i-ticker-h"><p class="help" id="i-ticker-h">The listed ticker symbol. Add it to the aliases too if the filings use it.</p></div>
+    <div class="f" id="tickerf" hidden><label for="i-ticker">Ticker</label><input type="text" id="i-ticker" placeholder="e.g. NBG" data-k="ticker" aria-describedby="i-ticker-h"><p class="help" id="i-ticker-h">Add it to the other names too if the filings use it.</p></div>
   </div>
-  <details class="block" id="moreid"><summary><b>Legal entities, sector and sponsor</b> <span class="muted">· recommended</span></summary>
+  <details class="block" id="moreid"><summary>Legal entities, sector and sponsor</summary>
   <div class="grid">
     <div class="f"><label for="i-borrower_name">Borrower (legal entity)</label><input type="text" id="i-borrower_name" placeholder="e.g. Northbridge Holdings LLC" data-k="borrower_name" aria-describedby="i-borrower_name-h"><p class="help" id="i-borrower_name-h">The entity that signs the credit agreement. Left blank, the modules look for it and record a gap if they cannot find it.</p></div>
     <div class="f"><label for="i-parent_name">Parent</label><input type="text" id="i-parent_name" placeholder="e.g. Northbridge Topco Ltd" data-k="parent_name" aria-describedby="i-parent_name-h"><p class="help" id="i-parent_name-h">The ultimate parent, if different.</p></div>
-    <div class="f"><label for="i-guarantors">Guarantors</label><textarea id="i-guarantors" rows="3" placeholder="e.g. Northbridge Opco LLC&#10;Northbridge IP LLC" data-k="guarantors" aria-describedby="i-guarantors-h"></textarea><p class="help" id="i-guarantors-h">One name per line, so a name may contain a comma.</p></div>
-    <div class="f"><label for="i-sector">Sector</label><input type="text" id="i-sector" placeholder="e.g. Gaming &amp; Leisure" data-k="sector" list="sectors" aria-describedby="i-sector-h"><p class="help" id="i-sector-h">Pick a suggestion or type your own. The library filters by it.</p></div>
-    <div class="f"><label for="i-country">Country</label><input type="text" id="i-country" placeholder="e.g. United States" data-k="country" aria-describedby="i-country-h"><p class="help" id="i-country-h">Country of the head office.</p></div>
+    <div class="f"><label for="i-guarantors">Guarantors</label><textarea id="i-guarantors" rows="2" placeholder="e.g. Northbridge Opco LLC&#10;Northbridge IP LLC" data-k="guarantors" aria-describedby="i-guarantors-h"></textarea><p class="help" id="i-guarantors-h">One per line, so a name may contain a comma.</p></div>
+    <div class="f"><label for="i-sector">Sector</label><input type="text" id="i-sector" placeholder="e.g. Gaming &amp; Leisure" data-k="sector" list="sectors" aria-describedby="i-sector-h"><p class="help" id="i-sector-h">The library filters by it.</p></div>
+    <div class="f"><label for="i-country">Country</label><input type="text" id="i-country" placeholder="e.g. United States" data-k="country" aria-describedby="i-country-h"><p class="help" id="i-country-h">Of the head office.</p></div>
     <div class="f"><label for="i-sponsor">Sponsor</label><input type="text" id="i-sponsor" placeholder="e.g. Harbour Peak Capital" data-k="sponsor" aria-describedby="i-sponsor-h"><p class="help" id="i-sponsor-h">Private equity owner, if any.</p></div>
   </div>
   </details>
@@ -340,90 +367,90 @@ fieldset[aria-invalid=true] .seg{border-color:var(--rb-neg)}
 </section>
 
 <!-- 3 Dates -->
-<section class="sec" id="st-dates" data-st="dates" hidden>
+<section class="run-step" id="st-dates" data-st="dates" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Which dates and periods?</span></h2>
   <p class="stepline"></p>
-  <p class="lead">The as-of date is the day the analysis stands on, not the end of the reporting period. Evidence published after it is treated as not yet available.</p>
+  <p class="lead">The as-of date is the day the analysis stands on, not the end of the reporting period. Evidence published after it counts as not yet available.</p>
   <div class="grid">
-    <div class="f"><label for="d-newest">Date of your newest source file</label><input type="date" id="d-newest" data-c="newest" aria-describedby="d-newest-h"><p class="help" id="d-newest-h">The filing or publication date of the latest file in the folder (for example the 10-Q filing date). Not saved; it only checks the as-of date below.</p></div>
-    <div class="f"><label for="d-as_of">As-of date</label><input type="date" id="d-as_of" data-k="as_of" aria-describedby="d-as_of-h"><p class="help" id="d-as_of-h">On or after the newest file's date. Quotes, ratings, deal terms and peer figures you enter must not be dated after it (they are refused).</p></div>
-    <div class="f"><label for="d-current_period">Current period</label><input type="text" id="d-current_period" placeholder="e.g. q3-2026" data-k="current_period" aria-describedby="d-current_period-h"><p class="help" id="d-current_period-h">The latest reported period in the folder, as the filing labels it: q1-2026 to q4-2026, h1-2026, h2-2026 or fy-2025 (lowercase). Use the issuer's fiscal labels.</p></div>
-    <div class="f"><label for="d-prior_period">Prior period</label><input type="text" id="d-prior_period" placeholder="e.g. q2-2026" data-k="prior_period" aria-describedby="d-prior_period-h"><p class="help" id="d-prior_period-h">The period to compare with: earlier than the current period and the same kind (quarter, half or year).</p></div>
+    <div class="f"><label for="d-newest">Date of your newest file</label><input type="date" id="d-newest" data-c="newest" aria-describedby="d-newest-h"><p class="help" id="d-newest-h">When the latest file in the folder was filed or published. Only checks the as-of date; not saved.</p></div>
+    <div class="f"><label for="d-as_of">As-of date</label><input type="date" id="d-as_of" data-k="as_of" aria-describedby="d-as_of-h"><p class="help" id="d-as_of-h">On or after the newest file's date. Quotes, ratings, deal terms and peer figures dated after it are refused.</p></div>
+    <div class="f"><label for="d-current_period">Current period</label><input type="text" id="d-current_period" placeholder="e.g. q3-2026" data-k="current_period" aria-describedby="d-current_period-h"><p class="help" id="d-current_period-h">The latest reported period, as the filing labels it: q1-2026 to q4-2026, h1-2026, h2-2026 or fy-2025.</p></div>
+    <div class="f"><label for="d-prior_period">Prior period</label><input type="text" id="d-prior_period" placeholder="e.g. q2-2026" data-k="prior_period" aria-describedby="d-prior_period-h"><p class="help" id="d-prior_period-h">Earlier than the current period, and the same kind (quarter, half or year).</p></div>
     <div class="f"><label for="d-reporting_currency">Reporting currency</label><input type="text" id="d-reporting_currency" placeholder="e.g. USD" data-k="reporting_currency" value="USD" maxlength="3" aria-describedby="d-reporting_currency-h"><p class="help" id="d-reporting_currency-h">As the filing cover states it: three uppercase letters.</p></div>
-    <div class="f"><label for="d-cutoff">Research cutoff</label><input type="date" id="d-cutoff" data-k="cutoff" aria-describedby="d-cutoff-h"><p class="help" id="d-cutoff-h">Optional. Research items published after this are refused; not after the as-of date. Blank means the as-of date.</p></div>
+    <div class="f"><label for="d-cutoff">Research cutoff</label><input type="date" id="d-cutoff" data-k="cutoff" aria-describedby="d-cutoff-h"><p class="help" id="d-cutoff-h">Research published after it is refused. Blank means the as-of date.</p></div>
   </div>
   <div class="tl" id="timeline"></div>
   <p class="help" id="tlnote"></p>
 </section>
 
 <!-- 4 Sources -->
-<section class="sec" id="st-sources" data-st="sources" hidden>
+<section class="run-step" id="st-sources" data-st="sources" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>What is in the folder?</span></h2>
   <p class="stepline"></p>
-  <p class="lead">Modules can use only the files you drop with this context. Answer for the files that are really in the folder, not for files that exist somewhere: every module reads these declarations.</p>
+  <p class="lead">Modules can use only the files you drop with this context. Answer for the files that are in the folder, not for files that exist somewhere: every module reads these answers.</p>
   <div class="scan">
-    <b>Check my folder</b> <span class="muted">· optional, nothing leaves this computer</span>
-    <p class="help">Pick the issuer folder. The form lists the files the launcher will read and the ones it will skip, and guesses document types from file names to help you answer below. Nothing is uploaded and nothing is saved.</p>
-    <span class="btn sm">Choose folder…<input type="file" id="scan" webkitdirectory multiple aria-label="Choose the issuer folder to check"></span>
+    <h3>Check the folder</h3>
+    <p class="help">Optional. Pick the issuer folder: the form lists what the run will read and skip, and guesses document types from file names. Nothing is uploaded or saved.</p>
+    <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Choose folder<input type="file" id="scan" webkitdirectory multiple aria-label="Choose the issuer folder to check"></span>
     <div class="scanres" id="scanres" aria-live="polite"></div>
   </div>
   <div id="chklist"></div>
 </section>
 
 <!-- 5 Market -->
-<section class="sec" id="st-market" data-st="market" hidden>
+<section class="run-step" id="st-market" data-st="market" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Deal terms, quotes and ratings</span></h2>
   <p class="stepline"></p>
-  <p class="lead">Market inputs the filings do not hold. Each block says which module in this run uses it and what happens without it.</p>
+  <p class="lead">Market inputs the filings do not hold. Each part says which module in this run reads it, and what it does without it.</p>
   <div class="block" id="b-deal">
-    <h3>Facilities <ul class="uses" data-uses="deal"></ul></h3>
+    <h3>Facilities</h3><p class="uses" data-uses="deal"></p>
     <p class="help" id="dealnote"></p>
-    <p class="exrow"><b>Example</b>tlb-2031 · Term loan B · USD · size 1250 · 7 years · talk 325–350 bps · OID 99.0–99.5 · floor 0.50% · 101 soft call, 6 months · Refinance 2027 term loan · 2026-10-28 · Lead arranger</p>
+    <p class="exrow"><b>Example</b>tlb-2031 · Term loan B · USD · size 1250 · 7 years · talk 325–350 bps · OID 99.0–99.5 · floor 0.50% · 2026-10-28 · Lead arranger</p>
     <div id="rows-deal"></div>
-    <button type="button" class="btn sm" id="add-deal" data-add="deal" data-label="Facilities">Add facility</button>
+    <div class="adds"><button type="button" class="secondary-action sm" id="add-deal" data-add="deal" data-label="Facilities">Add facility</button></div>
   </div>
   <div class="block" id="b-quote">
-    <h3>Market quotes <ul class="uses" data-uses="quote"></ul></h3>
+    <h3>Market quotes</h3><p class="uses" data-uses="quote"></p>
     <p class="help" id="quotenote"></p>
     <p class="exrow"><b>Example</b>tlb-2031 · observed · bid 98.50 · ask 99.00 · yield 8.25% · spread 340 bps · 2026-10-30 · Dealer run</p>
     <div id="rows-quote"></div>
-    <button type="button" class="btn sm" id="add-quote" data-add="quote">Add quote</button>
+    <div class="adds"><button type="button" class="secondary-action sm" id="add-quote" data-add="quote">Add quote</button></div>
   </div>
   <div class="block" id="b-rating">
-    <h3>Agency ratings <ul class="uses" data-uses="rating"></ul></h3>
+    <h3>Agency ratings</h3><p class="uses" data-uses="rating"></p>
     <p class="help" id="ratingnote"></p>
     <p class="exrow"><b>Example</b>S&amp;P · issuer · B+ · Stable · 2026-09-15</p>
     <div id="rows-rating"></div>
-    <button type="button" class="btn sm" id="add-rating" data-add="rating">Add rating</button>
+    <div class="adds"><button type="button" class="secondary-action sm" id="add-rating" data-add="rating">Add rating</button></div>
   </div>
 </section>
 
 <!-- 6 Valuation -->
-<section class="sec" id="st-valuation" data-st="valuation" hidden>
+<section class="run-step" id="st-valuation" data-st="valuation" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Peers and valuation</span></h2>
   <p class="stepline"></p>
   <p class="lead" id="vallead"></p>
-  <fieldset id="psf"><legend>Where do peer figures come from?</legend><div data-cards="peer_source"></div></fieldset>
+  <fieldset id="psf"><legend>Where do peer figures come from?</legend><div data-cards="peer_source" data-class="two"></div></fieldset>
   <div id="rows-peers" data-mode="">
     <p class="help" id="peers-intro"></p>
     <p class="exrow"><b>Example</b>Harbour Leisure Inc · HLI · EV 5400 · EBITDA 600 · 2026-09-30 · Company 10-Q</p>
     <div id="rows-peer"></div>
-    <button type="button" class="btn sm" id="add-peer" data-add="peer">Add peer</button>
+    <div class="adds"><button type="button" class="secondary-action sm" id="add-peer" data-add="peer">Add peer</button></div>
   </div>
-  <fieldset><legend>Valuation basis</legend><div data-cards="basis"></div></fieldset>
+  <fieldset><legend>Valuation basis</legend><div data-cards="basis" data-class="two"></div></fieldset>
   <div id="prec" class="block" hidden>
     <h3>Precedent transactions</h3>
     <p class="exrow"><b>Example</b>Target Casinos Ltd · Acquirer Group · 2025-06-30 · EV 1800 · EBITDA 200 · Press release</p>
     <div id="rows-prec"></div>
-    <button type="button" class="btn sm" id="add-prec" data-add="prec">Add precedent</button>
+    <div class="adds"><button type="button" class="secondary-action sm" id="add-prec" data-add="prec">Add precedent</button></div>
   </div>
   <div id="im" class="block" hidden>
     <h3>Issuer market data</h3>
     <div class="grid">
-      <div class="f"><label for="im-market_cap_m">Market cap (m)</label><input type="text" id="im-market_cap_m" placeholder="e.g. 3200" data-k="market_cap_m" inputmode="decimal" aria-describedby="im-market_cap_m-h"><p class="help" id="im-market_cap_m-h">Millions of the reporting currency; a plain number.</p></div>
+      <div class="f"><label for="im-market_cap_m">Market cap (m)</label><input type="text" id="im-market_cap_m" placeholder="e.g. 3200" data-k="market_cap_m" inputmode="decimal" aria-describedby="im-market_cap_m-h"><p class="help" id="im-market_cap_m-h">Millions of the reporting currency.</p></div>
       <div class="f"><label for="im-net_debt_m">Net debt (m)</label><input type="text" id="im-net_debt_m" placeholder="e.g. 2200" data-k="net_debt_m" inputmode="decimal" aria-describedby="im-net_debt_m-h"><p class="help" id="im-net_debt_m-h">Negative if net cash.</p></div>
-      <div class="f"><label for="im-ev_m">Enterprise value (m)</label><input type="text" id="im-ev_m" placeholder="e.g. 5400" data-k="ev_m" inputmode="decimal" aria-describedby="im-ev_m-h"><p class="help" id="im-ev_m-h">Give EV, or market cap and net debt. Millions; a plain number.</p></div>
-      <div class="f"><label for="im-as_of">As-of</label><input type="date" id="im-as_of" data-k="as_of" aria-describedby="im-as_of-h"><p class="help" id="im-as_of-h">Date of the figures; not after the run as-of date.</p></div>
+      <div class="f"><label for="im-ev_m">Enterprise value (m)</label><input type="text" id="im-ev_m" placeholder="e.g. 5400" data-k="ev_m" inputmode="decimal" aria-describedby="im-ev_m-h"><p class="help" id="im-ev_m-h">Give EV, or market cap and net debt.</p></div>
+      <div class="f"><label for="im-as_of">As-of</label><input type="date" id="im-as_of" data-k="as_of" aria-describedby="im-as_of-h"><p class="help" id="im-as_of-h">Not after the run's as-of date.</p></div>
       <div class="f"><label for="im-source">Source</label><input type="text" id="im-source" placeholder="e.g. Company 10-Q, 2026-09-30" data-k="source" aria-describedby="im-source-h"><p class="help" id="im-source-h">Where the figures come from.</p></div>
     </div>
     <fieldset><legend>EBITDA basis</legend><div data-cards="ebitda_basis" data-name="im-basis" data-class="two"></div></fieldset>
@@ -432,14 +459,14 @@ fieldset[aria-invalid=true] .seg{border-color:var(--rb-neg)}
     <h3>Your multiple</h3>
     <div class="grid">
       <div class="f"><label for="um-value">EV/EBITDA multiple</label><input type="text" id="um-value" placeholder="e.g. 8.5" data-k="value" inputmode="decimal" aria-describedby="um-value-h"><p class="help" id="um-value-h">Above 0, up to 99.99.</p></div>
-      <div class="f"><label for="um-rationale">Rationale</label><input type="text" id="um-rationale" placeholder="e.g. Mid-point of 2024-26 sector LBO multiples" data-k="rationale" aria-describedby="um-rationale-h"><p class="help" id="um-rationale-h">Say why you chose this multiple; it is shown as user-supplied.</p></div>
+      <div class="f"><label for="um-rationale">Rationale</label><input type="text" id="um-rationale" placeholder="e.g. Mid-point of 2024-26 sector LBO multiples" data-k="rationale" aria-describedby="um-rationale-h"><p class="help" id="um-rationale-h">Shown with the multiple, as user-supplied.</p></div>
     </div>
     <fieldset><legend>EBITDA basis</legend><div data-cards="ebitda_basis" data-name="um-basis" data-class="two"></div></fieldset>
   </div>
 </section>
 
 <!-- 7 Assumptions -->
-<section class="sec" id="st-assumptions" data-st="assumptions" hidden>
+<section class="run-step" id="st-assumptions" data-st="assumptions" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Your own assumptions</span></h2>
   <p class="stepline"></p>
   <p class="lead" id="asmlead"></p>
@@ -447,48 +474,51 @@ fieldset[aria-invalid=true] .seg{border-color:var(--rb-neg)}
 </section>
 
 <!-- 8 Questions -->
-<section class="sec" id="st-questions" data-st="questions" hidden>
+<section class="run-step" id="st-questions" data-st="questions" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Questions to research</span></h2>
   <p class="stepline"></p>
   <p class="lead" id="qlead"></p>
   <p class="exrow"><b>Example</b>How much of 2025 adjusted EBITDA is run-rate cost savings?</p>
   <div id="rows-q"></div>
-  <button type="button" class="btn sm" id="add-q" data-add="q">Add question</button>
+  <div class="adds"><button type="button" class="secondary-action sm" id="add-q" data-add="q">Add question</button></div>
 </section>
 
 <!-- 9 Review -->
-<section class="sec" id="st-review" data-st="review" hidden>
+<section class="run-step" id="st-review" data-st="review" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Check and download</span></h2>
   <p class="stepline"></p>
-  <p class="lead">This is the run you are about to pay for. Read what each module is expected to do with these inputs; fix what you can now, because a changed context means a new run.</p>
-  <h3>Expected outcome by module</h3>
+  <p class="lead">This is the run you are about to start. Fix what you can now: a changed context means a new run.</p>
+  <h3 class="sub">What each module is expected to do</h3>
   <div id="rv-ready"></div>
-  <h3 style="margin-top:24px">Your answers</h3>
-  <div id="rv-steps"></div>
-  <h3 style="margin-top:24px">Before you drop the folder</h3>
+  <h3 class="sub">Your answers</h3>
+  <dl class="review-summary" id="rv-steps"></dl>
+  <h3 class="sub">Before you drop the folder</h3>
   <ol class="dropcheck" id="dropcheck"></ol>
-  <label class="ack" id="ackbox" hidden><input type="checkbox" id="ack"><span id="acktext"></span></label>
-  <div class="dl"><button type="button" class="btn primary" id="download">Download context.json</button><span id="dlnote" class="muted"></span></div>
+  <label class="start-confirm" id="ackbox" hidden><input type="checkbox" id="ack"><span id="acktext"></span></label>
+  <div class="dl"><button type="button" class="primary-action" id="download"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>Download context.json</button><span id="dlnote" class="muted"></span></div>
 </section>
 </form>
-<div class="stepnav">
-  <button type="button" class="btn" id="back">Back</button>
-  <button type="button" class="btn primary" id="next">Next</button>
+<div class="step-actions">
+  <button type="button" class="secondary-action" id="back"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back</button>
   <span id="nextlive" class="live" role="status" aria-live="polite"></span>
+  <button type="button" class="primary-action" id="next"><span id="next-t">Next</span><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
 </div>
-</div>
+</div></main>
 
-<details class="panel" id="panel">
+<details class="inspector" id="panel">
   <summary><span>Run readiness</span> <span id="pn-sum"></span></summary>
-  <div class="body">
+  <div class="inspector-bar">
     <h2>Run readiness</h2>
-    <p class="rsub" id="pn-run"></p>
+    <p id="pn-run"></p>
     <ul class="tally" id="pn-tally"></ul>
+  </div>
+  <div class="inspector-body">
     <div id="pn-runrow"></div>
     <ul class="mods" id="pn-mods" aria-label="Modules in this run"></ul>
-    <p class="note">Expected from your answers. Source readiness (CP-0) confirms during the run, and a model may still find less. Status: Ready, Check (confirm a file), Gap (the module records missing evidence), Limited (it concludes with a stated limit), Will refuse (it stops).</p>
+    <p class="note-foot">Expected from your answers. Source readiness confirms during the run, and a model may still find less. Ready · Check: confirm a file · Gap: records missing evidence · Limited: concludes with a stated limit · Will refuse: stops.</p>
   </div>
 </details>
+</div>
 </div>
 
 <script>
@@ -541,7 +571,7 @@ const MODULES = {
   'CP-4C': ['Recovery & fulcrum', 'Recovery waterfall and the fulcrum security.'],
   'CP-5': ['Evidence validation', 'Traces every figure back to its source.'],
   'CP-6': ['Committee decision', 'Challenges the thesis as an investment committee would.'],
-  'CP-8': ['Deliverable comparison', 'Compares this run with an earlier one (owner route only).'],
+  'CP-8': ['Deliverable comparison', 'Compares this run with an earlier one (not run from the inbox).'],
   'CP-DR': ['Research questions', 'Researches open questions (no pathway runs it today).']
 };
 const mname = m => (MODULES[m] || [m])[0];
@@ -556,6 +586,16 @@ const PATHS = {
 const RUN_LABEL = {primary:'New issue', secondary:'Trading', research:'No market view', earnings:'Earnings update'};
 /* A copy made for one inbox pathway carries data-pathway on <html>: that pathway is fixed. */
 const FIXED_PATH = Object.prototype.hasOwnProperty.call(PATHWAYS, document.documentElement.dataset.pathway) ? document.documentElement.dataset.pathway : '';
+// Fonts: this repository's for this copy; an inbox copy (fixed pathway) sits at <root>/inbox/<pathway>/_template
+// and uses the built library's, at <root>/_engine/library/fonts. One base each, so no request fails.
+const FONT_BASE = FIXED_PATH ? '../../../_engine/library/fonts/' : '../../src/deploy_vii/assets/fonts/';
+(() => {
+  const faces = [['Red Hat Display', 700, 'RedHatDisplay-Bold'], ['Red Hat Display', 600, 'RedHatDisplay-SemiBold'], ['Red Hat Text', 400, 'RedHatText-Regular'],
+    ['Red Hat Text', 500, 'RedHatText-Medium'], ['Red Hat Text', 600, 'RedHatText-SemiBold'], ['Red Hat Mono', 500, 'RedHatMono-Medium']];
+  const style = document.createElement('style');
+  style.textContent = faces.map(([family, weight, file]) => `@font-face{font-family:'${family}';font-weight:${weight};font-display:swap;src:url('${FONT_BASE}${file}.woff2') format('woff2')}`).join('\n');
+  document.head.appendChild(style);
+})();
 
 const OPTIONS = {
   run_type: [
@@ -642,23 +682,32 @@ const CHECKS = [
     without:'Trigger terms are not found; with no ratings entered under Market either, Ratings & triggers states Insufficient Information.'},
   {id:'quotesfile', c:'quotesfile', title:'Dealer runs or a quotes file', text:'Prices dated within 30 days of the as-of date. You can type quotes in the next stage instead.', uses:['CP-3','CP-3D'], when:has => has('CP-3') || has('CP-3D'),
     without:'Relative value and market-implied risk show gaps unless you enter quotes.'},
-  {id:'portfolio', k:'portfolio_workbook', title:'Portfolio workbook', text:'The fund workbook in the layout of docs/templates/portfolio.template.xlsx. Check it first: deploy-vii validate-input portfolio <file>.', uses:['CP-0','CP-3','CP-6'], when:(has, o) => o.run.pathway === 'portfolio_decision',
+  {id:'portfolio', k:'portfolio_workbook', title:'Portfolio workbook', text:'The fund workbook, in the layout of the portfolio template. A workbook that does not follow it is not read.', uses:['CP-0','CP-3','CP-6'], when:(has, o) => o.run.pathway === 'portfolio_decision',
     without:'Committee decision records a gap and portfolio fit shows gaps.'},
   {id:'prior', k:'prior_case', title:'Prior decision record', text:'The earlier investment committee decision on this issuer.', uses:['CP-0'], when:(has, o) => o.run.pathway === 'portfolio_decision',
-    without:'Nothing is compared with a prior decision. The comparison module (CP-8) runs on the owner route only, not from the inbox.'}
+    without:'Nothing is compared with a prior decision. The comparison module does not run from the inbox.'}
 ];
 const SAVED_BOOL = ['management_bridge', 'portfolio_workbook', 'prior_case'];
 
 /* ======================================================================= Rendering helpers */
 let uid = 0;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const PLANNED = '<span class="tag pl">Not built</span>';
+const PLANNED = '<span class="badge check">Not built</span>';
+const ICON_PATHS = {
+  'circle-alert': '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+  'triangle-alert': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  'circle-check': '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  'info': '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
+};
+const icon = name => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
 function cards(name, k, opts, cls) {
   return `<div class="cards ${cls || ''}">` + opts.map(o => {
     const id = name + '-' + o.v;
     return `<label class="card" for="${id}"><input type="radio" id="${id}" name="${name}" data-k="${k}" value="${o.v}"${o.def ? ' checked' : ''}>` +
-      `<span class="ct"><span class="ctl"><b>${o.label}</b>` + (o.def ? `<span class="tag def" data-deftag="${o.v}">Default</span>` : `<span class="tag def" data-deftag="${o.v}" hidden>Default</span>`) +
-      (o.rec ? '<span class="tag def">Recommended</span>' : '') + (o.planned ? PLANNED : '') + `</span>` +
+      `<span class="ct"><span class="ctl"><b>${o.label}</b>` + `<span class="badge badge-gray" data-deftag="${o.v}"${o.def ? '' : ' hidden'}>Default</span>` +
+      (o.rec ? '<span class="badge badge-gray">Recommended</span>' : '') + (o.planned ? PLANNED : '') + `</span>` +
       (o.text ? `<span class="imp">${o.text}</span>` : '') + `</span></label>`;
   }).join('') + '</div>';
 }
@@ -666,7 +715,8 @@ function seg(name, attr, opts, vertical) {
   return `<div class="seg${vertical ? ' v' : ''}">` + opts.map(([v, label]) =>
     `<label><input type="radio" name="${name}" ${attr} value="${v}">${label}</label>`).join('') + '</div>';
 }
-const usesList = mods => '<li class="lbl">Used by</li>' + mods.map(m => `<li title="${esc(m)}">${esc(mname(m))}</li>`).join('');
+// Reader names lead; the module code is the name's title (screens pass: production detail in a title).
+const usesList = mods => mods.length ? '<b>Used by</b> ' + mods.map(m => `<span title="${esc(m)}">${esc(mname(m))}</span>`).join(', ') : 'No module in this run reads it directly.';
 function F(id, k, label, attrs, help, cls) {
   return `<div class="f${cls ? ' ' + cls : ''}"><label for="${id}">${label}</label><input type="text" id="${id}" data-k="${k}" ${attrs || ''}${help ? ` aria-describedby="${id}-h"` : ''}>` +
     (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
@@ -677,7 +727,7 @@ function S(id, k, label, opts, help) {
     opts.map(o => `<option>${esc(o)}</option>`).join('') + '</select>' + (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
 }
 function rowShell(title, body) {
-  return `<div class="row" data-row><div class="rowhead"><h4 data-title="${title}"></h4><button type="button" class="btn sm" data-remove>Remove</button></div>${body}</div>`;
+  return `<div class="row" data-row><div class="rowhead"><h4 data-title="${title}"></h4><button type="button" class="tertiary-action sm" data-remove>Remove</button></div>${body}</div>`;
 }
 const P = t => ` placeholder="${t}"`;
 const NP = t => 'inputmode="decimal"' + P(t);
@@ -710,7 +760,7 @@ const ROWS = {
     const p = 'p' + (++uid);
     return rowShell('Peer', '<div class="grid">' + F(p+'a','name','Name',P('e.g. Harbour Leisure Inc'),'Plain text.') + F(p+'b','ticker','Ticker',P('e.g. HLI'),'The listed ticker symbol.') +
       '</div><div class="grid comps">' + F(p+'c','ev_m','EV (m)',NP('e.g. 5400'),'Millions.') + F(p+'d','ebitda_m','EBITDA (m)',NP('e.g. 600'),'Millions; above 0.') + D(p+'e','as_of','As-of','At most 12 months before the run as-of date, or the peer is excluded.') + F(p+'f','source','Source',P('e.g. Company 10-Q, 2026-09-30'),'Where the figures come from.') +
-      '</div><p class="help comps">EV/EBITDA: <span class="num" data-mult>n/a</span> (shown for checking; Python recomputes it)</p>');
+      '</div><p class="help comps">EV/EBITDA: <span class="num" data-mult>n/a</span> (shown for checking; the run recomputes it)</p>');
   }},
   prec: {box:'rows-prec', title:'Precedent', max:30, make() {
     const p = 'x' + (++uid);
@@ -756,9 +806,9 @@ function asmBlocks() {
   return Object.keys(ASM_FIELDS).map(key => {
     const a = ASM_FIELDS[key], m = ASM_MODULE[key];
     const body = a.rows
-      ? '<p class="help">1 to 4 scenarios.</p><p class="exrow"><b>Example</b>EBITDA decline 20% · interest increase 10%</p><div id="rows-cp2a"></div><button type="button" class="btn sm" id="add-cp2a" data-add="scen" data-label="Downside scenarios">Add scenario</button>'
+      ? '<p class="help">1 to 4 scenarios.</p><p class="exrow"><b>Example</b>EBITDA decline 20% · interest increase 10%</p><div id="rows-cp2a"></div><div class="adds"><button type="button" class="secondary-action sm" id="add-cp2a" data-add="scen" data-label="Downside scenarios">Add scenario</button></div><p class="help" id="cp2a-note"></p>'
       : '<div class="grid">' + a.grid + '</div>';
-    return `<div class="block mod" id="as-${key}"><h3>${a.title} <ul class="uses">${usesList([m])}</ul></h3>` +
+    return `<div class="block mod" id="as-${key}"><h3>${a.title}</h3><p class="uses">${usesList([m])}</p>` +
       `<fieldset><legend>${esc(mname(m))} assumptions</legend>${cards('mode-' + key, 'mode', OPTIONS.asm, 'two')}</fieldset>` +
       `<div class="uf" hidden>${body}` + F(`as-${key}-rationale`, 'rationale', 'Rationale', P('e.g. Matches the sponsor downside case'), 'Say why you chose these values.') + '</div></div>';
   }).join('');
@@ -803,7 +853,7 @@ function nameOf(el) {
   const lab = el.type === 'radio' || el.type === 'checkbox' && el.dataset.c ? (el.closest('fieldset') || el.closest('.chk') || el).querySelector('legend, h4') : (el.labels && el.labels[0]);
   if (!lab) return el.dataset.label || el.dataset.k || el.dataset.c || '';
   const c = lab.cloneNode(true);
-  c.querySelectorAll('.rtag, .uses').forEach(x => x.remove());
+  c.querySelectorAll('.req, .rec, .uses, .badge, .sr-only').forEach(x => x.remove());
   return c.textContent.trim();
 }
 function record(list, el, msg) {
@@ -1089,11 +1139,12 @@ function advise(o) {
 // the checklist answers stand in for the launcher's guesses from file covers. Each rule names its module.
 const OUTCOMES = ['will_refuse', 'gap', 'limited', 'check', 'information', 'ready'];
 const WORD = {will_refuse:'Will refuse', gap:'Gap', limited:'Limited', check:'Check', information:'Note', ready:'Ready'};
-const GLYPH = {will_refuse:'✕', gap:'○', limited:'!', check:'?', information:'i', ready:'✓'};
 const worst = list => list.reduce((a, b) => OUTCOMES.indexOf(a) <= OUTCOMES.indexOf(b) ? a : b, 'ready');
 const PEER_GAP = {none:'No peer source: no peer universe and no peer multiple.', cp_dr_public:'"Research finds public peers" needs the research module, which no pathway runs, and its peer pack has no enterprise value: "No peer figures".', user_list:'Named peers need a figure look-up that is not built: "No peer figures".'};
+// Live evidence behind the wording: tdg-forecast-003 and -004 (legal declaration, CP-2A), and
+// cpos-tdg-sol-medium-all-001 (as-of 2024-09-30; CP-2G left out the December-quarter results).
 const RULES = [
-  {s:'run', o:'check', c:f => validDate(f.newest) && validDate(f.o.run.as_of) && f.o.run.as_of < f.newest, r:f => `The as-of date (${f.o.run.as_of}) is before your newest file (${f.newest}): modules may set that file aside as not yet available (in live run cpos-tdg-sol-medium-all-001, as-of 2024-09-30, the forecast module excluded the December-quarter results as not available at the as-of date).`, fix:'Use a date on or after the newest file.', go:'dates'},
+  {s:'run', o:'check', c:f => validDate(f.newest) && validDate(f.o.run.as_of) && f.o.run.as_of < f.newest, r:f => `The as-of date (${f.o.run.as_of}) is before your newest file (${f.newest}): modules may set that file aside as not yet available (in a TDG run as of 2024-09-30, the forecast module left out the December-quarter results).`, fix:'Use a date on or after the newest file.', go:'dates'},
   {s:'run', o:'check', c:f => { const e = calEnd(f.o.run.current_period); return !!e && validDate(f.o.run.as_of) && f.o.run.as_of <= e; }, r:f => `The as-of date (${f.o.run.as_of}) is not after the end of ${f.o.run.current_period} (${calEnd(f.o.run.current_period)}, for a calendar fiscal year): its report cannot have been published yet.`, fix:'Use the date you run the analysis, or check the period.', go:'dates'},
   {s:'run', o:'information', c:f => f.o.identity.issue_classification === 'investment_grade', r:'Investment grade: the methods are written for high-yield and leveraged-loan credit. The run notes this; whether it changes a conclusion is not asserted.', go:'issuer'},
   {s:'CP-1', o:'check', c:f => f.chk.fin === 'no' || f.chk.fin === '' && f.scan && !f.scan.has.financial, r:'No filed financial report in the folder: financials would rest on management claims.', fix:'Add the annual or quarterly report.', go:'sources'},
@@ -1106,7 +1157,7 @@ const RULES = [
   {s:'CP-1D', o:'check', c:f => f.raw.bridge === '', r:'Waiting for your answer: is the management EBITDA bridge in the folder?', fix:'Answer under Source files.', go:'sources'},
   {s:'CP-1D', o:'gap', c:f => f.raw.bridge === 'no', r:'No management EBITDA bridge: every bridge cell is not applicable.', fix:'Add the bridge to the folder and say so under Source files.', go:'sources'},
   {s:'CP-2', o:'gap', c:f => f.o.run.run_type === 'primary' && !f.has('CP-1D'), r:'A new issue without Earnings quality in the run: the pro forma base row has no add-back verdicts.', fix:'Nothing to add in this pathway; read the pro forma base as unverified.'},
-  {s:'CP-2A', o:'limited', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the downside path has no covenant or financing-document evidence (live run tdg-forecast-004 came back Restricted this way).', fix:'Add the executed agreement if you have it.', go:'sources'},
+  {s:'CP-2A', o:'limited', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the downside path has no covenant or financing-document evidence (a TDG run came back Restricted this way).', fix:'Add the executed agreement if you have it.', go:'sources'},
   {s:'CP-2D', o:'limited', c:f => f.o.deal_terms.some(d => d.currency && d.currency !== f.o.run.reporting_currency), r:'A facility is in another currency than the reporting currency: it is not calculable (no FX conversion).', fix:'Nothing to add; read that facility as excluded.', go:'market'},
   {s:'CP-2G', o:'limited', c:f => f.chk.guidance === 'no', r:'No company guidance: forecast drivers rest on labelled analyst judgment.', fix:'Add a release or presentation that states guidance.', go:'sources'},
   {s:'CP-2G', o:'check', c:f => { const b = pkey(f.o.run.current_period); return b && !(b.kind === 'fy' || b.kind === 'q' && b.n === 4); }, r:'The forecast base is not a fiscal year: the model forecasts the three fiscal years after it.', fix:'Use fy-YYYY or q4-YYYY as the current period.', go:'dates'},
@@ -1220,25 +1271,25 @@ function stepLine(st, o) {
 }
 function renderSteps(sq, o) {
   const ol = $('stepper');
-  document.querySelectorAll('section.sec').forEach(x => { x.hidden = true; });
+  document.querySelectorAll('section.run-step').forEach(x => { x.hidden = true; });
   if (ol.dataset.seq !== sq.join(',')) {
     ol.dataset.seq = sq.join(',');
+    ol.style.setProperty('--n', sq.length);
     ol.innerHTML = '';
     sq.forEach(st => {
       const li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.dataset.step = st;
-      b.innerHTML = '<span class="sn"></span><span class="nm"></span><span class="sstate"></span>';
+      b.innerHTML = '<span class="nm"></span><span class="sstate"></span>';
       li.appendChild(b); ol.appendChild(li);
     });
   }
   sq.forEach((st, i) => {
     const s = stepState(st, sq, o), b = ol.children[i].firstChild;
-    b.className = 'step ' + s.word.toLowerCase().replace(/ /g, '-');
+    b.className = s.word.toLowerCase().replace(/ /g, '-');
     if (st === cur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
     if (s.locked) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
-    b.children[0].textContent = i + 1;
-    b.children[1].textContent = SHORT[st];
-    b.children[2].textContent = (s.word === 'Done' ? '✓ ' : '') + s.word;
+    b.children[0].textContent = SHORT[st];
+    b.children[1].textContent = s.word === 'Current' ? 'In progress' : s.word;
     const sec = $('st-' + st);
     sec.hidden = st !== cur;
     sec.querySelector('.n').textContent = i + 1;
@@ -1253,7 +1304,7 @@ function renderNav(sq, o) {
   $('back').hidden = i === 0;
   nx.hidden = cur === 'review';
   $('nextlive').hidden = cur === 'review';
-  nx.textContent = sq[i + 1] === 'review' ? 'Check & download' : optionalStage(cur, o) && !entered(cur, o) ? 'Skip' : 'Next';
+  $('next-t').textContent = sq[i + 1] === 'review' ? 'Check & download' : optionalStage(cur, o) && !entered(cur, o) ? 'Skip' : 'Next';
   const mine = errs.filter(e => e.st === cur);
   const req = mine.filter(e => /^(required|choose|add |say whether|tick)/.test(e.short)).length, oth = mine.length - req;
   const nw = warns.filter(w => w.st === cur).length;
@@ -1264,6 +1315,7 @@ function gotoStep(st) {
   cur = st; visited.add(st);
   update();
   $('st-' + st).querySelector('h2').focus();
+  $('canvas').scrollTop = 0;
   window.scrollTo(0, 0);
 }
 function goNext() {
@@ -1290,7 +1342,7 @@ function go(id) {
 
 /* ======================================================================= Messages on fields */
 function clearMessages() {
-  document.querySelectorAll('.err, .warn.fieldwarn').forEach(e => e.remove());
+  document.querySelectorAll('.err.fielderr, .note.fieldnote').forEach(e => e.remove());
   document.querySelectorAll('[aria-invalid]').forEach(e => e.removeAttribute('aria-invalid'));
   document.querySelectorAll('[data-base]').forEach(e => { if (e.dataset.base) e.setAttribute('aria-describedby', e.dataset.base); else e.removeAttribute('aria-describedby'); });
 }
@@ -1312,15 +1364,17 @@ function showMessages() {
   errs.forEach((er, i) => {
     if (!shown(er)) return;
     const p = document.createElement('p');
-    p.className = 'err'; p.id = 'err-' + i; p.textContent = er.short;
+    p.className = 'err fielderr'; p.id = 'err-' + i;
+    p.innerHTML = icon('circle-alert') + '<span></span>';
+    p.lastChild.textContent = er.short.charAt(0).toUpperCase() + er.short.slice(1);
     attach(er.el, p, true);
   });
   warns.forEach((w, i) => {
     if (!shown(w)) return;
     const p = document.createElement('p');
-    p.className = 'warn fieldwarn'; p.id = 'warn-' + i;
-    p.innerHTML = '<b>Note:</b> ';
-    p.append(w.short.charAt(0).toUpperCase() === w.short.charAt(0) ? w.short : nameOf(w.el) + ' ' + w.short);
+    p.className = 'note fieldnote'; p.id = 'warn-' + i;
+    p.innerHTML = icon('triangle-alert') + '<span><span class="sr-only">Note: </span></span>';
+    p.lastChild.append(w.short.charAt(0).toUpperCase() === w.short.charAt(0) ? w.short : nameOf(w.el) + ' ' + w.short);
     attach(w.el, p, false);
   });
   const mine = errs.filter(e => e.st === cur), box = $('steperr');
@@ -1330,14 +1384,13 @@ function showMessages() {
     box._key = key;
     box.innerHTML = '';
     if (!box.hidden) {
-      const b = document.createElement('b'), ul = document.createElement('ul');
-      b.textContent = 'Fix these to continue:';
+      box.innerHTML = icon('circle-alert') + '<div><span class="strip-title">Fix these to continue</span><ul></ul></div>';
+      const ul = box.querySelector('ul');
       mine.forEach(er => {
         const li = document.createElement('li'), a = document.createElement('a');
         a.href = '#' + er.el.id; a.dataset.go = er.el.id; a.textContent = er.msg;
         li.appendChild(a); ul.appendChild(li);
       });
-      box.append(b, ul);
     }
   }
 }
@@ -1378,11 +1431,14 @@ function tagFor(el, o) {
 function setTag(host, t) {
   if (!host) return;
   if (!host._tag) { host._tag = document.createElement('span'); host.appendChild(host._tag); }
-  host._tag.className = 'rtag ' + t[0];
-  host._tag.textContent = t[1];
+  // Untitled UI convention: an asterisk marks required, a quiet badge marks recommended, optional is unmarked.
+  host._tag.title = t[1];
+  if (t[0] === 'req') { host._tag.className = 'req'; host._tag.innerHTML = '<span aria-hidden="true">*</span><span class="sr-only">required</span>'; }
+  else if (t[0] === 'rec') { host._tag.className = 'rec'; host._tag.textContent = 'Recommended'; }
+  else { host._tag.className = ''; host._tag.textContent = ''; }
 }
 function applyTags(o) {
-  document.querySelectorAll('section.sec [data-k], #d-newest').forEach(el => {
+  document.querySelectorAll('section.run-step [data-k], #d-newest').forEach(el => {
     if (el.closest('.chk')) return; // the checklist states its own requirement
     const t = tagFor(el, o);
     if (el.type === 'radio') {
@@ -1397,37 +1453,54 @@ function applyTags(o) {
 
 /* ======================================================================= Readiness panel and review */
 let openMods = new Set();
-function readyList(R, withGo) {
-  const item = it => `<li>${esc(it.reason)}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(it.fix)}</span>` : ''}` +
-    (withGo && it.go && it.go !== cur ? ` <button type="button" class="linkbtn go" data-goto="${it.go}">Go to ${SHORT[it.go]}</button>` : '') + '</li>';
-  return '<ul class="mods">' + R.mods.map((m, i) => {
-    const badge = `<span class="badge ${m.status}"><span aria-hidden="true">${GLYPH[m.status]}</span> ${WORD[m.status]}</span>`;
-    const head = `<span class="ix">${i + 1}</span><span class="nm">${esc(mname(m.id))}<small><span class="code">${m.id}</span> · ${esc(MODULES[m.id][1])}</small></span>${badge}`;
+const badgeFor = (status, text) => `<span class="badge ${status}"><i></i>${esc(text || WORD[status])}</span>`;
+function readyList(R) {
+  const item = it => `<li>${esc(it.reason)}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(it.fix)}</span>` : ''}</li>`;
+  return R.mods.map(m => {
+    const head = `<span class="nm">${esc(mname(m.id))}<small><span class="code">${m.id}</span> · ${esc(MODULES[m.id][1])}</small></span>${badgeFor(m.status)}`;
     if (!m.items.length) return `<li><div class="mrow">${head}<span></span></div></li>`;
-    return `<li><details data-mod="${m.id}"${openMods.has(m.id) || withGo ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
-  }).join('') + '</ul>';
+    return `<li><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
+  }).join('');
+}
+// The review's table: one row a module, as the run report's module matrix (name, state, words).
+function readyTable(R) {
+  const go = it => it.go && it.go !== cur ? ` <button type="button" class="text-button" data-goto="${it.go}">Go to ${SHORT[it.go]}</button>` : '';
+  const item = it => `<p>${esc(it.reason)}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(it.fix)}${go(it)}</span>` : go(it)}</p>`;
+  const rows = [];
+  if (R.run.length) rows.push(`<tr><td><span class="mod-name">Whole run</span></td><td>${badgeFor(worst(R.run.map(x => x.outcome)))}</td><td>${R.run.map(item).join('')}</td></tr>`);
+  R.mods.forEach(m => rows.push(`<tr><td><span class="mod-name">${esc(mname(m.id))}</span><span class="code">${m.id}</span></td><td>${badgeFor(m.status)}</td><td>${m.items.length ? m.items.map(item).join('') : '<span class="muted">Nothing missing.</span>'}</td></tr>`));
+  return `<div class="table-scroll"><table><colgroup><col style="width:28%"><col style="width:132px"><col></colgroup><thead><tr><th scope="col">Module</th><th scope="col">Expected</th><th scope="col">Why, and what fixes it</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
 function tally(R) {
   const n = {};
   R.mods.forEach(m => { n[m.status] = (n[m.status] || 0) + 1; });
-  return OUTCOMES.filter(k => n[k]).map(k => `<li class="badge ${k}"><span aria-hidden="true">${GLYPH[k]}</span> ${n[k]} ${WORD[k].toLowerCase()}</li>`).join('');
+  return OUTCOMES.filter(k => n[k]).map(k => `<li>${badgeFor(k, n[k] + ' ' + WORD[k].toLowerCase())}</li>`).join('');
 }
 function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
 function renderPanel(o, R) {
-  setHTML($('pn-run'), esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules, in this order`));
+  setHTML($('scope'), esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`));
+  setHTML($('pn-run'), `${R.mods.length} modules, in the order they run. Updates as you answer.`);
   setHTML($('pn-tally'), tally(R));
   setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(x.reason)}</li>`).join('')}</ul></div>` : '');
-  setHTML($('pn-mods'), readyList(R, false).replace(/^<ul class="mods">|<\/ul>$/g, ''));
+  setHTML($('pn-mods'), readyList(R));
   const bad = R.mods.filter(m => m.status === 'will_refuse').length, gaps = R.mods.filter(m => ['gap', 'limited'].includes(m.status)).length;
-  $('pn-sum').innerHTML = bad ? `<span class="badge will_refuse">${bad} will refuse</span>` : gaps ? `<span class="badge limited">${gaps} limited or gap</span>` : '<span class="badge ready">Ready</span>';
+  setHTML($('pn-sum'), bad ? badgeFor('will_refuse', bad + ' will refuse') : gaps ? badgeFor('limited', gaps + ' limited or gap') : badgeFor('ready', 'Ready'));
 }
+// Answers in reader terms: an option's label, Yes/No for a flag, the key as words (screens pass).
+const OPTION_OF = {case_kind:'case_kind', issue_classification:'issue_classification', peer_source:'peer_source', basis:'basis', kind:'deal_kind', scope:'scope', ebitda_basis:'ebitda_basis', legal_documents:'legal_documents', run_type:'run_type'};
+function shown_(k, v) {
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  const opts = OPTIONS[OPTION_OF[k]], o = opts && opts.find(x => x.v === v);
+  return o ? o.label : v;
+}
+const words = k => (k.charAt(0).toUpperCase() + k.slice(1)).replace(/_/g, ' ').replace(/ m$/, ' (m)').replace(/ pct$/, ' (%)').replace(/ bps$/, ' (bps)');
 const nz = obj => Object.entries(obj).filter(([, v]) => v !== '' && v !== null && !(Array.isArray(v) && !v.length))
-  .map(([k, v]) => k.replace(/_/g, ' ') + ': ' + (Array.isArray(v) ? v.map(x => isObj(x) ? '(' + nz(x) + ')' : x).join(', ') : v)).join('; ');
+  .map(([k, v]) => words(k) + ': ' + (Array.isArray(v) ? v.map(x => isObj(x) ? '(' + nz(x) + ')' : x).join(', ') : shown_(k, v))).join('; ');
 function summaryLines(st, o) {
   const v = o.valuation, a = o.attachments, yn = b => b ? 'in the folder' : 'not in the folder';
   switch (st) {
     case 'purpose': return ['Pathway: ' + PATHS[o.run.pathway].label, 'Market situation: ' + (RUN_LABEL[o.run.run_type] || o.run.run_type)];
-    case 'issuer': return [nz(Object.assign({filing_status: o.run.case_kind}, o.identity))];
+    case 'issuer': return [nz(Object.assign({case_kind: o.run.case_kind}, o.identity)).replace('Case kind:', 'Reports as:')];
     case 'dates': return [nz({as_of:o.run.as_of, cutoff:o.run.cutoff, current_period:o.run.current_period, prior_period:o.run.prior_period, reporting_currency:o.run.reporting_currency})];
     case 'sources': {
       const l = ['Legal documents: ' + ({executed:'executed agreement in the folder', draft:'draft only', none:'none in the folder'}[a.legal_documents] || 'not answered')];
@@ -1439,7 +1512,7 @@ function summaryLines(st, o) {
     }
     case 'market': return [...o.deal_terms.map((r, i) => 'Facility ' + (i + 1) + ': ' + nz(r)), ...o.quotes.map((r, i) => 'Quote ' + (i + 1) + ': ' + nz(r)), ...o.ratings.map((r, i) => 'Rating ' + (i + 1) + ': ' + nz(r))];
     case 'valuation': {
-      const l = ['Peers: ' + v.peer_source, 'Basis: ' + v.basis];
+      const l = ['Peer figures: ' + shown_('peer_source', v.peer_source), 'Valuation basis: ' + shown_('basis', v.basis)];
       if (v.basis === 'issuer_trading') l.push('Issuer market data: ' + nz(v.issuer_market));
       if (v.basis === 'user_multiple') l.push('Your multiple: ' + nz(v.user_multiple));
       v.peers.forEach((r, i) => l.push('Peer ' + (i + 1) + ': ' + nz(r)));
@@ -1453,22 +1526,21 @@ function summaryLines(st, o) {
 }
 let ackKey = '';
 function renderReview(sq, o, R) {
-  setHTML($('rv-ready'), (R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(x.reason)}${x.fix ? ` <b>Fix:</b> ${esc(x.fix)}` : ''}${x.go ? ` <button type="button" class="linkbtn go" data-goto="${x.go}">Go to ${SHORT[x.go]}</button>` : ''}</li>`).join('')}</ul></div>` : '') + readyList(R, true));
+  setHTML($('rv-ready'), readyTable(R));
   const box = $('rv-steps');
   box.innerHTML = '';
   sq.filter(st => st !== 'review').forEach((st, i) => {
-    const d = document.createElement('div'), hd = document.createElement('header'), h = document.createElement('h4'), ed = document.createElement('button');
-    d.className = 'rv';
-    h.textContent = (i + 1) + ' ' + SHORT[st];
-    ed.type = 'button'; ed.className = 'linkbtn'; ed.dataset.goto = st; ed.textContent = 'Edit';
+    const dt = document.createElement('dt'), dd = document.createElement('dd'), ed = document.createElement('button');
+    dt.textContent = (i + 1) + '. ' + SHORT[st];
+    ed.type = 'button'; ed.className = 'text-button'; ed.dataset.goto = st; ed.textContent = 'Edit';
     ed.setAttribute('aria-label', 'Edit ' + SHORT[st]);
-    hd.append(h, ed); d.appendChild(hd);
+    dt.appendChild(ed);
     const lines = summaryLines(st, o).filter(Boolean);
-    if (stepBad(st)) { const p = document.createElement('p'); p.className = 'err'; p.textContent = 'Needs attention'; d.appendChild(p); }
-    if (!lines.length) { const p = document.createElement('p'); p.className = 'skip'; p.textContent = 'Nothing entered (optional)'; d.appendChild(p); }
-    else { const ul = document.createElement('ul'); lines.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }); d.appendChild(ul); }
-    warns.filter(w => w.st === st).forEach(w => { const p = document.createElement('p'); p.className = 'warn'; p.innerHTML = '<b>Note:</b> '; p.append(w.msg); d.appendChild(p); });
-    box.appendChild(d);
+    if (stepBad(st)) { const p = document.createElement('p'); p.className = 'err'; p.innerHTML = icon('circle-alert') + '<span>Needs attention</span>'; dd.appendChild(p); }
+    if (!lines.length) { const p = document.createElement('p'); p.className = 'nil'; p.textContent = 'Nothing entered (optional)'; dd.appendChild(p); }
+    else { const ul = document.createElement('ul'); lines.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }); dd.appendChild(ul); }
+    warns.filter(w => w.st === st).forEach(w => { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = icon('triangle-alert') + '<span></span>'; p.lastChild.textContent = w.msg; dd.appendChild(p); });
+    box.append(dt, dd);
   });
   const a = o.attachments, files = [];
   if (a.legal_documents === 'executed') files.push('the executed credit agreement or indenture');
@@ -1479,10 +1551,10 @@ function renderReview(sq, o, R) {
   const dest = FIXED_PATH || o.run.pathway;
   setHTML($('dropcheck'), [
     'Save <code>context.json</code> at the top of the issuer folder, beside the files. Keep exactly one context file there: the inbox refuses a folder with two, or with none at the top.',
-    files.length ? 'Check that the folder holds what you declared: ' + esc(files.join(', ')) + '. Every module reads these declarations.' : 'You declared no legal documents or attachments; that is what every module will be told.',
-    'Files the launcher reads: PDF with selectable text (not a scan), HTML, TXT, Markdown, XLSX, CSV, JSON and JSONL. Save Word, PowerPoint, old Excel and e-mail files as PDF; an empty or scanned PDF stops the launch.',
+    files.length ? 'Check that the folder holds what you declared: ' + esc(files.join(', ')) + '. Every module reads these answers.' : 'You declared no legal documents or attachments; that is what every module will be told.',
+    'The run reads PDF with selectable text (not a scan), HTML, TXT, Markdown, XLSX, CSV, JSON and JSONL. Save Word, PowerPoint, old Excel and e-mail files as PDF; an empty or scanned PDF stops the run before it starts.',
     'Names starting with <code>.</code>, <code>_</code> or <code>~$</code> are skipped, and a shortcut or link refuses the drop.',
-    FIXED_PATH ? `Copy the folder back into <code>inbox\\${esc(dest)}\\</code>, where this form came from.` : `Copy the folder into <code>inbox\\${esc(dest)}\\</code>: a context that names another pathway than its folder is refused. From a checkout, pass it to the launcher with <code>--context</code> and <code>--sources</code>.`,
+    FIXED_PATH ? `Copy the folder back into <code>inbox\\${esc(dest)}\\</code>, where this form came from. Its progress shows under Run activity in the library.` : `Copy the folder into <code>inbox\\${esc(dest)}\\</code>: a context that names another pathway than its folder is refused.`,
     'A refused drop moves to <code>inbox\\failed\\</code> with a <code>WHY.txt</code>; it costs nothing. Once a run has started, any change to the context means a new run.'
   ].map(t => `<li>${t}</li>`).join(''));
   const key = R.counted.map(x => x.scope + ':' + x.reason).join('|');
@@ -1500,11 +1572,12 @@ function syncDownload(R) {
 /* ======================================================================= Source checklist */
 function renderChecklist() {
   $('chklist').innerHTML = CHECKS.map(c => {
-    const head = `<h4>${c.title} <ul class="uses" data-uses-chk="${c.id}"></ul></h4>`;
+    const head = `<h4>${c.title}</h4><p class="uses" data-uses-chk="${c.id}"></p>`;
     if (c.id === 'legal') return `<div class="chk" data-chk="legal"><div class="full">${head}<p class="help" id="legal-intro"></p><p class="found" data-found="legal" hidden></p></div>` +
       `<fieldset class="full"><legend class="sr-only">${c.title}</legend>${cards('legal', 'legal_documents', OPTIONS.legal_documents)}</fieldset>` +
-      `<label class="full ack" id="legalokf" hidden><input type="checkbox" data-c="legalok" id="legalok"><span id="legalok-t"></span></label>` +
-      '<div class="full why"><b>Why we ask twice.</b> In live run tdg-forecast-003 the context said "executed" for a folder of public filings only. The downside module blocked on the missing documents, the forecast never ran, and the run had to be paid for again.</div></div>';
+      `<label class="full confirm" id="legalokf" hidden><input type="checkbox" data-c="legalok" id="legalok"><span id="legalok-t"></span></label>` +
+      // The run id is the strip's title: the reader needs the lesson, not the identifier.
+      `<div class="full run-strip" data-tone="brand" title="Live run tdg-forecast-003, 2026-11-10">${icon('info')}<div><span class="strip-title">Why this is asked twice</span><p class="strip-text">In a TDG run the context said "executed" for a folder of public filings only. The downside module blocked on the missing documents, the forecast never ran, and the run had to be paid for again.</p></div></div></div>`;
     const name = c.k || 'c-' + c.id, attr = c.k ? `data-k="${c.k}"` : `data-c="${c.c}"`;
     return `<div class="chk" data-chk="${c.id}"><div>${head}<p class="help">${c.text}</p><p class="help"><b>Without it:</b> ${c.without}</p><p class="found" data-found="${c.id}" hidden></p></div>` +
       `<fieldset><legend class="sr-only">${c.title}</legend>${seg(name, attr, [['yes', 'In the folder'], ['no', 'Not available']])}</fieldset></div>`;
@@ -1541,14 +1614,14 @@ async function scanFolder(files) {
     let status = 'read', why = 'Read.';
     if (!SOURCE_SUFFIXES.includes(ext)) { status = 'skip'; why = ext ? `${ext} files are not read: save it as PDF (or XLSX for a table).` : 'No file type: not read.'; }
     else if (parts.some(p => p.startsWith('_') || p.startsWith('~$'))) { status = 'skip'; why = 'The name starts with _ or ~$: skipped.'; }
-    else if (f.size === 0) { status = 'stop'; why = 'Empty: the launch stops ("no extractable text").'; }
-    else if (/\.html?$/.test(ext) && all.has(rel + '.jsonl')) { status = 'stop'; why = `Clashes with ${base}.jsonl: the launch stops. Rename or remove one.`; }
+    else if (f.size === 0) { status = 'stop'; why = 'Empty: the run stops before it starts ("no extractable text").'; }
+    else if (/\.html?$/.test(ext) && all.has(rel + '.jsonl')) { status = 'stop'; why = `Clashes with ${base}.jsonl: the run stops before it starts. Rename or remove one.`; }
     if (status === 'read' && ext === '.json' && f.size < 1048576) {
       try {
         const j = JSON.parse(await f.text());
         if (j && j.schema === 'context/1') {
           status = 'context';
-          why = parts.length === 1 ? 'A context file. Replace it with the one you download here.' : 'A context file in a subfolder: the inbox does not take it as the context, and the launcher reads it as a source.';
+          why = parts.length === 1 ? 'A context file. Replace it with the one you download here.' : 'A context file in a subfolder: the inbox does not take it as the context, and the run reads it as a source.';
           (parts.length === 1 ? out.contexts : out.nested).push(rel);
         }
       } catch (err) { /* not JSON: an ordinary source */ }
@@ -1571,12 +1644,12 @@ function renderScan() {
   const box = $('scanres');
   if (!scan) { box.innerHTML = ''; return; }
   const s = scan, msgs = [];
-  msgs.push(`<b>${s.read} file${s.read === 1 ? '' : 's'} will be read</b>${s.skipped ? `, <span class="no">${s.skipped} skipped or stopping the launch</span>` : ''}${s.hidden ? `, ${s.hidden} hidden ignored` : ''}.`);
+  msgs.push(`<b>${s.read} file${s.read === 1 ? '' : 's'} will be read</b>${s.skipped ? `, <span class="no">${s.skipped} skipped or stopping the run</span>` : ''}${s.hidden ? `, ${s.hidden} hidden ignored` : ''}.`);
   if (!s.read) msgs.push('<span class="no">No readable source: the inbox refuses this folder.</span>');
   if (s.contexts.length > 1) msgs.push(`<span class="no">${s.contexts.length} context files at the top: the inbox refuses the drop. Keep exactly one.</span>`);
   else if (s.contexts.length === 1) msgs.push(`<span class="maybe">The folder already holds ${esc(s.contexts[0])}. Replace it with the file you download here.</span>`);
-  const rows = s.files.slice(0, 200).map(f => `<tr><td>${esc(f.path)}</td><td class="st ${f.status === 'read' ? 'ok' : f.status === 'context' ? 'maybe' : 'no'}">${{read:'Read', skip:'Skipped', stop:'Stops launch', context:'Context'}[f.status]}</td><td>${f.status === 'read' ? (f.kinds.length ? 'Looks like: ' + f.kinds.map(k => KIND_LABEL[k]).join(', ') + (f.exec === true ? ' (executed)' : f.exec === false ? ' (draft)' : '') : '<span class="muted">Type not guessed from the name</span>') : esc(f.why)}</td></tr>`).join('');
-  box.innerHTML = `<p>${msgs.join('<br>')}</p><table><thead><tr><th>File</th><th class="st">Launcher</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>` + (s.files.length > 200 ? `<p class="help">First 200 of ${s.files.length} files shown.</p>` : '');
+  const rows = s.files.slice(0, 200).map(f => `<tr><td>${esc(f.path)}</td><td class="st ${f.status === 'read' ? 'ok' : f.status === 'context' ? 'maybe' : 'no'}">${{read:'Reads it', skip:'Skips it', stop:'Stops', context:'Context file'}[f.status]}</td><td>${f.status === 'read' ? (f.kinds.length ? 'Looks like: ' + f.kinds.map(k => KIND_LABEL[k]).join(', ') + (f.exec === true ? ' (executed)' : f.exec === false ? ' (draft)' : '') : '<span class="muted">Type not guessed from the name</span>') : esc(f.why)}</td></tr>`).join('');
+  box.innerHTML = `<p>${msgs.join('<br>')}</p><div class="table-scroll"><table><colgroup><col style="width:44%"><col style="width:120px"><col></colgroup><thead><tr><th scope="col">File</th><th scope="col">The run</th><th scope="col">Note</th></tr></thead><tbody>${rows}</tbody></table></div>` + (s.files.length > 200 ? `<p class="help">First 200 of ${s.files.length} files shown.</p>` : '');
 }
 
 /* ======================================================================= Visibility */
@@ -1593,7 +1666,7 @@ function renderPathCards() {
     const id = 'path-' + p, d = PATHS[p];
     return `<label class="card" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
       `<span class="ct"><span class="ctl"><b>${d.label}</b></span><span class="q">${d.q}</span><span class="imp">Needs: ${d.needs}</span>` +
-      `<span class="mods" aria-label="${RUN_ORDER[p].length} modules">${RUN_ORDER[p].map(m => `<span class="mchip" title="${m}">${esc(mname(m))}</span>`).join('')}</span></span></label>`;
+      `<span class="mods-line">${RUN_ORDER[p].length} modules: ${RUN_ORDER[p].map(m => `<span title="${m}">${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
   }).join('');
 }
 function renderTimeline() {
@@ -1610,7 +1683,8 @@ function renderTimeline() {
 }
 function vis() {
   const sp = $('st-purpose'), si = $('st-issuer'), sd = $('st-dates'), sv = $('st-valuation'), ss = $('st-sources');
-  if (FIXED_PATH) { setRadio(sp, 'pathway', FIXED_PATH); els(sp, 'pathway').forEach(x => { x.disabled = x.value !== FIXED_PATH; }); }
+  // An inbox copy shows only its own pathway: the others are disabled and hidden, not offered.
+  if (FIXED_PATH) { setRadio(sp, 'pathway', FIXED_PATH); els(sp, 'pathway').forEach(x => { x.disabled = x.value !== FIXED_PATH; x.closest('.card').hidden = x.disabled; }); }
   const path = getV(sp, 'pathway'), has = m => runOf(path).includes(m);
   $('pathnote').textContent = FIXED_PATH ? `Fixed by the inbox folder this form came from (inbox\\${FIXED_PATH}\\).` : 'The run readiness panel lists the modules in run order and updates as you answer.';
   els(sp, 'run_type').forEach(x => { x.disabled = (path === 'earnings_update') !== (x.value === 'earnings'); });
@@ -1629,7 +1703,7 @@ function vis() {
   for (const b of ['deal', 'quote', 'rating']) $('b-' + b).hidden = !mb[b];
   document.querySelectorAll('[data-uses]').forEach(u => {
     const list = BLOCK_USES[u.dataset.uses].filter(has);
-    setHTML(u, list.length ? usesList(list) : '<li class="lbl">No module in this run reads it directly</li>');
+    setHTML(u, usesList(list));
   });
   $('dealnote').textContent = rt === 'primary' ? 'Required for a new issue: at least one facility. Price talk feeds relative value; give both ends of each range.' : 'Optional. Tenor and price talk apply to a new issue only.';
   $('quotenote').textContent = has('CP-3') || has('CP-3D') ? `Without an observed quote, relative value states Insufficient Information (price talk alone caps confidence below High), and market-implied risk has nothing to read. A quote more than ${STALE_DAYS} days before the as-of date is stale.` : 'No module in this pathway reads quotes directly.';
@@ -1659,8 +1733,9 @@ function vis() {
     blk.hidden = !(has(ASM_MODULE[k]) || set);
     blk.querySelector('.uf').hidden = !set;
   });
-  $('asmlead').textContent = 'Optional. Leave a module on "Let the module choose" unless you have a house view. Your values go to the module as user-supplied assumptions with your rationale. On an inbox run the model reads them as your stated assumption; on the owner route Python also checks that the module used them.';
-  $('qlead').textContent = 'No pathway runs the research module (CP-DR) today, so an inbox run does not answer these questions. They stay in the file for the owner route.';
+  $('cp2a-note').textContent = has('CP-2G') ? 'The forward model takes its downside shock from the downside module\'s scenario, so a scenario you set here can also reach the forecast.' : '';
+  $('asmlead').textContent = 'Optional. Leave each module on "Let the module choose" unless you have a house view. Your values reach the module as user-supplied assumptions, with your rationale.';
+  $('qlead').textContent = 'No pathway runs the research module today, so a run started from the inbox does not answer these questions. They stay in the file.';
 
   CHECKS.forEach(c => {
     const row = document.querySelector(`[data-chk="${c.id}"]`);
@@ -1782,7 +1857,10 @@ $('download').addEventListener('click', () => {
 /* ======================================================================= Load / reset */
 function loadMsg(text, isErr) {
   const m = $('loadmsg');
-  m.textContent = text; m.className = isErr ? 'bad' : '';
+  m.className = 'run-strip';
+  if (isErr) m.dataset.tone = 'error'; else delete m.dataset.tone;
+  m.innerHTML = icon(isErr ? 'circle-alert' : 'circle-check') + '<div><p class="strip-text"></p></div>';
+  m.querySelector('p').textContent = text;
   m.setAttribute('role', isErr ? 'alert' : 'status');
 }
 const isObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -1925,6 +2003,7 @@ $('reset').addEventListener('click', () => {
 const wide = window.matchMedia('(min-width:960px)');
 function syncPanel() { if (wide.matches) $('panel').open = true; }
 wide.addEventListener('change', syncPanel);
+$('rail-library').hidden = $('rail-activity').hidden = !FIXED_PATH;
 renderPathCards();
 document.querySelectorAll('[data-cards]').forEach(box => {
   const key = box.dataset.cards, name = box.dataset.name || key, k = box.dataset.key || key;

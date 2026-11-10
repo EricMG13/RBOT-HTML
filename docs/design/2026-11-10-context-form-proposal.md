@@ -129,7 +129,78 @@ Stale wording in the current form:
 - the `build()` and `fill()` globals;
 - every reader bound, copied from the current form.
 
-## 4. Decisions for the owner
+## 4. Design language (after main `caeb622`)
+
+The page now uses the Credit OS language of `apps/issuer-library/credit_os/web/screen.css`. It
+follows the screens pass (`2026-11-10-screens-pass.md`): what a reader acts on leads, and production
+detail is quiet, in a title, or behind a disclosure.
+
+**Copied from `screen.css`:**
+- the tokens (its lines 5 and 81);
+- the Untitled UI component foundation: 40px buttons and fields with an 8px radius, 12px cards, pill
+  badges and the focus ring;
+- the New run patterns it still carries (`.run-stages` progress bars, `.run-field`, `.step-actions`,
+  `.run-strip` alerts, the start confirmation).
+
+**The frame:** the navy rail with the brand symbol, then one white card holding the title (with the
+run's pathway, market and module count), the stage bars and the workbench. Run readiness sits in
+that card as the inspector column.
+
+**Inbox copies** (the pathway is fixed):
+- The rail links to Issuer library and Run activity at `<root>/_engine/library/`.
+- The page loads that library's fonts, which lifts the README limit "form copies in the inbox use
+  system fonts". The repository copy uses `src/deploy_vii/assets/fonts`; only one base is requested,
+  so no request fails (console empty in both).
+- Only the folder's own pathway card is shown.
+
+**Reader terms:**
+- Module names lead and codes are their titles.
+- Answers show option labels, not schema values (`High yield`, not `high_yield`).
+- Live-run ids are code comments or titles.
+- No command lines, "launcher", "owner route" or "Python" in the reader's copy.
+
+**Signals:**
+- Unanswered reads as a neutral dashed "Check".
+- Amber is kept for Gap and Limited (they need an acknowledgement).
+- Red is for errors and Will refuse.
+- An asterisk marks required; a quiet badge marks recommended.
+
+## 5. Review of main (`caeb622`): suggestions
+
+1. **New run patterns.** `screen.css` still carries the New run and Settings patterns
+   (`.run-stages`, `.module-steps`, `.run-field`, `.step-actions`, `#new-run`, `#context-editor`,
+   `.settings`). Their markup was removed (`credit_os/SOURCE.md`: "New run and Settings are gone").
+   - The proposal is the natural owner of those patterns. It has to copy them inline, because it
+     opens from disk under its own CSP.
+   - Either retire them from `screen.css`, or keep them and add a test that the form's copied tokens
+     equal `screen.css` lines 5 and 81.
+2. **Drift tests to add on adoption.** The form duplicates five tables from Python and the library.
+   One test each would stop silent drift:
+   - `RUN_ORDER` against `registry.plan` per pathway;
+   - `EDGES` against `run_expectations.edges_for`;
+   - `MODULES` names against `report-adapter.js` `MODULE_NAMES`;
+   - `SCALES` against `cp2h.COMBINED_SCALE`;
+   - the peer, precedent and staleness limits against `valuation_basis` and `cp3_relative_value`.
+3. **CP-2G's own cases (`a51a8a1`).** The forecast's downside shock still comes from CP-2A's scenario,
+   so the form's CP-2A assumptions can now reach the forecast. The form says so where CP-2G runs. The
+   forecast also needs a fiscal-year base; the form requires the current period on Distressed and
+   asks for `fy-YYYY`.
+4. **No way from the library to the form.** The library's empty state ("No runs in this workspace
+   yet. The data file holds no retained runs.") and Run activity give a first-time analyst no route
+   to start a run.
+   - Suggested: one line on both, "To start a run, fill in the form in
+     `inbox\<pathway>\_template\` and drop the folder in `inbox\<pathway>\`".
+   - From `_engine/library/` the forms are at `../../inbox/<pathway>/_template/`.
+5. **Show the forecast in Run activity.** The watcher could write the launcher's offline
+   `expectations` for each drop into Run activity. The owner could then compare forecast with
+   outcome per module, which is the calibration this form's rules need, and the comparison of actual
+   output with instructions that `AGENTS.md` asks for. Today nothing shows them.
+6. **On adoption:**
+   - update `README.md` (the inbox font limit is gone; the form's steps);
+   - update the two `FORM_PROBE` expectations;
+   - mention the form-only rules in `docs/templates/README.md`.
+
+## 6. Decisions for the owner
 
 1. Adopt as `docs/templates/context-form.html`? The inbox would then copy it. Two expectations in
    `tests/test_library_page_browser.py` `FORM_PROBE` would change:
