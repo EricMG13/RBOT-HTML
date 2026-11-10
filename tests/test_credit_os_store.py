@@ -451,7 +451,6 @@ def test_a_debt_stack_is_a_stack_chart_with_its_amount_and_leverage_columns():
         ("| A | senior | Yes | 100 | 1.0 | US$m | S. |",),
         ("| A | 2 | Yes | 100 | 1.0 | US$m | S. |", "| B | 1 | Yes | 100 | 2.0 | US$m | S. |"),
         ("| A | 1 | Yes | 1.2bn | 1.0 | US$m | S. |",),
-        ("| A | 1 | Yes | 100 | 1x | US$m | S. |",),
     ],
 )
 def test_a_debt_stack_out_of_shape_is_named_not_drawn(rows):

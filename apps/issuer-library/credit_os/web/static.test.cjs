@@ -1429,6 +1429,13 @@ test('structure views: portfolio limits are bars of the stated exposures with a 
   assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
 });
 
+test('structure views: no amber or red in the series, stack, tick or limit rules; a stated zero amount draws no note', () => {
+  const css = read('screen.css').replace(/\/\*.*?\*\//gs, '').split('}').filter(r => /series-|stack|\.tick|limit-key/.test(r.split('{')[0]));
+  assert.ok(css.length > 4 && css.every(r => !/amber|red\)|#8a5300|#b3261e/.test(r)));
+  const html = runPage(d => { const t = withStructure(d)[outId('CP-1')].sections.flatMap(x => x.blocks).find(b => b.line === 92); t.rows[2].cells[3] = '0'; return d; }).readerChart(outId('CP-1'), STACK);
+  assert.ok(!html.includes('no stated amount'));
+});
+
 test('structure views: only a period chart carries the missing-values note, once, under the last of them', () => {
   const mod = storyModule(runPage(withStructure).runReport(RUN), 'CP-1');
   assert.equal(countOf(mod, /Missing values have no bar\./g), 1);
