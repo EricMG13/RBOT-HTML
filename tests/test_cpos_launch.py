@@ -3095,3 +3095,35 @@ def test_a_scenario_with_every_amount_not_supplied_is_accepted():
         f"| Value not distributed | {gap} | US$m | S. |",
     )
     assert cpos_launch.chart_issues(text, allocation_spec(1)) == ()
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "Chart data: value allocation - scenario 2",
+        "Chart data: value allocation \u2013 scenario 2",
+        "chart data: Value Allocation \u2014  Scenario 2",
+    ],
+)
+def test_a_misheaded_optional_scenario_is_sent_back_naming_the_exact_heading(heading):
+    text = f"### {heading}\n\n" + synthetic_table(
+        ALLOCATION_HEAD,
+        "| Enterprise value | 1 | US$m | S. |",
+        "| Value not distributed | 1 | US$m | S. |",
+    )
+    (issue,) = cpos_launch.chart_issues(text, allocation_spec(2))
+    assert f"`### {ALLOCATION_TWO}`" in issue
+
+
+def test_the_exact_heading_and_an_absent_one_are_not_a_misheading():
+    absent = "### Chart data: value allocation \u2014 scenario 1\n\nx"
+    assert cpos_launch.chart_issues(absent, allocation_spec(2)) == ()
+
+
+def test_a_recovery_table_with_more_than_three_scenarios_is_sent_back():
+    head = RECOVERY_HEAD
+    rows = [f"| Senior | S{n} | 10 | 5 | 50 | US$m | S. |" for n in range(4)]
+    text = f"### {RECOVERY}\n\n" + synthetic_table(head, *rows)
+    spec = next(t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading == RECOVERY)
+    assert any("at most 3" in i for i in cpos_launch.chart_issues(text, spec))
+    assert cpos_launch.chart_issues(text.replace("| S3 |", "| S2 |"), spec) == ()

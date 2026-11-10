@@ -375,9 +375,11 @@ function recoveryChart(id,v,chips=false,note=true) {
   const legend=`<div class="chart-legend">${scenarios.map((s,i)=>`<span><i class="series-${i%3}"></i>${esc(s)}</span>`).join('')}</div>`;
   const groups=classes.map(name=>{
     const rows=table.rows.filter(r=>r.cells[v.label]===name);
-    const cols=rows.map(row=>{
-      const key=`${id}:${row.line}`,scenario=row.cells[v.scenario],said=`${plain(name)}, ${scenario}: recovery ${chartNumber(row.cells[v.recovery])===null?'n.a.':row.cells[v.recovery]} ${unitOf(row)}. View source`;
-      return columnOf(row.cells[v.recovery],scenarios.indexOf(scenario)%3,zero,pct,'a',` href="${evidenceHref(id,row.line)}" data-evidence="${esc(key)}" aria-label="${esc(said)}"`);
+    const cols=scenarios.map((scenario,i)=>{
+      const row=rows.find(r=>r.cells[v.scenario]===scenario);
+      if(!row)return `<span class="col missing" title="No row for ${esc(scenario)}"><strong style="bottom:${zero}%">not stated</strong></span>`;
+      const said=`${plain(name)}, ${scenario}: recovery ${chartNumber(row.cells[v.recovery])===null?'n.a.':row.cells[v.recovery]} ${unitOf(row)}. View source`;
+      return columnOf(row.cells[v.recovery],i%3,zero,pct,'a',` href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" aria-label="${esc(said)}"`);
     }).join('');
     const facts=rows.map(r=>`<small>${esc(r.cells[v.scenario])}: claim ${stated(r.cells[v.claim])} ${esc(unitOf(r))} · recovery ${stated(r.cells[v.recovery])} · ${stated(r.cells[v.percent],'%')}</small>`).join('');
     return `<div class="recovery-group" role="group" aria-label="${esc(plain(name))}"><span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(plain(name))}${facts}</span>${chips?rows.map(r=>chipsMarkup(`${id}:${r.line}`)).join(''):''}</div>`;

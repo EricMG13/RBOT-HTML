@@ -1550,6 +1550,15 @@ test('recovery views: recovery is columns by class, one series per scenario on o
   assert.ok(!/\bcomputed\b|\bshortfall\b/i.test(strip(html)), 'no recovery percentage or shortfall is worked out');
 });
 
+test('recovery views: scenarios keep one order in every class; a class with no row for one has an empty not-stated slot, never a zero bar', () => {
+  const rows = [recoveryRow(303, 'Senior', 'Base', '100', '90', '90'), recoveryRow(304, 'Senior', 'Downside', '100', '60', '60'), recoveryRow(305, 'Junior', 'Downside', '50', '10', '20')];
+  const chart = { ...RECOVERY, table: 302 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: recovery by class', 3, 300, 'consumed', [table(302, RECOVERY_HEAD, rows)])); d[outId('CP-1')].charts.push(chart); return d; });
+  const junior = page.readerChart(outId('CP-1'), chart).split('<div class="recovery-group"')[2];
+  assert.ok(/^[^]*?class="col missing"[^]*?not stated[^]*?series-1/.test(junior.split('<span class="chart-label">')[0]), 'the Base slot is first and empty');
+  assert.equal(countOf(junior, /<i class="series-/g), 1);
+});
+
 test('recovery views: the figure takes the missing-values note and its rules use no amber or red', () => {
   const page = runPage(withRecovery);
   assert.equal(page.lastPeriodChart([{ kind: 'waterfall' }, { kind: 'recovery' }, { kind: 'bullet' }]), 1);
