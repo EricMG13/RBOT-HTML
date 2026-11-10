@@ -113,10 +113,16 @@ A drop is refused, with the reason in `WHY.txt`, when:
 A loose file, or a folder placed in `inbox\` outside a pathway folder, is refused too. Fix the
 folder and drop it again.
 
-A drop is never put back in the inbox. If it cannot be moved to `inbox\failed\`, it stays in
+A drop is put back in the inbox only if its first record cannot be saved, and never after that.
+If it cannot be moved to `inbox\failed\`, it stays in
 `_engine\drops\<id>` and Run activity shows it as rejected, with the reason. A file in a drop
 that cannot be opened makes the drop rejected with "cannot be read" after the settle time. If the
 library cannot be rebuilt, Run activity says so and ended runs wait for it.
+
+After a restart, a run that was being started when the watcher stopped is shown as interrupted
+and is not started again; check whether its process is still running before dropping the folder
+again. A folder the watcher was taking in when it stopped is shown as rejected, with its files
+kept in `_engine\drops\<id>`.
 
 ### The shared folder
 

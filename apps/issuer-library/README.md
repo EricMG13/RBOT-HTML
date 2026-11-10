@@ -50,9 +50,13 @@ README (section 3) has the full steps.
   depends on the file system honouring file locks (a local disk does; do not rely on it across
   machines). The root path must be 80 characters or fewer.
 - **Waiting and refused drops:** a drop waits in a queue when 3 runs are going or 30 have started
-  today; Run activity shows why. A drop is never put back in the inbox: if it cannot be moved to
-  `inbox\failed\`, it stays in `_engine\drops\<id>` and Run activity shows it as rejected with
-  the reason. A file that cannot be opened makes the drop rejected ("cannot be read"). If the
+  today; Run activity lists the drop under Waiting and names the daily limit when that is the
+  cause. A drop is put back in the inbox only if its first record cannot be saved, and never after
+  that: if it cannot be moved to `inbox\failed\`, it stays in `_engine\drops\<id>` and Run
+  activity shows it as rejected with the reason. After a restart, a run that was being started
+  when the watcher stopped is shown as interrupted and is not started again; check whether its
+  process is still running before dropping the folder again. A folder the watcher was taking in
+  when it stopped is shown as rejected, with its files kept in `_engine\drops\<id>`. A file that cannot be opened makes the drop rejected ("cannot be read"). If the
   library cannot be rebuilt, Run activity says so and ended runs wait for it.
 - **At boot:** Task Scheduler, "At startup", under a service account whose environment holds the
   key, running `Start watcher.cmd <root>`. Give analysts modify on `inbox\` and read elsewhere;
