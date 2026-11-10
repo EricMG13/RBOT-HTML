@@ -51,6 +51,101 @@ BRIDGE = """
 | Debt repayment | -450 | US$m | Synthetic. |
 | Closing accessible liquidity | 570 | US$m | Synthetic. |
 """
+
+
+def chart_table(heading: str, header: str, *rows: str) -> str:
+    divider = " | ".join(["---"] * (header.count("|") + 1))
+    body = "".join(f"\n| {row} |" for row in rows)
+    return f"\n### Chart data: {heading}\n\n| {header} |\n| {divider} |{body}\n"
+
+
+# Synthetic: the credit-structure tables as the launcher asks for them (placed in the CP-1 fixture).
+UNIT_BASIS = "Reporting unit | Basis and limitation"
+STRUCTURE = (
+    chart_table(
+        "debt stack",
+        f"Facility | Ranking | Secured | Amount | Cumulative leverage | {UNIT_BASIS}",
+        "Term loan | 1 | Yes | 1,200 | 2.4 | US$m | Synthetic.",
+        "Notes | 2 | No | 800 | 4.0 | US$m | Synthetic.",
+    )
+    + chart_table(
+        "covenant headroom",
+        f"Test | Threshold | Current | Headroom | Direction | {UNIT_BASIS}",
+        "Net leverage | 5.0 | 4.2 | 0.8x | Passes at or below | x | Synthetic.",
+        "Liquidity | 100 | Not supplied: not stated | Not supplied: no current "
+        "| Passes at or above | US$m | Synthetic.",
+    )
+    + chart_table(
+        "portfolio limits",
+        f"Limit | Current exposure | Proposed exposure | Limit value | {UNIT_BASIS}",
+        "Single issuer | 3.0 | 4.0 | 5.0 | % NAV | Synthetic.",
+    )
+    + chart_table(
+        "prior and current results",
+        f"Measure | Prior period | Prior | Current period | Current | {UNIT_BASIS}",
+        "Revenue | FY2023 | 2,100 | FY2024 | 2,250 | US$m | Synthetic.",
+    )
+    + chart_table(
+        "margin and KPI changes",
+        f"Measure | Prior period | Prior | Current period | Current | {UNIT_BASIS}",
+        "EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 | % | Synthetic.",
+    )
+    + chart_table(
+        "peer range \u2014 percent metrics",
+        f"Metric | Issuer | Peer low | Peer median | Peer high | Peer count | {UNIT_BASIS}",
+        "EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 7 | % | Synthetic.",
+    )
+    + chart_table(
+        "yield against maturity",
+        f"Instrument | Maturity date | Yield | Spread | Quote date | Source class | {UNIT_BASIS}",
+        "Note A | 2028-06-15 | 6.4 | +310 bp | 2024-12-31 | Dealer quote | % | Synthetic.",
+        "Note B | 2030-06-15 | 7.0 | +350 bp | 2024-12-31 | Dealer quote | % | Synthetic.",
+    )
+    + chart_table(
+        "recovery by class",
+        f"Class | Scenario | Claim | Recovery | Recovery % | {UNIT_BASIS}",
+        "Senior | Base | 1,200 | 1,080 | 90 | US$m | Synthetic.",
+        "Senior | Downside | 1,200 | 720 | 60 | US$m | Synthetic.",
+        "Junior | Base | 800 | Not supplied: no value | Not supplied: no value | US$m | Synthetic.",
+    )
+    + chart_table(
+        "value allocation \u2014 scenario 1",
+        f"Step | Amount | {UNIT_BASIS}",
+        "Enterprise value | 2,000 | US$m | Synthetic.",
+        "Senior distribution | -1,080 | US$m | Synthetic.",
+        "Value not distributed | 920 | US$m | Synthetic.",
+    )
+)
+# Synthetic: a calendar lane as the launcher asks a module for it (here placed in the CP-1 fixture).
+EVENTS = """
+### Events: Financing
+
+| Event date | Date precision | Published | Event | Status | Source | Credit relevance |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2025-03-31 | day | \u2014 | Synthetic note | Scheduled — due | Synthetic filing p.1 | Wall |
+| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — announced | Synthetic memo | Cost |
+| 2025-Q3 | quarter | \u2014 | Synthetic review | Scenario — modelled | Synthetic memo | Rating |
+| 2025 | year | \u2014 | Synthetic maturity year | Scheduled — due | Synthetic filing p.2 | Wall |
+"""
+# Synthetic: a credit-risk transmission map as the launcher asks for it (in the CP-1 fixture).
+MAPS = """
+### Map: credit-risk transmission
+
+| From | Relationship | Edge type | To | Evidence |
+| --- | --- | --- | --- | --- |
+| Synthetic driver | drives | Documentary Fact | Synthetic mechanism | Synthetic p.1 |
+| Synthetic mechanism | squeezes | Management Language | Synthetic outcome | Synthetic p.2 |
+| Synthetic driver | also hits | Analyst Interpretation | Synthetic outcome | Synthetic p.3 |
+| Synthetic outcome | feeds back | Insufficient Information | Synthetic driver | Synthetic p.4 |
+| Synthetic outcome | then | Documentary Fact | Synthetic step 1 | Synthetic p.5 |
+| Synthetic step 1 | then | Documentary Fact | Synthetic step 2 | Synthetic p.6 |
+| Synthetic step 2 | then | Documentary Fact | Synthetic step 3 | Synthetic p.7 |
+| Synthetic step 3 | then | Documentary Fact | Synthetic step 4 | Synthetic p.8 |
+| Synthetic step 4 | then | Documentary Fact | Synthetic step 5 | Synthetic p.9 |
+| Synthetic step 5 | then | Documentary Fact | Synthetic step 6 | Synthetic p.10 |
+| Synthetic step 6 | then | Documentary Fact | Synthetic step 7 | Synthetic p.11 |
+| Synthetic step 7 | then | Documentary Fact | Synthetic step 8 | Synthetic p.12 |
+"""
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -379,11 +474,12 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
     # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
     assert seen["filtered"] == {"shown": 0, "emptyShown": True}
     # Design pass 2026-11-10: parts listed and reachable, tables whole and in the text face.
-    assert seen["outline"][-4:] == [
+    assert seen["outline"][-5:] == [
         "Findings register",
         "Open items",
         "Module matrix",
         "Deliverables from this run",
+        "Chart index",
     ]
     assert seen["jump"] == {
         "hash": "#W-Overview/run-matrix",
@@ -740,3 +836,104 @@ def test_a_liquidity_bridge_is_a_waterfall_with_its_table_form_and_fits_the_page
     assert (seen["points"], seen["totals"], seen["outflows"]) == (4, 2, 1)
     assert seen["barsInside"] is True and seen["fits"] is True
     assert seen["formRows"] == 4 and seen["formHidden"] is True  # Present for a reader, closed.
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the_page(
+    tmp_path, width
+):
+    make_run(tmp_path, "run-a", as_of="2024-12-31", cp1_extra=CHARTS + STRUCTURE)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_structure.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert (seen["segments"], seen["bulletRows"], seen["limitRows"]) == (2, 2, 1)
+    assert (seen["markers"], seen["ticks"]) == (1, 3)  # No marker for the current value not stated.
+    assert seen["forms"] >= 9 and seen["formsClosed"] is True and seen["fits"] is True
+    assert (seen["dumbbells"], seen["bands"], seen["scatterDots"]) == (2, 1, 2)
+    assert (seen["recoveryGroups"], seen["recoveryBars"]) == (
+        2,
+        2,
+    )  # No bar for a value not stated.
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_calendar_draws_the_event_lane_with_its_table_and_fits_the_page(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + EVENTS)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_calendar.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Calendar?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert (seen["lanes"], seen["points"], seen["spans"], seen["tableRows"]) == (1, 1, 3, 4)
+    assert seen["laneName"] == "Financing" and seen["focusable"] is True
+    assert seen["tableAfterLanes"] is True and seen["fits"] is True
+    # The Overview draws the same lanes compactly, linked to the Calendar tab, with no table.
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert console == [] and (seen["lanes"], seen["tableRows"], seen["fits"]) == (1, 0, True)
+    assert 'class="event-lanes compact"' in dom and "Open the Calendar tab" in dom
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_the_page(
+    tmp_path, width
+):
+    make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + MAPS)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_maps.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert (seen["nodes"], seen["edges"], seen["labels"], seen["tableRows"]) == (11, 12, 12, 12)
+    assert seen["statusNodes"] >= 1 and seen["statusStates"] == seen["statusNodes"]
+    assert seen["wide"] is True and seen["scrolls"] is True  # Natural width, scrolled in its card.
+    assert seen["scrollFocusable"] is True and seen["fits"] is True and seen["statusItems"] >= 1
+    assert seen["tableAfterDiagram"] is True and seen["cutEdges"] == 1
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_context_bar_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_path, width):
+    # Long names: a 38-character issuer and 80-character run folders, with every popover open.
+    long = "cpos-tdg-copilot-sol-medium-revision-with-a-very-long-folder-name-0000000000000001"
+    issuer = "Synthetic Holding Company Incorporated Ltd"
+    make_run(
+        tmp_path, long, as_of="2025-12-31", issuer_name=issuer, cp1_extra=CHARTS + EVENTS + MAPS
+    )
+    make_run(tmp_path, f"{long}-other", as_of="2025-06-30", issuer_name=issuer)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_index.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    for route in (f"#W-Overview?c={long}", f"#W-Forecast?c={long}"):
+        dom, console = visit(page, route, width)
+        assert console == []
+        seen = json.loads(
+            html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
+        )
+        assert seen["shown"] is True and "As of 31 December 2025" in seen["text"]
+        assert len(seen["others"]) == 1 and f"c={long}-other" in seen["others"][0]
+        assert seen["roles"] == ["source", "analysis", "export"]
+        assert seen["indexRows"] == [
+            "Leverage|Drawn",
+            "Interest cover|Drawn",
+            "Liquidity|Drawn",
+            "Financing events|Drawn",
+            "Credit-risk transmission map|Drawn",
+        ]
+        assert seen["indexScrollFocusable"] is True
+        assert seen["summaryFocus"] is True and seen["listInView"] is True and seen["fits"] is True
+        assert (
+            f"c={long}" in seen["after"] and seen["barAfter"] is True
+        )  # Moving to a file keeps the run.

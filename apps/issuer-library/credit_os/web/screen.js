@@ -304,7 +304,7 @@ function parseRoute() {
   let module=Object.hasOwn(moduleNames,resolved)?resolved:'W-Library';
   const params=new URLSearchParams(query);
   let fallback=data[pins[module]]?.run;
-  if(!fallback&&module==='W-Calendar')fallback=calendarRun(requestedSection==='hedges'?'CP-2E':'CP-1A');
+  if(!fallback&&module==='W-Calendar')fallback=calendarRun(requestedSection==='lanes'?'lanes':requestedSection==='hedges'?'CP-2E':'CP-1A')||calendarRun('lanes');
   const requestedContext=params.get('c');
   let context=Object.hasOwn(contexts,requestedContext)?requestedContext:fallback||current?.context||Object.keys(contexts)[0]||null;
   // A deliverable opens under a run of its own issuer, or under none if no run file matches.
@@ -511,6 +511,7 @@ function renderRoute() {
     $('section-nav').innerHTML=contextPrefix(next)+(only||report||(isAnalytical(next.module)&&!next.output)?title:`${title}<span>${index+1} / ${sections.length}</span><button id="previous-section" ${index===0?'disabled':''} aria-label="Previous ${pagerNoun}">${icon('arrow-left')}</button><button id="next-section" ${index===sections.length-1?'disabled':''} aria-label="Next ${pagerNoun}">${icon('arrow-right')}</button>`);
     nameCodes($('section-nav'));
     updateWorkspaceChrome(next.module);
+    nameCodes($('context-bar'));
     $('content').innerHTML=moduleBody(next);
     // watchFrame returns the callback that stops its timer; the previous report's timer must not fire against a detached element.
     if(cancelReportFrame)cancelReportFrame();

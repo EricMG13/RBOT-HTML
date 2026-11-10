@@ -31,8 +31,9 @@ if str(ROOT / "src") not in sys.path:
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from credit_os.store import workspace_store
+from credit_os.store import regular_chunks, workspace_store
 
+from deploy_vii.registry import dependencies, edge_rule, plan
 from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.credit_os_chips import chips
 from deploy_workflow.library_index import (
@@ -41,6 +42,7 @@ from deploy_workflow.library_index import (
     build_library,
     read_pinned,
 )
+from deploy_workflow.run_events import read_events
 
 # Nothing is fetched: the page and the reports it frames come from its own folder, and no request
 # can leave it.
@@ -124,10 +126,74 @@ def embedded_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=True, allow_nan=False).replace("<", "\\u003c")
 
 
+def run_events(
+    run_dir: Path, folder: str, issues: list[str]
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Read events or return a named failure; a missing log has no events and no failure."""
+    path = run_dir / "events.jsonl"
+    if not path.is_symlink() and not path.exists():
+        return [], None  # A replay or a run that never started: normal.
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("not a regular file")
+        events = read_events(path)
+        if any(not isinstance(event, dict) for event in events):
+            raise ValueError("event is not an object")
+        return events, None
+    except (OSError, ValueError) as error:
+        issues.append(f"{folder}: events.jsonl could not be read ({type(error).__name__})")
+        return [], type(error).__name__
+
+
+def run_record(run_dir: Path, folder: str, issues: list[str]) -> dict[str, Any] | None:
+    """The method's dependency edges for the run's requested modules (deploy_vii.registry, with
+    each edge's degradation rule) and the modules in recorded order with the times its event log
+    states. Nothing is written, and no time is made up: a module with no event has none."""
+    try:
+        raw = json.loads(b"".join(regular_chunks(run_dir / "workflow.json", follow=False)))
+        requested = tuple(raw["run"]["requested_modules"])
+        order, deps = plan(requested), dependencies(requested)
+        edges = [
+            [producer, consumer, edge_rule(consumer, producer)]
+            for consumer in order
+            for producer in sorted(deps[consumer])
+        ]
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, KeyError, TypeError, RecursionError) as error:
+        issues.append(f"{folder}: run record could not be read ({type(error).__name__})")
+        return None
+    events, events_issue = run_events(run_dir, folder, issues)
+    seen: dict[str, dict[str, str | None]] = {}
+    for event in events:
+        module, at = event.get("module"), event.get("at")
+        name = event.get("event")
+        kind = {"module_started": "started", "module_accepted": "accepted"}.get(str(name))
+        if kind and isinstance(module, str) and isinstance(at, str):
+            seen.setdefault(module, {"started": None, "accepted": None})
+            seen[module][kind] = seen[module][kind] or at
+    started = [m for m, t in seen.items() if t["started"]]
+    steps = [{"module": m, **seen[m]} for m in started]
+    steps += [{"module": m, "started": None, "accepted": None} for m in order if m not in started]
+    record = {"edges": edges, "steps": steps, "timed": bool(started)}
+    if events_issue:
+        record["eventsIssue"] = events_issue
+    return record
+
+
+def run_records(workspace: Path, store: dict[str, Any]) -> None:
+    """Add each shown run's `record` (see run_record) to the store, reading the run folder only."""
+    for run in store["runs"].values():
+        record = run_record(workspace / "runs" / run["folder"], run["folder"], store["issues"])
+        if record:
+            run["record"] = record
+
+
 def build_into(folder: Path, workspace: Path, library: Library) -> None:
     shutil.copytree(WEB, folder, ignore=shutil.ignore_patterns("*.test.cjs"), dirs_exist_ok=True)
     cat = catalogue(workspace, library)
     store = workspace_store(workspace, cat)
+    run_records(workspace, store)
     presented = write_presented_reports(workspace, library, folder)
     # Run activity, as data: the folders left out and why, and every issue the build recorded
     # (the store's list already holds the catalogue's; each is kept once, in order).

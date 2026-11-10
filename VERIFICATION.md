@@ -4,6 +4,55 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Visuals package 8: complete the whole-branch review
+
+Scope: continued the interrupted `claude/visuals-p8` changes from reviewed package 7
+(original tip `44108e6`). Offline synthetic tests and a deterministic rebuild from retained
+handoffs; no provider call or new analytical run. Packages 1–8 were later pushed and merged through GitHub PRs #33–#40. No further rewrite tournaments,
+per the current user's instruction.
+
+Confidence review, ranked doubts and outcomes:
+- **Missing evidence could force invented rows (M1).** Every owner row table now accepts its
+  explicit all-gap form; the library retains the reason in `chartGaps` without a chart or an
+  invalid-table complaint. Checked all independently written owner fixtures and the original
+  reviewer's no-data probe. Empty unit/basis and mixed gap/data rows remain invalid. A stated
+  gap in a unit/basis cell remains permitted as explicit missing information, never a guessed unit.
+- **Index claims could disagree with actual pages (M2).** Not-assessable modules' charts show
+  their limitation and no placement/table-form link; maps remain available as their pages draw
+  them. Static regressions and the original folded-page browser probe (updated to expect the
+  removed link) verify this through the generated library.
+- **Event-log failure could masquerade as no history (M3/L4).** The run record carries the read
+  error; the page names and escapes it. Non-object JSON records invalidate the log without
+  stopping the build. Missing logs remain distinct. The shared log reader's existing tolerance
+  for an unfinished final JSON line is unchanged.
+- **Launcher/store disagreement could misstate figures (L1-L3/L5).** Fixed currency instructions,
+  reminder status, unit constraints, peer bounds, maturity ordering, scenario count and duplicate
+  class/scenario rejection. The reviewer's parity probe reports zero disagreements. Confidence
+  review additionally reproduced a missing EUR period relabelling later USD figures; the chart
+  now takes its unit from a numeric row. No numeric value is converted or derived.
+- **Cleanup could remove a live caller (L6).** Traced callers and removed unused owner metadata,
+  UI options, the redundant format lookup/CSS class and comparison-registry intermediate;
+  repeated allocation/map instructions are emitted once. Affected fixtures still pass.
+- **Package limit (M4).** Removed one redundant test-heading comment from package 2 and restacked
+  the later local packages. Package 2 is exactly 800 changed lines; each other package is below
+  800. Original branch tips are retained under `refs/codex-backups/visuals-p*-before-p8-review`.
+
+Verification (each test process bounded to 300 seconds using Python subprocess timeout because
+this macOS host has no `timeout` executable):
+- `uv run pytest -q --tb=short -m 'not live' tests/test_cpos_launch.py
+  tests/test_update_library.py tests/test_credit_os_store.py tests/test_library_page_browser.py`:
+  **612 passed, 1 deselected**, including Chrome over file URLs; 84.40 seconds.
+- `node --test apps/issuer-library/credit_os/web/static.test.cjs
+  apps/issuer-library/credit_os/web/calendar.test.cjs`: **186 passed**.
+- `uv run python tools/quality_gate.py`: **0 findings**; `git diff --check` clean.
+- Retained-source rebuild into a temporary directory: `cpos-tdg-copilot-sol-medium-002`,
+  `cpos-tdg-sol-high-001`, `cpos-tdg-sol-high-cp2-001`. The unfinished Copilot run was excluded
+  for no completion record; `cpos-tdg-sol-medium-all-001` was excluded for the changed shared
+  methodology. Original run directories were read only. This is library compatibility evidence,
+  not proof that a model satisfies the new combined chart instructions or a complete TDG pathway.
+- Still outside scope: paid model output for the new contracts, Windows, screen-reader/print
+  testing, the pre-existing escaped-pipe parser discrepancy and the weekly full test suite.
+
 ## 2026-11-10 — Word documents (.docx) in the issuer folder (branch `claude/optimistic-johnson-bmnwip`, after main `3ac4db6`)
 
 Owner: "Add docx compatibility too". Input only: nothing is written as Word.

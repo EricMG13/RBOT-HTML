@@ -728,12 +728,12 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
     ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'Unnamed module']]]];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
-  const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
+  const contexts = { [RUN]: { folder: RUN, record: more.record, ...more.runFields, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => ''];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules};`)(...args);
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name])];
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, calendarSections, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex, contextBar};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1129,7 +1129,7 @@ test('run report: every part carries an id and the label the navigator lists, in
   const html = runPage().runReport(RUN);
   const parts = [...html.matchAll(/<section class="[^"]*" id="(run-[a-z0-9-]+)" data-run-part="([^"]*)">/g)].map(m => [m[1], m[2]]);
   assert.deepEqual(parts, [['run-group-1', 'Financial performance'], ['run-group-2', 'Outlook and downside'], ['run-group-3', 'Decision and review'], ['run-group-4', 'Other modules'],
-    ['run-register', 'Findings register'], ['run-open-items', 'Open items'], ['run-matrix', 'Module matrix']]);
+    ['run-register', 'Findings register'], ['run-open-items', 'Open items'], ['run-matrix', 'Module matrix'], ['run-charts', 'Chart index']]);
   const screen = read('screen.js');
   assert.ok(screen.includes("querySelectorAll('[data-run-part]')") && screen.includes('run-[a-z0-9-]+'), 'the navigator lists the parts and the route scrolls to one');
 });
@@ -1340,7 +1340,7 @@ test('reader charts: a bridge whose running position dips below zero is drawn in
   assert.equal(rects.length, 4);
   for (const r of rects) assert.ok(r.top >= -12 && r.bottom <= 210.001, JSON.stringify(r));
   // The zero rule sits where the opening and closing bars stand; the deepest point (-200) reaches the floor.
-  const zero = Number(/<line x1="0" y1="([^"]*)" x2="660" y2="\1" class="axis zero-axis"\/>/.exec(html)[1]);
+  const zero = Number(/<line x1="0" y1="([^"]*)" x2="660" y2="\1" class="axis"\/>/.exec(html)[1]);
   assert.ok(zero < 210 && Math.abs(rects[0].bottom - zero) < 0.01 && Math.abs(rects[3].bottom - zero) < 0.01);
   assert.ok(Math.abs(rects[1].bottom - 210) < 0.01, 'the outflow ends at the lowest running position');
 });
@@ -1364,6 +1364,214 @@ test('run report: the bridge is drawn in its module story beside the module\'s o
   const mod = storyModule(runPage(withBridge).runReport(RUN), 'CP-1');
   assert.ok(mod.includes('<div class="vector-chart">') && mod.includes('<div class="column-chart"'));
   assert.ok(mod.indexOf('column-chart') < mod.indexOf('vector-chart'), 'charts keep the handoff order');
+});
+
+const TAIL = ['Reporting unit', 'Basis and limitation'];
+const STACK = { title: 'Debt stack', unit: 'US$m', table: 92, kind: 'stack', label: 0, rank: 1, secured: 2, amount: 3, leverage: 4, columns: [3, 4] };
+const BULLET = { title: 'Covenant headroom', unit: '', table: 102, kind: 'bullet', label: [0], threshold: 1, current: 2, headroom: 3, direction: 4, columns: [1, 2] };
+const LIMITS = { title: 'Portfolio limits', unit: '% NAV', table: 112, kind: 'limits', label: 0, current: 1, proposed: 2, limit: 3, columns: [1, 2, 3] };
+const withStructure = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(
+    sec('Chart data: debt stack', 3, 90, 'consumed', [table(92, ['Facility', 'Ranking', 'Secured', 'Amount', 'Cumulative leverage', ...TAIL], [[93, 'Term loan', '1', 'Yes', '1,200', '2.4', 'US$m', 'Synthetic.'], [94, 'Notes', '2', 'No', '800', '4.0', 'US$m', 'Synthetic.'], [95, 'Subordinated', '3', 'No', 'Not supplied: not stated', 'Not supplied: no balance', 'US$m', 'Synthetic.']])]),
+    sec('Chart data: covenant headroom', 3, 100, 'consumed', [table(102, ['Test', 'Threshold', 'Current', 'Headroom', 'Direction', ...TAIL], [[103, 'Net leverage', '5.0', '4.2', '0.8x', 'Passes at or below', 'x', 'Synthetic.'], [104, 'Interest cover', '2.0', '2.6', '0.6x', 'Passes at or above', 'x', 'Synthetic.'], [105, 'Liquidity', '100', 'Not supplied: not stated', 'Not supplied: no current', 'Passes at or above', 'US$m', 'Synthetic.']])]),
+    sec('Chart data: portfolio limits', 3, 110, 'consumed', [table(112, ['Limit', 'Current exposure', 'Proposed exposure', 'Limit value', ...TAIL], [[113, 'Single issuer', '3.0', '4.0', '5.0', '% NAV', 'Synthetic.'], [114, 'High-yield bucket', '12.0', 'Not supplied: no proposal', '15.0', '% NAV', 'Synthetic.']])]));
+  cp1.charts.push(STACK, BULLET, LIMITS);
+  return d;
+};
+
+test('structure views: a debt stack is segments in stated rank order, widths from the stated amounts, leverage as stated', () => {
+  const html = runPage(withStructure).readerChart(outId('CP-1'), STACK);
+  const segments = [...html.matchAll(/<a class="stack-seg series-(\d)" href="[^"]*" data-evidence="[^"]*:(\d+)" style="width:([\d.]+)%"/g)].map(m => [m[1], m[2], m[3]]);
+  assert.deepEqual(segments, [['0', '93', '60'], ['1', '94', '40']]);
+  const key = strip(/<ol class="stack-key">(.*?)<\/ol>/s.exec(html)[1]);
+  assert.ok(key.indexOf('Term loan') < key.indexOf('Notes') && key.indexOf('Notes') < key.indexOf('Subordinated'));
+  assert.ok(key.includes('Secured') && key.includes('1,200') && key.includes('2.4x') && key.includes('4.0x'));
+  // A gap is stated as n.a. in the key and has no segment; it is not a zero.
+  assert.ok(/Subordinated.*n\.a\./s.test(key) && !/Subordinated.*>0</s.test(key));
+  assert.ok(html.includes('<p class="matrix-note">A facility with no stated amount has no segment.</p>'));
+  assert.ok(html.includes('<h2>Debt stack</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
+  assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+test('structure views: a bullet chart marks the stated threshold and current, the passing side and the stated headroom', () => {
+  const html = runPage(withStructure).readerChart(outId('CP-1'), BULLET);
+  const row = html.split('<div class="bullet-row"')[1];
+  assert.ok(row.includes('<i class="pass" style="left:0%;width:90.91%"></i>'), 'at or below passes under the threshold');
+  assert.ok(row.includes('<i class="tick" style="left:90.91%"></i>') && row.includes('<i class="marker" style="left:76.36%"></i>'));
+  assert.ok(strip(row).includes('Threshold 5.0') && strip(row).includes('Current 4.2') && strip(row).includes('Headroom 0.8x') && strip(row).includes('Passes at or below'));
+  const above = html.split('<div class="bullet-row"')[2];
+  assert.ok(above.includes('<i class="pass" style="left:'), 'at or above passes over the threshold');
+  assert.equal(countOf(above, /<i class="pass" style="left:(\d+(?:\.\d+)?)%;width:(\d+(?:\.\d+)?)%"><\/i>/g), 1);
+  // A current value that is not stated has no marker and is n.a., never the zero position.
+  const gap = html.split('<div class="bullet-row"')[3];
+  assert.ok(!gap.includes('class="marker"') && strip(gap).includes('Current n.a.') && gap.includes('class="tick"'));
+  assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+test('structure views: a rating-trigger row is labelled by agency and trigger, with no headroom claimed', () => {
+  const chart = { ...BULLET, title: 'Rating triggers', unit: 'x', label: [0, 1], threshold: 2, current: 3, headroom: null, direction: 4, table: 122 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: rating triggers', 3, 120, 'consumed', [table(122, ['Agency', 'Trigger', 'Threshold', 'Current', 'Direction', ...TAIL], [[123, 'Agency A', 'Net leverage review', '5.5', '4.2', 'Passes below', 'x', 'Synthetic.']])])); d[outId('CP-1')].charts.push(chart); return d; });
+  const html = page.readerChart(outId('CP-1'), chart);
+  assert.ok(strip(html).includes('Agency A') && strip(html).includes('Net leverage review') && !strip(html).includes('Headroom'));
+  assert.ok(html.includes('<i class="pass" style="left:0%;width:'), 'below passes under the threshold');
+});
+
+test('structure views: portfolio limits are bars of the stated exposures with a tick at the stated limit', () => {
+  const html = runPage(withStructure).readerChart(outId('CP-1'), LIMITS);
+  const first = html.split('<div class="limit-row"')[1];
+  assert.ok(first.includes('<i class="series-0" style="width:54.55%"></i>') && first.includes('<i class="series-1" style="width:72.73%"></i>'));
+  assert.ok(first.includes('<i class="tick" style="left:90.91%"></i>') && strip(first).includes('Limit 5.0'));
+  const gap = html.split('<div class="limit-row"')[2];
+  assert.equal(countOf(gap, /<i class="series-1"/g), 0);
+  assert.ok(strip(gap).includes('Proposed n.a.') && gap.includes('class="tick"'));
+  assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+test('structure views: no amber or red in the series, stack, tick or limit rules; a stated zero amount draws no note', () => {
+  const css = read('screen.css').replace(/\/\*.*?\*\//gs, '').split('}').filter(r => /series-|stack|\.tick|limit-key/.test(r.split('{')[0]));
+  assert.ok(css.length > 4 && css.every(r => !/amber|red\)|#8a5300|#b3261e/.test(r)));
+  const html = runPage(d => { const t = withStructure(d)[outId('CP-1')].sections.flatMap(x => x.blocks).find(b => b.line === 92); t.rows[2].cells[3] = '0'; return d; }).readerChart(outId('CP-1'), STACK);
+  assert.ok(!html.includes('no stated amount'));
+});
+
+test('structure views: only a period chart carries the missing-values note, once, under the last of them', () => {
+  const mod = storyModule(runPage(withStructure).runReport(RUN), 'CP-1');
+  assert.equal(countOf(mod, /Missing values have no bar\./g), 1);
+  assert.ok(mod.indexOf('Missing values have no bar.') < mod.indexOf('stack-key'), 'the note sits under the period charts, before the structure views');
+});
+
+// ---- Package 3 views (2026-11-10): prior and current results, margin and KPI changes, peer ranges and yield against maturity. Every value is synthetic.
+const PAIR_HEAD = ['Measure', 'Prior period', 'Prior', 'Current period', 'Current', ...TAIL];
+const PEER_HEAD = ['Metric', 'Issuer', 'Peer low', 'Peer median', 'Peer high', 'Peer count', ...TAIL];
+const YIELD_HEAD = ['Instrument', 'Maturity date', 'Yield', 'Spread', 'Quote date', 'Source class', ...TAIL];
+const GROUPED = { title: 'Prior and current results', unit: 'US$m', table: 132, kind: 'grouped', label: 0, sub: [1, 3], periods: [1, 3], prior: 2, current: 4, columns: [2, 4] };
+const DUMBBELL = { title: 'Margin and KPI changes', unit: '', table: 142, kind: 'dumbbell', label: 0, sub: [1, 3], periods: [1, 3], prior: 2, current: 4, columns: [2, 4] };
+const RANGE = { title: 'Peer range — percent metrics', unit: '%', table: 152, kind: 'range', label: 0, issuer: 1, low: 2, median: 3, high: 4, count: 5, columns: [1, 2, 3, 4, 5] };
+const SCATTER = { title: 'Yield against maturity', unit: '', table: 162, kind: 'scatter', label: 0, date: 1, yield: 2, spread: 3, quoted: 4, source: 5, columns: [2] };
+const SYN = 'Synthetic.';
+const note = (name, date, yld, unit, spread = '+310 bp') => [name, date, yld, spread, '2024-12-31', 'Dealer quote', unit, SYN];
+const withComparison = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(
+    sec('Chart data: prior and current results', 3, 130, 'consumed', [table(132, PAIR_HEAD, [[133, 'Revenue', 'FY2023', '2,100', 'FY2024', '2,250', 'US$m', SYN], [134, 'EBITDA', 'FY2023', 'Not supplied: not stated', 'FY2024', '410', 'US$m', SYN]])]),
+    sec('Chart data: margin and KPI changes', 3, 140, 'consumed', [table(142, PAIR_HEAD, [[143, 'EBITDA margin', 'FY2023', '19.5', 'FY2024', '21.0', '%', SYN], [144, 'Subscribers', 'FY2023', '1.2', 'FY2024', '1.4', 'm', SYN], [145, 'Leverage', 'FY2023', '4.0', 'FY2024', 'Not supplied: not stated', 'x', SYN]])]),
+    sec('Chart data: peer range — percent metrics', 3, 150, 'consumed', [table(152, PEER_HEAD, [[153, 'EBITDA margin', '21.0', '12.0', '18.5', '26.0', '7', '%', SYN], [154, 'FFO / debt', 'Not supplied: not stated', '8.0', '15.0', '22.0', '6', '%', SYN], [155, 'Misordered', '10.0', '30.0', '18.5', '26.0', '5', '%', SYN]])]),
+    sec('Chart data: yield against maturity', 3, 160, 'consumed', [table(162, YIELD_HEAD, [note('2028 note', '2028-06-15', '6.4', '%'), note('2030 note', '2030-06-15', '7.0', '%'), note('2029 note', '2029-06-15', '6.8', '%'), note('No quote', '2031-03-01', 'Not supplied: no quote', '%', 'Not supplied: no quote'), note('Undated', 'June 2029', '6.9', '%'), note('Other measure', '2029-01-01', '250', 'bp')].map((r, i) => [163 + i, ...r]))]));
+  cp1.charts.push(GROUPED, DUMBBELL, RANGE, SCATTER);
+  return d;
+};
+const comparison = chart => runPage(withComparison).readerChart(outId('CP-1'), chart);
+const FORM = '<details class="chart-table"><summary>Table form</summary>';
+
+test('comparison views: prior and current results are two columns per measure on one zero baseline, the periods under the label', () => {
+  const html = comparison(GROUPED);
+  assert.ok(html.includes('<span class="chart-label">Revenue<small>FY2023 → FY2024</small></span>'));
+  assert.ok(html.includes('<i class="series-0" style="bottom:0%;height:93.33%"></i>') && html.includes('<i class="series-1" style="bottom:0%;height:100%"></i>'));
+  const ebitda = html.split('<div class="chart-row"')[2] || html.split('class="chart-row"')[2];
+  assert.ok(ebitda.includes('class="col missing"') && !ebitda.includes('series-0'), 'a prior that is not stated has no column');
+  assert.ok(strip(html).includes('Prior') && strip(html).includes('Current') && html.includes(FORM) && !/CP-\d/.test(strip(html)));
+});
+
+test('comparison views: a dumbbell joins the stated prior and current on a scale shared only within a unit, with no change worked out', () => {
+  const html = comparison(DUMBBELL);
+  const [margin, subscribers, leverage] = html.split('<div class="dumbbell-row"').slice(1);
+  assert.ok(margin.includes('<i class="dumbbell-link" style="left:84.42%;width:6.49%"></i>'));
+  assert.ok(margin.includes('<i class="dumbbell-dot series-0" style="left:84.42%"></i>') && margin.includes('<i class="dumbbell-dot series-1" style="left:90.91%"></i>'));
+  assert.ok(subscribers.includes('<i class="dumbbell-link" style="left:77.92%;width:12.99%"></i>'), 'its own unit has its own scale');
+  assert.ok(strip(margin).includes('Prior FY2023 19.5') && strip(margin).includes('Current FY2024 21.0'));
+  assert.ok(leverage.includes('dumbbell-dot series-0') && !leverage.includes('dumbbell-dot series-1') && !leverage.includes('dumbbell-link') && strip(leverage).includes('Current FY2024 n.a.'));
+  assert.ok(!/\bchange\b|difference|\bpp\b/i.test(strip(html)), 'no change is stated that the handoff did not state');
+  assert.ok(html.includes(FORM));
+});
+
+test('comparison views: a peer range is a band from the stated low to high, a median tick and the issuer marker', () => {
+  const html = comparison(RANGE);
+  const [margin, ffo, misordered] = html.split('<div class="range-row"').slice(1);
+  assert.ok(margin.includes('<i class="range-band" style="left:41.96%;width:48.95%"></i>') && margin.includes('<i class="tick" style="left:64.69%"></i>') && margin.includes('<i class="marker" style="left:73.43%"></i>'));
+  assert.ok(strip(margin).includes('Issuer 21.0') && strip(margin).includes('Peers 7') && strip(margin).includes('Peer low 12.0'));
+  assert.ok(ffo.includes('range-band') && !ffo.includes('class="marker"') && strip(ffo).includes('Issuer n.a.'), 'no marker for an issuer value not stated');
+  assert.ok(!misordered.includes('range-band'), 'a band is drawn only for a stated low that does not exceed the high');
+  assert.ok(html.includes(FORM));
+});
+
+test('comparison views: yield against maturity places each stated date and yield, one panel per unit, and lists what has no point', () => {
+  const html = comparison(SCATTER);
+  const panels = html.split('<svg').slice(1);
+  assert.equal(panels.length, 2, 'yields in another unit are not drawn on the same scale');
+  const dots = [...panels[0].matchAll(/<circle class="scatter-dot" cx="([\d.]+)" cy="([\d.]+)"/g)].map(m => [m[1], m[2]]);
+  assert.deepEqual(dots, [['60', '166.67'], ['630', '33.33'], ['345', '77.78']]);
+  assert.ok(panels[0].includes('>2028-06-15</text>') && panels[0].includes('>2030-06-15</text>'));
+  const key = strip(/<ol class="stack-key">(.*?)<\/ol>/s.exec(html)[1]);
+  assert.ok(/No quote.*Yield n\.a\./s.test(key) && /Undated.*Maturity June 2029/s.test(key) && key.includes('Dealer quote') && key.includes('+310 bp') && key.includes('2024-12-31'));
+  assert.ok(html.includes('An instrument with no stated maturity date or yield has no point.') && html.includes(FORM));
+});
+
+test('comparison views: an invalid calendar date has no point and does not break the page; a grouped chart takes the missing-values note', () => {
+  const bad = ['2028-13-01', '2028-00-10', '9999-99-99', '2028-02-31'];
+  const rows = bad.map((when, i) => [190 + i, ...note(`Bad ${i}`, when, '6.4', '%')]);
+  const chart = { ...SCATTER, table: 182 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: yield against maturity', 3, 180, 'consumed', [table(182, YIELD_HEAD, rows)])); d[outId('CP-1')].charts.push(chart); return d; });
+  const html = page.readerChart(outId('CP-1'), chart);
+  assert.equal(countOf(html, /scatter-dot/g), 0);
+  assert.ok(html.includes('An instrument with no stated maturity date or yield has no point.'));
+  assert.equal(page.lastPeriodChart([{ kind: 'dumbbell' }, { kind: 'grouped' }]), 1);
+});
+
+test('comparison views: the new view rules use only the series and ink tokens, never amber or red', () => {
+  const rules = read('screen.css').split('\n').filter(line => /\.(dumbbell|range|scatter)-/.test(line));
+  assert.ok(rules.length >= 3, 'the new rules are found');
+  for (const rule of rules) assert.ok(!/amber|--red|#b47812|#b3261e|#8a5300/i.test(rule), rule);
+});
+
+// ---- Package 4 views (2026-11-10): recovery by class and the value allocation waterfalls. Every value is synthetic.
+const RECOVERY_HEAD = ['Class', 'Scenario', 'Claim', 'Recovery', 'Recovery %', ...TAIL];
+const RECOVERY = { title: 'Recovery by class', unit: 'US$m', table: 202, kind: 'recovery', label: 0, scenario: 1, claim: 2, recovery: 3, percent: 4, columns: [2, 3, 4] };
+const ALLOCATION = { title: 'Value allocation \u2014 scenario 1', unit: 'US$m', table: 222, kind: 'waterfall', amount: 1, columns: [1] };
+const recoveryRow = (line, cls, scenario, claim, recovery, percent) => [line, cls, scenario, claim, recovery, percent, 'US$m', SYN];
+const withRecovery = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(
+    sec('Chart data: recovery by class', 3, 200, 'consumed', [table(202, RECOVERY_HEAD, [recoveryRow(203, 'Senior secured', 'Base', '1,200', '1,080', '90'), recoveryRow(204, 'Senior secured', 'Downside', '1,200', '720', '60'), recoveryRow(205, 'Unsecured', 'Base', '800', '120', '15'), recoveryRow(206, 'Unsecured', 'Downside', '800', 'Not supplied: no downside value', 'Not supplied: no downside value')])]),
+    sec('Chart data: value allocation \u2014 scenario 1', 3, 220, 'consumed', [table(222, ['Step', 'Amount', ...TAIL], [[223, 'Enterprise value', '2,000', 'US$m', SYN], [224, 'Restructuring costs', '-100', 'US$m', SYN], [225, 'Senior secured distribution', '-1,080', 'US$m', SYN], [226, 'Unsecured distribution', '-120', 'US$m', SYN], [227, 'Value not distributed', '700', 'US$m', SYN]])]));
+  cp1.charts.push(RECOVERY, ALLOCATION);
+  return d;
+};
+
+test('recovery views: recovery is columns by class, one series per scenario on one zero baseline, claim and percent as stated', () => {
+  const html = runPage(withRecovery).readerChart(outId('CP-1'), RECOVERY);
+  const [senior, unsecured] = html.split('<div class="recovery-group"').slice(1);
+  assert.ok(html.includes('<div class="chart-legend"><span><i class="series-0"></i>Base</span><span><i class="series-1"></i>Downside</span></div>'));
+  assert.ok(senior.includes('<i class="series-0" style="bottom:0%;height:100%"></i>') && senior.includes('<i class="series-1" style="bottom:0%;height:66.67%"></i>'));
+  assert.ok(strip(senior).includes('Base: claim 1,200 US$m · recovery 1,080 · 90%') && strip(senior).includes('Downside: claim 1,200 US$m · recovery 720 · 60%'));
+  assert.ok(unsecured.includes('<i class="series-0" style="bottom:0%;height:11.11%"></i>') && unsecured.includes('class="col missing"') && !unsecured.includes('series-1'), 'a recovery not stated has no bar and is never zero');
+  assert.ok(strip(unsecured).includes('Downside: claim 800 US$m · recovery n.a. · n.a.'));
+  assert.ok(senior.includes(`data-evidence="${outId('CP-1')}:203"`) && html.includes(FORM) && !/CP-\d/.test(strip(html)));
+  assert.ok(!/\bcomputed\b|\bshortfall\b/i.test(strip(html)), 'no recovery percentage or shortfall is worked out');
+});
+
+test('recovery views: scenarios keep one order in every class; a class with no row for one has an empty not-stated slot, never a zero bar', () => {
+  const rows = [recoveryRow(303, 'Senior', 'Base', '100', '90', '90'), recoveryRow(304, 'Senior', 'Downside', '100', '60', '60'), recoveryRow(305, 'Junior', 'Downside', '50', '10', '20')];
+  const chart = { ...RECOVERY, table: 302 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: recovery by class', 3, 300, 'consumed', [table(302, RECOVERY_HEAD, rows)])); d[outId('CP-1')].charts.push(chart); return d; });
+  const junior = page.readerChart(outId('CP-1'), chart).split('<div class="recovery-group"')[2];
+  assert.ok(/^[^]*?class="col missing"[^]*?not stated[^]*?series-1/.test(junior.split('<span class="chart-label">')[0]), 'the Base slot is first and empty');
+  assert.equal(countOf(junior, /<i class="series-/g), 1);
+});
+
+test('recovery views: the figure takes the missing-values note and its rules use no amber or red', () => {
+  const page = runPage(withRecovery);
+  assert.equal(page.lastPeriodChart([{ kind: 'waterfall' }, { kind: 'recovery' }, { kind: 'bullet' }]), 1);
+  const rules = read('screen.css').split('\n').filter(line => /\.recovery-/.test(line));
+  assert.ok(rules.length >= 1, 'the new rules are found');
+  for (const rule of rules) assert.ok(!/amber|--red|#b47812|#b3261e|#8a5300/i.test(rule), rule);
+});
+
+test('recovery views: a value allocation is a waterfall from enterprise value to the value not distributed', () => {
+  const html = runPage(withRecovery).readerChart(outId('CP-1'), ALLOCATION);
+  assert.equal(countOf(html, /<rect class="total"/g), 2);
+  assert.equal(countOf(html, /<rect class="outflow"/g), 3);
+  assert.ok(html.includes('aria-label="Value not distributed, 700 US$m. View source"') && html.includes('<h2>Value allocation \u2014 scenario 1</h2>') && html.includes(FORM));
 });
 
 // ---- Screens pass (2026-11-10): what a reader acts on is shown; production detail (hashes, file names, word counts) is a title or behind a disclosure.
@@ -1634,4 +1842,432 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
   const screen = read('screen.js'), adapter = read('report-adapter.js');
   assert.ok(screen.includes("parent.closest('.ref,.excerpt')"), 'a source excerpt is the issuer\'s text, as quoted');
   assert.ok(adapter.includes('"CP-MODEL":"Forecast"'), 'the app\'s word for the model');
+});
+
+// ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.
+const LANE_HEAD = ['Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance'];
+const laneRow = (line, date, precision, published, event, status = 'Scheduled — due') => [line, date, precision, published, event, status, 'Synthetic filing', 'Synthetic relevance'];
+const LANE_GAP = 'Not supplied: the handoff states no dated event';
+const withLanes = d => {
+  d[outId('CP-1')].sections.push(sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures'), laneRow(304, '2025-06', 'month', '2025-05-01', 'Call window'), laneRow(305, '2025-Q3', 'quarter', '—', 'Rating review', 'Scenario — modelled review'), laneRow(306, '2025', 'year', '—', 'Maturity year')])]));
+  d[outId('CP-1')].events = [{ lane: 'Financing', table: 302, gap: null }];
+  d[outId('CP-6')].sections.push(sec('Events: Decision and watch', 3, 310, 'consumed', [table(312, LANE_HEAD, [[313, ...Array(7).fill(LANE_GAP)]])]));
+  d[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 312, gap: 'the handoff states no dated event' }];
+  return d;
+};
+const markers = html => [...html.matchAll(/class="lane-event (point|span)(?: scenario)?"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?"/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
+
+test('calendar lanes: one lane per module that supplied events, placed on one axis at each date precision', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  assert.equal(countOf(html, /<div class="lane-row">/g), 2);
+  assert.ok(strip(html).includes('Financing') && strip(html).includes('Decision and watch') && !/CP-\d/.test(strip(html)), 'lanes carry names, never module codes');
+  // Hand-computed: the axis is 2025-01-01 to 2025-12-31, 364 days. Mar 31 is day 89; June is days 151-180; Q3 is days 181-272; the year is the whole axis.
+  assert.deepEqual(markers(html), [['point', 24.45, null], ['span', 41.48, 7.97], ['span', 49.73, 25], ['span', 0, 100]]);
+});
+
+test('calendar lanes: a table of only Not supplied draws no event and says why', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  const gap = html.split('<div class="lane-row">')[2];
+  assert.ok(strip(gap).includes('Decision and watch') && strip(gap).includes('Not established for this run') && strip(gap).includes('the handoff states no dated event'));
+  assert.ok(!gap.includes('lane-event') && !gap.includes('Not supplied'));
+});
+
+test('calendar lanes: every event is a keyboard-reachable link naming its lane, date and precision, and the event table follows the lanes', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  const marker = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]);
+  assert.equal(marker.length, 4);
+  assert.ok(marker.every(m => /href="[^"]+"/.test(m) && m.includes('data-evidence=') && m.includes('aria-label=')));
+  assert.ok(marker[1].includes('aria-label="Financing: Call window, 2025-06 (month). View source"') && marker[1].includes(`data-evidence="${outId('CP-1')}:304"`));
+  assert.ok(html.indexOf('class="lane-row"') < html.indexOf('<table class="event-table">'));
+  const rows = [...html.split('<tbody>')[1].matchAll(/<tr>(.*?)<\/tr>/gs)].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
+  assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Lane', 'Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance']);
+  assert.equal(rows.length, 4, 'the lane with no event adds no row');
+  assert.deepEqual(rows[1], ['Financing', '2025-06', 'month', '2025-05-01', 'Call window', 'Scheduled — due', 'Synthetic filing', 'Synthetic relevance']);
+  assert.deepEqual(rows[2].slice(0, 4), ['Financing', '2025-Q3', 'quarter', '—']);
+});
+
+test('calendar lanes: the Calendar sections list the lanes first and leave the issuer-events calendar as it was', () => {
+  const issuer = d => { d[outId('CP-1A')] = runOutput('CP-1A', { sections: [sec('History', 3, 10, 'view', [table(11, ['Date / period', 'Category'], [[12, '1993', 'Fact']])])] }); return d; };
+  assert.deepEqual(runPage().calendarSections(RUN), [['unavailable', 'Calendar availability', []]]);
+  assert.deepEqual(runPage(issuer).calendarSections(RUN), [['tdg', 'Issuer events', []]]);
+  assert.deepEqual(runPage(withLanes).calendarSections(RUN), [['lanes', 'Event lanes', []]]);
+  assert.deepEqual(runPage(d => issuer(withLanes(d))).calendarSections(RUN), [['lanes', 'Event lanes', []], ['tdg', 'Issuer events', []]]);
+});
+
+test('calendar lanes: the new rules use only existing tokens, no amber or red, and a span is drawn differently from a day', () => {
+  const css = read('screen.css').split('\n').filter(line => /\.lane-|\.event-table|\.event-lanes/.test(line));
+  assert.ok(css.length >= 3, 'the new rules are found');
+  for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b/i.test(rule), rule);  // the font name Red Hat is not a colour
+  assert.ok(css.some(rule => /\.lane-event\.point/.test(rule)) && css.some(rule => /\.lane-event\.span/.test(rule)));
+});
+
+test('calendar lanes: a Scenario event is drawn with a dashed outline, not by colour alone, and says so in its name and its table row', () => {
+  const html = runPage(withLanes).eventLanesView(RUN);
+  const marker = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]);
+  assert.deepEqual(marker.map(m => m.includes('scenario')), [false, false, true, false]);
+  assert.ok(marker[2].includes('Scenario event') && !marker[1].includes('Scenario event'));
+  assert.ok(strip(html).includes('Scenario — modelled review'));
+  const rule = read('screen.css').split('\n').find(line => /\.lane-event\.scenario/.test(line));
+  assert.ok(rule && /dashed/.test(rule) && !/amber|--red/.test(rule));
+});
+
+test('calendar lanes: the Overview shows the same lanes compactly with a link to the Calendar tab, and nothing without lanes', () => {
+  const page = runPage(withLanes), compact = page.eventLanesView(RUN, { compact: true });
+  assert.equal(countOf(compact, /<div class="lane-row">/g), 2);
+  assert.ok(!compact.includes('event-table') && compact.includes('href="#W-Calendar') && strip(compact).includes('Open the Calendar'));
+  const overview = page.runReport(RUN);
+  assert.ok(overview.includes('class="event-lanes compact"') && overview.indexOf('event-lanes') < overview.indexOf('run-inventory'));
+  assert.ok(!runPage().runReport(RUN).includes('event-lanes'));
+});
+
+test('calendar lanes: a module filter draws only that module lane, and the Sources page draws the Sources lane', () => {
+  const sources = d => { d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [laneRow(403, '2025-02-14', 'day', '—', 'Filing published', 'Historical — filed')])])], events: [{ lane: 'Sources', table: 402, gap: null }] }); return withLanes(d); };
+  const page = runPage(sources), only = page.eventLanesView(RUN, { at: 'Evidence', compact: true });
+  assert.equal(countOf(only, /<div class="lane-row">/g), 1);
+  assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
+  const text = read('views.js');
+  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*eventLanesView\(context,\{at:'Evidence',compact:true\}\)/.test(text));
+});
+
+// ---- Package 6 views (2026-11-10): node/edge maps and the run status map. Every value is synthetic.
+const MAP_HEAD = ['From', 'Relationship', 'Edge type', 'To', 'Evidence'];
+const edgeRow = (line, from, link, type, to) => [line, from, link, type, to, 'Synthetic p.1'];
+const LONG = 'Synthetic holding company with a deliberately very long registered name Limited';
+const withMaps = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(sec('Map: credit-risk transmission', 3, 400, 'consumed', [table(402, MAP_HEAD, [
+    edgeRow(403, 'Synthetic driver', 'drives', 'Documentary Fact', 'Synthetic mechanism'),
+    edgeRow(404, 'Synthetic mechanism', 'squeezes', 'Management Language', 'Synthetic outcome'),
+    edgeRow(405, 'Synthetic driver', 'also hits', 'Analyst Interpretation', 'Synthetic outcome'),
+    edgeRow(406, 'Synthetic outcome', 'feeds back', 'Insufficient Information', 'Synthetic driver'),
+    edgeRow(407, LONG, 'owns', 'Documentary Fact', 'Synthetic driver'),
+  ])]));
+  cp1.sections.push(sec('Map: stress scenario', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, ...Array(5).fill('Not supplied: no scenario stated')]])]));
+  cp1.maps = [{ name: 'credit-risk transmission', table: 402, gap: null }, { name: 'stress scenario', table: 412, gap: 'no scenario stated' }];
+  return d;
+};
+
+test('maps: a layer is the longest path from a node with no incoming edge, and a cycle is cut at its last row', () => {
+  const page = runPage();
+  const ab = (from, to) => ({ from, to });
+  const diamond = page.mapLayers([ab('A', 'B'), ab('B', 'C'), ab('A', 'C')]);
+  assert.deepEqual([...diamond.layer], [['A', 0], ['B', 1], ['C', 2]]);
+  const loop = page.mapLayers([ab('A', 'B'), ab('B', 'C'), ab('C', 'A'), ab('C', 'C')]);
+  assert.deepEqual(loop.cut, [false, false, true, true]);
+  assert.deepEqual([...loop.layer], [['A', 0], ['B', 1], ['C', 2]]);
+  assert.deepEqual(page.mapLayers([ab('B', 'A'), ab('A', 'B')]).cut, [false, true], 'the first stated row is kept');
+});
+
+test('maps: one SVG, a box per node, a word and a line style per edge type, and the edge table beneath with the full text', () => {
+  const html = runPage(withMaps).mapsView(outId('CP-1'), 'h3');
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0];
+  assert.equal(countOf(svg, /<g class="map-node"/g), 4, 'driver, mechanism, outcome and the long holding company: the loop adds no node');
+  for (const word of ['Documentary Fact', 'Management Language', 'Analyst Interpretation', 'Insufficient Information']) assert.ok(strip(svg).includes(word), word);
+  const dashes = [...svg.matchAll(/<path class="map-edge[^"]*"[^>]*>/g)].map(m => /stroke-dasharray="([^"]*)"/.exec(m[0])?.[1] ?? '');
+  assert.equal(dashes.length, 5);
+  assert.ok(new Set(dashes).size >= 4, 'each edge type has its own line style');
+  assert.ok(!/stroke-width|opacity|weight/.test(svg), 'no weight, thickness or probability is drawn');
+  assert.ok(!svg.replace(/<title>.*?<\/title>/g, '').includes(LONG) && svg.includes('…') && svg.includes(`<title>${LONG}</title>`), 'a long name is cut in the box and whole in its title');
+  const table = /<table class="map-table".*?<\/table>/s.exec(html)[0];
+  assert.ok(html.indexOf('<svg') < html.indexOf('<table class="map-table"'));
+  assert.deepEqual([...table.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), MAP_HEAD);
+  assert.equal(countOf(table, /<tr>/g), 6);
+  assert.ok(table.includes(LONG) && table.includes('feeds back'));
+  assert.ok(/<div class="map-scroll" role="region" aria-label="[^"]+" tabindex="0">/.test(html), 'the diagram scrolls inside its card and can be reached by keyboard');
+  assert.ok(!/CP-\d/.test(strip(html)));
+});
+
+test('maps: a map of only Not supplied draws no diagram and says why', () => {
+  const html = runPage(withMaps).mapsView(outId('CP-1'), 'h3');
+  const gap = html.slice(html.indexOf('Stress scenario'));
+  assert.ok(gap.includes('Not established for this run') && gap.includes('no scenario stated'));
+  assert.ok(!gap.includes('<svg') && !gap.includes('Not supplied'));
+});
+
+test('maps: placement is by the map, so credit-risk transmission reaches the Overview and no other map does', () => {
+  const page = runPage(withMaps);
+  const overview = page.runReport(RUN);
+  assert.ok(overview.includes('Credit-risk transmission') && !overview.includes('>Stress scenario<'));
+  assert.equal(page.mapsView(outId('CP-1')).includes('Stress scenario'), true);
+  assert.equal(page.mapsPlaced(RUN, { at: 'Evidence' }), '');
+  const text = read('views.js');
+  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*statusMapView\(context\)[^\n]*mapsPlaced\(context,\{at:'Evidence'\}\)/.test(text));
+  assert.ok(/if\(module==='CP-OS'\)return[^\n]*statusMapView\(context,\{timeline:true\}\)/.test(text));
+  assert.ok(/\['maps',reportMaps\(id\)\]/.test(text) && /anchor==='maps'\?'Maps'/.test(text), 'the owning module page draws its maps');
+});
+
+test('maps: the new rules use only existing tokens, no amber or red', () => {
+  const css = read('screen.css').split('\n').filter(line => /\.map-|\.state-shape|\.status-/.test(line));
+  assert.ok(css.length >= 4, 'the new rules are found');
+  for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b/i.test(rule), rule);
+  assert.ok(css.some(rule => /\.map-edge/.test(rule)) && css.some(rule => /shape-open/.test(rule)));
+});
+
+// Fix round 1: the status map draws the run's own record (registry edges, recorded order and times).
+const T0 = '2026-01-01T10:00:00Z', T1 = '2026-01-01T10:05:00Z';
+const RECORD = {
+  edges: [['CP-0', 'CP-1', 'block'], ['CP-1', 'CP-2A', 'restricted'], ['CP-1', 'CP-6', 'block']],
+  steps: [{ module: 'CP-1', started: T0, accepted: T1 }, { module: 'CP-2A', started: T1, accepted: null }, { module: 'CP-6', started: null, accepted: null }, { module: 'CP-0', started: null, accepted: null }],
+  timed: true,
+};
+const MODULE_WORDS = ['Financial foundation', 'Downside', 'Committee decision', 'Source readiness'];
+const textOrder = (html, names) => names.map(n => html.indexOf(n));
+
+test('status map: the dependency map carries each module state by word and shape and says where it comes from', () => {
+  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN);
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0];
+  assert.equal(countOf(svg, /<g class="map-node"/g), 4);
+  for (const [shape, word] of [['established', 'Reaches a conclusion'], ['open', 'Not assessable'], ['none', 'No saved output']]) {
+    assert.ok(new RegExp(`class="map-state shape-${shape}"`).test(svg) && strip(svg).includes(word), shape);
+  }
+  assert.ok(strip(svg).includes('Block') && strip(svg).includes('Restricted'), 'the registry rule is the edge type, in words');
+  assert.ok(html.indexOf('<table class="map-table"') > html.indexOf('<svg'));
+  assert.ok(html.includes('required dependencies') && html.includes('method registry') && html.includes('recorded order'));
+  assert.ok(!html.includes('No dependency or time record') && !/CP-\d/.test(strip(html)));
+});
+
+test('status map: the list follows the recorded order, never the reading-group order, and carries no time on the Overview', () => {
+  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN);
+  const list = html.slice(html.indexOf('<ol class="status-list">'));
+  const at = textOrder(list, MODULE_WORDS);
+  assert.ok(at.every(n => n >= 0) && at.every((n, i) => !i || n > at[i - 1]), at.join());
+  assert.ok(!list.includes(T0) && !html.includes('<th scope="col">Started</th>'));
+});
+
+test('execution timeline: recorded times as written, Not recorded where an event is missing, nothing invented', () => {
+  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN, { timeline: true });
+  const table = /<table class="timeline-table".*?<\/table>/s.exec(html)[0];
+  assert.deepEqual([...table.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Step', 'Module', 'State', 'Started', 'Accepted']);
+  const rows = [...table.matchAll(/<tr><td>.*?<\/tr>/gs)].map(m => strip(m[0].replace(/<\/td>/g, '|')));
+  assert.equal(rows.length, 4);
+  assert.ok(rows[0].includes(T0) && rows[0].includes(T1));
+  assert.ok(rows[1].includes(T1) && rows[1].includes('Not recorded'));
+  assert.equal(countOf(rows[2], /Not recorded/g), 2);
+  assert.equal(countOf(table, /\d{4}-\d{2}-\d{2}T/g), 3, 'only the three stated times appear');
+  assert.ok(html.includes('event log') && !html.includes('No dependency or time record'));
+});
+
+test('execution timeline: a run with no event log is a numbered plan-order list labelled order only', () => {
+  const record = { ...RECORD, timed: false, steps: RECORD.steps.map(s => ({ ...s, started: null, accepted: null })) };
+  const html = runPage(d => d, [], m => m, { record }).statusMapView(RUN, { timeline: true });
+  assert.ok(html.includes('Order only, no times recorded') && !html.includes('<table class="timeline-table"'));
+  assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(html));
+});
+
+test('status map: a run with no record says so and lists the modules in reading-group order with no edge or time', () => {
+  const html = runPage().statusMapView(RUN, { timeline: true });
+  assert.ok(html.includes('No run record was read for this run') && !html.includes('<svg') && !html.includes('timeline-table'));
+  assert.equal(countOf(html, /<li class="status-item/g), 4);
+  assert.ok(!html.includes('No dependency or time record is held'));
+});
+
+test('maps: a wide map keeps its natural width and scrolls inside its card', () => {
+  const rule = read('screen.css').split('\n').find(line => /\.map-scroll svg/.test(line));
+  assert.ok(rule && !/max-width:\s*100%/.test(rule) && /flex:none|max-width:none/.test(rule), rule);
+  const chain = [...Array(12)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', 'Documentary Fact', `Layer ${i + 1}`));
+  const html = runPage(d => { const o = d[outId('CP-1')]; o.sections.push(sec('Map: credit-risk transmission', 3, 890, 'consumed', [table(892, MAP_HEAD, chain)])); o.maps = [{ name: 'credit-risk transmission', table: 892, gap: null }]; return d; }).mapsView(outId('CP-1'), 'h3');
+  assert.ok(Number(/<svg[^>]*width="(\d+)"/.exec(html)[1]) > 1440, 'twelve layers are wider than the page');
+});
+
+test('status map: no run chosen draws nothing and does not throw', () => {
+  assert.equal(runPage().statusMapView(undefined, { timeline: true }), '');
+});
+
+// ---- Package 7 views (2026-11-10): the chart index, the report manifest and the run/file context bar. Every value is synthetic.
+const withIndex = d => {
+  withLanes(d);
+  withMaps(d);
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(sec('Chart data: broken peer set', 3, 500, 'consumed', [table(502, ['Period', 'Value'], [[503, 'FY2024', '1']])]));
+  cp1.issue = 'Chart data: broken peer set is not in its fixed table';
+  return d;
+};
+const cellsOf = (html, attr) => [...html.matchAll(new RegExp(`<tr ${attr}="[^"]*">(.*?)</tr>`, 'gs'))].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
+const INDEX_HEAD = ['Chart', 'Module', 'State', 'Limitation', 'Unit', 'Period', 'Shown in', 'Table form', 'Source'];
+
+test('chart index: one row per chart, map and lane the run holds, whatever its state, with the owner by name', () => {
+  const html = runPage(withIndex).chartIndex(RUN);
+  assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), INDEX_HEAD);
+  const rows = cellsOf(html, 'data-chart').map(r => r.slice(0, 7));
+  const OVERVIEW = 'Financial foundation page, Overview';
+  assert.deepEqual(rows, [
+    ['Leverage', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
+    ['Cover', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
+    ['Financing events', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', 'Calendar, Overview'],
+    ['Credit-risk transmission map', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', 'Financial foundation page, Overview'],
+    ['Stress scenario map', 'Financial foundation', 'Not established for this run', 'no scenario stated', 'Not stated', 'Not stated', 'Not drawn'],
+    ['Broken peer set', 'Financial foundation', 'Sent back', 'Chart data: broken peer set is not in its fixed table', 'Not stated', 'Not stated', 'Not drawn'],
+    ['Decision and watch events', 'Committee decision', 'Not established for this run', 'the handoff states no dated event', 'Not stated', 'Not stated', 'Not drawn'],
+  ]);
+  assert.ok(!/CP-\d/.test(strip(html)), 'owners are named, never coded');
+});
+
+test('chart index: the table form and the handoff line are links that keep the run; a row with no evidence line has none', () => {
+  const html = runPage(withIndex).chartIndex(RUN);
+  const leverage = /<tr data-chart="[^"]*">.*?<\/tr>/s.exec(html)[0];
+  const [table, source] = [...leverage.matchAll(/<a href="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(table.startsWith('#CP-1/numbers') && table.includes('c=run-a') && !table.includes('e='), table);
+  assert.ok(source.startsWith('#CP-1/') && source.includes('c=run-a') && source.includes(`e=${encodeURIComponent(`${outId('CP-1')}:43`)}`), source);
+  assert.ok(!leverage.includes('data-evidence'), 'a plain route works from every page the index sits on');
+  const lane = cellsOf(html, 'data-chart')[2];
+  assert.ok(/<tr data-chart="[^"]*">(?:(?!<\/tr>).)*href="#W-Calendar\/lanes\?c=run-a"/s.test(html.slice(html.indexOf('Financing events') - 120)), 'a lane opens in the Calendar');
+  assert.equal(lane[7], 'Table form');
+  const map = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*Credit-risk transmission map.*?<\/tr>/s.exec(html)[0];
+  assert.ok(map.includes('#CP-1/maps?c=run-a'), 'a map opens its module’s Maps part');
+});
+
+test('chart index: placed on the Overview and the Forecast page; a run with no chart table says so, and no run draws nothing', () => {
+  const page = runPage(withIndex);
+  assert.ok(page.runReport(RUN).includes('class="run-section chart-index"'));
+  assert.ok(/if\(module==='W-Forecast'\)return[^\n]*chartIndex\(context\)/.test(read('views.js')));
+  const none = runPage(d => { for (const out of Object.values(d)) out.sections = out.sections.filter(s => !/^(Chart data|Map|Events): /.test(s.heading)); return d; }).chartIndex(RUN);
+  assert.ok(none.includes('No chart, map or calendar lane') && !none.includes('<table'));
+  assert.equal(page.chartIndex(undefined), '');
+});
+
+const REPORT_FILES = [{ name: 'report.html', href: 'x/report.html' }, { name: 'report.json', href: 'x/report.json' }, { name: 'report-view.json', href: 'x/report-view.json' }, { name: 'CP-1.md', href: 'x/CP-1.md' }];
+test('chart index never claims or links charts hidden by a not-assessable module', () => {
+  const page = runPage(d => {
+    withIndex(d);
+    const out = d[outId('CP-1')];
+    out.state.established = false;
+    out.summary.limitation = 'No comparable source.';
+    return d;
+  });
+  const rows = cellsOf(page.chartIndex(RUN), 'data-chart');
+  for (const row of rows.slice(0, 2)) {
+    assert.equal(row[2], 'Not established for this run');
+    assert.equal(row[3], 'No comparable source.');
+    assert.equal(row[6], 'Not drawn');
+    assert.equal(row[7], 'Not drawn');
+  }
+  assert.ok(!page.chartIndex(RUN).includes('#CP-1/numbers'));
+  assert.equal(rows[3][2], 'Drawn', 'the folded module still draws its maps');
+});
+
+test('chart index uses the stored reason for an owner table that states none', () => {
+  const html = runPage(d => {
+    const out = d[outId('CP-1')], [chart] = out.charts;
+    out.charts = out.charts.slice(1);
+    out.chartGaps = [{ ...chart, gap: 'No sourced quantity.' }];
+    return d;
+  }).chartIndex(RUN);
+  const [row] = cellsOf(html, 'data-chart');
+  assert.equal(row[2], 'Not established for this run');
+  assert.equal(row[3], 'No sourced quantity.');
+  assert.equal(row[7], 'Not drawn');
+});
+
+test('status map names an unreadable event log without claiming times were not recorded', () => {
+  const record = { ...RECORD, timed: false, eventsIssue: '<ValueError>', steps: RECORD.steps.map(s => ({ ...s, started: null, accepted: null })) };
+  const page = runPage(d => d, [], m => m, { record });
+  for (const timeline of [true, false]) {
+    const html = page.statusMapView(RUN, { timeline });
+    assert.ok(html.includes('Event log could not be read: &lt;ValueError&gt;'));
+    assert.ok(!html.includes('no times recorded') && !html.includes('<ValueError>'));
+    assert.ok(html.includes('Module dependencies'));
+  }
+});
+const SYNTHETIC_FIGURES = [{ title: 'Chart data: synthetic leverage — Period', kind: 'Figure', periods: ['FY2023 / 2023-09-30', 'FY2024 / 2024-09-30'], unit: 'x', unitClass: 'multiple', note: 'Synthetic note.', points: 2, sources: [{ source: 'CP-0', pin: 'a'.repeat(64) }] }, { title: 'Synthetic grid', kind: 'Table', periods: [], unit: null, unitClass: null, note: null, points: 1, sources: [] }];
+test('report manifest: the level is named, each handoff is pinned by its full hash and run, and only the formats present are listed', () => {
+  const report = { ...zedReport(RUN), files: REPORT_FILES, builtFrom: [...zedReport(RUN).builtFrom, { module: 'CP-6', run: null, source: 'CP-6.md', sha256: 'b'.repeat(64), output: false }] };
+  const html = runPage(d => d, [report], m => m, { runFields: { run: RUN, period: 'FY2024', asOf: '2024-09-30' } }).reportView(report, RUN);
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(html)[0];
+  assert.ok(strip(manifest).includes('lists report-view.json but no figures were read from it, so only its handoffs are shown') && !strip(manifest).includes('not held'), 'the fallback is labelled as the handoff level');
+  const rows = cellsOf(manifest, 'data-pin');
+  assert.deepEqual(rows.map(r => r.slice(0, 2)), [['Financial foundation', RUN], ['Committee decision', 'No matching run file']]);
+  assert.ok(rows[0][2].includes('a'.repeat(64)) && rows[1][2].includes('b'.repeat(64)), 'the whole pin, not a prefix');
+  assert.ok(rows[0][3].includes('FY2024') && rows[0][3].includes('30 September 2024'), 'the run’s own period and as-of');
+  assert.ok(/Formats present: HTML\./.test(strip(manifest)), 'handoff inputs and internal JSON records are not exports');
+  assert.ok(!/PDF|Excel|XLSX|CSV/i.test(manifest), 'no format that is not a file is named');
+});
+
+test('report manifest: one row per figure and table as the delivery states them, a missing value is Not stated, the handoffs stay beneath', () => {
+  const report = { ...zedReport(RUN), files: REPORT_FILES, figures: SYNTHETIC_FIGURES };
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [report]).reportView(report, RUN))[0];
+  assert.deepEqual([...manifest.matchAll(/<th scope="col">(.*?)<\/th>/g)].slice(0, 7).map(m => m[1]), ['Figure or table', 'Kind', 'Period', 'Unit', 'Basis and limitation', 'Points', 'Source pin']);
+  const rows = cellsOf(manifest, 'data-figure');
+  assert.deepEqual(rows[0], ['Chart data: synthetic leverage — Period', 'Figure', 'FY2023 / 2023-09-30; FY2024 / 2024-09-30', 'x (multiple)', 'Synthetic note.', '2', `Source readiness · ${'a'.repeat(64)}`]);
+  assert.deepEqual(rows[1], ['Synthetic grid', 'Table', 'Not stated', 'Not stated', 'Not stated', '1', 'Not stated']);
+  assert.ok(!/CP-\d/.test(strip(manifest)) && manifest.includes('data-pin'), 'no code on screen, and the built-from list is kept');
+  assert.ok(!strip(manifest).includes('not held'));
+});
+
+test('report manifest: a report with no files names no format', () => {
+  const report = { ...zedReport(RUN), files: [] };
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [report]).reportView(report, RUN))[0];
+  assert.ok(strip(manifest).includes('No export file is held for this report') && !/Formats present/.test(manifest));
+});
+
+const BAR_STORE = { inputs: { [`${RUN}/inputs/CP-1-input.md`]: { module: 'CP-1', run: RUN, source: 'inputs/CP-1-input.md', href: '../runs/run-a/inputs/CP-1-input.md', sha256: 'c'.repeat(64) } } };
+const BAR = {
+  runFields: { issuer: 'Synthetic Issuer', issuerKey: 'k1', title: 'Synthetic Issuer', run: 'Run A', asOf: '2025-12-31' },
+  contexts: { 'run-b': { folder: 'run-b', issuer: 'Synthetic Issuer', issuerKey: 'k1', run: 'Run B', asOf: '2025-06-30', modules: {} }, 'run-c': { folder: 'run-c', issuer: 'Other', issuerKey: 'k2', run: 'Run C', asOf: '2025-01-31', modules: {} } },
+  store: BAR_STORE,
+};
+const withInput = m => Object.fromEntries(Object.entries(m).map(([code, entry]) => [code, { ...entry, inputs: code === 'CP-1' ? [`${RUN}/inputs/CP-1-input.md`] : [] }]));
+const barPage = (reports = [], shape = withInput) => runPage(d => d, reports, shape, BAR);
+
+test('context bar: the issuer, the run and its as-of date; the other runs of that issuer only, as links in the same place', () => {
+  const html = barPage().contextBar('W-Calendar', RUN);
+  assert.ok(strip(html).includes('Synthetic Issuer') && strip(html).includes('Run A') && strip(html).includes('As of 31 December 2025'));
+  const others = [...html.matchAll(/<a href="([^"]+)">([^<]*)<\/a>/g)].filter(m => m[1].includes('c=run-b') || m[1].includes('c=run-c'));
+  assert.equal(others.length, 1, 'the other issuer’s run is not offered');
+  assert.ok(others[0][1].startsWith('#W-Calendar/') && others[0][1].includes('c=run-b') && others[0][2].includes('Run B') && others[0][2].includes('30 June 2025'));
+  assert.ok(barPage().contextBar('CP-1', RUN).includes('href="#W-Overview/'), 'an analytical module has no counterpart in another run, so its link opens the Overview');
+  assert.ok(!/CP-\d/.test(strip(html)));
+});
+
+test('context bar: revision order is not claimed, because no run records one', () => {
+  const text = strip(barPage().contextBar('W-Overview', RUN));
+  assert.ok(text.includes('No revision order is recorded between runs'));
+  assert.ok(!/latest|newer|older|supersede|revision of/i.test(text.replace('No revision order is recorded between runs', '')));
+});
+
+test('context bar: a recorded rerun and a recorded supersession are linked, and the no-order sentence appears only when none is recorded', () => {
+  const html = barPage([], withInput).contextBar('W-Overview', RUN);
+  assert.ok(strip(html).includes('No revision order is recorded between runs'));
+  const page = runPage(d => d, [], withInput, { ...BAR, runFields: { ...BAR.runFields, revisions: [{ word: 'Rerun of', id: 'id-b', run: 'run-b' }, { word: 'Supersedes', id: 'id-x', run: null }] } });
+  const text = page.contextBar('W-Overview', RUN);
+  assert.ok(/<a href="#W-Overview\/[^"]*c=run-b[^"]*">Rerun of Run B<\/a>/.test(text), 'a recorded run in the library is a link that keeps that run');
+  assert.ok(strip(text).includes('Supersedes id-x') && !/<a[^>]*>Supersedes/.test(text), 'a recorded run the library does not hold is named, not linked');
+  assert.ok(!strip(text).includes('No revision order is recorded'));
+});
+
+test('context bar: files by role, each link keeps the run, and a role with no file says so', () => {
+  const report = { ...zedReport(RUN), files: REPORT_FILES };
+  const html = barPage([report]).contextBar('W-Overview', RUN);
+  const role = name => new RegExp(`<section class="context-role" data-role="${name}">.*?</section>`, 's').exec(html)[0];
+  assert.ok(strip(role('source')).includes('CP-1-input.md') || strip(role('source')).includes('Financial foundation'));
+  assert.ok(role('source').includes('href="../runs/run-a/inputs/CP-1-input.md"') && role('source').includes(' download'));
+  assert.ok(role('analysis').includes('c=run-a') && strip(role('analysis')).includes('Financial foundation'));
+  assert.ok(role('export').includes('#W-Reports/') && role('export').includes('c=run-a') && strip(role('export')).includes('report.html') && role('export').includes('href="x/report.html"') && !/report\.json|report-view|handoff/.test(role('export')), 'inputs and records are not exports');
+  const bare = barPage([], m => Object.fromEntries(Object.entries(m).map(([code, entry]) => [code, { ...entry, inputs: [] }]))).contextBar('W-Overview', RUN);
+  assert.ok(/data-role="source"[^>]*>(?:(?!<\/section>).)*None retained for this run/s.test(bare) && /data-role="export"[^>]*>(?:(?!<\/section>).)*None retained for this run/s.test(bare));
+});
+
+test('context bar: no run chosen draws nothing, and the shell holds the bar where the run tabs are', () => {
+  assert.equal(barPage().contextBar('W-Overview', null), '');
+  assert.ok(read('index.html').includes('id="context-bar"'));
+  assert.ok(/\$\('context-bar'\)\.hidden=isHome/.test(read('views.js')));
+});
+
+test('package 7: the new rules use only existing tokens, no amber or red', () => {
+  const css = read('screen.css').split('\n').filter(line => /\.index-|\.context-|\.report-manifest/.test(line));
+  assert.ok(css.length >= 4 && css.some(rule => /\.context-bar/.test(rule)) && css.some(rule => /\.index-/.test(rule)));
+  for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b|badge-attention/i.test(rule), rule);
+});
+
+test('report manifest: a handoff note names its module, never codes it, and a listed-but-unreadable report-view.json is not called unlisted', () => {
+  const coded = [{ ...SYNTHETIC_FIGURES[0], note: 'CP-1 states the basis; CP-6 is not assessable.' }];
+  const report = { ...zedReport(RUN), files: REPORT_FILES, figures: coded };
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [report]).reportView(report, RUN))[0];
+  assert.ok(!/CP-\d/.test(strip(manifest)) && strip(manifest).includes('Financial foundation states the basis'));
+  const failed = { ...zedReport(RUN), files: REPORT_FILES, figures: null, figuresIssue: 'd1: report-view.json is not the plain file its delivery lists' };
+  const text = strip(/<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [failed]).reportView(failed, RUN))[0]);
+  assert.ok(text.includes('lists report-view.json but it could not be read') && text.includes('is not the plain file its delivery lists') && !text.includes('lists no report-view.json'));
+  const silent = { ...zedReport(RUN), files: REPORT_FILES, figures: null, figuresIssue: null };
+  assert.ok(!strip(runPage(d => d, [silent]).reportView(silent, RUN)).includes('lists no report-view.json'), 'a listed file is never called unlisted');
+  const unlisted = { ...zedReport(RUN), figures: null, figuresIssue: null };
+  assert.ok(strip(runPage(d => d, [unlisted]).reportView(unlisted, RUN)).includes('lists no report-view.json'));
 });
