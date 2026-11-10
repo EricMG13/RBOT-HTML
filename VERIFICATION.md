@@ -4,6 +4,88 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Context form adopted (branch `claude/optimistic-johnson-bmnwip`, after main `4ce88c2`)
+
+Owner: "Approved". The proposal below replaced `docs/templates/context-form.html` and follows main's
+ruling that CP-1C takes its peers from CP-DR by default (`pathway_modules`). Design note section 7
+has the detail. Checks are offline (headless Chromium 1.63, the Python reader, the inbox's own
+functions); no provider call and no analytical run.
+
+- **Same output as before.** The original form (`483a555`) and the adopted one give byte-identical
+  `context.json` for the three fixture contexts. `cp_dr_public` is the default in both.
+- **The research module joins.** With the default peer source, Relative Value and Distressed list
+  CP-DR in the launcher's order. "Not available" for the peers' files makes CP-1C a Gap, and choosing
+  your own figures drops CP-DR.
+- **End to end again.** Three downloads load in `load_context` and pass `inbox.drops.check`, and
+  round-trip byte for byte. Every stage advanced by click and by tap at 390 px, and Start over is
+  clean.
+- **Inbox copies.** Copies written by `write_templates` as `context-form.html` lock the pathway,
+  load the built library's fonts and log nothing.
+- **Tests.**
+  - `tests/test_library_page_browser.py` `FORM_PROBE`: the old probe was seen failing on the adopted
+    form (`#s1-pathway` is gone). Rewritten, the file passes: 20 passed.
+  - New `tests/test_context_form.py`: 22 passed. Each of nine one-line changes to the form's copied
+    tables made its test fail, among them the Distressed order main had already changed.
+  - `test_issuer_library_packaging.py`: 9 passed. The watcher's form tests: 2 passed.
+  - `test_inbox_drops.py`: 55 passed, 3 failed. The three are permission tests that fail here
+    because this sandbox runs as root, and they fail the same without this change.
+  - Quality gate exit 0 (176 changed lines in scope, after one long line in the probe was split).
+- **Research cutoff written (owner: "Your recommendation").**
+  - New browser test `test_the_research_cutoff_follows_the_as_of_date_and_is_written`, seen
+    failing on the form before the change: the cutoff came out blank.
+  - Against the original form, the three fixture contexts differ only in `run.cutoff`. A blank one
+    becomes the as-of date (`2026-10-31`); an explicit `2025-12-31` is kept.
+  - The new downloads load and are accepted by the inbox. Each has
+    `effective_cutoff(as_of, cutoff) == effective_cutoff(as_of, "")`, so the code reads them as it
+    read a blank cutoff.
+- **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
+  filings: no live run. Whether the readiness forecast matches live outcomes.
+
+## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
+
+Proposal only: `docs/templates/context-form-proposal.html` is new, and
+`docs/design/2026-11-10-context-form-proposal.md` holds the module review and the design.
+`context-form.html`, `context.py`, the inbox and the tests are unchanged. All checks below are
+offline browser and reader checks, run in headless Chromium 1.63. No provider was called and no
+analytical run was made with it.
+
+- **Same output as the current form.** Each of three fixture contexts was loaded into both forms with
+  `fill()` and written with `build()`. The two `context.json` files are byte-identical for each:
+  `cases/context/primary-full.json`, `cases/context/research-minimal.json` and
+  `cases/cpdr-context-cutoff/context.json`.
+- **End to end through the page.**
+  - Three files were made by clicking through the page and downloading: Earnings Update; Distressed
+    with TDG-like dates, a duplicate S&P row and stale peers; and a new issue on Credit Snapshot.
+  - Each loads in `context.load_context` and passes `inbox.drops.check` for its pathway.
+  - Each round-trips through `fill()` and `build()` byte for byte.
+  - The readiness panel showed what its own rules state, for example CP-2H Gap on two S&P rows and
+    CP-1C Gap on one admitted peer. This checks the page against its rules, not against a run.
+- **Inbox copies.** Copies made by the real `write_templates` lock the pathway (5 other cards
+  disabled). A loaded file naming another pathway is replaced, with a note.
+- **Newly caught.** `load_context` refuses a research question containing `|`, and an issuer name
+  with U+2028. The current form writes both; the proposal stops both before download.
+- **Defect found and fixed in the proposal.** A blur that adds a message moved the Next button
+  between mousedown and mouseup, and the click was lost. The current form uses the same pattern; not
+  verified there. After the fix, every stage advanced by click on desktop and by tap at iPhone 13
+  size, with no horizontal scroll at 390 px.
+- **Other checks.** Start over returns the page to a fresh build. No console errors in any run.
+  Quality gate exit 0, with no Python changed.
+- **Restyled in the Credit OS language after merging main `caeb622`.** All the checks above were
+  repeated on the restyled page with the same results: byte-identical output, three downloads loading
+  and accepted by the inbox, round-trips, every stage by click and by tap, and Start over.
+  - An inbox copy (from `write_templates`, beside a copy of the library's web folder at
+    `_engine/library`) loads Red Hat Display, Text and Mono from there, shows the rail links to the
+    library, and logs nothing. The repository copy loads the repository's fonts and hides those links.
+  - Compared by eye with the library built offline from the synthetic fixture run, shown in its empty
+    state because that run is not on the current methodology.
+  - Found and fixed while restyling: the yes/no inputs had no positioned parent, so their own hit
+    area sat outside their segment.
+- **Not verified:**
+  - Firefox and Safari, and the folder picker in them.
+  - Real issuer folders. The folder check guesses only from file names.
+  - Whether the readiness forecast matches what the modules actually do in a live run. It ports
+    `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.
+
 ## 2026-11-10 — Module method gaps: what CP-OS sends against what each method needs (branch `claude/module-method-gaps`)
 
 Owner: "review all the modules for any missing items from methodology files", then "Fix all … Keep a

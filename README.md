@@ -82,8 +82,10 @@ run for each folder, and the finished report appears in the issuer library.
 
 ### What an analyst does
 
-1. Open `inbox\<pathway>\_template\context-form.html` (it opens from disk) and fill it in. The
-   pathway is already chosen. Download `context.json`.
+1. Open `inbox\<pathway>\_template\context-form.html` (it opens from disk) and work through its
+   stages. The pathway is already chosen, and the form asks only for what that pathway's modules
+   use. Its Run readiness panel says what each module is expected to do with your answers. Before
+   the download, it asks you to acknowledge any expected limits. Download `context.json`.
 2. Make a folder. Put `context.json` and the issuer's source files in it (PDF, TXT, Markdown,
    XLSX, CSV, JSON, JSONL or HTML).
 3. Copy the folder into `inbox\<pathway>\`. The pathways are `credit_snapshot`,
@@ -207,7 +209,8 @@ not end `<root>` with a backslash. The setup person sets the folder permissions:
 - A run can end slightly above USD 20 after one call overruns the cap.
 - A report leaves the library list after a method update (see "Which runs are listed" in the
   library README) but stays in `issuers\`.
-- The form copies in the inbox use system fonts.
+- A form copy already in `inbox\<pathway>\_template\` is never replaced. After the form changes,
+  delete those copies and restart the watcher; it writes the new form at start.
 - Whether USD 20 covers a full pathway on `sol-medium` has not been measured.
 
 ## Current limits

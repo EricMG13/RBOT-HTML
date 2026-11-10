@@ -73,7 +73,8 @@ README (section 3) has the full steps.
   part-way and is left in the inbox looks complete (the files read are listed in Run activity);
   two IDs for one issuer make two folders; a run can end slightly above USD 20 after one
   overrunning call; a report leaves the library list after a method update but stays in
-  `issuers\`; the form copies use system fonts; whether USD 20 covers a full pathway on
+  `issuers\`; a form copy already in a pathway's `_template` is never replaced (delete it and
+  restart the watcher after the form changes); whether USD 20 covers a full pathway on
   `sol-medium` is not measured.
 
 ## Which runs are listed
