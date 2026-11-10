@@ -352,3 +352,43 @@ def test_m3_save_waits_out_a_refused_replace(layout, monkeypatch):
     save(layout, RECORD)
     assert refusals == [0]
     assert [r.id for r in load_all(layout)] == ["id1"]
+
+
+def test_start_gives_the_child_a_pid_file_beside_the_record_and_load_all_ignores_it(
+    layout, monkeypatch, tmp_path
+):
+    real_shape = str(Path(__file__).parent / "fixtures" / "real_shape_launcher.py")
+    monkeypatch.setenv("REAL_SHAPE_HOLD", str(tmp_path / "never"))  # stays alive; killed below
+    expected = layout.state / "id1.pid"
+    process = start(
+        layout, RECORD, CTX, launcher=[sys.executable, real_shape], config="sol-medium",
+        cap=CAP, ruling=RULING,
+    )  # fmt: skip
+    try:
+        deadline = time.monotonic() + 30
+        while not expected.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert expected.read_text(encoding="utf-8") == str(process.pid)  # the child's own PID
+        assert load_all(layout) == []  # a .pid file is not a record
+    finally:
+        process.kill()
+        process.wait()
+
+
+def test_the_pid_file_variable_is_in_the_child_environment_only_through_start(
+    layout, fake_env, monkeypatch
+):
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-key-for-the-test")
+    monkeypatch.delenv("DEPLOY_WORKFLOW_PID_FILE", raising=False)
+    assert "DEPLOY_WORKFLOW_PID_FILE" not in child_environment()
+    captured: dict[str, object] = {}
+    real = subprocess.Popen
+
+    def spy(*args, **kwargs):
+        captured.update(kwargs["env"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", spy)
+    fake_env({})
+    start(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP, ruling=RULING).wait()
+    assert captured["DEPLOY_WORKFLOW_PID_FILE"] == str(layout.state / "id1.pid")

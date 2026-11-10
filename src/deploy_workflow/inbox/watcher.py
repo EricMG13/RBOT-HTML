@@ -43,6 +43,9 @@ _CUT_SHORT = (
     "the watcher stopped while starting this run; its process may still be running"
     " \N{EM DASH} check before dropping the folder again"
 )
+# ponytail: a run whose launcher writes its PID file after 60 s is cut short; a reused process ID
+# after a reboot reads as alive. Both are known ceilings, not handled.
+_PID_GRACE_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -98,6 +101,7 @@ class Watcher:
         self._rebuild_error = ""
         self._logged_rebuild_error = ""  # the last rebuild error written to the log
         self._stopped: dict[str, str] = {}  # run ID -> why the watcher stopped its process
+        self._bad_pid_files: set[str] = set()  # run IDs whose unusable PID file is logged
         self._limit_held = ""
         startup.write_pages(self.layout)
         self._recover()
@@ -112,9 +116,21 @@ class Watcher:
 
     def _recover(self) -> None:
         """Decide what an earlier stop left: runs cut short while starting, unrecorded folders."""
+        self._track_untracked()
+        self._reject_unrecorded_folders()
+
+    def _track_untracked(self) -> None:
+        """A running record with no PID and no child of this watcher was cut short between the
+        child's start and the PID save: take the PID from the file the launcher wrote, or wait out
+        the grace, then mark it interrupted (never restarted)."""
         for record in self._with_status("running"):
-            if record.pid == 0:
-                with self._guard(f"run {record.id}"):
+            if record.pid != 0 or record.id in self._children:
+                continue
+            with self._guard(f"run {record.id}"):
+                pid = self._pid_from_file(record)
+                if pid:
+                    self._put(replace(record, pid=pid))
+                elif self._past_grace(record):
                     self._put(
                         replace(
                             record,
@@ -123,7 +139,26 @@ class Watcher:
                             ended_at=self._utc(self.now()),
                         )
                     )
-        self._reject_unrecorded_folders()
+
+    def _pid_from_file(self, record: Record) -> int:
+        """The positive process ID in the run's PID file, else 0 (bad content: logged once)."""
+        try:
+            text = runs.pid_file(self.layout, record.id).read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return 0
+        if text.isascii() and text.isdigit() and int(text) > 0:
+            return int(text)
+        if record.id not in self._bad_pid_files:
+            self._bad_pid_files.add(record.id)
+            self._logger.warning("run %s: PID file holds %r, not a process ID", record.id, text)
+        return 0
+
+    def _past_grace(self, record: Record) -> bool:
+        try:
+            started = datetime.strptime(record.started_at, _TIME).replace(tzinfo=UTC)
+        except ValueError:
+            return True  # an unreadable time is treated as past the grace
+        return (self.now().astimezone(UTC) - started).total_seconds() >= _PID_GRACE_SECONDS
 
     def _reject_unrecorded_folders(self) -> None:
         """A folder or file in ``_engine/drops`` with no record was cut short before its record.
@@ -161,6 +196,14 @@ class Watcher:
     def _put(self, record: Record) -> None:
         runs.save(self.layout, record)  # the in-memory copy changes only once the file has
         self._records[record.id] = record
+        if record.status not in ("queued", "running"):
+            self._remove_pid_file(record.id)
+
+    def _remove_pid_file(self, run_id: str) -> None:
+        try:
+            runs.pid_file(self.layout, run_id).unlink(missing_ok=True)
+        except OSError:
+            self._logger.exception("run %s: its PID file could not be removed", run_id)
 
     def _with_status(self, status: str) -> list[Record]:
         return sorted((r for r in self._records.values() if r.status == status), key=lambda r: r.id)
@@ -196,6 +239,7 @@ class Watcher:
     # -- one poll ---------------------------------------------------------------------------
 
     def step(self) -> None:
+        self._track_untracked()
         self._reap()
         self._scan()
         self._prepare_queued()
@@ -237,6 +281,8 @@ class Watcher:
     def _reap(self) -> None:
         ended: list[tuple[Record, int | None]] = []
         for record in self._with_status("running"):
+            if record.pid == 0 and record.id not in self._children:
+                continue  # inside the PID grace: _track_untracked decides it
             with self._guard(f"run {record.id}"):
                 done, code = self._exit_of(record)
                 if done:

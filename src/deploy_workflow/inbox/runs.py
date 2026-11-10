@@ -45,6 +45,14 @@ class Record:
     prepared: bool = False  # the offline check passed; only then may the run be started
 
 
+PID_FILE_VARIABLE = "DEPLOY_WORKFLOW_PID_FILE"  # the launcher reads the same name
+
+
+def pid_file(layout: Layout, run_id: str) -> Path:
+    """Where a run's launcher writes its own process ID: beside the run's record file."""
+    return layout.state / f"{run_id}.pid"
+
+
 _SRC = Path(__file__).resolve().parents[2]
 
 
@@ -208,6 +216,7 @@ def start(  # noqa: PLR0913 - the signature the watcher calls
         layout, record, context, launcher=launcher, config=config, cap=cap, ruling=ruling
     )
     env = child_environment()
+    env[PID_FILE_VARIABLE] = str(pid_file(layout, record.id))
     with (layout.logs / f"{record.id}.log").open("ab") as log_file:
         if sys.platform == "win32":  # a Ctrl-C to the watcher must not stop its runs
             return subprocess.Popen(
