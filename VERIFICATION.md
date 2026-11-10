@@ -16,8 +16,8 @@ sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-s
   stays in a title, the evidence inspector or one "Built from" disclosure. Reports and the report
   selector name their run; the acceptance state sits beside Open report; "run" replaces "case";
   a missing figure reads `n.a.`; a sorted column shows its direction.
-- Adversarial design review (breaker, newcomer, truster): CONCERNS before the fixes; D1 to D8
-  fixed, D9 to D14 left with the owner (design doc table).
+- Adversarial design review (breaker, newcomer, truster): BLOCK before the fixes (D1), CONCERNS
+  after them; D1 to D8 fixed, D9 to D14 left with the owner (design doc table).
 - Tests: twelve static tests changed or added and seen failing against the unchanged screens
   (`git archive` of HEAD). `node --test` static + calendar 116 pass, 0 fail; CI fast pytest list
   1441 passed, 7 deselected; `tests/test_library_page_browser.py` 20 passed; quality gate 0

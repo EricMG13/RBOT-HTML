@@ -56,7 +56,8 @@ provenance table.
 
 ## Adversarial design review (three hostile readers)
 
-Verdict before the fixes: **CONCERNS**. Fixed here unless marked open.
+Verdict before the fixes: **BLOCK** (D1, Critical by promotion). After them: **CONCERNS** (two
+warnings open, D9 and D10). Fixed here unless marked open.
 
 | # | Sev | Reader | Finding | Disposition |
 |---|---|---|---|---|
