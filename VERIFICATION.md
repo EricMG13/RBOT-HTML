@@ -50,6 +50,15 @@ run", then "Yes" to working out web search for CP-DR. No provider was called; no
   - whether CP-1C then has peers.
 - Not done: the standing inbox ruling and every other ruling are unchanged, so web search stays off
   until the owner adds `web-search` to a ruling.
+- Merged as `88c50ee` (#30). Owner: "Merge then test".
+  - Ruling `docs/rulings/2026-11-10-cpdr-web-search-test.md`: CP-0, CP-1, CP-DR and CP-1C on TDG,
+    `sol-medium` with web search, cap USD 10.
+  - Dry launch here (no provider call) with tdg-all-001's context and a one-line stand-in source:
+    the four modules are accepted and the launcher prints "CP-DR searches the web (the ruling lists
+    web-search)".
+  - Each call holds USD 5.73, or 5.89 for CP-DR, so the run can spend about USD 4.10 before the
+    next hold no longer fits the cap. A stop there can be resumed.
+  - The paid run needs the owner's machine, which has the TDG files and the key.
 
 ## 2026-11-10 — Context form against live run tdg-all-001 (branch `claude/optimistic-johnson-bmnwip`, after main `53a5632`)
 
