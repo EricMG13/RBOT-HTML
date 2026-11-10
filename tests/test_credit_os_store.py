@@ -516,3 +516,131 @@ def test_a_portfolio_limit_table_is_a_limits_chart_and_a_gap_is_allowed():
     assert fields["issue"] is None
     assert chart["kind"] == "limits" and chart["unit"] == "% NAV"
     assert (chart["label"], chart["current"], chart["proposed"], chart["limit"]) == (0, 1, 2, 3)
+
+
+# ---- Package 3 (2026-11-10): the comparison tables. Every value is synthetic.
+PAIR_HEADER = (
+    "| Measure | Prior period | Prior | Current period | Current | Reporting unit "
+    "| Basis and limitation |"
+)
+PEER_HEADER = (
+    "| Metric | Issuer | Peer low | Peer median | Peer high | Peer count | Reporting unit "
+    "| Basis and limitation |"
+)
+YIELD_HEADER = (
+    "| Instrument | Maturity date | Yield | Spread | Quote date | Source class | Reporting unit "
+    "| Basis and limitation |"
+)
+RESULTS = "Chart data: prior and current results"
+KPIS = "Chart data: margin and KPI changes"
+RESULT_ROWS = (
+    "| Revenue | FY2023 | 2,100 | FY2024 | 2,250 | US$m | S. |",
+    "| EBITDA | FY2023 | Not supplied: not stated | FY2024 | 410 | US$m | S. |",
+)
+
+
+def test_prior_and_current_results_are_grouped_columns_over_one_unit():
+    (chart,) = synthetic_charts(chart_section(RESULTS, PAIR_HEADER, *RESULT_ROWS))["charts"]
+    assert chart["kind"] == "grouped" and chart["title"] == "Prior and current results"
+    assert (chart["columns"], chart["sub"], chart["unit"]) == ([2, 4], [1, 3], "US$m")
+
+
+def test_prior_and_current_results_in_two_units_are_named_not_drawn():
+    rows = (RESULT_ROWS[0], RESULT_ROWS[1].replace("US$m", "%"))
+    fields = synthetic_charts(chart_section(RESULTS, PAIR_HEADER, *rows))
+    assert fields["charts"] == [] and f"{RESULTS} is not in its fixed table" in fields["issue"]
+
+
+def test_margin_and_kpi_changes_are_a_dumbbell_whose_rows_state_their_own_unit():
+    rows = ("| EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 | % | S. |", RESULT_ROWS[0])
+    (chart,) = synthetic_charts(chart_section(KPIS, PAIR_HEADER, *rows))["charts"]
+    assert chart["kind"] == "dumbbell" and chart["unit"] == ""
+    assert (chart["label"], chart["periods"], chart["prior"], chart["current"]) == (0, [1, 3], 2, 4)
+
+
+@pytest.mark.parametrize(
+    ("heading", "row"),
+    [
+        ("Chart data: another pair table", RESULT_ROWS[0]),
+        (RESULTS, "| Revenue | FY2023 | 2.1bn | FY2024 | 2,250 | US$m | S. |"),
+        (KPIS, "| EBITDA margin | FY2023 | 19.5 | FY2024 | 21.0 |  | S. |"),
+    ],
+)
+def test_a_pair_table_out_of_shape_is_named_not_drawn(heading, row):
+    fields = synthetic_charts(chart_section(heading, PAIR_HEADER, row))
+    assert fields["charts"] == [] and f"{heading} is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize(
+    "heading", ["Chart data: peer range — percent metrics", "Chart data: peer range — multiples"]
+)
+def test_a_peer_range_is_a_range_chart_and_a_gap_is_allowed(heading):
+    fields = synthetic_charts(
+        chart_section(
+            heading,
+            PEER_HEADER,
+            "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 7 | % | S. |",
+            "| FFO / debt | Not supplied: not stated | 8.0 | 15.0 | 22.0 | 6 | % | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None and chart["kind"] == "range" and chart["unit"] == "%"
+    roles = (chart["label"], chart["issuer"], chart["low"], chart["median"], chart["high"])
+    assert roles == (0, 1, 2, 3, 4) and chart["count"] == 5
+
+
+def test_a_peer_range_with_a_percent_sign_in_a_number_is_named_not_drawn():
+    row = "| EBITDA margin | 21% | 12.0 | 18.5 | 26.0 | 7 | % | S. |"
+    heading = "Chart data: peer range — percent metrics"
+    fields = synthetic_charts(chart_section(heading, PEER_HEADER, row))
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+def test_yield_against_maturity_is_a_scatter_with_its_date_yield_and_text_columns():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: yield against maturity",
+            YIELD_HEADER,
+            "| 2028 note | 2028-06-15 | 6.4 | +310 bp | 2024-12-31 | Dealer quote | % | S. |",
+            "| 2031 note | 2031-03-01 | Not supplied: no quote | Not supplied: no quote "
+            "| 2024-12-31 | Dealer quote | % | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None and chart["kind"] == "scatter" and chart["unit"] == "%"
+    assert (chart["label"], chart["date"], chart["yield"]) == (0, 1, 2)
+    assert (chart["spread"], chart["quoted"], chart["source"]) == (3, 4, 5)
+
+
+def test_a_yield_that_is_not_a_plain_number_is_named_not_drawn():
+    row = "| 2028 note | 2028-06-15 | 6.4% | +310 bp | 2024-12-31 | Dealer quote | % | S. |"
+    fields = synthetic_charts(
+        chart_section("Chart data: yield against maturity", YIELD_HEADER, row)
+    )
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize("when", ["2028-13-01", "2028-00-10", "9999-99-99", "2028-02-31"])
+@pytest.mark.parametrize("column", [1, 4])
+def test_a_yield_row_with_an_invalid_calendar_date_is_named_not_drawn(when, column):
+    cells = ["2028 note", "2028-06-15", "6.4", "+310 bp", "2024-12-31", "Dealer quote", "%", "S."]
+    cells[column] = when
+    row = "| " + " | ".join(cells) + " |"
+    fields = synthetic_charts(
+        chart_section("Chart data: yield against maturity", YIELD_HEADER, row)
+    )
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize("count", ["-3", "2.5", "1,0", "seven"])
+def test_a_peer_count_that_is_not_a_whole_number_is_named_not_drawn(count):
+    row = f"| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | {count} | % | S. |"
+    heading = "Chart data: peer range \u2014 percent metrics"
+    fields = synthetic_charts(chart_section(heading, PEER_HEADER, row))
+    assert fields["charts"] == [] and "is not in its fixed table" in fields["issue"]
+
+
+def test_a_peer_count_of_zero_is_a_stated_count():
+    row = "| EBITDA margin | 21.0 | 12.0 | 18.5 | 26.0 | 0 | % | S. |"
+    heading = "Chart data: peer range \u2014 percent metrics"
+    assert len(synthetic_charts(chart_section(heading, PEER_HEADER, row))["charts"]) == 1

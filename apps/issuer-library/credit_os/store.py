@@ -122,6 +122,14 @@ MONTHS = (
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 
 
+def valid_date(text: str) -> bool:
+    """A real YYYY-MM-DD calendar date (not merely that shape)."""
+    try:
+        return bool(ISO_DATE.fullmatch(text)) and bool(datetime.date.fromisoformat(text))
+    except ValueError:
+        return False
+
+
 def display_date(iso: Any) -> Any:
     """`31 December 2024` for a valid YYYY-MM-DD calendar date; any other text unchanged."""
     if not isinstance(iso, str) or not ISO_DATE.fullmatch(iso):
@@ -148,9 +156,7 @@ DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at o
 # Row tables the launcher asks for (cpos_launch.py OWNER_TABLES with `columns`): the exact leading
 # header, the drawn kind with its column roles, the numeric columns and the columns of fixed words.
 BULLET = {"kind": "bullet", "direction": 4}  # Direction is the last column before the unit.
-ROW_CHARTS: tuple[
-    tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[int, tuple[str, ...]]], ...
-] = (
+ROW_CHARTS: tuple[tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[int, Any]], ...] = (
     (
         ("Facility", "Ranking", "Secured", "Amount", "Cumulative leverage"),
         {"kind": "stack", "label": 0, "rank": 1, "secured": 2, "amount": 3, "leverage": 4},
@@ -175,7 +181,39 @@ ROW_CHARTS: tuple[
         (1, 2, 3),
         {},
     ),
+    (
+        ("Measure", "Prior period", "Prior", "Current period", "Current"),
+        {"kind": None, "label": 0, "sub": [1, 3], "periods": [1, 3], "prior": 2, "current": 4},
+        (2, 4),
+        {},
+    ),
+    (
+        ("Metric", "Issuer", "Peer low", "Peer median", "Peer high", "Peer count"),
+        {"kind": "range", "label": 0, "issuer": 1, "low": 2, "median": 3, "high": 4, "count": 5},
+        (1, 2, 3, 4),
+        {5: "count"},
+    ),
+    (
+        ("Instrument", "Maturity date", "Yield", "Spread", "Quote date", "Source class"),
+        {
+            "kind": "scatter",
+            "label": 0,
+            "date": 1,
+            "yield": 2,
+            "spread": 3,
+            "quoted": 4,
+            "source": 5,
+        },
+        (2,),
+        {1: "date", 4: "date"},
+    ),
 )
+# The two tables of the pair header differ only by heading: the results are grouped columns (one
+# unit, so one scale), the margin and KPI changes a dumbbell per row.
+PAIR_KINDS = {
+    f"{CHART_PREFIX}prior and current results": "grouped",
+    f"{CHART_PREFIX}margin and KPI changes": "dumbbell",
+}
 
 
 def physical_lines(text: str) -> list[str]:
@@ -557,6 +595,10 @@ def _row_cell_ok(cell: str, column: int, numeric: tuple[int, ...], words: dict[i
     numeric column, one of the fixed words in a word column, anything stated elsewhere."""
     if column in numeric:
         return bool(PLAIN_AMOUNT.fullmatch(cell) or STATED_GAP.match(cell))
+    if words.get(column) == "date":
+        return bool(valid_date(cell) or STATED_GAP.match(cell))
+    if words.get(column) == "count":  # A whole number of peers, zero included.
+        return bool(re.fullmatch(r"\d+", cell) or STATED_GAP.match(cell))
     if column in words:
         return cell in words[column]
     return bool(cell)
@@ -605,8 +647,13 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
     table = tables[0]
     headers = table["headers"]
     if headers[0] not in CHART_FIRST_COLUMNS:
+        head = _chart_head(section, table)
         drawn = _row_chart(table)
-        return drawn and {**_chart_head(section, table), **drawn}
+        if drawn and drawn["kind"] is None:  # The pair header: its heading says how it is drawn.
+            kind = PAIR_KINDS.get(section["heading"])
+            grouped = kind == "grouped" and not drawn["unit"]  # One scale needs one unit.
+            drawn = None if kind is None or grouped else {**drawn, "kind": kind}
+        return drawn and {**head, **drawn}
     if len(headers) < 4 or headers[-2:] != CHART_LAST_COLUMNS:
         return None
     chart = {

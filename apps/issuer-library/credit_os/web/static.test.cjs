@@ -733,7 +733,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag'];
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => ''];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules};`)(...args);
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1439,6 +1439,89 @@ test('structure views: only a period chart carries the missing-values note, once
   const mod = storyModule(runPage(withStructure).runReport(RUN), 'CP-1');
   assert.equal(countOf(mod, /Missing values have no bar\./g), 1);
   assert.ok(mod.indexOf('Missing values have no bar.') < mod.indexOf('stack-key'), 'the note sits under the period charts, before the structure views');
+});
+
+// ---- Package 3 views (2026-11-10): prior and current results, margin and KPI changes, peer ranges and yield against maturity. Every value is synthetic.
+const PAIR_HEAD = ['Measure', 'Prior period', 'Prior', 'Current period', 'Current', ...TAIL];
+const PEER_HEAD = ['Metric', 'Issuer', 'Peer low', 'Peer median', 'Peer high', 'Peer count', ...TAIL];
+const YIELD_HEAD = ['Instrument', 'Maturity date', 'Yield', 'Spread', 'Quote date', 'Source class', ...TAIL];
+const GROUPED = { title: 'Prior and current results', unit: 'US$m', table: 132, kind: 'grouped', label: 0, sub: [1, 3], periods: [1, 3], prior: 2, current: 4, columns: [2, 4] };
+const DUMBBELL = { title: 'Margin and KPI changes', unit: '', table: 142, kind: 'dumbbell', label: 0, sub: [1, 3], periods: [1, 3], prior: 2, current: 4, columns: [2, 4] };
+const RANGE = { title: 'Peer range — percent metrics', unit: '%', table: 152, kind: 'range', label: 0, issuer: 1, low: 2, median: 3, high: 4, count: 5, columns: [1, 2, 3, 4, 5] };
+const SCATTER = { title: 'Yield against maturity', unit: '', table: 162, kind: 'scatter', label: 0, date: 1, yield: 2, spread: 3, quoted: 4, source: 5, columns: [2] };
+const SYN = 'Synthetic.';
+const note = (name, date, yld, unit, spread = '+310 bp') => [name, date, yld, spread, '2024-12-31', 'Dealer quote', unit, SYN];
+const withComparison = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(
+    sec('Chart data: prior and current results', 3, 130, 'consumed', [table(132, PAIR_HEAD, [[133, 'Revenue', 'FY2023', '2,100', 'FY2024', '2,250', 'US$m', SYN], [134, 'EBITDA', 'FY2023', 'Not supplied: not stated', 'FY2024', '410', 'US$m', SYN]])]),
+    sec('Chart data: margin and KPI changes', 3, 140, 'consumed', [table(142, PAIR_HEAD, [[143, 'EBITDA margin', 'FY2023', '19.5', 'FY2024', '21.0', '%', SYN], [144, 'Subscribers', 'FY2023', '1.2', 'FY2024', '1.4', 'm', SYN], [145, 'Leverage', 'FY2023', '4.0', 'FY2024', 'Not supplied: not stated', 'x', SYN]])]),
+    sec('Chart data: peer range — percent metrics', 3, 150, 'consumed', [table(152, PEER_HEAD, [[153, 'EBITDA margin', '21.0', '12.0', '18.5', '26.0', '7', '%', SYN], [154, 'FFO / debt', 'Not supplied: not stated', '8.0', '15.0', '22.0', '6', '%', SYN], [155, 'Misordered', '10.0', '30.0', '18.5', '26.0', '5', '%', SYN]])]),
+    sec('Chart data: yield against maturity', 3, 160, 'consumed', [table(162, YIELD_HEAD, [note('2028 note', '2028-06-15', '6.4', '%'), note('2030 note', '2030-06-15', '7.0', '%'), note('2029 note', '2029-06-15', '6.8', '%'), note('No quote', '2031-03-01', 'Not supplied: no quote', '%', 'Not supplied: no quote'), note('Undated', 'June 2029', '6.9', '%'), note('Other measure', '2029-01-01', '250', 'bp')].map((r, i) => [163 + i, ...r]))]));
+  cp1.charts.push(GROUPED, DUMBBELL, RANGE, SCATTER);
+  return d;
+};
+const comparison = chart => runPage(withComparison).readerChart(outId('CP-1'), chart);
+const FORM = '<details class="chart-table"><summary>Table form</summary>';
+
+test('comparison views: prior and current results are two columns per measure on one zero baseline, the periods under the label', () => {
+  const html = comparison(GROUPED);
+  assert.ok(html.includes('<span class="chart-label">Revenue<small>FY2023 → FY2024</small></span>'));
+  assert.ok(html.includes('<i class="series-0" style="bottom:0%;height:93.33%"></i>') && html.includes('<i class="series-1" style="bottom:0%;height:100%"></i>'));
+  const ebitda = html.split('<div class="chart-row"')[2] || html.split('class="chart-row"')[2];
+  assert.ok(ebitda.includes('class="col missing"') && !ebitda.includes('series-0'), 'a prior that is not stated has no column');
+  assert.ok(strip(html).includes('Prior') && strip(html).includes('Current') && html.includes(FORM) && !/CP-\d/.test(strip(html)));
+});
+
+test('comparison views: a dumbbell joins the stated prior and current on a scale shared only within a unit, with no change worked out', () => {
+  const html = comparison(DUMBBELL);
+  const [margin, subscribers, leverage] = html.split('<div class="dumbbell-row"').slice(1);
+  assert.ok(margin.includes('<i class="dumbbell-link" style="left:84.42%;width:6.49%"></i>'));
+  assert.ok(margin.includes('<i class="dumbbell-dot series-0" style="left:84.42%"></i>') && margin.includes('<i class="dumbbell-dot series-1" style="left:90.91%"></i>'));
+  assert.ok(subscribers.includes('<i class="dumbbell-link" style="left:77.92%;width:12.99%"></i>'), 'its own unit has its own scale');
+  assert.ok(strip(margin).includes('Prior FY2023 19.5') && strip(margin).includes('Current FY2024 21.0'));
+  assert.ok(leverage.includes('dumbbell-dot series-0') && !leverage.includes('dumbbell-dot series-1') && !leverage.includes('dumbbell-link') && strip(leverage).includes('Current FY2024 n.a.'));
+  assert.ok(!/\bchange\b|difference|\bpp\b/i.test(strip(html)), 'no change is stated that the handoff did not state');
+  assert.ok(html.includes(FORM));
+});
+
+test('comparison views: a peer range is a band from the stated low to high, a median tick and the issuer marker', () => {
+  const html = comparison(RANGE);
+  const [margin, ffo, misordered] = html.split('<div class="range-row"').slice(1);
+  assert.ok(margin.includes('<i class="range-band" style="left:41.96%;width:48.95%"></i>') && margin.includes('<i class="tick" style="left:64.69%"></i>') && margin.includes('<i class="marker" style="left:73.43%"></i>'));
+  assert.ok(strip(margin).includes('Issuer 21.0') && strip(margin).includes('Peers 7') && strip(margin).includes('Peer low 12.0'));
+  assert.ok(ffo.includes('range-band') && !ffo.includes('class="marker"') && strip(ffo).includes('Issuer n.a.'), 'no marker for an issuer value not stated');
+  assert.ok(!misordered.includes('range-band'), 'a band is drawn only for a stated low that does not exceed the high');
+  assert.ok(html.includes(FORM));
+});
+
+test('comparison views: yield against maturity places each stated date and yield, one panel per unit, and lists what has no point', () => {
+  const html = comparison(SCATTER);
+  const panels = html.split('<svg').slice(1);
+  assert.equal(panels.length, 2, 'yields in another unit are not drawn on the same scale');
+  const dots = [...panels[0].matchAll(/<circle class="scatter-dot" cx="([\d.]+)" cy="([\d.]+)"/g)].map(m => [m[1], m[2]]);
+  assert.deepEqual(dots, [['60', '166.67'], ['630', '33.33'], ['345', '77.78']]);
+  assert.ok(panels[0].includes('>2028-06-15</text>') && panels[0].includes('>2030-06-15</text>'));
+  const key = strip(/<ol class="stack-key">(.*?)<\/ol>/s.exec(html)[1]);
+  assert.ok(/No quote.*Yield n\.a\./s.test(key) && /Undated.*Maturity June 2029/s.test(key) && key.includes('Dealer quote') && key.includes('+310 bp') && key.includes('2024-12-31'));
+  assert.ok(html.includes('An instrument with no stated maturity date or yield has no point.') && html.includes(FORM));
+});
+
+test('comparison views: an invalid calendar date has no point and does not break the page; a grouped chart takes the missing-values note', () => {
+  const bad = ['2028-13-01', '2028-00-10', '9999-99-99', '2028-02-31'];
+  const rows = bad.map((when, i) => [190 + i, ...note(`Bad ${i}`, when, '6.4', '%')]);
+  const chart = { ...SCATTER, table: 182 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: yield against maturity', 3, 180, 'consumed', [table(182, YIELD_HEAD, rows)])); d[outId('CP-1')].charts.push(chart); return d; });
+  const html = page.readerChart(outId('CP-1'), chart);
+  assert.equal(countOf(html, /scatter-dot/g), 0);
+  assert.ok(html.includes('An instrument with no stated maturity date or yield has no point.'));
+  assert.equal(page.lastPeriodChart([{ kind: 'dumbbell' }, { kind: 'grouped' }]), 1);
+});
+
+test('comparison views: the new view rules use only the series and ink tokens, never amber or red', () => {
+  const rules = read('screen.css').split('\n').filter(line => /\.(dumbbell|range|scatter)-/.test(line));
+  assert.ok(rules.length >= 3, 'the new rules are found');
+  for (const rule of rules) assert.ok(!/amber|--red|#b47812|#b3261e|#8a5300/i.test(rule), rule);
 });
 
 // ---- Screens pass (2026-11-10): what a reader acts on is shown; production detail (hashes, file names, word counts) is a title or behind a disclosure.
