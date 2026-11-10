@@ -33,7 +33,7 @@ from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import platform_io
-from deploy_workflow.context import CONTEXT_SOURCE_ID, load_context
+from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
 from deploy_workflow.handoff_delivery import (
     DeliveryRequest,
     HandoffInput,
@@ -92,13 +92,24 @@ MAX_OUTPUT_TOKENS = 32000  # What the retained live campaigns ran with.
 
 _SKILLS = "docs/reuse/selected-methods/skills/"
 _VII = "src/deploy_vii/methods/"
+# The Confidence Score rules `confidence_score.py` applies; the script cannot run in this transport.
+_SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
-METHODS: dict[str, tuple[str, ...]] = {
+# Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
+# or binding (a runbook, a phase's method bundle), copied from cp-os at b57a344 and listed in
+# docs/reuse/selected-methods/manifest.json. Companions the SKILL opens only "to resolve an
+# ambiguity" (CANON_SHARED.md, the schema and system references) are archived, not sent.
+_SELECTED: dict[str, tuple[str, ...]] = {
     "CP-0": (_VII + "cp0.md",),
     "CP-1": ("prompts/CP-1.md",),  # Plus CP1_STEPS; no standalone CP-1 method file exists.
     "CP-1A": (_VII + "cp1a.md",),
-    "CP-1B": ("src/deploy_workflow/prompts/texts/earnings_delta.md",),
+    # Deploy V's skill: earnings_delta.md needs the structured runtime's `read_inputs` view, which
+    # CP-OS does not give, so it blocked on every CP-OS run (2026-11-09, 2026-11-10).
+    "CP-1B": (
+        _SKILLS + "cp-1b-earnings-delta/SKILL.md",
+        _SKILLS + "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
+    ),
     "CP-1C": (
         _SKILLS + "cp-1c-peer-benchmark/SKILL.md",
         _SKILLS + "cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md",
@@ -107,6 +118,7 @@ METHODS: dict[str, tuple[str, ...]] = {
     "CP-2": (_VII + "cp2.md",),
     "CP-2A": (
         _SKILLS + "cp-2a-downside-pathway/SKILL.md",
+        _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
         _SKILLS + "cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md",
         _VII + "cp2a.md",
     ),
@@ -131,6 +143,10 @@ METHODS: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-3-relative-value-security-selection/SKILL.md",
         _SKILLS + "cp-3-relative-value-security-selection/references/REF_CP-3_STEPS.md",
         _SKILLS + "cp-3-relative-value-security-selection/references/REF_CP-3A_STEPS.md",
+        _SKILLS + "cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
+        _SKILLS + "cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
+        _SKILLS + "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
+        _SKILLS + "cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
     ),
     "CP-3C": (_VII + "cp3c.md",),
     "CP-3D": (
@@ -139,7 +155,12 @@ METHODS: dict[str, tuple[str, ...]] = {
     ),
     "CP-4": (
         _SKILLS + "cp-4-legal-covenant-interpreter/SKILL.md",
+        _SKILLS + "cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
         _SKILLS + "cp-4-legal-covenant-interpreter/references/REF_CP-4_STEPS.md",
+        _SKILLS + "cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
+        _SKILLS + "cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
+        _SKILLS + "cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
+        _SKILLS + "cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
     ),
     "CP-4C": (
         _SKILLS + "cp-4c-restructuring-fulcrum/SKILL.md",
@@ -147,18 +168,25 @@ METHODS: dict[str, tuple[str, ...]] = {
     ),
     "CP-5": (
         _SKILLS + "cp-5-evidence-trace-validator/SKILL.md",
+        _SKILLS + "cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",
         _SKILLS + "cp-5-evidence-trace-validator/references/REF_CP-5_STEPS.md",
         _SKILLS + "cp-5-evidence-trace-validator/references/REF_CP-5A_STEPS.md",
     ),
     "CP-6": (
         _SKILLS + "cp-6-ic-debate-challenge/SKILL.md",
         _SKILLS + "cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md",
+        _SKILLS + "cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md",
     ),
     "CP-DR": (
         _SKILLS + "cp-dr-deep-research/SKILL.md",
         _SKILLS + "cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
+        _SKILLS + "cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
         _VII + "cpdr.md",
     ),
+}
+METHODS: dict[str, tuple[str, ...]] = {
+    module: (*paths, _SCORE) if any(p.startswith(_SKILLS) for p in paths) else paths
+    for module, paths in _SELECTED.items()
 }
 CP1_STEPS = ("source_context", "financials", "narrative", "readiness", "quality")
 # Report sections whose registered producer is the Model or nothing: the first module present in
@@ -534,6 +562,62 @@ READER_SECTION_RULES = (
 )
 
 
+# Every module (owner, 2026-11-10, "Fix all"). Retained run cpos-tdg-sol-medium-all-001 and the
+# 2026-11-10 inbox run: CP-1D, CP-3 and CP-5 blocked only for want of an acceptance receipt or a
+# helper script's output, neither of which exists in this transport; only CP-2G had been told so.
+TRANSPORT_RULES = (
+    "Acceptance, helper scripts and entry values in this transport: CP-OS checked every handoff it "
+    "supplies before passing it on, and pins each by its sha256. That check is the acceptance, "
+    "validation and lineage the method asks of an upstream handoff: do not block for want of an "
+    "acceptance receipt, invocation digest, settled-head verification or fresh snapshot. The "
+    "method's helper scripts (`prepare_invocation.py`, `validate_handoff.py`, "
+    "`confidence_score.py`, `completeness_check.py` and any other `scripts/*.py`) cannot be run "
+    "here: record each as not run, do its check or arithmetic yourself (with `calculate`, by the "
+    "rules in the method block), and do not block for it. A companion file the method names that "
+    "is not in the method block below is unavailable: say so where the method relies on it, and do "
+    "not block the module for it. Nobody can answer a question during this run: take each entry "
+    "value from the context and the supplied handoffs, then the method's declared safe default; "
+    "where neither gives it the value is missing, so block only the decision the method ties to "
+    "it. A supplied handoff that itself reports Blocked or a gap is a real limitation: restrict "
+    "only the work that depends on it. Missing evidence still blocks exactly what the method says "
+    "it blocks.\n\n"
+)
+# CP-2A only. Its two methods disagree on who sets the stress sizes; run tdg-forecast-005 followed
+# the SKILL, gave no shock, and CP-2G had no stress case to compute. cp2a.md is the later
+# correction (LEAD adaptation, ruling Q2), and the owner allowed labelled judgment for CP-2G's
+# drivers on 2026-11-10 ("Yes, allow judgment").
+STRESS_BLOCK = (
+    "Stress design: where the method sections below differ on stress magnitudes, "
+    "`src/deploy_vii/methods/cp2a.md` governs. You choose the base period, the scenarios, the "
+    "shock sizes and the watch levels as labelled analyst assumptions (`Analyst Interpretation`, "
+    "confidence never High), each anchored to a stated figure (a decline the sources report, a "
+    "calculated break point, a disclosed rate exposure): name the anchor and what the assumption "
+    "leaves out. A labelled, anchored assumption is not the invented or unsupported stress "
+    "magnitude the other sections forbid; an unlabelled or unanchored one still is. State at least "
+    "one scenario as a pair, an EBITDA decline and a cash-interest rate increase, each a fraction "
+    "from 0 to 1 with at most four decimal places, so a forward model can apply it.\n\n"
+)
+# CP-DR and CP-1C, when the context's peer source is CP-DR and both run (cpdr.md, "The peer pack").
+# Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default".
+PEER_PACK_BLOCK = (
+    "Peer pack: the context sets `valuation.peer_source` to `cp_dr_public` and CP-1C is in this "
+    "run, so this run requests the peer pack with CP-1C as its consumer. Inside `## Findings` "
+    "write TDR.4 (candidate peers), TDR.5 (alignment observations: period, definition, currency, "
+    "segment) and TDR.6 (located figures, one row per peer and operand: `revenue`, `ebitda`, "
+    "`debt`, `interest`, `ffo`, each with unit, currency, period end, source locator and a "
+    "verbatim quote), as `src/deploy_vii/methods/cpdr.md` describes them. "
+    "Use every source this run holds "
+    "that is not the issuer's own document, and any research or web tool this environment gives "
+    "you. Name no peer and type no figure from memory. Where no peer evidence can be reached, "
+    "still write the three tables, each with one row saying what was searched and that nothing "
+    "was found.\n\n"
+)
+PEER_READER_BLOCK = (
+    "Peer source: the context sets `valuation.peer_source` to `cp_dr_public`, so take the peer set "
+    "and its figures from the CP-DR handoff's TDR.4, TDR.5 and TDR.6 before any other discovery. "
+    "You own inclusion, comparability, normalisation and every statistic. Block the benchmark for "
+    "want of peers only when those tables hold no usable peer, and say so.\n\n"
+)
 # Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
 FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
@@ -603,10 +687,21 @@ def method_sections(module: str) -> list[tuple[str, str]]:
     Each section is written into the instructions under a ``=== name sha256 hex ===`` heading, so
     a run's retained instructions record exactly which method it ran.
     """
-    sections = [(path, (ROOT / path).read_text(encoding="utf-8")) for path in METHODS[module]]
+    sections = [(name, _method_file(name)) for name in METHODS[module]]
     if module == "CP-1":
         sections += [(f"STEP_CONTRACTS[{step}]", STEP_CONTRACTS[step]) for step in CP1_STEPS]
     return sections
+
+
+def _method_file(name: str) -> str:
+    """A method file's text; `path § heading` gives that `## heading` section alone."""
+    path, _, heading = name.partition(" § ")
+    text = (ROOT / path).read_text(encoding="utf-8")
+    if not heading:
+        return text
+    start = text.index(f"## {heading}\n")
+    end = text.find("\n## ", start + 1)
+    return text[start:] if end < 0 else text[start : end + 1]
 
 
 # The method block follows this line and runs to the end of a module's instructions.
@@ -648,7 +743,8 @@ def _instructions(
         "whole filings: reads stop once this module's context is full.\n\n"
         "Use calculate for all new arithmetic. Keep exact amounts, units, currencies, periods, "
         "source locators and limitations. Absent evidence stays an explicit gap.\n\n"
-        "A handoff is rejected unless it does all of this:\n"
+        + TRANSPORT_RULES
+        + "A handoff is rejected unless it does all of this:\n"
         f"- name {run.issuer_name} in `## Request`, and state the as-of date {run.as_of} there;\n"
         "- list each issuer source it relied on in `## Sources`, with its exact name and sha256;\n"
         "- list each supplied handoff in `## Sources`, with its module and exact sha256"
@@ -747,6 +843,17 @@ def _retained_prefix(
     return kept, ("", "")
 
 
+def pathway_modules(settings: RunContext) -> tuple[str, ...]:
+    """A pathway's analytical modules. Owner, 2026-11-10: CP-1C takes its peers from CP-DR by
+    default, and no pathway lists CP-DR, so CP-DR joins a pathway that has CP-1C whenever the
+    context names it as the peer source. Explicit --modules are run as given."""
+    chosen = tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
+    peers_from_research = settings.valuation.peer_source == "cp_dr_public"
+    if "CP-1C" in chosen and "CP-DR" not in chosen and peers_from_research:
+        return (*chosen, "CP-DR")
+    return chosen
+
+
 def prepare(  # noqa: PLR0913 - one keyword per run setting; retained is the resume input
     context: Path,
     sources: Path,
@@ -766,11 +873,7 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting; retained is the res
     folder = Path(sources).expanduser().resolve()
     raw_context = context_path.read_bytes()
     settings = load_context(raw_context)
-    requested = (
-        tuple(modules)
-        if modules
-        else tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
-    )
+    requested = tuple(modules) if modules else pathway_modules(settings)
     ordered = plan(requested)  # Refuses an unknown module, naming it.
     if unknown := [m for m in ordered if m not in METHODS]:
         raise LaunchRefused(f"--modules: no launchable method for {', '.join(unknown)}")
@@ -800,9 +903,18 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting; retained is the res
         for m in ordered
     }
     forecast = {"CP-1", "CP-2G"} <= set(ordered)
-    if forecast:
-        head, mark, method = texts["CP-2G"].partition(METHOD_MARK.encode())
-        texts["CP-2G"] = head + FORECAST_BLOCK.encode() + mark + method
+    peer_pack = settings.valuation.peer_source == "cp_dr_public" and {"CP-DR", "CP-1C"} <= set(
+        ordered
+    )
+    for module, block, wanted in (
+        ("CP-2G", FORECAST_BLOCK, forecast),
+        ("CP-2A", STRESS_BLOCK, True),
+        ("CP-DR", PEER_PACK_BLOCK, peer_pack),
+        ("CP-1C", PEER_READER_BLOCK, peer_pack),
+    ):
+        if wanted and module in texts:
+            head, mark, method = texts[module].partition(METHOD_MARK.encode())
+            texts[module] = head + block.encode() + mark + method
     guesses = {key: guess_kind(name, pages) for key, (name, pages) in covers.items()}
     items = expectations(
         ordered, tuple(guesses.values()), settings, edges_for(ordered), omitted=omitted

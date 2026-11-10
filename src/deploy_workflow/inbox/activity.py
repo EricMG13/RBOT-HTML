@@ -18,7 +18,7 @@ from deploy_workflow.inbox.drops import Layout
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.model.budget import BudgetError, exact_sum, read_reservation_snapshot
 from deploy_workflow.model.pricing import money_text
-from deploy_workflow.owners.cpos_launch import NOT_ANALYTICAL
+from deploy_workflow.owners.cpos_launch import METHODS, NOT_ANALYTICAL
 from deploy_workflow.run_events import EVENTS, read_events
 
 log = logging.getLogger(__name__)
@@ -46,7 +46,9 @@ def module_states(pathway: str, events: Sequence[Mapping[str, Any]]) -> list[lis
     accepted = {str(e.get("module")) for e in events if e.get("event") == "module_accepted"}
     # A pathway the plan does not know (a record edited by hand) has no modules to show.
     listed = PATHWAY_MODULES.get(cast(PathwayId, pathway), ())
-    modules = plan(tuple(m for m in listed if m not in NOT_ANALYTICAL)) if listed else ()
+    # The launcher may add a module the preset does not list (CP-DR as CP-1C's peer source).
+    extra = sorted(m for m in started if m in METHODS and m not in listed)
+    modules = plan((*(m for m in listed if m not in NOT_ANALYTICAL), *extra)) if listed else ()
     states = [[m, _state(m, started, accepted)] for m in modules]
     names = {e.get("event") for e in events if isinstance(e.get("event"), str)}
     report = "waiting"

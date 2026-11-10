@@ -4,6 +4,47 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Module method gaps: what CP-OS sends against what each method needs (branch `claude/module-method-gaps`)
+
+Owner: "review all the modules for any missing items from methodology files", then "Fix all … Keep a
+copy of the methodology in the repo" and "Cp-1c is supposed to get that information from cp-dr by
+default". Comparison: each module's method text as sent, against the retained all-modules run
+(`runs/cpos-tdg-sol-medium-all-001`, 11 of its 15 skill modules Blocked) and the 2026-11-10 inbox run.
+Offline only; no provider call.
+
+- Acceptance and scripts (CP-1D, CP-3, CP-5 blocked for want of an acceptance receipt or script
+  output): every module's instructions now carry what only CP-2G had: CP-OS's check is the
+  acceptance, helper scripts are recorded as not run, nobody can be asked, and an entry value comes
+  from the context, the handoffs, then the method's safe default.
+- Companions: the methodology is copied read-only from `~/Documents/cp-os` at `b57a344` into
+  `docs/reuse/selected-methods/` (63 files added, manifest hashes checked). Each skill is sent the
+  files its SKILL calls mandatory or binding, and the Confidence Score section of `CANON_SHARED.md`.
+  CP-4's instructions grow from 88 KB to 191 KB and CP-3's from 104 KB to 165 KB; the read budget
+  already counts instructions, so reads shrink rather than the request growing.
+- CP-1B runs Deploy V's skill; the structured-runtime step it had needs a `read_inputs` view CP-OS
+  never gives (blocked on both runs).
+- Order: CP-2A and CP-2E now run after CP-2 (CP-2A had blocked with "CP-2 is Not supplied"), CP-2A
+  after CP-1B, CP-1C and CP-2 after CP-DR. Correction to the review note: CP-1D does not need CP-2;
+  CP-2 is its consumer.
+- CP-2A stress sizes: `cp2a.md` governs over the SKILL, so CP-2A states labelled, anchored
+  scenarios, one as an EBITDA-decline and rate-increase pair CP-2G can apply.
+- CP-DR as CP-1C's peer source: no pathway lists CP-DR, so the default (`cp_dr_public`) left CP-1C
+  with no producer. CP-DR now joins a pathway that has CP-1C; it is asked for the peer pack (TDR.4
+  to TDR.6) and CP-1C is told to read it. Run activity shows the added module once it starts.
+- Tests written first and seen failing (10); CI test set plus every registry-dependent test: 1,471
+  passed, 7 known failures deselected; quality gate exit 0. Offline prepare of all 20 modules on the
+  TDG files gives the order CP-0, CP-1, CP-1A, CP-1B, CP-DR, CP-1C, CP-1D, CP-2, CP-4, CP-2A, CP-2E,
+  CP-2D, CP-2G, CP-2H, CP-3D, CP-3C, CP-4C, CP-3, CP-5, CP-6.
+- Consequence: a run made before this change that includes any skill module is no longer "on the
+  current methodology", so the library stops listing it and names the changed files (checked:
+  `tdg-forecast-005` is reported "Not shown … CP-2A: not on the current methodology").
+- Not verified: any model behaviour. No live run was made, so whether the modules now proceed past
+  their old blocks is unproven. CP-DR has no web or research tool in this transport: its peer pack
+  can only use files in the run's folder, so CP-1C on public filings alone will still lack peers
+  here. Gates for market data (CP-3, CP-3D), executed legal documents (CP-4), rating reports (CP-2H)
+  and distress (CP-4C) are unchanged and untested with such files. The skills' scripts and three
+  `.xlsx` placeholders were not copied. Output-side loss of analysis was checked for CP-2G only.
+
 ## 2026-11-10 — Library and report screens: reader value against production detail (branch `claude/forecast-publication-screens`)
 
 Scope: the static library page only (`apps/issuer-library/credit_os/web/`), on
