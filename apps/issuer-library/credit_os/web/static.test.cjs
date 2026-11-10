@@ -731,8 +731,8 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => ''];
   return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
@@ -1274,6 +1274,68 @@ test('reader charts: a negative value hangs below a raised zero baseline; chips 
   assert.ok(html.includes('<i class="series-0 negative" style="bottom:0%;height:25%"></i><strong class="below" style="bottom:0%">(100)</strong>'));
   // With chips each period is a group: its button holds the columns and label, its chips follow it.
   assert.equal(countOf(html, /<div class="chart-row" role="group" aria-label="FY202[34]"><button class="chart-open" data-evidence=/g), 2);
+});
+
+// ---- Package 1 views (2026-11-10): revenue and EBITDA, the liquidity bridge and the refinancing need. Every value below is synthetic.
+const SYNTHETIC_BRIDGE = [[63, 'Opening accessible liquidity', '900', 'US$m', 'Synthetic.'], [64, 'Free cash flow', '120', 'US$m', 'Synthetic.'], [65, 'Debt repayment', '-450', 'US$m', 'Synthetic.'], [66, 'Closing accessible liquidity', '570', 'US$m', 'Synthetic.']];
+const BRIDGE_CHART = { title: 'Liquidity bridge', unit: 'US$m', table: 62, kind: 'waterfall', amount: 1, columns: [1] };
+const withBridge = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], SYNTHETIC_BRIDGE)]));
+  cp1.charts.push(BRIDGE_CHART);
+  return d;
+};
+
+test('reader charts: a step table is a waterfall of its stated amounts, each bar linked to its handoff row', () => {
+  const page = runPage(withBridge);
+  const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
+  assert.ok(html.includes('<div class="vector-chart">') && !html.includes('column-chart'));
+  assert.equal(countOf(html, /<a class="plot-point"/g), 4);
+  // The opening and the closing stand on the axis; the change between them hangs as stated.
+  assert.equal(countOf(html, /<rect class="total"/g), 2);
+  assert.equal(countOf(html, /<rect class="movement"/g), 1);
+  assert.equal(countOf(html, /<rect class="outflow"/g), 1);
+  assert.ok(html.includes('aria-label="Opening accessible liquidity, 900 US$m. View source"'));
+  assert.ok(html.includes(`data-evidence="${outId('CP-1')}:66"`) && html.includes('>570</text>'));
+  // The unit and period read in the heading; no module code or step id shows.
+  assert.ok(html.includes('<h2>Liquidity bridge</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
+});
+
+test('reader charts: every chart has its table form, the handoff table as written with its chips', () => {
+  const page = runPage(withBridge);
+  const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
+  const form = /<details class="chart-table"><summary>Table form<\/summary>(.*?)<\/details>/s.exec(html)?.[1];
+  assert.ok(form, 'a table form');
+  assert.deepEqual([...form.matchAll(/<th scope="col"[^>]*>(.*?)<\/th>/g)].map(m => m[1]), ['Step', 'Amount', 'Reporting unit', 'Basis and limitation', 'Source']);
+  assert.equal(countOf(form, /<tr><td/g), 4);
+  assert.ok(form.includes('Closing accessible liquidity') && form.includes('>570<') && form.includes('>-450<'));
+  const periods = runPage(d => d).readerChart(outId('CP-1'), { title: 'Leverage', unit: 'x', table: 42, columns: [1] });
+  assert.ok(/<details class="chart-table"><summary>Table form<\/summary>.*<td>FY2024<\/td>.*<\/details>/s.test(periods));
+});
+
+test('reader charts: revenue and EBITDA and the refinancing need are columns per series over periods, a gap drawn as n.a.', () => {
+  const page = runPage(d => {
+    const cp1 = d[outId('CP-1')];
+    cp1.sections.push(
+      sec('Chart data: revenue and EBITDA', 3, 70, 'consumed', [table(72, ['Period', 'Revenue', 'Adjusted EBITDA', 'Reporting unit', 'Basis and limitation'], [[73, 'FY2023', '2,100', '410', 'US$m', 'Synthetic.'], [74, 'FY2024', '2,250', 'Not supplied: the measure is not stated', 'US$m', 'Synthetic.']])]),
+      sec('Chart data: refinancing need', 3, 80, 'consumed', [table(82, ['Period', 'Debt maturing', 'Committed resources', 'Reporting unit', 'Basis and limitation'], [[83, 'FY2026', '500', '300', 'US$m', 'Synthetic.']])]));
+    return d;
+  });
+  const id = outId('CP-1');
+  const revenue = page.readerChart(id, { title: 'Revenue and EBITDA', unit: 'US$m', table: 72, columns: [1, 2] });
+  assert.ok(revenue.includes('<h2>Revenue and EBITDA</h2><span>US$m</span>') && revenue.includes('<span><i class="series-1"></i>Adjusted EBITDA</span>'));
+  assert.ok(revenue.includes('<span class="col missing"><strong style="bottom:0%" title="Not supplied: the measure is not stated">n.a.</strong></span>'));
+  assert.ok(revenue.includes('<strong style="bottom:100%">2,250</strong>'));
+  const need = page.readerChart(id, { title: 'Refinancing need', unit: 'US$m', table: 82, columns: [1, 2] });
+  assert.equal(countOf(need, /<span class="col">/g), 2);
+  assert.ok(need.includes('<span><i class="series-0"></i>Debt maturing</span><span><i class="series-1"></i>Committed resources</span>'));
+  for (const html of [revenue, need]) assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+test('run report: the bridge is drawn in its module story beside the module\'s other charts', () => {
+  const mod = storyModule(runPage(withBridge).runReport(RUN), 'CP-1');
+  assert.ok(mod.includes('<div class="vector-chart">') && mod.includes('<div class="column-chart"'));
+  assert.ok(mod.indexOf('column-chart') < mod.indexOf('vector-chart'), 'charts keep the handoff order');
 });
 
 // ---- Screens pass (2026-11-10): what a reader acts on is shown; production detail (hashes, file names, word counts) is a title or behind a disclosure.

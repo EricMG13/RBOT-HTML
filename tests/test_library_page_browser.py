@@ -40,6 +40,17 @@ MATURITIES = """
 | FY2026 ending September 30 | 92 | US$m | Synthetic bucket. |
 | Thereafter | 12637 | US$m | Synthetic bucket. |
 """
+# Synthetic: a liquidity bridge as the launcher asks CP-2D for it (here placed in the CP-1 fixture).
+BRIDGE = """
+### Chart data: liquidity bridge
+
+| Step | Amount | Reporting unit | Basis and limitation |
+| --- | --- | --- | --- |
+| Opening accessible liquidity | 900 | US$m | Synthetic. |
+| Free cash flow | 120 | US$m | Synthetic. |
+| Debt repayment | -450 | US$m | Synthetic. |
+| Closing accessible liquidity | 570 | US$m | Synthetic. |
+"""
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -712,3 +723,20 @@ def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
         )  # A loaded context naming the fixed pathway gives no such warning.
     finally:
         shutil.rmtree(layout.root)
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_a_liquidity_bridge_is_a_waterfall_with_its_table_form_and_fits_the_page(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2024-12-31", cp1_extra=CHARTS + BRIDGE)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_bridge.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["title"] == "Liquidity bridge"
+    assert (seen["points"], seen["totals"], seen["outflows"]) == (4, 2, 1)
+    assert seen["barsInside"] is True and seen["fits"] is True
+    assert seen["formRows"] == 4 and seen["formHidden"] is True  # Present for a reader, closed.

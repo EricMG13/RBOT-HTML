@@ -267,7 +267,14 @@ const CHART_RENDERERS={paired:comparisonChart,peers:comparisonChart,bars:compari
 const visualMarkup=(module,v)=>(CHART_RENDERERS[v.kind]||qualitativeVisual)(module,v);
 // A reader chart is a "Chart data:" table whose first column is Period, so it is drawn over time: periods along the x axis in table order,
 // one column per series from a zero baseline (owner, 2026-11-10). Each period is one button (its handoff row) with its chips under it.
+// The accessible table form of a reader chart: the handoff's own table, every cell as written and a chip per row, behind a disclosure.
+function chartTableForm(id,chart) {
+  const table=fixtureTable(id,chart.table),columns=table.headers.map((_,c)=>c);
+  return `<details class="chart-table"><summary>Table form</summary>${sourceTable(id,chart.title,table,columns.map(c=>numericColumn(table,c)),columns,table.rows)}</div></details>`;
+}
+// A step table (store.py: kind "waterfall") is the liquidity bridge: opening, stated changes and closing, drawn by bridgeChart.
 function readerChart(id,chart,chips=false,note=true) {
+  if(chart.kind==='waterfall')return `${bridgeChart(id,chart)}${chartTableForm(id,chart)}`;
   const table=fixtureTable(id,chart.table),series=chart.columns||[chart.column],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
   const numbers=rows.flatMap(row=>series.map(c=>chartNumber(row.cells[c])??0));
   const top=Math.max(0,...numbers),low=Math.min(0,...numbers),span=top-low||1,pct=n=>Math.round(n/span*10000)/100,zero=pct(-low);
@@ -285,7 +292,7 @@ function readerChart(id,chart,chips=false,note=true) {
     const label=`aria-label="${esc(`${period}: ${said}. View source`)}"`;
     return chips?`<div class="chart-row" role="group" aria-label="${esc(period)}"><button class="chart-open" data-evidence="${esc(key)}" ${label}>${inner}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}" ${label}>${inner}</button>`;
   }).join('');
-  return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}`;
+  return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}${chartTableForm(id,chart)}`;
 }
 function readerCharts(id,section) {
   const lines=new Set(sectionData(id,section).flatMap(s=>s.blocks).map(b=>b.line));

@@ -397,31 +397,135 @@ def _chart_route(block_id: str, figure: str) -> MarkdownRoute:
     )
 
 
-def _chart_header(route: MarkdownRoute) -> list[str]:
-    return ["Period", *route.value_columns, "Reporting unit", "Basis and limitation"]
+@dataclass(frozen=True)
+class OwnerTable:
+    """A `### Chart data: ...` table an owning module is asked for beside the report's own charts.
+
+    Only the library draws it, so it is not a delivery route. `steps` makes it a bridge: rows are
+    steps, the first the opening amount and the last the closing, the rows between signed changes.
+    Add a bridge or a period table for any module here and the instructions and the loop's
+    validation follow."""
+
+    module_id: str
+    figure_id: str
+    heading: str
+    value_columns: tuple[str, ...]
+    chart_unit: str
+    steps: bool = False
 
 
-def chart_issues(text: str, route: MarkdownRoute) -> tuple[str, ...]:
-    """A chart table's cells reach the report as they are, so each must already be chart-ready."""
-    heading = f"### {route.heading}"
+# The catalogue's launcher-asked figures (docs/visualisations/catalogue.csv) that are not report
+# strip figures: S.5 (CP-1-V05), the liquidity bridge (CP-2D-V01) and the refinancing need
+# (CP-3C-V01).
+OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
+    "CP-1": (
+        OwnerTable(
+            "CP-1", "S.5", "Chart data: revenue and EBITDA", ("Revenue", "Adjusted EBITDA"), "US$m"
+        ),
+    ),
+    "CP-2D": (
+        OwnerTable(
+            "CP-2D", "CR.2", "Chart data: liquidity bridge", ("Amount",), "US$m", steps=True
+        ),
+    ),
+    "CP-3C": (
+        OwnerTable(
+            "CP-3C",
+            "CR.3",
+            "Chart data: refinancing need",
+            ("Debt maturing", "Committed resources"),
+            "US$m",
+        ),
+    ),
+}
+
+
+def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
+    if isinstance(table, OwnerTable):
+        return table
+    return OwnerTable(
+        table.module_id,
+        str(table.figure_id),
+        table.heading,
+        table.value_columns,
+        str(table.chart_unit),
+    )
+
+
+def _chart_header(table: MarkdownRoute | OwnerTable) -> list[str]:
+    spec = _owner_table(table)
+    first = "Step" if spec.steps else "Period"
+    return [first, *spec.value_columns, "Reporting unit", "Basis and limitation"]
+
+
+def _stated_rows(text: str, heading: str) -> list[list[str]]:
     lines = text.splitlines()
-    if heading not in lines:
-        return (f"Add `{heading}` inside ## Findings, with its table.",)
     rows = []
     for line in lines[lines.index(heading) + 1 :]:
         if line.startswith("#"):
             break
         if line.startswith("|"):
             rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
-    header = _chart_header(route)
+    return rows
+
+
+def _decimals(number: str) -> int:
+    return len(number.partition(".")[2])
+
+
+def _bridge_issues(heading: str, rows: list[list[str]]) -> list[str]:
+    """A step table is a check on what the module stated, never a derivation: nothing is filled.
+
+    Every amount is a plain signed number, or every one is `Not supplied: <reason>` (a bridge the
+    module cannot state). Opening plus the stated changes must equal the closing; each amount has
+    at most the table's own number of decimals, so the sum is exact and any difference is real."""
+    amounts = [row[1] for row in rows]
+    unsupplied = [
+        a.startswith(NOT_SUPPLIED) and a.removeprefix(NOT_SUPPLIED).strip() for a in amounts
+    ]
+    if all(unsupplied):
+        return []
+    if len(rows) < 2:
+        return [f"`{heading}` needs an opening and a closing row."]
+    if not all(PLAIN_NUMBER.fullmatch(a) for a in amounts):
+        return [
+            (
+                f"`{heading}`: every Amount must be a plain signed number (a gap is "
+                "`Not supplied: <reason>` in every Amount, so no partial bridge is drawn)."
+            )
+        ]
+    values = [Decimal(a.replace(",", "")) for a in amounts]
+    opening, *changes, closing = values
+    if opening + sum(changes, Decimal(0)) != closing:
+        total = opening + sum(changes, Decimal(0))
+        return [
+            (
+                f"`{heading}`: the opening {amounts[0]} plus the stated changes {total:,} does not "
+                f"equal the closing {amounts[-1]}; state the missing step or correct the amount. "
+                "Nothing is filled in for you."
+            )
+        ]
+    return []
+
+
+def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...]:
+    """A chart table's cells reach the page as they are, so each must already be chart-ready."""
+    spec = _owner_table(table)
+    heading = f"### {spec.heading}"
+    if heading not in text.splitlines():
+        return (f"Add `{heading}` inside ## Findings, with its table.",)
+    rows = _stated_rows(text, heading)
+    header = _chart_header(spec)
     if not rows or rows[0] != header:
         return (f"`{heading}` needs the table headed `| {' | '.join(header)} |`.",)
     issues = []
+    stated = []
     for row in rows[2:]:
         if len(row) != len(header):
             issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
             continue
         period, *values, unit, basis = row
+        stated.append(row)
         if not basis:
             issues.append(f"`{heading}` {period}: Basis and limitation is blank.")
         for value in values:
@@ -432,11 +536,13 @@ def chart_issues(text: str, route: MarkdownRoute) -> tuple[str, ...]:
                     f"`{heading}` {period}: `{value} |` must be a plain number "
                     "or `Not supplied: <reason>`."
                 )
-            elif unit != route.chart_unit:
+            elif unit != spec.chart_unit:
                 issues.append(
                     f"`{heading}` {period}: a number in {unit} cannot be charted as "
-                    f"{route.chart_unit}; write `Not supplied: reported in {unit}`."
+                    f"{spec.chart_unit}; write `Not supplied: reported in {unit}`."
                 )
+    if spec.steps and not issues:
+        issues += _bridge_issues(heading, stated)
     return tuple(issues)
 
 
@@ -653,15 +759,27 @@ FORECAST_BLOCK = (
 )
 
 
-def _selector(route: MarkdownRoute) -> str:
-    if route.kind == "chart":
+BRIDGE_RULES = (
+    " Each row is one step: the first row is the opening amount and the last row is the closing "
+    "amount; the rows between are the signed changes the method states (a negative number for an "
+    "outflow), in the order the method states them. The opening plus those changes must reconcile "
+    "to the closing at the precision the table states, or the table is sent back: state the "
+    "missing step, never a plug. If the bridge cannot be stated, write `Not supplied: <reason>` "
+    "in every Amount."
+)
+
+
+def _selector(route: MarkdownRoute | OwnerTable) -> str:
+    if isinstance(route, OwnerTable) or route.kind == "chart":
+        spec = _owner_table(route)
         return (
-            f"- `### {route.heading}`: exactly one Markdown table headed "
-            f"`| {' | '.join(_chart_header(route))} |`, one row per period. Value cells are plain "
-            f"numbers in {route.chart_unit}, with that as the Reporting unit, or "
-            "`Not supplied: <reason>`. An issuer reporting in another currency or scale writes "
+            f"- `### {spec.heading}`: exactly one Markdown table headed "
+            f"`| {' | '.join(_chart_header(spec))} |`, one row per "
+            f"{'step' if spec.steps else 'period'}. "
+            f"Value cells are plain numbers in {spec.chart_unit}, with that as the Reporting unit, "
+            "or `Not supplied: <reason>`. An issuer reporting in another currency or scale writes "
             "`Not supplied: reported in <unit>` in monetary cells. Basis and limitation is never "
-            "blank."
+            "blank." + (BRIDGE_RULES if spec.steps else "")
         )
     what = (
         "exactly one populated Markdown table under it." if route.kind == "table" else "prose only."
@@ -716,7 +834,8 @@ def _instructions(
     run_type: str,  # Plan 3 (Primary scope) reads these two; no instruction byte uses them yet.
     legal_documents: str,
 ) -> bytes:
-    selectors = "\n".join(_selector(r) for r in routes if r.module_id == module)
+    asked: list[MarkdownRoute | OwnerTable] = [r for r in routes if r.module_id == module]
+    selectors = "\n".join(_selector(r) for r in (*asked, *OWNER_TABLES.get(module, ())))
     method = method_text(module)
     opening = OPENING.get(module)
     return (
@@ -952,6 +1071,8 @@ def checker(layout: MarkdownLayout) -> Check:
         for route in routes:
             if route.kind == "chart":
                 issues += chart_issues(text, route)
+        for owned in OWNER_TABLES.get(task.module_id, ()):
+            issues += chart_issues(text, owned)
         return (*issues, *_forecast_issues(task, text))
 
     return check
