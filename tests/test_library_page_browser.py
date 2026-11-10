@@ -474,11 +474,12 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
     # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
     assert seen["filtered"] == {"shown": 0, "emptyShown": True}
     # Design pass 2026-11-10: parts listed and reachable, tables whole and in the text face.
-    assert seen["outline"][-4:] == [
+    assert seen["outline"][-5:] == [
         "Findings register",
         "Open items",
         "Module matrix",
         "Deliverables from this run",
+        "Chart index",
     ]
     assert seen["jump"] == {
         "hash": "#W-Overview/run-matrix",
@@ -899,3 +900,35 @@ def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_t
     assert seen["wide"] is True and seen["scrolls"] is True  # Natural width, scrolled in its card.
     assert seen["scrollFocusable"] is True and seen["fits"] is True and seen["statusItems"] >= 1
     assert seen["tableAfterDiagram"] is True and seen["cutEdges"] == 1
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_context_bar_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + EVENTS + MAPS)
+    make_run(tmp_path, "run-b", as_of="2025-06-30")
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_index.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    for route in ("#W-Overview?c=run-a", "#W-Forecast?c=run-a"):
+        dom, console = visit(page, route, width)
+        assert console == []
+        seen = json.loads(
+            html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
+        )
+        assert seen["shown"] is True and "As of 31 December 2025" in seen["text"]
+        assert len(seen["others"]) == 1 and "c=run-b" in seen["others"][0]
+        assert seen["roles"] == ["source", "analysis", "export"]
+        assert seen["indexRows"] == [
+            "Leverage|Drawn",
+            "Interest cover|Drawn",
+            "Liquidity|Drawn",
+            "Financing events|Drawn",
+            "Credit-risk transmission map|Drawn",
+        ]
+        assert seen["indexScrollFocusable"] is True
+        assert seen["summaryFocus"] is True and seen["listInView"] is True and seen["fits"] is True
+        assert (
+            "c=run-a" in seen["after"] and seen["barAfter"] is True
+        )  # Moving to a file keeps the run.

@@ -728,12 +728,12 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
     ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'Unnamed module']]]];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
-  const contexts = { [RUN]: { folder: RUN, record: more.record, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
+  const contexts = { [RUN]: { folder: RUN, record: more.record, ...more.runFields, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name])];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, calendarSections, mapLayers, mapsView, mapsPlaced, statusMapView};`)(...args);
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name])];
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, calendarSections, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex, contextBar};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1129,7 +1129,7 @@ test('run report: every part carries an id and the label the navigator lists, in
   const html = runPage().runReport(RUN);
   const parts = [...html.matchAll(/<section class="[^"]*" id="(run-[a-z0-9-]+)" data-run-part="([^"]*)">/g)].map(m => [m[1], m[2]]);
   assert.deepEqual(parts, [['run-group-1', 'Financial performance'], ['run-group-2', 'Outlook and downside'], ['run-group-3', 'Decision and review'], ['run-group-4', 'Other modules'],
-    ['run-register', 'Findings register'], ['run-open-items', 'Open items'], ['run-matrix', 'Module matrix']]);
+    ['run-register', 'Findings register'], ['run-open-items', 'Open items'], ['run-matrix', 'Module matrix'], ['run-charts', 'Chart index']]);
   const screen = read('screen.js');
   assert.ok(screen.includes("querySelectorAll('[data-run-part]')") && screen.includes('run-[a-z0-9-]+'), 'the navigator lists the parts and the route scrolls to one');
 });
@@ -1987,7 +1987,7 @@ test('maps: a map of only Not supplied draws no diagram and says why', () => {
 test('maps: placement is by the map, so credit-risk transmission reaches the Overview and no other map does', () => {
   const page = runPage(withMaps);
   const overview = page.runReport(RUN);
-  assert.ok(overview.includes('Credit-risk transmission') && !overview.includes('Stress scenario'));
+  assert.ok(overview.includes('Credit-risk transmission') && !overview.includes('>Stress scenario<'));
   assert.equal(page.mapsPlaced(RUN, { module: 'CP-1' }).includes('Stress scenario'), true);
   assert.equal(page.mapsPlaced(RUN, { module: 'CP-5' }), '');
   const text = read('views.js');
@@ -2071,4 +2071,125 @@ test('maps: a wide map keeps its natural width and scrolls inside its card', () 
 
 test('status map: no run chosen draws nothing and does not throw', () => {
   assert.equal(runPage().statusMapView(undefined, { timeline: true }), '');
+});
+
+// ---- Package 7 views (2026-11-10): the chart index, the report manifest and the run/file context bar. Every value is synthetic.
+const withIndex = d => {
+  withLanes(d);
+  withMaps(d);
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(sec('Chart data: broken peer set', 3, 500, 'consumed', [table(502, ['Period', 'Value'], [[503, 'FY2024', '1']])]));
+  cp1.issue = 'Chart data: broken peer set is not in its fixed table';
+  return d;
+};
+const cellsOf = (html, attr) => [...html.matchAll(new RegExp(`<tr ${attr}="[^"]*">(.*?)</tr>`, 'gs'))].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
+const INDEX_HEAD = ['Chart', 'Module', 'State', 'Limitation', 'Unit', 'Period', 'Shown in', 'Table form', 'Source'];
+
+test('chart index: one row per chart, map and lane the run holds, whatever its state, with the owner by name', () => {
+  const html = runPage(withIndex).chartIndex(RUN);
+  assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), INDEX_HEAD);
+  const rows = cellsOf(html, 'data-chart').map(r => r.slice(0, 7));
+  const OVERVIEW = 'Financial foundation page, Overview';
+  assert.deepEqual(rows, [
+    ['Leverage', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
+    ['Cover', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
+    ['Financing events', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', 'Calendar, Overview'],
+    ['Credit-risk transmission map', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', 'Financial foundation page, Overview'],
+    ['Stress scenario map', 'Financial foundation', 'Not established for this run', 'no scenario stated', 'Not stated', 'Not stated', 'Not drawn'],
+    ['Broken peer set', 'Financial foundation', 'Sent back', 'Chart data: broken peer set is not in its fixed table', 'Not stated', 'Not stated', 'Not drawn'],
+    ['Decision and watch events', 'Committee decision', 'Not established for this run', 'the handoff states no dated event', 'Not stated', 'Not stated', 'Not drawn'],
+  ]);
+  assert.ok(!/CP-\d/.test(strip(html)), 'owners are named, never coded');
+});
+
+test('chart index: the table form and the handoff line are links that keep the run; a row with no evidence line has none', () => {
+  const html = runPage(withIndex).chartIndex(RUN);
+  const leverage = /<tr data-chart="[^"]*">.*?<\/tr>/s.exec(html)[0];
+  const [table, source] = [...leverage.matchAll(/<a href="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(table.startsWith('#CP-1/') && table.includes('c=run-a') && !table.includes('e='), table);
+  assert.ok(source.startsWith('#CP-1/') && source.includes('c=run-a') && source.includes(`e=${encodeURIComponent(`${outId('CP-1')}:43`)}`), source);
+  assert.ok(!leverage.includes('data-evidence'), 'a plain route works from every page the index sits on');
+  const lane = cellsOf(html, 'data-chart')[2];
+  assert.ok(/<tr data-chart="[^"]*">(?:(?!<\/tr>).)*href="#W-Calendar\/lanes\?c=run-a"/s.test(html.slice(html.indexOf('Financing events') - 120)), 'a lane opens in the Calendar');
+  assert.equal(lane[7], 'Table form');
+  const map = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*Credit-risk transmission map.*?<\/tr>/s.exec(html)[0];
+  assert.ok(map.includes('#CP-1/maps?c=run-a'), 'a map opens its module’s Maps part');
+});
+
+test('chart index: placed on the Overview and the Forecast page; a run with no chart table says so, and no run draws nothing', () => {
+  const page = runPage(withIndex);
+  assert.ok(page.runReport(RUN).includes('class="run-section chart-index"'));
+  assert.ok(/if\(module==='W-Forecast'\)return[^\n]*chartIndex\(context\)/.test(read('views.js')));
+  const none = runPage(d => { for (const out of Object.values(d)) out.sections = out.sections.filter(s => !/^(Chart data|Map|Events): /.test(s.heading)); return d; }).chartIndex(RUN);
+  assert.ok(none.includes('No chart, map or calendar lane') && !none.includes('<table'));
+  assert.equal(page.chartIndex(undefined), '');
+});
+
+const REPORT_FILES = [{ name: 'report.html', href: 'x/report.html' }, { name: 'report.json', href: 'x/report.json' }, { name: 'CP-1.md', href: 'x/CP-1.md' }];
+test('report manifest: the level is named, each handoff is pinned by its full hash and run, and only the formats present are listed', () => {
+  const report = { ...zedReport(RUN), files: REPORT_FILES, builtFrom: [...zedReport(RUN).builtFrom, { module: 'CP-6', run: null, source: 'CP-6.md', sha256: 'b'.repeat(64), output: false }] };
+  const html = runPage(d => d, [report], m => m, { runFields: { run: RUN, period: 'FY2024', asOf: '2024-09-30' } }).reportView(report, RUN);
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(html)[0];
+  assert.ok(strip(manifest).includes('handoff level') && strip(manifest).includes('not held for delivered reports'));
+  const rows = cellsOf(manifest, 'data-pin');
+  assert.deepEqual(rows.map(r => r.slice(0, 2)), [['Financial foundation', RUN], ['Committee decision', 'No matching run file']]);
+  assert.ok(rows[0][2].includes('a'.repeat(64)) && rows[1][2].includes('b'.repeat(64)), 'the whole pin, not a prefix');
+  assert.ok(rows[0][3].includes('FY2024') && rows[0][3].includes('30 September 2024'), 'the run’s own period and as-of');
+  assert.ok(/Formats present[^<]*HTML, JSON, Markdown/.test(strip(manifest)));
+  assert.ok(!/PDF|Excel|XLSX|CSV/i.test(manifest), 'no format that is not a file is named');
+});
+
+test('report manifest: a report with no files names no format', () => {
+  const report = { ...zedReport(RUN), files: [] };
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [report]).reportView(report, RUN))[0];
+  assert.ok(strip(manifest).includes('No export file is held for this report') && !/Formats present/.test(manifest));
+});
+
+const BAR_STORE = { inputs: { [`${RUN}/inputs/CP-1-input.md`]: { module: 'CP-1', run: RUN, source: 'inputs/CP-1-input.md', href: '../runs/run-a/inputs/CP-1-input.md', sha256: 'c'.repeat(64) } } };
+const BAR = {
+  runFields: { issuer: 'Synthetic Issuer', issuerKey: 'k1', title: 'Synthetic Issuer', run: 'Run A', asOf: '2025-12-31' },
+  contexts: { 'run-b': { folder: 'run-b', issuer: 'Synthetic Issuer', issuerKey: 'k1', run: 'Run B', asOf: '2025-06-30', modules: {} }, 'run-c': { folder: 'run-c', issuer: 'Other', issuerKey: 'k2', run: 'Run C', asOf: '2025-01-31', modules: {} } },
+  store: BAR_STORE,
+};
+const withInput = m => Object.fromEntries(Object.entries(m).map(([code, entry]) => [code, { ...entry, inputs: code === 'CP-1' ? [`${RUN}/inputs/CP-1-input.md`] : [] }]));
+const barPage = (reports = [], shape = withInput) => runPage(d => d, reports, shape, BAR);
+
+test('context bar: the issuer, the run and its as-of date; the other runs of that issuer only, as links in the same place', () => {
+  const html = barPage().contextBar('W-Calendar', RUN);
+  assert.ok(strip(html).includes('Synthetic Issuer') && strip(html).includes('Run A') && strip(html).includes('As of 31 December 2025'));
+  const others = [...html.matchAll(/<a href="([^"]+)">([^<]*)<\/a>/g)].filter(m => m[1].includes('c=run-b') || m[1].includes('c=run-c'));
+  assert.equal(others.length, 1, 'the other issuer’s run is not offered');
+  assert.ok(others[0][1].startsWith('#W-Calendar/') && others[0][1].includes('c=run-b') && others[0][2].includes('Run B') && others[0][2].includes('30 June 2025'));
+  assert.ok(barPage().contextBar('CP-1', RUN).includes('href="#W-Overview/'), 'an analytical module has no counterpart in another run, so its link opens the Overview');
+  assert.ok(!/CP-\d/.test(strip(html)));
+});
+
+test('context bar: revision order is not claimed, because no run records one', () => {
+  const text = strip(barPage().contextBar('W-Overview', RUN));
+  assert.ok(text.includes('No revision order is recorded between runs'));
+  assert.ok(!/latest|newer|older|supersede|revision of/i.test(text.replace('No revision order is recorded between runs', '')));
+});
+
+test('context bar: files by role, each link keeps the run, and a role with no file says so', () => {
+  const report = { ...zedReport(RUN), files: REPORT_FILES };
+  const html = barPage([report]).contextBar('W-Overview', RUN);
+  const role = name => new RegExp(`<section class="context-role" data-role="${name}">.*?</section>`, 's').exec(html)[0];
+  assert.ok(strip(role('source')).includes('CP-1-input.md') || strip(role('source')).includes('Financial foundation'));
+  assert.ok(role('source').includes('href="../runs/run-a/inputs/CP-1-input.md"') && role('source').includes(' download'));
+  assert.ok(role('analysis').includes('c=run-a') && strip(role('analysis')).includes('Financial foundation'));
+  assert.ok(role('export').includes('#W-Reports/') && role('export').includes('c=run-a') && strip(role('export')).includes('report.json') && role('export').includes('href="x/report.json"'));
+  const bare = barPage([], m => Object.fromEntries(Object.entries(m).map(([code, entry]) => [code, { ...entry, inputs: [] }]))).contextBar('W-Overview', RUN);
+  assert.ok(/data-role="source"[^>]*>(?:(?!<\/section>).)*None retained for this run/s.test(bare) && /data-role="export"[^>]*>(?:(?!<\/section>).)*None retained for this run/s.test(bare));
+});
+
+test('context bar: no run chosen draws nothing, and the shell holds the bar where the run tabs are', () => {
+  assert.equal(barPage().contextBar('W-Overview', null), '');
+  assert.ok(read('index.html').includes('id="context-bar"'));
+  assert.ok(/\$\('context-bar'\)\.hidden=isHome/.test(read('views.js')));
+});
+
+test('package 7: the new rules use only existing tokens, no amber or red', () => {
+  const css = read('screen.css').split('\n').filter(line => /\.index-|\.context-|\.report-manifest/.test(line));
+  assert.ok(css.length >= 4 && css.some(rule => /\.context-bar/.test(rule)) && css.some(rule => /\.index-/.test(rule)));
+  for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b|badge-attention/i.test(rule), rule);
 });
