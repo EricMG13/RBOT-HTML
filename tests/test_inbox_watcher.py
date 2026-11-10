@@ -671,7 +671,7 @@ def test_m1_an_interrupt_after_start_leaves_one_process_at_most_and_no_second_st
         assert len(started) == 1 and started[0].poll() is not None  # the child was stopped
         record = _only(root)
         assert (record.status, record.pid) == ("running", 0) and record.started_at
-        # No PID file was written (the child was stopped before it could): past the 60 s grace the
+        # No PID file exists (the fake launcher never writes one): past the 60 s grace the
         # run is cut short. Inside the grace it stays running (see test_c_...).
         second = Watcher(settings(root), now=lambda: datetime.now(UTC) + timedelta(seconds=61))
         for _ in range(3):
@@ -1085,7 +1085,7 @@ def test_m1_a_drop_the_watcher_cannot_move_is_logged_once_and_shown_as_held(root
             w.step()
         assert load_all(layout(root)) == [] and drop.is_dir()
         log = (root / "_engine/logs/watcher.log").read_text()
-        assert log.count("acme") == 1 and "Permission denied" in log
+        assert log.count("acme is ready but cannot be moved") == 1 and "Permission denied" in log
         held = activity_js(root)
         assert "acme" in held and "Permission denied" in held
         pathway.chmod(0o755)
@@ -1320,7 +1320,10 @@ def test_a_a_run_whose_pid_was_never_saved_is_adopted_from_its_own_pid_file(root
             w.close()
 
 
-def test_b_a_run_with_no_pid_file_after_the_grace_is_interrupted_and_nothing_starts(root):
+def test_b_a_run_with_no_pid_file_after_the_grace_is_interrupted_and_nothing_starts(
+    root, monkeypatch
+):
+    started = _track_starts(monkeypatch)
     _save_running(root, _stamp(T0 - timedelta(seconds=61)))
     w = Watcher(settings(root), now=_Clock(T0))
     try:
@@ -1329,7 +1332,7 @@ def test_b_a_run_with_no_pid_file_after_the_grace_is_interrupted_and_nothing_sta
         w.close()
     record = _only(root)
     assert record.status == "interrupted" and "may still be running" in record.reason
-    assert list((root / "_engine/runs").iterdir()) == []
+    assert started == []  # no process was started
 
 
 def test_c_a_run_with_no_pid_file_inside_the_grace_stays_running_then_is_interrupted(root):
@@ -1346,10 +1349,13 @@ def test_c_a_run_with_no_pid_file_inside_the_grace_stays_running_then_is_interru
     assert _only(root).status == "interrupted"
 
 
-@pytest.mark.parametrize("text", ["abc", "0", "-5", ""])
+@pytest.mark.parametrize("text", ["abc", "0", "-5", "", b"\xff\xfe", "1" * 5000])
 def test_d_a_pid_file_that_is_not_a_positive_integer_is_no_pid_file_and_logged_once(root, text):
     pid_file = _save_running(root, _stamp(T0 - timedelta(seconds=10)))
-    pid_file.write_text(text, encoding="utf-8")
+    if isinstance(text, bytes):
+        pid_file.write_bytes(text)
+    else:
+        pid_file.write_text(text, encoding="utf-8")
     clock = _Clock(T0)
     w = Watcher(settings(root), now=clock)
     try:

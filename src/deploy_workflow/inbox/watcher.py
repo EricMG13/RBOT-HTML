@@ -80,6 +80,9 @@ def _stop(child: subprocess.Popen[bytes]) -> None:
         child.wait()
 
 
+_MAX_PID_DIGITS = 10  # a longer number is no process ID (and int() refuses thousands of digits)
+
+
 class Watcher:
     def __init__(
         self,
@@ -143,14 +146,17 @@ class Watcher:
     def _pid_from_file(self, record: Record) -> int:
         """The positive process ID in the run's PID file, else 0 (bad content: logged once)."""
         try:
-            text = runs.pid_file(self.layout, record.id).read_text(encoding="utf-8").strip()
+            raw = runs.pid_file(self.layout, record.id).read_bytes()
         except FileNotFoundError:
             return 0
-        if text.isascii() and text.isdigit() and int(text) > 0:
+        text = raw.decode("ascii", "replace").strip()
+        if text.isascii() and text.isdigit() and len(text) <= _MAX_PID_DIGITS and int(text) > 0:
             return int(text)
         if record.id not in self._bad_pid_files:
             self._bad_pid_files.add(record.id)
-            self._logger.warning("run %s: PID file holds %r, not a process ID", record.id, text)
+            self._logger.warning(
+                "run %s: PID file holds %r, not a process ID", record.id, text[:40]
+            )
         return 0
 
     def _past_grace(self, record: Record) -> bool:
