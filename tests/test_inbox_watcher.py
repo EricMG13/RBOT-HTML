@@ -1468,3 +1468,125 @@ def test_e_the_pid_file_is_gone_once_the_run_has_ended(root):
     finally:
         w.close()
     assert list((root / "_engine/state").glob("*.pid")) == []
+
+
+# -- outstanding rows of the 2026-11-10 sweep ------------------------------------------------
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="mode 0 does not stop a read on Windows")
+def test_an_unreadable_drop_still_being_copied_stays_in_the_inbox(root):
+    now = [0.0]
+    drop = make_drop(root, "credit_snapshot", "acme")
+    (drop / "locked.pdf").write_bytes(b"%PDF")
+    (drop / "locked.pdf").chmod(0)
+    growing = drop / "b.pdf"
+    growing.write_bytes(b"%PDF part 1")
+    w = Watcher(settings(root, settle_seconds=120), clock=lambda: now[0])
+    try:
+        w.step()  # t=0: first seen, already unreadable
+        for moment in (60, 121):
+            now[0] = moment
+            with growing.open("ab") as handle:  # the copy is still writing
+                handle.write(b" more")
+            w.step()
+        assert drop.is_dir() and status(root) == []
+        now[0] = 242  # unchanged for 121 s: only now is it rejected
+        w.step()
+        assert status(root) == ["rejected"] and not drop.exists()
+    finally:
+        for locked in root.rglob("locked.pdf"):
+            locked.chmod(0o644)
+
+
+def test_the_daily_limit_is_shown_while_every_slot_is_busy(root, fake_env):
+    fake_env({"events": DELIVERED, "sleep": 20})
+    w = Watcher(settings(root, max_running=1, max_per_day=1))
+    make_drop(root, "credit_snapshot", "a", issuer="a")
+    go(w)
+    assert status(root) == ["running"]  # 1 of 1 started today, and the only slot is busy
+    make_drop(root, "credit_snapshot", "b", issuer="b")
+    go(w)
+    assert sorted(status(root)) == ["queued", "running"]
+    assert "daily limit of 1 runs reached" in activity_js(root)
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a settable process time zone")
+def test_a_start_earlier_the_same_local_day_counts_across_a_clock_change(root, monkeypatch):
+    # New York, 1 Nov 2026: clocks went back at 02:00. A start at 00:30 EDT (04:30Z) and "now"
+    # at 23:00 EST are the same local day, though 23:00's offset puts 04:30Z on 31 Oct.
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    try:
+        late = datetime(2026, 11, 2, 4, 0, tzinfo=UTC).astimezone()  # 23:00 EST on 1 Nov
+        assert (late.hour, late.day) == (23, 1)
+        watcher_module.runs.save(
+            ensure_layout(root),
+            Record(
+                "20261101-043000-01", "credit_snapshot", "first", "finished", "t",
+                started_at="2026-11-01T04:30:00Z", ended_at="2026-11-01T05:00:00Z", prepared=True,
+            ),
+        )  # fmt: skip
+        w = Watcher(settings(root, max_per_day=1), now=lambda: late)
+        make_drop(root, "credit_snapshot", "second", issuer="b")
+        go(w)
+        w.step()
+        assert sorted(status(root)) == ["finished", "queued"]
+        assert "daily limit of 1 runs reached" in activity_js(root)
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+
+def test_a_loose_file_named_like_a_pathway_is_rejected_and_does_not_stop_a_restart(root):
+    Watcher(settings(root)).close()
+    shutil.rmtree(root / "inbox/credit_snapshot")
+    (root / "inbox/credit_snapshot").write_bytes(b"%PDF loose file")
+    w = Watcher(settings(root))  # start-up meets a file where a pathway folder was
+    go(w)
+    assert status(root) == ["rejected"]
+    [failed] = (root / "inbox/failed").iterdir()
+    assert "not inside a pathway folder" in (failed / "WHY.txt").read_text(encoding="utf-8")
+    assert (failed / "credit_snapshot").read_bytes() == b"%PDF loose file"
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        ["--poll-seconds", "-1"], ["--poll-seconds", "0"], ["--poll-seconds", "nan"],
+        ["--settle-seconds", "-5"], ["--settle-seconds", "inf"],
+        ["--max-running", "0"], ["--max-per-day", "0"],
+    ],
+)  # fmt: skip
+def test_a_setting_the_watcher_cannot_run_with_is_refused_before_anything_starts(
+    root, capsys, flag
+):
+    target = root / "never-made"
+    assert main(["--root", str(target), *flag]) == 2
+    assert flag[0] in capsys.readouterr().err and not target.exists()
+
+
+def test_a_malformed_line_in_a_runs_files_does_not_stop_the_watcher(root, fake_env):
+    # A run folder is written by the launcher, but one bad line there must not end the process
+    # that supervises every other run.
+    fake_env({"events": DELIVERED, "sleep": 20})
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))
+    go(w)
+    [record] = load_all(layout(root))
+    log = root / "_engine/runs" / record.id / "events.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    for text in ('{"event": ["x"]}\n{"event": "y"}\n', "[" * 100_000 + "]" * 100_000 + "\n{}\n"):
+        log.write_text(text, encoding="utf-8")
+        w.step()
+        assert f'"id": "{record.id}"' in activity_js(root)
+
+
+def test_a_loose_file_named_failed_is_rejected_and_does_not_stop_a_restart(root):
+    Watcher(settings(root)).close()
+    (root / "inbox/failed").rmdir()
+    (root / "inbox/failed").write_bytes(b"%PDF loose file")
+    w = Watcher(settings(root))  # start-up meets a file where inbox/failed was
+    go(w)
+    assert status(root) == ["rejected"]
+    [failed] = (root / "inbox/failed").iterdir()
+    assert (failed / "failed").read_bytes() == b"%PDF loose file"

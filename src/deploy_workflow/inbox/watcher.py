@@ -10,6 +10,7 @@ its process starts. A run is shown as finished only when the library lists it.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import subprocess
 import sys
@@ -31,7 +32,6 @@ from deploy_workflow.owners import cpos_launch
 
 __all__ = ["Settings", "StartupRefused", "Watcher", "main"]
 
-ROOT = Path(__file__).resolve().parents[3]
 _TIME = "%Y-%m-%dT%H:%M:%SZ"
 _REBUILD_FAILED = "the library could not be rebuilt ({}); ended runs wait for it"
 _KEPT = "_engine/drops/"
@@ -377,13 +377,15 @@ class Watcher:
                         self._watch_unreadable(pathway, entry)
 
     def _watch_unreadable(self, pathway: str, entry: Path) -> None:
-        """A drop that cannot be read is rejected once that has lasted past the settle time."""
+        """A drop that cannot be read is rejected once that has lasted past the settle time and
+        nothing in it has changed for as long: a copy still arriving is left alone."""
         error = drops.unreadable(entry)
         if error is None:
             self._unreadable.pop(entry, None)
             return
         first, _ = self._unreadable.setdefault(entry, (self.clock(), error))
-        if self.clock() - first > self.settings.settle_seconds:
+        since = max(first, self._tracker.unchanged_since(entry) or first)
+        if self.clock() - since > self.settings.settle_seconds:
             del self._unreadable[entry]
             self._claim(pathway, entry, f"cannot be read: {error}")
 
@@ -493,7 +495,9 @@ class Watcher:
     # -- start ------------------------------------------------------------------------------
 
     def _started_today(self) -> int:
-        today = self.now()
+        # Each moment's own local date, by the machine's time-zone rules: on a clock-change day
+        # the offset of "now" would put the day's first hour on the day before.
+        today = self.now().astimezone().date()
         count = 0
         for record in self._records.values():
             if not record.started_at:
@@ -507,7 +511,7 @@ class Watcher:
                 )
                 count += 1
                 continue
-            count += started.astimezone(today.tzinfo).date() == today.date()
+            count += started.astimezone().date() == today
         return count
 
     def _start_queued(self) -> None:
@@ -516,11 +520,11 @@ class Watcher:
         for record in self._with_status("queued"):
             if not record.prepared:
                 continue
-            if len(self._with_status("running")) >= self.settings.max_running:
-                break
-            if today >= self.settings.max_per_day:
+            if today >= self.settings.max_per_day:  # first: shown even while every slot is busy
                 limit = self.settings.max_per_day
                 self._limit_held = f"daily limit of {limit} runs reached; waiting until tomorrow"
+                break
+            if len(self._with_status("running")) >= self.settings.max_running:
                 break
             with self._guard(f"run {record.id}"):
                 today += self._launch(record)
@@ -592,10 +596,28 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _unusable(args: argparse.Namespace) -> str:
+    """Why the watcher cannot poll with these settings, else "". A poll interval of zero spins,
+    a negative one stops the first sleep, and a limit below one never starts a run."""
+    if not (math.isfinite(args.poll_seconds) and args.poll_seconds > 0):
+        return "--poll-seconds must be a finite number above zero"
+    if not (math.isfinite(args.settle_seconds) and args.settle_seconds >= 0):
+        return "--settle-seconds must be a finite number, zero or more"
+    if args.max_running < 1:
+        return "--max-running must be at least 1"
+    if args.max_per_day < 1:
+        return "--max-per-day must be at least 1"
+    return ""
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if not (args.cap.is_finite() and args.cap > 0):
         print("--cap must be a finite amount above zero", file=sys.stderr)
+        return 2
+    refused = _unusable(args)
+    if refused:
+        print(refused, file=sys.stderr)
         return 2
     settings = Settings(
         args.root,

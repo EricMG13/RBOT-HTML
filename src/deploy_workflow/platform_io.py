@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+import tempfile
 import time
 from pathlib import Path
 
@@ -51,6 +52,27 @@ def replace(source: str | Path, target: str | Path) -> None:
             if not remaining:
                 raise
             time.sleep(0.05)
+
+
+def write_atomic(target: Path, text: str, *, sync: bool = False) -> None:
+    """Write ``text`` (UTF-8) to ``target`` through a temporary file beside it, then ``replace``.
+
+    A reader sees the old content or the new, never a part. ``sync`` forces the bytes to disk
+    first, for a file that must survive a power cut. The temporary file never outlives a failure.
+    """
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tmp", dir=target.parent
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            if sync:
+                handle.flush()
+                os.fsync(handle.fileno())
+        replace(temporary, target)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
 
 
 def flags(*names: str) -> int:

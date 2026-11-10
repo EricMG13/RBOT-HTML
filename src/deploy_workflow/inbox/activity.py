@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
@@ -46,11 +44,11 @@ def module_states(pathway: str, events: Sequence[Mapping[str, Any]]) -> list[lis
     """[[module, done|running|waiting], ...] in plan order, then the final Report entry."""
     started = {str(e.get("module")) for e in events if e.get("event") == "module_started"}
     accepted = {str(e.get("module")) for e in events if e.get("event") == "module_accepted"}
-    modules = plan(
-        tuple(m for m in PATHWAY_MODULES[cast(PathwayId, pathway)] if m not in NOT_ANALYTICAL)
-    )
+    # A pathway the plan does not know (a record edited by hand) has no modules to show.
+    listed = PATHWAY_MODULES.get(cast(PathwayId, pathway), ())
+    modules = plan(tuple(m for m in listed if m not in NOT_ANALYTICAL)) if listed else ()
     states = [[m, _state(m, started, accepted)] for m in modules]
-    names = {e.get("event") for e in events}
+    names = {e.get("event") for e in events if isinstance(e.get("event"), str)}
     report = "waiting"
     if "delivered" in names:
         report = "done"
@@ -75,7 +73,7 @@ def spent(run_dir: Path) -> Decimal | None:
             if item.status in ("settled", "overrun", "unknown", None)
         ]
         return exact_sum(amounts)
-    except (BudgetError, OSError) as error:
+    except (BudgetError, OSError, RecursionError) as error:
         # Documented fail-open (display only): an unreadable journal shows as an unknown spend.
         log.warning(
             "budget journal under %s unreadable (%s); spend shown as unknown", run_dir, error
@@ -84,12 +82,12 @@ def spent(run_dir: Path) -> Decimal | None:
 
 
 def _events(run_dir: Path, run_id: str) -> tuple[list[dict[str, Any]], bool]:
-    """The events, and whether the log was read (False: the fail-open below was taken)."""
+    """The events, and whether a log was read (False: there is none, or the fail-open below)."""
     try:
         # A valid JSON line need not be an event; only objects are kept.
         return [e for e in read_events(run_dir / EVENTS) if isinstance(e, dict)], True
     except FileNotFoundError:
-        return [], True  # no log yet (a prepared run waiting for a slot): nothing to report
+        return [], False  # no log yet (a prepared run waiting for a slot): nothing to report
     except (OSError, ValueError) as error:
         # Documented fail-open (display only): an unreadable log shows every module as waiting.
         log.warning("run %s: event log unreadable (%s); modules shown as waiting", run_id, error)
@@ -115,7 +113,8 @@ def _age_seconds(
 
 def _entry(layout: Layout, record: Record, now: datetime) -> tuple[dict[str, Any], bool]:
     """The run's entry, and whether it is complete: a rejected run reads nothing, and any other
-    run is complete only when its folder was visible and neither fail-open below was taken."""
+    run is complete only when its event log and budget journal were both there and read. One
+    that is absent reads as "nothing yet", which may only mean it was out of sight this poll."""
     entry: dict[str, Any] = asdict(record)
     entry["files"] = list(record.files)
     run_dir = layout.runs / record.id
@@ -126,7 +125,7 @@ def _entry(layout: Layout, record: Record, now: datetime) -> tuple[dict[str, Any
         entry["modules"] = module_states(record.pathway, events)
         amount = spent(run_dir)
         entry["spent"] = None if amount is None else money_text(amount)
-        complete = readable and amount is not None
+        complete = readable and amount is not None and (run_dir / "live").is_dir()
     if record.status == "running":
         age = _age_seconds(record, events, now)
         if age is not None and age > STALLED_AFTER:
@@ -181,14 +180,7 @@ def write(layout: Layout, data: Mapping[str, Any]) -> None:
     """Write _engine/activity.js through a temporary file, then ``os.replace`` it."""
     text = json.dumps(data, ensure_ascii=True, allow_nan=False).replace("<", "\\u003c")
     layout.engine.mkdir(parents=True, exist_ok=True)
-    target = layout.engine / "activity.js"
-    descriptor, name = tempfile.mkstemp(dir=layout.engine, prefix="activity.", suffix=".tmp")
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(
-                f"window.RUN_ACTIVITY={text};window.onRunActivity&&window.onRunActivity();\n"
-            )
-        platform_io.replace(name, target)
-    except BaseException:
-        Path(name).unlink(missing_ok=True)
-        raise
+    platform_io.write_atomic(
+        layout.engine / "activity.js",
+        f"window.RUN_ACTIVITY={text};window.onRunActivity&&window.onRunActivity();\n",
+    )
