@@ -545,7 +545,7 @@ class Watcher:
                 launcher=self.settings.launcher,
                 config=self.settings.config,
                 cap=self.settings.cap,
-                ruling=self.settings.ruling,
+                ruling=startup.STANDING_RULING,  # start-up proved settings.ruling is this file
             )
         except OSError as error:
             self._logger.exception("run %s could not be started", record.id)
