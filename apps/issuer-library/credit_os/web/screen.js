@@ -36,9 +36,9 @@ const groups = [
   ['Relative value',[['CP-3','Security selection'],['CP-3D','Market-implied risk']]],
   ['Decision and review',[['CP-6','Committee decision'],['CP-5','Evidence validation'],['CP-8','Deliverable comparison']]]
 ];
-// A module the reading groups do not name still gets a place, under its code.
+// A module the reading groups do not name still gets a place, as an unnamed module.
 const unnamed=[...new Set(Object.values(data).map(output=>output.module))].filter(id=>id!=='CP-MODEL'&&!groups.some(group=>group[1].some(item=>item[0]===id))).sort();
-if(unnamed.length)groups.push(['Other modules',unnamed.map(id=>[id,id])]);
+if(unnamed.length)groups.push(['Other modules',unnamed.map(id=>[id,'Unnamed module'])]);
 const moduleNames = Object.fromEntries(groups.flatMap(g=>g[1]));
 delete modules.undefined; // A pin this workspace does not hold.
 const isAnalytical = id => !id.startsWith('W-')&&id!=='CP-OS';
@@ -60,41 +60,32 @@ installDestinations();
 const appDestinations=new Set(['W-Library','CP-OS']); // These need no selected run.
 const aliases = {'CP-MODEL':'W-Forecast','CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
 for(const visual of window.DESIGN_WORKSPACE.visuals)for(const alias of String(visual.aliases||'').split(/[;,\s]+/).filter(Boolean))aliases[alias]??=visual.module;
-// Reader pages show names; the audit, inspector and evidence pages keep exact codes. Text only, so
-// downloads, links and the retained files are untouched, and each name carries its code as a title.
-const MODULE_CODE=/\bCP-[A-Z0-9]+\b(?![-.][A-Za-z0-9])/,REFERENCE=/\bT\d+[A-Z]?\.\d+\b|\b[FKCS]\d{1,4}\b/;
-const READER_TOKEN=new RegExp(`${MODULE_CODE.source}|${REFERENCE.source}`,'g');
-// A module's own name wins; a code standing in for its own label takes its parent's name when it has one.
-const moduleLabel=code=>{
-  const own=moduleNames[code];
-  return (own!==code&&own)||moduleNames[aliases[code]]||own||(code==='CP-MEMO'?'Credit memo':null);
-};
-const namedText=text=>text.replace(new RegExp(MODULE_CODE,'g'),code=>moduleLabel(code)||code);
-// A module report keeps names in its parts and exact codes inside its Evidence & audit list (nameCodes skips it).
-const showsCodes=({module,section,output})=>(section==='audit'&&!(output&&isAnalytical(module)))||['W-Evidence','W-Forecast'].includes(module);
-function readerMark(token) {
-  if(!MODULE_CODE.test(token))return Object.assign(document.createElement('small'),{className:'ref',textContent:token});
-  const label=moduleLabel(token);
-  return label?Object.assign(document.createElement('abbr'),{className:'module-ref',textContent:label,title:token}):token;
-}
-function nameCodes(root) {
+// Every page shows names (views.js namedText). Text and the title and aria-label attributes only, so downloads, links and the retained files are untouched.
+// Register references (F, K, C, S plus digits) are not codes of this kind: they stay, as a quiet mark.
+const REFERENCE=/\b[FKCS]\d{1,4}\b/g;
+function nameCodes(root,output=current?.output,marks=true) {
   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),nodes=[];
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.module-ref,.built-from,.hash,.chip,.coverage,details.audit,.module-head .sub'))continue;
-    const parts=[...node.data.matchAll(READER_TOKEN)];
-    if(!parts.length)continue;
-    // A chart or a select cannot hold markup, so these only take the name.
-    if(parent.closest('svg,option')){node.data=namedText(node.data);continue;}
+    if(parent.closest('.ref'))continue;
+    const named=namedText(node.data,output);
+    if(named!==node.data)node.data=named;
+    // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
+    const found=marks?[...node.data.matchAll(REFERENCE)]:[];
+    if(!found.length||parent.closest('svg,option,.chip'))continue;
     const fragment=document.createDocumentFragment();
     let at=0;
-    for(const part of parts) {
-      fragment.append(node.data.slice(at,part.index),readerMark(part[0]));
-      at=part.index+part[0].length;
+    for(const mark of found) {
+      fragment.append(node.data.slice(at,mark.index),Object.assign(document.createElement('small'),{className:'ref',textContent:mark[0]}));
+      at=mark.index+mark[0].length;
     }
     fragment.append(node.data.slice(at));
     node.replaceWith(fragment);
+  }
+  for(const element of root.querySelectorAll('[title],[aria-label]'))for(const attribute of ['title','aria-label']) {
+    const value=element.getAttribute(attribute),named=value&&namedText(value,output);
+    if(named&&named!==value)element.setAttribute(attribute,named);
   }
 }
 
@@ -270,12 +261,13 @@ function renderSearch(query) {
     return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading),s.heading])];
   }).filter(([id,label])=>has(label,data[id].module));
   const files=[
-    ...outputs.filter(id=>has(data[id].source,data[id].label)).map(id=>hit('Source',code(id),data[id].source,href(id,modules[id].first))),
+    ...outputs.filter(id=>has(data[id].source,data[id].label)).map(id=>hit('Source',code(id),handoffLabel(data[id].source),href(id,modules[id].first))),
     ...Object.values(store.inputs).filter(input=>input.run===context&&has(input.source)).map(input=>hit('Source',moduleNames[input.module]||input.module,input.source,routeHref('W-Evidence','sources',null,context))),
   ];
   const items=[...evidence.entries()].filter(([,item])=>item.run===context&&has(item.title,...item.fields.map(field=>field[1]))).sort((a,b)=>outputs.indexOf(a[1].output)-outputs.indexOf(b[1].output));
   $('search-results').innerHTML=group('Figures',figures.length,figures.slice(0,6).map(([id,label,heading])=>hit('Figure',code(id),label,href(id,sectionOf(id,heading)))))
     +group('Sources',files.length+items.length,[...files.slice(0,4),...items.slice(0,4).map(([key,item])=>hit('Reference',code(item.output),itemLabel(item),href(item.output,sectionOf(item.output,item.section),key)))]);
+  nameCodes($('search-results'),undefined,false); // handoff cells can carry codes; the hits keep their register references as they are
 }
 function renderNavigator(module) {
   const query=$('module-search').value.trim().toLowerCase(),context=current.context;
@@ -289,7 +281,7 @@ function renderNavigator(module) {
     const open=query||matches.some(([id])=>id===module)||(expandedGroups.get(title)??false);
     return `<details class="nav-group" data-group="${esc(title)}" ${open?'open':''}><summary>${esc(title)}</summary>${matches.map(([id,name])=>{
       const section=query&&sectionsOf(id).find(s=>s[1].toLowerCase().includes(query));
-      return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" title="${esc(id)}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
+      return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
     }).join('')}</details>`;
   }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
   // A module report and the run report have parts to list; Run activity (CP-OS) has no output and no outline.
@@ -360,7 +352,8 @@ function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
   const chipHtml=chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
   $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleNames[item.module]&&moduleNames[item.module]!==item.module?`${moduleNames[item.module]} (${item.module})`:item.module)}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${item.fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(output.file)}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>These are exact retained fields from this historical case. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${item.fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>These are exact retained fields from this historical case. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
   document.querySelectorAll('.chip').forEach(el=>{
     const pressed=el.dataset.chip===key?Number(el.dataset.index)===chipIndex:el.dataset.evidence===key&&chipIndex===null;
@@ -446,7 +439,7 @@ function libraryClick(target) {
 function openAuditSection(button) {
   const body=$(button.getAttribute('aria-controls')),open=body.hidden;
   if(open&&!body.dataset.drawn) {
-    try {body.innerHTML=sectionView(current.output,button.dataset.audit);body.dataset.drawn='1';}
+    try {body.innerHTML=sectionView(current.output,button.dataset.audit);nameCodes(body);body.dataset.drawn='1';}
     catch(error) {
       // Documented fail-open, as in moduleBody: logged, and the item says it could not be drawn; the saved file is unchanged.
       console.error(error);
@@ -516,7 +509,7 @@ function renderRoute() {
     const title=`<${level} id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</${level}>`;
     // The bar sticks at narrow widths, so it names the run and the module (or destination) it belongs to.
     $('section-nav').innerHTML=contextPrefix(next)+(only||report||(isAnalytical(next.module)&&!next.output)?title:`${title}<span>${index+1} / ${sections.length}</span><button id="previous-section" ${index===0?'disabled':''} aria-label="Previous ${pagerNoun}">${icon('arrow-left')}</button><button id="next-section" ${index===sections.length-1?'disabled':''} aria-label="Next ${pagerNoun}">${icon('arrow-right')}</button>`);
-    if(!showsCodes(next))nameCodes($('section-nav'));
+    nameCodes($('section-nav'));
     updateWorkspaceChrome(next.module);
     $('content').innerHTML=moduleBody(next);
     // watchFrame returns the callback that stops its timer; the previous report's timer must not fire against a detached element.
@@ -534,7 +527,8 @@ function renderRoute() {
       disclosure.addEventListener('toggle',openModel);
     }
     if(frame)cancelReportFrame=watchFrame(frame,$('content').querySelector('.frame-status'),'Loading report…','The report did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',window.DESIGN_WORKSPACE.reports.find(r=>r.id===next.section).download);link.download='';link.textContent='Download original HTML';return link;});
-    if(!showsCodes(next))nameCodes($('content'));
+    nameCodes($('module-head'));
+    nameCodes($('content'));
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
     showNavigator(false);
@@ -714,7 +708,7 @@ window.onRunActivity=()=>{
   lastActivity=seen;
   const kept=recordActivityView(content,document.activeElement);
   content.innerHTML=moduleBody(current);
-  if(!showsCodes(current))nameCodes(content);
+  nameCodes(content);
   restoreActivityView(content,kept);
   content.scrollTop=top;
 };

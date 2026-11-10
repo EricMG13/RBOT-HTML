@@ -74,7 +74,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .settings .issue-list li{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
 #settings-status:empty{display:none}
 @media(max-width:720px){.run-fields,.review-modules{grid-template-columns:minmax(0,1fr)}#new-run{padding:10px 9px 20px}.review-summary{grid-template-columns:minmax(0,1fr)}}
-.module-ref{text-decoration:none;cursor:help}.ref{font-size:var(--fs-label);color:var(--muted);font-variant-numeric:tabular-nums}
+.ref{font-size:var(--fs-label);color:var(--muted);font-variant-numeric:tabular-nums}
 .summary-deliverables{padding:16px 0;margin-top:24px}.summary-deliverables h2{font-size:19px;margin:0 0 8px}.summary-deliverables .text-action{display:flex;margin:6px 0}.summary-deliverables .deliverable{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}.tool-sep{align-self:center;width:1px;height:16px;background:var(--text-quaternary);flex:none;margin-left:-4px}
 .summary-facts{display:grid;grid-template-columns:auto 1fr;gap:10px 28px;margin:10px 0 0}.summary-facts>div{display:contents}.summary-facts dt{font-size:var(--fs-compact);opacity:.75}.summary-facts dd{margin:0;font-size:var(--fs-body)}
 /* Component foundation after Untitled UI React (MIT, (c) 2025 Untitled UI): type scale, text and border roles, radii, shadows and focus ring. Colours stay the company's; greys lean toward its navy. */
@@ -335,7 +335,6 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 #module-head:empty{display:none}
 .module-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
 .module-head h2{font-size:21px;font-weight:700;line-height:1.25}
-.module-head .sub{font-size:var(--fs-compact);color:var(--muted);margin-top:3px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .head-tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .head-tools .output-meta{display:inline-flex;flex-direction:row;padding:0;text-align:left}
 .btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff;font-size:var(--fs-compact);font-weight:600;color:var(--navy);text-decoration:none}
@@ -409,8 +408,6 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .chip:hover{border-color:#b9c0d6;background:var(--quiet)}
 .chip[aria-pressed=true]{border-color:var(--blue);background:var(--blue-50);color:var(--blue-700)}
 .chip .av{width:18px;height:18px;border-radius:3px;display:grid;place-items:center;font:600 var(--fs-label)/1 'Red Hat Text',sans-serif;letter-spacing:.02em;background:var(--navy);color:#fff}
-.chip .av.q{background:#5b6a8c}
-.chip .av.cp{background:var(--blue-100);color:var(--blue-700)}
 .chip .av.gap{background:transparent;border:1px dashed #b9c0d6;color:var(--muted)}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block}
 .dot.row{background:var(--navy)}
@@ -467,7 +464,7 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .run-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:14px 0 8px}.run-count{font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif}
 /* Coverage states a fact, it is not a control row: navy for a conclusion, an outline for none, blue only under the pointer. */
 .coverage{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px}
-a.cov{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:24px;padding:0 6px;border:1px solid #b9c0d6;border-radius:var(--radius-inline);font:500 var(--fs-label)/1 'Red Hat Mono',monospace;text-decoration:none;color:var(--muted);background:#fff}
+a.cov{display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:3px 9px;border:1px solid #b9c0d6;border-radius:var(--radius-inline);font:500 var(--fs-label)/1.2 'Red Hat Text',sans-serif;text-decoration:none;color:var(--muted);background:#fff}
 a.cov.filled{background:var(--navy);border-color:var(--navy);color:#fff}a.cov:hover{border-color:var(--blue);color:var(--blue)}a.cov.filled:hover{background:var(--blue);border-color:var(--blue);color:#fff}
 .story-group{margin-top:40px}.story-group>h2{font-size:19px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
 /* A module leads with its name and its bottom line; its findings sit one step below. */

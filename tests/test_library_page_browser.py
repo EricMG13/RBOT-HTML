@@ -380,8 +380,7 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
         "inView": True,
     }
     assert seen["scrollers"] == 0 and seen["monoProse"] == 0
-    codes = seen["coverage"]
-    assert codes and all(re.fullmatch(r"CP-[0-9A-Z]+", code) for code in codes)
+    assert seen["coverage"] == ["Source readiness", "Financial foundation"]  # Names, not codes.
 
 
 # A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then
@@ -416,6 +415,65 @@ def nine_part_library(tmp_path: Path) -> Path:
     (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
     update_library.update_library(tmp_path)
     return tmp_path / "library/index.html"
+
+
+# Names, not codes: the module page with its audit section and the inspector open, then the Evidence
+# tab, Run activity and a search, read as a reader sees and hears them (text, title, aria-label).
+# Register references (C1, K) are not codes of this kind.
+CODES_PROBE = """(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [];
+  const code = /\\bCP-[A-Z0-9]+\\b|\\bT\\d+[A-Z]?(?:\\.\\d+)?\\b/;
+  const scan = where => {
+    const walker = document.createTreeWalker(
+      document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode, text = node.nodeType === 3;
+      const seen = text
+        ? [node.parentElement.closest('script,style,#probe') ? '' : node.data]
+        : ['title', 'aria-label'].map(a => node.getAttribute(a) || '');
+      for (const value of seen) if (code.test(value)) hits.push(where + ': ' + value.slice(0, 80));
+    }
+  };
+  for (let i = 0; i < 200 && !document.querySelector('.module-head'); i++) await sleep(50);
+  document.querySelector('.audit-open').click();
+  await sleep(100);
+  scan('module page');
+  document.querySelector('.chip[data-evidence]').click();
+  await sleep(300);
+  scan('inspector');
+  for (const route of ['#W-Evidence/sources?c=run-a', '#CP-OS/activity']) {
+    location.hash = route;
+    await sleep(300);
+    scan(route);
+  }
+  location.hash = '#CP-1/head?c=run-a';
+  await sleep(300);
+  const search = document.getElementById('module-search');
+  search.value = 'cp-1';
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(200);
+  scan('search');
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify({
+    hits,
+    titled: document.querySelectorAll('a.module-item[title]').length,
+    inspector: !!document.querySelector('.evidence-context'),
+    searched: document.querySelectorAll('.search-hit').length,
+  });
+  document.body.append(out);
+})();"""
+
+
+def test_no_module_code_or_step_id_reaches_a_reader_from_a_module_page(tmp_path):
+    page = nine_part_library(tmp_path)
+    (page.parent / "probe.js").write_text(CODES_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/head?c=run-a")
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["inspector"] is True and seen["titled"] == 0 and seen["searched"] > 0
+    assert seen["hits"] == []
 
 
 def line_of(tmp_path: Path, heading: str) -> int:
