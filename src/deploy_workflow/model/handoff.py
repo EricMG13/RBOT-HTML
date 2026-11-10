@@ -67,10 +67,18 @@ MAX_PAGES_PER_READ = 8
 MAX_HITS = 20
 MAX_WRITES = 3
 REDACTION_FAILED = "redaction failed; the failure detail is withheld"
-# The budget hold counts a request's bytes as tokens and refuses above 1,050,000 for gpt-6.1-sol, so
-# a module that read whole filings could not continue. Reads stop well short of that, which leaves
-# room for drafts and repairs in the history and stays under the long-context price.
-MAX_CONTEXT_FOR_READS = 700_000
+# The pre-send bound on a request's input tokens: its bytes over this, plus REQUEST_OVERHEAD. Run
+# tdg-all-001 (2026-11-10) stopped CP-5 at one byte per token ("1105073 input-token bound is over
+# the 1050000 supported") though that request was about 240,000 tokens. Measured: at least 4.11
+# request bytes per input token over 817 retained CP-OS live calls (median 4.44), and 2.51 at the
+# lowest in the structured runtime's financials calls (run_pathway.py, PF-R12). Two stays below
+# every measurement. The hold itself does not depend on it: a Sol call holds the whole context.
+BYTES_PER_TOKEN_BOUND = 2
+REQUEST_OVERHEAD = 4096
+# Reads stop once the request reaches this many bytes: 268,000 tokens at the lowest 4.11 bytes per
+# token measured, under the 272,000-token long-context price, with the 1,050,000-token context
+# left for drafts and repairs. At 700,000, run tdg-all-001 refused every read CP-3 and CP-5 made.
+MAX_CONTEXT_FOR_READS = 1_100_000
 READS_FULL = (
     "ERROR: this module has read as much as its context allows. Use what you have read, record "
     "anything unread that matters as a gap, and submit with write_handoff."
@@ -578,7 +586,9 @@ class HandoffExecutor:
         raw_request = dump_json(asdict(request)).encode()
         _put(folder / f"{index}.request.json", raw_request)
         reserved = request_reservation_usd(
-            price_of(self.adapter.config_id), len(raw_request) + 4096, request.max_output_tokens
+            price_of(self.adapter.config_id),
+            -(-len(raw_request) // BYTES_PER_TOKEN_BOUND) + REQUEST_OVERHEAD,
+            request.max_output_tokens,
         )
         call_id = f"call-{uuid4().hex}"
         self.budget.reserve(call_id, reserved, config_id=self.adapter.config_id)

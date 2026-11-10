@@ -30,7 +30,7 @@ from typing import Any, get_args
 from deploy_vii.business_context import Category
 from deploy_vii.contracts import PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
-from deploy_vii.registry import modules, plan
+from deploy_vii.registry import dependencies, modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import platform_io
 from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
@@ -575,7 +575,10 @@ TRANSPORT_RULES = (
     "here: record each as not run, do its check or arithmetic yourself (with `calculate`, by the "
     "rules in the method block), and do not block for it. A companion file the method names that "
     "is not in the method block below is unavailable: say so where the method relies on it, and do "
-    "not block the module for it. Nobody can answer a question during this run: take each entry "
+    "not block the module for it. CP-OS supplies only the handoffs of the modules the registry "
+    "names as this module's producers (CP-5: every analyst before it); an upstream module the "
+    "method names that is not supplied is unavailable in the same way. Nobody can answer a "
+    "question during this run: take each entry "
     "value from the context and the supplied handoffs, then the method's declared safe default; "
     "where neither gives it the value is missing, so block only the decision the method ties to "
     "it. A supplied handoff that itself reports Blocked or a gap is a real limitation: restrict "
@@ -792,7 +795,8 @@ def _mismatch(
         return "the stopped run's model setting could not be read"
     chosen = CONFIGS[now.config]
     asked = record.request
-    upstream = {prior: _sha(kept[prior]) for prior in now.ordered[:position]}
+    producers = dependencies(now.ordered)[module]  # What CP-OS sends it; see cpos.run_handoffs.
+    upstream = {prior: _sha(kept[prior]) for prior in now.ordered[:position] if prior in producers}
     differences = (
         (
             record.model != (chosen.provider, chosen.model, chosen.effort),
@@ -806,7 +810,7 @@ def _mismatch(
             asked.get("sources") != {k: _sha(v) for k, v in now.sources.items()},
             "its sources or context changed since the stopped run",
         ),
-        (asked.get("handoffs") != upstream, "the modules before it differ from the stopped run's"),
+        (asked.get("handoffs") != upstream, "the handoffs it reads differ from the stopped run's"),
         (
             asked.get("instructions") != now.texts[module].decode(),
             "its instructions changed since the stopped run",

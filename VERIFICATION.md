@@ -4,6 +4,46 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — All-modules live run tdg-all-001 and its corrections (branch `claude/all-modules-live-fixes`)
+
+Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling
+`docs/rulings/2026-11-10-all-modules-live-test.md` (cap USD 20); run folder
+`/private/tmp/claude-501/rbot-live7/runs/tdg-all-001` (outside the repo, unchanged here).
+
+- Run (live, sol-medium, TDG 2024-09-30, all 19 analytical modules on #23's methods): 18 modules
+  accepted, USD 10.32 spent against an estimate of USD 4–6. It stopped at CP-5, before any call:
+  "1105073 input-token bound is over the 1050000 supported". No delivery was made.
+- What the run shows: every module now states that CP-OS acceptance stands for lineage and records
+  the helper scripts as not run. CP-1D, CP-2A and CP-2G are no longer blocked (Restricted); CP-1B
+  ran. Still Blocked, each for a missing source only: CP-DR (no external research), CP-1C (no
+  peers), CP-4 (no legal documents), CP-2H (no rating reports), CP-3D and CP-3 (no market data),
+  CP-4C (follows CP-4).
+- Defects found and fixed, each with a test written first and seen failing:
+  1. The pre-send bound counted one byte per token. 817 retained CP-OS live calls measure at least
+     4.11 request bytes per input token (median 4.44); `run_pathway.py` notes 2.51 at the lowest.
+     The bound now counts two (`BYTES_PER_TOKEN_BOUND`); the hold is unchanged, since a Sol call
+     holds its whole context.
+  2. Every module was sent every earlier handoff, so first requests grew from 20 KB (CP-0) to
+     1.01 MB (CP-5). CP-OS now sends only the registry's producers (required, plus optional ones
+     the run selects; CP-5 every analyst before it), and the resume pins and the launcher's
+     retained-prefix match use the same set. On tdg-all-001's handoffs the first requests total
+     5.6 MB instead of 9.6 MB (estimate, not a live measurement).
+  3. Six modules (CP-2H, CP-3D, CP-3C, CP-4C, CP-3, CP-5) had every source read refused by the
+     700,000-byte reads cap. The cap is now 1,100,000 bytes (268,000 tokens at 4.11 bytes per
+     token, under the 272,000-token long-context price).
+- Registry: CP-4 += optional CP-1A (its runbook's upstream; CP-3C is left out because CP-3C already
+  takes CP-4, which would make a cycle), CP-6 += optional CP-1B, CP-1C, CP-4 (its SKILL's upstream). The
+  context form's edge table follows. The transport rules add one sentence saying which handoffs
+  are supplied; this also changes every manifest, so a relaunch into an older run folder is
+  refused ("choose a new --out") rather than re-sending its modules.
+- Gates: CI pytest list plus `tests/test_handoff_loop.py` and `tests/test_context_form.py`, 1529
+  passed, 7 deselected (known failures); quality gate 0 findings. Both exit 0. Two mutations (each resume site reverted to "every earlier module") fail the replay
+  test.
+- Not verified: no live run of the changes; CP-5 and CP-6 have still not completed on TDG; the
+  cost saving and the reads CP-3 and CP-5 now get are estimates from retained requests; the
+  relaunch refusal for old folders was checked by instruction text (old `CP-0.md` lacks the new
+  sentence), not by a launch.
+
 ## 2026-11-10 — Names, not codes, on every library screen (branch `claude/names-not-codes`)
 
 Owner: "Remove all cp-IDs and methodology step IDs from user facing screens. Replace with module

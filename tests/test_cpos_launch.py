@@ -560,7 +560,9 @@ def test_selected_model_and_effort_reach_every_provider_request(
     assert {r["provider"] for r in records} == {key.split("_")[0].lower()}
 
 
-def prepare_routes(tmp_path: Path, config: str) -> list:
+def prepare_routes(
+    tmp_path: Path, config: str, modules: tuple[str, ...] | None = ("CP-4",)
+) -> list:
     return list(
         prepare(
             tmp_path / "context.json",
@@ -568,7 +570,7 @@ def prepare_routes(tmp_path: Path, config: str) -> list:
             tmp_path / "preview",
             config=config,
             cap="50",
-            modules=("CP-4",),
+            modules=modules,
         ).plan.layout.routes
     )
 
@@ -666,6 +668,72 @@ def test_interrupted_module_is_never_resent_because_its_charge_is_unknown(
     assert main(argv) == 1
     assert "cpos_interrupted" in capsys.readouterr().err
     assert len(sent) == 1
+
+
+# Written by hand from src/deploy_vii/methodology.json (required, plus optional producers this
+# run selects; CP-5 takes every analyst before it), not from the registry code.
+COVENANT_PRODUCERS = {
+    "CP-0": [],
+    "CP-1": ["CP-0"],
+    "CP-1A": ["CP-0"],
+    "CP-2": ["CP-0", "CP-1", "CP-1A"],
+    "CP-4": ["CP-0", "CP-1", "CP-1A"],
+    "CP-2D": ["CP-0", "CP-1", "CP-2"],
+    "CP-3C": ["CP-0", "CP-1", "CP-1A", "CP-2D", "CP-4"],
+    "CP-5": ["CP-0", "CP-1", "CP-1A", "CP-2", "CP-2D", "CP-3C", "CP-4"],
+}
+
+
+def test_each_module_is_sent_only_its_producers_handoffs(tmp_path, provider):
+    # Run tdg-all-001 (2026-11-10) sent every module every earlier handoff: the first request
+    # grew to 1 MB by CP-5, and six modules had all their source reads refused.
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING))
+    routes = prepare_routes(tmp_path, "sol-medium", modules=None)
+    sent = {}
+
+    def answering(context):
+        sent[context["module_id"]] = sorted(context["handoffs"])
+        return answer(context, routes)
+
+    provider.answer = answering
+    assert main(argv) == 0
+    assert sent == COVENANT_PRODUCERS
+
+
+def test_a_stopped_runs_answers_pinned_to_their_producers_are_replayed_unsent(tmp_path, provider):
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING))
+    routes = prepare_routes(tmp_path, "sol-medium", modules=None)
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    sent = list(provider.calls)
+    stopped = {}
+    for record in (tmp_path / "out/requests").glob("*/*/1.request.json"):
+        asked = json.loads(record.read_text())
+        assert sorted(asked["handoffs"]) == COVENANT_PRODUCERS[asked["module_id"]]
+        stopped[asked["module_id"]] = Accepted(
+            (record.parent / "1.response.md").read_bytes(),
+            asked,
+            ("openai", "gpt-6.1-sol", "medium"),
+        )
+    prepared = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "again",
+        config="sol-medium",
+        cap="50",
+        retained=stopped,
+    )
+    assert prepared.retained_modules == COVENANT_MODULES
+    assert prepared.retained_stop == ("", "")
+    cpos_launch.run_live_handoffs(
+        prepared.manifest,
+        prepared.directory,
+        ruling=RULING,
+        check=checker(prepared.layout),
+        max_turns=4,
+        max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
+    )
+    assert provider.calls == sent
 
 
 def test_second_launch_resumes_without_sending_anything(tmp_path, provider):

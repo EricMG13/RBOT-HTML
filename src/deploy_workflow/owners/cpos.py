@@ -40,7 +40,7 @@ from pydantic import Field, TypeAdapter, model_validator
 
 from deploy_vii.contracts import Contract, Hash, Identifier, Run, Text, View
 from deploy_vii.execution import Execution
-from deploy_vii.registry import idle_statuses, plan
+from deploy_vii.registry import dependencies, idle_statuses, plan
 from deploy_vii.render import render
 from deploy_vii.report_view import navigator
 from deploy_workflow import platform_io
@@ -262,15 +262,16 @@ def _handoff(  # noqa: PLR0913 - existing signature
     raise ValueError(f"cpos_module_failed: {task.module_id}: {'; '.join(feedback)}")
 
 
-def _refuse_decided_stale(ordered: Sequence[str], specs: Mapping[str, RetainedHandoff]) -> None:
+def _refuse_decided_stale(
+    ordered: Sequence[str],
+    producers: Mapping[str, set[str]],
+    specs: Mapping[str, RetainedHandoff],
+) -> None:
     """Refuse, before any call, a retained module whose pinned upstream is not exactly the
-    modules placed before it: the pins alone decide that, so no call may precede the refusal."""
-    for position, module_id in enumerate(ordered):
+    producers it is sent: the pins alone decide that, so no call may precede the refusal."""
+    for module_id in ordered:
         spec = specs.get(module_id)
-        if spec is None:
-            continue
-        earlier = set(ordered[:position])
-        if set(spec.upstream) != earlier:
+        if spec is not None and set(spec.upstream) != producers[module_id]:
             raise ValueError(f"cpos_retained_stale: {module_id}")
 
 
@@ -379,7 +380,10 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
     sources = _pinned_inputs(manifest.parent, request.sources)
     instructions = _pinned_inputs(manifest.parent, request.instructions)
     retained = _pinned_inputs(manifest.parent, request.retained_handoffs)
-    _refuse_decided_stale(ordered, request.retained_handoffs)
+    # Each module is sent only its declared producers' handoffs (CP-5 every analyst before it).
+    # Run tdg-all-001 (2026-11-10) sent every earlier handoff: CP-5's first request was 1 MB.
+    producers = dependencies(ordered)
+    _refuse_decided_stale(ordered, producers, request.retained_handoffs)
     source_hashes = {name: _sha(raw) for name, raw in sources.items()}
     for module_id, retained_spec in request.retained_handoffs.items():
         if retained_spec.source_hashes != source_hashes:
@@ -416,14 +420,15 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
         for module_id in ordered:
             _refuse_pins_of_replayed(request.retained_handoffs, handoffs)
             spec = request.retained_handoffs.get(module_id)
-            if spec is not None and spec.upstream != {m: _sha(raw) for m, raw in handoffs.items()}:
+            supplied = {m: handoffs[m] for m in ordered if m in producers[module_id]}
+            if spec is not None and spec.upstream != {m: _sha(raw) for m, raw in supplied.items()}:
                 raise ValueError(f"cpos_retained_stale: {module_id}")
             task = HandoffTask(
                 request.run,
                 module_id,
                 instructions[module_id],
                 MappingProxyType(sources),
-                MappingProxyType(dict(handoffs)),
+                MappingProxyType(supplied),
                 1,
                 (),
             )

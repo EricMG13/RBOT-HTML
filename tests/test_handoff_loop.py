@@ -121,10 +121,56 @@ def test_whole_filing_reads_stop_before_the_request_outgrows_the_budget_bound(
     loop = HandoffExecutor(tmp_path, adapter=adapter, cap_usd=Decimal(10), check=check)
     current = replace(task(), sources={"S1.txt": filing.encode()})
     assert loop(current) == GOOD
-    assert max(p.stat().st_size for p in tmp_path.rglob("*.request.json")) < 1_050_000
+    # The bound counts two request bytes per token against the 1,050,000-token context.
+    assert max(p.stat().st_size for p in tmp_path.rglob("*.request.json")) < 2 * 1_050_000
     tools = [m.text for m in adapter.requests[-1].messages if m.role == "tool"]
     assert tools[0].startswith("<<<SOURCE id=S1.txt")
     assert "gap" in tools[-1] and tools[-1].startswith("ERROR")
+
+
+def test_reads_continue_until_the_request_reaches_1_1_mb(tmp_path: Path) -> None:
+    """Live run tdg-all-001 (2026-11-10): CP-3 and CP-5 began at 0.99 and 1.01 MB, past the
+    700,000-byte cap, so every source read they asked for was refused. 1.1 MB is 268,000 tokens
+    at the lowest 4.11 request bytes per token measured, under the 272,000-token long-context
+    price."""
+    filing = ("x" * 11_999 + "\n") * 40
+    adapter = Adapter(
+        turn(ToolCall("1", "read_pages", {"source_id": "S1.txt", "first": 1, "last": 8})),
+        turn(ToolCall("2", "read_pages", {"source_id": "S1.txt", "first": 9, "last": 16})),
+        turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})),
+    )
+    loop = HandoffExecutor(tmp_path, adapter=adapter, cap_usd=Decimal(10), check=check)
+    handoffs = {"CP-1": b"Revenue 100; cash unavailable. " + b"x" * 950_000}
+    assert loop(replace(task(), sources={"S1.txt": filing.encode()}, handoffs=handoffs)) == GOOD
+    tools = [m.text for m in adapter.requests[-1].messages if m.role == "tool"]
+    assert tools[0].startswith("<<<SOURCE id=S1.txt")  # About 1.05 MB with this read.
+    assert tools[1].startswith("ERROR: this module has read as much as its context allows")
+
+
+def test_a_request_past_one_byte_per_token_is_sent_when_it_fits_the_context(
+    tmp_path: Path,
+) -> None:
+    """Live run tdg-all-001 (2026-11-10): CP-5 stopped with "1105073 input-token bound is over the
+    1050000 supported", though its largest request sent had 231,568 input tokens. 817 retained
+    live calls measured at least 4.11 request bytes per input token."""
+    handoffs = {"CP-1": b"Revenue 100; cash unavailable. " + b"x" * 1_200_000}
+    adapter = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
+    loop = HandoffExecutor(tmp_path, adapter=adapter, cap_usd=Decimal(10), check=check)
+    assert loop(replace(task(), handoffs=handoffs)) == GOOD
+    assert len(adapter.requests) == 1
+    assert max(p.stat().st_size for p in tmp_path.rglob("*.request.json")) > 1_050_000
+
+
+def test_a_request_past_the_context_at_two_bytes_per_token_is_refused_unsent(
+    tmp_path: Path,
+) -> None:
+    handoffs = {"CP-1": b"x" * 2_200_000}
+    adapter = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
+    loop = HandoffExecutor(tmp_path, adapter=adapter, cap_usd=Decimal(10), check=check)
+    with pytest.raises(Exception, match="input-token bound is over the 1050000 supported"):
+        loop(replace(task(), handoffs=handoffs))
+    assert adapter.requests == []
+    assert loop.budget.spent == 0
 
 
 def test_atomic_patch_allowlist_and_page_bounds(tmp_path: Path) -> None:
