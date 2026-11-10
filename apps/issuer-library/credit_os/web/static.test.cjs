@@ -1366,6 +1366,81 @@ test('run report: the bridge is drawn in its module story beside the module\'s o
   assert.ok(mod.indexOf('column-chart') < mod.indexOf('vector-chart'), 'charts keep the handoff order');
 });
 
+const TAIL = ['Reporting unit', 'Basis and limitation'];
+const STACK = { title: 'Debt stack', unit: 'US$m', table: 92, kind: 'stack', label: 0, rank: 1, secured: 2, amount: 3, leverage: 4, columns: [3, 4] };
+const BULLET = { title: 'Covenant headroom', unit: '', table: 102, kind: 'bullet', label: [0], threshold: 1, current: 2, headroom: 3, direction: 4, columns: [1, 2] };
+const LIMITS = { title: 'Portfolio limits', unit: '% NAV', table: 112, kind: 'limits', label: 0, current: 1, proposed: 2, limit: 3, columns: [1, 2, 3] };
+const withStructure = d => {
+  const cp1 = d[outId('CP-1')];
+  cp1.sections.push(
+    sec('Chart data: debt stack', 3, 90, 'consumed', [table(92, ['Facility', 'Ranking', 'Secured', 'Amount', 'Cumulative leverage', ...TAIL], [[93, 'Term loan', '1', 'Yes', '1,200', '2.4', 'US$m', 'Synthetic.'], [94, 'Notes', '2', 'No', '800', '4.0', 'US$m', 'Synthetic.'], [95, 'Subordinated', '3', 'No', 'Not supplied: not stated', 'Not supplied: no balance', 'US$m', 'Synthetic.']])]),
+    sec('Chart data: covenant headroom', 3, 100, 'consumed', [table(102, ['Test', 'Threshold', 'Current', 'Headroom', 'Direction', ...TAIL], [[103, 'Net leverage', '5.0', '4.2', '0.8x', 'Passes at or below', 'x', 'Synthetic.'], [104, 'Interest cover', '2.0', '2.6', '0.6x', 'Passes at or above', 'x', 'Synthetic.'], [105, 'Liquidity', '100', 'Not supplied: not stated', 'Not supplied: no current', 'Passes at or above', 'US$m', 'Synthetic.']])]),
+    sec('Chart data: portfolio limits', 3, 110, 'consumed', [table(112, ['Limit', 'Current exposure', 'Proposed exposure', 'Limit value', ...TAIL], [[113, 'Single issuer', '3.0', '4.0', '5.0', '% NAV', 'Synthetic.'], [114, 'High-yield bucket', '12.0', 'Not supplied: no proposal', '15.0', '% NAV', 'Synthetic.']])]));
+  cp1.charts.push(STACK, BULLET, LIMITS);
+  return d;
+};
+
+test('structure views: a debt stack is segments in stated rank order, widths from the stated amounts, leverage as stated', () => {
+  const html = runPage(withStructure).readerChart(outId('CP-1'), STACK);
+  const segments = [...html.matchAll(/<a class="stack-seg series-(\d)" href="[^"]*" data-evidence="[^"]*:(\d+)" style="width:([\d.]+)%"/g)].map(m => [m[1], m[2], m[3]]);
+  assert.deepEqual(segments, [['0', '93', '60'], ['1', '94', '40']]);
+  const key = strip(/<ol class="stack-key">(.*?)<\/ol>/s.exec(html)[1]);
+  assert.ok(key.indexOf('Term loan') < key.indexOf('Notes') && key.indexOf('Notes') < key.indexOf('Subordinated'));
+  assert.ok(key.includes('Secured') && key.includes('1,200') && key.includes('2.4x') && key.includes('4.0x'));
+  // A gap is stated as n.a. in the key and has no segment; it is not a zero.
+  assert.ok(/Subordinated.*n\.a\./s.test(key) && !/Subordinated.*>0</s.test(key));
+  assert.ok(html.includes('<p class="matrix-note">A facility with no stated amount has no segment.</p>'));
+  assert.ok(html.includes('<h2>Debt stack</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
+  assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+test('structure views: a bullet chart marks the stated threshold and current, the passing side and the stated headroom', () => {
+  const html = runPage(withStructure).readerChart(outId('CP-1'), BULLET);
+  const row = html.split('<div class="bullet-row"')[1];
+  assert.ok(row.includes('<i class="pass" style="left:0%;width:90.91%"></i>'), 'at or below passes under the threshold');
+  assert.ok(row.includes('<i class="tick" style="left:90.91%"></i>') && row.includes('<i class="marker" style="left:76.36%"></i>'));
+  assert.ok(strip(row).includes('Threshold 5.0') && strip(row).includes('Current 4.2') && strip(row).includes('Headroom 0.8x') && strip(row).includes('Passes at or below'));
+  const above = html.split('<div class="bullet-row"')[2];
+  assert.ok(above.includes('<i class="pass" style="left:'), 'at or above passes over the threshold');
+  assert.equal(countOf(above, /<i class="pass" style="left:(\d+(?:\.\d+)?)%;width:(\d+(?:\.\d+)?)%"><\/i>/g), 1);
+  // A current value that is not stated has no marker and is n.a., never the zero position.
+  const gap = html.split('<div class="bullet-row"')[3];
+  assert.ok(!gap.includes('class="marker"') && strip(gap).includes('Current n.a.') && gap.includes('class="tick"'));
+  assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+test('structure views: a rating-trigger row is labelled by agency and trigger, with no headroom claimed', () => {
+  const chart = { ...BULLET, title: 'Rating triggers', unit: 'x', label: [0, 1], threshold: 2, current: 3, headroom: null, direction: 4, table: 122 };
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: rating triggers', 3, 120, 'consumed', [table(122, ['Agency', 'Trigger', 'Threshold', 'Current', 'Direction', ...TAIL], [[123, 'Agency A', 'Net leverage review', '5.5', '4.2', 'Passes below', 'x', 'Synthetic.']])])); d[outId('CP-1')].charts.push(chart); return d; });
+  const html = page.readerChart(outId('CP-1'), chart);
+  assert.ok(strip(html).includes('Agency A') && strip(html).includes('Net leverage review') && !strip(html).includes('Headroom'));
+  assert.ok(html.includes('<i class="pass" style="left:0%;width:'), 'below passes under the threshold');
+});
+
+test('structure views: portfolio limits are bars of the stated exposures with a tick at the stated limit', () => {
+  const html = runPage(withStructure).readerChart(outId('CP-1'), LIMITS);
+  const first = html.split('<div class="limit-row"')[1];
+  assert.ok(first.includes('<i class="series-0" style="width:54.55%"></i>') && first.includes('<i class="series-1" style="width:72.73%"></i>'));
+  assert.ok(first.includes('<i class="tick" style="left:90.91%"></i>') && strip(first).includes('Limit 5.0'));
+  const gap = html.split('<div class="limit-row"')[2];
+  assert.equal(countOf(gap, /<i class="series-1"/g), 0);
+  assert.ok(strip(gap).includes('Proposed n.a.') && gap.includes('class="tick"'));
+  assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+test('structure views: no amber or red in the series, stack, tick or limit rules; a stated zero amount draws no note', () => {
+  const css = read('screen.css').replace(/\/\*.*?\*\//gs, '').split('}').filter(r => /series-|stack|\.tick|limit-key/.test(r.split('{')[0]));
+  assert.ok(css.length > 4 && css.every(r => !/amber|red\)|#8a5300|#b3261e/.test(r)));
+  const html = runPage(d => { const t = withStructure(d)[outId('CP-1')].sections.flatMap(x => x.blocks).find(b => b.line === 92); t.rows[2].cells[3] = '0'; return d; }).readerChart(outId('CP-1'), STACK);
+  assert.ok(!html.includes('no stated amount'));
+});
+
+test('structure views: only a period chart carries the missing-values note, once, under the last of them', () => {
+  const mod = storyModule(runPage(withStructure).runReport(RUN), 'CP-1');
+  assert.equal(countOf(mod, /Missing values have no bar\./g), 1);
+  assert.ok(mod.indexOf('Missing values have no bar.') < mod.indexOf('stack-key'), 'the note sits under the period charts, before the structure views');
+});
+
 // ---- Screens pass (2026-11-10): what a reader acts on is shown; production detail (hashes, file names, word counts) is a title or behind a disclosure.
 const HASH = 'f'.repeat(64);
 const zedRun = (extra = {}) => ({ id: RUN, name: 'Zed & Sons', issuer: 'ZED', title: 'Credit Snapshot', sector: 'Telecoms', workflow: 'Credit Snapshot', date: '2024-09-30', period: 'FY-2024', completion: null, summary: 'Leverage is high.', gaps: [], ratings: [], currency: 'USD',

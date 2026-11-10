@@ -408,3 +408,111 @@ def test_a_step_table_with_another_header_is_not_taken_as_an_unsupplied_bridge()
     gap = "| Step 0 | Not supplied: none | n | US$m | Synthetic. |"
     fields = synthetic_charts(chart_section("Chart data: liquidity bridge", header, gap))
     assert fields["charts"] == [] and fields["issue"]
+
+
+# ---- Package 2 (2026-11-10): the credit-structure tables. Every value is synthetic.
+STACK_HEADER = (
+    "| Facility | Ranking | Secured | Amount | Cumulative leverage | Reporting unit "
+    "| Basis and limitation |"
+)
+COVENANT_HEADER = (
+    "| Test | Threshold | Current | Headroom | Direction | Reporting unit | Basis and limitation |"
+)
+TRIGGER_HEADER = (
+    "| Agency | Trigger | Threshold | Current | Direction | Reporting unit | Basis and limitation |"
+)
+LIMITS_HEADER = (
+    "| Limit | Current exposure | Proposed exposure | Limit value | Reporting unit "
+    "| Basis and limitation |"
+)
+
+
+def stack(*rows: str) -> str:
+    return chart_section("Chart data: debt stack", STACK_HEADER, *rows)
+
+
+def test_a_debt_stack_is_a_stack_chart_with_its_amount_and_leverage_columns():
+    fields = synthetic_charts(
+        stack(
+            "| Term loan | 1 | Yes | 1,200 | 2.4 | US$m | Synthetic. |",
+            "| Notes | 2 | No | Not supplied: not stated | Not supplied: no balance | US$m | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None
+    assert chart["kind"] == "stack" and chart["title"] == "Debt stack" and chart["unit"] == "US$m"
+    assert (chart["label"], chart["rank"], chart["secured"]) == (0, 1, 2)
+    assert (chart["amount"], chart["leverage"]) == (3, 4)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        ("| A | senior | Yes | 100 | 1.0 | US$m | S. |",),
+        ("| A | 2 | Yes | 100 | 1.0 | US$m | S. |", "| B | 1 | Yes | 100 | 2.0 | US$m | S. |"),
+        ("| A | 1 | Yes | 1.2bn | 1.0 | US$m | S. |",),
+        ("| A | 1 | Yes | 100 | 1x | US$m | S. |",),
+    ],
+)
+def test_a_debt_stack_out_of_shape_is_named_not_drawn(rows):
+    fields = synthetic_charts(stack(*rows))
+    assert fields["charts"] == []
+    assert "Chart data: debt stack is not in its fixed table" in fields["issue"]
+
+
+def test_a_covenant_table_is_a_bullet_chart_whose_unit_is_shared_only_when_it_is():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: covenant headroom",
+            COVENANT_HEADER,
+            "| Net leverage | 5.0 | 4.2 | 0.8x | Passes at or below | x | S. |",
+            "| Liquidity | 100 | 150 | 50 | Passes at or above | US$m | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert chart["kind"] == "bullet" and chart["title"] == "Covenant headroom"
+    assert chart["unit"] == ""  # Rows state their own units; none is claimed for the figure.
+    assert (chart["label"], chart["threshold"], chart["current"]) == ([0], 1, 2)
+    assert (chart["headroom"], chart["direction"]) == (3, 4)
+
+
+def test_a_rating_trigger_table_is_the_same_bullet_chart_with_no_stated_headroom():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: rating triggers",
+            TRIGGER_HEADER,
+            "| Agency A | Net leverage review | 5.5 | 4.2 | Passes below | x | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert chart["kind"] == "bullet" and chart["unit"] == "x"
+    assert (chart["label"], chart["threshold"], chart["current"]) == ([0, 1], 2, 3)
+    assert chart["headroom"] is None and chart["direction"] == 4
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| T | 5.0x | 4.2 | 0.8x | Passes at or below | x | S. |",
+        "| T | 5.0 | 4.2 | 0.8x | Under | x | S. |",
+        "| T | 5.0 | 4.2 | 0.8x | Passes at or below |  | S. |",
+    ],
+)
+def test_a_covenant_row_out_of_shape_is_named_not_drawn(row):
+    fields = synthetic_charts(chart_section("Chart data: covenant headroom", COVENANT_HEADER, row))
+    assert fields["charts"] == []
+    assert "Chart data: covenant headroom is not in its fixed table" in fields["issue"]
+
+
+def test_a_portfolio_limit_table_is_a_limits_chart_and_a_gap_is_allowed():
+    fields = synthetic_charts(
+        chart_section(
+            "Chart data: portfolio limits",
+            LIMITS_HEADER,
+            "| Single issuer | 3.0 | Not supplied: no proposal | 5.0 | % NAV | S. |",
+        )
+    )
+    (chart,) = fields["charts"]
+    assert fields["issue"] is None
+    assert chart["kind"] == "limits" and chart["unit"] == "% NAV"
+    assert (chart["label"], chart["current"], chart["proposed"], chart["limit"]) == (0, 1, 2, 3)

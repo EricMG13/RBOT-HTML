@@ -413,6 +413,20 @@ class OwnerTable:
     chart_unit: str
     steps: bool = False
     rules: str = ""  # The catalogue guard for the view, sent to the module with the table.
+    # A row table (debt stack, headroom, limits) states its own header up to the Reporting unit:
+    # `numbers` are plain numbers or a stated gap (`in_unit`, default all, are in the Reporting
+    # unit); `choices` fix a column's words; `may_gap` text columns may be a stated gap; `ranked`
+    # is a column of whole numbers that must not fall down the rows.
+    columns: tuple[str, ...] = ()
+    numbers: tuple[str, ...] = ()
+    in_unit: tuple[str, ...] = ()
+    choices: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    may_gap: tuple[str, ...] = ()
+    ranked: str = ""
+    noun: str = "period"
+
+
+DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
 
 
 # The catalogue's launcher-asked figures (docs/visualisations/catalogue.csv) that are not report
@@ -434,6 +448,109 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
                 "quarterly or half-year); a period of another duration is "
                 "`Not supplied: <reason>`."
             ),
+        ),
+        OwnerTable(
+            "CP-1",
+            "S.6",
+            "Chart data: debt stack",
+            (),
+            "US$m",
+            rules=(
+                "Rows run in legal rank order, most senior first. Ranking is the legal rank as "
+                "a plain whole number (1 is most senior; equal ranks share a number); a "
+                "facility whose legal rank no source states is left out and named under Gaps. "
+                "Secured is Yes or No. Cumulative leverage is the stated cumulative debt "
+                "through that facility over the common EBITDA denominator, as times without an "
+                "`x`; state it only for a positive common EBITDA denominator, else "
+                "`Not supplied: <reason>`. Name each facility's guarantor or obligor scope in "
+                "Basis and limitation. An enterprise value is not a sourced fact merely because "
+                "it is a chart marker: add no enterprise value row unless a source states it."
+            ),
+            columns=("Facility", "Ranking", "Secured", "Amount", "Cumulative leverage"),
+            numbers=("Amount", "Cumulative leverage"),
+            in_unit=("Amount",),
+            choices=(("Secured", ("Yes", "No")),),
+            ranked="Ranking",
+            noun="facility",
+        ),
+        OwnerTable(
+            "CP-1",
+            "EU.3",
+            "Chart data: EBITDA bridge",
+            ("Amount",),
+            "US$m",
+            steps=True,
+            rules=(
+                "The first row is the reported measure and the last row is the specified "
+                "adjusted measure the method names; name both in Basis and limitation. The "
+                "rows between are the signed adjustments the method states, each as stated: do "
+                "not manufacture intermediate adjustments from the endpoints. If the method "
+                "states only the endpoints, or its adjustments do not reconcile them, write "
+                "`Not supplied: <reason>` in every Amount."
+            ),
+        ),
+    ),
+    "CP-2H": (
+        OwnerTable(
+            "CP-2H",
+            "DR.6",
+            "Chart data: rating triggers",
+            (),
+            "",
+            rules=(
+                "Agency names the agency and Trigger the trigger as the agency states it; "
+                "Threshold and Current are the same metric on the same basis, in the Reporting "
+                "unit; Direction says which side passes (the trigger is not reached). No rating "
+                "probability is stated or implied. Where only a synthetic-source frame exists, "
+                "write `Not supplied: <reason>` in Threshold and Current and state the "
+                "synthetic-source limitation in Basis and limitation; name the agency basis of "
+                "an agency-adjusted metric."
+            ),
+            columns=("Agency", "Trigger", "Threshold", "Current", "Direction"),
+            numbers=("Threshold", "Current"),
+            choices=(("Direction", DIRECTIONS),),
+            noun="trigger",
+        ),
+    ),
+    "CP-4": (
+        OwnerTable(
+            "CP-4",
+            "CR.1",
+            "Chart data: covenant headroom",
+            (),
+            "",
+            rules=(
+                "One row per covenant test the handoff settles. Preserve the quantity and the "
+                "strictness of each test: Direction says which side passes, as the covenant "
+                "defines it. Threshold and Current are the same quantity in the Reporting unit. "
+                "Headroom is the stated headroom with its unit, as the method states it, never "
+                "worked out here. The chart is not a legal compliance opinion."
+            ),
+            columns=("Test", "Threshold", "Current", "Headroom", "Direction"),
+            numbers=("Threshold", "Current"),
+            choices=(("Direction", DIRECTIONS),),
+            may_gap=("Headroom",),
+            noun="test",
+        ),
+    ),
+    "CP-6": (
+        OwnerTable(
+            "CP-6",
+            "PD.1",
+            "Chart data: portfolio limits",
+            (),
+            "",
+            rules=(
+                "Rows come from the selected portfolio evaluation: Current exposure, Proposed "
+                "exposure and Limit value are its stated figures in one Reporting unit; name the "
+                "NAV denominator in Basis and limitation. Proposed exposure is `Not supplied: "
+                "<reason>` when no proposal is evaluated. This module owns the interpretation; "
+                "delivery only renders it. Do not state invented holdings or a new analytical "
+                "owner's result."
+            ),
+            columns=("Limit", "Current exposure", "Proposed exposure", "Limit value"),
+            numbers=("Current exposure", "Proposed exposure", "Limit value"),
+            noun="limit",
         ),
     ),
     "CP-2D": (
@@ -484,7 +601,8 @@ def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
 def _chart_header(table: MarkdownRoute | OwnerTable) -> list[str]:
     spec = _owner_table(table)
     first = "Step" if spec.steps else "Period"
-    return [first, *spec.value_columns, "Reporting unit", "Basis and limitation"]
+    leading = list(spec.columns) or [first, *spec.value_columns]
+    return [*leading, "Reporting unit", "Basis and limitation"]
 
 
 def _stated_rows(text: str, heading: str) -> list[list[str]]:
@@ -539,6 +657,68 @@ def _bridge_issues(heading: str, rows: list[list[str]]) -> list[str]:
     return []
 
 
+def _stated_gap(cell: str) -> bool:
+    return cell.startswith(NOT_SUPPLIED) and bool(cell.removeprefix(NOT_SUPPLIED).strip())
+
+
+def _number_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None:
+    if _stated_gap(cell):
+        return None
+    if not PLAIN_NUMBER.fullmatch(cell):
+        return f"{name} `{cell}` must be a plain number or `Not supplied: <reason>`."
+    if spec.chart_unit and name in (spec.in_unit or spec.numbers) and unit != spec.chart_unit:
+        return (
+            f"{name} in {unit} cannot be charted as {spec.chart_unit}; "
+            f"write `Not supplied: reported in {unit}`."
+        )
+    return None
+
+
+def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None:
+    """What is wrong with one cell of a row table, or None. Nothing is repaired or worked out."""
+    allowed = dict(spec.choices).get(name)
+    if name in ("Basis and limitation", "Reporting unit"):
+        issue = None if cell else f"{name} is blank."
+    elif name in spec.numbers:
+        issue = _number_issue(spec, name, cell, unit)
+    elif allowed is not None:
+        issue = None if cell in allowed else f"{name} `{cell}` must be one of {', '.join(allowed)}."
+    elif name == spec.ranked:
+        legal = re.fullmatch(r"[1-9]\d*", cell)
+        issue = None if legal else f"{name} `{cell}` must be a plain positive whole number."
+    elif not cell or (_stated_gap(cell) and name not in spec.may_gap):
+        issue = f"{name} is blank or not stated."
+    else:
+        issue = None
+    return issue
+
+
+def _row_table_issues(
+    spec: OwnerTable, heading: str, header: list[str], rows: list[list[str]]
+) -> list[str]:
+    """A row table's rows against its fixed header, cell by cell, in the order stated."""
+    issues = []
+    ranks = []
+    for row in rows:
+        if len(row) != len(header):
+            issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
+            continue
+        unit = row[-2]
+        for name, cell in zip(header, row, strict=True):
+            problem = _cell_issue(spec, name, cell, unit)
+            if problem:
+                issues.append(f"`{heading}` {row[0] or 'row'}: {problem}")
+        if spec.ranked and row[header.index(spec.ranked)].isdecimal():
+            ranks.append(int(row[header.index(spec.ranked)]))
+    if ranks != sorted(ranks):
+        issues.append(
+            f"`{heading}`: rows must run in rank order, most senior first (ranks {ranks})."
+        )
+    if not rows:
+        issues.append(f"`{heading}` needs at least one row.")
+    return issues
+
+
 def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...]:
     """A chart table's cells reach the page as they are, so each must already be chart-ready."""
     spec = _owner_table(table)
@@ -549,6 +729,8 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
     header = _chart_header(spec)
     if not rows or rows[0] != header:
         return (f"`{heading}` needs the table headed `| {' | '.join(header)} |`.",)
+    if spec.columns:
+        return tuple(_row_table_issues(spec, heading, header, rows[2:]))
     issues = []
     stated = []
     for row in rows[2:]:
@@ -803,14 +985,24 @@ BRIDGE_RULES = (
 def _selector(route: MarkdownRoute | OwnerTable) -> str:
     if isinstance(route, OwnerTable) or route.kind == "chart":
         spec = _owner_table(route)
+        others = [n for n in spec.numbers if spec.in_unit and n not in spec.in_unit]
+        counted = [n for n in spec.numbers if n not in others]
+        numbers = f" ({', '.join(counted)})" if counted else ""
+        where = "in the Reporting unit the row states"
+        if spec.chart_unit:
+            where = f"in {spec.chart_unit}, with that as the Reporting unit"
+        rest = (
+            f" {', '.join(others)} is a plain number in the unit its rule states." if others else ""
+        )
         return (
             f"- `### {spec.heading}`: exactly one Markdown table headed "
             f"`| {' | '.join(_chart_header(spec))} |`, one row per "
-            f"{'step' if spec.steps else 'period'}. "
-            f"Value cells are plain numbers in {spec.chart_unit}, with that as the Reporting unit, "
-            "or `Not supplied: <reason>`. An issuer reporting in another currency or scale writes "
-            "`Not supplied: reported in <unit>` in monetary cells. Basis and limitation is never "
-            "blank."
+            f"{'step' if spec.steps else spec.noun}. "
+            f"Value cells{numbers} are plain numbers {where}, or `Not supplied: <reason>`.{rest} "
+            "An issuer reporting in another currency or scale writes "
+            "`Not supplied: reported in <unit>` in monetary cells. "
+            f"{'Every other cell is stated, never blank. ' if spec.columns else ''}"
+            "Basis and limitation is never blank."
             + (BRIDGE_RULES if spec.steps else "")
             + (f" {spec.rules}" if spec.rules else "")
         )

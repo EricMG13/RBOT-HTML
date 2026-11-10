@@ -136,6 +136,46 @@ def synthetic_table(header: str, *rows: str) -> str:
 
 
 PERIOD_HEAD = "| Period | {} | Reporting unit | Basis and limitation |"
+DEBT_STACK_HEAD = (
+    "| Facility | Ranking | Secured | Amount | Cumulative leverage | Reporting unit "
+    "| Basis and limitation |"
+)
+DEBT_STACK_ROWS = (
+    "| Senior secured term loan | 1 | Yes | 1,200 | 2.4 | US$m | Synthetic. |",
+    "| Senior notes | 2 | No | 800 | 4.0 | US$m | Synthetic. |",
+    (
+        "| Subordinated notes | 3 | No | Not supplied: balance not stated "
+        "| Not supplied: no balance | US$m | Synthetic. |"
+    ),
+)
+COVENANT_HEAD = (
+    "| Test | Threshold | Current | Headroom | Direction | Reporting unit | Basis and limitation |"
+)
+COVENANT_ROWS = (
+    "| Net leverage | 5.0 | 4.2 | 0.8x | Passes at or below | x | Synthetic. |",
+    "| Interest cover | 2.0 | 2.6 | 0.6x | Passes at or above | x | Synthetic. |",
+    (
+        "| Minimum liquidity | 100 | Not supplied: not stated | Not supplied: no current "
+        "| Passes at or above | US$m | Synthetic. |"
+    ),
+)
+TRIGGER_HEAD = (
+    "| Agency | Trigger | Threshold | Current | Direction | Reporting unit | Basis and limitation |"
+)
+TRIGGER_ROWS = (
+    (
+        "| Synthetic agency | Downgrade review: net leverage | 5.5 | 4.2 | Passes below | x "
+        "| Synthetic. |"
+    ),
+)
+LIMITS_HEAD = (
+    "| Limit | Current exposure | Proposed exposure | Limit value | Reporting unit "
+    "| Basis and limitation |"
+)
+LIMITS_ROWS = (
+    "| Single-issuer limit | 3.0 | 4.0 | 5.0 | % NAV | Synthetic. |",
+    "| High-yield bucket | 12.0 | Not supplied: no proposal | 15.0 | % NAV | Synthetic. |",
+)
 OWNER_TABLES = {
     "CP-1": {
         "Chart data: revenue and EBITDA": synthetic_table(
@@ -143,6 +183,23 @@ OWNER_TABLES = {
             "| FY2023 | 2,100 | 410 | US$m | Synthetic. |",
             "| FY2024 | 2,250 | Not supplied: the measure is not stated | US$m | Synthetic. |",
         ),
+        "Chart data: debt stack": synthetic_table(DEBT_STACK_HEAD, *DEBT_STACK_ROWS),
+        "Chart data: EBITDA bridge": synthetic_table(
+            "| Step | Amount | Reporting unit | Basis and limitation |",
+            "| Reported EBITDA | 410 | US$m | Synthetic. |",
+            "| Restructuring add-back | 30 | US$m | Synthetic. |",
+            "| Disposal | -10 | US$m | Synthetic. |",
+            "| Issuer-adjusted EBITDA | 430 | US$m | Synthetic. |",
+        ),
+    },
+    "CP-2H": {
+        "Chart data: rating triggers": synthetic_table(TRIGGER_HEAD, *TRIGGER_ROWS),
+    },
+    "CP-4": {
+        "Chart data: covenant headroom": synthetic_table(COVENANT_HEAD, *COVENANT_ROWS),
+    },
+    "CP-6": {
+        "Chart data: portfolio limits": synthetic_table(LIMITS_HEAD, *LIMITS_ROWS),
     },
     "CP-2D": {
         "Chart data: liquidity bridge": synthetic_table(
@@ -161,10 +218,14 @@ OWNER_TABLES = {
         ),
     },
 }
+OWNER_PATHWAY = {"CP-2H": "distressed_restructuring", "CP-6": "portfolio_decision"}
 OWNER_HEADERS = {
     "CP-1": PERIOD_HEAD.format("Revenue | Adjusted EBITDA"),
     "CP-2D": "| Step | Amount | Reporting unit | Basis and limitation |",
     "CP-3C": PERIOD_HEAD.format("Debt maturing | Committed resources"),
+    "CP-2H": TRIGGER_HEAD,
+    "CP-4": COVENANT_HEAD,
+    "CP-6": LIMITS_HEAD,
 }
 
 
@@ -807,7 +868,8 @@ def test_run_directory_inside_the_issuer_folder_is_refused(tmp_path, capsys):
     assert not (tmp_path / "issuer/run").exists()
 
 
-def good_task(tmp_path: Path, module: str = "CP-2", pathway: str = "covenant_refinancing"):
+def good_task(tmp_path: Path, module: str = "CP-2", pathway: str | None = None):
+    pathway = pathway or OWNER_PATHWAY.get(module, "covenant_refinancing")
     prepared = prepare(
         context_file(tmp_path, pathway),
         issuer_folder(tmp_path),
@@ -2524,15 +2586,15 @@ def test_web_search_follows_the_ruling_and_reaches_only_the_research_module(
 
 @pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
 def test_the_instructions_ask_each_owner_for_its_own_chart_table(tmp_path, module):
-    prepared, *_ = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, *_ = good_task(tmp_path, module)
     text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
     assert f"`{OWNER_HEADERS[module]}`" in text
     assert "Not supplied: reported in <unit>" in text
 
 
 def test_a_module_with_no_owner_table_is_not_asked_for_one(tmp_path):
-    prepared, *_ = good_task(tmp_path, "CP-4", "covenant_refinancing")
-    text = (tmp_path / "out" / prepared.plan.instructions["CP-4"].path).read_text()
+    prepared, *_ = good_task(tmp_path, "CP-5", "covenant_refinancing")
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-5"].path).read_text()
     assert "Chart data:" not in text
 
 
@@ -2545,7 +2607,7 @@ def test_the_bridge_instruction_states_the_opening_closing_and_sign_rules(tmp_pa
 
 @pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
 def test_checker_accepts_each_owner_chart_table(tmp_path, module):
-    prepared, task, context = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, task, context = good_task(tmp_path, module)
     raw = answer(context, list(prepared.plan.layout.routes)).encode()
     assert _checked_handoff(task, raw, checker(prepared.layout)) == ()
 
@@ -2575,7 +2637,7 @@ def test_checker_accepts_each_owner_chart_table(tmp_path, module):
     ],
 )
 def test_checker_sends_back_each_malformed_owner_chart_table(tmp_path, module, old, new, complaint):
-    prepared, task, context = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, task, context = good_task(tmp_path, module)
     raw = answer(context, list(prepared.plan.layout.routes))
     assert old in raw
     issues = _checked_handoff(task, raw.replace(old, new).encode(), checker(prepared.layout))
@@ -2631,7 +2693,7 @@ def test_a_bridge_check_names_the_stated_and_summed_amounts():
     ],
 )
 def test_each_owner_table_carries_its_catalogue_guard(tmp_path, module, phrases):
-    prepared, *_ = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, *_ = good_task(tmp_path, module)
     text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
     for phrase in phrases:
         assert phrase in text, phrase
@@ -2649,7 +2711,7 @@ def test_a_bridge_with_a_header_and_no_rows_is_sent_back():
 @pytest.mark.parametrize("module", sorted(OWNER_HEADERS))
 def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tmp_path, module):
     """Owner tables are not report charts: delivery lists them as evidence tables, no new chart."""
-    prepared, _, context = good_task(tmp_path, module, "covenant_refinancing")
+    prepared, _, context = good_task(tmp_path, module)
     raw = answer(context, list(prepared.plan.layout.routes))
     routes = tuple(r for r in prepared.layout.routes if r.module_id == module)
     blocks = tuple(dict.fromkeys(r.block_id for r in routes))
@@ -2658,12 +2720,117 @@ def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tm
     handoff = HandoffInput(path="h.md", sha256=hashlib.sha256(raw.encode()).hexdigest())
     request = DeliveryRequest(run=prepared.plan.run, handoffs={module: handoff}, layout=own)
     files = markdown_files(request, tmp_path)
-    ((heading, table),) = OWNER_TABLES[module].items()
-    listed = [
-        e for e in json.loads(files["coverage.json"])["modules"][module] if e["heading"] == heading
-    ]
-    assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
-    page = files["report.html"].decode()
-    assert heading in page
-    for cell in table.splitlines()[2].strip("|").split("|"):
-        assert cell.strip() in page
+    for heading, table in OWNER_TABLES[module].items():
+        listed = [
+            e
+            for e in json.loads(files["coverage.json"])["modules"][module]
+            if e["heading"] == heading
+        ]
+        assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
+        page = files["report.html"].decode()
+        assert heading in page
+        for cell in table.splitlines()[2].strip("|").split("|"):
+            assert cell.strip() in page
+
+
+# ---- Package 2 (2026-11-10): the credit-structure tables. Every value is synthetic.
+STRUCTURE_HEADERS = {
+    "Chart data: debt stack": DEBT_STACK_HEAD,
+    "Chart data: EBITDA bridge": "| Step | Amount | Reporting unit | Basis and limitation |",
+    "Chart data: covenant headroom": COVENANT_HEAD,
+    "Chart data: rating triggers": TRIGGER_HEAD,
+    "Chart data: portfolio limits": LIMITS_HEAD,
+}
+STRUCTURE_OWNERS = [
+    ("CP-1", "Chart data: debt stack"),
+    ("CP-1", "Chart data: EBITDA bridge"),
+    ("CP-4", "Chart data: covenant headroom"),
+    ("CP-2H", "Chart data: rating triggers"),
+    ("CP-6", "Chart data: portfolio limits"),
+]
+
+
+def instruction_text(tmp_path: Path, module: str) -> str:
+    prepared, *_ = good_task(tmp_path, module)
+    return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+
+
+@pytest.mark.parametrize(("module", "heading"), STRUCTURE_OWNERS)
+def test_each_credit_structure_table_is_asked_of_its_owner_with_its_fixed_header(
+    tmp_path, module, heading
+):
+    text = instruction_text(tmp_path, module)
+    assert f"`### {heading}`" in text
+    assert f"`{STRUCTURE_HEADERS[heading]}`" in text
+
+
+@pytest.mark.parametrize(
+    ("module", "phrases"),
+    [
+        ("CP-1", ("legal rank", "positive common EBITDA denominator", "enterprise value")),
+        ("CP-1", ("do not manufacture", "specified adjusted measure", "reconcile")),
+        ("CP-4", ("strictness", "legal compliance opinion", "which side passes")),
+        ("CP-2H", ("rating probability", "synthetic-source limitation", "agency")),
+        ("CP-6", ("NAV denominator", "invented holdings", "interpretation")),
+    ],
+)
+def test_each_credit_structure_table_carries_its_catalogue_guard(tmp_path, module, phrases):
+    text = instruction_text(tmp_path, module)
+    for phrase in phrases:
+        assert phrase in text, phrase
+
+
+@pytest.mark.parametrize(("module", "heading"), STRUCTURE_OWNERS)
+def test_checker_accepts_each_credit_structure_table(tmp_path, module, heading):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert heading in raw
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+@pytest.mark.parametrize(
+    ("module", "old", "new", "complaint"),
+    [
+        ("CP-1", "| Facility | Ranking |", "| Tranche | Ranking |", "Facility"),
+        ("CP-1", "| Senior notes | 2 |", "| Senior notes | senior |", "Ranking"),
+        (
+            "CP-1",
+            "| Senior secured term loan | 1 |",
+            "| Senior secured term loan | 3 |",
+            "rank order",
+        ),
+        ("CP-1", "| 1 | Yes |", "| 1 | Maybe |", "Secured"),
+        ("CP-1", "| 1,200 |", "| 1.2bn |", "1.2bn"),
+        ("CP-1", "| 800 | 4.0 | US$m |", "| 800 | 4.0 | EUR m |", "EUR m"),
+        ("CP-1", "| 800 | 4.0 | US$m | Synthetic. |", "| 800 | 4.0 | US$m |  |", "Basis"),
+        ("CP-1", "| 430 |", "| 440 |", "does not equal"),
+        ("CP-4", "| Test | Threshold |", "| Covenant | Threshold |", "Test"),
+        ("CP-4", "| 5.0 | 4.2 |", "| 5.0x | 4.2 |", "5.0x"),
+        ("CP-4", "| Passes at or below |", "| Under |", "Direction"),
+        ("CP-4", "| 0.8x |", "|  |", "Headroom"),
+        (
+            "CP-4",
+            "| x | Synthetic. |\n| Interest",
+            "|  | Synthetic. |\n| Interest",
+            "Reporting unit",
+        ),
+        ("CP-2H", "| Passes below |", "| Passes sometimes |", "Direction"),
+        ("CP-6", "| 5.0 |", "| 5% |", "5%"),
+        ("CP-6", "| 3.0 | 4.0 |", "| 3.0 | 0.04 bn |", "0.04 bn"),
+    ],
+)
+def test_checker_sends_back_each_malformed_credit_structure_table(
+    tmp_path, module, old, new, complaint
+):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def test_the_debt_stack_instruction_keeps_leverage_out_of_the_money_unit(tmp_path):
+    text = instruction_text(tmp_path, "CP-1")
+    assert "(Amount) are plain numbers in US$m" in text
+    assert "Cumulative leverage is a plain number in the unit its rule states" in text
+    assert "(Amount, Cumulative leverage) are plain numbers in US$m" not in text
