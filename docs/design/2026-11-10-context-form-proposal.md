@@ -1,9 +1,10 @@
-# Context form proposal: progressive, module-aware (2026-11-10)
+# Context form: progressive, module-aware (2026-11-10)
 
-Proposal for review, not adopted. The working page is
-[`docs/templates/context-form-proposal.html`](../templates/context-form-proposal.html). It opens from
-disk and writes the same `context/1` file as `context-form.html`. The live form, the inbox copies and
-the tests are unchanged.
+**Adopted 2026-11-10** (owner: "Approved"). The page is now
+[`docs/templates/context-form.html`](../templates/context-form.html), which the inbox copies into each
+pathway's `_template`. It writes the same `context/1` file as the form it replaced: three fixture
+contexts give byte-identical output. Sections 1 to 5 are the review and design as proposed. Section 7
+records what changed at adoption, after main's ruling that CP-1C takes its peers from CP-DR by default.
 
 Goal (owner, 2026-11-10): analysts should give each module the right context the first time, so that
 fewer paid runs have to be repeated. Any change to the context means a whole new run. A resumed run
@@ -30,9 +31,9 @@ CP-8 are not launched.
 |---|---|
 | Credit Snapshot | CP-0, CP-1, CP-1A, CP-2, CP-4, CP-3, CP-5, CP-6 |
 | Earnings Update | CP-0, CP-1, CP-1B, CP-1D, CP-5 |
-| Relative Value | CP-0, CP-1, CP-1A, CP-3D, CP-1C, CP-2, CP-2D, CP-3C, CP-3, CP-5 |
+| Relative Value | CP-0, CP-1, CP-1A, CP-3D, CP-1C, CP-2, CP-2D, CP-3C, CP-3, CP-5 (with CP-DR before CP-1C when the peer source is `cp_dr_public`: section 7) |
 | Covenant & Refinancing | CP-0, CP-1, CP-1A, CP-2, CP-4, CP-2D, CP-3C, CP-5 |
-| Distressed & Restructuring | CP-0, CP-1, CP-1A, CP-1C, CP-2A, CP-4, CP-2, CP-2G, CP-2H, CP-4C, CP-5 |
+| Distressed & Restructuring | CP-0, CP-1, CP-1A, CP-1C, CP-4, CP-2, CP-2A, CP-2G, CP-2H, CP-4C, CP-5 (order on main `4ce88c2`; with CP-DR after CP-1A when the peer source is `cp_dr_public`) |
 | Portfolio Decision | CP-0, CP-1, CP-1A, CP-2, CP-3, CP-5, CP-6 |
 
 | Module | Context it uses | Without it, or when it is wrong |
@@ -50,13 +51,15 @@ CP-8 are not launched.
 | CP-3C, CP-3D, CP-4C | their pins; quotes (CP-3D) | No quotes: CP-3D has nothing to read. |
 | CP-4 Legal & covenants | legal_documents | `none`: the method stops ("No executed governing document"). `draft`: Provisional. |
 | CP-6 Committee decision | portfolio_workbook (Portfolio Decision) | Gap. |
-| CP-DR, CP-2E | research_questions, cutoff; the cp2e pin | In no pathway, so an inbox run never uses them. |
+| CP-DR | research_questions, cutoff, peer_source | Joins Relative Value and Distressed when the peer source is `cp_dr_public` (main `a2f5e8e`): builds the peer pack CP-1C reads and answers the context's questions first. No web access in this transport: only files in the folder. |
+| CP-2E | the cp2e pin | In no pathway, so an inbox run never uses it. |
 
 Stale wording in the current form:
 - Pinned assumptions are built: owner route `pins.py`, and advisory on the inbox route.
 - "USD fixed" for CP-2D is now wrong. Only a facility in another currency is not calculable.
 - CP-8 "blocked without the prior decision" does not apply to the inbox.
-- `cp_dr_public` is the default peer source, but it always gives CP-1C a gap.
+- `cp_dr_public` is the default peer source, and before main `a2f5e8e` it always gave CP-1C a gap.
+  Since then CP-DR joins to supply the peers (section 7).
 
 ## 2. What made runs repeat, and what the proposal does about each
 
@@ -75,8 +78,9 @@ Stale wording in the current form:
      period's (calendar) end.
    - The help text is corrected: source files are not date-checked; context entries are.
 3. **Peer data.** CP-1C was blocked at the peer-data gate in the all-modules run.
-   - Where CP-1C runs, the peer source has no default.
-   - "I'll give peer figures" is marked as the only working choice.
+   - As proposed: no default where CP-1C runs, and "I'll give peer figures" marked as the only
+     working choice. Superseded at adoption (section 7): `cp_dr_public` is the default again, CP-DR
+     joins the run, and the form asks whether the peers' filings are in the folder.
    - Stale peers and precedents are flagged on the row.
    - Fewer than 3 admitted makes CP-1C a Gap.
 4. **Periods.** Nothing ties the run type to the pathway: a Research run on Earnings Update leaves
@@ -119,7 +123,6 @@ Stale wording in the current form:
 - issuer_id at most 40 characters;
 - the Earnings Update pathway ⇔ the earnings run type;
 - current_period required where CP-2G runs;
-- the peer source chosen where CP-1C runs;
 - a Yes/No answer for each attachment the pathway uses;
 - the legal confirmation tick.
 
@@ -174,8 +177,8 @@ that card as the inspector column.
      opens from disk under its own CSP.
    - Either retire them from `screen.css`, or keep them and add a test that the form's copied tokens
      equal `screen.css` lines 5 and 81.
-2. **Drift tests to add on adoption.** The form duplicates five tables from Python and the library.
-   One test each would stop silent drift:
+2. **Drift tests** (added at adoption, `tests/test_context_form.py`). The form duplicates tables
+   from Python and the library; one test each stops silent drift:
    - `RUN_ORDER` against `registry.plan` per pathway;
    - `EDGES` against `run_expectations.edges_for`;
    - `MODULES` names against `report-adapter.js` `MODULE_NAMES`;
@@ -202,15 +205,46 @@ that card as the inspector column.
 
 ## 6. Decisions for the owner
 
-1. Adopt as `docs/templates/context-form.html`? The inbox would then copy it. Two expectations in
-   `tests/test_library_page_browser.py` `FORM_PROBE` would change:
-   - the pathway is a card group, not the `#s1-pathway` select;
-   - on the Earnings Update copy the run type stays `earnings`.
+1. ~~Adopt as `docs/templates/context-form.html`?~~ Adopted (owner, "Approved"); see section 7.
 2. Should `context.py` mirror the form-only rules, or keep accepting hand-written files without them?
 3. Should the launcher print its `expectations` (computed today but only read by tests), so a CLI run
    shows the same forecast as the form?
 4. Owner route: CP-1D and CP-2D need an fy/q4 base (`period_basis.run_basis`), but an earnings update
    names quarters. Is that conflict intended?
-5. CP-DR and CP-2E are in no pathway, so research questions and the cp2e pin have no effect from the
-   inbox. The proposal hides both unless a loaded file holds them. Keep, remove, or add the modules to
-   a pathway?
+5. CP-2E is in no pathway, so the cp2e pin has no effect from the inbox; the form hides it unless a
+   loaded file holds it. Keep, remove, or add CP-2E to a pathway? (CP-DR now joins with the default
+   peer source, so research questions are answered there.)
+
+## 7. At adoption (2026-11-10, after main `4ce88c2`)
+
+**Main's ruling and what the form does with it.** Owner: "Cp-1c is supposed to get that information
+from cp-dr by default". `cpos_launch.pathway_modules` now adds CP-DR to a pathway that has CP-1C when
+the peer source is `cp_dr_public`. The form follows:
+- **Peer source.** `cp_dr_public` is the default again. The form-only "choose a peer source" rule is
+  gone.
+- **Run order.** It depends on the peer source (`RUN_ORDER`, `WITH_RESEARCH`); main also moved CP-2A
+  after CP-2. The readiness panel lists CP-DR where it joins.
+- **Peer files.** CP-DR has no web access in this transport (main's own verification note), so a new
+  Source files item asks whether the peers' filings or a peer data file are in the folder. Unanswered
+  makes CP-DR a Check; "Not available" makes CP-1C a Gap.
+- **Questions.** The Questions stage is shown where CP-DR runs. CP-DR answers the context's questions
+  first (`cpdr.md`) and routes each to CP-1C, CP-2 or both.
+- `Named peers` (`user_list`) keeps its Gap: nothing looks up their figures, and CP-DR joins only for
+  `cp_dr_public`.
+
+**Other changes at adoption:**
+- The form replaced `context-form.html`; the proposal file is gone.
+- `tests/test_library_page_browser.py` `FORM_PROBE` now reads the pathway cards. On the Earnings
+  Update copy it expects the run type to stay `earnings`. The probe runs in its own function scope,
+  because the form declares globals.
+- `tests/test_context_form.py` keeps the copied tables to their sources: pathways, run order per
+  peer source, edges, module names, rating scales, limits, pinned bounds against
+  `context.ASSUMPTION_LIMITS`, and design tokens. Each was seen to fail on a one-line change to the
+  form. Main had already moved CP-2A in the Distressed order; the test caught the copy written before
+  that.
+- `README.md`, `apps/issuer-library/README.md` and `docs/templates/README.md` describe the form.
+  - The inbox font limit is gone: inbox copies load the built library's fonts.
+  - A copy already in a pathway's `_template` is never replaced: delete it and restart the watcher.
+
+**Still open:** decisions 2 to 5 in section 6; suggestions 1, 4 and 5 in section 5.
+

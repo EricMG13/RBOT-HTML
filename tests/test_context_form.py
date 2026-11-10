@@ -1,0 +1,137 @@
+"""The context form (docs/templates/context-form.html) copies tables from the code and from the
+library it sits beside, because it opens from disk with no request. Each test keeps one copy to its
+source, so a change in the code cannot leave the form forecasting a run that no longer happens."""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+from deploy_vii import cp3_relative_value
+from deploy_vii.contracts import PATHWAY_MODULES
+from deploy_vii.registry import plan
+from deploy_workflow.context import ASSUMPTION_LIMITS, Limit, RunContext, load_context
+from deploy_workflow.inbox.drops import MAX_ISSUER_ID
+from deploy_workflow.owners import cp2h, valuation_basis
+from deploy_workflow.owners.cpos_launch import SOURCE_SUFFIXES, pathway_modules
+from deploy_workflow.run_expectations import edges_for
+
+ROOT = Path(__file__).resolve().parents[1]
+FORM = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
+WEB = ROOT / "apps/issuer-library/credit_os/web"
+# With cp_dr_public the research module joins a pathway that has CP-1C; with any other source not.
+PEER_SOURCES = ("cp_dr_public", "user_comps")
+
+
+def constant(name: str) -> str:
+    """The literal of the form script's ``const NAME = ...;``."""
+    match = re.search(rf"^const {name} = (.*?);$", FORM, re.MULTILINE | re.DOTALL)
+    assert match is not None, f"the form has no const {name}"
+    return match[1]
+
+
+def lists(name: str) -> dict[str, list[str]]:
+    """A ``{key: ['a', 'b']}`` table of the form's script."""
+    rows = re.findall(r"(\w+): \[([^\]]*)\]", constant(name))
+    return {key: re.findall(r"'([^']*)'", items) for key, items in rows}
+
+
+def context(pathway: str, peer_source: str) -> RunContext:
+    raw = json.loads((ROOT / "cases/context/research-minimal.json").read_text(encoding="utf-8"))
+    raw["run"]["pathway"] = pathway
+    raw["valuation"]["peer_source"] = peer_source
+    if pathway == "earnings_update":
+        raw["run"].update(run_type="earnings", current_period="q3-2026", prior_period="q2-2026")
+    return load_context(json.dumps(raw).encode())
+
+
+def launched(pathway: str, peer_source: str) -> list[str]:
+    """What CP-OS runs for an inbox drop of this pathway and peer source, in order."""
+    return list(plan(pathway_modules(context(pathway, peer_source))))
+
+
+def test_the_pathways_are_the_contracts() -> None:
+    assert lists("PATHWAYS") == {pathway: list(m) for pathway, m in PATHWAY_MODULES.items()}
+
+
+@pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+def test_the_run_order_is_the_launchers_for_each_peer_source(pathway: str) -> None:
+    base, with_research = lists("RUN_ORDER"), lists("WITH_RESEARCH")
+    assert base[pathway] == launched(pathway, "user_comps")
+    assert with_research.get(pathway, base[pathway]) == launched(pathway, "cp_dr_public")
+
+
+def test_the_dependency_edges_are_the_registrys() -> None:
+    expected: dict[str, dict[str, str]] = {}
+    for pathway in PATHWAY_MODULES:
+        for peer_source in PEER_SOURCES:
+            for consumer, producers in edges_for(launched(pathway, peer_source)).items():
+                if producers:
+                    edges = expected.setdefault(consumer, {})
+                    edges.update({p: rule[0] for p, rule in producers.items()})
+    assert json.loads(constant("EDGES")) == expected
+
+
+def test_the_module_names_are_the_librarys() -> None:
+    adapter = (WEB / "report-adapter.js").read_text(encoding="utf-8")
+    match = re.search(r"const MODULE_NAMES=(\{.*?\});", adapter)
+    assert match is not None
+    library = json.loads(match[1])
+    form = dict(re.findall(r"^  '(CP-[\w-]+)': \['([^']+)'", constant("MODULES"), re.MULTILINE))
+    assert form and form == {code: library[code] for code in form}
+
+
+def test_the_rating_scales_are_cp2hs() -> None:
+    scales = {a: sorted(s, key=s.__getitem__) for a, s in cp2h.COMBINED_SCALE.items()}
+    assert json.loads(constant("SCALES")) == scales
+    assert json.loads(constant("UNRATED")) == list(cp2h.UNRATED)
+
+
+def test_the_limits_are_the_codes() -> None:
+    numbers = {name: int(value) for name, value in re.findall(r"\b([A-Z_]+) = (\d+)\b", FORM)}
+    assert {name: numbers[name] for name in ("STALE_DAYS", "MAX_ISSUER_ID")} == {
+        "STALE_DAYS": cp3_relative_value.STALE_DAYS,
+        "MAX_ISSUER_ID": MAX_ISSUER_ID,
+    }
+    assert [numbers[n] for n in ("PEER_MONTHS", "PRECEDENT_MONTHS", "MIN_ADMITTED")] == [
+        valuation_basis.PEER_MONTHS,
+        valuation_basis.PRECEDENT_MONTHS,
+        valuation_basis.MIN_ADMITTED,
+    ]
+    assert set(re.findall(r"'([^']*)'", constant("SOURCE_SUFFIXES"))) == SOURCE_SUFFIXES
+
+
+def form_limit(field: str) -> Limit:
+    """The bounds the form's build() reads one pinned field with; a list's are its items'."""
+    match = re.search(rf"\['{field}',\{{(.*?)\}}\]", FORM)
+    assert match is not None, f"the form reads no pinned field {field}"
+    props = dict(re.findall(r"(\w+):([\w.']+)", match[1]))
+    return Limit(
+        req=props.get("req") == "true",
+        whole=props.get("int") == "true",
+        places=int(props["dp"]) if "dp" in props else None,
+        low=props.get("min"),
+        low_excl=props.get("minEx"),
+        high=props.get("max"),
+        high_excl=props.get("maxEx"),
+    )
+
+
+@pytest.mark.parametrize("key", sorted(ASSUMPTION_LIMITS))
+def test_the_pinned_limits_are_the_readers(key: str) -> None:
+    assert form_limit(key.split(".")[1]) == ASSUMPTION_LIMITS[key]
+
+
+def tokens(css: str) -> dict[str, str]:
+    blocks = re.findall(r":root\{([^}]*)\}", css)
+    return {k: v.strip() for b in blocks for k, v in re.findall(r"(--[\w-]+):([^;]+)", b)}
+
+
+def test_the_design_tokens_are_the_librarys() -> None:
+    library, form = tokens((WEB / "screen.css").read_text(encoding="utf-8")), tokens(FORM)
+    shared = sorted(form.keys() & library.keys())
+    assert len(shared) >= len(form) - 3  # Only --ring-error, --red-bg and --red-border are its own.
+    assert {k: form[k] for k in shared} == {k: library[k] for k in shared}

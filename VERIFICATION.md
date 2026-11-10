@@ -4,6 +4,35 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Context form adopted (branch `claude/optimistic-johnson-bmnwip`, after main `4ce88c2`)
+
+Owner: "Approved". The proposal below replaced `docs/templates/context-form.html` and follows main's
+ruling that CP-1C takes its peers from CP-DR by default (`pathway_modules`). Design note section 7
+has the detail. Checks are offline (headless Chromium 1.63, the Python reader, the inbox's own
+functions); no provider call and no analytical run.
+
+- **Same output as before.** The original form (`483a555`) and the adopted one give byte-identical
+  `context.json` for the three fixture contexts. `cp_dr_public` is the default in both.
+- **The research module joins.** With the default peer source, Relative Value and Distressed list
+  CP-DR in the launcher's order. "Not available" for the peers' files makes CP-1C a Gap, and choosing
+  your own figures drops CP-DR.
+- **End to end again.** Three downloads load in `load_context` and pass `inbox.drops.check`, and
+  round-trip byte for byte. Every stage advanced by click and by tap at 390 px, and Start over is
+  clean.
+- **Inbox copies.** Copies written by `write_templates` as `context-form.html` lock the pathway,
+  load the built library's fonts and log nothing.
+- **Tests.**
+  - `tests/test_library_page_browser.py` `FORM_PROBE`: the old probe was seen failing on the adopted
+    form (`#s1-pathway` is gone). Rewritten, the file passes: 20 passed.
+  - New `tests/test_context_form.py`: 22 passed. Each of nine one-line changes to the form's copied
+    tables made its test fail, among them the Distressed order main had already changed.
+  - `test_issuer_library_packaging.py`: 9 passed. The watcher's form tests: 2 passed.
+  - `test_inbox_drops.py`: 55 passed, 3 failed. The three are permission tests that fail here
+    because this sandbox runs as root, and they fail the same without this change.
+  - Quality gate exit 0 (176 changed lines in scope, after one long line in the probe was split).
+- **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
+  filings: no live run. Whether the readiness forecast matches live outcomes.
+
 ## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
 
 Proposal only: `docs/templates/context-form-proposal.html` is new, and

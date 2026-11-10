@@ -305,3 +305,32 @@ and re-save unchanged; a file that uses one needs this version or later):
   (`YYYY-MM-DD`). Facility rows are allowed on every run type and required (at least one) for Primary only.
   Tenor and price talk are shown for Primary only; the form writes them blank on other run types.
 - `attachments.legal_documents` has no preselected choice in the form (`executed`, `draft` or `none`).
+
+The form (adopted 2026-11-10; design and module review in
+`docs/design/2026-11-10-context-form-proposal.md`) asks in stages: purpose, issuer, dates, source
+files, then market, valuation, assumptions and questions only where a module of the run uses them,
+then a check before download.
+
+**Rules the form adds.** `context.py` does not enforce these, so a hand-written file without them
+still loads; the form will not download without them:
+- `identity.issuer_id` at most 40 characters (the inbox refuses longer).
+- `run.pathway` `earnings_update` if and only if `run.run_type` `earnings`.
+- `run.current_period` where CP-2G runs (the forecast's base).
+- An explicit answer for each attachment the pathway uses.
+- A confirmation that an `executed` or `draft` legal document is in the folder.
+- The reader's own refusals, caught before download: a research question with `|`, and U+0085,
+  U+2028 or U+2029 in any text.
+
+**What it shows without enforcing:**
+- Notes, for example an as-of date before the newest file, a stale quote, two rows for one rating
+  agency, or a peer older than 12 months.
+- An expected outcome for each module (Ready, Check, Gap, Limited, Will refuse), ported from
+  `run_expectations.RULES` with dependency propagation. Download needs one acknowledgement while
+  any limit remains.
+
+**Copied tables.** The form copies these from the code and the library:
+- the run order per pathway and peer source;
+- the dependency edges;
+- module names, rating scales, limits and design tokens.
+
+`tests/test_context_form.py` fails when one drifts from its source.
