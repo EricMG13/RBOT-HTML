@@ -198,8 +198,11 @@ test('(a) the module report has the nine anchors once each, in order', () => {
   assert.deepEqual(anchorsOf(html), NINE);
   assert.deepEqual(report().REPORT_PARTS.map(p => p[0]), NINE);
   assert.deepEqual(report().REPORT_PARTS.map(p => p[1]), ['Module', 'Bottom line', 'Key numbers', 'Findings', 'Analysis', 'Limits & monitoring', 'Statements and registers', 'Calculations', 'Evidence & audit']);
-  assert.ok(html.includes('Candidate · not accepted') && html.includes('Current methodology') && html.includes('<code>CP-1.md</code> · 10 sections'));
-  assert.ok(html.includes('Quoted from the handoff') && html.includes('CP-1.md · line 13'));
+  // The head names the module by its code alone; the file name and section count are production detail (Evidence & audit, titles).
+  assert.ok(html.includes('Candidate · not accepted') && html.includes('<div class="sub"><span>CP-1</span></div>'));
+  assert.ok(!html.includes('Current methodology') && !html.includes('<code>CP-1.md</code>'));
+  // The band's link says what it does; the file and line are its title.
+  assert.ok(html.includes('Quoted from the handoff') && html.includes('title="CP-1.md · line 13">View source</button>'));
   const r = report();
   assert.deepEqual(r.reportParts(OUT).map(p => p[0]), NINE);
   assert.deepEqual(r.navigationSections('CP-1', 'run-a', OUT).map(s => s[0]), NINE);
@@ -289,7 +292,7 @@ test('(h) a section placed audit is in the Evidence & audit list and in no other
 
 test('(i) the declared status is a badge beside the acceptance badge; none declared means the acceptance badge only', () => {
   const blocked = report({ state: { established: true, declared: 'Blocked' } }).reportHead(OUT);
-  assert.ok(blocked.includes('<span class="badge badge-gray">Blocked</span>') && blocked.includes('Candidate · not accepted'));
+  assert.ok(blocked.includes('<span class="badge badge-gray" title="Status the module declares in its handoff">Blocked</span>') && blocked.includes('Candidate · not accepted'));
   assert.equal(blocked.match(/class="badge badge-gray"/g).length, 2);
   assert.ok(blocked.indexOf('Candidate · not accepted') < blocked.indexOf('>Blocked<'));
   const none = report({ state: { established: true, declared: null } }).reportHead(OUT);
@@ -572,11 +575,11 @@ test('a key-numbers column with a prose cell is not numeric; "Not supplied" and 
   assert.equal(shown.match(/<th scope="col" class="num">/g).length, 2);
 });
 
-test('the head and the audit summary give the store\'s one section count', () => {
+test('the audit summary gives the store\'s section count; the head carries no file name or count', () => {
   const sections = [...SECTIONS, sec('Empty', 2, 70, 'audit', []), sec('Also empty', 2, 72, 'audit', [])];
   const html = report({ sections }).moduleReport(OUT);
   assert.equal(sections.length, 12);
-  assert.ok(html.includes('<code>CP-1.md</code> · 12 sections'));
+  assert.ok(!/class="module-head".*?<\/h2><div class="sub">(?:(?!<\/div>).)*(?:CP-1\.md|sections)/s.test(html));
   assert.ok(html.includes('<span>12 sections · unchanged from the handoff</span>'));
   assert.ok(!/\b(?:10|11) sections\b/.test(html));
 });
@@ -707,7 +710,7 @@ function runData(overrides = {}) {
   const cpx = runOutput('CP-X', { sections: [], state: { established: null, declared: null }, words: { view: 100, reference: 200, calculations: 50, limits: 0, audit: 0 }, summary: null });
   return { [outId('CP-1')]: cp1, [outId('CP-2A')]: cp2a, [outId('CP-6')]: cp6, [outId('CP-X')]: cpx, ...overrides };
 }
-function runPage(mutate = d => d, reports = [], shape = modules => modules) {
+function runPage(mutate = d => d, reports = [], shape = modules => modules, more = {}) {
   const src = read('views.js');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const plain = v => String(v).replace(/\*\*|`/g, '');
@@ -721,11 +724,12 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules) {
     ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'CP-X']]]];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
-  const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) } };
-  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] } }, DESIGN_CATALOGUE: { real: [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports } };
-  const names = ['LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
-  const args = [new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow, libraryPath};`)(...args);
+  const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
+  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
+  const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, reportList, reportView, libraryState};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -880,16 +884,17 @@ test('run report: open items are one grouped row per module with a summary, each
   assert.ok(!open.includes('CP-X'));
 });
 
-test('run report: the matrix has a row per module, not declared for CP-X, and the two word columns from words', () => {
+test('run report: the matrix has a row per module with its confidence and declared status, and no word counts', () => {
   const html = runPage().runReport(RUN);
   const mat = /<table class="matrix">.*?<\/table>/s.exec(html)[0];
-  assert.deepEqual([...mat.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Module', 'Confidence', 'Declared status', 'Words to read', 'Words of reference']);
+  assert.deepEqual([...mat.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Module', 'Confidence', 'Declared status']);
   const rows = [...mat.matchAll(/<tr><th scope="row">(.*?)<\/th>(.*?)<\/tr>/gs)].map(m => [strip(m[1]).trim(), [...m[2].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map(c => strip(c[1]).trim())]);
   assert.deepEqual(rows.map(r => r[0]), ['Financial foundation', 'Downside', 'Committee decision', 'CP-X']);
-  assert.deepEqual(rows[0][1], ['Medium', 'Requires More Work', '746', '4145']);
-  assert.deepEqual(rows[1][1], ['Not assessable', 'Blocked', '20', '35']);
-  assert.deepEqual(rows[2][1], ['Not assessable', 'not declared', '1', '5']);
-  assert.deepEqual(rows[3][1], ['No reader summary', 'not declared', '100', '250']);
+  assert.deepEqual(rows[0][1], ['Medium', 'Requires More Work']);
+  assert.deepEqual(rows[1][1], ['Not assessable', 'Blocked']);
+  assert.deepEqual(rows[2][1], ['Not assessable', 'not declared']);
+  assert.deepEqual(rows[3][1], ['No reader summary', 'not declared']);
+  assert.ok(!/\b(?:746|4145)\b/.test(strip(mat)));
 });
 
 test('run report: deliverables and the source inventory link render after the matrix', () => {
@@ -1183,20 +1188,20 @@ test('library: a row is one item per column; what left the row is the cell title
     metrics: { leverage: metric('6.5744', 'C9; same "basis"'), net_leverage: metric('0', 'Net of cash'), coverage: null }, ratings: [{ label: 'B+', agency: 'S&P', scope: 'issuer', date: '2024-06-30' }] };
   const cells = [...libraryRow(run, true, false).matchAll(/<td([^>]*)>(.*?)<\/td>/g)].map((m) => [m[1].trim(), m[2]]);
   // Ten columns, in the header's order; a cell holds one value and at most the one control that acts on it.
-  assert.deepEqual(cells.map(([, body]) => strip(body)), ['Zed &amp; Sons', 'run-z', 'Telecoms', '30 Sept 2024', '6.5744×', '0×', '—', 'B+', 'Not assessed', 'Handoffs only']);
+  assert.deepEqual(cells.map(([, body]) => strip(body)), ['Zed &amp; Sons', 'run-z', 'Telecoms', '30 Sept 2024', '6.5744×', '0×', 'n.a.', 'B+', 'Not assessed', 'Handoffs only']);
   assert.ok(cells.every(([, body]) => countOf(body, /<(?!\/)/g) <= 1));
   assert.ok(/^<button class="library-run-name" type="button" data-library-select="run-z" aria-expanded="true" aria-controls="run-detail"/.test(cells[0][1]));
   // A run the store does not hold has no link; its id is still shown.
-  assert.deepEqual(cells[1], ['class="run-id"', 'run-z']);
-  // The basis and the rating detail stay on the cell; a missing figure is a dash, a zero is a zero.
+  assert.deepEqual(cells[1], ['class="run-id" title="run-z"', 'run-z']);
+  // The basis and the rating detail stay on the cell; a missing figure reads n.a., a zero is a zero.
   assert.equal(cells[4][0], 'title="C9; same &quot;basis&quot;"');
   assert.equal(cells[5][0], 'title="Net of cash"');
   assert.equal(cells[6][0], 'class="missing" title="Not available"');
   assert.equal(cells[7][0], 'title="S&amp;P · Issuer · 30 Jun 2024"');
   // A run the store holds opens from its id; a percentage and the not-screened note are single items too.
   const held = libraryRow({ ...run, id: RUN, completion: 75, ratings: [] }, false, true);
-  assert.ok(held.includes(`<td class="run-id"><a href="#W-Overview/overview?c=${RUN}" aria-label="Open run: Zed &amp; Sons, ${RUN}">${RUN}</a></td>`), held);
-  assert.ok(held.endsWith('<td class="missing">—</td><td>75%</td><td>No report · not screened</td></tr>'));
+  assert.ok(held.includes(`<td class="run-id" title="${RUN}"><a href="#W-Overview/overview?c=${RUN}" aria-label="Open run: Zed &amp; Sons, ${RUN}">${RUN}</a></td>`), held);
+  assert.ok(held.endsWith('<td class="missing" title="No rating recorded">n.a.</td><td>75%</td><td>No report · not screened</td></tr>'));
   const views = read('views.js'), screen = read('screen.js');
   // The selected-run panel carries the ticker, workflow and period the row no longer shows; the issuer rail is a select.
   assert.ok(views.includes("esc(`${run.issuer} · ${run.id} / ${run.title}`)") && views.includes("['Evidence date',libraryDate(run.date),run.period]"));
@@ -1264,4 +1269,115 @@ test('reader charts: a negative value hangs below a raised zero baseline; chips 
   assert.ok(html.includes('<i class="series-0 negative" style="bottom:0%;height:25%"></i><strong class="below" style="bottom:0%">(100)</strong>'));
   // With chips each period is a group: its button holds the columns and label, its chips follow it.
   assert.equal(countOf(html, /<div class="chart-row" role="group" aria-label="FY202[34]"><button class="chart-open" data-evidence=/g), 2);
+});
+
+// ---- Screens pass (2026-11-10): what a reader acts on is shown; production detail (hashes, file names, word counts) is a title or behind a disclosure.
+const HASH = 'f'.repeat(64);
+const zedRun = (extra = {}) => ({ id: RUN, name: 'Zed & Sons', issuer: 'ZED', title: 'Credit Snapshot', sector: 'Telecoms', workflow: 'Credit Snapshot', date: '2024-09-30', period: 'FY-2024', completion: null, summary: 'Leverage is high.', gaps: [], ratings: [], currency: 'USD',
+  metrics: { leverage: { value: '6.57', unit: 'x', basis: 'Total debt / EBITDA', period: 'FY2024' } },
+  artifacts: [{ kind: 'report', label: HASH, state: 'candidate', relationship: 'direct', issue: '', available: true, href: `reports/${RUN}/${HASH}/report.html` }], ...extra });
+const zedReport = (run, id = HASH) => ({ id, label: 'Zed & Sons · as of 30 September 2024', build: null, status: null, mode: 'candidate', qualification: 'partial', issuer: 'Zed & Sons', issuerKey: 'zed', href: `reports/${run}/${id}/report.html`, download: `reports/${run}/${id}/original.html`,
+  builtFrom: [{ module: 'CP-1', run, source: `${run}/deliveries/${id}/CP-1.md`, sha256: 'a'.repeat(64), output: false }], files: [{ href: 'x/report.json', name: 'report.json' }] });
+
+test('library panel: a deliverable is named by its report and its recorded acceptance; measures the run lacks are one line', () => {
+  const page = runPage(d => d, [zedReport(RUN)]);
+  page.libraryState.selected = RUN;
+  const html = page.libraryDetail({ rows: [zedRun()] });
+  const list = /<ul class="artifact-list">(.*?)<\/ul>/s.exec(html)[1];
+  // The report's name is the link; the delivery folder's hash is not shown as text, and no build check is recited.
+  assert.ok(list.includes('>Zed &amp; Sons · as of 30 September 2024</a><small>Candidate · not accepted</small>'), list);
+  assert.ok(!strip(html).includes(HASH) && !html.includes('file hashes'));
+  // The acceptance is stated beside the buttons that open the report.
+  assert.ok(/<div class="detail-actions"><span class="badge badge-gray">Candidate · not accepted<\/span><a /.test(html));
+  // One card for the measure the run has; the seven it lacks are named once, with no empty card.
+  assert.equal(countOf(html, /class="metric-item"/g), 1);
+  assert.ok(html.includes('<p class="metric-absent">Not established for this run: Revenue, EBITDA, Net leverage, Interest coverage, Closing cash, Undrawn facilities, Cash flow measure.</p>'));
+  // A catalogued file the store does not hold keeps its own label; an accepted one says so.
+  const other = page.libraryDetail({ rows: [zedRun({ artifacts: [{ kind: 'report', label: 'Board pack', state: 'accepted', relationship: 'direct', issue: '', available: true, href: 'reports/elsewhere/pack.html' }] })] });
+  assert.ok(other.includes('>Board pack ↗</a><small>Accepted</small>'), other);
+});
+
+test('library filters: Reset shows only while something is filtered or sorted; Completeness is offered once a run records one', () => {
+  const page = runPage(d => d, [], m => m, { catalogue: [zedRun()] });
+  const idle = page.libraryPanel();
+  assert.ok(idle.includes('<button id="library-clear" class="tertiary-action" type="button" hidden>Reset filters</button>'));
+  assert.ok(!idle.includes('id="library-completion"'));
+  page.libraryState.sortKey = 'name';
+  assert.ok(page.libraryPanel().includes('<button id="library-clear" class="tertiary-action" type="button">Reset filters</button>'));
+  const assessed = runPage(d => d, [], m => m, { catalogue: [zedRun({ completion: 75 })] }).libraryPanel();
+  assert.ok(assessed.includes('id="library-completion"') && assessed.includes('75% or above'));
+  // The address is read against the same options, so it cannot set a Completeness nothing can match.
+  assert.ok(read('views.js').includes("completion:runs.some(run=>run.completion!=null)?[['75','75% or above']"));
+});
+
+test('reports: a report from another run names that run; the delivery hash is a title, never the row text; one provenance disclosure', () => {
+  const OTHER = 'run-b', OTHER_HASH = 'e'.repeat(64);
+  const reports = [zedReport(RUN), zedReport(OTHER, OTHER_HASH)];
+  const contextsMore = { [OTHER]: { folder: OTHER, run: 'RUN-B', modules: {} } };
+  const page = runPage(d => d, reports, m => m, { contexts: contextsMore });
+  const list = page.reportList(RUN);
+  const rows = [...list.matchAll(/<li class="report-row">(.*?)<\/li>/gs)].map(m => m[1]);
+  assert.equal(rows.length, 2);
+  const own = rows.find(r => r.includes(`title="Delivery ${HASH}"`)), other = rows.find(r => r.includes(`title="Delivery ${OTHER_HASH}"`));
+  assert.ok(own && !own.includes('class="code"'), own);
+  assert.ok(other.includes('<span class="code">RUN-B</span>'), other);
+  assert.ok(!strip(list).includes(HASH) && !strip(list).includes(OTHER_HASH));
+  // The heading already says the report was built from this run: no sentence repeats it.
+  assert.ok(list.includes('<h2>Built from this run</h2>') && !list.includes('class="intro"'));
+  // Reading one report: its sources and files are one disclosure in plain words; the way back is the rail and Change run.
+  const view = page.reportView(reports[1], OTHER);
+  assert.equal(countOf(view, /<details class="built-from">/g), 1);
+  assert.ok(view.includes('<summary>Built from 1 handoff · each matches its run file · 1 file</summary>'));
+  assert.ok(view.includes('<h3>Files in this deliverable</h3><ul><li><a href="x/report.json" download>report.json</a></li></ul></details>'));
+  assert.ok(!view.includes('Return to library') && !view.includes('byte-identical'));
+  // Reports of one issuer and date share a name, so the selector names the run too.
+  assert.ok(view.includes(`<option value="${OTHER_HASH}" selected>Zed &amp; Sons · as of 30 September 2024 · RUN-B</option>`), view);
+  // A handoff with no matching run file is still said, in place of the match.
+  const loose = { ...reports[1], builtFrom: [{ module: 'CP-1', run: null, source: 'CP-1.md', sha256: 'b'.repeat(64) }] };
+  assert.ok(page.reportView(loose, OTHER).includes('<summary>Built from 1 handoff · 1 with no matching run file · 1 file</summary>'));
+});
+
+test('run report: a finding shows its resolved chips; citations without a page are counted on the module page only', () => {
+  const gap = { chips: { [`${outId('CP-1')}:17`]: [{ kind: 'gap', label: 'no page' }] } };
+  const html = runPage(d => d, [], m => m, gap).runReport(RUN);
+  const story = storyModule(html, 'CP-1');
+  assert.ok(story.includes('aria-label="Handoff row, line 17"') && story.includes('data-chip='));
+  assert.ok(!html.includes('chip-count') && !html.includes('without a page'));
+});
+
+test('screens pass: one word for a run, in-app actions carry no out-arrow, and the styles the markup needs exist', () => {
+  const views = read('views.js'), css = read('screen.css'), screen = read('screen.js');
+  assert.ok(!/Change case|another case|for this case|other cases/.test(views));
+  assert.ok(views.includes('>Change run</a>') && !views.includes('View source ↗'));
+  for (const sel of ['.metric-absent{', '.library-table td.run-id{white-space:nowrap', '.built-from h3{', '#run-matrix .table-scroll{max-width']) assert.ok(css.includes(sel), sel);
+  // Never assessed is a fact, not an alert: the completeness note no longer uses the amber of states that need action.
+  const box = css.slice(css.lastIndexOf('.completion-box{'));
+  assert.ok(box.startsWith('.completion-box{border-color:var(--border-secondary);background:var(--gray-50)'));
+  // The list of reports is a page of links: it has no pager.
+  assert.ok(screen.includes("(next.module==='W-Reports'&&next.section==='list')"));
+});
+
+test('embedded report: the navigator uses the workspace\'s module names, keeping the report\'s own as the title', () => {
+  const src = read('report-adapter.js');
+  const last = src.slice(src.lastIndexOf('(() => {'));
+  // Run the naming pass over a minimal document: one module link as the report renders it.
+  const text = { nodeType: 3, data: 'Canonical data foundation' };
+  const link = { title: '', getAttribute: () => '#CP-1', querySelector: () => ({ firstChild: text }) };
+  const root = { querySelectorAll: () => [link] };
+  const walker = { nextNode: () => false };
+  const doc = { querySelectorAll: () => [root], createTreeWalker: () => walker };
+  class Observer { observe() {} }
+  new Function('document', 'MutationObserver', 'NodeFilter', 'Node', last.replace(/^\(\(\) => \{/, '').replace(/\}\)\(\);\s*$/, ''))(doc, Observer, { SHOW_TEXT: 4 }, { TEXT_NODE: 3 });
+  assert.equal(text.data, 'Financial foundation');
+  assert.equal(link.title, 'Canonical data foundation');
+});
+
+test('library table: the sorted column shows its direction; the others keep the two-way mark', () => {
+  const page = runPage(d => d, [], m => m, { catalogue: [zedRun()] });
+  Object.assign(page.libraryState, { sortKey: 'leverage', direction: 'desc' });
+  const html = page.libraryResults({ runs: [zedRun()], rows: [zedRun()], skipped: new Set(), hidden: '' });
+  assert.ok(html.includes('<th scope="col" aria-sort="descending"><button type="button" data-library-sort="leverage">Leverage <span aria-hidden="true">↓</span></button></th>'));
+  assert.ok(html.includes('<th scope="col" aria-sort="none"><button type="button" data-library-sort="name">Issuer <span aria-hidden="true">↕</span></button></th>'));
+  page.libraryState.direction = 'asc';
+  assert.ok(page.libraryResults({ runs: [zedRun()], rows: [zedRun()], skipped: new Set(), hidden: '' }).includes('Leverage <span aria-hidden="true">↑</span>'));
 });

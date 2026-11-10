@@ -39,6 +39,70 @@ analytical run was made with it.
   - Whether the readiness forecast matches what the modules actually do in a live run. It ports
     `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.
 
+## 2026-11-10 — Library and report screens: reader value against production detail (branch `claude/forecast-publication-screens`)
+
+Scope: the static library page only (`apps/issuer-library/credit_os/web/`), on
+`claude/forecast-publication` (PR 19) merged with `claude/period-charts` (PR 20). One agent, no
+sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-screens-pass.md`.
+
+- Change: production detail leaves the reading path (SHA-256 ids as link text, file names and line
+  numbers in heads and bands, handoff word counts, "file hashes checked at build", a citation count
+  on every Overview finding, five empty metric cards, a Completeness filter no run can match). It
+  stays in a title, the evidence inspector or one "Built from" disclosure. Reports and the report
+  selector name their run; the acceptance state sits beside Open report; "run" replaces "case";
+  a missing figure reads `n.a.`; a sorted column shows its direction.
+- Adversarial design review (breaker, newcomer, truster): BLOCK before the fixes (D1), CONCERNS
+  after them; D1 to D8 fixed, D9 to D14 left with the owner (design doc table).
+- Tests: twelve static tests changed or added and seen failing against the unchanged screens
+  (`git archive` of HEAD). `node --test` static + calendar 116 pass, 0 fail; CI fast pytest list
+  1441 passed, 7 deselected; `tests/test_library_page_browser.py` 20 passed; quality gate 0
+  findings, exit 0.
+- Looked at: headless Chrome at 1440 and 1280 over `file://`, and the built-in browser over a
+  local server, on a library rebuilt from the four retained TDG runs: library, Overview, module
+  matrix, CP-1 charts, reports list, report reader. No console error from the page (the one 404
+  is the optional `activity.js`, absent without a live run).
+- Not verified: phone and tablet widths; Windows and Edge; a library with many issuers or with an
+  accepted report (fixture only); a live run's activity view; the delivered report's own layout
+  inside the frame, which belongs to the delivery renderer; no independent review of this pass.
+
+## 2026-11-10 — Forecast tab: open items of run tdg-forecast-005 and CP-2G's own cases (branch `claude/forecast-tab-register`)
+
+Owner: investigate the open items; leave any that come from the sources lacking the needed files, but
+check the code would produce the output if they were there. All checks offline on retained data.
+
+- In-loop forecast check (not triggered live): replaying run 004's real CP-2G answer through
+  `_forecast_issues` gives the repair request naming `ebitda_margin`'s pattern failure (9 problems),
+  and replaying run 005's answer gives none. Verified on real model output; no provider call.
+- No downside case (sources): CP-2A's method forbids unsupported stress magnitudes, and the filings
+  give no rate path or stated stress case, so CP-2G wrote `downside_shock: null` and said why. With
+  a shock of 0.20/0.10 set in run 005's real CP-2G block, `model_files` writes REFERENCE and
+  DOWNSIDE, and the library grid shows a Downside group: Adj EBITDA 3,364 / 3,710 / 4,092, each
+  the base figure × 0.8 by hand; FY2025 interest 1,156.92 × 1.1 = 1,272.612.
+- Upside footnote (code): the cash flow notes said "The upside case stays in the calculation record".
+  CP-OS models never had one; the predecessor's models (`final-workflow` deliverables) do carry an
+  UPSIDE case, which the library hid. Sentence removed; the grid now shows UPSIDE (below).
+- No assumption register (code): `register_of` matched only headings containing "assumption
+  register", but the method fixes the id T2H.3, not the wording; runs 001–005 wrote "Assumption
+  register", "assumption lock", "assumption disposition" and "Assumptions and definition lock". It
+  now also matches a heading starting with T2H.3. Run 005's rebuilt library shows the register
+  (B1–B7, F1–F4, U1, D1–D2, L1–L2).
+- Tests written first and seen failing (4 of 5); library tests 68 passed incl. browser; gate exit 0.
+- CP-2G's own cases computed (owner, 2026-11-10, "Yes, compute them"): the inputs block takes
+  optional `upside_drivers` and `downside_drivers`, each only the drivers that differ from base
+  (the rest inherited). Python writes UPSIDE and DOWNSIDE_DRIVERS; CP-2A's shock stays DOWNSIDE on
+  base drivers (the predecessor's meaning), never compounded with CP-2G's downside. The keys are
+  written only when stated: run 005's delivery, made before this, still re-verifies byte for byte
+  (it failed with `delivery_changed: forecast_exact.json` in the first version, caught in review).
+  Grid groups: Base, Upside, Downside (CP-2G drivers), Downside stress (shock on base drivers).
+- Answer key written by hand, not by production code: upside year 1 (growth 0.10, margin 0.35)
+  revenue 1,100, EBITDA 385, CFO 239, FCF 195, closing cash 225; downside year 1 (no growth, no
+  dividends) 1,000 / 300 / 164 / 124 / 174; all three years of every case against the test's
+  fraction model. Run 005 replayed offline with its register's U1 (growth 0.2058) and D1–D2 (growth
+  0, margin 0.4781): upside revenue 9,574.052 = 7,940 × 1.2058; downside EBITDA 3,796.114 = 7,940 ×
+  0.4781. Tests first and seen failing (9); 237 passed incl. browser; node 105; gate exit 0.
+- Not verified: a live CP-2G run writing the case blocks (instructions changed, no paid run); the
+  predecessor's UPSIDE shown in this library (no such workspace built here).
+
 ## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
 
 Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
