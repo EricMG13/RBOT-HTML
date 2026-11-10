@@ -1340,7 +1340,7 @@ test('reader charts: a bridge whose running position dips below zero is drawn in
   assert.equal(rects.length, 4);
   for (const r of rects) assert.ok(r.top >= -12 && r.bottom <= 210.001, JSON.stringify(r));
   // The zero rule sits where the opening and closing bars stand; the deepest point (-200) reaches the floor.
-  const zero = Number(/<line x1="0" y1="([^"]*)" x2="660" y2="\1" class="axis zero-axis"\/>/.exec(html)[1]);
+  const zero = Number(/<line x1="0" y1="([^"]*)" x2="660" y2="\1" class="axis"\/>/.exec(html)[1]);
   assert.ok(zero < 210 && Math.abs(rects[0].bottom - zero) < 0.01 && Math.abs(rects[3].bottom - zero) < 0.01);
   assert.ok(Math.abs(rects[1].bottom - 210) < 0.01, 'the outflow ends at the lowest running position');
 });
@@ -1922,7 +1922,7 @@ test('calendar lanes: the Overview shows the same lanes compactly with a link to
 
 test('calendar lanes: a module filter draws only that module lane, and the Sources page draws the Sources lane', () => {
   const sources = d => { d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [laneRow(403, '2025-02-14', 'day', '—', 'Filing published', 'Historical — filed')])])], events: [{ lane: 'Sources', table: 402, gap: null }] }); return withLanes(d); };
-  const page = runPage(sources), only = page.eventLanesView(RUN, { module: 'CP-0', compact: true });
+  const page = runPage(sources), only = page.eventLanesView(RUN, { at: 'Evidence', compact: true });
   assert.equal(countOf(only, /<div class="lane-row">/g), 1);
   assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
   const text = read('views.js');
@@ -1988,8 +1988,8 @@ test('maps: placement is by the map, so credit-risk transmission reaches the Ove
   const page = runPage(withMaps);
   const overview = page.runReport(RUN);
   assert.ok(overview.includes('Credit-risk transmission') && !overview.includes('>Stress scenario<'));
-  assert.equal(page.mapsPlaced(RUN, { module: 'CP-1' }).includes('Stress scenario'), true);
-  assert.equal(page.mapsPlaced(RUN, { module: 'CP-5' }), '');
+  assert.equal(page.mapsView(outId('CP-1')).includes('Stress scenario'), true);
+  assert.equal(page.mapsPlaced(RUN, { at: 'Evidence' }), '');
   const text = read('views.js');
   assert.ok(/if\(module==='W-Evidence'\)return[^\n]*statusMapView\(context\)[^\n]*mapsPlaced\(context,\{at:'Evidence'\}\)/.test(text));
   assert.ok(/if\(module==='CP-OS'\)return[^\n]*statusMapView\(context,\{timeline:true\}\)/.test(text));
@@ -2126,6 +2126,48 @@ test('chart index: placed on the Overview and the Forecast page; a run with no c
 });
 
 const REPORT_FILES = [{ name: 'report.html', href: 'x/report.html' }, { name: 'report.json', href: 'x/report.json' }, { name: 'report-view.json', href: 'x/report-view.json' }, { name: 'CP-1.md', href: 'x/CP-1.md' }];
+test('chart index never claims or links charts hidden by a not-assessable module', () => {
+  const page = runPage(d => {
+    withIndex(d);
+    const out = d[outId('CP-1')];
+    out.state.established = false;
+    out.summary.limitation = 'No comparable source.';
+    return d;
+  });
+  const rows = cellsOf(page.chartIndex(RUN), 'data-chart');
+  for (const row of rows.slice(0, 2)) {
+    assert.equal(row[2], 'Not established for this run');
+    assert.equal(row[3], 'No comparable source.');
+    assert.equal(row[6], 'Not drawn');
+    assert.equal(row[7], 'Not drawn');
+  }
+  assert.ok(!page.chartIndex(RUN).includes('#CP-1/numbers'));
+  assert.equal(rows[3][2], 'Drawn', 'the folded module still draws its maps');
+});
+
+test('chart index uses the stored reason for an owner table that states none', () => {
+  const html = runPage(d => {
+    const out = d[outId('CP-1')], [chart] = out.charts;
+    out.charts = out.charts.slice(1);
+    out.chartGaps = [{ ...chart, gap: 'No sourced quantity.' }];
+    return d;
+  }).chartIndex(RUN);
+  const [row] = cellsOf(html, 'data-chart');
+  assert.equal(row[2], 'Not established for this run');
+  assert.equal(row[3], 'No sourced quantity.');
+  assert.equal(row[7], 'Not drawn');
+});
+
+test('status map names an unreadable event log without claiming times were not recorded', () => {
+  const record = { ...RECORD, timed: false, eventsIssue: '<ValueError>', steps: RECORD.steps.map(s => ({ ...s, started: null, accepted: null })) };
+  const page = runPage(d => d, [], m => m, { record });
+  for (const timeline of [true, false]) {
+    const html = page.statusMapView(RUN, { timeline });
+    assert.ok(html.includes('Event log could not be read: &lt;ValueError&gt;'));
+    assert.ok(!html.includes('no times recorded') && !html.includes('<ValueError>'));
+    assert.ok(html.includes('Module dependencies'));
+  }
+});
 const SYNTHETIC_FIGURES = [{ title: 'Chart data: synthetic leverage — Period', kind: 'Figure', periods: ['FY2023 / 2023-09-30', 'FY2024 / 2024-09-30'], unit: 'x', unitClass: 'multiple', note: 'Synthetic note.', points: 2, sources: [{ source: 'CP-0', pin: 'a'.repeat(64) }] }, { title: 'Synthetic grid', kind: 'Table', periods: [], unit: null, unitClass: null, note: null, points: 1, sources: [] }];
 test('report manifest: the level is named, each handoff is pinned by its full hash and run, and only the formats present are listed', () => {
   const report = { ...zedReport(RUN), files: REPORT_FILES, builtFrom: [...zedReport(RUN).builtFrom, { module: 'CP-6', run: null, source: 'CP-6.md', sha256: 'b'.repeat(64), output: false }] };

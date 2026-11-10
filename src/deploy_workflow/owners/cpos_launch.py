@@ -11,6 +11,7 @@ needs issuer-specific row selectors; add it when a run can derive those from CP-
 """
 
 import argparse
+from collections import Counter
 import hashlib
 import importlib.util
 import json
@@ -406,8 +407,6 @@ class OwnerTable:
     Add a bridge or a period table for any module here and the instructions and the loop's
     validation follow."""
 
-    module_id: str
-    figure_id: str
     heading: str
     value_columns: tuple[str, ...]
     chart_unit: str
@@ -430,6 +429,7 @@ class OwnerTable:
     not_before: tuple[str, ...] = ()  # (later, earlier) date columns: the first may not precede.
     one_unit: bool = False  # Every row states the same Reporting unit (one scale for the figure).
     series: str = ""  # A column whose distinct words are the figure's series, at most MAX_SERIES.
+    unique: tuple[str, ...] = ()  # Columns whose values together name a row once.
     optional: bool = False  # The module writes the table only if the handoff supplies its case.
     events: bool = False  # A dated-event table: no unit or basis columns; dates by precision.
     edges: bool = False  # A node/edge map table: no unit or basis columns; an edge type's words.
@@ -449,8 +449,6 @@ DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at o
 OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     "CP-1": (
         OwnerTable(
-            "CP-1",
-            "S.5",
             "Chart data: revenue and EBITDA",
             ("Revenue", "Adjusted EBITDA"),
             "US$m",
@@ -464,8 +462,6 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
             ),
         ),
         OwnerTable(
-            "CP-1",
-            "S.6",
             "Chart data: debt stack",
             (),
             "US$m",
@@ -488,8 +484,6 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
             noun="facility",
         ),
         OwnerTable(
-            "CP-1",
-            "EU.3",
             "Chart data: EBITDA bridge",
             ("Amount",),
             "US$m",
@@ -506,8 +500,6 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     ),
     "CP-2H": (
         OwnerTable(
-            "CP-2H",
-            "DR.6",
             "Chart data: rating triggers",
             (),
             "",
@@ -528,8 +520,6 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     ),
     "CP-4": (
         OwnerTable(
-            "CP-4",
-            "CR.1",
             "Chart data: covenant headroom",
             (),
             "",
@@ -549,8 +539,6 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     ),
     "CP-6": (
         OwnerTable(
-            "CP-6",
-            "PD.1",
             "Chart data: portfolio limits",
             (),
             "",
@@ -569,8 +557,6 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     ),
     "CP-2D": (
         OwnerTable(
-            "CP-2D",
-            "CR.2",
             "Chart data: liquidity bridge",
             ("Amount",),
             "US$m",
@@ -585,8 +571,6 @@ OWNER_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     ),
     "CP-3C": (
         OwnerTable(
-            "CP-3C",
-            "CR.3",
             "Chart data: refinancing need",
             ("Debt maturing", "Committed resources"),
             "US$m",
@@ -617,8 +601,6 @@ YIELD_COLUMNS = (
 
 def _peer_range(heading: str, rules: str) -> OwnerTable:
     return OwnerTable(
-        "CP-1C",
-        "RV.3b" if "multiples" in heading else "RV.3a",
         heading,
         (),
         "",
@@ -641,11 +623,9 @@ PEER_RULES = (
 )
 # The catalogue's other launcher-asked figures: CP-1B (EU.1, EU.2), CP-1C (RV.3a, RV.3b), CP-3D
 # (RV.1, a report strip figure that delivery does not ask for as a chart).
-COMPARISON_TABLES: dict[str, tuple[OwnerTable, ...]] = {
+OWNER_TABLES |= {
     "CP-1B": (
         OwnerTable(
-            "CP-1B",
-            "EU.1",
             "Chart data: prior and current results",
             (),
             "",
@@ -664,8 +644,6 @@ COMPARISON_TABLES: dict[str, tuple[OwnerTable, ...]] = {
             noun="measure",
         ),
         OwnerTable(
-            "CP-1B",
-            "EU.2",
             "Chart data: margin and KPI changes",
             (),
             "",
@@ -697,8 +675,6 @@ COMPARISON_TABLES: dict[str, tuple[OwnerTable, ...]] = {
     ),
     "CP-3D": (
         OwnerTable(
-            "CP-3D",
-            "RV.1",
             "Chart data: yield against maturity",
             (),
             "",
@@ -718,8 +694,6 @@ COMPARISON_TABLES: dict[str, tuple[OwnerTable, ...]] = {
         ),
     ),
 }
-
-OWNER_TABLES |= COMPARISON_TABLES  # One registry: the instructions and the loop read this.
 
 # CP-4C (DR.2 to DR.5). A value allocation is a step table the bridge check reads unchanged: the
 # first row is the enterprise value (the opening), the costs and each class's distribution are the
@@ -741,22 +715,19 @@ ALLOCATION_RULES = (
 
 def _allocation(scenario: int) -> OwnerTable:
     ask = " Ask for this scenario only if the handoff supplies it." if scenario > 1 else ""
+    rest = ALLOCATION_RULES if scenario == 1 else " The rules of scenario 1 apply."
     return OwnerTable(
-        "CP-4C",
-        f"DR.{scenario + 2}",
         f"Chart data: value allocation \u2014 scenario {scenario}",
         ("Amount",),
         "US$m",
         steps=True,
-        rules=f"Scenario {scenario} of the handoff's valuation rows.{ask}{ALLOCATION_RULES}",
+        rules=f"Scenario {scenario} of the handoff's valuation rows.{ask}{rest}",
         optional=scenario > 1,
     )
 
 
 OWNER_TABLES["CP-4C"] = (
     OwnerTable(
-        "CP-4C",
-        "DR.2",
         "Chart data: recovery by class",
         (),
         "",
@@ -775,6 +746,7 @@ OWNER_TABLES["CP-4C"] = (
         in_unit=("Claim", "Recovery"),
         one_unit=True,
         series="Scenario",
+        unique=("Class", "Scenario"),
         noun="class and scenario",
     ),
     *(_allocation(n) for n in (1, 2, 3)),
@@ -797,9 +769,7 @@ EVENT_RULES = (
     "modelled downgrade trigger`. Record each event once, in the lane of the module that owns "
     "it; another module refers to it in Credit relevance, it does not repeat the row. Source "
     "names the document and locator; Credit relevance says why the event matters. An event "
-    "with no stated date has no "
-    "row. If the handoff supplies no dated event, write one row in which every cell is "
-    "`Not supplied: <reason>`. "
+    "with no stated date has no row. A user-entered reminder's Status is `User reminder`. "
 )
 EVENT_LANES: dict[str, tuple[str, str]] = {
     "CP-0": (
@@ -887,8 +857,6 @@ for _module, (_lane, _guard) in EVENT_LANES.items():
     OWNER_TABLES[_module] = (
         *OWNER_TABLES.get(_module, ()),
         OwnerTable(
-            _module,
-            "EVT",
             f"Events: {_lane}",
             (),
             "",
@@ -906,8 +874,7 @@ EDGE_RULES = (
     "One row per edge the handoff states, From and To each one named node: the same name for the "
     "same node in every row. Edge type is exactly one of the words listed; Relationship and "
     "Evidence are stated in your own words from the source, never blank. No weights, "
-    "probabilities, coordinates or likelihoods; no edge the handoff does not state. If it "
-    "states none, write `Not supplied: <reason>` in every cell of one row. "
+    "probabilities, coordinates or likelihoods; no edge the handoff does not state. "
 )
 FACTS = ("Documentary Fact", "Management Language", "Analyst Interpretation")
 NARROW = (
@@ -979,8 +946,6 @@ for _heading, _module, _types, _guard in MAPS:
     OWNER_TABLES[_module] = (
         *OWNER_TABLES.get(_module, ()),
         OwnerTable(
-            _module,
-            "MAP",
             _heading,
             (),
             "",
@@ -996,8 +961,6 @@ def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
     if isinstance(table, OwnerTable):
         return table
     return OwnerTable(
-        table.module_id,
-        str(table.figure_id),
         table.heading,
         table.value_columns,
         str(table.chart_unit),
@@ -1109,7 +1072,9 @@ def _dates_issue(spec: OwnerTable, header: list[str], row: list[str]) -> str | N
 
 
 EVENT_SHAPES = {"month": r"\d{4}-(?:0[1-9]|1[0-2])", "quarter": r"\d{4}-Q[1-4]", "year": r"\d{4}"}
-EVENT_STATUS = re.compile(r"(?:Historical|Scheduled|Scenario) \u2014 \S")
+EVENT_STATUS = re.compile(
+    r"(?:Historical|Scheduled|Scenario) \u2014 \S|User reminder(?: \u2014 \S|$)"
+)
 EVENT_KINDS = "Historical, Scheduled or Scenario"
 EVENT_FORMS = {"day": "YYYY-MM-DD", "month": "YYYY-MM", "quarter": "YYYY-Qn", "year": "YYYY"}
 
@@ -1136,7 +1101,10 @@ def _event_issues(spec: OwnerTable, header: list[str], row: list[str]) -> list[s
     if published == stated:
         issues.append("Published repeats the event date: write \u2014 when it is the event date.")
     if not _stated_gap(cells["Status"]) and not EVENT_STATUS.match(cells["Status"]):
-        issues.append(f"Status `{cells['Status']}` must start with {EVENT_KINDS} and ` \u2014 `.")
+        issues.append(
+            f"Status `{cells['Status']}` must start with {EVENT_KINDS} and ` \u2014 `, "
+            "or be `User reminder`."
+        )
     return issues
 
 
@@ -1168,14 +1136,26 @@ def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None
     return issue
 
 
+def _states_none(spec: OwnerTable, header: list[str], rows: list[list[str]]) -> bool:
+    """The one escape for every owner table: each row's cells before the Reporting unit (every cell
+    of a bare table) are stated gaps, so the module states none; the unit and basis stay stated."""
+    tail = 0 if spec.bare else 2
+    return bool(rows) and all(
+        len(row) == len(header)
+        and all(_stated_gap(c) for c in row[: len(row) - tail])
+        and all(row[len(row) - tail :])
+        for row in rows
+    )
+
+
 def _row_table_issues(
     spec: OwnerTable, heading: str, header: list[str], rows: list[list[str]]
 ) -> list[str]:
     """A row table's rows against its fixed header, cell by cell, in the order stated."""
     issues = []
     ranks = []
-    if spec.bare and rows and all(_stated_gap(c) for row in rows for c in row):
-        return []  # The module states it has no dated event or edge: valid, and nothing is drawn.
+    if _states_none(spec, header, rows):
+        return []  # The module states none: valid, and nothing is drawn.
     for row in rows:
         if len(row) != len(header):
             issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
@@ -1207,6 +1187,16 @@ def _row_table_issues(
     )
     if len(seen) > MAX_SERIES:
         issues.append(f"`{heading}`: at most {MAX_SERIES} distinct {spec.series} values are drawn.")
+    keys = Counter(
+        tuple(row[header.index(n)] for n in spec.unique)
+        for row in rows
+        if spec.unique and len(row) == len(header)
+    )
+    issues.extend(
+        f"`{heading}`: {' / '.join(key)} is stated twice; one row names it once."
+        for key, count in sorted(keys.items())
+        if count > 1
+    )
     if spec.one_unit and len({row[-2] for row in rows if len(row) == len(header)}) > 1:
         issues.append(f"`{heading}`: every row states one Reporting unit, as one scale is drawn.")
     return issues
@@ -1489,6 +1479,26 @@ BRIDGE_RULES = (
 )
 
 
+CURRENCY_RULE = (
+    "An issuer reporting in another currency or scale writes "
+    "`Not supplied: reported in <unit>` in monetary cells. "
+)
+
+
+def _none_rule(spec: OwnerTable) -> str:
+    """The one sentence every row table (not a step table, which has its own) is sent for the case
+    that its module has nothing to report; `_states_none` accepts exactly that row."""
+    if not spec.columns:
+        return ""
+    cells = "every cell" if spec.bare else "every cell before Reporting unit"
+    return (
+        f" If the handoff supplies none, write one row whose {cells} is `Not supplied: <reason>`"
+        f"{'' if spec.bare else ', with Reporting unit and Basis and limitation stated'}: "
+        "the module "
+        "states none, and the page shows it as not established for this run."
+    )
+
+
 def _selector(route: MarkdownRoute | OwnerTable) -> str:
     if isinstance(route, OwnerTable) or route.kind == "chart":
         spec = _owner_table(route)
@@ -1497,7 +1507,7 @@ def _selector(route: MarkdownRoute | OwnerTable) -> str:
                 f"- `### {spec.heading}`: exactly one Markdown table headed "
                 f"`| {' | '.join(_chart_header(spec))} |`, one row per "
                 f"{'edge' if spec.edges else 'dated event'}. "
-                f"Every cell is stated, never blank. {spec.rules}"
+                f"Every cell is stated, never blank. {spec.rules}{_none_rule(spec)}"
             )
         others = [n for n in spec.numbers if spec.in_unit and n not in spec.in_unit]
         counted = [n for n in spec.numbers if n not in others]
@@ -1513,12 +1523,12 @@ def _selector(route: MarkdownRoute | OwnerTable) -> str:
             f"`| {' | '.join(_chart_header(spec))} |`, one row per "
             f"{'step' if spec.steps else spec.noun}. "
             f"Value cells{numbers} are plain numbers {where}, or `Not supplied: <reason>`.{rest} "
-            "An issuer reporting in another currency or scale writes "
-            "`Not supplied: reported in <unit>` in monetary cells. "
-            f"{'Every other cell is stated, never blank. ' if spec.columns else ''}"
+            + (CURRENCY_RULE if spec.chart_unit else "")
+            + f"{'Every other cell is stated, never blank. ' if spec.columns else ''}"
             "Basis and limitation is never blank."
             + (BRIDGE_RULES if spec.steps else "")
             + (f" {spec.rules}" if spec.rules else "")
+            + _none_rule(spec)
         )
     what = (
         "exactly one populated Markdown table under it." if route.kind == "table" else "prose only."
@@ -1575,6 +1585,8 @@ def _instructions(
 ) -> bytes:
     asked: list[MarkdownRoute | OwnerTable] = [r for r in routes if r.module_id == module]
     selectors = "\n".join(_selector(r) for r in (*asked, *OWNER_TABLES.get(module, ())))
+    first, shared, rest = selectors.partition(EDGE_RULES)
+    selectors = first + shared + rest.replace(EDGE_RULES, "")
     method = method_text(module)
     opening = OPENING.get(module)
     return (

@@ -167,7 +167,7 @@ ROW_CHARTS: tuple[tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[i
         ("Test", "Threshold", "Current", "Headroom", "Direction"),
         {**BULLET, "label": [0], "threshold": 1, "current": 2, "headroom": 3},
         (1, 2),
-        {4: DIRECTIONS},
+        {3: "gap", 4: DIRECTIONS},
     ),
     (
         ("Agency", "Trigger", "Threshold", "Current", "Direction"),
@@ -185,7 +185,7 @@ ROW_CHARTS: tuple[tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[i
         ("Measure", "Prior period", "Prior", "Current period", "Current"),
         {"kind": None, "label": 0, "sub": [1, 3], "periods": [1, 3], "prior": 2, "current": 4},
         (2, 4),
-        {},
+        {1: "gap", 3: "gap"},
     ),
     (
         ("Metric", "Issuer", "Peer low", "Peer median", "Peer high", "Peer count"),
@@ -205,7 +205,7 @@ ROW_CHARTS: tuple[tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[i
             "source": 5,
         },
         (2,),
-        {1: "date", 4: "date"},
+        {1: "date", 3: "gap", 4: "date"},
     ),
     (
         ("Class", "Scenario", "Claim", "Recovery", "Recovery %"),
@@ -694,15 +694,41 @@ def _bridge_amounts(table: dict[str, Any]) -> list[decimal.Decimal] | None:
     return values if sum(values[:-1], decimal.Decimal(0)) == values[-1] else None
 
 
-def _unsupplied_bridge(section: dict[str, Any]) -> bool:
-    """A step table whose every Amount is a stated `Not supplied: <reason>`: nothing to draw."""
+def _chart_gap(section: dict[str, Any]) -> dict[str, Any] | None:
+    """A fixed owner table explicitly stating no data; preserve its reason without a chart."""
     tables = [b for b in section["blocks"] if b["type"] == "table"]
-    return (
-        len(tables) == 1
-        and tables[0]["headers"] == STEP_HEADERS
-        and len(tables[0]["rows"]) > 0
-        and all(STATED_GAP.match(row["cells"][1]) for row in tables[0]["rows"])
-    )
+    if len(tables) != 1 or not tables[0]["rows"]:
+        return None
+    table = tables[0]
+    headers, rows = table["headers"], [r["cells"] for r in table["rows"]]
+    step = headers == STEP_HEADERS
+    known = tuple(headers[:-2]) in {leading for leading, *_ in ROW_CHARTS}
+    if not (step or known) or headers[-2:] != CHART_LAST_COLUMNS:
+        return None
+    if any(len(row) != len(headers) or not all(row[-2:]) for row in rows):
+        return None
+    cells = [c for row in rows for c in (row[1:2] if step else row[:-2])]
+    if not all(STATED_GAP.match(c) for c in cells):
+        return None
+    reasons = list(dict.fromkeys(c.partition(":")[2].strip() for c in cells))
+    return {**_chart_head(section, table), "gap": "; ".join(reasons)}
+
+
+def _row_relations_ok(rows: list[dict[str, Any]], kind: str | None) -> bool:
+    """Cross-cell constraints mirrored from the launcher; no value is filled or recomputed."""
+    cells = [r["cells"] for r in rows]
+    if kind == "range":
+        values = [
+            [decimal.Decimal(c.replace(",", "")) for c in row[2:5] if PLAIN_AMOUNT.fullmatch(c)]
+            for row in cells
+        ]
+        return all(v == sorted(v) for v in values)
+    if kind == "scatter":
+        return all(not (valid_date(r[1]) and valid_date(r[4])) or r[1] >= r[4] for r in cells)
+    if kind == "recovery":
+        keys = [(r[0], r[1]) for r in cells]
+        return len({r[1] for r in cells}) <= 3 and len(keys) == len(set(keys))
+    return True
 
 
 def _row_cell_ok(cell: str, column: int, numeric: tuple[int, ...], words: dict[int, Any]) -> bool:
@@ -714,9 +740,11 @@ def _row_cell_ok(cell: str, column: int, numeric: tuple[int, ...], words: dict[i
         return bool(valid_date(cell) or STATED_GAP.match(cell))
     if words.get(column) == "count":  # A whole number of peers, zero included.
         return bool(re.fullmatch(r"\d+", cell) or STATED_GAP.match(cell))
+    if words.get(column) == "gap":
+        return bool(cell)
     if column in words:
         return cell in words[column]
-    return bool(cell)
+    return bool(cell and not STATED_GAP.match(cell))
 
 
 def _ranks_in_order(rows: list[dict[str, Any]], column: int) -> bool:
@@ -742,6 +770,12 @@ def _row_chart(table: dict[str, Any]) -> dict[str, Any] | None:
         ) and all(row["cells"][-2] and row["cells"][-1] for row in rows)
         if not stated or ("rank" in roles and not _ranks_in_order(rows, roles["rank"])):
             return None
+        if not _row_relations_ok(rows, roles["kind"]):
+            return None
+        if roles["kind"] == "stack" and any(
+            not STATED_GAP.match(r["cells"][3]) and r["cells"][-2] != "US$m" for r in rows
+        ):
+            return None
         units = {row["cells"][-2] for row in rows}
         # A single stated unit is the figure's; rows in different units each state their own.
         return {**roles, "unit": units.pop() if len(units) == 1 else "", "columns": list(numeric)}
@@ -754,6 +788,19 @@ def _chart_head(section: dict[str, Any], table: dict[str, Any]) -> dict[str, Any
     return {"title": title[:1].upper() + title[1:], "table": table["line"]}
 
 
+def _period_cells_ok(section: dict[str, Any], table: dict[str, Any]) -> bool:
+    """Owner period and step tables use US$m, except cells explicitly stating a gap."""
+    fixed = table["headers"][0] == "Step" or section["heading"] in (
+        "Chart data: revenue and EBITDA",
+        "Chart data: refinancing need",
+    )
+    return not fixed or all(
+        STATED_GAP.match(c) or (PLAIN_AMOUNT.fullmatch(c) and r["cells"][-2] == "US$m")
+        for r in table["rows"]
+        for c in r["cells"][1:-2]
+    )
+
+
 def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
     """What the app needs to draw the section's table, or None when it is not the fixed shape."""
     tables = [b for b in section["blocks"] if b["type"] == "table"]
@@ -761,6 +808,8 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
         return None
     table = tables[0]
     headers = table["headers"]
+    if any(len(r["cells"]) != len(headers) or not all(r["cells"][-2:]) for r in table["rows"]):
+        return None
     if headers[0] not in CHART_FIRST_COLUMNS:
         head = _chart_head(section, table)
         drawn = _row_chart(table)
@@ -771,11 +820,16 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
         if drawn and drawn["kind"] == "recovery" and not drawn["unit"]:
             drawn = None  # The recoveries share one scale, so one unit.
         return drawn and {**head, **drawn}
-    if len(headers) < 4 or headers[-2:] != CHART_LAST_COLUMNS:
+    if (
+        len(headers) < 4
+        or headers[-2:] != CHART_LAST_COLUMNS
+        or not _period_cells_ok(section, table)
+    ):
         return None
+    valued = [r for r in table["rows"] if any(PLAIN_AMOUNT.fullmatch(c) for c in r["cells"][1:-2])]
     chart = {
         **_chart_head(section, table),
-        "unit": table["rows"][0]["cells"][-2],
+        "unit": (valued or table["rows"])[0]["cells"][-2],
         "columns": list(range(1, len(headers) - 2)),
     }
     if headers[0] == "Step":
@@ -797,7 +851,9 @@ EVENT_SHAPES = {
 }
 
 
-EVENT_STATUS = re.compile(r"(?:Historical|Scheduled|Scenario) \u2014 \S")
+EVENT_STATUS = re.compile(
+    r"(?:Historical|Scheduled|Scenario) \u2014 \S|User reminder(?: \u2014 \S|$)"
+)
 
 
 def _event_row_ok(cells: list[str]) -> bool:
@@ -870,7 +926,9 @@ def _edge_map(section: dict[str, Any]) -> dict[str, Any] | None:
 
 def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
     """A handoff's reader section and chart tables; a malformed one is named, the handoff reads."""
-    summary, charts, events, maps, problems = None, [], [], [], []
+    charts: list[dict[str, Any]] = []
+    gaps: list[dict[str, Any]] = []
+    summary, events, maps, problems = None, [], [], []
     for section in sections:
         heading = section["heading"]
         if heading == "Reader summary":
@@ -890,14 +948,15 @@ def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
             else:
                 problems.append(f"{heading} is not in its fixed table")
         elif heading.startswith(CHART_PREFIX):
-            chart = _chart_table(section)
+            chart = _chart_gap(section) or _chart_table(section)
             if chart:
-                charts.append(chart)
-            elif not _unsupplied_bridge(section):
+                (gaps if "gap" in chart else charts).append(chart)
+            else:
                 problems.append(f"{heading} is not in its fixed table")
     return {
         "summary": summary,
         "charts": charts,
+        "chartGaps": gaps,
         "events": events,
         "maps": maps,
         "issue": "; ".join(problems) or None,

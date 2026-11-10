@@ -326,3 +326,21 @@ def test_an_unreadable_event_log_keeps_the_edges_draws_no_time_and_names_the_fai
     record, issues = record_of(tmp_path, '{"event": "module_started"\nnot json\n{}\n')
     assert record["timed"] is False and record["edges"]
     assert any("r1: events.jsonl could not be read" in i for i in issues)
+    assert record["eventsIssue"] == "ValueError", (
+        "the record says the log failed, not that it is absent"
+    )
+
+
+def test_a_run_with_no_log_carries_no_event_failure(tmp_path):
+    record, _ = record_of(tmp_path, None)
+    assert "eventsIssue" not in record
+
+
+@pytest.mark.parametrize("line", ["[1]", '"text"', "null", "3"])
+def test_a_json_line_that_is_not_an_object_names_the_failure_and_does_not_stop_the_build(
+    tmp_path, line
+):
+    good = json.dumps(EVENTS[0])
+    record, issues = record_of(tmp_path, f"{line}\n{good}\n")
+    assert record["timed"] is False and record["eventsIssue"] == "ValueError"
+    assert any("r1: events.jsonl could not be read" in i for i in issues)
