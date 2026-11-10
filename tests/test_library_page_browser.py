@@ -51,6 +51,36 @@ BRIDGE = """
 | Debt repayment | -450 | US$m | Synthetic. |
 | Closing accessible liquidity | 570 | US$m | Synthetic. |
 """
+
+
+def chart_table(heading: str, header: str, *rows: str) -> str:
+    divider = " | ".join(["---"] * (header.count("|") + 1))
+    body = "".join(f"\n| {row} |" for row in rows)
+    return f"\n### Chart data: {heading}\n\n| {header} |\n| {divider} |{body}\n"
+
+
+# Synthetic: the credit-structure tables as the launcher asks for them (placed in the CP-1 fixture).
+UNIT_BASIS = "Reporting unit | Basis and limitation"
+STRUCTURE = (
+    chart_table(
+        "debt stack",
+        f"Facility | Ranking | Secured | Amount | Cumulative leverage | {UNIT_BASIS}",
+        "Term loan | 1 | Yes | 1,200 | 2.4 | US$m | Synthetic.",
+        "Notes | 2 | No | 800 | 4.0 | US$m | Synthetic.",
+    )
+    + chart_table(
+        "covenant headroom",
+        f"Test | Threshold | Current | Headroom | Direction | {UNIT_BASIS}",
+        "Net leverage | 5.0 | 4.2 | 0.8x | Passes at or below | x | Synthetic.",
+        "Liquidity | 100 | Not supplied: not stated | Not supplied: no current "
+        "| Passes at or above | US$m | Synthetic.",
+    )
+    + chart_table(
+        "portfolio limits",
+        f"Limit | Current exposure | Proposed exposure | Limit value | {UNIT_BASIS}",
+        "Single issuer | 3.0 | 4.0 | 5.0 | % NAV | Synthetic.",
+    )
+)
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -740,3 +770,21 @@ def test_a_liquidity_bridge_is_a_waterfall_with_its_table_form_and_fits_the_page
     assert (seen["points"], seen["totals"], seen["outflows"]) == (4, 2, 1)
     assert seen["barsInside"] is True and seen["fits"] is True
     assert seen["formRows"] == 4 and seen["formHidden"] is True  # Present for a reader, closed.
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the_page(
+    tmp_path, width
+):
+    make_run(tmp_path, "run-a", as_of="2024-12-31", cp1_extra=CHARTS + STRUCTURE)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_structure.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert (seen["segments"], seen["bulletRows"], seen["limitRows"]) == (2, 2, 1)
+    assert (seen["markers"], seen["ticks"]) == (1, 3)  # No marker for the current value not stated.
+    assert seen["forms"] >= 3 and seen["formsClosed"] is True and seen["fits"] is True

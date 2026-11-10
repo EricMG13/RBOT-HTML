@@ -534,3 +534,23 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 /* Print: the canvas is the document. The app frame goes, nothing clips or scrolls, and a finding or a table row is not split across pages. Closed parts print closed. Fills print as drawn: the navy band and a filled coverage cell carry white text. */
 @media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench,.workbench.has-evidence{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}.library-table,table.register,table.open-items,table.matrix{min-width:0}article.finding,tr,.chart-row,.na-line{break-inside:avoid}h2,h3,h4,.story-head{break-after:avoid}a{text-decoration:none}}
 .chart-table{margin:4px 0 14px}.chart-table>summary{cursor:pointer;font-size:var(--fs-label);font-weight:600;color:var(--blue)}.panel-card>.chart-table{margin-left:16px;margin-right:16px}
+.stack-bar{display:flex;height:34px;margin:12px 0 8px;background:var(--quiet);border-radius:var(--radius-inline);overflow:hidden}
+.stack-seg{display:block;min-width:2px;border-right:2px solid #fff;cursor:pointer}
+.stack-seg:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+.stack-key{list-style:none;margin:0 0 14px;padding:0}
+.stack-key li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--rule);min-width:0}
+.stack-key li>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.stack-key small{display:block;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);margin-top:2px}
+.stack-key .swatch{flex:none;width:12px;height:12px;margin-top:4px;border-radius:2px}
+.bullet-row,.limit-row{border-bottom:1px solid var(--rule)}
+.bullet-row>.chart-open,.limit-row>.chart-open{display:grid;grid-template-columns:minmax(96px,1fr) minmax(120px,2.4fr);gap:4px 14px;align-items:center;width:100%;min-width:0;padding:10px 0;text-align:left;cursor:pointer}
+.bullet-row>.chart-open:hover,.limit-row>.chart-open:hover{background:var(--gray-25)}
+.structure-text{grid-column:1/-1;font:var(--fs-compact) 'Red Hat Mono',monospace;color:var(--muted);overflow-wrap:anywhere}
+.bullet-track,.limit-track{position:relative;display:block;min-width:0}
+.bullet-track{height:18px;background:var(--quiet)}
+.bullet-track .pass{position:absolute;top:0;bottom:0;background:var(--selection)}
+.bullet-track .marker{position:absolute;top:4px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--blue)}
+.tick{position:absolute;top:-3px;bottom:-3px;border-left:2px solid var(--navy)}
+.limit-track{padding:2px 0;background:var(--quiet)}
+.limit-track>i[class^=series-]{display:block;height:10px;margin-top:2px;margin-bottom:2px}
+.limit-key{width:2px!important;height:12px!important;background:var(--navy)}

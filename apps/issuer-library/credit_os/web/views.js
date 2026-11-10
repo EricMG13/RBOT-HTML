@@ -271,11 +271,56 @@ function chartTableForm(id,chart) {
   const table=fixtureTable(id,chart.table),columns=table.headers.map((_,c)=>c);
   return `<details class="chart-table"><summary>Table form</summary>${sourceTable(id,chart.title,table,columns.map(c=>numericColumn(table,c)),columns,table.rows)}</div></details>`;
 }
+// ---- Structure views (a "Chart data:" row table that is not by period or step): drawn from the stated numbers only. A value that is
+// not a number is n.a. with its stated reason as the title; it is never a zero position. Nothing is computed for display: headroom and
+// cumulative leverage are shown as stated, and the geometry uses the stated numbers.
+const roundPct=n=>Math.round(n*100)/100;
+const shown=cell=>/^Not supplied:/.test(cell)?`<span title="${esc(cell)}">n.a.</span>`:esc(cell);
+const stated=(cell,suffix='')=>chartNumber(cell)===null?shown(cell):`${esc(cell)}${suffix}`;
+// A track runs from the zero baseline (or the lowest stated value) to just past the highest: `at` is a stated number's position in percent.
+function trackScale(numbers) {
+  const known=numbers.filter(n=>n!==null),low=Math.min(0,...known),high=Math.max(0,...known),end=high+((high-low)||1)*.1;
+  return n=>roundPct((n-low)/(end-low)*100);
+}
+function structureOpen(id,row,inner,label,chips) {
+  const key=`${id}:${row.line}`,button=`<button class="chart-open" data-evidence="${esc(key)}" aria-label="${esc(`${label}. View source`)}">${inner}</button>`;
+  return chips?`${button}${chipsMarkup(key)}`:button;
+}
+function stackChart(id,v,chips=false) {
+  const table=fixtureTable(id,v.table),amounts=table.rows.map(r=>chartNumber(r.cells[v.amount])),total=amounts.reduce((sum,n)=>sum+(n>0?n:0),0);
+  const bar=table.rows.map((row,i)=>amounts[i]>0?`<a class="stack-seg series-${i%4}" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${row.cells[v.label]}, ${row.cells[v.amount]} ${v.unit}. View source`)}" title="${esc(row.cells[v.label])}: ${esc(row.cells[v.amount])}"></a>`:'').join('');
+  const key=table.rows.map((row,i)=>`<li><i class="swatch series-${i%4}"></i><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(row.cells[v.amount])} · Cumulative leverage ${stated(row.cells[v.leverage],'x')}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
+  return `${chartIntro(id,v)}<div class="stack-bar" role="group" aria-label="${esc(v.title)} in stated rank order. Select a facility to inspect its source.">${bar}</div><ol class="stack-key">${key}</ol>`;
+}
+function bulletChart(id,v,chips=false) {
+  const table=fixtureTable(id,v.table);
+  return `${chartIntro(id,v)}<div class="bullet-chart">${table.rows.map(row=>{
+    const cells=row.cells,threshold=chartNumber(cells[v.threshold]),current=chartNumber(cells[v.current]),direction=cells[v.direction],at=trackScale([threshold,current]);
+    const label=v.label.map(c=>plain(cells[c])).join(' · '),unit=v.unit?'':cells[cells.length-2];
+    const pass=threshold===null?'':/below/.test(direction)?`<i class="pass" style="left:0%;width:${at(threshold)}%"></i>`:`<i class="pass" style="left:${at(threshold)}%;width:${roundPct(100-at(threshold))}%"></i>`;
+    const track=`<span class="bullet-track">${pass}${threshold===null?'':`<i class="tick" style="left:${at(threshold)}%"></i>`}${current===null?'':`<i class="marker" style="left:${at(current)}%"></i>`}</span>`;
+    const text=`<span class="structure-text">Threshold ${stated(cells[v.threshold])} · Current ${stated(cells[v.current])}${v.headroom===null?'':` · Headroom ${shown(cells[v.headroom])}`} · ${esc(direction)}</span>`;
+    const inner=`<span class="chart-label">${esc(label)}${unit?`<small>${esc(unit)}</small>`:''}</span>${track}${text}`;
+    return `<div class="bullet-row" role="group" aria-label="${esc(label)}">${structureOpen(id,row,inner,`${label}: threshold ${cells[v.threshold]}, current ${cells[v.current]}, ${direction}`,chips)}</div>`;
+  }).join('')}</div>`;
+}
+function limitsChart(id,v,chips=false) {
+  const table=fixtureTable(id,v.table);
+  return `${chartIntro(id,v)}<div class="limits-chart"><div class="chart-legend"><span><i class="series-0"></i>Current exposure</span><span><i class="series-1"></i>Proposed exposure</span><span><i class="limit-key"></i>Limit</span></div>${table.rows.map(row=>{
+    const cells=row.cells,[current,proposed,limit]=[v.current,v.proposed,v.limit].map(c=>chartNumber(cells[c])),at=trackScale([current,proposed,limit]),zero=at(0);
+    const bar=(n,series)=>n===null?'':`<i class="series-${series}" style="${n<0?`margin-left:${at(n)}%;`:zero?`margin-left:${zero}%;`:''}width:${roundPct(Math.abs(at(n)-zero))}%"></i>`;
+    const track=`<span class="limit-track">${bar(current,0)}${bar(proposed,1)}${limit===null?'':`<i class="tick" style="left:${at(limit)}%"></i>`}</span>`;
+    const text=`<span class="structure-text">Current ${stated(cells[v.current])} · Proposed ${stated(cells[v.proposed])} · Limit ${stated(cells[v.limit])}</span>`;
+    const inner=`<span class="chart-label">${esc(plain(cells[v.label]))}${v.unit?'':`<small>${esc(cells[cells.length-2])}</small>`}</span>${track}${text}`;
+    return `<div class="limit-row" role="group" aria-label="${esc(plain(cells[v.label]))}">${structureOpen(id,row,inner,`${plain(cells[v.label])}: current ${cells[v.current]}, proposed ${cells[v.proposed]}, limit ${cells[v.limit]}`,chips)}</div>`;
+  }).join('')}</div>`;
+}
+const READER_FIGURES={waterfall:bridgeChart,stack:stackChart,bullet:bulletChart,limits:limitsChart};
 // A reader chart is a "Chart data:" table whose first column is Period, so it is drawn over time: periods along the x axis in table order,
 // one column per series from a zero baseline (owner, 2026-11-10). Each period is one button (its handoff row) with its chips under it.
-// A step table (store.py: kind "waterfall") is the liquidity bridge: opening, stated changes and closing, drawn by bridgeChart.
+// A step table (store.py: kind "waterfall") is a bridge: opening, stated changes and closing, drawn by bridgeChart; the row tables (kinds stack, bullet, limits) are below.
 function readerChart(id,chart,chips=false,note=true) {
-  if(chart.kind==='waterfall')return `${bridgeChart(id,chart)}${chartTableForm(id,chart)}`;
+  if(READER_FIGURES[chart.kind])return `${READER_FIGURES[chart.kind](id,chart,chips)}${chartTableForm(id,chart)}`;
   const table=fixtureTable(id,chart.table),series=chart.columns||[chart.column],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
   const numbers=rows.flatMap(row=>series.map(c=>chartNumber(row.cells[c])??0));
   const top=Math.max(0,...numbers),low=Math.min(0,...numbers),span=top-low||1,pct=n=>Math.round(n/span*10000)/100,zero=pct(-low);
@@ -409,7 +454,7 @@ function reportBand(id) {
 // A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
 const cardTitle=chart=>chart.replace(/<div class="section-heading"><h2>(.*?)<\/h2>/s,'<div class="section-heading"><h4>$1</h4>');
 // The index of the last period chart: the waterfall is not a column chart, so "Missing values have no bar" prints under the last one that is.
-const lastPeriodChart=charts=>charts.findLastIndex(c=>c.kind!=='waterfall');
+const lastPeriodChart=charts=>charts.findLastIndex(c=>!c.kind);
 const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.

@@ -144,6 +144,38 @@ CHART_PREFIX = "Chart data: "
 CHART_LAST_COLUMNS = ["Reporting unit", "Basis and limitation"]
 CHART_FIRST_COLUMNS = ("Period", "Step")  # Periods are columns over time; steps are a bridge.
 STEP_HEADERS = ["Step", "Amount", *CHART_LAST_COLUMNS]
+DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
+# Row tables the launcher asks for (cpos_launch.py OWNER_TABLES with `columns`): the exact leading
+# header, the drawn kind with its column roles, the numeric columns and the columns of fixed words.
+BULLET = {"kind": "bullet", "direction": 4}  # Direction is the last column before the unit.
+ROW_CHARTS: tuple[
+    tuple[tuple[str, ...], dict[str, Any], tuple[int, ...], dict[int, tuple[str, ...]]], ...
+] = (
+    (
+        ("Facility", "Ranking", "Secured", "Amount", "Cumulative leverage"),
+        {"kind": "stack", "label": 0, "rank": 1, "secured": 2, "amount": 3, "leverage": 4},
+        (3, 4),
+        {2: ("Yes", "No")},
+    ),
+    (
+        ("Test", "Threshold", "Current", "Headroom", "Direction"),
+        {**BULLET, "label": [0], "threshold": 1, "current": 2, "headroom": 3},
+        (1, 2),
+        {4: DIRECTIONS},
+    ),
+    (
+        ("Agency", "Trigger", "Threshold", "Current", "Direction"),
+        {**BULLET, "label": [0, 1], "threshold": 2, "current": 3, "headroom": None},
+        (2, 3),
+        {4: DIRECTIONS},
+    ),
+    (
+        ("Limit", "Current exposure", "Proposed exposure", "Limit value"),
+        {"kind": "limits", "label": 0, "current": 1, "proposed": 2, "limit": 3},
+        (1, 2, 3),
+        {},
+    ),
+)
 
 
 def physical_lines(text: str) -> list[str]:
@@ -520,6 +552,51 @@ def _unsupplied_bridge(section: dict[str, Any]) -> bool:
     )
 
 
+def _row_cell_ok(cell: str, column: int, numeric: tuple[int, ...], words: dict[int, Any]) -> bool:
+    """Mirrors the launcher's cell check for a row table: a plain number or a stated gap in a
+    numeric column, one of the fixed words in a word column, anything stated elsewhere."""
+    if column in numeric:
+        return bool(PLAIN_AMOUNT.fullmatch(cell) or STATED_GAP.match(cell))
+    if column in words:
+        return cell in words[column]
+    return bool(cell)
+
+
+def _ranks_in_order(rows: list[dict[str, Any]], column: int) -> bool:
+    """Legal rank is a positive whole number that never falls down the rows (as the launcher)."""
+    ranks = [row["cells"][column] for row in rows]
+    if not all(re.fullmatch(r"[1-9]\d*", rank) for rank in ranks):
+        return False
+    return [int(r) for r in ranks] == sorted(int(r) for r in ranks)
+
+
+def _row_chart(table: dict[str, Any]) -> dict[str, Any] | None:
+    """A debt stack, headroom or portfolio-limit table that is in its fixed shape, else None."""
+    headers, rows = table["headers"], table["rows"]
+    for leading, roles, numeric, words in ROW_CHARTS:
+        if tuple(headers[:-2]) != leading or headers[-2:] != CHART_LAST_COLUMNS:
+            continue
+        if any(len(row["cells"]) != len(headers) for row in rows):
+            return None
+        stated = all(
+            _row_cell_ok(cell, at, numeric, words)
+            for row in rows
+            for at, cell in enumerate(row["cells"][:-2])
+        ) and all(row["cells"][-2] and row["cells"][-1] for row in rows)
+        if not stated or ("rank" in roles and not _ranks_in_order(rows, roles["rank"])):
+            return None
+        units = {row["cells"][-2] for row in rows}
+        # A single stated unit is the figure's; rows in different units each state their own.
+        return {**roles, "unit": units.pop() if len(units) == 1 else "", "columns": list(numeric)}
+    return None
+
+
+def _chart_head(section: dict[str, Any], table: dict[str, Any]) -> dict[str, Any]:
+    # Only the first letter is raised: an acronym in the heading keeps its case.
+    title = section["heading"].removeprefix(CHART_PREFIX)
+    return {"title": title[:1].upper() + title[1:], "table": table["line"]}
+
+
 def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
     """What the app needs to draw the section's table, or None when it is not the fixed shape."""
     tables = [b for b in section["blocks"] if b["type"] == "table"]
@@ -527,18 +604,14 @@ def _chart_table(section: dict[str, Any]) -> dict[str, Any] | None:
         return None
     table = tables[0]
     headers = table["headers"]
-    if (
-        len(headers) < 4
-        or headers[0] not in CHART_FIRST_COLUMNS
-        or headers[-2:] != CHART_LAST_COLUMNS
-    ):
+    if headers[0] not in CHART_FIRST_COLUMNS:
+        drawn = _row_chart(table)
+        return drawn and {**_chart_head(section, table), **drawn}
+    if len(headers) < 4 or headers[-2:] != CHART_LAST_COLUMNS:
         return None
-    chart: dict[str, Any] = {
-        # Only the first letter is raised: an acronym in the heading keeps its case.
-        "title": section["heading"].removeprefix(CHART_PREFIX)[:1].upper()
-        + section["heading"].removeprefix(CHART_PREFIX)[1:],
+    chart = {
+        **_chart_head(section, table),
         "unit": table["rows"][0]["cells"][-2],
-        "table": table["line"],
         "columns": list(range(1, len(headers) - 2)),
     }
     if headers[0] == "Step":
