@@ -130,8 +130,8 @@ class Watcher:
 
         Nothing is moved or deleted; the record says where the files are."""
         for folder in sorted(self.layout.drops.iterdir()):
-            if folder.name in self._records:
-                continue
+            if folder.name in self._records or drops._is_noise(folder.name):
+                continue  # a system file (.DS_Store, Thumbs.db) is not a claim
             with self._guard(f"folder {folder}"):
                 self._put(
                     Record(

@@ -1178,6 +1178,18 @@ def test_l1_a_claimed_loose_file_with_no_record_is_rejected_at_start_up(root):
     assert orphan.read_bytes() == b"%PDF loose"
 
 
+def test_l1_system_files_in_drops_do_not_stop_start_up_or_get_a_record(root):
+    lay = ensure_layout(root)
+    strays = [".DS_Store", "Thumbs.db", "desktop.ini", "~$lock"]
+    for name in strays:
+        (lay.drops / name).write_bytes(b"x")
+    orphan = lay.drops / "20260101-000000-01"
+    orphan.write_bytes(b"%PDF loose")
+    Watcher(settings(root)).close()
+    assert [r.id for r in load_all(lay)] == [orphan.name]
+    assert all((lay.drops / name).read_bytes() == b"x" for name in strays)
+
+
 def test_l1_a_loose_file_in_the_inbox_is_rejected_under_its_own_name(root):
     (root / "inbox").mkdir(parents=True, exist_ok=True)
     w = Watcher(settings(root))
