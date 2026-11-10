@@ -1176,3 +1176,10 @@ test('module tables: a numeric column is .num, a number in a text column is .fig
   const css = read('screen.css');
   assert.ok(css.includes(".table-card td{font-family:'Red Hat Text',sans-serif}.table-card td.fig{font-family:'Red Hat Mono',monospace"));
 });
+
+test('library: a ratio basis is clamped to three lines by CSS only; the cell and its title keep the whole sentence', () => {
+  const views = read('views.js'), css = read('screen.css');
+  assert.ok(views.includes('<span class="cell-secondary basis" title="${esc(basis)}">${esc(basis)}</span>'));
+  assert.ok(css.includes('.library-table .basis{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}'));
+  assert.ok(css.includes('@media print{.library-table .basis{display:block;overflow:visible}}'));
+});

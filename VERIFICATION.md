@@ -32,9 +32,14 @@ the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `orig
   background fills); rewrite tournament run inline (one hoist applied, the rest held).
 - Detector after the pass (1280): no skipped-heading or line-length finding on the four routes;
   the remaining tiny-text findings are the committed 11px label size and nested-cards is the app frame.
+- Basis clamp (owner, 2026-11-10, after the PR opened): the library's ratio basis shows three lines
+  per row. Probe at 1440 and 1280: 12 of 12 basis cells clamped, each cell's title equals its full
+  text, rows 145–161px, table 922px in 922px at 1280. Node 105 pass; the three library pytest files
+  70 passed.
 - Not verified: a real print dialog and printers; Safari and Firefox; a screen reader; Windows
   forced colours (rule written, not rendered); touch input; the inbox-built library with Run
-  activity; runs without charts or with a committee band; library rows remain 190–365px tall.
+  activity; runs without charts or with a committee band; whether a keyboard-only reader finds
+  the full basis (it is in the selected-run panel, not on focus).
 
 ## 2026-11-10 — Run report Phase A (library Overview and module pages)
 

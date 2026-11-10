@@ -30,6 +30,9 @@ Module page
 
 Library
 - * Each row shows its run id. The table fits 1280px (922px box); closed criteria groups share one line.
+- A ratio's basis is clamped to three lines in the row (owner, 2026-11-10). The clamp is CSS only: the
+  cell's text and title hold the whole sentence, the selected-run panel prints it in full, and print
+  shows it whole. Rows are 145–161px (were 245–485px before the pass).
 
 Everywhere
 - Print stylesheet (the canvas prints whole, fills kept), forced-colours rule for coverage, reduced
@@ -45,8 +48,6 @@ Everywhere
 
 ## Left as found
 
-- Library rows stay tall (190–365px): the ratio basis sentences wrap in ~110px columns. Clamping
-  them would hide definitions the row shows today; that is the owner's call.
 - The selected-run panel stays below the table. "Selected run" above its heading, the `—` for a
   missing rating, revenue or EBITDA, and "Open report" as plain text when the file is not linked
   are content or pre-existing behaviour.

@@ -653,7 +653,11 @@ function libraryCoverage({runs,coverage,unscreened}) {
   return lines.join('');
 }
 const libraryCell=(primary,secondary,cls='')=>`<td><span class="cell-primary${cls}">${esc(primary)}</span><span class="cell-secondary">${esc(secondary)}</span></td>`;
-const libraryMetricCell=(run,key)=>libraryCell(libraryMetric(run.metrics[key]),run.metrics[key]?.basis||'Not available',run.metrics[key]?'':' missing');
+// The basis is clamped to three lines in the row (owner, 2026-11-10); the whole sentence stays in the cell's text and title, and the selected-run panel prints it in full.
+const libraryMetricCell=(run,key)=>{
+  const metric=run.metrics[key],basis=metric?.basis||'Not available';
+  return `<td><span class="cell-primary${metric?'':' missing'}">${esc(libraryMetric(metric))}</span><span class="cell-secondary basis" title="${esc(basis)}">${esc(basis)}</span></td>`;
+};
 function libraryCompletion(run) {
   if(run.completion===null)return libraryCell('Not assessed','Checklist required');
   const done=run.checkpoints?`${run.checkpoints.done}/${run.checkpoints.total} requirements`:'';

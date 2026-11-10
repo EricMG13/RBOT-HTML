@@ -134,8 +134,11 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-control)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 .ticker{display:block;font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
 .run-id{font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;overflow-wrap:anywhere}
+/* A ratio's basis shows three lines in the row; the full sentence is the title and is in the selected-run panel. Print shows it whole. */
+.library-table .basis{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+@media print{.library-table .basis{display:block;overflow:visible}}
 /* The run's identity gets the room; a date stays on one line. Below 1300px the cells tighten so nine columns fit without a sideways scroll. */
-.library-table th:first-child{width:13%}.library-table th{vertical-align:middle}.library-table td:nth-child(3) .cell-primary{white-space:nowrap}
+.library-table th:first-child{width:18%}.library-table th{vertical-align:middle}.library-table td:nth-child(3) .cell-primary{white-space:nowrap}
 @media(max-width:1300px){.library-table th,.library-table td{padding-left:10px;padding-right:10px}}
 .cell-primary{display:block;font-weight:600}.cell-primary.missing{color:var(--text-quaternary);font-weight:400}
 .cell-secondary{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}
