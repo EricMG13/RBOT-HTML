@@ -36,3 +36,9 @@ guidance. Asked whether CP-2G should give analyst-judgment drivers, with the opt
 method change needing "another paid run of about USD 1.30 to prove", the user said "Yes, allow
 judgment": one fresh launch of the same four modules and scope, cap USD 10, in
 `/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`.
+
+Fourth launch: `tdg-forecast-003` stopped at CP-2A, which read the context's declared but absent
+executed legal documents as a prohibition. Asked "Rerun the four modules with legal documents set
+to "none" (about USD 1.10, cap USD 10)?", the user said "Yes, rerun": one fresh launch of the same
+four modules, the context changed only in `attachments.legal_documents` (`executed` to `none`),
+cap USD 10, in `/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`.
