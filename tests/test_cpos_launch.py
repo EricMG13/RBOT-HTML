@@ -2827,3 +2827,10 @@ def test_checker_sends_back_each_malformed_credit_structure_table(
     assert old in raw
     issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
     assert any(complaint in issue for issue in issues), issues
+
+
+def test_the_debt_stack_instruction_keeps_leverage_out_of_the_money_unit(tmp_path):
+    text = instruction_text(tmp_path, "CP-1")
+    assert "(Amount) are plain numbers in US$m" in text
+    assert "Cumulative leverage is a plain number in the unit its rule states" in text
+    assert "(Amount, Cumulative leverage) are plain numbers in US$m" not in text

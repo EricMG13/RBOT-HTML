@@ -1390,6 +1390,7 @@ test('structure views: a debt stack is segments in stated rank order, widths fro
   assert.ok(key.includes('Secured') && key.includes('1,200') && key.includes('2.4x') && key.includes('4.0x'));
   // A gap is stated as n.a. in the key and has no segment; it is not a zero.
   assert.ok(/Subordinated.*n\.a\./s.test(key) && !/Subordinated.*>0</s.test(key));
+  assert.ok(html.includes('<p class="matrix-note">A facility with no stated amount has no segment.</p>'));
   assert.ok(html.includes('<h2>Debt stack</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
   assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
 });

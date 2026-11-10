@@ -985,17 +985,20 @@ BRIDGE_RULES = (
 def _selector(route: MarkdownRoute | OwnerTable) -> str:
     if isinstance(route, OwnerTable) or route.kind == "chart":
         spec = _owner_table(route)
-        numbers = f" ({', '.join(spec.numbers)})" if spec.numbers else ""
-        measured = (
-            f"in {spec.chart_unit}, with that as the Reporting unit"
-            if spec.chart_unit
-            else "in the Reporting unit the row states"
+        others = [n for n in spec.numbers if spec.in_unit and n not in spec.in_unit]
+        counted = [n for n in spec.numbers if n not in others]
+        numbers = f" ({', '.join(counted)})" if counted else ""
+        where = "in the Reporting unit the row states"
+        if spec.chart_unit:
+            where = f"in {spec.chart_unit}, with that as the Reporting unit"
+        rest = (
+            f" {', '.join(others)} is a plain number in the unit its rule states." if others else ""
         )
         return (
             f"- `### {spec.heading}`: exactly one Markdown table headed "
             f"`| {' | '.join(_chart_header(spec))} |`, one row per "
             f"{'step' if spec.steps else spec.noun}. "
-            f"Value cells{numbers} are plain numbers {measured}, or `Not supplied: <reason>`. "
+            f"Value cells{numbers} are plain numbers {where}, or `Not supplied: <reason>`.{rest} "
             "An issuer reporting in another currency or scale writes "
             "`Not supplied: reported in <unit>` in monetary cells. "
             f"{'Every other cell is stated, never blank. ' if spec.columns else ''}"
