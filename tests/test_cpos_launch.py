@@ -1928,3 +1928,34 @@ def test_standing_ruling_lifts_the_pause_for_sol_medium_only():
     check_ruling("sol-medium", ruling)
     with pytest.raises(LivePauseInForce):
         check_ruling("sol-high", ruling)
+
+
+def test_f_the_entry_writes_its_pid_before_any_check(tmp_path, monkeypatch):
+    target = tmp_path / "run.pid"
+    monkeypatch.setenv("DEPLOY_WORKFLOW_PID_FILE", str(target))
+    with pytest.raises(SystemExit):  # argparse refuses the missing arguments: an early check
+        main(["--bogus"])
+    assert target.read_text(encoding="utf-8") == str(os.getpid())
+    assert [p.name for p in tmp_path.iterdir()] == ["run.pid"]  # no temporary file left
+
+
+def test_g_an_unwritable_pid_file_stops_the_entry_before_anything_else(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setenv("DEPLOY_WORKFLOW_PID_FILE", str(tmp_path / "missing" / "run.pid"))
+
+    def reached(*_a, **_k):
+        raise AssertionError("a step after the PID file ran")
+
+    monkeypatch.setattr(cpos_launch, "check_ruling", reached)
+    monkeypatch.setattr(cpos_launch, "prepare", reached)
+    assert main(["--bogus"]) != 0  # argparse would have raised SystemExit if it had been reached
+    assert capsys.readouterr().err.strip() != ""
+
+
+def test_h_without_the_variable_no_file_is_written(tmp_path, monkeypatch):
+    monkeypatch.delenv("DEPLOY_WORKFLOW_PID_FILE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        main(["--bogus"])
+    assert list(tmp_path.iterdir()) == []
