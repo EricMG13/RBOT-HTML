@@ -92,6 +92,8 @@ def _age_seconds(
 ) -> float | None:
     last = str(events[-1].get("at", "")) if events else ""
     text = last or record.started_at
+    if not text:  # Nothing to measure from: simply not stalled.
+        return None
     try:
         then = datetime.fromisoformat(text)
     except ValueError:

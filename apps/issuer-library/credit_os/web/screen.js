@@ -596,7 +596,7 @@ function restoreActivityView(root,kept) {
 window.onRunActivity=()=>{
   if(nextActivityReload(current)===null)return;
   const content=$('content'),live=window.RUN_ACTIVITY,top=content.scrollTop;
-  const seen=JSON.stringify([live?.runs,live?.held]);
+  const seen=JSON.stringify([live?.runs,live?.held,live?.cap]);
   if(seen===lastActivity){ // same runs: leave the page as the reader has it; only the snapshot's own time moves
     const stamp=content.querySelector?.('.run-updated-at');
     if(stamp&&typeof live?.updated==='string')stamp.textContent=live.updated;

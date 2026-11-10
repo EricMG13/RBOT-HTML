@@ -6,22 +6,29 @@ import json
 import os
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from deploy_workflow.inbox.drops import Layout
 
 REGISTRY_NAME = "issuers.json"
-_UNSAFE = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
+_UNSAFE = re.compile(r'[\\/:*?"<>|]')
 _RESERVED = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])", re.IGNORECASE)
 
 
 def safe_name(text: str, limit: int = 80) -> str:
     """A name that is safe as a folder or file name on Windows, macOS and Linux."""
+    text = "".join(" " if unicodedata.category(c) == "Cc" else c for c in text)
     cleaned = " ".join(_UNSAFE.sub(" ", text).split()).rstrip(". ")
     cleaned = cleaned[:limit].rstrip(". ")
     if not cleaned or _RESERVED.fullmatch(cleaned.split(".", 1)[0].strip()):
         return "_" + cleaned
     return cleaned
+
+
+def _same_name(name: str) -> str:
+    """The form in which two names are one folder on a case- and normalisation-insensitive disk."""
+    return unicodedata.normalize("NFC", name).casefold()
 
 
 def _registry_path(layout: Layout) -> Path:
@@ -62,9 +69,9 @@ def issuer_folder(layout: Layout, issuer_id: str, issuer_name: str) -> tuple[Pat
     if fixed is not None:
         differs = fixed != wanted and re.fullmatch(re.escape(wanted) + r" \d+", fixed) is None
         return layout.issuers / fixed, differs
-    taken = {name.casefold() for name in registry.values()}
+    taken = {_same_name(name) for name in registry.values()}
     name, number = wanted, 1
-    while name.casefold() in taken or (layout.issuers / name).exists():
+    while _same_name(name) in taken or (layout.issuers / name).exists():
         number += 1
         name = f"{wanted} {number}"
     registry[issuer_id] = name
@@ -85,7 +92,12 @@ def file_report(  # noqa: PLR0913 - signature fixed by the build plan; callers p
         target = folder / (f"{stem}.html" if number == 1 else f"{stem}-{number}.html")
         try:
             with target.open("xb") as handle:
-                handle.write(data)
+                try:
+                    handle.write(data)
+                except BaseException:
+                    handle.close()
+                    target.unlink(missing_ok=True)  # No partial report is left behind.
+                    raise
         except FileExistsError:
             number += 1
             continue

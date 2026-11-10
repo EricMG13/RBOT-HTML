@@ -275,4 +275,6 @@ test('rows carry the run id for restoring, and unchanged data is not re-rendered
   assert.strictEqual(content.writes, 1, 'unchanged runs: no replacement'); assert.strictEqual(content.stamp.textContent, 'T2');
   win.RUN_ACTIVITY = { updated: 'T3', held: '', runs: [{ id: 'a', status: 'running' }] }; fn();
   assert.strictEqual(content.writes, 2, 'changed runs: replaced');
+  win.RUN_ACTIVITY = { updated: 'T4', cap: '20', held: '', runs: [{ id: 'a', status: 'running' }] }; fn();
+  assert.strictEqual(content.writes, 3, 'a changed cap with the same runs: replaced');
 });

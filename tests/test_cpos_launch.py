@@ -603,6 +603,21 @@ def test_every_pathway_runs_end_to_end_to_a_verified_report(tmp_path, provider, 
     assert completed["cp_model_published"] is False
 
 
+@pytest.mark.parametrize(("extra", "refreshed"), [((), True), (("--no-library",), False)])
+def test_main_refreshes_the_library_only_without_no_library(
+    tmp_path, provider, monkeypatch, extra, refreshed
+):
+    """A finished offline run on the fake provider; only the library refresh is stubbed."""
+    refreshes = []
+    monkeypatch.setattr(cpos_launch, "_refresh_library", refreshes.append)
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING), *extra)
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    assert provider.calls
+    assert refreshes == ([tmp_path / "out"] if refreshed else [])
+
+
 def test_rejected_module_stops_the_run_without_a_report(tmp_path, provider, capsys):
     argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
     provider.answer = lambda context: "## Request\n\nNot a handoff."

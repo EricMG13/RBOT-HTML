@@ -296,7 +296,7 @@ def check(drop: Path, pathway: str) -> Checked:
     """Validate a claimed drop or raise ``DropRejected`` with the reason."""
     if not pathway:
         raise DropRejected("not inside a pathway folder")
-    if drop.is_symlink() or not drop.is_dir():
+    if _is_link(drop) or not drop.is_dir():
         raise DropRejected("not a folder")
     odd = _first_link_or_special(drop)
     if odd is not None:

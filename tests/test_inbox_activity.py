@@ -197,6 +197,13 @@ def test_an_unparsable_time_is_logged_not_silent(layout, caplog):
     assert "stalled" not in entry and "yesterday" in caplog.text
 
 
+def test_an_empty_start_time_and_no_events_is_not_stalled_and_logs_nothing(layout, caplog):
+    record = Record("t3", "credit_snapshot", "x", "running", "t", started_at="")
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    entry = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"][0]
+    assert "stalled" not in entry and caplog.text == ""
+
+
 def test_only_200_ended_records_are_kept_and_the_running_one_leads(layout):
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
     records = [

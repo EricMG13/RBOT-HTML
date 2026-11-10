@@ -321,6 +321,14 @@ def test_fake_launcher_refuses_what_the_real_one_refuses(tmp_path):
     assert _fake_live(tmp_path, RULING, key=True).returncode == 0
 
 
+def test_fake_launcher_refuses_an_unknown_config_through_argparse(tmp_path):
+    argv = [*FAKE, "--config", "nope", "--context", "c", "--sources", str(tmp_path)]
+    argv += ["--cap", "1", "--out", str(tmp_path / "out"), "--no-library"]
+    env = {**os.environ, "PYTHONPATH": child_environment()["PYTHONPATH"]}
+    done = subprocess.run(argv, env=env, capture_output=True, text=True, check=False)
+    assert done.returncode == 2 and "invalid choice" in done.stderr
+
+
 def test_prepared_defaults_to_false_and_an_old_record_without_it_loads(layout):
     assert RECORD.prepared is False
     old = {"id": "old1", "pathway": "credit_snapshot", "folder": "f", "status": "queued"}

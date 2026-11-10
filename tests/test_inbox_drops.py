@@ -207,6 +207,28 @@ def test_check_rejects_a_file(tmp_path):
         check(f, "credit_snapshot")
 
 
+def test_check_rejects_a_drop_root_that_is_a_symlink(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "c.json").write_bytes(ctx())
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    with pytest.raises(DropRejected, match="not a folder"):
+        check(link, "credit_snapshot")
+
+
+def test_check_tests_the_drop_root_with_the_module_link_test(tmp_path, monkeypatch):
+    # The Windows junction branch cannot run here: a junction is a link only to _is_link.
+    from deploy_workflow.inbox import drops
+
+    folder = tmp_path / "d"
+    folder.mkdir()
+    (folder / "c.json").write_bytes(ctx())
+    monkeypatch.setattr(drops, "_is_link", lambda path: path == folder)
+    with pytest.raises(DropRejected, match="not a folder"):
+        check(folder, "credit_snapshot")
+
+
 def test_context_may_have_any_name_and_other_json_is_a_source(tmp_path):
     checked = check(
         make(tmp_path, {"Acme ctx.json": CTX_SNAPSHOT, "data.json": b"{}", "a.pdf": b"1"}),

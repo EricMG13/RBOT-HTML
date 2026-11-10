@@ -1287,6 +1287,7 @@ function fill(o) {
   const run = o.run, id = o.identity, v = o.valuation;
   setV(s1, 'run_type', txt(run.run_type), 'run.run_type', warn);
   setV(s1, 'pathway', txt(run.pathway), 'run.pathway', warn);
+  if (FIXED_PATH && txt(run.pathway) !== FIXED_PATH) warn.push(`run.pathway: this form is fixed to ${FIXED_PATH}; "${txt(run.pathway)}" was replaced`);
   pathTouched = getV(s1, 'pathway') !== RUN_DEFAULT_PATH[getV(s1, 'run_type')];
   setV(s1, 'case_kind', txt(run.case_kind), 'run.case_kind', warn);
   for (const k of ['as_of','cutoff','current_period','prior_period','reporting_currency']) if (k === 'as_of' || txt(run[k]) !== '') setV(s3, k, txt(run[k]), 'run.' + k, warn);
