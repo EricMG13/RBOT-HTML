@@ -267,7 +267,8 @@ function numericColumn(block,c) {
 const cellView=(cell,numeric)=>{
   const text=plain(cell??'').trim();
   if(MISSING_CELL.test(text))return `<td${numeric?' class="num"':''}><span class="na" title="${esc(text||'Empty in the handoff')}">n.a.</span></td>`;
-  return `<td${numeric?' class="num"':''}>${rich(text)}</td>`;
+  // A number in a column that also holds text keeps the figure face where it stands; only a wholly numeric column aligns right.
+  return `<td${numeric?' class="num"':chartNumber(text)!==null?' class="fig"':''}>${rich(text)}</td>`;
 };
 const isFindingsTable=b=>b.type==='table'&&b.headers[0]==='Finding'&&b.headers[1]==='Creditor impact';
 // The first table of the reference sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).

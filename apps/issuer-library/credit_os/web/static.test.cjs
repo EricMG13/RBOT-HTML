@@ -725,7 +725,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules) {
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] } }, DESIGN_CATALOGUE: { real: [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports } };
   const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
   const args = [win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards};`)(...args);
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1162,4 +1162,14 @@ test('hardening: the module report\'s section title is an h2, fold arrows respec
   assert.ok(/@media\(prefers-reduced-motion:reduce\)\{[^}]*details\.fold>summary img[^}]*\{transition:none\}/.test(css));
   assert.ok(/@media print\{[^@]*#content\{[^}]*overflow:visible/.test(css));
   assert.ok(/@media\(forced-colors:active\)\{[^@]*a\.cov\.filled\{/.test(css));
+});
+
+test('module tables: a numeric column is .num, a number in a text column is .fig, a sentence has no figure class', () => {
+  const { cellView } = runPage();
+  assert.equal(cellView('1,299', true), '<td class="num">1,299</td>');
+  assert.equal(cellView('1,299', false), '<td class="fig">1,299</td>');
+  assert.equal(cellView('(12.5)%', false), '<td class="fig">(12.5)%</td>');
+  assert.equal(cellView('Reported GAAP; Annual page:121', false), '<td>Reported GAAP; Annual page:121</td>');
+  const css = read('screen.css');
+  assert.ok(css.includes(".table-card td{font-family:'Red Hat Text',sans-serif}.table-card td.fig{font-family:'Red Hat Mono',monospace"));
 });
