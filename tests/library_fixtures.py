@@ -53,7 +53,7 @@ HANDOFF = """# {module} handoff
 
 | Bottom line | Confidence | Main limitation |
 | --- | --- | --- |
-| {bottom} | Medium | Synthetic fixture only. |
+| {bottom} | {confidence} | Synthetic fixture only. |
 
 | Finding | Creditor impact | Confidence |
 | --- | --- | --- |
@@ -75,6 +75,7 @@ class RunSpec:
     settled: tuple[str | None, ...] = ("0.10", "0.20")
     view_issuer: str | None = None
     cp0_extra: str = ""  # Text appended to the CP-0 handoff, such as a source inventory.
+    cp0_confidence: str = "Medium"  # The Confidence cell of the CP-0 Reader summary.
     cp1_findings: str = ""  # Text inserted into the CP-1 handoff just before its Sources section.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
@@ -110,7 +111,11 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
             "sha256": put(run_dir / f"instructions/{module}.md", text.encode()),
         }
         answer = HANDOFF.format(
-            module=module, name=issuer_name, as_of=as_of, bottom=f"{module} bottom line."
+            module=module,
+            name=issuer_name,
+            as_of=as_of,
+            bottom=f"{module} bottom line.",
+            confidence=spec.cp0_confidence if module == "CP-0" else "Medium",
         )
         if module == "CP-0":
             answer += spec.cp0_extra

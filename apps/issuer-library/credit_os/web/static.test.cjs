@@ -661,3 +661,212 @@ test('a route into a closed part opens it: scrollToPart opens every details that
   new Function('$', `${src.slice(start, end)}; scrollToPart('s-9');`)(id => (id === 'content' ? content : id === 's-9' ? target : null));
   assert.ok(inner.open && outer.open && !target.open);
 });
+
+// ---- The run report: views.js evaluated over a four-module run, with the screen.js globals it calls stood in.
+const RUN = 'run-a';
+const outId = code => `${RUN}/deliveries/d1/${code}.md`;
+const FINDINGS_HEADERS = ['Finding', 'Creditor impact', 'Confidence'];
+const chartTable = (line, rows) => table(line, ['Period', 'Value', 'Reporting unit', 'Basis'], rows);
+const runOutput = (code, extra) => ({ module: code, run: RUN, source: `deliveries/d1/${code}.md`, href: `../runs/${RUN}/deliveries/d1/${code}.md`, label: code, charts: [], call: null, ...extra });
+const STATE_ON = { established: true, declared: null };
+function runData(overrides = {}) {
+  const cp1 = runOutput('CP-1', {
+    sections: [
+      sec('Reader summary', 3, 10, 'consumed', [table(15, FINDINGS_HEADERS, [[16, 'Leverage rose.', 'Higher gross leverage.', 'High'], [17, 'Cash rose.', 'More cushion.', 'Medium']])]),
+      sec('Chart data: leverage', 3, 40, 'consumed', [chartTable(42, [[43, 'FY2024', '6.57', 'x', 'K']])]),
+      sec('Chart data: cover', 3, 50, 'consumed', [chartTable(52, [[53, 'FY2024', '2.1', 'x', 'K']])]),
+    ],
+    state: { established: true, declared: 'Requires More Work' }, words: { view: 746, reference: 3000, calculations: 1145, limits: 940, audit: 972 },
+    summary: { bottomLine: 'Cash is up and leverage is high.', confidence: 'Medium', limitation: 'Synthetic limit one.', line: 13 },
+    charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }, { title: 'Cover', unit: 'x', table: 52, columns: [1] }],
+  });
+  const cp2a = runOutput('CP-2A', {
+    sections: [sec('Reader summary', 3, 10, 'consumed', [table(15, FINDINGS_HEADERS, [[16, 'Downside unmeasured.', 'No cushion test.', 'Low']])])],
+    state: { established: false, declared: 'Blocked' }, words: { view: 20, reference: 30, calculations: 5, limits: 7, audit: 9 },
+    summary: { bottomLine: 'No downside is drawn.', confidence: 'Not assessable', limitation: 'Downside inputs are missing.', line: 13 },
+  });
+  const cp6 = runOutput('CP-6', {
+    sections: [sec('Reader summary', 3, 10, 'consumed', [])],
+    state: { established: false, declared: null }, words: { view: 1, reference: 2, calculations: 3, limits: 4, audit: 5 },
+    summary: { bottomLine: 'Committee cannot decide yet.', confidence: 'Not assessable', limitation: 'Every upstream module is open.', line: 13 },
+  });
+  const cpx = runOutput('CP-X', { sections: [], state: { established: null, declared: null }, words: { view: 100, reference: 200, calculations: 50, limits: 0, audit: 0 }, summary: null });
+  return { [outId('CP-1')]: cp1, [outId('CP-2A')]: cp2a, [outId('CP-6')]: cp6, [outId('CP-X')]: cpx, ...overrides };
+}
+function runPage(mutate = d => d, reports = []) {
+  const src = read('views.js');
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const plain = v => String(v).replace(/\*\*|`/g, '');
+  const rich = v => esc(v).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const data = mutate(runData());
+  const evidence = new Map();
+  for (const [id, out] of Object.entries(data)) for (const s of out.sections) for (const b of s.blocks) {
+    for (const r of b.type === 'table' ? b.rows : [b]) evidence.set(`${id}:${r.line}`, { module: out.module, line: r.line });
+  }
+  const groups = [['Business and evidence', [['CP-0', 'Source readiness']]], ['Financial performance', [['CP-1', 'Financial foundation']]], ['Outlook and downside', [['CP-2A', 'Downside']]],
+    ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'CP-X']]]];
+  const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
+  const entry = code => ({ outputs: [outId(code)], default: outId(code) });
+  const contexts = { [RUN]: { folder: RUN, modules: { 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) } } };
+  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] } }, DESIGN_CATALOGUE: { real: [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports } };
+  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
+  const args = [win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart};`)(...args);
+}
+const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
+const countOf = (html, re) => (html.match(re) || []).length;
+// A story module, from its opening tag to the next story module or the end of its group (flat regex over generated markup).
+const storyModule = (html, code) => new RegExp(`<div class="story-module" data-module="${code}">.*?(?=<div class="story-module"|</section>)`, 's').exec(html)?.[0];
+const groupOf = (html, title) => new RegExp(`<section class="story-group"><h2>${title}</h2>.*?</section>`, 's').exec(html)?.[0];
+
+test('run report: the count line reads from state, with the unsummarised module counted apart', () => {
+  const html = runPage().runReport(RUN);
+  assert.equal(strip(/<p class="run-count">(.*?)<\/p>/.exec(html)[1]), '1 of 4 modules reach a conclusion · 2 not assessable · 1 without a reader summary');
+  assert.ok(html.includes('Candidate · not accepted'));
+  const all = runPage(d => { delete d[outId('CP-X')]; d[outId('CP-2A')].state.established = true; d[outId('CP-6')].state.established = true; return d; }).runReport(RUN);
+  assert.equal(strip(/<p class="run-count">(.*?)<\/p>/.exec(all)[1]), '3 of 3 modules reach a conclusion · 0 not assessable');
+});
+
+test('run report: coverage is four links in group order, code as label, only the established one filled', () => {
+  const html = runPage().runReport(RUN);
+  const cells = [...html.matchAll(/<a class="cov( filled)?" href="([^"]*)"[^>]*>(.*?)<\/a>/g)].map(m => [m[3], !!m[1], m[2]]);
+  assert.deepEqual(cells.map(c => c[0]), ['CP-1', 'CP-2A', 'CP-6', 'CP-X']);
+  assert.deepEqual(cells.map(c => c[1]), [true, false, false, false]);
+  for (const [code, , href] of cells) assert.ok(href.startsWith(`#${code}/`), href);
+});
+
+test('run report: no band while CP-6 is not assessable; one band quoting CP-6 once it is established; no CALL_ORDER or summaryView', () => {
+  assert.equal(countOf(runPage().runReport(RUN), /class="band"/g), 0);
+  const html = runPage(RUN_CP6_ESTABLISHED).runReport(RUN);
+  assert.equal(countOf(html, /class="band"/g), 1);
+  assert.equal(countOf(html, /Committee leans against\./g), 2); // The band and the module's own story entry quote the same cell.
+  assert.ok(html.indexOf('class="band"') < html.indexOf('class="story-group"'));
+  const src = read('views.js');
+  assert.ok(!src.includes('CALL_ORDER') && !src.includes('summaryView'));
+});
+
+test('run report: an established module reads bottom line, pill, status, findings with chips, limitation and both charts in one element', () => {
+  const html = runPage().runReport(RUN);
+  const mod = storyModule(html, 'CP-1');
+  assert.ok(mod, 'CP-1 story-module');
+  assert.ok(/<a class="text-action" href="#CP-1\//.test(mod) && mod.includes('Financial foundation'));
+  assert.ok(mod.includes('Cash is up and leverage is high.'));
+  assert.ok(mod.includes('<span class="pill">Medium</span>'));
+  assert.ok(mod.includes('Requires More Work'));
+  assert.equal(countOf(mod, /<article class="finding">/g), 2);
+  assert.ok(mod.includes('Higher gross leverage.') && mod.includes('<span class="pill">High</span>') && mod.includes('p.123'));
+  assert.ok(mod.includes('Synthetic limit one.'));
+  assert.equal(countOf(mod, /<div class="panel-card">/g), 2);
+  assert.equal(countOf(mod, /<div class="chart-row"/g), 2);
+  const group = groupOf(html, 'Financial performance');
+  assert.equal(countOf(group, /Missing values have no bar/g), 1);
+  assert.equal(countOf(html, /Missing values have no bar/g), 1);
+});
+
+test('run report: the chart note prints once per group even when two modules draw charts', () => {
+  const html = runPage(d => {
+    d[outId('CP-2A')].sections.push(sec('Chart data: x', 3, 60, 'consumed', [chartTable(62, [[63, 'FY2024', '1.0', 'x', 'K']])]));
+    d[outId('CP-2A')].charts = [{ title: 'X', unit: 'x', table: 62, columns: [1] }];
+    d[outId('CP-2A')].state = { established: true, declared: null };
+    return d;
+  }).runReport(RUN);
+  assert.equal(countOf(groupOf(html, 'Outlook and downside'), /Missing values have no bar/g), 1);
+  assert.equal(countOf(html, /Missing values have no bar/g), 2); // One per group that draws a chart.
+});
+
+test('run report: a not-assessable module is one line with name link, state, declared status and the limitation, and no finding', () => {
+  const html = runPage().runReport(RUN);
+  const lines = [...html.matchAll(/<p class="na-line">(.*?)<\/p>/gs)].map(m => m[1]);
+  assert.equal(lines.length, 2);
+  const line = lines.find(l => l.includes('Downside'));
+  assert.ok(/<a class="text-action" href="#CP-2A\//.test(line));
+  assert.equal(strip(line).replace(/\s+/g, ' ').trim(), 'Downside · Not assessable · Blocked · Downside inputs are missing.');
+  assert.ok(!storyModule(html, 'CP-2A'));
+  const group = groupOf(html, 'Outlook and downside');
+  assert.ok(!group.includes('class="finding"') && group.includes('<h2>Outlook and downside</h2>'));
+  assert.equal(strip(lines.find(l => l.includes('Committee decision'))).replace(/\s+/g, ' ').trim(), 'Committee decision · Not assessable · Every upstream module is open.');
+});
+
+test('run report: a module with no reader summary sits under Other modules as "<name> · No reader summary", counted in coverage and matrix', () => {
+  const html = runPage().runReport(RUN);
+  const group = groupOf(html, 'Other modules');
+  assert.equal(strip(/<p class="nosum-line">(.*?)<\/p>/s.exec(group)[1]).replace(/\s+/g, ' ').trim(), 'CP-X · No reader summary');
+  assert.ok(html.includes('>CP-X</a>') && /<th scope="row"><a[^>]*>CP-X/.test(html));
+  assert.ok(!groupOf(html, 'Business and evidence'), 'a group with no output in the run is not listed');
+});
+
+test('run report: the register has the ruled columns, hides the not-assessable row, and marks it', () => {
+  const html = runPage().runReport(RUN);
+  const reg = /<table class="register">.*?<\/table>/s.exec(html)[0];
+  assert.deepEqual([...reg.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Group', 'Module', 'Finding', 'Creditor impact', 'Confidence']);
+  const rows = [...reg.matchAll(/<tr data-group="([^"]*)" data-confidence="([^"]*)" data-established="(true|false)"([^>]*)>(.*?)<\/tr>/gs)];
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map(r => r[3]), ['true', 'true', 'false']);
+  assert.deepEqual(rows.map(r => /\bhidden\b/.test(r[4])), [false, false, true]);
+  assert.deepEqual(rows.map(r => r[2]), ['High', 'Medium', 'Low']);
+  assert.ok(rows[2][5].includes('Not assessable') && !rows[0][5].includes('Not assessable'));
+  assert.equal(strip(/<label for="register-all">(.*?)<\/label>/.exec(html)[1]), 'Include not-assessable modules (1)');
+  assert.ok(/<input type="checkbox" id="register-all"/.test(html));
+  for (const kind of ['group', 'confidence']) assert.ok(new RegExp(`<select id="register-${kind}" data-register-filter="${kind}"`).test(html) && html.includes(`<label for="register-${kind}">`), kind);
+});
+
+test('registerRowShown: a not-assessable row shows only with all; a group or confidence mismatch hides', () => {
+  const { registerRowShown: shown } = runPage();
+  const row = { group: 'Financial performance', confidence: 'High', established: true }, na = { ...row, established: false };
+  const open = { group: '', confidence: '', all: false };
+  assert.equal(shown(row, open), true);
+  assert.equal(shown(na, open), false);
+  assert.equal(shown(na, { ...open, all: true }), true);
+  assert.equal(shown(row, { ...open, group: 'Outlook and downside' }), false);
+  assert.equal(shown(row, { ...open, group: 'Financial performance' }), true);
+  assert.equal(shown(row, { ...open, confidence: 'Low' }), false);
+  assert.equal(shown(row, { ...open, confidence: 'High' }), true);
+  assert.equal(shown(na, { group: 'Outlook and downside', confidence: 'High', all: true }), false);
+});
+
+test('run report: open items are one grouped row per module with a summary, each linking to its limits part', () => {
+  const html = runPage().runReport(RUN);
+  const open = /<table class="open-items">.*?<\/table>/s.exec(html)[0];
+  const rows = [...open.matchAll(/<tr>(?:(?!<\/tr>).)*?<td>.*?<\/tr>/gs)].map(m => m[0]);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map(r => /href="(#CP-[0-9A-Z]+)\/limits/.exec(r)?.[1]), ['#CP-1', '#CP-2A', '#CP-6']);
+  assert.ok(rows[0].includes('Financial performance') && rows[0].includes('Synthetic limit one.'));
+  assert.ok(rows[1].includes('Downside inputs are missing.') && rows[2].includes('Every upstream module is open.'));
+  assert.ok(!open.includes('CP-X'));
+});
+
+test('run report: the matrix has a row per module, not declared for CP-X, and the two word columns from words', () => {
+  const html = runPage().runReport(RUN);
+  const mat = /<table class="matrix">.*?<\/table>/s.exec(html)[0];
+  assert.deepEqual([...mat.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Module', 'Confidence', 'Declared status', 'Words to read', 'Words of reference']);
+  const rows = [...mat.matchAll(/<tr><th scope="row">(.*?)<\/th>(.*?)<\/tr>/gs)].map(m => [strip(m[1]).trim(), [...m[2].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map(c => strip(c[1]).trim())]);
+  assert.deepEqual(rows.map(r => r[0]), ['Financial foundation', 'Downside', 'Committee decision', 'CP-X']);
+  assert.deepEqual(rows[0][1], ['Medium', 'Requires More Work', '746', '4145']);
+  assert.deepEqual(rows[1][1], ['Not assessable', 'Blocked', '20', '35']);
+  assert.deepEqual(rows[2][1], ['Not assessable', 'not declared', '1', '5']);
+  assert.deepEqual(rows[3][1], ['No reader summary', 'not declared', '100', '250']);
+});
+
+test('run report: deliverables and the source inventory link render after the matrix', () => {
+  const report = { id: 'd1', label: 'Credit report', build: null, mode: 'candidate', qualification: 'unrun', builtFrom: [{ run: RUN, module: 'CP-1', source: outId('CP-1') }] };
+  const html = runPage(d => d, [report]).runReport(RUN);
+  const tail = html.slice(html.indexOf('class="matrix"'));
+  assert.ok(tail.includes('Deliverables from this run') && tail.includes('href="#W-Reports/d1?c=run-a"') && tail.includes('Credit report'));
+  assert.ok(tail.includes('href="#W-Evidence/sources?c=run-a"'));
+  assert.ok(!runPage().runReport(RUN).includes('Deliverables from this run'));
+});
+
+test('run report: markup order follows the spec, and every interpolated cell is escaped', () => {
+  const html = runPage(d => { d[outId('CP-1')].summary.bottomLine = '<img src=x onerror=1>'; d[outId('CP-1')].summary.limitation = '<b>L</b>'; return d; }).runReport(RUN);
+  assert.ok(!html.includes('<img src=x') && !html.includes('<b>L</b>'));
+  const order = ['class="run-count"', 'class="coverage"', 'class="story-group"', 'class="register"', 'class="open-items"', 'class="matrix"'].map(s => html.indexOf(s));
+  assert.ok(order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])), order.join());
+});
+
+test('screen.css drops the summary-card family and draws the run report', () => {
+  const css = read('screen.css');
+  for (const gone of ['.summary-lead', '.summary-card', '.summary-charts', '.summary-chart{', '.question-map', '.summary-text', '.summary-note']) assert.ok(!css.includes(gone), gone);
+  for (const sel of ['.story-module', '.na-line', '.cov.filled', 'table.register', 'table.open-items', 'table.matrix']) assert.ok(css.includes(sel), sel);
+  const screen = read('screen.js');
+  assert.ok(screen.includes('registerRowShown') && screen.includes('data-register-filter') && screen.includes('register-all'));
+});

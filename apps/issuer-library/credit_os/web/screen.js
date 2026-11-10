@@ -583,6 +583,10 @@ document.addEventListener('change',event=>{
   if(event.target.id==='model-select')go('W-Forecast',event.target.value);
   if(event.target.id==='report-select')go('W-Reports',event.target.value);
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
+  if(event.target.matches('[data-register-filter], #register-all')) {
+    const filter={group:$('register-group').value,confidence:$('register-confidence').value,all:$('register-all').checked};
+    for(const row of document.querySelectorAll('table.register tbody tr'))row.hidden=!registerRowShown({group:row.dataset.group,confidence:row.dataset.confidence,established:row.dataset.established==='true'},filter);
+  }
   if(event.target.id==='chart-metric') {
     $('module-visual').innerHTML=comparisonChart(current.output,data[current.output].visual,Number(event.target.value));
     nameCodes($('module-visual'));

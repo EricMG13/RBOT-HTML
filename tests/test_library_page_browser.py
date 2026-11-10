@@ -92,8 +92,8 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     dom, console = visit(page, "#W-Overview/overview?c=run-a")
     assert console == []
     assert (
-        len(re.findall(r'class="summary-chart"', dom)) == 4
-    )  # Leverage, cover, liquidity, maturities.
+        len(re.findall(r'<div class="panel-card">', dom)) == 4
+    )  # Leverage, cover, liquidity, maturities, each under the module that owns it.
     dom, console = visit(page, "#W-Reports/list?c=run-a")
     delivery = re.search(r'href="#W-Reports/([0-9a-f]{64})\?c=run-a"', dom)
     assert delivery, "the Reports tab lists the run's report"
@@ -151,13 +151,14 @@ PROBE = Path(__file__).with_name("browser_probe_module_report.js").read_text(enc
 OVERVIEW_PROBE = Path(__file__).with_name("browser_probe_overview.js").read_text(encoding="utf-8")
 
 
-def report_library(tmp_path: Path) -> Path:
+def report_library(tmp_path: Path, cp0_confidence: str = "Medium") -> Path:
     digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
     run = make_run(
         tmp_path,
         "run-a",
         as_of="2024-12-31",
         cp0_extra=inventory_text(digest),
+        cp0_confidence=cp0_confidence,
         # Under Findings: the tables are Reference, not audit (R39).
         cp1_findings=CITED + REPORT_ROWS,
     )
@@ -282,15 +283,18 @@ def test_the_reference_part_fits_the_page(tmp_path, width):
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_overview_chart_values_stay_inside_their_cards(tmp_path, width):
-    page = report_library(tmp_path)
+def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width):
+    page = report_library(tmp_path, cp0_confidence="Not assessable")
     (page.parent / "probe.js").write_text(OVERVIEW_PROBE, encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert seen["rows"] > 0, "the Overview drew no chart rows"
+    assert seen["rows"] > 0, "the run report drew no chart rows"
     assert seen["valueInCard"] is True and seen["fits"] is True
+    assert 0 < seen["established"] < seen["total"], "the run has no not-assessable row"
+    assert seen["before"] == seen["established"]  # Not-assessable rows start hidden.
+    assert seen["after"] == seen["total"]  # Ticking the checkbox shows every row.
 
 
 # A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then
