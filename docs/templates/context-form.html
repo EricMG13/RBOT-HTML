@@ -1158,9 +1158,10 @@ const RULES = [
   {s:'CP-1', o:'limited', np:true, c:f => /^[A-Z]{3}$/.test(f.o.run.reporting_currency) && f.o.run.reporting_currency !== 'USD', r:'Not USD: the report\'s chart strip is US$ millions only; its money cells read "Not supplied".', fix:'Nothing to add; the report states the limit.', go:'dates'},
   {s:'CP-1B', o:'gap', c:f => f.chk.periods === 'no', r:'The reports for both periods are not in the folder: the periods cannot be compared.', fix:'Add the report for the missing period.', go:'sources'},
   // Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they specifically
-  // want to in the context file." This transport gives no module a web search tool (model/handoff.py
-  // TOOLS); in live run tdg-all-001 the research module came back Blocked and the peer benchmark had none.
-  {s:'CP-DR', o:'information', c:() => true, r:'This environment gives the research module no web search tool, so it cannot reach public sources: in a TDG run it came back Blocked and the peer benchmark had no peers. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
+  // want to in the context file." The research module searches the web only when the run's ruling lists
+  // web-search (owners/cpos.py WEB_SEARCH_GRANT); without it, in live run tdg-all-001, it came back
+  // Blocked and the peer benchmark had no peers.
+  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web only when the run\'s ruling allows it (web-search). Without that it cannot reach public sources: in a TDG run it came back Blocked and the peer benchmark had no peers. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
   {s:'CP-1C', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
   {s:'CP-1C', o:'gap', c:f => f.o.valuation.basis === 'auto' && f.o.valuation.peer_source === 'user_comps' && f.peersIn < MIN_ADMITTED && f.precIn < MIN_ADMITTED,
     r:f => `Automatic basis: ${f.peersIn} peer${f.peersIn === 1 ? '' : 's'} admitted (needs ${MIN_ADMITTED}, at most ${PEER_MONTHS} months old) and ${f.precIn} precedent${f.precIn === 1 ? '' : 's'} (needs ${MIN_ADMITTED}, at most ${PRECEDENT_MONTHS} months old): no multiple is selected.`, fix:'Add peers or precedents, or choose another basis.', go:'valuation'},

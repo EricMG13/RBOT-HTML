@@ -663,7 +663,7 @@ document.body.append(out);
 def test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run(tmp_path):
     # Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they
     # specifically want to in the context file." So the form never asks for peers' filings, and the
-    # research module's block in live run tdg-all-001 (no web search in this transport) is a note,
+    # research module's block in live run tdg-all-001 (no web-search grant in its ruling) is a note,
     # not the analyst's to fix. That run's Earnings quality came back Restricted with no bridge.
     page = tmp_path / "sources.html"
     text = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
@@ -675,7 +675,7 @@ def test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_ru
     assert probe["asked"] and not any("peer" in item for item in probe["asked"])  # ... unasked.
     research = probe["research"]
     assert research["status"] == "information" and len(research["items"]) == 1
-    assert "web search" in research["items"][0]["reason"]
+    assert "web-search" in research["items"][0]["reason"]  # The ruling's grant, not the analyst's.
     assert probe["benchmark"] == "ready"
     assert probe["nobridge"] == "limited"
 

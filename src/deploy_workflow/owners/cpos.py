@@ -576,6 +576,24 @@ def _release(adapter: "LiveAdapter | CopilotAdapter") -> None:
         adapter.close()
 
 
+# The token a ruling's ``configs:`` line carries to let the research module search the web (owner,
+# 2026-11-10: "Cp-dr supplies the peers"). Without it CP-DR reads only the run's files.
+WEB_SEARCH_GRANT = "web-search"
+
+
+def web_search_ruled(ruling: Path | None, rulings_root: Path | None = None) -> bool:
+    """Whether ``ruling`` lists ``web-search`` among its configs."""
+    from deploy_workflow.model.adapter import LivePauseInForce, check_ruling
+
+    if ruling is None:
+        return False
+    try:
+        check_ruling(WEB_SEARCH_GRANT, ruling, rulings_root=rulings_root)
+    except LivePauseInForce:
+        return False
+    return True
+
+
 def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes every run option
     manifest: Path,
     directory: Path,
@@ -615,6 +633,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             max_turns=max_turns,
             max_output_tokens=max_output_tokens,
             events=directory,
+            web_search=web_search_ruled(ruling, rulings_root),
         )
         result = run_handoffs(
             manifest,

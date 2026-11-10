@@ -146,6 +146,29 @@ class ToolSpec:
     parameters: Mapping[str, Any]
 
 
+# A hosted tool is one the provider runs itself, not a function this program answers. Its
+# parameters name the hosted kind and the most calls one response may make; providers.build sends it
+# as the provider's own tool and refuses it where the provider has none. Only OpenAI's web search
+# is offered (owner, 2026-11-10: CP-DR supplies the peers).
+HOSTED = "x-hosted-tool"
+WEB_SEARCH = "web_search"
+
+
+def hosted_web_search(max_calls: int) -> ToolSpec:
+    """The provider's web search, at most ``max_calls`` built-in calls per response."""
+    if isinstance(max_calls, bool) or not isinstance(max_calls, int) or max_calls < 1:
+        raise TurnError("a hosted web search needs a positive call limit")
+    return ToolSpec(
+        WEB_SEARCH, "Web search run by the provider.", {HOSTED: WEB_SEARCH, "max_calls": max_calls}
+    )
+
+
+def hosted_kind(tool: ToolSpec) -> str | None:
+    """The hosted kind of ``tool``, or None for a function tool."""
+    kind = tool.parameters.get(HOSTED)
+    return kind if isinstance(kind, str) else None
+
+
 @dataclass(frozen=True)
 class ToolCall:
     call_id: str

@@ -4,6 +4,53 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Web search for the research module, offline (branch `claude/optimistic-johnson-bmnwip`, after main `1fbc57c`)
+
+Owner: "Cp-dr supplies the peers … By default cp-dr always provides the peers or 1C and 2 can never
+run", then "Yes" to working out web search for CP-DR. No provider was called; no paid run.
+
+- Sources:
+  - OpenAI pages fetched 2026-11-10 through owner-approved network access: the pricing page, the
+    web search guide, the Responses reference and the gpt-6.1-sol model page.
+  - Quoted in `cases/pricing/openai-web-search.json`: USD 10.00 per 1,000 calls plus search
+    content tokens at model rates; tool `{"type": "web_search"}`; `include`
+    `web_search_call.action.sources`; `max_tool_calls`; web search listed as supported for
+    gpt-6.1-sol.
+- What changed:
+  - **Grant.** CP-DR searches only when the run's ruling lists `web-search` on its `configs:`
+    line (`owners/cpos.py` `web_search_ruled`), and only on OpenAI. Other providers are refused
+    before a call. The launcher prints a `Web:` line when CP-DR runs.
+  - **Request.** Only CP-DR's requests carry the hosted tool, with at most 16 calls per response.
+    Its system text adds the rules: public names only in a query, nothing published after the
+    research cutoff, every web item cited by URL and date, figures quoted verbatim.
+  - **Record.** A reply's `web_search_call` items are kept in the response record under
+    `openai-web-search` and never sent back. A reasoning item before one is dropped, since it
+    would go back without the item that followed it.
+  - **Money.** Each searching call holds USD 0.16 more and is charged USD 0.01 per search action.
+    Opening a page or searching within one is not charged; the guide names only search actions.
+    A sent reply that cannot be read is charged the whole USD 0.16.
+- Unchanged without the grant: the stored request and the OpenAI body for CP-2 and for CP-DR
+  hash the same before and after (checked by script on both checkouts).
+- Tests:
+  - Written first: `tests/model/test_providers.py` (3) and `tests/test_handoff_loop.py` (3) failed
+    at import before the code existed. `tests/test_cpos_launch.py` (1) fails with the launcher's
+    grant wiring reverted.
+  - Added after: the unreadable-reply charge test; reverting that charge to zero fails it.
+  - `tests/model/test_pricing.py` pins the fee to the key file.
+  - `tests/model`, the loop, launcher, library-page, context-form and inbox-watcher tests: 1,178
+    passed, 3 skipped. 8 failed, every one of them also failing on unchanged code here: the 3 on
+    `tests/known-failures.txt`, and 5 inbox-watcher permission tests, because the sandbox runs as
+    root.
+  - Quality gate: 0 findings.
+- Not verified, until a paid run:
+  - that web search runs with `store: false`;
+  - that search content tokens are in `usage.input_tokens`;
+  - that CP-DR ends a searching turn with a tool call under `tool_choice: "required"`;
+  - whether its peer pack respects the cutoff;
+  - whether CP-1C then has peers.
+- Not done: the standing inbox ruling and every other ruling are unchanged, so web search stays off
+  until the owner adds `web-search` to a ruling.
+
 ## 2026-11-10 — Context form against live run tdg-all-001 (branch `claude/optimistic-johnson-bmnwip`, after main `53a5632`)
 
 Owner: "Yes do that" (compare tdg-all-001 with the form's forecast), "Your recommendation", then
