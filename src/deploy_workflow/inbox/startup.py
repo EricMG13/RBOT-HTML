@@ -75,7 +75,7 @@ def close_log(layout: Layout) -> None:
 
 
 def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
-    if cap > RULED_RUN_CAP:
+    if cap.is_nan() or cap > RULED_RUN_CAP:
         raise StartupRefused(
             f"cap {cap} is above USD {RULED_RUN_CAP} per run, the limit of the standing ruling "
             "docs/rulings/2026-11-09-inbox-automation.md"

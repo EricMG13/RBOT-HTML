@@ -29,6 +29,8 @@ STALLED_AFTER = 3600  # seconds without a new event
 KEPT_ENDED = 200
 # Ended statuses whose launcher the watcher knows is gone: _reap saw it exit, or it never started.
 # "interrupted" is excluded: a run cut short before its process ID was saved may still spend.
+# So is a run with a start time but no process ID, whatever its status: "failed: could not be
+# started" after Popen (watcher start path) leaves a live child; see _shown.
 _SETTLED = frozenset({"finished", "failed", "capped", "rejected"})
 _TIME = "%Y-%m-%dT%H:%M:%SZ"
 _ORDER = {"running": 0, "queued": 1}
@@ -135,7 +137,7 @@ def _shown(
     layout: Layout, record: Record, now: datetime, kept: dict[str, tuple[Record, dict[str, Any]]]
 ) -> dict[str, Any]:
     """The entry for a shown run; an ended run with a gone launcher is read once, not per poll."""
-    if record.status not in _SETTLED:
+    if record.status not in _SETTLED or (record.started_at and not record.pid):
         return _entry(layout, record, now)[0]
     saved = kept.get(record.id)
     if saved is not None and saved[0] == record:  # any changed field is a miss

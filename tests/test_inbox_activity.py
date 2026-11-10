@@ -262,6 +262,9 @@ def _ended(layout, run_id="k1", status="finished", **fields):
     run_dir = layout.runs / run_id
     append_event(run_dir, "module_started", module="CP-0")
     append_event(run_dir, "module_accepted", module="CP-0")
+    # A run reaped normally carries the process ID it was started with (and a start time).
+    fields.setdefault("started_at", "2026-11-09T07:00:00Z")
+    fields.setdefault("pid", 4242)
     return Record(
         run_id, "credit_snapshot", "f", status, "t", ended_at="2026-11-09T08:00:00Z", **fields
     )
@@ -360,3 +363,16 @@ def test_s1_nothing_is_kept_for_a_record_no_longer_shown(layout):
     assert set(kept) == {"e000", "e001", "e002"}
     snapshot(layout, records[:1], cap=Decimal(20), now=_NOW, kept=kept)
     assert set(kept) == {"e000"}
+
+
+def test_s1_a_failed_run_started_but_with_no_saved_pid_is_read_again(layout, reads):
+    # "failed: could not be started" after Popen leaves a live paid child and no saved pid.
+    record = _ended(layout, status="failed", pid=0, reason="could not be started")
+    kept: dict = {}
+    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    append_event(layout.runs / "k1", "module_started", module="CP-1")
+    entry = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert dict(entry["modules"])["CP-1"] == "running" and kept == {}
+    never_started = replace(record, started_at="")  # refused before launch: nothing can change
+    snapshot(layout, [never_started], cap=Decimal(20), now=_NOW, kept=kept)
+    assert set(kept) == {"k1"}

@@ -1248,3 +1248,5 @@ def test_a_cap_above_the_standing_rulings_usd_20_is_refused_at_start_up(root, ca
     assert main(["--root", str(root), "--cap", "20.01"]) == 2
     assert "above USD 20" in capsys.readouterr().err
     Watcher(settings(root, cap=Decimal(20))).close()
+    with pytest.raises(StartupRefused, match="above USD 20"):
+        Watcher(settings(root, cap=Decimal("NaN")))
