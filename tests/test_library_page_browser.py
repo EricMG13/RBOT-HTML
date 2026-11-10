@@ -569,9 +569,12 @@ def test_the_report_canvas_and_old_section_links(tmp_path):
 
 
 FORM_PROBE = """<script>
+(() => {  // Its own scope: the form's script declares globals of its own.
+document.querySelector('[data-k="pathway"][value="credit_snapshot"]').checked = true;
 document.querySelector('[data-k="run_type"][value="secondary"]').checked = true;
 document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
-const sel = document.getElementById('s1-pathway');
+const radios = [...document.querySelectorAll('[data-k="pathway"]')];
+const shown = radios.filter(x => !x.closest('.card').hidden).map(x => x.value);
 const out = document.createElement('pre');
 out.id = 'probe';
 const built = build();
@@ -579,10 +582,55 @@ const other = JSON.parse(JSON.stringify(built));
 other.run.pathway = 'credit_snapshot';
 const warned = fill(other).filter(w => w.startsWith('run.pathway'));
 const same = fill(built).filter(w => w.startsWith('run.pathway'));
-out.textContent = JSON.stringify({value: sel.value, disabled: sel.disabled, built, warned, same});
+const disabled = radios.filter(x => x.disabled).length;
+out.textContent = JSON.stringify({shown, disabled, built, warned, same});
 document.body.append(out);
+})();
 </script>
 </body>"""
+
+
+CUTOFF_PROBE = """<script>
+(() => {  // Its own scope: the form's script declares globals of its own.
+const asOf = document.getElementById('d-as_of'), cut = document.getElementById('d-cutoff');
+const type = (el, value) => {
+  el.value = value;
+  el.dispatchEvent(new Event('input', {bubbles: true}));
+};
+type(asOf, '2026-10-31');
+const followed = build().run.cutoff;
+type(cut, '2026-09-30');
+type(asOf, '2026-11-05');
+const kept = build().run.cutoff;
+type(cut, '');
+const cleared = build().run.cutoff;
+const file = JSON.parse(JSON.stringify(build()));
+file.run.as_of = '2026-08-31';
+file.run.cutoff = '';
+const notes = fill(file).filter(n => n.startsWith('run.cutoff'));
+const loaded = build().run.cutoff;
+const out = document.createElement('pre');
+out.id = 'probe';
+out.textContent = JSON.stringify({followed, kept, cleared, notes, loaded});
+document.body.append(out);
+})();
+</script>
+</body>"""
+
+
+def test_the_research_cutoff_follows_the_as_of_date_and_is_written(tmp_path):
+    # Session A, 2026-11-10: the modules read a blank cutoff in the pinned context as "information
+    # cutoff not supplied". The code reads blank as the as-of date, so the form writes that date.
+    page = tmp_path / "cutoff.html"
+    text = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
+    page.write_text(text.replace("</body>", CUTOFF_PROBE, 1), encoding="utf-8")
+    dom, console = visit(page)
+    assert console == []
+    probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert probe["followed"] == "2026-10-31"  # Follows the as-of date ...
+    assert probe["kept"] == "2026-09-30"  # ... until the analyst sets an earlier one ...
+    assert probe["cleared"] == "2026-11-05"  # ... and again once that is cleared.
+    assert probe["loaded"] == "2026-08-31" and len(probe["notes"]) == 1  # A blank file says so.
 
 
 def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
@@ -596,7 +644,7 @@ def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
         form = layout.inbox / "earnings_update/_template/context-form.html"
         page = (
             tmp_path / "probe.html"
-        )  # The form with a probe that changes the run type, then reads.
+        )  # The form with a probe that tries another pathway and run type, then reads.
         text = form.read_text(encoding="utf-8")
         page.write_text(text.replace("</body>", FORM_PROBE, 1), encoding="utf-8")
         dom, console = visit(page)
@@ -604,9 +652,11 @@ def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
         probe = json.loads(
             html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
         )
-        assert probe["value"] == "earnings_update" and probe["disabled"] is True
-        assert probe["built"]["run"]["run_type"] == "secondary"  # The run type did change ...
-        assert probe["built"]["run"]["pathway"] == "earnings_update"  # ... the pathway did not.
+        # Only the folder's pathway is offered; the other five are disabled and hidden.
+        assert probe["shown"] == ["earnings_update"] and probe["disabled"] == 5
+        assert probe["built"]["run"]["pathway"] == "earnings_update"  # The pathway held ...
+        # ... and so did the run type: an Earnings Update compares two periods (form, 2026-11-10).
+        assert probe["built"]["run"]["run_type"] == "earnings"
         assert probe["warned"] == [
             'run.pathway: this form is fixed to earnings_update; "credit_snapshot" was replaced'
         ]
