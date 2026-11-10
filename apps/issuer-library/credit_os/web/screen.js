@@ -563,4 +563,52 @@ window.addEventListener('hashchange',renderRoute);
   document.documentElement.addEventListener('pointerleave',leave);
   rail.addEventListener('pointerleave',leave);
 })();
+// Live run activity: re-load activity.js every 30 s while Run activity is the view showing, and once at once when the view is entered. The script
+// calls onRunActivity, which re-renders that view through the same moduleBody path as a route change, only when it is still the one showing
+// and only when the runs or the held note changed. A re-render keeps the lists the reader opened and the control that had focus.
+let activityTimer=null;
+let activityShowing=false;
+function syncActivityTimer() {
+  const wait=nextActivityReload(current);
+  if(wait===null){clearTimeout(activityTimer);activityTimer=null;activityShowing=false;return;}
+  if(!activityShowing){activityShowing=true;swapActivityScript(document,Date.now());}
+  if(activityTimer!==null)return;
+  activityTimer=setTimeout(()=>{activityTimer=null;if(nextActivityReload(current)===null)return;swapActivityScript(document,Date.now());syncActivityTimer();},wait);
+}
+let lastActivity=null;
+// Which runs have an opened file list, and which run's control (link, list or its summary) has focus. A run is named by its data-run attribute.
+function recordActivityView(root,active) {
+  const runs=root.querySelectorAll?.('[data-run]')??[];
+  const open=[...runs].filter(el=>el.tagName==='DETAILS'&&el.open).map(el=>el.getAttribute('data-run'));
+  const owner=active&&(active.getAttribute?.('data-run')!==null&&active.getAttribute?.('data-run')!==undefined?active:active.parentElement);
+  const run=owner?.getAttribute?.('data-run');
+  const focus=active&&root.contains?.(active)&&run!==null&&run!==undefined?{run,tag:active.tagName}:null;
+  return {open,focus};
+}
+function restoreActivityView(root,kept) {
+  const runs=[...(root.querySelectorAll?.('[data-run]')??[])];
+  for(const el of runs)if(el.tagName==='DETAILS'&&kept.open.includes(el.getAttribute('data-run')))el.open=true;
+  if(!kept.focus)return;
+  const {run,tag}=kept.focus;
+  const target=tag==='SUMMARY'?runs.find(el=>el.tagName==='DETAILS'&&el.getAttribute('data-run')===run)?.querySelector('summary'):runs.find(el=>el.tagName===tag&&el.getAttribute('data-run')===run);
+  target?.focus?.();
+}
+window.onRunActivity=()=>{
+  if(nextActivityReload(current)===null)return;
+  const content=$('content'),live=window.RUN_ACTIVITY,top=content.scrollTop;
+  const seen=JSON.stringify([live?.runs,live?.held,live?.cap]);
+  if(seen===lastActivity){ // same runs: leave the page as the reader has it; only the snapshot's own time moves
+    const stamp=content.querySelector?.('.run-updated-at');
+    if(stamp&&typeof live?.updated==='string')stamp.textContent=live.updated;
+    return;
+  }
+  lastActivity=seen;
+  const kept=recordActivityView(content,document.activeElement);
+  content.innerHTML=moduleBody(current);
+  if(!showsCodes(current))nameCodes(content);
+  restoreActivityView(content,kept);
+  content.scrollTop=top;
+};
+window.addEventListener('hashchange',syncActivityTimer);
 renderRoute();
+syncActivityTimer();

@@ -4,6 +4,34 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Inbox automation (branch `claude/user-journey-2939fb`, tip `f13ce44`)
+
+Scope: synthetic runs through a fake launcher on macOS. No provider was called, the real launcher
+was never started with `--live`, and nothing ran on Windows or over a network share. This is not
+proof of any pathway or issuer.
+- Built: `deploy_workflow.inbox` (drops, filing, runs, activity, watcher, startup), the live Run
+  activity view, the per-pathway context form, `Start watcher.cmd`, the standing ruling
+  `docs/rulings/2026-11-09-inbox-automation.md`. Design:
+  `docs/superpowers/specs/2026-11-09-inbox-automation-design.md`.
+- Passed on the tip, with `origin/main` `51203a9` merged in: `tests/test_inbox_*.py`,
+  `test_cpos_launch.py`, `test_update_library.py`, `test_issuer_library_packaging.py` — 365 passed,
+  1 skipped (the paid test); `static.test.cjs` and `calendar.test.cjs` 28; the browser tests 5
+  (local Chrome over `file://`); the quality gate, 0 findings in 19 changed files.
+- One test runs the watcher with the real library rebuild and a real-shaped completed run; the
+  others replace the library's listing. The real launcher's offline step was exercised by a
+  reviewer's probe only, not by the suite.
+- Reviews: each task; the whole branch (approved with fixes, 0 High, 4 Medium, all fixed and
+  re-reviewed). Killing the watcher mid-run and starting another adopted the live run with one
+  launch, one record and one filed report; that probe is timing-sensitive on a loaded machine.
+- Known and left open: a hard kill between a run's process start and the save of its process ID
+  leaves that run untracked (it is shown `interrupted` and is not restarted, while its launcher
+  may still spend up to the cap); deleting `watcher.lock` while a watcher runs lets a second one
+  start; queued runs never expire; setting the clock back allows 30 more starts that day.
+- Not verified: anything on Windows (the file lock, sharing-violation readiness, the retry on a
+  refused replace, folder permissions after the move, `Start watcher.cmd`, Edge over `file://`);
+  one measured live run (whether USD 20 covers a pathway on `sol-medium` is unmeasured); the full
+  test suite (weekly job).
+
 ## 2026-11-09 — TDG live runs on sol-high, compared with medium
 
 Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.

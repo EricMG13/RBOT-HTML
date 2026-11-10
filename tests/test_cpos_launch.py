@@ -18,7 +18,12 @@ from deploy_workflow.handoff_delivery import (
     verify_delivery,
 )
 from deploy_workflow.markdown_delivery import markdown_files
-from deploy_workflow.model.adapter import AdapterReply, LiveAdapter
+from deploy_workflow.model.adapter import (
+    AdapterReply,
+    LiveAdapter,
+    LivePauseInForce,
+    check_ruling,
+)
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import ToolCall, Turn, Usage
@@ -596,6 +601,21 @@ def test_every_pathway_runs_end_to_end_to_a_verified_report(tmp_path, provider, 
     completed = json.loads(next(out.glob("completed-*.json")).read_text())
     assert completed["execution"] == "live-provider"
     assert completed["cp_model_published"] is False
+
+
+@pytest.mark.parametrize(("extra", "refreshed"), [((), True), (("--no-library",), False)])
+def test_main_refreshes_the_library_only_without_no_library(
+    tmp_path, provider, monkeypatch, extra, refreshed
+):
+    """A finished offline run on the fake provider; only the library refresh is stubbed."""
+    refreshes = []
+    monkeypatch.setattr(cpos_launch, "_refresh_library", refreshes.append)
+    argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING), *extra)
+    routes = prepare_routes(tmp_path, "sol-medium")
+    provider.answer = lambda context: answer(context, routes)
+    assert main(argv) == 0
+    assert provider.calls
+    assert refreshes == ([tmp_path / "out"] if refreshed else [])
 
 
 def test_rejected_module_stops_the_run_without_a_report(tmp_path, provider, capsys):
@@ -1395,7 +1415,7 @@ def library_launch(tmp_path, monkeypatch, copilot_ruling, update):
     monkeypatch.setattr(
         cpos_launch, "run_live_handoffs", lambda manifest, directory, **k: directory / "report.html"
     )
-    monkeypatch.setattr(cpos_launch, "_update_library", update)
+    monkeypatch.setattr(cpos_launch, "update_library_at", update)
     argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
     argv[argv.index("--out") + 1] = str(tmp_path / "runs" / "x")
     return main(argv)
@@ -1895,3 +1915,16 @@ def test_odd_driver_values_end_in_value_error_not_type_error(values):
 def test_a_non_object_driver_ends_in_value_error():
     with pytest.raises(ValueError):
         cpos_forecast.parse(forecast_block(base_drivers={"revenue_growth": 5}), "1000")
+
+
+def test_no_library_flag_is_accepted_and_defaults_off():
+    base = ["--context", "c.json", "--sources", "s", "--config", "sol-medium", "--cap", "20"]
+    assert cpos_launch._parser().parse_args(base).no_library is False
+    assert cpos_launch._parser().parse_args([*base, "--no-library"]).no_library is True
+
+
+def test_standing_ruling_lifts_the_pause_for_sol_medium_only():
+    ruling = cpos_launch.ROOT / "docs/rulings/2026-11-09-inbox-automation.md"
+    check_ruling("sol-medium", ruling)
+    with pytest.raises(LivePauseInForce):
+        check_ruling("sol-high", ruling)

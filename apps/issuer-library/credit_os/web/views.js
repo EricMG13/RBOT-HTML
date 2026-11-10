@@ -656,11 +656,61 @@ function summaryView(context) {
   return `${summaryLead(lead)}${summaryCharts(available,context)}<div class="question-map">${questions.map(([title,items])=>`<section><h2>${esc(title)}</h2><div>${items.map(([id])=>summaryCard(id,context)).join('')}</div></section>`).join('')}</div>${built.length?`<section class="summary-deliverables"><h2>Deliverables from this run</h2>${built.map(r=>`<div class="deliverable"><a class="text-action" href="${routeHref('W-Reports',r.id,null,context)}">${esc(reportName(r))}${icon('arrow-right')}</a>${reportAcceptance(r).html}</div>`).join('')}</section>`:''}`;
 }
 // Read-only: the folders the library does not show (with the reason) and the issues found when it was built.
-function activityView(activity) {
-  if(!activity)return '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>The data file did not supply it, so nothing is claimed about excluded runs or issues. Rebuild the data file and open this page again.</p></div>';
+function activityView(activity,live) {
+  const top=liveActivityView(live);
+  if(!activity)return top+ '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>The data file did not supply it, so nothing is claimed about excluded runs or issues. Rebuild the data file and open this page again.</p></div>';
   const excluded=activity.excluded,issues=activity.issues;
-  if(!excluded.length&&!issues.length)return '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Nothing to report</h2><p>Every run folder in this workspace is shown in the library, and building it raised no issues.</p></div>';
-  return `<p class="intro">Read when the library was built. It lists run folders that are not shown and any issues found; it changes nothing.</p>${excluded.length?`<section class="activity-excluded"><h2>Run folders not shown</h2><ol class="report-list">${excluded.map(([folder,reason])=>`<li class="report-row"><span class="code">${esc(folder)}</span><span>${esc(reason)}</span></li>`).join('')}</ol></section>`:''}${issues.length?`<section class="activity-issues"><h2>Issues</h2><ul class="report-list">${issues.map(i=>`<li class="report-row">${esc(i)}</li>`).join('')}</ul></section>`:''}`;
+  if(!excluded.length&&!issues.length)return top+'<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Nothing to report</h2><p>Every run folder in this workspace is shown in the library, and building it raised no issues.</p></div>';
+  return top+`<p class="intro">Read when the library was built. It lists run folders that are not shown and any issues found; it changes nothing.</p>${excluded.length?`<section class="activity-excluded"><h2>Run folders not shown</h2><ol class="report-list">${excluded.map(([folder,reason])=>`<li class="report-row"><span class="code">${esc(folder)}</span><span>${esc(reason)}</span></li>`).join('')}</ol></section>`:''}${issues.length?`<section class="activity-issues"><h2>Issues</h2><ul class="report-list">${issues.map(i=>`<li class="report-row">${esc(i)}</li>`).join('')}</ul></section>`:''}`;
+}
+// Live runs from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed:
+// then nothing live is shown. Each value passes through esc; a report path becomes a link only when it is a plain relative path.
+const ACTIVITY_RELOAD_MS=30000;
+const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
+// Report links stay under issuers/<folder>/<file>.html: the one place only the watcher writes. Nothing else becomes a link.
+function reportHref(report) {
+  if(typeof report!=='string'||!report||report.startsWith('/')||/^[a-z][a-z0-9+.-]*:/i.test(report)||report.includes('\\'))return null;
+  const parts=report.split('/');
+  if(parts.length!==3||parts[0]!=='issuers'||!/\.html$/i.test(parts[2])||parts.some(p=>p===''||p==='.'||p==='..'))return null;
+  try {return '../../'+parts.map(encodeURIComponent).join('/');}
+  catch(error) {if(error instanceof URIError)return null;throw error;} // a lone surrogate cannot be a link; the path is still shown as text
+}
+// Only strings and finite numbers reach the page; any other value in a field renders as empty text.
+function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
+const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted'];
+function liveRunSpend(run,cap) {
+  if(run.spent===null)return '<span class="run-spend">spend could not be read</span>';
+  if(typeof run.spent!=='string')return '';
+  return `<span class="run-spend">USD ${liveText(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${liveText(cap)}`}</span>`;
+}
+function liveRunRow(run,cap) {
+  const ended=run.status!=='running'&&run.status!=='queued',files=Array.isArray(run.files)?run.files:[];
+  const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
+  const chips=Array.isArray(run.modules)?run.modules.filter(Array.isArray).map(([name,state])=>`<span class="chip chip-${['done','running','waiting'].includes(state)?state:'waiting'}">${liveText(name)}</span>`).join(''):'';
+  const href=run.status==='finished'?reportHref(run.report):null;
+  const report=run.status==='finished'&&run.report?(href?`<a class="text-action"${tag} href="${esc(href)}">${liveText(run.report)}</a>`:`<span class="code">${liveText(run.report)}</span>`):'';
+  const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
+  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${ended?`<span class="run-status">${liveText(run.status)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${ended&&run.ended_at?`<span class="run-time">ended ${liveText(run.ended_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${report}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
+}
+function liveActivityView(live) {
+  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
+  const runs=live.runs.filter(r=>r&&typeof r==='object'&&!Array.isArray(r));
+  const section=(title,cls,list,note='')=>list.length||note?`<section class="${cls}"><h2>${title}</h2>${note}${list.length?`<ul class="report-list">${list.map(r=>liveRunRow(r,live.cap)).join('')}</ul>`:''}</section>`:'';
+  const waiting=runs.filter(r=>r.status==='queued');
+  const held=live.held&&liveText(live.held)?`<p class="run-held">${liveText(live.held)}</p>`:'';
+  const ended=runs.filter(r=>r.status!=='running'&&r.status!=='queued');
+  const stamp=`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`;
+  return stamp+section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held)+section('Ended','activity-ended',ended);
+}
+// The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
+function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}
+// Adds a fresh copy of the script and removes the previous one. A missing file only logs in the browser; the page carries on.
+function swapActivityScript(doc,now) {
+  const previous=doc.head.querySelector('script[data-run-activity]');
+  const script=doc.createElement('script');
+  script.src='../activity.js?t='+now;script.setAttribute('data-run-activity','');
+  doc.head.append(script);
+  if(previous)previous.remove();
 }
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
@@ -678,7 +728,7 @@ function workspaceView(module,section) {
     return report?reportView(report,context):reportList(context);
   }
   if(module==='W-Forecast')return forecastView(context,section);
-  if(module==='CP-OS')return activityView(window.DESIGN_ACTIVITY);
+  if(module==='CP-OS')return activityView(window.DESIGN_ACTIVITY,window.RUN_ACTIVITY);
   return '';
 }
 function updateWorkspaceChrome(module) {
