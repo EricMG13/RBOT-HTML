@@ -56,16 +56,16 @@ Ledger: T1 `agent=mx-feature fix-rounds=0 gates-first-pass=y` · T2 `mx-feature 
 | # | Sev | Where | Finding | Disposition |
 |---|---|---|---|---|
 | F1b | Medium | `watcher.py` `--ruling`, `--config` | `--config sol-high` with another ruling passes start-up and launches. | fixed in the follow-up (`f921c9f`, `e74f2b4`): start-up refuses any other ruling and every launch cites the standing one |
-| F2 | Low | `runs.py:211-223` | `OSError` closing the log handle after `Popen` records "failed" while the child runs untracked. | open (cap reached); S1 no longer freezes its display |
+| F2 | Low | `runs.py:211-223` | `OSError` closing the log handle after `Popen` records "failed" while the child runs untracked. | fixed (outstanding-items branch): an error closing the log handle after `Popen` is logged and the launcher stays tracked |
 | F3 | Low | `watcher.py:168-173` | A rebuild error outside `OSError`/`ValueError`/`ImportError` stops the watcher. Root cause D2 is fixed. | fixed in the follow-up (`f921c9f`): any `Exception` is logged, shown and retried |
-| F4 | Low | `watcher.py:322-331` | An unreadable drop is moved to `failed` while other files still copy. | open |
-| F5 | Low | `watcher.py:459-467` | The daily-limit note is hidden while every slot is busy. | open |
-| F6 | Low | `watcher.py:67-68, 453` | On the autumn clock-change day a start in the first local hour is not counted. | open |
-| F7 | Low | `drops.py:233-252, 93-96` | A file named like a pathway folder is never reported and stops the next start. | open |
-| D4 | Low | `tools/quality_gate.py:64-66` | Changed files with a space or non-ASCII name are dropped silently (none tracked today). Predates PRs 10 and 11. | owner |
-| B1 | Low | `activity.py` `_entry` | A settled run first read while only its event log or only its journal is invisible is kept with waiting modules or spend 0. | open; indistinguishable from a run that wrote neither |
+| F4 | Low | `watcher.py:322-331` | An unreadable drop is moved to `failed` while other files still copy. | fixed: rejected only once nothing in it has changed for the settle time |
+| F5 | Low | `watcher.py:459-467` | The daily-limit note is hidden while every slot is busy. | fixed: the limit is checked before the slots |
+| F6 | Low | `watcher.py:67-68, 453` | On the autumn clock-change day a start in the first local hour is not counted. | fixed: each start's own local date, by the machine's zone rules |
+| F7 | Low | `drops.py:233-252, 93-96` | A file named like a pathway folder is never reported and stops the next start. | fixed, and the same for a file named `failed`: rejected as a stray; start-up tolerates it |
+| D4 | Low | `tools/quality_gate.py:64-66` | Changed files with a space or non-ASCII name are dropped silently (none tracked today). Predates PRs 10 and 11. | fixed: `-z` name lists |
+| B1 | Low | `activity.py` `_entry` | A settled run first read while only its event log or only its journal is invisible is kept with waiting modules or spend 0. | fixed: an entry is kept only when the event log and the journal were both there and read |
 | B2 | Info | `credit_os_chips.py:390` | A source named with `:` (legal on macOS/Linux) now gets a gap chip. Safe direction of D3. | accepted |
-| B3 | Info | `store.py:601` | A handoff with no YAML whose first line is `## Front matter` reads as declaring a status. | open; parser gives both the same shape |
+| B3 | Info | `store.py:601` | A handoff with no YAML whose first line is `## Front matter` reads as declaring a status. | accepted and pinned by a test: a handoff that opens with that heading declares its status |
 
 Structure measured and deferred: 349 lines of identical function bodies in scope, 160 of them the
 `cpXX_module` builder repeated in 11 owner modules (no owner tests in this repository protect
@@ -74,6 +74,35 @@ source-text reads for 6 files; chips pass 0.11 s, under the threshold); `drops.c
 run; `issuer_folder` twice per filing; `parse_locators` has no production caller. No function in
 the update's files exceeds the gate's complexity limits. Fast tests take 65 s; the slowest are
 watcher tests with real waits (3.7 s).
+
+## Outstanding items and adversarial review of `main` (branch `claude/sweep-outstanding-items`)
+
+Base `main` `b2ae395`. Written without sub-agents, on the owner's instruction (2026-11-10). Every
+fix began with a test that failed for the stated cause; the reviewers' probes for F2, F4, F5, F6
+(run with `TZ=America/New_York`), F7, D4 and B1 (against the `c145b16` oracle) now pass.
+
+Review of `main` (three passes: break it in production, read it cold, attack it) found, beyond
+the open rows above:
+
+| # | Sev | Where | Finding | Disposition |
+|---|---|---|---|---|
+| R1 | Warning | `credit_os_chips.py` `issuer_chip`, `page_locators` | A page range in handoff text (model output) was walked page by page: `pp. 10-3000000000` hung the library build, which the watcher runs in its own process. A page number over 4,300 digits raised and failed every rebuild. | fixed: only the pages the source has are read; a number over 9 digits is a gap chip |
+| R2 | Warning | `activity.py`, `run_events.py` | One line in a run's `events.jsonl` whose `event` is a list, or JSON nested too deep (also in a budget marker), or a record with an unknown pathway, raised out of `Watcher.step` and ended the watcher on every restart. | fixed: each reads as unreadable or empty, as the other malformed cases already did |
+| R3 | Warning | `watcher.py` `main` | `--poll-seconds 0` spins, a negative value stops the first sleep after runs were launched, `--max-running 0` never starts a run, a negative `--settle-seconds` claims a drop mid-copy. | fixed: refused before anything is created |
+| R4 | Warning | `.github/workflows/checks.yml` | The pull-request check ran none of the inbox or chips tests (they ran only in the weekly job, which has never run), so every inbox change merged today was gated by local runs alone. | fixed: both sets and the new gate test are in the PR check |
+| R5 | Note | five modules | The temp-file-then-replace writer existed five times (`runs.save`, `filing._save`, `activity.write`, `cpos_status.atomic_json`, `cpos_launch._record_own_pid`). | one helper, `platform_io.write_atomic`, and five call sites |
+| R6 | Note | `watcher.py` | `ROOT` unused since the standing-ruling constant; the `(32, 33)` literal beside `_SHARING_VIOLATIONS`. | removed |
+| R7 | Note | `watcher.py` `_pid_from_file` | The process ID a run is adopted by is whatever its PID file holds; anyone who can write `_engine/state` can hold a slot. They could also delete the records. | left: needs the share's permissions, not code |
+| R8 | Note | `drops.py` `candidates` | A link under a pathway's name is still neither listed nor reported (deliberate: links are not followed), and after a stray file under a pathway's name is rejected the pathway folder is missing until the next start. | left |
+
+Protected output: the library built from the four retained runs is byte-identical to `main`'s
+(build time masked). Watcher step at 200 ended runs 2.9 ms (0 reads); rebuild median 0.575 s.
+
+Still deferred, with the reason: the `cpXX_module` duplicate (11 analytical owner modules with no
+tests in this repository); `Pages` per output (0.03 s, under the contract's threshold);
+`drops.check` twice per run (a deliberate re-check before spend); `issuer_folder` twice per filing
+(two small reads per run); `parse_locators` (the tests' entry point); the two event readers and
+two safe-name rules (different rules on purpose).
 
 For the web session (not edited here): the module head's declared badge now appears on real data.
 

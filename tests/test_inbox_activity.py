@@ -176,7 +176,7 @@ def test_write_removes_its_temporary_file_when_the_replace_fails(layout, monkeyp
     def refuse(*_a, **_k):
         raise OSError("no")
 
-    monkeypatch.setattr("deploy_workflow.inbox.activity.os.replace", refuse)
+    monkeypatch.setattr(os, "replace", refuse)
     with pytest.raises(OSError):
         write(layout, {"runs": []})
     assert not list(layout.engine.glob("*.tmp"))
@@ -258,10 +258,12 @@ def test_m3_write_retries_a_refused_replace(layout, monkeypatch):
 # -- kept ended runs (S1): an ended run whose launcher is gone is read once --------------------
 
 
-def _ended(layout, run_id="k1", status="finished", **fields):
+def _ended(layout, run_id="k1", status="finished", journal=True, **fields):
     run_dir = layout.runs / run_id
     append_event(run_dir, "module_started", module="CP-0")
     append_event(run_dir, "module_accepted", module="CP-0")
+    if journal:  # a run that reached a provider call left a budget journal (USD 2 held)
+        Budget(Decimal(20), run_dir / "live").reserve("e" * 32, Decimal(2), config_id="sol-medium")
     # A run reaped normally carries the process ID it was started with (and a start time).
     fields.setdefault("started_at", "2026-11-09T07:00:00Z")
     fields.setdefault("pid", 4242)
@@ -297,9 +299,6 @@ _NOW = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
 @pytest.mark.parametrize("status", ["finished", "failed", "capped"])
 def test_s1_an_ended_run_is_read_once_and_shows_the_same_entry(layout, reads, status):
     record = _ended(layout, status=status)
-    Budget(Decimal(20), layout.runs / "k1" / "live").reserve(
-        "c" * 32, Decimal(1), config_id="sol-medium"
-    )
     kept: dict = {}
     first = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
     before = dict(reads)
@@ -321,7 +320,7 @@ def test_s1_a_run_that_may_still_have_a_launcher_is_always_read_again(layout, re
 
 
 def test_s1_an_unreadable_journal_is_not_kept(layout, reads):
-    record = _ended(layout)
+    record = _ended(layout, journal=False)
     (layout.runs / "k1" / "live").write_text("not a folder", encoding="utf-8")
     kept: dict = {}
     assert (
@@ -387,4 +386,40 @@ def test_s1_a_settled_run_whose_folder_was_not_visible_is_read_again(layout):
     assert "modules" not in first and kept == {}
     hidden.rename(layout.runs / "k1")
     second = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
-    assert second["modules"] and second["spent"] == "0"
+    assert second["modules"] and Decimal(second["spent"]) == 2
+
+
+@pytest.mark.parametrize("hidden", ["events.jsonl", "live"])
+def test_s1_a_settled_run_first_read_without_its_log_or_journal_is_read_again(layout, hidden):
+    # An absent event log or journal reads as "nothing yet"; for a settled run that is not a
+    # fact to keep: the file may only have been out of sight for one poll.
+    record = _ended(layout)
+    path = layout.runs / "k1" / hidden
+    away = path.with_name(hidden + ".away")
+    kept: dict = {}
+    path.rename(away)
+    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    assert kept == {}
+    away.rename(path)
+    entry = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert dict(entry["modules"])["CP-0"] == "done" and Decimal(entry["spent"]) == 2
+    assert set(kept) == {"k1"}
+
+
+def test_an_event_whose_name_is_not_text_is_not_fatal():
+    events = [{"event": ["x"]}, {"event": {"a": 1}}, {"event": "delivered"}]
+    assert dict(module_states("earnings_update", events))["Report"] == "done"
+
+
+def test_a_pathway_the_plan_does_not_know_shows_only_the_report_entry():
+    assert module_states("no-such-pathway", []) == [["Report", "waiting"]]
+
+
+def test_a_line_or_marker_nested_too_deep_to_parse_is_unreadable_not_fatal(layout):
+    record = _ended(layout, status="running")
+    deep = "[" * 100_000 + "]" * 100_000
+    (layout.runs / "k1" / "events.jsonl").write_text(deep + "\n{}\n", encoding="utf-8")
+    marker = next((layout.runs / "k1" / "live").rglob("e" * 32 + "*"))
+    marker.write_text(deep, encoding="utf-8")
+    [entry] = snapshot(layout, [record], cap=Decimal(20), now=_NOW)["runs"]
+    assert {state for _, state in entry["modules"]} == {"waiting"} and entry["spent"] is None

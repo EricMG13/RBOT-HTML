@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import tempfile
 import unicodedata
 from pathlib import Path
 
@@ -49,17 +48,8 @@ def _load(layout: Layout) -> dict[str, str]:
 
 
 def _save(layout: Layout, registry: dict[str, str]) -> None:
-    path = _registry_path(layout)
-    fd, temp = tempfile.mkstemp(prefix=".issuers-", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(registry, handle, ensure_ascii=False, indent=2, sort_keys=True)
-            handle.flush()
-            os.fsync(handle.fileno())
-        platform_io.replace(temp, path)
-    except BaseException:
-        Path(temp).unlink(missing_ok=True)
-        raise
+    text = json.dumps(registry, ensure_ascii=False, indent=2, sort_keys=True)
+    platform_io.write_atomic(_registry_path(layout), text, sync=True)
 
 
 def issuer_folder(layout: Layout, issuer_id: str, issuer_name: str) -> tuple[Path, bool]:

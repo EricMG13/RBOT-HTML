@@ -137,6 +137,16 @@ provider was called and nothing ran on Windows. Report with all measurements and
   command (1,412 passed, 7 deselected). Review found the first ruling test passed without the
   guard; it is now a cause test (fails with the check removed). The packaged layout was checked by
   building the package into a temporary folder on macOS, not on Windows.
+- Outstanding items and a review of `main` (branch `claude/sweep-outstanding-items`, base
+  `b2ae395`; owner, 2026-11-10; written without sub-agents): the seven open rows are fixed
+  test-first (F2, F4, F5, F6, F7, D4, B1) and B3 is accepted and pinned. The review added four
+  fixes: a page range in handoff text hung the library build; one malformed line in a run folder
+  ended the watcher; `--poll-seconds 0` and like settings were accepted; the PR check ran no inbox
+  or chips test. Exit 0 on the branch: the quality gate; the PR check's pytest command with those
+  tests added (1,437 passed, 7 deselected); node page logic (107 pass). The library built from the
+  four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
+  inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
+  sub-agents), only the author's adversarial pass.
 
 ## 2026-11-10 — Run report Phase A (library Overview and module pages)
 
