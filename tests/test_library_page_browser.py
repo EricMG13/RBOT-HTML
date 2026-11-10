@@ -90,9 +90,11 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     assert console == []  # No script error and no policy violation.
     assert len(re.findall(r"<tr[ >]", dom.split("<tbody>", 1)[1].split("</tbody>")[0])) == 1
     assert "Northbridge Synthetic Group" in dom
-    # The row names its run, and the id opens it.
+    # The row names its run (the cell's title holds the id whole), and the id opens it.
     assert re.search(
-        r'<td class="run-id"><a href="#W-Overview/overview\?c=run-a"[^>]*>run-a</a></td>', dom
+        r'<td class="run-id" title="run-a">'
+        r'<a href="#W-Overview/overview\?c=run-a"[^>]*>run-a</a></td>',
+        dom,
     )
     assert 'id="library-nav"' not in dom  # Issuers are a filter, not a second navigation.
     delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name

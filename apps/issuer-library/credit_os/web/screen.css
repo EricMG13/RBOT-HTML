@@ -492,11 +492,10 @@ table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text'
 table.register,table.open-items,table.matrix{table-layout:fixed}table.register thead th,table.open-items thead th,table.matrix thead th{white-space:normal}
 table.register th:nth-child(1){width:15%}table.register th:nth-child(2){width:17%}table.register th:nth-child(3){width:33%}table.register th:nth-child(5){width:92px}
 table.open-items th:nth-child(1){width:15%}table.open-items th:nth-child(2){width:19%}
-table.matrix th:nth-child(1){width:30%}table.matrix th:nth-child(2){width:20%}table.matrix th:nth-child(n+4){width:14%}
-/* Five columns need room. The measure is the section's own width, so a phone and a desktop canvas narrowed by the inspector get the same answer: the table keeps a readable width and scrolls sideways in its box. */
+table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
+/* A table of sentences needs room. The measure is the section's own width, so a phone and a desktop canvas narrowed by the inspector get the same answer: the table keeps a readable width and scrolls sideways in its box. */
 .run-section{container-type:inline-size}
 @container (max-width:600px){.run-section .table-scroll{overflow-x:auto}table.register,table.open-items{min-width:640px}table.matrix{min-width:520px}.run-section .table-scroll thead th{top:0}}
-table.matrix td.num{text-align:right;font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums}table.matrix thead th:nth-child(n+4){text-align:right}
 .run-inventory{margin:22px 0 8px}
 /* Hardening (design pass 2026-11-10). */
 /* An unbroken string in handoff text (a URL, a long identifier) wraps where it would otherwise widen the canvas or the inspector. Normal text is unaffected: break-word breaks a word only when it cannot fit on a line of its own. */
@@ -506,5 +505,34 @@ table.matrix td.num{text-align:right;font-family:'Red Hat Mono',monospace;font-v
 @media(prefers-reduced-motion:reduce){details.audit>summary img,details.fold>summary img{transition:none}}
 /* Forced colours drop backgrounds, so a filled coverage cell is restated in system colours. */
 @media(forced-colors:active){a.cov.filled{forced-color-adjust:none;background:Highlight;border-color:Highlight;color:HighlightText}}
+/* Screens pass (2026-11-10): what a reader acts on leads; production detail is quiet, in a title, or behind a disclosure. */
+/* The matrix is three short columns: its card does not need the canvas's full width. */
+#run-matrix .table-scroll{max-width:760px}
+/* A run id stays on one line, so every row keeps one height: a long one is cut with an ellipsis and the cell's title holds it whole. */
+.library-table td.run-id{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:1300px){.library-table td.run-id{font-size:var(--fs-label)}}
+.library-table td.run-id a{color:var(--blue-700);text-decoration-color:color-mix(in srgb,currentColor 35%,transparent)}
+.library-table td.run-id a:hover,.library-table td.run-id a:focus-visible{text-decoration-color:currentColor}
+/* The column the table is sorted by reads as the active one. */
+.library-table th:is([aria-sort=ascending],[aria-sort=descending]) button{color:var(--text-primary)}
+/* The selected run's panel: the report's acceptance sits with the buttons that open it. */
+.detail-actions{align-items:center}
+/* Measures the run does not establish are one quiet line under the cards that have a value. */
+.metric-absent{margin:10px 0 0;font-size:var(--fs-compact);line-height:1.5;color:var(--text-tertiary)}
+/* View source is a quiet link on the card's text edge, not a button the size of the figure. */
+.metric-item .tertiary-action,.run-detail p>.tertiary-action{height:24px;padding:0;border:0;font:500 var(--fs-compact)/18px 'Red Hat Text',sans-serif;color:var(--blue-700);text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
+.metric-item .tertiary-action:hover,.run-detail p>.tertiary-action:hover{background:none;color:var(--blue);text-decoration-color:currentColor}
+/* Completeness that was never assessed is a fact, not an alert: amber is kept for what needs action. */
+.completion-box{border-color:var(--border-secondary);background:var(--gray-50);color:var(--text-secondary)}.completion-box strong{color:var(--text-primary)}
+/* A deliverable in the panel's list: its name, then its state. */
+.artifact-list{list-style:none;padding-left:0}.artifact-list li+li{margin-top:8px}
+/* One provenance disclosure above a report: the handoffs it was built from, then its files. */
+.built-from h3{margin:12px 0 4px;font:600 var(--fs-compact)/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.built-from ul{margin:0;padding-left:18px;columns:3 220px;column-gap:24px}.built-from li{break-inside:avoid}
+/* A report row: name, the run it was built from, its state. */
+.report-row .code{font-size:var(--fs-label)}
+/* Reader charts: a period keeps a comparable width, so two periods sit side by side instead of at the card's two ends. */
+.column-chart .periods{max-width:calc(var(--periods)*320px)}
+@media print{.column-chart .periods{max-width:none}}
 /* Print: the canvas is the document. The app frame goes, nothing clips or scrolls, and a finding or a table row is not split across pages. Closed parts print closed. Fills print as drawn: the navy band and a filled coverage cell carry white text. */
 @media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench,.workbench.has-evidence{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}.library-table,table.register,table.open-items,table.matrix{min-width:0}article.finding,tr,.chart-row,.na-line{break-inside:avoid}h2,h3,h4,.story-head{break-after:avoid}a{text-decoration:none}}

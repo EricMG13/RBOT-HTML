@@ -44,3 +44,5 @@
 .library-report .module-link .code{display:none}
 /* A module name in a block head is reader text, not a code. */
 .library-report .block-head .meta.num{font-family:inherit}
+/* The delivery's limits note is a paragraph to read, not a heading: regular weight, a measure it can be read at. */
+.library-report #delivery-limits{font-weight:400;font-size:var(--fs-compact);line-height:1.55}.library-report #delivery-limits li{max-width:100ch}

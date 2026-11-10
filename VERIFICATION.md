@@ -4,6 +4,32 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Library and report screens: reader value against production detail (branch `claude/forecast-publication-screens`)
+
+Scope: the static library page only (`apps/issuer-library/credit_os/web/`), on
+`claude/forecast-publication` (PR 19) merged with `claude/period-charts` (PR 20). One agent, no
+sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-screens-pass.md`.
+
+- Change: production detail leaves the reading path (SHA-256 ids as link text, file names and line
+  numbers in heads and bands, handoff word counts, "file hashes checked at build", a citation count
+  on every Overview finding, five empty metric cards, a Completeness filter no run can match). It
+  stays in a title, the evidence inspector or one "Built from" disclosure. Reports and the report
+  selector name their run; the acceptance state sits beside Open report; "run" replaces "case";
+  a missing figure reads `n.a.`; a sorted column shows its direction.
+- Adversarial design review (breaker, newcomer, truster): BLOCK before the fixes (D1), CONCERNS
+  after them; D1 to D8 fixed, D9 to D14 left with the owner (design doc table).
+- Tests: twelve static tests changed or added and seen failing against the unchanged screens
+  (`git archive` of HEAD). `node --test` static + calendar 116 pass, 0 fail; CI fast pytest list
+  1441 passed, 7 deselected; `tests/test_library_page_browser.py` 20 passed; quality gate 0
+  findings, exit 0.
+- Looked at: headless Chrome at 1440 and 1280 over `file://`, and the built-in browser over a
+  local server, on a library rebuilt from the four retained TDG runs: library, Overview, module
+  matrix, CP-1 charts, reports list, report reader. No console error from the page (the one 404
+  is the optional `activity.js`, absent without a live run).
+- Not verified: phone and tablet widths; Windows and Edge; a library with many issuers or with an
+  accepted report (fixture only); a live run's activity view; the delivered report's own layout
+  inside the frame, which belongs to the delivery renderer; no independent review of this pass.
+
 ## 2026-11-10 — Forecast tab: open items of run tdg-forecast-005 and CP-2G's own cases (branch `claude/forecast-tab-register`)
 
 Owner: investigate the open items; leave any that come from the sources lacking the needed files, but

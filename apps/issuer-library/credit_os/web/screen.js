@@ -506,9 +506,10 @@ function renderRoute() {
     const sections=navigationSections(next.module,next.context,next.output),index=sections.findIndex(s=>s[0]===next.section);
     $('module-head').innerHTML=moduleHead(next);
     // A page with one section already says its name in the heading above.
-    const only=sections.length===1&&!isAnalytical(next.module);
-    // The pager names what it steps through on the pages where the sections are models or reports.
-    const pagerNoun={'W-Forecast':'model','W-Reports':'report'}[next.module]||'section';
+    // So does the list of reports: it is a page of links, and a pager there would step into the first report.
+    const only=(sections.length===1&&!isAnalytical(next.module))||(next.module==='W-Reports'&&next.section==='list');
+    // The pager names what it steps through on the page where the sections are models.
+    const pagerNoun={'W-Forecast':'model'}[next.module]||'section';
     const report=reportPage(next);
     // A module report has no heading above this one but the issuer's h1, so there it is an h2; elsewhere it sits under the page's h2.
     const level=report?'h2':'h3';
