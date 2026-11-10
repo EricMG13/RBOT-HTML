@@ -900,6 +900,7 @@ for _module, (_lane, _guard) in EVENT_LANES.items():
     )
 
 
+DASHES = ("\u2014", "-", "\u2013")  # An Evidence cell that is only a dash states nothing.
 EDGE_COLUMNS = ("From", "Relationship", "Edge type", "To", "Evidence")
 EDGE_RULES = (
     "One row per edge the handoff states, From and To each one named node: the same name for the "
@@ -1144,6 +1145,8 @@ def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None
     allowed = dict(spec.choices).get(name)
     if name in ("Basis and limitation", "Reporting unit"):
         issue = None if cell else f"{name} is blank."
+    elif spec.edges and name == "Evidence" and cell in DASHES:
+        issue = f"{name} `{cell}` is not evidence: write where the source names its source."
     elif name in spec.counts:
         legal = _stated_gap(cell) or re.fullmatch(r"\d+", cell)
         issue = None if legal else f"{name} `{cell}` must be a whole number of 0 or more."

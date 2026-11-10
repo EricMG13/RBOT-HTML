@@ -761,6 +761,7 @@ def _edge_map(section: dict[str, Any]) -> dict[str, Any] | None:
     if rows and all(STATED_GAP.match(c) for cells in rows for c in cells):
         return {**drawn, "gap": rows[0][0].partition(":")[2].strip()}
     stated = all(c and not STATED_GAP.match(c) for cells in rows for c in cells)
+    stated = stated and all(cells[4] not in ("\u2014", "-", "\u2013") for cells in rows)
     legal = stated and all(cells[2] in MAP_EDGES[name] for cells in rows)
     return {**drawn, "gap": None} if rows and legal else None
 

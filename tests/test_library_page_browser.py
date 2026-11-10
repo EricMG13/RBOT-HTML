@@ -137,6 +137,14 @@ MAPS = """
 | Synthetic mechanism | squeezes | Management Language | Synthetic outcome | Synthetic p.2 |
 | Synthetic driver | also hits | Analyst Interpretation | Synthetic outcome | Synthetic p.3 |
 | Synthetic outcome | feeds back | Insufficient Information | Synthetic driver | Synthetic p.4 |
+| Synthetic outcome | then | Documentary Fact | Synthetic step 1 | Synthetic p.5 |
+| Synthetic step 1 | then | Documentary Fact | Synthetic step 2 | Synthetic p.6 |
+| Synthetic step 2 | then | Documentary Fact | Synthetic step 3 | Synthetic p.7 |
+| Synthetic step 3 | then | Documentary Fact | Synthetic step 4 | Synthetic p.8 |
+| Synthetic step 4 | then | Documentary Fact | Synthetic step 5 | Synthetic p.9 |
+| Synthetic step 5 | then | Documentary Fact | Synthetic step 6 | Synthetic p.10 |
+| Synthetic step 6 | then | Documentary Fact | Synthetic step 7 | Synthetic p.11 |
+| Synthetic step 7 | then | Documentary Fact | Synthetic step 8 | Synthetic p.12 |
 """
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -886,6 +894,8 @@ def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_t
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert (seen["nodes"], seen["edges"], seen["labels"], seen["tableRows"]) == (3, 4, 4, 4)
+    assert (seen["nodes"], seen["edges"], seen["labels"], seen["tableRows"]) == (11, 12, 12, 12)
+    assert seen["statusNodes"] >= 1 and seen["statusStates"] == seen["statusNodes"]
+    assert seen["wide"] is True and seen["scrolls"] is True  # Natural width, scrolled in its card.
     assert seen["scrollFocusable"] is True and seen["fits"] is True and seen["statusItems"] >= 1
     assert seen["tableAfterDiagram"] is True and seen["cutEdges"] == 1

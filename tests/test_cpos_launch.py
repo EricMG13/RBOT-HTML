@@ -3387,3 +3387,9 @@ def test_an_edge_table_needs_its_exact_header_and_a_misheaded_one_names_the_head
 def test_the_cp4_map_rules_say_the_narrow_registers_alone_do_not_make_a_graph():
     for heading in ("Map: legal entities", "Map: intercreditor"):
         assert "narrow registers alone do not establish" in map_spec(heading).rules
+
+
+@pytest.mark.parametrize("dash", ["—", "-", "–"])
+def test_a_dash_is_not_edge_evidence_and_is_sent_back(dash):
+    issues = map_issues("Map: stress scenario", f"| A | r | Assumption | B | {dash} |")
+    assert any("Evidence" in i and "names its source" in i for i in issues), issues

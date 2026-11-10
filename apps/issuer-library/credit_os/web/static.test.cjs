@@ -728,7 +728,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
     ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'Unnamed module']]]];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
-  const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
+  const contexts = { [RUN]: { folder: RUN, record: more.record, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace'];
@@ -1996,24 +1996,77 @@ test('maps: placement is by the map, so credit-risk transmission reaches the Ove
   assert.ok(/\['maps',reportMaps\(id\)\]/.test(text) && /anchor==='maps'\?'Maps'/.test(text), 'the owning module page draws its maps');
 });
 
-test('status map: each module by word and shape from its own record, in run order, with no time or score invented', () => {
-  const html = runPage().statusMapView(RUN);
-  const item = word => html.split('<li class="status-item').find(chunk => chunk.includes(word)) ?? '';
-  assert.ok(/state-shape shape-established/.test(item('Reaches a conclusion')));
-  assert.ok(/state-shape shape-open/.test(item('Not assessable')) && item('Not assessable').includes('Downside inputs are missing.'));
-  assert.ok(/state-shape shape-unsummarised/.test(item('No reader summary')));
-  assert.equal(countOf(html, /<li class="status-item/g), 4);
-  assert.ok(html.indexOf('Financial foundation') < html.indexOf('Downside') && html.indexOf('Downside') < html.indexOf('Committee decision'));
-  assert.ok(html.includes('No dependency or time record is held for this run'));
-  assert.ok(!/<time|\d{2}:\d{2}|score|%/.test(strip(html)) && !/CP-\d/.test(strip(html)));
-  assert.ok(!runPage().statusMapView(RUN, { timeline: true }).includes('<svg'));
-});
-
 test('maps: the new rules use only existing tokens, no amber or red', () => {
   const css = read('screen.css').split('\n').filter(line => /\.map-|\.state-shape|\.status-/.test(line));
   assert.ok(css.length >= 4, 'the new rules are found');
   for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b/i.test(rule), rule);
   assert.ok(css.some(rule => /\.map-edge/.test(rule)) && css.some(rule => /shape-open/.test(rule)));
+});
+
+// Fix round 1: the status map draws the run's own record (registry edges, recorded order and times).
+const T0 = '2026-01-01T10:00:00Z', T1 = '2026-01-01T10:05:00Z';
+const RECORD = {
+  edges: [['CP-0', 'CP-1', 'block'], ['CP-1', 'CP-2A', 'restricted'], ['CP-1', 'CP-6', 'block']],
+  steps: [{ module: 'CP-1', started: T0, accepted: T1 }, { module: 'CP-2A', started: T1, accepted: null }, { module: 'CP-6', started: null, accepted: null }, { module: 'CP-0', started: null, accepted: null }],
+  timed: true,
+};
+const MODULE_WORDS = ['Financial foundation', 'Downside', 'Committee decision', 'Source readiness'];
+const textOrder = (html, names) => names.map(n => html.indexOf(n));
+
+test('status map: the dependency map carries each module state by word and shape and says where it comes from', () => {
+  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN);
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0];
+  assert.equal(countOf(svg, /<g class="map-node"/g), 4);
+  for (const [shape, word] of [['established', 'Reaches a conclusion'], ['open', 'Not assessable'], ['none', 'No saved output']]) {
+    assert.ok(new RegExp(`class="map-state shape-${shape}"`).test(svg) && strip(svg).includes(word), shape);
+  }
+  assert.ok(strip(svg).includes('Block') && strip(svg).includes('Restricted'), 'the registry rule is the edge type, in words');
+  assert.ok(html.indexOf('<table class="map-table"') > html.indexOf('<svg'));
+  assert.ok(html.includes('required dependencies') && html.includes('method registry') && html.includes('recorded order'));
+  assert.ok(!html.includes('No dependency or time record') && !/CP-\d/.test(strip(html)));
+});
+
+test('status map: the list follows the recorded order, never the reading-group order, and carries no time on the Overview', () => {
+  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN);
+  const list = html.slice(html.indexOf('<ol class="status-list">'));
+  const at = textOrder(list, MODULE_WORDS);
+  assert.ok(at.every(n => n >= 0) && at.every((n, i) => !i || n > at[i - 1]), at.join());
+  assert.ok(!list.includes(T0) && !html.includes('<th scope="col">Started</th>'));
+});
+
+test('execution timeline: recorded times as written, Not recorded where an event is missing, nothing invented', () => {
+  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN, { timeline: true });
+  const table = /<table class="timeline-table".*?<\/table>/s.exec(html)[0];
+  assert.deepEqual([...table.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Step', 'Module', 'State', 'Started', 'Accepted']);
+  const rows = [...table.matchAll(/<tr><td>.*?<\/tr>/gs)].map(m => strip(m[0].replace(/<\/td>/g, '|')));
+  assert.equal(rows.length, 4);
+  assert.ok(rows[0].includes(T0) && rows[0].includes(T1));
+  assert.ok(rows[1].includes(T1) && rows[1].includes('Not recorded'));
+  assert.equal(countOf(rows[2], /Not recorded/g), 2);
+  assert.equal(countOf(table, /\d{4}-\d{2}-\d{2}T/g), 3, 'only the three stated times appear');
+  assert.ok(html.includes('event log') && !html.includes('No dependency or time record'));
+});
+
+test('execution timeline: a run with no event log is a numbered plan-order list labelled order only', () => {
+  const record = { ...RECORD, timed: false, steps: RECORD.steps.map(s => ({ ...s, started: null, accepted: null })) };
+  const html = runPage(d => d, [], m => m, { record }).statusMapView(RUN, { timeline: true });
+  assert.ok(html.includes('Order only, no times recorded') && !html.includes('<table class="timeline-table"'));
+  assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(html));
+});
+
+test('status map: a run with no record says so and lists the modules in reading-group order with no edge or time', () => {
+  const html = runPage().statusMapView(RUN, { timeline: true });
+  assert.ok(html.includes('No run record was read for this run') && !html.includes('<svg') && !html.includes('timeline-table'));
+  assert.equal(countOf(html, /<li class="status-item/g), 4);
+  assert.ok(!html.includes('No dependency or time record is held'));
+});
+
+test('maps: a wide map keeps its natural width and scrolls inside its card', () => {
+  const rule = read('screen.css').split('\n').find(line => /\.map-scroll svg/.test(line));
+  assert.ok(rule && !/max-width:\s*100%/.test(rule) && /flex:none|max-width:none/.test(rule), rule);
+  const chain = [...Array(12)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', 'Documentary Fact', `Layer ${i + 1}`));
+  const html = runPage(d => { const o = d[outId('CP-1')]; o.sections.push(sec('Map: credit-risk transmission', 3, 890, 'consumed', [table(892, MAP_HEAD, chain)])); o.maps = [{ name: 'credit-risk transmission', table: 892, gap: null }]; return d; }).mapsView(outId('CP-1'), 'h3');
+  assert.ok(Number(/<svg[^>]*width="(\d+)"/.exec(html)[1]) > 1440, 'twelve layers are wider than the page');
 });
 
 test('status map: no run chosen draws nothing and does not throw', () => {

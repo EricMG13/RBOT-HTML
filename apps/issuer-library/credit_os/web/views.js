@@ -693,7 +693,7 @@ function eventLanesView(context,{module=null,compact=false}={}) {
 // ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.
 // Nothing is weighted: the edge type is a word label and a line style, and the only coordinates are the layout's.
-function mapLayers(edges) {
+function mapLayers(edges,nodes=[]) {
   const into=new Map(),out=new Map(),layer=new Map(),names=[];
   const reaches=(from,to,seen=new Set())=>from===to||(!seen.has(from)&&seen.add(from)&&(out.get(from)||[]).some(next=>reaches(next,to,seen)));
   const cut=edges.map(({from,to})=>{
@@ -702,13 +702,15 @@ function mapLayers(edges) {
     out.set(from,[...(out.get(from)||[]),to]);into.set(to,[...(into.get(to)||[]),from]);
     return false;
   });
+  for(const name of nodes)if(!names.includes(name))names.push(name);
   const depth=name=>{if(!layer.has(name))layer.set(name,Math.max(-1,...(into.get(name)||[]).map(depth))+1);return layer.get(name);};
   names.forEach(depth);
   return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
 }
 const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:46,gx:120,gy:22,pad:12};
-function mapDiagram(id,map,rows) {
-  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gx,gy,pad}=BOX;
+// `marks` (name to {shape,word}) puts a module's state in its box by word and shape; `alone` adds names that have no edge.
+function mapDiagram(id,map,rows,marks=null,alone=[]) {
+  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges,alone),{w,h,gx,gy,pad}=BOX;
   const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
   for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
   const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
@@ -719,12 +721,17 @@ function mapDiagram(id,map,rows) {
     const low=Math.max(a.y,b.y)+h+34,x1=a.x+w/2+(from===to?-30:0),x2=b.x+w/2+(from===to?30:0);
     return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,x:(x1+x2)/2,y:low-8};
   };
-  const lines=name=>[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
+  const lines=name=>marks?.has(name)?[name.length>18?name.slice(0,17)+'…':name,marks.get(name).word]:[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
+  const glyph=(name,p)=>{
+    const mark=marks?.get(name),cx=p.x+w-14,cy=p.y+14,cls=`class="map-state shape-${mark?.shape}"`;
+    if(!mark)return '';
+    return mark.shape==='open'?`<rect ${cls} x="${cx-5}" y="${cy-5}" width="10" height="10"/>`:mark.shape==='unsummarised'?`<rect ${cls} x="${cx-4}" y="${cy-4}" width="8" height="8" transform="rotate(45 ${cx} ${cy})"/>`:`<circle ${cls} cx="${cx}" cy="${cy}" r="5"/>`;
+  };
   const drawn=edges.map((edge,at)=>{
     const p=path(edge,cut[at]),dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length];
     return `<path class="map-edge${cut[at]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${p.x}" y="${p.y}" text-anchor="middle">${esc(edge.type)}</text>`;
   }).join('');
-  const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
+  const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text>${glyph(name,p)}</g>`;}).join('');
   const label=`${map.name}: ${names.length} nodes, ${edges.length} edges. The edge table follows.`;
   const marker=`<defs><marker id="map-arrow-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
   const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
@@ -747,16 +754,29 @@ function mapsPlaced(context,{name=null,module=null}={}) {
   return html?`<section class="map-section">${html}</section>`:'';
 }
 const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4')}</section>`:'';
-// The run's own record only: each module's state by word and shape, in run order. The library holds no dependency or timestamp per module, so none is drawn.
+// The run's own records. Dependencies are the method registry's edges for the modules the run requested and times are the run's event log, both read when the library was built (update_library.py `run_record`); a module with no event has no time.
+const EDGE_WORD={block:'Block',restricted:'Restricted'};
 function statusMapView(context,{timeline=false}={}) {
-  const entries=contexts[context]?runGroups(context).flatMap(([,items])=>items):[];
+  const record=contexts[context]?.record;
+  const entry=module=>{const id=defaultOutput(module,context);return {module,out:id?data[id]:null,choices:(moduleEntry(module,context)?.outputs||[]).length};};
+  const entries=record?record.steps.map(({module})=>entry(module)):contexts[context]?runGroups(context).flatMap(([,items])=>items):[];
   if(!entries.length)return '';
-  const shape=out=>!out?'none':out.state.established===true?'established':out.state.established===false?'open':'unsummarised';
-  const items=entries.map(({module,out,choices})=>{
-    const why=out?.state.established===false&&out.summary?.limitation?` <span class="status-why">${rich(out.summary.limitation)}</span>`:'';
-    return `<li class="status-item"><span class="state-shape shape-${shape(out)}" aria-hidden="true"></span>${moduleLink(module)} <strong class="status-word">${esc(out?stateWord(out.state.established):`${choices} saved outputs, none chosen`)}</strong>${why}</li>`;
+  const shape=({out})=>!out?'none':out.state.established===true?'established':out.state.established===false?'open':'unsummarised';
+  const word=({out,choices})=>out?stateWord(out.state.established):choices?`${choices} saved outputs, none chosen`:'No saved output';
+  const items=entries.map(item=>{
+    const why=item.out?.state.established===false&&item.out.summary?.limitation?` <span class="status-why">${rich(item.out.summary.limitation)}</span>`:'';
+    return `<li class="status-item"><span class="state-shape shape-${shape(item)}" aria-hidden="true"></span>${moduleLink(item.module)} <strong class="status-word">${esc(word(item))}</strong>${why}</li>`;
   }).join('');
-  return `<section class="run-section status-map"><h2>${timeline?'Run progress':'Readiness by module'}</h2><p class="intro">Each module’s state as its own handoff records it: a filled circle reaches a conclusion, an empty square is not assessable, a dotted diamond has no reader summary, a dashed circle has no chosen output. No dependency or time record is held for this run, so no edge or time is drawn; modules are listed in run order.</p><ol class="status-list">${items}</ol></section>`;
+  const title=`<h2>${timeline?'Run progress':'Readiness by module'}</h2>`;
+  if(!record)return `<section class="run-section status-map">${title}<p class="intro">No run record was read for this run, so no dependency or time is shown. Each module’s state is its own handoff’s; modules are listed in reading-group order.</p><ol class="status-list">${items}</ol></section>`;
+  const rows=record.edges.map(([from,to,rule])=>({cells:[moduleTitle(from),'supplies',EDGE_WORD[rule]||rule,moduleTitle(to)]}));
+  const marks=new Map(entries.map(item=>[moduleTitle(item.module),{shape:shape(item),word:word(item)}]));
+  const diagram=mapDiagram('run',{name:'Module dependencies',table:'run'},rows,marks,entries.map(item=>moduleTitle(item.module)));
+  const edgeTable=rows.length?`<table class="map-table"><caption>Required dependencies, producer to consumer</caption><thead><tr>${['From','Relationship','Edge type','To'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(({cells})=>`<tr>${cells.map(cell=>`<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'';
+  const at=time=>time?esc(time):'Not recorded';
+  const steps=timeline&&record.timed?`<table class="timeline-table"><caption>Execution order and times, as the run’s event log states them</caption><thead><tr>${['Step','Module','State','Started','Accepted'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${entries.map((item,n)=>`<tr><td>${n+1}</td><td>${moduleLink(item.module)}</td><td>${esc(word(item))}</td><td>${at(record.steps[n].started)}</td><td>${at(record.steps[n].accepted)}</td></tr>`).join('')}</tbody></table>`:`${timeline?'<p class="intro">Order only, no times recorded.</p>':''}<ol class="status-list">${items}</ol>`;
+  const order=record.timed?'the recorded order of the run’s event log, modules never started last in plan order':'plan order from the method registry';
+  return `<section class="run-section status-map">${title}<p class="intro">Edges are the method registry’s required dependencies for the modules this run requested (Block: the consumer needs the producer; Restricted: it runs with a limit). Each box shows that module’s state from its own handoff, by word and shape: filled circle reaches a conclusion, empty square not assessable, dotted diamond no reader summary, dashed circle no output chosen. Modules are listed in ${order}.</p>${diagram}${edgeTable}${steps}</section>`;
 }
 function calendarSections(context) {
   const sections=[];

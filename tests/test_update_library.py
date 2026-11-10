@@ -268,3 +268,61 @@ def test_a_tampered_view_is_still_refused_in_a_build(tmp_path):
     library = update_library.update_library(tmp_path)
     assert library.runs == [] and library.deliveries == {}
     assert "view.json no longer has its recorded sha256" in library.excluded[0][1]
+
+
+# ---- Fix round 1 (2026-11-10): the run's own dependency edges and module times. Synthetic runs.
+def record_of(tmp_path: Path, events: list[dict] | str | None, requested=("CP-0", "CP-1", "CP-1A")):
+    run_dir = tmp_path / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    workflow = {"run": {"requested_modules": list(requested)}}
+    (run_dir / "workflow.json").write_text(json.dumps(workflow), encoding="utf-8")
+    if isinstance(events, list):
+        lines = "".join(json.dumps(e) + "\n" for e in events)
+        (run_dir / "events.jsonl").write_text(lines, encoding="utf-8")
+    elif isinstance(events, str):
+        (run_dir / "events.jsonl").write_text(events, encoding="utf-8")
+    store = {"runs": {"r1": {"folder": "r1"}}, "issues": []}
+    before = tree(run_dir)
+    update_library.run_records(tmp_path, store)
+    assert tree(run_dir) == before, "the run folder is only read"
+    return store["runs"]["r1"].get("record"), store["issues"]
+
+
+EVENTS = [
+    {"at": "2026-01-01T10:00:00Z", "event": "module_started", "module": "CP-0"},
+    {"at": "2026-01-01T10:05:00Z", "event": "module_accepted", "module": "CP-0"},
+    {"at": "2026-01-01T10:06:00Z", "event": "module_started", "module": "CP-1A"},
+    {"at": "2026-01-01T10:07:00Z", "event": "turn", "module": "CP-1A", "turn": 1},
+]
+
+
+def test_a_run_record_has_registry_edges_and_the_recorded_event_order_with_its_times(tmp_path):
+    record, issues = record_of(tmp_path, EVENTS)
+    assert issues == []
+    assert record["edges"] == [["CP-0", "CP-1", "block"], ["CP-0", "CP-1A", "block"]]
+    started = "2026-01-01T10:00:00Z"
+    assert record["timed"] is True and record["steps"] == [
+        {"module": "CP-0", "started": started, "accepted": "2026-01-01T10:05:00Z"},
+        {"module": "CP-1A", "started": "2026-01-01T10:06:00Z", "accepted": None},
+        {"module": "CP-1", "started": None, "accepted": None},
+    ], "recorded start order first, then the modules never started, in plan order; no time invented"
+
+
+def test_a_run_without_an_event_log_has_the_plan_order_and_no_times(tmp_path):
+    record, issues = record_of(tmp_path, None)
+    assert issues == [] and record["timed"] is False
+    assert [s["module"] for s in record["steps"]] == ["CP-0", "CP-1", "CP-1A"]
+    assert all(s["started"] is None and s["accepted"] is None for s in record["steps"])
+
+
+def test_a_run_without_a_workflow_record_has_no_run_record(tmp_path):
+    store = {"runs": {"r1": {"folder": "r1"}}, "issues": []}
+    (tmp_path / "runs" / "r1").mkdir(parents=True)
+    update_library.run_records(tmp_path, store)
+    assert "record" not in store["runs"]["r1"] and store["issues"] == []
+
+
+def test_an_unreadable_event_log_keeps_the_edges_draws_no_time_and_names_the_failure(tmp_path):
+    record, issues = record_of(tmp_path, '{"event": "module_started"\nnot json\n{}\n')
+    assert record["timed"] is False and record["edges"]
+    assert any("r1: events.jsonl could not be read" in i for i in issues)

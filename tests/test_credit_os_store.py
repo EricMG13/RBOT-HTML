@@ -828,3 +828,9 @@ def test_the_store_vocabulary_is_the_launchers():
     from deploy_workflow.owners.cpos_launch import MAPS
 
     assert {f"Map: {k}": v for k, v in store.MAP_EDGES.items()} == {h: t for h, _, t, _ in MAPS}
+
+
+@pytest.mark.parametrize("dash", ["—", "-", "–"])
+def test_an_edge_whose_evidence_is_a_dash_is_not_drawn(dash):
+    fields = map_fields(f"| A | rel | Assumption | B | {dash} |")
+    assert fields["maps"] == [] and "is not in its fixed table" in fields["issue"]
