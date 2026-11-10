@@ -315,7 +315,7 @@ function reportBand(id) {
 }
 // One chip-dot legend per set of charts, under the last card.
 // A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
-const cardTitle=chart=>chart.replace('<div class="section-heading"><h2>','<div class="section-heading"><h4>').replace('</h2>','</h4>');
+const cardTitle=chart=>chart.replace(/<div class="section-heading"><h2>(.*?)<\/h2>/s,'<div class="section-heading"><h4>$1</h4>');
 const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.

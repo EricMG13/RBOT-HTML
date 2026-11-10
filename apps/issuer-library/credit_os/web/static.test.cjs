@@ -1138,6 +1138,9 @@ test('charts: one chip-dot legend per set of charts, under the last card', () =>
   assert.equal(countOf(html, /class="panel-card"/g), 3);
   assert.ok(html.indexOf('class="legend"') > html.indexOf('<i>c</i>'));
   assert.equal(runPage().chartCards([]), '');
+  // A chart without the heading is left as it is: its own h2 is not half-retagged.
+  assert.equal(runPage().chartCards(['<h2>own</h2>']).includes('<h2>own</h2>'), true);
+  assert.ok(runPage().chartCards(['<div class="section-heading"><h2>Cost $1 &amp; $&</h2></div>']).includes('<h4>Cost $1 &amp; $&</h4>'));
   // A card's chart title is an h4 (it sits under a module's h3); the rest of the chart is untouched.
   assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div></div>');
 });

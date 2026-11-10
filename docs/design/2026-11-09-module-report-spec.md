@@ -52,7 +52,8 @@ Visual: Untitled UI Tag anatomy in Credit OS tokens; height 24px, 4px corners, R
 | `upstream` | upstream module code | blue-grey | `D1 · D3 · E1` or `CP-1A · E2` | inspector: the upstream register row |
 | `gap` | `?`, dashed | hollow | `no page` / `Not supplied` | inspector: the gap text |
 
-Legend line under each chart panel names the four dots.
+Legend line under the last chart panel of a set names the four dots (amended 2026-11-10,
+`2026-11-10-impeccable-pass.md`; was under each panel).
 
 ## Data contract (`data.js`, built by Python)
 

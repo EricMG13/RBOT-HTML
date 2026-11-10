@@ -354,7 +354,7 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
     assert seen["emptyBefore"] is False  # Rows are shown, so the empty row is not.
     # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
     assert seen["filtered"] == {"shown": 0, "emptyShown": True}
-    # Design pass 2026-11-10: the parts are listed and reachable, the tables run whole in the text face.
+    # Design pass 2026-11-10: parts listed and reachable, tables whole and in the text face.
     assert seen["outline"][-4:] == [
         "Findings register",
         "Open items",
@@ -367,7 +367,8 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
         "inView": True,
     }
     assert seen["scrollers"] == 0 and seen["monoProse"] == 0
-    assert seen["coverage"] and all(re.fullmatch(r"CP-[0-9A-Z]+", code) for code in seen["coverage"])
+    codes = seen["coverage"]
+    assert codes and all(re.fullmatch(r"CP-[0-9A-Z]+", code) for code in codes)
 
 
 # A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then

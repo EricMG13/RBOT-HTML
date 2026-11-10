@@ -294,7 +294,7 @@ function renderNavigator(module) {
   }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
   // A module report and the run report have parts to list; Run activity (CP-OS) has no output and no outline.
   const analytical=!module.startsWith('W-'),outline=query?'':analytical&&current.output?outlineMarkup(current.output):module==='W-Overview'?runOutline():'';
-  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||!outline||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${outline&&`<div class="outline-heading">On this page</div>${outline}`}`;
+  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||(!analytical&&!outline)||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${outline&&`<div class="outline-heading">On this page</div>${outline}`}`;
   nameCodes($('module-list'));
   document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Analysis & tools'} <span>${count}</span>`;
   $('module-search-clear').hidden=!$('module-search').value;
@@ -487,8 +487,8 @@ const positionKey=route=>`${route.context}:${route.output||route.module}:${repor
 const runPart=()=>{const part=/^#W-Overview\/(run-[a-z0-9-]+)/.exec(location.hash)?.[1];return part&&$('content').querySelector(`#${part}[data-run-part]`)?part:null;};
 // Read from the page as drawn: a part the run does not have has no entry.
 const runOutline=()=>{
-  const parts=[...$('content').querySelectorAll('[data-run-part]')];
-  return parts.length?`<nav class="section-outline" aria-label="On this page"><ol>${parts.map(part=>`<li><a class="section-item" href="${routeHref('W-Overview',part.id)}" ${runPart()===part.id?'aria-current="location"':''}>${esc(part.dataset.runPart)}</a></li>`).join('')}</ol></nav>`:'';
+  const parts=[...$('content').querySelectorAll('[data-run-part]')],here=runPart();
+  return parts.length?`<nav class="section-outline" aria-label="On this page"><ol>${parts.map(part=>`<li><a class="section-item" href="${routeHref('W-Overview',part.id)}" ${here===part.id?'aria-current="location"':''}>${esc(part.dataset.runPart)}</a></li>`).join('')}</ol></nav>`:'';
 };
 function scrollToPart(part) {
   const content=$('content'),target=part==='head'?null:$(part);

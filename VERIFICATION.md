@@ -4,6 +4,38 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Design pass on the run report and library (branch `claude/impeccable-report-library-595877`)
+
+Scope: `/impeccable` critique, harden, layout and polish on `apps/issuer-library/credit_os/web/`
+(page parts only; no Python under `src/` or `apps/issuer-library/*.py` changed). What changed and
+the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `origin/main` c145b16.
+- Real-data check: the four retained TDG runs built into a scratch folder through a link to `runs/`
+  (nothing written under `runs/` or the checkout's `library/`; no model call). Word-level diff of the
+  drawn page text against the `origin/main` page parts on `cpos-tdg-sol-medium-all-001` (Overview,
+  CP-1, CP-6), `cpos-tdg-sol-high-001` (Overview) and the library table: the only differences are
+  coverage labels (module names to codes), three repeated chart legends and three repeated
+  "Missing values have no bar" notes removed, and four run ids added to library rows. CP-6: none.
+- Measured in headless Chrome from disk at 1440 and 1280: no horizontal overflow on the four
+  routes; library table 922px in a 922px box at 1280 (was 964px); run-report tables are not scroll
+  boxes and their headers stick at 0px; heading levels have no skip on Overview, CP-1, CP-6; long
+  unbroken, RTL, CJK and emoji text injected into every bottom line, finding and limitation does not
+  widen the page at 1280 or 500px; the Overview prints as 15 pages and CP-1 as 8.
+- Driven in the app's browser pane at 1440: library row to run, outline click and Tab+Enter to a
+  part (route, scroll, current entry, focus ring), count of citations without a page to the
+  inspector and Esc back to the count, a chart chip to the inspector, the Reference route.
+- Gates, all exit 0: `node --test` on `static.test.cjs` and `calendar.test.cjs` (104 pass);
+  `uv run pytest tests/test_library_page_browser.py tests/test_update_library.py
+  tests/test_library_index.py tests/test_credit_os_store.py` (94 passed, browser tests included);
+  `uv run python tools/quality_gate.py --base origin/main`.
+- Reviews: critique by two independent agents; confidence review fixed three findings (a
+  half-retagged chart heading, the catalogue opening on a no-output module, print without
+  background fills); rewrite tournament run inline (one hoist applied, the rest held).
+- Detector after the pass (1280): no skipped-heading or line-length finding on the four routes;
+  the remaining tiny-text findings are the committed 11px label size and nested-cards is the app frame.
+- Not verified: a real print dialog and printers; Safari and Firefox; a screen reader; Windows
+  forced colours (rule written, not rendered); touch input; the inbox-built library with Run
+  activity; runs without charts or with a committee band; library rows remain 190–365px tall.
+
 ## 2026-11-10 — Run report Phase A (library Overview and module pages)
 
 Scope: the library page Overview is now a run report (what the run establishes, credit story by

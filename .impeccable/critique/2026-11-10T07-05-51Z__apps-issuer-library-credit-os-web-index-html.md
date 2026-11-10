@@ -10,6 +10,7 @@ target_fingerprint: "sha256:9bca907ca796ab4f1bb1e59a3d559a16eadf4af22d1bbd2b4c21
 target_path: /Users/ericguei/Documents/RBOT-HTML/.claude/worktrees/impeccable-report-library-595877/apps/issuer-library/credit_os/web/index.html
 timestamp: 2026-11-10T07-05-51Z
 slug: apps-issuer-library-credit-os-web-index-html
+closed: true
 ---
 Method: dual-agent (A: Fable design review · B: Fable detector and browser evidence). Routes: library, run report (cpos-tdg-sol-medium-all-001), CP-1, CP-6 at 1440 and 1280.
 
