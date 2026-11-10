@@ -65,13 +65,16 @@ COVENANT_ROUTES = {
 PATHWAY_MODULES = {
     "credit_snapshot": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-4", "CP-3", "CP-5", "CP-6"),
     "earnings_update": ("CP-0", "CP-1", "CP-1B", "CP-1D", "CP-5"),
+    # The fixture context's peer source is CP-DR, so the two pathways with CP-1C gain CP-DR.
     "relative_value": (
-        *("CP-0", "CP-1", "CP-1A", "CP-3D", "CP-1C", "CP-2", "CP-2D", "CP-3C", "CP-3", "CP-5"),
+        *("CP-0", "CP-1", "CP-1A", "CP-3D", "CP-DR", "CP-1C", "CP-2", "CP-2D", "CP-3C", "CP-3"),
+        "CP-5",
     ),
     "covenant_refinancing": COVENANT_MODULES,
+    # CP-2 before CP-2A since 2026-11-10 (cp-2a SKILL.md: "Upstream: CP-1, CP-1B, CP-2").
     "distressed_restructuring": (
-        *("CP-0", "CP-1", "CP-1A", "CP-1C", "CP-2A", "CP-4", "CP-2", "CP-2G", "CP-2H", "CP-4C"),
-        "CP-5",
+        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-1C", "CP-2", "CP-2A", "CP-2G", "CP-2H"),
+        *("CP-4C", "CP-5"),
     ),
     "portfolio_decision": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-3", "CP-5", "CP-6"),
 }
@@ -880,7 +883,209 @@ def test_checker_enforces_the_opening_on_every_module(tmp_path, module, pathway)
 
 
 def test_every_selected_method_file_exists():
-    assert all((ROOT / path).is_file() for files in METHODS.values() for path in files)
+    assert all(
+        (ROOT / path.split(" § ")[0]).is_file() for files in METHODS.values() for path in files
+    )
+
+
+# --- module method gaps (owner, 2026-11-10: "Fix all ... Keep a copy of the methodology") --------
+SKILLS = "docs/reuse/selected-methods/skills/"
+# Written from each SKILL.md's own words ("mandatory, not optional", "binding method for the ...
+# phase", "they bind every run", "Read ...; materialize its run-specific brief"), not from METHODS.
+BINDING_COMPANIONS = {
+    "CP-1B": (
+        "cp-1b-earnings-delta/SKILL.md",
+        "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
+    ),
+    "CP-2A": ("cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",),
+    "CP-3": (
+        "cp-3-relative-value-security-selection/references/CP-3A_RUNBOOK.md",
+        "cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
+        "cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
+        "cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
+    ),
+    "CP-4": (
+        "cp-4-legal-covenant-interpreter/references/CP-4_RUNBOOK.md",
+        "cp-4-legal-covenant-interpreter/references/CP-4A_RUNBOOK.md",
+        "cp-4-legal-covenant-interpreter/references/REF_CP-4A_STEPS.md",
+        "cp-4-legal-covenant-interpreter/references/CP-4B_RUNBOOK.md",
+        "cp-4-legal-covenant-interpreter/references/REF_CP-4B_STEPS.md",
+    ),
+    "CP-5": ("cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md",),
+    "CP-6": ("cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md",),
+    "CP-DR": ("cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",),
+}
+SKILL_MODULES = [
+    *("CP-1B", "CP-1C", "CP-1D", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-2H", "CP-3", "CP-3D"),
+    *("CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR"),
+]
+
+
+def test_each_module_is_sent_the_companions_its_method_calls_binding():
+    for module, names in BINDING_COMPANIONS.items():
+        for name in names:
+            assert SKILLS + name in METHODS[module], (module, name)
+
+
+def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
+    """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
+    view with `pairs`, which only the older structured runtime gives."""
+    text = cpos_launch.method_text("CP-1B")
+    assert "read_inputs" not in text and "earnings_delta.md" not in text
+    assert "# CP-1B Earnings Delta" in text
+
+
+def test_skill_modules_carry_the_confidence_score_rules_their_script_would_apply():
+    section = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
+    for module in SKILL_MODULES:
+        names = [name for name, _ in cpos_launch.method_sections(module)]
+        assert names.count(section) == 1, module
+        body = dict(cpos_launch.method_sections(module))[section]
+        assert body.startswith("## CP_CONFIDENCE_SCORE.md\n")
+        assert "score = clamp( (0.6 * E + 0.4 * C) * S - P , 0 , 100 )" in body
+        assert "CP_LIMITATION_TAXONOMY" not in body  # the next canon section is not swept in
+    assert all(" § " not in name for name, _ in cpos_launch.method_sections("CP-2"))
+
+
+def test_the_method_archive_lists_every_sent_file_with_its_hash():
+    manifest = json.loads((ROOT / "docs/reuse/selected-methods/manifest.json").read_text())
+    listed = {entry["archive_path"]: entry["sha256"] for entry in manifest["files"]}
+    for files in METHODS.values():
+        for name in files:
+            path = name.split(" § ")[0]
+            if path.startswith("docs/reuse/selected-methods/"):
+                assert listed.get(path) == hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), (
+                    path
+                )
+
+
+def all_instructions(tmp_path, pathway="distressed_restructuring", modules=None, peer_source=None):
+    context = context_file(tmp_path, pathway)
+    if peer_source is not None:
+        data = json.loads(context.read_text())
+        data["valuation"].update(peer_source=peer_source, peers=[])
+        context.write_text(json.dumps(data))
+    prepared = prepare(
+        context,
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
+        modules=modules,
+    )
+    return prepared, {
+        m: (tmp_path / "out" / spec.path).read_text()
+        for m, spec in prepared.plan.instructions.items()
+    }
+
+
+def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(tmp_path):
+    """Retained run cpos-tdg-sol-medium-all-001 and the 2026-11-10 inbox run: CP-1D, CP-3 and CP-5
+    blocked only because no acceptance receipt or helper-script output exists in this transport.
+    Only CP-2G was told that is not a reason to block."""
+    _, texts = all_instructions(tmp_path, modules=tuple(METHODS))
+    assert set(texts) == set(METHODS)
+    for module, text in texts.items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        for phrase in (
+            "That check is the acceptance, validation and lineage the method asks",
+            "do not block for want of an acceptance receipt",
+            "`prepare_invocation.py`",
+            "`validate_handoff.py`",
+            "`confidence_score.py`",
+            "record each as not run",
+            "Nobody can answer a question during this run",
+            "then the method's declared safe default",
+            "block only the decision the method ties to it",
+            "is not in the method block below is unavailable",
+            "Missing evidence still blocks exactly what the method says it blocks",
+        ):
+            assert phrase in head, (module, phrase)
+
+
+def test_modules_run_after_the_handoffs_their_methods_consume(tmp_path):
+    """Retained run cpos-tdg-sol-medium-all-001: CP-2E and CP-2A ran before CP-2, and CP-2A blocked
+    with "Required fundamental handoff CP-2 is Not supplied"."""
+    prepared, _ = all_instructions(tmp_path, modules=tuple(METHODS))
+    order = list(prepared.plan.instructions)
+    for consumer, producers in {
+        "CP-2A": ("CP-2", "CP-1B"),  # cp-2a SKILL.md: "Upstream: CP-1, CP-1B, CP-2"
+        "CP-2E": ("CP-2", "CP-1", "CP-1A"),  # cp-2e SKILL.md: "Upstream: CP-1, CP-1A, CP-2"
+        "CP-1C": ("CP-DR",),  # cpdr.md: CP-1C reads the peer pack
+        "CP-2": ("CP-DR",),  # cpdr.md: CP-2 is a named receiver
+        "CP-2G": ("CP-2A",),
+    }.items():
+        for producer in producers:
+            assert order.index(producer) < order.index(consumer), (producer, consumer, order)
+
+
+def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
+    """The two CP-2A methods sent disagree: cp2a.md has the analyst choose the shock sizes as
+    labelled assumptions, the SKILL forbids an "unsupported stress magnitude". Run
+    tdg-forecast-005: CP-2A gave no shock, so no stress case was computed."""
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
+    head = texts["CP-2A"].partition(cpos_launch.METHOD_MARK)[0]
+    assert "`src/deploy_vii/methods/cp2a.md` governs" in head
+    assert "labelled analyst assumptions" in head and "anchored to a stated figure" in head
+    assert "an EBITDA decline and a cash-interest rate increase" in head
+    assert "at most four decimal places" in head
+    assert "Stress design" not in texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
+
+
+@pytest.mark.parametrize(
+    ("pathway", "peer_source", "added"),
+    [
+        ("relative_value", "cp_dr_public", True),
+        ("distressed_restructuring", "cp_dr_public", True),
+        ("relative_value", "none", False),
+        ("credit_snapshot", "cp_dr_public", False),  # no CP-1C in this pathway
+    ],
+)
+def test_a_pathway_with_cp1c_adds_cpdr_when_cpdr_is_the_peer_source(
+    tmp_path, pathway, peer_source, added
+):
+    """Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default". No
+    pathway lists CP-DR, so the default peer source used to leave CP-1C without a producer."""
+    prepared, _ = all_instructions(tmp_path, pathway, peer_source=peer_source)
+    order = list(prepared.plan.instructions)
+    assert ("CP-DR" in order) is added
+    assert set(order) - {"CP-DR"} == set(PATHWAY_MODULES[pathway]) - {"CP-DR"}
+    if added:
+        assert order.index("CP-DR") < order.index("CP-1C")
+        assert "CP-DR" in prepared.plan.run.requested_modules
+
+
+def test_explicit_modules_are_run_as_given(tmp_path):
+    prepared, _ = all_instructions(
+        tmp_path, "relative_value", modules=("CP-0", "CP-1", "CP-1A", "CP-2", "CP-1C")
+    )
+    assert "CP-DR" not in prepared.plan.instructions
+
+
+@pytest.mark.parametrize(
+    ("peer_source", "modules", "asked"),
+    [
+        ("cp_dr_public", ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-DR", "CP-1C"), True),
+        ("cp_dr_public", ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-DR"), False),
+        ("none", ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-DR", "CP-1C"), False),
+    ],
+)
+def test_cpdr_is_asked_for_the_peer_pack_cp1c_reads_by_default(
+    tmp_path, peer_source, modules, asked
+):
+    """Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default"."""
+    _, texts = all_instructions(tmp_path, "relative_value", modules, peer_source)
+    research = texts["CP-DR"].partition(cpos_launch.METHOD_MARK)[0]
+    assert ("this run requests the peer pack" in research) is asked
+    if asked:
+        for phrase in ("TDR.4", "TDR.5", "TDR.6", "`revenue`, `ebitda`, `debt`, `interest`, `ffo`"):
+            assert phrase in research, phrase
+        assert "Name no peer and type no figure from memory" in research
+        benchmark = texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
+        assert "take the peer set and its figures from the CP-DR handoff's TDR.4" in benchmark
+        assert "You own inclusion, comparability, normalisation and every statistic" in benchmark
+    elif "CP-1C" in texts:
+        assert "CP-DR handoff's TDR.4" not in texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
 
 
 def test_checker_rejects_a_handoff_without_a_reader_section(tmp_path):
