@@ -693,7 +693,7 @@ function runData(overrides = {}) {
   const cpx = runOutput('CP-X', { sections: [], state: { established: null, declared: null }, words: { view: 100, reference: 200, calculations: 50, limits: 0, audit: 0 }, summary: null });
   return { [outId('CP-1')]: cp1, [outId('CP-2A')]: cp2a, [outId('CP-6')]: cp6, [outId('CP-X')]: cpx, ...overrides };
 }
-function runPage(mutate = d => d, reports = []) {
+function runPage(mutate = d => d, reports = [], shape = modules => modules) {
   const src = read('views.js');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const plain = v => String(v).replace(/\*\*|`/g, '');
@@ -707,7 +707,7 @@ function runPage(mutate = d => d, reports = []) {
     ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'CP-X']]]];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
-  const contexts = { [RUN]: { folder: RUN, modules: { 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) } } };
+  const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) } };
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] } }, DESIGN_CATALOGUE: { real: [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports } };
   const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
   const args = [win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
@@ -869,4 +869,29 @@ test('screen.css drops the summary-card family and draws the run report', () => 
   for (const sel of ['.story-module', '.na-line', '.cov.filled', 'table.register', 'table.open-items', 'table.matrix']) assert.ok(css.includes(sel), sel);
   const screen = read('screen.js');
   assert.ok(screen.includes('registerRowShown') && screen.includes('data-register-filter') && screen.includes('register-all'));
+});
+
+// A module with saved outputs and no default (two unnumbered variants): counted, listed as a choose line, never given an output by the page.
+const CP0_TWO = modules => ({ ...modules, 'CP-0': { outputs: [`${RUN}/deliveries/d1/CP-0-a.md`, `${RUN}/deliveries/d1/CP-0-b.md`], default: null } });
+test('run report: a module with outputs but no default is counted, listed as a choose line, and adds no register rows', () => {
+  const html = runPage(d => d, [], CP0_TWO).runReport(RUN);
+  assert.equal(strip(/<p class="run-count">(.*?)<\/p>/.exec(html)[1]), '1 of 5 modules reach a conclusion · 2 not assessable · 1 without a reader summary · 1 without a chosen output');
+  const line = /<p class="choose-line">(.*?)<\/p>/.exec(html)[1];
+  assert.equal(strip(line), 'CP-0 Source readiness · 2 saved outputs. Choose one');
+  assert.ok(/<a [^>]*href="#CP-0"[^>]*>Choose one/.test(line));
+  assert.ok(groupOf(html, 'Business and evidence').includes('choose-line'));
+  assert.ok(/<a class="cov" href="[^"]*"[^>]*>CP-0<\/a>/.test(html));
+  const matrix = /<table class="matrix">.*?<\/table>/s.exec(html)[0];
+  const row = /<tr><th scope="row">(?:(?!<\/tr>).)*CP-0.*?<\/tr>/s.exec(matrix)[0];
+  assert.ok(strip(row).includes('2 saved outputs'));
+  assert.equal(countOf(html, /<tr data-group[^>]*>/g), countOf(runPage().runReport(RUN), /<tr data-group[^>]*>/g));
+  assert.ok(!/without a chosen output/.test(runPage().runReport(RUN)));
+});
+
+test('run report: the register carries one hidden-unless-empty "No findings match" row', () => {
+  const html = runPage(RUN_CP6_ESTABLISHED).runReport(RUN);
+  assert.ok(/<tr class="register-empty" hidden><td colspan="5">No findings match<\/td><\/tr>/.test(html));
+  const none = runPage(d => { d[outId('CP-1')].state.established = false; return d; }).runReport(RUN);
+  assert.ok(/<tr class="register-empty"><td colspan="5">No findings match/.test(none));
+  assert.ok(read('screen.js').includes('register-empty'));
 });

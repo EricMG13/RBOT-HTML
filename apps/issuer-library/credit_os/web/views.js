@@ -781,13 +781,18 @@ function reportView(report,context) {
 // Python (data[id].state, data[id].words). The page makes no judgement of its own.
 const COMMITTEE='CP-6';
 const NO_SUMMARY='No reader summary';
-// Every module that has an output in the run, in reading-group order: [group title, [{module, id, out}]].
+// Every module that has an output in the run, in reading-group order: [group title, [{module, id, out}]]. A module with saved outputs but no
+// default has id and out null and the number of its outputs in choices: the page does not pick one for it.
 function runGroups(context) {
-  return groups.map(([title,items])=>[title,items.map(([module])=>({module,id:defaultOutput(module,context)})).filter(item=>item.id).map(item=>({...item,out:data[item.id]}))]).filter(([,items])=>items.length);
+  const item=module=>{
+    const id=defaultOutput(module,context);
+    return id?{module,id,out:data[id],choices:0}:{module,id:null,out:null,choices:(moduleEntry(module,context)?.outputs||[]).length};
+  };
+  return groups.map(([title,items])=>[title,items.map(([module])=>item(module)).filter(item=>item.id||item.choices)]).filter(([,items])=>items.length);
 }
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
 function coverageStrip(entries) {
-  return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out})=>`<a class="cov${out.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" aria-label="${esc(`${module}, ${moduleNames[module]}, ${stateWord(out.state.established)}`)}">${esc(module)}</a>`).join('')}</nav>`;
+  return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out,choices})=>`<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" aria-label="${esc(`${module}, ${moduleNames[module]}, ${out?stateWord(out.state.established):`${choices} saved outputs`}`)}">${esc(module)}</a>`).join('')}</nav>`;
 }
 function storyCharts(id,noted) {
   const charts=data[id].charts||[];
@@ -800,7 +805,8 @@ function storyModule({module,id,out},noted) {
   return `<div class="story-module" data-module="${esc(module)}"><div class="story-head"><h3>${moduleLink(module)}</h3><span class="pill">${esc(summary.confidence)}</span>${declared}</div><p class="bottom-line">${rich(summary.bottomLine.replace(/\n/g,' '))}</p>${findings.join('')}<p class="main-limit"><b>Main limitation</b>${rich(summary.limitation)}</p>${storyCharts(id,noted)}</div>`;
 }
 // One line, no card and no findings: a module that does not reach a conclusion, or has no reader summary at all (R41).
-function storyLine({module,out}) {
+function storyLine({module,out,choices}) {
+  if(!out)return `<p class="choose-line">${esc(module)} ${esc(moduleNames[module])} · ${choices} saved outputs. <a class="text-action" href="#${encodeURIComponent(module)}">Choose one</a></p>`;
   if(out.state.established===null)return `<p class="nosum-line">${moduleLink(module)} · ${NO_SUMMARY}</p>`;
   const {declared}=out.state,{limitation}=out.summary;
   return `<p class="na-line">${moduleLink(module)} · <span>Not assessable</span>${declared==null?'':` · <span class="badge badge-gray">${esc(declared)}</span>`}${limitation?` · ${rich(limitation)}`:''}</p>`;
@@ -809,7 +815,7 @@ function creditStory(grouped) {
   return grouped.map(([title,items])=>{
     let noted=false;
     const body=items.map(item=>{
-      if(item.out.state.established!==true)return storyLine(item);
+      if(item.out?.state.established!==true)return storyLine(item);
       const html=storyModule(item,noted);
       noted=noted||(item.out.charts||[]).length>0;
       return html;
@@ -820,7 +826,7 @@ function creditStory(grouped) {
 // A register row shows when its module is established (or the box is ticked) and it matches the group and confidence filters ('' is all).
 const registerRowShown=(row,filter)=>(filter.all||row.established)&&(!filter.group||row.group===filter.group)&&(!filter.confidence||row.confidence===filter.confidence);
 function findingsRegister(grouped) {
-  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out.state.established!==null).flatMap(({module,id,out})=>findingBlocks(id).flatMap(block=>{
+  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out&&item.out.state.established!==null).flatMap(({module,id,out})=>findingBlocks(id).flatMap(block=>{
     const at=block.headers.indexOf('Confidence');
     return block.rows.map(row=>({group,module,established:out.state.established,finding:row.cells[0],impact:row.cells[1],confidence:at<0?'':plain(row.cells[at]??'')}));
   })));
@@ -828,22 +834,22 @@ function findingsRegister(grouped) {
   const unique=values=>[...new Set(values)];
   const select=(kind,label,all,values)=>`<label for="register-${kind}">${label}</label><select id="register-${kind}" data-register-filter="${kind}"><option value="">${all}</option>${values.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select>`;
   const body=rows.map(row=>`<tr data-group="${esc(row.group)}" data-confidence="${esc(row.confidence)}" data-established="${row.established}"${row.established?'':' hidden'}><td>${esc(row.group)}</td><td>${moduleLink(row.module)}${row.established?'':' <span class="badge badge-gray">Not assessable</span>'}</td><td>${rich(row.finding)}</td><td>${rich(row.impact)}</td><td>${esc(row.confidence)}</td></tr>`).join('');
-  return `<section class="run-section"><h2>Findings register</h2><div class="register-tools">${select('group','Group','All groups',unique(rows.map(row=>row.group)))}${select('confidence','Confidence','All confidences',unique(rows.map(row=>row.confidence)))}<input type="checkbox" id="register-all"><label for="register-all">Include not-assessable modules (${rows.filter(row=>!row.established).length})</label></div><div class="table-scroll"><table class="register"><thead><tr>${['Group','Module','Finding','Creditor impact','Confidence'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></section>`;
+  return `<section class="run-section"><h2>Findings register</h2><div class="register-tools">${select('group','Group','All groups',unique(rows.map(row=>row.group)))}${select('confidence','Confidence','All confidences',unique(rows.map(row=>row.confidence)))}<input type="checkbox" id="register-all"><label for="register-all">Include not-assessable modules (${rows.filter(row=>!row.established).length})</label></div><div class="table-scroll"><table class="register"><thead><tr>${['Group','Module','Finding','Creditor impact','Confidence'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}<tr class="register-empty"${rows.some(row=>row.established)?' hidden':''}><td colspan="5">No findings match</td></tr></tbody></table></div></section>`;
 }
 function openItems(grouped) {
-  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out.summary).map(({module,out})=>`<tr><td>${esc(group)}</td><th scope="row"><a class="text-action" href="${esc(routeHref(module,'limits'))}">${esc(moduleNames[module])}</a></th><td>${rich(out.summary.limitation)}</td></tr>`));
+  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out?.summary).map(({module,out})=>`<tr><td>${esc(group)}</td><th scope="row"><a class="text-action" href="${esc(routeHref(module,'limits'))}">${esc(moduleNames[module])}</a></th><td>${rich(out.summary.limitation)}</td></tr>`));
   if(!rows.length)return '';
   return `<section class="run-section"><h2>Open items</h2><div class="table-scroll"><table class="open-items"><thead><tr>${['Group','Module','Main limitation'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
 }
 function moduleMatrix(grouped) {
-  const rows=grouped.flatMap(([,items])=>items.map(({module,out})=>`<tr><th scope="row">${moduleLink(module)}</th><td>${esc(out.summary?out.summary.confidence:NO_SUMMARY)}</td><td>${esc(out.state.declared??'not declared')}</td><td class="num">${out.words.view}</td><td class="num">${out.words.reference+out.words.calculations}</td></tr>`));
+  const rows=grouped.flatMap(([,items])=>items.map(({module,out,choices})=>out?`<tr><th scope="row">${moduleLink(module)}</th><td>${esc(out.summary?out.summary.confidence:NO_SUMMARY)}</td><td>${esc(out.state.declared??'not declared')}</td><td class="num">${out.words.view}</td><td class="num">${out.words.reference+out.words.calculations}</td></tr>`:`<tr><th scope="row">${moduleLink(module)}</th><td>${choices} saved outputs</td><td>not declared</td><td class="num">–</td><td class="num">–</td></tr>`));
   return `<section class="run-section"><h2>Module matrix</h2><div class="table-scroll"><table class="matrix"><thead><tr>${['Module','Confidence','Declared status','Words to read','Words of reference'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
 }
 function runReport(context) {
   const grouped=runGroups(context),entries=grouped.flatMap(([,items])=>items),built=reportsBuiltFrom(context);
-  const count=established=>entries.filter(entry=>entry.out.state.established===established).length;
-  const unsummarised=count(null),line=`${count(true)} of ${entries.length} modules reach a conclusion · ${count(false)} not assessable${unsummarised?` · ${unsummarised} without a reader summary`:''}`;
-  const committee=entries.find(entry=>entry.module===COMMITTEE&&entry.out.state.established===true);
+  const count=established=>entries.filter(entry=>entry.out&&entry.out.state.established===established).length;
+  const unsummarised=count(null),unchosen=entries.filter(entry=>!entry.out).length,line=`${count(true)} of ${entries.length} modules reach a conclusion · ${count(false)} not assessable${unsummarised?` · ${unsummarised} without a reader summary`:''}${unchosen?` · ${unchosen} without a chosen output`:''}`;
+  const committee=entries.find(entry=>entry.module===COMMITTEE&&entry.out?.state.established===true);
   const deliverables=built.length?`<section class="summary-deliverables"><h2>Deliverables from this run</h2>${built.map(r=>`<div class="deliverable"><a class="text-action" href="${routeHref('W-Reports',r.id,null,context)}">${esc(reportName(r))}${icon('arrow-right')}</a>${reportAcceptance(r).html}</div>`).join('')}</section>`:'';
   return `<div class="run-summary"><p class="run-count">${esc(line)}</p>${runAcceptance(context)}</div>${coverageStrip(entries)}${committee?reportBand(committee.id):''}${creditStory(grouped)}${findingsRegister(grouped)}${openItems(grouped)}${moduleMatrix(grouped)}${deliverables}<p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Source inventory${icon('arrow-right')}</a></p>`;
 }

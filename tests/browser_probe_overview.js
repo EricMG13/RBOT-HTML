@@ -7,7 +7,7 @@
     const card = s.closest('.panel-card').getBoundingClientRect(), box = s.getBoundingClientRect();
     return box.right <= card.right && box.left >= card.left;
   });
-  const register = [...document.querySelectorAll('table.register tbody tr')];
+  const register = [...document.querySelectorAll('table.register tbody tr[data-group]')];
   const shown = () => register.filter(row => !row.hidden).length;
   const before = shown(), established = register.filter(row => row.dataset.established === 'true').length;
   const box = document.getElementById('register-all');

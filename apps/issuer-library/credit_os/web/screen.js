@@ -585,7 +585,9 @@ document.addEventListener('change',event=>{
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
   if(event.target.matches('[data-register-filter], #register-all')) {
     const filter={group:$('register-group').value,confidence:$('register-confidence').value,all:$('register-all').checked};
-    for(const row of document.querySelectorAll('table.register tbody tr'))row.hidden=!registerRowShown({group:row.dataset.group,confidence:row.dataset.confidence,established:row.dataset.established==='true'},filter);
+    const rows=[...document.querySelectorAll('table.register tbody tr[data-group]')];
+    for(const row of rows)row.hidden=!registerRowShown({group:row.dataset.group,confidence:row.dataset.confidence,established:row.dataset.established==='true'},filter);
+    document.querySelector('table.register tr.register-empty').hidden=rows.some(row=>!row.hidden);
   }
   if(event.target.id==='chart-metric') {
     $('module-visual').innerHTML=comparisonChart(current.output,data[current.output].visual,Number(event.target.value));
