@@ -9,7 +9,7 @@ from pathlib import Path
 from library_fixtures import make_run, method
 
 from deploy_workflow.credit_os_catalogue import catalogue
-from deploy_workflow.library_index import build_library
+from deploy_workflow.library_index import Library, build_library
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
@@ -284,3 +284,12 @@ def test_an_impossible_date_is_not_ordered(tmp_path):
     result = built(tmp_path)
     assert "cash" not in result["real"][0]["metrics"]
     assert [i for i in result["issues"] if "liquidity table has no metric" in i]
+
+
+def test_a_library_built_by_hand_still_catalogues_without_the_shared_deliveries(tmp_path):
+    make_run(tmp_path, "run-a")
+    listed = build_library(tmp_path, tmp_path / "library", method())
+    assert "run-a" in listed.deliveries
+    by_hand = Library(runs=listed.runs)  # no shared deliveries: each is verified again
+    assert by_hand.deliveries == {}
+    assert catalogue(tmp_path, by_hand)["real"] == catalogue(tmp_path, listed)["real"]

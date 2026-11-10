@@ -29,7 +29,9 @@ from deploy_workflow.credit_os_chips import (
     chips_for_output,
     inventory,
     inventory_alternates,
+    is_file_name,
     parse_locators,
+    read_pages,
 )
 from deploy_workflow.library_index import build_library
 
@@ -722,3 +724,14 @@ def test_an_ambiguous_alias_becomes_a_gap_chip_with_its_reason(tmp_path):
     assert (got["kind"], got["source"], got["label"]) == ("gap", None, "Annual p.5 · ambiguous")
     assert got["reason"].startswith("alias 'Annual' fits 'Annual filing', 'Annual PDF'")
     assert got["avatar"] is None and got["excerpt"] is None
+
+
+def test_overflowing_page_number_is_a_reason_not_an_exception():
+    pages, problem = read_pages(b'{"page": 1e400, "text": "x"}\n')
+    assert pages == {}
+    assert problem is not None and problem.startswith("source text unreadable")
+
+
+@pytest.mark.parametrize("name", ["C:secret.jsonl", "C:..x", "a:b"])
+def test_a_drive_relative_name_is_not_a_bare_file_name(name):
+    assert not is_file_name(name)

@@ -21,6 +21,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -1240,6 +1241,17 @@ def test_l9_a_run_is_filed_and_listed_through_the_real_library_rebuild(root, mon
     library = update_library_at(root / "_engine")
     assert record.id in [run["id"] for run in library.runs]
     assert f'"report": "{record.report}"' in activity_js(root)
+
+
+def test_a_cap_above_the_standing_rulings_usd_20_is_refused_at_start_up(root, capsys):
+    refusal = r"cap 500 .*above USD 20.*2026-11-09-inbox-automation"
+    with pytest.raises(StartupRefused, match=refusal):
+        Watcher(settings(root, cap=Decimal(500)))
+    assert main(["--root", str(root), "--cap", "20.01"]) == 2
+    assert "above USD 20" in capsys.readouterr().err
+    Watcher(settings(root, cap=Decimal(20))).close()
+    with pytest.raises(StartupRefused, match="above USD 20"):
+        Watcher(settings(root, cap=Decimal("NaN")))
 
 
 # -- a run started just before a hard kill: its own PID file --------------------------------

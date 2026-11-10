@@ -62,6 +62,10 @@ class Refused(ValueError):
 class Library:
     runs: list[dict[str, Any]] = field(default_factory=list)
     excluded: list[tuple[str, str]] = field(default_factory=list)  # (run folder, reason)
+    # Run id -> the delivery this build verified (folder, files, parsed view). Per-build state,
+    # shared read-only so later readers need not verify and parse the same delivery again; a
+    # Library built by hand has none and its readers verify for themselves.
+    deliveries: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
 
 
 def sha256(raw: bytes) -> str:
@@ -136,8 +140,13 @@ def report_completion(folder: Path) -> dict[str, Any]:
     return reports[0]
 
 
-def delivery_folder(folder: Path, report_sha256: str) -> tuple[str, Mapping[str, str]]:
-    """The folder under ``deliveries/`` holding exactly its listed files and the stated report."""
+def delivery_folder(
+    folder: Path, report_sha256: str, view: dict[str, bytes] | None = None
+) -> tuple[str, Mapping[str, str]]:
+    """The folder under ``deliveries/`` holding exactly its listed files and the stated report.
+
+    When ``view`` is given, the verified bytes of ``view.json`` are put in it, so the caller need
+    not read that file a second time."""
     deliveries = folder / "deliveries"
     names = sorted(os.listdir(deliveries)) if deliveries.is_dir() else []
     for name in names:
@@ -152,7 +161,9 @@ def delivery_folder(folder: Path, report_sha256: str) -> tuple[str, Mapping[str,
         if set(os.listdir(folder / relative)) != set(files) | {"delivery.json"}:
             raise Refused(f"{relative} does not hold exactly the files its delivery.json lists")
         for entry, digest in files.items():
-            read_pinned(folder, f"{relative}/{entry}", digest)
+            raw = read_pinned(folder, f"{relative}/{entry}", digest)
+            if view is not None and entry == "view.json":
+                view[entry] = raw
         return relative, files
     raise Refused("no delivery folder holds the report the completion record names")
 
@@ -183,8 +194,11 @@ def verified_delivery(folder: Path, completion: Mapping[str, Any]) -> dict[str, 
         raise Refused("the completion record names no report")
     name = f"delivery-{manifest_sha}.json"
     manifest = json_object(read_pinned(folder, name, manifest_sha), name)
-    relative, files = delivery_folder(folder, report_sha)
-    view = json_object(read_inside(folder, f"{relative}/view.json"), "view.json")
+    checked: dict[str, bytes] = {}
+    relative, files = delivery_folder(folder, report_sha, checked)
+    if "view.json" not in checked:  # The folder holds exactly its listed files, so it is missing.
+        raise Refused(f"{relative}/view.json is missing")
+    view = json_object(checked["view.json"], "view.json")
     handoffs, modules = manifest.get("handoffs"), completion.get("modules")
     execution = completion.get("module_execution")
     if not isinstance(handoffs, dict) or not isinstance(modules, dict) or not modules:
@@ -206,6 +220,7 @@ def verified_delivery(folder: Path, completion: Mapping[str, Any]) -> dict[str, 
         "manifest": manifest,
         "view": view,
         "folder": relative,
+        "files": files,
         "report_sha256": report_sha,
         "handoffs": {m: handoffs[m] for m in modules},
     }
@@ -380,9 +395,14 @@ def module_entries(
 
 
 def admit_run(
-    folder: Path, page_dir: Path, method: tuple[MethodText, MethodHeadings]
+    folder: Path,
+    page_dir: Path,
+    method: tuple[MethodText, MethodHeadings],
+    deliveries: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """The run's library record, or ``Refused`` with the reason it is not listed."""
+    """The run's library record, or ``Refused`` with the reason it is not listed.
+
+    When ``deliveries`` is given, the verified delivery of an admitted run is kept in it."""
     if not os.path.lexists(folder / "workflow.json"):
         raise Refused("not a CP-OS launcher run (no workflow.json)")
     workflow = json_object(read_inside(folder, "workflow.json"), "workflow.json")
@@ -399,7 +419,7 @@ def admit_run(
     report = folder / delivered["folder"] / "report.html"
     requested = run.get("requested_modules")
     cap = completion.get("provider_cap_usd")
-    return {
+    record = {
         "id": folder.name,
         **identity,
         **{key: text_or_none(run.get(key)) for key in ("case_kind", "method_version")},
@@ -412,6 +432,9 @@ def admit_run(
         "report": {"href": link(page_dir, report), "sha256": delivered["report_sha256"]},
         "execution": execution_record(folder),
     }
+    if deliveries is not None:  # Only a run that is listed is kept.
+        deliveries[folder.name] = delivered
+    return record
 
 
 def mark_latest(runs: list[dict[str, Any]]) -> None:
@@ -475,7 +498,7 @@ def build_library(
             library.excluded.append((shown, "a link to another folder; not followed"))
             continue
         try:
-            library.runs.append(admit_run(folder, page_dir, method))
+            library.runs.append(admit_run(folder, page_dir, method, library.deliveries))
         except Refused as error:
             library.excluded.append((shown, str(error)))
         except (OSError, ValueError, TypeError, KeyError, RecursionError) as error:
