@@ -84,6 +84,14 @@ For the web session (not edited here): the module head's declared badge now appe
   1,392 passed, 7 deselected (base: 1,372).
 - `node --test` on `static.test.cjs` and `calendar.test.cjs`: 97 pass.
 
+## Merge of `origin/main` `b5cd826` (hard-kill window, PR 12) — `aa30273`
+
+`main` moved during the sweep. Both sides added a `Watcher` attribute and tests at the same
+places; both are kept. On `aa30273`, exit 0: the quality gate (0 findings in 14 changed files);
+the same pytest command (1,407 passed, 7 deselected); the three review probes of the activity
+reuse and the cap (20 passed). The contract's "known open" hard-kill item is closed by PR 12.
+The measurements above were taken on `dc90974` and not repeated on the merged tree.
+
 One new suppression: `# noqa: PLR0913` on `activity.snapshot` (six arguments), as `runs.py` and
 `filing.py` already do.
 
