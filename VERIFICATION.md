@@ -28,9 +28,19 @@ scope_is_missing") that takes its values from a command qualifier the launcher n
   assumptions cannot be supported by the supplied evidence. This is an evidence constraint, not
   a request to reconfirm the locked entry values"). It declined even capex, where it quotes
   management's FY2025 range of 2.5% to 3.5% of sales, because no point value or later year is given.
-- Not verified: the Forecast tab with a published model; no run has produced one. Whether CP-2G
-  should give `Analyst Interpretation` drivers when guidance is absent is a method decision, not
-  made here. "Open primary handoff" was left as it is: no run can reach it.
+- Driver rule (owner, 2026-11-10, "Yes, allow judgment"): the preface now asks for a value for every
+  driver, as labelled `Analyst Interpretation` anchored to a stated figure where guidance is absent,
+  and keeps null only when nothing stated can anchor it. Test changed first and seen failing; 157
+  passed; gate exit 0.
+- Third live run (`/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`, 13 minutes,
+  USD 1.0801): **not a test of the driver rule.** CP-2A itself came back Blocked this time ("missing
+  financing documents and legal-perimeter evidence"; it was Requires More Work in -001 and
+  Restricted in -002 on identical instructions and sources), and CP-2G stopped at the method's
+  required-dependency gate, as the method directs. No forecast was published.
+- Not verified: that CP-2G gives drivers under the new rule, and the Forecast tab with a published
+  model; no run has produced one. CP-2A's run-to-run variation between Blocked and usable on the
+  same inputs is unexamined. "Open primary handoff" was left as it is: no run can reach it.
+- Spend across the four live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 = 4.6602.
 
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
 
