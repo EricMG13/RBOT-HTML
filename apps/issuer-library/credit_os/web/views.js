@@ -317,7 +317,8 @@ function reportBand(id) {
 const cardTitle=chart=>chart.replace('<div class="section-heading"><h2>','<div class="section-heading"><h4>').replace('</h2>','</h4>');
 const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
-  const charts=chartCards((data[id].charts||[]).map(c=>readerChart(id,c,true))),table=keyNumbers(id);
+  // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.
+  const charts=chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===all.length-1))),table=keyNumbers(id);
   return charts||table?`<section class="part" id="numbers"><h3>Key numbers</h3>${charts+table}</section>`:'';
 }
 // Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
