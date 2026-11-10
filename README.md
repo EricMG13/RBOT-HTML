@@ -96,7 +96,8 @@ run for each folder, and the finished report appears in the issuer library.
 What you will see: the folder leaves the inbox about 2 minutes after the copy stops changing. The
 watcher waits that long so it never reads a half-copied folder. It also waits while another
 program holds one of the files open. Run activity re-loads every 30 seconds while it is showing.
-A running run's spend counts a call in flight at its full reserved amount, so it can read a little
+A drop waits in a queue when 3 runs are going or 30 have started today. Run activity lists it
+under Waiting and says why when the daily limit is the cause. A running run's spend counts a call in flight at its full reserved amount, so it can read a little
 high until that call settles.
 
 A drop is refused, with the reason in `WHY.txt`, when:
@@ -104,12 +105,18 @@ A drop is refused, with the reason in `WHY.txt`, when:
 - it has no context file, or more than one;
 - the context file is invalid, or names another pathway than the folder it was dropped in;
 - it has no source file the launcher can read;
-- it holds a link (a shortcut or symlink) or a special file;
+- it holds a symbolic link or junction (Windows shortcut files are not links; they are ignored
+  like any unsupported file) or a special file;
 - it cannot be read;
 - the launcher's offline check refuses it (the same check as a run without `--live`).
 
 A loose file, or a folder placed in `inbox\` outside a pathway folder, is refused too. Fix the
 folder and drop it again.
+
+A drop is never put back in the inbox. If it cannot be moved to `inbox\failed\`, it stays in
+`_engine\drops\<id>` and Run activity shows it as rejected, with the reason. A file in a drop
+that cannot be opened makes the drop rejected with "cannot be read" after the settle time. If the
+library cannot be rebuilt, Run activity says so and ended runs wait for it.
 
 ### The shared folder
 
@@ -132,16 +139,22 @@ longer one.
 From a checkout:
 
 ```bash
-uv run python -m deploy_workflow.inbox.watcher --root /path/to/shared-folder
+PYTHONPATH=src uv run python -m deploy_workflow.inbox.watcher --root /path/to/shared-folder
 ```
+
+On Windows, put `set PYTHONPATH=src` on its own line before the command. The package is not
+installed in a checkout, so without `PYTHONPATH` the command fails with `ModuleNotFoundError`.
 
 From the Windows package: `Start watcher.cmd <root>`. Without an argument it uses
 `FINAL_WORKFLOW_WORKSPACE`; with neither it prints the usage and exits 1.
 
 The watcher refuses to start when the provider key is missing from its environment
 (`OPENAI_API_KEY` for the default `sol-medium`), when the ruling does not allow the config, or when
-another watcher already holds `_engine\watcher.lock` for that folder. Only one watcher runs per
-shared folder. Press Ctrl-C to stop it; runs already started keep going, and a restarted watcher
+another watcher already holds `_engine\watcher.lock` for that folder. The watcher holds an
+operating-system file lock on that file for as long as it runs. A second watcher on the same
+folder is refused with exit code 2 and "another watcher is running on this folder (<host>
+<pid>)". Run the watcher on one machine only. The lock depends on the file system honouring file
+locks: a local disk does; do not rely on it across machines. Press Ctrl-C to stop it; runs already started keep going, and a restarted watcher
 picks them up. Its log is `_engine\logs\watcher.log`.
 
 | Flag | Default |
@@ -160,8 +173,10 @@ the account that runs the watcher; nothing reads a credential file.
 ### Start it at boot (Windows)
 
 In Task Scheduler, create a task that runs "At startup" under a service account whose environment
-holds the provider key. The action is `Start watcher.cmd <root>` from the package folder. The
-setup person sets the folder permissions:
+holds the provider key. The action is `Start watcher.cmd <root>` from the package folder. Use
+a full local path or a UNC path for `<root>`, not a mapped drive letter (mapped drives do not
+exist at start-up). Put the path to `Start watcher.cmd` in quotes, because it holds a space. Do
+not end `<root>` with a backslash. The setup person sets the folder permissions:
 
 - analysts: modify on `inbox\`, read on everything else;
 - only the watcher's account writes `_engine\`, `issuers\` and `library.html`.

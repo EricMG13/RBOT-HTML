@@ -46,6 +46,8 @@ def offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     for name in ["src", "docs/reuse/selected-methods", "docs/visualisations", "prompts"]:
         (root / name).mkdir(parents=True)
         (root / name / "keep.txt").write_text("x")
+    (root / "src/deploy_workflow/inbox").mkdir(parents=True)
+    (root / "src/deploy_workflow/inbox/watcher.py").write_text("WATCHER = 1")
     (root / "docs/visualisations/catalogue.csv").write_text("id\nV1\n")
     (root / "docs/rulings").mkdir()
     (root / "docs/rulings/2026-11-09-inbox-automation.md").write_text("ruling")
@@ -122,6 +124,20 @@ def test_the_same_pins_reuse_the_runtime_without_a_download(
     assert "pypdf/removed_in_2.py" in site_listing(target)
 
 
+def test_a_reused_runtime_gets_the_current_pth_text(
+    tmp_path: Path, offline: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "windows-amd64"
+    target.mkdir()
+    monkeypatch.setattr(runtime, "PINS", {"pypdf": "1"})
+    runtime.bundle(target, "amd64")
+    pth = target / "engine/runtime/python313._pth"
+    pth.write_text("python313.zip\n.\nLib\\site-packages\nimport site\n")  # An older build.
+    runtime.bundle(target, "amd64")
+    assert len(offline) == 2  # Reused, not downloaded again.
+    assert pth.read_text() == "python313.zip\n.\nLib\\site-packages\n..\\src\nimport site\n"
+
+
 def test_a_linked_runtime_folder_is_refused_and_its_target_kept(
     tmp_path: Path, offline: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -166,6 +182,7 @@ def test_the_package_ships_the_static_library_and_its_two_windows_wrappers(
     # Only the inbox ruling ships; the watcher passes it on every launch.
     shipped_rulings = [p.name for p in (engine / "docs/rulings").iterdir()]
     assert shipped_rulings == ["2026-11-09-inbox-automation.md"]
+    assert (engine / "src/deploy_workflow/inbox/watcher.py").read_text() == "WATCHER = 1"
     assert (engine / "src").is_dir() and (engine / "docs/templates/context-form.html").is_file()
     for name in ["Run workflow.cmd", "Update library.cmd", "Start watcher.cmd"]:
         raw = (target / name).read_bytes()

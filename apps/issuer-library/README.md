@@ -29,7 +29,7 @@ store and its sources are listed in `credit_os/SOURCE.md`.
 ## Automated: the inbox
 
 `Start watcher.cmd <root>` in the package (or
-`python -m deploy_workflow.inbox.watcher --root <root>` from a checkout) watches
+`PYTHONPATH=src uv run python -m deploy_workflow.inbox.watcher --root <root>` from a checkout) watches
 `<root>\inbox\<pathway>\`. Analysts fill in `_template\context-form.html`, put the downloaded
 `context.json` and the source files in a folder, and copy it into the pathway folder. The root
 README (section 3) has the full steps.
@@ -42,9 +42,18 @@ README (section 3) has the full steps.
 - **Limits and defaults:** USD 20 per run, `sol-medium`, 3 runs at once, 30 runs started per day,
   120 s settle, 10 s poll. Each is a watcher flag.
 - **Key and ruling:** the provider key comes only from the environment of the account that runs
-  the watcher. Every launch passes `engine\docs\rulings\2026-11-09-inbox-automation.md`.
-- **One watcher per root:** `_engine\watcher.lock` refuses a second. The root path must be 80
-  characters or fewer.
+  the watcher. Every live launch passes the standing ruling `2026-11-09-inbox-automation.md`: in the
+  package at `engine\docs\rulings`, from a checkout at `docs\rulings`.
+- **One watcher, one machine:** the watcher holds an operating-system file lock on
+  `_engine\watcher.lock` while it runs. A second watcher on the same root is refused with exit
+  code 2 ("another watcher is running on this folder"). Run it on one machine only; the lock
+  depends on the file system honouring file locks (a local disk does; do not rely on it across
+  machines). The root path must be 80 characters or fewer.
+- **Waiting and refused drops:** a drop waits in a queue when 3 runs are going or 30 have started
+  today; Run activity shows why. A drop is never put back in the inbox: if it cannot be moved to
+  `inbox\failed\`, it stays in `_engine\drops\<id>` and Run activity shows it as rejected with
+  the reason. A file that cannot be opened makes the drop rejected ("cannot be read"). If the
+  library cannot be rebuilt, Run activity says so and ended runs wait for it.
 - **At boot:** Task Scheduler, "At startup", under a service account whose environment holds the
   key, running `Start watcher.cmd <root>`. Give analysts modify on `inbox\` and read elsewhere;
   only the watcher's account writes `_engine\`, `issuers\` and `library.html`.
