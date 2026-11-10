@@ -7,14 +7,23 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
 from deploy_vii import cp3_relative_value
 from deploy_vii.contracts import PATHWAY_MODULES
 from deploy_vii.registry import plan
-from deploy_workflow.context import ASSUMPTION_LIMITS, Limit, RunContext, load_context
+from deploy_workflow.context import (
+    ASSUMPTION_LIMITS,
+    IssueClassification,
+    Limit,
+    RatingScope,
+    RunContext,
+    load_context,
+)
 from deploy_workflow.inbox.drops import MAX_ISSUER_ID
+from deploy_workflow.inbox.runs import Status
 from deploy_workflow.owners import cp2h, valuation_basis
 from deploy_workflow.owners.cpos_launch import SOURCE_SUFFIXES, pathway_modules
 from deploy_workflow.run_expectations import edges_for
@@ -82,6 +91,28 @@ def test_the_module_names_are_the_librarys() -> None:
     library = json.loads(match[1])
     form = dict(re.findall(r"^  '(CP-[\w-]+)': \['([^']+)'", constant("MODULES"), re.MULTILINE))
     assert form and form == {code: library[code] for code in form}
+
+
+def test_the_library_screens_value_lists_are_the_codes() -> None:
+    """The screens (views.js) copy value lists too: a value missing there reads "unknown" or
+    "not recorded". Sweep 2026-11-10 (wiring)."""
+    views = (WEB / "views.js").read_text(encoding="utf-8")
+
+    def listed(name: str) -> list[str]:
+        match = re.search(rf"\b{name}=\[([^\]]*)\]", views)
+        assert match is not None, name
+        return re.findall(r"'(\w+)'", match[1])
+
+    def keyed(name: str) -> list[str]:
+        match = re.search(rf"\b{name}=\{{([^}}]*)\}}", views)
+        assert match is not None, name
+        return re.findall(r"(\w+):'", match[1])
+
+    statuses = list(get_args(Status))
+    assert listed("LIVE_STATUSES") == statuses
+    assert listed("ENDED_STATUSES") == [s for s in statuses if s not in ("queued", "running")]
+    assert keyed("CLASSIFICATIONS") == [c for c in get_args(IssueClassification) if c]
+    assert keyed("RATING_SCOPES") == list(get_args(RatingScope))
 
 
 def test_the_rating_scales_are_cp2hs() -> None:

@@ -2246,6 +2246,57 @@ def test_the_forecast_tab_shows_the_model_only_for_the_run_that_published_one(
     assert "No forecast model was published from this run’s files" in dom
 
 
+UNFILLED = re.compile(r"\b(undefined|NaN|null|\[object Object\])\b")
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+def test_each_pathways_run_reaches_the_library_screens(tmp_path, provider, capsys, pathway):
+    """Sweep 2026-11-10 (wiring): one run per pathway, launched into runs/, is listed by the real
+    library, and its screens and report render with no console message or unfilled value."""
+    from test_library_page_browser import visit
+
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway=pathway)
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+        ).plan.layout.routes
+    )
+    forecast = "CP-2G" in PATHWAY_MODULES[pathway]
+    provider.answer = lambda context: (
+        forecast_answer(context, routes, forecast_block()) if forecast else answer(context, routes)
+    )
+    assert main(argv) == 0
+    assert "Library not updated" not in capsys.readouterr().err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    assert list(data["workspace"]["runs"]) == [RUN_ID]
+    models = data["workspace"]["models"]
+    assert len(models) == forecast
+    (delivery,) = (tmp_path / "runs" / RUN_ID / "deliveries").iterdir()
+    pages = [
+        (tmp_path / "library/index.html", f"#W-{route}?c={RUN_ID}")
+        for route in (
+            "Overview",
+            "Reports/list",
+            f"Reports/{delivery.name}",
+            "Evidence/sources",
+            f"Forecast/{models[0]['id'] if models else 'none'}",
+        )
+    ]
+    for page, route in [*pages, (delivery / "report.html", "")]:
+        dom, console = visit(page, route)
+        shown = re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>|\s+", " ", dom)
+        assert console == [], (route, console)
+        assert UNFILLED.search(shown) is None, (route, UNFILLED.findall(shown))
+        assert ISSUER in shown, route
+
+
 def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(
     tmp_path, provider, capsys
 ):

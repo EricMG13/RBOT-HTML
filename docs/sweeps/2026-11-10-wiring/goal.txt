@@ -1,0 +1,4 @@
+Sweep (refactoring, then optimisation) of the run path front to back, main 53a5632, range c721a0f..53a5632.
+Contract: docs/sweeps/2026-11-10-wiring/CONTRACT.md. Bounds: 6 landed items, 2 fix rounds each, 800 changed lines. No provider call.
+Done: register dispositioned, gates exit 0, REPORT.md written, one VERIFICATION.md entry, PR open and unmerged.
+Resume from .superpowers/sdd/sweep-wiring/progress.md and register.md, and the actual tree.

@@ -178,6 +178,25 @@ def test_a_drop_becomes_a_filed_report_exactly_once(root, fake_env, listed):
     assert (record.issuer_id, record.as_of, record.files) == ("acme", "2026-11-09", ("a.pdf",))
 
 
+def test_a_drop_is_run_by_the_real_launcher_filed_and_listed(root, tmp_path, monkeypatch):
+    """Sweep 2026-11-10 (wiring): the other watcher tests stand in a launcher. Here the real one
+    runs CP-OS and delivery on canned answers, and the real library rebuild lists the run."""
+    from test_cpos_launch import context_file, issuer_folder
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", update_library_at)
+    drop = root / "inbox/credit_snapshot/nbg"
+    shutil.copytree(issuer_folder(tmp_path), drop)
+    shutil.copy(context_file(tmp_path, "credit_snapshot"), drop / "context.json")
+    canned = str(HERE / "fixtures/canned_provider_launcher.py")
+    w = Watcher(settings(root, launcher=(sys.executable, canned)))
+    pump(w, lambda: status(root) not in ([], ["queued"], ["running"]), limit=120)
+    [record] = load_all(layout(root))
+    assert record.status == "finished", record.reason
+    [delivered] = (root / "_engine/runs" / record.id / "deliveries").glob("*/report.html")
+    assert (root / record.report).read_bytes() == delivered.read_bytes()
+    assert f'"{record.id}"' in (root / "_engine/library/data.js").read_text(encoding="utf-8")
+
+
 def test_a_drop_still_arriving_does_not_start(root, fake_env):
     now = [0.0]
     w = Watcher(settings(root, settle_seconds=120), clock=lambda: now[0])
