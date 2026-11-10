@@ -4,6 +4,30 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Library links to the report and to retained sources (branch `claude/library-open-report-link`)
+
+Cause: the page matched a catalogue deliverable to the store's report by a server address ending
+`&embedded=1` and linked only root-absolute paths; the static build writes `reports/…` and `../…`
+with the query removed. So "Open report" (row, selected run, deliverables list) was plain text and
+"Open retained source" never appeared. Present since the web assets were copied (`5249e4e`).
+
+- Fix in `views.js`: match by the one address the build writes; `libraryPath` accepts only those two
+  relative forms and refuses a scheme, a root, a backslash, a query, an empty or dot segment and
+  percent-encoded dots or slashes.
+- Tests written first and seen failing: the browser test on a fixture library (row and selected-run
+  links to `#W-Reports/<delivery>?c=run-a`, source link to the retained `CP-1.md`) and a node test
+  of the path guard (4 accepted, 31 refused forms). 107 node tests; 107 pytest (library set,
+  browser included); quality gate exit 0.
+- Real library rebuilt from this branch over the four TDG runs, headless Chrome: each row's
+  deliverable opens its own report in the app; the two file links in the selected-run panel exist
+  on disk; no script error. The row link is regular weight so rows stay 41px at 1440 and 1280.
+- End-to-end walk on merged `main` before the fix (same build): library → run id → Overview → 20 of
+  20 module pages → chip → evidence inspector; Reports, Evidence, Calendar, Run activity render;
+  75 of 76 file links exist (`../activity.js` is written only by the inbox watcher).
+- Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
+  inbox-built library; a run with a published forecast model or without a report ("Open primary
+  handoff"); the Windows package; Safari and Firefox.
+
 ## 2026-11-10 — Design pass on the run report and library (branch `claude/impeccable-report-library-595877`)
 
 Scope: `/impeccable` critique, harden, layout and polish on `apps/issuer-library/credit_os/web/`

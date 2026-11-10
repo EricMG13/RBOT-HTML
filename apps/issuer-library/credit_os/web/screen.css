@@ -126,7 +126,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .library-table tr.selected>td{background:var(--blue-50)}
 .library-table td.missing{color:var(--text-quaternary)}
 .library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-body)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-.library-table td.run-id{font:400 var(--fs-compact)/20px 'Red Hat Mono',monospace;overflow-wrap:anywhere}.library-table td.run-id a{text-underline-offset:3px}
+.library-table td.run-id{font:400 var(--fs-compact)/20px 'Red Hat Mono',monospace;overflow-wrap:anywhere}
 .library-table th:nth-child(1){width:18.3%}.library-table th:nth-child(2){width:19.2%}.library-table th:nth-child(3){width:8.3%}.library-table th:nth-child(4){width:9.2%}.library-table th:nth-child(5){width:6.9%}.library-table th:nth-child(6){width:8.6%}.library-table th:nth-child(7){width:7%}.library-table th:nth-child(8){width:5.5%}.library-table th:nth-child(9){width:9.3%}.library-table th:nth-child(10){width:7.7%}
 /* The three ratios are figures: mono, right-aligned under their headings. A date stays on one line. */
 .library-table :is(th,td):nth-child(n+5):nth-child(-n+7){text-align:right}
@@ -136,7 +136,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 /* Paper is narrower than the table's screen minimum and cannot scroll: columns size to their words again. The header prints once: Chrome drops the sort buttons from a repeated header. */
 @media print{.library-table{table-layout:auto}.library-table thead{display:table-row-group}.library-table th,.library-table td{padding-left:4px;padding-right:4px}}
 .cell-secondary{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}
-.report-link{font-weight:600}.library-table td{font:400 var(--fs-body)/20px 'Red Hat Text',sans-serif}
+.library-table td a{text-underline-offset:3px}.library-table td{font:400 var(--fs-body)/20px 'Red Hat Text',sans-serif}
 .library-empty{padding:32px 0;max-width:68ch}.library-empty h2{margin-bottom:10px}.library-empty .primary-action{margin-top:12px}
 .detail-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.detail-head>div:first-child{min-width:0}.run-detail{overflow-wrap:anywhere}.detail-actions{display:flex;gap:12px;flex-wrap:wrap}
 .detail-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}

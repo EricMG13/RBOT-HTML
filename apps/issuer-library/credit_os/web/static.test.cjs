@@ -725,7 +725,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules) {
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] } }, DESIGN_CATALOGUE: { real: [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports } };
   const names = ['LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
   const args = [new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow};`)(...args);
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow, libraryPath};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1218,4 +1218,16 @@ test('hardening: unbroken strings wrap in the canvas, the inspector and the libr
   assert.ok(/\.run-section\{container-type:inline-size\}\s*@container \(max-width:600px\)\{\.run-section \.table-scroll\{overflow-x:auto\}/.test(css));
   // Paper has no sideways scroll: the minimum widths are dropped in print.
   assert.ok(/@media print\{[^@]*\.library-table,table\.register,table\.open-items,table\.matrix\{min-width:0\}/.test(css));
+});
+
+test('library: a file is linked only in the two forms the build writes, a presented report or a retained workspace file', () => {
+  const { libraryPath } = runPage();
+  for (const good of ['reports/run-a/9c5b/report.html', '../runs/run-a/deliveries/9c5b/CP-1.md', 'reports/A%20B/x/report.html', '../runs/a_b-c.d~e/x.md']) {
+    assert.strictEqual(libraryPath(good), true, good);
+  }
+  for (const bad of ['/etc/passwd', '/files/runs/a/x.md', '//evil.example/x', 'https://x/y', 'javascript:alert(1)', 'file:///x', 'C:\\x', 'reports/../../x', '../../x', '../runs/../../x',
+    'reports/./x', 'reports/%2e%2e/x', 'reports/%2E%2E/x', '..%2fx', '../runs/x%2f..%2fy', '../runs/x/%5c..%5cy', 'reports/a\\b', 'reports//x', 'reports/', '../', 'reports', 'x.html',
+    'runs/a/x.md', 'reports/a?b', 'reports/a#b', ' reports/a', 'reports/a b', '', null, undefined, 7]) {
+    assert.strictEqual(libraryPath(bad), false, String(bad));
+  }
 });

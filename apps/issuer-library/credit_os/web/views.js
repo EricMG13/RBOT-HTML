@@ -607,8 +607,12 @@ function libraryDate(value) {
   const day=new Date(`${value}T12:00:00Z`);
   return Number.isNaN(day.getTime())||day.toISOString().slice(0,10)!==value?String(value):day.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});
 }
-// Only a same-origin path is linked; a record cannot send the reader elsewhere.
-const libraryPath=href=>/^\/[^/\\]/.test(href??'');
+// Only a file of this workspace is linked, in the two forms the library build writes: a presented report (reports/…) or a retained file beside the library (../…).
+// No scheme, no root, no further climbing, plain or percent-encoded: a record cannot send the reader elsewhere.
+const libraryPath=href=>{
+  const rest=/^(?:reports\/|\.\.\/)([\w.~%\/-]+)$/.exec(href??'')?.[1];
+  return !!rest&&!/%(2e|2f|5c)/i.test(rest)&&rest.split('/').every(part=>part&&part!=='.'&&part!=='..');
+};
 // A value as served: grouping and its own decimals only; no value is missing-as-zero.
 function libraryMetric(metric) {
   if(LibraryLogic.numberOf(metric)===null)return '—';
@@ -622,8 +626,9 @@ const libraryRunKey=run=>Object.keys(contexts).find(key=>contexts[key].folder===
 const primaryArtifact=run=>run.artifacts.find(a=>a.available&&a.state!=='superseded');
 // A pinned report or published model the store holds opens inside the app; any other file opens in its own tab.
 function libraryArtifactLink(artifact,key,text,cls,aria='') {
-  const pinned=`${artifact.href}&embedded=1`,report=window.DESIGN_WORKSPACE.reports.find(r=>r.href===pinned);
-  const model=window.DESIGN_WORKSPACE.models.find(m=>m.href===pinned),owner=model&&modelOwnRun(model);
+  // The build writes one address for a file wherever it is named, so the catalogue's artifact and the store's report or model match by it.
+  const report=window.DESIGN_WORKSPACE.reports.find(r=>r.href===artifact.href);
+  const model=window.DESIGN_WORKSPACE.models.find(m=>m.href===artifact.href),owner=model&&modelOwnRun(model);
   const inApp=report?routeHref('W-Reports',report.id,null,key&&sameIssuer(report.issuerKey,contexts[key].issuerKey)?key:tracedRun(report)):owner?routeHref('W-Forecast',model.id,null,owner):null;
   const href=inApp??(libraryPath(artifact.href)?artifact.href:null);
   if(!href)return `<span>${esc(text)}</span>`;

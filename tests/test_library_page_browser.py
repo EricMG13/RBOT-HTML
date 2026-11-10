@@ -95,6 +95,13 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
         r'<td class="run-id"><a href="#W-Overview/overview\?c=run-a"[^>]*>run-a</a></td>', dom
     )
     assert 'id="library-nav"' not in dom  # Issuers are a filter, not a second navigation.
+    delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name
+    # The deliverable opens the report inside the app, from the row and from the selected run.
+    report = f'href="#W-Reports/{delivery}?c=run-a"'
+    assert f'<a class="report-link" {report}' in dom
+    assert f'<a class="primary-action" {report}' in dom
+    # A cited source links the retained file it quotes.
+    assert f'href="../runs/run-a/deliveries/{delivery}/CP-1.md" target="_blank"' in dom
     dom, console = visit(page, "#W-Overview/overview?c=run-a")
     assert console == []
     assert (
