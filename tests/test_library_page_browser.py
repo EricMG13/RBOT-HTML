@@ -127,6 +127,54 @@ def test_run_activity_and_forecast_not_run_from_disk(tmp_path):
     assert "No forecast model was published from this run’s files" in dom
 
 
+LIVE_CHIPS_PROBE = """addEventListener('load',()=>setTimeout(()=>{
+  const out={};
+  for(const state of ['running','done','waiting']){
+    const s=getComputedStyle(document.querySelector('.chip-'+state));
+    out[state]=[s.backgroundColor,s.color];
+  }
+  document.body.insertAdjacentHTML('beforeend','<pre id="chips">'+JSON.stringify(out)+'</pre>');
+},500));
+"""
+
+
+def test_live_run_chips_show_their_state_colours(tmp_path):
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    activity = {
+        "updated": "2026-11-10T00:00:00Z",
+        "runs": [
+            {
+                "id": "r1",
+                "status": "running",
+                "issuer_name": "Northbridge Synthetic Group",
+                "modules": [["CP-1", "running"], ["CP-0", "done"], ["CP-2", "waiting"]],
+            }
+        ],
+    }
+    # The page loads ../activity.js, the file the watcher writes beside the library folder.
+    (tmp_path / "activity.js").write_text(
+        f"window.RUN_ACTIVITY={json.dumps(activity)};\n", encoding="utf-8"
+    )
+    page = tmp_path / "library/index.html"
+    probe = tmp_path / "library/probe.html"
+    (tmp_path / "library/probe.js").write_text(
+        LIVE_CHIPS_PROBE, encoding="utf-8"
+    )  # CSP: self only.
+    probe.write_text(
+        page.read_text(encoding="utf-8").replace(
+            "</body>", '<script src="probe.js"></script></body>', 1
+        ),
+        encoding="utf-8",
+    )
+    dom, console = visit(probe, "#CP-OS/activity")
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="chips">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["running"] == ["rgb(0, 5, 51)", "rgb(255, 255, 255)"]
+    assert seen["done"][0] == "rgb(246, 247, 250)"
+    assert seen["waiting"][1] == "rgb(74, 80, 104)"
+
+
 def test_an_empty_library_says_so(tmp_path):
     update_library.update_library(tmp_path)
     dom, console = visit(tmp_path / "library/index.html")

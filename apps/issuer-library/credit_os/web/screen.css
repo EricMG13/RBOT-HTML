@@ -328,7 +328,7 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .model-original[open]>summary{margin-bottom:8px}
 .summary-line{display:block}
 /* Inbox automation: live run activity. Declared before the run report's .chips so that rule's gap wins. */
-.chips{display:inline-flex;flex-wrap:wrap;gap:4px}.chip-done,.chip-running,.chip-waiting{display:inline-block;padding:1px 8px;border:1px solid var(--rule);border-radius:10px;font-size:var(--fs-label)}.chip-done{background:var(--quiet);color:var(--navy)}.chip-running{background:var(--navy);color:#fff;border-color:var(--navy)}.chip-waiting{background:#fff;color:var(--muted)}.run-stalled{font-weight:600}.run-files{flex-basis:100%;font-size:var(--fs-compact)}.run-held,.run-reason,.run-note{color:var(--muted)}
+.chips{display:inline-flex;flex-wrap:wrap;gap:4px}.run-stalled{font-weight:600}.run-files{flex-basis:100%;font-size:var(--fs-compact)}.run-held,.run-reason,.run-note{color:var(--muted)}
 /* Module report (the Modules canvas): head, band, panel, findings, limits and audit, after docs/design/mockups/module-report.html. */
 #module-head:empty{display:none}
 .module-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
@@ -400,6 +400,8 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .chip-count{display:inline-flex;align-items:center;height:24px;padding:0 8px;border:1px dashed var(--rule);border-radius:var(--radius-inline);background:transparent;font:500 var(--fs-label)/1 'Red Hat Text',sans-serif;color:var(--muted);white-space:nowrap;cursor:pointer}
 .chip-count:hover{border-color:#b9c0d6;background:var(--quiet)}
 .chip.source-selected{background:var(--selection)!important}
+/* Live run chips: after the run report's .chip rule (same specificity), so their state colours win. */
+.chip-done,.chip-running,.chip-waiting{display:inline-block;padding:1px 8px;border:1px solid var(--rule);border-radius:10px;font-size:var(--fs-label)}.chip-done{background:var(--quiet);color:var(--navy)}.chip-running{background:var(--navy);color:#fff;border-color:var(--navy)}.chip-waiting{background:#fff;color:var(--muted)}
 article.finding{max-width:none;margin:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:6px 28px;padding:16px 0;border-top:1px solid var(--rule);border-bottom:0}
 article.finding:first-of-type{border-top:0;padding-top:4px}
 article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;text-wrap:pretty}
