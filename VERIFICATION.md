@@ -84,11 +84,20 @@ scope_is_missing") that takes its values from a command qualifier the launcher n
   can always finish. Delivery's fail-open stays as a backstop. Tests written first and seen failing;
   the five invalid-block cases now assert a repair request rather than a report without a model.
   `tests/test_cpos_launch.py` 160 passed, 1 paid test skipped; quality gate exit 0.
-- Not verified: a live run publishing the forecast model. Resuming a pre-fix run directory whose
-  retained CP-2G answer this check now rejects would stop with `cpos_feedback_changed`; the runs
-  001–004 are historical and not resumed.
-- Spend across the five live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 =
-  5.9207.
+- Fifth live run (`/private/tmp/claude-501/rbot-live6/runs/tdg-forecast-005`, run-004 context,
+  USD 1.4039): **forecast published** (`cp_forecast_published: true`; `forecast.md` and
+  `forecast_exact.json` delivered). CP-2G wrote four-decimal drivers (`ebitda_margin` "0.4802",
+  anchored to CP-1's FY2024 EBITDA 3,813 on sales 7,940) on its first draft, so the new check passed
+  it; its two repairs were reader-summary issues. CP-2A gave no shock, so only the reference case
+  exists. The library built for that workspace shows the Forecast tab: revenue 8,757 / 9,658 /
+  10,652, Adj EBITDA 4,205 / 4,638 / 5,115, total leverage 5.74x / 5.18x / 4.68x. Spot check by
+  hand: 7,940 × 1.1029 = 8,757 and 8,757 × 0.4802 = 4,205.
+- Not verified: the in-loop forecast check repairing a real model's bad block (it was not
+  triggered live); the tab's note mentions an upside case that this run does not have, and the
+  model has no assumption register. Resuming a pre-fix run directory whose retained CP-2G answer
+  this check now rejects would stop with `cpos_feedback_changed`; runs 001–004 are not resumed.
+- Spend across the six live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 +
+  1.4039 = 7.3246.
 
 ## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
 
