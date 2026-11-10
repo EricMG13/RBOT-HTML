@@ -4,6 +4,32 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Run report Phase A (library Overview and module pages)
+
+Scope: the library page Overview is now a run report (what the run establishes, credit story by
+question, findings register, open items, module matrix); module pages split View from Statements
+and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
+`docs/superpowers/plans/2026-11-09-run-report-phase-a.md`. Commits fdb21ee..a887ba4, then merge
+4dad3d9 of `origin/main` 51203a9.
+- Real-data check: deterministic rebuild of one retained run, `cpos-tdg-sol-medium-all-001`, into a
+  temporary folder; no model call, nothing written under `runs/` or `library/`. Result: `7 of 20
+  modules reach a conclusion · 13 not assessable`; established CP-1, CP-1A, CP-2, CP-2D, CP-2E,
+  CP-3C, CP-DR; findings register 33 rows shown, 84 with not-assessable modules included; 58 checks
+  pass; key-numbers differences against the previous page 0.
+- Gates on 4dad3d9, all exit 0: `node --test apps/issuer-library/credit_os/web/static.test.cjs` (82
+  pass); pytest on the seven affected files (300 passed, 1 skipped: the paid live test); `uv run
+  python tools/quality_gate.py --base origin/main`.
+- Reviews: per-task and whole-branch; one Medium fixed test-first in a887ba4 (an empty
+  `committee_status:` took the next front-matter line as the status); the merge resolution was
+  reviewed separately and found sound.
+- Merge ruling: front matter follows `main` (dc2320c): a level-2 `Front matter` section whose
+  locator covers only the lines between the `---` markers. Placements of the 20 real handoffs are
+  identical before and after.
+- Not verified: runs other than `cpos-tdg-sol-medium-all-001` were only built without error; widths
+  below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
+  Confidence cell reads as established (neither occurs in retained data); the Overview opened with
+  no run context; the branch diff is 2,245 lines against the 800-line cap.
+
 ## 2026-11-09 — TDG live runs on sol-high, compared with medium
 
 Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
