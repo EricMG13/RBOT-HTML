@@ -73,9 +73,16 @@
       node.parentElement.title=[...new Set([node.parentElement.title,...codes].filter(Boolean))].join(', ');
     }
   }
+  // The navigator lists a module under the name the workspace uses for it; the report's own title becomes the link's title.
+  function nameLinks(root) {
+    for(const link of root.querySelectorAll('.module-link')) {
+      const name=MODULE_NAMES[(link.getAttribute('href')||'').slice(1)],own=link.querySelector('.title')?.firstChild;
+      if(name&&own?.nodeType===Node.TEXT_NODE&&own.data!==name){link.title=own.data;own.data=name;}
+    }
+  }
   // Only child changes are observed, so rewriting text here cannot trigger another pass.
   for(const root of document.querySelectorAll('.navigator,#view-root,#call-root')) {
-    new MutationObserver(()=>nameCodes(root)).observe(root,{childList:true,subtree:true});
-    nameCodes(root);
+    new MutationObserver(()=>{nameCodes(root);nameLinks(root);}).observe(root,{childList:true,subtree:true});
+    nameCodes(root);nameLinks(root);
   }
 })();
