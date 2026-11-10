@@ -4,6 +4,35 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
+
+Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
+the repository (`/private/tmp/claude-501/rbot-live`, `…/rbot-live2`); `main` at `9aec393`. Each
+proves its dated case and route only; outputs are unreviewed candidates.
+
+- Inbox (`deploy_workflow.inbox.watcher`, `--cap 10 --settle-seconds 10 --poll-seconds 5`): a
+  copied folder dropped into `inbox/earnings_update/` at 08:56:09Z was claimed at 08:56:21Z, ran
+  CP-0, CP-1, CP-1B, CP-1D and CP-5 live (39 calls, 3 drafts rejected and repaired), delivered at
+  09:10:39Z and was filed as `issuers/TransDigm Group Incorporated (tdg)/2024-09-30
+  earnings_update.html`. Recorded spend USD 1.0761. Watcher-built library in headless Chrome: one
+  row; the run id opens Overview; 5 of 5 module pages render; "Open report" opens the report in
+  the app; Run activity shows the run finished, its spend and a link to the filed report that
+  exists on disk; no script error.
+- Forecast (`cpos_launch --modules CP-0 CP-1 CP-2A CP-2G --cap 10`): four modules accepted,
+  delivered in 17 minutes, USD 1.1979. The forecast model was **not published**: CP-2G's inputs
+  block now validates (the 2026-11-09 failure is gone) but the handoff declares a blocked
+  forecast with every driver null ("the forecast horizon is not locked and required invocation
+  and upstream acceptance validation cannot be completed through the supplied tools"). The library
+  lists the run, 4 of 4 module pages and the report render, and Forecast reads "No forecast model
+  was published from this run's files".
+- A run without a report cannot be produced by a run: `library_index` lists only runs with a
+  verified delivered report, and `credit_os_catalogue.run_record` always writes `handoff_href`
+  empty, so "Open primary handoff" never draws in this build. "Handoffs only" appears only if a
+  listed delivery fails cataloguing.
+- Not verified: the Forecast tab with a published model (no retained or new run has one); a
+  refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
+  Windows; analytical accuracy of either run.
+
 ## 2026-11-10 — Library links to the report and to retained sources (branch `claude/library-open-report-link`)
 
 Cause: the page matched a catalogue deliverable to the store's report by a server address ending
