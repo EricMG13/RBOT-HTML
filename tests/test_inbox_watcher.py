@@ -33,6 +33,7 @@ from deploy_workflow.inbox import activity
 from deploy_workflow.inbox import watcher as watcher_module
 from deploy_workflow.inbox.drops import Layout, ensure_layout
 from deploy_workflow.inbox.runs import Record, alive, load_all
+from deploy_workflow.inbox.startup import STANDING_RULING
 from deploy_workflow.inbox.watcher import Settings, StartupRefused, Watcher, main
 from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.model_testing.configs import CONFIGS
@@ -40,6 +41,7 @@ from deploy_workflow.owners import cpos_launch
 from deploy_workflow.owners.cpos_launch import update_library_at
 
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
 FAKE = str(HERE / "fixtures" / "fake_launcher.py")
 CONTEXT = json.loads((HERE.parent / "cases/context/research-minimal.json").read_text("utf-8"))
 DELIVERED = [["delivered", {}]]
@@ -437,6 +439,81 @@ def test_r6_a_failed_rebuild_changes_nothing_and_is_retried(root, fake_env, monk
     monkeypatch.setattr(cpos_launch, "update_library_at", good)
     pump(w, lambda: status(root) == ["finished"])
     assert len(list((root / "issuers").iterdir())) == 1
+
+
+@pytest.mark.parametrize("error", [RuntimeError("surprise"), TypeError("surprise")])
+def test_an_unexpected_rebuild_error_does_not_stop_the_watcher(root, fake_env, monkeypatch, error):
+    fake_env({"report": True, "events": DELIVERED})
+    good = cpos_launch.update_library_at
+
+    def broken(_workspace: Path) -> None:
+        raise error
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", broken)
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))  # constructs although the first rebuild raises
+    try:
+        pump(w, lambda: bool(w._children))  # launched
+        [child] = w._children.values()
+        child.wait(timeout=10)  # the run has really ended before the unfiled assertions
+        assert "surprise" in _log(root)
+        for _ in range(3):
+            w.step()  # returns; the run ended but stays unfiled
+        assert "the library could not be rebuilt (surprise); ended runs wait for it" in (
+            activity_js(root)
+        )
+        assert status(root) == ["running"]
+        assert not list((root / "issuers").rglob("*.html"))
+        monkeypatch.setattr(cpos_launch, "update_library_at", good)
+        pump(w, lambda: status(root) == ["finished"])
+        assert len(list((root / "issuers").rglob("*.html"))) == 1
+    finally:
+        w.close()
+
+
+def test_a_keyboard_interrupt_from_the_rebuild_still_stops_the_watcher(root, monkeypatch):
+    def interrupted(_workspace: Path) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        Watcher(settings(root))
+
+
+def test_a_ruling_other_than_the_standing_one_is_refused_at_start_up(root, tmp_path, monkeypatch):
+    # The cause: another ruling under docs/rulings that names the config passes check_ruling.
+    monkeypatch.setenv(KEY_VARIABLES[CONFIGS["sol-high"].provider], "test-key-not-real")
+    sol_high = REPO / "docs/rulings/2026-11-09-tdg-sol-high-test.md"
+    with pytest.raises(StartupRefused, match="2026-11-09-inbox-automation"):
+        Watcher(settings(root, config="sol-high", ruling=sol_high))
+    other = tmp_path / "2026-11-09-tdg-sol-high-test.md"
+    other.write_text("sol-medium", encoding="utf-8")
+    with pytest.raises(StartupRefused, match="2026-11-09-inbox-automation"):
+        Watcher(settings(root, ruling=other))
+    Watcher(settings(root)).close()
+
+
+def test_every_launch_is_under_the_standing_ruling_even_if_a_symlink_is_repointed(
+    root, monkeypatch
+):
+    launched: list[Path] = []
+
+    def record_start(*_args: Any, ruling: Path, **_kwargs: Any) -> subprocess.Popen[bytes]:
+        launched.append(Path(ruling))
+        return subprocess.Popen([sys.executable, "-c", "pass"])
+
+    monkeypatch.setattr(watcher_module.runs, "start", record_start)
+    link = root / "ruling.md"
+    link.symlink_to(STANDING_RULING)
+    w = Watcher(settings(root, ruling=link))
+    try:
+        link.unlink()
+        link.symlink_to(REPO / "docs/rulings/2026-11-05-launcher-live-test.md")
+        make_drop(root, "credit_snapshot", "acme")
+        pump(w, lambda: bool(launched))
+    finally:
+        w.close()
+    assert launched == [STANDING_RULING]
 
 
 def _log(root: Path) -> str:

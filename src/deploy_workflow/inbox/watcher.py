@@ -57,7 +57,7 @@ class Settings:
     max_per_day: int = 30
     settle_seconds: float = 120
     poll_seconds: float = 10
-    ruling: Path = ROOT / "docs/rulings/2026-11-09-inbox-automation.md"
+    ruling: Path = startup.STANDING_RULING
     launcher: tuple[str, ...] = (
         sys.executable,
         "-X",
@@ -218,7 +218,10 @@ class Watcher:
     def _rebuild(self) -> Any:
         try:
             library = cpos_launch.update_library_at(self.layout.engine)
-        except (OSError, ValueError, ImportError) as error:
+        except Exception as error:  # noqa: BLE001
+            # Documented fail-open: the rebuild is display. Ended runs wait unfiled and the next
+            # poll retries; the traceback is logged and the page says why. KeyboardInterrupt and
+            # SystemExit (BaseException) still stop the watcher.
             self._rebuild_failed(f"library rebuild failed: {error}", f"{error}", exc=True)
             return None
         if library is None:
@@ -542,7 +545,7 @@ class Watcher:
                 launcher=self.settings.launcher,
                 config=self.settings.config,
                 cap=self.settings.cap,
-                ruling=self.settings.ruling,
+                ruling=startup.STANDING_RULING,  # start-up proved settings.ruling is this file
             )
         except OSError as error:
             self._logger.exception("run %s could not be started", record.id)
