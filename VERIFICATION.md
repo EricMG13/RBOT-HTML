@@ -47,7 +47,22 @@ scope_is_missing") that takes its values from a command qualifier the launcher n
   a prohibition from both predecessors. In -001 and -002 CP-0 and CP-1 did not write those lines
   and CP-2A ran. The trigger is the context's declaration; the form's value for this pack is `none`.
   Not tested: a run with `legal_documents: none`.
-- Spend across the four live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 = 4.6602.
+- Fourth live run (`/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`, `legal_documents:
+  none`, USD 1.2605): CP-2A came back Restricted and CP-2G gave a labelled, anchored value for every
+  driver, so the driver rule works. The forecast was still **not published**: `ebitda_margin`,
+  `tax_wc_pct_revenue` and `interest_rate` were written at 38 decimal places (calculator output
+  pasted in) against the inputs schema's four, and delivery dropped the block after payment.
+- Fix: the preface states the four-decimal limit, and the in-loop check now parses CP-2G's block
+  against CP-1 (`_forecast_issues`), so a block delivery would refuse goes back for repair. A
+  declined (all-null) block is still accepted, and the repair text offers declining, so the model
+  can always finish. Delivery's fail-open stays as a backstop. Tests written first and seen failing;
+  the five invalid-block cases now assert a repair request rather than a report without a model.
+  `tests/test_cpos_launch.py` 160 passed, 1 paid test skipped; quality gate exit 0.
+- Not verified: a live run publishing the forecast model. Resuming a pre-fix run directory whose
+  retained CP-2G answer this check now rejects would stop with `cpos_feedback_changed`; the runs
+  001–004 are historical and not resumed.
+- Spend across the five live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 =
+  5.9207.
 
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
 

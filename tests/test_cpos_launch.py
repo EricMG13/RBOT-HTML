@@ -1,5 +1,6 @@
 """User-launched CP-OS runs. A fake provider proves wiring only, not model or analytical quality."""
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from deploy_vii.registry import plan
 from deploy_vii.report_view import ReportView
 from deploy_workflow.handoff_delivery import (
     HEADINGS,
@@ -27,10 +29,8 @@ from deploy_workflow.model.adapter import (
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import ToolCall, Turn, Usage
-from deploy_vii.registry import plan
 from deploy_workflow.owners import cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos import HandoffTask, _checked_handoff
-from deploy_workflow.run_expectations import Item
 from deploy_workflow.owners.cpos_launch import (
     METHODS,
     Accepted,
@@ -40,6 +40,7 @@ from deploy_workflow.owners.cpos_launch import (
     prepare,
     without_for,
 )
+from deploy_workflow.run_expectations import Item
 
 ROOT = Path(__file__).resolve().parents[1]
 RULING = ROOT / "docs/rulings/2026-11-05-live-loop-tests.md"  # configs: sol-medium
@@ -581,7 +582,12 @@ def test_every_pathway_runs_end_to_end_to_a_verified_report(tmp_path, provider, 
             cap="50",
         ).plan.layout.routes
     )
-    provider.answer = lambda context: answer(context, routes)
+    # CP-2G after CP-1 must write a forecast block; the declined one publishes no model.
+    provider.answer = lambda context: (
+        forecast_answer(context, routes, REAL_DECLINED_BLOCK)
+        if context["module_id"] == "CP-2G"
+        else answer(context, routes)
+    )
     assert main(argv) == 0
     out = tmp_path / "out"
     assert tuple(c[0] for c in provider.calls) == PATHWAY_MODULES[pathway]
@@ -1716,14 +1722,14 @@ def test_model_publish_failure_keeps_the_report(tmp_path, provider, capsys, monk
         ),
     ],
 )
-def test_an_invalid_or_missing_inputs_block_publishes_no_model_and_names_why(
-    tmp_path, provider, capsys, block, reason
+def test_an_invalid_or_missing_inputs_block_is_sent_back_for_repair_naming_why(
+    tmp_path, block, reason
 ):
-    code, out, seen = forecast_run(tmp_path, provider, capsys, block)
-    assert code == 0
-    (folder,) = (out / "deliveries").iterdir()
-    assert (folder / "report.html").is_file() and not (folder / "forecast_exact.json").exists()
-    assert f"Model not published: CP-2G: {reason}" in seen.err
+    """Live run tdg-forecast-004 (2026-11-10): a block delivery cannot parse used to be dropped
+    after payment. The in-loop check now asks for a repair, or a declined block."""
+    issues = cp2g_check(tmp_path, block)
+    assert any(f"Forecast inputs: CP-2G: {reason}" in i for i in issues), issues
+    assert all("[null, null, null]" in i for i in issues if i.startswith("Forecast inputs"))
 
 
 def test_without_a_shock_only_the_reference_case_is_published(tmp_path, provider, capsys):
@@ -1920,6 +1926,35 @@ def test_the_forecast_instructions_lock_the_entry_values_the_method_would_ask_fo
     assert "anchored to a stated figure" in block
     assert "name the anchor in `rationale`" in block and "in `limitation`" in block
     assert "only when no stated figure can anchor it" in block
+
+
+def test_the_forecast_instructions_cap_driver_values_at_four_decimal_places():
+    """Live run tdg-forecast-004 (2026-11-10): three ratios came at 38 decimal places."""
+    assert "at most four decimal places" in cpos_launch.FORECAST_BLOCK
+
+
+def cp2g_check(tmp_path, block):
+    """The in-loop check of a CP-2G answer holding `block`, with a CP-1 that prints BASE."""
+    prepared, task, context = good_task(tmp_path, "CP-2G", "distressed_restructuring")
+    cp1 = " ".join(BASE.values()).encode()
+    task = dataclasses.replace(task, handoffs={"CP-1": cp1})
+    context["handoffs"] = {"CP-1": {"sha256": hashlib.sha256(cp1).hexdigest()}}
+    routes = list(prepared.plan.layout.routes)
+    raw = forecast_answer(context, routes, block).encode()
+    return _checked_handoff(task, raw, checker(prepared.layout))
+
+
+def test_checker_asks_for_repair_of_an_over_precise_driver(tmp_path):
+    drivers = json.loads(forecast_block().split("```json\n")[1].split("\n```")[0])["base_drivers"]
+    drivers["ebitda_margin"]["values"][0] = "0.48022670025188916876574307304785894207"
+    issues = cp2g_check(tmp_path, forecast_block(base_drivers=drivers))
+    assert any("ebitda_margin" in i and "Forecast inputs" in i for i in issues), issues
+
+
+def test_checker_accepts_a_valid_or_declined_forecast_block(tmp_path):
+    assert cp2g_check(tmp_path, forecast_block()) == ()
+    (tmp_path / "declined").mkdir()
+    assert cp2g_check(tmp_path / "declined", REAL_DECLINED_BLOCK) == ()
 
 
 @pytest.mark.parametrize(

@@ -546,7 +546,8 @@ FORECAST_BLOCK = (
     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
     "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
-    'one per forecast year (for example ["0.05", "0.04", "0.03"]); `category` is exactly one of '
+    'one per forecast year (for example ["0.05", "0.04", "0.03"]), each rounded to at most four '
+    'decimal places (a ratio of 0.48022670 is written "0.4802"); `category` is exactly one of '
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
     "(for example a blocked dependency), still write the block, with every driver's `values` as "
     "`[null, null, null]`. `downside_shock` is "
@@ -952,9 +953,26 @@ def checker(layout: MarkdownLayout) -> Check:
         for route in routes:
             if route.kind == "chart":
                 issues += chart_issues(text, route)
-        return tuple(issues)
+        return (*issues, *_forecast_issues(task, text))
 
     return check
+
+
+def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+    """Live run tdg-forecast-004 (2026-11-10): a forecast block delivery cannot parse is sent
+    back for repair here, not dropped after payment. Declining (all null) stays the method's call
+    and is accepted, so a model that cannot fix the block has a way to finish the run."""
+    if task.module_id != "CP-2G" or "CP-1" not in task.handoffs:
+        return ()
+    try:
+        cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
+    except ValueError as error:
+        if "gives no forecast drivers" not in str(error):
+            fix = "Correct the block; if you cannot, set every driver's values to "
+            return (
+                f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
+            )
+    return ()
 
 
 def _opens_with(lines: list[str], heading: str) -> bool:
