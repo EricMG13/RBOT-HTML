@@ -126,20 +126,23 @@ def embedded_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=True, allow_nan=False).replace("<", "\\u003c")
 
 
-def run_events(run_dir: Path, folder: str, issues: list[str]) -> list[dict[str, Any]] | None:
-    """The run's event log, read only; None when there is none or it cannot be read.
-
-    Documented fail-open: an unreadable log draws no time and is named in `issues`."""
+def run_events(
+    run_dir: Path, folder: str, issues: list[str]
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Read events or return a named failure; a missing log has no events and no failure."""
     path = run_dir / "events.jsonl"
     if not path.is_symlink() and not path.exists():
-        return None  # A replay or a run that never started: normal.
+        return [], None  # A replay or a run that never started: normal.
     try:
         if path.is_symlink() or not path.is_file():
             raise ValueError("not a regular file")
-        return read_events(path)
+        events = read_events(path)
+        if any(not isinstance(event, dict) for event in events):
+            raise ValueError("event is not an object")
+        return events, None
     except (OSError, ValueError) as error:
         issues.append(f"{folder}: events.jsonl could not be read ({type(error).__name__})")
-        return None
+        return [], type(error).__name__
 
 
 def run_record(run_dir: Path, folder: str, issues: list[str]) -> dict[str, Any] | None:
@@ -160,9 +163,9 @@ def run_record(run_dir: Path, folder: str, issues: list[str]) -> dict[str, Any] 
     except (OSError, ValueError, KeyError, TypeError, RecursionError) as error:
         issues.append(f"{folder}: run record could not be read ({type(error).__name__})")
         return None
-    events = run_events(run_dir, folder, issues)
+    events, events_issue = run_events(run_dir, folder, issues)
     seen: dict[str, dict[str, str | None]] = {}
-    for event in events or ():
+    for event in events:
         module, at = event.get("module"), event.get("at")
         name = event.get("event")
         kind = {"module_started": "started", "module_accepted": "accepted"}.get(str(name))
@@ -172,7 +175,10 @@ def run_record(run_dir: Path, folder: str, issues: list[str]) -> dict[str, Any] 
     started = [m for m, t in seen.items() if t["started"]]
     steps = [{"module": m, **seen[m]} for m in started]
     steps += [{"module": m, "started": None, "accepted": None} for m in order if m not in started]
-    return {"edges": edges, "steps": steps, "timed": bool(started)}
+    record = {"edges": edges, "steps": steps, "timed": bool(started)}
+    if events_issue:
+        record["eventsIssue"] = events_issue
+    return record
 
 
 def run_records(workspace: Path, store: dict[str, Any]) -> None:

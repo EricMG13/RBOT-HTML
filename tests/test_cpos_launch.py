@@ -2749,7 +2749,8 @@ def test_the_instructions_ask_each_owner_for_its_own_chart_table(tmp_path, modul
     prepared, *_ = good_task(tmp_path, module)
     text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
     assert f"`{OWNER_HEADERS[module]}`" in text
-    assert "Not supplied: reported in <unit>" in text
+    constrained = module in {"CP-1", "CP-2D", "CP-3C", "CP-4C"}
+    assert ("Not supplied: reported in <unit>" in text) is constrained
 
 
 def test_a_module_with_no_owner_table_is_not_asked_for_one(tmp_path):
@@ -3199,7 +3200,7 @@ def test_a_recovery_table_with_more_than_three_scenarios_is_sent_back():
     text = f"### {RECOVERY}\n\n" + synthetic_table(head, *rows)
     spec = next(t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading == RECOVERY)
     assert any("at most 3" in i for i in cpos_launch.chart_issues(text, spec))
-    assert cpos_launch.chart_issues(text.replace("| S3 |", "| S2 |"), spec) == ()
+    assert cpos_launch.chart_issues(text.replace(rows[-1], ""), spec) == ()
 
 
 # ---- Package 5 (2026-11-10): the calendar lanes. Every value is synthetic.
@@ -3393,3 +3394,78 @@ def test_the_cp4_map_rules_say_the_narrow_registers_alone_do_not_make_a_graph():
 def test_a_dash_is_not_edge_evidence_and_is_sent_back(dash):
     issues = map_issues("Map: stress scenario", f"| A | r | Assumption | B | {dash} |")
     assert any("Evidence" in i and "names its source" in i for i in issues), issues
+
+
+# ---- Package 8 (2026-11-10): one "states none" escape for every row table. Synthetic values.
+ROW_SPECS = [
+    t for tables in cpos_launch.OWNER_TABLES.values() for t in tables if t.columns and not t.bare
+]
+NONE_GAP = "Not supplied: the handoff states none"
+
+
+def none_text(spec, *, unit: str = "US$m", basis: str = "Synthetic.") -> str:
+    header = cpos_launch._chart_header(spec)
+    cells = [NONE_GAP] * (len(header) - 2) + [unit, basis]
+    return f"### {spec.heading}\n\n" + synthetic_table(
+        "| " + " | ".join(header) + " |", "| " + " | ".join(cells) + " |"
+    )
+
+
+@pytest.mark.parametrize("spec", ROW_SPECS, ids=lambda s: s.heading)
+def test_every_row_table_accepts_one_all_gap_row_as_the_module_stating_none(spec):
+    assert cpos_launch.chart_issues(none_text(spec), spec) == ()
+    assert cpos_launch._selector(spec).count("states none") == 1
+
+
+@pytest.mark.parametrize("spec", ROW_SPECS, ids=lambda s: s.heading)
+def test_an_all_gap_row_still_states_its_unit_and_basis_and_is_not_mixed_with_real_rows(spec):
+    assert cpos_launch.chart_issues(none_text(spec, basis=""), spec)
+    assert cpos_launch.chart_issues(none_text(spec, unit=""), spec)
+    mixed = none_text(spec)
+    row = mixed.splitlines()[-1].replace(NONE_GAP, "x", 1)
+    assert cpos_launch.chart_issues(mixed + "\n" + row, spec)
+
+
+def test_a_debt_stack_left_with_no_ranked_facility_may_state_none():
+    spec = next(t for t in ROW_SPECS if t.heading == "Chart data: debt stack")
+    assert cpos_launch.chart_issues(none_text(spec), spec) == ()
+    assert "left out" in spec.rules and "states none" in cpos_launch._selector(spec)
+
+
+def test_a_repeated_class_and_scenario_row_is_sent_back_but_a_repeated_class_is_not():
+    spec = next(t for t in ROW_SPECS if t.heading == RECOVERY)
+    one = "| Senior | Base | 100 | 50 | 50 | US$m | S. |"
+    other = "| Senior | Downside | 100 | 20 | 20 | US$m | S. |"
+    duplicate = f"### {RECOVERY}\n\n" + synthetic_table(RECOVERY_HEAD, one, one)
+    assert any("Senior" in i and "twice" in i for i in cpos_launch.chart_issues(duplicate, spec))
+    distinct = f"### {RECOVERY}\n\n" + synthetic_table(RECOVERY_HEAD, one, other)
+    assert cpos_launch.chart_issues(distinct, spec) == ()
+
+
+def test_a_user_reminder_status_the_cp6_guard_names_is_accepted_and_a_lookalike_is_not():
+    row = "| 2026-01-15 | day | — | Review | {} | Analyst note | Review date |"
+    for status in ("User reminder", "User reminder — due"):
+        assert event_issues(row.format(status), module="CP-6") == (), status
+    for status in ("User reminders", "user reminder", "User reminder -"):
+        assert event_issues(row.format(status), module="CP-6"), status
+    guard = cpos_launch.EVENT_LANES["CP-6"][1]
+    assert "labelled `User reminder` in Status" in guard
+
+
+def test_the_currency_sentence_is_sent_only_with_a_unit_constraint():
+    sentence = "reported in <unit>"
+    for spec in ROW_SPECS:
+        assert (sentence in cpos_launch._selector(spec)) is bool(spec.chart_unit), spec.heading
+    bridge = next(t for ts in cpos_launch.OWNER_TABLES.values() for t in ts if t.steps)
+    assert sentence in cpos_launch._selector(bridge)
+
+
+def test_the_value_allocation_rules_are_sent_once_to_their_module(tmp_path):
+    text = instruction_text(tmp_path, "CP-4C")
+    assert text.count("Scenario identity is the label of its source valuation row") == 1
+
+
+@pytest.mark.parametrize("module", ["CP-1A", "CP-4"])
+def test_shared_edge_rules_are_sent_once_per_module(tmp_path, module):
+    text = instruction_text(tmp_path, module)
+    assert text.count(cpos_launch.EDGE_RULES) == 1

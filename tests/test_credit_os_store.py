@@ -319,6 +319,126 @@ def synthetic_charts(*chart_sections: str) -> dict:
     return store.reader_fields(store.sections_of(text))
 
 
+def test_every_owner_row_table_can_state_none_without_a_chart_or_problem():
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    gap = "Not supplied: no sourced quantity"
+    for specs in launcher.OWNER_TABLES.values():
+        for spec in specs:
+            if not spec.columns or spec.bare:
+                continue
+            headers = [*spec.columns, "Reporting unit", "Basis and limitation"]
+            cells = [gap] * len(spec.columns) + ["US$m", "Synthetic absence."]
+            text = chart_section(
+                spec.heading, "| " + " | ".join(headers) + " |", "| " + " | ".join(cells) + " |"
+            )
+            fields = synthetic_charts(text)
+            assert launcher.chart_issues(text, spec) == ()
+            assert fields["charts"] == [] and fields["issue"] is None, spec.heading
+            assert fields["chartGaps"][0]["gap"] == "no sourced quantity"
+            invalid = text.replace("Synthetic absence.", "")
+            assert launcher.chart_issues(invalid, spec)
+            assert synthetic_charts(invalid)["issue"], spec.heading
+
+
+@pytest.mark.parametrize(
+    "name,rows",
+    [
+        (
+            "debt stack",
+            [
+                ["Loan", "1", "Yes", "500", "2", "US$m", "S"],
+                ["Notes", "2", "No", "400", "3", "EURm", "S"],
+            ],
+        ),
+        (
+            "liquidity bridge",
+            [
+                ["Open", "100", "US$m", "S"],
+                ["Draw", "50", "EURm", "S"],
+                ["Close", "150", "US$m", "S"],
+            ],
+        ),
+        ("liquidity bridge", [["Open", "100", "EURm", "S"], ["Close", "100", "EURm", "S"]]),
+        ("peer range — multiples", [["Leverage", "4", "6", "5", "3", "5", "x", "S"]]),
+        (
+            "recovery by class",
+            [["Senior", f"S{n}", "100", "50", "50", "US$m", "S"] for n in range(4)],
+        ),
+        (
+            "recovery by class",
+            [
+                ["Senior", "Base", "100", "50", "50", "US$m", "S"],
+                ["Senior", "Base", "100", "20", "20", "US$m", "S"],
+            ],
+        ),
+        (
+            "yield against maturity",
+            [["Notes", "2020-01-01", "7.5", "450 bp", "2025-01-01", "Dealer quote", "%", "S"]],
+        ),
+        ("revenue and EBITDA", [["FY2024", "100", "20", "EURm", "S"]]),
+    ],
+)
+def test_the_store_refuses_the_launchers_invalid_chart_tables(name, rows):
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    spec = next(
+        t for ts in launcher.OWNER_TABLES.values() for t in ts if t.heading == f"Chart data: {name}"
+    )
+    text = chart_section(
+        spec.heading,
+        "| " + " | ".join(launcher._chart_header(spec)) + " |",
+        *("| " + " | ".join(row) + " |" for row in rows),
+    )
+    assert launcher.chart_issues(text, spec), name
+    fields = synthetic_charts(text)
+    assert not fields["charts"] and fields["issue"], name
+
+
+def test_the_calendar_draws_the_cp6_user_reminder_status():
+    fields = lane_fields("| 2026-01-15 | day | — | Review | User reminder | Analyst note | Due |")
+    assert fields["events"] and fields["issue"] is None
+
+
+def test_launcher_and_store_accept_every_independently_written_owner_fixture():
+    from test_cpos_launch import OWNER_TABLES as examples
+
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    specs = {s.heading: s for ts in launcher.OWNER_TABLES.values() for s in ts}
+    fixtures = {heading: body for tables in examples.values() for heading, body in tables.items()}
+    fixtures["Chart data: value allocation — scenario 3"] = (
+        f"{BRIDGE_HEADER}\n| --- | --- | --- | --- |\n"
+        "| Opening value | 400 | US$m | Synthetic third scenario. |\n"
+        "| Closing value | 400 | US$m | Synthetic third scenario. |\n"
+    )
+    assert fixtures.keys() == specs.keys()
+    for heading, body in fixtures.items():
+        text = f"### {heading}\n\n{body}\n"
+        assert launcher.chart_issues(text, specs[heading]) == (), heading
+        fields = synthetic_charts(text)
+        assert fields["issue"] is None, heading
+        assert len(fields["charts"] + fields["maps"] + fields["events"]) == 1, heading
+    assert store.EVENT_HEADERS == list(launcher.EVENT_COLUMNS)
+    assert store.EVENT_STATUS.pattern == launcher.EVENT_STATUS.pattern
+    assert store.DIRECTIONS == launcher.DIRECTIONS
+
+
+def test_a_period_gap_in_another_currency_does_not_relabel_the_numeric_values():
+    from deploy_workflow.owners import cpos_launch as launcher
+
+    text = chart_section(
+        "Chart data: revenue and EBITDA",
+        "| Period | Revenue | Adjusted EBITDA | Reporting unit | Basis and limitation |",
+        "| FY2023 | Not supplied: reported in EURm | Not supplied: reported in EURm | EURm | S |",
+        "| FY2024 | 100 | 20 | US$m | S |",
+    )
+    spec = launcher.OWNER_TABLES["CP-1"][0]
+    assert launcher.chart_issues(text, spec) == ()
+    fields = synthetic_charts(text)
+    assert fields["issue"] is None and fields["charts"][0]["unit"] == "US$m"
+
+
 def chart_section(heading: str, header: str, *rows: str) -> str:
     cells = header.count("|") - 1
     body = "\n".join(rows)
