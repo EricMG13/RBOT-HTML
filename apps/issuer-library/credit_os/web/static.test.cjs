@@ -1926,7 +1926,7 @@ test('calendar lanes: a module filter draws only that module lane, and the Sourc
   assert.equal(countOf(only, /<div class="lane-row">/g), 1);
   assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
   const text = read('views.js');
-  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*eventLanesView\(context,\{module:'CP-0',compact:true\}\)/.test(text));
+  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*eventLanesView\(context,\{at:'Evidence',compact:true\}\)/.test(text));
 });
 
 // ---- Package 6 views (2026-11-10): node/edge maps and the run status map. Every value is synthetic.
@@ -1991,7 +1991,7 @@ test('maps: placement is by the map, so credit-risk transmission reaches the Ove
   assert.equal(page.mapsPlaced(RUN, { module: 'CP-1' }).includes('Stress scenario'), true);
   assert.equal(page.mapsPlaced(RUN, { module: 'CP-5' }), '');
   const text = read('views.js');
-  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*statusMapView\(context\)[^\n]*mapsPlaced\(context,\{module:'CP-5'\}\)/.test(text));
+  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*statusMapView\(context\)[^\n]*mapsPlaced\(context,\{at:'Evidence'\}\)/.test(text));
   assert.ok(/if\(module==='CP-OS'\)return[^\n]*statusMapView\(context,\{timeline:true\}\)/.test(text));
   assert.ok(/\['maps',reportMaps\(id\)\]/.test(text) && /anchor==='maps'\?'Maps'/.test(text), 'the owning module page draws its maps');
 });
@@ -2106,7 +2106,7 @@ test('chart index: the table form and the handoff line are links that keep the r
   const html = runPage(withIndex).chartIndex(RUN);
   const leverage = /<tr data-chart="[^"]*">.*?<\/tr>/s.exec(html)[0];
   const [table, source] = [...leverage.matchAll(/<a href="([^"]+)"/g)].map(m => m[1]);
-  assert.ok(table.startsWith('#CP-1/') && table.includes('c=run-a') && !table.includes('e='), table);
+  assert.ok(table.startsWith('#CP-1/numbers') && table.includes('c=run-a') && !table.includes('e='), table);
   assert.ok(source.startsWith('#CP-1/') && source.includes('c=run-a') && source.includes(`e=${encodeURIComponent(`${outId('CP-1')}:43`)}`), source);
   assert.ok(!leverage.includes('data-evidence'), 'a plain route works from every page the index sits on');
   const lane = cellsOf(html, 'data-chart')[2];
@@ -2125,18 +2125,30 @@ test('chart index: placed on the Overview and the Forecast page; a run with no c
   assert.equal(page.chartIndex(undefined), '');
 });
 
-const REPORT_FILES = [{ name: 'report.html', href: 'x/report.html' }, { name: 'report.json', href: 'x/report.json' }, { name: 'CP-1.md', href: 'x/CP-1.md' }];
+const REPORT_FILES = [{ name: 'report.html', href: 'x/report.html' }, { name: 'report.json', href: 'x/report.json' }, { name: 'report-view.json', href: 'x/report-view.json' }, { name: 'CP-1.md', href: 'x/CP-1.md' }];
+const SYNTHETIC_FIGURES = [{ title: 'Chart data: synthetic leverage — Period', kind: 'Figure', periods: ['FY2023 / 2023-09-30', 'FY2024 / 2024-09-30'], unit: 'x', unitClass: 'multiple', note: 'Synthetic note.', points: 2, sources: [{ source: 'CP-0', pin: 'a'.repeat(64) }] }, { title: 'Synthetic grid', kind: 'Table', periods: [], unit: null, unitClass: null, note: null, points: 1, sources: [] }];
 test('report manifest: the level is named, each handoff is pinned by its full hash and run, and only the formats present are listed', () => {
   const report = { ...zedReport(RUN), files: REPORT_FILES, builtFrom: [...zedReport(RUN).builtFrom, { module: 'CP-6', run: null, source: 'CP-6.md', sha256: 'b'.repeat(64), output: false }] };
   const html = runPage(d => d, [report], m => m, { runFields: { run: RUN, period: 'FY2024', asOf: '2024-09-30' } }).reportView(report, RUN);
   const manifest = /<section class="report-manifest".*?<\/section>/s.exec(html)[0];
-  assert.ok(strip(manifest).includes('handoff level') && strip(manifest).includes('not held for delivered reports'));
+  assert.ok(strip(manifest).includes('lists no report-view.json, so only its handoffs are shown') && !strip(manifest).includes('not held'), 'the fallback is labelled as the handoff level');
   const rows = cellsOf(manifest, 'data-pin');
   assert.deepEqual(rows.map(r => r.slice(0, 2)), [['Financial foundation', RUN], ['Committee decision', 'No matching run file']]);
   assert.ok(rows[0][2].includes('a'.repeat(64)) && rows[1][2].includes('b'.repeat(64)), 'the whole pin, not a prefix');
   assert.ok(rows[0][3].includes('FY2024') && rows[0][3].includes('30 September 2024'), 'the run’s own period and as-of');
-  assert.ok(/Formats present[^<]*HTML, JSON, Markdown/.test(strip(manifest)));
+  assert.ok(/Formats present: HTML\./.test(strip(manifest)), 'handoff inputs and internal JSON records are not exports');
   assert.ok(!/PDF|Excel|XLSX|CSV/i.test(manifest), 'no format that is not a file is named');
+});
+
+test('report manifest: one row per figure and table as the delivery states them, a missing value is Not stated, the handoffs stay beneath', () => {
+  const report = { ...zedReport(RUN), files: REPORT_FILES, figures: SYNTHETIC_FIGURES };
+  const manifest = /<section class="report-manifest".*?<\/section>/s.exec(runPage(d => d, [report]).reportView(report, RUN))[0];
+  assert.deepEqual([...manifest.matchAll(/<th scope="col">(.*?)<\/th>/g)].slice(0, 7).map(m => m[1]), ['Figure or table', 'Kind', 'Period', 'Unit', 'Basis and limitation', 'Points', 'Source pin']);
+  const rows = cellsOf(manifest, 'data-figure');
+  assert.deepEqual(rows[0], ['Chart data: synthetic leverage — Period', 'Figure', 'FY2023 / 2023-09-30; FY2024 / 2024-09-30', 'x (multiple)', 'Synthetic note.', '2', `Source readiness · ${'a'.repeat(64)}`]);
+  assert.deepEqual(rows[1], ['Synthetic grid', 'Table', 'Not stated', 'Not stated', 'Not stated', '1', 'Not stated']);
+  assert.ok(!/CP-\d/.test(strip(manifest)) && manifest.includes('data-pin'), 'no code on screen, and the built-from list is kept');
+  assert.ok(!strip(manifest).includes('not held'));
 });
 
 test('report manifest: a report with no files names no format', () => {
@@ -2170,6 +2182,16 @@ test('context bar: revision order is not claimed, because no run records one', (
   assert.ok(!/latest|newer|older|supersede|revision of/i.test(text.replace('No revision order is recorded between runs', '')));
 });
 
+test('context bar: a recorded rerun and a recorded supersession are linked, and the no-order sentence appears only when none is recorded', () => {
+  const html = barPage([], withInput).contextBar('W-Overview', RUN);
+  assert.ok(strip(html).includes('No revision order is recorded between runs'));
+  const page = runPage(d => d, [], withInput, { ...BAR, runFields: { ...BAR.runFields, revisions: [{ word: 'Rerun of', id: 'id-b', run: 'run-b' }, { word: 'Supersedes', id: 'id-x', run: null }] } });
+  const text = page.contextBar('W-Overview', RUN);
+  assert.ok(/<a href="#W-Overview\/[^"]*c=run-b[^"]*">Rerun of Run B<\/a>/.test(text), 'a recorded run in the library is a link that keeps that run');
+  assert.ok(strip(text).includes('Supersedes id-x') && !/<a[^>]*>Supersedes/.test(text), 'a recorded run the library does not hold is named, not linked');
+  assert.ok(!strip(text).includes('No revision order is recorded'));
+});
+
 test('context bar: files by role, each link keeps the run, and a role with no file says so', () => {
   const report = { ...zedReport(RUN), files: REPORT_FILES };
   const html = barPage([report]).contextBar('W-Overview', RUN);
@@ -2177,7 +2199,7 @@ test('context bar: files by role, each link keeps the run, and a role with no fi
   assert.ok(strip(role('source')).includes('CP-1-input.md') || strip(role('source')).includes('Financial foundation'));
   assert.ok(role('source').includes('href="../runs/run-a/inputs/CP-1-input.md"') && role('source').includes(' download'));
   assert.ok(role('analysis').includes('c=run-a') && strip(role('analysis')).includes('Financial foundation'));
-  assert.ok(role('export').includes('#W-Reports/') && role('export').includes('c=run-a') && strip(role('export')).includes('report.json') && role('export').includes('href="x/report.json"'));
+  assert.ok(role('export').includes('#W-Reports/') && role('export').includes('c=run-a') && strip(role('export')).includes('report.html') && role('export').includes('href="x/report.html"') && !/report\.json|report-view|handoff/.test(role('export')), 'inputs and records are not exports');
   const bare = barPage([], m => Object.fromEntries(Object.entries(m).map(([code, entry]) => [code, { ...entry, inputs: [] }]))).contextBar('W-Overview', RUN);
   assert.ok(/data-role="source"[^>]*>(?:(?!<\/section>).)*None retained for this run/s.test(bare) && /data-role="export"[^>]*>(?:(?!<\/section>).)*None retained for this run/s.test(bare));
 });

@@ -11,7 +11,7 @@
   const scroll = document.querySelector('.chart-index .table-scroll');
   const seen = {
     shown: !bar.hidden && bar.getBoundingClientRect().height > 0, text: bar.querySelector('.context-run')?.textContent,
-    others: all('#context-bar details.context-pop a').filter(a => a.getAttribute('href').includes('c=run-b')).map(a => a.getAttribute('href')),
+    others: all('#context-bar details.context-pop a').filter(a => /-other/.test(a.getAttribute('href'))).map(a => a.getAttribute('href')),
     roles: all('#context-bar .context-role').map(r => r.dataset.role),
     indexRows: all('.index-table tbody tr').map(r => `${r.cells[0].textContent}|${r.cells[2].textContent}`), indexScrollFocusable: scroll?.getAttribute('tabindex') === '0',
     summaryFocus: Boolean(summary) && document.activeElement === summary, listInView: Boolean(list) && list.right <= innerWidth && list.bottom <= innerHeight,
