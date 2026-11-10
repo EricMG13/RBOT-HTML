@@ -87,7 +87,11 @@ def write_presented_reports(workspace: Path, library: Library, folder: Path) -> 
     presented = set()
     for run in library.runs:
         run_dir = workspace / "runs" / run["id"]
-        relative, files = delivery_folder(run_dir, run["report"]["sha256"])
+        verified = library.deliveries.get(run["id"])
+        if verified is not None:  # This build verified every file of it already.
+            relative, files = verified["folder"], verified["files"]
+        else:
+            relative, files = delivery_folder(run_dir, run["report"]["sha256"])
         original = read_pinned(run_dir, f"{relative}/report.html", files["report.html"])
         target = folder / "reports" / run["id"] / relative.split("/", 1)[1] / "report.html"
         target.parent.mkdir(parents=True)

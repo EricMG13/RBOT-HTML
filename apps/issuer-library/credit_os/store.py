@@ -835,17 +835,32 @@ def built_from(
     return rows
 
 
+# Each folder's (delivery.json, listed view.json), or describe(error) when it cannot be read.
+Manifests = dict[str, "tuple[dict[str, Any], dict[str, Any]] | str"]
+
+
+def delivery_and_view(
+    root: Path, folder: str, manifests: Manifests | None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The folder's (delivery.json, listed view.json): from `manifests` when it was read there,
+    else read here, so a folder that could not be read raises its own error."""
+    manifest = (manifests or {}).get(folder)
+    if isinstance(manifest, tuple):
+        return manifest
+    delivery = delivery_json(root / folder)
+    return delivery, listed_view(root / folder, delivery)
+
+
 def report_record(
-    root: Path,
     folder: str,
     artifact: dict[str, Any],
     sources: dict[str, list[dict[str, Any]]],
     keys: dict[str, str],
+    read: tuple[dict[str, Any], dict[str, Any]],
 ) -> dict[str, Any]:
-    """One verified deliverable as the app shows it; raises when its delivery cannot be read."""
+    """One verified deliverable as the app shows it; `read` is its (delivery.json, view.json)."""
     name = Path(folder).name
-    delivery = delivery_json(root / folder)
-    view = listed_view(root / folder, delivery)
+    delivery, view = read
     identity = view["run"]
     issuer_name, as_of = identity["issuer_name"], identity["as_of"]
     issuer_key = report_issuer_key(keys, identity.get("issuer_id"))
@@ -895,10 +910,11 @@ def catalogue_reports(
     catalogue: dict[str, Any],
     sources: dict[str, list[dict[str, Any]]],
     keys: dict[str, str],
+    manifests: Manifests | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Deliverables the server verified, each once, with what it was built from.
 
-    `keys` maps issuer IDs to group keys.
+    `keys` maps issuer IDs to group keys; `manifests` are the folders' model_manifests.
     """
     reports, seen, issues = [], set(), []
     for run in catalogue["real"]:
@@ -914,7 +930,15 @@ def catalogue_reports(
             seen.add(name)
             # Documented fail-open: reported in Settings; the other deliverables stay readable.
             try:
-                reports.append(report_record(root, folder, artifact, sources, keys))
+                reports.append(
+                    report_record(
+                        folder,
+                        artifact,
+                        sources,
+                        keys,
+                        delivery_and_view(root, folder, manifests),
+                    )
+                )
             except (
                 OSError,
                 ValueError,
@@ -2403,8 +2427,6 @@ MANIFEST_ERRORS = (
     MemoryError,
 )
 
-Manifests = dict[str, "tuple[dict[str, Any], dict[str, Any]] | str"]
-
 
 def model_manifests(root: Path, folders: Iterable[str]) -> Manifests:
     """Each folder's (delivery.json, listed view.json), read once, or describe(error) when it
@@ -2964,7 +2986,7 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
     fields, keys = issuer_groups({key: recorded[key] for key in runs}, found)
     for key, identity in fields.items():
         runs[key].update(identity)
-    reports, unread = catalogue_reports(root, catalogue, sources, keys)
+    reports, unread = catalogue_reports(root, catalogue, sources, keys, manifests)
     found += unread
     models, unread = catalogue_models(
         root, catalogue, WorkspaceReads(outputs, keys, runs, manifests)
