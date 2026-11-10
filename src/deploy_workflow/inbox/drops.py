@@ -90,10 +90,17 @@ def ensure_layout(root: Path) -> Layout:
             f"use a shorter path (at most {MAX_ROOT})"
         )
     layout = Layout(resolved)
-    folders = [layout.failed, layout.issuers, layout.runs, layout.drops, layout.state, layout.logs]
-    folders += [layout.inbox / pathway for pathway in PATHWAYS]
+    folders = [layout.inbox, layout.issuers, layout.runs, layout.drops, layout.state, layout.logs]
     for folder in folders:
         folder.mkdir(parents=True, exist_ok=True)
+    for name in (FAILED, *PATHWAYS):
+        try:
+            (layout.inbox / name).mkdir(exist_ok=True)
+        except FileExistsError:
+            # A file an analyst left under one of the inbox's own names must not stop the watcher
+            # from starting: the scan rejects it like any other stray, and the folder is made
+            # again by the rejection (failed) or the next start (a pathway).
+            pass
     return layout
 
 
@@ -149,7 +156,7 @@ def unreadable(entry: Path) -> str | None:
             with path.open("rb"):
                 pass
         except OSError as error:
-            if getattr(error, "winerror", None) in (32, 33):
+            if getattr(error, "winerror", None) in _SHARING_VIOLATIONS:
                 continue
             return str(error)
     return None
@@ -194,6 +201,11 @@ class ReadyTracker:
         for entry in [e for e in self._seen if e not in keep]:
             del self._seen[entry]
 
+    def unchanged_since(self, entry: Path) -> float | None:
+        """When the entry's content was last seen to change; None when it cannot be listed."""
+        seen = self._seen.get(entry)
+        return None if seen is None else seen[1]
+
     def ready(self, entry: Path) -> bool:
         try:
             entry.lstat()
@@ -233,7 +245,8 @@ def _real_folder_under(folder: Path, parent: Path) -> bool:
 def candidates(layout: Layout) -> list[tuple[str, Path]]:
     """(pathway, entry) for each entry in a pathway folder; strays directly in the inbox get "".
 
-    A pathway folder that is a link, or that resolves outside the inbox, is not listed."""
+    A pathway folder that is a link, or that resolves outside the inbox, is not listed. A file
+    under a pathway's name is a stray like any other."""
     found: list[tuple[str, Path]] = []
     for pathway in PATHWAYS:
         folder = layout.inbox / pathway
@@ -247,7 +260,8 @@ def candidates(layout: Layout) -> list[tuple[str, Path]]:
     found += [
         ("", e)
         for e in sorted(layout.inbox.iterdir())
-        if e.name.casefold() not in skip and not _is_noise(e.name)
+        if not _is_noise(e.name)
+        and (e.name.casefold() not in skip or not (_is_link(e) or e.is_dir()))
     ]
     return found
 
@@ -410,6 +424,8 @@ def write_templates(layout: Layout, form: Path) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     for pathway in PATHWAYS:
         folder = layout.inbox / pathway / TEMPLATE
+        if not folder.parent.is_dir():
+            continue  # a stray file under the pathway's name; the scan rejects it
         if _is_link(folder):
             raise OSError(f"{folder} is a link; no form was written")
         folder.mkdir(exist_ok=True)

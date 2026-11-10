@@ -1092,16 +1092,7 @@ def _record_own_pid() -> None:
     target = os.environ.get("DEPLOY_WORKFLOW_PID_FILE")  # the name inbox.runs sets
     if not target:
         return
-    descriptor, temporary = tempfile.mkstemp(prefix=".pid-", suffix=".tmp", dir=Path(target).parent)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(str(os.getpid()))
-            handle.flush()
-            os.fsync(handle.fileno())
-        platform_io.replace(temporary, target)
-    except BaseException:
-        Path(temporary).unlink(missing_ok=True)
-        raise
+    platform_io.write_atomic(Path(target), str(os.getpid()), sync=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

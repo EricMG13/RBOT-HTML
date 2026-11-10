@@ -7,7 +7,6 @@ import logging
 import os
 import subprocess
 import sys
-import tempfile
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -72,16 +71,7 @@ def save(layout: Layout, record: Record) -> None:
     if not record.id or Path(record.id).name != record.id or record.id.startswith("."):
         raise ValueError(f"run ID {record.id!r} is not a plain file name")
     target = layout.state / f"{record.id}.json"
-    descriptor, temporary = tempfile.mkstemp(prefix=".run-", suffix=".tmp", dir=layout.state)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(asdict(record), handle, indent=2)
-            handle.flush()
-            os.fsync(handle.fileno())
-        platform_io.replace(temporary, target)
-    except BaseException:
-        Path(temporary).unlink(missing_ok=True)
-        raise
+    platform_io.write_atomic(target, json.dumps(asdict(record), indent=2), sync=True)
 
 
 def _load(path: Path) -> Record:
@@ -217,19 +207,28 @@ def start(  # noqa: PLR0913 - the signature the watcher calls
     )
     env = child_environment()
     env[PID_FILE_VARIABLE] = str(pid_file(layout, record.id))
-    with (layout.logs / f"{record.id}.log").open("ab") as log_file:
-        if sys.platform == "win32":  # a Ctrl-C to the watcher must not stop its runs
-            return subprocess.Popen(
-                argv,
-                stdout=log_file,
-                stderr=log_file,
-                env=env,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-            )
-        # A new session keeps a terminal Ctrl-C (SIGINT to the watcher's group) off the run.
-        return subprocess.Popen(
-            argv, stdout=log_file, stderr=log_file, env=env, start_new_session=True
-        )
+    child: subprocess.Popen[bytes] | None = None
+    try:
+        with (layout.logs / f"{record.id}.log").open("ab") as log_file:
+            if sys.platform == "win32":  # a Ctrl-C to the watcher must not stop its runs
+                child = subprocess.Popen(
+                    argv,
+                    stdout=log_file,
+                    stderr=log_file,
+                    env=env,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+            else:  # a new session keeps a terminal Ctrl-C (SIGINT to the watcher's group) off it
+                child = subprocess.Popen(
+                    argv, stdout=log_file, stderr=log_file, env=env, start_new_session=True
+                )
+    except OSError:
+        if child is None:
+            raise
+        # Documented fail-open: the launcher has started and holds its own copy of the handle, so
+        # an error closing this one is logged; raising would leave a paid run nobody tracks.
+        log.exception("run %s: closing the log handle failed after the launcher started", record.id)
+    return child
 
 
 def outcome(layout: Layout, record: Record, exit_code: int | None) -> tuple[Status, str]:

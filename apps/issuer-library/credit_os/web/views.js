@@ -204,7 +204,28 @@ function qualitativeVisual(module,v) {
 }
 const CHART_RENDERERS={paired:comparisonChart,peers:comparisonChart,bars:comparisonChart,bridge:bridgeChart,waterfall:bridgeChart,paths:pathChart,hedges:hedgeChart};
 const visualMarkup=(module,v)=>(CHART_RENDERERS[v.kind]||qualitativeVisual)(module,v);
-const readerChart=(id,chart,chips=false,note=true)=>comparisonChart(id,{kind:'bars',...chart},0,chips,note);
+// A reader chart is a "Chart data:" table whose first column is Period, so it is drawn over time: periods along the x axis in table order,
+// one column per series from a zero baseline (owner, 2026-11-10). Each period is one button (its handoff row) with its chips under it.
+function readerChart(id,chart,chips=false,note=true) {
+  const table=fixtureTable(id,chart.table),series=chart.columns||[chart.column],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
+  const numbers=rows.flatMap(row=>series.map(c=>chartNumber(row.cells[c])??0));
+  const top=Math.max(0,...numbers),low=Math.min(0,...numbers),span=top-low||1,pct=n=>Math.round(n/span*10000)/100,zero=pct(-low);
+  const legend=`<div class="chart-legend">${series.map((c,i)=>`<span><i class="series-${i}"></i>${esc(table.headers[c])}</span>`).join('')}</div>`;
+  const periods=rows.map(row=>{
+    const key=`${id}:${row.line}`,period=plain(row.cells[0]);
+    const cols=series.map((c,i)=>{
+      const n=chartNumber(row.cells[c]),value=row.cells[c];
+      if(n===null)return `<span class="col missing"><strong style="bottom:${zero}%"${/[\p{L}\p{N}]/u.test(String(value??''))?` title="${esc(value)}"`:''}>n.a.</strong></span>`;
+      const height=pct(Math.abs(n)),bottom=n<0?Math.round((zero-height)*100)/100:zero;
+      return `<span class="col"><i class="series-${i}${n<0?' negative':''}" style="bottom:${bottom}%;height:${height}%"></i><strong${n<0?' class="below"':''} style="bottom:${n<0?bottom:Math.round((bottom+height)*100)/100}%">${esc(value)}</strong></span>`;
+    }).join('');
+    const said=series.map(c=>`${table.headers[c]} ${chartNumber(row.cells[c])===null?'n.a.':plain(row.cells[c])}`).join(', ');
+    const inner=`<span class="plot"><span class="zero-rule" style="bottom:${zero}%"></span>${cols}</span><span class="chart-label">${esc(period)}</span>`;
+    const label=`aria-label="${esc(`${period}: ${said}. View source`)}"`;
+    return chips?`<div class="chart-row" role="group" aria-label="${esc(period)}"><button class="chart-open" data-evidence="${esc(key)}" ${label}>${inner}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}" ${label}>${inner}</button>`;
+  }).join('');
+  return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}`;
+}
 function readerCharts(id,section) {
   const lines=new Set(sectionData(id,section).flatMap(s=>s.blocks).map(b=>b.line));
   return (data[id].charts||[]).filter(c=>lines.has(c.table)).map(c=>readerChart(id,c)).join('');

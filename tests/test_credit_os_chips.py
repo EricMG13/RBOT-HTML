@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -735,3 +736,20 @@ def test_overflowing_page_number_is_a_reason_not_an_exception():
 @pytest.mark.parametrize("name", ["C:secret.jsonl", "C:..x", "a:b"])
 def test_a_drive_relative_name_is_not_a_bare_file_name(name):
     assert not is_file_name(name)
+
+
+def test_a_huge_page_range_reads_only_the_pages_the_source_has(tmp_path):
+    # Handoff text is model output: "pp. 10-300000000" must not be walked page by page.
+    run, inv = one_run(tmp_path)
+    started = time.monotonic()
+    (got,) = run_chips(run, inv, ("a", "-", "K, pp. 10-300000000 says “alpha”"))["x/CP-1.md:4"]
+    assert time.monotonic() - started < 5
+    assert (got["kind"], got["page"], got["page_end"]) == ("issuer_page", 10, 300000000)
+    assert got["quote_found"] is True
+
+
+def test_a_page_number_too_long_to_be_one_is_a_gap_not_an_exception(tmp_path):
+    run, inv = one_run(tmp_path)
+    digits = "9" * 5000  # int() refuses a decimal string this long
+    (got,) = run_chips(run, inv, ("a", "-", f"K, page:{digits}"))["x/CP-1.md:4"]
+    assert got["kind"] == "gap" and got["label"] == "p.999999999999… · not a page number"
