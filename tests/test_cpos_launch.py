@@ -30,10 +30,9 @@ from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import ToolCall, Turn, Usage
 from deploy_workflow.owners import cpos_forecast, cpos_launch
-from deploy_workflow.owners.cpos import HandoffTask, _checked_handoff
+from deploy_workflow.owners.cpos import HandoffPlan, HandoffTask, RetainedHandoff, _checked_handoff
 from deploy_workflow.owners.cpos_launch import (
     METHODS,
-    Accepted,
     LaunchRefused,
     checker,
     main,
@@ -700,36 +699,36 @@ def test_each_module_is_sent_only_its_producers_handoffs(tmp_path, provider):
     assert sent == COVENANT_PRODUCERS
 
 
-def test_a_stopped_runs_answers_pinned_to_their_producers_are_replayed_unsent(tmp_path, provider):
+def test_answers_pinned_to_their_producers_are_replayed_unsent(tmp_path, provider):
+    """CP-OS replays a retained answer whose pins are exactly the producers it is sent."""
     argv = launch(tmp_path, "--live", "--ruling", str(RULING))
     routes = prepare_routes(tmp_path, "sol-medium", modules=None)
     provider.answer = lambda context: answer(context, routes)
     assert main(argv) == 0
     sent = list(provider.calls)
-    stopped = {}
-    for record in (tmp_path / "out/requests").glob("*/*/1.request.json"):
+    out = tmp_path / "out"
+    pins = {}
+    for record in (out / "requests").glob("*/*/1.request.json"):
         asked = json.loads(record.read_text())
         assert sorted(asked["handoffs"]) == COVENANT_PRODUCERS[asked["module_id"]]
-        stopped[asked["module_id"]] = Accepted(
-            (record.parent / "1.response.md").read_bytes(),
-            asked,
-            ("openai", "gpt-6.1-sol", "medium"),
+        response = (record.parent / "1.response.md").read_bytes()
+        path = f"retained/{asked['module_id']}.md"
+        (out / path).parent.mkdir(exist_ok=True)
+        (out / path).write_bytes(response)
+        pins[asked["module_id"]] = RetainedHandoff(
+            path=path,
+            sha256=hashlib.sha256(response).hexdigest(),
+            source_hashes=asked["sources"],
+            upstream=asked["handoffs"],
         )
-    prepared = prepare(
-        tmp_path / "context.json",
-        tmp_path / "issuer",
-        tmp_path / "again",
-        config="sol-medium",
-        cap="50",
-        retained=stopped,
-    )
-    assert prepared.retained_modules == COVENANT_MODULES
-    assert prepared.retained_stop == ("", "")
+    request = HandoffPlan.model_validate_json((out / "workflow.json").read_bytes())
+    manifest = out / "workflow-retained.json"
+    manifest.write_text(request.model_copy(update={"retained_handoffs": pins}).model_dump_json())
     cpos_launch.run_live_handoffs(
-        prepared.manifest,
-        prepared.directory,
+        manifest,
+        tmp_path / "again",
         ruling=RULING,
-        check=checker(prepared.layout),
+        check=checker(request.layout),
         max_turns=4,
         max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
     )
@@ -1514,36 +1513,6 @@ def test_cp6_front_routes_lead_with_its_summary_then_its_action_bias():
     )
 
 
-def test_prepare_ends_the_retained_prefix_at_the_first_answer_that_does_not_match(tmp_path):
-    asked = {"run": {}, "sources": {}, "handoffs": {}, "instructions": "other method"}
-    prepared = prepare(
-        context_file(tmp_path),
-        issuer_folder(tmp_path),
-        tmp_path / "out",
-        config="sol-medium",
-        cap="50",
-        retained={
-            "CP-0": Accepted(b"# first answer\n", asked, ("openai", "gpt-6.1-sol", "medium"))
-        },
-    )
-    assert prepared.ordered == COVENANT_MODULES
-    assert prepared.plan.retained_handoffs == {}
-    assert prepared.retained_modules == ()
-    assert prepared.retained_stop == ("CP-0", "the run's identity or scope changed")
-    assert not (tmp_path / "out" / "retained").exists()
-
-
-def test_prepare_with_nothing_retained_pins_nothing(tmp_path):
-    prepared = prepare(
-        context_file(tmp_path),
-        issuer_folder(tmp_path),
-        tmp_path / "out",
-        config="sol-medium",
-        cap="50",
-    )
-    assert prepared.retained_modules == () and prepared.plan.retained_handoffs == {}
-
-
 # --- Expectations carried by prepare ---------------------------------------------------
 KEY = json.loads((ROOT / "tests/fixtures/run-expectations/outcome-key.json").read_text())
 
@@ -2244,6 +2213,57 @@ def test_the_forecast_tab_shows_the_model_only_for_the_run_that_published_one(
     dom, console = visit(other / "library/index.html", f"#W-Forecast/none?c={RUN_ID}")
     assert console == []
     assert "No forecast model was published from this run’s files" in dom
+
+
+UNFILLED = re.compile(r"\b(undefined|NaN|null|\[object Object\])\b")
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+def test_each_pathways_run_reaches_the_library_screens(tmp_path, provider, capsys, pathway):
+    """Sweep 2026-11-10 (wiring): one run per pathway, launched into runs/, is listed by the real
+    library, and its screens and report render with no console message or unfilled value."""
+    from test_library_page_browser import visit
+
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway=pathway)
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+        ).plan.layout.routes
+    )
+    forecast = "CP-2G" in PATHWAY_MODULES[pathway]
+    provider.answer = lambda context: (
+        forecast_answer(context, routes, forecast_block()) if forecast else answer(context, routes)
+    )
+    assert main(argv) == 0
+    assert "Library not updated" not in capsys.readouterr().err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    assert list(data["workspace"]["runs"]) == [RUN_ID]
+    models = data["workspace"]["models"]
+    assert len(models) == forecast
+    (delivery,) = (tmp_path / "runs" / RUN_ID / "deliveries").iterdir()
+    pages = [
+        (tmp_path / "library/index.html", f"#W-{route}?c={RUN_ID}")
+        for route in (
+            "Overview",
+            "Reports/list",
+            f"Reports/{delivery.name}",
+            "Evidence/sources",
+            f"Forecast/{models[0]['id'] if models else 'none'}",
+        )
+    ]
+    for page, route in [*pages, (delivery / "report.html", "")]:
+        dom, console = visit(page, route)
+        shown = re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>|\s+", " ", dom)
+        assert console == [], (route, console)
+        assert UNFILLED.search(shown) is None, (route, UNFILLED.findall(shown))
+        assert ISSUER in shown, route
 
 
 def test_a_delivery_without_a_forecast_has_no_forecast_key_in_its_receipt(

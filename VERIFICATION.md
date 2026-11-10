@@ -4,6 +4,49 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Sweep: end-to-end wiring (branch `claude/sweep-wiring`, base `53a5632`)
+
+Owner: "Move to latest main - run /sweep refactoring and optimisation sweep make sure front to back
+and end to end wiring." Contract and report: `docs/sweeps/2026-11-10-wiring/`. Range `c721a0f..53a5632`
+(PRs 19–27). Offline, canned provider answers, no spend.
+
+- Journeys proved at base:
+  - The live TDG context round-trips through the context form, with only the intended changes. The
+    launcher reads the form's output.
+  - Every pathway: launcher → CP-OS → delivery → real library → five screens and `report.html`,
+    with no console message and no unfilled value.
+  - An inbox drop is run by the real launcher, filed byte for byte and listed. Before this, the
+    watcher tests used stand-in launchers.
+- No product defect was reproduced. Landed, tests and CI only:
+  - `test_each_pathways_run_reaches_the_library_screens` (browser, 6 pathways).
+  - `test_a_drop_is_run_by_the_real_launcher_filed_and_listed` with
+    `tests/fixtures/canned_provider_launcher.py`. Dividing the watcher's `--cap` by 100 fails it
+    and passes the stand-in test.
+  - `test_the_library_screens_value_lists_are_the_codes`: run statuses, classification and rating
+    scope in `views.js` against the Python literals; fails when a status is dropped.
+  - `checks.yml` now runs `test_handoff_loop.py` and `test_context_form.py` on every PR.
+- Performance, median of 5 after one warm-up, noise = max − min. `prepare()` over all 20 modules:
+  23.8 ms (noise 18.0). Library rebuild of 10 run folders: 372.9 ms (noise 37.0), with no single
+  hot spot. Nothing above the floor; page render unmeasured.
+- `prepare(retained=)` and its resume helpers had no production caller. Owner: "Remove it". 127
+  lines are gone from `cpos_launch.py`. The prepared run folder (manifest and instructions) hashes
+  the same before and after for all six pathways. CP-OS's replay of pinned answers stays, and its
+  test now pins them in the manifest directly. Reverting the producers pin check still fails it.
+- Gates on the final tree, all exit 0:
+  - quality gate: 0 findings.
+  - `node --test` static and calendar.
+  - CI pytest list plus the two added files: 1529 passed, 13 deselected (7 known failures, 6
+    browser), after the removal took out two tests.
+  - Browser (`test_library_page_browser.py`, `test_cpos_launch.py`): 29 passed. After the
+    removal, `test_cpos_launch.py`'s 7 browser tests passed again.
+  - Base logs: the same commands at `53a5632`, all exit 0.
+- Not verified:
+  - a live run of the journeys;
+  - page render timing;
+  - `TERM_LABELS` against the builder of `run.facilities` (not traced);
+  - the form's download click (its `build()` output was used);
+  - Windows paths.
+
 ## 2026-11-10 — All-modules live run tdg-all-001 and its corrections (branch `claude/all-modules-live-fixes`)
 
 Owner: "Yes, run it", then "Merge now apply corrections on next PR". Ruling
