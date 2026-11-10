@@ -28,7 +28,7 @@ from deploy_workflow.model.adapter import (
 )
 from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
-from deploy_workflow.model.turn import ToolCall, Turn, Usage
+from deploy_workflow.model.turn import ToolCall, Turn, Usage, hosted_kind
 from deploy_workflow.owners import cpos_forecast, cpos_launch
 from deploy_workflow.owners.cpos import HandoffPlan, HandoffTask, RetainedHandoff, _checked_handoff
 from deploy_workflow.owners.cpos_launch import (
@@ -192,6 +192,8 @@ def provider(monkeypatch):
     def complete(self, request, **kwargs):
         context = json.loads(request.messages[1].text)
         calls.append((context["module_id"], self.config_id, request.effort))
+        if any(hosted_kind(t) for t in request.tools):
+            provider.searched.append(context["module_id"])
         # The real provider body builder must accept what the handoff loop sends this model.
         provider.models.add(json.loads(build(self._model, request, "not-a-real-key").body)["model"])
         turn = Turn(
@@ -217,6 +219,7 @@ def provider(monkeypatch):
 
     monkeypatch.setattr(LiveAdapter, "complete", complete)
     provider.calls = calls
+    provider.searched = []
     provider.models = set()
     provider.reported = "fake"
     provider.answer = lambda context: pytest.fail("no answer set")
@@ -2440,3 +2443,38 @@ def test_h_without_the_variable_no_file_is_written(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         main(["--bogus"])
     assert list(tmp_path.iterdir()) == []
+
+
+def test_web_search_follows_the_ruling_and_reaches_only_the_research_module(
+    tmp_path, provider, capsys
+):
+    root = tmp_path / "rulings"
+    root.mkdir()
+    for name, configs in (("on.md", "sol-medium, web-search"), ("off.md", "sol-medium")):
+        lines = (
+            "lifts: live-provider-pause",
+            "by: user",
+            "date: 2026-11-10",
+            f"configs: {configs}",
+        )
+        (root / name).write_text("\n".join(lines) + "\n")
+    assert main(launch(tmp_path, "--ruling", str(RULING), pathway="relative_value")) == 0
+    assert "Web:      off" in capsys.readouterr().out  # RULING does not list web-search.
+    routes = prepare_routes(tmp_path, "sol-medium", modules=None)
+    provider.answer = lambda context: answer(context, routes)
+    manifest = tmp_path / "out/workflow.json"
+    layout = HandoffPlan.model_validate_json(manifest.read_bytes()).layout
+    searched = {}
+    for name in ("on.md", "off.md"):
+        provider.searched.clear()
+        cpos_launch.run_live_handoffs(
+            manifest,
+            tmp_path / name,
+            ruling=root / name,
+            check=checker(layout),
+            max_turns=4,
+            max_output_tokens=cpos_launch.MAX_OUTPUT_TOKENS,
+            rulings_root=root,
+        )
+        searched[name] = list(provider.searched)
+    assert searched == {"on.md": ["CP-DR"], "off.md": []}

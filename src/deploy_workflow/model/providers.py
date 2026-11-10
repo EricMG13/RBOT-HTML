@@ -34,6 +34,7 @@ from deploy_workflow.model.transport import (
 from deploy_workflow.model.turn import (
     CONFIG_MODELS,
     MODEL_EFFORTS,
+    WEB_SEARCH,
     Message,
     ModelSpec,
     Provider,
@@ -45,6 +46,7 @@ from deploy_workflow.model.turn import (
     TurnRequest,
     Usage,
     dump_json,
+    hosted_kind,
     load_arguments,
     load_json,
 )
@@ -59,6 +61,13 @@ OPENROUTER_IGNORE_FOR_DEEPSEEK = ["open-inference"]  # spec §8
 MESSAGE_CHARS = 500
 RETRY_AFTER_DEFAULT_S = 120
 RETRY_AFTER_MAX_S = 300  # runner.py:608-614
+# OpenAI's web search (web search guide and Responses reference, fetched 2026-11-10): the tool
+# {"type": "web_search"}; ``include`` asks for each search's full source list; a reply's
+# ``web_search_call`` items become blocks under WEB_SEARCH_BLOCK, kept in the record and never
+# sent back. Only a search action is a billed call; opening or searching within a page is not.
+OPENAI_WEB_SEARCH_INCLUDE = ("web_search_call.action.sources",)
+WEB_SEARCH_BLOCK = "openai-web-search"
+_UNBILLED_ACTIONS = frozenset({"open_page", "find_in_page"})
 
 
 @dataclass(frozen=True)
@@ -154,6 +163,10 @@ def _check(spec: ModelSpec, request: TurnRequest, key: str) -> str:
         raise MaxOutputTooLarge(
             f"max_output_tokens {request.max_output_tokens} outside 1..{MAX_OUTPUT_TOKENS}"
         )
+    for tool in request.tools:
+        kind = hosted_kind(tool)
+        if kind is not None and (kind != WEB_SEARCH or spec.provider != "openai"):
+            raise ProviderConfigError(f"hosted {kind!r}: web search is offered on OpenAI only")
     return effort_for(spec, request.effort)
 
 
@@ -233,7 +246,8 @@ def _openai_body(spec: ModelSpec, request: TurnRequest, effort: str) -> dict[str
             items.append(
                 {"type": "function_call_output", "call_id": m.tool_call_id, "output": m.text}
             )
-    return {
+    hosted = [t for t in request.tools if hosted_kind(t) == WEB_SEARCH]
+    body: dict[str, Any] = {
         "model": spec.model,
         "instructions": _system_text(request.messages),
         "input": items,
@@ -246,13 +260,19 @@ def _openai_body(spec: ModelSpec, request: TurnRequest, effort: str) -> dict[str
                 "strict": OPENAI_STRICT_TOOLS,
             }
             for t in request.tools
-        ],
+            if hosted_kind(t) is None
+        ]
+        + ([{"type": WEB_SEARCH}] if hosted else []),
         "tool_choice": "required",  # CP1H-R7: a step ends through a submit tool call
         "reasoning": {"effort": effort},
         "max_output_tokens": request.max_output_tokens,
         "store": False,  # controller ruling: do not retain request data at the provider
         "prompt_cache_options": dict(OPENAI_PROMPT_CACHE_OPTIONS),
     }
+    if hosted:
+        body["include"] = list(OPENAI_WEB_SEARCH_INCLUDE)
+        body["max_tool_calls"] = hosted[0].parameters["max_calls"]
+    return body
 
 
 def _anthropic_body(spec: ModelSpec, request: TurnRequest, effort: str) -> dict[str, Any]:
@@ -846,33 +866,9 @@ def _openai_outcome(
     output = data.get("output")
     if not isinstance(output, list):
         raise _BadReply("output is not a list")
-    calls: list[ToolCall] = []
-    reasoning: list[ProviderBlock] = []
-    waiting: list[dict[str, Any]] = []  # reasoning items not yet tied to the item after them
-    for item in output:
-        kind = item.get("type") if isinstance(item, dict) else None
-        if kind == "reasoning":
-            # CP1H-R8: kept whole. Without encrypted_content (store=false) the provider holds
-            # no item to resolve, so such an item is not resent.
-            encrypted = item.get("encrypted_content")
-            if isinstance(encrypted, str) and encrypted:
-                waiting.append(dict(item))
-        elif kind == "function_call":
-            call_id, name = _id(item, "call_id"), _id(item, "name")
-            _anchor_reasoning(waiting, reasoning, {"type": "function_call", "call_id": call_id})
-            calls.append(_call(call_id, name, item.get("arguments"), seen))
-        elif kind == "message":
-            _anchor_reasoning(waiting, reasoning, {"type": "message"})
-            content = item.get("content")
-            if content is None:
-                content = []
-            if not isinstance(content, list):
-                raise _BadReply("message content is not a list")
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "refusal":
-                    return _usage_error("Refusal", "the model refused", status, usage, model, rid)
-                if isinstance(part, dict) and part.get("type") == "output_text":
-                    texts.append(str(part.get("text", "")))
+    calls, blocks, refused = _openai_items(output, texts, seen)
+    if refused:
+        return _usage_error("Refusal", "the model refused", status, usage, model, rid)
     incomplete = _sub(data, "incomplete_details")
     state = data.get("status")
     if state == "incomplete" and not calls and not cut_as_turn:
@@ -888,10 +884,63 @@ def _openai_outcome(
         stop = "max_tokens"
     else:
         stop = "other"
+    return Turn("".join(texts), tuple(calls), usage, stop, model, rid, status, None, blocks)
+
+
+def _openai_items(
+    output: list[Any], texts: list[str], seen: list[Any]
+) -> tuple[list[ToolCall], tuple[ProviderBlock, ...], bool]:
+    """A reply's output items in order: its tool calls, the blocks it keeps (reasoning, then web
+    searches) and whether a message refused. Message text goes to ``texts``."""
+    calls: list[ToolCall] = []
+    reasoning: list[ProviderBlock] = []
+    searches: list[ProviderBlock] = []
+    waiting: list[dict[str, Any]] = []  # reasoning items not yet tied to the item after them
+    for item in output:
+        kind = item.get("type") if isinstance(item, dict) else None
+        if kind == "reasoning":
+            # CP1H-R8: kept whole. Without encrypted_content (store=false) the provider holds
+            # no item to resolve, so such an item is not resent.
+            encrypted = item.get("encrypted_content")
+            if isinstance(encrypted, str) and encrypted:
+                waiting.append(dict(item))
+        elif kind == "web_search_call":
+            # Never sent back, so a reasoning item before it would go back without the item that
+            # followed it: it is dropped instead (reasoning input is optional).
+            waiting.clear()
+            searches.append(ProviderBlock(WEB_SEARCH_BLOCK, dict(item)))
+        elif kind == "function_call":
+            call_id, name = _id(item, "call_id"), _id(item, "name")
+            _anchor_reasoning(waiting, reasoning, {"type": "function_call", "call_id": call_id})
+            calls.append(_call(call_id, name, item.get("arguments"), seen))
+        elif kind == "message":
+            _anchor_reasoning(waiting, reasoning, {"type": "message"})
+            if _message_refused(item, texts):
+                return calls, (), True
     _anchor_reasoning(waiting, reasoning, None)  # nothing followed them: they go last
-    return Turn(
-        "".join(texts), tuple(calls), usage, stop, model, rid, status, None, tuple(reasoning)
-    )
+    return calls, (*reasoning, *searches), False
+
+
+def _message_refused(item: Mapping[str, Any], texts: list[str]) -> bool:
+    """Add a message item's output text to ``texts``; True at a refusal part."""
+    content = item.get("content")
+    if content is None:
+        content = []
+    if not isinstance(content, list):
+        raise _BadReply("message content is not a list")
+    for part in content:
+        if isinstance(part, dict) and part.get("type") == "refusal":
+            return True
+        if isinstance(part, dict) and part.get("type") == "output_text":
+            texts.append(str(part.get("text", "")))
+    return False
+
+
+def web_searches(turn: Turn) -> int:
+    """The billed web searches in ``turn``: its web search items, less those that only opened or
+    searched within a page. An item whose action is not stated counts."""
+    actions = [b.data.get("action") for b in turn.provider_blocks if b.provider == WEB_SEARCH_BLOCK]
+    return sum(not (isinstance(a, dict) and a.get("type") in _UNBILLED_ACTIONS) for a in actions)
 
 
 # Anthropic Messages (SSE)

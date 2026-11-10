@@ -13,7 +13,8 @@ import pytest
 from deploy_vii.contracts import Run
 from deploy_workflow.model.adapter import AdapterReply
 from deploy_workflow.model.handoff import REDACTION_FAILED, HandoffExecutor, ModuleTools
-from deploy_workflow.model.turn import ToolCall, Turn, Usage
+from deploy_workflow.model.providers import WEB_SEARCH_BLOCK
+from deploy_workflow.model.turn import ProviderBlock, ToolCall, Turn, Usage, hosted_kind
 from deploy_workflow.owners.cpos import HandoffTask
 
 
@@ -652,3 +653,91 @@ def test_loop_json_records_the_adapters_auth_only_when_it_has_one(tmp_path: Path
     HandoffExecutor(without, adapter=Adapter(), cap_usd=Decimal(10), check=check)
     assert json.loads((with_auth / "loop.json").read_text())["auth"] == "gh-login"
     assert "auth" not in json.loads((without / "loop.json").read_text())
+
+
+# ---------------------------------------------------------------- web search for CP-DR
+
+
+def searched(call: ToolCall, searches: int) -> AdapterReply:
+    """A reply that searched ``searches`` times and opened one page before ``call``."""
+    items = [
+        {"type": "web_search_call", "id": f"ws_{n}", "status": "completed", "action": action}
+        for n, action in enumerate(
+            [{"type": "search", "queries": [f"peer {n}"]} for n in range(searches)]
+            + [{"type": "open_page", "url": "https://example.com/peer"}]
+        )
+    ]
+    reply = turn(call)
+    assert reply.turn is not None
+    found = replace(
+        reply.turn, provider_blocks=tuple(ProviderBlock(WEB_SEARCH_BLOCK, i) for i in items)
+    )
+    return replace(reply, turn=found)
+
+
+def record(folder: Path) -> dict[str, Any]:
+    return json.loads((folder / "calls.jsonl").read_text().splitlines()[0])
+
+
+def test_web_search_is_offered_to_the_research_module_and_each_search_is_charged(
+    tmp_path: Path,
+) -> None:
+    research = replace(task(), module_id="CP-DR")
+    write = ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})
+    on = Adapter(searched(write, searches=3))
+    loop = HandoffExecutor(
+        tmp_path / "on", adapter=on, cap_usd=Decimal(10), check=check, web_search=True
+    )
+    assert loop(research) == GOOD
+    offered = [t for t in on.requests[0].tools if hosted_kind(t)]
+    assert [(t.name, t.parameters["max_calls"]) for t in offered] == [("web_search", 16)]
+    system = on.requests[0].messages[0].text
+    assert "web_search" in system and "public" in system and "cutoff" in system
+    off = Adapter(turn(write))
+    plain = HandoffExecutor(tmp_path / "off", adapter=off, cap_usd=Decimal(10), check=check)
+    assert plain(research) == GOOD
+    assert not [t for t in off.requests[0].tools if hosted_kind(t)]
+    # OpenAI pricing page, fetched 2026-11-10: web search is USD 10.00 per 1,000 calls. Three
+    # searches cost USD 0.03 beyond the same tokens; the hold covers 16 calls, USD 0.16.
+    assert loop.budget.spent - plain.budget.spent == Decimal("0.03")
+    held = Decimal(record(tmp_path / "on")["reserved_usd"])
+    assert held - Decimal(record(tmp_path / "off")["reserved_usd"]) == Decimal("0.16")
+
+
+def test_web_search_leaves_every_other_module_unchanged(tmp_path: Path) -> None:
+    write = ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})
+    on, off = Adapter(turn(write)), Adapter(turn(write))
+    HandoffExecutor(tmp_path / "on", adapter=on, cap_usd=Decimal(10), check=check, web_search=True)(
+        task()
+    )
+    HandoffExecutor(tmp_path / "off", adapter=off, cap_usd=Decimal(10), check=check)(task())
+    assert on.requests == off.requests
+
+
+def test_web_search_is_refused_off_the_openai_configurations(tmp_path: Path) -> None:
+    class Opus(Adapter):
+        config_id = "opus-medium"
+
+    with pytest.raises(ValueError, match="web search"):
+        HandoffExecutor(tmp_path, adapter=Opus(), cap_usd=Decimal(10), check=check, web_search=True)
+
+
+def test_a_sent_reply_that_cannot_be_read_is_charged_every_search_it_could_have_made(
+    tmp_path: Path,
+) -> None:
+    research = replace(task(), module_id="CP-DR")
+    usage = Usage(input_tokens=100, output_tokens=50)
+    spent = {}
+    for name, web in (("on", True), ("off", False)):
+        unread = AdapterReply("sent_usage", None, None, 502, "BadGateway", None, 1, 2, usage)
+        loop = HandoffExecutor(
+            tmp_path / name,
+            adapter=Adapter(unread),
+            cap_usd=Decimal(10),
+            check=check,
+            web_search=web,
+        )
+        with pytest.raises(RuntimeError, match="cpos_live_stopped"):
+            loop(research)
+        spent[name] = loop.budget.spent
+    assert spent["on"] - spent["off"] == Decimal("0.16")  # 16 searches at USD 0.01, not counted

@@ -60,9 +60,11 @@ from deploy_workflow.model.pricing import price_of, request_reservation_usd
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cp2g, cpos_forecast
 from deploy_workflow.owners.cpos import (
+    WEB_SEARCH_GRANT,
     HandoffPlan,
     HandoffTask,
     run_live_handoffs,
+    web_search_ruled,
     with_notes,
 )
 from deploy_workflow.reader_summary import (
@@ -1001,7 +1003,17 @@ def _cap(text: str) -> Decimal:
     return value
 
 
-def _readiness(prepared: Prepared, config: str) -> str:
+def _web_line(prepared: Prepared, ruling: Path | None) -> tuple[str, ...]:
+    """Whether the research module searches the web, when it runs."""
+    if "CP-DR" not in prepared.ordered:
+        return ()
+    if web_search_ruled(ruling):
+        return (f"Web:      CP-DR searches the web (the ruling lists {WEB_SEARCH_GRANT})",)
+    why = "the ruling does not list" if ruling is not None else "no ruling lists"
+    return (f"Web:      off: CP-DR reads only this run's files ({why} {WEB_SEARCH_GRANT})",)
+
+
+def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> str:
     selected = CONFIGS[config]
     run = prepared.plan.run
     names = (n for n in prepared.plan.sources if n != CONTEXT_SOURCE_ID)
@@ -1016,6 +1028,7 @@ def _readiness(prepared: Prepared, config: str) -> str:
             f"Report:   {', '.join(prepared.layout.blocks)}",
             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
             f"Manifest: {prepared.manifest}",
+            *_web_line(prepared, ruling),
         )
     )
 
@@ -1131,7 +1144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (ValueError, OSError, LivePauseInForce) as error:
         print(error, file=sys.stderr)
         return 2
-    print(_readiness(prepared, args.config), flush=True)
+    print(_readiness(prepared, args.config, args.ruling), flush=True)
     if not args.live:
         print("No provider was called. Add --live --ruling <file> to start the paid run.")
         return 0

@@ -61,6 +61,13 @@ selected config, and the provider key must be in the launching environment (for 
 `COPILOT_GITHUB_TOKEN`, or `COPILOT_USE_GH_LOGIN=1` to use the gh CLI login (its account pays), and `COPILOT_CLI_PATH`; see `docs/COPILOT.md`). CP-OS runs the modules in
 order and publishes `deliveries/<id>/report.html` inside the run folder.
 
+**Web search for the research module.** CP-DR searches the web for the peers only when the
+ruling's `configs:` line also lists `web-search` (for example `configs: sol-medium, web-search`),
+and only on the OpenAI configs (`sol-medium`, `sol-high`). Each search costs USD 0.01, and each
+CP-DR call holds USD 0.16 more for up to 16 searches (`cases/pricing/openai-web-search.json`).
+Queries leave the environment, so CP-DR is told to put only public names in them. Without
+`web-search` it reads only the run's files. The launcher's `Web:` line says which applies.
+
 ## 2. Update the library
 
 ```bash

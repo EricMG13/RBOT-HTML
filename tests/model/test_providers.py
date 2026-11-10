@@ -12,6 +12,7 @@ import pytest
 
 from deploy_workflow.model.providers import (
     INCLUSIVITY,
+    WEB_SEARCH_BLOCK,
     ErrorKind,
     KeyMissing,
     MaxOutputTooLarge,
@@ -25,6 +26,7 @@ from deploy_workflow.model.providers import (
     error_from_transport,
     parse,
     retry_after_seconds,
+    web_searches,
 )
 from deploy_workflow.model.redact import Redactor
 from deploy_workflow.model.transport import IdleTimeout, InsecureUrl, TransportError
@@ -39,6 +41,7 @@ from deploy_workflow.model.turn import (
     TurnError,
     TurnRequest,
     Usage,
+    hosted_web_search,
 )
 
 KEY_FILE = Path(__file__).parents[2] / "cases" / "pricing" / "openai-sol-cache-write.json"
@@ -99,6 +102,78 @@ def test_openai_build() -> None:
     assert json.loads(body["input"][1]["arguments"]) == {"k": 1}
     assert body["tools"][0]["type"] == "function" and body["tools"][0]["name"] == "submit_x"
     assert not req.stream
+
+
+def _searching_request() -> TurnRequest:
+    request = _request()
+    return TurnRequest(request.messages, (*TOOLS, hosted_web_search(16)), 128000, "medium")
+
+
+def test_openai_build_sends_web_search_only_when_the_request_offers_it() -> None:
+    # OpenAI web search guide and Responses reference, fetched 2026-11-10: the tool is
+    # {"type": "web_search"}; include "web_search_call.action.sources" lists every source;
+    # max_tool_calls bounds the built-in tool calls in one response.
+    body = _body(build(SOL, _searching_request(), KEY))
+    assert body["tools"][0]["name"] == "submit_x" and body["tools"][1:] == [{"type": "web_search"}]
+    assert body["include"] == ["web_search_call.action.sources"]
+    assert body["max_tool_calls"] == 16
+    plain = _body(build(SOL, _request(), KEY))
+    assert "include" not in plain and "max_tool_calls" not in plain
+    assert [t["type"] for t in plain["tools"]] == ["function"]
+
+
+@pytest.mark.parametrize("spec", [OPUS, DEEPSEEK])
+def test_web_search_is_refused_off_openai_before_anything_is_built(spec: ModelSpec) -> None:
+    with pytest.raises(ProviderConfigError, match="web search"):
+        build(spec, _searching_request(), KEY)
+
+
+def test_openai_web_search_calls_are_recorded_and_never_resent() -> None:
+    reasoning = {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "gAAAA"}
+    search = {
+        "type": "web_search_call",
+        "id": "ws_1",
+        "status": "completed",
+        "action": {
+            "type": "search",
+            "queries": ["aerospace components peers EV EBITDA"],
+            "sources": [{"type": "url", "url": "https://example.com/peers"}],
+        },
+    }
+    opened = {
+        "type": "web_search_call",
+        "id": "ws_2",
+        "status": "completed",
+        "action": {"type": "open_page", "url": "https://example.com/peers"},
+    }
+    call = {"type": "function_call", "call_id": "c1", "name": "submit_x", "arguments": "{}"}
+    turn = parse(
+        "openai", 200, _openai_reply(output=[reasoning, search, opened, call]), {}, Redactor()
+    )
+    assert isinstance(turn, Turn)
+    assert turn.provider_blocks == (
+        ProviderBlock(WEB_SEARCH_BLOCK, search),
+        ProviderBlock(WEB_SEARCH_BLOCK, opened),
+    )
+    assert web_searches(turn) == 1  # Only a search action is a billed call; opening a page is not.
+    after = TurnRequest(
+        (
+            Message("system", "s"),
+            Message("user", "u"),
+            Message("assistant", "", turn.tool_calls, provider_blocks=turn.provider_blocks),
+            Message("tool", "ok", tool_call_id="c1"),
+        ),
+        TOOLS,
+        1000,
+        "medium",
+    )
+    sent = _body(build(SOL, after, KEY))["input"]
+    # Neither the search items nor the reasoning that preceded them go back (store is false).
+    assert [item.get("type", item.get("role")) for item in sent] == [
+        "user",
+        "function_call",
+        "function_call_output",
+    ]
 
 
 def test_anthropic_build() -> None:

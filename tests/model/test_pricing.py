@@ -114,6 +114,20 @@ def test_table_is_the_six_configs_dated() -> None:
     assert (ds.input, ds.cached_read, ds.output) == (D("0.45"), D("0.009"), D("1.8"))
 
 
+WEB_KEY = Path(__file__).parents[2] / "cases" / "pricing" / "openai-web-search.json"
+
+
+def test_the_web_search_fee_is_the_pricing_pages() -> None:
+    from deploy_workflow.model.pricing import WEB_SEARCH_USD_PER_CALL, web_search_usd
+
+    key = json.loads(WEB_KEY.read_text(encoding="utf-8"))
+    assert "$10.00 / 1k calls" in key["quoted"]["pricing_page_tools_row"]
+    assert WEB_SEARCH_USD_PER_CALL == Decimal(key["usd_per_call"]) == Decimal("10.00") / 1000
+    for example in key["computed_examples"]:
+        assert web_search_usd(example["searches"]) == Decimal(example["usd"])
+    assert web_search_usd(0) == 0
+
+
 def test_copilot_table_rates() -> None:
     sol, opus = price_of("copilot-sol-medium"), price_of("copilot-opus-medium")
     assert (sol.input, sol.cached_read, sol.cache_write, sol.output) == (

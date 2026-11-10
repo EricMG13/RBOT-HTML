@@ -4,6 +4,79 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Web search for the research module, offline (branch `claude/optimistic-johnson-bmnwip`, after main `1fbc57c`)
+
+Owner: "Cp-dr supplies the peers … By default cp-dr always provides the peers or 1C and 2 can never
+run", then "Yes" to working out web search for CP-DR. No provider was called; no paid run.
+
+- Sources:
+  - OpenAI pages fetched 2026-11-10 through owner-approved network access: the pricing page, the
+    web search guide, the Responses reference and the gpt-6.1-sol model page.
+  - Quoted in `cases/pricing/openai-web-search.json`: USD 10.00 per 1,000 calls plus search
+    content tokens at model rates; tool `{"type": "web_search"}`; `include`
+    `web_search_call.action.sources`; `max_tool_calls`; web search listed as supported for
+    gpt-6.1-sol.
+- What changed:
+  - **Grant.** CP-DR searches only when the run's ruling lists `web-search` on its `configs:`
+    line (`owners/cpos.py` `web_search_ruled`), and only on OpenAI. Other providers are refused
+    before a call. The launcher prints a `Web:` line when CP-DR runs.
+  - **Request.** Only CP-DR's requests carry the hosted tool, with at most 16 calls per response.
+    Its system text adds the rules: public names only in a query, nothing published after the
+    research cutoff, every web item cited by URL and date, figures quoted verbatim.
+  - **Record.** A reply's `web_search_call` items are kept in the response record under
+    `openai-web-search` and never sent back. A reasoning item before one is dropped, since it
+    would go back without the item that followed it.
+  - **Money.** Each searching call holds USD 0.16 more and is charged USD 0.01 per search action.
+    Opening a page or searching within one is not charged; the guide names only search actions.
+    A sent reply that cannot be read is charged the whole USD 0.16.
+- Unchanged without the grant: the stored request and the OpenAI body for CP-2 and for CP-DR
+  hash the same before and after (checked by script on both checkouts).
+- Tests:
+  - Written first: `tests/model/test_providers.py` (3) and `tests/test_handoff_loop.py` (3) failed
+    at import before the code existed. `tests/test_cpos_launch.py` (1) fails with the launcher's
+    grant wiring reverted.
+  - Added after: the unreadable-reply charge test; reverting that charge to zero fails it.
+  - `tests/model/test_pricing.py` pins the fee to the key file.
+  - `tests/model`, the loop, launcher, library-page, context-form and inbox-watcher tests: 1,178
+    passed, 3 skipped. 8 failed, every one of them also failing on unchanged code here: the 3 on
+    `tests/known-failures.txt`, and 5 inbox-watcher permission tests, because the sandbox runs as
+    root.
+  - Quality gate: 0 findings.
+- Not verified, until a paid run:
+  - that web search runs with `store: false`;
+  - that search content tokens are in `usage.input_tokens`;
+  - that CP-DR ends a searching turn with a tool call under `tool_choice: "required"`;
+  - whether its peer pack respects the cutoff;
+  - whether CP-1C then has peers.
+- Not done: the standing inbox ruling and every other ruling are unchanged, so web search stays off
+  until the owner adds `web-search` to a ruling.
+
+## 2026-11-10 — Context form against live run tdg-all-001 (branch `claude/optimistic-johnson-bmnwip`, after main `53a5632`)
+
+Owner: "Yes do that" (compare tdg-all-001 with the form's forecast), "Your recommendation", then
+"Cp-dr supplies the peers, the user does not provide them unless they specifically want to in the
+context file…" and "User can provide peers but it is optional". Design note section 8. Compared
+against the run's record below. The run folder was not read.
+
+- Forecasts were made before the run reported. Of the 10 modules with a recorded outcome, the form
+  flagged 9 and the launcher's `run_expectations` 5. The form's miss was CP-DR: Ready, but Blocked.
+  The form's 4 Gaps for a missing source (CP-1C, CP-2H, CP-3D, CP-3) came back Blocked.
+  CP-1D's Gap came back Restricted.
+- CP-1D: no bridge is now Limited (its reads worked in the run).
+- CP-DR: the form no longer asks for the peers' filings. Supplying peers is optional: add the
+  peers' filings to the folder, which CP-DR is told to read, or give your own peer figures. CP-DR
+  carries a Note, not counted: CP-OS gives no module a web search tool (`model/handoff.py`
+  `TOOLS`). CP-OS sends CP-DR both cp-os's SKILL v1.1 (2026-07-22, web or hybrid research; blocks
+  without web) and `cpdr.md` (2026-10-31, LOCAL). Neither reaches public peers here.
+- Not changed: CP-2H, CP-3D and CP-3 had every read refused in the run, so they wait for a rerun.
+  The registry keeps CP-DR optional for CP-1C and CP-2. That is a registry decision, not a form
+  one.
+- Tests: `test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run` fails on
+  the first version of this change, which asked about peer files, and passes now.
+  `tests/test_library_page_browser.py` and `tests/test_context_form.py`: 45 passed. Quality gate: 0
+  findings.
+- Not verified: no live run of the changed forecast; one issuer, one date.
+
 ## 2026-11-10 — Sweep: end-to-end wiring (branch `claude/sweep-wiring`, base `53a5632`)
 
 Owner: "Move to latest main - run /sweep refactoring and optimisation sweep make sure front to back

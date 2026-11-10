@@ -1,0 +1,34 @@
+{
+ "schema": "pricing-key/1",
+ "what": "OpenAI hosted web search tool (Responses API, {\"type\": \"web_search\"}), used by CP-DR on sol-medium and sol-high",
+ "source": {
+  "pricing_page": "https://developers.openai.com/api/docs/pricing",
+  "web_search_guide": "https://developers.openai.com/api/docs/guides/tools-web-search",
+  "responses_reference": "https://developers.openai.com/api/reference/resources/responses/methods/create",
+  "model_page": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+  "fetched": "2026-11-10",
+  "fetched_by": "Claude Code session, owner-approved network access to developers.openai.com"
+ },
+ "quoted": {
+  "pricing_page_tools_row": "Web search (incl. images) $10.00 / 1k calls + Search content tokens billed at model rates.",
+  "pricing_page_tokens": "Tokens used for built-in tools are billed at the chosen model's per-token rates.",
+  "guide_billed_action": "search, which represents a web search. It will usually (but not always) includes the search queries which were searched. Search actions incur a tool call cost (see pricing).",
+  "guide_other_actions": "open_page, which represents a page being opened. Supported in reasoning models. find_in_page, which represents searching within a page. Supported in reasoning models.",
+  "reference_max_tool_calls": "The maximum number of total calls to built-in tools that can be processed in a response. This maximum number applies across all built-in tool calls, not per individual tool. Any further attempts to call a tool by the model will be ignored.",
+  "reference_include": "web_search_call.action.sources: Include the sources of the web search tool call.",
+  "model_page": "gpt-6.1-sol: Tools supported by this model when using the Responses API. Web search: Supported"
+ },
+ "usd_per_call": "0.01",
+ "billed_actions": ["search", "an action not stated"],
+ "unbilled_actions": ["open_page", "find_in_page"],
+ "max_tool_calls_per_response": 16,
+ "computed_examples": [
+  {"searches": 3, "usd": "0.03"},
+  {"searches": 16, "usd": "0.16", "note": "the hold per CP-DR call"}
+ ],
+ "not_stated": [
+  "Whether search content tokens appear in usage.input_tokens; the charge assumes they do (the pricing page bills them at model rates). Compare the first paid call with the provider's usage page.",
+  "Whether open_page and find_in_page are free; the guide names only search actions as incurring the call cost.",
+  "Whether web search runs with store: false; no page fetched here says it does not. The first paid call shows it."
+ ]
+}

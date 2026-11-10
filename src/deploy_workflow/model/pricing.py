@@ -39,6 +39,10 @@ from typing import Literal
 from deploy_workflow.model.turn import CONFIG_PROVIDERS, Usage
 
 PRICES_AS_OF = date(2026, 10, 31)  # provider-docs fetch date
+# OpenAI's hosted web search: USD 10.00 per 1,000 calls, search content tokens billed at the
+# model's rates (pricing page fetched 2026-11-10; cases/pricing/openai-web-search.json).
+WEB_SEARCH_USD_PER_CALL = Decimal("0.01")
+WEB_SEARCH_PRICES_AS_OF = date(2026, 11, 10)
 COPILOT_PRICES_AS_OF = date(2026, 11, 6)  # GitHub "Models and pricing" fetch date
 CostStatus = Literal["computed", "billed", "unknown"]
 
@@ -212,6 +216,11 @@ def _held_output(price: ModelPrice, max_output: int) -> int:
     """Output tokens a hold prices: the request cap, or the model maximum where that is set."""
     floor = price.reservation_output_tokens
     return max_output if floor is None else max(max_output, floor)
+
+
+def web_search_usd(calls: int) -> Decimal:
+    """The fee for ``calls`` web searches; their content tokens are in the reply's usage."""
+    return _count("calls", calls) * WEB_SEARCH_USD_PER_CALL
 
 
 def request_reservation_usd(price: ModelPrice, input_bound: int, max_output: int) -> Decimal:

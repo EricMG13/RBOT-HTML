@@ -633,6 +633,53 @@ def test_the_research_cutoff_follows_the_as_of_date_and_is_written(tmp_path):
     assert probe["loaded"] == "2026-08-31" and len(probe["notes"]) == 1  # A blank file says so.
 
 
+SOURCES_PROBE = """<script>
+(() => {  // Its own scope: the form's script declares globals of its own.
+const pick = (attr, value) => {
+  document.querySelector(`[${attr}][value="${value}"]`).checked = true;
+  document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
+};
+const forecast = () => Object.fromEntries(readiness(build()).mods.map(m => [m.id, m]));
+pick('data-k="pathway"', 'distressed_restructuring');
+const peers = forecast();
+const asked = [...document.querySelectorAll('[data-chk]')].map(c => c.dataset.chk);
+pick('data-k="pathway"', 'earnings_update');
+pick('data-k="management_bridge"', 'no');  // The checklist is drawn for the pathway first.
+const out = document.createElement('pre');
+out.id = 'probe';
+out.textContent = JSON.stringify({
+  source: build().valuation.peer_source,
+  asked,
+  research: peers['CP-DR'],
+  benchmark: peers['CP-1C'].status,
+  nobridge: forecast()['CP-1D'].status,
+});
+document.body.append(out);
+})();
+</script>
+</body>"""
+
+
+def test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_run(tmp_path):
+    # Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they
+    # specifically want to in the context file." So the form never asks for peers' filings, and the
+    # research module's block in live run tdg-all-001 (no web-search grant in its ruling) is a note,
+    # not the analyst's to fix. That run's Earnings quality came back Restricted with no bridge.
+    page = tmp_path / "sources.html"
+    text = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
+    page.write_text(text.replace("</body>", SOURCES_PROBE, 1), encoding="utf-8")
+    dom, console = visit(page)
+    assert console == []
+    probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert probe["source"] == "cp_dr_public"  # The research module finds the peers by default ...
+    assert probe["asked"] and not any("peer" in item for item in probe["asked"])  # ... unasked.
+    research = probe["research"]
+    assert research["status"] == "information" and len(research["items"]) == 1
+    assert "web-search" in research["items"][0]["reason"]  # The ruling's grant, not the analyst's.
+    assert probe["benchmark"] == "ready"
+    assert probe["nobridge"] == "limited"
+
+
 def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
     from deploy_workflow.inbox.drops import ensure_layout, write_templates
 
