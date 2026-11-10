@@ -1366,7 +1366,6 @@ test('run report: the bridge is drawn in its module story beside the module\'s o
   assert.ok(mod.indexOf('column-chart') < mod.indexOf('vector-chart'), 'charts keep the handoff order');
 });
 
-// ---- Package 2 views (2026-11-10): the debt stack, covenant and rating-trigger headroom and portfolio limits. Every value below is synthetic.
 const TAIL = ['Reporting unit', 'Basis and limitation'];
 const STACK = { title: 'Debt stack', unit: 'US$m', table: 92, kind: 'stack', label: 0, rank: 1, secured: 2, amount: 3, leverage: 4, columns: [3, 4] };
 const BULLET = { title: 'Covenant headroom', unit: '', table: 102, kind: 'bullet', label: [0], threshold: 1, current: 2, headroom: 3, direction: 4, columns: [1, 2] };
