@@ -105,22 +105,34 @@ test('the navigator names every module in catalog.json', () => {
 // ---- The module report: views.js evaluated over a hand-written output, with stand-ins for the screen.js globals it calls.
 const OUT = 'run-a/deliveries/d1/CP-1.md';
 const table = (line, headers, rows) => ({ type: 'table', line, headers, rows: rows.map(([n, ...cells]) => ({ line: n, cells })) });
+const text = (line, body) => ({ type: 'text', line, text: body });
+// `where` is the placement the store would give the section (Task 1); report() turns it into the output's parallel `placement` list.
+const sec = (heading, level, line, where, blocks) => ({ heading, level, line, where, blocks });
+const ref = (heading, line, blocks) => sec(heading, 3, line, 'reference', blocks);
+const view = (heading, line, blocks) => sec(heading, 3, line, 'view', blocks);
 const SECTIONS = [
-  { heading: 'Reader summary', line: 10, blocks: [
+  sec('Reader summary', 3, 10, 'consumed', [
     table(12, ['Bottom line', 'Confidence', 'Main limitation'], [[13, 'Cash up.', 'Medium', 'Synthetic.']]),
     table(15, ['Finding', 'Creditor impact', 'Confidence'], [[16, 'Leverage rose.', 'Higher gross leverage.', 'High'], [17, 'Cash rose.', 'More cushion.', 'Medium']]),
-  ] },
-  { heading: 'Liquidity table', line: 20, blocks: [
+  ]),
+  ref('Liquidity table', 20, [
     table(22, ['Measure', 'FY2023', 'FY2024', 'Unit', 'Note', 'Extra1', 'Extra2'], [
       [23, 'Cash', '3,472', '6,261', 'US$m', 'a very long note that is longer than twenty-four characters', 'e1', 'e2'],
       [24, 'Coupons', 'Not supplied', '', 'US$m', 'x', 'e1', 'e2'], [25, 'A', '1', '2', 'US$m', 'x', 'e1', 'e2'], [26, 'B', '1', '2', 'US$m', 'x', 'e1', 'e2'],
       [27, 'C', '1', '2', 'US$m', 'x', 'e1', 'e2'], [28, 'D', '1', '2', 'US$m', 'x', 'e1', 'e2'], [29, 'E', '1', '2', 'US$m', 'x', 'e1', 'e2'], [30, 'F', '1', '2', 'US$m', 'x', 'e1', 'e2'], [31, 'G', '1', '2', 'US$m', 'x', 'e1', 'e2'],
     ]),
-  ] },
-  { heading: 'Chart data: leverage', line: 40, blocks: [table(42, ['Period', 'Total debt / EBITDA', 'Reporting unit', 'Basis'], [[43, 'FY2024', '6.57', 'x', 'K, page:123'], [44, 'FY2023', '', 'x', 'none']])] },
-  { heading: 'Gaps', line: 50, blocks: [{ type: 'text', line: 52, text: 'Coupons are **not supplied**.' }] },
-  { heading: 'Sources', line: 60, blocks: [{ type: 'text', line: 62, text: 'K.' }] },
+  ]),
+  view('Liquidity view', 34, [text(35, 'Liquidity is **ample** through FY2025.')]),
+  view('T2F.1 — Macro source gate', 36, [text(37, 'The macro gate is open.')]),
+  sec('Chart data: leverage', 3, 40, 'consumed', [table(42, ['Period', 'Total debt / EBITDA', 'Reporting unit', 'Basis'], [[43, 'FY2024', '6.57', 'x', 'K, page:123'], [44, 'FY2023', '', 'x', 'none']])]),
+  ref('Debt register', 45, [table(46, ['Instrument', 'Maturity', 'Amount'], [[47, 'Term loan', 'FY2028', '1,200'], [48, 'Notes', 'FY2030', '700']])]),
+  sec('Gaps', 2, 50, 'limits', [text(52, 'Coupons are **not supplied**.')]),
+  sec('Calculation trace', 3, 56, 'calculations', [text(57, 'Net debt is 1,200 less 3,472.')]),
+  sec('Sources', 2, 60, 'audit', [text(62, 'K.')]),
+  sec('Extra notes', 2, 64, 'audit', [text(65, 'Reviewer note.')]),
 ];
+// Hand-written word counts per placement (the store computes them; the page prints them).
+const WORDS = { view: 12, reference: 40, calculations: 8, limits: 5, audit: 9 };
 const CHIPS = {
   [`${OUT}:16`]: [
     { kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null, quote: '6.57', quote_found: true, excerpt: 'Debt 6.57 times', reason: null, hash_matches_inventory: true },
@@ -133,15 +145,23 @@ const CHIPS = {
   [`${OUT}:53`]: [{ kind: 'gap', label: 'no page', codes: [] }, { kind: 'gap', label: 'p.7 · no key', codes: [] }],
   [`${OUT}:54`]: [{ kind: 'gap', label: 'Annual p.9 · ambiguous', codes: [] }],
 };
+const DEFAULT_MODULES = [
+  ['summary', 'Reader summary', ['Reader summary']], ['liquidity', 'Liquidity table', ['Liquidity table']], ['view', 'Liquidity view', ['Liquidity view']],
+  ['gate', 'T2F.1 — Macro source gate', ['T2F.1 — Macro source gate']], ['leverage', 'Chart data', ['Chart data']], ['debt', 'Debt register', ['Debt register']],
+  ['gaps', 'Gaps & limitations', ['Gaps']], ['calc', 'Calculation trace', ['Calculation trace']], ['sources', 'Sources', ['Sources']], ['extra', 'Extra notes', ['Extra notes']],
+  ['audit', 'Technical audit', ['Request']],
+];
 function report(overrides = {}, modSections = null) {
-  const text = read('views.js');
+  const src = read('views.js');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const plain = v => String(v).replace(/\*\*|`/g, '');
   const rich = v => esc(v).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  const out = { module: 'CP-1', run: 'run-a', source: 'deliveries/d1/CP-1.md', href: '../runs/run-a/deliveries/d1/CP-1.md', label: 'CP-1', sections: SECTIONS,
+  const sections = overrides.sections || SECTIONS;
+  const out = { module: 'CP-1', run: 'run-a', source: 'deliveries/d1/CP-1.md', href: '../runs/run-a/deliveries/d1/CP-1.md', label: 'CP-1', sections,
+    placement: sections.map(s => s.where), state: { established: true, declared: null }, words: WORDS,
     summary: { bottomLine: 'Cash up.', confidence: 'Medium', limitation: 'Synthetic.', line: 13 }, charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }], ...overrides };
   const data = { [OUT]: out };
-  const modules = { [OUT]: { sections: modSections || [['liquidity', 'Liquidity table', ['Liquidity table']], ['leverage', 'Chart data', ['Chart data']], ['gaps', 'Gaps & limitations', ['Gaps']], ['sources', 'Sources', ['Sources']], ['audit', 'Technical audit', ['Request']]] } };
+  const modules = { [OUT]: { sections: modSections || DEFAULT_MODULES } };
   const evidence = new Map();
   for (const s of out.sections) for (const b of s.blocks) {
     if (b.type === 'table') for (const r of b.rows) evidence.set(`${OUT}:${r.line}`, { module: 'CP-1', line: r.line });
@@ -151,22 +171,129 @@ function report(overrides = {}, modSections = null) {
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
   const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile'];
   const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, { 'CP-1': 'Financial foundation' }, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head' }, id => !id.startsWith('W-'), sectionData, new Map()];
-  return new Function(...names, `${text}; return {moduleReport, reportAnalysis, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, availability, unavailableView};`)(...args);
+  return new Function(...names, `${src}; return {moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE};`)(...args);
 }
+const strip = html => html.replace(/<[^>]+>/g, '');
+const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1]);
+const NINE = ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'reference', 'calculations', 'audit'];
+const NINE_RE = /\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"/g;
+const anchorsOf = (html, re = NINE_RE) => [...html.matchAll(re)].map(m => m[1]);
 
-test('the module report has the seven anchors, in order', () => {
+test('(a) the module report has the nine anchors once each, in order', () => {
   const html = report().moduleReport(OUT);
-  const ids = [...html.matchAll(/\bid="(head|bottom-line|numbers|findings|analysis|limits|audit)"/g)].map(m => m[1]);
-  assert.deepEqual(ids, ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'audit']);
-  assert.ok(html.includes('Candidate · not accepted') && html.includes('Current methodology') && html.includes('<code>CP-1.md</code> · 5 sections'));
+  assert.deepEqual(anchorsOf(html), NINE);
+  assert.deepEqual(report().REPORT_PARTS.map(p => p[0]), NINE);
+  assert.deepEqual(report().REPORT_PARTS.map(p => p[1]), ['Module', 'Bottom line', 'Key numbers', 'Findings', 'Analysis', 'Limits & monitoring', 'Statements and registers', 'Calculations', 'Evidence & audit']);
+  assert.ok(html.includes('Candidate · not accepted') && html.includes('Current methodology') && html.includes('<code>CP-1.md</code> · 10 sections'));
   assert.ok(html.includes('Quoted from the handoff') && html.includes('CP-1.md · line 13'));
+  const r = report();
+  assert.deepEqual(r.reportParts(OUT).map(p => p[0]), NINE);
+  assert.deepEqual(r.navigationSections('CP-1', 'run-a', OUT).map(s => s[0]), NINE);
+  assert.equal(r.reportParts(OUT).map(p => p[2]).join(''), html);
 });
 
-test('an empty part keeps its anchor and says so once', () => {
+test('(b) a handoff with no view and no calculations section omits both parts, their outline entries and any empty-part text', () => {
+  const r = report({ sections: SECTIONS.filter(s => s.where !== 'view' && s.where !== 'calculations') });
+  const html = r.moduleReport(OUT);
+  assert.deepEqual(anchorsOf(html), ['head', 'bottom-line', 'numbers', 'findings', 'limits', 'reference', 'audit']);
+  assert.ok(!html.includes('id="analysis"') && !html.includes('id="calculations"') && !html.includes('part-empty'));
+  const outline = r.outlineMarkup(OUT);
+  assert.ok(!outline.includes('>Analysis<') && !outline.includes('>Calculations<'));
+  assert.equal(outline.match(/class="section-item"/g).length, 7);
+});
+
+test('a handoff with nothing to read keeps only its head and the audit list, and says nothing about the rest', () => {
   const html = report({ summary: null, call: null, charts: [], sections: [] }).moduleReport(OUT);
-  const ids = [...html.matchAll(/\bid="(head|bottom-line|numbers|findings|analysis|limits|audit)"/g)].map(m => m[1]);
-  assert.deepEqual(ids, ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'audit']);
-  assert.ok(html.includes('No bottom line in this handoff.'));
+  assert.deepEqual(anchorsOf(html), ['head', 'audit']);
+  assert.ok(!html.includes('part-empty') && !html.includes('No bottom line'));
+});
+
+test('(c) a not-assessable module has head, band, findings, limits, one closed fold and the audit list', () => {
+  const r = report({ state: { established: false, declared: null } });
+  const html = r.moduleReport(OUT);
+  assert.deepEqual(anchorsOf(html, /\bid="(head|bottom-line|numbers|findings|limits|handoff-text|audit)"/g), ['head', 'bottom-line', 'findings', 'limits', 'handoff-text', 'audit']);
+  const tag = /<details[^>]*id="handoff-text"[^>]*>/.exec(html)[0];
+  assert.ok(!/\bopen\b/.test(tag), tag);
+  assert.equal(summaryOf(html, 'handoff-text'), 'Full handoff text · 60 words'); // 12 view + 40 reference + 8 calculations
+  assert.ok(html.indexOf('id="handoff-text"') < html.indexOf('id="analysis"') && html.indexOf('id="analysis"') < html.indexOf('id="audit"'));
+  assert.ok(!html.includes('id="numbers"'));
+  assert.deepEqual(r.navigationSections('CP-1', 'run-a', OUT).map(s => s[0]), ['head', 'bottom-line', 'findings', 'limits', 'handoff-text', 'audit']);
+});
+
+test('(d) a module with no reader summary keeps the full page with no band and no fold', () => {
+  // No reader summary means no Reader summary section: the fixture drops it with the summary.
+  const html = report({ state: { established: null, declared: null }, summary: null, sections: SECTIONS.filter(s => s.heading !== 'Reader summary') }).moduleReport(OUT);
+  assert.deepEqual(anchorsOf(html), ['head', 'numbers', 'analysis', 'limits', 'reference', 'calculations', 'audit']);
+  assert.ok(!html.includes('handoff-text'));
+});
+
+test('(e) Statements and registers is a closed fold of the reference sections, whole, in handoff order', () => {
+  const r = report(), html = r.reportReference(OUT);
+  assert.ok(!/\bopen\b/.test(/<details[^>]*id="reference"[^>]*>/.exec(html)[0]));
+  assert.equal(summaryOf(html, 'reference'), 'Statements and registers · 2 tables · 11 rows'); // Liquidity table 9 rows, Debt register 2
+  assert.ok(html.indexOf('id="s-20"') > 0 && html.indexOf('id="s-20"') < html.indexOf('id="s-45"'));
+  assert.equal(html.match(/<tr><td>/g).length, 11); // no row dropped
+  assert.ok(html.includes('>Extra2<') && html.includes('a very long note that is longer than twenty-four characters') && !html.includes('more rows'));
+  assert.ok(!html.includes('Reader summary') && !html.includes('Chart data') && !html.includes('Liquidity view') && !html.includes('Calculation trace'));
+  assert.equal(summaryOf(report({ sections: SECTIONS.filter(s => s.heading !== 'Debt register') }).reportReference(OUT), 'reference'), 'Statements and registers · 1 table · 9 rows');
+});
+
+test('(f) Calculations is a closed fold of the calculations sections, whole', () => {
+  const html = report().reportCalculations(OUT);
+  assert.ok(!/\bopen\b/.test(/<details[^>]*id="calculations"[^>]*>/.exec(html)[0]));
+  assert.equal(summaryOf(html, 'calculations'), 'Calculations · 8 words');
+  assert.ok(html.includes('id="s-56"') && html.includes('Net debt is 1,200 less 3,472.') && html.includes('aria-label="Handoff row, line 57"'));
+});
+
+test('(g) a leading method code is dropped from a displayed heading and kept in title', () => {
+  const sections = ['T2F.1 — Macro source gate', 'cp2b.cp_model_catalysts — blocked interface', 'TDR.1 — Research brief', 'Net debt — bridge'].map((h, i) => view(h, 100 + 10 * i, [text(101 + 10 * i, 'x')]));
+  const html = report({ sections }).reportAnalysis(OUT);
+  assert.ok(html.includes('<h4 title="T2F.1 — Macro source gate">Macro source gate</h4>'));
+  assert.ok(html.includes('<h4 title="cp2b.cp_model_catalysts — blocked interface">blocked interface</h4>'));
+  assert.ok(html.includes('<h4 title="TDR.1 — Research brief">Research brief</h4>'));
+  assert.ok(html.includes('<h4>Net debt — bridge</h4>'));
+  assert.equal(report().METHOD_CODE.source, '^([A-Z][A-Z0-9]*\\.[A-Z]?\\d+|[a-z0-9]+(\\.[a-z0-9_]+)+)\\s+—\\s+');
+  // The code goes from Limits, Reference and Calculations headings too, and stays in the audit list.
+  const coded = [sec('C.1 — Gap list', 2, 100, 'limits', [text(101, 'g')]), ref('T4.D1 — Register', 110, [table(111, ['A', 'B'], [[112, 'x', 'y']])]), sec('T2F.2 — Trace', 3, 120, 'calculations', [text(121, 'c')]), sec('T3D.1 — Source map', 3, 130, 'audit', [text(131, 'a')])];
+  const r = report({ sections: coded }, [['gap', 'C.1 — Gap list', ['C.1']], ['reg', 'T4.D1 — Register', ['T4.D1']], ['trace', 'T2F.2 — Trace', ['T2F.2']], ['map', 'T3D.1 — Source map', ['T3D.1']]]);
+  assert.ok(r.reportLimits(OUT).includes('<h4 title="C.1 — Gap list">Gap list</h4>'));
+  assert.ok(r.reportReference(OUT).includes('<h4 title="T4.D1 — Register">Register</h4>'));
+  assert.ok(r.reportCalculations(OUT).includes('<h4 title="T2F.2 — Trace">Trace</h4>'));
+  const audit = r.reportAudit(OUT);
+  assert.ok(audit.includes('T3D.1 — Source map') && !audit.includes('T2F.2 — Trace') && !audit.includes('Gap list'));
+});
+
+test('(h) a section placed audit is in the Evidence & audit list and in no other part', () => {
+  const r = report(), html = r.moduleReport(OUT);
+  const audit = r.reportAudit(OUT), rest = html.replace(audit, '');
+  assert.ok(audit.includes('Extra notes') && audit.includes('<span>L64</span>'));
+  assert.ok(!rest.includes('Extra notes') && !rest.includes('Reviewer note.') && !html.includes('id="s-64"'));
+  // Consumed and audit sections are listed; what a part draws is not.
+  for (const listed of ['Reader summary', 'Chart data', 'Sources', 'Technical audit']) assert.ok(audit.includes(listed), listed);
+  for (const drawn of ['Liquidity table', 'Liquidity view', 'Debt register', 'Gaps &amp; limitations', 'Calculation trace']) assert.ok(!audit.includes(drawn), drawn);
+});
+
+test('(i) the declared status is a badge beside the acceptance badge; none declared means the acceptance badge only', () => {
+  const blocked = report({ state: { established: true, declared: 'Blocked' } }).reportHead(OUT);
+  assert.ok(blocked.includes('<span class="badge badge-gray">Blocked</span>') && blocked.includes('Candidate · not accepted'));
+  assert.equal(blocked.match(/class="badge badge-gray"/g).length, 2);
+  assert.ok(blocked.indexOf('Candidate · not accepted') < blocked.indexOf('>Blocked<'));
+  const none = report({ state: { established: true, declared: null } }).reportHead(OUT);
+  assert.equal(none.match(/class="badge badge-gray"/g).length, 1);
+  assert.ok(!none.includes('Blocked'));
+});
+
+test('(j) Analysis holds only the view sections, open, in handoff order, each with its line id', () => {
+  const html = report().reportAnalysis(OUT);
+  assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>') && !html.includes('<details'));
+  assert.deepEqual([...html.matchAll(/class="analysis-section" id="(s-\d+)"/g)].map(m => m[1]), ['s-34', 's-36']);
+  assert.ok(html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes('aria-label="Handoff row, line 35"'));
+  for (const other of ['Liquidity table', 'Debt register', 'Calculation trace', 'Coupons', 'Reader summary', 'Extra notes']) assert.ok(!html.includes(other), other);
+});
+
+test('the sections a part draws are the routable s-<line> anchors; audit and consumed sections are not', () => {
+  const ids = [...report().drawnAnchors(OUT)];
+  assert.deepEqual(ids.sort(), ['s-20', 's-34', 's-36', 's-45', 's-50', 's-56']);
 });
 
 test('chip labels and avatars follow the data, one chip per dict', () => {
@@ -212,7 +339,7 @@ test('key numbers: the first reader table with two numeric columns, 8 rows, 5+so
   assert.equal(html.match(/<th scope="col"/g).length, 6);
   assert.ok(!html.includes('Note<') && !html.includes('Extra2<') && html.includes('Extra1<') && html.includes('>Source<'));
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>'));
-  assert.ok(html.includes('1 more rows are under Evidence &amp; audit.'));
+  assert.ok(html.includes('1 more rows are under Statements and registers.'));
   assert.ok(!/<td[^>]*>\s*[—–-]\s*<\/td>/.test(html));
 });
 
@@ -234,19 +361,19 @@ test('findings are articles with impact, confidence and chips', () => {
   assert.ok(html.includes('<b>Creditor impact</b>Higher gross leverage.') && html.includes('<span class="pill">High</span>'));
 });
 
-test('limits come from the Limits group with chips; audit lists the rest by line', () => {
+test('limits come from the limits-placed sections with chips and their line ids; audit lists the rest by line', () => {
   const r = report();
   const limits = r.reportLimits(OUT);
-  assert.ok(limits.includes('Coupons are <strong>not supplied</strong>.') && limits.includes('Not supplied'));
+  assert.ok(limits.includes('id="s-50"') && limits.includes('Coupons are <strong>not supplied</strong>.') && limits.includes('Not supplied'));
   const audit = r.reportAudit(OUT);
-  assert.ok(audit.includes('<span>L20</span>') && audit.includes('<span>L60</span>') && !audit.includes('Gaps &amp; limitations'));
+  assert.ok(audit.includes('<span>L10</span>') && audit.includes('<span>L60</span>') && audit.includes('<span>L64</span>') && !audit.includes('<span>L20</span>') && !audit.includes('Gaps &amp; limitations'));
   assert.ok(audit.includes('<details class="audit" id="audit">') && audit.includes('hidden'));
 });
 
-test('the outline is the seven anchors under On this page', () => {
+test('the outline is the nine anchors under On this page', () => {
   const html = report().outlineMarkup(OUT);
-  assert.equal(html.match(/class="section-item"/g).length, 7);
-  assert.ok(html.includes('aria-label="On this page"') && html.includes('aria-current="location"'));
+  assert.equal(html.match(/class="section-item"/g).length, 9);
+  assert.ok(html.includes('aria-label="On this page"') && html.includes('aria-current="location"') && html.includes('>Statements and registers<') && html.includes('>Calculations<'));
 });
 
 test('no output reads No output found, once, in the state word and on the canvas', () => {
@@ -264,9 +391,9 @@ test('screen.css sets no font-size below 11px and the report styles exist', () =
   for (const sel of ['.chip{', '.chip .av{', '.dot{', 'article.finding{', '.limits{', 'details.audit{', '.band{', '.panel-card{', '.table-card{']) assert.ok(css.includes(sel), sel);
 });
 
-test('key numbers read the analysis group whatever its name (CP-2E: Rates, FX & hedges)', () => {
-  // Answer key from the fixture: the T2F section groups under 'Rates, FX & hedges' for CP-2E, its first non-limits group.
-  const sections = [{ heading: 'T2F.4 Hedge register', line: 70, blocks: [table(72, ['Instrument', 'Amount', 'Margin / Coupon'], [[73, 'Swap', '500', '3.1'], [74, 'Collar', '250', '2.4']])] }];
+test('key numbers read the reference sections whatever the module (CP-2E: a hedge register)', () => {
+  // Answer key from the fixture: the T2F.4 register is the only reference table with two numeric columns.
+  const sections = [ref('T2F.4 Hedge register', 70, [table(72, ['Instrument', 'Amount', 'Margin / Coupon'], [[73, 'Swap', '500', '3.1'], [74, 'Collar', '250', '2.4']])])];
   const html = report({ module: 'CP-2E', sections }, [['hedges', 'Hedge register', ['T2F.4']]]).keyNumbers(OUT);
   assert.equal(html.match(/<tr>/g).length, 3);
   assert.ok(html.includes('>Amount<') && html.includes('>Margin / Coupon<') && html.includes('>500<'));
@@ -291,14 +418,15 @@ test('Open source file is omitted when the build says the source text is missing
   assert.ok(there.includes('href="../runs/r/source-text/a.pdf"') && there.includes('Open source file'));
 });
 
-test('key numbers look past the first analysis group (CP-2E: numeric register in the second group)', () => {
-  // Answer key from the fixture: T2G.1 (first group) holds only a text table; the T2F.4 register in the second group is the one shown.
+test('key numbers look past a reference table without numbers, and ignore tables not placed reference', () => {
+  // Answer key from the fixture: T2G.1 holds only a text table; T2F.4 is the numeric register; the audit-placed table is never a candidate.
   const sections = [
-    { heading: 'T2G.1 ESG notes', line: 60, blocks: [table(62, ['Topic', 'View'], [[63, 'Governance', 'Stable']])] },
-    { heading: 'T2F.4 Hedge register', line: 70, blocks: [table(72, ['Instrument', 'Amount', 'Margin / Coupon'], [[73, 'Swap', '500', '3.1']])] },
+    sec('Sources', 2, 55, 'audit', [table(56, ['Name', 'A', 'B'], [[57, 'K', '1', '2']])]),
+    ref('T2G.1 ESG notes', 60, [table(62, ['Topic', 'View'], [[63, 'Governance', 'Stable']])]),
+    ref('T2F.4 Hedge register', 70, [table(72, ['Instrument', 'Amount', 'Margin / Coupon'], [[73, 'Swap', '500', '3.1']])]),
   ];
-  const html = report({ module: 'CP-2E', sections }, [['esg', 'ESG notes', ['T2G.1']], ['hedges', 'Hedge register', ['T2F.4']]]).keyNumbers(OUT);
-  assert.ok(html.includes('>Amount<') && html.includes('>500<') && !html.includes('>Governance<'));
+  const html = report({ module: 'CP-2E', sections }, [['src', 'Sources', ['Sources']], ['esg', 'ESG notes', ['T2G.1']], ['hedges', 'Hedge register', ['T2F.4']]]).keyNumbers(OUT);
+  assert.ok(html.includes('>Amount<') && html.includes('>500<') && !html.includes('>Governance<') && !html.includes('>K<'));
 });
 
 // ---- The hedge chart: views.js evaluated over a hand-written CP-2E table and a run whose as-of is 2024-09-30.
@@ -418,74 +546,65 @@ function chipViewOf(chip) { return report().chipView(chip, 'CP-1'); }
 
 test('a key-numbers column with a prose cell is not numeric; "Not supplied" and n.a. do not count against it', () => {
   const prose = 'Drawn loan principal not separately printed in retained summary; 910 commitment, 843 available';
-  const sections = [{ heading: 'Register', line: 90, blocks: [table(92, ['Item', 'Amount', 'Limit', 'Note'], [
+  const sections = [ref('Register', 90, [table(92, ['Item', 'Amount', 'Limit', 'Note'], [
     [93, 'Revolver', prose, '910', 'x'], [94, 'Term loan', '1,200', 'Not supplied: not printed', 'y'], [95, 'Notes', '500', 'n.a.', 'z'], [96, 'Other', '', '12', 'w'],
-  ])] }];
+  ])])];
   const html = report({ sections }, [['register', 'Register', ['Register']]]).keyNumbers(OUT);
   assert.equal(html, '');
-  const both = [{ heading: 'Register', line: 90, blocks: [table(92, ['Item', 'Amount', 'Limit'], [
+  const both = [ref('Register', 90, [table(92, ['Item', 'Amount', 'Limit'], [
     [93, 'Term loan', '1,200', '910'], [94, 'Notes', 'Not supplied: not printed', '500'], [95, 'Other', 'n.a.', '12'], [96, 'Bonds', '', '7'],
-  ])] }];
+  ])])];
   const shown = report({ sections: both }, [['register', 'Register', ['Register']]]).keyNumbers(OUT);
   assert.equal(shown.match(/<th scope="col" class="num">/g).length, 2);
 });
 
 test('the head and the audit summary give the store\'s one section count', () => {
-  const sections = [...SECTIONS, { heading: 'Empty', line: 70, blocks: [] }, { heading: 'Also empty', line: 72, blocks: [] }];
+  const sections = [...SECTIONS, sec('Empty', 2, 70, 'audit', []), sec('Also empty', 2, 72, 'audit', [])];
   const html = report({ sections }).moduleReport(OUT);
-  assert.equal(sections.length, 7);
-  assert.ok(html.includes('<code>CP-1.md</code> · 7 sections'));
-  assert.ok(html.includes('<span>7 sections · unchanged from the handoff</span>'));
-  assert.ok(!/\b(?:5|6) sections\b/.test(html));
+  assert.equal(sections.length, 12);
+  assert.ok(html.includes('<code>CP-1.md</code> · 12 sections'));
+  assert.ok(html.includes('<span>12 sections · unchanged from the handoff</span>'));
+  assert.ok(!/\b(?:10|11) sections\b/.test(html));
 });
 
-// ---- Part 5, Analysis: narrative sections and registers the parts above did not print, open, in handoff order.
+// ---- Reference, Analysis and the other parts draw what the store placed; the page re-judges nothing.
 const NARRATIVE = [
-  { heading: 'Debt structure', level: 3, line: 70, blocks: [
-    { type: 'text', line: 72, text: 'Debt is **mostly secured**.\nSecond line.' },
+  sec('Debt structure', 3, 70, 'reference', [
+    text(72, 'Debt is **mostly secured**.\nSecond line.'),
     table(74, ['Instrument', 'Maturity', 'Amount', 'Note'], [[75, 'Term loan', '2028', '1,200', 'first'], [76, 'Notes', '2030', 'Not supplied', ''], [77, 'Revolver', '2027', '300', 'undrawn']]),
-    { type: 'text', line: 79, text: 'Closing remark.' },
-  ] },
-  { heading: 'Sub topic', level: 4, line: 80, blocks: [{ type: 'text', line: 82, text: 'Nested text.' }] },
+    text(79, 'Closing remark.'),
+  ]),
+  sec('Sub topic', 4, 80, 'reference', [text(82, 'Nested text.')]),
 ];
-const NARRATIVE_MODULES = [['liquidity', 'Liquidity table', ['Liquidity table']], ['leverage', 'Chart data', ['Chart data']], ['debt', 'Debt structure', ['Debt structure']], ['sub', 'Sub topic', ['Sub topic']], ['gaps', 'Gaps & limitations', ['Gaps']], ['sources', 'Sources', ['Sources']], ['audit', 'Technical audit', ['Request']]];
-const withNarrative = () => report({ sections: [...SECTIONS, ...NARRATIVE] }, NARRATIVE_MODULES);
-test('a narrative section and a register render open under #analysis, in order, whole, with chips', () => {
-  const r = withNarrative();
-  const html = r.reportAnalysis(OUT);
-  // Answer key from NARRATIVE (real handoffs are level 3): the shallowest section is h4, its level-4 child h5; the text before the table before the closing remark.
+const NARRATIVE_MODULES = [['debt', 'Debt structure', ['Debt structure']], ['sub', 'Sub topic', ['Sub topic']], ['sources', 'Sources', ['Sources']]];
+test('a reference section renders whole inside Statements and registers, in order, with chips and relative heading tags', () => {
+  const html = report({ sections: [...NARRATIVE, SECTIONS.find(s => s.heading === 'Sources')] }, NARRATIVE_MODULES).reportReference(OUT);
   const at = s => html.indexOf(s);
-  assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>'));
+  // Answer key from NARRATIVE: the shallowest section is h4, its level-4 child h5; the text before the table before the closing remark.
   assert.ok(at('<h4>Debt structure</h4>') > 0 && at('<h5>Sub topic</h5>') > at('<h4>Debt structure</h4>'));
-  assert.equal(html.match(/<h3>/g).length, 1); // R33a: the part heading is the only h3, tags are relative
   assert.ok(at('Debt is <strong>mostly secured</strong>. Second line.') > at('Debt structure') && at('Term loan') > at('mostly secured') && at('Closing remark.') > at('Revolver'));
   assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
-  assert.ok(html.includes('aria-label="Handoff row, line 72"') && html.includes('aria-label="Handoff row, line 75"') && html.includes('aria-label="Handoff row, line 77"') && html.includes('aria-label="Handoff row, line 79"') && html.includes('aria-label="Handoff row, line 82"'));
-  assert.ok(html.includes('class="table-card"') && !html.includes('<details'));
-  const page = r.moduleReport(OUT);
-  assert.ok(page.indexOf('id="findings"') < page.indexOf('id="analysis"') && page.indexOf('id="analysis"') < page.indexOf('id="limits"'));
+  for (const line of [72, 75, 77, 79, 82]) assert.ok(html.includes(`aria-label="Handoff row, line ${line}"`), line);
+  assert.ok(html.includes('class="table-card"') && !html.includes('K.'));
 });
 
-test('a section fully consumed by the parts above does not appear in Analysis; consumed blocks of a mixed section are dropped', () => {
-  const html = report().reportAnalysis(OUT);
-  assert.ok(!html.includes('Reader summary') && !html.includes('Chart data') && !html.includes('Liquidity table'));
-  assert.ok(html.includes('No further analysis sections in this handoff.'));
-  const mixed = { heading: 'Findings extra', level: 2, line: 90, blocks: [table(92, ['Finding', 'Creditor impact', 'Confidence'], [[93, 'Consumed claim.', 'x', 'High']]), { type: 'text', line: 95, text: 'Kept note.' }] };
-  const out = report({ sections: [...SECTIONS, mixed] }, [...NARRATIVE_MODULES.slice(0, 2), ['extra', 'Findings extra', ['Findings extra']], ...NARRATIVE_MODULES.slice(4)]).reportAnalysis(OUT);
-  assert.ok(out.includes('Findings extra') && out.includes('Kept note.') && !out.includes('Consumed claim.'));
+test('the parts come in the ruled order on the page', () => {
+  const page = report().moduleReport(OUT);
+  const at = id => page.indexOf(`id="${id}"`);
+  for (let i = 1; i < NINE.length; i++) assert.ok(at(NINE[i - 1]) < at(NINE[i]), `${NINE[i - 1]} before ${NINE[i]}`);
 });
 
-test('the audit list no longer lists a section shown in Analysis', () => {
-  const audit = withNarrative().reportAudit(OUT);
-  assert.ok(!audit.includes('Debt structure') && !audit.includes('Sub topic'));
-  assert.ok(audit.includes('Sources') && audit.includes('Technical audit') && audit.includes('Liquidity table')); // consumed-only and cut-table sections stay
+test('a section placed consumed, audit or limits is not drawn in Analysis or Reference', () => {
+  const r = report();
+  for (const html of [r.reportAnalysis(OUT), r.reportReference(OUT)]) for (const name of ['Reader summary', 'Chart data', 'Extra notes', 'Sources', 'Reviewer note.']) assert.ok(!html.includes(name), name);
 });
 
-test('a handoff with no output still reads one sentence on the canvas', () => {
+test('a handoff with no output still reads one sentence on the canvas, and no part prints an empty-part sentence', () => {
   const text = read('views.js');
   assert.equal([...text.matchAll(/No output found/g)].length, 1);
-  assert.ok(text.includes('analysis:\'No further analysis sections in this handoff.\''));
+  assert.ok(!text.includes('No further analysis sections') && !text.includes('part-empty') && !text.includes('EMPTY_PART'));
+  for (const gone of ['function sectionGroups', 'analysisSections', 'limitsGroup', 'analysisBlocks', 'EVIDENCE_HEADING', 'isEvidenceSection']) assert.ok(!text.includes(gone), gone);
 });
 
 test('the shell landmark does not take the id of the Analysis part', () => {
@@ -494,50 +613,51 @@ test('the shell landmark does not take the id of the Analysis part', () => {
   assert.ok(!read('screen.js').includes("$('analysis')"));
 });
 
-test('R31: a section under a Sources parent, front matter and the request stay out of Analysis and in the audit list', () => {
+test('R31: sections the store placed audit stay out of every part and in the audit list', () => {
   const extra = [
-    { heading: 'Front matter', level: 1, line: 1, blocks: [{ type: 'text', line: 2, text: 'title: x' }] },
-    { heading: 'Request', level: 2, line: 3, blocks: [{ type: 'text', line: 4, text: 'asked' }] },
-    { heading: 'Sources', level: 2, line: 100, blocks: [{ type: 'text', line: 101, text: 'Parent text.' }] },
-    { heading: 'Alpha register', level: 3, line: 102, blocks: [table(103, ['Name', 'Hash'], [[104, 'K', 'abc']])] },
-    { heading: 'Beta analysis', level: 2, line: 110, blocks: [{ type: 'text', line: 111, text: 'Real analysis.' }] },
+    sec('Front matter', 1, 1, 'audit', [text(2, 'title: x')]),
+    sec('Request', 2, 3, 'audit', [text(4, 'asked')]),
+    sec('Sources', 2, 100, 'audit', [text(101, 'Parent text.')]),
+    sec('Alpha register', 3, 102, 'audit', [table(103, ['Name', 'Hash'], [[104, 'K', 'abc']])]),
+    view('Beta analysis', 110, [text(111, 'Real analysis.')]),
   ];
-  const mods = [['front', 'Front matter', ['Front matter']], ['req', 'Request', ['Request']], ['alpha', 'Alpha register', ['Alpha register']], ['beta', 'Beta analysis', ['Beta analysis']], ['srcs', 'Sources', ['Sources']], ['gaps', 'Gaps & limitations', ['Gaps']]];
-  const r = report({ sections: [...SECTIONS, ...extra] }, mods);
-  const html = r.reportAnalysis(OUT), audit = r.reportAudit(OUT);
-  // Answer key from the fixture: only Beta analysis is analysis; the register's parent heading is Sources.
-  assert.ok(html.includes('Beta analysis') && html.includes('Real analysis.'));
-  for (const name of ['Front matter', 'Request', 'Alpha register', 'Sources', 'Parent text.']) assert.ok(!html.includes(name), name);
+  const mods = [['front', 'Front matter', ['Front matter']], ['req', 'Request', ['Request']], ['alpha', 'Alpha register', ['Alpha register']], ['beta', 'Beta analysis', ['Beta analysis']], ['srcs', 'Sources', ['Sources']]];
+  const r = report({ sections: extra, charts: [], summary: null }, mods);
+  const page = r.moduleReport(OUT), audit = r.reportAudit(OUT);
+  assert.ok(r.reportAnalysis(OUT).includes('Real analysis.'));
   for (const name of ['Front matter', 'Request', 'Alpha register', 'Sources']) assert.ok(audit.includes(name), name);
   assert.ok(!audit.includes('Beta analysis'));
+  for (const name of ['Parent text.', 'asked', 'abc']) assert.ok(!page.replace(audit, '').includes(name), name);
 });
 
-test('R32: Analysis sections follow the handoff line order, not the group order', () => {
-  const sections = [
-    { heading: 'T2G.1 — Later group', level: 2, line: 140, blocks: [{ type: 'text', line: 141, text: 'Second by line.' }] },
-    { heading: 'Plain earlier', level: 2, line: 120, blocks: [{ type: 'text', line: 121, text: 'First by line.' }] },
-  ];
-  // CP-2E puts T2G. sections in 'ESG & credit effects' and the rest in 'Credit conclusion'; the module list names ESG first.
-  const mods = [['esg', 'T2G.1 — Later group', ['T2G.1 — Later group']], ['plain', 'Plain earlier', ['Plain earlier']]];
-  const html = report({ module: 'CP-2E', sections, summary: null, charts: [] }, mods).reportAnalysis(OUT);
+test('R32: Analysis follows the handoff order of the sections it is given', () => {
+  const sections = [view('Plain earlier', 120, [text(121, 'First by line.')]), view('T2G.1 — Later group', 140, [text(141, 'Second by line.')])];
+  const html = report({ module: 'CP-2E', sections, summary: null, charts: [] }, [['plain', 'Plain earlier', ['Plain earlier']], ['esg', 'T2G.1 — Later group', ['T2G.1 — Later group']]]).reportAnalysis(OUT);
   assert.ok(html.indexOf('First by line.') > 0 && html.indexOf('First by line.') < html.indexOf('Second by line.'));
 });
 
-test('R31a: the audit set by heading, answer key from the ruling', () => {
-  const toAudit = ['Exact source register', 'Exact relied-on source register', 'Supplied handoff', 'Supplied handoffs', 'All supplied current handoffs and lineage', 'Source-context assessments', 'Front matter', 'Request'];
-  const toAnalysis = ['Resource bridge and competing uses', 'Source-gate reasoning and strongest contrary evidence', 'Financing-source sufficiency boundary', 'Calculation conventions and lineage', 'Exact arithmetic and financial-lineage trace'];
-  const all = [...toAudit, ...toAnalysis];
-  const sections = all.map((heading, i) => ({ heading, level: 3, line: 200 + 10 * i, blocks: [{ type: 'text', line: 201 + 10 * i, text: `Body ${i}.` }] }));
-  const r = report({ sections }, all.map((h, i) => [`s${i}`, h, [h]]));
-  const html = r.reportAnalysis(OUT);
-  for (const h of toAnalysis) assert.ok(html.includes(`>${h}</h4>`), `${h} should be Analysis`);
-  for (const h of toAudit) assert.ok(!html.includes(`>${h}</h4>`), `${h} should be audit`);
+test('the page does not re-judge a heading: a view-placed "Exact source register" is drawn, an audit-placed "Resource bridge" is not', () => {
+  const sections = [view('Exact source register', 200, [text(201, 'Drawn.')]), sec('Resource bridge and competing uses', 3, 210, 'audit', [text(211, 'Listed.')])];
+  const html = report({ sections }, [['a', 'Exact source register', ['Exact source']], ['b', 'Resource bridge', ['Resource bridge']]]).reportAnalysis(OUT);
+  assert.ok(html.includes('>Exact source register</h4>') && html.includes('Drawn.') && !html.includes('Resource bridge') && !html.includes('Listed.'));
 });
 
 test('R33a: heading tags are relative and capped at h6; the style sheet sets h4, h5 and h6 at 11px or more', () => {
-  const sections = [3, 4, 5, 6, 7].map((level, i) => ({ heading: `Level ${level}`, level, line: 300 + 10 * i, blocks: [{ type: 'text', line: 301 + 10 * i, text: 'x' }] }));
+  const sections = [3, 4, 5, 6, 7].map((level, i) => sec(`Level ${level}`, level, 300 + 10 * i, 'view', [text(301 + 10 * i, 'x')]));
   const html = report({ sections }, sections.map((s, i) => [`l${i}`, s.heading, [s.heading]])).reportAnalysis(OUT);
   assert.deepEqual([...html.matchAll(/<(h[3-6])>(Analysis|Level \d)</g)].map(m => m[1]), ['h3', 'h4', 'h5', 'h6', 'h6', 'h6']);
   const css = read('screen.css');
   for (const tag of ['h4', 'h5', 'h6']) assert.ok(css.includes(`.analysis-section>${tag}{font-size:`), tag);
+});
+
+test('a route into a closed part opens it: scrollToPart opens every details that is or holds the target', () => {
+  const src = read('screen.js');
+  const start = src.indexOf('function scrollToPart('), end = src.indexOf('function renderRoute(');
+  assert.ok(start >= 0 && end > start);
+  const node = (tag, parent) => ({ tag, parent, open: false, matches(sel) { return sel === 'details' && this.tag === 'details'; }, closest(sel) { for (let n = this; n; n = n.parent) if (n.matches(sel)) return n; return null; }, getBoundingClientRect: () => ({ top: 0 }) });
+  const outer = node('details', null), inner = node('details', outer), target = node('div', inner);
+  inner.parentElement = outer; target.parentElement = inner;
+  const content = { scrollTop: 0, getBoundingClientRect: () => ({ top: 0 }) };
+  new Function('$', `${src.slice(start, end)}; scrollToPart('s-9');`)(id => (id === 'content' ? content : id === 's-9' ? target : null));
+  assert.ok(inner.open && outer.open && !target.open);
 });

@@ -292,7 +292,8 @@ function renderNavigator(module) {
       return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" title="${esc(id)}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
     }).join('')}</details>`;
   }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
-  const analytical=!module.startsWith('W-'),outline=current.output||(Object.hasOwn(modules,module)&&module);
+  // Only a module report has parts to list; Run activity (CP-OS) has no output and no outline.
+  const analytical=!module.startsWith('W-'),outline=current.output;
   $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||!analytical||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${analytical&&!query&&outline?`<div class="outline-heading">On this page</div>${outlineMarkup(outline)}`:''}`;
   nameCodes($('module-list'));
   document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Analysis & tools'} <span>${count}</span>`;
@@ -320,14 +321,16 @@ function parseRoute() {
   if(!context&&!appDestinations.has(module)&&module!=='W-Reports')module='W-Library';
   const output=resolveOutput(module,context,params.get('o'));
   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
-  const selected=sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===first)||sections[0];
+  // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
+  const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
+  const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===first)||sections[0];
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
   const permitted=item&&item.run===context&&(item.output===output||module==='W-Calendar'||module==='W-Overview');
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
   // A chip index names one of the key's chips, and `gaps` its citations without a page; one that is not there opens the row alone.
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':null;
-  return {module,output,file,section:selected[0],context,evidence:permitted?key:null,chip:permitted?chip:null};
+  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
@@ -478,11 +481,15 @@ function contextPrefix({module,context}) {
 const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 // The reading position of a page: a module report is one page whatever part is scrolled to.
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
-// Scroll the canvas to one of the report's parts; the head is the top. Unknown parts never reach here: parseRoute maps them to the head.
+// Scroll the canvas to one of the report's parts or sections; the head is the top. Unknown names never reach here: parseRoute maps them to the head.
+// Every closed <details> that is or holds the target is opened first, so a route into a folded part shows what it names.
 function scrollToPart(part) {
   const content=$('content'),target=part==='head'?null:$(part);
-  if(part==='audit'&&target)target.open=true;
+  if(target)openFolds(target);
   content.scrollTop=target?Math.max(0,content.scrollTop+target.getBoundingClientRect().top-content.getBoundingClientRect().top-10):0;
+}
+function openFolds(target) {
+  for(let fold=target.closest('details');fold;fold=fold.parentElement?.closest('details'))fold.open=true;
 }
 function renderRoute() {
   const next=parseRoute(), previous=current;
@@ -547,7 +554,15 @@ function renderRoute() {
     const link=focused?.classList.contains('section-item')&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
     if(link)link.focus({preventScroll:true});
   }
-  if(next.evidence) showInspector(next.evidence,next.chip);
+  if(next.evidence) {
+    // A route to a row inside a folded part (a link, a reload) opens the part holding its trigger; Esc then returns to that trigger.
+    const trigger=reportPage(next)?($(next.section)||$('content')).querySelector(`.chip[data-evidence="${CSS.escape(next.evidence)}"]`)||$('content').querySelector(`.chip[data-evidence="${CSS.escape(next.evidence)}"]`):null;
+    if(trigger) {
+      openFolds(trigger);
+      if(!returnTrigger?.isConnected){returnTrigger=trigger;returnContentScroll=$('content').scrollTop;}
+    }
+    showInspector(next.evidence,next.chip);
+  }
   else {
     $('inspector').hidden=true; $('workbench').classList.remove('has-evidence');
     document.querySelectorAll('.source-selected').forEach(el=>el.classList.remove('source-selected'));
@@ -561,7 +576,7 @@ function renderRoute() {
   if(hashed&&!changed)updateLibrary(true);
   if(next.module==='W-Library')writeLibraryHash();
   const named=contexts[next.context]&&!appDestinations.has(next.module)?`${contexts[next.context].title}, ${contexts[next.context].run}, `:'';
-  $('announcement').textContent=`${named}${moduleNames[next.module]}, ${namedText(navigationSections(next.module,next.context,next.output).find(s=>s[0]===next.section)[1])}${next.evidence?', evidence open':''}`;
+  $('announcement').textContent=`${named}${moduleNames[next.module]}, ${namedText(next.label)}${next.evidence?', evidence open':''}`;
 }
 document.addEventListener('change',event=>{
   if(event.target.matches('[data-library-filter]'))readLibraryFilters();

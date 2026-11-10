@@ -210,10 +210,21 @@ function readerCharts(id,section) {
   return (data[id].charts||[]).filter(c=>lines.has(c.table)).map(c=>readerChart(id,c)).join('');
 }
 
-// ---- The module report: seven parts in one scroll. Python resolves every citation into window.CREDIT_OS_DATA.chips;
-// nothing below infers a page, a class or a date.
-const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['analysis','Analysis'],['limits','Limits & monitoring'],['audit','Evidence & audit']];
-const EMPTY_PART={'bottom-line':'No bottom line in this handoff.',numbers:'No chart data or key-number table in this handoff.',findings:'No findings table in this handoff.',analysis:'No further analysis sections in this handoff.',limits:'No gap, limit or monitoring section in this handoff.'};
+// ---- The module report: nine parts in one scroll, those the handoff has. Python resolves every citation into window.CREDIT_OS_DATA.chips
+// and places every section (data[id].placement, parallel to data[id].sections); nothing below infers a page, a class, a date or a placement.
+const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['analysis','Analysis'],['limits','Limits & monitoring'],['reference','Statements and registers'],['calculations','Calculations'],['audit','Evidence & audit']];
+const HANDOFF_TEXT=['handoff-text','Full handoff text'];
+// A leading method code (R36) is dropped from a displayed heading and kept in its title.
+const METHOD_CODE=/^([A-Z][A-Z0-9]*\.[A-Z]?\d+|[a-z0-9]+(\.[a-z0-9_]+)+)\s+—\s+/;
+function headingView(heading,tag) {
+  const short=heading.replace(METHOD_CODE,'');
+  return `<${tag}${short===heading?'':` title="${esc(plain(heading))}"`}>${rich(short)}</${tag}>`;
+}
+// The sections the store placed here that have something to draw, in handoff order.
+const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
+const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
+// The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
+const drawnAnchors=id=>new Set(DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)).map(section=>`s-${section.line}`));
 const SHORT_CODES={'CP-1':'C1','CP-1A':'A','CP-0':'C0','CP-2':'C2'};
 const shortCode=module=>SHORT_CODES[module]||String(module).replace(/^CP-/,'');
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
@@ -259,12 +270,9 @@ const cellView=(cell,numeric)=>{
   return `<td${numeric?' class="num"':''}>${rich(text)}</td>`;
 };
 const isFindingsTable=b=>b.type==='table'&&b.headers[0]==='Finding'&&b.headers[1]==='Creditor impact';
-// The sections of the analysis groups (neither limits nor evidence, whatever the module names them), in handoff order.
-const analysisSections=id=>sectionGroups(id).filter(([group])=>group!=='Limits & monitoring'&&group!=='Evidence & audit').flatMap(([,sections])=>sections);
-// The first reader table of the findings-and-analysis sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).
+// The first table of the reference sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).
 function keyNumbersChoice(id) {
-  for(const section of analysisSections(id).flatMap(([sectionId])=>sectionData(id,sectionId))) {
-    if(section.heading.startsWith('Chart data'))continue;
+  for(const section of drawn(id,'reference')) {
     for(const block of section.blocks) {
       if(block.type!=='table'||isFindingsTable(block)||block.headers[0]==='Bottom line')continue;
       const numeric=block.headers.map((_,c)=>numericColumn(block,c));
@@ -280,29 +288,7 @@ function keyNumbers(id) {
   const pick=keyNumbersChoice(id);
   if(!pick)return '';
   const {section,block,numeric,columns,rows}=pick;
-  return `${sourceTable(id,section.heading,block,numeric,columns,rows)}${block.rows.length>rows.length?`<p class="table-more">${block.rows.length-rows.length} more rows are under Evidence &amp; audit.</p>`:''}</div>`;
-}
-// What parts 2 to 4 print: the bottom-line table, the findings tables, every chart-data table and the key-numbers table. The key-numbers section whose table is cut stays in the audit list, where the rest of its rows are.
-const isBottomLine=b=>b.type==='table'&&b.headers[0]==='Bottom line';
-// Evidence & audit by heading (R31a): the section's own heading or any ancestor heading, found by walking up the levels of the handoff.
-const EVIDENCE_HEADING=/^front matter$|^request$|^sources?$|source register|source-context|supplied (current )?handoffs?|technical audit/i;
-function isEvidenceSection(id,section) {
-  const all=data[id].sections;
-  let level=section.level;
-  if(EVIDENCE_HEADING.test(plain(section.heading).trim()))return true;
-  for(let i=all.indexOf(section)-1;i>=0;i--) {
-    if(!(all[i].level<level)||all[i].level<2)continue; // a level-1 heading is the title or the front matter, not a parent section
-    if(EVIDENCE_HEADING.test(plain(all[i].heading).trim()))return true;
-    level=all[i].level;
-  }
-  return false;
-}
-function analysisBlocks(id) {
-  const pick=keyNumbersChoice(id);
-  const consumed=(section,block)=>block.type==='table'&&(isBottomLine(block)||isFindingsTable(block)||section.heading.startsWith('Chart data')||block===pick?.block);
-  const items=analysisSections(id).flatMap(([sectionId])=>sectionData(id,sectionId).filter(section=>!isEvidenceSection(id,section)).map(section=>({sectionId,section,blocks:section.blocks.filter(block=>!consumed(section,block))}))).filter(item=>item.blocks.length);
-  // Handoff order (R32), whatever the groups.
-  return items.sort((a,b)=>a.section.line-b.section.line).map(item=>({sectionId:item.sectionId,sections:[{section:item.section,blocks:item.blocks}]}));
+  return `${sourceTable(id,section.heading,block,numeric,columns,rows)}${block.rows.length>rows.length?`<p class="table-more">${block.rows.length-rows.length} more rows are under Statements and registers.</p>`:''}</div>`;
 }
 const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div>';
 function reportHead(id) {
@@ -311,54 +297,88 @@ function reportHead(id) {
   // No catalogue field says "accepted"; a run shows a checklist only when one is recorded (none is today), and that is not acceptance.
   const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===ctx.folder);
   const acceptance=record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
+  // The front matter's committee_status, verbatim, as the store gives it; none declared draws nothing.
+  const declared=out.state.declared==null?'':`<span class="badge badge-gray">${esc(out.state.declared)}</span>`;
   const count=out.sections.length;
-  return `<div class="module-head" id="head"><div><h2 title="${esc(module)}">${esc(moduleNames[module])}</h2><div class="sub"><span>${esc(module)}</span><span>·</span><span>Current methodology</span><span>·</span><span>Handoff <code>${esc(out.source.split('/').pop())}</code> · ${plural(count,'section')}</span></div></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${meta}${usedIn}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  return `<div class="module-head" id="head"><div><h2 title="${esc(module)}">${esc(moduleNames[module])}</h2><div class="sub"><span>${esc(module)}</span><span>·</span><span>Current methodology</span><span>·</span><span>Handoff <code>${esc(out.source.split('/').pop())}</code> · ${plural(count,'section')}</span></div></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${declared}${meta}${usedIn}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
-  if(!quoted)return `<p class="part-empty" id="bottom-line">${EMPTY_PART['bottom-line']}</p>`;
+  if(!quoted)return '';
   const facts=summary?`<dl><span class="row"><dt>Confidence</dt><dd>${esc(summary.confidence)}</dd></span><span class="row"><dt>Main limitation</dt><dd>${rich(summary.limitation)}</dd></span></dl>`:'';
   return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}">${esc(source.split('/').pop())} · line ${quoted.line}</button></div></div>`;
 }
 function reportNumbers(id) {
   const charts=(data[id].charts||[]).map(c=>`<div class="panel-card">${readerChart(id,c,true)}${LEGEND}</div>`).join(''),table=keyNumbers(id);
-  return `<section class="part" id="numbers"><h3>Key numbers</h3>${charts||table?charts+table:`<p class="part-empty">${EMPTY_PART.numbers}</p>`}</section>`;
+  return charts||table?`<section class="part" id="numbers"><h3>Key numbers</h3>${charts+table}</section>`:'';
 }
 function reportFindings(id) {
   const articles=data[id].sections.flatMap(s=>s.blocks).filter(isFindingsTable).flatMap(block=>{
     const confidence=block.headers.indexOf('Confidence');
     return block.rows.map(row=>`<article class="finding"><div><h4>${rich(row.cells[0])}</h4><p class="impact"><b>Creditor impact</b>${rich(row.cells[1])}</p></div><aside>${confidence<0?'':`<span class="conf">Confidence<span class="pill">${esc(plain(row.cells[confidence]??''))}</span></span>`}${chipsMarkup(`${id}:${row.line}`)}</aside></article>`);
   });
-  return `<section class="part" id="findings"><h3>Findings</h3>${articles.join('')||`<p class="part-empty">${EMPTY_PART.findings}</p>`}</section>`;
+  return articles.length?`<section class="part" id="findings"><h3>Findings</h3>${articles.join('')}</section>`:'';
 }
-function reportAnalysis(id) {
-  const shown=analysisBlocks(id).flatMap(({sections})=>sections),top=Math.min(...shown.map(({section})=>section.level));
-  const body=shown.map(({section,blocks})=>{
-    // R33a: relative to the shallowest analysis section (h4), one step per level, capped at h6; the part heading stays the only h3.
+// Sections drawn whole, in the order given. Heading tags are relative to the shallowest section (R33a), one step per level, capped at h6; the part heading stays the only h3.
+function readingSections(id,sections) {
+  const top=Math.min(...sections.map(section=>section.level));
+  return sections.map(section=>{
     const tag='h'+Math.min(6,4+(section.level-top||0));
-    return `<div class="analysis-section"><${tag}>${rich(section.heading)}</${tag}>${blocks.map(block=>{
+    return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,tag)}${section.blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
       return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))} ${chipsMarkup(`${id}:${block.line}`)}</p>`;
     }).join('')}</div>`;
-  });
-  return `<section class="part" id="analysis"><h3>Analysis</h3>${body.join('')||`<p class="part-empty">${EMPTY_PART.analysis}</p>`}</section>`;
+  }).join('');
 }
-function limitsGroup(id) {return sectionGroups(id).find(([group])=>group==='Limits & monitoring')?.[1]||[];}
+function reportAnalysis(id) {
+  const sections=drawn(id,'view');
+  return sections.length?`<section class="part" id="analysis"><h3>Analysis</h3>${readingSections(id,sections)}</section>`:'';
+}
+// A closed part: nothing is cut, it opens to the whole sections (a hash route or a chip into it opens it, screen.js).
+const fold=(anchor,summary,body)=>`<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}${esc(summary)}</summary>${body}</details>`;
+function reportReference(id) {
+  const sections=drawn(id,'reference');
+  if(!sections.length)return '';
+  const tables=sections.flatMap(section=>section.blocks).filter(block=>block.type==='table');
+  return fold('reference',`Statements and registers · ${plural(tables.length,'table')} · ${plural(tables.reduce((n,block)=>n+block.rows.length,0),'row')}`,readingSections(id,sections));
+}
+function reportCalculations(id) {
+  const sections=drawn(id,'calculations');
+  return sections.length?fold('calculations',`Calculations · ${data[id].words.calculations} words`,readingSections(id,sections)):'';
+}
 function reportLimits(id) {
   const line=(key,html)=>`<p>${html} ${chipsMarkup(key)}</p>`;
-  const cards=limitsGroup(id).map(([sectionId,label])=>`<div><h4>${esc(label)}</h4>${sectionData(id,sectionId).flatMap(s=>s.blocks).flatMap(block=>block.type==='table'?block.rows.map(row=>line(`${id}:${row.line}`,`<strong>${rich(row.cells[0])}</strong> ${row.cells.slice(1).map(rich).join(' · ')}`)):[line(`${id}:${block.line}`,rich(block.text.replace(/\n/g,' ')))]).join('')}</div>`);
-  return `<section class="part" id="limits"><h3>Limits &amp; monitoring</h3>${cards.length?`<div class="limits">${cards.join('')}</div>`:`<p class="part-empty">${EMPTY_PART.limits}</p>`}</section>`;
+  const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(row=>line(`${id}:${row.line}`,`<strong>${rich(row.cells[0])}</strong> ${row.cells.slice(1).map(rich).join(' · ')}`)):[line(`${id}:${block.line}`,rich(block.text.replace(/\n/g,' ')))]).join('')}</div>`);
+  return cards.length?`<section class="part" id="limits"><h3>Limits &amp; monitoring</h3><div class="limits">${cards.join('')}</div></section>`:'';
 }
-// Every section the parts above do not print in full, as a line-numbered list; a section's content is drawn when it is opened (screen.js).
+// The sections no part draws, as a line-numbered list; a section's content is drawn when it is opened (screen.js). An entry is listed when a section it holds
+// is placed audit or consumed; the `audit` entry is always listed, for the original-output block it opens with.
 function reportAudit(id) {
-  const cut=keyNumbersChoice(id),keptForRows=cut&&cut.block.rows.length>cut.rows.length?cut.section:null;
-  const shown=new Set([...limitsGroup(id).map(s=>s[0]),...analysisBlocks(id).filter(({sections})=>!sections.some(({section})=>section===keptForRows)).map(item=>item.sectionId)]),rest=modules[id].sections.filter(s=>!shown.has(s[0]));
-  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(data[id].sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${rest.map(([sectionId,label])=>{
+  const out=data[id],kept=['audit','consumed'];
+  const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])));
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
   }).join('')}</ul></details>`;
 }
-const moduleReport=id=>reportHead(id)+reportBand(id)+reportNumbers(id)+reportFindings(id)+reportAnalysis(id)+reportLimits(id)+reportAudit(id);
+// A module that reaches no conclusion (established false) keeps its head, band, findings and limits; the reading and reference parts fold under one closed disclosure.
+function reportParts(id) {
+  const out=data[id],folded=out.state.established===false,label=anchor=>REPORT_PARTS.find(part=>part[0]===anchor)[1];
+  const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
+  const {view,reference:referenceWords,calculations:calculationWords}=out.words;
+  const parts=[['head',reportHead(id)],['bottom-line',reportBand(id)]];
+  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
+  else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations]);
+  parts.push(['audit',reportAudit(id)]);
+  return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
+}
+const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
+// What the outline and the section list show: each present part's anchor and label. Presence depends on the data only, so it is built once per output.
+const outlineCache=new Map();
+function reportOutline(id) {
+  if(!outlineCache.has(id))outlineCache.set(id,reportParts(id).map(([anchor,label])=>[anchor,label,[]]));
+  return outlineCache.get(id);
+}
 function galleryVisual(module,section) {
   const out=data[module],v=out.visual;
   if(!v||!sectionData(module,section).some(s=>s.blocks.some(b=>b.line===v.table)))return '';
@@ -400,24 +420,9 @@ function routeHref(module,section,key=null,context=current?.context,file=lastFil
   // A report id is a folder name: encoded, it can hold quotes, angle brackets, ? or # and still route back.
   return `#${encodeURIComponent(module)}/${encodeURIComponent(section)}${params.size?'?'+params:''}`;
 }
-function sectionGroups(id) {
-  const result=new Map(),module=data[id].module;
-  for(const section of modules[id].sections) {
-    const [sectionId,label,prefixes]=section,heading=prefixes.join(' ');
-    let group='Findings & analysis';
-    if(sectionId==='audit'||/^(Sources|Scope &|Evidence &|Definitions & periods|Source register)/.test(label))group='Evidence & audit';
-    else if(/gap|limit|monitor|follow-up|readiness/i.test(label))group='Limits & monitoring';
-    else if(module==='CP-2E')group=heading.includes('T2G.')?'ESG & credit effects':heading.includes('T2F.')?'Rates, FX & hedges':'Credit conclusion';
-    else if(module==='CP-1D')group=heading.includes('T1E.')?'Debt & obligations':'Earnings quality';
-    else if(module==='CP-5')group=heading.includes('T5B.')?'Evidence lineage':'Validation & remediation';
-    if(!result.has(group))result.set(group,[]);
-    result.get(group).push(section);
-  }
-  return [...result];
-}
 function outlineMarkup(id) {
   const module=data[id].module||id;
-  return `<nav class="section-outline" aria-label="On this page"><ol>${REPORT_PARTS.map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
+  return `<nav class="section-outline" aria-label="On this page"><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
 }
 function unavailableView(module) {
   const ctx=contexts[current.context];
@@ -461,7 +466,7 @@ function navigationSections(module,context,output=defaultOutput(module,context))
   if(module==='W-Evidence')return [['sources','Retained outputs',[]]];
   if(module==='W-Reports')return reportSections(context);
   if(module==='W-Forecast')return forecastSections(context);
-  if(isAnalytical(module)&&output)return REPORT_PARTS.map(([part,label])=>[part,label,[]]);
+  if(isAnalytical(module)&&output)return reportOutline(output);
   if(Object.hasOwn(modules,module))return modules[module].sections;
   return [['status',moduleEntry(module,context)?.outputs.length?'Choose a saved output':availability(module,context),[]]];
 }

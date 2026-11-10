@@ -158,7 +158,8 @@ def report_library(tmp_path: Path) -> Path:
         "run-a",
         as_of="2024-12-31",
         cp0_extra=inventory_text(digest),
-        cp1_extra=CITED + REPORT_ROWS,
+        # Under Findings: the tables are Reference, not audit (R39).
+        cp1_findings=CITED + REPORT_ROWS,
     )
     (run / "source-text").mkdir()
     (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
@@ -204,8 +205,7 @@ def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_retur
         "run-a",
         as_of="2024-12-31",
         cp0_extra=inventory_text(digest),
-        cp1_extra=CITED + REPORT_ROWS,
-        cp1_findings=UNKEYED,
+        cp1_findings=CITED + REPORT_ROWS + UNKEYED,
     )
     (run / "source-text").mkdir()
     (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
@@ -216,11 +216,12 @@ def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_retur
     dom, console = visit(page, "#CP-1/head?c=run-a")
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert re.fullmatch(r"\d+ citations? without a page", seen["count"]), seen
+    # The count under the UNKEYED paragraph (two citations), not the first count on the page (one).
+    assert seen["count"] == "2 citations without a page", seen
     assert seen["verified"] >= 1 and seen["singleGaps"] == 0
     opened = seen["open"]
     assert opened["hidden"] is False and "chip=gaps" in opened["hash"]
-    assert opened["items"] == opened["expected"] >= 1
+    assert opened["items"] == opened["expected"] == 2
     assert opened["focusInInspector"] is True
     assert seen["escaped"] == {
         "hidden": True,
@@ -229,10 +230,11 @@ def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_retur
     }
 
 
-# A narrative section and a register wider than the canvas, appended to the CP-1 handoff.
+# A narrative section and a register wider than the canvas, inserted under Findings. A section with
+# a table is Reference, so the register sits in the closed Statements and registers part.
 LONG = "A long note that keeps the register wider than the canvas"
 ANALYSIS_ROWS = f"""
-## Credit analysis
+### Credit analysis
 
 ### Debt structure
 
@@ -246,34 +248,36 @@ Debt is mostly secured, K, page:123 states the figure.
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_analysis_part_fits_the_page(tmp_path, width):
+def test_the_reference_part_fits_the_page(tmp_path, width):
     digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
     run = make_run(
         tmp_path,
         "run-a",
         as_of="2024-12-31",
         cp0_extra=inventory_text(digest),
-        cp1_extra=CITED + REPORT_ROWS + ANALYSIS_ROWS,
+        cp1_findings=ANALYSIS_ROWS,
+        cp1_extra=CITED + REPORT_ROWS,
     )
     (run / "source-text").mkdir()
     (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
     update_library.update_library(tmp_path)
-    dom, console = visit(tmp_path / "library/index.html", "#CP-1/analysis?c=run-a", width)
+    dom, console = visit(tmp_path / "library/index.html", "#CP-1/reference?c=run-a", width)
     assert console == []
-    found = re.search(r'<section class="part" id="analysis">(.*?)</section>', dom, re.DOTALL)
-    analysis = found[1]
-    assert "Debt structure" in analysis and "Term loan" in analysis and "Call schedule" in analysis
-    assert (
-        analysis.count('class="chip') >= 4
-    )  # Row and page chips on the paragraph and the register.
+    found = re.search(r'<details class="fold" id="reference"[^>]*>(.*?)</details>', dom, re.DOTALL)
+    assert found and re.search(r'<details class="fold" id="reference" open', dom)
+    reference = found[1]
+    assert "Debt structure" in reference and "Term loan" in reference
+    assert "Call schedule" in reference
+    # Row and page chips on the paragraph and the register.
+    assert reference.count('class="chip') >= 4
     probe = Path(__file__).with_name("browser_probe_fits.js")
     (tmp_path / "library/probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page = tmp_path / "library/index.html"
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#CP-1/analysis?c=run-a", width)
+    dom, console = visit(page, "#CP-1/reference?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    # Earlier fixture rows sit under Sources (audit); Debt structure is the one analysis table.
+    # The fixture rows after Sources are audit; Debt structure is the one reference table.
     assert seen["pageFits"] is True and seen["tablesInCards"] is True and seen["tables"] == 1
 
 
@@ -289,12 +293,96 @@ def test_the_overview_chart_values_stay_inside_their_cards(tmp_path, width):
     assert seen["valueInCard"] is True and seen["fits"] is True
 
 
+# A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then
+# Calculations and Gaps sections, inserted before Sources.
+CALC_AND_GAPS = """
+## Calculations
+
+### Net debt trace
+
+Net debt is 1,200 less 3,472, K, page:123 states the figure.
+
+## Gaps
+
+### Coverage gaps
+
+Coupons are not supplied.
+"""
+SECTIONS_PROBE = Path(__file__).with_name("browser_probe_sections.js").read_text(encoding="utf-8")
+
+
+def nine_part_library(tmp_path: Path) -> Path:
+    digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        cp0_extra=inventory_text(digest),
+        cp1_findings=CITED + REPORT_ROWS + UNKEYED + CALC_AND_GAPS,
+    )
+    (run / "source-text").mkdir()
+    (run / "source-text" / SOURCE_NAME).write_bytes(SOURCE_PAGES)
+    update_library.update_library(tmp_path)
+    return tmp_path / "library/index.html"
+
+
+def line_of(tmp_path: Path, heading: str) -> int:
+    handoff = next(tmp_path.glob("runs/run-a/deliveries/*/CP-1.md"))
+    return handoff.read_text().splitlines().index(heading) + 1
+
+
+def probe_route(page: Path, route: str, width: int = 1280) -> dict:
+    (page.parent / "probe.js").write_text(SECTIONS_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, route, width)
+    assert console == []
+    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_nine_part_module_page_has_no_horizontal_overflow(tmp_path, width):
+    seen = probe_route(nine_part_library(tmp_path), "#CP-1/head?c=run-a", width)
+    # Closed on arrival; the page fits with every fold open.
+    assert seen["fits"] is True and seen["referenceOpen"] is False
+
+
+def test_a_section_route_opens_the_reference_part_and_scrolls_to_it(tmp_path):
+    page = nine_part_library(tmp_path)
+    line = line_of(tmp_path, "### Cash table")
+    seen = probe_route(page, f"#CP-1/s-{line}?c=run-a")
+    assert seen["referenceOpen"] is True
+    assert seen["target"] == {"found": True, "inReference": True, "topInside": True}
+    assert seen["inspectorHidden"] is True
+
+
+def test_a_row_route_into_the_reference_part_opens_it_and_escape_returns_to_the_row_chip(tmp_path):
+    page = nine_part_library(tmp_path)
+    row = line_of(tmp_path, "### Cash table") + 4  # The "Cash interest" row of the table.
+    seen = probe_route(page, f"#CP-1/reference?c=run-a&e={row}")
+    assert seen["referenceOpen"] is True and seen["inspectorHidden"] is False
+    assert seen["escaped"]["hidden"] is True and seen["escaped"]["onChip"] is True
+    assert seen["escaped"]["key"].endswith(f"CP-1.md:{row}")
+
+
 def test_the_report_canvas_and_old_section_links(tmp_path):
-    page = report_library(tmp_path)
+    page = nine_part_library(tmp_path)
     dom, console = visit(page, "#CP-1/s54?c=run-a")  # A section id from before the report.
     assert console == []
-    ids = re.findall(r'\bid="(head|bottom-line|numbers|findings|analysis|limits|audit)"', dom)
-    assert ids == ["head", "bottom-line", "numbers", "findings", "analysis", "limits", "audit"]
+    ids = re.findall(
+        r'\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"',
+        dom,
+    )
+    assert ids == [
+        "head",
+        "bottom-line",
+        "numbers",
+        "findings",
+        "analysis",
+        "limits",
+        "reference",
+        "calculations",
+        "audit",
+    ]
     assert (
         "Candidate · not accepted" in dom and "Reader summary" in dom
     )  # The summary stays in the audit list.
