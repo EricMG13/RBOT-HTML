@@ -7,7 +7,7 @@ import logging
 import os
 import tempfile
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -27,6 +27,11 @@ log = logging.getLogger(__name__)
 
 STALLED_AFTER = 3600  # seconds without a new event
 KEPT_ENDED = 200
+# Ended statuses whose launcher the watcher knows is gone: _reap saw it exit, or it never started.
+# "interrupted" is excluded: a run cut short before its process ID was saved may still spend.
+# So is a run with a start time but no process ID, whatever its status: "failed: could not be
+# started" after Popen (watcher start path) leaves a live child; see _shown.
+_SETTLED = frozenset({"finished", "failed", "capped", "rejected"})
 _TIME = "%Y-%m-%dT%H:%M:%SZ"
 _ORDER = {"running": 0, "queued": 1}
 
@@ -78,16 +83,17 @@ def spent(run_dir: Path) -> Decimal | None:
         return None
 
 
-def _events(run_dir: Path, run_id: str) -> list[dict[str, Any]]:
+def _events(run_dir: Path, run_id: str) -> tuple[list[dict[str, Any]], bool]:
+    """The events, and whether the log was read (False: the fail-open below was taken)."""
     try:
         # A valid JSON line need not be an event; only objects are kept.
-        return [e for e in read_events(run_dir / EVENTS) if isinstance(e, dict)]
+        return [e for e in read_events(run_dir / EVENTS) if isinstance(e, dict)], True
     except FileNotFoundError:
-        return []  # no log yet (a prepared run waiting for a slot): nothing to report
+        return [], True  # no log yet (a prepared run waiting for a slot): nothing to report
     except (OSError, ValueError) as error:
         # Documented fail-open (display only): an unreadable log shows every module as waiting.
         log.warning("run %s: event log unreadable (%s); modules shown as waiting", run_id, error)
-        return []
+        return [], False
 
 
 def _age_seconds(
@@ -107,40 +113,67 @@ def _age_seconds(
     return (now.astimezone(UTC) - then).total_seconds()
 
 
-def _entry(layout: Layout, record: Record, now: datetime) -> dict[str, Any]:
+def _entry(layout: Layout, record: Record, now: datetime) -> tuple[dict[str, Any], bool]:
+    """The run's entry, and whether it is complete: a rejected run reads nothing, and any other
+    run is complete only when its folder was visible and neither fail-open below was taken."""
     entry: dict[str, Any] = asdict(record)
     entry["files"] = list(record.files)
     run_dir = layout.runs / record.id
     events: list[dict[str, Any]] = []
+    complete = record.status == "rejected"
     if record.status != "rejected" and run_dir.is_dir():
-        events = _events(run_dir, record.id)
+        events, readable = _events(run_dir, record.id)
         entry["modules"] = module_states(record.pathway, events)
         amount = spent(run_dir)
         entry["spent"] = None if amount is None else money_text(amount)
+        complete = readable and amount is not None
     if record.status == "running":
         age = _age_seconds(record, events, now)
         if age is not None and age > STALLED_AFTER:
             entry["stalled"] = True
+    return entry, complete
+
+
+def _shown(
+    layout: Layout, record: Record, now: datetime, kept: dict[str, tuple[Record, dict[str, Any]]]
+) -> dict[str, Any]:
+    """The entry for a shown run; an ended run with a gone launcher is read once, not per poll."""
+    if record.status not in _SETTLED or (record.started_at and not record.pid):
+        return _entry(layout, record, now)[0]
+    saved = kept.get(record.id)
+    if saved is not None and saved[0] == record:  # any changed field is a miss
+        return saved[1]
+    entry, complete = _entry(layout, record, now)
+    if complete:  # a fail-open result is read again next poll
+        kept[record.id] = (replace(record), entry)
     return entry
 
 
-def snapshot(
+def snapshot(  # noqa: PLR0913 - one more argument: the caller's store of finished entries
     layout: Layout,
     records: Sequence[Record],
     *,
     cap: Decimal,
     now: datetime,
     held: str = "",
+    kept: dict[str, tuple[Record, dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
+    """``kept`` is the caller's store of finished entries (run ID -> record, entry); pass the
+    same dict on every poll to read each ended run once. It is pruned to the runs shown."""
+    store = {} if kept is None else kept
     live = [r for r in records if r.status in _ORDER]
     live.sort(key=lambda r: (_ORDER[r.status], r.id))
     ended = [r for r in records if r.status not in _ORDER]
     ended.sort(key=lambda r: (r.ended_at or r.claimed_at, r.id), reverse=True)
+    shown = [*live, *ended[:KEPT_ENDED]]
+    runs = [_shown(layout, r, now, store) for r in shown]
+    for run_id in store.keys() - {r.id for r in shown}:
+        del store[run_id]
     return {
         "updated": now.astimezone(UTC).strftime(_TIME),
         "cap": str(cap),
         "held": held,
-        "runs": [_entry(layout, r, now) for r in [*live, *ended[:KEPT_ENDED]]],
+        "runs": runs,
     }
 
 

@@ -59,6 +59,25 @@ the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `orig
   activity; runs without charts or with a committee band; whether a keyboard-only reader finds
   the full basis (it is in the selected-run panel, not on focus).
 
+## 2026-11-10 — Refactoring and optimisation sweep (branch `claude/refactor-optimisation-sweep-01c49e`, tip `dc90974`)
+
+Scope: synthetic tests, scratch harnesses and a scratch copy of four retained runs on macOS. No
+provider was called and nothing ran on Windows. Report with all measurements and the open rows:
+`docs/sweeps/2026-11-10/REPORT.md`.
+- Fixed test-first: `state.declared` was `None` for every real handoff (now Blocked 11, Requires
+  More Work 2 on `cpos-tdg-sol-medium-all-001`); the watcher accepted a cap above the ruling's
+  USD 20; an overflowing source-text page number stopped the build; a drive-relative source name
+  was accepted.
+- Measured: watcher step at 200 ended runs 801.6 ms to 2.4 ms (16,200 file opens to 0); library
+  rebuild of four runs 0.777 s to 0.576 s, bytes read 185.4 MB to 65.7 MB, built library identical
+  (build time masked).
+- Gates on `dc90974`, exit 0: the quality gate (0 findings in 19 files); the `checks.yml` pytest
+  command plus the chips and inbox tests (1,392 passed, 7 deselected); node page logic (97 pass).
+- Reviews: per task and whole branch; one Medium (a "failed" run with a live launcher kept its
+  empty activity entry) fixed in `f28523a` and re-reviewed.
+- Not verified: Windows; a live watcher or provider path; the browser tests and the page's
+  rendering of the declared statuses; the full suite; ten open or decision rows listed in the report.
+
 ## 2026-11-10 — Run report Phase A (library Overview and module pages)
 
 Scope: the library page Overview is now a run report (what the run establishes, credit story by
@@ -89,6 +108,24 @@ and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
   below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
   Confidence cell reads as established (neither occurs in retained data); the Overview opened with
   no run context; the branch diff is 2,245 lines against the 800-line cap.
+
+## 2026-11-10 — Inbox: a run started just before a hard kill is adopted (tip `6ea3a9b`)
+
+Scope: macOS, fake and real-shaped launchers, plus the real launcher started without `--live` and
+without a key. No provider was called. Nothing ran on Windows.
+- Change: the launcher writes its own process ID to a per-run file (`DEPLOY_WORKFLOW_PID_FILE`) as
+  its first step and refuses to start if it cannot; the watcher adopts a `running` record with no
+  process ID from that file, and marks it `interrupted` only after 60 s without one. This closes
+  the first item under "Known and left open" in the entry below.
+- Passed on the tip, exit 0: the eight affected pytest files (381 passed, 1 skipped: the paid
+  test); the quality gate, 0 findings in 7 changed files.
+- Review (adversarial): approved, 0 High, 0 Medium, 1 Low fixed test-first (a corrupt process-ID
+  file stopped the watcher). The reviewer killed a real watcher with SIGKILL before the start,
+  after the start and after the file was written: each time one process at most, the live run
+  adopted and one report filed, or `interrupted` after the grace with nothing started.
+- Not verified: Windows (on a virtual environment the process ID in the file may differ from the
+  one the watcher started; the file replace; liveness checks); a launcher that needs more than
+  60 s to reach its first line; process-ID reuse after a reboot; a paid run.
 
 ## 2026-11-10 — Inbox automation (branch `claude/user-journey-2939fb`, tip `f13ce44`)
 

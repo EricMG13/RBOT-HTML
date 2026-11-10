@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -252,3 +253,138 @@ def test_m3_write_retries_a_refused_replace(layout, monkeypatch):
     write(layout, {"runs": []})
     assert refusals == [0]
     assert (layout.engine / "activity.js").read_text().startswith("window.RUN_ACTIVITY=")
+
+
+# -- kept ended runs (S1): an ended run whose launcher is gone is read once --------------------
+
+
+def _ended(layout, run_id="k1", status="finished", **fields):
+    run_dir = layout.runs / run_id
+    append_event(run_dir, "module_started", module="CP-0")
+    append_event(run_dir, "module_accepted", module="CP-0")
+    # A run reaped normally carries the process ID it was started with (and a start time).
+    fields.setdefault("started_at", "2026-11-09T07:00:00Z")
+    fields.setdefault("pid", 4242)
+    return Record(
+        run_id, "credit_snapshot", "f", status, "t", ended_at="2026-11-09T08:00:00Z", **fields
+    )
+
+
+@pytest.fixture
+def reads(monkeypatch):
+    """Counts of the readers that open an event log and a budget journal."""
+    from deploy_workflow.inbox import activity
+
+    counts = {"events": 0, "journal": 0}
+    real_events, real_journal = activity.read_events, activity.read_reservation_snapshot
+
+    def events(*args, **kwargs):
+        counts["events"] += 1
+        return real_events(*args, **kwargs)
+
+    def journal(*args, **kwargs):
+        counts["journal"] += 1
+        return real_journal(*args, **kwargs)
+
+    monkeypatch.setattr(activity, "read_events", events)
+    monkeypatch.setattr(activity, "read_reservation_snapshot", journal)
+    return counts
+
+
+_NOW = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("status", ["finished", "failed", "capped"])
+def test_s1_an_ended_run_is_read_once_and_shows_the_same_entry(layout, reads, status):
+    record = _ended(layout, status=status)
+    Budget(Decimal(20), layout.runs / "k1" / "live").reserve(
+        "c" * 32, Decimal(1), config_id="sol-medium"
+    )
+    kept: dict = {}
+    first = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    before = dict(reads)
+    second = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    assert reads == before and before["events"] == 1
+    assert second == first == snapshot(layout, [record], cap=Decimal(20), now=_NOW)
+
+
+def test_s1_a_run_that_may_still_have_a_launcher_is_always_read_again(layout, reads):
+    # interrupted may still spend (VERIFICATION.md, known and left open); running and queued too.
+    kept: dict = {}
+    for status in ("interrupted", "running", "queued"):
+        record = _ended(layout, run_id=status, status=status, started_at="2026-11-09T11:59:00Z")
+        snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+        before = reads["events"]
+        snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+        assert reads["events"] == before + 1, status
+    assert kept == {}
+
+
+def test_s1_an_unreadable_journal_is_not_kept(layout, reads):
+    record = _ended(layout)
+    (layout.runs / "k1" / "live").write_text("not a folder", encoding="utf-8")
+    kept: dict = {}
+    assert (
+        snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]["spent"] is None
+    )
+    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    assert reads["events"] == 2 and kept == {}
+
+
+def test_s1_an_unreadable_event_log_is_not_kept(layout, reads):
+    record = _ended(layout)
+    (layout.runs / "k1" / "events.jsonl").write_text("{broken\n{}\n", encoding="utf-8")
+    kept: dict = {}
+    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    assert reads["events"] == 2 and kept == {}
+
+
+def test_s1_a_changed_record_is_read_again(layout, reads):
+    record = _ended(layout)
+    kept: dict = {}
+    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    append_event(layout.runs / "k1", "module_started", module="CP-1")
+    assert (
+        dict(
+            snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]["modules"]
+        )["CP-1"]
+        == "waiting"
+    )  # same record: kept
+    changed = replace(record, status="failed", reason="later")
+    entry = snapshot(layout, [changed], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert entry["status"] == "failed" and dict(entry["modules"])["CP-1"] == "running"
+
+
+def test_s1_nothing_is_kept_for_a_record_no_longer_shown(layout):
+    records = [_ended(layout, run_id=f"e{i:03}") for i in range(3)]
+    kept: dict = {}
+    snapshot(layout, records, cap=Decimal(20), now=_NOW, kept=kept)
+    assert set(kept) == {"e000", "e001", "e002"}
+    snapshot(layout, records[:1], cap=Decimal(20), now=_NOW, kept=kept)
+    assert set(kept) == {"e000"}
+
+
+def test_s1_a_failed_run_started_but_with_no_saved_pid_is_read_again(layout, reads):
+    # "failed: could not be started" after Popen leaves a live paid child and no saved pid.
+    record = _ended(layout, status="failed", pid=0, reason="could not be started")
+    kept: dict = {}
+    snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)
+    append_event(layout.runs / "k1", "module_started", module="CP-1")
+    entry = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert dict(entry["modules"])["CP-1"] == "running" and kept == {}
+    never_started = replace(record, started_at="")  # refused before launch: nothing can change
+    snapshot(layout, [never_started], cap=Decimal(20), now=_NOW, kept=kept)
+    assert set(kept) == {"k1"}
+
+
+def test_s1_a_settled_run_whose_folder_was_not_visible_is_read_again(layout):
+    record = _ended(layout)
+    hidden = layout.runs / "k1-away"
+    kept: dict = {}
+    (layout.runs / "k1").rename(hidden)  # the share dropped for one poll
+    first = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert "modules" not in first and kept == {}
+    hidden.rename(layout.runs / "k1")
+    second = snapshot(layout, [record], cap=Decimal(20), now=_NOW, kept=kept)["runs"][0]
+    assert second["modules"] and second["spent"] == "0"

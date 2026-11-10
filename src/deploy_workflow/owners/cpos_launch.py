@@ -32,6 +32,7 @@ from deploy_vii.contracts import PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
+from deploy_workflow import platform_io
 from deploy_workflow.context import CONTEXT_SOURCE_ID, load_context
 from deploy_workflow.handoff_delivery import (
     DeliveryRequest,
@@ -1050,7 +1051,29 @@ def _refresh_library(directory: Path) -> None:
         print(f"Library:  {workspace / 'library' / 'index.html'} ({len(library.runs)} run(s))")
 
 
+def _record_own_pid() -> None:
+    """Write this process's ID to the file the inbox watcher names, atomically (same folder)."""
+    target = os.environ.get("DEPLOY_WORKFLOW_PID_FILE")  # the name inbox.runs sets
+    if not target:
+        return
+    descriptor, temporary = tempfile.mkstemp(prefix=".pid-", suffix=".tmp", dir=Path(target).parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(str(os.getpid()))
+            handle.flush()
+            os.fsync(handle.fileno())
+        platform_io.replace(temporary, target)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    try:  # first: a run that cannot be tracked must not start
+        _record_own_pid()
+    except OSError as error:
+        print(f"cannot record this run's process ID: {error}", file=sys.stderr)
+        return 2
     args = _parser().parse_args(argv)
     try:
         if args.live and args.ruling is None:

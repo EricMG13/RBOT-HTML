@@ -12,6 +12,7 @@ from library_fixtures import make_run, method
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
+
 from deploy_workflow.library_index import Refused
 
 PREFIX = "window.CREDIT_OS_DATA="
@@ -211,3 +212,59 @@ def test_data_js_carries_state_placement_and_words(tmp_path):
     assert output["state"] == {"established": True, "declared": None}
     assert len(output["placement"]) == len(workspace["handoffs"][output["sha256"]])
     assert set(output["words"]) == {"view", "reference", "calculations", "limits", "audit"}
+
+
+def count_work(monkeypatch) -> dict[str, int]:
+    """Wrap each reader of a delivery so one build's view.json reads and delivery checks count."""
+    from credit_os import store
+
+    import deploy_workflow.credit_os_catalogue as cat
+    import deploy_workflow.library_index as index
+
+    counts = {"view_reads": 0, "delivery_checks": 0}
+
+    def reading(real):
+        def read(folder, relative, *rest):
+            counts["view_reads"] += relative.endswith("view.json")
+            return real(folder, relative, *rest)
+
+        return read
+
+    def listing(real):
+        def listed(folder, delivery, name):
+            counts["view_reads"] += name == "view.json"
+            return real(folder, delivery, name)
+
+        return listed
+
+    def checking(real):
+        def check(*args):
+            counts["delivery_checks"] += 1
+            return real(*args)
+
+        return check
+
+    monkeypatch.setattr(index, "read_inside", reading(index.read_inside))
+    monkeypatch.setattr(cat, "read_inside", reading(cat.read_inside))
+    monkeypatch.setattr(store, "listed_bytes", listing(store.listed_bytes))
+    real_check = index.delivery_folder
+    for module in (index, cat):
+        monkeypatch.setattr(module, "delivery_folder", checking(real_check))
+    return counts
+
+
+def test_one_build_verifies_each_delivery_once_and_reads_its_view_twice(tmp_path, monkeypatch):
+    make_run(tmp_path, "run-a")
+    counts = count_work(monkeypatch)
+    update_library.update_library(tmp_path)
+    # The library side reads view.json once, the store side once; the delivery is checked once.
+    assert counts == {"view_reads": 2, "delivery_checks": 1}
+
+
+def test_a_tampered_view_is_still_refused_in_a_build(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    (view,) = run_dir.glob("deliveries/*/view.json")
+    view.write_bytes(view.read_bytes() + b" ")
+    library = update_library.update_library(tmp_path)
+    assert library.runs == [] and library.deliveries == {}
+    assert "view.json no longer has its recorded sha256" in library.excluded[0][1]

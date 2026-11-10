@@ -116,8 +116,8 @@ def _section(heading, level, *blocks):
 
 
 SECTIONS = [
+    _section("Front matter", 2, _text("module: CP-1\ncommittee_status: Requires More Work")),
     _section("CP-1 handoff", 1),
-    _section("Front matter", 1, _text("module: CP-1\ncommittee_status: Requires More Work")),
     _section("Request", 2, _text("What is asked.")),
     _section("Sources", 2, _text("K is the annual filing.")),
     _section("Findings", 2),
@@ -217,12 +217,23 @@ def test_empty_committee_status_is_no_status_not_the_next_line(front_matter, exp
     sections = [
         {
             "heading": "Front matter",
-            "level": 1,
+            "level": 2,
             "line": 1,
             "blocks": [{"type": "text", "text": front_matter}],
         }
     ]
     assert store.report_fields(sections, None)["state"]["declared"] == expected
+
+
+def test_declared_is_read_from_front_matter_the_parser_produced():
+    sections = store.parse_source(REAL_FRONT_MATTER_HEAD + "\nBody line.\n")
+    assert store.report_fields(sections, None)["state"]["declared"] == "Blocked"
+
+
+def test_a_later_front_matter_heading_is_not_the_yaml_block():
+    text = "## Request\nAsked.\n\n## Front matter\ncommittee_status: Refer\n"
+    sections = store.parse_source(text)
+    assert store.report_fields(sections, None)["state"]["declared"] is None
 
 
 def test_declared_is_none_without_front_matter():

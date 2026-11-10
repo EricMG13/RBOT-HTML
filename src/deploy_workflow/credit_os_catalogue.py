@@ -234,14 +234,24 @@ def forecast_published(folder: Path, relative: str, files: Mapping[str, str]) ->
 
 
 def delivery_fields(
-    workspace: Path, run: dict[str, Any], sources: dict[str, Any], issues: list[str]
+    workspace: Path,
+    run: dict[str, Any],
+    sources: dict[str, Any],
+    issues: list[str],
+    verified: Mapping[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
-    """The run's verified delivery as one artifact, and the metrics its CP-1 handoff states."""
+    """The run's verified delivery as one artifact, and the metrics its CP-1 handoff states.
+
+    ``verified`` is the delivery this build already verified (``Library.deliveries``), used as is
+    and never changed; without it the delivery is verified here."""
     name = run["id"]
     folder = workspace / "runs" / name
     try:
-        relative, files = delivery_folder(folder, run["report"]["sha256"])
-        view = json_object(read_inside(folder, f"{relative}/view.json"), "view.json")
+        if verified is not None:
+            relative, files, view = verified["folder"], verified["files"], verified["view"]
+        else:
+            relative, files = delivery_folder(folder, run["report"]["sha256"])
+            view = json_object(read_inside(folder, f"{relative}/view.json"), "view.json")
         published = forecast_published(folder, relative, files)
         cp1 = next((m for m in run["modules"] if m["id"] == "CP-1"), None)
         text = ""
@@ -274,14 +284,18 @@ def delivery_fields(
 
 
 def run_record(
-    workspace: Path, run: dict[str, Any], sources: dict[str, Any], issues: list[str]
+    workspace: Path,
+    run: dict[str, Any],
+    sources: dict[str, Any],
+    issues: list[str],
+    verified: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     name = run["id"]
     context = context_values(workspace / "runs" / name, issues)
     period, period_kind = period_fields(context)
     summary, gaps = summary_fields(run)
     title = pathway_title(run["pathway"])
-    artifacts, metrics = delivery_fields(workspace, run, sources, issues)
+    artifacts, metrics = delivery_fields(workspace, run, sources, issues, verified)
     return {
         "id": name,
         "issuer": context.get("ticker") or run["issuer_id"].upper(),
@@ -319,7 +333,10 @@ def catalogue(workspace: Path, library: Library) -> dict[str, Any]:
     """Every run ``library_index`` listed, in its order, as the JSON Credit OS reads."""
     sources: dict[str, Any] = {}
     issues: list[str] = []
-    real = [run_record(workspace, run, sources, issues) for run in library.runs]
+    real = [
+        run_record(workspace, run, sources, issues, library.deliveries.get(run["id"]))
+        for run in library.runs
+    ]
     return {
         "real": real,
         "illustrative": [],
