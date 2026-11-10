@@ -723,15 +723,15 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules) {
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
   const contexts = { [RUN]: { folder: RUN, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) } };
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] } }, DESIGN_CATALOGUE: { real: [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports } };
-  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
-  const args = [win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart};`)(...args);
+  const names = ['LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection'];
+  const args = [new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, {}, contexts, {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map()];
+  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, chartCards, cellView, libraryRow};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
 // A story module, from its opening tag to the next story module or the end of its group (flat regex over generated markup).
 const storyModule = (html, code) => new RegExp(`<div class="story-module" data-module="${code}">.*?(?=<div class="story-module"|</section>)`, 's').exec(html)?.[0];
-const groupOf = (html, title) => new RegExp(`<section class="story-group"><h2>${title}</h2>.*?</section>`, 's').exec(html)?.[0];
+const groupOf = (html, title) => new RegExp(`<section class="story-group"[^>]*><h2>${title}</h2>.*?</section>`, 's').exec(html)?.[0];
 
 test('run report: the count line reads from state, with the unsummarised module counted apart', () => {
   const html = runPage().runReport(RUN);
@@ -1113,4 +1113,109 @@ test('rows carry the run id for restoring, and unchanged data is not re-rendered
   assert.strictEqual(content.writes, 2, 'changed runs: replaced');
   win.RUN_ACTIVITY = { updated: 'T4', cap: '20', held: '', runs: [{ id: 'a', status: 'running' }] }; fn();
   assert.strictEqual(content.writes, 3, 'a changed cap with the same runs: replaced');
+});
+
+// Design pass 2026-11-10 (docs/design/2026-11-10-impeccable-pass.md).
+test('run report: every part carries an id and the label the navigator lists, in page order', () => {
+  const html = runPage().runReport(RUN);
+  const parts = [...html.matchAll(/<section class="[^"]*" id="(run-[a-z0-9-]+)" data-run-part="([^"]*)">/g)].map(m => [m[1], m[2]]);
+  assert.deepEqual(parts, [['run-group-1', 'Financial performance'], ['run-group-2', 'Outlook and downside'], ['run-group-3', 'Decision and review'], ['run-group-4', 'Other modules'],
+    ['run-register', 'Findings register'], ['run-open-items', 'Open items'], ['run-matrix', 'Module matrix']]);
+  const screen = read('screen.js');
+  assert.ok(screen.includes("querySelectorAll('[data-run-part]')") && screen.includes('run-[a-z0-9-]+'), 'the navigator lists the parts and the route scrolls to one');
+});
+
+test('run report: a coverage cell shows the code and carries the module name as its title; the page does not rewrite it', () => {
+  const html = runPage().runReport(RUN);
+  assert.ok(/<a class="cov filled" href="[^"]*" title="Financial foundation · Reaches a conclusion" aria-label="CP-1, Financial foundation, Reaches a conclusion">CP-1<\/a>/.test(html));
+  assert.ok(/<a class="cov" href="[^"]*" title="Downside · Not assessable"/.test(html));
+  assert.ok(/parent\.closest\('[^']*\.coverage[^']*'\)\)continue/.test(read('screen.js')), 'nameCodes leaves the coverage strip alone');
+});
+
+test('charts: one chip-dot legend per set of charts, under the last card', () => {
+  const html = runPage().chartCards(['<i>a</i>', '<i>b</i>', '<i>c</i>']);
+  assert.equal(countOf(html, /class="legend"/g), 1);
+  assert.equal(countOf(html, /class="panel-card"/g), 3);
+  assert.ok(html.indexOf('class="legend"') > html.indexOf('<i>c</i>'));
+  assert.equal(runPage().chartCards([]), '');
+  // A chart without the heading is left as it is: its own h2 is not half-retagged.
+  assert.equal(runPage().chartCards(['<h2>own</h2>']).includes('<h2>own</h2>'), true);
+  assert.ok(runPage().chartCards(['<div class="section-heading"><h2>Cost $1 &amp; $&</h2></div>']).includes('<h4>Cost $1 &amp; $&</h4>'));
+  // A card's chart title is an h4 (it sits under a module's h3); the rest of the chart is untouched.
+  assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div></div>');
+});
+
+test('screen.css: run-report tables run whole in the text face', () => {
+  const css = read('screen.css');
+  assert.ok(css.includes('.run-section .table-scroll{max-height:none;overflow:clip}'));
+  assert.ok(css.includes("table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text',sans-serif"));
+});
+
+test('run report: a run with no module output says so and keeps the source inventory link; no empty strip, table or count line', () => {
+  const html = runPage(() => ({})).runReport(RUN);
+  assert.equal(strip(/<div class="missing-state">(.*?)<\/div>/.exec(html)[1]), 'No module output retained for this runThe run report is drawn from module handoffs, and this run holds none.');
+  assert.ok(html.includes('href="#W-Evidence/sources?c=run-a"'));
+  for (const gone of ['class="run-count"', 'class="coverage"', '<table']) assert.ok(!html.includes(gone), gone);
+});
+
+test('hardening: the module report\'s section title is an h2, fold arrows respect reduced motion, the page prints whole', () => {
+  const screen = read('screen.js'), css = read('screen.css');
+  assert.ok(screen.includes("const level=report?'h2':'h3';"));
+  assert.ok(/@media\(prefers-reduced-motion:reduce\)\{[^}]*details\.fold>summary img[^}]*\{transition:none\}/.test(css));
+  assert.ok(/@media print\{[^@]*#content\{[^}]*overflow:visible/.test(css));
+  assert.ok(/@media\(forced-colors:active\)\{[^@]*a\.cov\.filled\{/.test(css));
+});
+
+test('module tables: a numeric column is .num, a number in a text column is .fig, a sentence has no figure class', () => {
+  const { cellView } = runPage();
+  assert.equal(cellView('1,299', true), '<td class="num">1,299</td>');
+  assert.equal(cellView('1,299', false), '<td class="fig">1,299</td>');
+  assert.equal(cellView('(12.5)%', false), '<td class="fig">(12.5)%</td>');
+  assert.equal(cellView('Reported GAAP; Annual page:121', false), '<td>Reported GAAP; Annual page:121</td>');
+  const css = read('screen.css');
+  assert.ok(css.includes(".table-card td{font-family:'Red Hat Text',sans-serif}.table-card td.fig{font-family:'Red Hat Mono',monospace"));
+});
+
+test('library: a row is one item per column; what left the row is the cell title or the selected-run panel', () => {
+  const { libraryRow } = runPage();
+  const metric = (value, basis) => ({ value, unit: 'x', basis, period: 'FY2024' });
+  const run = { id: 'run-z', name: 'Zed & Sons', issuer: 'ZED', title: 'Credit Snapshot', sector: 'Telecoms', date: '2024-09-30', period: 'FY-2024', completion: null, artifacts: [],
+    metrics: { leverage: metric('6.5744', 'C9; same "basis"'), net_leverage: metric('0', 'Net of cash'), coverage: null }, ratings: [{ label: 'B+', agency: 'S&P', scope: 'issuer', date: '2024-06-30' }] };
+  const cells = [...libraryRow(run, true, false).matchAll(/<td([^>]*)>(.*?)<\/td>/g)].map((m) => [m[1].trim(), m[2]]);
+  // Ten columns, in the header's order; a cell holds one value and at most the one control that acts on it.
+  assert.deepEqual(cells.map(([, body]) => strip(body)), ['Zed &amp; Sons', 'run-z', 'Telecoms', '30 Sept 2024', '6.5744×', '0×', '—', 'B+', 'Not assessed', 'Handoffs only']);
+  assert.ok(cells.every(([, body]) => countOf(body, /<(?!\/)/g) <= 1));
+  assert.ok(/^<button class="library-run-name" type="button" data-library-select="run-z" aria-expanded="true" aria-controls="run-detail"/.test(cells[0][1]));
+  // A run the store does not hold has no link; its id is still shown.
+  assert.deepEqual(cells[1], ['class="run-id"', 'run-z']);
+  // The basis and the rating detail stay on the cell; a missing figure is a dash, a zero is a zero.
+  assert.equal(cells[4][0], 'title="C9; same &quot;basis&quot;"');
+  assert.equal(cells[5][0], 'title="Net of cash"');
+  assert.equal(cells[6][0], 'class="missing" title="Not available"');
+  assert.equal(cells[7][0], 'title="S&amp;P · Issuer · 30 Jun 2024"');
+  // A run the store holds opens from its id; a percentage and the not-screened note are single items too.
+  const held = libraryRow({ ...run, id: RUN, completion: 75, ratings: [] }, false, true);
+  assert.ok(held.includes(`<td class="run-id"><a href="#W-Overview/overview?c=${RUN}" aria-label="Open run: Zed &amp; Sons, ${RUN}">${RUN}</a></td>`), held);
+  assert.ok(held.endsWith('<td class="missing">—</td><td>75%</td><td>No report · not screened</td></tr>'));
+  const views = read('views.js'), screen = read('screen.js');
+  // The selected-run panel carries the ticker, workflow and period the row no longer shows; the issuer rail is a select.
+  assert.ok(views.includes("esc(`${run.issuer} · ${run.id} / ${run.title}`)") && views.includes("['Evidence date',libraryDate(run.date),run.period]"));
+  assert.ok(views.includes("select('issuer','Issuer','All issuers')"));
+  // The stylesheet right-aligns columns 5 to 7 by position: they are the three ratios.
+  assert.ok(views.includes("[['name','Issuer'],[null,'Run'],[null,'Sector'],['date','Evidence date'],['leverage','Leverage'],['net_leverage','Net leverage'],['coverage','Coverage'],['rating','Rating'],['completion','Completeness'],[null,'Deliverable']]"));
+  assert.ok(read('screen.css').includes('.library-table :is(th,td):nth-child(n+5):nth-child(-n+7){text-align:right}'));
+  for (const gone of ['library-nav', 'data-library-issuer', 'cell-primary', 'Combined filters', 'class="eyebrow"']) assert.ok(!views.includes(gone) && !screen.includes(gone), gone);
+});
+
+test('hardening: unbroken strings wrap in the canvas, the inspector and the library table; narrow run tables scroll by their own width', () => {
+  const css = read('screen.css');
+  assert.ok(css.includes('#content,.inspector{overflow-wrap:break-word}'));
+  assert.ok(/\.library-table\{width:100%;min-width:1000px;table-layout:fixed;/.test(css));
+  // The ten fixed columns account for the whole table.
+  const widths = [...css.matchAll(/\.library-table th:nth-child\(\d+\)\{width:([\d.]+)%\}/g)].map((m) => Number(m[1]));
+  assert.equal(widths.length, 10);
+  assert.ok(Math.abs(widths.reduce((a, b) => a + b, 0) - 100) < 1e-9);
+  assert.ok(/\.run-section\{container-type:inline-size\}\s*@container \(max-width:600px\)\{\.run-section \.table-scroll\{overflow-x:auto\}/.test(css));
+  // Paper has no sideways scroll: the minimum widths are dropped in print.
+  assert.ok(/@media print\{[^@]*\.library-table,table\.register,table\.open-items,table\.matrix\{min-width:0\}/.test(css));
 });

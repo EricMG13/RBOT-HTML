@@ -82,7 +82,7 @@ function nameCodes(root) {
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.module-ref,.built-from,.hash,.chip,details.audit,.module-head .sub'))continue;
+    if(parent.closest('.ref,.module-ref,.built-from,.hash,.chip,.coverage,details.audit,.module-head .sub'))continue;
     const parts=[...node.data.matchAll(READER_TOKEN)];
     if(!parts.length)continue;
     // A chart or a select cannot hold markup, so these only take the name.
@@ -292,9 +292,9 @@ function renderNavigator(module) {
       return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" title="${esc(id)}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
     }).join('')}</details>`;
   }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
-  // Only a module report has parts to list; Run activity (CP-OS) has no output and no outline.
-  const analytical=!module.startsWith('W-'),outline=current.output;
-  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||!analytical||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${analytical&&!query&&outline?`<div class="outline-heading">On this page</div>${outlineMarkup(outline)}`:''}`;
+  // A module report and the run report have parts to list; Run activity (CP-OS) has no output and no outline.
+  const analytical=!module.startsWith('W-'),outline=query?'':analytical&&current.output?outlineMarkup(current.output):module==='W-Overview'?runOutline():'';
+  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||(!analytical&&!outline)||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${outline&&`<div class="outline-heading">On this page</div>${outline}`}`;
   nameCodes($('module-list'));
   document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Analysis & tools'} <span>${count}</span>`;
   $('module-search-clear').hidden=!$('module-search').value;
@@ -421,7 +421,7 @@ function resetLibrary() {
 }
 // Clicks inside the Library screen; true when one was handled.
 function libraryClick(target) {
-  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),nav=target.closest('[data-library-nav],[data-library-issuer]'),source=target.closest('[data-library-source]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
+  const choose=target.closest('[data-library-select]'),sort=target.closest('[data-library-sort]'),source=target.closest('[data-library-source]'),hide=target.closest('[data-library-hidden]'),back=target.closest('[data-library-back]');
   if(choose) {
     libraryState.selected=choose.dataset.librarySelect;updateLibrary();
     $('run-detail').focus({preventScroll:true});$('run-detail').scrollIntoView({block:'start'});
@@ -429,13 +429,6 @@ function libraryClick(target) {
     const key=sort.dataset.librarySort;
     libraryState.direction=libraryState.sortKey===key&&libraryState.direction==='asc'?'desc':'asc';libraryState.sortKey=key;
     updateLibrary();$('library-results').querySelector(`[data-library-sort="${key}"]`).focus();
-  } else if(nav) {
-    const {libraryNav:kind,libraryIssuer:issuer}=nav.dataset;
-    if(kind==='all')resetLibrary();
-    else if(kind==='reports')Object.assign(libraryFilters,{issuer:'',availability:'report'});
-    else libraryFilters.issuer=LibraryLogic.issuerKey(libraryFilters.issuer)===LibraryLogic.issuerKey(issuer)?'':issuer;
-    updateLibrary(true);
-    [...$('library-nav').querySelectorAll('button')].find(b=>b.dataset.libraryNav===kind&&b.dataset.libraryIssuer===issuer).focus();
   } else if(hide) {
     libraryState.hidden=hide.dataset.libraryHidden;updateLibrary();$('library-hidden-title').focus();
   } else if(back) {
@@ -483,6 +476,13 @@ const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
 // Scroll the canvas to one of the report's parts or sections; the head is the top. Unknown names never reach here: parseRoute maps them to the head.
 // Every closed <details> that is or holds the target is opened first, so a route into a folded part shows what it names.
+// The run report's parts are places on one page: #W-Overview/<part id> keeps the Overview route and scrolls to the part.
+const runPart=()=>{const part=/^#W-Overview\/(run-[a-z0-9-]+)/.exec(location.hash)?.[1];return part&&$('content').querySelector(`#${part}[data-run-part]`)?part:null;};
+// Read from the page as drawn: a part the run does not have has no entry.
+const runOutline=()=>{
+  const parts=[...$('content').querySelectorAll('[data-run-part]')],here=runPart();
+  return parts.length?`<nav class="section-outline" aria-label="On this page"><ol>${parts.map(part=>`<li><a class="section-item" href="${routeHref('W-Overview',part.id)}" ${here===part.id?'aria-current="location"':''}>${esc(part.dataset.runPart)}</a></li>`).join('')}</ol></nav>`:'';
+};
 function scrollToPart(part) {
   const content=$('content'),target=part==='head'?null:$(part);
   if(target)openFolds(target);
@@ -510,7 +510,9 @@ function renderRoute() {
     // The pager names what it steps through on the pages where the sections are models or reports.
     const pagerNoun={'W-Forecast':'model','W-Reports':'report'}[next.module]||'section';
     const report=reportPage(next);
-    const title=`<h3 id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</h3>`;
+    // A module report has no heading above this one but the issuer's h1, so there it is an h2; elsewhere it sits under the page's h2.
+    const level=report?'h2':'h3';
+    const title=`<${level} id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</${level}>`;
     // The bar sticks at narrow widths, so it names the run and the module (or destination) it belongs to.
     $('section-nav').innerHTML=contextPrefix(next)+(only||report||(isAnalytical(next.module)&&!next.output)?title:`${title}<span>${index+1} / ${sections.length}</span><button id="previous-section" ${index===0?'disabled':''} aria-label="Previous ${pagerNoun}">${icon('arrow-left')}</button><button id="next-section" ${index===sections.length-1?'disabled':''} aria-label="Next ${pagerNoun}">${icon('arrow-right')}</button>`);
     if(!showsCodes(next))nameCodes($('section-nav'));
@@ -548,8 +550,11 @@ function renderRoute() {
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
   }
-  if(partMove) {
-    scrollToPart(next.section);
+  const runMove=next.module==='W-Overview'&&runPart();
+  if(runMove)scrollToPart(runMove);
+  // A move inside the run report redraws the outline only, so its current part follows the route.
+  if(partMove||(next.module==='W-Overview'&&!changed)) {
+    if(partMove)scrollToPart(next.section);
     renderNavigator(next.module);
     const link=focused?.classList.contains('section-item')&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
     if(link)link.focus({preventScroll:true});

@@ -142,7 +142,7 @@ Phase A (no new run):
 
 - **Run report:** each chart sits under its owning module in the credit story. No chart row at the
   top of the page. A group with no chart shows none and says nothing about it.
-- **Coverage strip** beside the count line: one cell per module in group order, labelled with
+- **Coverage strip** under the count line (amended 2026-11-10, `2026-11-10-impeccable-pass.md`; was beside): one cell per module in group order, labelled with
   its code, filled when established, hollow when not assessable, each a link. Built from `state`.
 - **Module page:** charts stay in the numbers part, above the key-numbers table.
 - The 46 catalogue entries marked `Table/content only` are the Reference tables; no chart is

@@ -75,7 +75,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 #settings-status:empty{display:none}
 @media(max-width:720px){.run-fields,.review-modules{grid-template-columns:minmax(0,1fr)}#new-run{padding:10px 9px 20px}.review-summary{grid-template-columns:minmax(0,1fr)}}
 .module-ref{text-decoration:none;cursor:help}.ref{font-size:var(--fs-label);color:var(--muted);font-variant-numeric:tabular-nums}
-.summary-deliverables{padding:16px 0}.summary-deliverables h2{font-size:15px;margin:0 0 8px}.summary-deliverables .text-action{display:flex;margin:6px 0}.summary-deliverables .deliverable{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}.tool-sep{align-self:center;width:1px;height:16px;background:var(--text-quaternary);flex:none;margin-left:-4px}
+.summary-deliverables{padding:16px 0;margin-top:24px}.summary-deliverables h2{font-size:19px;margin:0 0 8px}.summary-deliverables .text-action{display:flex;margin:6px 0}.summary-deliverables .deliverable{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}.tool-sep{align-self:center;width:1px;height:16px;background:var(--text-quaternary);flex:none;margin-left:-4px}
 .summary-facts{display:grid;grid-template-columns:auto 1fr;gap:10px 28px;margin:10px 0 0}.summary-facts>div{display:contents}.summary-facts dt{font-size:var(--fs-compact);opacity:.75}.summary-facts dd{margin:0;font-size:var(--fs-body)}
 /* Component foundation after Untitled UI React (MIT, (c) 2025 Untitled UI): type scale, text and border roles, radii, shadows and focus ring. Colours stay the company's; greys lean toward its navy. */
 :root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--shadow-sm:0 1px 3px rgba(0,5,51,.1),0 1px 2px -1px rgba(0,5,51,.1);--ring:0 0 0 4px rgba(0,23,229,.16);--radius-inline:4px;--radius-control:8px;--radius-card:12px}
@@ -97,57 +97,59 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .badge-navy{background:var(--navy);border-color:var(--navy);color:#fff}
 .badge-attention{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
 .muted{color:var(--text-quaternary)}
-/* Library: issuer navigator, screening panel, results table and selected-run detail */
-.library-screen{display:grid;grid-template-columns:216px minmax(0,1fr);gap:24px;align-items:start}
-.library-nav{display:flex;flex-direction:column;gap:4px;position:sticky;top:0}
-.nav-choice{display:flex;align-items:center;gap:8px;min-height:36px;padding:6px 10px;border-radius:var(--radius-control);color:var(--text-secondary);font-weight:500;text-align:left}
-.nav-choice>span:not(.monogram):not(.count){flex:1;min-width:0;overflow-wrap:anywhere}
-.nav-choice .count,.monogram{font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
-.monogram{display:grid;place-items:center;width:30px;height:24px;border-radius:var(--radius-inline);background:var(--gray-100)}
-.nav-choice:hover{background:var(--gray-50)}
-.nav-choice.active{background:var(--blue-50);color:var(--blue-700)}
-.library-nav .eyebrow,.run-detail .eyebrow{margin:14px 10px 4px;font:600 var(--fs-label)/16px 'Red Hat Text',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary)}
+/* Library: screening toolbar, results table and selected-run detail */
 .library-main{display:flex;flex-direction:column;gap:20px;min-width:0}
-.library-panel,.run-detail{padding:16px 18px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:#fff;box-shadow:var(--shadow-xs)}
-.block-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
-.block-head h2,.run-detail h2{font-size:18px}
+/* The filters are a toolbar on the canvas, not a card: the table is the page's one framed region above the selected run. */
+.run-detail{padding:16px 18px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:#fff;box-shadow:var(--shadow-xs)}
+.run-detail h2{font-size:18px}
 .search-row{display:flex;gap:12px;align-items:center;margin-bottom:12px}
 .library-search{position:relative;flex:1;max-width:420px}
 .library-search img{position:absolute;left:12px;top:10px;width:20px;height:20px;opacity:.55;pointer-events:none}
 .library-search input,.library-filters select,.library-filters input{width:100%;height:40px;border:1px solid var(--border-primary);border-radius:var(--radius-control);background:#fff;box-shadow:var(--shadow-xs);color:var(--text-primary);padding:0 12px}
 .library-search input{padding-left:40px;font-size:16px}
 .library-search input:focus,.library-filters select:focus,.library-filters input:focus{outline:none;border-color:var(--blue);box-shadow:var(--shadow-xs),var(--ring)}
-.library-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.library-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .library-filters label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-compact);font-weight:600;color:var(--text-tertiary)}
 .library-filters select,.library-filters input{font-size:var(--fs-control);font-weight:400}
-#library-filters details{margin-top:14px}
+/* Closed criteria groups share one line; an open group takes the full width. */
+#library-filters{display:flex;flex-wrap:wrap;column-gap:24px}#library-filters>*{flex:1 1 100%;min-width:0}#library-filters>details:not([open]){flex:0 0 auto}
+#library-filters details{margin-top:14px}#library-filters details:not([open])>summary{margin-bottom:0}
 #library-filters summary{cursor:pointer;font-weight:600;margin-bottom:12px}
 #library-count{font-size:var(--fs-control);color:var(--text-tertiary);margin-bottom:8px}
 .library-coverage{font-size:var(--fs-compact);color:var(--text-tertiary);margin-bottom:8px}.library-coverage p{margin:2px 0}.hidden-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.facility h4,.facility h5{margin:12px 0 6px}
-.library-table{width:100%;border-collapse:collapse;font-size:var(--fs-control);line-height:20px}
-.library-table th,.library-table td{padding:12px 16px;border-bottom:1px solid var(--border-secondary);text-align:left;vertical-align:top;color:var(--text-primary)}
-.library-table th{font-size:var(--fs-compact);font-weight:600;color:var(--text-tertiary);white-space:nowrap}
+/* One item per column (owner, 2026-11-10): a row is one line of single values. Fixed columns: a long name, sector or run id wraps in its cell and cannot widen the table; below 1000px of room the table keeps that width and its box scrolls sideways. */
+.library-table{width:100%;min-width:1000px;table-layout:fixed;border-collapse:collapse}
+.library-table th,.library-table td{padding:10px 12px;border-bottom:1px solid var(--border-secondary);text-align:left;vertical-align:top;color:var(--text-primary);overflow-wrap:break-word}
+.library-table tbody tr:last-child td{border-bottom:0}
+.library-table th{font-size:var(--fs-compact);font-weight:600;color:var(--text-tertiary);vertical-align:middle}
 .library-table th button{font:inherit;color:inherit;padding:0}
 .library-table tr.selected>td{background:var(--blue-50)}
-.library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-control)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-.ticker{display:block;font:500 var(--fs-label)/16px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
-.cell-primary{display:block;font-weight:600}.cell-primary.missing{color:var(--text-quaternary);font-weight:400}
+.library-table td.missing{color:var(--text-quaternary)}
+.library-run-name{display:block;padding:0;text-align:left;font:600 var(--fs-body)/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.library-table td.run-id{font:400 var(--fs-compact)/20px 'Red Hat Mono',monospace;overflow-wrap:anywhere}.library-table td.run-id a{text-underline-offset:3px}
+.library-table th:nth-child(1){width:18.3%}.library-table th:nth-child(2){width:19.2%}.library-table th:nth-child(3){width:8.3%}.library-table th:nth-child(4){width:9.2%}.library-table th:nth-child(5){width:6.9%}.library-table th:nth-child(6){width:8.6%}.library-table th:nth-child(7){width:7%}.library-table th:nth-child(8){width:5.5%}.library-table th:nth-child(9){width:9.3%}.library-table th:nth-child(10){width:7.7%}
+/* The three ratios are figures: mono, right-aligned under their headings. A date stays on one line. */
+.library-table :is(th,td):nth-child(n+5):nth-child(-n+7){text-align:right}
+.library-table td:nth-child(n+5):nth-child(-n+7){font-family:'Red Hat Mono',monospace}
+.library-table td:nth-child(4){white-space:nowrap}
+@media(max-width:1300px){.library-table th,.library-table td{padding-left:8px;padding-right:8px}}
+/* Paper is narrower than the table's screen minimum and cannot scroll: columns size to their words again. The header prints once: Chrome drops the sort buttons from a repeated header. */
+@media print{.library-table{table-layout:auto}.library-table thead{display:table-row-group}.library-table th,.library-table td{padding-left:4px;padding-right:4px}}
 .cell-secondary{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}
-.run-link,.report-link{font-size:var(--fs-compact);font-weight:600}.report-link{white-space:nowrap}.library-table td{font:400 var(--fs-control)/20px 'Red Hat Text',sans-serif}
-.progress-track{display:block;height:6px;margin:4px 0;border-radius:var(--radius-inline);background:var(--gray-200)}.progress-track i{display:block;height:100%;border-radius:var(--radius-inline);background:var(--blue)}
+.report-link{font-weight:600}.library-table td{font:400 var(--fs-body)/20px 'Red Hat Text',sans-serif}
 .library-empty{padding:32px 0;max-width:68ch}.library-empty h2{margin-bottom:10px}.library-empty .primary-action{margin-top:12px}
-.detail-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.detail-actions{display:flex;gap:12px;flex-wrap:wrap}
+.detail-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.detail-head>div:first-child{min-width:0}.run-detail{overflow-wrap:anywhere}.detail-actions{display:flex;gap:12px;flex-wrap:wrap}
 .detail-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
 .run-detail h3{margin:16px 0 6px}.gap-list{margin:0;padding-left:20px}
 .completion-box{margin-top:16px;padding:12px 14px;border:1px solid var(--amber-border);border-radius:var(--radius-control);background:var(--amber-bg);color:var(--amber)}.completion-box strong{display:block}
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.metric-item{padding:10px 12px;border:1px solid var(--border-secondary);border-radius:var(--radius-control)}
+.metric-item{min-width:0;padding:10px 12px;border:1px solid var(--border-secondary);border-radius:var(--radius-control)}
 .metric-label{display:block;font-size:var(--fs-compact);color:var(--text-tertiary)}.metric-value{display:block;font:700 20px/28px 'Red Hat Display',sans-serif}.metric-value small{margin-left:4px;font:400 var(--fs-compact)/16px 'Red Hat Text',sans-serif}
 .metric-item p{font-size:var(--fs-compact);color:var(--text-tertiary)}
-.artifact-list{margin:0;padding-left:20px}.artifact-list li{overflow-wrap:anywhere}.artifact-list small{display:block;color:var(--text-tertiary)}
+.artifact-list{margin:0;padding-left:20px}.artifact-list li{overflow-wrap:anywhere}.artifact-list small{display:block;font-size:var(--fs-label);color:var(--text-tertiary)}
 .source-details{margin-top:14px}.source-details summary{cursor:pointer;font-weight:600}.source-details>div{margin-top:10px;padding:8px 10px;border-left:3px solid var(--gray-300);overflow-wrap:anywhere}.source-details blockquote{margin:6px 0;font:var(--fs-compact)/1.5 'Red Hat Mono',monospace;white-space:pre-wrap}
 @media(max-width:720px){.library-filters,.metric-grid,.detail-layout{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:900px){.library-screen{grid-template-columns:minmax(0,1fr)}.library-nav{position:static;flex-direction:row;flex-wrap:wrap}.search-row{flex-wrap:wrap}.library-search{max-width:none;flex-basis:100%}.page-actions{margin-top:12px}}
+@media(max-width:900px){.search-row{flex-wrap:wrap}.library-search{max-width:none;flex-basis:100%}.page-actions{margin-top:12px}}
 /* Run header and underline tabs, after Untitled UI React (MIT): one title line, then tabs. */
 .issuer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;background:#fff;border-radius:var(--radius-card) var(--radius-card) 0 0}
 .issuer-title{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-width:0;flex:1 1 auto}
@@ -345,7 +347,7 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .band p{margin:0;font-size:15px;line-height:1.55;font-weight:500;text-wrap:pretty}
 .band dl{margin:0;font-size:var(--fs-compact);line-height:1.5}
 .band dt{color:#c9cfee;display:inline}
-.band dd{display:inline;margin:0 0 0 6px;color:#fff}
+.band dd{display:inline;margin:0 0 0 6px;color:#fff}.band{overflow-wrap:anywhere}
 .band .row{display:block;margin-top:4px}
 .band .src{grid-column:1/-1;display:flex;gap:8px;align-items:center;margin-top:4px;font-size:var(--fs-label);color:#c9cfee;flex-wrap:wrap}
 .band-link{color:#c9cfee;text-decoration:underline;text-underline-offset:3px;font-size:var(--fs-label);padding:0;background:none;border:0}
@@ -355,9 +357,10 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .panel-card{border:1px solid var(--rule);border-radius:var(--radius-card);overflow:hidden;margin-bottom:14px}
 .panel-card>.section-heading{margin:0;padding:12px 16px;background:var(--quiet);border-bottom:1px solid var(--rule)}
 .panel-card>.section-heading h2{font-size:var(--fs-control)}
+.panel-card>.section-heading h4{font:700 var(--fs-control)/1.3 'Red Hat Display',sans-serif;letter-spacing:-.02em;color:var(--navy)}
 .panel-card>.chart-reading,.panel-card>.source-footer,.panel-card>.matrix-note{margin-left:16px;margin-right:16px}
 .panel-card .horizontal-chart{margin:6px 16px 8px}
-.panel-card .chart-row{grid-template-columns:minmax(0,3fr) minmax(min-content,1fr);gap:12px;cursor:default;text-align:left;padding:0}
+.panel-card .chart-row{grid-template-columns:minmax(0,1.6fr) minmax(min-content,1fr);gap:12px;cursor:default;text-align:left;padding:0}
 /* The row button is a real box (focusable, with a focus ring); it holds the label, bar and value, and the chips are the row's second cell. */
 .panel-card .chart-open{display:grid;grid-template-columns:minmax(110px,1fr) minmax(80px,1.6fr) 72px;gap:12px;align-items:center;padding:10px 0;width:100%;cursor:pointer;text-align:left;min-width:0;border-radius:var(--radius-inline)}
 .panel-card .chart-row strong{overflow-wrap:normal;white-space:nowrap}
@@ -369,6 +372,8 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .table-card thead th{background:var(--quiet);text-align:left;font-weight:600;color:var(--muted);padding:9px 14px;border-bottom:1px solid var(--rule);white-space:nowrap}
 .table-card tbody td{padding:9px 14px;border-bottom:1px solid var(--rule);vertical-align:middle}
 .table-card tbody tr:last-child td{border-bottom:0}
+/* Row labels and notes read in the text face; mono is for the numbers. */
+.table-card td{font-family:'Red Hat Text',sans-serif}.table-card td.fig{font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums}
 .table-card td.num,.table-card th.num{text-align:right;font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums;font-weight:500}
 .table-card .na{color:var(--muted);font-style:normal}
 .table-more{margin:0;padding:8px 14px;font-size:var(--fs-label);color:var(--muted);border-top:1px solid var(--rule)}
@@ -378,7 +383,7 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .analysis-section>h4{font-size:var(--fs-control)}
 .analysis-section>h5{font-size:var(--fs-compact)}
 .analysis-section>h6{font-size:var(--fs-label)}
-.analysis-text{max-width:75ch;margin:0 0 10px;line-height:1.65}
+.analysis-text{max-width:56ch;margin:0 0 10px;line-height:1.65}
 .analysis-text .chips{margin-left:6px;vertical-align:middle}
 .analysis-section .table-card{max-width:100%;margin:8px 0 12px}
 .analysis-section .table-card td{vertical-align:top}
@@ -397,14 +402,14 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .dot.gap{background:transparent;border:1px solid #9aa2b8}
 .chip.gap{border-style:dashed;color:var(--muted)}
 .chip.verified{border-color:#9fc7ac}
-.chip-count{display:inline-flex;align-items:center;height:24px;padding:0 8px;border:1px dashed var(--rule);border-radius:var(--radius-inline);background:transparent;font:500 var(--fs-label)/1 'Red Hat Text',sans-serif;color:var(--muted);white-space:nowrap;cursor:pointer}
-.chip-count:hover{border-color:#b9c0d6;background:var(--quiet)}
+.chip-count{display:inline-flex;align-items:center;height:24px;padding:0 2px;border-radius:var(--radius-inline);background:transparent;font:400 var(--fs-label)/1 'Red Hat Text',sans-serif;color:var(--muted);white-space:nowrap;cursor:pointer;text-decoration:underline dotted #9aa2b8;text-underline-offset:3px}
+.chip-count:hover{color:var(--blue);text-decoration-color:currentColor}
 .chip.source-selected{background:var(--selection)!important}
 /* Live run chips: after the run report's .chip rule (same specificity), so their state colours win. */
 .chip-done,.chip-running,.chip-waiting{display:inline-block;padding:1px 8px;border:1px solid var(--rule);border-radius:10px;font-size:var(--fs-label)}.chip-done{background:var(--quiet);color:var(--navy)}.chip-running{background:var(--navy);color:#fff;border-color:var(--navy)}.chip-waiting{background:#fff;color:var(--muted)}
 article.finding{max-width:none;margin:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:6px 28px;padding:16px 0;border-top:1px solid var(--rule);border-bottom:0}
 article.finding:first-of-type{border-top:0;padding-top:4px}
-article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;text-wrap:pretty}
+article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;color:var(--navy);text-wrap:pretty}
 article.finding .impact{margin:6px 0 0;color:#3a4056;text-wrap:pretty}
 article.finding .impact b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
 article.finding aside{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding-top:2px}
@@ -445,17 +450,46 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 @media(max-width:720px){.panel-card .chart-row{grid-template-columns:minmax(0,1fr)}.panel-card .chart-open{grid-template-columns:1fr 72px}.panel-card .chart-open .chart-label{grid-column:1/-1}.panel-card .chart-row .chips{padding-bottom:8px}}
 /* Run report: the Overview. Cards hold only what a handoff says; the page adds no sentence. */
 .run-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:14px 0 8px}.run-count{font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif}
-.coverage{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
-a.cov{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;border:1px solid var(--blue);border-radius:var(--radius-inline);font:500 var(--fs-label)/1 'Red Hat Mono',monospace;text-decoration:none;color:var(--blue);background:#fff}
-a.cov.filled{background:var(--blue);color:#fff}a.cov:hover{background:var(--selection);color:var(--navy)}a.cov.filled:hover{background:var(--navy);color:#fff}
-.story-group{margin-top:26px}.story-group>h2{font-size:19px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
-.story-module{padding:14px 0;border-bottom:1px solid var(--rule);min-width:0}.story-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.story-head h3{margin:0}
-.story-module .bottom-line{margin:8px 0 4px;font-size:var(--fs-body);line-height:1.55;text-wrap:pretty}
-.story-module .main-limit{margin:6px 0 10px;color:#3a4056}.story-module .main-limit b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
+/* Coverage states a fact, it is not a control row: navy for a conclusion, an outline for none, blue only under the pointer. */
+.coverage{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px}
+a.cov{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:24px;padding:0 6px;border:1px solid #b9c0d6;border-radius:var(--radius-inline);font:500 var(--fs-label)/1 'Red Hat Mono',monospace;text-decoration:none;color:var(--muted);background:#fff}
+a.cov.filled{background:var(--navy);border-color:var(--navy);color:#fff}a.cov:hover{border-color:var(--blue);color:var(--blue)}a.cov.filled:hover{background:var(--blue);border-color:var(--blue);color:#fff}
+.story-group{margin-top:40px}.story-group>h2{font-size:19px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+/* A module leads with its name and its bottom line; its findings sit one step below. */
+.story-module{padding:18px 0 14px;border-bottom:1px solid var(--rule);min-width:0}.story-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.story-head h3{margin:0;font-size:16px;line-height:1.3}.story-head h3 .text-action{font-size:inherit;margin:0}
+.story-module .bottom-line{margin:8px 0 12px;max-width:110ch;font-size:var(--fs-control);line-height:1.5;text-wrap:pretty}
+.story-module article.finding h4{font-size:var(--fs-body)}
+.story-module .main-limit{margin:6px 0 10px;max-width:110ch;color:#3a4056}.story-module .main-limit b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
 .na-line,.nosum-line,.choose-line{margin:0;padding:9px 0;border-bottom:1px solid var(--rule);font-size:var(--fs-compact);color:var(--muted);overflow-wrap:anywhere}.na-line .text-action,.nosum-line .text-action,.choose-line .text-action{margin-right:2px}
-.run-section{margin-top:30px}.run-section>h2{font-size:19px;margin-bottom:10px}
+/* In a one-line module entry the name is followed by its state, so the link's arrow would point at a separator. */
+.na-line .text-action img,.nosum-line .text-action img{display:none}
+.run-section{margin-top:40px}.run-section>h2{font-size:19px;margin-bottom:10px}
 .register-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 10px;font-size:var(--fs-compact)}.register-tools select{height:32px;background:var(--quiet);border:1px solid #d7dce7;border-radius:var(--radius-inline);padding:2px 6px}.register-tools input{width:16px;height:16px}
+/* The run report is one scroll: its tables run whole (no box of their own to scroll) and their headers stick to the page. */
+.run-section .table-scroll{max-height:none;overflow:clip}
+/* A sticky offset is measured inside the canvas's 12px top padding, so the header is pulled up by it; at phone widths the page scrolls, not the canvas. */
+.run-section .table-scroll thead th{top:-12px}@media(max-width:720px){.run-section .table-scroll thead th{top:0}}
 table.register,table.open-items,table.matrix{width:100%;border-collapse:collapse;font-size:var(--fs-compact)}
-table.register th,table.register td,table.open-items th,table.open-items td,table.matrix th,table.matrix td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
-table.matrix td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.register th,table.register td,table.open-items th,table.open-items td,table.matrix th,table.matrix td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:break-word}
+/* Sentences read in the text face; the mono face is kept for the numbers. */
+table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text',sans-serif;font-size:var(--fs-compact)}
+/* Fixed columns: one unbroken string (a URL in a limitation) wraps inside its cell and cannot widen the page. */
+table.register,table.open-items,table.matrix{table-layout:fixed}table.register thead th,table.open-items thead th,table.matrix thead th{white-space:normal}
+table.register th:nth-child(1){width:15%}table.register th:nth-child(2){width:17%}table.register th:nth-child(3){width:33%}table.register th:nth-child(5){width:92px}
+table.open-items th:nth-child(1){width:15%}table.open-items th:nth-child(2){width:19%}
+table.matrix th:nth-child(1){width:30%}table.matrix th:nth-child(2){width:20%}table.matrix th:nth-child(n+4){width:14%}
+/* Five columns need room. The measure is the section's own width, so a phone and a desktop canvas narrowed by the inspector get the same answer: the table keeps a readable width and scrolls sideways in its box. */
+.run-section{container-type:inline-size}
+@container (max-width:600px){.run-section .table-scroll{overflow-x:auto}table.register,table.open-items{min-width:640px}table.matrix{min-width:520px}.run-section .table-scroll thead th{top:0}}
+table.matrix td.num{text-align:right;font-family:'Red Hat Mono',monospace;font-variant-numeric:tabular-nums}table.matrix thead th:nth-child(n+4){text-align:right}
 .run-inventory{margin:22px 0 8px}
+/* Hardening (design pass 2026-11-10). */
+/* An unbroken string in handoff text (a URL, a long identifier) wraps where it would otherwise widen the canvas or the inspector. Normal text is unaffected: break-word breaks a word only when it cannot fit on a line of its own. */
+#content,.inspector{overflow-wrap:break-word}
+/* Pointer targets reach 24px where they stood alone below it. */
+.library-table th button{min-height:24px}#library-filters summary{min-height:24px}details.fold>summary,details.audit>summary{min-height:24px}
+@media(prefers-reduced-motion:reduce){details.audit>summary img,details.fold>summary img{transition:none}}
+/* Forced colours drop backgrounds, so a filled coverage cell is restated in system colours. */
+@media(forced-colors:active){a.cov.filled{forced-color-adjust:none;background:Highlight;border-color:Highlight;color:HighlightText}}
+/* Print: the canvas is the document. The app frame goes, nothing clips or scrolls, and a finding or a table row is not split across pages. Closed parts print closed. Fills print as drawn: the navy band and a filled coverage cell carry white text. */
+@media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench,.workbench.has-evidence{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}.library-table,table.register,table.open-items,table.matrix{min-width:0}article.finding,tr,.chart-row,.na-line{break-inside:avoid}h2,h3,h4,.story-head{break-after:avoid}a{text-decoration:none}}

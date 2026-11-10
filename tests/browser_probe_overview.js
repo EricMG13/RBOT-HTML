@@ -23,6 +23,15 @@
   group.value = hidden.dataset.group;
   group.dispatchEvent(new Event('change', { bubbles: true }));
   const filtered = { shown: shown(), emptyShown: !empty.hidden };
+  // Design pass: the navigator lists the report's parts and a click scrolls to one; the tables do not scroll on their own; prose cells are not monospace; coverage cells keep codes.
+  const outline = [...document.querySelectorAll('#module-list .section-outline a')];
+  const scrollers = [...document.querySelectorAll('.run-section .table-scroll')].filter(box => box.scrollHeight > box.clientHeight + 1).length;
+  const monoProse = [...content.querySelectorAll('td')].filter(td => /Mono/.test(getComputedStyle(td).fontFamily) && td.textContent.trim().split(/\s+/).length > 6).length;
+  const coverage = [...document.querySelectorAll('.coverage .cov')].map(a => a.textContent);
+  outline.find(a => a.textContent === 'Module matrix').click();
+  await sleep(200);
+  const matrix = document.getElementById('run-matrix').getBoundingClientRect(), frame = content.getBoundingClientRect();
+  const jump = { hash: location.hash.split('?')[0], current: [...document.querySelectorAll('#module-list [aria-current="location"]')].map(a => a.textContent), inView: matrix.top >= frame.top && matrix.top < frame.bottom };
   const de = document.documentElement;
   const out = document.createElement('pre');
   out.id = 'probe';
@@ -30,6 +39,7 @@
     rows: rows.length, valueInCard: inside,
     fits: de.scrollWidth <= de.clientWidth && content.scrollWidth <= content.clientWidth,
     before, after, established, total: register.length, emptyBefore, filtered,
+    outline: outline.map(a => a.textContent), scrollers, monoProse, coverage, jump,
   });
   document.body.append(out);
 })();
