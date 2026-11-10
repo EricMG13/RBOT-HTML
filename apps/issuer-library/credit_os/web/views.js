@@ -316,13 +316,13 @@ function reportNumbers(id) {
   const charts=(data[id].charts||[]).map(c=>`<div class="panel-card">${readerChart(id,c,true)}${LEGEND}</div>`).join(''),table=keyNumbers(id);
   return charts||table?`<section class="part" id="numbers"><h3>Key numbers</h3>${charts+table}</section>`:'';
 }
-const findingBlocks=id=>data[id].sections.flatMap(s=>s.blocks).filter(isFindingsTable);
-function findingArticle(id,block,row) {
-  const confidence=block.headers.indexOf('Confidence');
-  return `<article class="finding"><div><h4>${rich(row.cells[0])}</h4><p class="impact"><b>Creditor impact</b>${rich(row.cells[1])}</p></div><aside>${confidence<0?'':`<span class="conf">Confidence<span class="pill">${esc(plain(row.cells[confidence]??''))}</span></span>`}${chipsMarkup(`${id}:${row.line}`)}</aside></article>`;
+// Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
+const findingRows=id=>data[id].summary?.findings??[];
+function findingArticle(id,row) {
+  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${chipsMarkup(`${id}:${row.line}`)}</aside></article>`;
 }
 function reportFindings(id) {
-  const articles=findingBlocks(id).flatMap(block=>block.rows.map(row=>findingArticle(id,block,row)));
+  const articles=findingRows(id).map(row=>findingArticle(id,row));
   return articles.length?`<section class="part" id="findings"><h3>Findings</h3>${articles.join('')}</section>`:'';
 }
 // Sections drawn whole, in the order given. Heading tags are relative to the shallowest section (R33a), one step per level, capped at h6; the part heading stays the only h3.
@@ -801,7 +801,7 @@ function storyCharts(id,noted) {
 function storyModule({module,id,out},noted) {
   const {summary,state}=out;
   const declared=state.declared==null?'':`<span class="badge badge-gray">${esc(state.declared)}</span>`;
-  const findings=findingBlocks(id).flatMap(block=>block.rows.map(row=>findingArticle(id,block,row)));
+  const findings=findingRows(id).map(row=>findingArticle(id,row));
   return `<div class="story-module" data-module="${esc(module)}"><div class="story-head"><h3>${moduleLink(module)}</h3><span class="pill">${esc(summary.confidence)}</span>${declared}</div><p class="bottom-line">${rich(summary.bottomLine.replace(/\n/g,' '))}</p>${findings.join('')}<p class="main-limit"><b>Main limitation</b>${rich(summary.limitation)}</p>${storyCharts(id,noted)}</div>`;
 }
 // One line, no card and no findings: a module that does not reach a conclusion, or has no reader summary at all (R41).
@@ -826,10 +826,7 @@ function creditStory(grouped) {
 // A register row shows when its module is established (or the box is ticked) and it matches the group and confidence filters ('' is all).
 const registerRowShown=(row,filter)=>(filter.all||row.established)&&(!filter.group||row.group===filter.group)&&(!filter.confidence||row.confidence===filter.confidence);
 function findingsRegister(grouped) {
-  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out&&item.out.state.established!==null).flatMap(({module,id,out})=>findingBlocks(id).flatMap(block=>{
-    const at=block.headers.indexOf('Confidence');
-    return block.rows.map(row=>({group,module,established:out.state.established,finding:row.cells[0],impact:row.cells[1],confidence:at<0?'':plain(row.cells[at]??'')}));
-  })));
+  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out).flatMap(({module,id,out})=>findingRows(id).map(row=>({group,module,established:out.state.established,finding:row.finding,impact:row.impact,confidence:plain(row.confidence)}))));
   if(!rows.length)return '';
   const unique=values=>[...new Set(values)];
   const select=(kind,label,all,values)=>`<label for="register-${kind}">${label}</label><select id="register-${kind}" data-register-filter="${kind}"><option value="">${all}</option>${values.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select>`;

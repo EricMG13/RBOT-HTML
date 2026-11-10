@@ -150,6 +150,8 @@ AUDIT_HEADINGS = [
     "Supplied handoffs",
     "All supplied current handoffs and lineage",
     "Source-context assessments",
+    "Front matter",
+    "Request",
 ]
 VIEW_HEADINGS = [
     "Resource bridge and competing uses",
@@ -161,7 +163,7 @@ VIEW_HEADINGS = [
 
 
 def test_audit_set_by_heading_under_findings_answer_key_from_the_ruling():
-    """R31a key (from the deleted node test): six headings go to audit, five do not."""
+    """R31a key (from the deleted node test): eight headings go to audit, five do not."""
     headings = AUDIT_HEADINGS + VIEW_HEADINGS
     sections = [_section("Findings", 2)] + [_section(h, 3, _text("Body.")) for h in headings]
     placed = dict(zip(headings, store.placements(sections)[1:]))
@@ -200,6 +202,27 @@ def test_no_reader_summary_is_neither():
 def test_declared_is_the_front_matter_status_verbatim():
     fields = store.report_fields(SECTIONS, {"confidence": "Medium"})
     assert fields["state"]["declared"] == "Requires More Work"
+
+
+@pytest.mark.parametrize(
+    "front_matter, expected",
+    [
+        ("module: CP-6\ncommittee_status: Refer\ndepends_on: [CP-1]", "Refer"),
+        ("module: CP-6\ncommittee_status:\ndepends_on: [CP-1]", None),
+        ("committee_status:   \nrun_id: r1", None),
+        ("module: CP-6\ncommittee_status:", None),
+    ],
+)
+def test_empty_committee_status_is_no_status_not_the_next_line(front_matter, expected):
+    sections = [
+        {
+            "heading": "Front matter",
+            "level": 1,
+            "line": 1,
+            "blocks": [{"type": "text", "text": front_matter}],
+        }
+    ]
+    assert store.report_fields(sections, None)["state"]["declared"] == expected
 
 
 def test_declared_is_none_without_front_matter():

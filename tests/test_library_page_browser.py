@@ -160,6 +160,7 @@ def report_library(tmp_path: Path, cp0_confidence: str = "Medium") -> Path:
         cp0_extra=inventory_text(digest),
         cp0_confidence=cp0_confidence,
         # Under Findings: the tables are Reference, not audit (R39).
+        cp1_finding=CITED_FINDING,
         cp1_findings=CITED + REPORT_ROWS,
     )
     (run / "source-text").mkdir()
@@ -194,6 +195,10 @@ def test_a_module_report_fits_and_its_chips_open_the_source_page(tmp_path, width
     assert seen["anchor"]["current"] == "Key numbers" and seen["anchor"]["chipStillThere"] is True
 
 
+# A Reader summary finding whose impact cites a page: the Findings part draws a page chip.
+CITED_FINDING = (
+    "| Interest was paid in cash. | K, page:123 says “Cash paid during the period”. | High |"
+)
 GAPS_PROBE = Path(__file__).with_name("browser_probe_gaps.js").read_text(encoding="utf-8")
 # Two citations whose key no inventory knows: each resolves to a gap chip with no page.
 UNKEYED = "\n### Unkeyed citations\n\nThe figure is printed in Z, page:9 and in Y, page:8.\n"
@@ -206,6 +211,7 @@ def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_retur
         "run-a",
         as_of="2024-12-31",
         cp0_extra=inventory_text(digest),
+        cp1_finding=CITED_FINDING,
         cp1_findings=CITED + REPORT_ROWS + UNKEYED,
     )
     (run / "source-text").mkdir()
@@ -295,6 +301,9 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
     assert 0 < seen["established"] < seen["total"], "the run has no not-assessable row"
     assert seen["before"] == seen["established"]  # Not-assessable rows start hidden.
     assert seen["after"] == seen["total"]  # Ticking the checkbox shows every row.
+    assert seen["emptyBefore"] is False  # Rows are shown, so the empty row is not.
+    # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
+    assert seen["filtered"] == {"shown": 0, "emptyShown": True}
 
 
 # A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then
@@ -322,6 +331,7 @@ def nine_part_library(tmp_path: Path) -> Path:
         "run-a",
         as_of="2024-12-31",
         cp0_extra=inventory_text(digest),
+        cp1_finding=CITED_FINDING,
         cp1_findings=CITED + REPORT_ROWS + UNKEYED + CALC_AND_GAPS,
     )
     (run / "source-text").mkdir()
@@ -366,6 +376,26 @@ def test_a_row_route_into_the_reference_part_opens_it_and_escape_returns_to_the_
     assert seen["referenceOpen"] is True and seen["inspectorHidden"] is False
     assert seen["escaped"]["hidden"] is True and seen["escaped"]["onChip"] is True
     assert seen["escaped"]["key"].endswith(f"CP-1.md:{row}")
+
+
+def test_a_row_route_from_the_head_opens_the_fold_holding_the_row(tmp_path):
+    page = nine_part_library(tmp_path)
+    row = (
+        line_of(tmp_path, "### Quoted findings") + 4
+    )  # In Reference only; Key numbers does not draw it.
+    # The section is the head, so only the trigger can open the closed Reference part.
+    seen = probe_route(page, f"#CP-1/head?c=run-a&e={row}")
+    assert seen["referenceOpen"] is True and seen["inspectorHidden"] is False
+
+
+def test_chip_gaps_on_a_row_without_a_gap_opens_the_row_alone(tmp_path):
+    page = nine_part_library(tmp_path)
+    row = (
+        line_of(tmp_path, "### Quoted findings") + 4
+    )  # In Reference only; Key numbers does not draw it.
+    seen = probe_route(page, f"#CP-1/head?c=run-a&e={row}&chip=gaps")
+    assert seen["inspectorHidden"] is False
+    assert seen["rowPressed"] == 1  # The row's own chip is pressed; no gap list was asked for.
 
 
 def test_the_report_canvas_and_old_section_links(tmp_path):

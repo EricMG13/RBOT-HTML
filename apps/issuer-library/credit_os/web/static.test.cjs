@@ -110,6 +110,8 @@ const text = (line, body) => ({ type: 'text', line, text: body });
 const sec = (heading, level, line, where, blocks) => ({ heading, level, line, where, blocks });
 const ref = (heading, line, blocks) => sec(heading, 3, line, 'reference', blocks);
 const view = (heading, line, blocks) => sec(heading, 3, line, 'view', blocks);
+// The store's summary.findings for the Reader summary below (the page draws these, not the tables).
+const READER_FINDINGS = [{ finding: 'Leverage rose.', impact: 'Higher gross leverage.', confidence: 'High', line: 16 }, { finding: 'Cash rose.', impact: 'More cushion.', confidence: 'Medium', line: 17 }];
 const SECTIONS = [
   sec('Reader summary', 3, 10, 'consumed', [
     table(12, ['Bottom line', 'Confidence', 'Main limitation'], [[13, 'Cash up.', 'Medium', 'Synthetic.']]),
@@ -159,7 +161,7 @@ function report(overrides = {}, modSections = null) {
   const sections = overrides.sections || SECTIONS;
   const out = { module: 'CP-1', run: 'run-a', source: 'deliveries/d1/CP-1.md', href: '../runs/run-a/deliveries/d1/CP-1.md', label: 'CP-1', sections,
     placement: sections.map(s => s.where), state: { established: true, declared: null }, words: WORDS,
-    summary: { bottomLine: 'Cash up.', confidence: 'Medium', limitation: 'Synthetic.', line: 13 }, charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }], ...overrides };
+    summary: { bottomLine: 'Cash up.', confidence: 'Medium', limitation: 'Synthetic.', line: 13, findings: READER_FINDINGS }, charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }], ...overrides };
   const data = { [OUT]: out };
   const modules = { [OUT]: { sections: modSections || DEFAULT_MODULES } };
   const evidence = new Map();
@@ -677,18 +679,18 @@ function runData(overrides = {}) {
       sec('Chart data: cover', 3, 50, 'consumed', [chartTable(52, [[53, 'FY2024', '2.1', 'x', 'K']])]),
     ],
     state: { established: true, declared: 'Requires More Work' }, words: { view: 746, reference: 3000, calculations: 1145, limits: 940, audit: 972 },
-    summary: { bottomLine: 'Cash is up and leverage is high.', confidence: 'Medium', limitation: 'Synthetic limit one.', line: 13 },
+    summary: { bottomLine: 'Cash is up and leverage is high.', confidence: 'Medium', limitation: 'Synthetic limit one.', line: 13, findings: READER_FINDINGS },
     charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }, { title: 'Cover', unit: 'x', table: 52, columns: [1] }],
   });
   const cp2a = runOutput('CP-2A', {
     sections: [sec('Reader summary', 3, 10, 'consumed', [table(15, FINDINGS_HEADERS, [[16, 'Downside unmeasured.', 'No cushion test.', 'Low']])])],
     state: { established: false, declared: 'Blocked' }, words: { view: 20, reference: 30, calculations: 5, limits: 7, audit: 9 },
-    summary: { bottomLine: 'No downside is drawn.', confidence: 'Not assessable', limitation: 'Downside inputs are missing.', line: 13 },
+    summary: { bottomLine: 'No downside is drawn.', confidence: 'Not assessable', limitation: 'Downside inputs are missing.', line: 13, findings: [{ finding: 'Downside unmeasured.', impact: 'No cushion test.', confidence: 'Low', line: 16 }] },
   });
   const cp6 = runOutput('CP-6', {
     sections: [sec('Reader summary', 3, 10, 'consumed', [])],
     state: { established: false, declared: null }, words: { view: 1, reference: 2, calculations: 3, limits: 4, audit: 5 },
-    summary: { bottomLine: 'Committee cannot decide yet.', confidence: 'Not assessable', limitation: 'Every upstream module is open.', line: 13 },
+    summary: { bottomLine: 'Committee cannot decide yet.', confidence: 'Not assessable', limitation: 'Every upstream module is open.', line: 13, findings: [] },
   });
   const cpx = runOutput('CP-X', { sections: [], state: { established: null, declared: null }, words: { view: 100, reference: 200, calculations: 50, limits: 0, audit: 0 }, summary: null });
   return { [outId('CP-1')]: cp1, [outId('CP-2A')]: cp2a, [outId('CP-6')]: cp6, [outId('CP-X')]: cpx, ...overrides };
@@ -703,7 +705,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules) {
   for (const [id, out] of Object.entries(data)) for (const s of out.sections) for (const b of s.blocks) {
     for (const r of b.type === 'table' ? b.rows : [b]) evidence.set(`${id}:${r.line}`, { module: out.module, line: r.line });
   }
-  const groups = [['Business and evidence', [['CP-0', 'Source readiness']]], ['Financial performance', [['CP-1', 'Financial foundation']]], ['Outlook and downside', [['CP-2A', 'Downside']]],
+  const groups = [['Business and evidence', [['CP-0', 'Source readiness']]], ['Financial performance', [['CP-1', 'Financial foundation'], ['CP-1B', 'Cash flow']]], ['Outlook and downside', [['CP-2A', 'Downside']]],
     ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'CP-X']]]];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
@@ -772,6 +774,37 @@ test('run report: the chart note prints once per group even when two modules dra
   }).runReport(RUN);
   assert.equal(countOf(groupOf(html, 'Outlook and downside'), /Missing values have no bar/g), 1);
   assert.equal(countOf(html, /Missing values have no bar/g), 2); // One per group that draws a chart.
+});
+
+test('run report: the chart note prints once per group when two modules in the same group both draw charts', () => {
+  const html = runPage(d => {
+    d[outId('CP-1B')] = runOutput('CP-1B', {
+      sections: [sec('Chart data: x', 3, 60, 'consumed', [chartTable(62, [[63, 'FY2024', '1.0', 'x', 'K']])])],
+      state: STATE_ON, words: { view: 1, reference: 1, calculations: 1, limits: 1, audit: 1 },
+      summary: { bottomLine: 'Cash flow is steady.', confidence: 'Medium', limitation: 'Synthetic limit two.', line: 13, findings: [] },
+      charts: [{ title: 'X', unit: 'x', table: 62, columns: [1] }],
+    });
+    return d;
+  }).runReport(RUN);
+  const group = groupOf(html, 'Financial performance');
+  assert.ok(storyModule(html, 'CP-1') && storyModule(html, 'CP-1B'));
+  assert.equal(countOf(group, /<div class="panel-card">/g), 3); // CP-1 draws two charts, CP-1B one.
+  assert.equal(countOf(group, /Missing values have no bar/g), 1);
+});
+
+test('run report: a module under Other modules with a summary has its register row and open item', () => {
+  const html = runPage(d => {
+    d[outId('CP-X')].state = STATE_ON;
+    d[outId('CP-X')].summary = { bottomLine: 'Other is fine.', confidence: 'Medium', limitation: 'Other limit.', line: 13, findings: [{ finding: 'Other finding.', impact: 'Other impact.', confidence: 'Medium', line: 16 }] };
+    d[outId('CP-X')].sections = [sec('Reader summary', 3, 10, 'consumed', [])];
+    return d;
+  }).runReport(RUN);
+  const register = /<table class="register">.*?<\/table>/s.exec(html)[0];
+  const row = /<tr data-group="Other modules"[^>]*>.*?<\/tr>/s.exec(register)[0];
+  assert.deepEqual([...row.matchAll(/<td>(.*?)<\/td>/gs)].map(m => strip(m[1]).trim()), ['Other modules', 'CP-X', 'Other finding.', 'Other impact.', 'Medium']);
+  assert.ok(!row.includes(' hidden'));
+  const items = /<h2>Open items<\/h2>.*?<\/section>/s.exec(html)[0];
+  assert.ok(/<tr><td>Other modules<\/td><th scope="row"><a[^>]*href="#CP-X\/limits[^"]*">CP-X<\/a><\/th><td>Other limit\.<\/td><\/tr>/.test(items), items);
 });
 
 test('run report: a not-assessable module is one line with name link, state, declared status and the limitation, and no finding', () => {

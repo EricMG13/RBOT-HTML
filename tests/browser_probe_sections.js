@@ -13,6 +13,7 @@
     const box = target.getBoundingClientRect();
     seen.target.topInside = box.top >= view.top - 1 && box.top < view.bottom;
   }
+  seen.rowPressed = document.querySelectorAll('.chip[data-evidence][aria-pressed="true"]').length;
   seen.inspectorHidden = document.getElementById('inspector').hidden;
   if (!seen.inspectorHidden) {
     document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

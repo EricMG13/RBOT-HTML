@@ -525,7 +525,7 @@ def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
     return {"summary": summary, "charts": charts, "issue": "; ".join(problems) or None}
 
 
-# Evidence & audit by heading (R31a); the same pattern as EVIDENCE_HEADING in web/views.js.
+# Evidence & audit by heading (R31a); Python decides it and the page reads the placement.
 EVIDENCE_HEADING = re.compile(
     r"^front matter$|^request$|^sources?$|source register|source-context"
     r"|supplied (current )?handoffs?|technical audit",
@@ -533,7 +533,7 @@ EVIDENCE_HEADING = re.compile(
 )
 LEVEL_TWO_PLACEMENT = {"Calculations": "calculations", "Gaps": "limits"}
 CONFIDENCE_NOT_ASSESSABLE = "not assessable"
-COMMITTEE_STATUS = re.compile(r"^committee_status:\s*(.+)$", re.MULTILINE)
+COMMITTEE_STATUS = re.compile(r"^committee_status:[ \t]*(\S.*)$", re.MULTILINE)
 WORD_GROUPS = ("view", "reference", "calculations", "limits", "audit")
 
 

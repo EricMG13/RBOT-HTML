@@ -42,6 +42,7 @@ def put(path: Path, raw: bytes) -> str:
     return sha(raw)
 
 
+FINDING_ROW = "| One observed item. | None assessed. | Low |"
 HANDOFF = """# {module} handoff
 
 ## Request
@@ -57,7 +58,7 @@ HANDOFF = """# {module} handoff
 
 | Finding | Creditor impact | Confidence |
 | --- | --- | --- |
-| One observed item. | None assessed. | Low |
+{finding}
 
 ## Sources
 - fixture
@@ -76,6 +77,7 @@ class RunSpec:
     view_issuer: str | None = None
     cp0_extra: str = ""  # Text appended to the CP-0 handoff, such as a source inventory.
     cp0_confidence: str = "Medium"  # The Confidence cell of the CP-0 Reader summary.
+    cp1_finding: str = FINDING_ROW  # The one row of the CP-1 Reader summary's findings table.
     cp1_findings: str = ""  # Text inserted into the CP-1 handoff just before its Sources section.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
@@ -116,6 +118,7 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
             as_of=as_of,
             bottom=f"{module} bottom line.",
             confidence=spec.cp0_confidence if module == "CP-0" else "Medium",
+            finding=spec.cp1_finding if module == "CP-1" else FINDING_ROW,
         )
         if module == "CP-0":
             answer += spec.cp0_extra
