@@ -431,6 +431,7 @@ class OwnerTable:
     one_unit: bool = False  # Every row states the same Reporting unit (one scale for the figure).
     series: str = ""  # A column whose distinct words are the figure's series, at most MAX_SERIES.
     optional: bool = False  # The module writes the table only if the handoff supplies its case.
+    events: bool = False  # A dated-event table: no unit or basis columns; dates by precision.
 
 
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
@@ -774,6 +775,125 @@ OWNER_TABLES["CP-4C"] = (
 )
 
 
+# Package 5: one dated-event table asked of each lane's owning module (the Calendar tab draws a lane
+# per module that supplies one). Lane name and catalogue guard; the header and checks are shared.
+EVENT_COLUMNS = (
+    *("Event date", "Date precision", "Published", "Event"),
+    *("Status", "Source", "Credit relevance"),
+)
+EVENT_RULES = (
+    "One row per dated event the handoff states. Event date is written at the precision the "
+    "source gives and Date precision names it: `day` YYYY-MM-DD, `month` YYYY-MM, `quarter` "
+    "YYYY-Qn, `year` YYYY. Never write a day the source does not state, and infer no day from a "
+    "coarser date. Published is the publication date (YYYY-MM-DD) when it differs from the event "
+    "date, else `\u2014` (never repeat the event date there). Status starts with `Historical`, "
+    "`Scheduled` or `Scenario`, then ` \u2014 ` and the source's own words, e.g. `Scenario \u2014 "
+    "modelled downgrade trigger`. Record each event once, in the lane of the module that owns "
+    "it; another module refers to it in Credit relevance, it does not repeat the row. Source "
+    "names the document and locator; Credit relevance says why the event matters. An event "
+    "with no stated date has no "
+    "row. If the handoff supplies no dated event, write one row in which every cell is "
+    "`Not supplied: <reason>`. "
+)
+EVENT_LANES: dict[str, tuple[str, str]] = {
+    "CP-0": (
+        "Sources",
+        (
+            "Publication date, reporting period and import timestamp are different dates; the "
+            "Event date is the date the event states, never the import timestamp. Unknown dates "
+            "stay unplaced."
+        ),
+    ),
+    "CP-1A": (
+        "Issuer history",
+        (
+            "Separate announced, completed, cancelled and subsequent events in Status; never "
+            "fold a later payment into an earlier financial period."
+        ),
+    ),
+    "CP-1B": (
+        "Earnings and guidance",
+        (
+            "Reporting-period end is not the release date. No guessed next earnings date: a future "
+            "date only if the source explicitly schedules it."
+        ),
+    ),
+    "CP-DR": (
+        "Research catalysts",
+        (
+            "Retained supplied evidence only, with the impacted consumer in Credit relevance; "
+            "date-free themes stay a watchlist, not a row."
+        ),
+    ),
+    "CP-2D": (
+        "Financing",
+        (
+            "Maturities, dated obligations and funding-gap windows. Maturity is not a refinancing "
+            "commitment. Do not double-count a facility CP-1 and CP-3C both state."
+        ),
+    ),
+    "CP-2E": (
+        "Hedges",
+        (
+            "Hedge expiries and dated terms the handoff actually retains. Notional is not "
+            "effectiveness or fair value. No row without a stated date."
+        ),
+    ),
+    "CP-2H": (
+        "Ratings",
+        (
+            "Separate an observed rating action, a scheduled review and a modelled trigger in "
+            "Status. A historical action only if the handoff states it."
+        ),
+    ),
+    "CP-3": (
+        "Instruments",
+        (
+            "Sourced maturity, call/put, coupon/reset and offer deadlines, with the security "
+            "identity in Event. Do not create coupon schedules or option-exercise assumptions. "
+            "Unknown dates stay unplaced."
+        ),
+    ),
+    "CP-3C": (
+        "Refinancing",
+        (
+            "Source-dated maturities, call windows and explicit deadlines. Show analyst milestones "
+            "separately from contractual deadlines, in Status; preserve contingent triggers."
+        ),
+    ),
+    "CP-4": (
+        "Legal",
+        (
+            "A fixed deadline only when the source or legal module establishes the triggering date "
+            "and calculation; otherwise state the relative condition under Gaps, with no dated row."
+        ),
+    ),
+    "CP-6": (
+        "Decision and watch",
+        (
+            "Explicit decision and assigned review dates with sources. Undated conditions stay a "
+            "watchlist. A user-entered reminder is labelled `User reminder` in Status, separate "
+            "from a sourced issuer event."
+        ),
+    ),
+}
+for _module, (_lane, _guard) in EVENT_LANES.items():
+    OWNER_TABLES[_module] = (
+        *OWNER_TABLES.get(_module, ()),
+        OwnerTable(
+            _module,
+            "EVT",
+            f"Events: {_lane}",
+            (),
+            "",
+            rules=EVENT_RULES + _guard,
+            columns=EVENT_COLUMNS,
+            choices=(("Date precision", ("day", "month", "quarter", "year")),),
+            events=True,
+        ),
+    )
+
+
 def _owner_table(table: MarkdownRoute | OwnerTable) -> OwnerTable:
     if isinstance(table, OwnerTable):
         return table
@@ -790,6 +910,8 @@ def _chart_header(table: MarkdownRoute | OwnerTable) -> list[str]:
     spec = _owner_table(table)
     first = "Step" if spec.steps else "Period"
     leading = list(spec.columns) or [first, *spec.value_columns]
+    if spec.events:
+        return leading
     return [*leading, "Reporting unit", "Basis and limitation"]
 
 
@@ -888,6 +1010,38 @@ def _dates_issue(spec: OwnerTable, header: list[str], row: list[str]) -> str | N
     return None
 
 
+EVENT_SHAPES = {"month": r"\d{4}-(?:0[1-9]|1[0-2])", "quarter": r"\d{4}-Q[1-4]", "year": r"\d{4}"}
+EVENT_STATUS = re.compile(r"(?:Historical|Scheduled|Scenario) \u2014 \S")
+EVENT_KINDS = "Historical, Scheduled or Scenario"
+EVENT_FORMS = {"day": "YYYY-MM-DD", "month": "YYYY-MM", "quarter": "YYYY-Qn", "year": "YYYY"}
+
+
+def _event_issues(spec: OwnerTable, header: list[str], row: list[str]) -> list[str]:
+    """An event date must be in the form its precision names, never a coarser or finer one."""
+    if not spec.events:
+        return []
+    cells = dict(zip(header, row, strict=True))
+    precision, stated, published = cells["Date precision"], cells["Event date"], cells["Published"]
+    issues = []
+    if precision in EVENT_FORMS and not _stated_gap(stated):
+        legal = (
+            _iso_date(stated)
+            if precision == "day"
+            else re.fullmatch(EVENT_SHAPES.get(precision, ""), stated)
+        )
+        if not legal:
+            issues.append(
+                f"Event date `{stated}` must be {EVENT_FORMS[precision]} at precision {precision}."
+            )
+    if published != "\u2014" and not _stated_gap(published) and not _iso_date(published):
+        issues.append(f"Published `{published}` must be YYYY-MM-DD or \u2014.")
+    if published == stated:
+        issues.append("Published repeats the event date: write \u2014 when it is the event date.")
+    if not _stated_gap(cells["Status"]) and not EVENT_STATUS.match(cells["Status"]):
+        issues.append(f"Status `{cells['Status']}` must start with {EVENT_KINDS} and ` \u2014 `.")
+    return issues
+
+
 def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None:
     """What is wrong with one cell of a row table, or None. Nothing is repaired or worked out."""
     allowed = dict(spec.choices).get(name)
@@ -920,6 +1074,8 @@ def _row_table_issues(
     """A row table's rows against its fixed header, cell by cell, in the order stated."""
     issues = []
     ranks = []
+    if spec.events and rows and all(_stated_gap(c) for row in rows for c in row):
+        return []  # The module states it has no dated event: valid, and no lane is drawn.
     for row in rows:
         if len(row) != len(header):
             issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
@@ -929,6 +1085,7 @@ def _row_table_issues(
             problem = _cell_issue(spec, name, cell, unit)
             if problem:
                 issues.append(f"`{heading}` {row[0] or 'row'}: {problem}")
+        issues += [f"`{heading}` {row[0]}: {p}" for p in _event_issues(spec, header, row)]
         order = _order_issue(spec, header, row) if spec.ordered else None
         if order:
             issues.append(f"`{heading}` {row[0]}: {order}")
@@ -971,8 +1128,9 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
     spec = _owner_table(table)
     heading = f"### {spec.heading}"
     if heading not in text.splitlines():
-        if spec.optional:  # A case the handoff does not supply is not asked for, nor drawn.
-            return _misheaded(text, spec.heading)
+        near = _misheaded(text, spec.heading) if spec.optional or spec.events else ()
+        if spec.optional or near:  # An optional case not supplied is not asked for, nor drawn.
+            return near
         return (f"Add `{heading}` inside ## Findings, with its table.",)
     rows = _stated_rows(text, heading)
     header = _chart_header(spec)
@@ -1234,6 +1392,12 @@ BRIDGE_RULES = (
 def _selector(route: MarkdownRoute | OwnerTable) -> str:
     if isinstance(route, OwnerTable) or route.kind == "chart":
         spec = _owner_table(route)
+        if spec.events:
+            return (
+                f"- `### {spec.heading}`: exactly one Markdown table headed "
+                f"`| {' | '.join(_chart_header(spec))} |`, one row per dated event. "
+                f"Every cell is stated, never blank. {spec.rules}"
+            )
         others = [n for n in spec.numbers if spec.in_unit and n not in spec.in_unit]
         counted = [n for n in spec.numbers if n not in others]
         numbers = f" ({', '.join(counted)})" if counted else ""

@@ -707,3 +707,71 @@ def test_a_value_allocation_that_does_not_reconcile_is_named_not_drawn_and_a_gap
     gaps = (gap.format("Enterprise value"), gap.format("Value not distributed"))
     fields = synthetic_charts(chart_section(ALLOCATION, BRIDGE_HEADER, *gaps))
     assert fields["charts"] == [] and fields["issue"] is None
+
+
+# ---- Package 5 (2026-11-10): the calendar lanes. Every value is synthetic.
+EVENT_HEADER = (
+    "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
+)
+EVENT_ROWS = (
+    "| 2025-03-31 | day | — | Note matures | Scheduled — due | Indenture p.1 | Wall |",
+    "| 2025-06 | month | 2025-05-01 | Call window | Historical — announced | Notice | Cost |",
+    "| 2025-Q3 | quarter | — | Review | Scenario — modelled | Memo | Rating |",
+    "| 2026 | year | — | Maturity | Scheduled — due | Filing p.2 | Wall |",
+)
+
+
+def lane_fields(*rows: str, lane: str = "Financing") -> dict:
+    return synthetic_charts(chart_section(f"Events: {lane}", EVENT_HEADER, *rows))
+
+
+def test_an_event_table_is_a_lane_named_by_its_heading_and_is_not_a_chart():
+    fields = lane_fields(*EVENT_ROWS)
+    (lane,) = fields["events"]
+    assert fields["issue"] is None and fields["charts"] == []
+    assert lane["lane"] == "Financing" and lane["gap"] is None and isinstance(lane["table"], int)
+
+
+def test_an_event_table_of_only_not_supplied_is_a_lane_with_its_reason():
+    gap = "Not supplied: the handoff states no dated event"
+    fields = lane_fields(f"| {gap} |" + f" {gap} |" * 6)
+    assert fields["issue"] is None
+    assert fields["events"][0]["gap"] == "the handoff states no dated event"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| 2025-03 | day | — | E | S | Src | R |",
+        "| 2025-02-30 | day | — | E | S | Src | R |",
+        "| 2025-03-31 | month | — | E | S | Src | R |",
+        "| 2025-Q5 | quarter | — | E | S | Src | R |",
+        "| 2025 | week | — | E | S | Src | R |",
+        "| 2025-03-31 | day | May 2025 | E | S | Src | R |",
+        "| 2025-03-31 | day | — | | S | Src | R |",
+        "| Not supplied: undated | day | — | E | S | Src | R |",
+    ],
+)
+def test_an_event_table_out_of_shape_is_named_not_drawn(row):
+    fields = lane_fields(EVENT_ROWS[0], row)
+    assert (
+        fields["events"] == [] and "Events: Financing is not in its fixed table" in fields["issue"]
+    )
+
+
+def test_an_event_table_with_a_changed_header_is_named_not_drawn():
+    header = EVENT_HEADER.replace("Event date", "Date")
+    fields = synthetic_charts(chart_section("Events: Legal", header, EVENT_ROWS[0]))
+    assert fields["events"] == [] and "Events: Legal is not in its fixed table" in fields["issue"]
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| 2025-03-31 | day | — | E | Scheduled | Src | R |",
+        "| 2025-03-31 | day | — | E | Expected — due | Src | R |",
+        "| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |",
+    ],
+)
+def test_an_event_without_a_status_kind_or_with_a_redundant_published_date_is_not_drawn(row):
+    assert lane_fields(EVENT_ROWS[0], row)["events"] == []

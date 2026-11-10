@@ -294,7 +294,36 @@ OWNER_TABLES = {
         ),
     },
 }
+# Package 5 (2026-11-10): every lane's dated-event table. Synthetic rows; the answer key is here.
+EVENT_HEAD = (
+    "| Event date | Date precision | Published | Event | Status | Source | Credit relevance |"
+)
+EVENT_ROWS = (
+    "| 2025-03-31 | day | — | Synthetic note | Scheduled — matures | Synthetic filing p.1 | Wall |",
+    "| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — noted | Memo | Cost |",
+    "| 2025-Q3 | quarter | — | Synthetic review | Scenario — modelled | Synthetic memo | Rating |",
+    "| 2026 | year | — | Synthetic maturity | Scheduled — maturity | Synthetic filing p.2 | Wall |",
+)
+EVENT_LANES = {  # module -> (lane name, a phrase of its catalogue guard the instructions carry)
+    "CP-0": ("Sources", "import timestamp"),
+    "CP-1A": ("Issuer history", "never fold a later payment"),
+    "CP-1B": ("Earnings and guidance", "No guessed next earnings date"),
+    "CP-DR": ("Research catalysts", "date-free themes"),
+    "CP-2D": ("Financing", "Maturity is not a refinancing commitment"),
+    "CP-2E": ("Hedges", "not effectiveness or fair value"),
+    "CP-2H": ("Ratings", "modelled trigger"),
+    "CP-3": ("Instruments", "option-exercise"),
+    "CP-3C": ("Refinancing", "analyst milestones"),
+    "CP-4": ("Legal", "relative condition"),
+    "CP-6": ("Decision and watch", "user-entered reminder"),
+}
+for _module, (_lane, _) in EVENT_LANES.items():
+    OWNER_TABLES.setdefault(_module, {})[f"Events: {_lane}"] = synthetic_table(
+        EVENT_HEAD, *EVENT_ROWS
+    )
 OWNER_PATHWAY = {
+    "CP-3": "portfolio_decision",
+    "CP-DR": "relative_value",
     "CP-4C": "distressed_restructuring",
     "CP-2H": "distressed_restructuring",
     "CP-6": "portfolio_decision",
@@ -2744,7 +2773,7 @@ def bridge_table(*amounts: str, unit: str = "US$m") -> str:
 
 
 def bridge_issues(*amounts: str, unit: str = "US$m") -> tuple[str, ...]:
-    (table,) = cpos_launch.OWNER_TABLES["CP-2D"]
+    table = cpos_launch.OWNER_TABLES["CP-2D"][0]
     return cpos_launch.chart_issues(bridge_table(*amounts, unit=unit), table)
 
 
@@ -2788,7 +2817,7 @@ def test_each_owner_table_carries_its_catalogue_guard(tmp_path, module, phrases)
 
 
 def test_a_bridge_with_a_header_and_no_rows_is_sent_back():
-    (table,) = cpos_launch.OWNER_TABLES["CP-2D"]
+    table = cpos_launch.OWNER_TABLES["CP-2D"][0]
     text = "### Chart data: liquidity bridge\n\n" + synthetic_table(
         "| Step | Amount | Reporting unit | Basis and limitation |"
     )
@@ -2818,7 +2847,7 @@ def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tm
         # The page carries its data JSON-escaped, so an em dash in a heading reads `\u2014` there.
         assert heading.replace("—", "\\u2014") in page
         for cell in table.splitlines()[2].strip("|").split("|"):
-            assert cell.strip() in page
+            assert cell.strip().replace("—", "\\u2014") in page
 
 
 # ---- Package 2 (2026-11-10): the credit-structure tables. Every value is synthetic.
@@ -3127,3 +3156,126 @@ def test_a_recovery_table_with_more_than_three_scenarios_is_sent_back():
     spec = next(t for t in cpos_launch.OWNER_TABLES["CP-4C"] if t.heading == RECOVERY)
     assert any("at most 3" in i for i in cpos_launch.chart_issues(text, spec))
     assert cpos_launch.chart_issues(text.replace("| S3 |", "| S2 |"), spec) == ()
+
+
+# ---- Package 5 (2026-11-10): the calendar lanes. Every value is synthetic.
+def event_spec(module: str):
+    heading = f"Events: {EVENT_LANES[module][0]}"
+    return next(t for t in cpos_launch.OWNER_TABLES[module] if t.heading == heading)
+
+
+def event_text(module: str, *rows: str) -> str:
+    return f"### Events: {EVENT_LANES[module][0]}\n\n" + synthetic_table(EVENT_HEAD, *rows)
+
+
+def event_issues(*rows: str, module: str = "CP-1A") -> tuple[str, ...]:
+    return cpos_launch.chart_issues(event_text(module, *rows), event_spec(module))
+
+
+@pytest.mark.parametrize("module", sorted(EVENT_LANES))
+def test_every_lane_owner_is_asked_for_its_event_table_with_its_guard(tmp_path, module):
+    lane, guard = EVENT_LANES[module]
+    if module in OWNER_PATHWAY or module in COVENANT_MODULES:
+        prepared, *_ = good_task(tmp_path, module)
+        text = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+    else:  # CP-2E is in no pathway: only an explicit --modules run reaches it.
+        text = cpos_launch._selector(event_spec(module))
+    assert f"`### Events: {lane}`" in text and f"`{EVENT_HEAD}`" in text
+    assert guard in text and "YYYY-Qn" in text and "Not supplied: <reason>" in text
+
+
+@pytest.mark.parametrize("module", sorted(EVENT_LANES))
+def test_a_good_event_table_is_accepted_for_each_lane(module):
+    assert event_issues(*EVENT_ROWS, module=module) == ()
+
+
+@pytest.mark.parametrize(
+    ("row", "complaint"),
+    [
+        ("| 2025-03 | day | — | E | S | Src | R |", "Event date `2025-03` must be YYYY-MM-DD"),
+        ("| 2025-02-30 | day | — | E | S | Src | R |", "must be YYYY-MM-DD"),
+        ("| 2025-03-31 | month | — | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-13 | month | — | E | S | Src | R |", "must be YYYY-MM"),
+        ("| 2025-Q5 | quarter | — | E | S | Src | R |", "must be YYYY-Qn"),
+        ("| 2025-Q2 | year | — | E | S | Src | R |", "must be YYYY"),
+        ("| 2025 | week | — | E | S | Src | R |", "Date precision `week` must be one of"),
+        ("| 2025-03-31 | day | May 2025 | E | S | Src | R |", "Published `May 2025`"),
+        ("| 2025-03-31 | day | 2025-02-30 | E | S | Src | R |", "Published `2025-02-30`"),
+        ("| 2025-03-31 | day | — | | S | Src | R |", "Event is blank"),
+        ("| 2025-03-31 | day | — | E | S | Not supplied: none | R |", "Source is blank or not"),
+        ("| Not supplied: undated | day | — | E | S | Src | R |", "Event date is blank or not"),
+    ],
+)
+def test_a_malformed_event_row_is_sent_back(row, complaint):
+    issues = event_issues(EVENT_ROWS[0], row)
+    assert any(complaint in i for i in issues), issues
+
+
+def test_an_event_table_of_only_not_supplied_is_valid_and_a_mixed_one_is_not():
+    gap = "Not supplied: the handoff states no dated event"
+    assert event_issues(f"| {gap} |" + f" {gap} |" * 6) == ()
+    assert event_issues(f"| {gap} |" + f" {gap} |" * 6, EVENT_ROWS[0]) != ()
+    assert event_issues(f"| {gap} | day | — | E | S | Src | R |") != ()
+
+
+def test_an_event_table_needs_its_exact_header_and_a_row():
+    wrong = "### Events: Legal\n\n" + synthetic_table(
+        EVENT_HEAD.replace("Event date", "Date"), EVENT_ROWS[0]
+    )
+    assert any(
+        "needs the table headed" in i for i in cpos_launch.chart_issues(wrong, event_spec("CP-4"))
+    )
+    assert any("at least one row" in i for i in event_issues())
+    assert any(
+        "Add `### Events: Legal`" in i for i in cpos_launch.chart_issues("x", event_spec("CP-4"))
+    )
+
+
+@pytest.mark.parametrize("heading", ["events: legal", "Events:  Legal", "EVENTS: LEGAL"])
+def test_a_misheaded_event_table_is_sent_back_naming_the_exact_heading(heading):
+    text = f"### {heading}\n\n" + synthetic_table(EVENT_HEAD, EVENT_ROWS[0])
+    (issue,) = cpos_launch.chart_issues(text, event_spec("CP-4"))
+    assert "`### Events: Legal`" in issue and heading in issue
+
+
+def test_the_checker_sends_back_a_handoff_with_a_bad_event_precision(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-4")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert "| 2025-Q3 | quarter |" in raw
+    bad = raw.replace("| 2025-Q3 | quarter |", "| 2025-Q3 | day |", 1)
+    issues = _checked_handoff(task, bad.encode(), checker(prepared.layout))
+    assert any("must be YYYY-MM-DD" in issue for issue in issues), issues
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+@pytest.mark.parametrize(
+    ("status", "ok"),
+    [
+        ("Historical — completed", True),
+        ("Scheduled — due", True),
+        ("Scenario — modelled downgrade trigger", True),
+        ("Scheduled", False),
+        ("Scheduled - due", False),
+        ("Expected — due", False),
+        ("scheduled — due", False),
+        ("Scenario — ", False),
+    ],
+)
+def test_an_event_status_starts_with_its_kind_and_a_dash(status, ok):
+    issues = event_issues(f"| 2025-03-31 | day | — | E | {status} | Src | R |")
+    assert (issues == ()) is ok, issues
+    assert ok or any("Status" in i for i in issues), issues
+
+
+def test_a_published_date_equal_to_the_event_date_is_sent_back():
+    issues = event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |")
+    assert any("write \u2014" in i for i in issues), issues
+    assert event_issues("| 2025-03-31 | day | 2025-03-30 | E | Scheduled — due | Src | R |") == ()
+    assert event_issues("| 2025-03 | month | 2025-03-31 | E | Scheduled — due | Src | R |") == ()
+
+
+def test_the_event_rules_say_record_once_and_the_status_kinds():
+    text = cpos_launch._selector(event_spec("CP-2H"))
+    assert "Record each event once, in the lane of the module that owns it" in text
+    assert "another module refers to it in Credit relevance" in text
+    assert "`Historical`, `Scheduled` or `Scenario`" in text

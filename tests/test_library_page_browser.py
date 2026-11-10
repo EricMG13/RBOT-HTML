@@ -116,6 +116,17 @@ STRUCTURE = (
         "Value not distributed | 920 | US$m | Synthetic.",
     )
 )
+# Synthetic: a calendar lane as the launcher asks a module for it (here placed in the CP-1 fixture).
+EVENTS = """
+### Events: Financing
+
+| Event date | Date precision | Published | Event | Status | Source | Credit relevance |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2025-03-31 | day | \u2014 | Synthetic note | Scheduled — due | Synthetic filing p.1 | Wall |
+| 2025-06 | month | 2025-05-01 | Synthetic call | Historical — announced | Synthetic memo | Cost |
+| 2025-Q3 | quarter | \u2014 | Synthetic review | Scenario — modelled | Synthetic memo | Rating |
+| 2025 | year | \u2014 | Synthetic maturity year | Scheduled — due | Synthetic filing p.2 | Wall |
+"""
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -828,3 +839,24 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
         2,
         2,
     )  # No bar for a value not stated.
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_calendar_draws_the_event_lane_with_its_table_and_fits_the_page(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + EVENTS)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_calendar.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Calendar?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert (seen["lanes"], seen["points"], seen["spans"], seen["tableRows"]) == (1, 1, 3, 4)
+    assert seen["laneName"] == "Financing" and seen["focusable"] is True
+    assert seen["tableAfterLanes"] is True and seen["fits"] is True
+    # The Overview draws the same lanes compactly, linked to the Calendar tab, with no table.
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert console == [] and (seen["lanes"], seen["tableRows"], seen["fits"]) == (1, 0, True)
+    assert 'class="event-lanes compact"' in dom and "Open the Calendar tab" in dom

@@ -548,3 +548,18 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 .column-chart .recovery-group{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:0;padding:0 4px 10px;text-align:center}
 .recovery-group .chart-label small{display:block;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);overflow-wrap:anywhere}
 .recovery-group a.col{color:inherit;text-decoration:none}.recovery-group a.col:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+/* Calendar lanes (package 5): existing tokens only; the span is a ruled band, the day a filled point. */
+.event-lanes .lane-row{display:grid;grid-template-columns:minmax(110px,170px) minmax(0,1fr);gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--rule)}
+.lane-name{font-weight:600;overflow-wrap:anywhere}
+.lane-track{position:relative;display:block;height:28px;margin:0 8px;background:var(--quiet);border-radius:var(--radius-inline)}
+.lane-event{position:absolute;top:6px;height:16px;border-radius:var(--radius-inline)}
+.lane-event.point{width:12px;margin-left:-6px;border-radius:50%;background:var(--blue)}
+.lane-event.span{min-width:4px;background:var(--selection);box-shadow:inset 0 0 0 1px var(--navy)}
+.lane-event:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.lane-gap{color:var(--muted)}.lane-gap small{display:block}
+.lane-axis{display:flex;justify-content:space-between;margin:0 8px 0 182px;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
+.event-table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:18px;font-size:var(--fs-compact)}
+.event-table caption{text-align:left;font-weight:600;padding-bottom:6px}
+.event-table th,.event-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
+@media(max-width:720px){.event-lanes .lane-row{grid-template-columns:1fr}.lane-axis{margin-left:8px}}
+.lane-event.scenario{border:2px dashed var(--navy);background:var(--quiet);box-shadow:none}
