@@ -24,3 +24,27 @@ Neither run writes inside this repository or any retained run directory. The pro
 from the launching environment only; no credential file is read. The runs prove this dated case
 and these routes; automated checks cover handoff structure and anchors, not analytical accuracy.
 Outputs are candidates until reviewed.
+
+Second launch: `tdg-forecast-001` delivered but published no forecast (CP-2G declared a blocked
+forecast for want of entry values the launcher never gave; fixed on `claude/forecast-publication`).
+Asked "Run one more live CP-2G test (about USD 1.20, cap USD 10) to prove the fix?", the user said
+"Yes, run it": one fresh launch of the same four modules and scope, cap USD 10, in
+`/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`.
+
+Third launch: `tdg-forecast-002` locked the horizon but left every driver null for want of numeric
+guidance. Asked whether CP-2G should give analyst-judgment drivers, with the option described as a
+method change needing "another paid run of about USD 1.30 to prove", the user said "Yes, allow
+judgment": one fresh launch of the same four modules and scope, cap USD 10, in
+`/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`.
+
+Fourth launch: `tdg-forecast-003` stopped at CP-2A, which read the context's declared but absent
+executed legal documents as a prohibition. Asked "Rerun the four modules with legal documents set
+to "none" (about USD 1.10, cap USD 10)?", the user said "Yes, rerun": one fresh launch of the same
+four modules, the context changed only in `attachments.legal_documents` (`executed` to `none`),
+cap USD 10, in `/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`.
+
+Fifth launch: `tdg-forecast-004` gave every driver, but three ratios at 38 decimal places, so the
+forecast was dropped at delivery (fixed on `claude/forecast-publication`, 31a39f9). Asked "Run one
+more paid live test to prove the forecast publishes (about USD 1.30, cap USD 10)?", the user said
+"Yes, run it": one fresh launch of the same four modules with the run-004 context, cap USD 10, in
+`/private/tmp/claude-501/rbot-live6/runs/tdg-forecast-005`.
