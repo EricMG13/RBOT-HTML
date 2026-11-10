@@ -439,6 +439,48 @@ def test_r6_a_failed_rebuild_changes_nothing_and_is_retried(root, fake_env, monk
     assert len(list((root / "issuers").iterdir())) == 1
 
 
+def test_an_unexpected_rebuild_error_does_not_stop_the_watcher(root, fake_env, monkeypatch):
+    fake_env({"events": DELIVERED})
+    good = cpos_launch.update_library_at
+
+    def broken(_workspace: Path) -> None:
+        raise RuntimeError("surprise")
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", broken)
+    make_drop(root, "credit_snapshot", "acme")
+    w = Watcher(settings(root))  # constructs although the first rebuild raises
+    try:
+        pump(w, lambda: "surprise" in _log(root))
+        for _ in range(3):
+            w.step()  # returns; the run ended but stays unfiled
+        assert "the library could not be rebuilt (surprise); ended runs wait for it" in (
+            activity_js(root)
+        )
+        assert not any((root / "issuers").iterdir())
+        monkeypatch.setattr(cpos_launch, "update_library_at", good)
+        pump(w, lambda: status(root) == ["finished"])
+        assert len(list((root / "issuers").iterdir())) == 1
+    finally:
+        w.close()
+
+
+def test_a_keyboard_interrupt_from_the_rebuild_still_stops_the_watcher(root, monkeypatch):
+    def interrupted(_workspace: Path) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        Watcher(settings(root))
+
+
+def test_a_ruling_other_than_the_standing_one_is_refused_at_start_up(root, tmp_path):
+    other = tmp_path / "2026-11-09-tdg-sol-high-test.md"
+    other.write_text("sol-medium", encoding="utf-8")
+    with pytest.raises(StartupRefused, match="2026-11-09-inbox-automation"):
+        Watcher(settings(root, ruling=other))
+    Watcher(settings(root)).close()
+
+
 def _log(root: Path) -> str:
     log = root / "_engine/logs/watcher.log"
     return log.read_text(encoding="utf-8") if log.is_file() else ""

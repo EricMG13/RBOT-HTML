@@ -22,6 +22,8 @@ from deploy_workflow.model_testing.configs import CONFIGS
 
 ROOT = Path(__file__).resolve().parents[3]
 FORM = ROOT / "docs/templates/context-form.html"
+# The only ruling the watcher runs under; ``Settings.ruling`` defaults to it and start-up checks it.
+STANDING_RULING = ROOT / "docs/rulings/2026-11-09-inbox-automation.md"
 _PAGE = (
     '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
     '<meta http-equiv="refresh" content="0; url=_engine/library/index.html">'
@@ -79,6 +81,10 @@ def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
         raise StartupRefused(
             f"cap {cap} is above USD {RULED_RUN_CAP} per run, the limit of the standing ruling "
             "docs/rulings/2026-11-09-inbox-automation.md"
+        )
+    if ruling.resolve() != STANDING_RULING.resolve():
+        raise StartupRefused(
+            f"the watcher runs only under its standing ruling {STANDING_RULING}, not {ruling}"
         )
     config = CONFIGS.get(config_id)
     if config is None:
