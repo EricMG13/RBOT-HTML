@@ -4,6 +4,26 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
+
+Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
+a blocked forecast with every driver null. Its stated causes were procedural, not evidential: "What
+forecast horizon should be locked: FY2025–FY2027?" and "required invocation and upstream
+acceptance validation cannot be completed through the supplied tools". The method sent has an
+entry protocol (`forecast_horizon`, `base_period`, `cases`; "block_model_when_material_forecast_
+scope_is_missing") that takes its values from a command qualifier the launcher never gave.
+
+- Change: `FORECAST_BLOCK` (launcher preface, outside the method block) now states the command
+  with those three entry values and says the helper scripts are not run in this transport and are
+  not a reason to block. A driver the evidence cannot support still stays null.
+- Test written first and seen failing (`test_the_forecast_instructions_lock_the_entry_values_…`).
+  `tests/test_cpos_launch.py` 157 passed, 1 paid test skipped; quality gate exit 0. Offline
+  prepare: CP-2G's instructions carry the paragraph; CP-0, CP-1 and CP-2A instructions are
+  byte-identical; `tdg-forecast-001` is still listed as on the current methodology.
+- Not verified: that a live CP-2G run now gives drivers and publishes the forecast model, and the
+  Forecast tab with a model. No provider was called for this change. "Open primary handoff" was
+  left as it is: no run can reach it.
+
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
 
 Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside

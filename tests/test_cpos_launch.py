@@ -1900,6 +1900,23 @@ def test_the_forecast_instructions_name_every_allowed_category_and_the_value_for
     assert "[null, null, null]" in cpos_launch.FORECAST_BLOCK
 
 
+def test_the_forecast_instructions_lock_the_entry_values_the_method_would_ask_for():
+    """Live run tdg-forecast-001 (2026-11-10): CP-2G declared a blocked forecast because the
+    method's entry protocol found no forecast horizon and its helper scripts could not be run."""
+    block = cpos_launch.FORECAST_BLOCK
+    # The three entry stages of the method (forecast_horizon, base_period, cases) are given.
+    assert "[forecast horizon: the three fiscal years after the base period]" in block
+    assert "[base period: the current period the context names]" in block
+    assert "[cases: base/upside/downside]" in block
+    assert "do not ask for them and do not block the forecast for them" in block
+    # The helper scripts are a transport mechanic here, not an analytical gate.
+    for script in ("prepare_invocation.py", "validate_handoff.py"):
+        assert script in block
+    assert "is not a reason to block" in block
+    # Evidence still decides: the model may decline a driver it cannot support.
+    assert "Insufficient Information" in block and "[null, null, null]" in block
+
+
 @pytest.mark.parametrize(
     "values", [[{"low": "0.05"}, None, None], [["0.05"], None, None], "null", [], 5, None]
 )

@@ -555,6 +555,16 @@ FORECAST_BLOCK = (
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
     "`scope_limits` is a list of text limits. Set `schema_version` to "
     f"`{cpos_forecast.SCHEMA_VERSION}`.\n\n"
+    # Live run tdg-forecast-001 (2026-11-10): with no command qualifier the method's entry protocol
+    # found no forecast horizon and blocked, and it named the helper scripts as a second gate.
+    "Entry values: this run's command is `Run CP-2G [forecast horizon: the three fiscal years "
+    "after the base period] [base period: the current period the context names] "
+    "[cases: base/upside/downside]`. CP-OS has locked these: do not ask for them and do not block "
+    "the forecast for them. The horizon is the block's `years`. The method's helper scripts "
+    "(`prepare_invocation.py`, `validate_handoff.py`, the scoring script) cannot be run in this "
+    "transport: record each as not run. That, and the lack of an acceptance receipt for a handoff "
+    "CP-OS supplied, is not a reason to block. Evidence still decides each driver: one the "
+    "sources and handoffs cannot support stays `Insufficient Information` with null values.\n\n"
 )
 
 
