@@ -4,6 +4,41 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
+
+Proposal only: `docs/templates/context-form-proposal.html` is new, and
+`docs/design/2026-11-10-context-form-proposal.md` holds the module review and the design.
+`context-form.html`, `context.py`, the inbox and the tests are unchanged. All checks below are
+offline browser and reader checks, run in headless Chromium 1.63. No provider was called and no
+analytical run was made with it.
+
+- **Same output as the current form.** Each of three fixture contexts was loaded into both forms with
+  `fill()` and written with `build()`. The two `context.json` files are byte-identical for each:
+  `cases/context/primary-full.json`, `cases/context/research-minimal.json` and
+  `cases/cpdr-context-cutoff/context.json`.
+- **End to end through the page.**
+  - Three files were made by clicking through the page and downloading: Earnings Update; Distressed
+    with TDG-like dates, a duplicate S&P row and stale peers; and a new issue on Credit Snapshot.
+  - Each loads in `context.load_context` and passes `inbox.drops.check` for its pathway.
+  - Each round-trips through `fill()` and `build()` byte for byte.
+  - The readiness panel showed what its own rules state, for example CP-2H Gap on two S&P rows and
+    CP-1C Gap on one admitted peer. This checks the page against its rules, not against a run.
+- **Inbox copies.** Copies made by the real `write_templates` lock the pathway (5 other cards
+  disabled). A loaded file naming another pathway is replaced, with a note.
+- **Newly caught.** `load_context` refuses a research question containing `|`, and an issuer name
+  with U+2028. The current form writes both; the proposal stops both before download.
+- **Defect found and fixed in the proposal.** A blur that adds a message moved the Next button
+  between mousedown and mouseup, and the click was lost. The current form uses the same pattern; not
+  verified there. After the fix, every stage advanced by click on desktop and by tap at iPhone 13
+  size, with no horizontal scroll at 390 px.
+- **Other checks.** Start over returns the page to a fresh build. No console errors in any run.
+  Quality gate exit 0, with no Python changed.
+- **Not verified:**
+  - Firefox and Safari, and the folder picker in them.
+  - Real issuer folders. The folder check guesses only from file names.
+  - Whether the readiness forecast matches what the modules actually do in a live run. It ports
+    `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.
+
 ## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
 
 Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
