@@ -670,3 +670,25 @@ definitions and conditions. Standalone heading/question and explicitly supported
 legal/brand names are presentation metadata; original handoffs stay unchanged.
 See runs/cpos-ford-ratings-2024-001/verification.json. No new orchestration layer,
 model run, Excel output or inferred exact headroom was introduced.
+
+**Method selections of 2026-11-10 (owner: "Fix all … Keep a copy of the methodology in the
+repo").** Source revision for everything added: `~/Documents/cp-os` at commit `b57a344`, copied
+read-only into `docs/reuse/selected-methods/` and listed with hashes in its `manifest.json`.
+
+- CP-1B runs Deploy V's `cp-1b-earnings-delta` skill (SKILL and `REF_CP-1B_STEPS.md`). The
+  structured-runtime step `earnings_delta.md` needs a `read_inputs` view CP-OS does not give; it
+  blocked on both CP-OS runs that included it. This follows the note above that the three-table
+  contract is narrower than the earlier earnings pack.
+- Each skill is sent the companions its SKILL calls mandatory or binding: CP-2A its own
+  `REF_CP-2A_STEPS.md`; CP-3 the CP-3A and CP-3B runbooks, `REF_CP-3B_STEPS.md` and the schema
+  reference that maps the Sector RV workbook; CP-4 its runbook and the CP-4A and CP-4B runbooks and
+  step bundles; CP-5 its runbook; CP-6 `REF_CP-6A_STEPS.md`; CP-DR the research brief. Every skill
+  module also gets `CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`, the rules its score script applies.
+- Archived but not sent: the rest of `CANON_SHARED.md` and the schema and system references, which
+  the SKILLs open only to resolve a named ambiguity. Not archived: the skills' scripts (not run in
+  this transport) and three `.xlsx` deployment placeholders (enterprise data replaces them).
+- CP-2A stress sizes: `src/deploy_vii/methods/cp2a.md` (analyst-chosen, labelled, anchored
+  assumptions) governs where it and the SKILL ("no unsupported stress magnitude") differ.
+- Dependency edges added as optional (order and supply, never a block): CP-2A after CP-1B and CP-2;
+  CP-2E after CP-1, CP-1A and CP-2; CP-1C and CP-2 after CP-DR. CP-DR joins a pathway that has
+  CP-1C when the context's peer source is `cp_dr_public`.

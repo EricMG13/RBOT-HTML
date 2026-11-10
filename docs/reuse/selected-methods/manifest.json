@@ -603,6 +603,386 @@
       "archive_path": "docs/reuse/selected-methods/runtime/before-retained-planning-PINS.json",
       "sha256": "9cd1dc8562c51d966972b27ccc5b13889601dd7b11acd46359859d2e0b2bc020",
       "use": "Exact prior source before retained-handoff planning and standalone ratings presentation; prior PINS preserves the ancestor catalog hash, not financial expected-value changes."
+    },
+    {
+      "consumed_path": "skills/cp-0-source-readiness/references/CP-0_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/CP-0_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/CP-0_SCHEMA_REFERENCE.md",
+      "sha256": "2f50e7d03351d514deb509d8393d0049cb09c16e65f7cc1f4bbb314e4ad0af26"
+    },
+    {
+      "consumed_path": "skills/cp-0-source-readiness/references/CP-0_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/CP-0_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/CP-0_SYSTEM_REFERENCE.md",
+      "sha256": "b1dc690e2ddb45632280abaa1f5a3d9ba3f63bd02f0871e8a83e7888f0320b40"
+    },
+    {
+      "consumed_path": "skills/cp-0-source-readiness/references/CP-0__SourceReadiness__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/CP-0__SourceReadiness__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/CP-0__SourceReadiness__payload.schema.txt",
+      "sha256": "d867d1b640bbe16c515822ae1d1302c6336ecf12d0740ec678eb6af2b1e25c87"
+    },
+    {
+      "consumed_path": "skills/cp-0-source-readiness/references/CP-PARSE__DataPreparation__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/CP-PARSE__DataPreparation__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/CP-PARSE__DataPreparation__payload.schema.txt",
+      "sha256": "6fd06964b8b16a2646495d1ee822bfd10df184f64e7d6a2054e19ff57b65fad5"
+    },
+    {
+      "consumed_path": "skills/cp-0-source-readiness/references/CP0_CAPACITY_RESUME_CONTRACT_v1.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/CP0_CAPACITY_RESUME_CONTRACT_v1.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/CP0_CAPACITY_RESUME_CONTRACT_v1.md",
+      "sha256": "bed5d23e11ef87912fe2fdd5cac8682038788dae9fb37816e9156d611a455a7d"
+    },
+    {
+      "consumed_path": "skills/cp-0-source-readiness/references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md",
+      "sha256": "45ad6ab2eeeb754ae46a716b7e947e3acac214ea2696ef5e072f10ef7d36451a"
+    },
+    {
+      "consumed_path": "skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
+      "sha256": "d367c334f529a33e371b6c9568b5dce8d487e0f0d1bee3e8c15830555e46e78a"
+    },
+    {
+      "consumed_path": "skills/cp-1b-earnings-delta/SKILL.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1b-earnings-delta/SKILL.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1b-earnings-delta/SKILL.md",
+      "sha256": "b3a9bd8091c1ea7995a68e909b73ffbc178cf57f4b8021630c3ec4f467ecb569"
+    },
+    {
+      "consumed_path": "skills/cp-1b-earnings-delta/references/CP-1B_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1b-earnings-delta/references/CP-1B_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1b-earnings-delta/references/CP-1B_SCHEMA_REFERENCE.md",
+      "sha256": "cf6f1e4163a0e329789f2c66b3c11c4e2156e773982d9e9f425ee72b43711360"
+    },
+    {
+      "consumed_path": "skills/cp-1b-earnings-delta/references/CP-1B_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1b-earnings-delta/references/CP-1B_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1b-earnings-delta/references/CP-1B_SYSTEM_REFERENCE.md",
+      "sha256": "df89a76fd84fb619b73c28339f3f9a6d5c3ab9d281bc0de984735a2c4cb1753f"
+    },
+    {
+      "consumed_path": "skills/cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
+      "sha256": "5a5baa859471254ecba1807dfd067a8cc648fb5e0d40907dbc45a9b1edbd4889"
+    },
+    {
+      "consumed_path": "skills/cp-1c-peer-benchmark/references/CP-1C_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1c-peer-benchmark/references/CP-1C_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/references/CP-1C_SCHEMA_REFERENCE.md",
+      "sha256": "b85719891c3b688f49dd636416f02460d1d9b71e33d8fa01a6bc42ef335f7aad"
+    },
+    {
+      "consumed_path": "skills/cp-1c-peer-benchmark/references/CP-1C_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1c-peer-benchmark/references/CP-1C_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/references/CP-1C_SYSTEM_REFERENCE.md",
+      "sha256": "d85a1cc17ec9a079054a58761efba98ccacef58cd0a15ed084e39b5b38104048"
+    },
+    {
+      "consumed_path": "skills/cp-1c-peer-benchmark/references/CP-1C__PeerBenchmark__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1c-peer-benchmark/references/CP-1C__PeerBenchmark__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1c-peer-benchmark/references/CP-1C__PeerBenchmark__payload.schema.txt",
+      "sha256": "76de802455505ba43735873a84d9d87ade3b9c673493738f4194e3605d8081e5"
+    },
+    {
+      "consumed_path": "skills/cp-2a-downside-pathway/references/CP-2A_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2A_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/CP-2A_SCHEMA_REFERENCE.md",
+      "sha256": "70bd7ca83ee7240e77578a8f8537de7484f5edb1394610fbe1ae038eab30c0a3"
+    },
+    {
+      "consumed_path": "skills/cp-2a-downside-pathway/references/CP-2A_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2A_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/CP-2A_SYSTEM_REFERENCE.md",
+      "sha256": "7e7cdc81a11cecc42d5d55a6b800ddd1b367a94c2bbd60e1a114a10e21614701"
+    },
+    {
+      "consumed_path": "skills/cp-2a-downside-pathway/references/CP-2A__DownsidePathway__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2A__DownsidePathway__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/CP-2A__DownsidePathway__payload.schema.txt",
+      "sha256": "410b680f9a20d540e0dd463dcdf83eb173a12aa7d371b4aae45d8699d3c7226f"
+    },
+    {
+      "consumed_path": "skills/cp-2a-downside-pathway/references/CP-2B_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2B_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/CP-2B_SYSTEM_REFERENCE.md",
+      "sha256": "0a8f116546b54e29ff92939f3bd098a4e0d891a1ca8b98f53b93483986349aeb"
+    },
+    {
+      "consumed_path": "skills/cp-2a-downside-pathway/references/CP-2B__EventCatalystRegister__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/CP-2B__EventCatalystRegister__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/CP-2B__EventCatalystRegister__payload.schema.txt",
+      "sha256": "5a548b862cc9376777b66af8fc25eb78b195e0d0b2b29270b915063f71e530cf"
+    },
+    {
+      "consumed_path": "skills/cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md",
+      "sha256": "3253d74a88849c0cb9a06cd28f8414f8bef5edc20531cf76a2a428a8dc629643"
+    },
+    {
+      "consumed_path": "skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D_SYSTEM_REFERENCE.md",
+      "sha256": "f972c3955115beea485fb9427ecf1590ec9b89de90ff7133b9b4f3be45e561a9"
+    },
+    {
+      "consumed_path": "skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D__LiquidityCashFlowBridge__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D__LiquidityCashFlowBridge__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2d-liquidity-cash-flow-bridge/references/CP-2D__LiquidityCashFlowBridge__payload.schema.txt",
+      "sha256": "f5fc15fd9814d9442776a4c81148fd34340d9d40bb9d0a24ee0259a105a15695"
+    },
+    {
+      "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SCHEMA_REFERENCE.md",
+      "sha256": "1fc18026b3a18e9f347bf5b53574b7aad12859a334b7eb5d101c16fe9bad42bb"
+    },
+    {
+      "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SYSTEM_REFERENCE.md",
+      "sha256": "e0614b8cd2f6a53bc752a2a141b0abc857b20db6f2f1e934558dbfff4ff1638f"
+    },
+    {
+      "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E__MacroFXHedgingSensitivity__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E__MacroFXHedgingSensitivity__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E__MacroFXHedgingSensitivity__payload.schema.txt",
+      "sha256": "78fec7d5f885b6e9d7371b202827ea13d341f60e04396e6d9e989b85d14b9c92"
+    },
+    {
+      "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SCHEMA_REFERENCE.md",
+      "sha256": "c6249797d0c93bbb5eb2e0f82a1505c970ea7530fab26febed4efba1663c6aa8"
+    },
+    {
+      "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SYSTEM_REFERENCE.md",
+      "sha256": "c19efed087a74b9fdb63922d8c13ab1d5d5d738aa7b8a0baa6d69af028ea3c64"
+    },
+    {
+      "consumed_path": "skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F__ESGSustainabilityCreditRisk__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F__ESGSustainabilityCreditRisk__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F__ESGSustainabilityCreditRisk__payload.schema.txt",
+      "sha256": "8f512fe044384fb0ac7a787d2cb6efb413b9b2a6e432bddf1baf983a78be8358"
+    },
+    {
+      "consumed_path": "skills/cp-2g-forward-credit-model/references/CP-2G_ForwardCreditModel.schema.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2g-forward-credit-model/references/CP-2G_ForwardCreditModel.schema.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2g-forward-credit-model/references/CP-2G_ForwardCreditModel.schema.md",
+      "sha256": "d7bd456e2610d36de6512091ca65538f0ec888458ccad0041bb915f99490c496"
+    },
+    {
+      "consumed_path": "skills/cp-2g-forward-credit-model/references/CP-2G__ForwardCreditModel__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2g-forward-credit-model/references/CP-2G__ForwardCreditModel__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2g-forward-credit-model/references/CP-2G__ForwardCreditModel__payload.schema.txt",
+      "sha256": "5424a0a82f95d8e8e69bebc9faaeea2c81e0dff85492eaf9d3750d10e80fe0c3"
+    },
+    {
+      "consumed_path": "skills/cp-2h-ratings-migration-trigger/references/CP-2H_RatingTransition.schema.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2h-ratings-migration-trigger/references/CP-2H_RatingTransition.schema.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/references/CP-2H_RatingTransition.schema.md",
+      "sha256": "f674ef714e27e332e5247b392ca895e646a5893d8d194ee7dedecab87f713a3e"
+    },
+    {
+      "consumed_path": "skills/cp-2h-ratings-migration-trigger/references/CP-2H__RatingTransitionCase__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-2h-ratings-migration-trigger/references/CP-2H__RatingTransitionCase__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-2h-ratings-migration-trigger/references/CP-2H__RatingTransitionCase__payload.schema.txt",
+      "sha256": "81ebb127a618e5f4ce7cc8d640d16d999a17dff14d715b93be8344bb6550e2df"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/SKILL.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/SKILL.md",
+      "exact_copy_found_at": null,
+      "sha256": "7e85b2f545fffcb3ad17f4997e5c577ae9620d279f1ffe8e12aefa8ce38abcd1",
+      "note": "archived before 2026-11-10; cp-os at b57a344 holds a later revision"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3A_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3A_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3A_SCHEMA_REFERENCE.md",
+      "sha256": "6a61f6f3cd229be3ae6a9a9d531271527695bada0e658c6e31319aa43571a9dc"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3A_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3A_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3A_SYSTEM_REFERENCE.md",
+      "sha256": "cf68f9b54c8d2e448d43c64f5071fa4ba154ceb804bd2e42c2a5981b0453b602"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3B_RUNBOOK.md",
+      "sha256": "b506932e7abb629e5da139f0f049673c4737c662c988f4e0ee69fd799787bafa"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3B_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3B_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3B_SCHEMA_REFERENCE.md",
+      "sha256": "c686fbe33f83970fa235e666f66a1caa55b3dbaab6eed2fe87d8bca3de8f640d"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3B_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3B_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3B_SYSTEM_REFERENCE.md",
+      "sha256": "d6084e6ad7f603093c40c7a8f7cf1713bce460e6a6a7c709f641e0df598518fe"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md",
+      "sha256": "31e5ff3c2734e1ce35947e3484bba150413805a1671dacb98c9002db2d427040"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/CP-3_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/CP-3_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/CP-3_SYSTEM_REFERENCE.md",
+      "sha256": "f786e0441b4d07cb087f9e2aeee9502843a094d3f838bab083a14ef70893220b"
+    },
+    {
+      "consumed_path": "skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md",
+      "sha256": "9e134207ab85d004174ef27094948bdcbd798601def55cf307b63c5c302c4711"
+    },
+    {
+      "consumed_path": "skills/cp-3d-market-implied-risk/references/CP-3D_MarketImpliedRisk.schema.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3d-market-implied-risk/references/CP-3D_MarketImpliedRisk.schema.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3d-market-implied-risk/references/CP-3D_MarketImpliedRisk.schema.md",
+      "sha256": "6227c7896f7a36e404b41fef02ce2bc952cfe987645f1e35c714ba1f66f33373"
+    },
+    {
+      "consumed_path": "skills/cp-3d-market-implied-risk/references/CP-3D__MarketImpliedRiskMap__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3d-market-implied-risk/references/CP-3D__MarketImpliedRiskMap__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-3d-market-implied-risk/references/CP-3D__MarketImpliedRiskMap__payload.schema.txt",
+      "sha256": "5cacafce920bb15186f0b91ab0cbcb55c559f0f83574ebefaffacc58662624fd"
+    },
+    {
+      "consumed_path": "skills/cp-4-legal-covenant-interpreter/references/CP-4A_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4A_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4A_SCHEMA_REFERENCE.md",
+      "sha256": "51836c0d862af8fd53f12ef590a7ece45f49585cb9bd039be57be8d988558314"
+    },
+    {
+      "consumed_path": "skills/cp-4-legal-covenant-interpreter/references/CP-4A_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4A_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4A_SYSTEM_REFERENCE.md",
+      "sha256": "80b90a1169dc9082f5bf14543ea67e8bd5cbfc3d3c603c83c40f291375198f7a"
+    },
+    {
+      "consumed_path": "skills/cp-4-legal-covenant-interpreter/references/CP-4B_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4B_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4B_SCHEMA_REFERENCE.md",
+      "sha256": "ab5f03322aac431ac75a4d523da77b38cfa6d1cedd77baee4dedd76b17679daa"
+    },
+    {
+      "consumed_path": "skills/cp-4-legal-covenant-interpreter/references/CP-4B_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4B_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4B_SYSTEM_REFERENCE.md",
+      "sha256": "ca81c7ede3a4086bbcd785146ea05793c844c7243e192abd6bcfa73597a10f28"
+    },
+    {
+      "consumed_path": "skills/cp-4-legal-covenant-interpreter/references/CP-4_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4_SCHEMA_REFERENCE.md",
+      "sha256": "f6f177e675011dc4d2f20f74a63f99f4919d892970bb58e424797aaa849f93df"
+    },
+    {
+      "consumed_path": "skills/cp-4-legal-covenant-interpreter/references/CP-4_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/references/CP-4_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4-legal-covenant-interpreter/references/CP-4_SYSTEM_REFERENCE.md",
+      "sha256": "ef944dcb1e270bb949f576061c72facef6447b55f8e29da4cb0b9fdd1e02725a"
+    },
+    {
+      "consumed_path": "skills/cp-4c-restructuring-fulcrum/references/CP-4C_RestructuringScenario.schema.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4c-restructuring-fulcrum/references/CP-4C_RestructuringScenario.schema.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/references/CP-4C_RestructuringScenario.schema.md",
+      "sha256": "70ae77f77f30bf95a89ad6632c2f0dd458f14507ec4c92c3ee433128eb7adb49"
+    },
+    {
+      "consumed_path": "skills/cp-4c-restructuring-fulcrum/references/CP-4C__RestructuringScenario__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-4c-restructuring-fulcrum/references/CP-4C__RestructuringScenario__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-4c-restructuring-fulcrum/references/CP-4C__RestructuringScenario__payload.schema.txt",
+      "sha256": "c6b6defe9109b7e935fcee051ef16d15703c0918b6aab7c84ef8e689eca5af1e"
+    },
+    {
+      "consumed_path": "skills/cp-5-evidence-trace-validator/references/CP-5A_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/CP-5A_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5A_SCHEMA_REFERENCE.md",
+      "sha256": "05f9ebbdf6f6aabe3dbf39f525f708845cc1d4a7bd6e38a13e09d719bb35b2c9"
+    },
+    {
+      "consumed_path": "skills/cp-5-evidence-trace-validator/references/CP-5A_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/CP-5A_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5A_SYSTEM_REFERENCE.md",
+      "sha256": "05d4bed0e2af02906b69753e12ed5d1fd9ac517bfd3412df1a2951a86c4b561d"
+    },
+    {
+      "consumed_path": "skills/cp-5-evidence-trace-validator/references/CP-5_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/CP-5_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5_SCHEMA_REFERENCE.md",
+      "sha256": "d1ed4179b74f7d0405bdecb312744ace0d88c4a8031e554ace6c98f5965d96c9"
+    },
+    {
+      "consumed_path": "skills/cp-5-evidence-trace-validator/references/CP-5_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-5-evidence-trace-validator/references/CP-5_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-5-evidence-trace-validator/references/CP-5_SYSTEM_REFERENCE.md",
+      "sha256": "72d4c98c2fbdb2cef1f78a7a3835c3f6f07ca65db28990a67ae6cca8cec0aa56"
+    },
+    {
+      "consumed_path": "skills/cp-6-ic-debate-challenge/references/CP-6A_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/CP-6A_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/CP-6A_SCHEMA_REFERENCE.md",
+      "sha256": "f91e1ef62493c6bd734555dc7d4ee8b397a53f939a88f2c0e42b331880ae49e3"
+    },
+    {
+      "consumed_path": "skills/cp-6-ic-debate-challenge/references/CP-6A_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/CP-6A_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/CP-6A_SYSTEM_REFERENCE.md",
+      "sha256": "cedcf6fd097391fb5ce7c9d4f953241b207d9333fb471653af01ca90c1d006f6"
+    },
+    {
+      "consumed_path": "skills/cp-6-ic-debate-challenge/references/CP-6_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/CP-6_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/CP-6_SCHEMA_REFERENCE.md",
+      "sha256": "d98894b5c77c380401f9705dcd00ee71f8252cfefe2a2afcce4b3823654618fc"
+    },
+    {
+      "consumed_path": "skills/cp-6-ic-debate-challenge/references/CP-6_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-6-ic-debate-challenge/references/CP-6_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-6-ic-debate-challenge/references/CP-6_SYSTEM_REFERENCE.md",
+      "sha256": "b5395db90520627a2e3d5b2161dc4499cec41ad75024e51ee7973386d3d30608"
+    },
+    {
+      "consumed_path": "skills/cp-dr-deep-research/references/CP-DR_DeepResearch.schema.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/references/CP-DR_DeepResearch.schema.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/references/CP-DR_DeepResearch.schema.md",
+      "sha256": "6c90808df8632c535cb65b1321f0f16549d12b250e2d0fc8e5964c6ceafe94a8"
+    },
+    {
+      "consumed_path": "skills/cp-dr-deep-research/references/CP-DR__DeepResearch__payload.schema.txt",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-dr-deep-research/references/CP-DR__DeepResearch__payload.schema.txt",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-dr-deep-research/references/CP-DR__DeepResearch__payload.schema.txt",
+      "sha256": "87d4a28dda4a388edecada491b126ad6b630e7b1d08056ed560243e1c6b3cf5e"
+    },
+    {
+      "consumed_path": "CANON_SHARED.md",
+      "archive_path": "docs/reuse/selected-methods/CANON_SHARED.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/CANON_SHARED.md",
+      "sha256": "1ab484c5072a92944e1ed8b1591f96dfff2a021baf2cc230b8033eaa913a232d"
+    },
+    {
+      "consumed_path": "skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
+      "sha256": "5028a6476cdff812a457bdb994e614b15b73f7c663eaa96b533b64cfd758fbf0"
     }
-  ]
+  ],
+  "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill copied read-only from cp-os at commit b57a344. Four SKILL.md files archived earlier (cp-2h, cp-3, cp-6, cp-dr) differ from cp-os at that commit and are kept as archived. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
 }

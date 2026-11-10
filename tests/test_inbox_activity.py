@@ -40,6 +40,21 @@ def test_module_states_follow_the_events():
     )
 
 
+def test_a_module_the_launcher_added_to_the_pathway_is_shown_once_it_starts():
+    """CP-DR joins a pathway with CP-1C when it is the peer source (owner, 2026-11-10); the
+    pathway preset does not list it, so the events are how this view learns of it."""
+    events = [{"event": "module_started", "module": "CP-DR"}]
+    states = module_states("relative_value", events)
+    names = [name for name, _ in states]
+    assert dict(states)["CP-DR"] == "running"
+    assert names.index("CP-DR") < names.index("CP-1C") and names[-1] == "Report"
+    assert "CP-DR" not in dict(module_states("relative_value", []))
+    # A module name the plan does not know (a hand-edited event) is not shown and does not raise.
+    assert "CP-XX" not in dict(
+        module_states("relative_value", [{"event": "module_started", "module": "CP-XX"}])
+    )
+
+
 def test_report_entry_follows_delivery_events():
     running = dict(module_states("earnings_update", [{"event": "delivery_started"}]))
     done = dict(
