@@ -727,9 +727,48 @@ def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:
     return {**lane, "gap": None} if all(_event_row_ok(cells) for cells in rows) else None
 
 
+MAP_PREFIX = "Map: "
+MAP_HEADERS = ["From", "Relationship", "Edge type", "To", "Evidence"]
+_FACTS = ("Documentary Fact", "Management Language", "Analyst Interpretation")
+# Mirrors the launcher's MAPS (cpos_launch.py): each map's own words for an edge type.
+MAP_EDGES = {
+    "ownership and control": ("Ownership", "Legal control", "Guarantee", "Other stated"),
+    "operating model to credit": (*_FACTS, "Insufficient Information"),
+    "credit-risk transmission": (*_FACTS, "Insufficient Information"),
+    "stress scenario": ("Assumption", "Test outcome", "Explanation"),
+    "legal entities": ("Ownership", "Guarantee", "Security", "Structural claim"),
+    "intercreditor": (
+        "Payment rank",
+        "Security rank",
+        "Enforcement control",
+        "Standstill",
+        "Release",
+    ),
+    "support and contradiction": ("Supports", "Contradicts", "Unresolved"),
+}
+
+
+def _edge_map(section: dict[str, Any]) -> dict[str, Any] | None:
+    """A node/edge map from a `Map: <name>` table in its fixed shape, else None. Every edge type is
+    one of the map's own words and every other cell is stated; a table of only stated gaps is a
+    map with its reason and no edge."""
+    name = section["heading"].removeprefix(MAP_PREFIX)
+    tables = [b for b in section["blocks"] if b["type"] == "table"]
+    if name not in MAP_EDGES or len(tables) != 1 or tables[0]["headers"] != MAP_HEADERS:
+        return None
+    rows = [row["cells"] for row in tables[0]["rows"]]
+    drawn = {"name": name, "table": tables[0]["line"]}
+    if rows and all(STATED_GAP.match(c) for cells in rows for c in cells):
+        return {**drawn, "gap": rows[0][0].partition(":")[2].strip()}
+    stated = all(c and not STATED_GAP.match(c) for cells in rows for c in cells)
+    stated = stated and all(cells[4] not in ("\u2014", "-", "\u2013") for cells in rows)
+    legal = stated and all(cells[2] in MAP_EDGES[name] for cells in rows)
+    return {**drawn, "gap": None} if rows and legal else None
+
+
 def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
     """A handoff's reader section and chart tables; a malformed one is named, the handoff reads."""
-    summary, charts, events, problems = None, [], [], []
+    summary, charts, events, maps, problems = None, [], [], [], []
     for section in sections:
         heading = section["heading"]
         if heading == "Reader summary":
@@ -742,6 +781,12 @@ def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
                 events.append(lane)
             else:
                 problems.append(f"{heading} is not in its fixed table")
+        elif heading.startswith(MAP_PREFIX):
+            edge_map = _edge_map(section)
+            if edge_map:
+                maps.append(edge_map)
+            else:
+                problems.append(f"{heading} is not in its fixed table")
         elif heading.startswith(CHART_PREFIX):
             chart = _chart_table(section)
             if chart:
@@ -752,6 +797,7 @@ def reader_fields(sections: list[dict[str, Any]]) -> dict[str, Any]:
         "summary": summary,
         "charts": charts,
         "events": events,
+        "maps": maps,
         "issue": "; ".join(problems) or None,
     }
 

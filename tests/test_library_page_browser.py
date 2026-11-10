@@ -127,6 +127,25 @@ EVENTS = """
 | 2025-Q3 | quarter | \u2014 | Synthetic review | Scenario — modelled | Synthetic memo | Rating |
 | 2025 | year | \u2014 | Synthetic maturity year | Scheduled — due | Synthetic filing p.2 | Wall |
 """
+# Synthetic: a credit-risk transmission map as the launcher asks for it (in the CP-1 fixture).
+MAPS = """
+### Map: credit-risk transmission
+
+| From | Relationship | Edge type | To | Evidence |
+| --- | --- | --- | --- | --- |
+| Synthetic driver | drives | Documentary Fact | Synthetic mechanism | Synthetic p.1 |
+| Synthetic mechanism | squeezes | Management Language | Synthetic outcome | Synthetic p.2 |
+| Synthetic driver | also hits | Analyst Interpretation | Synthetic outcome | Synthetic p.3 |
+| Synthetic outcome | feeds back | Insufficient Information | Synthetic driver | Synthetic p.4 |
+| Synthetic outcome | then | Documentary Fact | Synthetic step 1 | Synthetic p.5 |
+| Synthetic step 1 | then | Documentary Fact | Synthetic step 2 | Synthetic p.6 |
+| Synthetic step 2 | then | Documentary Fact | Synthetic step 3 | Synthetic p.7 |
+| Synthetic step 3 | then | Documentary Fact | Synthetic step 4 | Synthetic p.8 |
+| Synthetic step 4 | then | Documentary Fact | Synthetic step 5 | Synthetic p.9 |
+| Synthetic step 5 | then | Documentary Fact | Synthetic step 6 | Synthetic p.10 |
+| Synthetic step 6 | then | Documentary Fact | Synthetic step 7 | Synthetic p.11 |
+| Synthetic step 7 | then | Documentary Fact | Synthetic step 8 | Synthetic p.12 |
+"""
 CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -860,3 +879,23 @@ def test_the_calendar_draws_the_event_lane_with_its_table_and_fits_the_page(tmp_
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert console == [] and (seen["lanes"], seen["tableRows"], seen["fits"]) == (1, 0, True)
     assert 'class="event-lanes compact"' in dom and "Open the Calendar tab" in dom
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_the_page(
+    tmp_path, width
+):
+    make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + MAPS)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    probe = Path(__file__).with_name("browser_probe_maps.js")
+    (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert (seen["nodes"], seen["edges"], seen["labels"], seen["tableRows"]) == (11, 12, 12, 12)
+    assert seen["statusNodes"] >= 1 and seen["statusStates"] == seen["statusNodes"]
+    assert seen["wide"] is True and seen["scrolls"] is True  # Natural width, scrolled in its card.
+    assert seen["scrollFocusable"] is True and seen["fits"] is True and seen["statusItems"] >= 1
+    assert seen["tableAfterDiagram"] is True and seen["cutEdges"] == 1

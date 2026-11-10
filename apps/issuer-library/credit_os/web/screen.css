@@ -563,3 +563,20 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 .event-table th,.event-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
 @media(max-width:720px){.event-lanes .lane-row{grid-template-columns:1fr}.lane-axis{margin-left:8px}}
 .lane-event.scenario{border:2px dashed var(--navy);background:var(--quiet);box-shadow:none}
+/* Maps (package 6): existing tokens only; no amber or red. Edge type is a word and a line style, a module's state a word and a shape. */
+.map-card{margin:14px 0}.map-card h2,.map-card h3,.map-card h4{margin:0 0 8px}
+.map-scroll{max-width:100%;overflow-x:auto;background:var(--quiet);border:1px solid var(--rule);border-radius:var(--radius-inline);padding:8px}
+.map-scroll:focus-visible{outline:3px solid var(--blue);outline-offset:2px}.map-scroll svg{display:block;flex:none;margin:0 auto}
+.map-node rect{fill:var(--selection);stroke:var(--navy);stroke-width:1.5}.map-node text{font:12px 'Red Hat Text',sans-serif;fill:var(--navy)}
+.map-edge{fill:none;stroke:var(--navy);stroke-width:1.5}.map-edge.cut{stroke:var(--muted)}.map-arrow{fill:var(--navy)}
+.map-edge-label{font:var(--fs-label) 'Red Hat Mono',monospace;fill:var(--navy);paint-order:stroke;stroke:var(--quiet);stroke-width:4px}
+.map-note{color:var(--muted);font-size:var(--fs-compact)}
+.map-table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:12px;font-size:var(--fs-compact)}.map-table caption{text-align:left;font-weight:600;padding-bottom:6px}
+.map-table th,.map-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
+.status-list{list-style:decimal;padding-left:28px;margin:8px 0}.status-item{padding:4px 0;overflow-wrap:anywhere}.status-word{margin:0 6px}.status-why{color:var(--muted)}
+.state-shape{display:inline-block;width:12px;height:12px;margin-right:8px;border:2px solid var(--navy);vertical-align:-1px}
+.state-shape.shape-established{border-radius:50%;background:var(--navy)}.state-shape.shape-open{background:transparent}
+.state-shape.shape-unsummarised{transform:rotate(45deg);border-style:dotted}.state-shape.shape-none{border-radius:50%;border-style:dashed;border-color:var(--muted)}
+.map-state{stroke:var(--navy);stroke-width:2;fill:transparent}.map-state.shape-established{fill:var(--navy)}.map-state.shape-unsummarised{stroke-dasharray:2 2}.map-state.shape-none{stroke:var(--muted);stroke-dasharray:3 2}
+.timeline-table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:12px;font-size:var(--fs-compact)}.timeline-table caption{text-align:left;font-weight:600;padding-bottom:6px}
+.timeline-table th,.timeline-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
