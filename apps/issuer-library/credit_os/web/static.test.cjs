@@ -365,8 +365,8 @@ test('every chart row holds its exact value and a chip set', () => {
   const html = report().moduleReport(OUT);
   const rows = [...html.matchAll(/<div class="chart-row"[^>]*>.*?<\/div>/g)].map(m => m[0]);
   assert.equal(rows.length, 2);
-  assert.ok(rows[0].includes('<strong>6.57</strong>') && rows[0].includes('class="chips"') && rows[0].includes('</span>p.123<span'));
-  for (const row of rows) assert.match(row, /<strong>[^<]+<\/strong>/);
+  assert.ok(rows[0].includes('%">6.57</strong>') && rows[0].includes('class="chips"') && rows[0].includes('</span>p.123<span'));
+  for (const row of rows) assert.match(row, /<strong[^>]*>[^<]+<\/strong>/);
 });
 
 test('findings are articles with impact, confidence and chips', () => {
@@ -416,7 +416,7 @@ test('key numbers read the reference sections whatever the module (CP-2E: a hedg
 test('the chart-row button is a real box, not display:contents', () => {
   const css = read('screen.css');
   assert.ok(!/\.chart-open\{[^}]*display:contents/.test(css));
-  assert.ok(/\.panel-card \.chart-open\{display:grid/.test(css));
+  assert.ok(/\.column-chart \.chart-open,\.column-chart button\.chart-row\{display:grid/.test(css));
 });
 
 test('Open source file is omitted when the build says the source text is missing', () => {
@@ -1230,4 +1230,38 @@ test('library: a file is linked only in the two forms the build writes, a presen
     'runs/a/x.md', 'reports/a?b', 'reports/a#b', ' reports/a', 'reports/a b', '', null, undefined, 7]) {
     assert.strictEqual(libraryPath(bad), false, String(bad));
   }
+});
+
+// Owner, 2026-11-10: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
+// "Chart data:" table whose first column is Period (store.py _chart_table), so each one is drawn as columns over periods.
+test('reader charts: periods run along the x axis, one group per period in table order, one column per series', () => {
+  const [fn, id] = chartFn('readerChart', ['Period', 'Total debt / EBITDA', 'Net debt / EBITDA', 'Reporting unit', 'Basis'],
+    [[81, 'FY2023 / 2023-09-30', '6.33', '5.22', 'x', 'K'], [82, 'FY2024', '6.57', '4.93', 'x', 'K'], [83, 'FY2025', 'Not supplied: no forecast', '4.10', 'x', 'K']]);
+  const html = fn(id, { title: 'Leverage', unit: 'x', table: 80, columns: [1, 2] });
+  assert.ok(html.includes('<div class="column-chart"') && !html.includes('horizontal-chart'));
+  // The series are named once, in a legend, in column order.
+  assert.ok(html.includes('<div class="chart-legend"><span><i class="series-0"></i>Total debt / EBITDA</span><span><i class="series-1"></i>Net debt / EBITDA</span></div>'));
+  const groups = [...html.matchAll(/<button class="chart-row" data-evidence="([^"]+)"[^>]*>(.*?)<\/button>/g)];
+  assert.deepEqual(groups.map((g) => g[1]), [`${id}:81`, `${id}:82`, `${id}:83`]);
+  // The period label is the x-axis label under its columns, written exactly as the handoff has it.
+  assert.deepEqual(groups.map((g) => /<span class="chart-label">(.*?)<\/span>$/.exec(g[2])?.[1]), ['FY2023 / 2023-09-30', 'FY2024', 'FY2025']);
+  for (const [, , body] of groups) assert.equal(countOf(body, /<span class="col/g), 2);
+  // Heights are to scale from a zero baseline; the largest value fills the plot.
+  assert.ok(groups[1][2].includes('<i class="series-0" style="bottom:0%;height:100%"></i><strong style="bottom:100%">6.57</strong>'));
+  assert.ok(groups[0][2].includes('<i class="series-1" style="bottom:0%;height:79.45%"></i><strong style="bottom:79.45%">5.22</strong>'));
+  // A value that is text draws no column; n.a. keeps the text in its title.
+  assert.ok(groups[2][2].includes('<span class="col missing"><strong style="bottom:0%" title="Not supplied: no forecast">n.a.</strong></span>'));
+  assert.ok(groups[0][2].startsWith('<span class="plot"><span class="zero-rule" style="bottom:0%"></span>'));
+  // The button names the period and every value, for a screen reader that does not see the columns.
+  assert.ok(html.includes(`aria-label="FY2023 / 2023-09-30: Total debt / EBITDA 6.33, Net debt / EBITDA 5.22. View source"`));
+});
+
+test('reader charts: a negative value hangs below a raised zero baseline; chips sit under their period', () => {
+  const [fn, id] = chartFn('readerChart', ['Period', 'Free cash flow', 'Reporting unit', 'Basis'], [[81, 'FY2023', '300', 'US$m', 'K'], [82, 'FY2024', '(100)', 'US$m', 'K']]);
+  const html = fn(id, { title: 'FCF', unit: 'US$m', table: 80, columns: [1] }, true);
+  assert.ok(html.includes('<span class="zero-rule" style="bottom:25%"></span>'));
+  assert.ok(html.includes('<i class="series-0" style="bottom:25%;height:75%"></i><strong style="bottom:100%">300</strong>'));
+  assert.ok(html.includes('<i class="series-0 negative" style="bottom:0%;height:25%"></i><strong class="below" style="bottom:0%">(100)</strong>'));
+  // With chips each period is a group: its button holds the columns and label, its chips follow it.
+  assert.equal(countOf(html, /<div class="chart-row" role="group" aria-label="FY202[34]"><button class="chart-open" data-evidence=/g), 2);
 });
