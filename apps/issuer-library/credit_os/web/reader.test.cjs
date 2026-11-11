@@ -193,3 +193,18 @@ test('nearestDates ignores items without a day date and keeps input order for eq
   const items = [{date: '2025-Q3', id: 1}, {date: '2025', id: 2}, {date: '2025-06-30', id: 3}, {date: '2025-06-30', id: 4}, {id: 5}];
   assert.deepEqual(nearestDates(items, '2025-01-01').map(i => i.id), [3, 4]);
 });
+
+test('figureSpans: only an ISO currency code is a prefix', () => {
+  const t = text => figureSpans(text).map(f => f.text);
+  assert.deepEqual(t('The AGM 2025 approved the dividend.'), []);
+  assert.deepEqual(t('Leases under IAS 17 were restated.'), []);
+  assert.deepEqual(t('The LTM 2024 figures were restated.'), []);
+  assert.deepEqual(t('The ECB 2024 stress test passed.'), []);
+  assert.deepEqual(t('Net debt was USD 1,250 million.'), ['USD 1,250 million']);
+});
+
+test('earlierBasis moves a citation written straight after sentence punctuation', () => {
+  assert.deepEqual(earlierBasis('Revenue rose.[CP-1: D4] Margin fell.'), {body: 'Revenue rose. Margin fell.', items: ['[CP-1: D4]']});
+  assert.deepEqual(earlierBasis('Interest was paid.【4:2†source】【4:3†source】 Debt rose.'), {body: 'Interest was paid. Debt rose.', items: ['【4:2†source】', '【4:3†source】']});
+  assert.deepEqual(earlierBasis('**[Insufficient Information]** for the point.'), {body: '**[Insufficient Information]** for the point.', items: []});
+});

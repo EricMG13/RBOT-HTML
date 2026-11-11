@@ -20,7 +20,7 @@ Basis: NBG_2025-03-31_annual-report.pdf, page 41; calculation K1
 ### Key findings
 
 - Leverage is moderate but not low, at 4.2x net debt to EBITDA, so there is little room for an earnings miss.
-Basis: NBG_2024-12-31_Q4-results.pdf
+Basis: NBG_2024-12-31_Q4-results.pdf; NBG_2025-03-31_annual-report.pdf, page 41
 - A large part of the debt comes due soon: 38% of gross debt matures within 24 months, which makes refinancing access the deciding factor.
 Basis: NBG_2025-03-31_annual-report.pdf, pages 43–45; Liquidity (CP-2D)
 - Liquidity support rests on an undrawn revolver that steps down, which narrows the cushion over time.
@@ -54,4 +54,4 @@ Basis: Liquidity (CP-2D)
 | No peer set supplied | Leverage is not benchmarked. |
 
 ## Next module
-CP-2D assesses liquidity against the maturities.
+None. The run ends here.

@@ -5,9 +5,7 @@ Liquidity for Northbridge Synthetic Group (nbg), as of 2025-03-31. SYNTHETIC FIX
 
 ## Sources
 
-| Source | Use |
-| --- | --- |
-| None | No file could be used for this module. |
+No file could be used for this module.
 
 ## Findings
 
@@ -25,4 +23,4 @@ None. The module is blocked.
 | No cash forecast or revolver terms | Liquidity is not assessed. |
 
 ## Next module
-None. The run ends here.
+CP-2 forms the credit view from the data, the calendar and this module.

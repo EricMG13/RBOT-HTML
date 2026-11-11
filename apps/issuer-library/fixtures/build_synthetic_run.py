@@ -30,8 +30,8 @@ from deploy_workflow.owners.cpos_launch import METHOD_MARK, method_text
 SOURCE_DIR = HERE / "synthetic-new-format"
 DEFAULT_FOLDER = "synthetic-nbg-new-format-001"
 SCOPE = "SYNTHETIC FIXTURE: hand-made to the 2026-11-11 handoff contract; not analysis."
-MODULES = ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2D")
-SETTLED = ("0.10", "0.20", "0.15", "0.30", "0.05")
+MODULES = ("CP-0", "CP-1", "CP-1A", "CP-2D", "CP-2")  # CP-2D is upstream of CP-2
+SETTLED = ("0.10", "0.20", "0.15", "0.05", "0.30")
 SUPPLIED = (
     "NBG_2025-03-31_annual-report.pdf",
     "NBG_2024-12-31_Q4-results.pdf",

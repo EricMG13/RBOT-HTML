@@ -92,6 +92,9 @@ const SYMBOLIC_UNIT = /^(?:%|x(?![A-Za-z])|bps(?![A-Za-z])|bp(?![A-Za-z])|pp(?![
 const SCALE_UNIT = /^(?:\s?(?:thousand|million|billion|trillion|bn|k|m)(?![A-Za-z]))/;
 const OTHER_UNIT = /^\s(?:times|notches|notch|days|day|weeks|week|months|month|quarters|quarter|years|year)(?![A-Za-z])/;
 const SYMBOLS = '$€£¥';
+// ISO 4217 codes a credit handoff uses; only these count as a currency prefix (not AGM, IAS, LTM, ECB).
+const CURRENCY_CODES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK', 'HKD', 'SGD', 'CNY', 'INR', 'BRL', 'MXN', 'ZAR', 'TRY', 'PLN', 'CZK'];
+const CURRENCY_BEFORE = new RegExp(`(?:^|[^A-Za-z])(?:${CURRENCY_CODES.join('|')})$`);
 
 function dateRanges(text) {
   const ranges = [];
@@ -114,7 +117,7 @@ function figureSpans(text) {
     if (!unit && /^[A-Za-z]/.test(rest)) continue;
     let from = start;
     if (SYMBOLS.includes(before)) from = start - 1;
-    else if (before === ' ' && /(?:^|[^A-Za-z])[A-Z]{3}$/.test(text.slice(0, start - 1))) from = start - 4;
+    else if (before === ' ' && CURRENCY_BEFORE.test(text.slice(0, start - 1))) from = start - 4;
     const prefixed = from !== start;
     const plain = !m[0].includes(',') && !m[0].includes('.');
     if (!prefixed && !symbolic && !scale && plain) {
@@ -135,7 +138,7 @@ function normaliseLimitation(text) {
 
 // ---- Earlier format (H7): a bracket citation or chip that ends a sentence or the paragraph moves, verbatim, to the items.
 const CITATION = /\[[^\]]*\]|【[^】]*】/g;
-const SENTENCE_END_BEFORE = /[.!?]["')”’]*\s$/;
+const SENTENCE_END_BEFORE = /[.!?]["')”’]*\s?$/;
 const SENTENCE_END_AFTER = /^(?:\s*$|[.!?]+["')”’]*(?:\s|$))/;
 
 function earlierBasis(text) {
