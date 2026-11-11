@@ -1170,7 +1170,7 @@ def test_prose_modules_get_four_passages_and_data_modules_only_the_bottom_line(t
             assert "Reader passages. " not in head, module
         else:
             assert PROSE_BLOCK_START in head, module
-            assert "Where the credit-research reading order's opening H3 differs" in head
+            assert "Where the credit-research reading order's opening H3 or front sequence" in head
             assert DATA_BLOCK not in head, module
         assert "place `### " not in text and "### Reader summary" not in text, module
 
@@ -1188,6 +1188,30 @@ def test_a_report_selector_named_like_a_passage_is_the_passage_and_is_asked_once
     text = (tmp_path / "out" / prepared.plan.instructions["CP-2"].path).read_text()
     assert "- `### Key findings`: the reader passage of that name is this report selector" in text
     assert "- `### Key findings`: prose only." not in text
+
+
+def test_a_blocked_module_is_told_to_keep_its_report_selectors(tmp_path):
+    prepared, _, _ = good_task(tmp_path, "CP-2", "credit_snapshot")
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-2"].path).read_text()
+    head = text.partition(cpos_launch.METHOD_MARK)[0]
+    assert "write only `### Bottom line` of these four sections" in head
+    assert "still each written exactly once even if blocked" in head
+    assert "even if this module is blocked" in head  # the CP-2 collision line
+
+
+def test_the_voice_and_precedence_rules_cover_method_labels_and_the_front_sequence(tmp_path):
+    head = all_texts(tmp_path)["CP-2"].partition(cpos_launch.METHOD_MARK)[0]
+    assert "`Evidence:`, `Risk Mechanic:`, `Credit Implication:`" in head
+    assert "write those as sentences" in head
+    assert "front sequence (the 90-150 word view, quantified drivers and front metrics" in head
+    assert "its table and appendix rules still apply after `### Limitations`" in head
+
+
+def test_the_limitation_instruction_says_repeats_across_the_run_are_refused(tmp_path):
+    head = all_texts(tmp_path)["CP-2"].partition(cpos_launch.METHOD_MARK)[0]
+    assert "any handoff accepted earlier in this run" in head
+    assert "word each limitation for this module's own conclusion" in head
+    assert "Do not repeat a limitation that a supplied handoff" not in head
 
 
 def test_the_canon_reader_layer_goes_to_prose_modules_only(tmp_path):
@@ -1503,8 +1527,9 @@ def test_the_bottom_line_is_retained_in_the_accepted_handoff(tmp_path, provider)
     )
     provider.answer = lambda context: answer(context, routes)
     assert main(argv) == 0
-    handoffs = [p for p in (tmp_path / "out").rglob("*.md") if READER_BOTTOM_LINE in p.read_text()]
-    assert handoffs, "no accepted handoff carries the module's bottom line"
+    folder = next((tmp_path / "out/deliveries").glob("*/delivery.json")).parent
+    handoffs = [p for p in folder.rglob("*.md") if READER_BOTTOM_LINE in p.read_text()]
+    assert handoffs, "no accepted handoff in the delivery folder carries the bottom line"
 
 
 def strip_of(prepared, raw: str, tmp_path: Path, block: str):

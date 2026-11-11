@@ -247,13 +247,16 @@ PROSE_PASSAGES = (
     "evidence against the view and what would change it.\n"
     "- `### Limitations`: a bulleted list, one limitation per item, each saying which "
     "conclusion it changes and how. A limitation that changes no conclusion goes in the "
-    "`## Gaps` table instead. Do not repeat a limitation that a supplied handoff already "
-    "states.\n"
+    "`## Gaps` table instead. CP-OS refuses a limitation that any handoff accepted earlier in "
+    "this run already states, so word each limitation for this module's own conclusion.\n"
     "Everything else in `## Findings` (method sections, registers, tables, report selectors) "
     "follows `### Limitations`, unchanged and exact. If this module is blocked, write only "
-    "`### Bottom line`, saying that the module is not assessable and why. Where the "
-    "credit-research reading order's opening H3 differs from these passage headings, these "
-    "headings govern.\n\n"
+    "`### Bottom line` of these four sections, saying that the module is not assessable and "
+    "why; the report selectors below are still each written exactly once even if blocked "
+    "(state that nothing is assessable where there is nothing to show). Where the "
+    "credit-research reading order's opening H3 or front sequence (the 90-150 word view, "
+    "quantified drivers and front metrics table) differs from these passages, these passages "
+    "govern; its table and appendix rules still apply after `### Limitations`.\n\n"
 )
 DATA_PASSAGE = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
@@ -264,7 +267,9 @@ DATA_PASSAGE = (
 )
 VOICE_RULES = (
     "- Write evidence, risk mechanism and credit implication as ordinary sentences, never as "
-    "labels (no `Evidence:`, `Mechanic:` or `Implication:` lead-ins).\n"
+    "labels (no `Evidence:`, `Mechanic:` or `Implication:` lead-ins). This overrides method "
+    "templates that write `Evidence:`, `Risk Mechanic:`, `Credit Implication:` or similar "
+    "labels in prose or registers: write those as sentences.\n"
     "- In the reader passages write no module code, page number, bracket, chip, hash, or "
     "table, register or calculation ID in a sentence. Name a source in words only when it "
     "matters to the argument.\n"
@@ -1607,7 +1612,8 @@ def _instructions(
     if named:
         selectors += (
             f"\n- {', '.join(f'`### {h}`' for h in named)}: the reader passage of that name is "
-            "this report selector; write it once, not twice."
+            "this report selector; write it once, not twice, and write it even if this module is "
+            "blocked (state that nothing is assessable)."
         )
     first, shared, rest = selectors.partition(EDGE_RULES)
     selectors = first + shared + rest.replace(EDGE_RULES, "")
