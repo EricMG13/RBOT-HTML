@@ -3262,13 +3262,22 @@ def sources_section_text(sections: list[dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
+def names_file(sources_text: str, name: str) -> bool:
+    """Whether the Sources text names the file exactly: the whole name, with only the start or end
+    of the text, white space, `|` or `,` on either side. `report.pdf` is not named by
+    `annual-report.pdf`."""
+    return re.search(rf"(?<![^\s|,]){re.escape(name)}(?![^\s|,])", sources_text) is not None
+
+
 def has_sources_section(sections: list[dict[str, Any]]) -> bool:
     """Whether the handoff has a `## Sources` heading at all (even an empty one)."""
     return any(s["level"] == 2 and s["heading"].strip() == "Sources" for s in sections)
 
 
 def run_calls(run_dir: Path, folder: str, issues: list[str]) -> list[dict[str, Any]]:
-    """live/calls.jsonl as recorded: one row per call with the fields as stored."""
+    """live/calls.jsonl as recorded: one row per call with the fields as stored. A file that is not
+    UTF-8 text lists no call and is named in the issues (documented fail-open: no byte is replaced
+    with a guess)."""
     try:
         raw = b"".join(regular_chunks(run_dir / "live" / "calls.jsonl", follow=False))
     except FileNotFoundError:
@@ -3276,8 +3285,16 @@ def run_calls(run_dir: Path, folder: str, issues: list[str]) -> list[dict[str, A
     except OSError as error:
         issues.append(f"{folder}: live/calls.jsonl could not be read ({describe(error)})")
         return []
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        bad = raw[: error.start].count(b"\n") + 1
+        issues.append(
+            f"{folder}: live/calls.jsonl is not UTF-8 text (line {bad}); no call is listed"
+        )
+        return []
     calls: list[dict[str, Any]] = []
-    for number, line in enumerate(raw.decode("utf-8", errors="replace").splitlines(), 1):
+    for number, line in enumerate(text.splitlines(), 1):
         if not line.strip():
             continue
         try:
@@ -3410,7 +3427,7 @@ def run_evidence(
             no_sources.append(module)
         text = sources_section_text(parsed)
         for name in names:
-            if name in text:
+            if names_file(text, name):
                 read_by.setdefault(name, []).append(module)
     rows = [
         {

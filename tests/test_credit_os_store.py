@@ -1122,6 +1122,23 @@ def test_evidence_some_handoffs_without_sources_stay_unused_and_are_named(tmp_pa
     assert [s["name"] for s in evidence["unused"]] == ["B_other.pdf"]
 
 
+def test_evidence_a_file_is_read_only_when_a_sources_token_is_exactly_its_name(tmp_path):
+    names = ("report.pdf", "annual-report.pdf", "Q3 results.pdf", "notes.txt", "other.pdf")
+    sources = (
+        "- annual-report.pdf\n"  # a list item: only the longer name is named
+        "Also: Q3 results.pdf, notes.txt.\n"  # a name with a space; "notes.txt." is not the name
+        "\n| File | Role |\n| --- | --- |\n| other.pdf | Primary |\n"  # a table cell
+    )
+    evidence = evidence_of(tmp_path, supplied=names, cp0_extra=sources)
+    read = {f["name"]: f["readBy"] for f in evidence["sources"]}
+    assert read == {
+        "annual-report.pdf": ["CP-0"],
+        "Q3 results.pdf": ["CP-0"],
+        "other.pdf": ["CP-0"],
+    }
+    assert [f["name"] for f in evidence["unused"]] == ["report.pdf", "notes.txt"]
+
+
 def test_evidence_handoffs_hashes_calls_and_cap_are_as_recorded(tmp_path):
     evidence = evidence_of(tmp_path, supplied=("A_report.pdf",))
     folder = tmp_path / "runs/run-a"
@@ -1183,6 +1200,18 @@ def test_a_malformed_call_line_is_named_in_the_issues(tmp_path):
     result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
     assert result["issues"] == ["run-a: live/calls.jsonl line 3 is not a call record"]
     assert len(result["runs"]["run-a"]["evidence"]["record"]["calls"]) == 2
+
+
+def test_an_undecodable_call_file_is_named_in_the_issues_and_lists_no_call(tmp_path):
+    make_run(tmp_path, "run-a")
+    calls = tmp_path / "runs/run-a/live/calls.jsonl"
+    calls.write_bytes(calls.read_bytes() + b'{"module_id": "CP-0", "note": "\xff"}\n')
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": []}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert result["issues"] == [
+        "run-a: live/calls.jsonl is not UTF-8 text (line 3); no call is listed"
+    ]
+    assert result["runs"]["run-a"]["evidence"]["record"]["calls"] == []
 
 
 @pytest.mark.parametrize(
