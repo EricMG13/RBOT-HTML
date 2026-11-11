@@ -142,7 +142,7 @@ def method_changes(store: dict[str, Any], library: Library) -> None:
     run, as ``methodChanges``; empty when none."""
     changed = {run["id"]: run["method_changes"] for run in library.runs}
     for run in store["runs"].values():
-        run["methodChanges"] = list(changed.get(run["folder"], []))
+        run["methodChanges"] = list(changed[run["folder"]])
 
 
 def checked_bytes(path: Path, digest: str, label: str) -> bytes:

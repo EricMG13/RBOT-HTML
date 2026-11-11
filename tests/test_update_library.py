@@ -4,6 +4,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from library_fixtures import make_run, method
@@ -249,6 +250,13 @@ def test_data_js_carries_the_method_changes_of_each_listed_run(tmp_path, monkeyp
         "run-a": ["CP-0: methods/cp0.md changed", "CP-1: prompts/CP-1.md changed"],
         "run-b": [],
     }
+
+
+def test_a_store_run_that_is_not_a_listed_run_is_refused_not_shown_as_current():
+    listed = SimpleNamespace(runs=[{"id": "run-a", "method_changes": []}])
+    store = {"runs": {"x": {"folder": "run-z"}}}
+    with pytest.raises(KeyError):
+        update_library.method_changes(store, listed)
 
 
 def test_data_js_carries_state_placement_and_words(tmp_path):

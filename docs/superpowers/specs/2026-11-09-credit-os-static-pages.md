@@ -18,3 +18,4 @@ Owner decisions, 2026-11-09 (session quotes in quotation marks):
 6. Only runs listed by `deploy_workflow.library_index` (completed by CP-OS, current methodology)
    appear. Approved runs today: `runs/cpos-tdg-sol-high-001`, `runs/cpos-tdg-sol-high-cp2-001`.
    No legacy seed or curated legacy case may appear.
+Amended 2026-11-11: a run whose methods have since changed is listed and marked 'Earlier methods' (docs/rulings/2026-11-11-reader-and-issuer-report.md).
