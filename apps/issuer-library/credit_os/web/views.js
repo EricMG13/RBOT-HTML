@@ -565,9 +565,12 @@ const passageSections=id=>Object.values(readerPassages(data[id].sections)).filte
 const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
 const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
+// An output with Events lanes draws them; an earlier-format one that has an event table and no lane draws that table as a timeline.
 function reportTimeline(id) {
   const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
-  return html?`<section class="part" id="timeline">${html}</section>`:'';
+  if(html)return `<section class="part" id="timeline">${html}</section>`;
+  const table=eventTable(data[id].sections);
+  return table?`<section class="part" id="timeline">${eventTimeline(id,table,'h3')}</section>`:'';
 }
 // The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
 const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
@@ -1156,6 +1159,7 @@ const stateWord=established=>established===true?'Reaches a conclusion':establish
 // judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
 const LEAD_MODULES=['CP-6','CP-2'];
 const NO_LEAD='No credit view module completed in this run.';
+const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
 // The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
 // The one place a handoff's prose is drawn (Overview and the module page): a list item loses its "- " marker, the Basis line is not printed, and its
 // figures (or one Basis button) open the inspector. `tables` false draws prose only (Overview).
@@ -1173,9 +1177,9 @@ function overviewEntries(context) {
 }
 const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.out.state);
 const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
-function overviewLead(entries) {
+function overviewLead(entries,earlier) {
   const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
-  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${NO_LEAD}</p></section>`};
+  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
   const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}`:'';
   return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}${key}</section>`};
 }
@@ -1211,22 +1215,29 @@ function overviewCharts(entries) {
   }).filter(html=>/class="(panel-card|map-card)"/.test(html));
   return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${html.join('')}</section>`:'';
 }
-// The next five dated items on or after the run's as-of date, from every module's event lanes.
+// Nearest dates: the next five day-dated items on or after the run's as-of date from every module's event lanes, then (under their own heading)
+// the items dated only to a month, quarter or year whose period has not ended. The sentence when none is drawn names its cause.
+const DAY_DATE=/^\d{4}-\d{2}-\d{2}$/;
+const runHoldsEventTable=context=>runModuleCodes(contexts[context]).some(module=>{const id=defaultOutput(module,context);return Boolean(id)&&Boolean(eventTable(data[id].sections));});
 function overviewDates(context) {
   const asOf=contexts[context].asOf;
   const head='<section class="overview-part" id="overview-dates"><h2>Nearest dates</h2>';
   if(!asOf)return `${head}<p class="intro">This run records no as-of date, so no nearest dates are selected.</p></section>`;
-  const items=eventLanes(context).filter(lane=>lane.gap===null).flatMap(lane=>fixtureTable(lane.id,lane.table).rows.map(row=>({date:row.cells[0],text:row.cells[3],module:data[lane.id].module,line:row.line})));
-  const next=nearestDates(items,asOf);
+  const lanes=eventLanes(context);
+  if(!lanes.length)return `${head}<p class="intro">${runHoldsEventTable(context)?'This run’s handoffs hold an event table but no dated lane, so no nearest dates are selected.':'No event timeline in this run’s handoffs.'}</p></section>`;
+  const items=lanes.filter(lane=>lane.gap===null).flatMap(lane=>fixtureTable(lane.id,lane.table).rows.map(row=>({date:row.cells[0],text:row.cells[3],module:data[lane.id].module,line:row.line})));
+  const next=nearestDates(items,asOf),days=next.filter(item=>DAY_DATE.test(item.date)),periods=next.filter(item=>!DAY_DATE.test(item.date));
   if(!next.length)return `${head}<p class="intro">No dated item on or after ${esc(asOf)} in this run’s handoffs.</p></section>`;
-  const rows=next.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('');
-  return `${head}<table class="dates-table"><caption>The next ${next.length} dated items on or after ${esc(asOf)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></section>`;
+  const table=(caption,list)=>scrollRegion(caption,`<table class="dates-table"><caption>${esc(caption)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${list.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('')}</tbody></table>`);
+  const dated=days.length?table(`The next ${days.length} dated items on or after ${asOf}`,days):'';
+  const coarse=periods.length?`<h3>Dated to a month, quarter or year</h3>${table(`Items dated to a period that ends on or after ${asOf}`,periods)}`:'';
+  return `${head}${dated}${coarse}</section>`;
 }
 function runReport(context) {
   const entries=overviewEntries(context);
   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
   if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
-  const {lead,html}=overviewLead(entries);
+  const {lead,html}=overviewLead(entries,earlierFormat(contexts[context]));
   return html+overviewBottomLines(entries,lead)+overviewLimitations(entries)+overviewCharts(entries)+overviewDates(context);
 }
 // Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
@@ -1281,7 +1292,9 @@ function swapActivityScript(doc,now) {
 const shownOrNot=value=>value===null||value===undefined||value===''?'Not recorded':String(value);
 const readers=codes=>codes.map(code=>`${esc(moduleTitle(code))} <span class="module-code">${esc(code)}</span>`).join(', ');
 const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="${esc(href)}" download aria-label="Download ${esc(named)}">${esc(label)}${icon('download')}</a>`:`<span>${esc(label)}</span> <span class="muted">No link</span>`;
-const evidenceTable=(caption,heads,rows)=>`<table class="history-table"><caption>${caption}</caption><thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+// A wide table scrolls inside its own focusable region, never the page (the region pattern of the library and chart index tables).
+const scrollRegion=(label,table)=>`<div class="table-scroll" role="region" aria-label="${esc(label)}" tabindex="0">${table}</div>`;
+const evidenceTable=(caption,heads,rows)=>scrollRegion(caption,`<table class="history-table"><caption>${esc(caption)}</caption><thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
 function evidenceSources(ev) {
   const used=ev.sources.length?evidenceTable('Supplied files that a handoff’s Sources section names',['Name','Type','Document date','Read by'],ev.sources.map(f=>[esc(f.name),esc(shownOrNot(f.type)),esc(shownOrNot(f.documentDate)),readers(f.readBy)])):'<p class="empty">No handoff’s Sources section names a supplied file.</p>';
   const fileList=files=>`<ul class="report-list">${files.map(f=>`<li class="report-row"><span>${esc(f.name)}</span><span class="muted">${esc(shownOrNot(f.type))} · document date ${esc(shownOrNot(f.documentDate))}</span></li>`).join('')}</ul>`;

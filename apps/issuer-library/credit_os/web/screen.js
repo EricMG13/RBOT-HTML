@@ -183,13 +183,13 @@ function performanceView() {
   const retainedNotes=sectionData(id,'performance').flatMap(s=>s.blocks.filter(b=>b.type==='text')).map(b=>narrativeMarkup(id,b)).join('');
   return `<div class="section-heading"><h2>Performance</h2><span>${esc(table.headers[3])}–${esc(table.headers[1])}</span></div>${trendChart(id,'Net sales')}<div class="section-heading compact"><h3>Exact financial measures</h3></div>${tableMarkup(id,table)}${retainedNotes}`;
 }
-function eventTimeline(id,table) {
+function eventTimeline(id,table,tag='h2') {
   const rowMarkup=row=>{
     const order=eventOrder(row.cells[0]),precision=order===null?'No year stated':order[1]===0?'Year only':'';
     const details=table.headers.slice(1).map((header,i)=>row.cells[i+1]?`<div class="event-detail"><strong>${esc(header)}</strong> ${rich(row.cells[i+1])}</div>`:'').join('');
     return `<li><div class="event-date"><strong>${esc(row.cells[0])}</strong>${precision?`<span>${precision}</span>`:''}</div><div class="event-body">${details}${sourceFooter(`${id}:${row.line}`)}</div></li>`;
   };
-  return `<div class="section-heading"><h2>Issuer events</h2><span>Historical record</span></div><p class="intro">Events are ordered by the first year and month named in each date cell; rows with no year follow. Row text is shown as retained.</p><ol class="timeline">${orderEvents(table.rows).map(rowMarkup).join('')}</ol>`;
+  return `<div class="section-heading"><${tag}>Issuer events</${tag}><span>Historical record</span></div><p class="intro">Events are ordered by the first year and month named in each date cell; rows with no year follow. Row text is shown as retained.</p><ol class="timeline">${orderEvents(table.rows).map(rowMarkup).join('')}</ol>`;
 }
 function businessVisual() {
   const row=findRow(pins['CP-1A'],'Company, business','End markets / concentration');

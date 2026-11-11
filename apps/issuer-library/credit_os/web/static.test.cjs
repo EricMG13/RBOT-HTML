@@ -297,12 +297,17 @@ function report(overrides = {}, modSections = null) {
   }
   const win = { CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
-  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'];
+  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTable', 'eventTimeline'];
   const reader = require('./reader.js');
-  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem, ...['chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => reader[name])];
+  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem, ...['chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => reader[name]), require('./calendar.js').eventTable, realEventTimeline(esc, rich)];
   return new Function(...names, `${src}; return {moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE, moduleTitle, handoffLabel};`)(...args);
 }
 const strip = html => html.replace(/<[^>]+>/g, '');
+// screen.js eventTimeline as written, with the page's helpers stood in (the source footer is a plain marker).
+function realEventTimeline(esc, rich) {
+  const screen = read('screen.js'), calendar = require('./calendar.js');
+  return new Function('esc', 'rich', 'eventOrder', 'orderEvents', 'sourceFooter', `${screen.slice(screen.indexOf('function eventTimeline('), screen.indexOf('function businessVisual('))}; return eventTimeline;`)(esc, rich, calendar.eventOrder, calendar.orderEvents, key => `<small class="footer">${esc(key)}</small>`);
+}
 const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1]);
 const NINE = ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'reference', 'calculations', 'audit'];
 const NINE_RE = /\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"/g;
@@ -848,8 +853,9 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name])];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
+  const eventTimeline = realEventTimeline(esc, rich);
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
   return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, drawnAnchors, defaultOutput, firstSection};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1040,9 +1046,56 @@ test('Overview nearest dates: a later as-of date moves the window; none on or af
   assert.ok(readText(part(gap, 'overview-dates')).includes('No dated item on or after 2025-03-31'));
 });
 
+// Overview nearest dates, from a hand-built `Events:` lane of the given [line, date, precision, event] rows.
+const laneRun = (rows, asOf = '2025-03-31') => runPage(() => {
+  const cells = ['Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance'];
+  const data = overviewData({ 'CP-1A': [sec('Findings', 2, 1, 'view', []), sec('Events: issuer calendar', 3, 10, 'view', [table(11, cells, rows.map(([line, date, precision, event]) => [line, date, precision, '-', event, 'Scheduled', 'K, page 1', 'Relevant.']))])] });
+  data[outId('CP-1A')].events = [{ lane: 'issuer calendar', table: 11, gap: null }];
+  return data;
+}, [], m => m, { record: steps(['CP-1A']), runFields: { asOf }, names: FIXTURE_NAMES });
+const dateRows = html => [...html.matchAll(/<tr><th scope="row">([^<]*)<\/th><td>(.*?)<\/td>/gs)].map(m => [m[1], readText(m[2])]);
+
+test('Overview nearest dates: items dated to a month, quarter or year that has not ended follow the five, verbatim, under their own heading', () => {
+  const rows = [[12, '2025-05-15', 'day', 'First quarter results'], [13, '2025-Q3', 'quarter', 'Rating review'], [14, '2025-06', 'month', 'Refinancing window'], [15, '2025-02', 'month', 'Past month'], [16, '2024', 'year', 'Past year'], [17, '2025', 'year', 'Capex programme']];
+  const html = part(laneRun(rows).runReport(RUN), 'overview-dates');
+  assert.deepEqual(dateRows(html), [['2025-05-15', 'First quarter results'], ['2025-06', 'Refinancing window'], ['2025-Q3', 'Rating review'], ['2025', 'Capex programme']]);
+  assert.ok(html.includes('<caption>The next 1 dated items on or after 2025-03-31</caption>'));
+  const heading = html.indexOf('<h3>Dated to a month, quarter or year</h3>');
+  assert.ok(heading > html.indexOf('First quarter results') && heading < html.indexOf('Refinancing window'), 'under their own heading, after the five');
+  assert.ok(!html.includes('Past month') && !html.includes('Past year'), 'a period that ended before the as-of date is left out');
+});
+
+test('Overview nearest dates: only period-dated items still on or after the as-of date are listed, with no empty day table', () => {
+  const html = part(laneRun([[12, '2025-Q3', 'quarter', 'Rating review']]).runReport(RUN), 'overview-dates');
+  assert.deepEqual(dateRows(html), [['2025-Q3', 'Rating review']]);
+  assert.ok(!html.includes('The next') && html.includes('<h3>Dated to a month, quarter or year</h3>') && !html.includes('No dated item'));
+});
+
+test('Overview nearest dates: the sentence names the cause: a run with no event table says so, one that holds an event table but no lane says that', () => {
+  const none = readText(part(overviewPage({ 'CP-1': FIXTURE['CP-1'] }).runReport(RUN), 'overview-dates'));
+  assert.equal(none, 'Nearest datesNo event timeline in this run’s handoffs.');
+  const earlierEvents = [sec('Findings', 2, 1, 'view', []), sec('Events', 3, 10, 'view', [table(11, ['Date', 'Event'], [[12, 'June 6, 2024', 'Notes redeemed']])])];
+  const held = readText(part(overviewPage({ 'CP-1A': earlierEvents }).runReport(RUN), 'overview-dates'));
+  assert.equal(held, 'Nearest datesThis run’s handoffs hold an event table but no dated lane, so no nearest dates are selected.');
+  const ended = readText(part(laneRun([[12, '2025-01-31', 'day', 'Past']]).runReport(RUN), 'overview-dates'));
+  assert.equal(ended, 'Nearest datesNo dated item on or after 2025-03-31 in this run’s handoffs.');
+});
+
+test('narrow pages (W1): every Evidence table and the Overview nearest-dates tables sit in a labelled, focusable scroll region', () => {
+  const region = label => `<div class="table-scroll" role="region" aria-label="${label}" tabindex="0"><table`;
+  const html = evidenceView({ r: { evidence: EVIDENCE } })('r');
+  assert.equal(countOf(html, /<table/g), 4);
+  for (const label of ['Supplied files that a handoff’s Sources section names', 'The delivered Markdown of each module', 'Hashes the run records', 'Model calls, in the order recorded']) assert.ok(html.includes(region(label)), label);
+  const rows = [[12, '2025-05-15', 'day', 'First quarter results'], [13, '2025-Q3', 'quarter', 'Rating review']];
+  const dates = part(laneRun(rows).runReport(RUN), 'overview-dates');
+  assert.equal(countOf(dates, /<table/g), 2);
+  assert.ok(dates.includes(region('The next 1 dated items on or after 2025-03-31')) && dates.includes(region('Items dated to a period that ends on or after 2025-03-31')));
+  assert.equal(countOf(dates, /<\/table><\/div>/g), 2, 'each table closes inside its region');
+});
+
 test('Overview of an earlier-format run: no lead, no bottom lines, no limitations from the old summary; modules still listed by name', () => {
   const html = runPage(d => d, [], m => m, { record: steps(['CP-1', 'CP-2A', 'CP-6', 'CP-X']), runFields: { asOf: '2025-03-31' } }).runReport(RUN);
-  assert.equal(readText(part(html, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
+  assert.equal(readText(part(html, 'overview-lead')), 'Credit viewThis run is in the earlier format: its handoffs carry no reader passages for Overview to select.');
   const list = part(html, 'overview-bottom-lines');
   assert.deepEqual([...list.matchAll(/<div class="bottom-entry" data-module="([^"]+)"/g)].map(m => m[1]), ['CP-1', 'CP-2A', 'CP-6', 'CP-X']);
   assert.equal(countOf(list, /No bottom line in this handoff\./g), 4);
@@ -1236,6 +1289,26 @@ test('module page: a module with event lanes draws its own timeline, and one wit
   assert.ok(cp1a.includes('<span class="lane-name">issuer calendar</span>') && countOf(cp1a, /class="lane-event point/g) === 9);
   assert.ok(!cp2.includes('id="timeline"') && !cp2.includes('lane-name'));
   assert.ok(page.reportParts(outId('CP-1A')).some(p => p[0] === 'timeline' && p[1] === 'Timeline'));
+});
+
+// One CP-1A output of the given sections, placed as the store places an earlier-format handoff's sections (here: all in the view).
+const placedPage = sections => runPage(() => { const d = overviewData({ 'CP-1A': sections }); d[outId('CP-1A')].placement = sections.map(s => s.where); return d; }, [], m => m, { record: steps(['CP-1A']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+test('module page (W2): an output with an event table and no Events lane draws its timeline from that table; with a lane the lane stands alone', () => {
+  const rows = [[12, 'June 6, 2024', 'Notes redeemed', 'K, page 41'], [13, 'May 21 2024', 'Term loan repriced', 'K, page 42'], [14, 'Ongoing', 'Covenant testing', 'K, page 43']];
+  const sections = [sec('Findings', 2, 1, 'view', []), sec('Business, structure and governance events', 3, 10, 'view', [table(11, ['Date', 'Event', 'Source'], rows)])];
+  const page = placedPage(sections);
+  const html = page.moduleReport(outId('CP-1A'));
+  assert.ok(/<section class="part" id="timeline"><div class="section-heading"><h3>Issuer events<\/h3>/.test(html), html.slice(0, 300));
+  // Rows are ordered by the year and month a date cell names; a row with no year follows. Text as written.
+  assert.deepEqual([...html.matchAll(/<div class="event-date"><strong>([^<]*)<\/strong>/g)].map(m => m[1]), ['May 21 2024', 'June 6, 2024', 'Ongoing']);
+  assert.ok(html.includes(`<small class="footer">${outId('CP-1A')}:13</small>`), 'each row keeps its source line');
+  assert.ok(page.reportParts(outId('CP-1A')).some(p => p[0] === 'timeline' && p[1] === 'Timeline'));
+  assert.ok(!html.includes('class="event-lanes'));
+  // A table that is not an event table draws no timeline; a lane is drawn as lanes alone.
+  const other = placedPage([sec('Findings', 2, 1, 'view', []), sec('Other', 3, 10, 'view', [table(11, ['Item', 'Value'], [[12, 'a', 'b']])])]);
+  assert.ok(!other.moduleReport(outId('CP-1A')).includes('id="timeline"'));
+  const lane = fixturePage().moduleReport(outId('CP-1A'));
+  assert.ok(lane.includes('class="event-lanes compact"') && !lane.includes('class="timeline"'));
 });
 
 test('module page (H4): an earlier-format handoff keeps its parts and sections, with its chips behind a Basis button, not in the prose', () => {

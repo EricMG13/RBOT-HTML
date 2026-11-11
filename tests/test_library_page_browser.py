@@ -159,6 +159,9 @@ def chrome() -> str:
     return found
 
 
+EARLIER_LEAD = "This run is in the earlier format: its handoffs carry no reader passages for Overview to select."
+
+
 def visit(page: Path, route: str = "", width: int = 1280) -> tuple[str, list[str]]:
     """The page's DOM after it ran, and its console messages."""
     done = subprocess.run(
@@ -213,7 +216,7 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     assert console == []
     # The Overview selects (ruling H5): this earlier-format run has no reader passages, so no
     # lead, and the visuals catalogue places no CP-1 chart on it; the charts stay with the module.
-    assert 'id="overview-lead"' in dom and "No credit view module completed in this run." in dom
+    assert 'id="overview-lead"' in dom and EARLIER_LEAD in dom
     assert "No bottom line in this handoff." in dom and 'id="overview-dates"' in dom
     assert 'class="navigator"' in dom and 'class="workbench overview-workspace"' in dom
     assert len(re.findall(r'<div class="panel-card">', dom)) == 0
@@ -517,7 +520,7 @@ def test_the_overview_fits_and_has_no_module_navigator(tmp_path, width):
         "overview-dates",
     ]
     # An earlier-format run has no passages (H7): no lead or bottom line; modules still listed.
-    assert "No credit view module completed in this run." in seen["lead"]
+    assert EARLIER_LEAD in seen["lead"]
     assert seen["bottomLines"][:2] == ["Source readiness Not assessable", "Financial foundation"]
 
 
@@ -894,12 +897,18 @@ def test_the_overview_lists_the_nearest_dates_instead_of_drawing_lanes_and_fits_
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
     # The Calendar tab is retired (decision 12) and the Overview draws no lane (H5): it lists the
-    # dated items on or after the as-of date. Only 2025-03-31 is a day; the month, quarter and
-    # year rows are not dated items.
+    # dated items on or after the as-of date: 2025-03-31 is the only day; the month, quarter and
+    # year rows follow it under their own heading, earliest period end first (L5).
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert console == [] and seen["fits"] is True
-    assert seen["dates"] == ["2025-03-31Synthetic noteFinancial foundation"]
+    assert seen["dates"] == [
+        "2025-03-31Synthetic noteFinancial foundation",
+        "2025-06Synthetic callFinancial foundation",
+        "2025-Q3Synthetic reviewFinancial foundation",
+        "2025Synthetic maturity yearFinancial foundation",
+    ]
+    assert "Dated to a month, quarter or year" in dom
     assert "event-lanes" not in dom and "W-Calendar" not in dom
 
 
@@ -1068,3 +1077,39 @@ def test_the_inspector_draws_every_basis_item_of_every_paragraph_as_the_handoff_
                     assert f"page{pages}" in drawn["text"], (item, drawn["text"])
     assert len(drawn_lines) == CP2_BASIS_ITEMS_BY_PARAGRAPH
     assert console == []
+
+
+NARROW_PROBE = (
+    Path(__file__).with_name("browser_probe_narrow_tables.js").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize(
+    ("route", "tables"),
+    [
+        ("#W-Overview?c=synthetic-nbg-new-format-001", 1),
+        ("#W-Evidence?c=synthetic-nbg-new-format-001", 4),
+    ],
+)
+def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route, tables):
+    """W1: the Overview nearest dates and the Evidence tables do not widen a phone-width page."""
+    for script, args in (("fixtures/build_synthetic_run.py", []), ("update_library.py", [])):
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "apps/issuer-library" / script),
+                "--workspace",
+                str(tmp_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(NARROW_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, route, 500)
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert console == []
+    assert seen["pageFits"] is True
+    assert seen["tables"] == seen["inRegion"] == tables
+    assert seen["scrolling"] >= 1
