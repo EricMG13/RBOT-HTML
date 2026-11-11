@@ -6,7 +6,13 @@ framework. Every request is checked before any body byte is read:
 
 * ``Host`` must be exactly ``<host>:<port>`` as started (and ``localhost:<port>`` when the host is
   ``127.0.0.1``); otherwise 403.
+* A request target must be a path (it starts with ``/``): an absolute URI is 400.
 * Every request other than GET must carry ``Origin: http://<Host>``; otherwise 403 and no change.
+  A GET that carries ``Origin`` must carry the same value. Any request whose ``Sec-Fetch-Site`` is
+  present and is not ``same-origin`` or ``none`` is 403: a page on another site cannot read the
+  library through an analyst's browser. A request with neither header (not a browser) is served.
+* Every response carries ``Cross-Origin-Resource-Policy: same-origin`` and ``nosniff``.
+* At most ``MAX_CONNECTIONS`` connections are open; one beyond that is closed at once.
 * A body needs ``Content-Length`` (else 411). JSON bodies are at most 1 MiB (else 413) and must be
   one JSON value (else 400). An upload's length is at most ``submissions.MAX_FILE`` (else 400,
   judged from the header). Every connection serves one request and closes.
@@ -45,12 +51,18 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
     plan order, then ``["Report", ...]``; ``stalled`` is added (true) when no event for an hour.
     ``report`` is a path under the library folder, relative to the root, once filed.
 ``GET /library/<path>``
-    A read-only file under ``_engine/library``. 404 for anything that resolves (links followed)
-    outside it, for a folder without ``index.html``, and for a path that does not decode as UTF-8.
-    The type comes from the file name; ``X-Content-Type-Options: nosniff`` is always sent.
+    A read-only file under ``_engine/library``. The final path (``index.html`` appended for a
+    folder) is resolved with links followed and must be a regular file inside the library: 404 for
+    anything else, and for a path that does not decode as UTF-8. The type comes from the file name.
+    The page is served with ``connect-src 'none'; form-action 'none'; frame-ancestors 'self'`` and
+    ``X-Frame-Options: SAMEORIGIN``, so its own script cannot call this API.
+``GET /activity.js``
+    ``_engine/activity.js`` (the library's Run activity, loaded as ``../activity.js``), under the
+    same rules and headers as a library file; it must itself be in ``_engine``.
 
 ``main`` runs this server in a daemon thread and the watcher's ``step`` every poll in the main
-thread; each poll also calls ``submissions.sweep``.
+thread; ``step`` also sweeps stale uploads. ``--host`` must be this machine's own address: a
+wildcard address (``0.0.0.0``, ``::``) can never equal a ``Host`` header and is refused.
 """
 
 from __future__ import annotations
@@ -82,10 +94,15 @@ log = logging.getLogger(__name__)
 
 MAX_JSON = 1024 * 1024
 SOCKET_TIMEOUT = 60  # seconds a connection may stall; a stalled upload cannot hold a thread
+# Each connection holds a thread for up to SOCKET_TIMEOUT. The service is used by a few colleagues,
+# so 64 is far above real use and low enough that idle sockets cannot exhaust threads or memory.
+MAX_CONNECTIONS = 64
 _POLICY = (
     "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
-    "font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'"
+    "font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; "
+    "form-action 'none'; frame-ancestors 'none'"
 )
+_LIBRARY_POLICY = "connect-src 'none'; form-action 'none'; frame-ancestors 'self'"
 _JSON = "application/json; charset=utf-8"
 _FAILED = "the service failed; see its log"
 _UNKNOWN = "unknown submission"  # the text submissions raises for an id it does not hold
@@ -121,6 +138,25 @@ class _Server(ThreadingHTTPServer):
     watcher: Watcher
     allowed_hosts: frozenset[str]
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.active_connections = 0
+        self._count = threading.Lock()
+        super().__init__(*args, **kwargs)
+
+    def verify_request(self, request: Any, client_address: Any) -> bool:
+        with self._count:
+            if self.active_connections >= MAX_CONNECTIONS:
+                return False  # closed by the server loop with no handler thread
+            self.active_connections += 1
+        return True
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self._count:
+                self.active_connections -= 1
+
 
 class Handler(BaseHTTPRequestHandler):
     timeout = SOCKET_TIMEOUT
@@ -151,6 +187,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _serve(self, route: Any) -> None:
         try:
+            if not self.path.startswith("/"):
+                raise _refuse(400, "the request target must be a path")
             self._check_origin()
             if self.headers.get("Transfer-Encoding") is not None:
                 raise _refuse(411, "a body needs Content-Length")
@@ -170,10 +208,12 @@ class Handler(BaseHTTPRequestHandler):
         hosts = self.headers.get_all("Host") or []
         if len(hosts) != 1 or hosts[0] not in self._service.allowed_hosts:
             raise _refuse(403, "this address is not the one the service was started on")
-        if self.command != "GET":
-            origins = self.headers.get_all("Origin") or []
-            if origins != [f"http://{hosts[0]}"]:
-                raise _refuse(403, "the request did not come from the service's own page")
+        site = self.headers.get_all("Sec-Fetch-Site")
+        if site is not None and site not in (["same-origin"], ["none"]):
+            raise _refuse(403, "the request came from another site")
+        origins = self.headers.get_all("Origin") or []
+        if (self.command != "GET" or origins) and origins != [f"http://{hosts[0]}"]:
+            raise _refuse(403, "the request did not come from the service's own page")
 
     def _send(self, reply: _Reply) -> None:
         if isinstance(reply.body, bytes):
@@ -185,6 +225,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.send_response(reply.status)
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
             self.send_header("Content-Length", str(len(data)))
             for name, value in headers.items():
                 self.send_header(name, value)
@@ -235,10 +276,16 @@ class Handler(BaseHTTPRequestHandler):
             raise _Reply(
                 200,
                 page,
-                {"Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": _POLICY},
+                {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Content-Security-Policy": _POLICY,
+                    "X-Frame-Options": "DENY",
+                },
             )
         if path.startswith(_LIBRARY):
-            self._library(path)
+            self._file(self._layout.engine / "library", path[len(_LIBRARY) :], direct=False)
+        if path == "/activity.js":
+            self._file(self._layout.engine, "activity.js", direct=True)
         found = _SUBMISSION.fullmatch(path)
         if found and found[2] == "reading":
             raise _Reply(200, self._guarded(lambda: submissions.reading(self._layout, found[1])))
@@ -314,21 +361,36 @@ class Handler(BaseHTTPRequestHandler):
         shown.setdefault("modules", activity.module_states(record.pathway, []))
         return {key: shown[key] for key in _RUN_FIELDS if key in shown}
 
-    def _library(self, path: str) -> None:
-        """Serve a file under ``_engine/library``; anything that resolves outside it is a 404."""
-        library = (self._layout.engine / "library").resolve()
+    def _file(self, base: Path, relative: str, *, direct: bool) -> None:
+        """Serve a regular file inside ``base``; anything else is a 404.
+
+        The final path is decided first (``index.html`` appended for a folder), then resolved with
+        links followed, and that resolved path is what is checked and read. ``direct`` also
+        requires the file to sit in ``base`` itself.
+        """
+        root = base.resolve()
         try:
-            relative = urllib.parse.unquote(path[len(_LIBRARY) :], errors="strict")
-            target = (library / relative.lstrip("/")).resolve()
-            if target.is_dir():
-                target = target / "index.html"
-            inside = target.is_relative_to(library) and target.is_file()
+            wanted = root / urllib.parse.unquote(relative, errors="strict").lstrip("/")
+            if wanted.resolve().is_dir():
+                wanted = wanted / "index.html"
+            target = wanted.resolve()
+            inside = target.is_relative_to(root) and target.is_file()
+            inside = inside and (not direct or target.parent == root)
+            data = target.read_bytes() if inside else b""
         except (UnicodeDecodeError, ValueError, OSError):  # not UTF-8, a NUL, a loop of links
             inside = False
         if not inside:
             raise _refuse(404, "not found")
         kind = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-        raise _Reply(200, target.read_bytes(), {"Content-Type": kind})
+        raise _Reply(
+            200,
+            data,
+            {
+                "Content-Type": kind,
+                "Content-Security-Policy": _LIBRARY_POLICY,
+                "X-Frame-Options": "SAMEORIGIN",
+            },
+        )
 
 
 def make_server(watcher: Watcher, host: str, port: int) -> ThreadingHTTPServer:
@@ -354,13 +416,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _loop(watcher: Watcher) -> None:
     while True:
-        watcher.step()
-        try:
-            submissions.sweep(watcher.layout, time.time())
-        except OSError:
-            # Documented fail-open: the sweep only removes stale uploads; a folder that vanished
-            # or cannot be read is retried next poll. The traceback is logged.
-            log.exception("the sweep of stale uploads failed")
+        watcher.step()  # which also sweeps the stale uploads, keeping the queued ones
         time.sleep(watcher.settings.poll_seconds)
 
 
@@ -371,6 +427,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if args.max_running < 1 or args.max_per_day < 1:
         print("--max-running and --max-per-day must be at least 1", file=sys.stderr)
+        return 2
+    if args.host in ("", "0.0.0.0", "::"):
+        print(
+            "--host: pass this machine's own address, not 0.0.0.0 (no Host header would match)",
+            file=sys.stderr,
+        )
         return 2
     settings = Settings(args.root, max_running=args.max_running, max_per_day=args.max_per_day)
     try:

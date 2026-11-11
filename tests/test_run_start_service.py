@@ -7,8 +7,10 @@ boundary, the upload limits, the approval digest and that no response carries th
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,7 +18,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from inbox_fixtures import CONTEXT, KEY, layout, pump, settings
@@ -75,7 +77,7 @@ class Service:
         body: bytes | dict[str, Any] | None = None,
         *,
         origin: str | None = "",
-        host: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> Reply:
         data = json.dumps(body).encode() if isinstance(body, dict) else body
         request = urllib.request.Request(f"http://{self.host}{path}", data=data, method=method)
@@ -83,8 +85,8 @@ class Service:
             origin = f"http://{self.host}"
         if origin is not None and method != "GET":
             request.add_header("Origin", origin)
-        if host is not None:
-            request.add_header("Host", host)
+        for name, value in (headers or {}).items():
+            request.add_header(name, value)
         try:
             with urllib.request.urlopen(request, timeout=20) as response:
                 return Reply(response.status, response.headers, response.read())
@@ -174,11 +176,15 @@ def test_a_post_without_or_with_a_foreign_origin_changes_nothing(svc):
 
 
 def test_a_request_for_another_host_name_is_refused(svc):
-    assert svc.call("GET", "/", host="evil.example").status == 403
-    assert svc.call("GET", "/", host="evil.example:1").status == 403
+    assert svc.call("GET", "/", headers={"Host": "evil.example"}).status == 403
+    assert svc.call("GET", "/", headers={"Host": "evil.example:1"}).status == 403
     port = svc.host.rsplit(":", 1)[1]
-    assert svc.call("GET", "/", host=f"localhost:{port}").status == 200  # loopback alias
-    made = svc.call("POST", "/api/submissions", host="evil.example", origin="http://evil.example")
+    assert (
+        svc.call("GET", "/", headers={"Host": f"localhost:{port}"}).status == 200
+    )  # loopback alias
+    made = svc.call(
+        "POST", "/api/submissions", headers={"Host": "evil.example"}, origin="http://evil.example"
+    )
     assert made.status == 403
     assert not list(layout(svc.root).uploads.iterdir())
 
@@ -186,8 +192,8 @@ def test_a_request_for_another_host_name_is_refused(svc):
 def test_a_service_started_on_another_name_has_no_loopback_alias(service_factory):
     other = service_factory("localhost")
     port = other.server.server_address[1]
-    assert other.call("GET", "/", host=f"localhost:{port}").status == 200
-    assert other.call("GET", "/", host=f"127.0.0.1:{port}").status == 403
+    assert other.call("GET", "/", headers={"Host": f"localhost:{port}"}).status == 200
+    assert other.call("GET", "/", headers={"Host": f"127.0.0.1:{port}"}).status == 403
 
 
 def _raw(svc: Service, request: bytes) -> bytes:
@@ -381,8 +387,174 @@ def test_the_page_is_served_with_a_same_origin_policy(svc):
     )
 
 
-def test_a_stalled_connection_times_out(svc):
-    assert service.Handler.timeout == 60
+def test_a_stalled_connection_times_out(service_factory, monkeypatch):
+    monkeypatch.setattr(service.Handler, "timeout", 0.3)
+    stalled = service_factory()
+    port = stalled.server.server_address[1]
+    with socket.create_connection(("127.0.0.1", port), timeout=10) as idle:
+        started = time.monotonic()
+        assert idle.recv(10) == b""  # the server closed it; the client sent nothing
+        assert time.monotonic() - started < 5
+    assert service.SOCKET_TIMEOUT == 60 and service.Handler.timeout == 0.3
+
+
+def _library(svc: Service) -> Path:
+    library = layout(svc.root).engine / "library"
+    library.mkdir(parents=True, exist_ok=True)
+    return library
+
+
+def test_a_linked_index_html_is_not_served_from_outside_the_library(svc):
+    library = _library(svc)
+    (layout(svc.root).state / "inner.txt").write_text("secret", encoding="utf-8")
+    (library / "d").mkdir()
+    (library / "d" / "index.html").symlink_to(layout(svc.root).state / "inner.txt")
+    for path in ("/library/d/", "/library/d", "/library/d/index.html"):
+        reply = svc.call("GET", path)
+        assert reply.status == 404 and b"secret" not in reply.body, path
+    (library / "e").mkdir()
+    (library / "e" / "index.html").write_text("<p>e</p>", encoding="utf-8")
+    assert svc.call("GET", "/library/e/").body == b"<p>e</p>"
+
+
+def test_a_foreign_site_cannot_read_a_library_file(svc):
+    library = _library(svc)
+    (library / "data.js").write_text("window.x=1;", encoding="utf-8")
+    for site in ("cross-site", "same-site", "bogus"):
+        got = svc.call("GET", "/library/data.js", headers={"Sec-Fetch-Site": site})
+        assert got.status == 403 and b"window" not in got.body, site
+    for site in ("same-origin", "none"):
+        assert svc.call("GET", "/library/data.js", headers={"Sec-Fetch-Site": site}).status == 200
+    foreign = svc.call("GET", "/library/data.js", headers={"Origin": "http://evil.example"})
+    assert foreign.status == 403
+    own = svc.call("GET", "/library/data.js", headers={"Origin": f"http://{svc.host}"})
+    assert own.status == 200
+    assert svc.call("GET", "/library/data.js").status == 200  # no header: not a browser
+    page = svc.call("GET", "/", headers={"Sec-Fetch-Site": "cross-site"})
+    assert page.status == 403
+    blocked = svc.call("POST", "/api/submissions", headers={"Sec-Fetch-Site": "cross-site"})
+    assert blocked.status == 403 and not list(layout(svc.root).uploads.iterdir())
+
+
+def test_every_response_carries_a_same_origin_resource_policy(svc):
+    _library(svc)
+    (_library(svc) / "a.html").write_text("<p>a</p>", encoding="utf-8")
+    replies = [
+        svc.call("GET", "/"),
+        svc.call("GET", "/library/a.html"),
+        svc.call("GET", "/library/missing"),
+        svc.call("GET", "/api/runs/none"),
+        svc.call("POST", "/api/submissions"),
+        svc.call("GET", "/", headers={"Host": "evil.example"}),
+        svc.call("GET", "/", headers={"Sec-Fetch-Site": "cross-site"}),
+    ]
+    assert [r.headers["Cross-Origin-Resource-Policy"] for r in replies] == ["same-origin"] * 7
+
+
+def test_the_start_page_cannot_be_framed_and_a_library_page_cannot_call_the_api(svc):
+    _library(svc)
+    (_library(svc) / "a.html").write_text("<p>a</p>", encoding="utf-8")
+    page = svc.call("GET", "/")
+    assert "frame-ancestors 'none'" in page.headers["Content-Security-Policy"]
+    assert page.headers["X-Frame-Options"] == "DENY"
+    shown = svc.call("GET", "/library/a.html")
+    assert shown.headers["Content-Security-Policy"] == (
+        "connect-src 'none'; form-action 'none'; frame-ancestors 'self'"
+    )
+    assert shown.headers["X-Frame-Options"] == "SAMEORIGIN"
+
+
+def test_connections_beyond_the_ceiling_are_closed_at_once(service_factory, monkeypatch):
+    monkeypatch.setattr(service, "MAX_CONNECTIONS", 2)
+    held = service_factory()
+    port = held.server.server_address[1]
+    idle = [socket.create_connection(("127.0.0.1", port), timeout=10) for _ in range(2)]
+    try:
+        deadline = time.monotonic() + 5
+        while cast(service._Server, held.server).active_connections < 2:
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as extra:
+            assert extra.recv(10) == b""  # closed with no handler thread and no reply
+        idle.pop().close()  # a freed slot is usable again
+        deadline = time.monotonic() + 5
+        while held.call("GET", "/api/runs/none").status != 404:
+            assert time.monotonic() < deadline
+            time.sleep(0.05)
+    finally:
+        for sock in idle:
+            sock.close()
+
+
+def test_a_request_target_that_is_not_a_path_is_refused(svc):
+    for target in (
+        f"http://{svc.host}/api/submissions",
+        "http://evil.example/api/submissions",
+        "*",
+    ):
+        head = f"POST {target} HTTP/1.1\r\nHost: {svc.host}\r\nOrigin: http://{svc.host}\r\n"
+        got = _raw(svc, (head + "Content-Length: 0\r\n\r\n").encode())
+        assert got.startswith(b"HTTP/1.0 400"), target
+    assert not list(layout(svc.root).uploads.iterdir())
+
+
+def test_the_activity_file_is_served_under_the_library_rules(svc):
+    engine = layout(svc.root).engine
+    (engine / "activity.js").write_text("window.A=1;", encoding="utf-8")
+    got = svc.call("GET", "/activity.js")
+    assert got.status == 200 and got.body == b"window.A=1;"
+    assert "javascript" in got.headers["Content-Type"]
+    assert got.headers["Cross-Origin-Resource-Policy"] == "same-origin"
+    assert got.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert svc.call("GET", "/activity.js", headers={"Sec-Fetch-Site": "cross-site"}).status == 403
+    (engine / "activity.js").unlink()
+    secret = layout(svc.root).state / "inner.txt"
+    secret.write_text("secret", encoding="utf-8")
+    (engine / "activity.js").symlink_to(secret)
+    assert svc.call("GET", "/activity.js").status == 404
+
+
+def test_the_loop_leaves_the_sweep_to_the_watcher(root, monkeypatch):
+    watcher = Watcher(settings(root))
+    calls: list[Any] = []
+    real = submissions.sweep
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        calls.append(args)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(submissions, "sweep", counted)
+
+    def stop(_seconds: float) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(service.time, "sleep", stop)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            service._loop(watcher)
+    finally:
+        watcher.close()
+    assert len(calls) == 1  # step() sweeps once; the loop adds none
+
+
+def test_the_watcher_sweep_removes_a_stale_upload_and_keeps_a_queued_one(root):
+    watcher = Watcher(settings(root))
+    try:
+        stale = submissions.new(layout(root))
+        old = layout(root).uploads / stale
+        past = time.time() - submissions.STALE_SECONDS - 100
+        os.utime(old, (past, past))
+        fresh = submissions.new(layout(root))
+        watcher.step()
+        assert not old.exists() and (layout(root).uploads / fresh).exists()
+    finally:
+        watcher.close()
+
+
+def test_a_wildcard_address_is_refused_at_start_up(root, capsys):
+    for host in ("0.0.0.0", "::"):
+        assert service.main(["--root", str(root), "--port", "0", "--host", host]) == 2
+        assert "pass this machine's own address, not 0.0.0.0" in capsys.readouterr().err
 
 
 def test_start_up_refuses_without_the_key_or_with_a_second_instance(root, monkeypatch, capsys):
@@ -399,3 +571,10 @@ def test_start_up_refuses_without_the_key_or_with_a_second_instance(root, monkey
         first.close()
     assert service.main([*argv, "--max-running", "0"]) == 2
     assert service.main([*argv, "--port", "70000"]) == 2
+
+
+def test_start_up_refuses_a_root_path_that_is_too_long(root, capsys):
+    long_root = root / ("d" * 90)
+    long_root.mkdir()
+    assert service.main(["--root", str(long_root), "--port", "0"]) == 2
+    assert "use a shorter path" in capsys.readouterr().err
