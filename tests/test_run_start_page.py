@@ -719,7 +719,10 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
     seen = page.run(f"""
     await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
     const S = await review();
+    const itemPs = [...document.querySelectorAll('#rv-ready [data-module] p')];
     const out = {{S, start: gate(), n: ticks().length,
+      shownNeeding: itemPs.filter(p => !!p.querySelector('.rv-tick')).length,
+      maxPerItem: Math.max(...itemPs.map(p => p.querySelectorAll('[data-tick]').length)),
       rowOutcomes: ticks().map(t => t.closest('[data-module]').dataset.outcome)}};
     const all = ticks();
     all.slice(1).forEach(t => {{ t.checked = true; change(t); }});
@@ -741,9 +744,10 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
     return out;
     """)
     need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
-    # One tick per gap, limited or will-refuse item of the service, and one per check it can fix;
-    # the page's own items (final wave, ruling 2) are ticked as well.
-    assert need and seen["n"] >= len(need)
+    # One tick per item that needs one (service or page rules); no item offers two.
+    assert need and seen["n"] == seen["shownNeeding"]
+    assert seen["n"] >= len(need)
+    assert seen["maxPerItem"] == 1
     assert set(seen["rowOutcomes"]) <= set(LIMITS)
     assert seen["start"] == {"approve": True, "approved": False, "submit": True}
     assert seen["partial"]["approve"] is True  # one tick still missing
@@ -1403,3 +1407,91 @@ def test_the_review_shows_turns_and_left_out_modules_at_every_level_when_they_di
         text = seen[lvl]
         assert "Turns per module2 (the default is 32)" in text, (lvl, text)
         assert "Modules left out" in text and f"({seen['left']})" in text, (lvl, text)
+
+
+def _stale(page, setup: str, change: str):
+    return page.run(f"""
+    {setup}
+    const S0 = await review(); tickAll(); approve();
+    const first = {{err: S0.error, gate: gate(), ticks: ticks().length}};
+    const posts = () => performance.getEntriesByType('resource')
+      .filter(e => /summary/.test(e.name)).length;
+    const before = posts();
+    {change}
+    gotoStep('review'); await settle(400); await summarised();
+    const run = [...document.querySelectorAll('#rv-ready [data-module="run"]')];
+    return {{first, live: readiness(build()).run.map(x => x.reason),
+      run: run.map(r => r.textContent).join(' '),
+      ticks: ticks().length, unticked: ticks().filter(t => !t.checked).length, gate: gate(),
+      asked: posts() - before}};
+    """)
+
+
+def _assert_cleared(seen, needle):
+    assert seen["first"]["err"] == "", seen["first"]
+    assert any(needle in r for r in seen["live"]), "setup: the page's rule did not fire"
+    assert needle in seen["run"]
+    assert seen["ticks"] >= 1 and seen["unticked"] >= 1
+    assert seen["gate"] == {"approve": True, "approved": False, "submit": True}, seen["gate"]
+
+
+def test_choosing_another_agreement_file_clears_a_ticked_approval(page):
+    seen = _stale(
+        page,
+        f"""pick('data-k="pathway"', 'distressed_restructuring');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
+      file('agreement.txt', {json.dumps(AGREEMENT)}), file('memo.txt', {json.dumps(MEMO)})]);
+    type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
+    pick('data-k="issue_classification"', 'high_yield'); type('d-current_period', 'fy-2025');
+    choose('legal-file', 'agreement.txt'); pick('data-k="legal_documents"', 'executed');""",
+        "gotoStep('legal'); choose('legal-file', 'memo.txt');",
+    )
+    assert seen["asked"] == 0, "only a page rule changed: the service is not asked again"
+    _assert_cleared(seen, "memo.txt")
+
+
+EARNINGS = f"""pick('data-k="pathway"', 'earnings_update');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
+      file('prior.txt', {json.dumps(REPORT.replace("2025", "2024"))})]);
+    type('i-issuer_name', 'Acme Corp'); pick('data-k="issue_classification"', 'high_yield');
+    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
+    type('d-as_of', '2026-10-31');"""
+
+
+def test_a_newest_file_date_after_the_as_of_date_clears_a_ticked_approval(page):
+    seen = _stale(page, EARNINGS, "gotoStep('issuer'); type('d-newest', '2026-11-05');")
+    assert seen["asked"] == 0, "only a page rule changed: the service is not asked again"
+    _assert_cleared(seen, "before your newest file")
+
+
+def test_any_change_to_a_page_rule_item_clears_it_not_only_two_named_inputs(page):
+    # The newest date moves from one late date to another: the as-of limit stays, its reason (which
+    # names the date) changes, and the ticked review no longer matches the items now held.
+    seen = _stale(
+        page,
+        EARNINGS + " type('d-newest', '2026-11-05');",
+        "gotoStep('issuer'); type('d-newest', '2026-11-07');",
+    )
+    assert seen["first"]["err"] == ""
+    assert "2026-11-07" in seen["run"] and "2026-11-05" not in seen["run"]
+    assert seen["unticked"] == seen["ticks"] >= 1
+    assert seen["gate"] == {"approve": True, "approved": False, "submit": True}, seen["gate"]
+
+
+def test_submit_refuses_when_a_page_rule_changed_after_the_table_was_built(page):
+    seen = page.run(f"""
+    {EARNINGS}
+    await review(); tickAll(); approve();
+    const ready = gate();
+    // Change a rule input and send at once, before the page redraws: the click must refuse.
+    $('d-newest').value = '2026-11-05';
+    let posted = 0;
+    const was = call;
+    call = async (...args) => {{ if (/submit$/.test(args[1])) posted++; return was(...args); }};
+    await submitRun();
+    call = was;
+    return {{ready, posted, gate: gate(), run: RUN}};
+    """)
+    assert seen["ready"] == {"approve": False, "approved": True, "submit": False}
+    assert seen["posted"] == 0 and seen["run"] == ""
+    assert seen["gate"]["approved"] is False and seen["gate"]["submit"] is True

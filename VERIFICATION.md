@@ -23,7 +23,7 @@ called and nothing ran on Windows. This is not proof of a paid run.
   `test_run_start_scheduler.py`, `test_run_start_service.py`, `test_run_start_page.py`,
   `test_context_form.py`, `test_context_module_options.py`, `test_cpos_launch.py`,
   `test_issuer_library_packaging.py`, `test_library_page_browser.py` and `test_library_index.py`:
-  929 passed, 1 skipped (the paid test), in Chrome, so the 51 page tests ran;
+  933 passed, 1 skipped (the paid test), in Chrome, so the 55 page tests ran;
   `uv run python tools/quality_gate.py`: 0 findings; `node --test` on `static.test.cjs` and
   `calendar.test.cjs`: 187 passed (the library's own JavaScript, which CI runs).
 - Final wave, what it changed: the summary joins the launcher's forecast with the page's own
@@ -48,7 +48,7 @@ called and nothing ran on Windows. This is not proof of a paid run.
   (`Start run page.cmd`, the file lock, paths); browsers other than Chrome; more than two
   analysts submitting at once; `../runs/...` download links, which the service does not serve; the
   full test suite (weekly job); the page tests in CI (CI deselects them); Windows file opening
-  (`O_BINARY` is requested through `platform_io`, not run there); a paid run through Submit.
+  (`O_BINARY` is requested through `platform_io`, not run there).
 
 ## 2026-11-10 — Visuals package 8: complete the whole-branch review
 

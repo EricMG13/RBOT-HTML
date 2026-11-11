@@ -712,9 +712,9 @@ const BASIS_DEFAULT = {no:'auto', yes:'issuer_trading'};
 // Agency scales CP-2H reads (src/deploy_workflow/owners/cp2h.py COMBINED_SCALE, UNRATED).
 const SCALES = {"S&P":["AAA","AA+","AA","AA-","A+","A","A-","BBB+","BBB","BBB-","BB+","BB","BB-","B+","B","B-","CCC+","CCC","CCC-","CC","C","SD","D"],"Moody's":["Aaa","Aa1","Aa2","Aa3","A1","A2","A3","Baa1","Baa2","Baa3","Ba1","Ba2","Ba3","B1","B2","B3","Caa1","Caa2","Caa3","Ca","C"],"Fitch":["AAA","AA+","AA","AA-","A+","A","A-","BBB+","BBB","BBB-","BB+","BB","BB-","B+","B","B-","CCC+","CCC","CCC-","CC","C","RD","D"]};
 const UNRATED = ["Withdrawn", "Not rated"];
-// Files the launcher reads (cpos_launch.SOURCE_SUFFIXES) and names it skips (inbox/drops.py check).
+// Files the launcher reads (cpos_launch.SOURCE_SUFFIXES) and the names the launcher skips (owners/cpos_launch.py).
 const SOURCE_SUFFIXES = ['.pdf','.htm','.html','.docx','.txt','.md','.xlsx','.csv','.json','.jsonl'];
-const MAX_ISSUER_ID = 40; // inbox/drops.py MAX_ISSUER_ID
+const MAX_ISSUER_ID = 40; // inbox/layout.py MAX_ISSUER_ID, enforced in run_start/submissions.py
 const DEFAULT_TURNS = 32, MAX_TURNS = 64; // run_start/submissions.py _TURNS
 // The launcher's reading (run_expectations): the agreement kinds, the kinds that count as a financial
 // document, and every kind it can answer with. tests/test_context_form.py keeps them to the code.
@@ -959,7 +959,7 @@ function fld(scope, k, r) {
   else if (r.t === 'cur' && !/^[A-Z]{3}$/.test(v)) bad(el, 'use three uppercase letters, such as USD.');
   else if (r.t === 'period' && !pkey(v)) bad(el, 'use q1-2026, h2-2026 or fy-2025 (lowercase).');
   else if (r.t === 'slug' && !/^[a-z0-9][a-z0-9-]*$/.test(v)) bad(el, 'use lowercase letters, digits and hyphens only, not starting with a hyphen.');
-  // Form-only rule: the inbox refuses a longer issuer_id (inbox/drops.py MAX_ISSUER_ID); the reader allows it.
+  // Form-only rule: the service refuses a longer issuer_id (inbox/layout.py MAX_ISSUER_ID); the reader allows it.
   else if (r.maxLen && v.length > r.maxLen) bad(el, `is ${v.length} characters; use at most ${r.maxLen} (the run page refuses a longer ID).`);
   return v;
 }
@@ -1651,6 +1651,7 @@ function errorStage(text) {
 let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted} for the answers and files held
 let SUMMARY_BUSY = false;
 let RENDERED = null;       // the summary the module table was built for
+let RENDERED_KEY = '';     // the page's own rule items that table was built from (pageKey)
 let SUBMITTING = false;
 let SUBMIT_ERROR = '';
 let RUN = '';              // the run id once Submit has succeeded
@@ -1722,6 +1723,10 @@ function pageItems(o, modules, service) {
     (x.inherited ? sv.inherited_from && sv.inherited_from.length : !!x.key && sv.id === `${x.scope}:${x.key}`));
   return own.filter(x => !covered(x)).map((x, i) => ({id: `page:${x.scope}:${i}`, scope: x.scope, outcome: x.outcome, reason: x.review || x.reason, fix: x.fix, go: x.go}));
 }
+// The page's own rule items as they stand now (id, scope, outcome, reason). The review is current only while
+// this equals what its table was built from, whatever input of a rule changed.
+const pageKey = o => summaryOk() ? JSON.stringify(pageItems(o, SUMMARY.modules, SUMMARY.items).map(i => [i.id, i.scope, i.outcome, i.reason])) : '';
+const reviewCurrent = o => summaryOk() && RENDERED === SUMMARY && RENDERED_KEY === pageKey(o);
 function itemRow(item, sq) {
   const stage = stageOf(item);
   const li = h('p', {}, h('span', {textContent: item.reason}));
@@ -1785,6 +1790,7 @@ function renderReview(sq, o) {
   renderState();
   if (RENDERED !== SUMMARY) {
     RENDERED = SUMMARY;
+    RENDERED_KEY = pageKey(o);
     $('rv-ready').textContent = '';
     if (summaryOk()) $('rv-ready').append(readyTable(sq, pageItems(o, SUMMARY.modules, SUMMARY.items)));
   }
@@ -1817,6 +1823,11 @@ function renderReview(sq, o) {
 async function submitRun() {
   const S = SUMMARY;
   if (SUBMITTING || RUN || !summaryOk() || !$('approve').checked || $('submit').disabled) return;
+  if (!reviewCurrent(build())) { // a page rule changed since the table was built: the approval no longer covers what is shown
+    $('approve').checked = false;
+    update();
+    return;
+  }
   SUBMITTING = true;
   SUBMIT_ERROR = '';
   $('submit').disabled = true;
@@ -2258,6 +2269,7 @@ function update() {
   renderPanel(o, R);
   $('panel').hidden = cur === 'review';
   syncSummary();
+  if (RENDERED && RENDERED === SUMMARY && RENDERED_KEY !== pageKey(o)) { RENDERED = null; $('approve').checked = false; } // a page rule changed: rebuild, untick, unapprove
   if (cur === 'review') renderReview(sq, o);
   syncApproval();
   save(o);
