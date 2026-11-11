@@ -337,3 +337,35 @@ def test_handoffs_zip_holds_the_delivered_markdown_byte_for_byte(tmp_path):
             assert archive.read(name) == (delivered / name).read_bytes()
     zip_path = data_of(tmp_path)["workspace"]["runs"]["run-a"]["evidence"]["zip"]
     assert (tmp_path / "library" / zip_path).is_file()
+
+
+def test_each_handoff_and_instruction_is_a_library_file_the_evidence_links_to(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    delivered = next((run_dir / "deliveries").iterdir())
+    library = tmp_path / "library"
+    evidence = data_of(tmp_path)["workspace"]["runs"]["run-a"]["evidence"]
+    assert [h["href"] for h in evidence["handoffs"]] == [
+        "downloads/run-a/CP-0.md",
+        "downloads/run-a/CP-1.md",
+    ]
+    for handoff in evidence["handoffs"]:
+        assert (library / handoff["href"]).read_bytes() == (
+            delivered / handoff["name"]
+        ).read_bytes()
+    instructions = evidence["record"]["instructions"]
+    assert [i["href"] for i in instructions] == [
+        "downloads/run-a/instructions/CP-0.md",
+        "downloads/run-a/instructions/CP-1.md",
+    ]
+    for row in instructions:
+        assert (library / row["href"]).read_bytes() == (
+            run_dir / f"instructions/{row['module']}.md"
+        ).read_bytes()
+
+
+def test_an_instruction_file_that_changed_during_the_build_is_refused(tmp_path, monkeypatch):
+    run_dir = make_run(tmp_path, "run-a")
+    (run_dir / "instructions/CP-0.md").write_text("changed\n")
+    with pytest.raises(Refused, match="instructions/CP-0.md changed during the build"):
+        update_library.update_library(tmp_path)

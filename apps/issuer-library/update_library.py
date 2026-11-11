@@ -5,9 +5,9 @@
 Reads ``FOLDER/runs`` (default: this checkout; the Windows package needs ``--workspace``, which
 ``Update library.cmd`` supplies) and writes only ``FOLDER/library/``: ``index.html`` with its
 scripts, styles, fonts and icons, ``data.js`` (the catalogue and the workspace store, as data) and
-``downloads/<run folder>/handoffs.zip`` (the run's delivered handoffs, byte for byte, for "Download
-all"). The runs' own files are never changed; the page links to them. The page opens from disk:
-no server, no network access. Which runs it lists is decided by ``deploy_workflow.library_index``.
+``downloads/<run folder>/`` (the run's delivered handoffs and instruction files, byte for byte, one
+file each, and ``handoffs.zip`` for "Download all"). The runs' own files are never changed. The page
+opens from disk or served from the library folder: no network access. Which runs it lists is decided by ``deploy_workflow.library_index``.
 No analysis is run and no provider is called.
 """
 
@@ -137,27 +137,51 @@ def run_records(workspace: Path, store: dict[str, Any]) -> None:
             run["record"] = record
 
 
+def checked_bytes(path: Path, digest: str, label: str) -> bytes:
+    """The bytes of a run file, refused when they no longer have the hash the store holds."""
+    raw = b"".join(regular_chunks(path))
+    if hashlib.sha256(raw).hexdigest() != digest:
+        raise Refused(f"Not written: {label} changed during the build")
+    return raw
+
+
+def write_download(path: Path, raw: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(raw)
+
+
 def handoff_zip(folder: Path, workspace: Path, run: dict[str, Any], store: dict[str, Any]) -> None:
-    """Write ``downloads/<run folder>/handoffs.zip``: each delivered handoff, byte for byte, as
-    ``<CODE>.md``. A file that no longer has the bytes the store hashed is refused, not zipped."""
-    target = folder / unquote(run["evidence"]["zip"])
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
-        for handoff in run["evidence"]["handoffs"]:
-            output = store["outputs"][run["modules"][handoff["module"]]["default"]]
-            raw = b"".join(regular_chunks(workspace / "runs" / run["folder"] / output["source"]))
-            if hashlib.sha256(raw).hexdigest() != output["sha256"]:
-                raise Refused(
-                    f"Not written: {run['folder']}/{output['source']} changed during the build"
+    """Write the run's delivered handoffs, byte for byte, as ``downloads/<run folder>/<CODE>.md``
+    (the Evidence links) and ``handoffs.zip`` (``<CODE>.md`` each), and its instruction files as
+    ``downloads/<run folder>/instructions/<CODE>.md``: everything the Evidence page links to lies
+    inside the library folder, so it opens from disk and when the library is served. A file that no
+    longer has the bytes the store hashed is refused, not written."""
+    run_dir = workspace / "runs" / run["folder"]
+    if run["evidence"]["zip"]:
+        target = folder / unquote(run["evidence"]["zip"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+            for handoff in run["evidence"]["handoffs"]:
+                output = store["outputs"][run["modules"][handoff["module"]]["default"]]
+                raw = checked_bytes(
+                    run_dir / output["source"],
+                    output["sha256"],
+                    f"{run['folder']}/{output['source']}",
                 )
-            # A fixed date makes the same handoffs give the same zip.
-            archive.writestr(zipfile.ZipInfo(handoff["name"], (1980, 1, 1, 0, 0, 0)), raw)
+                write_download(folder / unquote(handoff["href"]), raw)
+                # A fixed date makes the same handoffs give the same zip.
+                archive.writestr(zipfile.ZipInfo(handoff["name"], (1980, 1, 1, 0, 0, 0)), raw)
+    recorded = json.loads(b"".join(regular_chunks(run_dir / "workflow.json", follow=False)))
+    for row in run["evidence"]["record"]["instructions"]:
+        if row["href"]:
+            path = recorded["instructions"][row["module"]]["path"]
+            raw = checked_bytes(run_dir / path, row["sha256"], f"{run['folder']}/{path}")
+            write_download(folder / unquote(row["href"]), raw)
 
 
 def handoff_zips(folder: Path, workspace: Path, store: dict[str, Any]) -> None:
     for run in store["runs"].values():
-        if run["evidence"]["zip"]:
-            handoff_zip(folder, workspace, run, store)
+        handoff_zip(folder, workspace, run, store)
 
 
 def build_into(folder: Path, workspace: Path, library: Library) -> None:

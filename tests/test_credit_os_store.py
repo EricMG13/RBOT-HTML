@@ -1130,8 +1130,8 @@ def test_evidence_handoffs_hashes_calls_and_cap_are_as_recorded(tmp_path):
         ("CP-1", "CP-1.md"),
     ]
     for handoff in evidence["handoffs"]:
-        assert handoff["href"].startswith("/files/runs/run-a/deliveries/")
-        assert handoff["href"].endswith(f"{handoff['module']}.md?sha256=" + handoff["href"][-64:])
+        # Inside the library folder, so it also opens when the library is served.
+        assert handoff["href"] == f"downloads/run-a/{handoff['module']}.md"
     assert evidence["zip"] == "downloads/run-a/handoffs.zip"
     record = evidence["record"]
     assert record["cap"] == "12"
@@ -1161,7 +1161,7 @@ def test_evidence_handoffs_hashes_calls_and_cap_are_as_recorded(tmp_path):
     assert hashes["A_report.pdf"] == hashlib.sha256(b"text of A_report.pdf\n").hexdigest()
     assert [i["module"] for i in record["instructions"]] == ["CP-0", "CP-1"]
     first = record["instructions"][0]
-    assert first["href"] == f"/files/runs/run-a/instructions/CP-0.md?sha256={first['sha256']}"
+    assert first["href"] == "downloads/run-a/instructions/CP-0.md"
     assert first["sha256"] == hashes["instructions/CP-0.md"]
 
 

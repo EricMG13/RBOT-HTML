@@ -3314,9 +3314,11 @@ def run_hashes(run_dir: Path, workflow: dict[str, Any], issues: list[str]) -> li
 
 
 def instruction_rows(
-    workflow: dict[str, Any], folder: str, link: Callable[[str, str, str], str], issues: list[str]
+    workflow: dict[str, Any], folder: str, issues: list[str]
 ) -> list[dict[str, Any]]:
-    """The instructions each module was sent, as the run's workflow.json records them."""
+    """The instructions each module was sent, as the run's workflow.json records them. A usable
+    row links to the copy update_library writes under the library folder (so it opens when the
+    library is served too)."""
     entries = workflow.get("instructions")
     rows: list[dict[str, Any]] = []
     for module, entry in (entries if isinstance(entries, dict) else {}).items():
@@ -3334,7 +3336,9 @@ def instruction_rows(
         rows.append(
             {
                 "module": module,
-                "href": link(folder, str(path), str(digest)) if usable else None,
+                "href": f"downloads/{quote(folder)}/instructions/{quote(module)}.md"
+                if usable
+                else None,
                 "sha256": digest,
             }
         )
@@ -3365,11 +3369,10 @@ def run_downloads(
 
 
 class EvidenceReads(NamedTuple):
-    """What the store holds when Evidence is built: the workspace root, the link maker, the
-    outputs, the parsed handoffs by hash and the models."""
+    """What the store holds when Evidence is built: the workspace root, the outputs, the parsed
+    handoffs by hash and the models."""
 
     root: Path
-    link: Callable[[str, str, str], str]
     outputs: dict[str, Any]
     sections: dict[str, list[dict[str, Any]]]
     models: list[dict[str, Any]]
@@ -3395,7 +3398,13 @@ def run_evidence(
         output = held.outputs.get(entry["default"] or "")
         if output is None:
             continue
-        handoffs.append({"module": module, "name": f"{module}.md", "href": output["href"]})
+        handoffs.append(
+            {
+                "module": module,
+                "name": f"{module}.md",
+                "href": f"downloads/{quote(folder)}/{quote(module)}.md",
+            }
+        )
         parsed = held.sections[output["sha256"]]
         if not has_sources_section(parsed):
             no_sources.append(module)
@@ -3430,7 +3439,7 @@ def run_evidence(
         "downloads": run_downloads(run, key, held.models),
         "record": {
             "hashes": run_hashes(run_dir, workflow, issues),
-            "instructions": instruction_rows(workflow, folder, held.link, issues),
+            "instructions": instruction_rows(workflow, folder, issues),
             "calls": run_calls(run_dir, folder, issues),
             "cap": cap if isinstance(cap, (str, int, float)) else None,
         },
@@ -3478,7 +3487,7 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
         root, catalogue, WorkspaceReads(outputs, keys, runs, manifests)
     )
     found += unread
-    held = EvidenceReads(root, link, outputs, {h: p[0] for h, p in handoffs.parsed.items()}, models)
+    held = EvidenceReads(root, outputs, {h: p[0] for h, p in handoffs.parsed.items()}, models)
     for key, run in runs.items():
         run["evidence"] = run_evidence(key, run, held, found)
     # A deliverable that cannot be read is named here (read_model names a model's own folder).
