@@ -20,7 +20,13 @@ names with spaces, transitive-only lock changes, CRLF re-saves, `.venv` noise (t
 `472bdea..04e7221`: 5.9 MB. No symlinks in the tree (they would be reported as `extra`).
 
 Verification: `pytest tests/test_work_pc_delta.py tests/test_quality_gate.py` 5 passed;
-`tools/quality_gate.py` 0 findings. No pack committed yet: the first needs the work PC's base.
+`tools/quality_gate.py` 0 findings. First pack `04e7221..6f5ac16` (PR #42); `check` on a
+`git archive` of the PR head: identical.
+
+Follow-up: `.github/workflows/work-pc-pack.yml` makes and commits a pack after each push to
+`main`; a range with only pack-folder changes makes none (tested), and the CI fast-test
+list now includes `tests/test_work_pc_delta.py`. The workflow itself first runs on merge;
+a protected `main` would refuse its push (the run fails visibly; hand generation remains).
 
 ## 2026-11-10 — Visuals package 8: complete the whole-branch review
 

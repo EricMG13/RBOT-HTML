@@ -44,12 +44,18 @@ Packs chain: each starts at the `head` of the one before it. `NNN` numbers them 
 
 `check` needs only Python 3.11 or later; git is not required.
 
-## Making a pack (before downloading; needs git)
+## Making a pack
+
+Automatic: after every push to `main`, `.github/workflows/work-pc-pack.yml` runs
+`generate`, which starts where the last pack ended, and commits the new pack to `main`
+as `github-actions[bot]`. Download a minute after a merge so its pack is included;
+`check` reports a `differs` line if a download got ahead of its pack.
+
+By hand (needs git; for example if that workflow cannot push to a protected `main`):
 
 ```
-python tools/work_pc_delta.py generate --base <commit or "YYYY-MM-DD HH:MM">   # first pack
-python tools/work_pc_delta.py generate                                          # every later pack
+python tools/work_pc_delta.py generate                                          # next pack
+python tools/work_pc_delta.py generate --base <commit or "YYYY-MM-DD HH:MM">   # pick the start
 ```
 
-Without `--base` the pack starts at the `head` in `manifest.json`. `--head` defaults to
-`origin/main`. Commit the new pack and merge it, then download.
+`--head` defaults to `origin/main`. A range with no change outside this folder makes no pack.

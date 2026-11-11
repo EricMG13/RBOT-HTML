@@ -90,7 +90,8 @@ def test_next_pack_starts_where_the_last_ended_and_skips_its_own_folder(tmp_path
     assert work_pc_delta.generate(repo, base, head).startswith("wrote ")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "pack")
-    # The pack commit touches only the pack folder: the next pack would be empty.
+    # The pack commit touches only the pack folder: no pack for it alone.
+    assert work_pc_delta.generate(repo, None, "HEAD").startswith("nothing to do")
     later = _commit(repo, {"same.txt": "changed\n"}, "later")
     message = work_pc_delta.generate(repo, None, later)
     packs = sorted((repo / work_pc_delta.PACK_DIR / "syncs").iterdir())

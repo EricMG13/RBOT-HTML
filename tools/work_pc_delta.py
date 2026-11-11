@@ -325,8 +325,9 @@ def generate(root: Path, base_ref: str | None, head_ref: str) -> str:
             raise SystemExit("--base is required until a first pack records manifest.json")
         base_ref = json.loads(record.read_text(encoding="utf-8"))["head"]
     base = resolve(root, base_ref, head)
-    if base == head:
-        return f"nothing to do: the last pack already ends at {head[:12]}"
+    # Only pack commits since the last pack (e.g. the pack's own commit): nothing to list.
+    if run_git(root, "diff", "--quiet", base, head, *SCOPE).returncode == 0:
+        return f"nothing to do: no change outside {PACK_DIR} since {base[:12]}"
     out = write_pack(root, base, head)
     return f"wrote {out.relative_to(root).as_posix()}"
 
