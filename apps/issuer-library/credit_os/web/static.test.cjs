@@ -866,7 +866,7 @@ test('Overview bottom lines: every other module in the order CP-OS ran it, the l
   assert.ok(readText(bottomEntry(list, 'CP-1A')).includes("Northbridge is a single-segment services group whose creditors depend on one operating company, so debt service rests on that company's cash generation."));
   const blocked = bottomEntry(list, 'CP-2D');
   assert.ok(blocked.includes('<span class="badge badge-gray">Not assessable</span>'));
-  assert.ok(readText(blocked).includes('Liquidity is not assessable: the documents read give no monthly cash forecast and no revolver drawing terms, so cash cover of the maturities cannot be tested.'));
+  assert.ok(readText(blocked).includes('Not assessable: the documents read give no monthly cash forecast and no revolver drawing terms, so cash cover of the maturities cannot be tested.'));
   assert.equal(countOf(list, /Not assessable<\/span>/g), 1, 'only the blocked module is marked');
 });
 
@@ -891,13 +891,13 @@ test('Overview lead from CP-6 when it ran and is not blocked; CP-2 is then an or
 
 test('Overview lead: a blocked CP-6 falls back to CP-2, and CP-6 is listed with its mark', () => {
   const html = overviewPage({
-    'CP-6': passageSections({ bottom: 'The committee view is not assessable: no upstream module concluded.', key: ['- Nothing to rank.'] }),
+    'CP-6': passageSections({ bottom: 'Not assessable: no upstream module concluded.', key: ['- Nothing to rank.'] }),
     'CP-2': passageSections({ bottom: 'Credit view: refinancing risk.', key: ['- Leverage is moderate.'] }),
   }).runReport(RUN);
   const lead = readText(part(html, 'overview-lead'));
   assert.ok(lead.includes('Credit view: refinancing risk.') && lead.includes('Leverage is moderate.') && !lead.includes('Nothing to rank.'));
   const entry = bottomEntry(html, 'CP-6');
-  assert.ok(entry.includes('Not assessable</span>') && readText(entry).includes('The committee view is not assessable: no upstream module concluded.'));
+  assert.ok(entry.includes('Not assessable</span>') && readText(entry).includes('Not assessable: no upstream module concluded.'));
 });
 
 test('Overview lead: an unblocked earlier-format CP-6 has no Bottom line, so the new-format CP-2 leads and CP-6 reads "No bottom line in this handoff."', () => {
@@ -1149,7 +1149,7 @@ test('module page (H4): a blocked new-format module has only its Bottom line and
   const page = fixturePage(), html = page.moduleReport(outId('CP-2D'));
   assert.deepEqual(page.reportParts(outId('CP-2D')).map(p => p[1]).slice(0, 2), ['Module', 'Bottom line']);
   assert.ok(!html.includes('id="key-findings"') && !html.includes('id="limitations"') && html.includes('Not assessable</span>'));
-  assert.ok(readText(html).includes('Liquidity is not assessable: the documents read give no monthly cash forecast'));
+  assert.ok(readText(html).includes('Not assessable: the documents read give no monthly cash forecast'));
 });
 
 test('module page: a module with event lanes draws its own timeline, and one without draws none (the Calendar tab is gone)', () => {
@@ -2289,7 +2289,7 @@ const HIST = {
   },
   data: {
     [HIST_B0]: histOut(HIST_B0, 'CP-0', 'Sources are ready.'),
-    [HIST_B2]: histOut(HIST_B2, 'CP-2A', 'Downside is Not Assessable: no inputs were supplied.'),
+    [HIST_B2]: histOut(HIST_B2, 'CP-2A', 'Not assessable: no inputs were supplied.'),
     [HIST_D0]: histOut(HIST_D0, 'CP-0', 'Sources are ready.'),
   },
 };

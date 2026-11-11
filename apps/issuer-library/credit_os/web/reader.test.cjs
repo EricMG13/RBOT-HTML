@@ -52,8 +52,12 @@ test('earlierFormatRun is true when any handoff is not new format', () => {
 });
 
 test('blocked reads the Bottom line wording for new format and state.established for earlier format', () => {
-  assert.equal(blocked(newFormat('Liquidity is not assessable: no forecast.'), {established: true}), true);
-  assert.equal(blocked(newFormat('Liquidity is Not Assessable here.'), undefined), true);
+  assert.equal(blocked(newFormat('Not assessable: no forecast.'), {established: true}), true);
+  assert.equal(blocked(newFormat('Not assessable: no forecast.\n\nSecond paragraph.'), undefined), true);
+  assert.equal(blocked(newFormat('Liquidity is not assessable: no forecast.'), {established: false}), false, 'a mid-sentence mention is not the marker');
+  assert.equal(blocked(newFormat('Liquidity is Not Assessable here.'), undefined), false);
+  assert.equal(blocked(newFormat('not assessable: wrong case.'), undefined), false, 'exact case');
+  assert.equal(blocked(newFormat(' Not assessable: leading space.'), undefined), false, 'exact start of the text');
   assert.equal(blocked(newFormat('Debt service looks adequate.'), {established: false}), false);
   assert.equal(blocked(earlier, {established: false}), true);
   assert.equal(blocked(earlier, {established: true}), false);

@@ -44,10 +44,14 @@ function earlierFormatRun(outputsSections) {
 
 const sectionText = section => (section ? section.blocks.filter(b => b.type === 'text').map(b => b.text).join('\n') : '');
 
-// Not assessable: new format by the wording H2 requires of a blocked module in its Bottom line (known fragility: the store has no
-// confidence cell for it); earlier format by the store's own state.established === false.
+// Not assessable: new format by the engine contract (the launcher makes a blocked module's Bottom line BEGIN exactly `Not assessable: `
+// and forbids the phrase in a non-blocked Bottom line); earlier format by the store's own state.established === false.
 function blocked(sections, state) {
-  if (isNewFormat(sections)) return /not assessable/i.test(sectionText(readerPassages(sections).bottom));
+  if (isNewFormat(sections)) {
+    const bottom = readerPassages(sections).bottom;
+    const first = bottom && bottom.blocks.find(b => b.type === 'text');
+    return !!first && first.text.startsWith('Not assessable:');
+  }
   return !!state && state.established === false;
 }
 

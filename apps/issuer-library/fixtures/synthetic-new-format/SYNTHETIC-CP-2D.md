@@ -11,7 +11,7 @@ No file could be used for this module.
 
 ### Bottom line
 
-Liquidity is not assessable: the documents read give no monthly cash forecast and no revolver drawing terms, so cash cover of the maturities cannot be tested.
+Not assessable: the documents read give no monthly cash forecast and no revolver drawing terms, so cash cover of the maturities cannot be tested.
 
 ## Calculations
 None. The module is blocked.
