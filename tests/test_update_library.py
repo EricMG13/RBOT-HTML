@@ -323,3 +323,17 @@ def test_a_json_line_that_is_not_an_object_names_the_failure_and_does_not_stop_t
     record, issues = record_of(tmp_path, f"{line}\n{good}\n")
     assert record["timed"] is False and record["eventsIssue"] == "ValueError"
     assert any("r1: events.jsonl could not be read" in i for i in issues)
+
+
+def test_handoffs_zip_holds_the_delivered_markdown_byte_for_byte(tmp_path):
+    import zipfile
+
+    run_dir = make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    delivered = next((run_dir / "deliveries").iterdir())
+    with zipfile.ZipFile(tmp_path / "library/downloads/run-a/handoffs.zip") as archive:
+        assert archive.namelist() == ["CP-0.md", "CP-1.md"]
+        for name in archive.namelist():
+            assert archive.read(name) == (delivered / name).read_bytes()
+    zip_path = data_of(tmp_path)["workspace"]["runs"]["run-a"]["evidence"]["zip"]
+    assert (tmp_path / "library" / zip_path).is_file()

@@ -261,12 +261,20 @@ def test_run_activity_and_forecast_not_run_from_disk(tmp_path):
     page = tmp_path / "library/index.html"
     dom, console = visit(page, "#CP-OS/activity")
     assert console == []
-    assert "Run folders not shown" in dom and "run-half" in dom
-    assert html.escape(reason, quote=False) in dom
+    # Run activity is live runs only (decision 10): from disk there is no live data, and the
+    # excluded folder is no longer listed there.
+    assert "Run activity could not be read" in dom and "run-half" not in dom
+    assert "Run folders not shown" not in dom
     assert (
         'data-place="Run activity"' in dom
         and "<button" not in dom.split('id="content"', 1)[1].split("</article>")[0]
     )
+    # The folder and its reason are on the library page, in a details element that is closed.
+    dom, console = visit(page, "#W-Library/cases")
+    assert console == []
+    shown = re.search(r'<details class="library-not-shown">(.*?)</details>', dom, re.DOTALL)
+    assert shown and "Run folders not shown" in shown[1] and "run-half" in shown[1]
+    assert html.escape(reason, quote=False) in shown[1]
     dom, console = visit(page, "#W-Forecast/none?c=run-a")
     assert console == []
     assert "No forecast model was published from this run’s files" in dom
@@ -896,7 +904,9 @@ def test_the_overview_lists_the_nearest_dates_instead_of_drawing_lanes_and_fits_
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_map_with_its_table_and_the_status_map_are_drawn_and_fit_the_page(tmp_path, width):
+def test_the_map_with_its_table_is_drawn_and_fits_the_page_and_no_status_map_remains(
+    tmp_path, width
+):
     make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + MAPS)
     update_library.update_library(tmp_path)
     page = tmp_path / "library/index.html"
@@ -911,12 +921,13 @@ def test_the_map_with_its_table_and_the_status_map_are_drawn_and_fit_the_page(tm
     assert seen["wide"] is True and seen["scrolls"] is True  # Natural width, scrolled in its card.
     assert seen["scrollFocusable"] is True and seen["fits"] is True
     assert seen["tableAfterDiagram"] is True and seen["cutEdges"] == 1
-    # ... and the status map is on the Evidence page; the Overview draws neither.
+    # ... the status map is retired with the old Evidence content (decision 9); neither the
+    # Evidence page nor the Overview draws a map.
     dom, console = visit(page, "#W-Evidence/sources?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert seen["statusNodes"] >= 1 and seen["statusStates"] == seen["statusNodes"]
-    assert seen["statusItems"] >= 1 and seen["fits"] is True
+    assert seen["statusNodes"] == 0 and seen["statusItems"] == 0 and seen["fits"] is True
+    assert "status-map" not in dom and "map-card" not in dom
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     assert console == [] and "map-card" not in dom and "status-map" not in dom
 

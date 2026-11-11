@@ -88,7 +88,7 @@ function installDestinations() {
     'W-Library':['Issuer library',[['cases','Issuer cases',[]]]],
     'W-Report':['Report history',[['history','Report history',[]]]],
     'W-Overview':['Overview',[['overview','Overview',[]]]],
-    'W-Evidence':['Evidence library',[['sources','Retained outputs',[]]]],
+    'W-Evidence':['Evidence',[['sources','Evidence',[]]]],
     'W-Forecast':['Forecast',[['forecast','Forecast',[]]]],
     'CP-OS':['Run activity',[['activity','Run activity',[]]]]
   };
@@ -747,37 +747,7 @@ function mapsView(id,tag='h2',keep=()=>true) {
   }).join('');
 }
 // Maps placed on the Overview or Evidence page; the module page uses reportMaps.
-function mapsPlaced(context,{at=null}={}) {
-  const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(Boolean);
-  const html=ids.map(id=>mapsView(id,'h2',map=>!at||placed('map',at,data[id],map.name))).join('');
-  return html?`<section class="map-section">${html}</section>`:'';
-}
 const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4')}</section>`:'';
-// The run's own records. Dependencies are the method registry's edges for the modules the run requested and times are the run's event log, both read when the library was built (update_library.py `run_record`); a module with no event has no time.
-const EDGE_WORD={block:'Block',restricted:'Restricted'};
-function statusMapView(context,{timeline=false}={}) {
-  const record=contexts[context]?.record;
-  const entry=module=>{const id=defaultOutput(module,context);return {module,out:id?data[id]:null,choices:(moduleEntry(module,context)?.outputs||[]).length};};
-  const entries=record?record.steps.map(({module})=>entry(module)):contexts[context]?runGroups(context).flatMap(([,items])=>items):[];
-  if(!entries.length)return '';
-  const shape=({out})=>!out?'none':out.state.established===true?'established':out.state.established===false?'open':'unsummarised';
-  const word=({out,choices})=>out?stateWord(out.state.established):choices?`${choices} saved outputs, none chosen`:'No saved output';
-  const items=entries.map(item=>{
-    const why=item.out?.state.established===false&&item.out.summary?.limitation?` <span class="status-why">${rich(item.out.summary.limitation)}</span>`:'';
-    return `<li class="status-item"><span class="state-shape shape-${shape(item)}" aria-hidden="true"></span>${moduleLink(item.module)} <strong class="status-word">${esc(word(item))}</strong>${why}</li>`;
-  }).join('');
-  const title=`<h2>${timeline?'Run progress':'Readiness by module'}</h2>`;
-  if(!record)return `<section class="run-section status-map">${title}<p class="intro">No run record was read for this run, so no dependency or time is shown. Each module’s state is its own handoff’s; modules are listed in reading-group order.</p><ol class="status-list">${items}</ol></section>`;
-  const rows=record.edges.map(([from,to,rule])=>({cells:[moduleTitle(from),'supplies',EDGE_WORD[rule]||rule,moduleTitle(to)]}));
-  const marks=new Map(entries.map(item=>[moduleTitle(item.module),{shape:shape(item),word:word(item)}]));
-  const diagram=mapDiagram('run',{name:'Module dependencies',table:'run'},rows,marks,entries.map(item=>moduleTitle(item.module)));
-  const edgeTable=rows.length?`<table class="map-table"><caption>Required dependencies, producer to consumer</caption><thead><tr>${['From','Relationship','Edge type','To'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(({cells})=>`<tr>${cells.map(cell=>`<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'';
-  const at=time=>time?esc(time):'Not recorded';
-  const logIssue=record.eventsIssue?`<p class="intro">Event log could not be read: ${esc(record.eventsIssue)}. No execution times are shown.</p>`:'';
-  const steps=timeline&&record.timed?`<table class="timeline-table"><caption>Execution order and times, as the run’s event log states them</caption><thead><tr>${['Step','Module','State','Started','Accepted'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${entries.map((item,n)=>`<tr><td>${n+1}</td><td>${moduleLink(item.module)}</td><td>${esc(word(item))}</td><td>${at(record.steps[n].started)}</td><td>${at(record.steps[n].accepted)}</td></tr>`).join('')}</tbody></table>`:`${timeline&&!record.eventsIssue?'<p class="intro">Order only, no times recorded.</p>':''}<ol class="status-list">${items}</ol>`;
-  const order=record.timed?'the recorded order of the run’s event log, modules never started last in plan order':'plan order from the method registry';
-  return `<section class="run-section status-map">${title}<p class="intro">Edges are the method registry’s required dependencies for the modules this run requested (Block: the consumer needs the producer; Restricted: it runs with a limit). Each box shows that module’s state from its own handoff, by word and shape: filled circle reaches a conclusion, empty square not assessable, dotted diamond no reader summary, dashed circle no output chosen. Modules are listed in ${order}.</p>${diagram}${edgeTable}${logIssue}${steps}</section>`;
-}
 // ---- Chart index (CP-MODEL-V02): one row per `Chart data:`, `Map:` or `Events:` table the run's handoffs hold, in the state the build gave it. It lists and links; nothing is drawn or recomputed here.
 const CHART_HEADING=/^(Chart data|Map|Events): /;
 const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';
@@ -848,7 +818,7 @@ function forecastSections(context) {
   return models.length?models.map(m=>[m.id,m.id,[]]):[['none','Forecast availability',[]]];
 }
 function navigationSections(module,context,output=defaultOutput(module,context)) {
-  if(module==='W-Evidence')return [['sources','Retained outputs',[]]];
+  if(module==='W-Evidence')return [['sources','Evidence',[]]];
   if(module==='W-Forecast'||module===MODEL_ENTRY[0])return forecastSections(context);
   if(isAnalytical(module)&&output)return reportOutline(output);
   if(Object.hasOwn(modules,module))return modules[module].sections;
@@ -887,17 +857,6 @@ function navigatorView(module,query) {
 }
 const moduleHref=id=>routeHref(id,lastSection.get(current?.context+':'+id)||firstSection(id,current?.context));
 function moduleLink(id,label){return `<a class="text-action" href="${moduleHref(id)}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}
-// Rows repeat the same two actions, so each is an icon; its accessible name and tooltip still say what it does.
-const iconAction=(action,target,href,name,download=false)=>`<a class="icon-action" href="${esc(href)}" ${download?'download':''} aria-label="${esc(`${action}: ${target}`)}" title="${action}">${icon(name)}</a>`;
-function sourceInventory(context) {
-  const identity=f=>`<details><summary>File identity</summary><p>${esc(handoffLabel(f.file))}</p><p class="hash">SHA-256 ${f.sha256}</p></details>`;
-  const rows=Object.entries(contexts[context].modules).flatMap(([module,entry])=>[
-    ...entry.outputs.map(id=>{const out=data[id];const target=out.label===module?moduleTitle(module):`${moduleTitle(module)}, ${out.label}`;return `<section><div><h3>${esc(moduleTitle(module))}</h3>${out.label===module?'':`<p>${esc(out.label)}</p>`}${out.scope==='Retained module output'?'':`<span class="badge badge-gray">${esc(out.scope)}</span>`}</div><div>${iconAction('Open output',target,routeHref(module,modules[id].first,null,context,out.source),'arrow-right')}${iconAction('Download original handoff',target,out.href,'download',true)}</div>${identity(out)}</section>`;}),
-    ...entry.inputs.map(id=>{const f=store.inputs[id];return `<section><div><h3>${esc(moduleTitle(module))}</h3><p>${esc(f.source)}</p><span class="badge badge-gray">Input</span></div><div>${iconAction('Download original file',`${moduleTitle(module)}, ${f.source}`,f.href,'download',true)}</div>${identity(f)}</section>`;})
-  ]);
-  if(!rows.length)return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>No retained files for this run</h2><p>No module outputs or inputs were found in this run’s folder.</p></div><a class="text-action switch-case" href="#W-Library/cases">Choose another run</a>`;
-  return `<div class="source-inventory">${rows.join('')}</div>`;
-}
 const badge=(kind,text)=>`<span class="badge badge-${kind}">${esc(text)}</span>`;
 // The acceptance state a report declares, as the badge and muted qualification text every report listing shows.
 const QUALIFICATIONS=['unrun','partial','qualified','blocked'];
@@ -1156,10 +1115,19 @@ function libraryPanel() {
 }
 // A panel rebuild shows an unreadable number box empty, so its stored 'invalid' bound is dropped to keep the filter and the control in agreement.
 const clearInvalidBounds=()=>Object.keys(libraryFilters).forEach(k=>{if(libraryFilters[k]==='invalid')libraryFilters[k]='';});
+// Read when the library was built: the run folders it does not show, with the reason, and the issues the build found. Closed by default; it changes nothing.
+function libraryNotShown(activity) {
+  if(!activity)return '<p class="intro">The build’s list of folders not shown and its issues could not be read; nothing is claimed about them.</p>';
+  const {excluded,issues}=activity;
+  if(!excluded.length&&!issues.length)return '';
+  const folders=excluded.length?`<h3>Run folders not shown</h3><ol class="report-list">${excluded.map(([folder,reason])=>`<li class="report-row"><span class="code">${esc(folder)}</span><span>${esc(reason)}</span></li>`).join('')}</ol>`:'';
+  const found=issues.length?`<h3>Issues</h3><ul class="report-list">${issues.map(i=>`<li class="report-row">${esc(i)}</li>`).join('')}</ul>`:'';
+  return `<details class="library-not-shown"><summary>Not shown (${excluded.length} folders, ${issues.length} issues)</summary>${folders}${found}</details>`;
+}
 function libraryView() {
   clearInvalidBounds();
   const view=libraryRows();
-  return `<div class="library-main"><form id="library-filters" class="library-panel" role="search" aria-label="Screen issuer runs">${libraryPanel()}</form><section class="library-results-panel" aria-label="Run results"><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected run details" tabindex="-1" ${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>`;
+  return `<div class="library-main"><form id="library-filters" class="library-panel" role="search" aria-label="Screen issuer runs">${libraryPanel()}</form><section class="library-results-panel" aria-label="Run results"><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected run details" tabindex="-1" ${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>${libraryNotShown(window.DESIGN_ACTIVITY)}`;
 }
 // Re-places the results from the current filters; the panel itself is only rebuilt on a reset so typing keeps its focus.
 function updateLibrary(panel=false) {
@@ -1263,30 +1231,23 @@ function overviewDates(context) {
 function runReport(context) {
   const entries=overviewEntries(context);
   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
-  if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Source inventory${icon('arrow-right')}</a></p>`;
+  if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
   const {lead,html}=overviewLead(entries);
   return html+overviewBottomLines(entries,lead)+overviewLimitations(entries)+overviewCharts(entries)+overviewDates(context);
 }
-// Read-only: the folders the library does not show (with the reason) and the issues found when it was built.
-function activityView(activity,live) {
+// Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
+// library does not show and the build's issues are on the library page.
+function activityView(live) {
   const top=liveActivityView(live);
-  if(!activity)return top+ '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>The data file did not supply it, so nothing is claimed about excluded runs or issues. Rebuild the data file and open this page again.</p></div>';
-  const excluded=activity.excluded,issues=activity.issues;
-  if(!excluded.length&&!issues.length)return top+'<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Nothing to report</h2><p>Every run folder in this workspace is shown in the library, and building it raised no issues.</p></div>';
-  return top+`<p class="intro">Read when the library was built. It lists run folders that are not shown and any issues found; it changes nothing.</p>${excluded.length?`<section class="activity-excluded"><h2>Run folders not shown</h2><ol class="report-list">${excluded.map(([folder,reason])=>`<li class="report-row"><span class="code">${esc(folder)}</span><span>${esc(reason)}</span></li>`).join('')}</ol></section>`:''}${issues.length?`<section class="activity-issues"><h2>Issues</h2><ul class="report-list">${issues.map(i=>`<li class="report-row">${esc(i)}</li>`).join('')}</ul></section>`:''}`;
+  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>No live run data was supplied, so nothing is claimed about runs in progress or waiting.</p></div>';
+  if(!top.includes('<section'))return top+'<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p></div>';
+  return top;
 }
 // Live runs from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed:
-// then nothing live is shown. Each value passes through esc; a report path becomes a link only when it is a plain relative path.
+// then nothing live is shown. Each value passes through esc. Only runs that are running or queued are drawn.
 const ACTIVITY_RELOAD_MS=30000;
+// Statuses of runs that have ended: not drawn here (decision 10); the list stays so a test can check it against the run start service's statuses.
 const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
-// Report links stay under issuers/<folder>/<file>.html: the one place only the run start service writes. Nothing else becomes a link.
-function reportHref(report) {
-  if(typeof report!=='string'||!report||report.startsWith('/')||/^[a-z][a-z0-9+.-]*:/i.test(report)||report.includes('\\'))return null;
-  const parts=report.split('/');
-  if(parts.length!==3||parts[0]!=='issuers'||!/\.html$/i.test(parts[2])||parts.some(p=>p===''||p==='.'||p==='..'))return null;
-  try {return '../../'+parts.map(encodeURIComponent).join('/');}
-  catch(error) {if(error instanceof URIError)return null;throw error;} // a lone surrogate cannot be a link; the path is still shown as text
-}
 // Only strings and finite numbers reach the page; any other value in a field renders as empty text.
 function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
 const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted'];
@@ -1297,14 +1258,11 @@ function liveRunSpend(run,cap) {
 }
 const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location.protocol);
 function liveRunRow(run,cap) {
-  const ended=run.status!=='running'&&run.status!=='queued',files=Array.isArray(run.files)?run.files:[];
+  const files=Array.isArray(run.files)?run.files:[];
   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
   const chips=Array.isArray(run.modules)?run.modules.filter(Array.isArray).map(([name,state])=>`<span class="chip chip-${['done','running','waiting'].includes(state)?state:'waiting'}">${liveText(name)}</span>`).join(''):'';
-  // Served over HTTP the filed copy under issuers/ is not served and the library keeps no copy of it: the path stays as text.
-  const href=run.status==='finished'&&!servedOverHttp()?reportHref(run.report):null;
-  const report=run.status==='finished'&&run.report?(href?`<a class="text-action"${tag} href="${esc(href)}">${liveText(run.report)}</a>`:`<span class="code">${liveText(run.report)}</span>`):'';
   const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
-  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${run.submitted_by?`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`:''}${ended?`<span class="run-status">${liveText(run.status)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${ended&&run.ended_at?`<span class="run-time">ended ${liveText(run.ended_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${report}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
+  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${run.submitted_by?`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
 }
 function liveActivityView(live) {
   if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
@@ -1312,9 +1270,8 @@ function liveActivityView(live) {
   const section=(title,cls,list,note='')=>list.length||note?`<section class="${cls}"><h2>${title}</h2>${note}${list.length?`<ul class="report-list">${list.map(r=>liveRunRow(r,live.cap)).join('')}</ul>`:''}</section>`:'';
   const waiting=runs.filter(r=>r.status==='queued');
   const held=live.held&&liveText(live.held)?`<p class="run-held">${liveText(live.held)}</p>`:'';
-  const ended=runs.filter(r=>r.status!=='running'&&r.status!=='queued');
   const stamp=`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`;
-  return stamp+section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held)+section('Ended','activity-ended',ended);
+  return stamp+section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held);
 }
 // The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
 function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}
@@ -1326,14 +1283,45 @@ function swapActivityScript(doc,now) {
   doc.head.append(script);
   if(previous)previous.remove();
 }
+// ---- Evidence (ruling decisions 9, 10): four lists for the run, every value as the store copied it from the run's own files; a value the run does not record reads "Not recorded". Source files are listed only.
+const shownOrNot=value=>value===null||value===undefined||value===''?'Not recorded':String(value);
+const readers=codes=>codes.map(code=>`${esc(moduleTitle(code))} <span class="module-code">${esc(code)}</span>`).join(', ');
+const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="${esc(href)}" download aria-label="Download ${esc(named)}">${esc(label)}${icon('download')}</a>`:`<span>${esc(label)}</span> <span class="muted">No link</span>`;
+const evidenceTable=(caption,heads,rows)=>`<table class="history-table"><caption>${caption}</caption><thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+function evidenceSources(ev) {
+  const used=ev.sources.length?evidenceTable('Supplied files that a handoff’s Sources section names',['Name','Type','Document date','Read by'],ev.sources.map(f=>[esc(f.name),esc(shownOrNot(f.type)),esc(shownOrNot(f.documentDate)),readers(f.readBy)])):'<p class="empty">No handoff’s Sources section names a supplied file.</p>';
+  const unused=ev.unused.length?`<ul class="report-list">${ev.unused.map(f=>`<li class="report-row"><span>${esc(f.name)}</span><span class="muted">${esc(shownOrNot(f.type))} · document date ${esc(shownOrNot(f.documentDate))}</span></li>`).join('')}</ul>`:'<p class="empty">Every supplied file is named in a handoff’s Sources section.</p>';
+  return `<section class="run-section" id="evidence-sources"><h2>Source files used</h2><p class="intro">Listed only: source files are not included here and page references point to the originals.</p>${used}<h3>Supplied, not used</h3>${unused}</section>`;
+}
+function evidenceHandoffs(ev) {
+  const rows=ev.handoffs.map(h=>[`${esc(moduleTitle(h.module))} <span class="module-code">${esc(h.module)}</span>`,downloadLink(h.name,h.href,`${moduleTitle(h.module)} handoff`)]);
+  const all=ev.zip?`<p>${downloadLink('Download all',ev.zip,'all handoffs (zip)')}</p>`:'';
+  return `<section class="run-section" id="evidence-handoffs"><h2>Handoffs</h2>${rows.length?evidenceTable('The delivered Markdown of each module',['Module','Original Markdown'],rows)+all:'<p class="empty">This run holds no handoff.</p>'}</section>`;
+}
+function evidenceDownloads(ev) {
+  const rows=ev.downloads.map(d=>`<li class="report-row">${downloadLink(d.label,d.href)}</li>`).join('');
+  return `<section class="run-section" id="evidence-downloads"><h2>Calculations and Model</h2>${rows?`<ul class="report-list">${rows}</ul>`:'<p class="empty">No calculation or Model file was published from this run.</p>'}</section>`;
+}
+function evidenceRecord(ev) {
+  const r=ev.record;
+  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc(h.name),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
+  const sent=r.instructions.length?`<ul class="report-list">${r.instructions.map(i=>`<li class="report-row">${downloadLink(`${moduleTitle(i.module)} instructions`,i.href)}</li>`).join('')}</ul>`:'<p class="empty">The run records no instructions.</p>';
+  const calls=r.calls.length?evidenceTable('Model calls, in the order recorded',['Module','Attempt','Started','HTTP status','Error','Settled (USD)'],r.calls.map(c=>[esc(moduleTitle(c.module)),esc(shownOrNot(c.attempt)),esc(shownOrNot(c.started)),esc(shownOrNot(c.http_status)),esc(shownOrNot(c.error_class)),esc(shownOrNot(c.settled_usd))])):'<p class="empty">The run records no model call.</p>';
+  return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary><h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;
+}
+function evidenceView(context) {
+  const ev=contexts[context]?.evidence;
+  if(!ev)return '<div class="missing-state"><h2>No evidence record was read for this run</h2><p>Rebuild the library and open this page again.</p></div>';
+  return evidenceSources(ev)+evidenceHandoffs(ev)+evidenceDownloads(ev)+evidenceRecord(ev);
+}
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
   if(module==='W-Library')return libraryView();
   if(module==='W-Overview')return runReport(context);
   if(module==='W-Report')return historyView(context);
-  if(module==='W-Evidence')return `<p class="intro">Source PDFs aren’t included; page references point to the originals.</p>${eventLanesView(context,{at:'Evidence',compact:true})}${statusMapView(context)}${mapsPlaced(context,{at:'Evidence'})}${sourceInventory(context)}`;
+  if(module==='W-Evidence')return evidenceView(context);
   if(module==='W-Forecast')return forecastView(context,section)+chartIndex(context);
-  if(module==='CP-OS')return statusMapView(context,{timeline:true})+activityView(window.DESIGN_ACTIVITY,window.RUN_ACTIVITY);
+  if(module==='CP-OS')return activityView(window.RUN_ACTIVITY);
   return '';
 }
 function updateWorkspaceChrome(module) {

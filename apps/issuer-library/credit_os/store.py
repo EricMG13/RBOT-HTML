@@ -3209,6 +3209,219 @@ def shown_runs(
     return shown, recorded
 
 
+SHA_TEXT = re.compile(r"[0-9a-f]{64}")
+EXTENSION_WORDS = re.compile(r"((?:\.[A-Za-z]+)+)$")
+CALL_FIELDS = (
+    ("module", "module_id"),
+    ("attempt", "attempt"),
+    ("started", "started_at"),
+    ("http_status", "http_status"),
+    ("error_class", "error_class"),
+    ("settled_usd", "settled_usd"),
+)
+
+
+def stored_text(value: Any) -> str | None:
+    """A stored string as it is; anything else is missing, never a made-up value."""
+    return value if isinstance(value, str) else None
+
+
+def run_json(path: Path, issues: list[str], what: str) -> Any:
+    """A run file's JSON, or None with an issue naming why not (a documented fail-open: the
+    Evidence page then lacks that part; the failure is in Workspace issues)."""
+    try:
+        return json.loads(b"".join(regular_chunks(path, follow=False)).decode("utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as error:
+        issues.append(f"{what} could not be read ({describe(error)})")
+        return None
+
+
+def file_type(name: str) -> str | None:
+    """The file's trailing alphabetic extension words as written (`pdf`, `htm.jsonl`)."""
+    found = EXTENSION_WORDS.search(name)
+    return found[1][1:] if found else None
+
+
+def sources_section_text(sections: list[dict[str, Any]]) -> str:
+    """Every cell and paragraph under the handoff's `## Sources` heading (its subsections too)."""
+    parts: list[str] = []
+    inside = False
+    for section in sections:
+        if section["level"] <= 2:
+            inside = section["level"] == 2 and section["heading"].strip() == "Sources"
+        if not inside:
+            continue
+        for block in section["blocks"]:
+            if block["type"] == "text":
+                parts.append(block["text"])
+            elif block["type"] == "table":
+                parts.extend(block["headers"])
+                parts.extend(cell for row in block["rows"] for cell in row["cells"])
+    return "\n".join(parts)
+
+
+def run_calls(run_dir: Path, folder: str, issues: list[str]) -> list[dict[str, Any]]:
+    """live/calls.jsonl as recorded: one row per call with the fields as stored."""
+    try:
+        raw = b"".join(regular_chunks(run_dir / "live" / "calls.jsonl", follow=False))
+    except FileNotFoundError:
+        return []
+    except OSError as error:
+        issues.append(f"{folder}: live/calls.jsonl could not be read ({describe(error)})")
+        return []
+    calls: list[dict[str, Any]] = []
+    for number, line in enumerate(raw.decode("utf-8", errors="replace").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            call = json.loads(line)
+        except ValueError:
+            call = None
+        if not isinstance(call, dict):
+            issues.append(f"{folder}: live/calls.jsonl line {number} is not a call record")
+            continue
+        calls.append({key: call.get(field) for key, field in CALL_FIELDS})
+    return calls
+
+
+def run_hashes(run_dir: Path, workflow: dict[str, Any], issues: list[str]) -> list[dict[str, Any]]:
+    """The hashes a run records: its supplied files and instructions (workflow.json), then its
+    delivery manifest and completion record, hashed from the files themselves."""
+    rows: list[dict[str, Any]] = []
+    for part in ("sources", "instructions"):
+        entries = workflow.get(part)
+        for name, entry in (entries if isinstance(entries, dict) else {}).items():
+            entry = entry if isinstance(entry, dict) else {}
+            label = name if part == "sources" else str(entry.get("path") or name)
+            rows.append({"name": label, "sha256": stored_text(entry.get("sha256"))})
+    for pattern in ("delivery-*.json", "completed-*.json"):
+        for path in sorted(run_dir.glob(pattern)):
+            try:
+                rows.append({"name": path.name, "sha256": sha256(path)})
+            except OSError as error:
+                issues.append(
+                    f"{run_dir.name}: {path.name} could not be hashed ({describe(error)})"
+                )
+                rows.append({"name": path.name, "sha256": None})
+    return rows
+
+
+def instruction_rows(
+    workflow: dict[str, Any], folder: str, link: Callable[[str, str, str], str], issues: list[str]
+) -> list[dict[str, Any]]:
+    """The instructions each module was sent, as the run's workflow.json records them."""
+    entries = workflow.get("instructions")
+    rows: list[dict[str, Any]] = []
+    for module, entry in (entries if isinstance(entries, dict) else {}).items():
+        entry = entry if isinstance(entry, dict) else {}
+        path, digest = entry.get("path"), stored_text(entry.get("sha256"))
+        parts = PurePosixPath(path).parts if isinstance(path, str) else ()
+        safe = (
+            isinstance(path, str)
+            and bool(parts)
+            and not (path.startswith("/") or ".." in parts or "\\" in path or ":" in path)
+        )
+        usable = safe and digest is not None and SHA_TEXT.fullmatch(digest) is not None
+        if not usable:
+            issues.append(f"{folder}: instructions for {module} have no usable path or hash")
+        rows.append(
+            {
+                "module": module,
+                "href": link(folder, str(path), str(digest)) if usable else None,
+                "sha256": digest,
+            }
+        )
+    return rows
+
+
+def run_downloads(
+    run: dict[str, Any], key: str, models: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The Model and calculation files of the models this run's Forecast lists (the rule of
+    views.js runModels), each as a label and a download link."""
+    rows: list[dict[str, Any]] = []
+    for model in sorted(models, key=lambda m: m["id"]):
+        holds = model["issuerKey"] == run["issuerKey"] and (
+            (model["runId"] is not None and model["runId"] == run["folder"])
+            or model["runFolder"] == run["folder"]
+            or any(source["run"] == key for source in model["sources"])
+        )
+        if not holds:
+            continue
+        rows.append({"label": f"Model {model['id']}", "href": model["download"]})
+        rows.extend(
+            {"label": f"{model['id']}: {f['name']}", "href": f["href"]}
+            for f in model["files"]
+            if f["name"] in ("calculation.json", "forecast_exact.json")
+        )
+    return rows
+
+
+class EvidenceReads(NamedTuple):
+    """What the store holds when Evidence is built: the workspace root, the link maker, the
+    outputs, the parsed handoffs by hash and the models."""
+
+    root: Path
+    link: Callable[[str, str, str], str]
+    outputs: dict[str, Any]
+    sections: dict[str, list[dict[str, Any]]]
+    models: list[dict[str, Any]]
+
+
+def run_evidence(
+    key: str, run: dict[str, Any], held: EvidenceReads, issues: list[str]
+) -> dict[str, Any]:
+    """The run's Evidence page, as data: supplied files and who read them, the delivered
+    handoffs, the downloads and the run record. Every value is as stored; one the run does not
+    record is None."""
+    folder = run["folder"]
+    run_dir = held.root / "runs" / folder
+    workflow = run_json(run_dir / "workflow.json", issues, f"{folder}: workflow.json")
+    workflow = workflow if isinstance(workflow, dict) else {}
+    handoffs = []
+    read_by: dict[str, list[str]] = {}
+    supplied = workflow.get("sources")
+    supplied = supplied if isinstance(supplied, dict) else {}
+    names = [name for name in supplied if name != "context"]
+    for module, entry in run["modules"].items():
+        output = held.outputs.get(entry["default"] or "")
+        if output is None:
+            continue
+        handoffs.append({"module": module, "name": f"{module}.md", "href": output["href"]})
+        text = sources_section_text(held.sections[output["sha256"]])
+        for name in names:
+            if name in text:
+                read_by.setdefault(name, []).append(module)
+    rows = [
+        {
+            "name": name,
+            "sha256": stored_text(supplied[name].get("sha256"))
+            if isinstance(supplied[name], dict)
+            else None,
+            "type": file_type(name),
+            "documentDate": None,
+            "readBy": read_by.get(name, []),
+        }
+        for name in names
+    ]
+    cap = workflow.get("provider_cap_usd")
+    return {
+        "sources": [row for row in rows if row["readBy"]],
+        "unused": [row for row in rows if not row["readBy"]],
+        "handoffs": handoffs,
+        "zip": f"downloads/{quote(folder)}/handoffs.zip" if handoffs else None,
+        "downloads": run_downloads(run, key, held.models),
+        "record": {
+            "hashes": run_hashes(run_dir, workflow, issues),
+            "instructions": instruction_rows(workflow, folder, held.link, issues),
+            "calls": run_calls(run_dir, folder, issues),
+            "cap": cap if isinstance(cap, (str, int, float)) else None,
+        },
+    }
+
+
 def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, Any]:
     """Everything the app reads. A curated pin that stopped matching is dropped, not fatal."""
     root = Path(root)
@@ -3250,6 +3463,9 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
         root, catalogue, WorkspaceReads(outputs, keys, runs, manifests)
     )
     found += unread
+    held = EvidenceReads(root, link, outputs, {h: p[0] for h, p in handoffs.parsed.items()}, models)
+    for key, run in runs.items():
+        run["evidence"] = run_evidence(key, run, held, found)
     # A deliverable that cannot be read is named here (read_model names a model's own folder).
     for folder, manifest in manifests.items():
         reason = manifest if isinstance(manifest, str) else delivery_identity(folder, manifest[1])

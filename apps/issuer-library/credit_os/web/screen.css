@@ -586,3 +586,5 @@ td .basis-link{margin-left:6px}
 .basis-items{margin:6px 0;padding-left:18px}.basis-items>li{margin:6px 0}
 .calculation-row{margin:6px 0;display:grid;gap:4px}.calculation-row>div{display:grid;grid-template-columns:minmax(70px,auto) 1fr;gap:8px}.calculation-row dt{color:var(--muted);font-size:var(--fs-label)}.calculation-row dd{margin:0}
 .citations-heading{margin-top:14px}
+.library-not-shown{margin-top:24px}.library-not-shown summary,#evidence-record summary{cursor:pointer;font-weight:600}.library-not-shown h3,#evidence-record h3{margin:16px 0 6px}
+.history-table .module-code{display:inline}

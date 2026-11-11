@@ -4,8 +4,9 @@
 
 Reads ``FOLDER/runs`` (default: this checkout; the Windows package needs ``--workspace``, which
 ``Update library.cmd`` supplies) and writes only ``FOLDER/library/``: ``index.html`` with its
-scripts, styles, fonts and icons, and ``data.js`` (the catalogue and the workspace store, as data).
-The runs' own files are never copied or changed; the page links to them. The page opens from disk:
+scripts, styles, fonts and icons, ``data.js`` (the catalogue and the workspace store, as data) and
+``downloads/<run folder>/handoffs.zip`` (the run's delivered handoffs, byte for byte, for "Download
+all"). The runs' own files are never changed; the page links to them. The page opens from disk:
 no server, no network access. Which runs it lists is decided by ``deploy_workflow.library_index``.
 No analysis is run and no provider is called.
 """
@@ -13,10 +14,12 @@ No analysis is run and no provider is called.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote, urlsplit
@@ -139,11 +142,35 @@ def run_records(workspace: Path, store: dict[str, Any]) -> None:
             run["record"] = record
 
 
+def handoff_zip(folder: Path, workspace: Path, run: dict[str, Any], store: dict[str, Any]) -> None:
+    """Write ``downloads/<run folder>/handoffs.zip``: each delivered handoff, byte for byte, as
+    ``<CODE>.md``. A file that no longer has the bytes the store hashed is refused, not zipped."""
+    target = folder / unquote(run["evidence"]["zip"])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        for handoff in run["evidence"]["handoffs"]:
+            output = store["outputs"][run["modules"][handoff["module"]]["default"]]
+            raw = b"".join(regular_chunks(workspace / "runs" / run["folder"] / output["source"]))
+            if hashlib.sha256(raw).hexdigest() != output["sha256"]:
+                raise Refused(
+                    f"Not written: {run['folder']}/{output['source']} changed during the build"
+                )
+            # A fixed date makes the same handoffs give the same zip.
+            archive.writestr(zipfile.ZipInfo(handoff["name"], (1980, 1, 1, 0, 0, 0)), raw)
+
+
+def handoff_zips(folder: Path, workspace: Path, store: dict[str, Any]) -> None:
+    for run in store["runs"].values():
+        if run["evidence"]["zip"]:
+            handoff_zip(folder, workspace, run, store)
+
+
 def build_into(folder: Path, workspace: Path, library: Library) -> None:
     shutil.copytree(WEB, folder, ignore=shutil.ignore_patterns("*.test.cjs"), dirs_exist_ok=True)
     cat = catalogue(workspace, library)
     store = workspace_store(workspace, cat)
     run_records(workspace, store)
+    handoff_zips(folder, workspace, store)
     # Run activity, as data: the folders left out and why, and every issue the build recorded
     # (the store's list already holds the catalogue's; each is kept once, in order).
     activity = {

@@ -81,7 +81,7 @@ class RunSpec:
     cp1_findings: str = ""  # Text inserted into the CP-1 handoff just before its Sources section.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
-    report_page: bool = True  # False: a current delivery, with no report.html, stated by receipt.
+    supplied: tuple[str, ...] = ()  # Supplied file names, as workflow.json `sources` lists them.
 
 
 def make_run(workspace: Path, folder: str, **changes) -> Path:
@@ -142,7 +142,16 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         path = f"requests/{module}/{folder_sha}/1.response.md"
         handoffs[module] = {"path": path, "sha256": put(run_dir / path, answer.encode())}
         selected[module] = path
-    put(run_dir / "workflow.json", json.dumps({"run": run, "instructions": instructions}).encode())
+    workflow = {"run": run, "instructions": instructions, "provider_cap_usd": "12"}
+    if spec.supplied:
+        workflow["sources"] = {
+            name: {
+                "path": f"source-text/{name}.txt",
+                "sha256": put(run_dir / f"source-text/{name}.txt", f"text of {name}\n".encode()),
+            }
+            for name in spec.supplied
+        }
+    put(run_dir / "workflow.json", json.dumps(workflow).encode())
     manifest = json.dumps({"run": run, "handoffs": handoffs}, indent=2).encode()
     manifest_sha = sha(manifest)
     put(run_dir / f"delivery-{manifest_sha}.json", manifest)

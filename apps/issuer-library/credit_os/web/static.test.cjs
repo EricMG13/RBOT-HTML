@@ -101,35 +101,93 @@ test('installDestinations keys are exactly the library and issuer pages plus Run
   assert.deepEqual([...row.matchAll(/\['([^']+)','[^']*',\[\]\]/g)].map(m => m[1]), ['activity']);
 });
 
-// Pull the pure activityView out of views.js and run it with a stand-in esc and icon.
-const activityView = () => {
+// Pull the pure activityView and libraryNotShown out of views.js and run them with a stand-in esc and icon.
+const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const viewsPart = (from, to, returns) => {
   const text = read('views.js');
-  const start = text.indexOf('function activityView(');
-  const end = text.indexOf('function workspaceView(');
-  assert.ok(start >= 0 && end > start, 'activityView not found');
-  const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  return new Function('esc', 'icon', `${text.slice(start, end)}; return activityView;`)(esc, n => `<img src="icons/${n}.svg">`);
+  const start = text.indexOf(from), end = text.indexOf(to);
+  assert.ok(start >= 0 && end > start, `${from} not found`);
+  return new Function('esc', 'icon', `${text.slice(start, end)}; return ${returns};`)(esc, n => `<img src="icons/${n}.svg">`);
+};
+const activityView = () => viewsPart('function activityView(', 'function workspaceView(', 'activityView');
+const libraryNotShown = () => viewsPart('function libraryNotShown(', 'function libraryView(', 'libraryNotShown');
+
+const evidenceView = contexts => {
+  const text = read('views.js');
+  const start = text.indexOf('// ---- Evidence (ruling decisions 9, 10)'), end = text.indexOf('function workspaceView(');
+  assert.ok(start >= 0 && end > start, 'evidence view not found');
+  const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation' };
+  return new Function('esc', 'icon', 'moduleTitle', 'contexts', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, contexts);
+};
+const EVIDENCE = {
+  sources: [{ name: 'A <report>.pdf', sha256: 'a'.repeat(64), type: 'pdf', documentDate: null, readBy: ['CP-0', 'CP-1'] }],
+  unused: [{ name: 'C_unread.htm.jsonl', sha256: 'c'.repeat(64), type: 'htm.jsonl', documentDate: null, readBy: [] }],
+  handoffs: [{ module: 'CP-0', name: 'CP-0.md', href: '../runs/r/CP-0.md?sha256=1' }, { module: 'CP-1', name: 'CP-1.md', href: '../runs/r/CP-1.md?sha256=2' }],
+  zip: 'downloads/r/handoffs.zip',
+  downloads: [{ label: 'Model m', href: '/files/m.html' }],
+  record: { hashes: [{ name: 'delivery-x.json', sha256: 'd'.repeat(64) }], instructions: [{ module: 'CP-0', href: '../runs/r/instructions/CP-0.md', sha256: 'e'.repeat(64) }],
+    calls: [{ module: 'CP-0', attempt: 0, started: '2026-11-09T15:13:51Z', http_status: 200, error_class: null, settled_usd: '0.00941950' }], cap: '12' },
 };
 
-test('Run activity lists excluded folders with reasons, then issues', () => {
-  const html = activityView()({ excluded: [['run-half', 'no <CP-1A> output'], ['legacy', 'not a run']], issues: ['store: bad pin'] });
-  for (const want of ['run-half', 'no &lt;CP-1A&gt; output', 'legacy', 'not a run', 'store: bad pin', 'Run folders not shown']) {
-    assert.ok(html.includes(want), `missing ${want}`);
-  }
-  assert.ok(!/<(button|form|input|a )/i.test(html), 'Run activity carries no control');
+test('Evidence: four lists in order; sources are listed only, with Not recorded for the date and who read them', () => {
+  const html = evidenceView({ r: { evidence: EVIDENCE } })('r');
+  const at = ['Source files used', 'Handoffs', 'Calculations and Model', 'Run record'].map(t => html.indexOf(`<h2>${t}</h2>`) >= 0 ? html.indexOf(`<h2>${t}</h2>`) : html.indexOf(`<summary>${t}</summary>`));
+  assert.ok(at.every((n, i) => n >= 0 && (!i || n > at[i - 1])), at.join());
+  const row = /<tbody><tr>(.*?)<\/tr>/s.exec(html)[1];
+  assert.equal(strip(row.replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|Not recorded|Source readiness CP-0, Financial foundation CP-1|');
+  assert.ok(html.indexOf('Supplied, not used') > html.indexOf('A &lt;report&gt;.pdf') && html.includes('C_unread.htm.jsonl'));
+  assert.ok(!html.includes('A &lt;report&gt;.pdf</a>') && !/<a [^>]*>[^<]*(report|unread)/.test(html), 'no link for a source file');
 });
 
-test('Run activity says so when there is nothing to report', () => {
-  const html = activityView()({ excluded: [], issues: [] });
-  assert.ok(html.includes('Nothing to report') && !html.includes('<li'));
+test('Evidence: handoffs and calculations are download links; Download all is the zip; the record is closed', () => {
+  const html = evidenceView({ r: { evidence: EVIDENCE } })('r');
+  assert.equal(countOf(html, /<a class="text-action" href="[^"]*"\s+download/g), 5, 'two handoffs, Download all, one Model, one instruction');
+  assert.ok(html.includes('href="downloads/r/handoffs.zip" download') && html.includes('>Download all<'));
+  assert.ok(html.includes('href="../runs/r/CP-0.md?sha256=1" download'));
+  assert.ok(/<details><summary>Run record<\/summary>/.test(html) && !/<details[^>]* open/.test(html));
+  assert.ok(html.includes('Provider cap: USD 12') && html.includes('0.00941950') && html.includes('d'.repeat(64)));
+  assert.ok(strip(/<table class="history-table"><caption>Model calls.*?<\/table>/s.exec(html)[0]).includes('Not recorded'), 'a missing error class is not a value');
 });
 
-test('Run activity never shows the all-clear when its data is missing', () => {
-  const html = activityView()(null);
-  assert.ok(html.includes('could not be read'));
-  assert.ok(!html.includes('Nothing to report') && !html.includes('raised no issues'));
+test('Evidence: nothing recorded says so and invents nothing', () => {
+  const none = { sources: [], unused: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } };
+  const html = evidenceView({ r: { evidence: none } })('r');
+  for (const want of ['No handoff’s Sources section names a supplied file', 'This run holds no handoff', 'No calculation or Model file was published', 'The run records no hash', 'Provider cap: USD Not recorded']) assert.ok(html.includes(want), want);
+  assert.ok(!html.includes('Download all') && !html.includes('<table'));
+  assert.ok(evidenceView({ r: {} })('r').includes('No evidence record was read'));
+});
+
+test('Run activity shows only runs in progress and the queue (ruling decision 10)', () => {
+  const html = activityView()({ cap: '20', held: '', runs: [
+    { id: 'a', status: 'running', folder: 'f-run', issuer_name: 'Runner' },
+    { id: 'b', status: 'queued', folder: 'f-wait', issuer_name: 'Waiter' },
+    { id: 'c', status: 'finished', folder: 'f-done', issuer_name: 'Finisher' },
+    { id: 'd', status: 'failed', folder: 'f-bad', issuer_name: 'Failer' }] });
+  assert.ok(html.includes('Runner') && html.includes('Waiter') && html.includes('Running') && html.includes('Waiting'));
+  for (const gone of ['Finisher', 'Failer', 'Ended', 'Run folders not shown', 'Issues']) assert.ok(!html.includes(gone), gone);
+  assert.ok(!html.includes('<a '), 'no report link');
+});
+
+test('Run activity says so when nothing is running or waiting, and never when its data is missing', () => {
+  const none = activityView()({ runs: [{ status: 'finished', issuer_name: 'Finisher' }] });
+  assert.ok(none.includes('No run in progress') && !none.includes('Finisher'));
+  assert.ok(activityView()({ runs: [] }).includes('No run in progress'));
+  const missing = activityView()(undefined);
+  assert.ok(missing.includes('could not be read') && !missing.includes('No run in progress'));
   const boot = read('static-boot.js');
   assert.ok(boot.includes('activity=null') && !boot.includes('activity={excluded:[],issues:[]}'));
+});
+
+test('the library page lists the folders not shown and the build issues closed, last, with reasons', () => {
+  const html = libraryNotShown()({ excluded: [['run-half', 'no <CP-1A> output'], ['legacy', 'not a run']], issues: ['store: bad pin'] });
+  for (const want of ['run-half', 'no &lt;CP-1A&gt; output', 'legacy', 'not a run', 'store: bad pin', 'Run folders not shown', 'Issues']) {
+    assert.ok(html.includes(want), `missing ${want}`);
+  }
+  assert.ok(/^<details class="library-not-shown"><summary>/.test(html) && !/<details[^>]* open/.test(html), 'closed by default');
+  assert.equal(libraryNotShown()({ excluded: [], issues: [] }), '');
+  assert.ok(libraryNotShown()(null).includes('could not be read'));
+  const text = read('views.js');
+  assert.ok(text.includes('</div>${libraryNotShown(window.DESIGN_ACTIVITY)}`;'), 'drawn after the results and the run detail');
 });
 
 test('Forecast for a run with no CP-2G output says no model was published', () => {
@@ -781,7 +839,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'];
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name])];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, drawnAnchors, defaultOutput, firstSection};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, drawnAnchors, defaultOutput, firstSection};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -1198,9 +1256,9 @@ const liveFns = () => {
   const text = read('views.js');
   const start = text.indexOf('function activityView('), end = text.indexOf('function workspaceView(');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  return new Function('esc', 'icon', `${text.slice(start, end)}; return {liveActivityView, reportHref, nextActivityReload, swapActivityScript, activityView};`)(esc, n => `<img src="icons/${n}.svg">`);
+  return new Function('esc', 'icon', `${text.slice(start, end)}; return {liveActivityView, nextActivityReload, swapActivityScript, activityView};`)(esc, n => `<img src="icons/${n}.svg">`);
 };
-const { liveActivityView, reportHref, nextActivityReload, swapActivityScript, activityView: activityViewLive } = liveFns();
+const { liveActivityView, nextActivityReload, swapActivityScript, activityView: activityViewLive } = liveFns();
 
 test('live run activity shows spend, chips and escapes names', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
@@ -1212,7 +1270,7 @@ test('live run activity shows spend, chips and escapes names', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('USD 3.10 of 20') && html.includes('spend could not be read'));
   assert.ok(html.includes('chip-done') && html.includes('chip-running') && html.includes('chip-waiting'));
-  assert.ok(html.includes('href="../../issuers/Initech%20(ini)/2026-11-09%20credit_snapshot.html"'));
+  assert.ok(!html.includes('Initech') && !html.includes('<a '), 'a finished run is not drawn, and no run links to a report');
 });
 test('live run activity names who submitted a run, as text', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
@@ -1229,32 +1287,13 @@ test('malformed live activity shows nothing and does not throw', () => {
   assert.ok(html.includes('Waiting'));
 });
 
-test('live sections: waiting shows held, ended shows status, reason and the name warning, all escaped', () => {
+test('live sections: waiting shows held and the name warning, all escaped; an ended run is not drawn', () => {
   const html = liveActivityView({ cap: '20', held: 'daily limit <b>reached</b>', runs: [
-    { id: 'q', status: 'queued', pathway: 'p', folder: 'f', issuer_name: 'Q' },
-    { id: 'e', status: 'failed', pathway: 'p', folder: 'f', issuer_name: 'E', reason: '<script>x</script>', name_differs: true, ended_at: 'T', stalled: true }] });
+    { id: 'q', status: 'queued', pathway: 'p', folder: 'f', issuer_name: 'Q', reason: '<script>x</script>', name_differs: true, stalled: true },
+    { id: 'e', status: 'failed', pathway: 'p', folder: 'f', issuer_name: 'E', ended_at: 'T' }] });
   assert.ok(html.includes('daily limit &lt;b&gt;reached') && !html.includes('<b>') && !html.includes('<script>'));
-  assert.ok(html.includes('failed') && html.includes('issuer name differs from earlier runs') && html.indexOf('Waiting') < html.indexOf('Ended'));
-  assert.ok(!html.includes('<a '), 'a failed run has no report link');
-});
-
-test('a report path becomes a link only when it is a plain relative path', () => {
-  assert.strictEqual(reportHref('issuers/A B/r.html'), '../../issuers/A%20B/r.html');
-  for (const bad of ['/etc/passwd', 'a/../b', '../b', 'a//b', 'a/', '', './a', 'https://x/y', 'javascript:alert(1)', 'C:\\x', 'a\\b', null, undefined, 7,
-    'inbox/earnings_update/evil.html', '_engine/library/index.html', 'library.html', 'x.html', '%2e%2e/x', ' /x',
-    'issuers/a/b.txt', 'issuers/a/b/c.html', 'issuers/a.html', 'issuers/a/\ud800.html']) {
-    assert.strictEqual(reportHref(bad), null, String(bad));
-  }
-  assert.strictEqual(reportHref('issuers/A/R.HTML'), '../../issuers/A/R.HTML');
-  const html = liveActivityView({ runs: [{ status: 'finished', report: '../../x<y>' }] });
-  assert.ok(!html.includes('<a ') && html.includes('&lt;y&gt;'));
-});
-
-test('Run activity puts live runs above the build-time content and still works without them', () => {
-  const both = activityViewLive({ excluded: [['f', 'r']], issues: [] }, { runs: [{ status: 'running', folder: 'L' }] });
-  assert.ok(both.indexOf('Running') >= 0 && both.indexOf('Running') < both.indexOf('Run folders not shown'));
-  assert.ok(activityViewLive(null, { runs: [{ status: 'running', folder: 'L' }] }).includes('Running'));
-  assert.ok(!activityViewLive({ excluded: [], issues: [] }, undefined).includes('Running'));
+  assert.ok(html.includes('&lt;script&gt;x') && html.includes('issuer name differs from earlier runs') && html.includes('stalled'));
+  assert.ok(!html.includes('>E<') && !html.includes('Ended') && !html.includes('run-status'));
 });
 
 test('the 30 s re-load runs only for Run activity', () => {
@@ -1281,9 +1320,9 @@ test('one bad value does not hide the Run activity view', () => {
     lit('{"runs":[{"status":"running","folder":{"toString":1}}]}'),
     lit('{"held":{"toString":1,"valueOf":1},"runs":[]}'),
     lit('{"runs":[{"status":"running","modules":[[{"toString":null},"done"]]}]}')]) {
-    assert.doesNotThrow(() => activityViewLive({ excluded: [], issues: [] }, live));
+    assert.doesNotThrow(() => activityViewLive(live));
   }
-  assert.ok(activityViewLive(null, { runs: [{ status: 'running', folder: { toString: 1 }, issuer_name: 'Kept' }] }).includes('Kept'));
+  assert.ok(activityViewLive({ runs: [{ status: 'running', folder: { toString: 1 }, issuer_name: 'Kept' }] }).includes('Kept'));
 });
 
 test('the live section says how old the snapshot is, and the view re-loads at once when entered', () => {
@@ -1305,12 +1344,11 @@ test('the live section says how old the snapshot is, and the view re-loads at on
   state.current = { module: 'CP-OS' }; api.syncActivityTimer(); assert.strictEqual(swaps.length, 3, 're-entering re-loads at once');
 });
 
-test('a status adds no class names to the row', () => {
-  const cls = status => liveActivityView({ runs: [{ status, folder: 'f' }] }).match(/<li class="([^"]*)"/)[1];
-  assert.strictEqual(cls('x sr-only skip'), 'report-row live-run live-unknown');
-  assert.strictEqual(cls('__proto__'), 'report-row live-run live-unknown');
-  for (const ok of ['queued', 'running', 'finished', 'failed', 'capped', 'rejected', 'interrupted']) assert.strictEqual(cls(ok), `report-row live-run live-${ok}`);
-  assert.ok(liveActivityView({ runs: [{ status: 'x sr-only skip', folder: 'f' }] }).includes('x sr-only skip'), 'the status text is still shown');
+test('a status adds no class names to the row; only running and queued runs have one', () => {
+  const rows = status => [...liveActivityView({ runs: [{ status, folder: 'f' }] }).matchAll(/<li class="([^"]*)"/g)].map(m => m[1]);
+  assert.deepEqual(rows('running'), ['report-row live-run live-running']);
+  assert.deepEqual(rows('queued'), ['report-row live-run live-queued']);
+  for (const other of ['x sr-only skip', '__proto__', 'finished', 'failed', 'capped', 'rejected', 'interrupted']) assert.deepEqual(rows(other), [], other);
 });
 
 // The re-render helpers live in screen.js between these two markers; they take a root and the focused element.
@@ -1352,10 +1390,9 @@ test('re-render helpers cope with nothing open, nothing focused and runs that ha
 });
 
 test('rows carry the run id for restoring, and unchanged data is not re-rendered', () => {
-  const html = liveActivityView({ runs: [{ id: 'r"1', status: 'finished', folder: 'f', report: 'issuers/A/r.html', files: ['a'] }, { status: 'running', folder: 'g', files: ['b'] }] });
+  const html = liveActivityView({ runs: [{ id: 'r"1', status: 'running', folder: 'f', files: ['a'] }, { status: 'running', folder: 'g', files: ['b'] }] });
   assert.strictEqual([...html.matchAll(/<details class="run-files" data-run="r&quot;1">/g)].length, 1);
-  assert.ok(html.includes('<a class="text-action" data-run="r&quot;1" href="../../issuers/A/r.html">'));
-  assert.strictEqual([...html.matchAll(/data-run=/g)].length, 2, 'a run without an id gets no attribute');
+  assert.strictEqual([...html.matchAll(/data-run=/g)].length, 1, 'a run without an id gets no attribute');
   const screen = read('screen.js');
   const handler = screen.slice(screen.indexOf('window.onRunActivity='), screen.indexOf("window.addEventListener('hashchange',syncActivityTimer)"));
   assert.ok(handler.includes('JSON.stringify') && handler.includes('recordActivityView(') && handler.includes('restoreActivityView('));
@@ -1838,18 +1875,12 @@ const readerText = html => html.replace(/<[^>]*>/g, tag => [...tag.matchAll(/ (?
 const noCode = html => assert.ok(!/\bCP-[A-Z0-9]+\b/.test(readerText(html)), readerText(html).match(/.{0,40}\bCP-[A-Z0-9]+\b.{0,20}/)?.[0]);
 const withInputs = modules => Object.fromEntries(Object.entries(modules).map(([id, entry]) => [id, { inputs: [], ...entry }]));
 
-test('names, not codes: module heads, the Evidence tab and Built-from carry no module code in text, title or aria-label', () => {
+test('names, not codes: module heads and the report head carry no module code in text, title or aria-label', () => {
   const page = runPage(d => { for (const out of Object.values(d)) Object.assign(out, { file: `${RUN}--deliveries--d1--${out.module}.md`, sha256: 'c'.repeat(64) }); return d; }, [], withInputs);
   for (const id of Object.keys(runData())) page.modules[id] = { first: 'head' };
   const head = page.moduleHead({ module: 'CP-1', context: RUN, output: null });
   assert.ok(head.includes('<h2>Financial foundation</h2>') && !head.includes('title='));
   noCode(report().reportHead(OUT));
-  const inventory = page.sourceInventory(RUN);
-  assert.ok(inventory.includes('<h3>Financial foundation</h3>') && !inventory.includes('<h3>Financial foundation · CP-1'), 'the heading is the name only');
-  assert.ok(inventory.includes('aria-label="Open output: Financial foundation"') && inventory.includes('aria-label="Download original handoff: Financial foundation"'));
-  assert.ok(!inventory.includes('<p>CP-1</p>'), 'an output label equal to the module code is not shown');
-  assert.ok(inventory.includes('<summary>File identity</summary><p>Financial foundation handoff</p><p class="hash">SHA-256 ' + 'c'.repeat(64)));
-  noCode(inventory);
   assert.equal(page.handoffLabel('deliveries/h/CP-1A.md'), 'Unnamed module handoff', 'a module no group names');
   assert.equal(page.handoffLabel('K.pdf'), 'K.pdf');
 });
@@ -2040,7 +2071,7 @@ test('calendar lanes: a module filter draws only that module lane, and the Sourc
   assert.equal(countOf(only, /<div class="lane-row">/g), 1);
   assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
   const text = read('views.js');
-  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*eventLanesView\(context,\{at:'Evidence',compact:true\}\)/.test(text));
+  assert.ok(text.includes("if(module==='W-Evidence')return evidenceView(context);") && !/if\(module==='W-Evidence'\)return[^\n]*eventLanesView/.test(text), 'the Evidence page is the four lists, no lanes');
 });
 
 // ---- Package 6 views (2026-11-10): node/edge maps and the run status map. Every value is synthetic.
@@ -2105,63 +2136,6 @@ test('maps: the new rules use only existing tokens, no amber or red', () => {
   assert.ok(css.some(rule => /\.map-edge/.test(rule)) && css.some(rule => /shape-open/.test(rule)));
 });
 
-// Fix round 1: the status map draws the run's own record (registry edges, recorded order and times).
-const T0 = '2026-01-01T10:00:00Z', T1 = '2026-01-01T10:05:00Z';
-const RECORD = {
-  edges: [['CP-0', 'CP-1', 'block'], ['CP-1', 'CP-2A', 'restricted'], ['CP-1', 'CP-6', 'block']],
-  steps: [{ module: 'CP-1', started: T0, accepted: T1 }, { module: 'CP-2A', started: T1, accepted: null }, { module: 'CP-6', started: null, accepted: null }, { module: 'CP-0', started: null, accepted: null }],
-  timed: true,
-};
-const MODULE_WORDS = ['Financial foundation', 'Downside', 'Committee decision', 'Source readiness'];
-const textOrder = (html, names) => names.map(n => html.indexOf(n));
-
-test('status map: the dependency map carries each module state by word and shape and says where it comes from', () => {
-  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN);
-  const svg = /<svg.*?<\/svg>/s.exec(html)[0];
-  assert.equal(countOf(svg, /<g class="map-node"/g), 4);
-  for (const [shape, word] of [['established', 'Reaches a conclusion'], ['open', 'Not assessable'], ['none', 'No saved output']]) {
-    assert.ok(new RegExp(`class="map-state shape-${shape}"`).test(svg) && strip(svg).includes(word), shape);
-  }
-  assert.ok(strip(svg).includes('Block') && strip(svg).includes('Restricted'), 'the registry rule is the edge type, in words');
-  assert.ok(html.indexOf('<table class="map-table"') > html.indexOf('<svg'));
-  assert.ok(html.includes('required dependencies') && html.includes('method registry') && html.includes('recorded order'));
-  assert.ok(!html.includes('No dependency or time record') && !/CP-\d/.test(strip(html)));
-});
-
-test('status map: the list follows the recorded order, never the reading-group order, and carries no time on the Overview', () => {
-  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN);
-  const list = html.slice(html.indexOf('<ol class="status-list">'));
-  const at = textOrder(list, MODULE_WORDS);
-  assert.ok(at.every(n => n >= 0) && at.every((n, i) => !i || n > at[i - 1]), at.join());
-  assert.ok(!list.includes(T0) && !html.includes('<th scope="col">Started</th>'));
-});
-
-test('execution timeline: recorded times as written, Not recorded where an event is missing, nothing invented', () => {
-  const html = runPage(d => d, [], m => m, { record: RECORD }).statusMapView(RUN, { timeline: true });
-  const table = /<table class="timeline-table".*?<\/table>/s.exec(html)[0];
-  assert.deepEqual([...table.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Step', 'Module', 'State', 'Started', 'Accepted']);
-  const rows = [...table.matchAll(/<tr><td>.*?<\/tr>/gs)].map(m => strip(m[0].replace(/<\/td>/g, '|')));
-  assert.equal(rows.length, 4);
-  assert.ok(rows[0].includes(T0) && rows[0].includes(T1));
-  assert.ok(rows[1].includes(T1) && rows[1].includes('Not recorded'));
-  assert.equal(countOf(rows[2], /Not recorded/g), 2);
-  assert.equal(countOf(table, /\d{4}-\d{2}-\d{2}T/g), 3, 'only the three stated times appear');
-  assert.ok(html.includes('event log') && !html.includes('No dependency or time record'));
-});
-
-test('execution timeline: a run with no event log is a numbered plan-order list labelled order only', () => {
-  const record = { ...RECORD, timed: false, steps: RECORD.steps.map(s => ({ ...s, started: null, accepted: null })) };
-  const html = runPage(d => d, [], m => m, { record }).statusMapView(RUN, { timeline: true });
-  assert.ok(html.includes('Order only, no times recorded') && !html.includes('<table class="timeline-table"'));
-  assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(html));
-});
-
-test('status map: a run with no record says so and lists the modules in reading-group order with no edge or time', () => {
-  const html = runPage().statusMapView(RUN, { timeline: true });
-  assert.ok(html.includes('No run record was read for this run') && !html.includes('<svg') && !html.includes('timeline-table'));
-  assert.equal(countOf(html, /<li class="status-item/g), 4);
-  assert.ok(!html.includes('No dependency or time record is held'));
-});
 
 test('maps: a wide map keeps its natural width and scrolls inside its card', () => {
   const rule = read('screen.css').split('\n').find(line => /\.map-scroll svg/.test(line));
@@ -2169,10 +2143,6 @@ test('maps: a wide map keeps its natural width and scrolls inside its card', () 
   const chain = [...Array(12)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', 'Documentary Fact', `Layer ${i + 1}`));
   const html = runPage(d => { const o = d[outId('CP-1')]; o.sections.push(sec('Map: credit-risk transmission', 3, 890, 'consumed', [table(892, MAP_HEAD, chain)])); o.maps = [{ name: 'credit-risk transmission', table: 892, gap: null }]; return d; }).mapsView(outId('CP-1'), 'h3');
   assert.ok(Number(/<svg[^>]*width="(\d+)"/.exec(html)[1]) > 1440, 'twelve layers are wider than the page');
-});
-
-test('status map: no run chosen draws nothing and does not throw', () => {
-  assert.equal(runPage().statusMapView(undefined, { timeline: true }), '');
 });
 
 // ---- Package 7 views (2026-11-10): the chart index, the report manifest and the run/file context bar. Every value is synthetic.
@@ -2262,16 +2232,6 @@ test('chart index uses the stored reason for an owner table that states none', (
   assert.equal(row[7], 'Not drawn');
 });
 
-test('status map names an unreadable event log without claiming times were not recorded', () => {
-  const record = { ...RECORD, timed: false, eventsIssue: '<ValueError>', steps: RECORD.steps.map(s => ({ ...s, started: null, accepted: null })) };
-  const page = runPage(d => d, [], m => m, { record });
-  for (const timeline of [true, false]) {
-    const html = page.statusMapView(RUN, { timeline });
-    assert.ok(html.includes('Event log could not be read: &lt;ValueError&gt;'));
-    assert.ok(!html.includes('no times recorded') && !html.includes('<ValueError>'));
-    assert.ok(html.includes('Module dependencies'));
-  }
-});
 const BAR_STORE = { inputs: { [`${RUN}/inputs/CP-1-input.md`]: { module: 'CP-1', run: RUN, source: 'inputs/CP-1-input.md', href: '../runs/run-a/inputs/CP-1-input.md', sha256: 'c'.repeat(64) } } };
 const BAR = {
   runFields: { issuer: 'Synthetic Issuer', issuerKey: 'k1', title: 'Synthetic Issuer', run: 'Run A', asOf: '2025-12-31' },
