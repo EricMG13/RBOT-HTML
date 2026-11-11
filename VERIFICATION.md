@@ -4,6 +4,24 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
+
+Decisions M1-M7 are recorded in `docs/rulings/2026-11-11-module-presets-and-changes.md` (a decision
+record; it does not lift the pause).
+
+(a) Live run facts, this dated case only (ruling `docs/rulings/2026-11-11-reader-format-live-test.md`): TDG
+FY2024 public files, context `runs/tdg-context-2024-09-30.json`, `credit_snapshot`, sol-medium, cap USD 15;
+run folder outside the repository. CP-0, CP-1, CP-1A, CP-2, CP-4, CP-3, CP-5 and CP-6 were all accepted and
+delivered; charged USD 3.20906590; two drafts were rejected and repaired within the retry limit (CP-1, CP-3).
+Reader check so far: only CP-6's reader passages were read by the controller: judgement first, sources on
+Basis lines, no codes in sentences. Remaining weakness: pipeline wording in reader text ("producer-owned
+corrections remain open", "canonical financial amount", "open producer QA findings") and dense prose.
+Not verified: the other seven modules' prose; a side-by-side against the VMO2 reference; analytical accuracy.
+
+(b) This change, offline only (no provider call, no run folder read or written): M1 and M2 presets, CP-2G
+added to credit_snapshot and covenant_refinancing, CP-8 removed from portfolio_decision, context-form
+copy. Gate results: GATES_PLACEHOLDER
+
 ## 2026-11-11 — Runs on earlier methods are listed and marked (branch `claude/list-earlier-method-runs`)
 
 Scope: offline, macOS; synthetic fixtures only (`tests/library_fixtures.py`, the fake launcher run). No
