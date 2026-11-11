@@ -453,7 +453,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
     <h3>Module settings</h3>
     <fieldset id="cp3f"><legend>Relative value mode</legend><p class="uses" data-uses="cp3mode"></p><div data-cards="cp3_mode" data-class="two"></div></fieldset>
     <fieldset id="cp6f"><legend>Committee decision</legend><p class="uses" data-uses="cp6"></p><label class="confirm" for="cp6_deep_debate"><input type="checkbox" id="cp6_deep_debate" data-k="cp6_deep_debate"><span>Deep Debate: a longer, fuller argument (more attacks and cross-examination rounds), never a softer sizing posture. Off by default; the compact form is used.</span></label></fieldset>
-    <div class="run-strip" data-tone="brand" id="research-src" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">Research source</span><p class="strip-text">Research reads the supplied files only.</p></div></div>
+    <div class="run-strip" data-tone="brand" id="research-src" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">Research source</span><p class="strip-text">Research works from the supplied files only. Add peers' filings to the documents if you want them used.</p></div></div>
   </div>
   <fieldset id="basisf"><legend>Valuation basis</legend><div data-cards="basis" data-class="two"></div></fieldset>
   <div id="prec" class="block" hidden>
@@ -1178,7 +1178,7 @@ const RULES = [
   {s:'run', o:'information', c:f => f.o.identity.issue_classification === 'investment_grade', r:'Investment grade: the methods are written for high-yield and leveraged-loan credit. The run notes this; whether it changes a conclusion is not asserted.', go:'issuer'},
   {s:'CP-1', o:'check', c:f => f.chk.fin === 'no', r:'No filed financial report among the documents: financials would rest on management claims.', fix:'Add the annual or quarterly report.', go:'documents'},
   {s:'CP-1', o:'limited', np:true, c:f => /^[A-Z]{3}$/.test(f.o.run.reporting_currency) && f.o.run.reporting_currency !== 'USD', r:'Not USD: the report\'s chart strip is US$ millions only; its money cells read "Not supplied".', fix:'Nothing to add; the report states the limit.', go:'issuer'},
-  {s:'CP-1B', o:'gap', c:f => f.chk.periods === 'no', r:'The reports for both periods are not in the folder: the periods cannot be compared.', fix:'Add the report for the missing period.', go:'documents'},
+  {s:'CP-1B', o:'check', nc:true, c:f => f.chk.periods === '', r:'Whether the documents hold the report for each of the two periods is confirmed when the summary is made.'},
   // Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they specifically
   // want to in the context file." The research module searches the web only when the run's ruling lists
   // web-search (owners/cpos.py WEB_SEARCH_GRANT); without it, in live run tdg-all-001, it came back
@@ -1191,7 +1191,7 @@ const RULES = [
   {s:'CP-2', o:'gap', c:f => f.o.run.run_type === 'primary' && !f.has('CP-1D'), r:'A new issue without Earnings quality in the run: the pro forma base row has no add-back verdicts.', fix:'Nothing to add in this pathway; read the pro forma base as unverified.'},
   {s:'CP-2A', o:'limited', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the downside path has no covenant or financing-document evidence (a TDG run came back Restricted this way).', fix:'Add the executed agreement if you have it, and choose it under Legal.', go:'legal'},
   {s:'CP-2D', o:'limited', c:f => f.o.deal_terms.some(d => d.currency && d.currency !== f.o.run.reporting_currency), r:'A facility is in another currency than the reporting currency: it is not calculable (no FX conversion).', fix:'Nothing to add; read that facility as excluded.', go:'market'},
-  {s:'CP-2G', o:'limited', c:f => f.chk.guidance === 'no', r:'No company guidance: forecast drivers rest on labelled analyst judgment.', fix:'Add a release or presentation that states guidance.', go:'documents'},
+  {s:'CP-2G', o:'check', nc:true, c:f => f.chk.guidance === '', r:'Whether the documents state company guidance is confirmed when the summary is made.'},
   {s:'CP-2G', o:'check', c:f => { const b = pkey(f.o.run.current_period); return b && !(b.kind === 'fy' || b.kind === 'q' && b.n === 4); }, r:'The forecast base is not a fiscal year: the model forecasts the three fiscal years after it.', fix:'Use fy-YYYY or q4-YYYY as the current period.', go:'issuer'},
   {s:'CP-2H', o:'gap', c:f => !f.o.ratings.length && f.chk.ratingsfile !== 'yes', r:'No ratings entered and no rating report in the folder: Insufficient Information.', fix:'Enter the ratings under Market, or add the agency report to the documents.', go:'market'},
   {s:'CP-2H', o:'gap', c:f => ratingProblems(f.o.ratings).length > 0, r:'A rating row it cannot place (another agency, two rows for one agency, or a rating off the scale): the ratings are set aside.', fix:'One row per agency (S&P, Moody\'s, Fitch), each rating as the agency writes it.', go:'market'},
@@ -1201,7 +1201,13 @@ const RULES = [
   {s:'CP-3', o:'limited', c:f => f.observed && f.fresh === 0, r:`Every observed quote is more than ${STALE_DAYS} days old: stale, confidence capped.`, fix:'Add a recent quote.', go:'market'},
   {s:'CP-3D', o:'gap', c:f => !f.o.quotes.length && f.chk.quotesfile !== 'yes', r:'No quotes: nothing for market-implied risk to read.', fix:'Enter quotes under Market, or add a quotes file.', go:'market'},
   {s:'CP-4', o:'will_refuse', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the method stops with "No executed governing document".', fix:'Add the executed agreement (or its EDGAR Ex-10/Ex-4 exhibit) to the documents and choose it under Legal, or choose a pathway without Legal & covenants.', go:'legal'},
-  {s:'CP-4', o:'limited', c:f => f.o.attachments.legal_documents === 'draft', r:'Draft documents only: legal terms are Provisional.', fix:'Add the executed agreement when it exists.', go:'legal'},
+  // The launcher's rules for the legal answer (run_expectations.RULES, cp4-*): they read the whole set of
+  // documents, so each one is judged on the launcher's reading of every file, not on the chosen file alone.
+  {s:'CP-4', o:'check', c:f => f.legal === 'executed' && !!READING && !f.execAgr, r:f => `You declared ${f.legalFile || 'an agreement'} executed, but the launcher recognises no executed credit agreement or indenture among the files${f.legalFile ? ` (${legalRead(f.legalFile)})` : ''}.`, fix:'Add the executed agreement and choose it under Legal.', go:'legal'},
+  {s:'CP-4', o:'check', c:f => f.legal === 'draft' && !!READING && !f.draftAgr, r:f => `You declared ${f.legalFile || 'an agreement'} a draft, but the launcher recognises no draft credit agreement or indenture among the files${f.legalFile ? ` (${legalRead(f.legalFile)})` : ''}.`, fix:'Add the draft agreement to the documents.', go:'legal'},
+  {s:'CP-4', o:'limited', c:f => f.legal !== 'none' && (f.legal === 'draft' || f.o.run.run_type === 'primary') && !f.execAgr, r:'Legal terms are Provisional: the run is a new issue or the legal documents are drafts, and the launcher recognises no executed agreement.', fix:'Add the executed agreement when it exists.', go:'legal'},
+  {s:'CP-4', o:'limited', c:f => f.legal !== 'none' && f.kinds.includes('amendment') && !f.kinds.some(k => AGREEMENTS.includes(k)), r:'Only an amendment is recognised and no base agreement, so the amendment alone cannot show the covenants it changes.', fix:'Add the base credit agreement or indenture.', go:'documents'},
+  {s:'CP-4', o:'limited', c:f => f.legal !== 'none' && ['secondary', 'research'].includes(f.o.run.run_type) && !f.kinds.some(k => AGREEMENTS.includes(k)) && !!f.om && f.om.executed !== false, r:'Governing terms would rest on a final offering memorandum, which is a summary, not the governing document.', fix:'Add the executed agreement or indenture.', go:'documents'},
   // The analyst points to a file; the launcher's own reading of it decides the forecast, and a disagreement is a limit to tick.
   {s:'run', o:'check', c:f => f.legalIssue !== '', r:f => f.legalIssue, fix:'Choose the file that is the agreement, or say there is none.', go:'legal'},
   {s:'CP-6', o:'gap', c:f => f.o.run.pathway === 'portfolio_decision' && f.raw.workbook === 'no', r:'No portfolio workbook chosen: portfolio fit shows gaps.', fix:'Add the workbook to the documents and choose it under Issuer and dates.', go:'issuer'}
@@ -1211,15 +1217,17 @@ const RULES = [
 function chkFromReading() {
   if (!READING || !READING.documents.length) return {fin: '', periods: '', guidance: '', ratingsfile: '', quotesfile: ''};
   const docs = READING.documents, any = (...kinds) => docs.some(d => kinds.includes(d.kind)) ? 'yes' : 'no';
-  return {fin: any(...FINANCIAL_KINDS), periods: docs.filter(d => FINANCIAL_KINDS.includes(d.kind)).length >= 2 ? 'yes' : 'no',
-    guidance: any('earnings_release', 'lender_presentation', 'offering_memorandum'), ratingsfile: any('ratings'), quotesfile: any('market_quotes')};
+  // The reading states a document's kind, whether it is executed and its period end; it does not state
+  // which periods the documents cover or whether they give guidance, so those stay unanswered.
+  return {fin: any(...FINANCIAL_KINDS), periods: '', guidance: '', ratingsfile: any('ratings'), quotesfile: any('market_quotes')};
 }
 // The sentence naming a disagreement between the legal answer and the launcher's reading of the chosen
 // file (or of the documents, when none is chosen); '' when they agree. It never changes the reading.
+const readAs = d => d.kind === 'unrecognised' ? 'the launcher does not recognise it' : `the launcher reads it as ${KIND_LABEL[d.kind].toLowerCase()}`;
+const legalRead = file => { const d = docOf(file); return d ? readAs(d) : 'not among the documents'; };
 function legalIssue(o) {
   const file = getC('legalfile'), answer = o.attachments.legal_documents;
   if (!READING) return '';
-  const readAs = d => d.kind === 'unrecognised' ? 'the launcher does not recognise it' : `the launcher reads it as ${KIND_LABEL[d.kind].toLowerCase()}`;
   if (!file) {
     const found = READING.documents.filter(d => AGREEMENTS.includes(d.kind)).map(d => docName(d.source));
     return answer === 'none' && found.length ? `${found.join(', ')} ${found.length > 1 ? 'read' : 'reads'} as ${found.length > 1 ? 'agreements' : 'an agreement'}, and you say there is no agreement in these documents. Legal & covenants stops without an executed one: if ${found.length > 1 ? 'one of them is' : 'it is'} the agreement, choose it under Legal.` : '';
@@ -1234,7 +1242,9 @@ function legalIssue(o) {
 function readiness(o) {
   const order = runOf(o.run.pathway), has = m => order.includes(m);
   const vq = o.quotes;
-  const f = {o, has, legalIssue: legalIssue(o), raw: {bridge: getC('bridgefile') ? 'yes' : 'no', workbook: getC('portfoliofile') ? 'yes' : 'no'},
+  const docs = READING ? READING.documents : [], isAgr = d => AGREEMENTS.includes(d.kind);
+  const f = {o, has, legalIssue: legalIssue(o), legal: o.attachments.legal_documents, legalFile: getC('legalfile'), kinds: docs.map(d => d.kind),
+    execAgr: docs.some(d => isAgr(d) && d.executed === true), draftAgr: docs.some(d => isAgr(d) && d.executed === false), om: docs.find(d => d.kind === 'offering_memorandum'), raw: {bridge: getC('bridgefile') ? 'yes' : 'no', workbook: getC('portfoliofile') ? 'yes' : 'no'},
     chk: chkFromReading(),
     talk: o.deal_terms.some(d => d.talk_spread_bps_low || d.talk_spread_bps_high || d.talk_oid_low || d.talk_oid_high) || vq.some(q => q.kind === 'indicative_talk'),
     observed: vq.some(q => q.kind === 'observed') || chkFromReading().quotesfile === 'yes',
@@ -1242,7 +1252,7 @@ function readiness(o) {
     peersIn: admitted(o.valuation.peers, 'as_of', PEER_MONTHS, o.run.as_of),
     precIn: admitted(o.valuation.precedents, 'date', PRECEDENT_MONTHS, o.run.as_of)};
   f.newest = getC('newest');
-  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, np:!!r.np, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', counted: r.o !== 'information'}));
+  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, np:!!r.np, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', counted: r.o !== 'information' && !r.nc}));
   const effective = {}, mods = [];
   for (const m of order) {
     const own = fired.filter(x => x.scope === m), items = own.slice();
@@ -1290,7 +1300,7 @@ function seqFor(o) {
   return STAGES.filter(st => {
     if (st === cur || errIn(st)) return true;
     switch (st) {
-      case 'legal': return has('CP-4') || has('CP-2A') || has('CP-4C') || o.attachments.legal_documents !== 'none' || !!getC('legalfile');
+      case 'legal': return readiness(o).counted.some(x => x.go === 'legal') || has('CP-4') || has('CP-2A') || has('CP-4C') || o.attachments.legal_documents !== 'none' || !!getC('legalfile');
       case 'market': return o.run.run_type === 'primary' || o.deal_terms.length + o.quotes.length + o.ratings.length > 0 || (lvl >= 1 && (mb.deal || mb.quote || mb.rating));
       case 'valuation': return v.peers.length > 0 || v.precedents.length > 0 || !['auto', 'issuer_trading'].includes(v.basis) || v.peer_source !== 'cp_dr_public' || !!(mo.cp3_mode || mo.cp6_deep_debate) ||
         (lvl >= 1 && (valuationNeeded(o) || has('CP-3') || has('CP-6')));
@@ -1544,7 +1554,8 @@ function renderPanel(o, R) {
   setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(x.reason)}</li>`).join('')}</ul></div>` : '');
   setHTML($('pn-mods'), readyList(R));
   const bad = R.mods.filter(m => m.status === 'will_refuse').length, gaps = R.mods.filter(m => ['gap', 'limited'].includes(m.status)).length;
-  setHTML($('pn-sum'), bad ? badgeFor('will_refuse', bad + ' will refuse') : gaps ? badgeFor('limited', gaps + ' limited or gap') : badgeFor('ready', 'Ready'));
+  const checks = R.mods.filter(m => m.status === 'check').length + (R.run.some(x => x.outcome === 'check') ? 1 : 0);
+  setHTML($('pn-sum'), bad ? badgeFor('will_refuse', bad + ' will refuse') : gaps ? badgeFor('limited', gaps + ' limited or gap') : checks ? badgeFor('check', checks + ' to check') : badgeFor('ready', 'Ready'));
 }
 // Answers in reader terms: an option's label, Yes/No for a flag, the key as words (screens pass).
 const OPTION_OF = {case_kind:'case_kind', issue_classification:'issue_classification', peer_source:'peer_source', basis:'basis', kind:'deal_kind', scope:'scope', ebitda_basis:'ebitda_basis', legal_documents:'legal_documents', run_type:'run_type'};

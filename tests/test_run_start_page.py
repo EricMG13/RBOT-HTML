@@ -35,6 +35,7 @@ RESEARCH_MINIMAL = json.loads((ROOT / "cases/context/research-minimal.json").rea
 # Synthetic documents the launcher's own offline reading classifies by their cover lines.
 AGREEMENT = "Credit Agreement\nEXECUTION VERSION\ndated as of March 1, 2024\nBetween the parties.\n"
 REPORT = "Annual Report 2025\nFor the fiscal year ended December 31, 2025\nNet sales were 100.\n"
+DRAFT = "Credit Agreement\nDRAFT\ndated as of March 1, 2024\nBetween the parties.\n"
 MEMO = "Meeting notes\nNothing here names a document.\n"
 
 PRELUDE = """
@@ -243,7 +244,8 @@ def test_a_file_the_launcher_does_not_recognise_as_an_agreement_adds_a_limit(pag
       file('memo.txt', {json.dumps(MEMO)})]);
     // The limits that name an uploaded file (module-level ones, such as "draft only", name none).
     const legal = () => readiness(build()).counted
-      .filter(x => x.go === 'legal' && x.reason.includes('.txt')).map(x => x.reason);
+      .filter(x => x.scope === 'run' && x.go === 'legal' && x.reason.includes('.txt'))
+      .map(x => x.reason);
     const out = {{}};
     choose('legal-file', 'credit-agreement.txt'); out.agreement = legal();
     choose('legal-file', 'memo.txt'); out.memo = legal();
@@ -435,10 +437,17 @@ def test_changing_level_keeps_answers(page):
     assert seen["options"] == {"cp3_mode": "clo_screening", "cp6_deep_debate": True}
     assert seen["basis"] == "precedents" and seen["turns"] == 12
     assert seen["shownAgain"]
+    assert seen["hidden"] == {"aliases": False}  # An answered field is never hidden.
 
 
 def test_a_started_page_makes_no_request_that_the_policy_blocks(page):
-    page.run("return {};")
+    # A same-origin fetch is what the policy's connect-src must allow; the page's own calls are the
+    # service's, so the probe makes one and expects it to succeed.
+    seen = page.run("""
+    const res = await fetch('/', {cache: 'no-store'});
+    return {ok: res.ok, status: res.status};
+    """)
+    assert seen == {"ok": True, "status": 200}
     assert [m for m in page.console if "Content Security Policy" in m] == []
 
 
@@ -453,3 +462,121 @@ def test_the_pathway_stage_takes_the_name_and_the_answers_object_is_the_services
     assert seen["keys"] == ["context", "level", "max_turns", "modules", "submitted_by"]
     assert (seen["by"], seen["level"], seen["turns"], seen["modules"]) == ("Dana", "basic", 32, [])
     assert seen["context"] == "context/1"
+
+
+def _forecast(page, body):
+    """The module statuses and the headline the panel shows after ``body`` has answered the page."""
+    return page.run(
+        body
+        + """
+    update();
+    return {status: Object.fromEntries(readiness(build()).mods.map(m => [m.id, m.status])),
+      run: readiness(build()).run.map(x => x.reason),
+      headline: document.getElementById('pn-sum').textContent.trim(),
+      reasons: Object.fromEntries(readiness(build()).mods
+        .map(m => [m.id, m.items.map(i => i.reason)]))};
+    """
+    )
+
+
+def test_a_file_chosen_as_executed_that_the_launcher_does_not_recognise_is_not_ready(page):
+    seen = _forecast(
+        page,
+        f"""
+    pick('data-k="pathway"', 'covenant_refinancing');
+    await uploadFiles([file('memo.txt', {json.dumps(MEMO)})]);
+    choose('legal-file', 'memo.txt');""",
+    )
+    assert seen["status"]["CP-4"] == "check"  # cp4-declared-executed-none-recognised
+    assert any("memo.txt" in r and "recognises no executed" in r for r in seen["reasons"]["CP-4"])
+    assert "Ready" not in seen["headline"], seen["headline"]
+
+
+def test_an_executed_answer_against_a_draft_reading_is_not_ready(page):
+    seen = _forecast(
+        page,
+        f"""
+    pick('data-k="pathway"', 'covenant_refinancing');
+    await uploadFiles([file('draft-agreement.txt', {json.dumps(DRAFT)})]);
+    choose('legal-file', 'draft-agreement.txt');
+    pick('data-k="legal_documents"', 'executed');""",
+    )
+    assert len(seen["run"]) == 1 and "draft-agreement.txt" in seen["run"][0]
+    assert "reads it as a draft" in seen["run"][0]
+    assert seen["status"]["CP-4"] != "ready"
+    assert "draft-agreement.txt" in " ".join(seen["reasons"]["CP-4"])
+    assert "Ready" not in seen["headline"], seen["headline"]
+
+
+def test_an_executed_agreement_chosen_as_executed_keeps_the_legal_module_ready(page):
+    seen = _forecast(
+        page,
+        f"""
+    pick('data-k="pathway"', 'covenant_refinancing');
+    await uploadFiles([file('credit-agreement.txt', {json.dumps(AGREEMENT)}),
+      file('annual.txt', {json.dumps(REPORT)})]);
+    choose('legal-file', 'credit-agreement.txt');""",
+    )
+    assert seen["status"]["CP-4"] == "ready"
+    assert seen["headline"] == "Ready", seen
+
+
+def test_two_reports_of_one_period_do_not_make_the_period_comparison_ready(page):
+    seen = _forecast(
+        page,
+        f"""
+    pick('data-k="pathway"', 'earnings_update');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
+      file('annual-copy.txt', {json.dumps(REPORT)})]);
+    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');""",
+    )
+    # The reading states kind and period end, not which periods the pair covers.
+    assert seen["status"]["CP-1B"] == "check"
+    assert "confirmed when the summary is made" in " ".join(seen["reasons"]["CP-1B"])
+    assert "Ready" not in seen["headline"], seen["headline"]
+
+
+def test_a_report_does_not_make_the_guidance_forecast_ready(page):
+    seen = _forecast(
+        page,
+        f"""
+    pick('data-k="pathway"', 'distressed_restructuring');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);""",
+    )
+    # The reading does not say whether guidance is stated; other rules may make it worse.
+    assert seen["status"]["CP-2G"] != "ready"
+    assert "confirmed when the summary is made" in " ".join(seen["reasons"]["CP-2G"])
+
+
+def test_a_limit_that_points_to_the_legal_stage_offers_the_stage(page):
+    seen = page.run(
+        f"""
+    pick('data-k="pathway"', 'relative_value');
+    await uploadFiles([file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
+    const go = readiness(build()).counted.filter(x => x.go === 'legal').length;
+    return {{stages: stages(), go}};"""
+    )
+    assert seen["go"] == 1 and "legal" in seen["stages"]
+
+
+def test_a_stage_holding_an_answer_is_shown_at_every_level(page):
+    seen = page.run("""
+    pick('data-k="pathway"', 'relative_value');
+    level('standard');
+    // A complete row, so that no error is what keeps the stage on screen.
+    const row = addRow('quote');
+    const set = (k, v) => {
+      const el = row.querySelector(`[data-k="${k}"]`);
+      el.value = v;
+      el.dispatchEvent(new Event('input', {bubbles: true}));
+    };
+    set('facility_id', 'tlb-2031'); set('price', '99'); set('provider', 'Dealer run');
+    set('as_of', '2026-10-30'); type('d-as_of', '2026-10-31');
+    const kind = row.querySelector('[data-k="kind"]');
+    kind.checked = true;
+    kind.dispatchEvent(new Event('change', {bubbles: true}));
+    level('basic');
+    return {stages: stages(), rows: build().quotes.length, errs: errs.map(e => e.st)};
+    """)
+    assert seen["rows"] == 1 and "market" not in seen["errs"]
+    assert "market" in seen["stages"]
