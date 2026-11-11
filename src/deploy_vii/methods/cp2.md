@@ -24,7 +24,8 @@ either the CP-1A rows it lists in `cp1a_refs` (the refs under `cp1a_rows` in CON
 as written) or the CP-1 figures its text references, or both. Never cite a CP-1A row for a claim
 it does not support. A row that is not Insufficient Information needs at least one basis item.
 
-Analytical chain, for every material conclusion: Evidence (a cited CP-1A row or a CP-1 figure)
+Analytical chain, for every material conclusion, written as ordinary sentences, never as
+labels: Evidence (a cited CP-1A row or a CP-1 figure)
 -> Risk Mechanic (how it affects business risk, revenue visibility, margin resilience, cash
 conversion, liquidity, refinancing or creditor control) -> Credit Implication (default risk,
 loss given default, liquidity, debt service, leverage tolerance, refinancing, monitoring

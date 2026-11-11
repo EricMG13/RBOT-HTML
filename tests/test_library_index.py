@@ -397,7 +397,8 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
     assert library.excluded == []
     (run,) = library.runs
     assert [m["id"] for m in run["modules"]] == ["CP-0", "CP-1"]
-    assert run["modules"][0]["summary"]["bottom_line"] == launch_tests.READER_BOTTOM_LINE
+    # A new-format handoff has no Reader summary; the library shows older runs only (ruling H7).
+    assert run["modules"][0]["summary"] is None
 
     # The same run is left out once a method it ran on changes.
     sections = cpos_launch.method_sections

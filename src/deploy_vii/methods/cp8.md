@@ -11,7 +11,11 @@ are not prerequisites for this module.
    issuer, run, financial dates, requested scope and exact input revisions. Verify
    integrity first. If comparable prior/current outputs are absent, state the gap.
 2. Compare their values, definitions, periods, assumptions, conclusions, confidence,
-   source support, limitations and delivered output scope. Cover all sections.
+   source support, limitations, delivered output scope and presentation (the order
+and presence of the reader passages Bottom line, Key findings, Contrary evidence
+and what would change the view, and Limitations; whether sources stay out of
+sentences, in Basis lines, Source columns and `## Sources`; and figure units).
+Cover all sections.
    Match by meaning; shifted row numbers and duplicate labels are not identities.
 3. Explain each material difference: new-period/source information, analytical or
    methodological development, correction, presentation, unresolved or unmatched.

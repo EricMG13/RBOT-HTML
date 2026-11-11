@@ -670,7 +670,7 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
     source, facts, tables, _ = _literal_tables("CP-8", response, response_sha)
     titles: dict[str | None, str] = {
         "Bundle": "Selected prior and current publications",
-        "Dimension": "Seven requested comparison dimensions",
+        "Dimension": "Eight requested comparison dimensions",
         "Section": "All five narrative sections",
         "Restriction": "Continuing limitations",
     }
@@ -678,7 +678,7 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
     comparisons = [t for t in tables if t.row_header == "Dimension"]
     if (
         len(comparisons) != 1
-        or len(comparisons[0].rows) != 7
+        or len(comparisons[0].rows) != 8
         or {row.label for row in comparisons[0].rows}
         != {
             "Values",
@@ -688,10 +688,11 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
             "Sources",
             "Limitations",
             "Output scope",
+            "Presentation",
         }
     ):
         raise ValueError(
-            "cp8_dimensions: one comparison table must cover the seven requested dimensions"
+            "cp8_dimensions: one comparison table must cover the eight requested dimensions"
         )
     if len(comparisons[0].columns) < 2 or any(
         f.status != "known" for f in facts if f.table_id == comparisons[0].table_id
@@ -706,7 +707,10 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
         facts=tuple(facts),
         tables=tuple(tables),
         limitations=(
-            "Checked deliverable comparison, not investment-decision calibration or fresh issuer underwriting.",
+            (
+                "Checked deliverable comparison, not investment-decision calibration "
+                "or fresh issuer underwriting."
+            ),
         ),
     )
     view = View(
@@ -751,7 +755,7 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
                             "rows": primary.rows,
                             "columns": primary.columns,
                             "row_header": primary.row_header,
-                            "title": "Changes across the seven requested dimensions",
+                            "title": "Changes across the eight requested dimensions",
                             "owner": "CP-8",
                             "full_analysis_route": "CP-8",
                             "width": "full",

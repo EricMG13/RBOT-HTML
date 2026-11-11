@@ -141,6 +141,9 @@ class HandoffTask:
     attempt: int
     feedback: tuple[str, ...]
     draft: bytes | None = None  # Explicit targeted repair; never automatic retry of a sent call.
+    # Every handoff accepted so far in the run: read by the checker alone (prose check 7), so it
+    # is not in the request fingerprint.
+    accepted: Mapping[str, bytes] = MappingProxyType({})
 
 
 def _pinned_inputs(base: Path, entries: Mapping[str, HandoffInput]) -> dict[str, bytes]:
@@ -431,6 +434,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 MappingProxyType(supplied),
                 1,
                 (),
+                accepted=MappingProxyType(dict(handoffs)),
             )
             if events is not None:
                 append_event(events, "module_started", module=module_id)

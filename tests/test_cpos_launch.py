@@ -32,7 +32,13 @@ from deploy_workflow.model.handoff import _pages
 from deploy_workflow.model.providers import build
 from deploy_workflow.model.turn import ToolCall, Turn, Usage, hosted_kind
 from deploy_workflow.owners import cpos_forecast, cpos_launch
-from deploy_workflow.owners.cpos import HandoffPlan, HandoffTask, RetainedHandoff, _checked_handoff
+from deploy_workflow.owners.cpos import (
+    HandoffPlan,
+    HandoffTask,
+    RetainedHandoff,
+    _checked_handoff,
+    _handoff,
+)
 from deploy_workflow.owners.cpos_launch import (
     METHODS,
     LaunchRefused,
@@ -391,30 +397,17 @@ OWNER_HEADERS = {
 }
 
 
-# The H3 a reader meets first in every module (owner ruling 2026-11-05; Deploy V M365 runs). A copy,
-# not an import: the answer key stays independent of cpos_launch.OPENING.
-OPENING = {
-    "CP-0": "Readiness view",
-    "CP-1": "Financial base view",
-    "CP-1A": "Business and transaction view",
-    "CP-1B": "Earnings delta view",
-    "CP-1C": "Credit view",
-    "CP-1D": "Earnings quality view",
-    "CP-2": "Credit view",
-    "CP-2A": "Downside view",
-    "CP-2D": "Liquidity view",
-    "CP-2E": "Macro and FX view",
-    "CP-2G": "Forward model view",
-    "CP-2H": "Ratings view",
-    "CP-3": "Relative value view",
-    "CP-3C": "Funding gap view",
-    "CP-3D": "Market-implied view",
-    "CP-4": "Covenant view",
-    "CP-4C": "Restructuring view",
-    "CP-5": "Evidence trace view",
-    "CP-6": "Challenge view",
-    "CP-DR": "Research view",
-}
+# Data modules owe only `### Bottom line` (ruling 2026-11-11, H2). A copy, not an import: the
+# answer key stays independent of prose_checks.DATA_MODULES.
+DATA_MODULE_IDS = frozenset({"CP-0", "CP-PARSE", "CP-1", "CP-1C"})
+PASSAGES = (
+    "### Key findings\n\nThe synthetic issuer's cover is thin at 3.1x.\n"
+    "Basis: annual.txt, page 2\n\n"
+    "### Contrary evidence and what would change the view\n\n"
+    "Nothing supplied contradicts the view; a USD 1,250 million refinancing would.\n\n"
+    "### Limitations\n\n- Synthetic data only in the {case} case, so no conclusion carries "
+    "weight for a real issuer.\n"
+)
 
 
 def answer(context: dict, plan_routes: list) -> str:
@@ -422,16 +415,13 @@ def answer(context: dict, plan_routes: list) -> str:
     lines += ["## Sources", ""]
     lines += [f"- {n} {h}" for n, h in context["sources"].items()]
     lines += [f"- {n} {h['sha256']}" for n, h in context["handoffs"].items()]
-    lines += ["", "## Findings", "", "### Reader summary", ""]
-    lines += ["| Bottom line | Confidence | Main limitation |"]
-    lines += ["| --- | --- | --- |", f"| {READER_BOTTOM_LINE} | Low | Synthetic data only. |", ""]
-    lines += ["| Finding | Creditor impact | Confidence |", "| --- | --- | --- |"]
-    lines += ["| One item was observed. | None for this synthetic case. | Low |", ""]
+    lines += ["", "## Findings", "", "### Bottom line", "", READER_BOTTOM_LINE, ""]
+    if context["module_id"] not in DATA_MODULE_IDS:
+        case = context["module_id"].replace("-", " ").lower()  # Check 7: one limitation per module.
+        lines += [*PASSAGES.format(case=case).splitlines(), ""]
+    passages = {"Bottom line", "Key findings", "Contrary evidence and what would change the view"}
     own = [r for r in plan_routes if r.module_id == context["module_id"]]
-    opening = OPENING.get(context["module_id"])
-    if opening:  # The view follows the reader summary, whether or not a report section selects it.
-        lines += [f"### {opening}", "", "The issuer's credit view, stated first.", ""]
-        own = [r for r in own if r.heading != opening]
+    own = [r for r in own if r.heading not in passages]  # A selector so named is the passage.
     for route in own:
         lines += [f"### {route.heading}", ""]
         if route.kind == "chart":
@@ -691,7 +681,7 @@ def test_selected_method_and_report_selectors_reach_the_instructions(tmp_path):
     assert ISSUER in text and AS_OF in text
 
 
-def test_instructions_ask_for_a_reader_section_and_keep_the_method_verbatim(tmp_path):
+def test_instructions_ask_for_the_reader_passages_and_keep_the_method_verbatim(tmp_path):
     prepared = prepare(
         context_file(tmp_path),
         issuer_folder(tmp_path),
@@ -700,16 +690,12 @@ def test_instructions_ask_for_a_reader_section_and_keep_the_method_verbatim(tmp_
         cap="50",
     )
     text = (tmp_path / "out" / prepared.plan.instructions["CP-4"].path).read_text()
-    assert "### Reader summary" in text
-    assert "| Bottom line | Confidence | Main limitation |" in text
-    assert "| Finding | Creditor impact | Confidence |" in text
-    assert "first under `## Findings`" in text
-    assert "add no new fact, figure or conclusion" in text
-    assert "no module codes, table IDs or hashes" in text
+    assert "### Reader summary" not in text and "Reader summary" not in text
+    assert "open `## Findings` with these four sections" in text
     method = ROOT / "docs/reuse/selected-methods/skills/cp-4-legal-covenant-interpreter/SKILL.md"
     assert method.read_text() in text
     assert hashlib.sha256(method.read_bytes()).hexdigest() in text
-    assert text.index("### Reader summary") < text.index(method.read_text())
+    assert text.index("`### Bottom line`") < text.index(method.read_text())
 
 
 def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
@@ -886,7 +872,8 @@ def test_every_pathway_runs_end_to_end_to_a_verified_report(tmp_path, provider, 
     page = report.read_text()
     assert "not been independently reviewed" in page
     assert not (report.parent / "model.html").exists()
-    assert page.index('id="delivery-limits"') < page.index('id="call-root"')
+    # No front routes remain (the Reader summary is retired), so no front block is stated.
+    assert 'id="delivery-scope-banner"' in page and 'id="delivery-limits"' not in page
     modules = json.loads((report.parent / "view.json").read_text())["modules"]
     live = (
         "Produced by a live model run and accepted by the CP-OS check; "
@@ -1112,7 +1099,83 @@ def test_module_without_report_sections_still_needs_the_issuer(tmp_path):
     )
 
 
-def test_cp2_instructions_carry_the_reader_standard_and_its_opening(tmp_path):
+PERSONA = (
+    "You are a senior credit research analyst at a leading credit fund, specialising in high "
+    "yield credit and leveraged loans. Your research is used throughout the firm for key "
+    "investment decisions; it is presented to senior credit committees and affects portfolio "
+    "management. Your findings are institutional-grade, deeply analytical and data-dense, fully "
+    "reasoned with explicit links from data to risk to credit implication. Say nothing generic "
+    "unless it is tied to issuer-specific mechanics. Write in a detailed, structured style "
+    "grounded in the provided data, and say when information is insufficient. State explicitly "
+    "when information comes from external sources. Lead with the judgement; use data to support "
+    "it, not to narrate it.\n\n"
+)
+PROSE_BLOCK_START = (
+    "Reader passages. The reader is a portfolio manager or credit committee member who has not "
+    "read the source documents. After the analysis is finished, open `## Findings` with these "
+    "four sections, each exactly once, in this order, before any other `## Findings` content:\n"
+    "- `### Bottom line`: one or two paragraphs. The first sentence states this module's view "
+    "and its consequence for creditors.\n"
+    "- `### Key findings`: one paragraph or one list item per finding, each starting with the "
+    "judgement; give figures only where they move the view.\n"
+    "- `### Contrary evidence and what would change the view`: prose giving the strongest "
+    "evidence against the view and what would change it.\n"
+    "- `### Limitations`: a bulleted list, one limitation per item, each saying which "
+    "conclusion it changes and how."
+)
+DATA_BLOCK = (
+    "Reader passage. The reader is a portfolio manager or credit committee member who has not "
+    "read the source documents. Open `## Findings` with `### Bottom line`: one or two "
+    "paragraphs whose first sentence states this module's view and its consequence for "
+    "creditors (if blocked: that it is not assessable and why). Your tables follow as the main "
+    "content, unchanged and exact.\n\n"
+)
+READER_LAYER_SECTIONS = (
+    "docs/reuse/selected-methods/CANON_SHARED.md § Reader-facing research layer",
+    "docs/reuse/selected-methods/CANON_SHARED.md § Credit-research reading order",
+)
+
+
+def all_texts(tmp_path: Path) -> dict[str, str]:
+    prepared = prepare(
+        context_file(tmp_path, "relative_value"),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
+    )
+    return {
+        module: (tmp_path / "out" / ref.path).read_text()
+        for module, ref in prepared.plan.instructions.items()
+    }
+
+
+def test_the_persona_and_its_added_line_reach_every_module(tmp_path):
+    for module, text in all_texts(tmp_path).items():
+        assert PERSONA in text, module
+
+
+def test_prose_modules_get_four_passages_and_data_modules_only_the_bottom_line(tmp_path):
+    texts = all_texts(tmp_path)
+    assert {"CP-0", "CP-1", "CP-1C"} <= set(texts) and "CP-2" in texts
+    for module, text in texts.items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        assert (
+            "- Write evidence, risk mechanism and credit implication as ordinary sentences" in head
+        )
+        assert "End a paragraph or list item that rests on a source" in head
+        assert "Cite modules and locators in brackets" not in text, module
+        if module in DATA_MODULE_IDS:
+            assert DATA_BLOCK in head, module
+            assert "Reader passages. " not in head, module
+        else:
+            assert PROSE_BLOCK_START in head, module
+            assert "Where the credit-research reading order's opening H3 differs" in head
+            assert DATA_BLOCK not in head, module
+        assert "place `### " not in text and "### Reader summary" not in text, module
+
+
+def test_a_report_selector_named_like_a_passage_is_the_passage_and_is_asked_once(tmp_path):
     prepared = prepare(
         context_file(tmp_path, "credit_snapshot"),
         issuer_folder(tmp_path),
@@ -1120,119 +1183,103 @@ def test_cp2_instructions_carry_the_reader_standard_and_its_opening(tmp_path):
         config="sol-medium",
         cap="50",
     )
-
-    def read(module: str) -> str:
-        return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
-
-    cp2 = read("CP-2")
-    assert "place `### Credit view` directly after `### Reader summary`" in cp2
-    assert "CANON_SHARED.md" in cp2
-    assert "State each limitation once" in cp2 and "currency and unit" in cp2
-    # The user's Microsoft 365 Copilot custom instruction, which Deploy V's M365 runs carried.
-    assert "senior credit research analyst" in cp2 and "senior credit committees" in cp2
-    assert "external sources" in cp2
-    # The custom instruction is global; the CANON_SHARED reader rules and opening are CP-2's.
-    for module in prepared.plan.instructions:
-        text = read(module)
-        for phrase in (
-            "senior credit research analyst",
-            "senior credit committees",
-            "external sources",
-        ):
-            assert phrase in text, (module, phrase)
-    cp1a = read("CP-1A")
-    for phrase in ("CANON_SHARED.md", "State each limitation once"):
-        assert phrase not in cp1a, phrase
-    assert "open `## Findings` with `### Credit view`" not in cp1a
+    named = [r for r in prepared.plan.layout.routes if r.heading == "Key findings"]
+    assert [(r.module_id, r.kind) for r in named] == [("CP-2", "prose")]
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-2"].path).read_text()
+    assert "- `### Key findings`: the reader passage of that name is this report selector" in text
+    assert "- `### Key findings`: prose only." not in text
 
 
-def test_every_module_has_an_opening_and_its_instructions_require_it(tmp_path):
-    assert set(OPENING) == set(METHODS) == set(cpos_launch.OPENING)
-    assert cpos_launch.OPENING == OPENING
-    prepared = prepare(
-        context_file(tmp_path, "credit_snapshot"),
-        issuer_folder(tmp_path),
-        tmp_path / "out",
-        config="sol-medium",
-        cap="50",
+def test_the_canon_reader_layer_goes_to_prose_modules_only(tmp_path):
+    for module, names in METHODS.items():
+        sent = [name for name, _ in cpos_launch.method_sections(module)]
+        for section in READER_LAYER_SECTIONS:
+            assert (section in names) == (section in sent) == (module not in DATA_MODULE_IDS)
+    body = dict(cpos_launch.method_sections("CP-2"))
+    assert body[READER_LAYER_SECTIONS[0]].startswith("#### Reader-facing research layer\n")
+    assert body[READER_LAYER_SECTIONS[1]].startswith("##### Credit-research reading order\n")
+
+
+def test_a_heading_section_ends_at_the_next_heading_of_the_same_or_higher_level():
+    score = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
+    text = (ROOT / "docs/reuse/selected-methods/CANON_SHARED.md").read_text()
+    start = text.index("## CP_CONFIDENCE_SCORE.md\n")
+    end = text.find("\n## ", start + 1)
+    assert cpos_launch._method_file(score) == text[start : end + 1]  # as before the generalisation
+    reading = cpos_launch._method_file(READER_LAYER_SECTIONS[1])
+    assert reading.startswith("##### Credit-research reading order\n")
+    assert "\n##### " not in reading and "\n#### " not in reading
+
+
+def test_a_method_heading_that_is_missing_or_repeated_is_refused():
+    with pytest.raises(ValueError, match="expected one heading"):
+        cpos_launch._method_file("docs/reuse/selected-methods/CANON_SHARED.md § No such heading")
+
+
+def test_the_checker_accepts_a_good_prose_answer_and_a_good_data_answer(tmp_path):
+    for module in ("CP-4", "CP-1"):
+        (tmp_path / module).mkdir()
+        prepared, task, context = good_task(tmp_path / module, module)
+        raw = answer(context, list(prepared.plan.layout.routes))
+        assert ("### Key findings" in raw) == (module not in DATA_MODULE_IDS)
+        assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == (), module
+
+
+def prose_issues_of(tmp_path, module, change, **task_fields):
+    prepared, task, context = good_task(tmp_path, module)
+    raw = change(answer(context, list(prepared.plan.layout.routes)))
+    task = dataclasses.replace(task, **task_fields)
+    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
+
+
+def test_the_checker_rejects_a_missing_bottom_line(tmp_path):
+    issues = prose_issues_of(
+        tmp_path,
+        "CP-4",
+        lambda raw: raw.replace("### Bottom line\n\n" + READER_BOTTOM_LINE + "\n\n", ""),
     )
-    for module, ref in prepared.plan.instructions.items():
-        text = (tmp_path / "out" / ref.path).read_text()
-        assert f"place `### {OPENING[module]}` directly after `### Reader summary`" in text, module
-        assert ("State each limitation once" in text) == (module == "CP-2"), module
+    assert any(i.startswith("Prose check 1") for i in issues), issues
 
 
-def test_cp2_instructions_place_the_credit_view_after_the_reader_summary(tmp_path):
-    prepared = prepare(
-        context_file(tmp_path),
-        issuer_folder(tmp_path),
-        tmp_path / "out",
-        config="sol-medium",
-        cap="50",
+def test_the_checker_rejects_a_module_code_in_a_key_finding(tmp_path):
+    issues = prose_issues_of(
+        tmp_path,
+        "CP-4",
+        lambda raw: raw.replace("cover is thin at 3.1x", "cover is thin at 3.1x per CP-2D"),
     )
-    read = lambda m: (tmp_path / "out" / prepared.plan.instructions[m].path).read_text()
-    assert "place `### Credit view` directly after `### Reader summary`" in read("CP-2")
-    assert "first under `## Findings`" in read("CP-2") and "first under `## Findings`" in read(
-        "CP-4"
+    assert any(i.startswith("Prose check 2") and "CP-2D" in i for i in issues), issues
+
+
+def test_the_checker_rejects_a_bare_figure(tmp_path):
+    issues = prose_issues_of(
+        tmp_path, "CP-4", lambda raw: raw.replace("cover is thin at 3.1x", "debt is 1,250")
     )
+    assert any(i.startswith("Prose check 8") and "1,250" in i for i in issues), issues
 
 
-@pytest.mark.parametrize("pathway", ["credit_snapshot", "relative_value"])
-def test_checker_accepts_cp2_opening_with_its_view(tmp_path, pathway):
-    prepared, task, context = good_task(tmp_path, "CP-2", pathway)
-    raw = answer(context, list(prepared.plan.layout.routes))
-    assert raw.count("### Credit view") == 1
-    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+def test_a_limitation_repeated_from_an_accepted_handoff_is_rejected(tmp_path):
+    limitation = (
+        "Synthetic data only in the cp 4 case, so no conclusion carries weight for a real issuer."
+    )
+    accepted = {"CP-2": f"## Findings\n\n### Limitations\n\n- {limitation}\n".encode()}
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    plain = prose_issues_of(tmp_path / "a", "CP-4", lambda raw: raw)
+    assert not any(i.startswith("Prose check 7") for i in plain), plain
+    issues = prose_issues_of(tmp_path / "b", "CP-4", lambda raw: raw, accepted=accepted)
+    assert any(i.startswith("Prose check 7") for i in issues), issues
 
 
-VIEW = "### Credit view\n\nThe issuer's credit view, stated first.\n\n"
-
-
-@pytest.mark.parametrize("pathway", ["credit_snapshot", "relative_value"])
-@pytest.mark.parametrize(
-    ("old", "new"),
-    [
-        (VIEW, ""),
-        ("### Reader summary\n\n", "Preamble before the summary.\n\n### Reader summary\n\n"),
-        (VIEW, "### Overview\n\nText.\n\n" + VIEW),
-        ("The issuer's credit view, stated first.", "| A | B |\n| --- | --- |\n| x | y |"),
-        ("The issuer's credit view, stated first.", "- a bullet, not a paragraph"),
-        ("The issuer's credit view, stated first.", "```json\n{}\n```"),
-        ("The issuer's credit view, stated first.", "<!-- a comment -->"),
-    ],
-    ids=[
-        "missing",
-        "prose-first",
-        "other-section-first",
-        "table-first",
-        "bullet",
-        "fence",
-        "comment",
-    ],
-)
-def test_checker_rejects_cp2_that_does_not_open_with_its_view(tmp_path, pathway, old, new):
-    prepared, task, context = good_task(tmp_path, "CP-2", pathway)
-    raw = answer(context, list(prepared.plan.layout.routes))
-    assert old in raw
-    issues = _checked_handoff(task, raw.replace(old, new).encode(), checker(prepared.layout))
-    assert any(
-        "Place ### Credit view directly after ### Reader summary" in issue for issue in issues
-    ), issues
-
-
-@pytest.mark.parametrize(
-    ("module", "pathway"), [("CP-1A", "credit_snapshot"), ("CP-0", "credit_snapshot")]
-)
-def test_checker_enforces_the_opening_on_every_module(tmp_path, module, pathway):
-    prepared, task, context = good_task(tmp_path, module, pathway)
-    raw = answer(context, list(prepared.plan.layout.routes))
-    view = f"### {OPENING[module]}\n\nThe issuer's credit view, stated first.\n\n"
-    assert view in raw
-    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
-    issues = _checked_handoff(task, raw.replace(view, "").encode(), checker(prepared.layout))
-    assert any(
-        f"Place ### {OPENING[module]} directly after ### Reader summary" in i for i in issues
-    ), issues
+def test_accepted_handoffs_stay_out_of_the_request_fingerprint(tmp_path):
+    (tmp_path / "task").mkdir()
+    prepared, task, context = good_task(tmp_path / "task", "CP-4")
+    raw = answer(context, list(prepared.plan.layout.routes)).encode()
+    folders = []
+    for name, accepted in (("plain", {}), ("with", {"CP-2": b"# accepted"})):
+        shown = dataclasses.replace(task, accepted=accepted)
+        _handoff(shown, tmp_path / name, lambda _task: raw, lambda *_: (), 1)
+        folders.append(sorted(p.name for p in (tmp_path / name / "requests" / "CP-4").iterdir()))
+    assert folders[0] == folders[1] and len(folders[0]) == 1
 
 
 def test_every_selected_method_file_exists():
@@ -1297,7 +1344,9 @@ def test_skill_modules_carry_the_confidence_score_rules_their_script_would_apply
         assert body.startswith("## CP_CONFIDENCE_SCORE.md\n")
         assert "score = clamp( (0.6 * E + 0.4 * C) * S - P , 0 , 100 )" in body
         assert "CP_LIMITATION_TAXONOMY" not in body  # the next canon section is not swept in
-    assert all(" § " not in name for name, _ in cpos_launch.method_sections("CP-2"))
+    assert [name for name, _ in cpos_launch.method_sections("CP-2")][1:] == list(
+        READER_LAYER_SECTIONS
+    )
 
 
 def test_the_method_archive_lists_every_sent_file_with_its_hash():
@@ -1441,24 +1490,7 @@ def test_cpdr_is_asked_for_the_peer_pack_cp1c_reads_by_default(
         assert "CP-DR handoff's TDR.4" not in texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
 
 
-def test_checker_rejects_a_handoff_without_a_reader_section(tmp_path):
-    prepared, task, context = good_task(tmp_path, "CP-4")
-    raw = answer(context, list(prepared.plan.layout.routes))
-    start = raw.index("### Reader summary")
-    missing = raw[:start] + raw[raw.index("### ", start + 4) :]
-    issues = _checked_handoff(task, missing.encode(), checker(prepared.layout))
-    assert any("Reader summary" in issue for issue in issues)
-
-
-def test_checker_rejects_a_reader_number_the_handoff_does_not_hold(tmp_path):
-    prepared, task, context = good_task(tmp_path, "CP-4")
-    raw = answer(context, list(prepared.plan.layout.routes))
-    wrong = raw.replace(READER_BOTTOM_LINE, "Cover was 9.87x.")
-    issues = _checked_handoff(task, wrong.encode(), checker(prepared.layout))
-    assert any("9.87" in issue for issue in issues)
-
-
-def test_the_reader_section_reaches_the_report_unchanged(tmp_path, provider):
+def test_the_bottom_line_is_retained_in_the_accepted_handoff(tmp_path, provider):
     argv = launch(tmp_path, "--live", "--ruling", str(RULING))
     routes = list(
         prepare(
@@ -1471,8 +1503,8 @@ def test_the_reader_section_reaches_the_report_unchanged(tmp_path, provider):
     )
     provider.answer = lambda context: answer(context, routes)
     assert main(argv) == 0
-    report = next((tmp_path / "out" / "deliveries").glob("*/report.html"))
-    assert READER_BOTTOM_LINE in (report.parent / "report-view.json").read_text()
+    handoffs = [p for p in (tmp_path / "out").rglob("*.md") if READER_BOTTOM_LINE in p.read_text()]
+    assert handoffs, "no accepted handoff carries the module's bottom line"
 
 
 def strip_of(prepared, raw: str, tmp_path: Path, block: str):
@@ -1765,7 +1797,7 @@ def test_a_release_note_on_the_stop_is_shown_in_stderr(
     assert "adapter release also failed: stop failed: OSError" in capsys.readouterr().err
 
 
-def test_launcher_layout_adds_front_routes_only_for_requested_modules(tmp_path):
+def test_the_launcher_layout_has_no_front_routes_now_the_reader_summary_is_retired(tmp_path):
     full = prepare(
         context_file(tmp_path),
         issuer_folder(tmp_path),
@@ -1773,30 +1805,7 @@ def test_launcher_layout_adds_front_routes_only_for_requested_modules(tmp_path):
         config="sol-medium",
         cap="50",
     )
-    # CP-5, CP-2 and CP-0 are in the covenant run, CP-6 is not.
-    assert [(r.module_id, r.kind, r.label) for r in full.plan.layout.front] == [
-        ("CP-5", "table", "Evidence validation"),
-        ("CP-2", "table", "Fundamental credit"),
-        ("CP-0", "table", "Source readiness"),
-    ]
-    assert {(r.heading, r.table_header) for r in full.plan.layout.front} == {
-        ("Reader summary", "Bottom line | Confidence | Main limitation")
-    }
-    assert [r.module_id for r in cpos_launch._front_routes(("CP-0", "CP-1", "CP-4"))] == ["CP-0"]
-
-
-def test_cp6_front_routes_lead_with_its_summary_then_its_action_bias():
-    routes = cpos_launch._front_routes(("CP-0", "CP-2", "CP-6"))
-    assert [(r.module_id, r.kind, r.label) for r in routes] == [
-        ("CP-6", "table", "Committee decision"),
-        ("CP-2", "table", "Fundamental credit"),
-        ("CP-0", "table", "Source readiness"),
-        ("CP-6", "prose", "Committee action bias"),
-    ]
-    assert (routes[-1].heading, routes[-1].prefix) == (
-        "Action Bias Determination",
-        "Final Action Bias:",
-    )
+    assert full.plan.layout.front == ()
 
 
 # --- Expectations carried by prepare ---------------------------------------------------

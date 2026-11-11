@@ -81,7 +81,7 @@ Return only a ReadinessReview matching the supplied JSON Schema and exact pack
 hash. The analytical read-through must explain usable coverage, strongest
 contrary evidence/limitations, what cannot proceed and the next evidence action.
 Cite exact substrings from retained source spans. Describe evidence → source risk
-mechanism → downstream consequence. Do not invent certainty or confidence scores.
+mechanism → downstream consequence, as ordinary sentences, never as labels. Do not invent certainty or confidence scores.
 The Python assembler preserves P3/P5 and T1–T8; its structural acceptance receipt
 is separate from analytical/live qualification. If a validator rejects a review,
 repair only the named issues against the same frozen evidence. Permit at most

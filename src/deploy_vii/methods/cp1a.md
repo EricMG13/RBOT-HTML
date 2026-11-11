@@ -11,7 +11,8 @@ committee reads first. Reader question: which transaction, business, ownership a
 facts matter most to the creditor? Required decision drivers: transaction and ownership
 structure; business and operating model; credit-relevant history or change.
 
-Analytical chain, for every material conclusion: Evidence (a located quote) -> Risk Mechanic
+Analytical chain, for every material conclusion, written as ordinary sentences, never as
+labels: Evidence (a located quote) -> Risk Mechanic
 (how it affects business risk, revenue visibility, margin resilience, cash conversion,
 liquidity, refinancing, governance or creditor control) -> Credit Implication (default risk,
 loss given default, liquidity, debt service, leverage tolerance, refinancing, recovery
