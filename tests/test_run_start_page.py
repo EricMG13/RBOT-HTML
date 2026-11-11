@@ -721,7 +721,6 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
     const S = await review();
     const itemPs = [...document.querySelectorAll('#rv-ready [data-module] p')];
     const out = {{S, start: gate(), n: ticks().length,
-      shownNeeding: itemPs.filter(p => !!p.querySelector('.rv-tick')).length,
       maxPerItem: Math.max(...itemPs.map(p => p.querySelectorAll('[data-tick]').length)),
       rowOutcomes: ticks().map(t => t.closest('[data-module]').dataset.outcome)}};
     const all = ticks();
@@ -744,9 +743,8 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
     return out;
     """)
     need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
-    # One tick per item that needs one (service or page rules); no item offers two.
-    assert need and seen["n"] == seen["shownNeeding"]
-    assert seen["n"] >= len(need)
+    # One tick per item that needs one, counted from the service's items, not from the page.
+    assert need and seen["n"] == len(need)
     assert seen["maxPerItem"] == 1
     assert set(seen["rowOutcomes"]) <= set(LIMITS)
     assert seen["start"] == {"approve": True, "approved": False, "submit": True}
