@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -68,9 +69,9 @@ def put(layout: Layout, sid: str, name: str, data: bytes = b"abc") -> str:
 
 
 def test_an_uploaded_folder_is_read_as_the_launcher_reads_it(layout, tmp_path):
-    sid, _ = upload_issuer(layout, tmp_path)
+    sid, source = upload_issuer(layout, tmp_path)
     got = reading(layout, sid)
-    expected = read_documents(files_folder(layout, sid))
+    expected = read_documents(source)
     assert got["error"] == ""
     assert got["documents"] == list(expected.documents) and got["documents"]
     assert got["ignored"] == list(expected.ignored)
@@ -167,25 +168,41 @@ def test_the_file_count_size_and_total_limits_refuse(layout, monkeypatch):
     assert not [p for p in (layout.uploads / sid).iterdir() if p.name != "files"]
 
 
+class Meeting(io.RawIOBase):
+    """A body whose read waits for the other uploads, so the reservations overlap."""
+
+    def __init__(self, data: bytes, barrier: threading.Barrier) -> None:
+        self.data, self.barrier = data, barrier
+
+    def readable(self) -> bool:
+        return True
+
+    def read(self, size: int = -1) -> bytes:
+        self.barrier.wait()
+        out, self.data = self.data, b""
+        return out
+
+
 def test_concurrent_uploads_hold_the_count_limit(layout, monkeypatch):
-    monkeypatch.setattr(submissions, "MAX_FILES", 3)
+    monkeypatch.setattr(submissions, "MAX_FILES", 2)
     sid = new(layout)
+    barrier = threading.Barrier(2, timeout=10)  # the two admitted uploads are in flight together
     outcomes: list[str] = []
 
     def work(i: int) -> None:
         try:
-            put(layout, sid, f"f{i}.txt")
+            add_file(layout, sid, f"f{i}.txt", Meeting(b"abc", barrier), 3)
             outcomes.append("ok")
         except Refused:
             outcomes.append("refused")
 
-    threads = [threading.Thread(target=work, args=(i,)) for i in range(12)]
+    threads = [threading.Thread(target=work, args=(i,)) for i in range(8)]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
-    assert outcomes.count("ok") == 3
-    assert len(list(files_folder(layout, sid).iterdir())) == 3
+    assert outcomes.count("ok") == 2
+    assert len(list(files_folder(layout, sid).iterdir())) == 2
 
 
 def test_a_file_can_be_removed_and_a_bad_name_is_refused(layout):
@@ -255,6 +272,11 @@ def test_the_digest_changes_with_a_file_the_context_the_modules_or_the_turns_onl
     assert digest(layout, sid, base) != after_edit
     remove_file(layout, sid, "extra.txt")
     assert digest(layout, sid, base) == after_edit
+    put(layout, sid, "same-bytes-a.txt", b"same")
+    before_rename = digest(layout, sid, base)
+    remove_file(layout, sid, "same-bytes-a.txt")
+    put(layout, sid, "same-bytes-b.txt", b"same")  # the same bytes under another name
+    assert digest(layout, sid, base) != before_rename
 
 
 def test_the_summary_leaves_no_run_folder_and_no_temporary_file(layout, tmp_path):
@@ -282,3 +304,368 @@ def test_stale_uploads_are_swept_and_fresh_ones_kept(layout):
     assert not (layout.uploads / old).exists()
     assert (layout.uploads / fresh).is_dir()
     assert stray.is_dir()
+
+
+# ---- review round 1 ----
+
+
+def test_a_file_landing_while_the_summary_is_made_gives_no_digest(layout, tmp_path, monkeypatch):
+    sid, _ = upload_issuer(layout, tmp_path)
+    real = submissions.prepare
+
+    def racing(*args, **kwargs):
+        out = real(*args, **kwargs)
+        put(layout, sid, "late.txt", b"late")
+        return out
+
+    monkeypatch.setattr(submissions, "prepare", racing)
+    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    assert "digest" not in got
+    assert got["error"] == (
+        "the documents changed while the summary was being made; open the summary again"
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"modules": ["NOPE"]},
+        {"modules": [1]},
+        {"modules": None},
+        {"modules": ["CP-0"] * 41},
+        {"modules": ["x" * 13]},
+        {"context": [1]},
+        {"max_turns": "32"},
+        {"max_turns": True},
+        {"max_turns": 0},
+        {"max_turns": 65},
+        {"level": "expert"},
+        {"submitted_by": 5},
+        {"submitted_by": "x" * 81},
+    ],
+)
+def test_hostile_answers_are_refusals_not_exceptions(layout, tmp_path, change):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path, **change)
+    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    assert got["error"] and "digest" not in got
+    if change != {"modules": ["NOPE"]}:  # a well-formed name the launcher refuses, not the shape
+        with pytest.raises(Refused):
+            digest(layout, sid, answers)
+    assert list(layout.state.iterdir()) == []
+
+
+def test_answers_need_exactly_the_five_keys(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    extra = {**answers, "more": 1}
+    missing = {k: v for k, v in answers.items() if k != "level"}
+    for bad in (extra, missing, "x", None):
+        with pytest.raises(Refused):
+            digest(layout, sid, bad)  # type: ignore[arg-type]
+
+
+def test_a_lone_surrogate_in_the_context_is_a_refusal(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    answers["context"]["identity"]["issuer_name"] = "\ud800"
+    with pytest.raises(Refused):
+        submissions.context_bytes(answers)
+    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    assert got["error"] and "digest" not in got
+    with pytest.raises(Refused):
+        digest(layout, sid, answers)
+
+
+def test_there_is_a_ceiling_on_unfinished_submissions(layout, monkeypatch):
+    monkeypatch.setattr(submissions, "MAX_OPEN", 3)
+    for _ in range(3):
+        new(layout)
+    with pytest.raises(Refused, match="too many unfinished submissions"):
+        new(layout)
+    assert len(list(layout.uploads.iterdir())) == 3
+
+
+def test_a_sealed_submission_is_not_an_open_one(layout, monkeypatch):
+    monkeypatch.setattr(submissions, "MAX_OPEN", 1)
+    sid = new(layout)
+    submissions.seal(layout, sid)
+    assert new(layout)
+
+
+def test_the_store_total_is_held_across_submissions(layout, monkeypatch):
+    monkeypatch.setattr(submissions, "MAX_STORE", 10)
+    one, two = new(layout), new(layout)
+    put(layout, one, "a.txt", b"123456")
+    with pytest.raises(Refused, match="stor"):
+        put(layout, two, "b.txt", b"12345")  # 11 > 10 over both
+    put(layout, two, "b.txt", b"1234")
+    put(layout, one, "a.txt", b"1")  # a replacement frees the old bytes
+    assert not [p for p in (layout.uploads / two).iterdir() if p.name != "files"]
+
+
+def test_a_refused_upload_leaves_no_reservation_entry(layout, monkeypatch):
+    monkeypatch.setattr(submissions, "MAX_TOTAL", 3)
+    sid = new(layout)
+    with pytest.raises(Refused):
+        put(layout, sid, "a.txt", b"abcd")
+    assert sid not in submissions._PENDING
+
+
+def test_summaries_run_one_at_a_time(layout, tmp_path, monkeypatch):
+    sid, _ = upload_issuer(layout, tmp_path)
+    real = submissions.prepare
+    state = {"now": 0, "peak": 0}
+    guard = threading.Lock()
+
+    def counting(*args, **kwargs):
+        with guard:
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+        try:
+            return real(*args, **kwargs)
+        finally:
+            with guard:
+                state["now"] -= 1
+
+    monkeypatch.setattr(submissions, "prepare", counting)
+    answers = answers_for(tmp_path)
+    threads = [
+        threading.Thread(
+            target=summary,
+            args=(layout, sid, answers),
+            kwargs={"config": "sol-medium", "cap": Decimal(20)},
+        )
+        for _ in range(4)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert state["peak"] == 1
+
+
+def _failing_rmtree(path, *args, **kwargs):
+    raise PermissionError(13, "held open", str(path))
+
+
+def test_a_failed_summary_cleanup_is_logged_and_the_result_stands(
+    layout, tmp_path, monkeypatch, caplog
+):
+    sid, _ = upload_issuer(layout, tmp_path)
+    monkeypatch.setattr(submissions.shutil, "rmtree", _failing_rmtree)
+    with caplog.at_level(logging.WARNING, logger=submissions.log.name):
+        got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    assert got["error"] == "" and got["digest"]
+    left = [p for p in layout.state.iterdir() if p.name.startswith("summary-")]
+    assert len(left) == 1
+    assert any(left[0].name in r.getMessage() for r in caplog.records)
+    monkeypatch.undo()
+    old = left[0].stat().st_mtime - STALE_SECONDS - 10
+    os.utime(left[0], (old, old))
+    sweep(layout, left[0].stat().st_mtime + STALE_SECONDS + 100)
+    assert not left[0].exists()  # the sweep retries a leftover
+
+
+def test_a_failed_sweep_removal_is_logged_and_the_sweep_goes_on(layout, monkeypatch, caplog):
+    old, other = new(layout), new(layout)
+    now = (layout.uploads / old).stat().st_mtime + STALE_SECONDS + 10
+    monkeypatch.setattr(submissions.shutil, "rmtree", _failing_rmtree)
+    with caplog.at_level(logging.WARNING, logger=submissions.log.name):
+        sweep(layout, now)
+    assert (layout.uploads / old).exists() and (layout.uploads / other).exists()
+    assert any(old in r.getMessage() for r in caplog.records)
+    assert any(other in r.getMessage() for r in caplog.records)
+
+
+# seal
+
+
+def test_seal_freezes_the_uploads_and_unseal_restores_them(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    before = digest(layout, sid, answers)
+    sealed = submissions.seal(layout, sid)
+    assert sealed == layout.uploads / sid / "sealed" and sealed.is_dir()
+    assert not (layout.uploads / sid / "files").exists()
+    assert files_folder(layout, sid) == sealed
+    assert submissions.seal(layout, sid) == sealed  # again: the same folder
+    assert digest(layout, sid, answers) == before
+    assert reading(layout, sid)["documents"]
+    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    assert got["error"] == "" and got["digest"] == before
+    for call in (
+        lambda: put(layout, sid, "new.txt"),
+        lambda: remove_file(layout, sid, "annual.txt"),
+    ):
+        with pytest.raises(Refused, match="has been submitted"):
+            call()
+    submissions.unseal(layout, sid)
+    assert files_folder(layout, sid) == layout.uploads / sid / "files"
+    assert digest(layout, sid, answers) == before
+    put(layout, sid, "new.txt")
+    submissions.unseal(layout, sid)  # not sealed: nothing happens
+
+
+def test_seal_is_refused_while_an_upload_is_in_flight(layout):
+    sid = new(layout)
+    started, release = threading.Event(), threading.Event()
+
+    class Held(io.RawIOBase):
+        def readable(self) -> bool:
+            return True
+
+        def read(self, size: int = -1) -> bytes:
+            started.set()
+            assert release.wait(10)
+            return b"abc"
+
+    thread = threading.Thread(target=lambda: add_file(layout, sid, "a.txt", Held(), 3))
+    thread.start()
+    assert started.wait(10)
+    with pytest.raises(Refused, match="upload is still in progress"):
+        submissions.seal(layout, sid)
+    release.set()
+    thread.join()
+    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"abc"
+    submissions.seal(layout, sid)
+
+
+def test_an_upload_that_meets_the_seal_is_refused_and_leaves_nothing(layout, monkeypatch):
+    sid = new(layout)
+    real = submissions._parts
+
+    def sealing(name):
+        submissions.seal(layout, sid)  # the seal lands after the upload began
+        return real(name)
+
+    monkeypatch.setattr(submissions, "_parts", sealing)
+    with pytest.raises(Refused, match="has been submitted"):
+        put(layout, sid, "late.txt")
+    assert list((layout.uploads / sid / "sealed").iterdir()) == []
+    assert [p.name for p in (layout.uploads / sid).iterdir()] == ["sealed"]
+    assert sid not in submissions._PENDING
+
+
+# ride-alongs
+
+
+def test_a_link_inside_the_files_folder_is_not_followed(layout, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "y.pdf").write_bytes(b"victim")
+    (outside / "secret.txt").write_bytes(b"secret")
+    sid = new(layout)
+    files = files_folder(layout, sid)
+    os.symlink(outside, files / "sub")
+    with pytest.raises(Refused):
+        put(layout, sid, "sub/x.pdf")
+    with pytest.raises(Refused):
+        remove_file(layout, sid, "sub/y.pdf")
+    assert sorted(p.name for p in outside.iterdir()) == ["secret.txt", "y.pdf"]
+    os.unlink(files / "sub")
+    os.symlink(outside / "secret.txt", files / "leak.txt")
+    with pytest.raises(Refused):
+        digest(layout, sid, answers_for(tmp_path))
+    got = reading(layout, sid)
+    assert got["error"] and got["documents"] == []
+
+
+def test_a_files_folder_that_is_a_link_is_an_unknown_submission(layout, tmp_path):
+    sid = new(layout)
+    real = layout.uploads / sid / "files"
+    real.rmdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    os.symlink(elsewhere, real)
+    with pytest.raises(Refused):
+        files_folder(layout, sid)
+    with pytest.raises(Refused):
+        put(layout, sid, "a.txt")
+
+
+def test_a_name_with_a_lone_surrogate_is_refused_and_leaves_nothing(layout):
+    sid = new(layout)
+    for name in ("\ud800.pdf", "\udc80.pdf", "d\ud800/x.pdf"):
+        with pytest.raises(Refused):
+            put(layout, sid, name)
+        with pytest.raises(Refused):
+            remove_file(layout, sid, name)
+    assert list(files_folder(layout, sid).iterdir()) == []
+    assert [p.name for p in (layout.uploads / sid).iterdir()] == ["files"]
+
+
+def test_a_remove_cannot_run_inside_an_upload_into_the_same_folder(layout, monkeypatch):
+    sid = new(layout)
+    put(layout, sid, "d/one.pdf")
+    real = os.replace
+    held: list[threading.Thread] = []
+
+    def remover() -> None:
+        remove_file(layout, sid, "d/one.pdf")
+
+    def slow_replace(src, dst):
+        if str(dst).endswith("two.pdf"):
+            thread = threading.Thread(target=remover)
+            thread.start()
+            thread.join(0.3)
+            assert thread.is_alive()  # the lock holds the remove off until the upload is placed
+            held.append(thread)
+        return real(src, dst)
+
+    monkeypatch.setattr(submissions.os, "replace", slow_replace)
+    put(layout, sid, "d/two.pdf")
+    held[0].join(10)
+    assert sorted(p.name for p in (files_folder(layout, sid) / "d").iterdir()) == ["two.pdf"]
+
+
+def test_two_removes_of_one_name_give_one_refusal(layout):
+    sid = new(layout)
+    put(layout, sid, "x.pdf")
+    results: list[str] = []
+
+    def work() -> None:
+        try:
+            remove_file(layout, sid, "x.pdf")
+            results.append("ok")
+        except Refused:
+            results.append("refused")
+
+    threads = [threading.Thread(target=work) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(results) == ["ok"] + ["refused"] * 5
+
+
+def test_the_sweep_leaves_a_submission_with_an_upload_in_flight(layout):
+    sid = new(layout)
+    started, release = threading.Event(), threading.Event()
+
+    class Held(io.RawIOBase):
+        def readable(self) -> bool:
+            return True
+
+        def read(self, size: int = -1) -> bytes:
+            started.set()
+            assert release.wait(10)
+            return b"abc"
+
+    result: list[object] = []
+
+    def up() -> None:
+        try:
+            result.append(add_file(layout, sid, "big.pdf", Held(), 3))
+        except (Refused, OSError) as error:
+            result.append(error)
+
+    thread = threading.Thread(target=up)
+    thread.start()
+    assert started.wait(10)
+    now = (layout.uploads / sid).stat().st_mtime + STALE_SECONDS + 10
+    sweep(layout, now)
+    assert (layout.uploads / sid).is_dir()
+    release.set()
+    thread.join()
+    assert result == ["big.pdf"]
