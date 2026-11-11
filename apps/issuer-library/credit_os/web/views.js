@@ -1383,11 +1383,12 @@ function updateWorkspaceChrome(module) {
   // The rail shows where you are, and its run-level links keep the selected run.
   const rail=label=>document.querySelector(`.rail [data-place="${label}"]`);
   const place={'W-Library':'Issuer library','W-Reports':'Reports','CP-OS':'Run activity'}[module];
-  document.querySelectorAll('.rail a[data-place]').forEach(link=>{
+  document.querySelectorAll('.rail a[data-place]:not([data-place="Start a run"])').forEach(link=>{
     const here=link.dataset.place===place;
     link.classList.toggle('rail-active',here);
     if(here)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
+  rail('Start a run').hidden=!servedOverHttp(); // the start page exists only when the service serves the library
   rail('Reports').hidden=!window.DESIGN_WORKSPACE.reports.length&&!Object.keys(contexts).length;
   if(ctx) {
     rail('Reports').href=routeHref('W-Reports','list');

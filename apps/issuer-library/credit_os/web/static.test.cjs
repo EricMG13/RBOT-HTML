@@ -15,6 +15,19 @@ test('index.html carries no run-control destinations', () => {
   assert.ok(html.includes('href="#CP-OS/activity"'), 'the rail links to Run activity');
 });
 
+test('the rail opens the run start page first, hidden until the library is served', () => {
+  const html = read('index.html');
+  const entry = html.match(/<a [^>]*data-place="Start a run"[^>]*>.*?<\/a>/);
+  assert.ok(entry, 'the rail has a Start a run entry');
+  assert.ok(/\shref="\/"/.test(entry[0]), 'it goes to the service root');
+  assert.ok(/\shidden[\s>]/.test(entry[0]), 'it is hidden when the page is opened from disk');
+  assert.ok(entry[0].includes('<span class="rail-label">Start a run</span>'));
+  assert.ok(html.indexOf('data-place="Start a run"') < html.indexOf('data-place="Issuer library"'), 'it comes first');
+  const views = read('views.js');
+  assert.ok(/rail\('Start a run'\)\.hidden\s*=\s*!servedOverHttp\(\)/.test(views), 'views.js shows it only when served');
+  assert.ok(views.includes(".rail a[data-place]:not([data-place=\"Start a run\"])"), 'the active-place code leaves it alone');
+});
+
 test('the shell has no run controls: no form, no start/resume/stop button, no run strip', () => {
   for (const name of ['index.html', 'static-boot.js', 'views.js', 'screen.js', 'shared.js']) {
     const text = read(name);

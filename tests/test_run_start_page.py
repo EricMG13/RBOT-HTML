@@ -1493,3 +1493,32 @@ def test_submit_refuses_when_a_page_rule_changed_after_the_table_was_built(page)
     assert seen["ready"] == {"approve": False, "approved": True, "submit": False}
     assert seen["posted"] == 0 and seen["run"] == ""
     assert seen["gate"]["approved"] is False and seen["gate"]["submit"] is True
+
+
+def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
+    import html
+    import urllib.request
+
+    from inbox_fixtures import layout
+
+    assert update_library_at(layout(page.root).engine) is not None
+    dom = html.unescape(_served_dom(page, "/library/#W-Reports/list"))
+    entry = re.search(r'<a [^>]*data-place="Start a run"[^>]*>', dom)
+    assert entry is not None, dom[:1500]
+    assert 'href="/"' in entry[0] and " hidden" not in entry[0] and "rail-active" not in entry[0]
+    assert "Start a run</span>" in dom
+    # What Chrome sends when the analyst follows the link from /library/.
+    request = urllib.request.Request(
+        page.base + "/",
+        headers={
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Referer": page.base + "/library/",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=20) as reply:
+        assert reply.status == 200
+        assert "<h1>Run context</h1>" in reply.read().decode("utf-8")
+    with urllib.request.urlopen(page.base + "/library/icons/plus.svg", timeout=20) as reply:
+        assert reply.status == 200
