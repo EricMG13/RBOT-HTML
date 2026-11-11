@@ -284,8 +284,8 @@ function renderNavigator(module) {
       return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
     }).join('')}</details>`;
   }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
-  // A module report and the run report have parts to list; Run activity (CP-OS) has no output and no outline.
-  const analytical=!module.startsWith('W-'),outline=query?'':analytical&&current.output?outlineMarkup(current.output):module==='W-Overview'?runOutline():'';
+  // A module report has parts to list; the Overview and Run activity (CP-OS) have no outline.
+  const analytical=!module.startsWith('W-'),outline=query?'':analytical&&current.output?outlineMarkup(current.output):'';
   $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||(!analytical&&!outline)||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${outline&&`<div class="outline-heading">On this page</div>${outline}`}`;
   nameCodes($('module-list'));
   document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Analysis & tools'} <span>${count}</span>`;
@@ -467,13 +467,6 @@ const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
 // Scroll the canvas to one of the report's parts or sections; the head is the top. Unknown names never reach here: parseRoute maps them to the head.
 // Every closed <details> that is or holds the target is opened first, so a route into a folded part shows what it names.
-// The run report's parts are places on one page: #W-Overview/<part id> keeps the Overview route and scrolls to the part.
-const runPart=()=>{const part=/^#W-Overview\/(run-[a-z0-9-]+)/.exec(location.hash)?.[1];return part&&$('content').querySelector(`#${part}[data-run-part]`)?part:null;};
-// Read from the page as drawn: a part the run does not have has no entry.
-const runOutline=()=>{
-  const parts=[...$('content').querySelectorAll('[data-run-part]')],here=runPart();
-  return parts.length?`<nav class="section-outline" aria-label="On this page"><ol>${parts.map(part=>`<li><a class="section-item" href="${routeHref('W-Overview',part.id)}" ${here===part.id?'aria-current="location"':''}>${esc(part.dataset.runPart)}</a></li>`).join('')}</ol></nav>`:'';
-};
 function scrollToPart(part) {
   const content=$('content'),target=part==='head'?null:$(part);
   if(target)openFolds(target);
@@ -542,11 +535,8 @@ function renderRoute() {
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
   }
-  const runMove=next.module==='W-Overview'&&runPart();
-  if(runMove)scrollToPart(runMove);
-  // A move inside the run report redraws the outline only, so its current part follows the route.
-  if(partMove||(next.module==='W-Overview'&&!changed)) {
-    if(partMove)scrollToPart(next.section);
+  if(partMove) {
+    scrollToPart(next.section);
     renderNavigator(next.module);
     const link=focused?.classList.contains('section-item')&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
     if(link)link.focus({preventScroll:true});
@@ -579,12 +569,6 @@ document.addEventListener('change',event=>{
   if(event.target.matches('[data-library-filter]'))readLibraryFilters();
   if(event.target.id==='model-select')go('W-Forecast',event.target.value);
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
-  if(event.target.matches('[data-register-filter], #register-all')) {
-    const filter={group:$('register-group').value,confidence:$('register-confidence').value,all:$('register-all').checked};
-    const rows=[...document.querySelectorAll('table.register tbody tr[data-group]')];
-    for(const row of rows)row.hidden=!registerRowShown({group:row.dataset.group,confidence:row.dataset.confidence,established:row.dataset.established==='true'},filter);
-    document.querySelector('table.register tr.register-empty').hidden=rows.some(row=>!row.hidden);
-  }
   if(event.target.id==='chart-metric') {
     $('module-visual').innerHTML=comparisonChart(current.output,data[current.output].visual,Number(event.target.value));
     nameCodes($('module-visual'));

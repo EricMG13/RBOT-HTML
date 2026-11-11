@@ -1,7 +1,7 @@
 (async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  for (let i = 0; i < 200 && !document.querySelector('.story-module .vector-chart'); i++) await sleep(50);
-  const chart = document.querySelector('.story-module .vector-chart');
+  for (let i = 0; i < 200 && !document.querySelector('.vector-chart'); i++) await sleep(50);
+  const chart = document.querySelector('.vector-chart');
   const card = chart?.closest('.panel-card');
   const form = card?.querySelector('details.chart-table');
   const de = document.documentElement, content = document.getElementById('content');

@@ -767,229 +767,289 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
     for (const r of b.type === 'table' ? b.rows : [b]) evidence.set(`${id}:${r.line}`, { module: out.module, line: r.line });
   }
   const groups = [['Business and evidence', [['CP-0', 'Source readiness']]], ['Financial performance', [['CP-1', 'Financial foundation'], ['CP-1B', 'Cash flow']]], ['Outlook and downside', [['CP-2A', 'Downside']]],
-    ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'Unnamed module']]]];
+    ['Decision and review', [['CP-6', 'Committee decision']]], ['Other modules', [['CP-X', 'Unnamed module']]], ...(more.names ? [['Names added by the test', Object.entries(more.names)]] : [])];
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
   const contexts = { [RUN]: { folder: RUN, record: more.record, ...more.runFields, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
-  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
+  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix))];
-  return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex};`)(...args);
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates'].map(name => require('./reader.js')[name])];
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex};`)(...args);
 }
-const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
 const countOf = (html, re) => (html.match(re) || []).length;
-// A story module, from its opening tag to the next story module or the end of its group (flat regex over generated markup).
-const storyModule = (html, code) => new RegExp(`<div class="story-module" data-module="${code}">.*?(?=<div class="story-module"|</section>)`, 's').exec(html)?.[0];
-const groupOf = (html, title) => new RegExp(`<section class="story-group"[^>]*><h2>${title}</h2>.*?</section>`, 's').exec(html)?.[0];
 
-test('run report: the count line reads from state, with the unsummarised module counted apart', () => {
-  const html = runPage().runReport(RUN);
-  assert.equal(strip(/<p class="run-count">(.*?)<\/p>/.exec(html)[1]), '1 of 4 modules reach a conclusion · 2 not assessable · 1 without a reader summary');
-  assert.ok(html.includes('Candidate · not accepted'));
-  const all = runPage(d => { delete d[outId('CP-X')]; d[outId('CP-2A')].state.established = true; d[outId('CP-6')].state.established = true; return d; }).runReport(RUN);
-  assert.equal(strip(/<p class="run-count">(.*?)<\/p>/.exec(all)[1]), '3 of 3 modules reach a conclusion · 0 not assessable');
+// ---- The Overview (ruling H5): selection and ordering only. Expected values below are written by hand from the synthetic fixture's text
+// (apps/issuer-library/fixtures/synthetic-new-format) or from the tiny inline handoffs in each test; none is read back from production code.
+const readText = html => strip(html).replace(/&#39;/g, "'");
+// The fixture's markdown as the store hydrates it: a heading starts a section, a list item starts its own text block (its Basis line stays in it), a pipe table is one table block.
+function mdSections(name) {
+  const lines = fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'synthetic-new-format', `SYNTHETIC-${name}.md`), 'utf8').split('\n');
+  const sections = [];
+  let cur = null, block = null;
+  const close = () => { if (block && cur) cur.blocks.push(block); block = null; };
+  lines.forEach((raw, i) => {
+    const n = i + 1, h = /^(#{1,3}) (.*)$/.exec(raw);
+    if (h) { close(); cur = { heading: h[2], level: h[1].length, line: n, where: 'view', blocks: [] }; sections.push(cur); return; }
+    if (raw.trim() === '') { close(); return; }
+    if (raw.startsWith('|')) {
+      if (block?.type !== 'table') { close(); block = { type: 'table', line: n, headers: null, rows: [] }; }
+      const cells = raw.slice(1, -1).split('|').map(c => c.trim());
+      if (!block.headers) block.headers = cells; else if (!/^[-| ]+$/.test(raw)) block.rows.push({ line: n, cells });
+      return;
+    }
+    if (raw.startsWith('- ')) { close(); block = { type: 'text', line: n, text: raw }; return; }
+    if (block?.type === 'text') { block.text += `\n${raw}`; return; }
+    close(); block = { type: 'text', line: n, text: raw };
+  });
+  close();
+  return sections;
+}
+// A handoff of the new format from literal passages: lists are the "- " items of each passage.
+const passageSections = ({ bottom, key, limits }) => [
+  sec('Findings', 2, 1, 'view', []),
+  ...(bottom === undefined ? [] : [sec('Bottom line', 3, 2, 'view', [text(3, bottom)])]),
+  ...(key === undefined ? [] : [sec('Key findings', 3, 5, 'view', key.map((item, i) => text(6 + i, item)))]),
+  ...(limits === undefined ? [] : [sec('Limitations', 3, 20, 'view', limits.map((item, i) => text(21 + i, item)))]),
+];
+const FIXTURE_NAMES = { 'CP-1A': 'Business and structure', 'CP-2': 'Credit view', 'CP-2D': 'Liquidity' };
+const steps = codes => ({ steps: codes.map(module => ({ module, started: null, accepted: null })), edges: [], timed: false });
+// Outputs for a run in the new format. `parts` maps a code to sections; `blockedCodes` get established false only for the earlier-format rule.
+const overviewData = parts => Object.fromEntries(Object.entries(parts).map(([code, sections]) => [outId(code), runOutput(code, { sections, state: { established: true, declared: null }, summary: null, words: {} })]));
+const overviewPage = (parts, { order = Object.keys(parts), asOf = '2025-03-31', ...more } = {}) => runPage(() => overviewData(parts), [], m => m, { record: steps(order), runFields: { asOf }, names: FIXTURE_NAMES, ...more });
+const FIXTURE = { 'CP-0': mdSections('CP-0'), 'CP-1': mdSections('CP-1'), 'CP-1A': mdSections('CP-1A'), 'CP-2': mdSections('CP-2'), 'CP-2D': mdSections('CP-2D') };
+const withFixtureLanes = d => {
+  const cp1a = d[outId('CP-1A')], lane = cp1a.sections.find(s => s.heading === 'Events: issuer calendar');
+  cp1a.events = [{ lane: 'issuer calendar', table: lane.blocks.find(b => b.type === 'table').line, gap: null }];
+  return d;
+};
+const fixturePage = (more = {}) => runPage(d => withFixtureLanes(overviewData(FIXTURE)), [], m => m, { record: steps(Object.keys(FIXTURE)), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES, ...more });
+const part = (html, id) => new RegExp(`<section class="overview-part" id="${id}">.*?</section>`, 's').exec(html)?.[0];
+const headings = html => [...html.matchAll(/<section class="overview-part" id="([^"]+)"><h2>([^<]*)<\/h2>/g)].map(m => [m[1], m[2]]);
+const bottomEntry = (html, code) => new RegExp(`<div class="bottom-entry" data-module="${code}">.*?</div>`, 's').exec(html)?.[0];
+const chartsOf = (html, code) => new RegExp(`<div class="overview-charts" data-module="${code}">.*?(?=<div class="overview-charts"|</section>)`, 's').exec(html)?.[0];
+const CP2_BOTTOM = 'Creditors are exposed to refinancing risk rather than to weak earnings: net debt of USD 1,390 million is 4.2x earnings, and the next maturities fall inside two years.';
+
+test('Overview on the synthetic run: parts in H5 order, with no module navigator content, outline or count line', () => {
+  const html = fixturePage().runReport(RUN);
+  assert.deepEqual(headings(html), [['overview-lead', 'Credit view'], ['overview-bottom-lines', 'Bottom line by module'], ['overview-limitations', 'Limitations'], ['overview-dates', 'Nearest dates']]);
+  for (const gone of ['data-run-part', 'class="coverage"', 'run-count', 'register', 'class="matrix"', 'chart-index', 'event-lanes', 'status-map']) assert.ok(!html.includes(gone), gone);
 });
 
-test('run report: coverage is four links in group order, the module name as label, only the established one filled', () => {
-  const html = runPage().runReport(RUN);
-  const cells = [...html.matchAll(/<a class="cov( filled)?" href="([^"]*)"[^>]*>(.*?)<\/a>/g)].map(m => [m[3], !!m[1], m[2]]);
-  assert.deepEqual(cells.map(c => c[0]), ['Financial foundation', 'Downside', 'Committee decision', 'Unnamed module']);
-  assert.deepEqual(cells.map(c => c[1]), [true, false, false, false]);
-  assert.deepEqual(cells.map(c => c[2].split('/')[0]), ['#CP-1', '#CP-2A', '#CP-6', '#CP-X'], 'the route still carries the code');
+test('Overview lead: CP-6 absent, so CP-2 leads with its Bottom line then Key findings, text as written, module named and linked', () => {
+  const lead = part(fixturePage().runReport(RUN), 'overview-lead'), text = readText(lead);
+  assert.ok(/Written by <a class="text-action" href="#CP-2\/[^"]*">Credit view/.test(lead));
+  const bottom = text.indexOf(CP2_BOTTOM), key = text.indexOf('Key findings');
+  assert.ok(bottom > 0 && key > bottom);
+  const items = [
+    'Leverage is moderate but not low, at 4.2x net debt to EBITDA, so there is little room for an earnings miss.',
+    'A large part of the debt comes due soon: 38% of gross debt matures within 24 months, which makes refinancing access the deciding factor.',
+    'Liquidity support rests on an undrawn revolver that steps down, which narrows the cushion over time.',
+  ];
+  let at = key;
+  for (const item of items) { const next = text.indexOf(item, at); assert.ok(next > at, item); at = next; }
+  assert.equal(countOf(lead, /<li>/g), 3);
+  assert.ok(lead.includes('<small class="basis">Basis: NBG_2025-03-31_annual-report.pdf, pages 43–45; Financial foundation (CP-1)</small>'), 'the Basis line stays under its item, as written');
+  assert.ok(!text.includes('Contrary evidence') && !text.includes('The strongest evidence against concern'), 'only the two lead passages');
 });
 
-test('run report: no band while CP-6 is not assessable; one band quoting CP-6 once it is established; no CALL_ORDER or summaryView', () => {
-  assert.equal(countOf(runPage().runReport(RUN), /class="band"/g), 0);
-  const html = runPage(RUN_CP6_ESTABLISHED).runReport(RUN);
-  assert.equal(countOf(html, /class="band"/g), 1);
-  assert.equal(countOf(html, /Committee leans against\./g), 2); // The band and the module's own story entry quote the same cell.
-  assert.ok(html.indexOf('class="band"') < html.indexOf('class="story-group"'));
-  const src = read('views.js');
-  assert.ok(!src.includes('CALL_ORDER') && !src.includes('summaryView'));
+test('Overview bottom lines: every other module in the order CP-OS ran it, the lead not repeated, a blocked module marked and still quoted', () => {
+  const html = fixturePage().runReport(RUN), list = part(html, 'overview-bottom-lines');
+  assert.deepEqual([...list.matchAll(/<div class="bottom-entry" data-module="([^"]+)"/g)].map(m => m[1]), ['CP-0', 'CP-1', 'CP-1A', 'CP-2D']);
+  assert.ok(!list.includes('refinancing risk rather than'), 'CP-2 led, so it is not repeated');
+  assert.ok(readText(bottomEntry(list, 'CP-0')).includes('The two documents read are enough for a credit snapshot, but no covenant package was read, so creditor protections cannot be confirmed from the file set.'));
+  assert.ok(readText(bottomEntry(list, 'CP-1A')).includes("Northbridge is a single-segment services group whose creditors depend on one operating company, so debt service rests on that company's cash generation."));
+  const blocked = bottomEntry(list, 'CP-2D');
+  assert.ok(blocked.includes('<span class="badge badge-gray">Not assessable</span>'));
+  assert.ok(readText(blocked).includes('Liquidity is not assessable: the documents read give no monthly cash forecast and no revolver drawing terms, so cash cover of the maturities cannot be tested.'));
+  assert.equal(countOf(list, /Not assessable<\/span>/g), 1, 'only the blocked module is marked');
 });
 
-test('run report: an established module reads bottom line, pill, status, findings with chips, limitation and both charts in one element', () => {
-  const html = runPage().runReport(RUN);
-  const mod = storyModule(html, 'CP-1');
-  assert.ok(mod, 'CP-1 story-module');
-  assert.ok(/<a class="text-action" href="#CP-1\//.test(mod) && mod.includes('Financial foundation'));
-  assert.ok(mod.includes('Cash is up and leverage is high.'));
-  assert.ok(mod.includes('<span class="pill">Medium</span>'));
-  assert.ok(mod.includes('Requires More Work'));
-  assert.equal(countOf(mod, /<article class="finding">/g), 2);
-  assert.ok(mod.includes('Higher gross leverage.') && mod.includes('<span class="pill">High</span>') && mod.includes('p.123'));
-  assert.ok(mod.includes('Synthetic limit one.'));
-  assert.equal(countOf(mod, /<div class="panel-card">/g), 2);
-  assert.equal(countOf(mod, /<div class="chart-row"/g), 2);
-  const group = groupOf(html, 'Financial performance');
-  assert.equal(countOf(group, /Missing values have no bar/g), 1);
-  assert.equal(countOf(html, /Missing values have no bar/g), 1);
+test('Overview order follows the run record, not the reading groups; a module the record omits follows in key order', () => {
+  const parts = { 'CP-1': FIXTURE['CP-1'], 'CP-0': FIXTURE['CP-0'], 'CP-1A': FIXTURE['CP-1A'] };
+  const html = overviewPage(parts, { order: ['CP-1A', 'CP-0'] }).runReport(RUN);
+  assert.deepEqual([...html.matchAll(/data-module="([^"]+)"/g)].map(m => m[1]), ['CP-1A', 'CP-0', 'CP-1']);
 });
 
-test('run report: the chart note prints once per group even when two modules draw charts', () => {
-  const html = runPage(d => {
-    d[outId('CP-2A')].sections.push(sec('Chart data: x', 3, 60, 'consumed', [chartTable(62, [[63, 'FY2024', '1.0', 'x', 'K']])]));
-    d[outId('CP-2A')].charts = [{ title: 'X', unit: 'x', table: 62, columns: [1] }];
-    d[outId('CP-2A')].state = { established: true, declared: null };
-    return d;
+test('Overview lead from CP-6 when it ran and is not blocked; CP-2 is then an ordinary bottom line', () => {
+  const html = overviewPage({
+    'CP-6': passageSections({ bottom: 'Committee view: hold the position.', key: ['- Hold, because refinancing is open.'] }),
+    'CP-2': passageSections({ bottom: 'Credit view: refinancing risk.', key: ['- Leverage is moderate.'] }),
   }).runReport(RUN);
-  assert.equal(countOf(groupOf(html, 'Outlook and downside'), /Missing values have no bar/g), 1);
-  assert.equal(countOf(html, /Missing values have no bar/g), 2); // One per group that draws a chart.
+  const lead = readText(part(html, 'overview-lead'));
+  assert.ok(lead.includes('Committee view: hold the position.') && lead.includes('Hold, because refinancing is open.'));
+  assert.ok(!lead.includes('Credit view: refinancing risk.') && !lead.includes('Leverage is moderate.'));
+  assert.ok(/Written by <a class="text-action" href="#CP-6\/[^"]*">Committee decision/.test(html));
+  assert.deepEqual([...part(html, 'overview-bottom-lines').matchAll(/data-module="([^"]+)"/g)].map(m => m[1]), ['CP-2']);
+  assert.ok(readText(bottomEntry(html, 'CP-2')).includes('Credit view: refinancing risk.') && !readText(bottomEntry(html, 'CP-2')).includes('Leverage is moderate.'), 'a bottom-lines entry is the Bottom line alone');
 });
 
-test('run report: the chart note prints once per group when two modules in the same group both draw charts', () => {
-  const html = runPage(d => {
-    d[outId('CP-1B')] = runOutput('CP-1B', {
-      sections: [sec('Chart data: x', 3, 60, 'consumed', [chartTable(62, [[63, 'FY2024', '1.0', 'x', 'K']])])],
-      state: STATE_ON, words: { view: 1, reference: 1, calculations: 1, limits: 1, audit: 1 },
-      summary: { bottomLine: 'Cash flow is steady.', confidence: 'Medium', limitation: 'Synthetic limit two.', line: 13, findings: [] },
-      charts: [{ title: 'X', unit: 'x', table: 62, columns: [1] }],
-    });
-    return d;
+test('Overview lead: a blocked CP-6 falls back to CP-2, and CP-6 is listed with its mark', () => {
+  const html = overviewPage({
+    'CP-6': passageSections({ bottom: 'The committee view is not assessable: no upstream module concluded.', key: ['- Nothing to rank.'] }),
+    'CP-2': passageSections({ bottom: 'Credit view: refinancing risk.', key: ['- Leverage is moderate.'] }),
   }).runReport(RUN);
-  const group = groupOf(html, 'Financial performance');
-  assert.ok(storyModule(html, 'CP-1') && storyModule(html, 'CP-1B'));
-  assert.equal(countOf(group, /<div class="panel-card">/g), 3); // CP-1 draws two charts, CP-1B one.
-  assert.equal(countOf(group, /Missing values have no bar/g), 1);
+  const lead = readText(part(html, 'overview-lead'));
+  assert.ok(lead.includes('Credit view: refinancing risk.') && lead.includes('Leverage is moderate.') && !lead.includes('Nothing to rank.'));
+  const entry = bottomEntry(html, 'CP-6');
+  assert.ok(entry.includes('Not assessable</span>') && readText(entry).includes('The committee view is not assessable: no upstream module concluded.'));
 });
 
-test('run report: a module under Other modules with a summary has its register row and open item', () => {
-  const html = runPage(d => {
-    d[outId('CP-X')].state = STATE_ON;
-    d[outId('CP-X')].summary = { bottomLine: 'Other is fine.', confidence: 'Medium', limitation: 'Other limit.', line: 13, findings: [{ finding: 'Other finding.', impact: 'Other impact.', confidence: 'Medium', line: 16 }] };
-    d[outId('CP-X')].sections = [sec('Reader summary', 3, 10, 'consumed', [])];
-    return d;
+test('Overview lead: neither CP-6 nor CP-2 usable gives the one sentence; both blocked is the same', () => {
+  const none = overviewPage({ 'CP-0': FIXTURE['CP-0'], 'CP-1': FIXTURE['CP-1'] }).runReport(RUN);
+  assert.equal(readText(part(none, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
+  const both = overviewPage({ 'CP-6': passageSections({ bottom: 'Not assessable: no input.' }), 'CP-2': passageSections({ bottom: 'Not assessable: no peers.' }) }).runReport(RUN);
+  assert.equal(readText(part(both, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
+  assert.deepEqual([...part(both, 'overview-bottom-lines').matchAll(/data-module="([^"]+)"/g)].map(m => m[1]), ['CP-6', 'CP-2']);
+});
+
+test('Overview limitations: every item in module order, the repeated covenant item shown once with its first module, verbatim', () => {
+  const list = part(fixturePage().runReport(RUN), 'overview-limitations');
+  const items = [...list.matchAll(/<li class="limit-item">(.*?)<\/li>/gs)].map(m => readText(m[1]));
+  assert.deepEqual(items, [
+    'The covenant package was not reviewed, so covenant headroom is not assessed.Basis: NBG_2025-03-31_annual-report.pdfBusiness and structure',
+    'Dates after the annual report are scheduled, not confirmed, so the nearest-date list may move.Business and structure',
+    'Peer leverage was not compared, so the 4.2x reading has no market anchor.Basis: calculation K1Credit view',
+    'The liquidity assessment is not available, so cash cover of the maturities is unverified.Basis: Financial foundation (CP-1)Credit view',
+  ]);
+  assert.ok(!list.includes('The Covenant package was not reviewed,  so'), 'CP-2 repeats the covenant item: it is not shown again');
+});
+
+test('Overview limitations: identical after normalisation means once (case, punctuation, spacing); different wording stays; none says so', () => {
+  const html = overviewPage({
+    'CP-1': passageSections({ bottom: 'B1.', limits: ['- No peer set was supplied.'] }),
+    'CP-1A': passageSections({ bottom: 'B2.', limits: ['- NO peer set was   supplied', '- No peer set was supplied for the sector.'] }),
   }).runReport(RUN);
-  const register = /<table class="register">.*?<\/table>/s.exec(html)[0];
-  const row = /<tr data-group="Other modules"[^>]*>.*?<\/tr>/s.exec(register)[0];
-  assert.deepEqual([...row.matchAll(/<td>(.*?)<\/td>/gs)].map(m => strip(m[1]).trim()), ['Other modules', 'Unnamed module', 'Other finding.', 'Other impact.', 'Medium']);
-  assert.ok(!row.includes(' hidden'));
-  const items = /<h2>Open items<\/h2>.*?<\/section>/s.exec(html)[0];
-  assert.ok(/<tr><td>Other modules<\/td><th scope="row"><a[^>]*href="#CP-X\/limits[^"]*">Unnamed module<\/a><\/th><td>Other limit\.<\/td><\/tr>/.test(items), items);
+  const items = [...part(html, 'overview-limitations').matchAll(/<li class="limit-item">(.*?)<\/li>/gs)].map(m => readText(m[1]));
+  assert.deepEqual(items, ['No peer set was supplied.Financial foundation', 'No peer set was supplied for the sector.Business and structure']);
+  const none = overviewPage({ 'CP-1': passageSections({ bottom: 'B1.' }) }).runReport(RUN);
+  assert.equal(readText(part(none, 'overview-limitations')), 'LimitationsNo handoff in this run states limitations.');
 });
 
-test('run report: a not-assessable module is one line with name link, state, declared status and the limitation, and no finding', () => {
-  const html = runPage().runReport(RUN);
-  const lines = [...html.matchAll(/<p class="na-line">(.*?)<\/p>/gs)].map(m => m[1]);
-  assert.equal(lines.length, 2);
-  const line = lines.find(l => l.includes('Downside'));
-  assert.ok(/<a class="text-action" href="#CP-2A\//.test(line));
-  assert.equal(strip(line).replace(/\s+/g, ' ').trim(), 'Downside · Not assessable · Blocked · Downside inputs are missing.');
-  assert.ok(!storyModule(html, 'CP-2A'));
-  const group = groupOf(html, 'Outlook and downside');
-  assert.ok(!group.includes('class="finding"') && group.includes('<h2>Outlook and downside</h2>'));
-  assert.equal(strip(lines.find(l => l.includes('Committee decision'))).replace(/\s+/g, ' ').trim(), 'Committee decision · Not assessable · Every upstream module is open.');
+test('Overview nearest dates: the five items on or after the as-of date, earliest first, event text as written, owner linked', () => {
+  const dates = part(fixturePage().runReport(RUN), 'overview-dates');
+  const rows = [...dates.matchAll(/<tr><th scope="row">([^<]*)<\/th><td>(.*?)<\/td><td>(.*?)<\/td><\/tr>/gs)].map(m => [m[1], readText(m[2]), readText(m[3])]);
+  assert.deepEqual(rows, [
+    ['2025-03-31', 'Annual report reference date', 'Business and structure'],
+    ['2025-05-15', 'First quarter results', 'Business and structure'],
+    ['2025-06-30', 'Revolver commitment step-down', 'Business and structure'],
+    ['2025-09-30', 'Term loan amortisation payment', 'Business and structure'],
+    ['2025-11-14', 'Third quarter results', 'Business and structure'],
+  ]);
+  assert.ok(/<a class="text-action" href="#CP-1A\/[^"]*">Business and structure/.test(dates));
+  assert.ok(dates.includes('<caption>The next 5 dated items on or after 2025-03-31</caption>'));
+  assert.ok(!dates.includes('Senior note coupon') && !dates.includes('Revolver margin reset'), 'a sixth later item and an earlier item are left out');
 });
 
-test('run report: a module with no reader summary sits under Other modules as "<name> · No reader summary", counted in coverage and matrix', () => {
-  const html = runPage().runReport(RUN);
-  const group = groupOf(html, 'Other modules');
-  assert.equal(strip(/<p class="nosum-line">(.*?)<\/p>/s.exec(group)[1]).replace(/\s+/g, ' ').trim(), 'Unnamed module · No reader summary');
-  assert.ok(html.includes('>Unnamed module</a>') && /<th scope="row"><a[^>]*>Unnamed module/.test(html));
-  assert.ok(!groupOf(html, 'Business and evidence'), 'a group with no output in the run is not listed');
+test('Overview nearest dates: a later as-of date moves the window; none on or after says so; no as-of date says so; a gap lane adds nothing', () => {
+  const later = fixturePage({ runFields: { asOf: '2025-12-15' } }).runReport(RUN);
+  assert.deepEqual([...part(later, 'overview-dates').matchAll(/<th scope="row">([^<]*)<\/th>/g)].map(m => m[1]), ['2025-12-15', '2026-03-31']);
+  const past = readText(part(fixturePage({ runFields: { asOf: '2027-01-01' } }).runReport(RUN), 'overview-dates'));
+  assert.equal(past, 'Nearest datesNo dated item on or after 2027-01-01 in this run’s handoffs.');
+  const unknown = readText(part(fixturePage({ runFields: { asOf: null } }).runReport(RUN), 'overview-dates'));
+  assert.equal(unknown, 'Nearest datesThis run records no as-of date, so no nearest dates are selected.');
+  const gap = runPage(d => { withFixtureLanes(overviewData(FIXTURE)); const out = overviewData(FIXTURE); const l = out[outId('CP-1A')]; l.events = [{ lane: 'issuer calendar', table: l.sections.find(s => s.heading === 'Events: issuer calendar').blocks[0].line, gap: 'no dated item stated' }]; return out; }, [], m => m, { record: steps(Object.keys(FIXTURE)), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES }).runReport(RUN);
+  assert.ok(readText(part(gap, 'overview-dates')).includes('No dated item on or after 2025-03-31'));
 });
 
-test('run report: the register has the ruled columns, hides the not-assessable row, and marks it', () => {
-  const html = runPage().runReport(RUN);
-  const reg = /<table class="register">.*?<\/table>/s.exec(html)[0];
-  assert.deepEqual([...reg.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Group', 'Module', 'Finding', 'Creditor impact', 'Confidence']);
-  const rows = [...reg.matchAll(/<tr data-group="([^"]*)" data-confidence="([^"]*)" data-established="(true|false)"([^>]*)>(.*?)<\/tr>/gs)];
-  assert.equal(rows.length, 3);
-  assert.deepEqual(rows.map(r => r[3]), ['true', 'true', 'false']);
-  assert.deepEqual(rows.map(r => /\bhidden\b/.test(r[4])), [false, false, true]);
-  assert.deepEqual(rows.map(r => r[2]), ['High', 'Medium', 'Low']);
-  assert.ok(rows[2][5].includes('Not assessable') && !rows[0][5].includes('Not assessable'));
-  assert.equal(strip(/<label for="register-all">(.*?)<\/label>/.exec(html)[1]), 'Include not-assessable modules (1)');
-  assert.ok(/<input type="checkbox" id="register-all"/.test(html));
-  for (const kind of ['group', 'confidence']) assert.ok(new RegExp(`<select id="register-${kind}" data-register-filter="${kind}"`).test(html) && html.includes(`<label for="register-${kind}">`), kind);
+test('Overview of an earlier-format run: no lead, no bottom lines, no limitations from the old summary; modules still listed by name', () => {
+  const html = runPage(d => d, [], m => m, { record: steps(['CP-1', 'CP-2A', 'CP-6', 'CP-X']), runFields: { asOf: '2025-03-31' } }).runReport(RUN);
+  assert.equal(readText(part(html, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
+  const list = part(html, 'overview-bottom-lines');
+  assert.deepEqual([...list.matchAll(/<div class="bottom-entry" data-module="([^"]+)"/g)].map(m => m[1]), ['CP-1', 'CP-2A', 'CP-6', 'CP-X']);
+  assert.equal(countOf(list, /No bottom line in this handoff\./g), 4);
+  assert.equal(countOf(list, /Not assessable<\/span>/g), 2, 'CP-2A and CP-6 are blocked by the store state of an earlier-format handoff');
+  for (const old of ['Cash is up and leverage is high.', 'No downside is drawn.', 'Synthetic limit one.', 'Leverage rose.']) assert.ok(!html.includes(old), `${old} is the old reader summary, not selectable by H5`);
+  assert.equal(readText(part(html, 'overview-limitations')), 'LimitationsNo handoff in this run states limitations.');
 });
 
-test('registerRowShown: a not-assessable row shows only with all; a group or confidence mismatch hides', () => {
-  const { registerRowShown: shown } = runPage();
-  const row = { group: 'Financial performance', confidence: 'High', established: true }, na = { ...row, established: false };
-  const open = { group: '', confidence: '', all: false };
-  assert.equal(shown(row, open), true);
-  assert.equal(shown(na, open), false);
-  assert.equal(shown(na, { ...open, all: true }), true);
-  assert.equal(shown(row, { ...open, group: 'Outlook and downside' }), false);
-  assert.equal(shown(row, { ...open, group: 'Financial performance' }), true);
-  assert.equal(shown(row, { ...open, confidence: 'Low' }), false);
-  assert.equal(shown(row, { ...open, confidence: 'High' }), true);
-  assert.equal(shown(na, { group: 'Outlook and downside', confidence: 'High', all: true }), false);
+test('Overview: a module with saved outputs and no default is listed as such with a link to choose, never given an output', () => {
+  const two = modules => ({ ...modules, 'CP-0': { outputs: [`${RUN}/deliveries/d1/CP-0-a.md`, `${RUN}/deliveries/d1/CP-0-b.md`], default: null } });
+  const html = runPage(() => overviewData({ 'CP-1': FIXTURE['CP-1'] }), [], two, { record: steps(['CP-0', 'CP-1']), runFields: { asOf: '2025-03-31' } }).runReport(RUN);
+  const list = part(html, 'overview-bottom-lines');
+  assert.ok(readText(list).includes('Source readiness2 saved outputs, none chosen. Choose one'));
+  assert.ok(/<a class="text-action" href="#CP-0\?c=run-a">Choose one<\/a>/.test(list));
 });
 
-test('run report: open items are one grouped row per module with a summary, each linking to its limits part', () => {
-  const html = runPage().runReport(RUN);
-  const open = /<table class="open-items">.*?<\/table>/s.exec(html)[0];
-  const rows = [...open.matchAll(/<tr>(?:(?!<\/tr>).)*?<td>.*?<\/tr>/gs)].map(m => m[0]);
-  assert.equal(rows.length, 3);
-  assert.deepEqual(rows.map(r => /href="(#CP-[0-9A-Z]+)\/limits/.exec(r)?.[1]), ['#CP-1', '#CP-2A', '#CP-6']);
-  assert.ok(rows[0].includes('Financial performance') && rows[0].includes('Synthetic limit one.'));
-  assert.ok(rows[1].includes('Downside inputs are missing.') && rows[2].includes('Every upstream module is open.'));
-  assert.ok(!open.includes('CP-X'));
+test('Overview: a run with no module output says so and keeps the source inventory link; no part is drawn', () => {
+  const html = runPage(() => ({})).runReport(RUN);
+  assert.equal(strip(/<div class="missing-state">(.*?)<\/div>/.exec(html)[1]), 'No module output retained for this runThe Overview is selected from module handoffs, and this run holds none.');
+  assert.ok(html.includes('href="#W-Evidence/sources?c=run-a"'));
+  assert.ok(!html.includes('overview-part') && !html.includes('<table'));
 });
 
-test('run report: the matrix has a row per module with its confidence and declared status, and no word counts', () => {
-  const html = runPage().runReport(RUN);
-  const mat = /<table class="matrix">.*?<\/table>/s.exec(html)[0];
-  assert.deepEqual([...mat.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Module', 'Confidence', 'Declared status']);
-  const rows = [...mat.matchAll(/<tr><th scope="row">(.*?)<\/th>(.*?)<\/tr>/gs)].map(m => [strip(m[1]).trim(), [...m[2].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map(c => strip(c[1]).trim())]);
-  assert.deepEqual(rows.map(r => r[0]), ['Financial foundation', 'Downside', 'Committee decision', 'Unnamed module']);
-  assert.deepEqual(rows[0][1], ['Medium', 'Requires More Work']);
-  assert.deepEqual(rows[1][1], ['Not assessable', 'Blocked']);
-  assert.deepEqual(rows[2][1], ['Not assessable', 'not declared']);
-  assert.deepEqual(rows[3][1], ['No reader summary', 'not declared']);
-  assert.ok(!/\b(?:746|4145)\b/.test(strip(mat)));
-});
-
-test('run report: the source inventory link renders after the matrix and no deliverables section remains (the delivered report is retired)', () => {
-  const html = runPage().runReport(RUN);
-  const tail = html.slice(html.indexOf('class="matrix"'));
-  assert.ok(tail.includes('href="#W-Evidence/sources?c=run-a"'));
-  assert.ok(!html.includes('Deliverables from this run') && !html.includes('#W-Reports'));
-});
-
-test('run report: markup order follows the spec, and every interpolated cell is escaped', () => {
-  const html = runPage(d => { d[outId('CP-1')].summary.bottomLine = '<img src=x onerror=1>'; d[outId('CP-1')].summary.limitation = '<b>L</b>'; return d; }).runReport(RUN);
+test('Overview: every interpolated passage and event cell is escaped, and a passage keeps its own wording (bold only)', () => {
+  const html = overviewPage({ 'CP-2': passageSections({ bottom: '<img src=x onerror=1> **Bold** view.', limits: ['- <b>L</b> stays text.'] }) }).runReport(RUN);
   assert.ok(!html.includes('<img src=x') && !html.includes('<b>L</b>'));
-  const order = ['class="run-count"', 'class="coverage"', 'class="story-group"', 'class="register"', 'class="open-items"', 'class="matrix"'].map(s => html.indexOf(s));
-  assert.ok(order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])), order.join());
+  assert.ok(html.includes('&lt;img src=x onerror=1&gt; <strong>Bold</strong> view.'));
 });
 
-test('screen.css drops the summary-card family and draws the run report', () => {
-  const css = read('screen.css');
-  for (const gone of ['.summary-lead', '.summary-card', '.summary-charts', '.summary-chart{', '.question-map', '.summary-text', '.summary-note']) assert.ok(!css.includes(gone), gone);
-  for (const sel of ['.story-module', '.na-line', '.cov.filled', 'table.register', 'table.open-items', 'table.matrix']) assert.ok(css.includes(sel), sel);
-  const screen = read('screen.js');
-  assert.ok(screen.includes('registerRowShown') && screen.includes('data-register-filter') && screen.includes('register-all'));
+// Key charts: the visuals catalogue's own Overview placement, a module that is not blocked, data the run holds.
+const OVERVIEW_CP1 = { visuals: [{ module: 'CP-1', placement: 'Overview; Model' }] };
+test('Overview key charts: charts of a module the catalogue places on Overview are drawn, the note once, under the last period chart', () => {
+  const html = runPage(d => d, [], m => m, OVERVIEW_CP1).runReport(RUN);
+  const charts = part(html, 'overview-charts');
+  assert.ok(charts.startsWith('<section class="overview-part" id="overview-charts"><h2>Key charts</h2>'));
+  assert.deepEqual([...charts.matchAll(/data-module="([^"]+)"/g)].map(m => m[1]), ['CP-1']);
+  assert.equal(countOf(charts, /<div class="panel-card">/g), 2);
+  assert.equal(countOf(charts, /Missing values have no bar/g), 1);
+  assert.deepEqual(headings(html).map(h => h[0]), ['overview-lead', 'overview-bottom-lines', 'overview-limitations', 'overview-charts', 'overview-dates']);
 });
+
+test('Overview key charts: none placed, a placement without Overview, or a blocked module leaves the section out', () => {
+  assert.ok(!runPage(d => d).runReport(RUN).includes('overview-charts'), 'no visuals row at all');
+  assert.ok(!runPage(d => d, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Model; Files' }] }).runReport(RUN).includes('overview-charts'));
+  assert.ok(!runPage(d => d, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Overviewer' }] }).runReport(RUN).includes('overview-charts'), 'the word Overview, not a prefix of it');
+  assert.ok(!runPage(d => { d[outId('CP-1')].state.established = false; return d; }, [], m => m, OVERVIEW_CP1).runReport(RUN).includes('overview-charts'), 'a blocked module draws none');
+  const bridge = runPage(withBridge, [], m => m, OVERVIEW_CP1).runReport(RUN);
+  assert.equal(countOf(bridge, /Missing values have no bar/g), 1);
+});
+
+test('Overview key charts: the bridge and the structure views are drawn after the module\'s period charts, in handoff order', () => {
+  const bridge = chartsOf(runPage(withBridge, [], m => m, OVERVIEW_CP1).runReport(RUN), 'CP-1');
+  assert.ok(bridge.includes('<div class="vector-chart">') && bridge.indexOf('column-chart') < bridge.indexOf('vector-chart'));
+  const stack = chartsOf(runPage(withStructure, [], m => m, OVERVIEW_CP1).runReport(RUN), 'CP-1');
+  assert.equal(countOf(stack, /Missing values have no bar\./g), 1);
+  assert.ok(stack.indexOf('Missing values have no bar.') < stack.indexOf('stack-key'));
+});
+
+test('Overview key charts: a map with data is drawn, a map holding only a gap and every event lane are not', () => {
+  const html = runPage(d => withLanes(withMaps(d)), [], m => m, OVERVIEW_CP1).runReport(RUN);
+  assert.ok(html.includes('Credit-risk transmission') && !html.includes('>Stress scenario<'));
+  assert.ok(!html.includes('lane-row') && !html.includes('event-lanes'));
+  assert.ok(!runPage(withMaps).runReport(RUN).includes('Credit-risk transmission'), 'a module the catalogue does not place on Overview draws no map there');
+});
+
+test('Overview shell: no navigator or Browse modules button, no outline, and the old report parts and their styles are gone', () => {
+  const views = read('views.js'), screen = read('screen.js'), css = read('screen.css');
+  assert.ok(views.includes("classList.toggle('overview-workspace',!isHome&&module==='W-Overview')"));
+  assert.ok(css.includes('.overview-workspace .navigator,.overview-workspace .mobile-modules{display:none}'));
+  for (const gone of ['coverageStrip', 'creditStory', 'storyModule', 'storyLine', 'findingsRegister', 'openItems', 'moduleMatrix', 'registerRowShown']) assert.ok(!views.includes(gone) && !screen.includes(gone), gone);
+  for (const gone of ['runOutline', 'runPart', 'data-run-part', 'data-register-filter', 'register-all']) assert.ok(!views.includes(gone) && !screen.includes(gone), gone);
+  for (const gone of ['.story-module', '.story-group', '.na-line', 'a.cov', '.coverage{', 'table.register', 'table.open-items', 'table.matrix', '.register-tools', '.run-count', '#run-matrix']) assert.ok(!css.includes(gone), gone);
+  for (const sel of ['.overview-part', '.passage-list', '.basis{', '.dates-table']) assert.ok(css.includes(sel), sel);
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // A module with saved outputs and no default (two unnumbered variants): counted, listed as a choose line, never given an output by the page.
 const CP0_TWO = modules => ({ ...modules, 'CP-0': { outputs: [`${RUN}/deliveries/d1/CP-0-a.md`, `${RUN}/deliveries/d1/CP-0-b.md`], default: null } });
-test('run report: a module with outputs but no default is counted, listed as a choose line, and adds no register rows', () => {
-  const html = runPage(d => d, [], CP0_TWO).runReport(RUN);
-  assert.equal(strip(/<p class="run-count">(.*?)<\/p>/.exec(html)[1]), '1 of 5 modules reach a conclusion · 2 not assessable · 1 without a reader summary · 1 without a chosen output');
-  const line = /<p class="choose-line">(.*?)<\/p>/.exec(html)[1];
-  assert.equal(strip(line), 'Source readiness · 2 saved outputs. Choose one');
-  assert.ok(/<a [^>]*href="#CP-0\?c=run-a"[^>]*>Choose one/.test(line));
-  assert.ok(groupOf(html, 'Business and evidence').includes('choose-line'));
-  assert.ok(/<a class="cov" href="[^"]*"[^>]*>Source readiness<\/a>/.test(html));
-  const matrix = /<table class="matrix">.*?<\/table>/s.exec(html)[0];
-  const row = /<tr><th scope="row">(?:(?!<\/tr>).)*CP-0.*?<\/tr>/s.exec(matrix)[0];
-  assert.ok(strip(row).includes('2 saved outputs'));
-  assert.equal(countOf(html, /<tr data-group[^>]*>/g), countOf(runPage().runReport(RUN), /<tr data-group[^>]*>/g));
-  assert.ok(!/without a chosen output/.test(runPage().runReport(RUN)));
-});
 
-test('run report: the register carries one hidden-unless-empty "No findings match" row', () => {
-  const html = runPage(RUN_CP6_ESTABLISHED).runReport(RUN);
-  assert.ok(/<tr class="register-empty" hidden><td colspan="5">No findings match<\/td><\/tr>/.test(html));
-  const none = runPage(d => { d[outId('CP-1')].state.established = false; return d; }).runReport(RUN);
-  assert.ok(/<tr class="register-empty"><td colspan="5">No findings match/.test(none));
-  assert.ok(read('screen.js').includes('register-empty'));
-});
 
 // Live run activity: pull the live functions (between activityView and workspaceView) out of views.js.
 const liveFns = () => {
@@ -1173,22 +1233,7 @@ test('rows carry the run id for restoring, and unchanged data is not re-rendered
 });
 
 // Design pass 2026-11-10 (docs/design/2026-11-10-impeccable-pass.md).
-test('run report: every part carries an id and the label the navigator lists, in page order', () => {
-  const html = runPage().runReport(RUN);
-  const parts = [...html.matchAll(/<section class="[^"]*" id="(run-[a-z0-9-]+)" data-run-part="([^"]*)">/g)].map(m => [m[1], m[2]]);
-  assert.deepEqual(parts, [['run-group-1', 'Financial performance'], ['run-group-2', 'Outlook and downside'], ['run-group-3', 'Decision and review'], ['run-group-4', 'Other modules'],
-    ['run-register', 'Findings register'], ['run-open-items', 'Open items'], ['run-matrix', 'Module matrix'], ['run-charts', 'Chart index']]);
-  const screen = read('screen.js');
-  assert.ok(screen.includes("querySelectorAll('[data-run-part]')") && screen.includes('run-[a-z0-9-]+'), 'the navigator lists the parts and the route scrolls to one');
-});
 
-test('run report: a coverage cell is the module name, its state in the title and the accessible label, and no code', () => {
-  const html = runPage().runReport(RUN);
-  assert.ok(/<a class="cov filled" href="[^"]*" title="Financial foundation · Reaches a conclusion" aria-label="Financial foundation, Reaches a conclusion">Financial foundation<\/a>/.test(html));
-  assert.ok(/<a class="cov" href="[^"]*" title="Downside · Not assessable" aria-label="Downside, Not assessable">Downside<\/a>/.test(html));
-  const strip = /<nav class="coverage".*?<\/nav>/s.exec(html)[0].replace(/ href="[^"]*"/g, '');
-  assert.ok(!/\bCP-[A-Z0-9]+\b/.test(strip), 'no code in the strip');
-});
 
 test('charts: one chip-dot legend per set of charts, under the last card', () => {
   const html = runPage().chartCards(['<i>a</i>', '<i>b</i>', '<i>c</i>']);
@@ -1203,17 +1248,9 @@ test('charts: one chip-dot legend per set of charts, under the last card', () =>
   assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div></div>');
 });
 
-test('screen.css: run-report tables run whole in the text face', () => {
+test('screen.css: the run page tables (chart index, status map) run whole', () => {
   const css = read('screen.css');
   assert.ok(css.includes('.run-section .table-scroll{max-height:none;overflow:clip}'));
-  assert.ok(css.includes("table.register td,table.open-items td,table.matrix td{font-family:'Red Hat Text',sans-serif"));
-});
-
-test('run report: a run with no module output says so and keeps the source inventory link; no empty strip, table or count line', () => {
-  const html = runPage(() => ({})).runReport(RUN);
-  assert.equal(strip(/<div class="missing-state">(.*?)<\/div>/.exec(html)[1]), 'No module output retained for this runThe run report is drawn from module handoffs, and this run holds none.');
-  assert.ok(html.includes('href="#W-Evidence/sources?c=run-a"'));
-  for (const gone of ['class="run-count"', 'class="coverage"', '<table']) assert.ok(!html.includes(gone), gone);
 });
 
 test('hardening: the module report\'s section title is an h2, fold arrows respect reduced motion, the page prints whole', () => {
@@ -1221,7 +1258,6 @@ test('hardening: the module report\'s section title is an h2, fold arrows respec
   assert.ok(screen.includes("const level=report?'h2':'h3';"));
   assert.ok(/@media\(prefers-reduced-motion:reduce\)\{[^}]*details\.fold>summary img[^}]*\{transition:none\}/.test(css));
   assert.ok(/@media print\{[^@]*#content\{[^}]*overflow:visible/.test(css));
-  assert.ok(/@media\(forced-colors:active\)\{[^@]*a\.cov\.filled\{/.test(css));
 });
 
 test('module tables: a numeric column is .num, a number in a text column is .fig, a sentence has no figure class', () => {
@@ -1277,7 +1313,7 @@ test('hardening: unbroken strings wrap in the canvas, the inspector and the libr
   assert.ok(Math.abs(widths.reduce((a, b) => a + b, 0) - 100) < 1e-9);
   assert.ok(/\.run-section\{container-type:inline-size\}\s*@container \(max-width:600px\)\{\.run-section \.table-scroll\{overflow-x:auto\}/.test(css));
   // Paper has no sideways scroll: the minimum widths are dropped in print.
-  assert.ok(/@media print\{[^@]*\.library-table,table\.register,table\.open-items,table\.matrix\{min-width:0\}/.test(css));
+  assert.ok(/@media print\{[^@]*\.library-table\{min-width:0\}/.test(css));
 });
 
 test('library: a file is linked only in the one form the build writes, a retained workspace file; a presented report copy is not one', () => {
@@ -1395,26 +1431,7 @@ test('reader charts: a bridge whose running position dips below zero is drawn in
   assert.ok(Math.abs(rects[1].bottom - 210) < 0.01, 'the outflow ends at the lowest running position');
 });
 
-test('the "Missing values have no bar" note prints under the last period chart, not the bridge after it', () => {
-  const page = runPage(d => {
-    withBridge(d);
-    return d;
-  });
-  // CP-1's charts are Leverage, Cover, then the bridge; the note is under Cover.
-  const mod = storyModule(page.runReport(RUN), 'CP-1');
-  assert.equal(countOf(mod, /Missing values have no bar/g), 1);
-  const cards = mod.split('<div class="panel-card">').slice(1);
-  assert.deepEqual(cards.map(c => c.includes('Missing values have no bar')), [false, true, false]);
-  // A module with only a bridge prints no note, and leaves it for the next module that has period charts.
-  const alone = runPage(d => { d[outId('CP-1')].charts = [BRIDGE_CHART]; return withBridge(d); });
-  assert.equal(countOf(storyModule(alone.runReport(RUN), 'CP-1'), /Missing values have no bar/g), 0);
-});
 
-test('run report: the bridge is drawn in its module story beside the module\'s other charts', () => {
-  const mod = storyModule(runPage(withBridge).runReport(RUN), 'CP-1');
-  assert.ok(mod.includes('<div class="vector-chart">') && mod.includes('<div class="column-chart"'));
-  assert.ok(mod.indexOf('column-chart') < mod.indexOf('vector-chart'), 'charts keep the handoff order');
-});
 
 const TAIL = ['Reporting unit', 'Basis and limitation'];
 const STACK = { title: 'Debt stack', unit: 'US$m', table: 92, kind: 'stack', label: 0, rank: 1, secured: 2, amount: 3, leverage: 4, columns: [3, 4] };
@@ -1485,11 +1502,6 @@ test('structure views: no amber or red in the series, stack, tick or limit rules
   assert.ok(!html.includes('no stated amount'));
 });
 
-test('structure views: only a period chart carries the missing-values note, once, under the last of them', () => {
-  const mod = storyModule(runPage(withStructure).runReport(RUN), 'CP-1');
-  assert.equal(countOf(mod, /Missing values have no bar\./g), 1);
-  assert.ok(mod.indexOf('Missing values have no bar.') < mod.indexOf('stack-key'), 'the note sits under the period charts, before the structure views');
-});
 
 // ---- Package 3 views (2026-11-10): prior and current results, margin and KPI changes, peer ranges and yield against maturity. Every value is synthetic.
 const PAIR_HEAD = ['Measure', 'Prior period', 'Prior', 'Current period', 'Current', ...TAIL];
@@ -1663,19 +1675,12 @@ test('library filters: Reset shows only while something is filtered or sorted; C
 });
 
 
-test('run report: a finding shows its resolved chips; citations without a page are counted on the module page only', () => {
-  const gap = { chips: { [`${outId('CP-1')}:17`]: [{ kind: 'gap', label: 'no page' }] } };
-  const html = runPage(d => d, [], m => m, gap).runReport(RUN);
-  const story = storyModule(html, 'CP-1');
-  assert.ok(story.includes('aria-label="Handoff row, line 17"') && story.includes('data-chip='));
-  assert.ok(!html.includes('chip-count') && !html.includes('without a page'));
-});
 
 test('screens pass: one word for a run, in-app actions carry no out-arrow, and the styles the markup needs exist', () => {
   const views = read('views.js'), css = read('screen.css'), screen = read('screen.js');
   assert.ok(!/Change case|another case|for this case|other cases/.test(views));
   assert.ok(views.includes('>Change run</a>') && !views.includes('View source ↗'));
-  for (const sel of ['.metric-absent{', '.library-table td.run-id{white-space:nowrap', '#run-matrix .table-scroll{max-width']) assert.ok(css.includes(sel), sel);
+  for (const sel of ['.metric-absent{', '.library-table td.run-id{white-space:nowrap']) assert.ok(css.includes(sel), sel);
   // Never assessed is a fact, not an alert: the completeness note no longer uses the amber of states that need action.
   const box = css.slice(css.lastIndexOf('.completion-box{'));
   assert.ok(box.startsWith('.completion-box{border-color:var(--border-secondary);background:var(--gray-50)'));
@@ -1872,7 +1877,8 @@ test('calendar lanes: every event is a keyboard-reachable link naming its lane, 
 test('calendar lanes: no Calendar page remains; lanes are drawn on the Overview and Evidence pages', () => {
   const page = runPage(withLanes);
   assert.ok(!('calendarSections' in page));
-  assert.ok(page.eventLanesView(RUN, { at: 'Overview', compact: true }).includes('lane-row') && !page.eventLanesView(RUN, { at: 'Calendar' }));
+  assert.ok(!page.eventLanesView(RUN, { at: 'Calendar' }));
+  assert.ok(!read('views.js').includes("eventLanesView(context,{at:'Overview'"), 'the Overview draws no lane: its dated rows feed the nearest dates');
 });
 
 test('calendar lanes: the new rules use only existing tokens, no amber or red, and a span is drawn differently from a day', () => {
@@ -1892,14 +1898,6 @@ test('calendar lanes: a Scenario event is drawn with a dashed outline, not by co
   assert.ok(rule && /dashed/.test(rule) && !/amber|--red/.test(rule));
 });
 
-test('calendar lanes: the Overview shows the same lanes compactly, with no link to a Calendar tab, and nothing without lanes', () => {
-  const page = runPage(withLanes), compact = page.eventLanesView(RUN, { compact: true });
-  assert.equal(countOf(compact, /<div class="lane-row">/g), 2);
-  assert.ok(!compact.includes('event-table') && !compact.includes('W-Calendar') && !strip(compact).includes('Calendar tab'));
-  const overview = page.runReport(RUN);
-  assert.ok(overview.includes('class="event-lanes compact"') && overview.indexOf('event-lanes') < overview.indexOf('run-inventory'));
-  assert.ok(!runPage().runReport(RUN).includes('event-lanes'));
-});
 
 test('calendar lanes: a module filter draws only that module lane, and the Sources page draws the Sources lane', () => {
   const sources = d => { d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [laneRow(403, '2025-02-14', 'day', '—', 'Filing published', 'Historical — filed')])])], events: [{ lane: 'Sources', table: 402, gap: null }] }); return withLanes(d); };
@@ -1965,17 +1963,6 @@ test('maps: a map of only Not supplied draws no diagram and says why', () => {
   assert.ok(!gap.includes('<svg') && !gap.includes('Not supplied'));
 });
 
-test('maps: placement is by the map, so credit-risk transmission reaches the Overview and no other map does', () => {
-  const page = runPage(withMaps);
-  const overview = page.runReport(RUN);
-  assert.ok(overview.includes('Credit-risk transmission') && !overview.includes('>Stress scenario<'));
-  assert.equal(page.mapsView(outId('CP-1')).includes('Stress scenario'), true);
-  assert.equal(page.mapsPlaced(RUN, { at: 'Evidence' }), '');
-  const text = read('views.js');
-  assert.ok(/if\(module==='W-Evidence'\)return[^\n]*statusMapView\(context\)[^\n]*mapsPlaced\(context,\{at:'Evidence'\}\)/.test(text));
-  assert.ok(/if\(module==='CP-OS'\)return[^\n]*statusMapView\(context,\{timeline:true\}\)/.test(text));
-  assert.ok(/\['maps',reportMaps\(id\)\]/.test(text) && /anchor==='maps'\?'Maps'/.test(text), 'the owning module page draws its maps');
-});
 
 test('maps: the new rules use only existing tokens, no amber or red', () => {
   const css = read('screen.css').split('\n').filter(line => /\.map-|\.state-shape|\.status-/.test(line));
@@ -2067,7 +2054,7 @@ const cellsOf = (html, attr) => [...html.matchAll(new RegExp(`<tr ${attr}="[^"]*
 const INDEX_HEAD = ['Chart', 'Module', 'State', 'Limitation', 'Unit', 'Period', 'Shown in', 'Table form', 'Source'];
 
 test('chart index: one row per chart, map and lane the run holds, whatever its state, with the owner by name', () => {
-  const html = runPage(withIndex).chartIndex(RUN);
+  const html = runPage(withIndex, [], m => m, OVERVIEW_CP1).chartIndex(RUN);
   assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), INDEX_HEAD);
   const rows = cellsOf(html, 'data-chart').map(r => r.slice(0, 7));
   const OVERVIEW = 'Financial foundation page, Overview';
@@ -2097,6 +2084,11 @@ test('chart index: the table form and the handoff line are links that keep the r
   assert.ok(map.includes('#CP-1/maps?c=run-a'), 'a map opens its module’s Maps part');
 });
 
+test('chart index: Overview in "Shown in" comes from the visuals catalogue row, not from the module alone', () => {
+  const rows = cellsOf(runPage(withIndex).chartIndex(RUN), 'data-chart').map(r => r[6]);
+  assert.deepEqual(rows.slice(0, 2), ['Financial foundation page', 'Financial foundation page'], 'no catalogue row names Overview for this module');
+});
+
 test('chart index: a lane opens the module section that holds its events table, not the module head', () => {
   const sections = { [outId('CP-1')]: [['head', 'Head', ['Reader']], ['additional', 'Additional findings', ['=Events: Financing']]] };
   const html = runPage(withIndex, [], m => m, { sections }).chartIndex(RUN);
@@ -2104,14 +2096,6 @@ test('chart index: a lane opens the module section that holds its events table, 
   assert.equal(/<a href="([^"]+)">Table form/.exec(lane)[1], '#CP-1/additional?c=run-a', lane);
 });
 
-test('chart index: placed on the Overview and the Forecast page; a run with no chart table says so, and no run draws nothing', () => {
-  const page = runPage(withIndex);
-  assert.ok(page.runReport(RUN).includes('class="run-section chart-index"'));
-  assert.ok(/if\(module==='W-Forecast'\)return[^\n]*chartIndex\(context\)/.test(read('views.js')));
-  const none = runPage(d => { for (const out of Object.values(d)) out.sections = out.sections.filter(s => !/^(Chart data|Map|Events): /.test(s.heading)); return d; }).chartIndex(RUN);
-  assert.ok(none.includes('No chart, map or calendar lane') && !none.includes('<table'));
-  assert.equal(page.chartIndex(undefined), '');
-});
 
 test('chart index never claims or links charts hidden by a not-assessable module', () => {
   const page = runPage(d => {
@@ -2255,7 +2239,7 @@ test('run label: a recorded rerun and a recorded supersession are linked or name
 test('Report history: the page is the W-Report destination with one section, the history', () => {
   assert.ok(read('views.js').includes("'W-Report':['Report history',[['history','Report history',[]]]]"));
   assert.ok(read('views.js').includes("if(module==='W-Report')return historyView(context);"));
-  assert.ok(read('screen.css').includes('.history-table{'));
+  assert.ok(read('screen.css').includes('.history-table,.dates-table{'));
 });
 
 test('package 7: the new rules use only existing tokens, no amber or red', () => {

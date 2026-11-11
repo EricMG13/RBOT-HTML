@@ -650,7 +650,10 @@ function eventLanes(context) {
 // A day is a point; a month, quarter or year is drawn across its whole span (calendar.js eventSpan), never on a day the source does not state.
 // `compact` is the lanes alone, without the intro and the event table; `at` selects their placement. Scenario events have an outline.
 // Where each kind of chart table is drawn besides its module page. The views that draw them and the chart index both read this table.
-const PLACEMENT=[['chart','Overview',out=>out?.state.established===true],['map','Overview',(out,name)=>name==='credit-risk transmission'],['map','Evidence',out=>out.module==='CP-5'],['lane','Overview',()=>true],['lane','Evidence',out=>out.module==='CP-0']];
+// Overview charts and maps are the visuals catalogue's own placement (docs/visualisations/catalogue.csv, window.DESIGN_WORKSPACE.visuals) for a module that is not blocked.
+const onOverview=out=>{const code=aliases[out.module]??out.module;return window.DESIGN_WORKSPACE.visuals.some(visual=>visual.module===code&&/\bOverview\b/.test(visual.placement))&&!blocked(out.sections,out.state);};
+// A lane is not drawn on the Overview: its dated rows feed the Overview's nearest dates (overviewDates), which is what 'Overview' means for a lane.
+const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['map','Evidence',out=>out.module==='CP-5'],['lane','Overview',()=>true],['lane','Evidence',out=>out.module==='CP-0']];
 const placed=(kind,where,out,name)=>PLACEMENT.some(([k,w,test])=>k===kind&&w===where&&test(out,name));
 function eventLanesView(context,{compact=false,at=null}={}) {
   const lanes=eventLanes(context).filter(lane=>(!at||placed('lane',at,data[lane.id]))).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
@@ -792,7 +795,7 @@ function chartRows(context) {
 }
 function chartIndex(context) {
   if(!contexts[context])return '';
-  const rows=chartRows(context),open='<section class="run-section chart-index" id="run-charts" data-run-part="Chart index"><h2>Chart index</h2>';
+  const rows=chartRows(context),open='<section class="run-section chart-index" id="run-charts"><h2>Chart index</h2>';
   if(!rows.length)return `${open}<p class="intro">No chart, map or calendar lane table is held in this run’s handoffs.</p></section>`;
   const head=['Chart','Module','State','Limitation','Unit','Period','Shown in','Table form','Source'];
   const body=rows.map(row=>`<tr data-chart="${esc(row.key)}"><th scope="row">${esc(row.title)}</th><td>${esc(row.owner)}</td><td>${esc(row.state)}</td><td class="index-limit">${esc(row.limitation)}</td><td>${esc(row.unit)}</td><td>${esc(row.period)}</td><td>${esc(row.where)}</td><td>${row.form?`<a href="${esc(row.form)}">Table form</a>`:'Not drawn'}</td><td>${row.source?`<a href="${esc(row.source)}">Line ${row.line}</a>`:NOT_STATED}</td></tr>`).join('');
@@ -1131,7 +1134,6 @@ function updateLibrary(panel=false) {
 }
 // ---- The run report: the run's landing page. Every sentence is a handoff cell verbatim; the counts, the state and the words come from
 // Python (data[id].state, data[id].words). The page makes no judgement of its own.
-const COMMITTEE='CP-6';
 const NO_SUMMARY='No reader summary';
 // Every module that has an output in the run, in reading-group order: [group title, [{module, id, out}]]. A module with saved outputs but no
 // default has id and out null and the number of its outputs in choices: the page does not pick one for it.
@@ -1143,70 +1145,94 @@ function runGroups(context) {
   return groups.map(([title,items])=>[title,items.map(([module])=>item(module)).filter(item=>item.id||item.choices)]).filter(([,items])=>items.length);
 }
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
-function coverageStrip(entries) {
-  // The fill is not the only carrier of the state: the accessible label says it in words.
-  return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out,choices})=>{
-    const state=out?stateWord(out.state.established):`${choices} saved outputs`;
-    return `<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" title="${esc(`${moduleNames[module]} · ${state}`)}" aria-label="${esc(`${moduleNames[module]}, ${state}`)}">${esc(moduleNames[module])}</a>`;
-  }).join('')}</nav>`;
+// ---- The Overview (ruling H5): selection and ordering of the handoffs' own passages, text unchanged. Nothing is written, counted or
+// judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
+const LEAD_MODULES=['CP-6','CP-2'];
+const NO_LEAD='No credit view module completed in this run.';
+// The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
+// A list item loses its "- " marker; its Basis line stays under it exactly as written.
+function passageParagraph(block) {
+  const {body}=splitBasis(block.text),lines=block.text.split('\n');
+  const item=body.startsWith('- ');
+  return {item,text:rich((item?body.slice(2):body).replace(/\n/g,' ')),basis:body===block.text?'':`<small class="basis">${rich(lines[lines.length-1])}</small>`};
 }
-function storyCharts(id,noted) {
-  const charts=data[id].charts||[];
-  return chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts))));
+function passageHtml(section) {
+  if(!section)return '';
+  let open=false,html='';
+  for(const block of section.blocks.filter(b=>b.type==='text')) {
+    const {item,text,basis}=passageParagraph(block);
+    if(item&&!open)html+='<ul class="passage-list">';
+    if(!item&&open)html+='</ul>';
+    open=item;html+=item?`<li>${text}${basis}</li>`:`<p class="passage-text">${text}${basis}</p>`;
+  }
+  return html+(open?'</ul>':'');
 }
-function storyModule({module,id,out},noted) {
-  const {summary,state}=out;
-  const declared=declaredBadge(state.declared);
-  const findings=findingRows(id).map(row=>findingArticle(id,row,false));
-  return `<div class="story-module" data-module="${esc(module)}"><div class="story-head"><h3>${moduleLink(module)}</h3><span class="pill">${esc(summary.confidence)}</span>${declared}</div><p class="bottom-line">${rich(summary.bottomLine.replace(/\n/g,' '))}</p>${findings.join('')}<p class="main-limit"><b>Main limitation</b>${rich(summary.limitation)}</p>${storyCharts(id,noted)}</div>`;
+// The run's modules in the order CP-OS ran them, each with its default output and that output's reader passages.
+function overviewEntries(context) {
+  return runModuleCodes(contexts[context]).map(module=>{
+    const id=defaultOutput(module,context);
+    if(!id)return {module,id:null,out:null,passages:null,choices:(moduleEntry(module,context)?.outputs||[]).length};
+    const out=data[id];
+    return {module,id,out,passages:readerPassages(out.sections),choices:0};
+  });
 }
-// One line, no card and no findings: a module that does not reach a conclusion, or has no reader summary at all (R41).
-function storyLine({module,out,choices}) {
-  if(!out)return `<p class="choose-line">${esc(moduleNames[module])} · ${choices} saved outputs. <a class="text-action" href="#${encodeURIComponent(module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p>`;
-  if(out.state.established===null)return `<p class="nosum-line">${moduleLink(module)} · ${NO_SUMMARY}</p>`;
-  const {declared}=out.state,{limitation}=out.summary;
-  return `<p class="na-line">${moduleLink(module)} · <span>Not assessable</span>${declared==null?'':` · ${declaredBadge(declared)}`}${limitation?` · ${rich(limitation)}`:''}</p>`;
+const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.out.state);
+const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
+function overviewLead(entries) {
+  const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
+  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${NO_LEAD}</p></section>`};
+  const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key)}`:'';
+  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom)}${key}</section>`};
 }
-function creditStory(grouped) {
-  return grouped.map(([title,items],at)=>{
-    let noted=false;
-    const body=items.map(item=>{
-      if(!placed('chart','Overview',item.out))return storyLine(item);
-      const html=storyModule(item,noted);
-      noted=noted||lastPeriodChart(item.out.charts||[])>=0;
-      return html;
-    }).join('');
-    return `<section class="story-group" id="run-group-${at+1}" data-run-part="${esc(title)}"><h2>${esc(title)}</h2>${body}</section>`;
-  }).join('');
+function overviewBottomLines(entries,lead) {
+  const rows=entries.filter(entry=>entry!==lead).map(entry=>{
+    if(!entry.out)return `<div class="bottom-entry"><h3>${moduleLink(entry.module)}</h3><p class="intro">${entry.choices} saved outputs, none chosen. <a class="text-action" href="#${encodeURIComponent(entry.module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p></div>`;
+    const body=entry.passages.bottom?passageHtml(entry.passages.bottom):'<p class="intro">No bottom line in this handoff.</p>';
+    return `<div class="bottom-entry" data-module="${esc(entry.module)}"><h3>${moduleLink(entry.module)}${notAssessable(entry)?` ${NOT_ASSESSABLE_BADGE}`:''}</h3>${body}</div>`;
+  });
+  return rows.length?`<section class="overview-part" id="overview-bottom-lines"><h2>Bottom line by module</h2>${rows.join('')}</section>`:'';
 }
-// A register row shows when its module is established (or the box is ticked) and it matches the group and confidence filters ('' is all).
-const registerRowShown=(row,filter)=>(filter.all||row.established)&&(!filter.group||row.group===filter.group)&&(!filter.confidence||row.confidence===filter.confidence);
-function findingsRegister(grouped) {
-  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out).flatMap(({module,id,out})=>findingRows(id).map(row=>({group,module,established:out.state.established,finding:row.finding,impact:row.impact,confidence:plain(row.confidence)}))));
-  if(!rows.length)return '';
-  const unique=values=>[...new Set(values)];
-  const select=(kind,label,all,values)=>`<label for="register-${kind}">${label}</label><select id="register-${kind}" data-register-filter="${kind}"><option value="">${all}</option>${values.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select>`;
-  const body=rows.map(row=>`<tr data-group="${esc(row.group)}" data-confidence="${esc(row.confidence)}" data-established="${row.established}"${row.established?'':' hidden'}><td>${esc(row.group)}</td><td>${moduleLink(row.module)}${row.established?'':' <span class="badge badge-gray">Not assessable</span>'}</td><td>${rich(row.finding)}</td><td>${rich(row.impact)}</td><td>${esc(row.confidence)}</td></tr>`).join('');
-  return `<section class="run-section" id="run-register" data-run-part="Findings register"><h2>Findings register</h2><div class="register-tools">${select('group','Group','All groups',unique(rows.map(row=>row.group)))}${select('confidence','Confidence','All confidences',unique(rows.map(row=>row.confidence)))}<input type="checkbox" id="register-all"><label for="register-all">Include not-assessable modules (${rows.filter(row=>!row.established).length})</label></div><div class="table-scroll"><table class="register"><thead><tr>${['Group','Module','Finding','Creditor impact','Confidence'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}<tr class="register-empty"${rows.some(row=>row.established)?' hidden':''}><td colspan="5">No findings match</td></tr></tbody></table></div></section>`;
+// Every Limitations item of every module, first occurrence kept (verbatim) when the normalised text repeats.
+function overviewLimitations(entries) {
+  const seen=new Set(),items=[];
+  for(const entry of entries)for(const block of (entry.passages?.limits?.blocks||[]).filter(b=>b.type==='text')) {
+    const key=normaliseLimitation(block.text);
+    if(key!==''&&seen.has(key))continue;
+    seen.add(key);
+    const {text,basis}=passageParagraph(block);
+    items.push(`<li class="limit-item">${text}${basis}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
+  }
+  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<ul class="passage-list">${items.join('')}</ul>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
 }
-function openItems(grouped) {
-  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out?.summary).map(({module,out})=>`<tr><td>${esc(group)}</td><th scope="row"><a class="text-action" href="${esc(routeHref(module,'limits'))}">${esc(moduleNames[module])}</a></th><td>${rich(out.summary.limitation)}</td></tr>`));
-  if(!rows.length)return '';
-  return `<section class="run-section" id="run-open-items" data-run-part="Open items"><h2>Open items</h2><div class="table-scroll"><table class="open-items"><thead><tr>${['Group','Module','Main limitation'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
+// The drawn charts and maps of the modules the visuals catalogue places on Overview (PLACEMENT); a blocked module draws none. Lanes are the dates section.
+function overviewCharts(entries) {
+  let noted=false;
+  const html=entries.filter(entry=>entry.out).map(({id,out})=>{
+    if(!placed('chart','Overview',out))return '';
+    const charts=out.charts||[];
+    const cards=chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts))));
+    noted=noted||lastPeriodChart(charts)>=0;
+    return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
+  }).filter(html=>/class="(panel-card|map-card)"/.test(html));
+  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${html.join('')}</section>`:'';
 }
-function moduleMatrix(grouped) {
-  const rows=grouped.flatMap(([,items])=>items.map(({module,out,choices})=>out?`<tr><th scope="row">${moduleLink(module)}</th><td>${esc(out.summary?out.summary.confidence:NO_SUMMARY)}</td><td>${esc(out.state.declared??'not declared')}</td></tr>`:`<tr><th scope="row">${moduleLink(module)}</th><td>${choices} saved outputs</td><td>not declared</td></tr>`));
-  return `<section class="run-section" id="run-matrix" data-run-part="Module matrix"><h2>Module matrix</h2><div class="table-scroll"><table class="matrix"><thead><tr>${['Module','Confidence','Declared status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
+// The next five dated items on or after the run's as-of date, from every module's event lanes.
+function overviewDates(context) {
+  const asOf=contexts[context].asOf;
+  const head='<section class="overview-part" id="overview-dates"><h2>Nearest dates</h2>';
+  if(!asOf)return `${head}<p class="intro">This run records no as-of date, so no nearest dates are selected.</p></section>`;
+  const items=eventLanes(context).filter(lane=>lane.gap===null).flatMap(lane=>fixtureTable(lane.id,lane.table).rows.map(row=>({date:row.cells[0],text:row.cells[3],module:data[lane.id].module,line:row.line})));
+  const next=nearestDates(items,asOf);
+  if(!next.length)return `${head}<p class="intro">No dated item on or after ${esc(asOf)} in this run’s handoffs.</p></section>`;
+  const rows=next.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('');
+  return `${head}<table class="dates-table"><caption>The next ${next.length} dated items on or after ${esc(asOf)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 function runReport(context) {
-  const grouped=runGroups(context),entries=grouped.flatMap(([,items])=>items);
-  const inventory=`<p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Source inventory${icon('arrow-right')}</a></p>`;
-  // A run that holds no module output has no report to draw: it says so and keeps the way to its sources.
-  if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The run report is drawn from module handoffs, and this run holds none.</p></div>${inventory}`;
-  const count=established=>entries.filter(entry=>entry.out&&entry.out.state.established===established).length;
-  const unsummarised=count(null),unchosen=entries.filter(entry=>!entry.out).length,line=`${count(true)} of ${entries.length} modules reach a conclusion · ${count(false)} not assessable${unsummarised?` · ${unsummarised} without a reader summary`:''}${unchosen?` · ${unchosen} without a chosen output`:''}`;
-  const committee=entries.find(entry=>entry.module===COMMITTEE&&entry.out?.state.established===true);
-  return `<div class="run-summary"><p class="run-count">${esc(line)}</p>${runAcceptance(context)}</div>${coverageStrip(entries)}${committee?reportBand(committee.id):''}${creditStory(grouped)}${findingsRegister(grouped)}${openItems(grouped)}${moduleMatrix(grouped)}${eventLanesView(context,{at:'Overview',compact:true})}${statusMapView(context)}${mapsPlaced(context,{at:'Overview'})}${chartIndex(context)}${inventory}`;
+  const entries=overviewEntries(context);
+  // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
+  if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Source inventory${icon('arrow-right')}</a></p>`;
+  const {lead,html}=overviewLead(entries);
+  return html+overviewBottomLines(entries,lead)+overviewLimitations(entries)+overviewCharts(entries)+overviewDates(context);
 }
 // Read-only: the folders the library does not show (with the reason) and the issues found when it was built.
 function activityView(activity,live) {
@@ -1290,6 +1316,8 @@ function updateWorkspaceChrome(module) {
     return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${icon(img)}${label}</a>`;
   }).join('');
   $('workbench').classList.toggle('library-workspace',isHome);
+  // The Overview is a page of selected passages: no module navigator beside it and no Browse modules button above it.
+  $('workbench').classList.toggle('overview-workspace',!isHome&&module==='W-Overview');
   // The navigator is resident only where its modules are the subject; elsewhere it opens from the Modules button.
   $('workbench').classList.toggle('tools-workspace',!isHome&&module!=='W-Overview'&&!isAnalytical(module));
   // The rail shows where you are, and its run-level links keep the selected run.

@@ -211,9 +211,17 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     assert f'href="../runs/run-a/deliveries/{delivery}/CP-1.md" target="_blank"' in dom
     dom, console = visit(page, "#W-Overview/overview?c=run-a")
     assert console == []
+    # The Overview selects (ruling H5): this earlier-format run has no reader passages, so no
+    # lead, and the visuals catalogue places no CP-1 chart on it; the charts stay with the module.
+    assert 'id="overview-lead"' in dom and "No credit view module completed in this run." in dom
+    assert "No bottom line in this handoff." in dom and 'id="overview-dates"' in dom
+    assert 'class="navigator"' in dom and 'class="workbench overview-workspace"' in dom
+    assert len(re.findall(r'<div class="panel-card">', dom)) == 0
+    dom, console = visit(page, "#CP-1/performance?c=run-a")
+    assert console == []
     assert (
         len(re.findall(r'<div class="panel-card">', dom)) == 4
-    )  # Leverage, cover, liquidity, maturities, each under the module that owns it.
+    )  # Leverage, cover, liquidity, maturities.
     # The Report history lists the run; no report frame is drawn and no report copy is held.
     dom, console = visit(page, "#W-Report/history?c=run-a")
     assert console == []
@@ -475,35 +483,25 @@ def test_the_reference_part_fits_the_page(tmp_path, width):
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width):
+def test_the_overview_fits_and_has_no_module_navigator(tmp_path, width):
     page = report_library(tmp_path, cp0_confidence="Not assessable")
     (page.parent / "probe.js").write_text(OVERVIEW_PROBE, encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert seen["rows"] > 0, "the run report drew no chart rows"
-    assert seen["valueInCard"] is True and seen["fits"] is True
-    assert 0 < seen["established"] < seen["total"], "the run has no not-assessable row"
-    assert seen["before"] == seen["established"]  # Not-assessable rows start hidden.
-    assert seen["after"] == seen["total"]  # Ticking the checkbox shows every row.
-    assert seen["emptyBefore"] is False  # Rows are shown, so the empty row is not.
-    # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
-    assert seen["filtered"] == {"shown": 0, "emptyShown": True}
-    # Design pass 2026-11-10: parts listed and reachable, tables whole and in the text face.
-    assert seen["outline"][-4:] == [
-        "Findings register",
-        "Open items",
-        "Module matrix",
-        "Chart index",
+    # Decision 6: no module navigator, Browse modules button or outline; the parts are H5's.
+    assert seen["navigatorShown"] is False and seen["moduleToggleShown"] is False
+    assert seen["outline"] == 0 and seen["fits"] is True
+    assert seen["parts"] == [
+        "overview-lead",
+        "overview-bottom-lines",
+        "overview-limitations",
+        "overview-dates",
     ]
-    assert seen["jump"] == {
-        "hash": "#W-Overview/run-matrix",
-        "current": ["Module matrix"],
-        "inView": True,
-    }
-    assert seen["scrollers"] == 0 and seen["monoProse"] == 0
-    assert seen["coverage"] == ["Source readiness", "Financial foundation"]  # Names, not codes.
+    # An earlier-format run has no passages (H7): no lead or bottom line; modules still listed.
+    assert "No credit view module completed in this run." in seen["lead"]
+    assert seen["bottomLines"][:2] == ["Source readiness Not assessable", "Financial foundation"]
 
 
 # A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then
@@ -834,7 +832,7 @@ def test_a_liquidity_bridge_is_a_waterfall_with_its_table_form_and_fits_the_page
     probe = Path(__file__).with_name("browser_probe_bridge.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    dom, console = visit(page, "#CP-1/performance?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert seen["title"] == "Liquidity bridge"
@@ -853,7 +851,7 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
     probe = Path(__file__).with_name("browser_probe_structure.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    dom, console = visit(page, "#CP-1/performance?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["segments"], seen["bulletRows"], seen["limitRows"]) == (2, 2, 1)
@@ -867,40 +865,49 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_overview_draws_the_event_lane_compactly_and_fits_the_page(tmp_path, width):
-    make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + EVENTS)
+def test_the_overview_lists_the_nearest_dates_instead_of_drawing_lanes_and_fits_the_page(
+    tmp_path, width
+):
+    make_run(tmp_path, "run-a", as_of="2025-03-31", cp1_extra=CHARTS + EVENTS)
     update_library.update_library(tmp_path)
     page = tmp_path / "library/index.html"
-    probe = Path(__file__).with_name("browser_probe_calendar.js")
+    probe = Path(__file__).with_name("browser_probe_overview.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    # The Calendar tab is retired (decision 12): the Overview draws the lanes, compactly, no table.
+    # The Calendar tab is retired (decision 12) and the Overview draws no lane (H5): it lists the
+    # dated items on or after the as-of date. Only 2025-03-31 is a day; the month, quarter and
+    # year rows are not dated items.
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert console == [] and (seen["lanes"], seen["tableRows"], seen["fits"]) == (1, 0, True)
-    assert (seen["points"], seen["spans"]) == (1, 3)
-    assert seen["laneName"] == "Financing" and seen["focusable"] is True
-    assert 'class="event-lanes compact"' in dom and "W-Calendar" not in dom
+    assert console == [] and seen["fits"] is True
+    assert seen["dates"] == ["2025-03-31Synthetic noteFinancial foundation"]
+    assert "event-lanes" not in dom and "W-Calendar" not in dom
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_the_page(
-    tmp_path, width
-):
+def test_the_map_with_its_table_and_the_status_map_are_drawn_and_fit_the_page(tmp_path, width):
     make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + MAPS)
     update_library.update_library(tmp_path)
     page = tmp_path / "library/index.html"
     probe = Path(__file__).with_name("browser_probe_maps.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    # The map is drawn by its owning module (the catalogue places no CP-1 map on the Overview) ...
+    dom, console = visit(page, "#CP-1/maps?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["nodes"], seen["edges"], seen["labels"], seen["tableRows"]) == (11, 12, 12, 12)
-    assert seen["statusNodes"] >= 1 and seen["statusStates"] == seen["statusNodes"]
     assert seen["wide"] is True and seen["scrolls"] is True  # Natural width, scrolled in its card.
-    assert seen["scrollFocusable"] is True and seen["fits"] is True and seen["statusItems"] >= 1
+    assert seen["scrollFocusable"] is True and seen["fits"] is True
     assert seen["tableAfterDiagram"] is True and seen["cutEdges"] == 1
+    # ... and the status map is on the Evidence page; the Overview draws neither.
+    dom, console = visit(page, "#W-Evidence/sources?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["statusNodes"] >= 1 and seen["statusStates"] == seen["statusNodes"]
+    assert seen["statusItems"] >= 1 and seen["fits"] is True
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == [] and "map-card" not in dom and "status-map" not in dom
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
@@ -930,14 +937,19 @@ def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_pat
         assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
         assert seen["tabs"] == ["Report", "Overview", "Modules", "Forecast", "Evidence"]
         assert seen["current"] == [route.split("?")[0][3:]]
-        assert seen["indexRows"] == [
-            "Leverage|Drawn",
-            "Interest cover|Drawn",
-            "Liquidity|Drawn",
-            "Financing events|Drawn",
-            "Credit-risk transmission map|Drawn",
-        ]
-        assert seen["indexScrollFocusable"] is True and seen["fits"] is True
+        # The chart index is the Forecast page's; the Overview selects passages instead.
+        assert seen["indexRows"] == (
+            []
+            if "Overview" in route
+            else [
+                "Leverage|Drawn",
+                "Interest cover|Drawn",
+                "Liquidity|Drawn",
+                "Financing events|Drawn",
+                "Credit-risk transmission map|Drawn",
+            ]
+        )
+        assert seen["indexScrollFocusable"] is ("Forecast" in route) and seen["fits"] is True
         # The link opens the issuer's Report history under the same run; the label is hidden there.
         assert seen["after"] == f"#W-Report/history?c={long}"
         assert seen["barOnHistory"] is True and seen["historyFits"] is True

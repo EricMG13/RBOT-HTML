@@ -1,6 +1,6 @@
 (async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  for (let i = 0; i < 200 && !document.querySelector('.index-table'); i++) await sleep(50);
+  for (let i = 0; i < 200 && !document.querySelector('.index-table, .overview-part'); i++) await sleep(50);
   const all = selector => [...document.querySelectorAll(selector)];
   const bar = document.getElementById('context-bar'), de = document.documentElement, content = document.getElementById('content');
   const scroll = document.querySelector('.chart-index .table-scroll');
