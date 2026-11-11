@@ -7,8 +7,10 @@ boundary, the upload limits, the approval digest and that no response carries th
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
+import struct
 import threading
 import time
 import urllib.error
@@ -21,7 +23,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from inbox_fixtures import CONTEXT, KEY, layout, pump, settings
+from inbox_fixtures import CONTEXT, KEY, layout, pump, settings, submit_run
 
 from deploy_workflow.inbox.runs import load_all
 from deploy_workflow.inbox.scheduler import Scheduler
@@ -537,18 +539,193 @@ def test_the_loop_leaves_the_sweep_to_the_watcher(root, monkeypatch):
     assert len(calls) == 1  # step() sweeps once; the loop adds none
 
 
-def test_the_watcher_sweep_removes_a_stale_upload_and_keeps_a_queued_one(root):
-    watcher = Scheduler(settings(root))
+def test_the_scheduler_sweep_removes_a_stale_upload_and_keeps_a_queued_one(root, monkeypatch):
+    """A queued run's files are still under ``uploads`` only while its move to the run folder is
+    unfinished (a failed rename); that folder is kept however old it is."""
+    scheduler = Scheduler(settings(root, max_running=0))  # nothing starts: the run stays queued
+    real_rename = os.rename
+
+    def refuse_the_move(src: Any, dst: Any, *args: Any, **kwargs: Any) -> None:
+        if Path(dst).parent == layout(root).drops:
+            raise PermissionError(13, "held open", str(dst))
+        real_rename(src, dst, *args, **kwargs)
+
     try:
         stale = submissions.new(layout(root))
         old = layout(root).uploads / stale
+        monkeypatch.setattr(os, "rename", refuse_the_move)
+        with pytest.raises(PermissionError):
+            submit_run(scheduler, root)
+        (record,) = load_all(layout(root))
+        held = layout(root).uploads / record.submission
+        assert record.status == "queued" and held.exists()
         past = time.time() - submissions.STALE_SECONDS - 100
         os.utime(old, (past, past))
-        fresh = submissions.new(layout(root))
-        watcher.step()
-        assert not old.exists() and (layout(root).uploads / fresh).exists()
+        os.utime(held, (past, past))
+        scheduler.step()
+        assert not old.exists()
+        assert held.exists() and load_all(layout(root))[0].status == "queued"
     finally:
-        watcher.close()
+        monkeypatch.undo()
+        scheduler.close()
+
+
+def test_a_library_file_swapped_for_a_link_after_the_check_is_not_served(svc, monkeypatch):
+    """Ported from probe t5r1_library_race.py (it imports the removed Watcher): the swap is made
+    deterministic at the moment the route has resolved the path and before it reads it."""
+    library = _library(svc)
+    secret = layout(svc.root).state / "secret.txt"
+    secret.write_text("SECRET-OUTSIDE-LIBRARY", encoding="utf-8")
+    target = library / "r.txt"
+    target.write_text("plain", encoding="utf-8")
+    real_resolve = Path.resolve
+    seen: list[Path] = []
+
+    def resolving(self: Path, strict: bool = False) -> Path:
+        got = real_resolve(self, strict=strict)
+        if got == real_resolve(target) and self == target:
+            seen.append(self)
+            if len(seen) == 2:  # the check has its answer: now the swap
+                target.unlink()
+                target.symlink_to(secret)
+        return got
+
+    monkeypatch.setattr(Path, "resolve", resolving)
+    got = svc.call("GET", "/library/r.txt")
+    monkeypatch.undo()
+    assert len(seen) == 2 and target.is_symlink()
+    assert b"SECRET" not in got.body and got.status == 404
+
+
+def test_the_library_serves_a_plain_file_and_not_a_link_or_a_folder(svc):
+    library = _library(svc)
+    (library / "real.html").write_text("<p>real</p>", encoding="utf-8")
+    (library / "alias.html").symlink_to(library / "real.html")
+    assert svc.call("GET", "/library/real.html").body == b"<p>real</p>"
+    assert service._read_regular(library) is None
+    assert service._read_regular(library / "missing") is None
+
+
+def test_every_reply_the_http_server_writes_itself_carries_the_policy_headers(svc):
+    """Ported from probe t5r1_corp_every_response.py."""
+    host = svc.host
+    cases = {
+        "HEAD": f"HEAD / HTTP/1.1\r\nHost: {host}\r\n\r\n",
+        "OPTIONS": f"OPTIONS / HTTP/1.1\r\nHost: {host}\r\n\r\n",
+        "PUT": f"PUT / HTTP/1.1\r\nHost: {host}\r\nContent-Length: 0\r\n\r\n",
+        "bad version": f"GET / HTTP/9.x\r\nHost: {host}\r\n\r\n",
+        "long request line": "GET /" + "a" * 70000 + f" HTTP/1.1\r\nHost: {host}\r\n\r\n",
+    }
+    for label, request in cases.items():
+        head = _raw(svc, request.encode()).split(b"\r\n\r\n", 1)[0].lower()
+        assert b"cross-origin-resource-policy: same-origin" in head, label
+        assert b"x-content-type-options: nosniff" in head, label
+        assert head.count(b"x-content-type-options") == 1, label
+
+
+@pytest.mark.parametrize(
+    "host", ["0.0.0.0", "0", "00", "0.0", "0.0.0", "0x0", "000.000.000.000", "::", "::ffff:0.0.0.0"]
+)
+def test_no_spelling_of_a_wildcard_address_starts_the_service(root, capsys, host):
+    """Ported from probe t5r1_wildcard_spellings.py."""
+    assert service.main(["--root", str(root), "--port", "0", "--host", host]) == 2
+    assert "pass this machine's own address" in capsys.readouterr().err
+
+
+def test_a_failed_thread_start_gives_its_connection_slot_back(service_factory, monkeypatch):
+    """Ported from probe t5r1_thread_start_leak.py."""
+    held = service_factory()
+    port = held.server.server_address[1]
+    real_start = threading.Thread.start
+    budget = [3]
+
+    def start(self: threading.Thread) -> None:
+        if getattr(self, "_target", None).__name__ == "process_request_thread" and budget[0] > 0:  # type: ignore[union-attr]
+            budget[0] -= 1
+            raise RuntimeError("can't start new thread")
+        real_start(self)
+
+    monkeypatch.setattr(threading.Thread, "start", start)
+    for _ in range(3):
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+            client.recv(10)
+    monkeypatch.undo()
+    deadline = time.monotonic() + 5
+    while cast(service._Server, held.server).active_connections:
+        assert time.monotonic() < deadline, "a slot leaked"
+        time.sleep(0.01)
+    assert held.call("GET", "/api/runs/none").status == 404
+
+
+def test_a_client_that_resets_the_connection_mid_upload_is_not_a_500(svc, caplog):
+    sid = svc.new()
+    port = svc.server.server_address[1]
+    with caplog.at_level(logging.INFO, logger=service.__name__):
+        client = socket.create_connection(("127.0.0.1", port), timeout=10)
+        client.sendall(
+            (
+                f"POST /api/submissions/{sid}/files?name=a.txt HTTP/1.1\r\nHost: {svc.host}\r\n"
+                f"Origin: http://{svc.host}\r\nContent-Length: 1000\r\n\r\nabc"
+            ).encode()
+        )
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        client.close()  # a reset, not a close
+        deadline = time.monotonic() + 5
+        while "connection lost" not in caplog.text and "short" not in caplog.text:
+            assert time.monotonic() < deadline, caplog.text
+            time.sleep(0.02)
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR], caplog.text
+    assert svc.call("GET", "/api/runs/none").status == 404  # the service goes on
+
+
+def test_a_top_level_navigation_is_served_even_when_cross_site(svc):
+    navigate = {"Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+    for site in ("cross-site", "same-site"):
+        got = svc.call("GET", "/", headers={"Sec-Fetch-Site": site, **navigate})
+        assert got.status == 200, site
+        assert got.headers["X-Frame-Options"] == "DENY"
+    # every other cross-site request stays refused
+    _library(svc)
+    (_library(svc) / "a.html").write_text("<p>a</p>", encoding="utf-8")
+    cross = {"Sec-Fetch-Site": "cross-site"}
+    refused = [
+        {**cross, "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "iframe"},  # framing
+        {**cross, "Sec-Fetch-Mode": "navigate"},
+        {**cross, "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "document"},
+        {**cross, "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "script"},
+        {**cross, "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document", "Origin": "http://e"},
+    ]
+    for headers in refused:
+        assert svc.call("GET", "/", headers=headers).status == 403, headers
+        assert svc.call("GET", "/library/a.html", headers=headers).status in (403,), headers
+    post = svc.call("POST", "/api/submissions", headers={**cross, **navigate})
+    assert post.status == 403 and not list(layout(svc.root).uploads.iterdir())
+
+
+def test_on_port_80_host_and_origin_may_leave_the_port_out(svc):
+    server = cast(service._Server, svc.server)
+    server.allowed_hosts, server.advertised_port = service._hosts("127.0.0.1", 80), 80
+    assert svc.call("GET", "/", headers={"Host": "127.0.0.1"}).status == 200
+    assert svc.call("GET", "/", headers={"Host": "localhost"}).status == 200
+    assert svc.call("GET", "/", headers={"Host": "127.0.0.1:80"}).status == 200
+    bare = svc.call(
+        "POST", "/api/submissions", headers={"Host": "127.0.0.1"}, origin="http://127.0.0.1"
+    )
+    assert bare.status == 200
+    with_port = svc.call(
+        "POST", "/api/submissions", headers={"Host": "127.0.0.1:80"}, origin="http://127.0.0.1"
+    )
+    assert with_port.status == 200
+    for host in ("evil.example", "127.0.0.1:81"):
+        assert svc.call("GET", "/", headers={"Host": host}).status == 403
+    foreign = svc.call(
+        "POST", "/api/submissions", headers={"Host": "127.0.0.1"}, origin="http://evil"
+    )
+    assert foreign.status == 403
+
+
+def test_off_port_80_a_host_without_a_port_is_still_refused(svc):
+    assert svc.call("GET", "/", headers={"Host": "127.0.0.1"}).status == 403
 
 
 def test_a_wildcard_address_is_refused_at_start_up(root, capsys):

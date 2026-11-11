@@ -1207,7 +1207,9 @@ def test_launch_refuses_a_record_with_no_submission_or_no_digest(root, monkeypat
         ):
             (lay.drops / run_id).mkdir()
             (lay.drops / run_id / "context.json").write_text("{}", encoding="utf-8")
-            record = Record(run_id, "credit_snapshot", "acme", "queued", "t", prepared=True, **extra)
+            record = Record(
+                run_id, "credit_snapshot", "acme", "queued", "t", prepared=True, **extra
+            )
             scheduler_module.runs.save(lay, record)
             assert w._launch(record) is False
     finally:
@@ -1228,8 +1230,14 @@ def test_a_queued_run_with_no_context_json_in_its_folder_fails_and_starts_nothin
     scheduler_module.runs.save(
         lay,
         Record(
-            run_id, "credit_snapshot", "acme", "queued", "t", prepared=True,
-            submission="s" * 32, digest="d",
+            run_id,
+            "credit_snapshot",
+            "acme",
+            "queued",
+            "t",
+            prepared=True,
+            submission="s" * 32,
+            digest="d",
         ),
     )
     w = Scheduler(settings(root))

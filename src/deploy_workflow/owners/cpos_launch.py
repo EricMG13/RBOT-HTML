@@ -382,8 +382,12 @@ class Reading:
     ignored: tuple[str, ...]  # Names the launcher skips without reading.
 
 
-def _documents(guesses: dict[str, Any]) -> tuple[dict[str, Any], ...]:
-    return tuple(
+def _documents(
+    covers: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+    """Each source's guess, and the same guesses as ``Prepared.documents`` rows."""
+    guesses = {key: guess_kind(name, pages) for key, (name, pages) in covers.items()}
+    rows = tuple(
         {
             "source": key,
             "kind": g.kind,
@@ -393,6 +397,7 @@ def _documents(guesses: dict[str, Any]) -> tuple[dict[str, Any], ...]:
         }
         for key, g in guesses.items()
     )
+    return guesses, rows
 
 
 def read_documents(folder: Path) -> Reading:
@@ -400,10 +405,7 @@ def read_documents(folder: Path) -> Reading:
     nothing; refuses a folder or file the launcher would refuse, with the launcher's own text."""
     source = Path(folder).expanduser().resolve()
     _, _, ignored, covers = _issuer_files(source, source.parent / ".no-context", source.parent)
-    return Reading(
-        _documents({key: guess_kind(name, pages) for key, (name, pages) in covers.items()}),
-        ignored,
-    )
+    return Reading(_documents(covers)[1], ignored)
 
 
 # Fixed so any run's charts can be read without issuer-specific row selectors.
@@ -1750,11 +1752,10 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         if wanted and module in texts:
             head, mark, method = texts[module].partition(METHOD_MARK.encode())
             texts[module] = head + block.encode() + mark + method
-    guesses = {key: guess_kind(name, pages) for key, (name, pages) in covers.items()}
+    guesses, documents = _documents(covers)
     items = expectations(
         ordered, tuple(guesses.values()), settings, edges_for(ordered), omitted=omitted
     )
-    documents = _documents(guesses)
     request = HandoffPlan(
         run=run,
         sources={

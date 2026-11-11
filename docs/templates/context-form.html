@@ -1545,7 +1545,9 @@ function applyTags(o) {
 
 /* ======================================================================= Readiness panel and review */
 let openMods = new Set();
-const badgeFor = (status, text) => `<span class="badge ${status}"><i></i>${esc(text || WORD[status])}</span>`;
+// The status reaches a class attribute: only the page's own outcomes are used; anything else is the worst.
+const known = status => OUTCOMES.includes(status) ? status : 'will_refuse';
+const badgeFor = (status, text) => `<span class="badge ${known(status)}"><i></i>${esc(text || WORD[known(status)])}</span>`;
 function readyList(R) {
   const item = it => `<li>${esc(it.reason)}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(it.fix)}</span>` : ''}</li>`;
   return R.mods.map(m => {
@@ -1567,7 +1569,9 @@ function renderPanel(o, R) {
   setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(x.reason)}</li>`).join('')}</ul></div>` : '');
   setHTML($('pn-mods'), readyList(R));
   const bad = R.mods.filter(m => m.status === 'will_refuse').length, gaps = R.mods.filter(m => ['gap', 'limited'].includes(m.status)).length;
-  const checks = R.mods.filter(m => m.status === 'check').length + (R.run.some(x => x.outcome === 'check') ? 1 : 0);
+  // Only checks with a fix the analyst can act on: "confirmed when the summary is made" is not counted.
+  const acts = x => x.outcome === 'check' && x.counted;
+  const checks = R.mods.filter(m => m.items.some(acts)).length + (R.run.some(acts) ? 1 : 0);
   setHTML($('pn-sum'), bad ? badgeFor('will_refuse', bad + ' will refuse') : gaps ? badgeFor('limited', gaps + ' limited or gap') : checks ? badgeFor('check', checks + ' to check') : badgeFor('ready', 'Ready'));
 }
 // Answers in reader terms: an option's label, Yes/No for a flag, the key as words (screens pass).
@@ -1702,7 +1706,8 @@ function itemRow(item, sq) {
     const hidden = !sq.includes(stage);
     li.append(' ', button(hidden ? 'Answer this now' : 'Go to ' + SHORT[stage], hidden ? {goto: stage, now: stage} : {goto: stage}));
   }
-  if (NEEDS_TICK.includes(item.outcome)) li.append(h('label', {className: 'rv-tick'}, h('input', {type: 'checkbox'}), h('span', {textContent: 'I accept this limit.'})));
+  if (!OUTCOMES.includes(item.outcome)) li.append(' ', h('span', {className: 'muted', textContent: 'Unrecognised outcome: ' + String(item.outcome)}));
+  if (NEEDS_TICK.includes(known(item.outcome))) li.append(h('label', {className: 'rv-tick'}, h('input', {type: 'checkbox'}), h('span', {textContent: 'I accept this limit.'})));
   const tick = li.querySelector('input');
   if (tick) tick.dataset.tick = item.id;
   return li;
@@ -1711,7 +1716,7 @@ function readyTable(sq) {
   const scopes = [...new Set(SUMMARY.items.map(i => i.scope))], order = [...(scopes.includes('run') ? ['run'] : []), ...SUMMARY.modules, ...scopes.filter(x => x !== 'run' && !SUMMARY.modules.includes(x))];
   const body = h('tbody');
   order.forEach(id => {
-    const items = SUMMARY.items.filter(i => i.scope === id), outcome = worst(items.map(i => i.outcome));
+    const items = SUMMARY.items.filter(i => i.scope === id), outcome = worst(items.map(i => known(i.outcome)));
     const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}), h('span', {className: 'code', textContent: id}));
     const state = h('td'); state.innerHTML = badgeFor(outcome);
     const why = h('td', {}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));

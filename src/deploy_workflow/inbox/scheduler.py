@@ -143,9 +143,7 @@ class Scheduler:
                     self._fail(record, _OLD_WATCHER)
 
     def _fail(self, record: Record, reason: str) -> None:
-        self._put(
-            replace(record, status="failed", reason=reason, ended_at=self._utc(self.now()))
-        )
+        self._put(replace(record, status="failed", reason=reason, ended_at=self._utc(self.now())))
 
     def _track_untracked(self) -> None:
         """A running record with no PID and no child of this scheduler was cut short between the

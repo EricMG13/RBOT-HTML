@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import os
+import shutil
 import tempfile
 import threading
 import time
@@ -804,6 +805,48 @@ def test_a_file_that_vanishes_while_the_summary_reads_it_is_the_changed_error(
     got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
     assert got == {"error": submissions._CHANGED}
     assert submissions.issued(layout, sid) == ""
+
+
+def test_a_summary_racing_the_removal_of_its_folder_is_refused_not_an_oserror(
+    layout, tmp_path, monkeypatch
+):
+    """Ported from probe r2_issued_release_race.py (it imports the removed drops module)."""
+    sid, _ = upload_issuer(layout, tmp_path)
+    real_folder = submissions._folder
+    real_summarise = submissions._summarise
+    armed = []
+
+    def summarise(*args, **kwargs):
+        got = real_summarise(*args, **kwargs)
+        armed.append(True)
+        return got
+
+    def folder(lay, name):
+        got = real_folder(lay, name)
+        if armed:  # the scheduler's move and release land between the check and the lock
+            shutil.rmtree(got)
+        return got
+
+    monkeypatch.setattr(submissions, "_summarise", summarise)
+    monkeypatch.setattr(submissions, "_folder", folder)
+    with pytest.raises(Refused, match="unknown submission"):
+        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+
+
+def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change(
+    layout, tmp_path, caplog
+):
+    """Ported from probe r2_summary_permission.py (it imports the removed drops module)."""
+    sid, _ = upload_issuer(layout, tmp_path)
+    victim = next(p for p in files_folder(layout, sid).rglob("*") if p.is_file())
+    victim.chmod(0)
+    try:
+        with caplog.at_level(logging.WARNING, logger=submissions.__name__):
+            got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    finally:
+        victim.chmod(0o600)
+    assert got == {"error": submissions._CHANGED}
+    assert "PermissionError" in caplog.text or "Permission denied" in caplog.text
 
 
 def test_a_failed_temporary_unlink_releases_the_reservation_and_refuses(

@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from deploy_vii.registry import plan
-from deploy_workflow.context import Cp3Mode
 from deploy_vii.report_view import ReportView
+from deploy_workflow.context import Cp3Mode
 from deploy_workflow.handoff_delivery import (
     HEADINGS,
     DeliveryRequest,

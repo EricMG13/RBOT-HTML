@@ -462,6 +462,8 @@ def _record_issued(layout: Layout, sid: str, value: str) -> None:
     """Replace the submission's issued digest with ``value`` (none when empty), under the lock."""
     folder = _folder(layout, sid)
     with _LOCK:
+        if not folder.is_dir():  # the scheduler's release removed it after the check above
+            raise Refused("unknown submission")
         path = folder / _ISSUED
         if not value:
             path.unlink(missing_ok=True)
@@ -512,7 +514,8 @@ def _summarise(
             try:
                 try:
                     before = _digest(files, answers)
-                except OSError:
+                except OSError as error:
+                    log.warning("summary %s: the files could not be read: %s", sid, error)
                     return {"error": _CHANGED}
                 run = load_context(context_bytes(answers))
                 if len(run.identity.issuer_id) > MAX_ISSUER_ID:
@@ -534,7 +537,8 @@ def _summarise(
                         modules=answers["modules"] or None,
                     )
                     after = _digest(files, answers)
-                except OSError:  # a file went away while it was being read: the folder changed
+                except OSError as error:  # a file went away while it was being read: it changed
+                    log.warning("summary %s: the files could not be read: %s", sid, error)
                     return {"error": _CHANGED}
             except ValueError as refusal:  # Refused, ContextRefused and LaunchRefused included
                 return {"error": _without_path(str(refusal), files)}

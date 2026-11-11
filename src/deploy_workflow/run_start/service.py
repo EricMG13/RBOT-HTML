@@ -5,12 +5,16 @@ reachable from other machines, so every request is hostile input. Plain ``http.s
 framework. Every request is checked before any body byte is read:
 
 * ``Host`` must be exactly ``<host>:<port>`` as started (and ``localhost:<port>`` when the host is
-  ``127.0.0.1``); otherwise 403.
+  ``127.0.0.1``); otherwise 403. On port 80 the port may be left out of ``Host`` and ``Origin``.
 * A request target must be a path (it starts with ``/``): an absolute URI is 400.
 * Every request other than GET must carry ``Origin: http://<Host>``; otherwise 403 and no change.
   A GET that carries ``Origin`` must carry the same value. Any request whose ``Sec-Fetch-Site`` is
   present and is not ``same-origin`` or ``none`` is 403: a page on another site cannot read the
-  library through an analyst's browser. A request with neither header (not a browser) is served.
+  library through an analyst's browser. The one exception is a top-level navigation: a GET with
+  ``Sec-Fetch-Mode: navigate`` and ``Sec-Fetch-Dest: document`` is served whatever its
+  ``Sec-Fetch-Site`` (colleagues open the page from a link in web chat or webmail; the linking
+  site cannot read a navigated document, and framing is refused by ``frame-ancestors``). A request
+  with neither header (not a browser) is served.
 * Every response carries ``Cross-Origin-Resource-Policy: same-origin`` and ``nosniff``.
 * At most ``MAX_CONNECTIONS`` connections are open; one beyond that is closed at once.
 * A body needs ``Content-Length`` (else 411). JSON bodies are at most 1 MiB (else 413) and must be
@@ -62,16 +66,21 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
 
 ``main`` runs this server in a daemon thread and the scheduler's ``step`` every poll in the main
 thread; ``step`` also sweeps stale uploads. ``--host`` must be this machine's own address: a
-wildcard address (``0.0.0.0``, ``::``) can never equal a ``Host`` header and is refused.
+wildcard address (``0.0.0.0``, ``::``, or any spelling that resolves to one) can never equal a
+``Host`` header and is refused.
 """
 
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import logging
 import mimetypes
+import os
 import re
+import socket
+import stat
 import sys
 import threading
 import time
@@ -137,6 +146,7 @@ class _Server(ThreadingHTTPServer):
     daemon_threads = True
     scheduler: Scheduler
     allowed_hosts: frozenset[str]
+    advertised_port: int = 0
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.active_connections = 0
@@ -150,12 +160,22 @@ class _Server(ThreadingHTTPServer):
             self.active_connections += 1
         return True
 
+    def _release(self) -> None:
+        with self._count:
+            self.active_connections -= 1
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._release()  # the handler thread never ran (the OS refused it), so it cannot
+            raise
+
     def process_request_thread(self, request: Any, client_address: Any) -> None:
         try:
             super().process_request_thread(request, client_address)
         finally:
-            with self._count:
-                self.active_connections -= 1
+            self._release()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -196,6 +216,10 @@ class Handler(BaseHTTPRequestHandler):
             raise _refuse(404, "not found")
         except _Reply as reply:
             self._send(reply)
+        except (ConnectionError, TimeoutError) as error:
+            # A client that reset or stalled mid-body is not a service failure: one info line.
+            log.info("%s %s: connection lost (%s)", self.command, self.path, error)
+            self.close_connection = True
         except Exception:
             # The only catch-all, documented: whatever a handler raises becomes a 500 with fixed
             # text. The traceback goes to the log; neither it, the exception text nor any
@@ -209,11 +233,30 @@ class Handler(BaseHTTPRequestHandler):
         if len(hosts) != 1 or hosts[0] not in self._service.allowed_hosts:
             raise _refuse(403, "this address is not the one the service was started on")
         site = self.headers.get_all("Sec-Fetch-Site")
-        if site is not None and site not in (["same-origin"], ["none"]):
+        if site is not None and site not in (["same-origin"], ["none"]) and not self._navigation():
             raise _refuse(403, "the request came from another site")
         origins = self.headers.get_all("Origin") or []
-        if (self.command != "GET" or origins) and origins != [f"http://{hosts[0]}"]:
+        acceptable = [f"http://{hosts[0]}"]
+        if self._service.advertised_port == 80 and hosts[0].endswith(":80"):
+            acceptable.append(f"http://{hosts[0][:-3]}")  # browsers leave the default port out
+        if (self.command != "GET" or origins) and not (
+            len(origins) == 1 and origins[0] in acceptable
+        ):
             raise _refuse(403, "the request did not come from the service's own page")
+
+    def _navigation(self) -> bool:
+        """A top-level navigation to a document: only a GET with both fetch-metadata values."""
+        return (
+            self.command == "GET"
+            and self.headers.get_all("Sec-Fetch-Mode") == ["navigate"]
+            and self.headers.get_all("Sec-Fetch-Dest") == ["document"]
+        )
+
+    def end_headers(self) -> None:
+        # Here, not in _send, so the replies http.server writes itself (501, 400, 414) carry them.
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        super().end_headers()
 
     def _send(self, reply: _Reply) -> None:
         if isinstance(reply.body, bytes):
@@ -224,8 +267,6 @@ class Handler(BaseHTTPRequestHandler):
             headers = {"Content-Type": _JSON, "Cache-Control": "no-store", **reply.headers}
         try:
             self.send_response(reply.status)
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
             self.send_header("Content-Length", str(len(data)))
             for name, value in headers.items():
                 self.send_header(name, value)
@@ -374,9 +415,9 @@ class Handler(BaseHTTPRequestHandler):
             if wanted.resolve().is_dir():
                 wanted = wanted / "index.html"
             target = wanted.resolve()
-            inside = target.is_relative_to(root) and target.is_file()
-            inside = inside and (not direct or target.parent == root)
-            data = target.read_bytes() if inside else b""
+            inside = target.is_relative_to(root) and (not direct or target.parent == root)
+            data = _read_regular(target) if inside else None
+            inside = data is not None
         except (UnicodeDecodeError, ValueError, OSError):  # not UTF-8, a NUL, a loop of links
             inside = False
         if not inside:
@@ -384,7 +425,7 @@ class Handler(BaseHTTPRequestHandler):
         kind = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         raise _Reply(
             200,
-            data,
+            cast(bytes, data),
             {
                 "Content-Type": kind,
                 "Content-Security-Policy": _LIBRARY_POLICY,
@@ -393,13 +434,60 @@ class Handler(BaseHTTPRequestHandler):
         )
 
 
+def _read_regular(path: Path) -> bytes | None:
+    """The bytes of ``path`` read from one handle, or None when it is not a regular file.
+
+    The handle is opened without following a link (where the platform can) and its own ``fstat``
+    decides, so a file swapped for a link after the path was checked is not read."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
+        return None
+    except OSError as error:  # a link where O_NOFOLLOW forbids it (ELOOP), or not readable
+        log.info("library file %s not served: %s", path.name, error)
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, "rb") as handle:
+            fd = -1  # the handle owns it now
+            return handle.read()
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def _wildcard(host: str) -> bool:
+    """True when ``host`` is empty or resolves to an address that means every interface."""
+    if not host:
+        return True
+    try:
+        found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError):
+        return False  # not an address: binding it fails with its own message
+    for *_, sockaddr in found:
+        address = ipaddress.ip_address(str(sockaddr[0]).partition("%")[0])
+        mapped = getattr(address, "ipv4_mapped", None)
+        if address.is_unspecified or (mapped is not None and mapped.is_unspecified):
+            return True
+    return False
+
+
+def _hosts(host: str, port: int) -> frozenset[str]:
+    names = [host, "localhost"] if host == "127.0.0.1" else [host]
+    allowed = {f"{name}:{port}" for name in names}
+    if port == 80:
+        allowed.update(names)  # a browser leaves the default port out of Host
+    return frozenset(allowed)
+
+
 def make_server(scheduler: Scheduler, host: str, port: int) -> ThreadingHTTPServer:
     """A server bound to ``host:port`` (port 0 picks one); not yet serving."""
     server = _Server((host, port), Handler)
-    allowed = {f"{host}:{server.server_address[1]}"}
-    if host == "127.0.0.1":
-        allowed.add(f"localhost:{server.server_address[1]}")
-    server.scheduler, server.allowed_hosts = scheduler, frozenset(allowed)
+    port = server.server_address[1]
+    server.scheduler, server.allowed_hosts = scheduler, _hosts(host, port)
+    server.advertised_port = port
     return server
 
 
@@ -428,7 +516,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.max_running < 1 or args.max_per_day < 1:
         print("--max-running and --max-per-day must be at least 1", file=sys.stderr)
         return 2
-    if args.host in ("", "0.0.0.0", "::"):
+    if _wildcard(args.host):
         print(
             "--host: pass this machine's own address, not 0.0.0.0 (no Host header would match)",
             file=sys.stderr,

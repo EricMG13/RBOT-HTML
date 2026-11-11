@@ -8,6 +8,7 @@ Chromium; skipped where there is none (then none of these tests is verified)."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 import subprocess
@@ -17,12 +18,14 @@ from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from inbox_fixtures import settings
 from test_library_page_browser import chrome
 
+from deploy_workflow import run_expectations as RE
 from deploy_workflow.inbox import startup
 from deploy_workflow.inbox.scheduler import Scheduler
 from deploy_workflow.owners.cpos_launch import (
@@ -983,3 +986,108 @@ def test_upload_to_filed_report_with_the_real_launcher(
     """)
     assert "finished" in after["text"]
     assert set(after["modules"]) == {"done"}
+
+
+def test_checks_confirmed_when_the_summary_is_made_do_not_count_as_to_check(page):
+    seen = _forecast(
+        page,
+        f"""
+    await issuer('earnings_update', [file('annual.txt', {json.dumps(REPORT)}),
+      file('annual-copy.txt', {json.dumps(REPORT)})]);
+    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
+    choose('f-bridge', 'annual.txt');""",
+    )
+    # CP-1B is only "confirmed when the summary is made": nothing the analyst can act on yet.
+    assert seen["status"]["CP-1B"] == "check"
+    assert "to check" not in seen["headline"], seen["headline"]
+    assert seen["headline"] == "Ready", seen["headline"]
+
+
+def test_a_check_with_a_fix_still_counts_as_to_check(page):
+    seen = _forecast(
+        page,
+        f"""
+    pick('data-k="pathway"', 'covenant_refinancing');
+    await uploadFiles([file('credit-agreement.txt', {json.dumps(AGREEMENT)}),
+      file('annual.txt', {json.dumps(REPORT)})]);
+    choose('legal-file', 'credit-agreement.txt');
+    type('d-as_of', '2025-06-01');""",
+    )
+    # the as-of date is before the newest file: a check with a fix the analyst can act on
+    assert seen["headline"] == "1 to check", seen
+
+
+def test_an_outcome_the_page_does_not_know_renders_as_the_worst_and_never_as_markup(page):
+    seen = page.run("""
+    const hostile = '"><img id="planted" src=x onerror="window.pwned=1">';
+    SUMMARY = {key: 'k', answers: {}, error: '', digest: 'd', modules: ['CP-1'], documents: [],
+      ignored: [], omitted: [],
+      items: [{id: 'CP-1:x', scope: 'CP-1', outcome: hostile, reason: 'r', fix: ''}]};
+    const table = readyTable(['issuer']);
+    document.body.append(table);
+    const row = table.querySelector('[data-module="CP-1"]');
+    return {planted: !!document.getElementById('planted'), pwned: !!window.pwned,
+      outcome: row.dataset.outcome, badge: row.querySelector('.badge').className,
+      text: row.textContent, tick: row.querySelectorAll('[data-tick]').length,
+      known: badgeFor('check', 'x').includes('badge check'),
+      odd: badgeFor(hostile).includes('<img')};
+    """)
+    assert not seen["planted"] and not seen["pwned"] and not seen["odd"]
+    assert seen["outcome"] == "will_refuse" and seen["badge"] == "badge will_refuse"
+    assert "onerror" in seen["text"]  # shown as text
+    assert seen["tick"] == 1 and seen["known"]
+
+
+def _launcher_cp4(legal: str, run_type: str, docs: tuple[tuple[str, bool | None], ...]) -> Any:
+    ctx = SimpleNamespace(
+        attachments=SimpleNamespace(legal_documents=legal), run=SimpleNamespace(run_type=run_type)
+    )
+    guesses = tuple(RE.Guess(k, "", e, None) for k, e in docs)
+    facts = RE.Facts(("CP-4",), guesses, ctx)
+    return sorted(r.outcome for r in RE.RULES if r.scope == "CP-4" and r.condition(facts))
+
+
+_DOCS = [
+    (k, e)
+    for k in ("credit_agreement", "indenture", "offering_memorandum")
+    for e in (True, False, None)
+] + [("amendment", None), ("amendment", True), ("unrecognised", None), ("financial_report", None)]
+_SETS = [()] + [(a,) for a in _DOCS] + list(itertools.combinations(_DOCS, 2))
+_COMBOS = [
+    (legal, rt, docs)
+    for legal in ("none", "draft", "executed")
+    for rt in ("primary", "secondary", "research", "earnings")
+    for docs in _SETS
+]
+
+
+def test_the_pages_cp4_rules_match_the_launchers(page):
+    """Ported from probe task6r1_probes.py::test_r1_cp4_rules_match_launcher (same combinations)."""
+    combos = [
+        {
+            "legal": legal,
+            "rt": rt,
+            "docs": [
+                {"source": f"d{i}.txt", "kind": k, "executed": e} for i, (k, e) in enumerate(docs)
+            ],
+        }
+        for legal, rt, docs in _COMBOS
+    ]
+    out = page.run(f"""
+    const AG = AGREEMENTS;
+    return {{r: {json.dumps(combos)}.map(c => {{
+      READING = {{documents: c.docs, ignored: [], error: ''}};
+      const docs = c.docs, isAgr = d => AG.includes(d.kind);
+      const f = {{o: {{attachments: {{legal_documents: c.legal}}, run: {{run_type: c.rt}}}},
+        legal: c.legal, legalFile: '', kinds: docs.map(d => d.kind),
+        execAgr: docs.some(d => isAgr(d) && d.executed === true),
+        draftAgr: docs.some(d => isAgr(d) && d.executed === false),
+        om: docs.find(d => d.kind === 'offering_memorandum')}};
+      return RULES.filter(r => r.s === 'CP-4' && r.c(f)).map(r => r.o).sort();
+    }})}};""")
+    assert len(out["r"]) == len(_COMBOS)
+    assert sum(1 for x in out["r"] if x) > 100 and any("check" in x for x in out["r"])
+    diffs = [
+        (c, got, _launcher_cp4(*c)) for c, got in zip(_COMBOS, out["r"]) if got != _launcher_cp4(*c)
+    ]
+    assert diffs == [], diffs[:10]
