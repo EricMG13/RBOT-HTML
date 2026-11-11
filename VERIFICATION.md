@@ -4,6 +4,24 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Reader and issuer report ruling, documents only (branch `claude/reader-ruling-docs-2d2c2a`)
+
+Scope: documents only. Changed: `docs/rulings/2026-11-11-reader-and-issuer-report.md` (new),
+`AGENTS.md`, `METHODOLOGY-REVIEW.md`, `README.md` and this entry. No code, test, prompt text or app
+changed; no provider was called. Nothing enforces the ruling yet: CP-OS still sends the reader
+standard to CP-2 only, delivery still publishes `report.html`, and the library is unchanged.
+- The two following sessions must prove, against the ruling's "Handoff contract":
+  module instructions, checks and delivery: every prose module is sent the four reader passages
+  and the Basis line form, data modules the bottom line; the eight prose checks block a handoff
+  and send a targeted repair request within the existing cap, each shown failing on a crafted
+  handoff and passing on a conforming one; CP-8 compares presentation; fidelity checks unchanged.
+  Library presentation: Report history, Overview selection (CP-6 then CP-2 lead), the flat
+  Modules navigator, Evidence's four lists and the Basis/inspector behaviour, each on a
+  conforming fixture and on an existing run labelled "Earlier format" with stored handoffs
+  byte-unchanged.
+- Judgement quality is proven only by reading one real run per change against the September
+  VMO2 reference; no paid run is allowed in these sessions, so that reading stays open.
+
 ## 2026-11-11 — Run start page: the inbox watcher and folder drop removed (branch `claude/no-nothing-6d5113`)
 
 Scope: offline, macOS, with stand-in launchers (the fake launcher `tests/fixtures/fake_launcher.py`

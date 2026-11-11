@@ -14,6 +14,12 @@ delivery → runs/<run>/deliveries/<id>/report.html → Update library → libra
 
 Excel files are analytical inputs only; no deliverable is an Excel workbook.
 
+The owner's ruling of 2026-11-11 ([`docs/rulings/2026-11-11-reader-and-issuer-report.md`](docs/rulings/2026-11-11-reader-and-issuer-report.md))
+retires the delivered `report.html` as a deliverable: a report becomes one run shown natively in the
+issuer library (Report history, then Overview, Modules, Forecast and Evidence), with the HTML Model,
+charts and calculation JSON as parts of it. The code below still publishes and lists `report.html`
+until the follow-up changes land.
+
 The two steps can be run by hand (sections 1 and 2) or from the run start page (section 3), where
 an analyst uploads the issuer's documents, answers staged questions and approves a summary; Submit
 starts a paid run.
