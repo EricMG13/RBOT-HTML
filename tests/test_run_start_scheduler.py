@@ -236,7 +236,7 @@ def test_a_restart_between_record_and_rename_finishes_the_move(root, fake_env, m
     monkeypatch.setattr(scheduler_module.os, "rename", cut_short)
     with pytest.raises(OSError, match="cut short"):
         first.submit(sid, answers, d)
-    monkeypatch.undo()
+    monkeypatch.setattr(scheduler_module.os, "rename", real_rename)
     [saved] = load_all(layout(root))
     assert saved.status == "queued"
     assert not (drops / saved.id).exists()
@@ -370,7 +370,7 @@ def _cut_short_submit(root: Path, w: Scheduler, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(scheduler_module.os, "rename", cut_short)
     with pytest.raises(OSError, match="cut short"):
         w.submit(sid, answers, d)
-    monkeypatch.undo()
+    monkeypatch.setattr(scheduler_module.os, "rename", real_rename)
     return sid
 
 
