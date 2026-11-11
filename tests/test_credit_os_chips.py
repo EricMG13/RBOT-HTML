@@ -753,3 +753,77 @@ def test_a_page_number_too_long_to_be_one_is_a_gap_not_an_exception(tmp_path):
     digits = "9" * 5000  # int() refuses a decimal string this long
     (got,) = run_chips(run, inv, ("a", "-", f"K, page:{digits}"))["x/CP-1.md:4"]
     assert got["kind"] == "gap" and got["label"] == "p.999999999999… · not a page number"
+
+
+# --- H3 Basis line: the last line of a paragraph or list item ----------------------------------
+
+ANNUAL = "Annual report 2024.pdf"
+BASIS_PAGES = (
+    b'{"page": 40, "text": "forty text"}\n'
+    b'{"page": 41, "text": "Leverage was 6.1x at year end."}\n'
+    b'{"page": 42, "text": "forty two text"}\n'
+)
+
+
+def paragraph_chips(run, inv, text):
+    sections = [
+        {
+            "heading": "H",
+            "level": 3,
+            "line": 1,
+            "blocks": [{"type": "paragraph", "line": 7, "text": text}],
+        }
+    ]
+    return chips_for_output(run, "x/CP-2D.md", "CP-2D", sections, inv).get("x/CP-2D.md:7", [])
+
+
+def test_basis_line_file_and_page_gives_an_issuer_page_chip(tmp_path):
+    run, inv = one_run(tmp_path, BASIS_PAGES, ANNUAL, ANNUAL)
+    text = f"The issuer's leverage stays high.\nBasis: {ANNUAL}, page 41."
+    (got,) = paragraph_chips(run, inv, text)
+    assert (got["kind"], got["source"], got["file"]) == ("issuer_page", "K", ANNUAL)
+    assert (got["page"], got["page_end"]) == (41, None)
+    assert got["excerpt"] == "Leverage was 6.1x at year end."
+
+
+def test_basis_line_page_range_with_an_en_dash(tmp_path):
+    run, inv = one_run(tmp_path, BASIS_PAGES, ANNUAL, ANNUAL)
+    (got,) = paragraph_chips(run, inv, f"Claim.\nBasis: {ANNUAL}, pages 40–42")
+    assert (got["kind"], got["page"], got["page_end"]) == ("issuer_page", 40, 42)
+
+
+def test_basis_line_module_item_is_upstream_and_calculation_gives_no_chip(tmp_path):
+    run, inv = one_run(tmp_path, BASIS_PAGES, ANNUAL, ANNUAL)
+    (got,) = paragraph_chips(run, inv, "Claim.\nBasis: Liquidity (CP-2D); calculation K1")
+    assert (got["kind"], got["module"], got["codes"]) == ("upstream", "CP-2D", [])
+
+
+def test_basis_line_file_not_in_inventory_is_a_gap(tmp_path):
+    run, inv = one_run(tmp_path, BASIS_PAGES, ANNUAL, ANNUAL)
+    (got,) = paragraph_chips(run, inv, "Claim.\nBasis: Other file.pdf, page 3.")
+    assert got["kind"] == "gap" and "not in inventory" in got["label"]
+
+
+def test_basis_line_file_without_a_page_and_unknown_item(tmp_path):
+    run, inv = one_run(tmp_path, BASIS_PAGES, ANNUAL, ANNUAL)
+    assert paragraph_chips(run, inv, f"Claim.\nBasis: {ANNUAL}") == []
+    (got,) = paragraph_chips(run, inv, "Claim.\nBasis: something odd")
+    assert got["kind"] == "gap" and got["label"] == "Basis item not recognised"
+    assert "something odd" in got["reason"]
+
+
+def test_a_paragraph_without_a_basis_line_keeps_the_trailing_code_chip(tmp_path):
+    run, inv = one_run(tmp_path, BASIS_PAGES, ANNUAL, ANNUAL)
+    (got,) = paragraph_chips(run, inv, "Leverage stays high, see K1.")
+    assert (got["kind"], got["module"], got["codes"]) == ("upstream", "CP-2D", ["K1"])
+
+
+def test_an_indented_basis_line_under_a_list_item_resolves(tmp_path):
+    run, inv = one_run(tmp_path, BASIS_PAGES, ANNUAL, ANNUAL)
+    for text in (
+        f"- Claim.\n  Basis: {ANNUAL}, page 41.",
+        f"1. Claim.\n   Basis: {ANNUAL}, page 41.",
+        f"Claim.\nBasis: {ANNUAL}, page 41. ",
+    ):
+        (got,) = paragraph_chips(run, inv, text)
+        assert (got["kind"], got["source"], got["page"]) == ("issuer_page", "K", 41), text

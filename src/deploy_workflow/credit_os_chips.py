@@ -40,6 +40,10 @@ TRAILING = re.compile(rf"(?:\.\s+|;\s*|(?<=[A-Za-z])\s+)({CODE}(?:\s*[,;]\s*{COD
 PERIOD_HEADER = re.compile(r"\b(?:period|year|date)s?\b", re.IGNORECASE)
 SENTENCE_END = re.compile(r"[.;]\s")
 CLAIM_HEADERS = ("finding", "bottom line")
+BASIS = "Basis: "
+BASIS_FILE = re.compile(r"(?P<file>.+), pages? (?P<a>\d+)(?:\s*[-–]\s*(?P<b>\d+))?")
+BASIS_MODULE = re.compile(r".+ \((?P<module>CP-[0-9A-Z]+)\)")
+BASIS_CALCULATION = re.compile(r"calculation \S+")
 
 
 class Locator(TypedDict):
@@ -172,12 +176,54 @@ def page_locators(match: re.Match[str], key: Resolved | None) -> list[Locator]:
     return result
 
 
+def basis_locators(line: str, files: dict[str, str | None]) -> list[Locator]:
+    """The locators of one ``Basis: `` line (H3): items split on ``; `` and read by their form.
+    ``files`` maps an inventory file name to its key, or None when two keys hold different bytes."""
+    result: list[Locator] = []
+    for item in (i.strip() for i in line.removeprefix(BASIS).removesuffix(".").split("; ")):
+        if BASIS_CALCULATION.fullmatch(item):
+            continue  # the library reads calculations from ## Calculations
+        if module := BASIS_MODULE.fullmatch(item):
+            result.append(locator("upstream", module=module["module"]))
+        elif item in files:
+            continue  # a file with no page: nothing to quote
+        elif (m := BASIS_FILE.fullmatch(item)) and max(len(m["a"]), len(m["b"] or "")) <= (
+            MAX_PAGE_DIGITS
+        ):
+            first, last = int(m["a"]), int(m["b"]) if m["b"] else None
+            span = span_text(first, last)
+            if m["file"] not in files:
+                label = f"{m['file']} p.{span} · not in inventory"
+                note = "the Basis file is not in the CP-0 inventory"
+                result.append(locator("gap", page=first, page_end=last, label=label, note=note))
+            elif (key := files[m["file"]]) is None:
+                label = f"{m['file']} p.{span} · ambiguous"
+                note = "two inventory keys hold this file with different hashes"
+                result.append(locator("gap", page=first, page_end=last, label=label, note=note))
+            else:
+                result.append(locator("issuer_page", source=key, page=first, page_end=last))
+        else:
+            result.append(locator("gap", label="Basis item not recognised", note=item))
+    return result
+
+
 def scan(
-    text: str, index: KeyIndex | None = None, row_key: Resolved | None = None
+    text: str,
+    index: KeyIndex | None = None,
+    row_key: Resolved | None = None,
+    files: dict[str, str | None] | None = None,
 ) -> list[tuple[int, Locator]]:
     """Every citation in ``text`` with its position; what no pattern matches is not guessed.
-    ``row_key`` is the source key the row itself names, for a page with no key of its own."""
+    ``row_key`` is the source key the row itself names, for a page with no key of its own.
+    With ``files`` (file name -> key), a last line starting ``Basis: `` is read by its own forms
+    and the patterns see only the text before it."""
     found: list[tuple[int, Locator]] = []
+    head, _, last_line = text.rpartition("\n")
+    last_line = last_line.strip()
+    if files is not None and last_line.startswith(BASIS):
+        at = len(head) + 1
+        found = [(at, loc) for loc in basis_locators(last_line, files)]
+        text = head
     for m in BRACKET.finditer(text):
         found.append((m.start(), locator("upstream", module=m[1], codes=split_codes(m[2]))))
     last_key: Resolved | None = None
@@ -367,6 +413,11 @@ class Pages:
 
     def __init__(self, run_dir: Path, inv: dict[str, tuple[str, str]]) -> None:
         self.inv = inv
+        self.files: dict[str, str | None] = {}
+        for key, (file, sha) in inv.items():
+            kept = self.files.setdefault(file, key)
+            if kept is not None and inv[kept][1] != sha:
+                self.files[file] = None
         self.index = key_index(tuple(inv), getattr(inv, "alternates", frozenset()))
         self.folder = run_dir / "source-text"
         self.cache: dict[str, tuple[dict[int, str], str | None, str | None]] = {}
@@ -465,7 +516,7 @@ def chips_for_cells(row: Row, module: str, pages: Pages) -> list[dict[str, Any]]
     named = pages.index.lookup(first) if row.headers else None
     result = []
     for index, cell in enumerate(row.cells):
-        found = scan(cell, pages.index, named if index else None)
+        found = scan(cell, pages.index, named if index else None, pages.files)
         quotes = bound_quotes(cell, found)
         for pos, loc in found:
             if loc["kind"] == "issuer_page":
