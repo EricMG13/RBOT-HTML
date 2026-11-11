@@ -271,3 +271,5 @@ Where the decisions left a detail open, the simplest option was taken:
 12. "Earlier format" is recognised from the handoffs themselves (H7), with no new manifest field.
 13. Report history "date" is the run's as-of date; runs with the same as-of date are ordered by
     start time, newest first.
+
+Amendment 2026-11-11: a run whose methods have since changed is listed and marked "Earlier methods"; replayed, synthetic and unverified runs stay unlisted.

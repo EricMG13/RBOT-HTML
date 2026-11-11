@@ -65,13 +65,22 @@ def test_completed_run_on_the_current_method_is_listed_with_its_recorded_values(
     assert run["latest"] is True and run["latest_shared_with"] == 0
 
 
-def test_a_changed_method_section_leaves_the_run_out_and_names_it(tmp_path):
+def test_a_changed_method_section_lists_the_run_and_names_the_change(tmp_path):
     make_run(tmp_path, "run-a", version="")
     library = listed(tmp_path, version=" Amended.")
-    assert library.runs == []
-    assert reasons(library) == {
-        "run-a": "CP-0: not on the current methodology (methods/cp0.md changed)"
-    }
+    assert library.excluded == []
+    (run,) = library.runs
+    # Every module whose method changed is named, in the run's module order.
+    assert run["method_changes"] == [
+        "CP-0: methods/cp0.md changed",
+        "CP-1: prompts/CP-1.md changed",
+    ]
+
+
+def test_a_run_on_todays_methods_has_no_method_changes(tmp_path):
+    make_run(tmp_path, "run-a")
+    (run,) = listed(tmp_path).runs
+    assert run["method_changes"] == []
 
 
 def test_a_module_with_no_current_method_is_not_assumed_current(tmp_path):
@@ -217,17 +226,24 @@ def test_edited_instruction_pins_cannot_stand_in_for_the_request_sent(tmp_path):
     workflow = json.loads((run / "workflow.json").read_text())
     workflow["instructions"]["CP-0"]["sha256"] = sha(current.encode())
     (run / "workflow.json").write_text(json.dumps(workflow))
-    assert reasons(listed(tmp_path)) == {
-        "run-a": "CP-0: not on the current methodology (methods/cp0.md changed)"
-    }
+    library = listed(tmp_path)
+    assert library.excluded == []
+    assert [r["method_changes"] for r in library.runs] == [
+        ["CP-0: methods/cp0.md changed", "CP-1: prompts/CP-1.md changed"]
+    ]
 
 
 def test_a_method_section_sent_then_dropped_from_the_method_is_not_current(tmp_path):
     extra = "\n\n=== methods/cp0-old-step.md sha256 " + "1" * 64 + " ===\nAn old step."
     make_run(tmp_path, "run-a", sent_extra=extra)
-    assert reasons(listed(tmp_path)) == {
-        "run-a": "CP-0: not on the current methodology (methods/cp0-old-step.md no longer selected)"
-    }
+    library = listed(tmp_path)
+    assert library.excluded == []
+    assert [r["method_changes"] for r in library.runs] == [
+        [
+            "CP-0: methods/cp0-old-step.md no longer selected",
+            "CP-1: methods/cp0-old-step.md no longer selected",
+        ]
+    ]
 
 
 def test_a_module_only_the_manifest_names_is_not_left_unchecked(tmp_path):
@@ -430,7 +446,7 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
     # A new-format handoff has no Reader summary; the library shows older runs only (ruling H7).
     assert run["modules"][0]["summary"] is None
 
-    # The same run is left out once a method it ran on changes.
+    # The same run is still listed, and marked, once a method it ran on changes.
     sections = cpos_launch.method_sections
 
     def amended(module):
@@ -442,17 +458,20 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
 
     monkeypatch.setattr(cpos_launch, "method_sections", amended)
     library = build_library(tmp_path / "ws", tmp_path / "ws/library", current_method())
-    assert dict(library.excluded) == {
-        "fake-run": "CP-1: not on the current methodology (prompts/CP-1.md, "
-        + ", ".join(f"STEP_CONTRACTS[{s}]" for s in cpos_launch.CP1_STEPS)
-        + " changed)"
-    }
+    assert library.excluded == []
+    assert [r["method_changes"] for r in library.runs] == [
+        [
+            "CP-1: prompts/CP-1.md, "
+            + ", ".join(f"STEP_CONTRACTS[{s}]" for s in cpos_launch.CP1_STEPS)
+            + " changed"
+        ]
+    ]
 
     # And once a step it was sent is dropped from the method (a scope reduction).
     monkeypatch.setattr(cpos_launch, "method_sections", sections)
     monkeypatch.setattr(cpos_launch, "CP1_STEPS", cpos_launch.CP1_STEPS[:-1])
     library = build_library(tmp_path / "ws", tmp_path / "ws/library", current_method())
-    assert dict(library.excluded) == {
-        "fake-run": "CP-1: not on the current methodology (STEP_CONTRACTS[quality] no longer "
-        "selected)"
-    }
+    assert library.excluded == []
+    assert [r["method_changes"] for r in library.runs] == [
+        ["CP-1: STEP_CONTRACTS[quality] no longer selected"]
+    ]

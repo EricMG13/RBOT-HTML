@@ -91,8 +91,9 @@ the library presents no delivered report and has no Calendar or Reports tab, and
 written under `library/reports/`. Evidence's handoff and instruction downloads are byte-for-byte
 copies under `library/downloads/<run>/`; the run folder is never changed. It lists only runs
 CP-OS completed (the completion record, delivery manifest and delivered files still match the
-hashes they record) in which every module ran on the current methodology, and says why each other
-run folder is left out.
+hashes they record) in which every module was answered in that run, and says why each other
+run folder is left out. A run whose module methods have since changed is listed and marked
+"Earlier methods".
 
 ## 3. The run start page
 

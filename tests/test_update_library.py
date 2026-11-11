@@ -183,7 +183,7 @@ def test_the_command_reports_what_it_listed_and_why_others_are_not_shown(tmp_pat
     (tmp_path / "runs/legacy").mkdir()
     assert update_library.main(["--workspace", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert "Listed 1 run(s) on the current methodology." in out
+    assert "Listed 1 run(s)." in out
     assert "  legacy: not a CP-OS launcher run (no workflow.json)" in out
     assert str(tmp_path.resolve() / "library/index.html") in out
 
@@ -234,6 +234,21 @@ def test_data_js_carries_excluded_runs(tmp_path):
     assert [name for name, _ in activity["excluded"]] == ["run-half"]
     assert activity["excluded"][0][1]  # library_index's own reason, not empty
     assert all(isinstance(i, str) for i in activity["issues"])
+
+
+def test_data_js_carries_the_method_changes_of_each_listed_run(tmp_path, monkeypatch):
+    make_run(tmp_path, "run-a", version="")
+    make_run(tmp_path, "run-b", version=" Amended.", issuer_id="zzz", issuer_name="Zeta Synthetic")
+    monkeypatch.setattr("deploy_workflow.library_index.current_method", lambda: method(" Amended."))
+    library = update_library.update_library(tmp_path)
+    assert library.excluded == []
+    changes = {
+        r["folder"]: r["methodChanges"] for r in data_of(tmp_path)["workspace"]["runs"].values()
+    }
+    assert changes == {
+        "run-a": ["CP-0: methods/cp0.md changed", "CP-1: prompts/CP-1.md changed"],
+        "run-b": [],
+    }
 
 
 def test_data_js_carries_state_placement_and_words(tmp_path):
