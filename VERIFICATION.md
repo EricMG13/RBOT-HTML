@@ -4,6 +4,40 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Reader standard and checks in CP-OS; delivered report retired (branch `claude/reader-engine-d46913`)
+
+Scope: instructions, checks and delivery changed; proven by synthetic passages and offline tests
+only. No provider was called and no run was started. No retained model response written under the
+new standard exists yet, and the reading check of one real run against the September VMO2
+reference (decision 11) is not done.
+- Changed: CP-OS instructions (`owners/cpos_launch.py`): every prose module is told to open
+  `## Findings` with `### Bottom line`, `### Key findings`, `### Contrary evidence and what would
+  change the view`, `### Limitations`; data modules (CP-0/CP-PARSE, CP-1, CP-1C) and blocked
+  modules only `### Bottom line`; the Basis line form of H3; figures with currency or unit; no
+  labels; persona kept with "Lead with the judgement; use data to support it, not to narrate it.";
+  CANON_SHARED's reader-facing layer and reading order sent to prose modules. `### Reader summary`,
+  the per-module opening H3, the CP-2-only reader standard and its front lines are removed.
+- Checks: the eight H6 prose checks (`prose_checks.py`) run in the CP-OS handoff check on the reader
+  passages; a failure is repair feedback naming check, line and text, inside the existing retry and
+  cap. Hand-written passing and failing passages per check (`tests/test_prose_checks.py`); check 7
+  across a run shown with the fake provider. Instructions and checks were cross-checked by a
+  whole-branch review: every instructed form passes all eight checks. The old rule that every Reader-summary figure appears
+  elsewhere in the handoff was retired with the Reader summary.
+- CP-8 requires an eighth dimension, Presentation (`tests/test_cp8_comparison.py`).
+- Delivery: new deliveries write no `report.html`; completion records carry `delivery_sha256`
+  (of `delivery.json`); HTML Model, charts, calculation JSON and forecast files unchanged. Earlier
+  runs with `report.html` are still listed and accepted as CP-8 bundles (tests on both formats).
+- Passed, exit 0: the affected fast tests (`test_cpos_launch`, `test_prose_checks`,
+  `test_reader_summary`, `test_handoff_loop`, `test_library_index`, `test_cp8_comparison`,
+  `test_credit_os_catalogue`, inbox tests, `test_run_start_page`, `test_update_library`,
+  `test_credit_os_store`; `-m "not live and not browser"`) on this branch merged with the library
+  branch (`claude/library-layout-637b87` at 3294c8d) in a scratch worktree: 899 passed;
+  `tools/quality_gate.py`: 0 findings. On this branch alone, 14 of those tests fail only on
+  `apps/issuer-library/update_library.py` reading `report.html`, which the library branch removes:
+  this branch merges after it.
+- Not verified: any real model response to the new instructions; the reading check against VMO2;
+  the browser test of the library's Run activity link (library side); the full weekly suite.
+
 ## 2026-11-11 — Reader and issuer report ruling, documents only (branch `claude/reader-ruling-docs-2d2c2a`)
 
 Scope: documents only. Changed: `docs/rulings/2026-11-11-reader-and-issuer-report.md` (new),
