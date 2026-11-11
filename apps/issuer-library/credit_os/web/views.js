@@ -661,16 +661,16 @@ function eventLanes(context) {
   });
 }
 // A day is a point; a month, quarter or year is drawn across its whole span (calendar.js eventSpan), never on a day the source does not state.
-// `compact` is the lanes alone, without the intro and the event table; `at` selects their placement. Scenario events have an outline.
+// `compact` is the lanes alone, without the intro and the event table. Scenario events have an outline.
 // Where each kind of chart table is drawn besides its module page. The views that draw them and the chart index both read this table.
 // Overview charts and maps are the visuals catalogue's own placement (docs/visualisations/catalogue.csv, window.DESIGN_WORKSPACE.visuals) for a module that is not blocked.
 const onOverview=out=>{const code=aliases[out.module]??out.module;return window.DESIGN_WORKSPACE.visuals.some(visual=>visual.module===code&&/\bOverview\b/.test(visual.placement))&&!blocked(out.sections,out.state);};
 // A lane is not drawn on the Overview: its dated rows feed the Overview's nearest dates (overviewDates), which is what 'Overview' means for a lane.
-const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['map','Evidence',out=>out.module==='CP-5'],['lane','Overview',()=>true],['lane','Evidence',out=>out.module==='CP-0']];
+const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['lane','Overview',()=>true]];
 const placed=(kind,where,out,name)=>PLACEMENT.some(([k,w,test])=>k===kind&&w===where&&test(out,name));
-function eventLanesView(context,{compact=false,at=null,only=null,tag='h2',title='Event lanes'}={}) {
+function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event lanes'}={}) {
   // `only` is one output's own lanes, whichever saved output it is; otherwise the run's lanes (each module's default output).
-  const lanes=(only?(data[only]?.events||[]).map(lane=>({...lane,id:only})):eventLanes(context)).filter(lane=>(!at||placed('lane',at,data[lane.id]))).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
+  const lanes=(only?(data[only]?.events||[]).map(lane=>({...lane,id:only})):eventLanes(context)).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
   if(!lanes.length)return '';
   const scenario=row=>/^Scenario — /.test(row.cells[4]);
   const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
@@ -707,9 +707,8 @@ function mapLayers(edges,nodes=[]) {
   return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
 }
 const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:46,gx:120,gy:22,pad:12};
-// `marks` (name to {shape,word}) puts a module's state in its box by word and shape; `alone` adds names that have no edge.
-function mapDiagram(id,map,rows,marks=null,alone=[]) {
-  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges,alone),{w,h,gx,gy,pad}=BOX;
+function mapDiagram(id,map,rows) {
+  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gx,gy,pad}=BOX;
   const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
   for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
   const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
@@ -720,17 +719,12 @@ function mapDiagram(id,map,rows,marks=null,alone=[]) {
     const low=Math.max(a.y,b.y)+h+34,x1=a.x+w/2+(from===to?-30:0),x2=b.x+w/2+(from===to?30:0);
     return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,x:(x1+x2)/2,y:low-8};
   };
-  const lines=name=>marks?.has(name)?[name.length>18?name.slice(0,17)+'…':name,marks.get(name).word]:[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
-  const glyph=(name,p)=>{
-    const mark=marks?.get(name),cx=p.x+w-14,cy=p.y+14,cls=`class="map-state shape-${mark?.shape}"`;
-    if(!mark)return '';
-    return mark.shape==='open'?`<rect ${cls} x="${cx-5}" y="${cy-5}" width="10" height="10"/>`:mark.shape==='unsummarised'?`<rect ${cls} x="${cx-4}" y="${cy-4}" width="8" height="8" transform="rotate(45 ${cx} ${cy})"/>`:`<circle ${cls} cx="${cx}" cy="${cy}" r="5"/>`;
-  };
+  const lines=name=>[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
   const drawn=edges.map((edge,at)=>{
     const p=path(edge,cut[at]),dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length];
     return `<path class="map-edge${cut[at]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${p.x}" y="${p.y}" text-anchor="middle">${esc(edge.type)}</text>`;
   }).join('');
-  const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text>${glyph(name,p)}</g>`;}).join('');
+  const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
   const label=`${map.name}: ${names.length} nodes, ${edges.length} edges. The edge table follows.`;
   const marker=`<defs><marker id="map-arrow-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
   const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
@@ -746,7 +740,7 @@ function mapsView(id,tag='h2',keep=()=>true) {
     return `<div class="map-card">${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
   }).join('');
 }
-// Maps placed on the Overview or Evidence page; the module page uses reportMaps.
+// Maps on a module page.
 const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4')}</section>`:'';
 // ---- Chart index (CP-MODEL-V02): one row per `Chart data:`, `Map:` or `Events:` table the run's handoffs hold, in the state the build gave it. It lists and links; nothing is drawn or recomputed here.
 const CHART_HEADING=/^(Chart data|Map|Events): /;
@@ -1290,8 +1284,12 @@ const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="
 const evidenceTable=(caption,heads,rows)=>`<table class="history-table"><caption>${caption}</caption><thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 function evidenceSources(ev) {
   const used=ev.sources.length?evidenceTable('Supplied files that a handoff’s Sources section names',['Name','Type','Document date','Read by'],ev.sources.map(f=>[esc(f.name),esc(shownOrNot(f.type)),esc(shownOrNot(f.documentDate)),readers(f.readBy)])):'<p class="empty">No handoff’s Sources section names a supplied file.</p>';
-  const unused=ev.unused.length?`<ul class="report-list">${ev.unused.map(f=>`<li class="report-row"><span>${esc(f.name)}</span><span class="muted">${esc(shownOrNot(f.type))} · document date ${esc(shownOrNot(f.documentDate))}</span></li>`).join('')}</ul>`:'<p class="empty">Every supplied file is named in a handoff’s Sources section.</p>';
-  return `<section class="run-section" id="evidence-sources"><h2>Source files used</h2><p class="intro">Listed only: source files are not included here and page references point to the originals.</p>${used}<h3>Supplied, not used</h3>${unused}</section>`;
+  const fileList=files=>`<ul class="report-list">${files.map(f=>`<li class="report-row"><span>${esc(f.name)}</span><span class="muted">${esc(shownOrNot(f.type))} · document date ${esc(shownOrNot(f.documentDate))}</span></li>`).join('')}</ul>`;
+  const unused=ev.unused.length?fileList(ev.unused):'<p class="empty">Every supplied file is named in a handoff’s Sources section.</p>';
+  const lacking=ev.noSourcesModules&&ev.noSourcesModules.length&&!ev.unrecorded.length?`<p class="intro">No Sources section in the handoff of ${readers(ev.noSourcesModules)}, so a file those modules read may be listed here.</p>`:'';
+  const unrecorded=ev.unrecorded&&ev.unrecorded.length?`<h3>Use not recorded</h3><p class="intro">None of this run’s handoffs has a Sources section, so the run does not record which supplied files were read.</p>${fileList(ev.unrecorded)}`:'';
+  const notUsed=ev.unrecorded&&ev.unrecorded.length&&!ev.unused.length?'':`<h3>Supplied, not used</h3>${lacking}${unused}`;
+  return `<section class="run-section" id="evidence-sources"><h2>Source files used</h2><p class="intro">Listed only: source files are not included here and page references point to the originals.</p>${used}${notUsed}${unrecorded}</section>`;
 }
 function evidenceHandoffs(ev) {
   const rows=ev.handoffs.map(h=>[`${esc(moduleTitle(h.module))} <span class="module-code">${esc(h.module)}</span>`,downloadLink(h.name,h.href,`${moduleTitle(h.module)} handoff`)]);

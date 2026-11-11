@@ -35,7 +35,7 @@ if str(HERE) not in sys.path:
 
 from credit_os.store import regular_chunks, workspace_store
 
-from deploy_vii.registry import dependencies, edge_rule, plan
+from deploy_vii.registry import plan
 from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.credit_os_chips import chips
 from deploy_workflow.library_index import (
@@ -99,18 +99,13 @@ def run_events(
 
 
 def run_record(run_dir: Path, folder: str, issues: list[str]) -> dict[str, Any] | None:
-    """The method's dependency edges for the run's requested modules (deploy_vii.registry, with
-    each edge's degradation rule) and the modules in recorded order with the times its event log
-    states. Nothing is written, and no time is made up: a module with no event has none."""
+    """The run's requested modules in recorded order (deploy_vii.registry plan order for those
+    never started) with the times its event log states. Nothing is written, and no time is made
+    up: a module with no event has none."""
     try:
         raw = json.loads(b"".join(regular_chunks(run_dir / "workflow.json", follow=False)))
         requested = tuple(raw["run"]["requested_modules"])
-        order, deps = plan(requested), dependencies(requested)
-        edges = [
-            [producer, consumer, edge_rule(consumer, producer)]
-            for consumer in order
-            for producer in sorted(deps[consumer])
-        ]
+        order = plan(requested)
     except FileNotFoundError:
         return None
     except (OSError, ValueError, KeyError, TypeError, RecursionError) as error:
@@ -128,7 +123,7 @@ def run_record(run_dir: Path, folder: str, issues: list[str]) -> dict[str, Any] 
     started = [m for m, t in seen.items() if t["started"]]
     steps = [{"module": m, **seen[m]} for m in started]
     steps += [{"module": m, "started": None, "accepted": None} for m in order if m not in started]
-    record = {"edges": edges, "steps": steps, "timed": bool(started)}
+    record = {"steps": steps, "timed": bool(started)}
     if events_issue:
         record["eventsIssue"] = events_issue
     return record

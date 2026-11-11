@@ -121,6 +121,7 @@ const evidenceView = contexts => {
 };
 const EVIDENCE = {
   sources: [{ name: 'A <report>.pdf', sha256: 'a'.repeat(64), type: 'pdf', documentDate: null, readBy: ['CP-0', 'CP-1'] }],
+  unrecorded: [], noSourcesModules: [],
   unused: [{ name: 'C_unread.htm.jsonl', sha256: 'c'.repeat(64), type: 'htm.jsonl', documentDate: null, readBy: [] }],
   handoffs: [{ module: 'CP-0', name: 'CP-0.md', href: '../runs/r/CP-0.md?sha256=1' }, { module: 'CP-1', name: 'CP-1.md', href: '../runs/r/CP-1.md?sha256=2' }],
   zip: 'downloads/r/handoffs.zip',
@@ -139,6 +140,16 @@ test('Evidence: four lists in order; sources are listed only, with Not recorded 
   assert.ok(!html.includes('A &lt;report&gt;.pdf</a>') && !/<a [^>]*>[^<]*(report|unread)/.test(html), 'no link for a source file');
 });
 
+test('Evidence: files whose use no handoff records are "Use not recorded", not "Supplied, not used"', () => {
+  const ev = { ...EVIDENCE, sources: [], unused: [], unrecorded: [{ name: 'D_file.pdf', sha256: 'd'.repeat(64), type: 'pdf', documentDate: null, readBy: [] }], noSourcesModules: ['CP-0', 'CP-1'] };
+  const html = evidenceView({ r: { evidence: ev } })('r');
+  assert.ok(html.includes('<h3>Use not recorded</h3>') && html.includes('has a Sources section') && html.includes('D_file.pdf'));
+  assert.ok(!html.includes('Supplied, not used'));
+  const some = { ...EVIDENCE, noSourcesModules: ['CP-1'] };
+  const part = evidenceView({ r: { evidence: some } })('r');
+  assert.ok(part.includes('Supplied, not used') && part.includes('No Sources section in the handoff of Financial foundation') && !part.includes('Use not recorded'));
+});
+
 test('Evidence: handoffs and calculations are download links; Download all is the zip; the record is closed', () => {
   const html = evidenceView({ r: { evidence: EVIDENCE } })('r');
   assert.equal(countOf(html, /<a class="text-action" href="[^"]*"\s+download/g), 5, 'two handoffs, Download all, one Model, one instruction');
@@ -150,7 +161,7 @@ test('Evidence: handoffs and calculations are download links; Download all is th
 });
 
 test('Evidence: nothing recorded says so and invents nothing', () => {
-  const none = { sources: [], unused: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } };
+  const none = { sources: [], unused: [], unrecorded: [], noSourcesModules: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } };
   const html = evidenceView({ r: { evidence: none } })('r');
   for (const want of ['No handoff’s Sources section names a supplied file', 'This run holds no handoff', 'No calculation or Model file was published', 'The run records no hash', 'Provider cap: USD Not recorded']) assert.ok(html.includes(want), want);
   assert.ok(!html.includes('Download all') && !html.includes('<table'));
@@ -2041,10 +2052,9 @@ test('calendar lanes: every event is a keyboard-reachable link naming its lane, 
   assert.deepEqual(rows[2].slice(0, 4), ['Financing', '2025-Q3', 'quarter', '—']);
 });
 
-test('calendar lanes: no Calendar page remains; lanes are drawn on the Overview and Evidence pages', () => {
+test('calendar lanes: no Calendar page remains; lanes are not drawn on the Overview; the Evidence page is the four lists', () => {
   const page = runPage(withLanes);
   assert.ok(!('calendarSections' in page));
-  assert.ok(!page.eventLanesView(RUN, { at: 'Calendar' }));
   assert.ok(!read('views.js').includes("eventLanesView(context,{at:'Overview'"), 'the Overview draws no lane: its dated rows feed the nearest dates');
 });
 
@@ -2067,7 +2077,7 @@ test('calendar lanes: a Scenario event is drawn with a dashed outline, not by co
 
 test('calendar lanes: a module filter draws only that module lane, and the Sources page draws the Sources lane', () => {
   const sources = d => { d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [laneRow(403, '2025-02-14', 'day', '—', 'Filing published', 'Historical — filed')])])], events: [{ lane: 'Sources', table: 402, gap: null }] }); return withLanes(d); };
-  const page = runPage(sources), only = page.eventLanesView(RUN, { at: 'Evidence', compact: true });
+  const page = runPage(sources), only = page.eventLanesView(RUN, { only: outId('CP-0'), compact: true });
   assert.equal(countOf(only, /<div class="lane-row">/g), 1);
   assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
   const text = read('views.js');

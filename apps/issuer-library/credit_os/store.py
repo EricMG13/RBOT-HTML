@@ -3262,6 +3262,11 @@ def sources_section_text(sections: list[dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
+def has_sources_section(sections: list[dict[str, Any]]) -> bool:
+    """Whether the handoff has a `## Sources` heading at all (even an empty one)."""
+    return any(s["level"] == 2 and s["heading"].strip() == "Sources" for s in sections)
+
+
 def run_calls(run_dir: Path, folder: str, issues: list[str]) -> list[dict[str, Any]]:
     """live/calls.jsonl as recorded: one row per call with the fields as stored."""
     try:
@@ -3382,6 +3387,7 @@ def run_evidence(
     workflow = workflow if isinstance(workflow, dict) else {}
     handoffs = []
     read_by: dict[str, list[str]] = {}
+    no_sources: list[str] = []
     supplied = workflow.get("sources")
     supplied = supplied if isinstance(supplied, dict) else {}
     names = [name for name in supplied if name != "context"]
@@ -3390,7 +3396,10 @@ def run_evidence(
         if output is None:
             continue
         handoffs.append({"module": module, "name": f"{module}.md", "href": output["href"]})
-        text = sources_section_text(held.sections[output["sha256"]])
+        parsed = held.sections[output["sha256"]]
+        if not has_sources_section(parsed):
+            no_sources.append(module)
+        text = sources_section_text(parsed)
         for name in names:
             if name in text:
                 read_by.setdefault(name, []).append(module)
@@ -3407,9 +3416,15 @@ def run_evidence(
         for name in names
     ]
     cap = workflow.get("provider_cap_usd")
+    # No delivered handoff has a Sources section: the run recorded nothing about use, so an
+    # unnamed file is "use not recorded", not "not used" (missing is not zero).
+    nothing_recorded = len(no_sources) == len(handoffs)
+    unnamed = [row for row in rows if not row["readBy"]]
     return {
         "sources": [row for row in rows if row["readBy"]],
-        "unused": [row for row in rows if not row["readBy"]],
+        "unused": [] if nothing_recorded else unnamed,
+        "unrecorded": unnamed if nothing_recorded else [],
+        "noSourcesModules": no_sources,
         "handoffs": handoffs,
         "zip": f"downloads/{quote(folder)}/handoffs.zip" if handoffs else None,
         "downloads": run_downloads(run, key, held.models),

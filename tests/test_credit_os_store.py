@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import library_fixtures
 from library_fixtures import make_run, without_report
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1089,6 +1090,36 @@ def test_evidence_a_name_outside_the_sources_section_is_not_a_read(tmp_path):
     )
     assert evidence["sources"] == []
     assert [s["name"] for s in evidence["unused"]] == ["A_report.pdf"]
+
+
+def test_evidence_no_sources_section_anywhere_is_use_not_recorded(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        library_fixtures,
+        "HANDOFF",
+        library_fixtures.HANDOFF.replace("## Sources\n- fixture\n", "## Gaps\n- none\n"),
+    )
+    evidence = evidence_of(tmp_path, supplied=("A_report.pdf", "B_filing.pdf"))
+    assert evidence["unused"] == []
+    assert [s["name"] for s in evidence["unrecorded"]] == ["A_report.pdf", "B_filing.pdf"]
+    assert evidence["noSourcesModules"] == ["CP-0", "CP-1"]
+
+
+def test_evidence_some_handoffs_without_sources_stay_unused_and_are_named(tmp_path, monkeypatch):
+    class WithoutSourcesInCP1(str):
+        def format(self, **fields):
+            text = str(self)
+            if fields["module"] == "CP-1":
+                text = text.replace("## Sources\n- fixture\n", "## Gaps\n- none\n")
+            return str.format(text, **fields)
+
+    monkeypatch.setattr(library_fixtures, "HANDOFF", WithoutSourcesInCP1(library_fixtures.HANDOFF))
+    evidence = evidence_of(
+        tmp_path, supplied=("A_report.pdf", "B_other.pdf"), cp0_extra="- A_report.pdf\n"
+    )
+    assert evidence["noSourcesModules"] == ["CP-1"]
+    assert evidence["unrecorded"] == []
+    assert [s["name"] for s in evidence["sources"]] == ["A_report.pdf"]
+    assert [s["name"] for s in evidence["unused"]] == ["B_other.pdf"]
 
 
 def test_evidence_handoffs_hashes_calls_and_cap_are_as_recorded(tmp_path):
