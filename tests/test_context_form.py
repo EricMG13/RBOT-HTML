@@ -91,10 +91,15 @@ def test_the_dependency_edges_are_the_registrys() -> None:
 
 
 def test_the_module_names_are_the_librarys() -> None:
-    adapter = (WEB / "report-adapter.js").read_text(encoding="utf-8")
-    match = re.search(r"const MODULE_NAMES=(\{.*?\});", adapter)
+    screen = (WEB / "screen.js").read_text(encoding="utf-8")
+    match = re.search(r"const groups = \[(.*?)\n\];", screen, re.DOTALL)
     assert match is not None
-    library = json.loads(match[1])
+    library = dict(re.findall(r"\['(CP-[\w-]+)','([^']+)'\]", match[1]))
+    # CP-MODEL is the library's Forecast destination (screen.js aliases it to W-Forecast).
+    assert "'CP-MODEL':'W-Forecast'" in screen and "'W-Forecast':['Forecast'" in (
+        WEB / "views.js"
+    ).read_text(encoding="utf-8")
+    library["CP-MODEL"] = "Forecast"
     form = dict(re.findall(r"^  '(CP-[\w-]+)': \['([^']+)'", constant("MODULES"), re.MULTILINE))
     assert form and form == {code: library[code] for code in form}
 

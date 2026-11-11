@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from library_fixtures import make_run
+from library_fixtures import make_run, without_report
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
@@ -45,9 +45,7 @@ def test_store_reads_a_listed_run(tmp_path):
         for p in (tmp_path / "runs/run-a/deliveries").glob("*/CP-*.md")
     }
     assert {o["sha256"] for o in result["outputs"].values()} == handoff_digests
-    (report,) = result["reports"]
-    assert "/files/runs/run-a/deliveries/" in report["href"]
-    assert report["href"].split("?")[0].endswith("/report.html")
+    assert "reports" not in result
     assert result["issues"] == []
 
 
@@ -55,11 +53,8 @@ def test_store_has_no_legacy_routes(tmp_path):
     result = read_store(tmp_path)
     assert result["pins"] == {}
     assert set(result["runs"]) == {"run-a"}
-    assert result["outputs"] and result["reports"]
-    links = [o["href"] for o in result["outputs"].values()]
-    for report in result["reports"]:
-        links += [report["href"], report["download"], *(f["href"] for f in report["files"])]
-    for link in links:
+    assert result["outputs"]
+    for link in [o["href"] for o in result["outputs"].values()]:
         assert link.startswith("/files/runs/run-a/"), link
 
 
@@ -1130,27 +1125,33 @@ def test_a_rerun_links_to_the_run_it_replays_through_the_store(tmp_path):
         {"word": "Rerun of", "id": earlier, "run": "run-a"}
     ]
     assert built["runs"]["run-a"]["revisions"] == []
-    assert all("figures" in report for report in built["reports"])
 
 
-def test_a_listed_report_view_that_fails_is_told_apart_from_an_unlisted_one(tmp_path):
+def test_a_delivery_without_report_html_builds_the_store(tmp_path):
+    """New CP-OS deliveries carry no report.html (their completion record has delivery_sha256)."""
     run_dir = make_run(tmp_path, "run-a")
-    (delivery,) = (run_dir / "deliveries").iterdir()
-    record = json.loads((delivery / "delivery.json").read_text())
-    folder = f"runs/run-a/deliveries/{delivery.name}"
-    digest = hashlib.sha256((delivery / "report.html").read_bytes()).hexdigest()
+    delivered = without_report(run_dir)
+    assert not (delivered / "report.html").exists()
+    folder = f"runs/run-a/deliveries/{delivered.name}"
+    artifact = {"folder": folder, "label": "r", "state": "final", "available": True, "href": None}
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert result["issues"] == []
+    assert set(result["runs"]) == {"run-a"}
+    assert {o["module"] for o in result["outputs"].values()} == set(MODULES)
+
+
+def test_a_delivery_that_cannot_be_read_is_named_in_the_issues(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    (delivered / "delivery.json").write_text("{not json")
     artifact = {
-        "folder": folder,
+        "folder": f"runs/run-a/deliveries/{delivered.name}",
         "label": "r",
         "state": "final",
         "available": True,
-        "href": f"/files/{folder}/report.html?sha256={digest}",
+        "href": None,
     }
     row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
-    plain = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
-    assert (plain["figures"], plain["figuresIssue"]) == (None, None)
-    (delivery / "report-view.json").write_text("{}")
-    record["files"]["report-view.json"] = "0" * 64
-    (delivery / "delivery.json").write_text(json.dumps(record))
-    failed = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
-    assert failed["figures"] is None and "report-view.json" in failed["figuresIssue"]
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert [i for i in result["issues"] if "could not be read" in i and delivered.name in i]

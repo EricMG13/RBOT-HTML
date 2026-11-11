@@ -300,24 +300,22 @@ function parseRoute() {
   let requestedModule=encodedModule,requestedSection=encodedSection;
   try{requestedModule=decodeURIComponent(encodedModule);}catch(error){if(!(error instanceof URIError))throw error;}
   try{if(encodedSection!==undefined)requestedSection=decodeURIComponent(encodedSection);}catch(error){if(!(error instanceof URIError))throw error;requestedSection=null;}
+  // The Calendar and Reports pages are retired (decisions 1 and 12 of the reader ruling): their old hashes open the run's Report history, or the library when no run is known.
+  if(requestedModule==='W-Calendar'||requestedModule==='W-Reports'){requestedModule='W-Report';requestedSection='history';}
   const resolved=!Object.hasOwn(moduleNames,requestedModule)&&Object.hasOwn(aliases,requestedModule)?aliases[requestedModule]:requestedModule;
   let module=Object.hasOwn(moduleNames,resolved)?resolved:'W-Library';
   const params=new URLSearchParams(query);
   let fallback=data[pins[module]]?.run;
-  if(!fallback&&module==='W-Calendar')fallback=calendarRun(requestedSection==='lanes'?'lanes':requestedSection==='hedges'?'CP-2E':'CP-1A')||calendarRun('lanes');
   const requestedContext=params.get('c');
   let context=Object.hasOwn(contexts,requestedContext)?requestedContext:fallback||current?.context||Object.keys(contexts)[0]||null;
-  // A deliverable opens under a run of its own issuer, or under none if no run file matches.
-  const report=module==='W-Reports'&&window.DESIGN_WORKSPACE.reports.find(r=>r.id===requestedSection);
-  if(report&&!sameIssuer(contexts[context]?.issuerKey,report.issuerKey))context=tracedRun(report);
-  if(!context&&!appDestinations.has(module)&&module!=='W-Reports')module='W-Library';
+  if(!context&&!appDestinations.has(module))module='W-Library';
   const output=resolveOutput(module,context,params.get('o'));
   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
   // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
   const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
   const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===first)||sections[0];
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
-  const permitted=item&&item.run===context&&(item.output===output||module==='W-Calendar'||module==='W-Overview');
+  const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
   // A chip index names one of the key's chips, and `gaps` its citations without a page; one that is not there opens the row alone.
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
@@ -374,7 +372,7 @@ function moduleBody({module,context,output}) {
     return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Couldn’t present this output</h2><p>The screen could not render this view. The saved file is unchanged.</p>${output?`<a class="text-action" href="${esc(data[output].href)}" download>Download the original handoff</a>`:''}</div>`;
   }
 }
-let cancelReportFrame=null;
+let cancelModelFrame=null;
 // A number box with text it cannot read is 'invalid', which excludes every run rather than being ignored.
 function readLibraryFilters() {
   const before=JSON.stringify(libraryFilters);
@@ -499,8 +497,7 @@ function renderRoute() {
     const sections=navigationSections(next.module,next.context,next.output),index=sections.findIndex(s=>s[0]===next.section);
     $('module-head').innerHTML=moduleHead(next);
     // A page with one section already says its name in the heading above.
-    // So does the list of reports: it is a page of links, and a pager there would step into the first report.
-    const only=(sections.length===1&&!isAnalytical(next.module))||(next.module==='W-Reports'&&next.section==='list');
+    const only=sections.length===1&&!isAnalytical(next.module);
     // The pager names what it steps through on the page where the sections are models.
     const pagerNoun={'W-Forecast':'model'}[next.module]||'section';
     const report=reportPage(next);
@@ -513,21 +510,20 @@ function renderRoute() {
     updateWorkspaceChrome(next.module);
     nameCodes($('context-bar'));
     $('content').innerHTML=moduleBody(next);
-    // watchFrame returns the callback that stops its timer; the previous report's timer must not fire against a detached element.
-    if(cancelReportFrame)cancelReportFrame();
-    cancelReportFrame=null;
-    const modelFrame=$('model-preview'),frame=$('report-preview');
+    // watchFrame returns the callback that stops its timer; the previous model's timer must not fire against a detached element.
+    if(cancelModelFrame)cancelModelFrame();
+    cancelModelFrame=null;
+    const modelFrame=$('model-preview');
     // The published model loads only when its disclosure is first opened: the frame gets its address and its watch then.
     const disclosure=$('content').querySelector('details.model-original');
     if(modelFrame&&disclosure){
       const openModel=()=>{
         if(!disclosure.open||modelFrame.getAttribute('src'))return;
         modelFrame.setAttribute('src',modelFrame.dataset.src);
-        cancelReportFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;});
+        cancelModelFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;});
       };
       disclosure.addEventListener('toggle',openModel);
     }
-    if(frame)cancelReportFrame=watchFrame(frame,$('content').querySelector('.frame-status'),'Loading report…','The report did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',window.DESIGN_WORKSPACE.reports.find(r=>r.id===next.section).download);link.download='';link.textContent='Download original HTML';return link;});
     nameCodes($('module-head'));
     nameCodes($('content'));
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
@@ -538,10 +534,10 @@ function renderRoute() {
     renderNavigator(next.module);
     titleBase=moduleNames[next.module];applyTitle();
     if(previous) {
-      const report=isReportRoute(next.module,next.section),library=appDestinations.has(next.module)||!contexts[next.context];
-      const restored=!report&&!library&&focusId&&$(focusId);
+      const library=appDestinations.has(next.module)||!contexts[next.context];
+      const restored=!library&&focusId&&$(focusId);
       const link=window.innerWidth>720&&focused?.classList.contains('section-item')&&focusHref&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
-      const destination=report?$('report-select'):next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('canvas'):$('section-title');
+      const destination=next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('canvas'):$('section-title');
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
@@ -582,7 +578,6 @@ function renderRoute() {
 document.addEventListener('change',event=>{
   if(event.target.matches('[data-library-filter]'))readLibraryFilters();
   if(event.target.id==='model-select')go('W-Forecast',event.target.value);
-  if(event.target.id==='report-select')go('W-Reports',event.target.value);
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
   if(event.target.matches('[data-register-filter], #register-all')) {
     const filter={group:$('register-group').value,confidence:$('register-confidence').value,all:$('register-all').checked};

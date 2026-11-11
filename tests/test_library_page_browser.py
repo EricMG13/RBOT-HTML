@@ -203,10 +203,10 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     )
     assert 'id="library-nav"' not in dom  # Issuers are a filter, not a second navigation.
     delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name
-    # The deliverable opens the report inside the app, from the row and from the selected run.
-    report = f'href="#W-Reports/{delivery}?c=run-a"'
-    assert f'<a class="report-link" {report}' in dom
-    assert f'<a class="primary-action" {report}' in dom
+    # The delivered report is retired (decision 1): the row opens the run and its history.
+    assert '<a class="report-link" href="#W-Overview/overview?c=run-a"' in dom
+    assert '<a class="report-link" href="#W-Report/history?c=run-a"' in dom
+    assert "#W-Reports" not in dom and "report.html" not in dom and "Open report" not in dom
     # A cited source links the retained file it quotes.
     assert f'href="../runs/run-a/deliveries/{delivery}/CP-1.md" target="_blank"' in dom
     dom, console = visit(page, "#W-Overview/overview?c=run-a")
@@ -214,15 +214,33 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     assert (
         len(re.findall(r'<div class="panel-card">', dom)) == 4
     )  # Leverage, cover, liquidity, maturities, each under the module that owns it.
-    dom, console = visit(page, "#W-Reports/list?c=run-a")
-    delivery = re.search(r'href="#W-Reports/([0-9a-f]{64})\?c=run-a"', dom)
-    assert delivery, "the Reports tab lists the run's report"
-    dom, console = visit(page, f"#W-Reports/{delivery[1]}?c=run-a")
-    assert console == []  # The presented report ran its adapter and the policy allowed it.
-    frame = re.search(r'<iframe id="report-preview"[^>]*src="([^"]*)"', dom)
-    assert frame and frame[1] == f"reports/run-a/{delivery[1]}/report.html"
-    assert (page.parent / frame[1]).is_file()
-    assert re.search(r'frame-status"[^>]*hidden', dom)  # Loaded: the loading notice is gone.
+    # The Report history lists the run; no report frame is drawn and no report copy is held.
+    dom, console = visit(page, "#W-Report/history?c=run-a")
+    assert console == []
+    assert '<table class="history-table">' in dom and 'aria-current="true"' in dom
+    assert "<iframe" not in dom.replace('id="model-preview"', "")
+    assert not (page.parent / "reports").exists()
+    assert not (page.parent / "report-adapter.js").exists()
+    # An old Reports or Calendar hash opens the run's Report history, not a blank page.
+    old_hashes = (
+        "#W-Reports/list?c=run-a",
+        f"#W-Reports/{delivery}?c=run-a",
+        "#W-Calendar?c=run-a",
+    )
+    for old in old_hashes:
+        dom, console = visit(page, old)
+        assert console == []
+        assert '<table class="history-table">' in dom, old
+    # With no run named, the page opens the workspace's first run, as every run page does.
+    dom, console = visit(page, "#W-Reports/list")
+    assert console == [] and '<table class="history-table">' in dom
+
+
+def test_an_old_reports_hash_opens_the_library_when_no_run_is_known(tmp_path):
+    update_library.update_library(tmp_path)  # No runs.
+    dom, console = visit(tmp_path / "library/index.html", "#W-Reports/list")
+    assert console == []
+    assert "history-table" not in dom and "No runs in this workspace yet" in dom
 
 
 def test_run_activity_and_forecast_not_run_from_disk(tmp_path):
@@ -473,11 +491,10 @@ def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width
     # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
     assert seen["filtered"] == {"shown": 0, "emptyShown": True}
     # Design pass 2026-11-10: parts listed and reachable, tables whole and in the text face.
-    assert seen["outline"][-5:] == [
+    assert seen["outline"][-4:] == [
         "Findings register",
         "Open items",
         "Module matrix",
-        "Deliverables from this run",
         "Chart index",
     ]
     assert seen["jump"] == {
@@ -850,24 +867,20 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_calendar_draws_the_event_lane_with_its_table_and_fits_the_page(tmp_path, width):
+def test_the_overview_draws_the_event_lane_compactly_and_fits_the_page(tmp_path, width):
     make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + EVENTS)
     update_library.update_library(tmp_path)
     page = tmp_path / "library/index.html"
     probe = Path(__file__).with_name("browser_probe_calendar.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Calendar?c=run-a", width)
-    assert console == []
-    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert (seen["lanes"], seen["points"], seen["spans"], seen["tableRows"]) == (1, 1, 3, 4)
-    assert seen["laneName"] == "Financing" and seen["focusable"] is True
-    assert seen["tableAfterLanes"] is True and seen["fits"] is True
-    # The Overview draws the same lanes compactly, linked to the Calendar tab, with no table.
+    # The Calendar tab is retired (decision 12): the Overview draws the lanes, compactly, no table.
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert console == [] and (seen["lanes"], seen["tableRows"], seen["fits"]) == (1, 0, True)
-    assert 'class="event-lanes compact"' in dom and "Open the Calendar tab" in dom
+    assert (seen["points"], seen["spans"]) == (1, 3)
+    assert seen["laneName"] == "Financing" and seen["focusable"] is True
+    assert 'class="event-lanes compact"' in dom and "W-Calendar" not in dom
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
@@ -891,8 +904,8 @@ def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_t
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_context_bar_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_path, width):
-    # Long names: a 38-character issuer and 80-character run folders, with every popover open.
+def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_path, width):
+    # Long names: a 38-character issuer and 80-character run folders.
     long = "cpos-tdg-copilot-sol-medium-revision-with-a-very-long-folder-name-0000000000000001"
     issuer = "Synthetic Holding Company Incorporated Ltd"
     make_run(
@@ -910,9 +923,13 @@ def test_the_context_bar_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_p
         seen = json.loads(
             html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
         )
-        assert seen["shown"] is True and "As of 31 December 2025" in seen["text"]
-        assert len(seen["others"]) == 1 and f"c={long}-other" in seen["others"][0]
-        assert seen["roles"] == ["source", "analysis", "export"]
+        # One line under the tabs: the run's date, pathway and code, and the way to the history.
+        assert seen["shown"] is True
+        assert seen["text"].startswith("Showing run: 31 December 2025 · Credit snapshot · ")
+        assert long.upper() in seen["text"]
+        assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
+        assert seen["tabs"] == ["Report", "Overview", "Modules", "Forecast", "Evidence"]
+        assert seen["current"] == [route.split("?")[0][3:]]
         assert seen["indexRows"] == [
             "Leverage|Drawn",
             "Interest cover|Drawn",
@@ -920,8 +937,10 @@ def test_the_context_bar_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_p
             "Financing events|Drawn",
             "Credit-risk transmission map|Drawn",
         ]
-        assert seen["indexScrollFocusable"] is True
-        assert seen["summaryFocus"] is True and seen["listInView"] is True and seen["fits"] is True
-        assert (
-            f"c={long}" in seen["after"] and seen["barAfter"] is True
-        )  # Moving to a file keeps the run.
+        assert seen["indexScrollFocusable"] is True and seen["fits"] is True
+        # The link opens the issuer's Report history under the same run; the label is hidden there.
+        assert seen["after"] == f"#W-Report/history?c={long}"
+        assert seen["barOnHistory"] is True and seen["historyFits"] is True
+        assert [row.split("|")[1] for row in seen["historyRows"]] == ["true", "null"]
+        assert seen["historyRows"][0].startswith("31 December 2025")
+        assert seen["historyRows"][1].startswith("30 June 2025")

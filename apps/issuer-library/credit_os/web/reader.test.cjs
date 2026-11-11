@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, nearestDates} = require('./reader.js');
+const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates} = require('./reader.js');
 
 // Shapes are store.py's: section {heading, level, line, blocks[]}, text block {type, line, end, text}. Expected values are literals.
 const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
@@ -207,4 +207,22 @@ test('earlierBasis moves a citation written straight after sentence punctuation'
   assert.deepEqual(earlierBasis('Revenue rose.[CP-1: D4] Margin fell.'), {body: 'Revenue rose. Margin fell.', items: ['[CP-1: D4]']});
   assert.deepEqual(earlierBasis('Interest was paid.【4:2†source】【4:3†source】 Debt rose.'), {body: 'Interest was paid. Debt rose.', items: ['【4:2†source】', '【4:3†source】']});
   assert.deepEqual(earlierBasis('**[Insufficient Information]** for the point.'), {body: '**[Insufficient Information]** for the point.', items: []});
+});
+
+test('pathwayTitle reads the id as words, first word capitalised; no id is null', () => {
+  assert.equal(pathwayTitle('credit_snapshot'), 'Credit snapshot');
+  assert.equal(pathwayTitle('full-credit_review'), 'Full credit review');
+  assert.equal(pathwayTitle(null), null);
+  assert.equal(pathwayTitle(''), null);
+});
+
+test('runModuleCodes lists the modules that hold an output in record order, then the unrecorded ones', () => {
+  const entry = outputs => ({outputs, default: outputs[0] || null});
+  const run = {
+    modules: {'CP-2': entry(['a']), 'CP-0': entry(['b']), 'CP-9': entry([]), 'CP-1': entry(['c']), 'CP-3': entry(['d'])},
+    record: {steps: [{module: 'CP-0'}, {module: 'CP-1'}, {module: 'CP-9'}, {module: 'CP-2'}]},
+  };
+  assert.deepEqual(runModuleCodes(run), ['CP-0', 'CP-1', 'CP-2', 'CP-3']);
+  assert.deepEqual(runModuleCodes({modules: {'CP-1': entry(['c']), 'CP-0': entry(['b'])}}), ['CP-1', 'CP-0']);
+  assert.deepEqual(runModuleCodes({}), []);
 });

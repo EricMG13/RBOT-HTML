@@ -49,8 +49,6 @@ without it.
 | `web/icons/settings-2.svg` | `web/icons/settings-2.svg` | `06d06c191bd7eb28afaf9d40acb5c49ef69448fdeda91801d9823d7c440a4e10` | yes |
 | `web/icons/triangle-alert.svg` | `web/icons/triangle-alert.svg` | `4866f38b8560d410f21e3226413e0b77997b6dfbb6931fadfe0a0d5aef9ffeb4` | yes |
 | `web/icons/x.svg` | `web/icons/x.svg` | `4a9cdab38fbb96162e7dace28e33f4ca0e49d8963a6162abc3d4691b7d675117` | yes |
-| `web/report-adapter.css` | `web/report-adapter.css` | `8819ac13bef113ea3a3f8ebdef58b92493c87b80e88ea3e96e1770b527787601` | yes |
-| `web/report-adapter.js` | `web/report-adapter.js` | `d581bcc5aaf9eda65f885651a08d40d64b6a09c0482f9c098b89615a02f5577a` | yes |
 | `web/screen.css` | `web/screen.css` | `b6d3a1d6ccd9a38b323553c385fb3919c08446859a5aad5d309f9fceffd19402` | yes |
 | `web/screen.js` | `web/screen.js` | `3f2b152ab197e4191bffb006188d15a303da3b092cf15e96c107713db314a80b` | NO, edited (see below) |
 | `web/screening.js` | `web/screening.js` | `f46f679ab376e57ce238f69d420591b7c9c923ac91c7915d07999e0c8406292c` | yes |
@@ -220,3 +218,19 @@ Handoffs that open with YAML front matter (`---` ... `---`) raised "Body before 
 Merge of origin/main (controller ruling): the Front matter section follows main's dc2320c contract, level 2 with block locators covering only the lines between the `---` markers (the branch's level 1 `front_matter()` helper is removed; `parse_source` holds the one implementation). `tests/test_credit_os_store.py` `test_front_matter_is_the_first_section_verbatim`: level 1 -> 2, block `line` 1 -> 2, `end` 4 -> 3.
 
 Merge fix (M1): `web/screen.css` moves main's live-run `.chip-done`, `.chip-running`, `.chip-waiting` rules after the run report's `.chip` rule (same specificity, so order decides) and leaves `.chips`, `.run-stalled`, `.run-files`, `.run-held`, `.run-reason`, `.run-note` in place, so the live-run chips keep the state colours they had on main; `tests/test_library_page_browser.py` adds `test_live_run_chips_show_their_state_colours`.
+
+## Library layout to the 2026-11-11 reader ruling (decisions 1, 4, 12 and H7)
+
+The delivered report is retired from the library, so the copied report pages and everything that served them are gone. The earlier rows above about `W-Calendar`, `W-Reports`, the Reports rail entry and `watchFrame` describe the copy as first made; these rows are what holds now.
+
+| File | Edit | Why |
+| --- | --- | --- |
+| `web/report-adapter.css`, `web/report-adapter.js` | Deleted (rows removed from the table above) | the presented copy of the delivered report no longer exists |
+| `web/reader.js` | New, pure (no DOM): reader passages, Basis lines, figures, earlier-format rules, history order, `pathwayTitle`, `runModuleCodes`; tests in `web/reader.test.cjs`; loaded by `static-boot.js` before `views.js` | the 2026-11-11 handoff contract in one tested place |
+| `web/index.html`, `web/views.js` | Rail is Start a run, Issuer library, Run activity, Search; issuer tabs are Report, Overview, Modules, Forecast, Evidence; `destinations` keys are W-Library W-Report W-Overview W-Evidence W-Forecast CP-OS | decision 12 |
+| `web/views.js` | `historyView` (Report history) and `runLabel` (the run line under the tabs, "Earlier format" badge) replace `contextBar`; `reportList`, `reportView`, `reportManifest`, `runReports`, `calendarSections`, `calendarRun`, `issuerReports`, `reportsBuiltFrom`, `reportsUsing`, `tracedRun`, `reportName`, `isReportRoute` deleted; the Library page's "Open report"/"All reports" become "Open run" and "History"; a catalogued report is named, never linked | decisions 1, 4, 12 |
+| `web/views.js`, `web/screen.js` | `watchFrame` and its timer stay for the Forecast page's published-model frame only (`cancelModelFrame`); the report frame and its status plumbing are deleted | the model is part of the issuer report; the delivered report is not |
+| `web/screen.js` | `parseRoute` sends an old `#W-Reports/...` or `#W-Calendar/...` hash to the run's Report history (the library when no run exists) | an old link opens a page, not a blank |
+| `web/screen.css` | `.report-workspace`, `.report-content`, `#report-preview` and the context pop-over rules deleted; `.history-table` added | the rules served only the retired pages |
+| `store.py` | `report_record`, `catalogue_reports`, `built_from`, `delivery_and_view` and `CURATED_REPORTS` labels removed; no `reports` list in the store; `curated_builds` keeps the compared-deliverable check; `collect_runs` no longer returns a handoff-source index; a delivery that cannot be read is named in the issues | a CP-OS delivery has no `report.html`; nothing remaining reads one |
+| `update_library.py` | No `library/reports/**`, no `present_report`; `/files/...` hrefs become `../...` paths whatever their query | decision 1 |

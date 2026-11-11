@@ -183,6 +183,19 @@ function historyRows(runs) {
   });
 }
 
+// The pathway id as words: "credit_snapshot" is "Credit snapshot"; no id is null (the caller says "Not recorded").
+function pathwayTitle(id) {
+  const words = String(id || '').split(/[_\s-]+/).filter(word => word !== '').map(word => word.toLowerCase());
+  return words.length ? words.join(' ').replace(/^./, first => first.toUpperCase()) : null;
+}
+
+// The modules of a run that hold an output, in the run's own order (record.steps), then any the record does not list.
+function runModuleCodes(run) {
+  const held = Object.entries(run.modules || {}).filter(([, entry]) => entry.outputs && entry.outputs.length).map(([code]) => code);
+  const ordered = ((run.record && run.record.steps) || []).map(step => step.module).filter(code => held.includes(code));
+  return [...new Set([...ordered, ...held])];
+}
+
 // H5: the next n items dated on or after asOf, earliest first; an item without a YYYY-MM-DD date is not dated and is left out.
 function nearestDates(items, asOf, n = 5) {
   const dated = items.filter(item => /^\d{4}-\d{2}-\d{2}$/.test(String(item.date)) && item.date >= asOf);
@@ -191,4 +204,4 @@ function nearestDates(items, asOf, n = 5) {
     .slice(0, n).map(entry => entry.item);
 }
 
-if (typeof module !== 'undefined') module.exports = {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, nearestDates};
+if (typeof module !== 'undefined') module.exports = {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};

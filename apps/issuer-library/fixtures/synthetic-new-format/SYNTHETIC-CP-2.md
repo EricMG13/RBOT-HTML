@@ -54,4 +54,4 @@ Basis: Liquidity (CP-2D)
 | No peer set supplied | Leverage is not benchmarked. |
 
 ## Next module
-None. The run ends here.
+CP-2D assesses liquidity against the maturities.

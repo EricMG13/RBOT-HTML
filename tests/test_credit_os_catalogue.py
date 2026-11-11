@@ -248,8 +248,7 @@ def test_store_joins_the_catalogue(tmp_path):
     assert artifact["available"] and "/report.html?sha256=" in artifact["href"]
     joined = store.workspace_store(tmp_path, result)
     assert {o["module"] for o in joined["outputs"].values()} == {"CP-0", "CP-1"}
-    (report,) = joined["reports"]
-    assert report["href"].split("?")[0].endswith("/report.html")
+    assert "reports" not in joined  # The delivered report is retired from the library's store.
     assert joined["issues"] == []
 
 

@@ -1,6 +1,5 @@
 """The update script: the static Credit OS library, written only to library/, from fixtures."""
 
-import hashlib
 import json
 import re
 import sys
@@ -39,11 +38,6 @@ def data_of(workspace: Path) -> dict:
     return json.loads(text.removeprefix(PREFIX).rstrip().removesuffix(";"))
 
 
-def delivered_report(run_dir: Path) -> Path:
-    (report,) = run_dir.glob("deliveries/*/report.html")
-    return report
-
-
 def strings(value):
     if isinstance(value, str):
         yield value
@@ -56,7 +50,7 @@ def strings(value):
 
 
 def test_writes_static_library(tmp_path):
-    run_dir = make_run(tmp_path, "run-a")
+    make_run(tmp_path, "run-a")
     before = tree(tmp_path)
     library = update_library.update_library(tmp_path)
     after = tree(tmp_path)
@@ -67,52 +61,27 @@ def test_writes_static_library(tmp_path):
     for name in ("index.html", "data.js", "static-boot.js", "screen.css", "fonts/OFL.txt"):
         assert (tmp_path / "library" / name).is_file()
     assert not [k for k in after if k.endswith(".test.cjs")]
-    presented = [k for k in after if k.startswith("library/reports/")]
-    delivery = delivered_report(run_dir).parent.name
-    assert presented == [f"library/reports/run-a/{delivery}/report.html"]
+    # The delivered report is retired (decision 1): no copy of it, no adapter, no reports list.
+    assert not [k for k in after if k.startswith("library/reports/") or "report-adapter" in k]
     data = data_of(tmp_path)
     assert data["catalogue"]["real"][0]["id"] == "run-a"
-    assert data["workspace"]["reports"][0]["href"] == (f"reports/run-a/{delivery}/report.html")
+    assert "reports" not in data["workspace"]
     assert not [s for s in strings(data) if s.startswith("/files/")]
     assert "../runs/run-a/" in "\n".join(strings(data))
-    assert not [s for s in strings(data) if "sha256=" in s and s.startswith(("../", "reports/"))]
+    assert not [s for s in strings(data) if "sha256=" in s and s.startswith("../")]
     page = (tmp_path / "library/index.html").read_text(encoding="utf-8")
     assert "default-src 'none'" in page and "connect-src 'none'" in page
     assert re.findall(r'\b(?:src|href)="(?:https?:)?//', page) == []
 
 
-def test_presented_report_keeps_original(tmp_path):
+def test_the_runs_own_files_are_not_changed_or_copied(tmp_path):
     run_dir = make_run(tmp_path, "run-a")
-    original = delivered_report(run_dir)
-    raw = original.read_bytes()
-    digest = hashlib.sha256(raw).hexdigest()
+    before = tree(tmp_path)
     update_library.update_library(tmp_path)
-    assert hashlib.sha256(original.read_bytes()).hexdigest() == digest
-    (copy,) = (tmp_path / "library/reports").rglob("report.html")
-    shown = copy.read_bytes()
-    assert shown.startswith(raw[: raw.rindex(b"</body>")])
-    assert b"<style data-library-presentation>" in shown
-    assert b"<script data-library-presentation>" in shown
-    assert shown.count(b"data-library-presentation") == 2
-
-
-def test_a_new_format_run_has_no_presented_report_and_does_not_stop_the_build(tmp_path):
-    make_run(tmp_path, "run-old")
-    make_run(tmp_path, "run-new", report_page=False, issuer_id="other", issuer_name="Other plc")
-    library = update_library.update_library(tmp_path)
-    assert sorted(r["id"] for r in library.runs) == ["run-new", "run-old"]
-    presented = [
-        p.relative_to(tmp_path).parts[2] for p in (tmp_path / "library/reports").rglob("*.html")
-    ]
-    assert presented == ["run-old"]
-
-
-def test_presentation_goes_before_the_last_body_close():
-    html = b"<body>a</body><p>b</P></BODY>tail"
-    shown = update_library.present_report(html)
-    start = shown.index(b"<style data-library-presentation>")
-    assert shown[:start] == b"<body>a</body><p>b</P>"
-    assert shown.endswith(b"</script></BODY>tail")
+    after = tree(tmp_path)
+    assert {k: v for k, v in after.items() if not k.startswith("library/")} == before
+    assert (run_dir / "deliveries").is_dir()
+    assert not any(p.name == "report.html" for p in (tmp_path / "library").rglob("*"))
 
 
 def test_refuses_library_symlink(tmp_path):
@@ -146,8 +115,7 @@ def test_unlisted_run_contributes_nothing(tmp_path):
     assert [name for name, _ in data["activity"]["excluded"]] == ["legacy", "run-half"]
     listed = json.dumps({k: v for k, v in data.items() if k != "activity"})
     assert "run-half" not in listed and "Zeta Synthetic" not in json.dumps(data)
-    assert not (tmp_path / "library/reports/run-half").exists()
-    assert [p.name for p in (tmp_path / "library/reports").iterdir()] == ["run-a"]
+    assert not (tmp_path / "library/reports").exists()
 
 
 def test_hostile_run_text_cannot_leave_the_data_file(tmp_path):

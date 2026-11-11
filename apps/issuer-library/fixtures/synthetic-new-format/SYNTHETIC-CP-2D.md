@@ -23,4 +23,4 @@ None. The module is blocked.
 | No cash forecast or revolver terms | Liquidity is not assessed. |
 
 ## Next module
-CP-2 forms the credit view from the data, the calendar and this module.
+None. The run ends here.

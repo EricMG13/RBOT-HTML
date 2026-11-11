@@ -19,12 +19,16 @@ The run start page's service (below) runs both steps for a shared folder, so ana
 by hand.
 
 `library/` is the Credit OS library (one row per listed run) and, for each run, its issuer report
-with tabs for Overview, Modules, Calendar, Forecast, Reports and Evidence. It has no run controls:
-runs are made by step 1 and shown by step 2. `data.js` holds the catalogue and the workspace store
-as data; `reports/<run>/<delivery>/report.html` is each run's delivered report with the library's
-presentation added before its last `</body>` (the original in the run folder is never changed;
-downloads point at it). Links to run files are relative (`../runs/...`); the run start page's service does not serve those
-links. The page opens from disk
+with tabs for Report, Overview, Modules, Forecast and Evidence, in that order. The Report tab is
+the issuer's Report history: one row per run of that issuer, latest as-of date first, with its
+pathway, the modules it ran, its status and an "Earlier format" mark for a run whose handoffs
+predate the reader format; each row opens that run's Overview. Every run page carries one line
+under the tabs naming the run it shows (as-of date, pathway, run code) with a link back to the
+history. The left rail is Start a run, Issuer library, Run activity and Search. The library holds
+no copy of any delivered report and shows none: an old `#W-Reports/...` or `#W-Calendar/...` link
+opens the run's Report history. It has no run controls: runs are made by step 1 and shown by step 2.
+`data.js` holds the catalogue and the workspace store as data. Links to run files are relative
+(`../runs/...`); the run start page's service does not serve those links. The page opens from disk
 (`file://`) and blocks every network request through its content security policy. Its hashes are
 checked when it is built: update it after new runs. The page parts are `credit_os/web/`; the
 store and its sources are listed in `credit_os/SOURCE.md`.

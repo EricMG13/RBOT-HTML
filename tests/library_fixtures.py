@@ -219,6 +219,26 @@ def rewrite_completion(run_dir: Path, change) -> None:
     put(run_dir / f"completed-{sha(raw)}.json", raw)
 
 
+def without_report(run_dir: Path) -> Path:
+    """Make the run's delivery one of the new kind.
+
+    No report.html in the folder or in its delivery.json, and a completion record that carries
+    delivery_sha256 (of delivery.json) instead of report_sha256. Returns the delivery folder."""
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    (delivered / "report.html").unlink()
+    receipt = json.loads((delivered / "delivery.json").read_text())
+    del receipt["files"]["report.html"]
+    raw = json.dumps(receipt).encode()
+    (delivered / "delivery.json").write_bytes(raw)
+
+    def swap(record: dict) -> None:
+        del record["report_sha256"]
+        record["delivery_sha256"] = sha(raw)
+
+    rewrite_completion(run_dir, swap)
+    return delivered
+
+
 # Cited handoff text and its source-text file, for tests/test_credit_os_chips.py.
 SOURCE_PAGES = (
     b'{"page": 122, "text": "Other note text."}\n'

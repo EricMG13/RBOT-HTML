@@ -59,4 +59,4 @@ None. This module calculates nothing.
 | No subsidiary list supplied | Structure is described, not mapped. |
 
 ## Next module
-CP-2D assesses liquidity against the maturities.
+CP-2 forms the credit view from the data and the calendar.

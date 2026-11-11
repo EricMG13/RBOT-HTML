@@ -4,9 +4,8 @@
 
 Reads ``FOLDER/runs`` (default: this checkout; the Windows package needs ``--workspace``, which
 ``Update library.cmd`` supplies) and writes only ``FOLDER/library/``: ``index.html`` with its
-scripts, styles, fonts and icons, ``data.js`` (the catalogue and the workspace store, as data),
-and ``reports/<run>/<delivery>/report.html``, each run's delivered report with the library's
-presentation added. The delivered reports themselves are never changed. The page opens from disk:
+scripts, styles, fonts and icons, and ``data.js`` (the catalogue and the workspace store, as data).
+The runs' own files are never copied or changed; the page links to them. The page opens from disk:
 no server, no network access. Which runs it lists is decided by ``deploy_workflow.library_index``.
 No analysis is run and no provider is called.
 """
@@ -44,8 +43,8 @@ from deploy_workflow.library_index import (
 )
 from deploy_workflow.run_events import read_events
 
-# Nothing is fetched: the page and the reports it frames come from its own folder, and no request
-# can leave it.
+# Nothing is fetched: the page and the published models it frames come from its own folder, and no
+# request can leave it.
 POLICY = (
     "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; "
     "img-src 'self' data:; frame-src 'self'; connect-src 'none'; base-uri 'none'; "
@@ -55,71 +54,20 @@ CSP_META = f'<meta http-equiv="Content-Security-Policy" content="{POLICY}">'
 FILES = "/files/"
 
 
-def last_body_close(html: bytes) -> int:
-    """Offset of the final ``</body>`` in html, len(html) when there is none (ASCII case-fold)."""
-    found = html.lower().rfind(b"</body>")
-    return len(html) if found < 0 else found
-
-
-def present_report(original: bytes) -> bytes:
-    """The delivered report with the library's presentation inserted before its last ``</body>``."""
-    style = (WEB / "report-adapter.css").read_bytes()
-    brand = (WEB / "brand.css").read_bytes()
-    script = (WEB / "report-adapter.js").read_bytes()
-    position = last_body_close(original)
-    return b"".join(
-        [
-            original[:position],
-            b"<style data-library-presentation>",
-            style,
-            brand,
-            b"</style><script data-library-presentation>",
-            script,
-            b"</script>",
-            original[position:],
-        ]
-    )
-
-
-def write_presented_reports(workspace: Path, library: Library, folder: Path) -> set[str]:
-    """Each listed run's verified report, presented, under ``folder/reports``.
-
-    Returns the workspace-relative paths of the originals that have a presented copy."""
-    presented = set()
-    for run in library.runs:
-        run_dir = workspace / "runs" / run["id"]
-        verified = library.deliveries[run["id"]]  # This build verified every file of it already.
-        relative, files = verified["folder"], verified["files"]
-        if "report.html" not in files:  # A new-format delivery has no report page to present.
-            continue
-        original = read_pinned(run_dir, f"{relative}/report.html", files["report.html"])
-        target = folder / "reports" / run["id"] / relative.split("/", 1)[1] / "report.html"
-        target.parent.mkdir(parents=True)
-        target.write_bytes(present_report(original))
-        presented.add(f"runs/{run['id']}/{relative}/report.html")
-    return presented
-
-
-def relative_href(href: str, presented: set[str]) -> str:
-    """A server ``/files/...`` href as a path from ``library/index.html``, query removed.
-
-    A report opened for reading points at its presented copy; a download keeps the original."""
-    parts = urlsplit(href)
-    path = unquote(parts.path)[len(FILES) :]
-    if "download=1" not in parts.query and path in presented:
-        _, run, _, delivery, name = path.split("/")
-        return quote(f"reports/{run}/{delivery}/{name}", safe="/")
+def relative_href(href: str) -> str:
+    """A server ``/files/...`` href as a path from ``library/index.html``, query removed."""
+    path = unquote(urlsplit(href).path)[len(FILES) :]
     return "../" + quote(path, safe="/")
 
 
-def relocate(value: Any, presented: set[str]) -> Any:
+def relocate(value: Any) -> Any:
     """``value`` with every ``/files/...`` string rewritten by ``relative_href``."""
     if isinstance(value, str):
-        return relative_href(value, presented) if value.startswith(FILES) else value
+        return relative_href(value) if value.startswith(FILES) else value
     if isinstance(value, list):
-        return [relocate(item, presented) for item in value]
+        return [relocate(item) for item in value]
     if isinstance(value, dict):
-        return {key: relocate(item, presented) for key, item in value.items()}
+        return {key: relocate(item) for key, item in value.items()}
     return value
 
 
@@ -196,7 +144,6 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
     cat = catalogue(workspace, library)
     store = workspace_store(workspace, cat)
     run_records(workspace, store)
-    presented = write_presented_reports(workspace, library, folder)
     # Run activity, as data: the folders left out and why, and every issue the build recorded
     # (the store's list already holds the catalogue's; each is kept once, in order).
     activity = {
@@ -209,8 +156,7 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
             "workspace": store,
             "activity": activity,
             "chips": chips(workspace, store),
-        },
-        presented,
+        }
     )
     (folder / "data.js").write_text(
         "window.CREDIT_OS_DATA=" + embedded_json(data) + ";\n", encoding="utf-8", newline="\n"

@@ -94,16 +94,17 @@ CURATED_RUNS: dict[str, tuple[str, ...]] = {
         "29 June 2020 disclosure · historical case",
     ),
 }
-# Build history recorded in README.md and VERIFICATION.md; builds 4-6 matched by diff.
-CURATED_REPORTS = {
-    "tdg-fy2024-snapshot": ("Initial snapshot · failed date presentation", "Superseded"),
-    "tdg-fy2024-snapshot-2": ("Annual snapshot · reviewed", None),
-    "tdg-fy2024-snapshot-3": ("Integrated · macro/ESG and conditional forecast", None),
-    "tdg-fy2024-snapshot-4": ("Peer comparison · first delivery, gap rows dropped", None),
-    "tdg-fy2024-snapshot-5": ("Peer comparison · gap boundary repaired", None),
-    "tdg-fy2024-snapshot-6": ("Peer comparison · exact fiscal dates added", None),
-    "tdg-fy2024-snapshot-7": ("Repairs from the deliverable comparison", "Latest build"),
-}
+# The TransDigm builds kept under deliverables/ (history in README.md, VERIFICATION.md): a curated
+# pin's compared deliverables must be among them.
+CURATED_BUILDS = (
+    "tdg-fy2024-snapshot",
+    "tdg-fy2024-snapshot-2",
+    "tdg-fy2024-snapshot-3",
+    "tdg-fy2024-snapshot-4",
+    "tdg-fy2024-snapshot-5",
+    "tdg-fy2024-snapshot-6",
+    "tdg-fy2024-snapshot-7",
+)
 SAFE_FOLDER = re.compile(r"[\w. -]+")
 MONTHS = (
     "January",
@@ -1141,7 +1142,6 @@ def collect_runs(
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
-    dict[str, list[dict[str, Any]]],
     dict[str, str],
     list[str],
 ]:
@@ -1155,7 +1155,6 @@ def collect_runs(
     runs: dict[str, Any] = {}
     outputs: dict[str, Any] = {}
     inputs: dict[str, Any] = {}
-    sources: dict[str, list[dict[str, Any]]] = {}
     pins: dict[str, str] = {}
     issues: list[str] = []
     for key, (folder, issuer, title, label, sector, period) in shown.items():
@@ -1170,9 +1169,6 @@ def collect_runs(
         for path, handoff in read.items():
             kind = "inputs" if INPUT_NAME.search(path.name) else "outputs"
             grouped.setdefault(handoff.module, {"outputs": [], "inputs": []})[kind].append(path)
-            sources.setdefault(handoff.sha256, []).append(
-                {"run": key, "source": f"{folder}/{relative(path)}", "output": kind == "outputs"}
-            )
         modules: dict[str, Any] = {}
         first: str | None = None
         for module, files in grouped.items():
@@ -1257,142 +1253,30 @@ def collect_runs(
             "first": first or (with_outputs[0] if with_outputs else "W-Overview"),
             "modules": modules,
         }
-    return runs, outputs, inputs, sources, pins, issues
-
-
-def built_from(
-    files: dict[str, str], sources: dict[str, list[dict[str, Any]]]
-) -> list[dict[str, Any]]:
-    """Each handoff the verified delivery lists, traced to the run files holding the same bytes.
-
-    The names and hashes are delivery.json's, which the server verified; a handoff-looking file
-    beside the report that the delivery does not list was not verified and is not "built from".
-    """
-    rows = []
-    for name, digest in sorted(files.items()):
-        match = HANDOFF_NAME.match(name)
-        if not match or not name.endswith(".md"):
-            continue
-        matches = sources.get(digest) or [{"run": None, "source": name, "output": False}]
-        rows += [{"module": match[0], "sha256": digest, **found} for found in matches]
-    return rows
+    return runs, outputs, inputs, pins, issues
 
 
 # Each folder's (delivery.json, listed view.json), or describe(error) when it cannot be read.
 Manifests = dict[str, "tuple[dict[str, Any], dict[str, Any]] | str"]
 
 
-def delivery_and_view(
-    root: Path, folder: str, manifests: Manifests | None
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The folder's (delivery.json, listed view.json): from `manifests` when it was read there,
-    else read here, so a folder that could not be read raises its own error."""
-    manifest = (manifests or {}).get(folder)
-    if isinstance(manifest, tuple):
-        return manifest
-    delivery = delivery_json(root / folder)
-    return delivery, listed_view(root / folder, delivery)
+def curated_builds(catalogue: dict[str, Any], manifests: Manifests) -> set[str]:
+    """Names of the curated TransDigm builds the library holds as verified deliverables.
 
-
-def report_record(
-    folder: str,
-    artifact: dict[str, Any],
-    sources: dict[str, list[dict[str, Any]]],
-    keys: dict[str, str],
-    read: tuple[dict[str, Any], dict[str, Any]],
-) -> dict[str, Any]:
-    """One verified deliverable as the app shows it; `read` is its (delivery.json, view.json)."""
-    name = Path(folder).name
-    delivery, view = read
-    identity = view["run"]
-    issuer_name, as_of = identity["issuer_name"], identity["as_of"]
-    issuer_key = report_issuer_key(keys, identity.get("issuer_id"))
-    files = {str(n): str(h) for n, h in delivery["files"].items()}
-    mode, qualification = view.get("mode"), view.get("analytical_qualification")
-    # The hand-written labels describe the TransDigm builds under deliverables/; a folder of that
-    # name elsewhere or for another issuer keeps the issuer its own view.json records.
-    curated = (
-        folder == f"deliverables/{name}"
-        and name in CURATED_REPORTS
-        and str(issuer_name).startswith("TransDigm Group")
-    )
-    issuer = "TransDigm Group" if curated else issuer_name
-    if curated:
-        label, status = CURATED_REPORTS[name]
-    else:
-        label = (
-            artifact["label"]
-            if artifact["label"] != name
-            else f"{issuer} · as of {display_date(as_of)}"
-        )
-        status = "Superseded" if artifact.get("state") == "superseded" else None
-    return {
-        "id": name,
-        "build": list(CURATED_REPORTS).index(name) + 1 if curated else None,
-        "label": label,
-        "status": status,
-        "mode": mode if isinstance(mode, str) else None,
-        "qualification": qualification if isinstance(qualification, str) else None,
-        "issuer": issuer,
-        "issuerKey": issuer_key,
-        "sha256": files["report.html"],
-        "scope": delivery.get("scope"),
-        "modelPublished": delivery.get("cp_model_published", False),
-        "href": artifact["href"] + "&embedded=1",
-        "download": artifact["href"] + "&download=1",
-        "files": [
-            {"name": n, "href": f"/files/{quote(f'{folder}/{n}')}?sha256={h}&download=1"}
-            for n, h in sorted(files.items())
-        ],
-        "builtFrom": built_from(files, sources),
-    }
-
-
-def catalogue_reports(
-    root: Path,
-    catalogue: dict[str, Any],
-    sources: dict[str, list[dict[str, Any]]],
-    keys: dict[str, str],
-    manifests: Manifests | None = None,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Deliverables the server verified, each once, with what it was built from.
-
-    `keys` maps issuer IDs to group keys; `manifests` are the folders' model_manifests.
+    A build is curated when its folder is deliverables/<name> for a name in CURATED_BUILDS and its
+    view.json records TransDigm Group as the issuer: a folder that merely has the name is not one.
+    Only delivery.json and view.json (the `manifests`) are read; no report file is needed.
     """
-    reports, seen, issues = [], set(), []
-    for run in catalogue["real"]:
-        for artifact in run.get("artifacts") or []:
-            folder = artifact["folder"]
-            name = Path(folder).name
-            if (
-                not artifact.get("available")
-                or artifact.get("kind", "report") != "report"
-                or name in seen
-            ):
-                continue
-            seen.add(name)
-            # Documented fail-open: reported in Settings; the other deliverables stay readable.
-            try:
-                read = delivery_and_view(root, folder, manifests)
-                record = report_record(folder, artifact, sources, keys, read)
-                record["figures"], figure_issue = report_figures(root / folder, read[0])
-                # Set exactly when the delivery lists report-view.json and it failed: the page
-                # tells that apart from a delivery that lists none.
-                record["figuresIssue"] = figure_issue
-                if figure_issue:
-                    issues.append(figure_issue)
-                reports.append(record)
-            except (
-                OSError,
-                ValueError,
-                KeyError,
-                TypeError,
-                AttributeError,
-                RecursionError,
-                MemoryError,
-            ) as error:
-                issues.append(f"{folder}: could not be read ({describe(error)})")
-    return reports, issues
+    builds = set()
+    for found in delivery_identities(Path(), catalogue, manifests):
+        name = Path(found["folder"]).name
+        if (
+            found["folder"] == f"deliverables/{name}"
+            and name in CURATED_BUILDS
+            and str(found["issuer_name"]).startswith("TransDigm Group")
+        ):
+            builds.add(name)
+    return builds
 
 
 def register_of(sections: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -3175,7 +3059,7 @@ def delivery_identities(
 ) -> list[dict[str, Any]]:
     """What each available (hash-verified) deliverable says about its own run and issuer.
 
-    A deliverable whose view.json cannot be read is skipped here; catalogue_reports names it in
+    A deliverable whose view.json cannot be read is skipped here; workspace_store names it in
     Workspace issues, so the failure is reported once and no run takes an identity from it.
     `manifests` are the folders' model_manifests, read when omitted.
     """
@@ -3414,7 +3298,6 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
     runs: dict[str, Any] = {}
     outputs: dict[str, Any] = {}
     inputs: dict[str, Any] = {}
-    sources: dict[str, list[dict[str, Any]]] = {}
     pins: dict[str, Any] = {}
     handoffs = Handoffs(strict=False)
     found: list[str] = []
@@ -3428,10 +3311,8 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
         runs |= part[0]
         outputs |= part[1]
         inputs |= part[2]
-        for digest, matches in part[3].items():
-            sources.setdefault(digest, []).extend(matches)
-        pins |= part[4]
-        found += part[5]
+        pins |= part[3]
+        found += part[4]
     # A recorded earlier run is linked only when the library holds a run with that id.
     by_id = {run["runId"]: key for key, run in runs.items() if run["runId"]}
     for run in runs.values():
@@ -3440,13 +3321,19 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
     fields, keys = issuer_groups({key: recorded[key] for key in runs}, found)
     for key, identity in fields.items():
         runs[key].update(identity)
-    reports, unread = catalogue_reports(root, catalogue, sources, keys, manifests)
-    found += unread
     models, unread = catalogue_models(
         root, catalogue, WorkspaceReads(outputs, keys, runs, manifests)
     )
     found += unread
+    # A deliverable that cannot be read is named here (read_model names a model's own folder).
+    for folder, manifest in manifests.items():
+        if (
+            isinstance(manifest, str)
+            and (message := f"{folder}: could not be read ({manifest})") not in found
+        ):
+            found.append(message)
     # A compared deliverable is a curated build, not a folder that merely has its name.
+    builds = curated_builds(catalogue, manifests)
     for module, config in catalog.items():
         compare = config.get("compare")
         if (
@@ -3454,8 +3341,7 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
             and compare
             and not (
                 compare["recheck"] in outputs
-                and {compare["prior"], compare["current"], compare["repaired"]}
-                <= {r["id"] for r in reports if r["build"]}
+                and {compare["prior"], compare["current"], compare["repaired"]} <= builds
             )
         ):
             del pins[module]
@@ -3469,7 +3355,6 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
         "handoffs": {o["sha256"]: handoffs.parsed[o["sha256"]][0] for o in outputs.values()},
         "inputs": inputs,
         "pins": pins,
-        "reports": reports,
         "models": models,
         "visuals": visual_catalogue(),
         "issues": issues + found,
