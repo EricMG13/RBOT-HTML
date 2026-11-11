@@ -50,6 +50,30 @@ called and nothing ran on Windows. This is not proof of a paid run.
   full test suite (weekly job); the page tests in CI (CI deselects them); Windows file opening
   (`O_BINARY` is requested through `platform_io`, not run there).
 
+## 2026-11-11 — Work-PC change packs (`tools/work_pc_delta.py`)
+
+Scope: offline tooling only; no analytical module, provider call or deliverable changed.
+The work PC takes ZIP downloads without git, so `generate` writes a numbered pack per sync
+(package/version tables from `pyproject.toml` and `uv.lock`, merged PR titles, every changed
+file with the new-version line ranges, the full patch) and `check` compares any folder with
+the git blob hashes in `manifest.json`.
+
+Confidence review: same-day packs sorted by hash, not order (confirmed, fixed with a
+sequence prefix); `\x1f` stripped as whitespace dropped PR titles (confirmed, fixed);
+a pack's own commit leaking into the next pack (tested: excluded); renames, deletions,
+names with spaces, transitive-only lock changes, CRLF re-saves, `.venv` noise (tested).
+`check` matched a `git archive` ZIP of `04e7221` exactly. Whole-history pack
+`472bdea..04e7221`: 5.9 MB. No symlinks in the tree (they would be reported as `extra`).
+
+Verification: `pytest tests/test_work_pc_delta.py tests/test_quality_gate.py` 5 passed;
+`tools/quality_gate.py` 0 findings. First pack `04e7221..6f5ac16` (PR #42); `check` on a
+`git archive` of the PR head: identical.
+
+Follow-up: `.github/workflows/work-pc-pack.yml` makes and commits a pack after each push to
+`main`; a range with only pack-folder changes makes none (tested), and the CI fast-test
+list now includes `tests/test_work_pc_delta.py`. The workflow itself first runs on merge;
+a protected `main` would refuse its push (the run fails visibly; hand generation remains).
+
 ## 2026-11-10 — Visuals package 8: complete the whole-branch review
 
 Scope: continued the interrupted `claude/visuals-p8` changes from reviewed package 7
