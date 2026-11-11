@@ -774,8 +774,8 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head' }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name])];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix))];
   return new Function(...names, `${src}; return {runReport, registerRowShown, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex};`)(...args);
 }
 const RUN_CP6_ESTABLISHED = d => { const cp6 = d[outId('CP-6')]; cp6.state = { established: true, declared: null }; cp6.summary = { ...cp6.summary, confidence: 'Low', bottomLine: 'Committee leans against.' }; return d; };
@@ -1286,7 +1286,7 @@ test('library: a file is linked only in the one form the build writes, a retaine
     assert.strictEqual(libraryPath(good), true, good);
   }
   for (const bad of ['reports/run-a/9c5b/report.html', 'reports/A%20B/x/report.html', '/etc/passwd', '/files/runs/a/x.md', '//evil.example/x', 'https://x/y', 'javascript:alert(1)', 'file:///x', 'C:\\x', 'reports/../../x', '../../x', '../runs/../../x',
-    'reports/./x', 'reports/%2e%2e/x', '..%2fx', '../runs/x%2f..%2fy', '../runs/x/%5c..%5cy', 'reports/a\\b', 'reports//x', 'reports/', '../', 'reports', 'x.html',
+    'reports/./x', 'reports/%2e%2e/x', '../runs/%2e%2e/x', '../runs/%2E%2E/x', '..%2fx', '../runs/x%2f..%2fy', '../runs/x/%5c..%5cy', 'reports/a\\b', 'reports//x', 'reports/', '../', 'reports', 'x.html',
     'runs/a/x.md', '../runs/a?b', '../runs/a#b', ' ../runs/a', '../runs/a b', '', null, undefined, 7]) {
     assert.strictEqual(libraryPath(bad), false, String(bad));
   }
@@ -1675,7 +1675,7 @@ test('screens pass: one word for a run, in-app actions carry no out-arrow, and t
   const views = read('views.js'), css = read('screen.css'), screen = read('screen.js');
   assert.ok(!/Change case|another case|for this case|other cases/.test(views));
   assert.ok(views.includes('>Change run</a>') && !views.includes('View source ↗'));
-  for (const sel of ['.metric-absent{', '.library-table td.run-id{white-space:nowrap', '.built-from h3{', '#run-matrix .table-scroll{max-width']) assert.ok(css.includes(sel), sel);
+  for (const sel of ['.metric-absent{', '.library-table td.run-id{white-space:nowrap', '#run-matrix .table-scroll{max-width']) assert.ok(css.includes(sel), sel);
   // Never assessed is a fact, not an alert: the completeness note no longer uses the amber of states that need action.
   const box = css.slice(css.lastIndexOf('.completion-box{'));
   assert.ok(box.startsWith('.completion-box{border-color:var(--border-secondary);background:var(--gray-50)'));
@@ -2095,6 +2095,13 @@ test('chart index: the table form and the handoff line are links that keep the r
   assert.equal(lane[7], 'Table form');
   const map = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*Credit-risk transmission map.*?<\/tr>/s.exec(html)[0];
   assert.ok(map.includes('#CP-1/maps?c=run-a'), 'a map opens its module’s Maps part');
+});
+
+test('chart index: a lane opens the module section that holds its events table, not the module head', () => {
+  const sections = { [outId('CP-1')]: [['head', 'Head', ['Reader']], ['additional', 'Additional findings', ['=Events: Financing']]] };
+  const html = runPage(withIndex, [], m => m, { sections }).chartIndex(RUN);
+  const lane = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*?Financing events.*?<\/tr>/s.exec(html)[0];
+  assert.equal(/<a href="([^"]+)">Table form/.exec(lane)[1], '#CP-1/additional?c=run-a', lane);
 });
 
 test('chart index: placed on the Overview and the Forecast page; a run with no chart table says so, and no run draws nothing', () => {

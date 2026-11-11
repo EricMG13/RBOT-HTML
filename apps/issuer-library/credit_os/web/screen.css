@@ -39,7 +39,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 /* Issuer discovery: persistent controls, exact run counts and local filtering. */
 @media(max-width:720px){.library-workspace #content{padding:8px 15px 24px}}
 /* Per-run outputs, quoted bands, report lineage and deliverable comparison. */
-.output-select{display:flex;flex-direction:row;align-items:center;gap:8px;flex-shrink:0}.output-select select{height:32px;max-width:260px;padding:2px 6px;border:1px solid #aeb6c9;border-radius:var(--radius-inline);background:#fff;color:var(--navy);font-size:var(--fs-compact)}.output-choices{display:grid;gap:12px;margin:0 0 25px}.analysis-call .call-quote{font-size:var(--fs-control);line-height:1.55;color:#fff;margin:0;max-width:80ch}.analysis-call+.source-footer{margin:-6px 0 16px}.report-list{list-style:none;padding:0;margin:8px 0 24px}.report-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 0;border-bottom:1px solid var(--rule)}.report-other h2,.report-built h2{font-size:17px}.built-from{flex-shrink:0;max-height:38dvh;overflow:auto;padding:7px 16px;border-bottom:1px solid var(--rule);font-size:var(--fs-compact)}.built-from summary{cursor:pointer;font-weight:600}.built-from table{margin-top:6px}.comparison-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;padding:12px 0;margin-bottom:16px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}.comparison-pair span{display:block;font-size:var(--fs-label);color:var(--muted);margin-bottom:3px}.comparison-pair p{grid-column:1/-1;font-size:var(--fs-label);color:var(--muted)}.recheck{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;background:var(--quiet);padding:10px 12px;margin-bottom:6px}.recheck p{width:100%;font-weight:600;font-size:var(--fs-compact)}
+.output-select{display:flex;flex-direction:row;align-items:center;gap:8px;flex-shrink:0}.output-select select{height:32px;max-width:260px;padding:2px 6px;border:1px solid #aeb6c9;border-radius:var(--radius-inline);background:#fff;color:var(--navy);font-size:var(--fs-compact)}.output-choices{display:grid;gap:12px;margin:0 0 25px}.analysis-call .call-quote{font-size:var(--fs-control);line-height:1.55;color:#fff;margin:0;max-width:80ch}.analysis-call+.source-footer{margin:-6px 0 16px}.report-list{list-style:none;padding:0;margin:8px 0 24px}.report-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 0;border-bottom:1px solid var(--rule)}.comparison-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;padding:12px 0;margin-bottom:16px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}.comparison-pair span{display:block;font-size:var(--fs-label);color:var(--muted);margin-bottom:3px}.comparison-pair p{grid-column:1/-1;font-size:var(--fs-label);color:var(--muted)}.recheck{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;background:var(--quiet);padding:10px 12px;margin-bottom:6px}.recheck p{width:100%;font-weight:600;font-size:var(--fs-compact)}
 .debate .grade{max-width:none}
 @media(max-width:720px){.output-select{margin-top:5px}.output-select select{max-width:100%}.comparison-pair{grid-template-columns:1fr}}
 .rail>button{width:38px;height:38px;display:grid;place-items:center;border:0;border-radius:var(--radius-control);background:none;padding:0;cursor:pointer}.rail-search{margin-top:auto;opacity:.65}.rail-search+.rail-bottom{margin-top:0}
@@ -75,7 +75,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 #settings-status:empty{display:none}
 @media(max-width:720px){.run-fields,.review-modules{grid-template-columns:minmax(0,1fr)}#new-run{padding:10px 9px 20px}.review-summary{grid-template-columns:minmax(0,1fr)}}
 .ref{font-size:var(--fs-label);color:var(--muted);font-variant-numeric:tabular-nums}
-.summary-deliverables{padding:16px 0;margin-top:24px}.summary-deliverables h2{font-size:19px;margin:0 0 8px}.summary-deliverables .text-action{display:flex;margin:6px 0}.summary-deliverables .deliverable{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}.tool-sep{align-self:center;width:1px;height:16px;background:var(--text-quaternary);flex:none;margin-left:-4px}
+.tool-sep{align-self:center;width:1px;height:16px;background:var(--text-quaternary);flex:none;margin-left:-4px}
 .summary-facts{display:grid;grid-template-columns:auto 1fr;gap:10px 28px;margin:10px 0 0}.summary-facts>div{display:contents}.summary-facts dt{font-size:var(--fs-compact);opacity:.75}.summary-facts dd{margin:0;font-size:var(--fs-body)}
 /* Component foundation after Untitled UI React (MIT, (c) 2025 Untitled UI): type scale, text and border roles, radii, shadows and focus ring. Colours stay the company's; greys lean toward its navy. */
 :root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--shadow-sm:0 1px 3px rgba(0,5,51,.1),0 1px 2px -1px rgba(0,5,51,.1);--ring:0 0 0 4px rgba(0,23,229,.16);--radius-inline:4px;--radius-control:8px;--radius-card:12px}
@@ -282,7 +282,7 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 #section-nav:not(:has(:not(.sr-only,.section-context))){padding:0;border:0}
 @media(max-width:720px){#section-nav{position:sticky;top:0;z-index:3;background:#fff;border-bottom:1px solid var(--rule);flex-wrap:wrap}#section-nav .section-context{display:block;flex:1 0 100%;white-space:normal;font-weight:600;color:var(--navy);font-size:var(--fs-label);line-height:1.4}#section-nav:not(:has(:not(.sr-only,.section-context))){padding:3px 0 7px;border-bottom:1px solid var(--rule)}}
 /* One reading toolbar line: the report picker gives way before the status, the badge and the links wrap. */
-.report-tools>span,.report-tools>a,.report-tools label{white-space:nowrap}.report-tools #report-select{flex:0 1 auto;min-width:0;max-width:100%;text-overflow:ellipsis}
+.report-tools>span,.report-tools>a,.report-tools label{white-space:nowrap}
 /* Reading toolbars (also the Forecast one) wrap whole items at every width, so nothing clips between 1051 and 1250 px. */
 .report-tools{flex-wrap:wrap}
 /* Forecast cash flow grid: the row labels stay in view while the periods scroll; the row background hides values behind them. */
@@ -523,8 +523,6 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 /* A deliverable in the panel's list: its name, then its state. */
 .artifact-list{list-style:none;padding-left:0}.artifact-list li+li{margin-top:8px}
 /* One provenance disclosure above a report: the handoffs it was built from, then its files. */
-.built-from h3{margin:12px 0 4px;font:600 var(--fs-compact)/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary)}
-.built-from ul{margin:0;padding-left:18px;columns:3 220px;column-gap:24px}.built-from li{break-inside:avoid}
 /* A report row: name, the run it was built from, its state. */
 .report-row .code{font-size:var(--fs-label)}
 /* Reader charts: a period keeps a comparable width, so two periods sit side by side instead of at the card's two ends. */
@@ -586,9 +584,6 @@ table.matrix th:nth-child(1){width:34%}table.matrix th:nth-child(2){width:24%}
 @media(max-width:720px){.context-bar{padding:4px 15px}}
 .index-table{font-size:var(--fs-label)}.index-table th,.index-table td{vertical-align:top;font-family:'Red Hat Text',sans-serif}.index-table .index-limit{min-width:220px;overflow-wrap:anywhere}
 .chart-index .table-scroll{overflow-x:auto}
-.manifest-fold{flex-shrink:0;max-height:38dvh;overflow:auto;padding:7px 16px;border-bottom:1px solid var(--rule);font-size:var(--fs-compact)}.manifest-fold summary{cursor:pointer;font-weight:600}
-.report-manifest{padding:4px 0}.report-manifest table{margin:8px 0}.report-manifest .hash{font-family:'Red Hat Mono',monospace}
-
 .history-table{width:100%;border-collapse:collapse;font-size:var(--fs-control)}
 .history-table caption{text-align:left;padding:8px 0;color:var(--text-secondary);font-size:var(--fs-label)}
 .history-table th,.history-table td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--border-secondary)}

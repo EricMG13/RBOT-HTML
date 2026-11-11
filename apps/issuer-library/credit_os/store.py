@@ -429,86 +429,6 @@ def listed_bytes(folder: Path, delivery: dict[str, Any], name: str) -> bytes | N
     return data if hashlib.sha256(data).hexdigest() == delivery["files"][name] else None
 
 
-def _passport_sources(
-    refs: list[str], passports: dict[str, dict[str, str]]
-) -> list[dict[str, str]]:
-    """The distinct (source, pin) pairs the report's passports state for these cell references."""
-    pairs: list[dict[str, str]] = []
-    for ref in refs:
-        fields = passports.get(ref, {})
-        pair = {"source": fields.get("Source", ""), "pin": fields.get("SHA-256", "")}
-        if pair["source"] and pair["pin"] and pair not in pairs:
-            pairs.append(pair)
-    return pairs
-
-
-def _view_figures(view: dict[str, Any]) -> list[dict[str, Any]]:
-    """One entry per figure and per table of a report-view.json, as it states them: title, periods,
-    unit, note, point count and the sources its cells cite. Nothing is recomputed."""
-    passports = {
-        p["ref_id"]: {f["name"]: f["value"] for f in p["fields"]} for p in view["passports"]
-    }
-
-    def refs(rows: list[dict[str, Any]]) -> list[str]:
-        return [c["ref_id"] for r in rows for c in r["cells"] if c.get("ref_id")]
-
-    found: list[dict[str, Any]] = []
-    for block in view["blocks"]:
-        for figure in block["figures"]:
-            chart = figure["chart"]
-            rows = chart["table_twin"]["rows"]
-            periods = [
-                r["label"].partition(" \u00b7 ")[2] for r in rows if " \u00b7 " in r["label"]
-            ]
-            found.append(
-                {
-                    "title": figure["title"],
-                    "kind": "Figure",
-                    "periods": list(dict.fromkeys(periods)),
-                    "unit": chart.get("unit") or chart["table_twin"].get("scale"),
-                    "unitClass": chart.get("unit_class"),
-                    "note": block.get("note") or figure.get("summary"),
-                    "points": len(rows),
-                    "sources": _passport_sources(refs(rows), passports),
-                }
-            )
-        if block["kind"] in ("period_grid", "dense", "keyvalue") and block["rows"]:
-            found.append(
-                {
-                    "title": block["title"],
-                    "kind": "Table",
-                    "periods": [c for c in block["columns"] if re.search(r"\d{4}", c)]
-                    if block["kind"] == "period_grid"
-                    else [],
-                    "unit": block.get("scale")
-                    or ("Stated per row" if "Unit" in block["columns"] else None),
-                    "unitClass": None,
-                    "note": block.get("note"),
-                    "points": len(block["rows"]),
-                    "sources": _passport_sources(refs(block["rows"]), passports),
-                }
-            )
-    return found
-
-
-def report_figures(
-    folder: Path, delivery: dict[str, Any]
-) -> tuple[list[dict[str, Any]] | None, str | None]:
-    """The figures and tables of folder/report-view.json when delivery.json lists it with a hash
-    that matches, read only. (None, None) when the delivery lists none; (None, issue) when the
-    listed file does not match or cannot be read: named, never silent."""
-    files = delivery.get("files")
-    if not isinstance(files, dict) or "report-view.json" not in files:
-        return None, None
-    try:
-        raw = listed_bytes(folder, delivery, "report-view.json")
-        if raw is None:
-            return None, f"{folder.name}: report-view.json is not the plain file its delivery lists"
-        return _view_figures(json.loads(raw.decode("utf-8"))), None
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as error:
-        return None, f"{folder.name}: report-view.json could not be read ({describe(error)})"
-
-
 def recorded_revisions(run_dir: Path, issues: list[str]) -> list[tuple[str, str]]:
     """The earlier run ids this run records: cap.json `replayed_from_run` (a rerun of it) and
     research/attachments.json `supersedes`. Read only. A missing file records nothing; one that
@@ -3054,14 +2974,28 @@ def recorded_run(run_dir: Path, issues: list[str] | None = None) -> dict[str, st
         return {}
 
 
+def delivery_identity(folder: str, manifest: dict[str, Any]) -> dict[str, Any] | str:
+    """A deliverable's recorded run and issuer, or the reason its view.json states none."""
+    try:
+        identity = manifest["run"]
+        run_id, name = identity["run_id"], identity["issuer_name"]
+        issuer_id = identity.get("issuer_id") or None
+    except MANIFEST_ERRORS as error:
+        return f"view.json states no run identity ({describe(error)})"
+    if not (isinstance(run_id, str) and isinstance(name, str) and name):
+        return "view.json states no run identity (run_id and issuer_name must be text)"
+    valid_id = issuer_id if isinstance(issuer_id, str) else None
+    return {"folder": folder, "run_id": run_id, "issuer_id": valid_id, "issuer_name": name}
+
+
 def delivery_identities(
     root: Path, catalogue: dict[str, Any], manifests: Manifests | None = None
 ) -> list[dict[str, Any]]:
     """What each available (hash-verified) deliverable says about its own run and issuer.
 
-    A deliverable whose view.json cannot be read is skipped here; workspace_store names it in
-    Workspace issues, so the failure is reported once and no run takes an identity from it.
-    `manifests` are the folders' model_manifests, read when omitted.
+    A deliverable whose view.json cannot be read, or states no run identity, is skipped here;
+    workspace_store names it in Workspace issues, so the failure is reported once and no run
+    takes an identity from it. `manifests` are the folders' model_manifests, read when omitted.
     """
     manifests = (
         model_manifests(root, available_folders(catalogue)) if manifests is None else manifests
@@ -3075,19 +3009,10 @@ def delivery_identities(
                 continue
             seen.add(folder)
             manifest = manifests.get(folder)
-            if not isinstance(manifest, tuple):
-                continue
-            try:
-                identity = manifest[1]["run"]
-                run_id, name = identity["run_id"], identity["issuer_name"]
-                issuer_id = identity.get("issuer_id") or None
-            except MANIFEST_ERRORS:
-                continue
-            if isinstance(run_id, str) and isinstance(name, str) and name:
-                valid_id = issuer_id if isinstance(issuer_id, str) else None
-                found.append(
-                    {"folder": folder, "run_id": run_id, "issuer_id": valid_id, "issuer_name": name}
-                )
+            if isinstance(manifest, tuple) and isinstance(
+                identity := delivery_identity(folder, manifest[1]), dict
+            ):
+                found.append(identity)
     return sorted(found, key=lambda item: item["folder"])
 
 
@@ -3327,9 +3252,10 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
     found += unread
     # A deliverable that cannot be read is named here (read_model names a model's own folder).
     for folder, manifest in manifests.items():
+        reason = manifest if isinstance(manifest, str) else delivery_identity(folder, manifest[1])
         if (
-            isinstance(manifest, str)
-            and (message := f"{folder}: could not be read ({manifest})") not in found
+            isinstance(reason, str)
+            and (message := f"{folder}: could not be read ({reason})") not in found
         ):
             found.append(message)
     # A compared deliverable is a curated build, not a folder that merely has its name.

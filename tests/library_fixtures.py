@@ -147,8 +147,9 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
     manifest_sha = sha(manifest)
     put(run_dir / f"delivery-{manifest_sha}.json", manifest)
     view_run = dict(run, issuer_id=spec.view_issuer or issuer_id)
-    # The parts of a CP-OS report that the library's report-adapter.js reads: the report data, the
-    # view root, and the evidence inspector with its head and content.
+    # A legacy CP-OS report.html, as older deliveries carry it. The library no longer reads or
+    # shows it (the report adapter is retired); it is listed and hash-checked like any delivered
+    # file, and without_report() builds the same delivery without it.
     payload = json.dumps(
         {"run": {"issuer_name": issuer_name}, "report": {"pathway": {"title": "Credit snapshot"}}}
     ).replace("<", "\\u003c")

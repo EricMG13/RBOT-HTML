@@ -639,13 +639,6 @@ function outputChooser(module) {
   const ctx=contexts[current.context],files=moduleEntry(module,current.context).outputs;
   return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Choose a saved output</h2><p>${files.length} versions of this analysis. Choose one to read.</p></div><div class="output-choices">${files.map(id=>`<a class="text-action" href="${routeHref(module,modules[id].first,null,current.context,data[id].source)}">${esc(data[id].label)}${icon('arrow-right')}</a>`).join('')}</div>`;
 }
-// Events come from the run's own CP-1A event table (calendar.js eventTable); no dates are inferred from other runs.
-// The CP-1A output holding that table, default output first, or null.
-function eventsOutput(context) {
-  const entry=moduleEntry('CP-1A',context);
-  return entry?[entry.default,...entry.outputs].find(id=>id&&eventTable(data[id].sections))||null:null;
-}
-const hedgesOutput=context=>{const entry=moduleEntry('CP-2E',context);return entry?.default||entry?.outputs[0]||null;};
 // ---- Calendar lanes: one lane per module output that carries an `Events: <lane>` table (store.py event lanes), on one shared date axis.
 // A lane is named by the table's heading, so no module code is shown. `gap` is the stated reason when the module supplied no dated event.
 function eventLanes(context) {
@@ -792,7 +785,7 @@ function chartRows(context) {
       const unit=drawn&&kind==='chart'?(here.unit===''?'Stated per row':here.unit??NOT_STATED):NOT_STATED;
       const period=drawn&&kind==='chart'&&table.headers[0]==='Period'?[...new Set([table.rows[0].cells[0],table.rows.at(-1).cells[0]])].map(plain).join(' to '):NOT_STATED;
       const line=table.rows[0]?.line,key=`${id}:${line}`;
-      const form=!drawn?null:kind==='lane'?routeHref(out.module,modules[id].first,null,out.run,out.source):routeHref(out.module,kind==='map'?'maps':'numbers',null,out.run,out.source);
+      const form=!drawn?null:kind==='lane'?routeHref(out.module,modules[id].sections.find(([,,patterns])=>patterns.some(p=>matchesHeading(section.heading,p)))?.[0]||modules[id].first,null,out.run,out.source):routeHref(out.module,kind==='map'?'maps':'numbers',null,out.run,out.source);
       return [{key,title,owner:moduleTitle(out.module),state,limitation,unit,period,where:drawn?shownIn(out,kind,here.name).join(', '):'Not drawn',form,source:evidence.has(key)?evidenceHref(id,line):null,line}];
     });
   });

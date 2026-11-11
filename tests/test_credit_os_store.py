@@ -952,135 +952,7 @@ def test_an_edge_whose_evidence_is_a_dash_is_not_drawn(dash):
     assert fields["maps"] == [] and "is not in its fixed table" in fields["issue"]
 
 
-# ---- Package 7 fix round: report-view.json figures and revisions (synthetic values).
-SYNTHETIC_VIEW = {
-    "blocks": [
-        {
-            "block_id": "intro",
-            "kind": "prose",
-            "title": "Intro",
-            "figures": [],
-            "rows": [],
-            "note": None,
-        },
-        {
-            "block_id": "strip",
-            "kind": "chart",
-            "title": "Strip",
-            "note": "Synthetic note.",
-            "rows": [],
-            "figures": [
-                {
-                    "fig_id": "S.1",
-                    "title": "Chart data: synthetic leverage — Period",
-                    "summary": "Synthetic summary.",
-                    "chart": {
-                        "unit": "x",
-                        "unit_class": "multiple",
-                        "table_twin": {
-                            "scale": "x",
-                            "rows": [
-                                {
-                                    "label": "Debt · FY2023 / 2023-09-30",
-                                    "cells": [{"text": "6.3x", "ref_id": "C1"}],
-                                },
-                                {
-                                    "label": "Debt · FY2024 / 2024-09-30",
-                                    "cells": [{"text": "5.9x", "ref_id": "C2"}],
-                                },
-                            ],
-                        },
-                    },
-                }
-            ],
-        },
-        {
-            "block_id": "grid",
-            "kind": "period_grid",
-            "title": "Synthetic grid",
-            "scale": None,
-            "note": None,
-            "columns": ["FY2024", "FY2023", "Unit"],
-            "figures": [],
-            "rows": [
-                {
-                    "cells": [
-                        {"text": "1", "ref_id": "C1"},
-                        {"text": "2", "ref_id": "C3"},
-                        {"text": "US$m", "ref_id": "C1"},
-                    ]
-                }
-            ],
-        },
-    ],
-    "passports": [
-        {
-            "ref_id": "C1",
-            "fields": [{"name": "Source", "value": "CP-0"}, {"name": "SHA-256", "value": "a" * 64}],
-        },
-        {
-            "ref_id": "C2",
-            "fields": [{"name": "Source", "value": "CP-0"}, {"name": "SHA-256", "value": "a" * 64}],
-        },
-        {
-            "ref_id": "C3",
-            "fields": [{"name": "Source", "value": "CP-1"}, {"name": "SHA-256", "value": "b" * 64}],
-        },
-    ],
-}
-
-
-def listed(folder, view_bytes, listed_hash=None):
-    (folder / "report-view.json").write_bytes(view_bytes)
-    return {"files": {"report-view.json": listed_hash or hashlib.sha256(view_bytes).hexdigest()}}
-
-
-def test_report_figures_are_read_as_stated_from_the_listed_report_view(tmp_path):
-    raw = json.dumps(SYNTHETIC_VIEW).encode()
-    figures, issue = store.report_figures(tmp_path, listed(tmp_path, raw))
-    assert issue is None
-    assert [f["title"] for f in figures] == [
-        "Chart data: synthetic leverage — Period",
-        "Synthetic grid",
-    ]
-    figure, table = figures
-    assert (
-        figure["kind"],
-        figure["periods"],
-        figure["unit"],
-        figure["unitClass"],
-        figure["points"],
-    ) == ("Figure", ["FY2023 / 2023-09-30", "FY2024 / 2024-09-30"], "x", "multiple", 2)
-    assert figure["note"] == "Synthetic note."
-    assert figure["sources"] == [{"source": "CP-0", "pin": "a" * 64}]
-    assert (table["kind"], table["periods"], table["unit"], table["note"]) == (
-        "Table",
-        ["FY2024", "FY2023"],
-        "Stated per row",
-        None,
-    )
-    assert table["sources"] == [
-        {"source": "CP-0", "pin": "a" * 64},
-        {"source": "CP-1", "pin": "b" * 64},
-    ]
-
-
-def test_a_delivery_that_lists_no_report_view_has_no_figures_and_no_issue(tmp_path):
-    assert store.report_figures(tmp_path, {"files": {"report.html": "x"}}) == (None, None)
-
-
-@pytest.mark.parametrize("hash_wrong", [True, False])
-def test_a_report_view_that_does_not_match_or_cannot_be_read_is_an_issue_not_silence(
-    tmp_path, hash_wrong
-):
-    raw = json.dumps(SYNTHETIC_VIEW).encode()
-    delivery = listed(tmp_path, raw, "0" * 64 if hash_wrong else None)
-    if not hash_wrong:
-        (tmp_path / "report-view.json").unlink()
-    figures, issue = store.report_figures(tmp_path, delivery)
-    assert figures is None and issue and "report-view.json" in issue
-
-
+# ---- Package 7 fix round: revisions (synthetic values).
 def test_recorded_revisions_read_the_cap_and_attachments_files(tmp_path):
     (tmp_path / "research").mkdir()
     (tmp_path / "cap.json").write_text(
@@ -1139,6 +1011,31 @@ def test_a_delivery_without_report_html_builds_the_store(tmp_path):
     assert result["issues"] == []
     assert set(result["runs"]) == {"run-a"}
     assert {o["module"] for o in result["outputs"].values()} == set(MODULES)
+
+
+@pytest.mark.parametrize(
+    "view",
+    [{"no_run": True}, {"run": {"issuer_name": "Issuer"}}, {"run": {"run_id": "run-a"}}, [1]],
+    ids=["no-run", "no-run-id", "no-issuer-name", "not-an-object"],
+)
+def test_a_delivery_whose_view_states_no_run_identity_is_named_in_the_issues(tmp_path, view):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    raw = json.dumps(view).encode()
+    (delivered / "view.json").write_bytes(raw)
+    receipt = json.loads((delivered / "delivery.json").read_text())
+    receipt["files"]["view.json"] = hashlib.sha256(raw).hexdigest()
+    (delivered / "delivery.json").write_text(json.dumps(receipt))
+    artifact = {
+        "folder": f"runs/run-a/deliveries/{delivered.name}",
+        "label": "r",
+        "state": "final",
+        "available": True,
+        "href": None,
+    }
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert [i for i in result["issues"] if "could not be read" in i and delivered.name in i]
 
 
 def test_a_delivery_that_cannot_be_read_is_named_in_the_issues(tmp_path):
