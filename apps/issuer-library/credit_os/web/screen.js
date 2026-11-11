@@ -348,7 +348,8 @@ function paragraphBasisHtml(key,item,output,mode,chips) {
     figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
     // reader.js draws the list (the same code the node tests read). New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
     const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
-    items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
+    const ev=contexts[output.run]?.evidence||{},files=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name);
+    items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,files,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
   }
   const rest=chips.filter(c=>!used.has(c));
   return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;

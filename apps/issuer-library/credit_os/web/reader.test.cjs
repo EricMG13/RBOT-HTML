@@ -262,6 +262,21 @@ test('inspectorItems: a "; " file name never resolves to another file\'s chips; 
   assert.deepEqual(noExt[0].chips, [bare]);
 });
 
+test('inspectorItems: a run supplying "Q3 results; final.pdf" whose key holds only a final.pdf page-4 chip: the fragment does not take final.pdf\'s chip', () => {
+  const other = {kind: 'issuer_page', file: 'final.pdf', page: 4};
+  const ctx = {sections: [], chips: [other], files: ['Q3 results; final.pdf'], ran: () => false};
+  const items = inspectorItems('x\nBasis: Q3 results; final.pdf, page 4', ctx);
+  assert.deepEqual(items.map(i => [i.raw, i.chips]), [['Q3 results; final.pdf, page 4', []]]);
+});
+
+test('screen.js passes the run\'s supplied file names, so a "; " file name is not split into another file\'s chips', () => {
+  const other = {kind: 'issuer_page', file: 'final.pdf', page: 4};
+  const text = 'Cash is thin.\nBasis: Q3 results; final.pdf, page 4';
+  const html = inspectorDrawnFor(0, 0, [other], {sources: [{name: 'Q3 results; final.pdf'}], unused: [], unrecorded: []}, text);
+  assert.ok(html.includes('<li><strong>Q3 results; final.pdf</strong>, page 4</li>'), html);
+  assert.ok(html.includes('Other citations') && html.includes('final.pdf p.4'), 'the final.pdf chip is listed apart, not taken by the item');
+});
+
 test('an earlier-format citation keeps class basis, so the page\'s name rewriting leaves [CP-1 T3] as written', () => {
   const html = inspectorBasisBlock('Leverage is 5.2x [CP-1 T3].', true, {sections: [], chips: [], ran: () => false}, () => '');
   assert.match(html, /^<div class="basis">/);
@@ -415,15 +430,15 @@ test('inspectorItems: a paragraph\'s Basis items resolved in the handoff\'s orde
 
 // The inspector's drawn Basis list: screen.js paragraphBasisHtml (the real text, stand-ins for its globals) over the synthetic CP-2 handoff.
 // Expected <li> items are written by hand from the Basis lines of apps/issuer-library/fixtures/synthetic-new-format/SYNTHETIC-CP-2.md (lines 18, 23, 25).
-function inspectorDrawnFor(firstLine, lastLine, chips = []) {
+function inspectorDrawnFor(firstLine, lastLine, chips = [], evidence = {}, paragraphText = null) {
   const text = fs.readFileSync(path.join(__dirname, 'screen.js'), 'utf8');
   const start = text.indexOf('function chipSection('), end = text.indexOf('function showInspector(');
   const reader = require('./reader.js');
-  const draw = new Function('esc', 'icon', 'inspectorItem', 'inspectorItemHtml', 'inspectorBasisBlock', 'uniqueChips', 'isNewFormat', 'paragraphBody', 'figureSpans', 'defaultOutput', 'moduleHref', `${text.slice(start, end)}; return paragraphBasisHtml;`)(
-    reader.escapeHtml, n => `<img src="${n}">`, reader.inspectorItem, reader.inspectorItemHtml, reader.inspectorBasisBlock, reader.uniqueChips, reader.isNewFormat, reader.paragraphBody, reader.figureSpans, code => code === 'CP-1', code => `#/${code}`);
+  const draw = new Function('esc', 'icon', 'inspectorItem', 'inspectorItemHtml', 'inspectorBasisBlock', 'uniqueChips', 'isNewFormat', 'paragraphBody', 'figureSpans', 'defaultOutput', 'moduleHref', 'contexts', `${text.slice(start, end)}; return paragraphBasisHtml;`)(
+    reader.escapeHtml, n => `<img src="${n}">`, reader.inspectorItem, reader.inspectorItemHtml, reader.inspectorBasisBlock, reader.uniqueChips, reader.isNewFormat, reader.paragraphBody, reader.figureSpans, code => code === 'CP-1', code => `#/${code}`, {r: {evidence}});
   const lines = fixture('CP-2');
   const calculations = {heading: 'Calculations', level: 2, line: 44, blocks: [{type: 'table', line: 46, headers: ['ID', 'Calculation', 'Steps', 'Result'], rows: [{line: 48, cells: ['K1', 'Net debt to EBITDA', 'Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331', '4.2x']}]}]};
-  const paragraph = lines.slice(firstLine - 1, lastLine).join('\n');
+  const paragraph = paragraphText ?? lines.slice(firstLine - 1, lastLine).join('\n');
   return draw('k', {text: paragraph}, {sections: [calculations, ...newFormat('b')], run: 'r', href: '../runs/r/d/CP-2.md', source: 'd/CP-2.md'}, 'p', chips);
 }
 const basisList = lis => `<div class="basis"><h3>Basis</h3><ul class="basis-items">${lis.join('')}</ul></div>`;
