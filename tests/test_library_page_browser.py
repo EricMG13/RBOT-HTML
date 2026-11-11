@@ -464,7 +464,13 @@ def test_the_reference_part_fits_the_page(tmp_path, width):
     update_library.update_library(tmp_path)
     dom, console = visit(tmp_path / "library/index.html", "#CP-1/reference?c=run-a", width)
     assert console == []
-    found = re.search(r'<details class="fold" id="reference"[^>]*>(.*?)</details>', dom, re.DOTALL)
+    # The fold holds Basis disclosures (earlier-format chips, ruling H4), so its end is the first
+    # </details> outside one.
+    fold = (
+        r'<details class="fold" id="reference"[^>]*>'
+        r'((?:<details class="basis-fold".*?</details>|(?!</details>).)*)</details>'
+    )
+    found = re.search(fold, dom, re.DOTALL)
     assert found and re.search(r'<details class="fold" id="reference" open', dom)
     reference = found[1]
     assert "Debt structure" in reference and "Term loan" in reference
@@ -540,7 +546,8 @@ def nine_part_library(tmp_path: Path) -> Path:
 
 # Names, not codes: the module page with its audit section and the inspector open, then the Evidence
 # tab, Run activity and a search, read as a reader sees and hears them (text, title, aria-label).
-# Register references (C1, K) are not codes of this kind.
+# Register references (C1, K) are not codes of this kind. A navigator entry shows its module code
+# in the code style (ruling decision 5), so `.module-code` text is the one place a code appears.
 CODES_PROBE = """(async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [];
   const code = /\\bCP-[A-Z0-9]+\\b|\\bT\\d+[A-Z]?(?:\\.\\d+)?\\b/;
@@ -550,7 +557,8 @@ CODES_PROBE = """(async () => {
     while (walker.nextNode()) {
       const node = walker.currentNode, text = node.nodeType === 3;
       const seen = text
-        ? [node.parentElement.closest('script,style,#probe') ? '' : node.data]
+        ? [node.parentElement.closest('script,style,#probe,.module-code')
+            ? '' : node.data]
         : ['title', 'aria-label'].map(a => node.getAttribute(a) || '');
       for (const value of seen) if (code.test(value)) hits.push(where + ': ' + value.slice(0, 80));
     }

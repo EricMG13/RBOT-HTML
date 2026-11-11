@@ -2,9 +2,12 @@
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const seen = {};
   // The count under the UNKEYED paragraph in Analysis (two citations), not the first count on the page (a finding row with one).
-  const unkeyed = () => [...document.querySelectorAll('#analysis .analysis-text')].find(p => p.textContent.includes('The figure is printed in Z'));
-  for (let i = 0; i < 200 && !unkeyed()?.querySelector('.chip-count'); i++) await sleep(50);
-  const count = unkeyed()?.querySelector('.chip-count');
+  // Earlier-format chips sit behind the paragraph's Basis control (the disclosure after it); the reader opens it first.
+  const unkeyed = () => [...document.querySelectorAll('#analysis .analysis-text')].find(p => p.textContent.includes('The figure is printed in Z'))?.nextElementSibling;
+  for (let i = 0; i < 200 && !unkeyed(); i++) await sleep(50);
+  const fold = unkeyed();
+  if (fold) fold.open = true;
+  const count = fold?.querySelector('.chip-count');
   seen.count = count ? count.textContent : null;
   seen.verified = document.querySelectorAll('.chip.verified').length;
   seen.singleGaps = [...document.querySelectorAll('.chip.gap')].filter(c => !/Not supplied/.test(c.textContent)).length;

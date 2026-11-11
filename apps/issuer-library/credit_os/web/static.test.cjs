@@ -228,8 +228,9 @@ function report(overrides = {}, modSections = null) {
   }
   const win = { CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
-  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases'];
-  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }];
+  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem'];
+  const reader = require('./reader.js');
+  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem];
   return new Function(...names, `${src}; return {moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE, moduleTitle, handoffLabel};`)(...args);
 }
 const strip = html => html.replace(/<[^>]+>/g, '');
@@ -348,7 +349,10 @@ test('(i) the declared status is a badge beside the acceptance badge; none decla
 
 test('(j) Analysis holds only the view sections, open, in handoff order, each with its line id', () => {
   const html = report().reportAnalysis(OUT);
-  assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>') && !html.includes('<details'));
+  // Ruling H4 (earlier format): chips in prose sit behind a quiet per-paragraph Basis control, so the part itself has no fold but the Basis disclosures.
+  assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>') && !html.includes('<details class="fold"'));
+  assert.equal(countOf(html, /<details class="basis-fold"><summary>Basis<\/summary><span class="chips">/g), 2);
+  assert.ok(!/class="chips"/.test(html.replace(/<details class="basis-fold">.*?<\/details>/gs, '')), 'no chip is printed outside a Basis control');
   assert.deepEqual([...html.matchAll(/class="analysis-section" id="(s-\d+)"/g)].map(m => m[1]), ['s-34', 's-36']);
   assert.ok(html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes('aria-label="Handoff row, line 35"'));
   for (const other of ['Liquidity table', 'Debt register', 'Calculation trace', 'Coupons', 'Reader summary', 'Extra notes']) assert.ok(!html.includes(other), other);
@@ -771,12 +775,12 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
   const contexts = { [RUN]: { folder: RUN, record: more.record, ...more.runFields, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
-  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [] } };
+  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates'].map(name => require('./reader.js')[name])];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex};`)(...args);
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem'].map(name => require('./reader.js')[name])];
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, drawnAnchors, defaultOutput, firstSection};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -1040,6 +1044,143 @@ test('Overview shell: no navigator or Browse modules button, no outline, and the
   for (const gone of ['.story-module', '.story-group', '.na-line', 'a.cov', '.coverage{', 'table.register', 'table.open-items', 'table.matrix', '.register-tools', '.run-count', '#run-matrix']) assert.ok(!css.includes(gone), gone);
   for (const sel of ['.overview-part', '.passage-list', '.basis{', '.dates-table']) assert.ok(css.includes(sel), sel);
 });
+// ---- The Modules navigator and the module page (ruling decisions 3, 5, 12; H1, H4). Expected values are written by hand from the synthetic fixture.
+const navPage = (more = {}, module = 'CP-2', query = '') => {
+  const page = fixturePage({ runFields: { asOf: '2025-03-31', issuerKey: 'nbg' }, ...more });
+  page.current.module = module; page.current.output = module === 'CP-MODEL' ? null : outId(module); page.current.section = 'head';
+  return { page, ...page.navigatorView(module, query) };
+};
+const NAV_MODEL = { id: 'model-1', issuerKey: 'nbg', runId: RUN, sources: [] };
+
+test('navigator (decision 5): no details or summary anywhere, plain group headings in order, only groups with a module that ran', () => {
+  const { html } = navPage();
+  assert.ok(!/<details|<summary/.test(html), 'flat and always open');
+  assert.deepEqual([...html.matchAll(/<h2 class="nav-heading">([^<]*)<\/h2>/g)].map(m => m[1]), ['Business and evidence', 'Financial performance', 'Names added by the test']);
+});
+
+test('navigator (decision 5): only modules that ran are listed, and the count is that number', () => {
+  const { html, count } = navPage();
+  assert.equal(count, 5);
+  assert.deepEqual([...html.matchAll(/<span class="module-code">([^<]*)<\/span>/g)].map(m => m[1]), ['CP-0', 'CP-1', 'CP-1A', 'CP-2', 'CP-2D']);
+  assert.ok(!html.includes('CP-1B') && !html.includes('CP-2A') && !html.includes('CP-6'), 'a module the run did not hold is not listed');
+});
+
+test('navigator (decision 5): a module with no saved output is not listed even when the run records it', () => {
+  const page = runPage(d => withFixtureLanes(overviewData(FIXTURE)), [], m => ({ ...m, 'CP-1B': { outputs: [], default: null } }), { record: steps([...Object.keys(FIXTURE), 'CP-1B']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  page.current.module = 'CP-2'; page.current.output = outId('CP-2');
+  const { html, count } = page.navigatorView('CP-2', '');
+  assert.equal(count, 5);
+  assert.ok(!html.includes('CP-1B'));
+});
+
+test('navigator (decision 5): plain name first, then the code in the code style; a blocked module is marked Not assessable, no other is', () => {
+  const { html } = navPage();
+  assert.ok(html.includes('<span class="module-label">Source readiness</span><span class="module-code">CP-0</span>'));
+  assert.ok(html.includes('<span class="module-label">Credit view</span><span class="module-code">CP-2</span>'));
+  const liquidity = /<a [^>]*><span class="module-label">Liquidity<\/span>.*?<\/a>/s.exec(html)[0];
+  assert.ok(liquidity.indexOf('>Liquidity<') < liquidity.indexOf('>CP-2D<') && liquidity.includes('<span class="badge badge-gray">Not assessable</span>'));
+  assert.equal(countOf(html, /Not assessable<\/span>/g), 1);
+});
+
+test('navigator (decision 5): the open entry has aria-current="page" and its On this page outline directly under it; no other entry has either', () => {
+  const { html } = navPage();
+  assert.equal(countOf(html, /aria-current="page"/g), 1);
+  assert.equal(countOf(html, /<nav class="section-outline" aria-label="On this page">/g), 1);
+  const entry = /<li><a [^>]*aria-current="page"[^>]*>.*?<\/a><nav class="section-outline".*?<\/nav><\/li>/s.exec(html)[0];
+  assert.ok(entry.includes('Credit view'));
+  assert.deepEqual([...entry.matchAll(/class="section-item" href="[^"]*"[^>]*>([^<]*)<\/a>/g)].map(m => m[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Request', 'Sources', 'Calculations', 'Gaps', 'Next module']);
+});
+
+test('navigator (decision 5): search filters the same flat list by name, code and section titles', () => {
+  assert.equal(navPage({}, 'CP-2', 'liquidity').count, 1);
+  assert.equal(navPage({}, 'CP-2', 'cp-2d').count, 1);
+  assert.equal(navPage({}, 'CP-2', 'cp-2').count, 2);
+  const none = navPage({}, 'CP-2', 'zzz');
+  assert.equal(none.count, 0);
+  assert.ok(none.html.includes('No match.') && !/<details/.test(none.html));
+});
+
+test('navigator (decision 5): the Cash flow model entry (code CP-MODEL) is present exactly when the run has a published model', () => {
+  const without = navPage();
+  assert.ok(!without.html.includes('CP-MODEL') && !without.html.includes('Cash flow model'));
+  const withModel = navPage({ models: [NAV_MODEL] });
+  assert.equal(withModel.count, 6);
+  assert.ok(withModel.html.includes('<h2 class="nav-heading">Delivered model</h2>'));
+  assert.ok(withModel.html.includes('<span class="module-label">Cash flow model</span><span class="module-code">CP-MODEL</span>'));
+  assert.ok(/href="#CP-MODEL\/model-1\?c=run-a"/.test(withModel.html), 'it opens the model view in the Modules workbench, not the Forecast tab');
+});
+
+test('module page (H1): the four reader passages come first under their headings, then the other sections in handoff order', () => {
+  const page = fixturePage(), id = outId('CP-2'), parts = page.reportParts(id);
+  assert.deepEqual(parts.map(p => p[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Request', 'Sources', 'Calculations', 'Gaps', 'Next module']);
+  const html = page.moduleReport(id);
+  const at = marker => html.indexOf(marker);
+  assert.ok(at('id="bottom-line"') > 0 && at('id="bottom-line"') < at('id="key-findings"') && at('id="key-findings"') < at('id="contrary-evidence"') && at('id="contrary-evidence"') < at('id="limitations"'));
+  assert.ok(at('id="limitations"') < at('Credit view for Northbridge Synthetic Group'), 'the Request section follows the passages');
+  for (const old of ['id="numbers"', 'id="findings"', 'class="band"', 'Quoted from the handoff', 'id="analysis"']) assert.ok(!html.includes(old), `${old} is the old reader-summary page`);
+});
+
+test('module page (H1): passage text exactly as written, the Basis line not printed and kept in data-basis', () => {
+  const html = fixturePage().moduleReport(outId('CP-2')), text = readText(html);
+  for (const kept of [
+    'Creditors are exposed to refinancing risk rather than to weak earnings: net debt of USD 1,390 million is 4.2x earnings, and the next maturities fall inside two years.',
+    'A large part of the debt comes due soon: 38% of gross debt matures within 24 months, which makes refinancing access the deciding factor.',
+    'The strongest evidence against concern is the consistent earnings record over recent quarters. A signed refinancing of the nearest maturity would move the view towards comfort.',
+    'The company has not said how it intends to fund the step-down.',
+    'The Covenant package was not reviewed,  so covenant headroom is not assessed',
+  ]) assert.ok(text.includes(kept), kept);
+  assert.ok(!text.includes('Basis:') && !html.includes('class="basis"'), 'the Basis line is not printed');
+  const attr = /<p class="passage-text" data-basis="([^"]*)">Creditors are exposed/.exec(html)[1].replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  assert.deepEqual(JSON.parse(attr), { line: 'Basis: NBG_2025-03-31_annual-report.pdf, page 41; calculation K1', items: [{ kind: 'source', file: 'NBG_2025-03-31_annual-report.pdf', page: 41 }, { kind: 'calculation', id: 'K1' }] });
+  // Key findings: three items, each with a Basis line. Limitations: the first item has none, the second and third have one.
+  assert.equal(countOf(html, /<li data-basis="/g), 5);
+  assert.equal(countOf(html, /<li>/g), 1, 'the one list item with no Basis line carries no data-basis');
+  assert.ok(/<p class="passage-text">The company has not said how it intends to fund the step-down\.<\/p>/.test(html), 'a paragraph with no Basis line has no data-basis');
+});
+
+test('module page (H1): the other sections are kept exact, tables with their Source column, in handoff order', () => {
+  const html = fixturePage().moduleReport(outId('CP-2'));
+  const order = ['Credit view for Northbridge Synthetic Group (nbg), as of 2025-03-31. SYNTHETIC FIXTURE.', 'Debt, cash and maturity profile.', 'Net debt to EBITDA', 'No peer set supplied', 'CP-2D assesses liquidity against the maturities.'].map(t => html.indexOf(t));
+  assert.ok(order.every(i => i > 0) && order.every((i, k) => k === 0 || i > order[k - 1]), `handoff order ${order}`);
+  assert.ok(html.includes('Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331') && html.includes('<th scope="col">Source</th>'));
+});
+
+test('module page (H4): a blocked new-format module has only its Bottom line and is marked in its head', () => {
+  const page = fixturePage(), html = page.moduleReport(outId('CP-2D'));
+  assert.deepEqual(page.reportParts(outId('CP-2D')).map(p => p[1]).slice(0, 2), ['Module', 'Bottom line']);
+  assert.ok(!html.includes('id="key-findings"') && !html.includes('id="limitations"') && html.includes('Not assessable</span>'));
+  assert.ok(readText(html).includes('Liquidity is not assessable: the documents read give no monthly cash forecast'));
+});
+
+test('module page: a module with event lanes draws its own timeline, and one without draws none (the Calendar tab is gone)', () => {
+  const page = fixturePage(), cp1a = page.moduleReport(outId('CP-1A')), cp2 = page.moduleReport(outId('CP-2'));
+  assert.ok(/<section class="part" id="timeline"><div class="event-lanes compact"><div class="section-heading"><h3>Timeline<\/h3>/.test(cp1a));
+  assert.ok(cp1a.includes('<span class="lane-name">issuer calendar</span>') && countOf(cp1a, /class="lane-event point/g) === 9);
+  assert.ok(!cp2.includes('id="timeline"') && !cp2.includes('lane-name'));
+  assert.ok(page.reportParts(outId('CP-1A')).some(p => p[0] === 'timeline' && p[1] === 'Timeline'));
+});
+
+test('module page (H4): an earlier-format handoff keeps its parts and sections, with chips behind Basis and no data-basis', () => {
+  const r = report(), parts = r.reportParts(OUT).map(p => p[0]);
+  assert.deepEqual(parts, NINE);
+  const html = r.moduleReport(OUT);
+  assert.ok(html.includes('class="band"') && html.includes('Leverage rose.') && html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes('Debt register') && !html.includes('data-basis'));
+  assert.ok(!/class="chips"/.test(r.reportAnalysis(OUT).replace(/<details class="basis-fold">.*?<\/details>/gs, '')), 'no chip in prose outside a Basis control');
+});
+
+test('module page: s-<line> routes are the new-format sections that are not passages; a passage is a part', () => {
+  const anchors = fixturePage().drawnAnchors(outId('CP-2'));
+  assert.ok(anchors.has('s-3') && anchors.has('s-44') && !anchors.has('s-15'), 'Request (line 3) and Calculations (line 44) are anchors; the Bottom line passage (line 15) is a part');
+});
+
+test('navigator (decision 5): nothing collapses and nothing persists: no expandedGroups, no details in the navigator code or markup, the Browse modules toggle remains', () => {
+  const screen = read('screen.js'), views = read('views.js');
+  assert.ok(!screen.includes('expandedGroups') && !screen.includes('module-catalogue') && !screen.includes('nav-group'));
+  const navigator = views.slice(views.indexOf('function navigatorGroups'), views.indexOf('const moduleHref='));
+  assert.ok(navigator.length > 500 && !/details|summary/.test(navigator));
+  assert.ok(!/<details|<summary/.test(read('index.html')) && read('index.html').includes('id="module-toggle"') && screen.includes("$('module-toggle').addEventListener('click'"));
+});
+
 // A module with saved outputs and no default (two unnumbered variants): counted, listed as a choose line, never given an output by the page.
 const CP0_TWO = modules => ({ ...modules, 'CP-0': { outputs: [`${RUN}/deliveries/d1/CP-0-a.md`, `${RUN}/deliveries/d1/CP-0-b.md`], default: null } });
 
@@ -1815,7 +1956,7 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
   assert.equal(name('T2E.2–T2E.4'), 'Beginning register to Cash uses');
   assert.equal(page.namedText('CP-0-a.md and CP-4_RUNBOOK.md and CP-1.md', null), 'Source readiness handoff (a) and unnamed module runbook and Financial foundation handoff');
   assert.equal(page.handoffLabel('r--deliveries--h--CP-0-a.md'), 'Source readiness handoff (a)');
-  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt,.basis')"), 'a source excerpt is the issuer\'s text, as quoted, and a Basis line is printed as written (T3 review L1)');
+  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt,.basis,.module-code')"), 'a source excerpt is the issuer\'s text, as quoted; a Basis line is printed as written (T3 review L1); a navigator code is the code (decision 5)');
 });
 
 // ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.

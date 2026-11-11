@@ -410,7 +410,7 @@ const headingView=(heading,tag)=>`<${tag}>${rich(heading.replace(METHOD_CODE,'')
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
-const drawnAnchors=id=>new Set(DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)).map(section=>`s-${section.line}`));
+const drawnAnchors=id=>new Set((isNewFormat(data[id].sections)?newFormatRest(id):DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where))).map(section=>`s-${section.line}`));
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
 function chipView(chip,rowModule) {
@@ -425,6 +425,14 @@ function chipView(chip,rowModule) {
     return {label:module?`${moduleTitle(module)} · ${codes}`:codes,av:'',avClass:'',dot:'up',cls:''};
   }
   return {label:chip.label||'no page',av:'?',avClass:'gap',dot:'gap',cls:'gap'};
+}
+// Earlier-format prose carries no printed chips: they sit behind a quiet per-paragraph Basis control (a disclosure after the paragraph, a <p> cannot hold one, holding the same chips, which still open the inspector).
+// A disclosure with no chips draws nothing. Tables and charts keep their visible Source columns.
+// `rowChip` false (a new-format page) draws it only for a paragraph that has a citation of its own, not for the bare handoff-row chip every paragraph has.
+function basisControl(key,rowChip=true) {
+  if(!rowChip&&!(window.CREDIT_OS_DATA?.chips?.[key]||[]).length)return '';
+  const chips=chipsMarkup(key);
+  return chips?`<details class="basis-fold"><summary>Basis</summary>${chips}</details>`:'';
 }
 const chipSet=chips=>chips.length?`<span class="chips">${chips.join('')}</span>`:'';
 // A gap chip that is not a plain "Not supplied" is a citation with no page: it is counted, not drawn.
@@ -495,7 +503,8 @@ function reportHead(id) {
   const {meta,flag}=headTools(module,context,id);
   const acceptance=runAcceptanceText(context);
   const declared=declaredBadge(out.state.declared);
-  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  const notAssessable=isNewFormat(out.sections)&&blocked(out.sections,out.state)?badge('gray','Not assessable'):'';
+  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
@@ -511,26 +520,26 @@ const lastPeriodChart=charts=>charts.findLastIndex(c=>!c.kind||c.kind==='grouped
 const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.
-  const charts=chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all)))),table=keyNumbers(id);
+  const charts=reportChartCards(id),table=keyNumbers(id);
   return charts||table?`<section class="part" id="numbers"><h3>Key numbers</h3>${charts+table}</section>`:'';
 }
 // Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
 const findingRows=id=>data[id].summary?.findings??[];
-function findingArticle(id,row,counted=true) {
-  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${chipsMarkup(`${id}:${row.line}`,counted)}</aside></article>`;
+function findingArticle(id,row) {
+  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${basisControl(`${id}:${row.line}`)}</aside></article>`;
 }
 function reportFindings(id) {
   const articles=findingRows(id).map(row=>findingArticle(id,row));
   return articles.length?`<section class="part" id="findings"><h3>Findings</h3>${articles.join('')}</section>`:'';
 }
 // Sections drawn whole, in the order given. Heading tags are relative to the shallowest section (R33a), one step per level, capped at h6; the part heading stays the only h3.
-function readingSections(id,sections) {
+function readingSections(id,sections,base=4,rowChip=true) {
   const top=Math.min(...sections.map(section=>section.level));
   return sections.map(section=>{
-    const tag='h'+Math.min(6,4+(section.level-top||0));
+    const tag='h'+Math.min(6,base+(section.level-top||0));
     return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,tag)}${section.blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
-      return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))} ${chipsMarkup(`${id}:${block.line}`)}</p>`;
+      return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))}</p>${basisControl(`${id}:${block.line}`,rowChip)}`;
     }).join('')}</div>`;
   }).join('');
 }
@@ -551,7 +560,7 @@ function reportCalculations(id) {
   return sections.length?fold('calculations',`Calculations · ${data[id].words.calculations} words`,readingSections(id,sections)):'';
 }
 function reportLimits(id) {
-  const line=(key,html)=>`<p>${html} ${chipsMarkup(key)}</p>`;
+  const line=(key,html)=>`<p>${html}</p>${basisControl(key)}`;
   const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(row=>line(`${id}:${row.line}`,`<strong>${rich(row.cells[0])}</strong> ${row.cells.slice(1).map(rich).join(' · ')}`)):[line(`${id}:${block.line}`,rich(block.text.replace(/\n/g,' ')))]).join('')}</div>`);
   return cards.length?`<section class="part" id="limits"><h3>Limits &amp; monitoring</h3><div class="limits">${cards.join('')}</div></section>`:'';
 }
@@ -567,14 +576,37 @@ function reportAudit(id) {
 }
 // A module that reaches no conclusion (established false) keeps its head, band, findings and limits; the reading and reference parts fold under one closed disclosure.
 function reportParts(id) {
-  const out=data[id],folded=out.state.established===false,label=anchor=>anchor==='maps'?'Maps':REPORT_PARTS.find(part=>part[0]===anchor)[1];
+  if(isNewFormat(data[id].sections))return newFormatParts(id);
+  const out=data[id],folded=out.state.established===false,label=anchor=>anchor==='maps'?'Maps':anchor==='timeline'?'Timeline':REPORT_PARTS.find(part=>part[0]===anchor)[1];
   const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
   const {view,reference:referenceWords,calculations:calculationWords}=out.words;
   const parts=[['head',reportHead(id)],['bottom-line',reportBand(id)]];
-  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
-  else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations],['maps',reportMaps(id)]);
+  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
+  else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations],['maps',reportMaps(id)],['timeline',reportTimeline(id)]);
   parts.push(['audit',reportAudit(id)]);
   return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
+}
+// ---- The module page of a new-format handoff (ruling H1, H4): the reader passages first, each under its own heading and drawn by the one paragraph
+// renderer (passageHtml); then the module's charts, maps and timeline; then every other section of the handoff, unchanged, in handoff order.
+const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrary-evidence',limits:'limitations'};
+const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
+const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
+// The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
+const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
+function reportTimeline(id) {
+  const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
+  return html?`<section class="part" id="timeline">${html}</section>`:'';
+}
+function newFormatParts(id) {
+  const out=data[id],passages=readerPassages(out.sections);
+  const parts=[['head','Module',reportHead(id)]];
+  for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key])parts.push([anchor,passages[key].heading,`<section class="part" id="${anchor}"><h3>${rich(passages[key].heading)}</h3>${passageHtml(passages[key],id)}</section>`]);
+  const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
+  if(charts)parts.push(['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]);
+  if(timeline)parts.push(['timeline','Timeline',timeline]);
+  if(maps)parts.push(['maps','Maps',maps]);
+  for(const section of newFormatRest(id))parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${readingSections(id,[section],3,false)}</section>`]);
+  return parts;
 }
 const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
 // What the outline and the section list show: each present part's anchor and label. Presence depends on the data only, so it is built once per output.
@@ -654,8 +686,9 @@ const onOverview=out=>{const code=aliases[out.module]??out.module;return window.
 // A lane is not drawn on the Overview: its dated rows feed the Overview's nearest dates (overviewDates), which is what 'Overview' means for a lane.
 const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['map','Evidence',out=>out.module==='CP-5'],['lane','Overview',()=>true],['lane','Evidence',out=>out.module==='CP-0']];
 const placed=(kind,where,out,name)=>PLACEMENT.some(([k,w,test])=>k===kind&&w===where&&test(out,name));
-function eventLanesView(context,{compact=false,at=null}={}) {
-  const lanes=eventLanes(context).filter(lane=>(!at||placed('lane',at,data[lane.id]))).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
+function eventLanesView(context,{compact=false,at=null,only=null,tag='h2',title='Event lanes'}={}) {
+  // `only` is one output's own lanes, whichever saved output it is; otherwise the run's lanes (each module's default output).
+  const lanes=(only?(data[only]?.events||[]).map(lane=>({...lane,id:only})):eventLanes(context)).filter(lane=>(!at||placed('lane',at,data[lane.id]))).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
   if(!lanes.length)return '';
   const scenario=row=>/^Scenario — /.test(row.cells[4]);
   const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
@@ -672,7 +705,7 @@ function eventLanesView(context,{compact=false,at=null}={}) {
   })).join('');
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
   const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
-  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><h2>Event lanes</h2><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${!compact&&body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${!compact&&body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
 }
 // ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.
@@ -834,10 +867,39 @@ function forecastSections(context) {
 }
 function navigationSections(module,context,output=defaultOutput(module,context)) {
   if(module==='W-Evidence')return [['sources','Retained outputs',[]]];
-  if(module==='W-Forecast')return forecastSections(context);
+  if(module==='W-Forecast'||module===MODEL_ENTRY[0])return forecastSections(context);
   if(isAnalytical(module)&&output)return reportOutline(output);
   if(Object.hasOwn(modules,module))return modules[module].sections;
   return [['status',moduleEntry(module,context)?.outputs.length?'Choose a saved output':availability(module,context),[]]];
+}
+// ---- The Modules navigator (ruling decision 5): flat and always open, only the modules this run holds, under plain group headings. Each entry is the plain
+// name, then the code in the code style (screen.js nameCodes leaves .module-code alone). The open entry carries its page outline directly under it.
+const MODEL_ENTRY=['CP-MODEL','Cash flow model'];
+function navigatorGroups(context) {
+  if(!contexts[context])return []; // the library page has no run, so no module list
+  const ran=new Set(contextModules(context)),named=groups.map(([title,items])=>[title,items.filter(([id])=>ran.has(id))]).filter(([,items])=>items.length);
+  return runModels(context).length?[...named,['Delivered model',[MODEL_ENTRY]]]:named;
+}
+function navigatorEntry(id,name,module,context,query) {
+  const output=defaultOutput(id,context),sections=id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];
+  const hit=query&&sections.find(s=>s[1].toLowerCase().includes(query));
+  const open=id===module,notAssessable=output&&blocked(data[output].sections,data[output].state);
+  const outline=open&&current.output&&isAnalytical(id)?outlineMarkup(current.output):'';
+  return `<li><a href="${routeHref(id,hit?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item${open?' selected':''}"${open?' aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code">${esc(id)}</span>${notAssessable?badge('gray','Not assessable'):''}${hit?`<small>${esc(hit[1])}</small>`:''}</a>${outline}</li>`;
+}
+// The entries that match `query` (name, code, aliases, section titles; lower case), as markup and a count.
+function navigatorView(module,query) {
+  const context=current.context;
+  let count=0;
+  const html=navigatorGroups(context).map(([title,items])=>{
+    const shown=items.filter(([id,name])=>{
+      const output=defaultOutput(id,context),sections=id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];
+      return `${id} ${Object.keys(aliases).filter(k=>aliases[k]===id).join(' ')} ${name} ${sections.map(s=>s[1]).join(' ')}`.toLowerCase().includes(query);
+    });
+    count+=shown.length;
+    return shown.length?`<div class="nav-group"><h2 class="nav-heading">${esc(title)}</h2><ul class="module-list">${shown.map(([id,name])=>navigatorEntry(id,name,module,context,query)).join('')}</ul></div>`:'';
+  }).join('')+(count?'':'<p class="empty">No match. Try another name or topic.</p>');
+  return {html,count};
 }
 const moduleHref=id=>routeHref(id,lastSection.get(current?.context+':'+id)||firstSection(id,current?.context));
 function moduleLink(id,label){return `<a class="text-action" href="${moduleHref(id)}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}
@@ -1150,21 +1212,30 @@ const LEAD_MODULES=['CP-6','CP-2'];
 const NO_LEAD='No credit view module completed in this run.';
 // The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
 // A list item loses its "- " marker; its Basis line stays under it exactly as written.
-function passageParagraph(block) {
-  const {body}=splitBasis(block.text),lines=block.text.split('\n');
-  const item=body.startsWith('- ');
-  return {item,text:rich((item?body.slice(2):body).replace(/\n/g,' ')),basis:body===block.text?'':`<small class="basis">${rich(lines[lines.length-1])}</small>`};
+// showBasis false (the module page) prints the body alone and keeps the Basis line and its parsed items in a data-basis attribute, so nothing is lost until the inspector reads it.
+function passageParagraph(block,showBasis=true) {
+  const {body,items}=splitBasis(block.text),lines=block.text.split('\n'),has=body!==block.text;
+  const item=body.startsWith('- '),basisLine=lines[lines.length-1];
+  return {item,text:rich((item?body.slice(2):body).replace(/\n/g,' ')),basis:has&&showBasis?`<small class="basis">${rich(basisLine)}</small>`:'',attr:has&&!showBasis?` data-basis="${esc(JSON.stringify({line:basisLine,items:items.map(basisItem)}))}"`:''};
 }
-function passageHtml(section) {
+// `id` set: the module page of that output, where a table inside a passage is kept (with its Source column) and Basis is not printed.
+function passageHtml(section,id=null) {
   if(!section)return '';
   let open=false,html='';
-  for(const block of section.blocks.filter(b=>b.type==='text')) {
-    const {item,text,basis}=passageParagraph(block);
+  const close=()=>{if(open)html+='</ul>';open=false;};
+  for(const block of section.blocks) {
+    if(block.type==='table') {
+      if(id===null)continue;
+      close();html+=`${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
+      continue;
+    }
+    const {item,text,basis,attr}=passageParagraph(block,id===null);
     if(item&&!open)html+='<ul class="passage-list">';
-    if(!item&&open)html+='</ul>';
-    open=item;html+=item?`<li>${text}${basis}</li>`:`<p class="passage-text">${text}${basis}</p>`;
+    if(!item)close();
+    open=item;html+=item?`<li${attr}>${text}${basis}</li>`:`<p class="passage-text"${attr}>${text}${basis}</p>`;
   }
-  return html+(open?'</ul>':'');
+  close();
+  return html;
 }
 // The run's modules in the order CP-OS ran them, each with its default output and that output's reader passages.
 function overviewEntries(context) {

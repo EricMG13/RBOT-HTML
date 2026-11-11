@@ -39,7 +39,7 @@ const groups = [
 // A module the reading groups do not name still gets a place, as an unnamed module.
 const unnamed=[...new Set(Object.values(data).map(output=>output.module))].filter(id=>id!=='CP-MODEL'&&!groups.some(group=>group[1].some(item=>item[0]===id))).sort();
 if(unnamed.length)groups.push(['Other modules',unnamed.map(id=>[id,'Unnamed module'])]);
-const moduleNames = Object.fromEntries(groups.flatMap(g=>g[1]));
+const moduleNames = {...Object.fromEntries(groups.flatMap(g=>g[1])),[MODEL_ENTRY[0]]:MODEL_ENTRY[1]}; // the delivered model is a Modules entry (decision 5) that no reading group names
 delete modules.undefined; // A pin this workspace does not hold.
 const isAnalytical = id => !id.startsWith('W-')&&id!=='CP-OS';
 const $ = id => document.getElementById(id);
@@ -50,7 +50,7 @@ const icon = name => `<img src="icons/${name}.svg" alt="">`;
 const matchesHeading = (heading,prefix) => prefix.startsWith('=') ? heading===prefix.slice(1) : heading.startsWith(prefix) && (!/^T\d+\.\d+$/.test(prefix) || !/\d/.test(heading.charAt(prefix.length)));
 const evidence = new Map();
 const lastSection = new Map(), lastFile = new Map();
-const readingPositions = new Map(), expandedGroups = new Map();
+const readingPositions = new Map();
 // Screening state, kept while the reader is on another screen. Filter names are LibraryLogic's.
 const LIBRARY_DEFAULTS = {search:'',sector:'',workflow:'',completion:'',availability:'',basis:'',period:'',leverageMin:'',leverageMax:'',coverageMin:'',coverageMax:'',issuer:'',runs:'latest',classification:'',currency:'',ratingBelow:'',ratingAbove:'',ratingScope:'issuer',netLeverageMin:'',netLeverageMax:'',cashMin:'',cashMax:'',undrawnMin:'',undrawnMax:'',talkMin:'',talkMax:'',marginMin:'',marginMax:'',couponMin:'',couponMax:'',priceMin:'',priceMax:'',yieldMin:'',yieldMax:'',limitation:''};
 const libraryFilters = {...LIBRARY_DEFAULTS};
@@ -58,7 +58,7 @@ const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:''};
 let current = null, returnTrigger = null, returnScroll = 0, returnContentScroll = 0;
 installDestinations();
 const appDestinations=new Set(['W-Library','CP-OS']); // These need no selected run.
-const aliases = {'CP-MODEL':'W-Forecast','CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
+const aliases = {'CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
 for(const visual of window.DESIGN_WORKSPACE.visuals)for(const alias of String(visual.aliases||'').split(/[;,\s]+/).filter(Boolean))aliases[alias]??=visual.module;
 // Every page shows names (views.js namedText). Text and the title and aria-label attributes only, so downloads, links and the retained files are untouched.
 // Register references (F, K, C, S plus digits) are not codes of this kind: they stay, as a quiet mark.
@@ -68,7 +68,7 @@ function nameCodes(root,output=current?.output,marks=true) {
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.excerpt,.basis'))continue; // a source excerpt is the issuer's own text, quoted as it is
+    if(parent.closest('.ref,.excerpt,.basis,.module-code'))continue; // a source excerpt is the issuer's own text, quoted as it is; a Basis line is printed as written; a navigator code is the code
     const named=namedText(node.data,output);
     if(named!==node.data)node.data=named;
     // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
@@ -270,25 +270,11 @@ function renderSearch(query) {
   nameCodes($('search-results'),null,false); // hits come from several outputs, so no step title is borrowed from the open one (a step id reads "a method step"); register references stay as they are
 }
 function renderNavigator(module) {
-  const query=$('module-search').value.trim().toLowerCase(),context=current.context;
-  let count=0;
-  // Search matches the module's named sections; the module page itself is the report, so a match opens its top.
-  const sectionsOf=id=>{const output=defaultOutput(id,context);return output&&isAnalytical(id)?modules[output].sections:navigationSections(id,context).filter(s=>s[0]!=='status');};
-  const catalogue=groups.concat([['Workspace tools',[['W-Forecast','Published model']]]]).map(([title,items])=>{
-    const matches=items.filter(([id,name])=>`${id} ${Object.keys(aliases).filter(k=>aliases[k]===id).join(' ')} ${name} ${sectionsOf(id).map(s=>s[1]).join(' ')} ${isAnalytical(id)?availability(id,context):''}`.toLowerCase().includes(query));
-    count+=matches.length;
-    if(!matches.length)return '';
-    const open=query||matches.some(([id])=>id===module)||(expandedGroups.get(title)??false);
-    return `<details class="nav-group" data-group="${esc(title)}" ${open?'open':''}><summary>${esc(title)}</summary>${matches.map(([id,name])=>{
-      const section=query&&sectionsOf(id).find(s=>s[1].toLowerCase().includes(query));
-      return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
-    }).join('')}</details>`;
-  }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
-  // A module report has parts to list; the Overview and Run activity (CP-OS) have no outline.
-  const analytical=!module.startsWith('W-'),outline=query?'':analytical&&current.output?outlineMarkup(current.output):'';
-  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||(!analytical&&!outline)||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${outline&&`<div class="outline-heading">On this page</div>${outline}`}`;
+  const query=$('module-search').value.trim().toLowerCase(),{html,count}=navigatorView(module,query);
+  // Flat and always open (decision 5): the list is the run's modules, the open one with its page outline under it.
+  $('module-list').innerHTML=html;
   nameCodes($('module-list'));
-  document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Analysis & tools'} <span>${count}</span>`;
+  document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Modules'} <span>${count}</span>`;
   $('module-search-clear').hidden=!$('module-search').value;
   renderSearch(query);
 }
@@ -364,6 +350,7 @@ function showInspector(key,chipIndex=null) {
 }
 function moduleBody({module,context,output}) {
   try {
+    if(module===MODEL_ENTRY[0])return forecastView(context,current.section);
     if(output||!isAnalytical(module))return renderContent(output||module,current.section);
     return moduleEntry(module,context)?.outputs.length?outputChooser(module):unavailableView(module);
   } catch(error) {
@@ -492,11 +479,11 @@ function renderRoute() {
     // A page with one section already says its name in the heading above.
     const only=sections.length===1&&!isAnalytical(next.module);
     // The pager names what it steps through on the page where the sections are models.
-    const pagerNoun={'W-Forecast':'model'}[next.module]||'section';
+    const pagerNoun={'W-Forecast':'model',[MODEL_ENTRY[0]]:'model'}[next.module]||'section';
     const report=reportPage(next);
     // A module report has no heading above this one but the issuer's h1, so there it is an h2; elsewhere it sits under the page's h2.
     const level=report?'h2':'h3';
-    const title=`<${level} id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</${level}>`;
+    const title=`<${level} id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report||next.module===MODEL_ENTRY[0]?moduleNames[next.module]:sections[index][1])}</${level}>`;
     // The bar sticks at narrow widths, so it names the run and the module (or destination) it belongs to.
     $('section-nav').innerHTML=contextPrefix(next)+(only||report||(isAnalytical(next.module)&&!next.output)?title:`${title}<span>${index+1} / ${sections.length}</span><button id="previous-section" ${index===0?'disabled':''} aria-label="Previous ${pagerNoun}">${icon('arrow-left')}</button><button id="next-section" ${index===sections.length-1?'disabled':''} aria-label="Next ${pagerNoun}">${icon('arrow-right')}</button>`);
     nameCodes($('section-nav'));
@@ -530,7 +517,7 @@ function renderRoute() {
       const library=appDestinations.has(next.module)||!contexts[next.context];
       const restored=!library&&focusId&&$(focusId);
       const link=window.innerWidth>720&&focused?.classList.contains('section-item')&&focusHref&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
-      const destination=next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('canvas'):$('section-title');
+      const destination=(next.module==='W-Forecast'||next.module===MODEL_ENTRY[0])&&$('model-select')?$('model-select'):library?$('canvas'):$('section-title');
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
@@ -567,7 +554,7 @@ function renderRoute() {
 }
 document.addEventListener('change',event=>{
   if(event.target.matches('[data-library-filter]'))readLibraryFilters();
-  if(event.target.id==='model-select')go('W-Forecast',event.target.value);
+  if(event.target.id==='model-select')go(current.module,event.target.value);
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
   if(event.target.id==='chart-metric') {
     $('module-visual').innerHTML=comparisonChart(current.output,data[current.output].visual,Number(event.target.value));
@@ -579,8 +566,6 @@ document.addEventListener('click',event=>{
   if(event.target.closest('#rail-search')){focusSearch();return;}
   const searchHit=event.target.closest('.search-hit');
   if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
-  const summary=event.target.closest('summary');
-  if(summary?.parentElement.dataset.group)expandedGroups.set(summary.parentElement.dataset.group,!summary.parentElement.open);
   if(libraryClick(event.target))return;
   if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,current.section);}else $('canvas').focus();return;}
   const chip=event.target.closest('[data-chip]');
@@ -595,7 +580,7 @@ document.addEventListener('click',event=>{
   if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,source.dataset.evidence);return;}
   if(event.target.closest('#back-analysis'))go(current.module,current.section);
   const moduleLink=event.target.closest('.module-item');
-  if(moduleLink){$('module-search').value='';expandedGroups.set('catalogue',false);if(moduleLink.hash===location.hash)renderNavigator(current.module);}
+  if(moduleLink){$('module-search').value='';if(moduleLink.hash===location.hash)renderNavigator(current.module);}
   const step=event.target.closest('#next-section')?1:event.target.closest('#previous-section')?-1:0;
   if(step){const sections=navigationSections(current.module,current.context),index=sections.findIndex(s=>s[0]===current.section);if(sections[index+step])go(current.module,sections[index+step][0]);}
 });
