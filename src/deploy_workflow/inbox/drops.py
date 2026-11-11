@@ -71,6 +71,10 @@ class Layout:
     def logs(self) -> Path:
         return self.engine / "logs"
 
+    @property
+    def uploads(self) -> Path:
+        return self.engine / "uploads"
+
 
 def ensure_layout(root: Path) -> Layout:
     """Create every folder under ``root``; refuse a root so long that Windows paths would break.
@@ -90,7 +94,15 @@ def ensure_layout(root: Path) -> Layout:
             f"use a shorter path (at most {MAX_ROOT})"
         )
     layout = Layout(resolved)
-    folders = [layout.inbox, layout.issuers, layout.runs, layout.drops, layout.state, layout.logs]
+    folders = [
+        layout.inbox,
+        layout.issuers,
+        layout.runs,
+        layout.drops,
+        layout.state,
+        layout.logs,
+        layout.uploads,
+    ]
     for folder in folders:
         folder.mkdir(parents=True, exist_ok=True)
     for name in (FAILED, *PATHWAYS):
