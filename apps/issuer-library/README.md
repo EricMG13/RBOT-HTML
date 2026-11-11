@@ -19,16 +19,22 @@ The run start page's service (below) runs both steps for a shared folder, so ana
 by hand.
 
 `library/` is the Credit OS library (one row per listed run) and, for each run, its issuer report
-with tabs for Report, Overview, Modules, Forecast and Evidence, in that order. The Report tab is
-the issuer's Report history: one row per run of that issuer, latest as-of date first, with its
+with tabs for Report history, Overview, Modules, Forecast and Evidence, in that order. Overview
+selects each module's own bottom line, key findings and limitations and the nearest dates; Modules
+is the flat navigator and each module's page (its charts, maps and timeline included); Forecast is
+the cash flow model and the chart index; Evidence lists the source files used, the handoffs (each
+downloadable), the calculation and Model files and the run record. The Report history tab is
+the issuer's history: one row per run of that issuer, latest as-of date first, with its
 pathway, the modules it ran, its status and an "Earlier format" mark for a run whose handoffs
 predate the reader format; each row opens that run's Overview. Every run page carries one line
 under the tabs naming the run it shows (as-of date, pathway, run code) with a link back to the
 history. The left rail is Start a run, Issuer library, Run activity and Search. The library holds
 no copy of any delivered report and shows none: an old `#W-Reports/...` or `#W-Calendar/...` link
 opens the run's Report history. It has no run controls: runs are made by step 1 and shown by step 2.
-`data.js` holds the catalogue and the workspace store as data. Links to run files are relative
-(`../runs/...`); the run start page's service does not serve those links. The page opens from disk
+`data.js` holds the catalogue and the workspace store as data. Evidence's handoff and instruction
+downloads (and "Download all", a zip) are written under `library/downloads/<run>/` as the bytes the
+build hash-checked, so they also open when the library is served; other links to run files are
+relative (`../runs/...`) and the run start page's service does not serve those. The page opens from disk
 (`file://`) and blocks every network request through its content security policy. Its hashes are
 checked when it is built: update it after new runs. The page parts are `credit_os/web/`; the
 store and its sources are listed in `credit_os/SOURCE.md`.
@@ -49,7 +55,7 @@ the launcher's reading disagrees with are Limited for the whole run.
 
 - **Address:** `127.0.0.1` unless one is given; pass this machine's own address to serve
   colleagues. `0.0.0.0` is refused. The service also serves the library and Run activity,
-  read-only; `../runs/...` download links are not served.
+  read-only; only files under `library/` are served, so `../runs/...` links are not.
 - **What happens:** Submit saves the run's record, moves the uploaded files to `_engine\drops\<id>`
   with the `context.json` the page built, and the scheduler starts it as a paid run within the
   limits. The finished report is filed as `issuers\<Issuer name> (<issuer_id>)\<as-of>
@@ -99,7 +105,8 @@ hold:
   including the report the completion record names; the handoffs still have their hashes; the
   completion record, the manifest and the delivered copies name the same modules and handoffs; and
   the manifest, the delivered `view.json` and `workflow.json` name the same run. The report is not
-  rebuilt, so a later renderer change does not unlist a run.
+  rebuilt, so a later renderer change does not unlist a run. The library shows a run from its
+  handoffs and presents no delivered report (ruling 2026-11-11, decisions 1 to 3).
 - **On the current methodology:** every module was answered in this run (not reused from another
   run, not synthetic). The request record beside its accepted answer still has the fingerprint
   CP-OS named its folder by (`cpos.request_fingerprint`), so it holds the instructions actually
