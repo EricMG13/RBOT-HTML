@@ -198,6 +198,32 @@ def test_the_command_turns_a_refusal_into_an_exit(tmp_path):
         update_library.main(["--workspace", str(tmp_path / "absent")])
 
 
+def test_a_run_with_no_delivered_report_page_is_listed_with_every_page_and_an_earlier_run_still_is(
+    tmp_path,
+):
+    """M1: the library lists a run from its handoffs; no report.html is needed or written."""
+    make_run(tmp_path, "run-old", issuer_id="old", issuer_name="Old Synthetic", report_page=True)
+    new = make_run(tmp_path, "run-new", report_page=False)
+    assert not list(new.glob("deliveries/*/report.html"))
+    library = update_library.update_library(tmp_path)
+    assert sorted(r["id"] for r in library.runs) == ["run-new", "run-old"]
+    assert library.excluded == []
+    assert not [p for p in tree(tmp_path) if p.startswith("library/reports")]
+    data = data_of(tmp_path)
+    assert sorted(r["id"] for r in data["catalogue"]["real"]) == ["run-new", "run-old"]
+    workspace = data["workspace"]
+    (run,) = [r for r in workspace["runs"].values() if r["folder"] == "run-new"]
+    assert sorted(run["modules"]) == ["CP-0", "CP-1"]
+    outputs = [o for o in workspace["outputs"].values() if o["run"] == run["folder"]]
+    assert sorted(o["module"] for o in outputs) == ["CP-0", "CP-1"]
+    assert all(o["firstHeading"] and o["sha256"] in workspace["handoffs"] for o in outputs)
+    evidence = run["evidence"]
+    assert [h["module"] for h in evidence["handoffs"]] == ["CP-0", "CP-1"]
+    assert evidence["record"] is not None and evidence["zip"]
+    # The earlier run's own file list names its report.html as stored; the new run's names none.
+    assert not [s for s in strings(run) if "report.html" in s]
+
+
 def test_data_js_carries_excluded_runs(tmp_path):
     make_run(tmp_path, "run-a")
     half = make_run(tmp_path, "run-half", issuer_id="zzz", issuer_name="Zeta Synthetic")

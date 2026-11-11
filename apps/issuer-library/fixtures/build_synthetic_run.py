@@ -94,33 +94,21 @@ def write_sources(run_dir: Path, folder: str) -> dict[str, dict[str, str]]:
     return declared
 
 
-def report_html(handoffs: dict[str, bytes]) -> bytes:
-    """The placeholder delivered report the library still requires; it carries no analysis."""
-    names = ", ".join(sorted(handoffs))
-    return (
-        "<!doctype html><title>SYNTHETIC FIXTURE report</title><body><main>"
-        f"<h1>SYNTHETIC FIXTURE</h1><p>Placeholder; hand-made handoffs only: {names}.</p>"
-        "</main></body>"
-    ).encode()
-
-
 def write_delivery(
     run_dir: Path, handoffs: dict[str, bytes], pins: dict[str, dict[str, str]]
 ) -> tuple[str, str]:
-    """The delivery manifest and folder; returns the manifest and report hashes."""
+    """The delivery manifest and folder; returns the manifest hash and the delivery.json hash."""
     manifest = json.dumps({"run": RUN, "handoffs": pins}, indent=2).encode()
     manifest_sha = put(run_dir / f"delivery-{sha(manifest)}.json", manifest)
-    report = report_html(handoffs)
     files = {
-        "report.html": report,
         "view.json": json.dumps({"run": RUN}).encode(),
         **{f"{module}.md": raw for module, raw in handoffs.items()},
     }
     delivery_id = sha(json.dumps({n: sha(r) for n, r in sorted(files.items())}).encode())
     folder = run_dir / "deliveries" / delivery_id
     receipt = {"files": {name: put(folder / name, raw) for name, raw in files.items()}}
-    put(folder / "delivery.json", json.dumps(receipt).encode())
-    return manifest_sha, sha(report)
+    receipt_sha = put(folder / "delivery.json", json.dumps(receipt).encode())
+    return manifest_sha, receipt_sha
 
 
 def write_calls(run_dir: Path) -> None:
@@ -159,7 +147,7 @@ def build(workspace: Path, folder: str) -> Path:
         run_dir / "workflow.json",
         json.dumps({"run": RUN, "instructions": instructions, "sources": sources}).encode(),
     )
-    manifest_sha, report_sha = write_delivery(run_dir, handoffs, pins)
+    manifest_sha, receipt_sha = write_delivery(run_dir, handoffs, pins)
     completion = {
         "kind": "cpos-markdown-delivery/1",
         "execution": "synthetic",
@@ -168,7 +156,7 @@ def build(workspace: Path, folder: str) -> Path:
         "modules": {m: pins[m]["path"] for m in MODULES},
         "module_execution": {m: "live-provider" for m in MODULES},
         "delivery_manifest_sha256": manifest_sha,
-        "report_sha256": report_sha,
+        "delivery_sha256": receipt_sha,
     }
     raw = json.dumps(completion, indent=2).encode()
     put(run_dir / f"completed-{sha(raw)}.json", raw)
