@@ -1,16 +1,18 @@
-"""Copy checked Markdown handoffs into the existing report designs.
+"""Publish checked Markdown handoffs as the issuer report's delivery folder.
 
-This is a narrow presentation adapter, not an analytical runner or journal import.
-Narrative values stay literal, with citations to exact model-authored handoff
-lines. Optional CP-MODEL publication reuses the existing calculation and chart
-components through explicit source selectors; Excel is ingestion-only.
+This is a narrow adapter, not an analytical runner or journal import. Per
+`docs/rulings/2026-11-11-reader-and-issuer-report.md`, delivery selects and orders
+module-written passages and adds no analysis; every number and qualification stays
+exact, with citations to the model-authored handoff lines. No `report.html` is
+rendered: the issuer library's pages are the report. Optional CP-MODEL publication
+reuses the existing calculation and chart components through explicit source
+selectors; Excel is ingestion-only.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
-import html
 import json
 import re
 from datetime import date
@@ -36,7 +38,6 @@ from deploy_vii.contracts import (
     View,
 )
 from deploy_vii.registry import modules
-from deploy_vii.render import render
 from deploy_vii.report_view import FactCoord, ReportView, build, pathways
 from deploy_workflow.run_scopes import PUBLIC_S1A_MODULES
 
@@ -47,20 +48,6 @@ SECTIONS = (
     "strengths-weaknesses",
     "company-profile",
     "transaction-summary",
-)
-SCOPE = (
-    "Manual delivery from checked, model-authored Markdown handoffs. Historical financial "
-    "base: {as_of}; disclosed subsequent events remain separately identified. "
-    "Five narrative sections only. CP-MODEL, charts, committee decision, "
-    "automated orchestration and the full pathway remain unproven. "
-    "Citations identify handoff lines, whose issuer references and limitations are retained."
-)
-MODEL_SCOPE = (
-    "Delivery from checked Markdown handoffs. Historical annual financial base: {as_of}; "
-    "subsequent events, additional quarter windows and conditional scenarios remain separate. "
-    "Five narrative sections plus the HTML Model, charts and calculation JSON are published. "
-    "Missing data and analytical limitations remain explicit. Complete current underwriting, "
-    "committee action and broader pathways are outside this publication."
 )
 
 
@@ -152,8 +139,8 @@ class MarkdownLayout(Contract):
     title: Annotated[str, Field(pattern=r"\S")] | None = None
     question: Annotated[str, Field(pattern=r"\S")] | None = None
     issuer_aliases: tuple[Annotated[str, Field(pattern=r"\S")], ...] = ()
-    # Lines the report states above the call (kind "table" or "prose"); their `block_id` is not
-    # a report block.
+    # Accepted and unused: the retired report page stated these lines above the call. Kept so
+    # earlier manifests and completions still validate.
     front: tuple[MarkdownRoute, ...] = Field(default=(), exclude_if=lambda v: not v)
 
 
@@ -614,26 +601,10 @@ def delivery_files(manifest: Path) -> dict[str, bytes]:
         return markdown_files(request, manifest.parent)
     view, report, copies = prepare(manifest)
     has_model = "model.html" in copies
-    rendered = render(view, report)
-    anchor = '<div id="call-root"></div>'
-    if rendered.count(anchor) != 1:
-        raise ValueError("Existing renderer scope-banner location changed")
-    banner = (
-        '<section id="delivery-scope-banner" class="banner" role="note">'
-        + html.escape((MODEL_SCOPE if has_model else SCOPE).format(as_of=view.run.as_of))
-        + "</section>"
-    )
-    if has_model:
-        nav = '["model", "Model", "#CP-1"]'
-        if rendered.count(nav) != 1:
-            raise ValueError("model_shell: main report Model destination changed")
-        rendered = rendered.replace(nav, '["model", "Model", "model.html"]')
-        banner += '<nav aria-label="Published deliverables"><a href="model.html">HTML Model and charts</a> · <a href="calculation.json">Calculation JSON</a></nav>'
     files = {
         **copies,
         "view.json": view.model_dump_json(indent=2).encode(),
         "report-view.json": report.model_dump_json(indent=2).encode(),
-        "report.html": rendered.replace(anchor, banner + anchor).encode(),
     }
     record = {
         "kind": "manual_handoff_delivery",
@@ -647,13 +618,14 @@ def delivery_files(manifest: Path) -> dict[str, bytes]:
 
 
 def verify_files(destination: Path, expected: dict[str, bytes]) -> Path:
-    """Check an exact flat publication, including its receipt, without repairing it."""
+    """Check an exact flat publication, including its receipt, without repairing it; return the
+    receipt's path."""
     if {p.name for p in destination.iterdir()} != set(expected):
         raise ValueError("delivery_files: publication file set differs")
     for name, raw in expected.items():
         if (destination / name).read_bytes() != raw:
             raise ValueError(f"delivery_changed: {name}")
-    return destination / "report.html"
+    return destination / "delivery.json"
 
 
 def verify_delivery(manifest: Path, destination: Path) -> Path:
@@ -768,10 +740,6 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
     )
     if any(b.state not in {"populated", "collapsed"} for b in report.blocks):
         raise ValueError("cp8_delivery: comparison must contain actual checked content")
-    rendered = render(view, report)
-    anchor = '<div id="call-root"></div>'
-    if rendered.count(anchor) != 1:
-        raise ValueError("Existing renderer scope-banner location changed")
     scope = (
         "Comparison of the explicitly selected prior and current delivery bundles. "
         "Latest local publication does not imply current issuer evidence. "
@@ -782,13 +750,6 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
         "CP-8.md": response,
         "view.json": view.model_dump_json(indent=2).encode(),
         "report-view.json": report.model_dump_json(indent=2).encode(),
-        "report.html": rendered.replace(
-            anchor,
-            '<section id="delivery-scope-banner" class="banner" role="note">'
-            + html.escape(scope)
-            + "</section>"
-            + anchor,
-        ).encode(),
         "comparison-inputs.json": (json.dumps(inputs, sort_keys=True, indent=2) + "\n").encode(),
     }
     receipt = {
@@ -806,7 +767,7 @@ def deliver(manifest: Path, destination: Path) -> Path:
     destination.mkdir(parents=True, exist_ok=False)
     for name, raw in files.items():
         (destination / name).write_bytes(raw)
-    return destination / "report.html"
+    return destination / "delivery.json"
 
 
 def main() -> None:

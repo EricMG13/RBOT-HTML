@@ -161,7 +161,7 @@ def test_start_runs_the_plan_and_logs(layout, fake_env, monkeypatch):
     process = start(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP, ruling=RULING)
     assert process.wait(timeout=60) == 0
     assert outcome(layout, RECORD, 0) == ("finished", "")
-    assert (layout.runs / "id1" / "deliveries" / "d1" / "report.html").is_file()
+    assert (layout.runs / "id1" / "deliveries" / "d1" / "delivery.json").is_file()
     assert (layout.logs / "id1.log").is_file()
 
 

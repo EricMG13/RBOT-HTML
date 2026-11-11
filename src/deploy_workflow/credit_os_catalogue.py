@@ -233,6 +233,9 @@ def forecast_published(folder: Path, relative: str, files: Mapping[str, str]) ->
     return receipt.get("cp_forecast_published") is True and set(MODEL_FILES) <= set(files)
 
 
+NO_REPORT_PAGE = "this delivery has no report page; the library shows the run itself"
+
+
 def delivery_fields(
     workspace: Path,
     run: dict[str, Any],
@@ -250,7 +253,12 @@ def delivery_fields(
         if verified is not None:
             relative, files, view = verified["folder"], verified["files"], verified["view"]
         else:
-            relative, files = delivery_folder(folder, run["report"]["sha256"])
+            report = run["report"]
+            relative, files = (
+                delivery_folder(folder, report["sha256"])
+                if report is not None
+                else delivery_folder(folder, run["delivery_sha256"], receipt_hash=True)
+            )
             view = json_object(read_inside(folder, f"{relative}/view.json"), "view.json")
         published = forecast_published(folder, relative, files)
         cp1 = next((m for m in run["modules"] if m["id"] == "CP-1"), None)
@@ -269,9 +277,11 @@ def delivery_fields(
         "label": relative.rsplit("/", 1)[-1],
         "state": mode if isinstance(mode, str) and mode else "candidate",
         "relationship": "direct",
-        "issue": "",
-        "available": True,
-        "href": pinned_url(f"{delivered}/report.html", files["report.html"]),
+        "issue": "" if "report.html" in files else NO_REPORT_PAGE,
+        "available": "report.html" in files,
+        "href": pinned_url(f"{delivered}/report.html", files["report.html"])
+        if "report.html" in files
+        else "",
     }
     metrics = {}
     if cp1 is not None:
@@ -279,7 +289,9 @@ def delivery_fields(
         metrics = handoff_metrics(name, pin, text, sources, issues)
     artifacts = [artifact]
     if published:
-        artifacts.append({**artifact, "kind": "model", "label": "Forecast"})
+        artifacts.append(
+            {**artifact, "kind": "model", "label": "Forecast", "issue": "", "available": True}
+        )
     return artifacts, metrics
 
 

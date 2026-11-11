@@ -293,3 +293,15 @@ def test_a_library_built_by_hand_still_catalogues_without_the_shared_deliveries(
     by_hand = Library(runs=listed.runs)  # no shared deliveries: each is verified again
     assert by_hand.deliveries == {}
     assert catalogue(tmp_path, by_hand)["real"] == catalogue(tmp_path, listed)["real"]
+
+
+def test_a_delivery_without_a_report_page_has_no_report_link_and_still_catalogues(tmp_path):
+    make_run(tmp_path, "run-a", report_page=False)
+    listed = build_library(tmp_path, tmp_path / "library", method())
+    by_hand = Library(runs=listed.runs)  # verified again here, by the receipt's hash
+    for library in (listed, by_hand):
+        result = catalogue(tmp_path, library)
+        (artifact,) = result["real"][0]["artifacts"]
+        assert artifact["available"] is False and artifact["href"] == ""
+        assert "no report page" in artifact["issue"]
+        assert result["issues"] == []

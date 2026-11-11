@@ -238,9 +238,9 @@ def count_work(monkeypatch) -> dict[str, int]:
         return listed
 
     def checking(real):
-        def check(*args):
+        def check(*args, **kwargs):
             counts["delivery_checks"] += 1
-            return real(*args)
+            return real(*args, **kwargs)
 
         return check
 

@@ -54,8 +54,37 @@ from deploy_workflow.owners.cpos_launch import update_library_at
 pytest_plugins = ["inbox_fixtures"]
 
 
-def test_a_submission_becomes_a_filed_report_exactly_once(root, fake_env, listed):
+def test_a_delivery_without_a_report_page_finishes_and_files_nothing(root, fake_env, listed):
+    """The delivery has no report.html: the library shows the run itself, so no copy is filed."""
     fake_env({"events": DELIVERED})
+    listed("*")
+    w = Scheduler(settings(root))
+    submit_run(w, root)
+    pump(w, lambda: status(root) == ["finished"])
+    [record] = load_all(layout(root))
+    assert record.report == "" and not list((root / "issuers").rglob("*.html"))
+    assert [p.name for p in (root / "_engine/runs" / record.id / "deliveries/d1").iterdir()] == [
+        "delivery.json"
+    ]
+
+
+def test_a_run_with_two_deliveries_fails_rather_than_choosing(root, fake_env, listed):
+    fake_env({"events": DELIVERED, "sleep": 1})
+    listed("*")
+    w = Scheduler(settings(root))
+    submit_run(w, root)
+    go(w)
+    other = root / "_engine/runs" / _only(root).id / "deliveries/d2"
+    other.mkdir(parents=True)
+    (other / "delivery.json").write_text('{"files": {}}', encoding="utf-8")
+    pump(w, lambda: status(root) != ["running"], limit=10)
+    record = _only(root)
+    assert record.status == "failed"
+    assert record.reason == "expected one deliveries/*/delivery.json, found 2"
+
+
+def test_an_earlier_format_delivery_is_filed_exactly_once(root, fake_env, listed):
+    fake_env({"events": DELIVERED, "report_page": True})
     listed("*")
     w = Scheduler(settings(root))
     submit_run(w, root)
@@ -73,7 +102,7 @@ def test_a_submission_becomes_a_filed_report_exactly_once(root, fake_env, listed
     assert (record.issuer_id, record.as_of) == ("acme", "2026-11-09")
 
 
-def test_a_submission_is_run_by_the_real_launcher_filed_and_listed(root, tmp_path, monkeypatch):
+def test_a_submission_is_run_by_the_real_launcher_and_listed(root, tmp_path, monkeypatch):
     """Sweep 2026-11-10 (wiring): the other scheduler tests stand in a launcher. Here the real one
     runs CP-OS and delivery on canned answers, and the real library rebuild lists the run."""
     from test_cpos_launch import context_file, issuer_folder
@@ -106,8 +135,8 @@ def test_a_submission_is_run_by_the_real_launcher_filed_and_listed(root, tmp_pat
     pump(w, lambda: status(root) not in ([], ["queued"], ["running"]), limit=120)
     [record] = load_all(layout(root))
     assert record.status == "finished", record.reason
-    [delivered] = (root / "_engine/runs" / record.id / "deliveries").glob("*/report.html")
-    assert (root / record.report).read_bytes() == delivered.read_bytes()
+    assert record.report == ""  # the delivery has no report page, so nothing is filed
+    assert not list((root / "_engine/runs" / record.id / "deliveries").glob("*/report.html"))
     assert f'"{record.id}"' in (root / "_engine/library/data.js").read_text(encoding="utf-8")
 
 
@@ -280,7 +309,7 @@ def test_f1_two_schedulers_started_together_one_refuses(root):
 
 
 def test_r6_a_failed_rebuild_changes_nothing_and_is_retried(root, fake_env, monkeypatch):
-    fake_env({"events": DELIVERED})
+    fake_env({"events": DELIVERED, "report_page": True})
     good = cpos_launch.update_library_at
 
     def broken(_workspace: Path) -> None:
@@ -300,7 +329,7 @@ def test_r6_a_failed_rebuild_changes_nothing_and_is_retried(root, fake_env, monk
 def test_an_unexpected_rebuild_error_does_not_stop_the_scheduler(
     root, fake_env, monkeypatch, error
 ):
-    fake_env({"report": True, "events": DELIVERED})
+    fake_env({"report": True, "report_page": True, "events": DELIVERED})
     good = cpos_launch.update_library_at
 
     def broken(_workspace: Path) -> None:
@@ -581,7 +610,7 @@ def test_l7_a_new_id_never_reuses_a_record_a_run_files_folder_a_run_folder_or_a_
 def test_f2_a_report_is_filed_once_even_when_the_finished_record_cannot_be_saved(
     root, fake_env, monkeypatch
 ):
-    fake_env({"events": DELIVERED})
+    fake_env({"events": DELIVERED, "report_page": True})
     real = _runs().save
     failures = [3]
 
@@ -604,7 +633,7 @@ def test_f2_a_report_is_filed_once_even_when_the_finished_record_cannot_be_saved
 def test_f3_a_corrupt_issuer_registry_fails_the_run_instead_of_stopping_the_scheduler(
     root, fake_env
 ):
-    fake_env({"events": DELIVERED, "sleep": 1})
+    fake_env({"events": DELIVERED, "sleep": 1, "report_page": True})
     w = Scheduler(settings(root))
     submit_run(w, root)
     go(w)

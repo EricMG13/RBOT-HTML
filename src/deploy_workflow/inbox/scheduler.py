@@ -426,15 +426,18 @@ class Scheduler:
         if record.id not in {run["id"] for run in library.runs}:
             why = dict(library.excluded).get(record.id, "the library did not list it")
             return replace(ended, status="failed", reason=f"not listed: {why}")
-        reports = sorted((self.layout.runs / record.id / "deliveries").glob("*/report.html"))
-        if len(reports) != 1:
-            reason = f"expected one deliveries/*/report.html, found {len(reports)}"
+        deliveries = sorted((self.layout.runs / record.id / "deliveries").glob("*/delivery.json"))
+        if len(deliveries) != 1:
+            reason = f"expected one deliveries/*/delivery.json, found {len(deliveries)}"
             return replace(ended, status="failed", reason=reason)
-        if not (record.report and (self.layout.root / record.report).is_file()):
+        # A delivery has no report page: the library shows the run itself, so nothing is filed.
+        # An earlier-format delivery that still holds one is filed as before.
+        page = deliveries[0].with_name("report.html")
+        if page.is_file() and not (record.report and (self.layout.root / record.report).is_file()):
             try:
                 filed = filing.file_report(
                     self.layout,
-                    reports[0],
+                    page,
                     issuer_id=record.issuer_id,
                     issuer_name=record.issuer_name,
                     as_of=record.as_of,

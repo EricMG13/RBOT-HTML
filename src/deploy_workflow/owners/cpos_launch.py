@@ -1306,9 +1306,10 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
 
 HTML_MODEL_SCOPE = "The HTML Model and calculation JSON are not published by this launcher."
 FORECAST_SCOPE = (
-    "The HTML Model is not published by this launcher. A forecast table is published beside the "
-    "report when the CP-2G handoff's inputs block validates; Python computes its figures from the "
-    "inputs the handoff states, and the inputs are not independently reviewed."
+    "The HTML Model is not published by this launcher. A forecast table is published with the "
+    "issuer report in the library when the CP-2G handoff's inputs block validates; Python "
+    "computes its figures from the inputs the handoff states, and the inputs are not "
+    "independently reviewed."
 )
 
 
@@ -1343,8 +1344,8 @@ def _layout(
     scope = (
         f"User-launched {preset.title} run for {run.issuer_name} as of {run.as_of}, using {config} "
         "on the selected issuer folder. Automated checks cover handoff structure, issuer and date "
-        "anchors, source and upstream references and report selectors; analytical accuracy has "
-        "not been independently reviewed. "
+        "anchors, source and upstream references and issuer-report section selectors; analytical "
+        "accuracy has not been independently reviewed. "
         + (FORECAST_SCOPE if {"CP-1", "CP-2G"} <= set(ordered) else HTML_MODEL_SCOPE)
         + f" Sections not produced: {', '.join(omitted) or 'none'}."
     )
@@ -2011,7 +2012,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("No provider was called. Add --live --ruling <file> to start the paid run.")
         return 0
     try:
-        report = run_live_handoffs(
+        receipt = run_live_handoffs(
             prepared.manifest,
             prepared.directory,
             ruling=args.ruling,
@@ -2028,7 +2029,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
     spent = Budget(prepared.plan.provider_cap_usd, prepared.directory / "live").spent
-    print(f"Report:   {report}\nCharged:  USD {spent}")
+    print(f"Delivery: {receipt}\nCharged:  USD {spent}")
     if not args.no_library:
         _refresh_library(prepared.directory)
     print("Automated checks only: review the handoffs against the sources before relying on this.")

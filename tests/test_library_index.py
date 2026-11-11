@@ -59,6 +59,7 @@ def test_completed_run_on_the_current_method_is_listed_with_its_recorded_values(
     assert run["execution"]["started_at"] == "2026-11-01T10:00:00Z"
     assert run["execution"]["models"] == ["gpt-6.1-sol · medium"]
     assert run["report"]["href"].startswith("../runs/run-a/deliveries/")
+    assert run["delivery_sha256"] is None  # an earlier-format run is listed by its report hash
     assert run["modules"][1]["href"].startswith("../runs/run-a/requests/CP-1/")
     assert (tmp_path / "library" / run["report"]["href"]).resolve().is_file()
     assert run["latest"] is True and run["latest_shared_with"] == 0
@@ -124,6 +125,34 @@ def test_other_completion_kinds_are_not_report_runs(tmp_path):
     }
 
 
+def test_a_run_whose_delivery_has_no_report_page_is_listed_by_its_receipt(tmp_path):
+    run = make_run(tmp_path, "run-a", report_page=False)
+    (receipt,) = run.glob("deliveries/*/delivery.json")
+    (library_run,) = listed(tmp_path).runs
+    assert library_run["report"] is None
+    assert library_run["delivery_sha256"] == sha(receipt.read_bytes())
+    assert not list(run.glob("deliveries/*/report.html"))
+
+
+def test_a_changed_delivery_receipt_is_not_the_completed_one(tmp_path):
+    run = make_run(tmp_path, "run-a", report_page=False)
+    (receipt,) = run.glob("deliveries/*/delivery.json")
+    receipt.write_bytes(receipt.read_bytes() + b" ")
+    assert reasons(listed(tmp_path)) == {
+        "run-a": "no delivery folder holds the delivery the completion record names"
+    }
+
+
+def test_an_unlisted_file_in_a_receipt_stated_delivery_is_refused(tmp_path):
+    run = make_run(tmp_path, "run-a", report_page=False)
+    (receipt,) = run.glob("deliveries/*/delivery.json")
+    (receipt.parent / "extra.txt").write_text("x")
+    assert (
+        "does not hold exactly the files its delivery.json lists"
+        in reasons(listed(tmp_path))["run-a"]
+    )
+
+
 def test_a_changed_report_is_not_listed(tmp_path):
     run = make_run(tmp_path, "run-a")
     (report,) = run.glob("deliveries/*/report.html")
@@ -136,7 +165,7 @@ def test_a_delivery_of_another_report_is_not_the_completed_one(tmp_path):
     run = make_run(tmp_path, "run-a")
     rewrite_completion(run, lambda r: r.update(report_sha256="0" * 64))
     assert reasons(listed(tmp_path)) == {
-        "run-a": "no delivery folder holds the report the completion record names"
+        "run-a": "no delivery folder holds the delivery the completion record names"
     }
 
 
@@ -397,6 +426,7 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
     assert library.excluded == []
     (run,) = library.runs
     assert [m["id"] for m in run["modules"]] == ["CP-0", "CP-1"]
+    assert run["report"] is None and len(run["delivery_sha256"]) == 64  # no report page rendered
     # A new-format handoff has no Reader summary; the library shows older runs only (ruling H7).
     assert run["modules"][0]["summary"] is None
 

@@ -866,15 +866,14 @@ def test_every_pathway_runs_end_to_end_to_a_verified_report(tmp_path, provider, 
     assert main(argv) == 0
     out = tmp_path / "out"
     assert tuple(c[0] for c in provider.calls) == PATHWAY_MODULES[pathway]
-    report = next((out / "deliveries").glob("*/report.html"))
-    assert verify_delivery(next(out.glob("delivery-*.json")), report.parent) == report
-    assert str(report) in capsys.readouterr().out
-    page = report.read_text()
-    assert "not been independently reviewed" in page
-    assert not (report.parent / "model.html").exists()
-    # No front routes remain (the Reader summary is retired), so no front block is stated.
-    assert 'id="delivery-scope-banner"' in page and 'id="delivery-limits"' not in page
-    modules = json.loads((report.parent / "view.json").read_text())["modules"]
+    receipt = next((out / "deliveries").glob("*/delivery.json"))
+    assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt
+    assert str(receipt) in capsys.readouterr().out
+    assert "not been independently reviewed" in json.loads(receipt.read_text())["scope"]
+    assert not (receipt.parent / "model.html").exists()
+    # The delivery renders no report page: the issuer library's pages are the report.
+    assert not (receipt.parent / "report.html").exists()
+    modules = json.loads((receipt.parent / "view.json").read_text())["modules"]
     live = (
         "Produced by a live model run and accepted by the CP-OS check; "
         "not native contract acceptance."
@@ -909,7 +908,7 @@ def test_rejected_module_stops_the_run_without_a_report(tmp_path, provider, caps
     assert not list((tmp_path / "out").glob("completed-*.json"))
 
 
-def test_issuer_name_from_the_context_cannot_inject_into_the_report(tmp_path, provider):
+def test_issuer_name_from_the_context_is_carried_exactly_and_renders_no_page(tmp_path, provider):
     argv = launch(tmp_path, "--modules", "CP-4", "--live", "--ruling", str(RULING))
     hostile = "A</script><script>alert(1)</script>"
     path = tmp_path / "context.json"
@@ -919,8 +918,9 @@ def test_issuer_name_from_the_context_cannot_inject_into_the_report(tmp_path, pr
     routes = prepare_routes(tmp_path, "sol-medium")
     provider.answer = lambda context: answer(context, routes).replace(ISSUER, hostile)
     assert main(argv) == 0
-    report = next((tmp_path / "out/deliveries").glob("*/report.html")).read_text()
-    assert "<script>alert(1)" not in report
+    folder = next((tmp_path / "out/deliveries").glob("*/delivery.json")).parent
+    assert json.loads((folder / "view.json").read_text())["run"]["issuer_name"] == hostile
+    assert not list(folder.glob("*.html"))  # no page is rendered for the name to inject into
 
 
 def test_interrupted_module_is_never_resent_because_its_charge_is_unknown(
@@ -1640,7 +1640,7 @@ def assert_live_evidence(out: Path, cap: Decimal) -> None:
     assert completed["execution"] == "live-provider"
     assert set(completed["module_execution"]) == LIVE_MODULES
     assert set(completed["module_execution"].values()) == {"live-provider"}
-    report = next((out / "deliveries").glob("*/report.html"))
+    report = next((out / "deliveries").glob("*/delivery.json"))
     assert verify_delivery(next(out.glob("delivery-*.json")), report.parent) == report
     handoffs = {m: (report.parent / f"{m}.md").read_bytes() for m in LIVE_MODULES}
     digest = {m: hashlib.sha256(raw).hexdigest().encode() for m, raw in handoffs.items()}
@@ -1648,7 +1648,7 @@ def assert_live_evidence(out: Path, cap: Decimal) -> None:
     assert digest["CP-0"] in handoffs["CP-1A"] and digest["CP-1"] in handoffs["CP-1A"]
     for filed in (b"7,940", b"6,261"):
         assert filed in handoffs["CP-1"]
-        assert filed in report.read_bytes()
+        assert filed in (report.parent / "report-view.json").read_bytes()
     view = json.loads((report.parent / "report-view.json").read_text())
     assert {b["block_id"]: b["state"] for b in view["blocks"]} == {
         "company-operating-model": "populated",
@@ -1733,7 +1733,7 @@ def test_copilot_gh_login_opt_in_passes_the_key_check(
     runtime = tmp_path / "copilot-runtime"
     runtime.write_text("#!/bin/sh\n")
     monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
-    monkeypatch.setattr(cpos_launch, "run_live_handoffs", lambda m, d, **k: d / "report.html")
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", lambda m, d, **k: d / "delivery.json")
     argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
     assert main(argv) == 0
 
@@ -1759,7 +1759,7 @@ def test_copilot_config_reaches_the_live_run_with_its_config(
 
     def fake_run(manifest, directory, **kwargs):
         seen.update(kwargs)
-        return directory / "report.html"
+        return directory / "delivery.json"
 
     monkeypatch.setattr(cpos_launch, "run_live_handoffs", fake_run)
     argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
@@ -1956,7 +1956,9 @@ def library_launch(tmp_path, monkeypatch, copilot_ruling, update):
     runtime.write_text("#!/bin/sh\n")
     monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
     monkeypatch.setattr(
-        cpos_launch, "run_live_handoffs", lambda manifest, directory, **k: directory / "report.html"
+        cpos_launch,
+        "run_live_handoffs",
+        lambda manifest, directory, **k: directory / "delivery.json",
     )
     monkeypatch.setattr(cpos_launch, "update_library_at", update)
     argv = copilot_argv(tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling))
@@ -1986,7 +1988,7 @@ def test_library_failure_keeps_the_run(tmp_path, monkeypatch, capsys, copilot_ru
     captured = capsys.readouterr()
     assert "disk full" in captured.err
     assert f"python apps/issuer-library/update_library.py --workspace {tmp_path}" in captured.err
-    assert f"Report:   {tmp_path / 'runs' / 'x' / 'report.html'}" in captured.out
+    assert f"Delivery: {tmp_path / 'runs' / 'x' / 'delivery.json'}" in captured.out
 
 
 def test_refresh_library_loads_the_checkout_update_library(tmp_path, capsys):
@@ -2151,7 +2153,7 @@ def test_cp2g_run_publishes_model_delivery(tmp_path, provider, capsys):
     assert files <= set(receipt["files"])
     for name in files:  # hash-checked like the report
         assert receipt["files"][name] == hashlib.sha256((folder / name).read_bytes()).hexdigest()
-    assert verify_delivery(next(out.glob("delivery-*.json")), folder) == folder / "report.html"
+    assert verify_delivery(next(out.glob("delivery-*.json")), folder) == folder / "delivery.json"
     exact = json.loads((folder / "forecast_exact.json").read_text())
     assert (
         exact["consumed"]["CP-1.md"]
@@ -2218,7 +2220,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
     assert "Model not published" not in seen.err
 
 
-def test_model_publish_failure_keeps_the_report(tmp_path, provider, capsys, monkeypatch):
+def test_model_publish_failure_keeps_the_delivery(tmp_path, provider, capsys, monkeypatch):
     def refuse(cp1, handoff):
         raise ValueError("synthetic failure")
 
@@ -2226,12 +2228,12 @@ def test_model_publish_failure_keeps_the_report(tmp_path, provider, capsys, monk
     code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
     assert code == 0
     (folder,) = (out / "deliveries").iterdir()
-    assert (folder / "report.html").is_file() and not (folder / "forecast_exact.json").exists()
+    assert (folder / "delivery.json").is_file() and not (folder / "forecast_exact.json").exists()
     assert "Model not published: synthetic failure" in seen.err
     completed = json.loads(next(out.glob("completed-*.json")).read_text())
     assert completed["cp_forecast_published"] is False
     assert completed["forecast_failure"] == "synthetic failure"
-    assert f"Report:   {folder / 'report.html'}" in seen.out
+    assert f"Delivery: {folder / 'delivery.json'}" in seen.out
 
 
 @pytest.mark.parametrize(
@@ -2554,7 +2556,7 @@ def test_each_pathways_run_reaches_the_library_screens(tmp_path, provider, capsy
             f"Forecast/{models[0]['id'] if models else 'none'}",
         )
     ]
-    for page, route in [*pages, (delivery / "report.html", "")]:
+    for page, route in pages:
         dom, console = visit(page, route)
         shown = re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>|\s+", " ", dom)
         assert console == [], (route, console)
@@ -2917,11 +2919,11 @@ def test_delivery_presents_each_owner_table_as_a_plain_table_with_its_heading(tm
             if e["heading"] == heading
         ]
         assert [(e["kind"], e["blocks"]) for e in listed] == [("table", ["evidence"])]
-        page = files["report.html"].decode()
-        # The page carries its data JSON-escaped, so an em dash in a heading reads `\u2014` there.
-        assert heading.replace("—", "\\u2014") in page
+        assert "report.html" not in files
+        view = files["view.json"].decode()
+        assert heading in view
         for cell in table.splitlines()[2].strip("|").split("|"):
-            assert cell.strip().replace("—", "\\u2014") in page
+            assert cell.strip() in view
 
 
 # ---- Package 2 (2026-11-10): the credit-structure tables. Every value is synthetic.
