@@ -104,6 +104,42 @@ function inspectorItems(text, ctx) {
   return splitBasis(text).items.map(raw => inspectorItem(raw, ctx));
 }
 
+// The pages of a source item as words: "page 41", "pages 43–45", or nothing.
+function itemPages(item) {
+  return item.pageEnd !== undefined ? `pages ${item.page}–${item.pageEnd}` : item.page !== undefined ? `page ${item.page}` : '';
+}
+
+// One resolved Basis item (inspectorItem) as the inspector's <li>, in words. `deps` are the page's drawing helpers: chipSection(chip) (HTML of one
+// source-page chip), moduleHref(code), icon(name).
+function inspectorItemHtml(item, deps) {
+  if (item.kind === 'source') {
+    const pages = itemPages(item);
+    return `<li><strong>${escapeHtml(item.file)}</strong>${pages ? `, ${escapeHtml(pages)}` : ''}${item.chips.map(c => deps.chipSection(c)).join('')}</li>`;
+  }
+  if (item.kind === 'calculation') {
+    const row = item.row;
+    if (!row) return `<li>${escapeHtml(item.raw)}<span class="small"> (no row with this ID in the handoff's Calculations table)</span></li>`;
+    return `<li>Calculation ${escapeHtml(item.id)}<dl class="calculation-row">${row.headers.map((header, i) => `<div><dt>${escapeHtml(header)}</dt><dd>${richText(row.cells[i] ?? '')}</dd></div>`).join('')}</dl></li>`;
+  }
+  if (item.kind === 'module') {
+    return item.ran ? `<li><a class="text-action" href="${deps.moduleHref(item.code)}">${escapeHtml(item.raw)}${deps.icon('arrow-right')}</a></li>`
+      : `<li>${escapeHtml(item.raw)}<span class="small"> · Not run in this run</span></li>`;
+  }
+  return `<li>${escapeHtml(item.raw)}</li>`;
+}
+
+// The inspector's whole Basis block for one paragraph: its items (inspectorItems) as a list in the handoff's order, each drawn by drawItem(item)
+// (the page's resolver of one item to its <li>, normally inspectorItemHtml with the page's helpers). An earlier-format paragraph lists its
+// citations as written. No items: no block. The app draws exactly this; the node tests read it.
+function inspectorBasisBlock(text, earlier, ctx, drawItem) {
+  if (earlier) {
+    const raw = earlierBasis(text).items;
+    return raw.length ? `<div class=""><h3>Basis</h3><ul class="basis-items">${raw.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : '';
+  }
+  const items = inspectorItems(text, ctx);
+  return items.length ? `<div class="basis"><h3>Basis</h3><ul class="basis-items">${items.map(item => drawItem(item)).join('')}</ul></div>` : '';
+}
+
 // ---- Figures (H6 check 8). A figure is a number with optional thousands commas and decimals, with its currency prefix and unit
 // suffix as written. Not figures: a number touching a letter or hyphen-joined to one (10-K, B-1, FY2024, 3rd), a four-digit year
 // 1900-2099, a date or a day/year beside a month name, a whole number below 100 that carries no currency, no symbolic unit
@@ -353,4 +389,4 @@ function nearestDates(items, asOf, n = 5) {
     .slice(0, n).map(entry => entry.item);
 }
 
-if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};
+if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};

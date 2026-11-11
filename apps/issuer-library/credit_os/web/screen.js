@@ -331,24 +331,11 @@ function chipSection(chip,output) {
   const open=chip.file&&!absent?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
   return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${chip.file&&chip.source?`<p class="small chip-key">Cited as ${esc(chip.source)}</p>`:''}${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }
-// The pages of a source item as words: "page 41", "pages 43–45", or nothing.
-const itemPages=item=>item.pageEnd!==undefined?`pages ${item.page}–${item.pageEnd}`:item.page!==undefined?`page ${item.page}`:'';
-// One Basis item of a new-format paragraph in words, resolved where the data allows (H3). `used` collects the chips an item took.
+// One Basis item of a new-format paragraph in words (reader.js inspectorItemHtml), resolved where the data allows (H3). `used` collects the chips an item took.
 function basisItemHtml(raw,output,chips,used) {
-  const item=inspectorItem(raw,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)}); // reader.js: the same resolution the tests read
-  if(item.kind==='source') {
-    item.chips.forEach(c=>used.add(c));
-    return `<li><strong>${esc(item.file)}</strong>${itemPages(item)?`, ${esc(itemPages(item))}`:''}${item.chips.map(c=>chipSection(c,output)).join('')}</li>`;
-  }
-  if(item.kind==='calculation') {
-    const row=item.row;
-    return row?`<li>Calculation ${esc(item.id)}<dl class="calculation-row">${row.headers.map((header,i)=>`<div><dt>${esc(header)}</dt><dd>${rich(row.cells[i]??'')}</dd></div>`).join('')}</dl></li>`
-      :`<li>${esc(raw)}<span class="small"> (no row with this ID in the handoff's Calculations table)</span></li>`;
-  }
-  if(item.kind==='module') {
-    return item.ran?`<li><a class="text-action" href="${moduleHref(item.code)}">${esc(raw)}${icon('arrow-right')}</a></li>`:`<li>${esc(raw)}<span class="small"> · Not run in this run</span></li>`;
-  }
-  return `<li>${esc(raw)}</li>`;
+  const item=inspectorItem(raw,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)});
+  if(item.kind==='source') item.chips.forEach(c=>used.add(c));
+  return inspectorItemHtml(item,{chipSection:c=>chipSection(c,output),moduleHref,icon});
 }
 // The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
 // in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
@@ -357,11 +344,11 @@ function paragraphBasisHtml(key,item,output,mode,chips) {
   const earlier=!isNewFormat(output.sections),used=new Set();
   let figure='',items='';
   if(item.text!==undefined) {
-    const {body,items:raw}=paragraphBody(item.text,earlier);
+    const {body}=paragraphBody(item.text,earlier);
     const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
     figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
-    // New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
-    items=raw.length?`<div class="${earlier?'':'basis'}"><h3>Basis</h3><ul class="basis-items">${earlier?raw.map(r=>`<li>${esc(r)}</li>`).join(''):raw.map(r=>basisItemHtml(r,output,chips,used)).join('')}</ul></div>`:'';
+    // reader.js draws the list (the same code the node tests read). New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
+    items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it.raw,output,chips,used));
   }
   const rest=chips.filter(c=>!used.has(c));
   return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;

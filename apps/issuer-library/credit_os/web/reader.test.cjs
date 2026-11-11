@@ -340,6 +340,39 @@ test('inspectorItems: a paragraph\'s Basis items resolved in the handoff\'s orde
   assert.deepEqual(inspectorItems('No basis here.', ctx), []);
 });
 
+// The inspector's drawn Basis list: screen.js paragraphBasisHtml (the real text, stand-ins for its globals) over the synthetic CP-2 handoff.
+// Expected <li> items are written by hand from the Basis lines of apps/issuer-library/fixtures/synthetic-new-format/SYNTHETIC-CP-2.md (lines 18, 23, 25).
+function inspectorDrawnFor(firstLine, lastLine, chips = []) {
+  const text = fs.readFileSync(path.join(__dirname, 'screen.js'), 'utf8');
+  const start = text.indexOf('function chipSection('), end = text.indexOf('function showInspector(');
+  const reader = require('./reader.js');
+  const draw = new Function('esc', 'icon', 'inspectorItem', 'inspectorItemHtml', 'inspectorBasisBlock', 'uniqueChips', 'isNewFormat', 'paragraphBody', 'figureSpans', 'defaultOutput', 'moduleHref', `${text.slice(start, end)}; return paragraphBasisHtml;`)(
+    reader.escapeHtml, n => `<img src="${n}">`, reader.inspectorItem, reader.inspectorItemHtml, reader.inspectorBasisBlock, reader.uniqueChips, reader.isNewFormat, reader.paragraphBody, reader.figureSpans, code => code === 'CP-1', code => `#/${code}`);
+  const lines = fixture('CP-2');
+  const calculations = {heading: 'Calculations', level: 2, line: 44, blocks: [{type: 'table', line: 46, headers: ['ID', 'Calculation', 'Steps', 'Result'], rows: [{line: 48, cells: ['K1', 'Net debt to EBITDA', 'Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331', '4.2x']}]}]};
+  const paragraph = lines.slice(firstLine - 1, lastLine).join('\n');
+  return draw('k', {text: paragraph}, {sections: [calculations, ...newFormat('b')], run: 'r', href: '../runs/r/d/CP-2.md', source: 'd/CP-2.md'}, 'p', chips);
+}
+const basisList = lis => `<div class="basis"><h3>Basis</h3><ul class="basis-items">${lis.join('')}</ul></div>`;
+
+test('the inspector draws every Basis item of the CP-2 bottom line in the handoff order: source with page, then the calculation row', () => {
+  assert.equal(inspectorDrawnFor(17, 18), basisList([
+    '<li><strong>NBG_2025-03-31_annual-report.pdf</strong>, page 41</li>',
+    '<li>Calculation K1<dl class="calculation-row"><div><dt>ID</dt><dd>K1</dd></div><div><dt>Calculation</dt><dd>Net debt to EBITDA</dd></div><div><dt>Steps</dt><dd>Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331</dd></div><div><dt>Result</dt><dd>4.2x</dd></div></dl></li>',
+  ]));
+});
+
+test('the inspector draws two sources, then a page range and an upstream module, for the CP-2 key findings', () => {
+  assert.equal(inspectorDrawnFor(22, 23), basisList([
+    '<li><strong>NBG_2024-12-31_Q4-results.pdf</strong></li>',
+    '<li><strong>NBG_2025-03-31_annual-report.pdf</strong>, page 41</li>',
+  ]));
+  assert.equal(inspectorDrawnFor(24, 25), basisList([
+    '<li><strong>NBG_2025-03-31_annual-report.pdf</strong>, pages 43–45</li>',
+    '<li><a class="text-action" href="#/CP-1">Financial foundation (CP-1)<img src="arrow-right"></a></li>',
+  ]));
+});
+
 test('paragraphView: text holding the private-use marker characters is drawn as written, one button per figure', () => {
   for (const digit of ['0', '7']) {
     const html = paragraphView(`Code \uE000${digit}\uE001 then 4.2x leverage.\nBasis: a.pdf`, 'k:1').html;
