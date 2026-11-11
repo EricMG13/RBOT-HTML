@@ -24,7 +24,7 @@ import pytest
 from inbox_fixtures import CONTEXT, KEY, layout, pump, settings
 
 from deploy_workflow.inbox.runs import load_all
-from deploy_workflow.inbox.watcher import Watcher
+from deploy_workflow.inbox.scheduler import Scheduler
 from deploy_workflow.run_start import service, submissions
 
 pytest_plugins = ["inbox_fixtures"]
@@ -62,7 +62,7 @@ class Reply:
 
 @dataclass
 class Service:
-    watcher: Watcher
+    watcher: Scheduler
     server: ThreadingHTTPServer
     root: Path
 
@@ -109,7 +109,7 @@ def service_factory(root: Path, fake_env: Callable[[dict[str, Any]], None]) -> I
 
     def start(host: str = "127.0.0.1") -> Service:
         fake_env({"sleep": 30})
-        watcher = Watcher(settings(root))
+        watcher = Scheduler(settings(root))
         server = service.make_server(watcher, host, 0)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         started.append(Service(watcher, server, root))
@@ -515,7 +515,7 @@ def test_the_activity_file_is_served_under_the_library_rules(svc):
 
 
 def test_the_loop_leaves_the_sweep_to_the_watcher(root, monkeypatch):
-    watcher = Watcher(settings(root))
+    watcher = Scheduler(settings(root))
     calls: list[Any] = []
     real = submissions.sweep
 
@@ -538,7 +538,7 @@ def test_the_loop_leaves_the_sweep_to_the_watcher(root, monkeypatch):
 
 
 def test_the_watcher_sweep_removes_a_stale_upload_and_keeps_a_queued_one(root):
-    watcher = Watcher(settings(root))
+    watcher = Scheduler(settings(root))
     try:
         stale = submissions.new(layout(root))
         old = layout(root).uploads / stale
@@ -563,10 +563,10 @@ def test_start_up_refuses_without_the_key_or_with_a_second_instance(root, monkey
     assert service.main(argv) == 2
     assert KEY in capsys.readouterr().err
     monkeypatch.setenv(KEY, "test-key-not-real")
-    first = Watcher(settings(root))
+    first = Scheduler(settings(root))
     try:
         assert service.main(argv) == 2
-        assert "another watcher is running" in capsys.readouterr().err
+        assert "another run page service" in capsys.readouterr().err
     finally:
         first.close()
     assert service.main([*argv, "--max-running", "0"]) == 2

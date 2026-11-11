@@ -60,7 +60,7 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
     ``_engine/activity.js`` (the library's Run activity, loaded as ``../activity.js``), under the
     same rules and headers as a library file; it must itself be in ``_engine``.
 
-``main`` runs this server in a daemon thread and the watcher's ``step`` every poll in the main
+``main`` runs this server in a daemon thread and the scheduler's ``step`` every poll in the main
 thread; ``step`` also sweeps stale uploads. ``--host`` must be this machine's own address: a
 wildcard address (``0.0.0.0``, ``::``) can never equal a ``Host`` header and is refused.
 """
@@ -83,8 +83,8 @@ from pathlib import Path
 from typing import Any, BinaryIO, cast
 
 from deploy_workflow.inbox import activity, runs, startup
-from deploy_workflow.inbox.drops import Layout
-from deploy_workflow.inbox.watcher import Settings, Watcher
+from deploy_workflow.inbox.layout import Layout
+from deploy_workflow.inbox.scheduler import Scheduler, Settings
 from deploy_workflow.run_start import submissions
 from deploy_workflow.run_start.submissions import Answers
 
@@ -135,7 +135,7 @@ def _refuse(status: int, text: str) -> _Reply:
 
 class _Server(ThreadingHTTPServer):
     daemon_threads = True
-    watcher: Watcher
+    scheduler: Scheduler
     allowed_hosts: frozenset[str]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
 
     @property
     def _layout(self) -> Layout:
-        return self._service.watcher.layout
+        return self._service.scheduler.layout
 
     def log_message(self, format: str, *args: Any) -> None:
         log.info("%s %s", self.address_string(), format % args)
@@ -332,7 +332,7 @@ class Handler(BaseHTTPRequestHandler):
         raise _Reply(200, {"name": stored})
 
     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
-        settings = self._service.watcher.settings
+        settings = self._service.scheduler.settings
         return submissions.summary(
             self._layout, sid, answers, config=settings.config, cap=settings.cap
         )
@@ -341,7 +341,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict) or not isinstance(body.get("digest"), str):
             raise _refuse(400, "the request needs the answers and the digest of the summary")
         record = self._guarded(
-            lambda: self._service.watcher.submit(
+            lambda: self._service.scheduler.submit(
                 sid,
                 cast(Answers, body.get("answers")),
                 body["digest"],  # checked by submit
@@ -353,7 +353,7 @@ class Handler(BaseHTTPRequestHandler):
         record = next((r for r in runs.load_all(self._layout) if r.id == run_id), None)
         if record is None:
             raise _refuse(404, "unknown run")
-        settings = self._service.watcher.settings
+        settings = self._service.scheduler.settings
         shown = activity.snapshot(self._layout, [record], cap=settings.cap, now=datetime.now(UTC))[
             "runs"
         ][0]
@@ -393,13 +393,13 @@ class Handler(BaseHTTPRequestHandler):
         )
 
 
-def make_server(watcher: Watcher, host: str, port: int) -> ThreadingHTTPServer:
+def make_server(scheduler: Scheduler, host: str, port: int) -> ThreadingHTTPServer:
     """A server bound to ``host:port`` (port 0 picks one); not yet serving."""
     server = _Server((host, port), Handler)
     allowed = {f"{host}:{server.server_address[1]}"}
     if host == "127.0.0.1":
         allowed.add(f"localhost:{server.server_address[1]}")
-    server.watcher, server.allowed_hosts = watcher, frozenset(allowed)
+    server.scheduler, server.allowed_hosts = scheduler, frozenset(allowed)
     return server
 
 
@@ -414,10 +414,10 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _loop(watcher: Watcher) -> None:
+def _loop(scheduler: Scheduler) -> None:
     while True:
-        watcher.step()  # which also sweeps the stale uploads, keeping the queued ones
-        time.sleep(watcher.settings.poll_seconds)
+        scheduler.step()  # which also sweeps the stale uploads, keeping the queued ones
+        time.sleep(scheduler.settings.poll_seconds)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -436,24 +436,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     settings = Settings(args.root, max_running=args.max_running, max_per_day=args.max_per_day)
     try:
-        watcher = Watcher(settings)
+        scheduler = Scheduler(settings)
     except (ValueError, OSError) as error:  # StartupRefused, a long root, an unreadable record
         print(error, file=sys.stderr)
         return 2
     try:
-        server = make_server(watcher, args.host, args.port)
+        server = make_server(scheduler, args.host, args.port)
     except (OSError, OverflowError) as error:  # the address is taken or is not one
-        watcher.close()
+        scheduler.close()
         print(f"cannot listen on {args.host}:{args.port}: {error}", file=sys.stderr)
         return 2
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"serving http://{args.host}:{server.server_address[1]}/", file=sys.stderr)
     try:
-        _loop(watcher)
+        _loop(scheduler)
     except KeyboardInterrupt:
         pass
     finally:
         server.shutdown()
         server.server_close()
-        watcher.close()
+        scheduler.close()
     return 0

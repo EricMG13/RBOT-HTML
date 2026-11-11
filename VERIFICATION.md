@@ -4,6 +4,32 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Run start page: the inbox watcher and folder drop removed (branch `claude/no-nothing-6d5113`)
+
+Scope: offline, macOS, with stand-in launchers (the fake launcher `tests/fixtures/fake_launcher.py`
+and the canned-provider launcher `tests/fixtures/canned_provider_launcher.py`). No provider was
+called and nothing ran on Windows. This is not proof of a paid run.
+- Built: `inbox/watcher.py` is now `inbox/scheduler.py` (`Scheduler`; the folder scan, claim,
+  settle timer, rejection into `inbox/failed`, `_template` copies and the watcher's own command
+  line are gone); `Layout` and `ensure_layout` moved to `inbox/layout.py` and make no `inbox`;
+  `inbox/drops.py` and `Start watcher.cmd` are deleted; `Start run page.cmd <root> [address]`
+  runs `-m deploy_workflow.run_start`; the package ships the 2026-11-11 ruling; the issuer-ID
+  length limit moved from the drop check to the summary. Records the watcher wrote still load and
+  show; one it queued unchecked is marked failed at start-up with a reason.
+- Passed on this tree, exit 0: `uv run pytest` on `tests/test_inbox_scheduler.py`,
+  `test_inbox_runs.py`, `test_inbox_activity.py`, `test_inbox_filing.py`,
+  `test_run_start_submissions.py`, `test_run_start_scheduler.py`, `test_run_start_service.py`,
+  `test_run_start_page.py`, `test_context_form.py`, `test_cpos_launch.py`,
+  `test_issuer_library_packaging.py` and `test_library_page_browser.py` (844 passed, 1 skipped: the
+  paid test), then `tests/test_inbox_layout.py` (4 passed); `uv run python tools/quality_gate.py`,
+  0 findings; `PYTHONPATH=src uv run python -m deploy_workflow.run_start --help`.
+- The real launcher ran in one scheduler test (canned provider answers, the real library
+  rebuild); the others stand in a launcher.
+- Not verified: a paid run through Submit; whether CP-3 and CP-6 honour `module_options`; Windows
+  (`Start run page.cmd`, the file lock, paths); browsers other than Chrome; more than two
+  analysts submitting at once; `../runs/...` download links, which the service does not serve; the
+  full test suite (weekly job); `tests/test_run_start_*` in CI (the CI fast set does not list them).
+
 ## 2026-11-10 — Visuals package 8: complete the whole-branch review
 
 Scope: continued the interrupted `claude/visuals-p8` changes from reviewed package 7

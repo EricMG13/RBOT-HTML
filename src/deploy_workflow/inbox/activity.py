@@ -14,7 +14,7 @@ from typing import Any, cast
 from deploy_vii.contracts import PATHWAY_MODULES, PathwayId
 from deploy_vii.registry import plan
 from deploy_workflow import platform_io
-from deploy_workflow.inbox.drops import Layout
+from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.model.budget import BudgetError, exact_sum, read_reservation_snapshot
 from deploy_workflow.model.pricing import money_text

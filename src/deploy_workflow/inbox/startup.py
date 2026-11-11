@@ -1,4 +1,4 @@
-"""What the watcher does once before polling: launch checks, the folder lock, log and pages."""
+"""What the service does once before polling: launch checks, the folder lock, log and page."""
 
 from __future__ import annotations
 
@@ -10,8 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import IO
 
-from deploy_workflow.inbox import drops
-from deploy_workflow.inbox.drops import Layout
+from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.model.adapter import (
     COPILOT_RUNTIME_VARIABLE,
     KEY_VARIABLES,
@@ -21,8 +20,9 @@ from deploy_workflow.model.adapter import (
 from deploy_workflow.model_testing.configs import CONFIGS
 
 ROOT = Path(__file__).resolve().parents[3]
+# The start page the service serves.
 FORM = ROOT / "docs/templates/context-form.html"
-# The only ruling the watcher runs under; ``Settings.ruling`` defaults to it and start-up checks it.
+# The only ruling the service runs under; ``Settings.ruling`` defaults to it and start-up checks it.
 STANDING_RULING = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
 _PAGE = (
     '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
@@ -33,7 +33,7 @@ _PAGE = (
 
 
 class StartupRefused(ValueError):
-    """The watcher cannot launch runs, or another watcher already owns this folder."""
+    """The service cannot launch runs, or another service already owns this folder."""
 
 
 PACKAGE_LOGGER = "deploy_workflow.inbox"
@@ -42,7 +42,7 @@ RULED_RUN_CAP = Decimal(20)
 
 
 class _RootHandler(logging.FileHandler):
-    """The watcher.log handler of one root, attached to the package logger."""
+    """The watcher.log handler of one root (the file keeps its old name), on the package logger."""
 
     def __init__(self, layout: Layout, own: str) -> None:
         super().__init__(layout.logs / "watcher.log", encoding="utf-8")
@@ -50,15 +50,17 @@ class _RootHandler(logging.FileHandler):
         self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
 
     def filter(self, record: logging.LogRecord) -> bool:
-        # Another root's watcher logger is not ours; runs and activity records carry no root.
+        # Another root's scheduler logger is not ours; runs and activity records carry no root.
         return record.name == self._own or not record.name.startswith(self._others)
 
 
 def open_log(layout: Layout, name: str) -> logging.Logger:
-    """The watcher's logger, with one file handler on the package logger ``deploy_workflow.inbox``.
+    """The scheduler's logger, with one file handler on the package logger.
 
-    ``watcher``, ``runs`` and ``activity`` all propagate to it, so their documented fail-open
-    warnings reach ``_engine/logs/watcher.log`` as well as the watcher's own lines. One file per
+    The package logger is ``deploy_workflow.inbox``.
+
+    ``scheduler``, ``runs`` and ``activity`` all propagate to it, so their documented fail-open
+    warnings reach ``_engine/logs/watcher.log`` as well as the scheduler's own lines. One file per
     root; ``close_log`` removes the handler."""
     package = logging.getLogger(PACKAGE_LOGGER)
     own = f"{name}.{layout.root}"
@@ -84,7 +86,7 @@ def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
         )
     if ruling.resolve() != STANDING_RULING.resolve():
         raise StartupRefused(
-            f"the watcher runs only under its standing ruling {STANDING_RULING}, not {ruling}"
+            f"the service runs only under its standing ruling {STANDING_RULING}, not {ruling}"
         )
     config = CONFIGS.get(config_id)
     if config is None:
@@ -102,13 +104,14 @@ def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
 
 
 def take_lock(layout: Layout) -> IO[str]:
-    """Hold an operating-system lock on byte 0 of ``_engine/watcher.lock`` for the watcher's life.
+    """Hold an operating-system lock on byte 0 of ``_engine/watcher.lock`` for the service's life.
 
-    The lock goes with the process, however it ends, so no stale lock can block a restart and
-    two watchers can never both hold it. Both platforms lock the same byte of the same kind of
-    handle: the file is opened without truncating or appending and rewound first, so whatever
-    text an earlier holder left cannot move the locked byte. Once the lock is held the file gets
-    ``<host> <pid>`` for the message."""
+    The file keeps the name ``watcher.lock`` so a folder watcher left running from an earlier
+    version and this service exclude each other. The lock goes with the process, however it ends,
+    so no stale lock can block a restart and two holders can never both hold it. Both platforms
+    lock the same byte of the same kind of handle: the file is opened without truncating or
+    appending and rewound first, so whatever text an earlier holder left cannot move the locked
+    byte. Once the lock is held the file gets ``<host> <pid>`` for the message."""
     descriptor = os.open(layout.engine / "watcher.lock", os.O_RDWR | os.O_CREAT, 0o644)
     handle = os.fdopen(descriptor, "r+", encoding="utf-8")
     try:
@@ -128,7 +131,10 @@ def take_lock(layout: Layout) -> IO[str]:
         except (OSError, UnicodeDecodeError):  # Windows: the locked byte cannot be read
             holder = "no details"
         handle.close()
-        raise StartupRefused(f"another watcher is running on this folder ({holder})") from None
+        raise StartupRefused(
+            "another run page service (or an old folder watcher) is running "
+            f"on this folder ({holder})"
+        ) from None
     handle.seek(0)
     handle.truncate()
     handle.write(f"{socket.gethostname()} {os.getpid()}")
@@ -148,9 +154,9 @@ def release_lock(handle: IO[str]) -> None:
 
 
 def write_pages(layout: Layout) -> None:
+    """The ``library.html`` page that opens the library; an existing one is never overwritten."""
     try:
         with (layout.root / "library.html").open("xb") as page:
             page.write(_PAGE.encode())
     except FileExistsError:
         pass  # never overwritten
-    drops.write_templates(layout, FORM)

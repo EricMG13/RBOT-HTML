@@ -41,6 +41,6 @@ jobs:
             tests/test_credit_os_catalogue.py tests/test_credit_os_store.py \
             tests/test_cpos_launch.py tests/model \
             tests/test_credit_os_chips.py tests/test_quality_gate.py \
-            tests/test_inbox_activity.py tests/test_inbox_drops.py tests/test_inbox_filing.py \
-            tests/test_inbox_runs.py tests/test_inbox_watcher.py \
+            tests/test_inbox_activity.py tests/test_inbox_filing.py \
+            tests/test_inbox_layout.py tests/test_inbox_runs.py tests/test_inbox_scheduler.py \
             tests/test_handoff_loop.py tests/test_context_form.py

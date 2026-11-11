@@ -23,8 +23,8 @@ from pathlib import Path
 from typing import Any, BinaryIO, TypedDict
 
 from deploy_workflow.context import load_context
-from deploy_workflow.inbox.drops import Layout
 from deploy_workflow.inbox.filing import safe_name
+from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
 from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
 
 MAX_FILE = 50 * 1024 * 1024
@@ -389,7 +389,7 @@ def context_bytes(answers: Answers) -> bytes:
 def _digest(root: Path, answers: Answers) -> str:
     files = []
     for rel in sorted(_stored(root, strict=True)):
-        if rel == _CONTEXT_NAME:  # made from the answers (the watcher writes it); never uploaded
+        if rel == _CONTEXT_NAME:  # made from the answers (the scheduler writes it); never uploaded
             continue
         sha = hashlib.sha256()
         with (root / rel).open("rb") as stream:
@@ -514,7 +514,12 @@ def _summarise(
                     before = _digest(files, answers)
                 except OSError:
                     return {"error": _CHANGED}
-                load_context(context_bytes(answers))
+                run = load_context(context_bytes(answers))
+                if len(run.identity.issuer_id) > MAX_ISSUER_ID:
+                    raise Refused(
+                        f"issuer_id is {len(run.identity.issuer_id)} characters; "
+                        f"use at most {MAX_ISSUER_ID}"
+                    )
                 context_dir = work / "context"
                 context_dir.mkdir()
                 context = context_dir / _CONTEXT_NAME

@@ -11,7 +11,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -787,38 +786,27 @@ def test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_ru
     assert probe["nobridge"] == "limited"
 
 
-def test_an_inbox_copy_of_the_page_no_longer_fixes_a_pathway(tmp_path):
-    from deploy_workflow.inbox.drops import ensure_layout, write_templates
-
-    short = tempfile.mkdtemp(prefix="ib", dir="/tmp")  # tmp_path is over the 80-character limit.
-    shutil.rmtree(short)
-    layout = ensure_layout(Path(short))
-    try:
-        write_templates(layout, ROOT / "docs/templates/context-form.html")
-        form = layout.inbox / "earnings_update/_template/context-form.html"
-        page = (
-            tmp_path / "probe.html"
-        )  # The form with a probe that tries another pathway and run type, then reads.
-        text = form.read_text(encoding="utf-8")
-        page.write_text(text.replace("</body>", FORM_PROBE, 1), encoding="utf-8")
-        dom, console = visit(page)
-        assert console == []
-        probe = json.loads(
-            html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
-        )
-        # The page is served by the start service, not opened from an inbox folder: the copy's
-        # data-pathway mark is ignored, every pathway is offered and none is disabled.
-        assert len(probe["shown"]) == 6 and probe["disabled"] == 0
-        assert (
-            probe["built"]["run"]["pathway"] == "credit_snapshot"
-        )  # The probe's own choice held ...
-        # The probe's event targets the form, not the radio, so the run type stays at the
-        # pathway's default (research for Credit Snapshot).
-        assert probe["built"]["run"]["run_type"] == "research"
-        assert probe["warned"] == []  # A loaded context naming another pathway is not replaced.
-        assert probe["same"] == []
-    finally:
-        shutil.rmtree(layout.root)
+def test_a_copy_of_the_page_marked_with_a_pathway_no_longer_fixes_it(tmp_path):
+    # The folder watcher once wrote such a copy into each inbox folder; the page's mark is ignored.
+    marked = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
+    assert marked.count('<html lang="en">') == 1
+    marked = marked.replace('<html lang="en">', '<html lang="en" data-pathway="earnings_update">')
+    page = (
+        tmp_path / "probe.html"
+    )  # The form with a probe that tries another pathway and run type, then reads.
+    page.write_text(marked.replace("</body>", FORM_PROBE, 1), encoding="utf-8")
+    dom, console = visit(page)
+    assert console == []
+    probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    # The page is served by the start service, not opened from a folder: the copy's
+    # data-pathway mark is ignored, every pathway is offered and none is disabled.
+    assert len(probe["shown"]) == 6 and probe["disabled"] == 0
+    assert probe["built"]["run"]["pathway"] == "credit_snapshot"  # The probe's own choice held ...
+    # The probe's event targets the form, not the radio, so the run type stays at the
+    # pathway's default (research for Credit Snapshot).
+    assert probe["built"]["run"]["run_type"] == "research"
+    assert probe["warned"] == []  # A loaded context naming another pathway is not replaced.
+    assert probe["same"] == []
 
 
 @pytest.mark.parametrize("width", [1440, 1280])

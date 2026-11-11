@@ -1,58 +1,55 @@
-"""The inbox watcher: the one long-running process that turns drops into filed reports.
+"""The scheduler: the one long-running part that turns submitted runs into filed reports.
 
-Each poll it reaps ended runs, scans the inbox, checks claimed drops, starts prepared runs within
-the limits and publishes run activity. A record is saved before every step that an interruption
-could cut short, so a restart always finds what to do next: a drop leaves the inbox in one rename
-and gets its record at once, is never put back, and a run is marked running (and counted) before
-its process starts. A run is shown as finished only when the library lists it.
+Each poll it reaps ended runs, starts queued runs within the limits, files finished reports and
+publishes run activity. A record is saved before every step that an interruption could cut short,
+so a restart always finds what to do next: a run is marked running (and counted) before its
+process starts, and is shown as finished only when the library lists it.
 
 ``submit`` takes an approved submission from the start page: under ``lock`` (also held by every
-poll) it saves the run's record, then renames the uploaded files folder to ``drops/<id>``. A
-record whose folder is still missing is finished by the next poll or restart; one submission is
-never two records.
+poll) it saves the run's record, then renames the sealed files folder to ``drops/<id>``. A record
+whose folder is still missing is finished by the next poll or restart; one submission is never
+two records. Records written by the earlier folder watcher still load and show in Run activity;
+one it left queued and unchecked is marked failed at start-up, and a run it queued is started
+only if its ``context.json`` is in its folder.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
-import math
-import re
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 from typing import IO, Any
 
-from deploy_workflow.inbox import activity, drops, filing, runs, startup
-from deploy_workflow.inbox.drops import DropRejected
+from deploy_workflow.inbox import activity, filing, layout, runs, startup
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.inbox.startup import StartupRefused
-from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
 from deploy_workflow.run_start import submissions
 from deploy_workflow.run_start.submissions import Answers
 
-__all__ = ["Settings", "StartupRefused", "Watcher", "main"]
+__all__ = ["MAX_QUEUED", "Scheduler", "Settings", "StartupRefused"]
 
 _TIME = "%Y-%m-%dT%H:%M:%SZ"
 _REBUILD_FAILED = "the library could not be rebuilt ({}); ended runs wait for it"
-_KEPT = "_engine/drops/"
-_NO_RECORD = (
-    "the watcher stopped while taking this folder in; its files are in _engine/drops/{}"
-    " \N{EM DASH} drop it again"
-)
 _CUT_SHORT = (
-    "the watcher stopped while starting this run; its process may still be running"
-    " \N{EM DASH} check before dropping the folder again"
+    "the service stopped while starting this run; its process may still be running"
+    " \N{EM DASH} check before submitting it again"
 )
+_UNCHECKED = (
+    "the earlier folder watcher took this folder in but never checked it"
+    " \N{EM DASH} submit it again from the run page"
+)
+_NO_CONTEXT = "no context.json in _engine/drops/{}; submit it again from the run page"
 # ponytail: a run whose launcher writes its PID file after 60 s is cut short; a reused process ID
 # after a reboot reads as alive. Both are known ceilings, not handled.
 _PID_GRACE_SECONDS = 60
@@ -69,7 +66,6 @@ class Settings:
     cap: Decimal = Decimal(20)
     max_running: int = 3
     max_per_day: int = 30
-    settle_seconds: float = 120
     poll_seconds: float = 10
     ruling: Path = startup.STANDING_RULING
     launcher: tuple[str, ...] = (
@@ -97,7 +93,7 @@ def _stop(child: subprocess.Popen[bytes]) -> None:
 _MAX_PID_DIGITS = 10  # a longer number is no process ID (and int() refuses thousands of digits)
 
 
-class Watcher:
+class Scheduler:
     def __init__(
         self,
         settings: Settings,
@@ -106,19 +102,16 @@ class Watcher:
         now: Callable[[], datetime] = _local_now,
     ) -> None:
         self.settings, self.clock, self.now = settings, clock, now
-        self.layout = drops.ensure_layout(settings.root)
+        self.layout = layout.ensure_layout(settings.root)
         startup.check_launchable(settings.config, settings.ruling, settings.cap)
         self._lock: IO[str] | None = startup.take_lock(self.layout)
         self._logger = startup.open_log(self.layout, __name__)  # only the lock holder logs
         self.lock = threading.Lock()  # held by step() and submit(): a submit never splits a poll
         self._records = {r.id: r for r in runs.load_all(self.layout)}
         self._children: dict[str, subprocess.Popen[bytes]] = {}
-        self._tracker = drops.ReadyTracker(settings.settle_seconds, clock)
-        self._unreadable: dict[Path, tuple[float, str]] = {}
-        self._unmovable: dict[Path, str] = {}  # ready drops the watcher cannot move -> error
         self._rebuild_error = ""
         self._logged_rebuild_error = ""  # the last rebuild error written to the log
-        self._stopped: dict[str, str] = {}  # run ID -> why the watcher stopped its process
+        self._stopped: dict[str, str] = {}  # run ID -> why the scheduler stopped its process
         self._kept_activity: dict[str, tuple[runs.Record, dict[str, Any]]] = {}
         self._bad_pid_files: set[str] = set()  # run IDs whose unusable PID file is logged
         self._limit_held = ""
@@ -134,13 +127,30 @@ class Watcher:
         startup.close_log(self.layout)
 
     def _recover(self) -> None:
-        """Decide what an earlier stop left: runs cut short while starting, unrecorded folders."""
+        """Decide what an earlier stop left: runs cut short while starting, half-finished moves,
+        and runs the earlier folder watcher queued without ever checking."""
         self._track_untracked()
         self._finish_moves()
-        self._reject_unrecorded_folders()
+        self._fail_unchecked()
+
+    def _fail_unchecked(self) -> None:
+        """A queued record that is not ``prepared`` came from the folder watcher, which checked a
+        drop before it started it. Nothing now checks it: fail it, with the reason, rather than
+        leave it waiting (and counted against the queue limit) for ever."""
+        for record in self._with_status("queued"):
+            if not record.prepared:
+                with self._guard(f"run {record.id}"):
+                    self._put(
+                        replace(
+                            record,
+                            status="failed",
+                            reason=_UNCHECKED,
+                            ended_at=self._utc(self.now()),
+                        )
+                    )
 
     def _track_untracked(self) -> None:
-        """A running record with no PID and no child of this watcher was cut short between the
+        """A running record with no PID and no child of this scheduler was cut short between the
         child's start and the PID save: take the PID from the file the launcher wrote, or wait out
         the grace, then mark it interrupted (never restarted)."""
         for record in self._with_status("running"):
@@ -298,26 +308,6 @@ class Watcher:
         self._put(record)
         return record
 
-    def _reject_unrecorded_folders(self) -> None:
-        """A folder or file in ``_engine/drops`` with no record was cut short before its record.
-
-        Nothing is moved or deleted; the record says where the files are."""
-        for folder in sorted(self.layout.drops.iterdir()):
-            if folder.name in self._records or drops._is_noise(folder.name):
-                continue  # a system file (.DS_Store, Thumbs.db) is not a claim
-            with self._guard(f"folder {folder}"):
-                self._put(
-                    Record(
-                        folder.name,
-                        "",
-                        folder.name,
-                        "rejected",
-                        self._utc(self.now()),
-                        reason=_NO_RECORD.format(folder.name),
-                        ended_at=self._utc(self.now()),
-                    )
-                )
-
     # -- shared helpers ---------------------------------------------------------------------
 
     @contextmanager
@@ -352,7 +342,7 @@ class Watcher:
         except Exception as error:  # noqa: BLE001
             # Documented fail-open: the rebuild is display. Ended runs wait unfiled and the next
             # poll retries; the traceback is logged and the page says why. KeyboardInterrupt and
-            # SystemExit (BaseException) still stop the watcher.
+            # SystemExit (BaseException) still stop the scheduler.
             self._rebuild_failed(f"library rebuild failed: {error}", f"{error}", exc=True)
             return None
         if library is None:
@@ -390,8 +380,6 @@ class Watcher:
             queued = frozenset(r.submission for r in self._with_status("queued") if r.submission)
             submissions.sweep(self.layout, self.clock(), queued)
         self._reap()
-        self._scan()
-        self._prepare_queued()
         self._start_queued()
         with self._guard("activity"):
             snapshot = activity.snapshot(
@@ -400,11 +388,7 @@ class Watcher:
                 cap=self.settings.cap,
                 now=self.now(),
                 kept=self._kept_activity,
-                held="; ".join(
-                    t
-                    for t in (self._rebuild_error, self._limit_held, *self._unmovable_notes())
-                    if t
-                ),
+                held="; ".join(t for t in (self._rebuild_error, self._limit_held) if t),
             )
             activity.write(self.layout, snapshot)
 
@@ -485,7 +469,7 @@ class Watcher:
             record.name_differs = differs
         return replace(ended, report=record.report, name_differs=record.name_differs)
 
-    # -- scan -------------------------------------------------------------------------------
+    # -- ids --------------------------------------------------------------------------------
 
     def _new_id(self) -> str:
         stamp = datetime.now(UTC) if self.now().tzinfo is None else self.now().astimezone(UTC)
@@ -500,136 +484,6 @@ class Watcher:
             if name not in self._records and not any(os.path.lexists(p) for p in taken):
                 return name
             number += 1
-
-    def _scan(self) -> None:
-        with self._guard("scan of the inbox"):
-            found = drops.candidates(self.layout)
-            listed = {entry for _, entry in found}
-            self._tracker.forget_missing(listed)
-            self._unreadable = {e: v for e, v in self._unreadable.items() if e in listed}
-            self._unmovable = {e: v for e, v in self._unmovable.items() if e in listed}
-            for pathway, entry in found:
-                with self._guard(f"drop {entry}"):
-                    if self._tracker.ready(entry):
-                        self._claim(pathway, entry, None)
-                    else:
-                        self._watch_unreadable(pathway, entry)
-
-    def _watch_unreadable(self, pathway: str, entry: Path) -> None:
-        """A drop that cannot be read is rejected once that has lasted past the settle time and
-        nothing in it has changed for as long: a copy still arriving is left alone."""
-        error = drops.unreadable(entry)
-        if error is None:
-            self._unreadable.pop(entry, None)
-            return
-        first, _ = self._unreadable.setdefault(entry, (self.clock(), error))
-        since = max(first, self._tracker.unchanged_since(entry) or first)
-        if self.clock() - since > self.settings.settle_seconds:
-            del self._unreadable[entry]
-            self._claim(pathway, entry, f"cannot be read: {error}")
-
-    def _claim(self, pathway: str, entry: Path, refusal: str | None) -> None:
-        """Move a drop out of the inbox and record it at once. ``refusal`` rejects it unchecked."""
-        record_id = self._new_id()
-        try:
-            folder = drops.claim(self.layout, entry, record_id)
-        except OSError as error:  # it will not move (rights, another volume): say so, once
-            self._note_unmovable(entry, error)
-            return
-        self._unmovable.pop(entry, None)
-        if folder is None:
-            return
-        record = Record(record_id, pathway, entry.name, "queued", self._utc(self.now()))
-        try:
-            self._put(record)
-        except OSError:  # no record exists, so the drop goes back for the next poll
-            self._logger.exception("drop %s (%s)", entry, record_id)
-            self._put_back(folder, entry)
-            return
-        if refusal:
-            self._reject(record, refusal)
-
-    def _note_unmovable(self, entry: Path, error: OSError) -> None:
-        """Log a drop that cannot be moved once per distinct error; the page shows it as held."""
-        text = error.strerror or type(error).__name__  # not str(): it holds the claim ID
-        if self._unmovable.get(entry) != text:
-            self._logger.error(
-                "drop %s is ready but cannot be moved out of the inbox: %s", entry, text
-            )
-        self._unmovable[entry] = text
-
-    def _unmovable_notes(self) -> list[str]:
-        return [
-            f"{entry.name} cannot be moved out of the inbox: {text}"
-            for entry, text in sorted(self._unmovable.items())
-        ]
-
-    def _put_back(self, folder: Path, entry: Path) -> None:
-        """Return a claimed drop whose record could not be saved to where it was."""
-        if folder.exists() and not os.path.lexists(entry):
-            with self._guard(f"returning {folder} to the inbox"):
-                os.rename(folder, entry)
-
-    def _reject(self, record: Record, reason: str) -> None:
-        """Record the drop as rejected, then move it to ``inbox/failed``; it never goes back.
-
-        The record comes first: if saving it fails nothing has moved and the next poll retries."""
-        ended = replace(record, status="rejected", reason=reason, ended_at=self._utc(self.now()))
-        drop = self.layout.drops / record.id
-        if not os.path.lexists(drop):
-            self._put(
-                replace(ended, reason=f"{reason}; its folder was not found in {_KEPT}{record.id}")
-            )
-            return
-        self._put(ended)
-        try:
-            self.layout.failed.mkdir(parents=True, exist_ok=True)
-            drops.reject(self.layout, drop, record.folder, reason, self.now())
-        except OSError as error:
-            self._logger.exception("run %s could not be moved to inbox/failed", record.id)
-            why = (
-                f"{reason} (the folder could not be moved to inbox/failed: {error}; "
-                f"it is kept in {_KEPT}{record.id})"
-            )
-            self._put(replace(ended, reason=why))
-
-    # -- prepare ----------------------------------------------------------------------------
-
-    def _prepare_queued(self) -> None:
-        for record in self._with_status("queued"):
-            if not record.prepared:
-                with self._guard(f"run {record.id}"):
-                    self._prepare(record)
-
-    def _prepare(self, record: Record) -> None:
-        """Check a claimed drop and run the offline check. An interruption leaves it unprepared."""
-        try:
-            checked = drops.check(self.layout.drops / record.id, record.pathway)
-            identity = checked.run.identity
-            record = replace(
-                record,
-                issuer_id=identity.issuer_id,
-                issuer_name=identity.issuer_name,
-                as_of=checked.run.run.as_of,
-                files=checked.files,
-            )
-            reason = runs.prepare(
-                self.layout,
-                record,
-                checked.context,
-                launcher=self.settings.launcher,
-                config=self.settings.config,
-                cap=self.settings.cap,
-            )
-        except DropRejected as error:
-            reason = str(error)
-        except OSError as error:
-            self._logger.exception("run %s could not be checked", record.id)
-            reason = f"could not be checked: {error}"
-        if reason:
-            self._reject(record, reason)
-        else:
-            self._put(replace(record, prepared=True))
 
     # -- start ------------------------------------------------------------------------------
 
@@ -657,8 +511,6 @@ class Watcher:
         today = self._started_today()
         self._limit_held = ""
         for record in self._with_status("queued"):
-            if not record.prepared:
-                continue
             if today >= self.settings.max_per_day:  # first: shown even while every slot is busy
                 limit = self.settings.max_per_day
                 self._limit_held = f"daily limit of {limit} runs reached; waiting until tomorrow"
@@ -673,12 +525,17 @@ class Watcher:
         drop = self.layout.drops / record.id
         if record.submission and not os.path.lexists(drop) and self._sealed(record).is_dir():
             return False  # its move is not finished yet (a failed rename): _finish_moves retries
-        try:
-            context = drops.check(self.layout.drops / record.id, record.pathway).context
-        except DropRejected as error:  # changed since the offline check
-            reason = str(error)
+        context = drop / "context.json"
+        if context.is_symlink() or not context.is_file():
+            # An earlier folder watcher's run (its context file may have any name), or a folder
+            # that has lost its file: failed with the reason, never started.
             self._put(
-                replace(record, status="failed", reason=reason, ended_at=self._utc(self.now()))
+                replace(
+                    record,
+                    status="failed",
+                    reason=_NO_CONTEXT.format(record.id),
+                    ended_at=self._utc(self.now()),
+                )
             )
             return False
         try:
@@ -733,75 +590,7 @@ class Watcher:
                 raise
             # The process has ended; the next poll reaps it through the Popen kept in _children.
             self._stopped[record.id] = (
-                f"stopped by the watcher: its record could not be saved ({error})"
+                f"stopped by the scheduler: its record could not be saved ({error})"
             )
             self._logger.exception("run %s: its process ID could not be saved", record.id)
         return True
-
-
-def _amount(text: str) -> Decimal:
-    try:
-        value = Decimal(text)
-    except InvalidOperation:
-        raise argparse.ArgumentTypeError(f"{text!r} is not an amount") from None
-    return value
-
-
-def _parser() -> argparse.ArgumentParser:
-    defaults = Settings(Path("."))
-    parser = argparse.ArgumentParser(prog="python -m deploy_workflow.inbox.watcher")
-    parser.add_argument("--root", type=Path, required=True, help="the shared folder")
-    parser.add_argument("--config", choices=tuple(CONFIGS), default=defaults.config)
-    parser.add_argument("--cap", type=_amount, default=defaults.cap, help="USD per run")
-    parser.add_argument("--max-running", type=int, default=defaults.max_running)
-    parser.add_argument("--max-per-day", type=int, default=defaults.max_per_day)
-    parser.add_argument("--settle-seconds", type=float, default=defaults.settle_seconds)
-    parser.add_argument("--poll-seconds", type=float, default=defaults.poll_seconds)
-    parser.add_argument("--ruling", type=Path, default=defaults.ruling)
-    return parser
-
-
-def _unusable(args: argparse.Namespace) -> str:
-    """Why the watcher cannot poll with these settings, else "". A poll interval of zero spins,
-    a negative one stops the first sleep, and a limit below one never starts a run."""
-    if not (math.isfinite(args.poll_seconds) and args.poll_seconds > 0):
-        return "--poll-seconds must be a finite number above zero"
-    if not (math.isfinite(args.settle_seconds) and args.settle_seconds >= 0):
-        return "--settle-seconds must be a finite number, zero or more"
-    if args.max_running < 1:
-        return "--max-running must be at least 1"
-    if args.max_per_day < 1:
-        return "--max-per-day must be at least 1"
-    return ""
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    if not (args.cap.is_finite() and args.cap > 0):
-        print("--cap must be a finite amount above zero", file=sys.stderr)
-        return 2
-    refused = _unusable(args)
-    if refused:
-        print(refused, file=sys.stderr)
-        return 2
-    settings = Settings(
-        args.root,
-        config=args.config,
-        cap=args.cap,
-        max_running=args.max_running,
-        max_per_day=args.max_per_day,
-        settle_seconds=args.settle_seconds,
-        poll_seconds=args.poll_seconds,
-        ruling=args.ruling,
-    )
-    try:
-        watcher = Watcher(settings)
-    except (ValueError, OSError) as error:  # StartupRefused, a long root, an unreadable record
-        print(error, file=sys.stderr)
-        return 2
-    watcher.run_forever()
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

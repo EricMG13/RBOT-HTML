@@ -18,9 +18,9 @@ import pytest
 from inbox_fixtures import CONTEXT, layout, pump, settings
 
 from deploy_workflow.inbox import runs
-from deploy_workflow.inbox import watcher as watcher_module
+from deploy_workflow.inbox import scheduler as scheduler_module
 from deploy_workflow.inbox.runs import Record, load_all
-from deploy_workflow.inbox.watcher import Watcher
+from deploy_workflow.inbox.scheduler import Scheduler
 from deploy_workflow.run_start import submissions
 from deploy_workflow.run_start.submissions import Answers, Refused, context_bytes
 
@@ -66,7 +66,7 @@ def test_a_submission_becomes_one_running_run_with_its_context(root, fake_env):
     fake_env({"sleep": 30})
     answers = answers_for(modules=["CP-0", "CP-1"], max_turns=16, submitted_by="eg")
     sid = upload(root)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     record = w.submit(sid, answers, approved(root, sid, answers))
     assert record.status == "queued"
     assert record.prepared
@@ -88,7 +88,7 @@ def test_submit_twice_and_from_two_threads_gives_one_run(root, fake_env):
     answers = answers_for()
     sid = upload(root)
     d = approved(root, sid, answers)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     found: list[Record] = []
     failures: list[BaseException] = []
 
@@ -119,7 +119,7 @@ def test_a_changed_file_or_answer_after_approval_is_refused_and_nothing_starts(r
     answers = answers_for()
     sid = upload(root)
     d = approved(root, sid, answers)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     (submissions.files_folder(layout(root), sid) / "a.txt").write_bytes(b"Net sales were 999.")
     with pytest.raises(Refused, match="changed after approval"):
         w.submit(sid, answers, d)
@@ -139,7 +139,7 @@ def test_a_changed_file_or_answer_after_approval_is_refused_and_nothing_starts(r
     w.close()
 
 
-def _submit_n(root: Path, w: Watcher, count: int) -> list[Record]:
+def _submit_n(root: Path, w: Scheduler, count: int) -> list[Record]:
     out = []
     for n in range(count):
         answers = answers_for()
@@ -150,7 +150,7 @@ def _submit_n(root: Path, w: Watcher, count: int) -> list[Record]:
 
 def test_the_fourth_submission_waits(root, fake_env):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root, max_running=3))
+    w = Scheduler(settings(root, max_running=3))
     records = _submit_n(root, w, 4)
     w.step()
     w.step()
@@ -162,7 +162,7 @@ def test_the_fourth_submission_waits(root, fake_env):
 
 def test_the_daily_limit_holds(root, fake_env):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root, max_running=3, max_per_day=2))
+    w = Scheduler(settings(root, max_running=3, max_per_day=2))
     _submit_n(root, w, 3)
     w.step()
     w.step()
@@ -205,10 +205,10 @@ def test_a_restart_starts_a_queued_submission_once_and_keeps_unsubmitted_uploads
     answers = answers_for()
     sid = upload(root)
     other = upload(root, b"Net sales were 1 (never submitted).")
-    first = Watcher(settings(root))
+    first = Scheduler(settings(root))
     record = first.submit(sid, answers, approved(root, sid, answers))
     first.close()
-    second = Watcher(settings(root))
+    second = Scheduler(settings(root))
     pump(second, lambda: [r.status for r in load_all(layout(root))] == ["running"])
     second.step()
     second.step()
@@ -224,7 +224,7 @@ def test_a_restart_between_record_and_rename_finishes_the_move(root, fake_env, m
     answers = answers_for()
     sid = upload(root)
     d = approved(root, sid, answers)
-    first = Watcher(settings(root))
+    first = Scheduler(settings(root))
     drops = layout(root).drops
     real_rename = os.rename
 
@@ -233,7 +233,7 @@ def test_a_restart_between_record_and_rename_finishes_the_move(root, fake_env, m
             raise OSError("cut short")
         real_rename(src, dst, *a, **k)
 
-    monkeypatch.setattr(watcher_module.os, "rename", cut_short)
+    monkeypatch.setattr(scheduler_module.os, "rename", cut_short)
     with pytest.raises(OSError, match="cut short"):
         first.submit(sid, answers, d)
     monkeypatch.undo()
@@ -241,7 +241,7 @@ def test_a_restart_between_record_and_rename_finishes_the_move(root, fake_env, m
     assert saved.status == "queued"
     assert not (drops / saved.id).exists()
     first.close()
-    second = Watcher(settings(root))
+    second = Scheduler(settings(root))
     assert (drops / saved.id / "context.json").read_bytes() == context_bytes(answers)
     assert (drops / saved.id / "a.txt").is_file()
     pump(second, lambda: [r.status for r in load_all(layout(root))] == ["running"])
@@ -251,7 +251,7 @@ def test_a_restart_between_record_and_rename_finishes_the_move(root, fake_env, m
 
 def test_a_record_saved_before_this_change_still_loads(root):
     lay = layout(root)
-    Watcher(settings(root)).close()
+    Scheduler(settings(root)).close()
     old = {
         "id": "20261101-000000-01",
         "pathway": PATHWAY,
@@ -290,7 +290,7 @@ def test_a_module_that_is_not_a_method_is_refused_even_when_the_digest_was_issue
     sid = upload(root)
     d = submissions.digest(layout(root), sid, answers)
     _write_issued(root, sid, d)  # as if a summary had issued it: the module check stands alone
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     with pytest.raises(Refused, match="unknown module"):
         w.submit(sid, answers, d)
     w.step()
@@ -304,7 +304,7 @@ def test_a_digest_the_service_never_issued_is_refused(root, fake_env):
     answers = answers_for()
     sid = upload(root)
     own = submissions.digest(layout(root), sid, answers)  # a client can compute this itself
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     with pytest.raises(Refused, match="changed after approval"):
         w.submit(sid, answers, own)
     assert load_all(layout(root)) == []
@@ -317,7 +317,7 @@ def test_a_digest_the_service_never_issued_is_refused(root, fake_env):
 def test_max_turns_outside_one_to_sixty_four_is_refused(root, fake_env, turns):
     fake_env({"sleep": 30})
     sid = upload(root)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     with pytest.raises(Refused):
         w.submit(sid, answers_for(max_turns=turns), "x")
     assert load_all(layout(root)) == []
@@ -331,7 +331,7 @@ def test_an_upload_landing_inside_the_submit_window_is_refused_and_never_reaches
     answers = answers_for()
     sid = upload(root)
     d = approved(root, sid, answers)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     real_save = runs.save
     outcomes: list[BaseException | None] = []
 
@@ -345,7 +345,7 @@ def test_an_upload_landing_inside_the_submit_window_is_refused_and_never_reaches
             except Refused as refusal:
                 outcomes.append(refusal)
 
-    monkeypatch.setattr(watcher_module.runs, "save", save)
+    monkeypatch.setattr(scheduler_module.runs, "save", save)
     record = w.submit(sid, answers, d)
     monkeypatch.undo()
     assert len(outcomes) == 1 and isinstance(outcomes[0], Refused)
@@ -354,7 +354,7 @@ def test_an_upload_landing_inside_the_submit_window_is_refused_and_never_reaches
     w.close()
 
 
-def _cut_short_submit(root: Path, w: Watcher, monkeypatch: pytest.MonkeyPatch) -> str:
+def _cut_short_submit(root: Path, w: Scheduler, monkeypatch: pytest.MonkeyPatch) -> str:
     """Upload, approve and submit with the rename into drops cut short; the submission's ID."""
     answers = answers_for()
     sid = upload(root)
@@ -367,7 +367,7 @@ def _cut_short_submit(root: Path, w: Watcher, monkeypatch: pytest.MonkeyPatch) -
             raise OSError("cut short")
         real_rename(src, dst, *a, **k)
 
-    monkeypatch.setattr(watcher_module.os, "rename", cut_short)
+    monkeypatch.setattr(scheduler_module.os, "rename", cut_short)
     with pytest.raises(OSError, match="cut short"):
         w.submit(sid, answers, d)
     monkeypatch.undo()
@@ -376,7 +376,7 @@ def _cut_short_submit(root: Path, w: Watcher, monkeypatch: pytest.MonkeyPatch) -
 
 def test_after_a_cut_short_rename_the_uploads_no_longer_accept_changes(root, fake_env, monkeypatch):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     sid = _cut_short_submit(root, w, monkeypatch)
     body = b"Net sales were 7."
     with pytest.raises(Refused):
@@ -389,14 +389,14 @@ def test_a_move_finished_after_the_documents_changed_fails_the_run_and_moves_not
     root, fake_env, monkeypatch, restart
 ):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     sid = _cut_short_submit(root, w, monkeypatch)
     [saved] = load_all(layout(root))
     assert saved.digest  # the record keeps what was approved
     (layout(root).uploads / sid / "sealed" / "later.txt").write_bytes(b"Net sales were 8.")
     if restart:
         w.close()
-        w = Watcher(settings(root))
+        w = Scheduler(settings(root))
     w.step()
     w.step()
     [after] = load_all(layout(root))
@@ -409,7 +409,7 @@ def test_a_move_finished_after_the_documents_changed_fails_the_run_and_moves_not
 
 def test_a_poisoned_record_fails_alone_and_the_next_run_still_starts(root, fake_env, caplog):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     first, second = _submit_n(root, w, 2)
     w._put(replace(first, modules=("--cap", "1000")))  # a hand-edited record
     with caplog.at_level("ERROR"):
@@ -426,9 +426,9 @@ def test_a_poisoned_record_fails_alone_and_the_next_run_still_starts(root, fake_
 @pytest.mark.parametrize("sid", ["", "x", "A" * 32, "0" * 31, "0" * 33, 5, None])
 def test_a_malformed_submission_id_is_refused_before_any_record_is_looked_at(root, fake_env, sid):
     lay = layout(root)
-    Watcher(settings(root)).close()
+    Scheduler(settings(root)).close()
     (lay.drops / "20261101-000000-01").mkdir()  # a folder with no record: recovery records it
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     with pytest.raises(Refused, match="unknown submission"):
         w.submit(sid, answers_for(), "anything")  # type: ignore[arg-type]
     w.close()
@@ -440,7 +440,7 @@ def test_a_transient_move_failure_is_retried_not_failed(root, fake_env, monkeypa
     answers = answers_for()
     sid = upload(root)
     d = approved(root, sid, answers)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     real_rename = os.rename
     failures = [2]  # submit's rename and the first poll's rename fail
 
@@ -450,7 +450,7 @@ def test_a_transient_move_failure_is_retried_not_failed(root, fake_env, monkeypa
             raise OSError("transient")
         real_rename(src, dst, *a, **k)
 
-    monkeypatch.setattr(watcher_module.os, "rename", flaky)
+    monkeypatch.setattr(scheduler_module.os, "rename", flaky)
     with pytest.raises(OSError):
         w.submit(sid, answers, d)
     w.step()
@@ -468,7 +468,7 @@ def test_a_queued_submission_with_neither_folder_fails(root, fake_env):
     fake_env({"sleep": 30})
     answers = answers_for()
     sid = upload(root)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     record = w.submit(sid, answers, approved(root, sid, answers))
     os.rename(layout(root).drops / record.id, layout(root).root / "gone")
     w.step()
@@ -483,7 +483,7 @@ def test_a_queued_submission_with_neither_folder_fails(root, fake_env):
 def test_fifty_submissions_in_a_day_do_not_block_a_new_one(root, fake_env, monkeypatch):
     fake_env({"sleep": 30})
     monkeypatch.setattr(submissions, "MAX_OPEN", 3)
-    w = Watcher(settings(root, max_running=3))
+    w = Scheduler(settings(root, max_running=3))
     _submit_n(root, w, 4)  # more than MAX_OPEN, all submitted
     lay = layout(root)
     assert submissions._open_folders(lay) == []
@@ -496,7 +496,7 @@ def test_a_failed_removal_of_the_moved_uploads_folder_is_logged_and_the_run_goes
     root, fake_env, monkeypatch, caplog
 ):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     answers = answers_for()
     sid = upload(root)
     real = submissions.shutil.rmtree
@@ -519,7 +519,7 @@ def test_a_cut_short_rename_finished_by_a_poll_also_removes_the_uploads_folder(
     root, fake_env, monkeypatch
 ):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     sid = _cut_short_submit(root, w, monkeypatch)
     w.step()
     assert not (layout(root).uploads / sid).exists()
@@ -536,7 +536,7 @@ def test_a_planted_sealed_link_is_refused_by_submit_and_never_becomes_a_run(root
     outside.mkdir()
     (outside / "a.txt").write_bytes(b"Net sales were 100.")  # the same bytes: the digest matches
     (lay.uploads / sid / "sealed").symlink_to(outside, target_is_directory=True)
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     with pytest.raises(Refused):
         w.submit(sid, answers, digest)
     assert load_all(lay) == []
@@ -546,7 +546,7 @@ def test_a_planted_sealed_link_is_refused_by_submit_and_never_becomes_a_run(root
 
 def test_a_record_that_cannot_become_a_command_uses_no_daily_slot(root, fake_env):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root, max_running=3, max_per_day=2))
+    w = Scheduler(settings(root, max_running=3, max_per_day=2))
     first, second, third = _submit_n(root, w, 3)
     w._put(replace(first, modules=("--cap", "1000")))
     w.step()
@@ -559,7 +559,7 @@ def test_a_record_that_cannot_become_a_command_uses_no_daily_slot(root, fake_env
 
 def test_the_recheck_of_a_cut_short_move_never_touches_context_json(root, fake_env, monkeypatch):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     sid = _cut_short_submit(root, w, monkeypatch)
     context = layout(root).uploads / sid / "sealed" / "context.json"
     before = context.read_bytes()
@@ -583,7 +583,7 @@ def test_the_recheck_of_a_cut_short_move_never_touches_context_json(root, fake_e
 
 def test_the_sweep_does_not_delete_the_files_of_a_queued_submission(root, fake_env, monkeypatch):
     fake_env({"sleep": 30})
-    w = Watcher(settings(root))
+    w = Scheduler(settings(root))
     sid = _cut_short_submit(root, w, monkeypatch)
     stale = (layout(root).uploads / sid).stat().st_mtime + submissions.STALE_SECONDS + 10
     real_rename = os.rename
@@ -593,7 +593,7 @@ def test_the_sweep_does_not_delete_the_files_of_a_queued_submission(root, fake_e
             raise OSError("still cut short")
         real_rename(src, dst, *a, **k)
 
-    monkeypatch.setattr(watcher_module.os, "rename", refuse)
+    monkeypatch.setattr(scheduler_module.os, "rename", refuse)
     w.clock = lambda: stale
     w.step()
     assert (layout(root).uploads / sid / "sealed" / "a.txt").is_file()
@@ -607,8 +607,8 @@ def test_the_sweep_does_not_delete_the_files_of_a_queued_submission(root, fake_e
 
 def test_a_full_queue_refuses_a_submission_before_sealing_it(root, fake_env, monkeypatch):
     fake_env({"sleep": 30})
-    monkeypatch.setattr(watcher_module, "MAX_QUEUED", 2)
-    w = Watcher(settings(root, max_running=1))
+    monkeypatch.setattr(scheduler_module, "MAX_QUEUED", 2)
+    w = Scheduler(settings(root, max_running=1))
     _submit_n(root, w, 2)
     answers = answers_for()
     sid = upload(root)

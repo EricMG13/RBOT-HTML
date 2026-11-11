@@ -9,7 +9,7 @@ import unicodedata
 from pathlib import Path
 
 from deploy_workflow import platform_io
-from deploy_workflow.inbox.drops import Layout
+from deploy_workflow.inbox.layout import Layout
 
 REGISTRY_NAME = "issuers.json"
 _UNSAFE = re.compile(r'[\\/:*?"<>|]')

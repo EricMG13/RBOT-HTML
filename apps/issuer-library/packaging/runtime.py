@@ -64,7 +64,7 @@ _DOCUMENTS = (
     'do set "WORKSPACE=%%D\\FinalWorkflow"'
 )
 # The embeddable Python ignores PYTHONPATH, so engine\src is listed here (paths are relative to the
-# runtime folder): `-m deploy_workflow...` and the watcher's launcher children both need it.
+# runtime folder): `-m deploy_workflow...` and the run page's launcher children both need it.
 PTH = "python313.zip\n.\nLib\\site-packages\n..\\src\nimport site\n"
 _ROOT_ARGUMENT = [
     'set "ROOT=%~1"',
@@ -95,30 +95,34 @@ WRAPPERS = {
         ")",
         'start "" "%WORKSPACE%\\library\\index.html"',
     ],
-    "Start watcher.cmd": [
+    "Start run page.cmd": [
         "@echo off",
         "setlocal",
-        "rem Watch the shared folder's inbox and start a paid run for each folder dropped there.",
-        "rem Folder: the first argument, else FINAL_WORKFLOW_WORKSPACE. The provider key must be",
-        "rem in the environment of the account that runs this; nothing here sets it (README.md).",
+        "rem Serve the run start page: analysts upload documents, answer the questions and Submit;",
+        "rem Submit starts a paid run. Folder: the first argument, else FINAL_WORKFLOW_WORKSPACE.",
+        "rem Address: the second argument, else 127.0.0.1 (this machine only). Pass this machine's",
+        "rem own address to serve colleagues; 0.0.0.0 is refused. The provider key must be in the",
+        "rem environment of the account that runs this; nothing here sets it (README.md).",
         *_ROOT_ARGUMENT,
+        'set "HOSTADDR=%~2"',
+        'if not defined HOSTADDR set "HOSTADDR=127.0.0.1"',
         "if not defined ROOT (",
-        "  echo Usage: Start watcher.cmd ^<shared folder^>",
+        "  echo Usage: Start run page.cmd ^<shared folder^> [address]",
         "  echo Or set FINAL_WORKFLOW_WORKSPACE to the shared folder.",
         "  exit /b 1",
         ")",
-        f'{_PYTHON} -m deploy_workflow.inbox.watcher --root "%ROOT%"',
+        f'{_PYTHON} -m deploy_workflow.run_start --root "%ROOT%" --host "%HOSTADDR%" --port 8765',
         "exit /b %errorlevel%",
     ],
 }
 
 
-def ship_inbox_files(engine: Path) -> None:
-    """The inbox watcher's standing ruling and the context form it copies into each inbox folder.
+def ship_run_page_files(engine: Path) -> None:
+    """The run page's standing ruling and the start page the service serves.
 
-    The only ruling shipped is the watcher's; any other paid run needs a ruling the person writes
+    The only ruling shipped is the run page's; any other paid run needs a ruling the person writes
     in docs/rulings (docs/COPILOT.md)."""
-    for name in ["docs/rulings/2026-11-09-inbox-automation.md", "docs/templates/context-form.html"]:
+    for name in ["docs/rulings/2026-11-11-run-start-submit.md", "docs/templates/context-form.html"]:
         (engine / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, engine / name)
 
@@ -155,7 +159,7 @@ def bundle(target: Path, architecture: str | None) -> None:
     shutil.copyfile(
         ROOT / "docs/visualisations/catalogue.csv", engine / "docs/visualisations/catalogue.csv"
     )
-    ship_inbox_files(engine)
+    ship_run_page_files(engine)
     if architecture is None:
         return
     runtime = engine / "runtime"

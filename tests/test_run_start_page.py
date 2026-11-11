@@ -24,7 +24,7 @@ from inbox_fixtures import settings
 from test_library_page_browser import chrome
 
 from deploy_workflow.inbox import startup
-from deploy_workflow.inbox.watcher import Watcher
+from deploy_workflow.inbox.scheduler import Scheduler
 from deploy_workflow.owners.cpos_launch import (
     update_library_at,
 )  # the real one, before any test patches it
@@ -165,8 +165,8 @@ class Page:
 
 
 @contextmanager
-def _serving(root: Path, tmp_path: Path, **changes: Any) -> Iterator[tuple[Page, Watcher]]:
-    watcher = Watcher(settings(root, **changes))
+def _serving(root: Path, tmp_path: Path, **changes: Any) -> Iterator[tuple[Page, Scheduler]]:
+    watcher = Scheduler(settings(root, **changes))
     server = service.make_server(watcher, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     profile = tmp_path / "profile"
@@ -201,13 +201,13 @@ def page(
 @pytest.fixture
 def page_with_launcher(
     root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[Callable[[str], tuple[Page, Watcher]]]:
+) -> Iterator[Callable[[str], tuple[Page, Scheduler]]]:
     """The served page over a launcher script of the test's choice (the real one, canned)."""
     chrome()
     monkeypatch.setattr(startup, "FORM", FORM)
     stack = ExitStack()
 
-    def start(launcher: str) -> tuple[Page, Watcher]:
+    def start(launcher: str) -> tuple[Page, Scheduler]:
         return stack.enter_context(_serving(root, tmp_path, launcher=(sys.executable, launcher)))
 
     with stack:
@@ -636,7 +636,7 @@ def test_a_stage_holding_an_answer_is_shown_at_every_level(page):
 
 
 def _records(page):
-    from deploy_workflow.inbox.drops import Layout
+    from deploy_workflow.inbox.layout import Layout
     from deploy_workflow.inbox.runs import load_all
 
     assert page.root is not None

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from test_cpos_launch import context_file, issuer_folder
 
-from deploy_workflow.inbox.drops import Layout, ensure_layout
+from deploy_workflow.inbox.layout import Layout, ensure_layout
 from deploy_workflow.owners.cpos_launch import prepare, read_documents
 from deploy_workflow.run_start import submissions
 from deploy_workflow.run_start.submissions import (
@@ -859,3 +859,15 @@ def test_the_sweep_keeps_a_submission_it_is_told_to_keep(layout):
     assert not (layout.uploads / gone).exists()
     sweep(layout, now)
     assert not (layout.uploads / kept).exists()
+
+
+def test_an_issuer_id_over_the_limit_is_refused_by_the_summary(layout, tmp_path):
+    # The folder watcher refused such an ID when it checked a drop; the summary now does.
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    answers["context"]["identity"]["issuer_id"] = "a" * 41
+    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    assert got["error"] == "issuer_id is 41 characters; use at most 40"
+    assert "digest" not in got
+    answers["context"]["identity"]["issuer_id"] = "a" * 40
+    assert summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))["error"] == ""

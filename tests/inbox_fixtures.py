@@ -1,4 +1,4 @@
-"""Fixtures and helpers shared by the inbox watcher and run-start scheduler tests.
+"""Fixtures and helpers shared by the scheduler tests.
 
 Tests start real child processes (tests/fixtures/fake_launcher.py), which call no provider and
 spend nothing. The ``root`` fixture kills any run still alive.
@@ -21,12 +21,13 @@ from typing import Any
 
 import pytest
 
-from deploy_workflow.inbox.drops import Layout
-from deploy_workflow.inbox.runs import load_all
-from deploy_workflow.inbox.watcher import Settings, Watcher
+from deploy_workflow.inbox.layout import Layout
+from deploy_workflow.inbox.runs import Record, load_all
+from deploy_workflow.inbox.scheduler import Scheduler, Settings
 from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
+from deploy_workflow.run_start import submissions
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
@@ -62,7 +63,7 @@ def root(monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
 @pytest.fixture(autouse=True)
 def _no_leaked_log_handlers() -> Iterator[None]:
-    """A test that never closes its Watcher must not leave a log file open for the next."""
+    """A test that never closes its Scheduler must not leave a log file open for the next."""
     yield
     package = logging.getLogger("deploy_workflow.inbox")
     for handler in list(package.handlers):
@@ -101,7 +102,7 @@ def listed(request: pytest.FixtureRequest) -> Callable[..., None]:
 
 
 def settings(root: Path, **changes: Any) -> Settings:
-    changes = {"settle_seconds": 0, "launcher": (sys.executable, FAKE), **changes}
+    changes = {"launcher": (sys.executable, FAKE), **changes}
     return Settings(root, **changes)
 
 
@@ -109,24 +110,37 @@ def layout(root: Path) -> Layout:
     return Layout(root)
 
 
-def make_drop(
+def submit_run(
+    w: Scheduler,
     root: Path,
-    pathway: str,
-    name: str,
-    *,
     issuer: str = "acme",
-    context_pathway: str | None = None,
-) -> Path:
+    *,
+    pathway: str = "credit_snapshot",
+    payload: bytes | None = None,
+) -> Record:
+    """Upload one document and submit it the way the start page does: the service's own summary
+    issues the approval digest, then ``Scheduler.submit`` takes the run."""
     body = json.loads(json.dumps(CONTEXT))
-    body["run"]["pathway"] = context_pathway or pathway
+    body["run"]["pathway"] = pathway
     body["run"]["as_of"] = "2026-11-09"
     body["identity"]["issuer_id"] = issuer
     body["identity"]["issuer_name"] = "Acme Corp"
-    folder = root / "inbox" / pathway / name
-    folder.mkdir(parents=True)
-    (folder / "context.json").write_text(json.dumps(body), encoding="utf-8")
-    (folder / "a.pdf").write_bytes(b"%PDF-1.4 not real")
-    return folder
+    answers = submissions.validated(
+        {
+            "context": body,
+            "modules": [],
+            "max_turns": 32,
+            "level": "basic",
+            "submitted_by": "analyst",
+        }
+    )
+    lay = Layout(root)
+    sid = submissions.new(lay)
+    text = payload or f"Net sales were 100 for {issuer}.".encode()
+    (submissions.files_folder(lay, sid) / "a.txt").write_bytes(text)
+    got = submissions.summary(lay, sid, answers, config=w.settings.config, cap=w.settings.cap)
+    assert got["error"] == "", got["error"]
+    return w.submit(sid, answers, str(got["digest"]))
 
 
 def status(root: Path) -> list[str]:
@@ -137,7 +151,7 @@ def activity_js(root: Path) -> str:
     return (root / "_engine/activity.js").read_text(encoding="utf-8")
 
 
-def pump(w: Watcher, until: Callable[[], bool], limit: float = 5) -> None:
+def pump(w: Scheduler, until: Callable[[], bool], limit: float = 5) -> None:
     deadline = time.monotonic() + limit
     while not until():
         assert time.monotonic() < deadline, "condition not met in time"
@@ -145,7 +159,7 @@ def pump(w: Watcher, until: Callable[[], bool], limit: float = 5) -> None:
         time.sleep(0.05)
 
 
-def go(w: Watcher) -> None:
-    """Two polls: the first sees a drop, the second finds it unchanged for 0 s and settled."""
+def go(w: Scheduler) -> None:
+    """Two polls: the first starts what is queued, the second sees what the start left."""
     w.step()
     w.step()

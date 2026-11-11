@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Literal, get_args
 
 from deploy_workflow import platform_io
-from deploy_workflow.inbox.drops import Layout
+from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.owners.cpos_launch import METHODS
 from deploy_workflow.run_events import EVENTS, read_events
 
@@ -152,7 +152,7 @@ def _check_options(record: Record) -> None:
         raise ValueError(f"run {record.id}: max_turns {turns!r} is not a whole number 1 to 64")
 
 
-def command(  # noqa: PLR0913 - the signature the watcher calls
+def command(  # noqa: PLR0913 - the signature the scheduler calls
     layout: Layout,
     record: Record,
     context: Path,
@@ -181,7 +181,7 @@ def command(  # noqa: PLR0913 - the signature the watcher calls
     return argv
 
 
-def prepare(  # noqa: PLR0913 - the signature the watcher calls
+def prepare(  # noqa: PLR0913 - the signature the scheduler calls
     layout: Layout,
     record: Record,
     context: Path,
@@ -217,7 +217,7 @@ def prepare(  # noqa: PLR0913 - the signature the watcher calls
     return lines[-1] if lines else f"launcher exited {done.returncode}"
 
 
-def start(  # noqa: PLR0913 - the signature the watcher calls
+def start(  # noqa: PLR0913 - the signature the scheduler calls
     layout: Layout,
     record: Record,
     context: Path,
@@ -236,7 +236,7 @@ def start(  # noqa: PLR0913 - the signature the watcher calls
     child: subprocess.Popen[bytes] | None = None
     try:
         with (layout.logs / f"{record.id}.log").open("ab") as log_file:
-            if sys.platform == "win32":  # a Ctrl-C to the watcher must not stop its runs
+            if sys.platform == "win32":  # a Ctrl-C to the service must not stop its runs
                 child = subprocess.Popen(
                     argv,
                     stdout=log_file,
@@ -244,7 +244,7 @@ def start(  # noqa: PLR0913 - the signature the watcher calls
                     env=env,
                     creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                 )
-            else:  # a new session keeps a terminal Ctrl-C (SIGINT to the watcher's group) off it
+            else:  # a new session keeps a terminal Ctrl-C (SIGINT to the service group) off it
                 child = subprocess.Popen(
                     argv, stdout=log_file, stderr=log_file, env=env, start_new_session=True
                 )

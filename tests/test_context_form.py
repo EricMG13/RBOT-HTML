@@ -23,7 +23,7 @@ from deploy_workflow.context import (
     RunContext,
     load_context,
 )
-from deploy_workflow.inbox.drops import MAX_ISSUER_ID
+from deploy_workflow.inbox.layout import MAX_ISSUER_ID
 from deploy_workflow.inbox.runs import Status
 from deploy_workflow.owners import cp2h, valuation_basis
 from deploy_workflow.owners.cpos_launch import SOURCE_SUFFIXES, pathway_modules

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from deploy_workflow.inbox.activity import module_states, snapshot, spent, write
-from deploy_workflow.inbox.drops import Layout, ensure_layout
+from deploy_workflow.inbox.layout import Layout, ensure_layout
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.model.budget import Budget, OverrunStop
 from deploy_workflow.run_events import append_event

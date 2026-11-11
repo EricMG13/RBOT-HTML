@@ -296,7 +296,11 @@ repository.
 ## Run context form (`context-form.html`, `context.json`, schema `context/1`)
 
 The form writes `context.json`; `src/deploy_workflow/context.py` reads it, and the form's `build()` is the
-normative rule set. New optional fields, each omitted from the file when empty (so older files load
+normative rule set. The file is now also the run start page: `python -m deploy_workflow.run_start`
+serves it, Submit after an approved summary takes the place of the Download step, and the service
+writes `context.json` into the run's own source folder, so analysts no longer handle the file or
+drop folders (the inbox is gone; root `README.md`, section 3). Where the notes below say "download",
+they describe the rules the page applies before Submit. New optional fields, each omitted from the file when empty (so older files load
 and re-save unchanged; a file that uses one needs this version or later):
 
 - `identity.issue_classification`: `investment_grade` or `high_yield`. The form requires a choice
@@ -313,7 +317,7 @@ then a check before download.
 
 **Rules the form adds.** `context.py` does not enforce these, so a hand-written file without them
 still loads; the form will not download without them:
-- `identity.issuer_id` at most 40 characters (the inbox refuses longer).
+- `identity.issuer_id` at most 40 characters (the summary refuses longer).
 - `run.pathway` `earnings_update` if and only if `run.run_type` `earnings`.
 - `run.current_period` where CP-2G runs (the forecast's base).
 - An explicit answer for each attachment the pathway uses.
