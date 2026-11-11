@@ -903,8 +903,8 @@ def test_the_overview_lists_the_nearest_dates_instead_of_drawing_lanes_and_fits_
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
     # The Calendar tab is retired (decision 12) and the Overview draws no lane (H5): it lists the
-    # dated items on or after the as-of date in one list, five in total at most (M2, H5.5): day-dated
-    # and period-dated items share one ordering, by the day or the period end, nearest first.
+    # dated items on or after the as-of date in one list, five at most (M2, H5.5): day-dated and
+    # period-dated items share one ordering, by the day or the period end, nearest first.
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert console == [] and seen["fits"] is True
