@@ -23,7 +23,7 @@ from deploy_workflow.model_testing.configs import CONFIGS
 ROOT = Path(__file__).resolve().parents[3]
 FORM = ROOT / "docs/templates/context-form.html"
 # The only ruling the watcher runs under; ``Settings.ruling`` defaults to it and start-up checks it.
-STANDING_RULING = ROOT / "docs/rulings/2026-11-09-inbox-automation.md"
+STANDING_RULING = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
 _PAGE = (
     '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
     '<meta http-equiv="refresh" content="0; url=_engine/library/index.html">'
@@ -37,7 +37,7 @@ class StartupRefused(ValueError):
 
 
 PACKAGE_LOGGER = "deploy_workflow.inbox"
-# USD per run the standing ruling allows (docs/rulings/2026-11-09-inbox-automation.md; AGENTS.md).
+# USD per run the standing ruling allows (docs/rulings/2026-11-11-run-start-submit.md; AGENTS.md).
 RULED_RUN_CAP = Decimal(20)
 
 
@@ -80,7 +80,7 @@ def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
     if cap.is_nan() or cap > RULED_RUN_CAP:
         raise StartupRefused(
             f"cap {cap} is above USD {RULED_RUN_CAP} per run, the limit of the standing ruling "
-            "docs/rulings/2026-11-09-inbox-automation.md"
+            "docs/rulings/2026-11-11-run-start-submit.md"
         )
     if ruling.resolve() != STANDING_RULING.resolve():
         raise StartupRefused(

@@ -399,11 +399,11 @@ def test_a_ruling_other_than_the_standing_one_is_refused_at_start_up(root, tmp_p
     # The cause: another ruling under docs/rulings that names the config passes check_ruling.
     monkeypatch.setenv(KEY_VARIABLES[CONFIGS["sol-high"].provider], "test-key-not-real")
     sol_high = REPO / "docs/rulings/2026-11-09-tdg-sol-high-test.md"
-    with pytest.raises(StartupRefused, match="2026-11-09-inbox-automation"):
+    with pytest.raises(StartupRefused, match="2026-11-11-run-start-submit"):
         Watcher(settings(root, config="sol-high", ruling=sol_high))
     other = tmp_path / "2026-11-09-tdg-sol-high-test.md"
     other.write_text("sol-medium", encoding="utf-8")
-    with pytest.raises(StartupRefused, match="2026-11-09-inbox-automation"):
+    with pytest.raises(StartupRefused, match="2026-11-11-run-start-submit"):
         Watcher(settings(root, ruling=other))
     Watcher(settings(root)).close()
 
@@ -1236,7 +1236,7 @@ def test_l9_a_run_is_filed_and_listed_through_the_real_library_rebuild(root, mon
 
 
 def test_a_cap_above_the_standing_rulings_usd_20_is_refused_at_start_up(root, capsys):
-    refusal = r"cap 500 .*above USD 20.*2026-11-09-inbox-automation"
+    refusal = r"cap 500 .*above USD 20.*2026-11-11-run-start-submit"
     with pytest.raises(StartupRefused, match=refusal):
         Watcher(settings(root, cap=Decimal(500)))
     assert main(["--root", str(root), "--cap", "20.01"]) == 2
