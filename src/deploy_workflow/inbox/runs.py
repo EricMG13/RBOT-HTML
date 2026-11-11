@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 Status = Literal["queued", "running", "finished", "failed", "capped", "rejected", "interrupted"]
 
 _REGISTRY = "issuers.json"
+DEFAULT_MAX_TURNS = 32
 
 
 @dataclass
@@ -42,6 +43,11 @@ class Record:
     report: str = ""  # posix path relative to the root
     name_differs: bool = False
     prepared: bool = False  # the offline check passed; only then may the run be started
+    submission: str = ""  # the start page's submission ID; empty for a folder drop
+    modules: tuple[str, ...] = ()  # () = the pathway's modules
+    max_turns: int = DEFAULT_MAX_TURNS
+    level: str = ""
+    submitted_by: str = ""
 
 
 PID_FILE_VARIABLE = "DEPLOY_WORKFLOW_PID_FILE"  # the launcher reads the same name
@@ -78,6 +84,7 @@ def _load(path: Path) -> Record:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         data["files"] = tuple(data.get("files", ()))
+        data["modules"] = tuple(data.get("modules", ()))
         record = Record(**data)
         if record.status not in get_args(Status):
             raise ValueError(f"unknown status {record.status!r}")
@@ -150,6 +157,10 @@ def command(  # noqa: PLR0913 - the signature the watcher calls
         "--out", str(layout.runs / record.id),
         "--no-library",
     ]  # fmt: skip
+    if record.modules:
+        argv += ["--modules", *record.modules]
+    if record.max_turns != DEFAULT_MAX_TURNS:
+        argv += ["--max-turns", str(record.max_turns)]
     if ruling is not None:
         argv += ["--live", "--ruling", str(ruling)]
     return argv

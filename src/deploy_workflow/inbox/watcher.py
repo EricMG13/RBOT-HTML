@@ -5,6 +5,11 @@ the limits and publishes run activity. A record is saved before every step that 
 could cut short, so a restart always finds what to do next: a drop leaves the inbox in one rename
 and gets its record at once, is never put back, and a run is marked running (and counted) before
 its process starts. A run is shown as finished only when the library lists it.
+
+``submit`` takes an approved submission from the start page: under ``lock`` (also held by every
+poll) it saves the run's record, then renames the uploaded files folder to ``drops/<id>``. A
+record whose folder is still missing is finished by the next poll or restart; one submission is
+never two records.
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ import math
 import os
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -29,6 +35,8 @@ from deploy_workflow.inbox.runs import Record
 from deploy_workflow.inbox.startup import StartupRefused
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
+from deploy_workflow.run_start import submissions
+from deploy_workflow.run_start.submissions import Answers
 
 __all__ = ["Settings", "StartupRefused", "Watcher", "main"]
 
@@ -96,6 +104,7 @@ class Watcher:
         startup.check_launchable(settings.config, settings.ruling, settings.cap)
         self._lock: IO[str] | None = startup.take_lock(self.layout)
         self._logger = startup.open_log(self.layout, __name__)  # only the lock holder logs
+        self.lock = threading.Lock()  # held by step() and submit(): a submit never splits a poll
         self._records = {r.id: r for r in runs.load_all(self.layout)}
         self._children: dict[str, subprocess.Popen[bytes]] = {}
         self._tracker = drops.ReadyTracker(settings.settle_seconds, clock)
@@ -121,6 +130,7 @@ class Watcher:
     def _recover(self) -> None:
         """Decide what an earlier stop left: runs cut short while starting, unrecorded folders."""
         self._track_untracked()
+        self._finish_moves()
         self._reject_unrecorded_folders()
 
     def _track_untracked(self) -> None:
@@ -166,6 +176,58 @@ class Watcher:
         except ValueError:
             return True  # an unreadable time is treated as past the grace
         return (self.now().astimezone(UTC) - started).total_seconds() >= _PID_GRACE_SECONDS
+
+    def _finish_moves(self) -> None:
+        """A queued submission whose folder is still in ``uploads`` was cut short between its
+        record and the rename: finish the rename."""
+        for record in self._with_status("queued"):
+            if record.submission and not os.path.lexists(self.layout.drops / record.id):
+                with self._guard(f"submission {record.submission}"):
+                    self._move_files(record)
+
+    def _move_files(self, record: Record) -> None:
+        files = self.layout.uploads / record.submission / "files"
+        if files.is_dir() and not files.is_symlink():
+            os.rename(files, self.layout.drops / record.id)
+
+    def submit(self, sid: str, answers: Answers, approved_digest: str) -> Record:
+        """Start one run for an approved submission. Repeating a submission returns its record.
+
+        ``Refused`` if the files or answers differ from what was approved. The record is saved
+        before the rename, so an interruption between them is finished by the next poll."""
+        with self.lock:
+            for record in self._records.values():
+                if record.submission == sid:
+                    return record
+            files = submissions.files_folder(self.layout, sid)
+            # context.json is made here from the answers; a left-over one (an earlier cut-short
+            # attempt) is ours, since an upload may not carry that name.
+            (files / "context.json").unlink(missing_ok=True)
+            if submissions.digest(self.layout, sid, answers) != approved_digest:
+                raise submissions.Refused(
+                    "the documents or answers changed after approval; review the summary again"
+                )
+            (files / "context.json").write_bytes(submissions.context_bytes(answers))
+            context = answers["context"]
+            record = Record(
+                self._new_id(),
+                context["run"]["pathway"],
+                context["identity"]["issuer_name"],
+                "queued",
+                self._utc(self.now()),
+                issuer_id=context["identity"]["issuer_id"],
+                issuer_name=context["identity"]["issuer_name"],
+                as_of=context["run"]["as_of"],
+                prepared=True,  # a submission arrives already checked
+                submission=sid,
+                modules=tuple(answers["modules"]),
+                max_turns=answers["max_turns"],
+                level=answers["level"],
+                submitted_by=answers["submitted_by"],
+            )
+            self._put(record)
+            self._move_files(record)
+            return record
 
     def _reject_unrecorded_folders(self) -> None:
         """A folder or file in ``_engine/drops`` with no record was cut short before its record.
@@ -249,7 +311,12 @@ class Watcher:
     # -- one poll ---------------------------------------------------------------------------
 
     def step(self) -> None:
+        with self.lock:
+            self._step()
+
+    def _step(self) -> None:
         self._track_untracked()
+        self._finish_moves()
         self._reap()
         self._scan()
         self._prepare_queued()

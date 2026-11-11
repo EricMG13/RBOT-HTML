@@ -119,6 +119,7 @@ def _entry(layout: Layout, record: Record, now: datetime) -> tuple[dict[str, Any
     that is absent reads as "nothing yet", which may only mean it was out of sight this poll."""
     entry: dict[str, Any] = asdict(record)
     entry["files"] = list(record.files)
+    entry.pop("modules")  # the modules asked for; "modules" here is each one's state, set below
     run_dir = layout.runs / record.id
     events: list[dict[str, Any]] = []
     complete = record.status == "rejected"
