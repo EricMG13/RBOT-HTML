@@ -4,45 +4,37 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
-## 2026-11-11 — Reader standard and checks in CP-OS; delivered report retired (branch `claude/reader-engine-d46913`)
+## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
 
-Scope: instructions, checks and delivery changed; proven by synthetic passages and offline tests
-only. No provider was called and no run was started. No retained model response written under the
-new standard exists yet, and the reading check of one real run against the September VMO2
-reference (decision 11) is not done.
-- Changed: CP-OS instructions (`owners/cpos_launch.py`): every prose module is told to open
-  `## Findings` with `### Bottom line`, `### Key findings`, `### Contrary evidence and what would
-  change the view`, `### Limitations`; data modules (CP-0/CP-PARSE, CP-1, CP-1C) and blocked
-  modules only `### Bottom line`; the Basis line form of H3; figures with currency or unit; no
-  labels; persona kept with "Lead with the judgement; use data to support it, not to narrate it.";
-  CANON_SHARED's reader-facing layer and reading order sent to prose modules. `### Reader summary`,
-  the per-module opening H3, the CP-2-only reader standard and its front lines are removed.
-- Checks: the eight H6 prose checks (`prose_checks.py`) run in the CP-OS handoff check on the reader
-  passages; a failure is repair feedback naming check, line and text, inside the existing retry and
-  cap. Hand-written passing and failing passages per check (`tests/test_prose_checks.py`); check 7
-  across a run shown with the fake provider. Instructions and checks were cross-checked by a
-  whole-branch review: every instructed form passes all eight checks. The Reader-summary figure rule was restored
-  for the new passages as a fidelity check (`figure_issues`, labelled `Fidelity check:`, not a ninth
-  prose check): every reader-passage figure must appear outside the reader passages with the same
-  sign, unit and scale (owner, 2026-11-11). Review fixes in the same entry: the library build skips
-  a delivery with no `report.html` (`apps/issuer-library/update_library.py`, the cause of the 14
-  failures above); check 6 also takes the first-column letter+digit cells of `## Calculations`
-  tables (period labels excepted); a Basis line after a blank line is sentence text.
-- CP-8 requires an eighth dimension, Presentation (`tests/test_cp8_comparison.py`).
-- Delivery: new deliveries write no `report.html`; completion records carry `delivery_sha256`
-  (of `delivery.json`); HTML Model, charts, calculation JSON and forecast files unchanged. Earlier
-  runs with `report.html` are still listed and accepted as CP-8 bundles (tests on both formats).
-- Passed, exit 0: the affected fast tests (`test_cpos_launch`, `test_prose_checks`,
-  `test_reader_summary`, `test_handoff_loop`, `test_library_index`, `test_cp8_comparison`,
-  `test_credit_os_catalogue`, inbox tests, `test_run_start_page`, `test_update_library`,
-  `test_credit_os_store`; `-m "not live and not browser"`) on this branch merged with the library
-  branch (`claude/library-layout-637b87` at 3294c8d) in a scratch worktree: 899 passed;
-  `tools/quality_gate.py`: 0 findings. Before the `update_library.py` fix, 14 of those tests failed on
-  its `report.html` read.
-- Limitation (owner ruling: left as is): `owner_rendering.py:992`, `financial_rendering.py:167` and
-  `rendering.py:162` still write `report.html` outside CP-OS.
-- Not verified: any real model response to the new instructions; the reading check against VMO2;
-  the browser test of the library's Run activity link (library side); the full weekly suite.
+Scope: offline, macOS, headless Chrome; the library app (`apps/issuer-library`) only. No provider was
+called, no run was started, no stored handoff or run folder was changed (retained runs were read through
+a symlinked `runs` folder in a scratch workspace). No run in the new handoff format exists yet: the new
+format was seen only on a hand-made synthetic fixture (`apps/issuer-library/fixtures/synthetic-new-format/`,
+built into a scratch workspace by `fixtures/build_synthetic_run.py`); the earlier format on the three
+listed retained TDG runs (`cpos-tdg-sol-high-001`, `cpos-tdg-sol-high-cp2-001`,
+`cpos-tdg-copilot-sol-medium-002`). This is not the reader check against the September VMO2 reference
+that AGENTS.md requires for a presentation change: that needs a real new-format run and stays open.
+- Built (decisions 3-7, 9, 10, 12, 14; H1, H3, H4, H5, H7): rail without Reports; per issuer Report
+  history, Overview, Modules, Forecast, Evidence with a run label; delivered report view, its adapter and
+  the Calendar tab retired; Overview selects passages only (CP-6 else CP-2 lead, bottom lines, limitations
+  de-duplicated by the check-7 normalisation, key charts, nearest dates); flat Modules navigator of the
+  modules that ran; figures and a quiet Basis link open the inspector; earlier-format trailing citations
+  move verbatim behind Basis; Evidence's four lists with handoff and instruction copies under
+  `library/downloads/`; Run activity shows live runs only.
+- Gates (HEAD of the branch at push): `node --test` reader/static/calendar 245 pass, exit 0; `uv run
+  pytest -m "not live and not browser"` on the eight library test files 348 passed, exit 0;
+  `tests/test_library_page_browser.py` 38 passed; `uv run python tools/quality_gate.py` 0 findings, exit 0.
+  `tests/test_library_reader_refs.py` asserts every Basis item and Source cell of each synthetic handoff is
+  reachable from the rendered page, with hand-written counts.
+- Walk-through at 1440 px and 375 px on both libraries: every page renders with no console error except
+  the pre-existing missing `../activity.js` when opened outside the run start service; a figure opens the
+  inspector by keyboard (Enter) and Esc returns focus; no horizontal overflow at 375 px.
+- Known limits: the inspector shows a source page's excerpt for a Basis item only once the engine's
+  `credit_os_chips` change (PR #46) is merged; earlier-format dates written as text cannot feed Nearest
+  dates; document dates of source files are not recorded anywhere, so Evidence shows "Not recorded";
+  key charts are selected per module from the catalogue (rows carry no chart identity);
+  `src/deploy_workflow/run_start/service.py` still links finished runs to `library/reports/`, which this
+  branch no longer writes (fixed on the engine branch).
 
 ## 2026-11-11 — Reader and issuer report ruling, documents only (branch `claude/reader-ruling-docs-2d2c2a`)
 
