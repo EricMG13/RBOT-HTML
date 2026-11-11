@@ -751,7 +751,7 @@ pick('data-k="pathway"', 'distressed_restructuring');
 const peers = forecast();
 const asked = [...document.querySelectorAll('[data-chk]')].map(c => c.dataset.chk);
 pick('data-k="pathway"', 'earnings_update');
-pick('data-k="management_bridge"', 'no');  // The checklist is drawn for the pathway first.
+// No bridge file is chosen: the attachment is false, and the forecast says so.
 const out = document.createElement('pre');
 out.id = 'probe';
 out.textContent = JSON.stringify({
@@ -787,7 +787,7 @@ def test_the_research_module_supplies_the_peers_and_the_bridge_is_forecast_as_ru
     assert probe["nobridge"] == "limited"
 
 
-def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
+def test_an_inbox_copy_of_the_page_no_longer_fixes_a_pathway(tmp_path):
     from deploy_workflow.inbox.drops import ensure_layout, write_templates
 
     short = tempfile.mkdtemp(prefix="ib", dir="/tmp")  # tmp_path is over the 80-character limit.
@@ -806,17 +806,17 @@ def test_a_fixed_pathway_is_selected_and_locked(tmp_path):
         probe = json.loads(
             html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
         )
-        # Only the folder's pathway is offered; the other five are disabled and hidden.
-        assert probe["shown"] == ["earnings_update"] and probe["disabled"] == 5
-        assert probe["built"]["run"]["pathway"] == "earnings_update"  # The pathway held ...
-        # ... and so did the run type: an Earnings Update compares two periods (form, 2026-11-10).
-        assert probe["built"]["run"]["run_type"] == "earnings"
-        assert probe["warned"] == [
-            'run.pathway: this form is fixed to earnings_update; "credit_snapshot" was replaced'
-        ]
+        # The page is served by the start service, not opened from an inbox folder: the copy's
+        # data-pathway mark is ignored, every pathway is offered and none is disabled.
+        assert len(probe["shown"]) == 6 and probe["disabled"] == 0
         assert (
-            probe["same"] == []
-        )  # A loaded context naming the fixed pathway gives no such warning.
+            probe["built"]["run"]["pathway"] == "credit_snapshot"
+        )  # The probe's own choice held ...
+        # The probe's event targets the form, not the radio, so the run type stays at the
+        # pathway's default (research for Credit Snapshot).
+        assert probe["built"]["run"]["run_type"] == "research"
+        assert probe["warned"] == []  # A loaded context naming another pathway is not replaced.
+        assert probe["same"] == []
     finally:
         shutil.rmtree(layout.root)
 
