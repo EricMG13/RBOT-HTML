@@ -914,3 +914,108 @@ def test_an_issuer_id_over_the_limit_is_refused_by_the_summary(layout, tmp_path)
     assert "digest" not in got
     answers["context"]["identity"]["issuer_id"] = "a" * 40
     assert summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))["error"] == ""
+
+
+def _source(tmp_path: Path, **files: bytes) -> Path:
+    """A finished run's source folder: the named files and a context.json."""
+    src = tmp_path / "source"
+    src.mkdir(exist_ok=True)
+    (src / "context.json").write_text("{}")
+    for name, data in files.items():
+        target = src / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    return src
+
+
+def _held(layout: Layout, sid: str) -> dict[str, int]:
+    return submissions.listing(files_folder(layout, sid))
+
+
+def test_carry_copies_every_file_but_the_context(layout, tmp_path):
+    src = _source(tmp_path, **{"a.txt": b"one", "sub/b.txt": b"two"})
+    sid = new(layout)
+    assert submissions.carry(layout, sid, src) == {"carried": ["a.txt", "sub/b.txt"], "kept": []}
+    assert submissions.listing(files_folder(layout, sid)) == {"a.txt": 3, "sub/b.txt": 3}
+    assert submissions.listing(src) == {"a.txt": 3, "sub/b.txt": 3}
+
+
+def test_carry_keeps_a_name_already_stored(layout, tmp_path):
+    src = _source(tmp_path, **{"a.txt": b"theirs", "c.txt": b"new"})
+    sid = new(layout)
+    put(layout, sid, "a.txt", b"mine")
+    assert submissions.carry(layout, sid, src) == {"carried": ["c.txt"], "kept": ["a.txt"]}
+    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
+    assert (files_folder(layout, sid) / "c.txt").read_bytes() == b"new"
+
+
+def test_a_carry_over_a_limit_copies_nothing(layout, tmp_path, monkeypatch):
+    monkeypatch.setattr(submissions, "MAX_FILES", 2)
+    src = _source(tmp_path, **{"a.txt": b"1", "b.txt": b"2", "c.txt": b"3"})
+    sid = new(layout)
+    with pytest.raises(Refused, match="more than 2 files"):
+        submissions.carry(layout, sid, src)
+    assert _held(layout, sid) == {}
+    monkeypatch.undo()
+    monkeypatch.setattr(submissions, "MAX_TOTAL", 4)
+    src = _source(tmp_path, **{"a.txt": b"123", "b.txt": b"456"})
+    (src / "c.txt").unlink()
+    with pytest.raises(Refused, match="in total"):
+        submissions.carry(layout, sid, src)
+    assert _held(layout, sid) == {}
+
+
+def test_a_carry_of_one_file_over_the_file_limit_copies_nothing(layout, tmp_path, monkeypatch):
+    monkeypatch.setattr(submissions, "MAX_FILE", 2)
+    src = _source(tmp_path, **{"a.txt": b"1", "b.txt": b"123"})
+    sid = new(layout)
+    with pytest.raises(Refused, match="a file is at most"):
+        submissions.carry(layout, sid, src)
+    assert _held(layout, sid) == {}
+
+
+def test_a_carry_from_a_folder_holding_a_link_copies_nothing(layout, tmp_path):
+    src = _source(tmp_path, **{"a.txt": b"one"})
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"secret")
+    (src / "z.txt").symlink_to(outside)
+    sid = new(layout)
+    with pytest.raises(Refused, match="is a link"):
+        submissions.carry(layout, sid, src)
+    assert _held(layout, sid) == {}
+
+
+def test_a_carry_into_a_sealed_submission_is_refused(layout, tmp_path):
+    src = _source(tmp_path, **{"a.txt": b"one"})
+    sid = new(layout)
+    submissions.seal(layout, sid)
+    with pytest.raises(Refused, match="^this submission has been submitted$"):
+        submissions.carry(layout, sid, src)
+
+
+def test_a_failed_copy_removes_what_the_carry_added(layout, tmp_path, monkeypatch):
+    src = _source(tmp_path, **{"a.txt": b"one", "b.txt": b"two"})
+    sid = new(layout)
+    put(layout, sid, "keep.txt", b"mine")
+    real = submissions.add_file
+
+    def failing(lay, s, name, body, length):
+        if name == "b.txt":
+            raise Refused("boom")
+        return real(lay, s, name, body, length)
+
+    monkeypatch.setattr(submissions, "add_file", failing)
+    with pytest.raises(Refused, match="boom"):
+        submissions.carry(layout, sid, src)
+    assert _held(layout, sid) == {"keep.txt": 4}
+
+
+def test_the_digest_of_carried_files_equals_the_digest_of_the_same_files_uploaded(layout, tmp_path):
+    files = {"a.txt": b"one", "sub/b.txt": b"two"}
+    src = _source(tmp_path, **files)
+    sid_a, sid_b = new(layout), new(layout)
+    submissions.carry(layout, sid_a, src)
+    for name, data in files.items():
+        put(layout, sid_b, name, data)
+    answers = answers_for(tmp_path)
+    assert digest(layout, sid_a, answers) == digest(layout, sid_b, answers)

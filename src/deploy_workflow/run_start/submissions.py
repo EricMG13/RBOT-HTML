@@ -357,6 +357,62 @@ def remove_file(layout: Layout, sid: str, name: str) -> None:
     _touch(folder)
 
 
+def listing(source: Path) -> dict[str, int]:
+    """Relative posix name -> size of each regular file under ``source``, but its own context.json.
+
+    ``Refused`` when anything under ``source`` is a link: a copy must never follow one."""
+    return {
+        name: size
+        for name, size in _stored(source, strict=True).items()
+        if name.casefold() != _CONTEXT_NAME
+    }
+
+
+def _check_carry(root: Path, sid: str, wanted: dict[str, int]) -> list[str]:
+    """The names to copy, after the limits are checked against what is stored and in flight."""
+    existing = _stored(root)
+    names = sorted(set(wanted) - set(existing))
+    for name in names:
+        if wanted[name] > MAX_FILE:
+            raise Refused(f"a file is at most {MAX_FILE // (1024 * 1024)} MB")
+    own = _PENDING.get(sid, {})
+    if len(existing) + len(own) + len(names) > MAX_FILES:
+        raise Refused(f"more than {MAX_FILES} files")
+    total = sum(existing.values()) + sum(size for _, size in own.values())
+    if total + sum(wanted[name] for name in names) > MAX_TOTAL:
+        raise Refused(f"more than {MAX_TOTAL // (1024 * 1024)} MB in total")
+    return names
+
+
+def carry(layout: Layout, sid: str, source: Path) -> dict[str, list[str]]:
+    """Copy each file under ``source`` (but its context.json) into the submission.
+
+    A name already stored is kept, not replaced. Nothing is copied when a link is found or a limit
+    would be passed; a copy that fails part-way removes what this call added. Returns the names
+    carried and the names kept, each sorted."""
+    folder = _folder(layout, sid)
+    wanted = listing(source)
+    with _LOCK:
+        root = _usable_root(folder)
+        names = _check_carry(root, sid, wanted)
+        kept = sorted(set(wanted) - set(names))
+    # ponytail: the pre-check and the copies are not one atomic step; ``add_file`` re-checks each
+    # file against the limits, and the rollback below restores the folder.
+    added: list[str] = []
+    try:
+        for name in names:
+            with (source / name).open("rb") as handle:
+                added.append(add_file(layout, sid, name, handle, wanted[name]))
+    except BaseException:
+        for stored in added:
+            try:
+                remove_file(layout, sid, stored)
+            except Refused as error:  # logged; the original failure is what the caller sees
+                log.warning("carry %s: could not remove %s (%s)", sid, stored, error)
+        raise
+    return {"carried": sorted(added), "kept": kept}
+
+
 def reading(layout: Layout, sid: str) -> dict[str, Any]:
     """What the launcher makes of each uploaded file; its refusal comes back as ``error``."""
     root = files_folder(layout, sid)
