@@ -1676,14 +1676,10 @@ def _instructions(
 
 
 def pathway_modules(settings: RunContext) -> tuple[str, ...]:
-    """A pathway's analytical modules. Owner, 2026-11-10: CP-1C takes its peers from CP-DR by
-    default, and no pathway lists CP-DR, so CP-DR joins a pathway that has CP-1C whenever the
-    context names it as the peer source. Explicit --modules are run as given."""
-    chosen = tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
-    peers_from_research = settings.valuation.peer_source == "cp_dr_public"
-    if "CP-1C" in chosen and "CP-DR" not in chosen and peers_from_research:
-        return (*chosen, "CP-DR")
-    return chosen
+    """A pathway's analytical modules: its preset less the modules that have their own route.
+    Owner, 2026-11-11: CP-DR and CP-2E are in every preset (CP-1C needs CP-DR's peers), so the
+    context's peer source no longer adds a module. Explicit --modules are run as given."""
+    return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
 
 
 def prepare(  # noqa: PLR0913 - one keyword per run setting

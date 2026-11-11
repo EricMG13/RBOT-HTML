@@ -46,7 +46,7 @@ def module_states(pathway: str, events: Sequence[Mapping[str, Any]]) -> list[lis
     accepted = {str(e.get("module")) for e in events if e.get("event") == "module_accepted"}
     # A pathway the plan does not know (a record edited by hand) has no modules to show.
     listed = PATHWAY_MODULES.get(cast(PathwayId, pathway), ())
-    # The launcher may add a module the preset does not list (CP-DR as CP-1C's peer source).
+    # An explicit --modules run may start a module the preset does not list.
     extra = sorted(m for m in started if m in METHODS and m not in listed)
     modules = plan((*(m for m in listed if m not in NOT_ANALYTICAL), *extra)) if listed else ()
     states = [[m, _state(m, started, accepted)] for m in modules]

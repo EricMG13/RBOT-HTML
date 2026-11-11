@@ -20,7 +20,12 @@ Not verified: the other seven modules' prose; a side-by-side against the VMO2 re
 
 (b) This change, offline only (no provider call, no run folder read or written): M1 and M2 presets, CP-2G
 added to credit_snapshot and covenant_refinancing, CP-8 removed from portfolio_decision, context-form
-copy. Gate results: GATES_PLACEHOLDER
+copy. Gate results: `uv run pytest tests/test_cpos_launch.py
+tests/test_context_form.py tests/test_inbox_activity.py -q -m "not live and not browser"` 509 passed, exit 0;
+`tests/test_cp8_comparison.py tests/test_handoff_loop.py` 44 passed, exit 0; `uv run python
+tools/quality_gate.py` 0 findings, exit 0. Plans per pathway were prepared offline by the parametrised
+test (every pathway, four peer sources); `tests/test_financial_workflow.py` was not run (over the
+fast-test limit). M3-M7 are decided and not built here.
 
 ## 2026-11-11 — Runs on earlier methods are listed and marked (branch `claude/list-earlier-method-runs`)
 
