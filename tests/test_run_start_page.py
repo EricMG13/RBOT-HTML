@@ -11,8 +11,10 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import threading
 from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +25,9 @@ from test_library_page_browser import chrome
 
 from deploy_workflow.inbox import startup
 from deploy_workflow.inbox.watcher import Watcher
+from deploy_workflow.owners.cpos_launch import (
+    update_library_at,
+)  # the real one, before any test patches it
 from deploy_workflow.run_start import service
 
 pytest_plugins = ["inbox_fixtures"]
@@ -68,6 +73,28 @@ const radio = v => document.querySelector(`[data-k="legal_documents"][value="${v
 const rows = () => [...document.querySelectorAll('#doclist tbody tr')].map(r =>
   [...r.cells].map(c => c.textContent.trim()));
 const limits = () => readiness(build()).counted.map(x => x.reason);
+const settle = ms => new Promise(r => setTimeout(r, ms));
+// Answers a pathway's first stages the way an analyst would, then opens the review and waits
+// for the service's summary (the page asks for it on entering the review).
+const issuer = async (pathway, docs) => {
+  pick('data-k="pathway"', pathway);
+  await uploadFiles(docs);
+  type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
+  pick('data-k="issue_classification"', 'high_yield');
+};
+const summarised = async () => {
+  for (let i = 0; i < 300 && !(SUMMARY && !SUMMARY_BUSY); i++) await settle(50);
+  return SUMMARY;
+};
+const review = async () => { gotoStep('review'); return summarised(); };
+const ticks = () => [...document.querySelectorAll('#rv-ready [data-tick]')];
+const change = el => el.dispatchEvent(new Event('change', {bubbles: true}));
+const tickAll = () => ticks().forEach(t => { t.checked = true; change(t); });
+const $ = id => document.getElementById(id);
+const approve = () => { const a = $('approve'); a.checked = true; change(a); };
+const gate = () => ({approve: document.getElementById('approve').disabled,
+  approved: document.getElementById('approve').checked,
+  submit: document.getElementById('submit').disabled});
 """
 
 WRAP = """<script>
@@ -101,6 +128,7 @@ class Page:
     folder: Path
     profile: Path
     console: list[str]
+    root: Path | None = None  # the shared folder, for tests that read the service's records
 
     def run(self, body: str) -> dict[str, Any]:
         text = FORM.read_text(encoding="utf-8")
@@ -136,6 +164,26 @@ class Page:
         return value  # type: ignore[no-any-return]
 
 
+@contextmanager
+def _serving(root: Path, tmp_path: Path, **changes: Any) -> Iterator[tuple[Page, Watcher]]:
+    watcher = Watcher(settings(root, **changes))
+    server = service.make_server(watcher, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    folder = tmp_path / "served"
+    folder.mkdir()
+    try:
+        yield (
+            Page(f"http://127.0.0.1:{server.server_address[1]}", folder, profile, [], root),
+            watcher,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        watcher.close()
+
+
 @pytest.fixture
 def page(
     root: Path,
@@ -146,19 +194,24 @@ def page(
     chrome()  # skips here when there is no browser
     monkeypatch.setattr(startup, "FORM", FORM)
     fake_env({"sleep": 30})
-    watcher = Watcher(settings(root))
-    server = service.make_server(watcher, "127.0.0.1", 0)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    profile = tmp_path / "profile"
-    profile.mkdir()
-    folder = tmp_path / "served"
-    folder.mkdir()
-    try:
-        yield Page(f"http://127.0.0.1:{server.server_address[1]}", folder, profile, [])
-    finally:
-        server.shutdown()
-        server.server_close()
-        watcher.close()
+    with _serving(root, tmp_path) as (served, _watcher):
+        yield served
+
+
+@pytest.fixture
+def page_with_launcher(
+    root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[Callable[[str], tuple[Page, Watcher]]]:
+    """The served page over a launcher script of the test's choice (the real one, canned)."""
+    chrome()
+    monkeypatch.setattr(startup, "FORM", FORM)
+    stack = ExitStack()
+
+    def start(launcher: str) -> tuple[Page, Watcher]:
+        return stack.enter_context(_serving(root, tmp_path, launcher=(sys.executable, launcher)))
+
+    with stack:
+        yield start
 
 
 def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
@@ -580,3 +633,353 @@ def test_a_stage_holding_an_answer_is_shown_at_every_level(page):
     """)
     assert seen["rows"] == 1 and "market" not in seen["errs"]
     assert "market" in seen["stages"]
+
+
+def _records(page):
+    from deploy_workflow.inbox.drops import Layout
+    from deploy_workflow.inbox.runs import load_all
+
+    assert page.root is not None
+    return load_all(Layout(page.root))
+
+
+# The outcomes that need a tick, one per item (the owner's ruling for the review).
+LIMITS = ("gap", "limited", "will_refuse")
+ORDER = ["will_refuse", "gap", "limited", "check", "information", "ready"]
+
+
+def test_the_review_shows_the_services_forecast_per_module(page):
+    seen = page.run(f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    const S = await review();
+    const mrows = [...document.querySelectorAll('#rv-ready [data-module]')].map(r => ({{
+      id: r.dataset.module, outcome: r.dataset.outcome, text: r.textContent}}));
+    const goto = [...document.querySelectorAll('#rv-ready [data-module="CP-4"] [data-goto]')]
+      .map(b => [b.dataset.goto, b.textContent]);
+    return {{S, rows: mrows, goto, facts: document.getElementById('rv-facts').textContent,
+      ready: document.getElementById('rv-ready').textContent,
+      panel: document.getElementById('panel').hidden}};
+    """)
+    summary = seen["S"]
+    assert summary["error"] == "" and summary["digest"]
+    shown = [r["id"] for r in seen["rows"] if r["id"] != "run"]
+    assert shown == summary["modules"]  # the service's order, not the page's own
+    by_module = {r["id"]: r for r in seen["rows"]}
+    for module in summary["modules"]:
+        own = [i["outcome"] for i in summary["items"] if i["scope"] == module]
+        want = min(own, key=ORDER.index) if own else "ready"
+        assert by_module[module]["outcome"] == want, module
+    for item in summary["items"]:  # every reason the service gave is shown
+        assert item["reason"] in seen["ready"]
+    assert by_module["CP-4"]["outcome"] == "will_refuse"  # legal documents: none, on CP-4
+    assert ["legal", "Go to Legal"] in seen["goto"]
+    for text in ("sol-medium", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
+        assert text in seen["facts"], text
+    for section in summary["omitted"]:
+        assert section in seen["facts"]
+    assert "confirmed when the summary is made" not in seen["ready"]
+
+
+def test_the_services_outcome_replaces_the_confirmed_when_the_summary_is_made_check(page):
+    seen = page.run(f"""
+    await issuer('earnings_update', [file('annual.txt', {json.dumps(REPORT)}),
+      file('annual-copy.txt', {json.dumps(REPORT)})]);
+    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
+    update();
+    const before = readiness(build()).mods.find(m => m.id === 'CP-1B').items.map(i => i.reason);
+    const S = await review();
+    const row = document.querySelector('#rv-ready [data-module="CP-1B"]');
+    return {{before, S, text: row.textContent, outcome: row.dataset.outcome}};
+    """)
+    assert any("confirmed when the summary is made" in r for r in seen["before"])
+    assert "confirmed when the summary is made" not in seen["text"]
+    own = [i for i in seen["S"]["items"] if i["scope"] == "CP-1B"]
+    for item in own:
+        assert item["reason"] in seen["text"]
+    want = min((i["outcome"] for i in own), key=ORDER.index) if own else "ready"
+    assert seen["outcome"] == want
+
+
+def test_every_rule_the_service_can_fire_has_a_stage_on_the_page(page):
+    from deploy_workflow.run_expectations import RULES
+
+    seen = page.run("return {map: STAGE_OF_RULE, stages: STAGES};")
+    assert sorted(seen["map"]) == sorted(r.key for r in RULES)
+    assert set(seen["map"].values()) <= set(seen["stages"]) | {""}  # "" = no stage fixes it
+
+
+def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
+    seen = page.run(f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    const S = await review();
+    const out = {{S, start: gate(), n: ticks().length,
+      rowOutcomes: ticks().map(t => t.closest('[data-module]').dataset.outcome)}};
+    const all = ticks();
+    all.slice(1).forEach(t => {{ t.checked = true; change(t); }});
+    out.partial = gate();
+    all[0].checked = true; change(all[0]);
+    out.ticked = gate();
+    approve();
+    out.approved = gate();
+    all[0].checked = false; change(all[0]);
+    out.untick = gate();
+    // A refusal the service makes (a name longer than it accepts) blocks approval.
+    document.getElementById('submitter').value = 'x'.repeat(500);
+    change(document.getElementById('submitter'));
+    gotoStep('review');
+    out.after = await summarised();
+    out.refusal = {{state: document.getElementById('rv-state').textContent, gate: gate(),
+      links: [...document.querySelectorAll('#rv-state [data-goto]')].map(b => b.dataset.goto),
+      ticks: ticks().length}};
+    return out;
+    """)
+    need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
+    assert need and seen["n"] == len(need)  # one tick per gap, limited or will-refuse item
+    assert set(seen["rowOutcomes"]) <= set(LIMITS)
+    assert seen["start"] == {"approve": True, "approved": False, "submit": True}
+    assert seen["partial"]["approve"] is True  # one tick still missing
+    assert seen["ticked"] == {"approve": False, "approved": False, "submit": True}
+    assert seen["approved"] == {"approve": False, "approved": True, "submit": False}
+    assert seen["untick"] == {"approve": True, "approved": False, "submit": True}
+    assert seen["after"]["error"] and "digest" not in seen["after"]
+    assert "80 characters" in seen["refusal"]["state"]  # the service's own sentence, as text
+    assert seen["refusal"]["gate"] == {"approve": True, "approved": False, "submit": True}
+    assert seen["refusal"]["links"] == ["pathway"] and seen["refusal"]["ticks"] == 0
+
+
+def test_basic_lists_its_defaults_and_offers_answer_this_now(page):
+    seen = page.run(f"""
+    level('basic');
+    await issuer('relative_value', [file('annual.txt', {json.dumps(REPORT)})]);
+    const S = await review();
+    const before = stages();
+    const button = document.querySelector('#rv-ready [data-now]');
+    const out = {{S, before, defaults: document.getElementById('rv-defaults').textContent,
+      now: button ? [button.dataset.now, button.textContent] : null}};
+    button.click();
+    out.after = {{cur, level: LEVEL, stages: stages()}};
+    level('standard');
+    gotoStep('review'); await summarised();
+    out.standard = document.getElementById('rv-defaults').textContent;
+    out.standardNow = document.querySelectorAll('#rv-ready [data-now]').length;
+    return out;
+    """)
+    quotes = [i for i in seen["S"]["items"] if i["id"].endswith(":cp3-no-quotes-no-talk")]
+    assert quotes and quotes[0]["outcome"] == "gap"  # the fix is in the Market stage
+    assert "market" not in seen["before"]  # which Basic does not ask
+    assert seen["now"] == ["market", "Answer this now"]
+    assert seen["after"]["cur"] == "market" and seen["after"]["level"] == "basic"
+    assert "market" in seen["after"]["stages"]
+    for text in ("Peer figures", "Valuation basis", "Automatic", "Quotes", "Ratings", "None"):
+        assert text in seen["defaults"], text
+    assert "Deep Debate" in seen["defaults"] and "Off" in seen["defaults"]
+    assert "Valuation basis" in seen["standard"]  # Standard still defaults the basis
+    assert "Quotes" not in seen["standard"] and seen["standardNow"] == 0
+
+
+def test_editing_after_approval_clears_it(page):
+    seen = page.run(f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)}),
+      file('memo.txt', {json.dumps(MEMO)})]);
+    const first = await review();
+    tickAll(); approve();
+    const out = {{approved: gate()}};
+    type('i-issuer_name', 'Acme Corp II');
+    out.answer = {{gate: gate(), digest: SUMMARY ? SUMMARY.digest : null, ticks: ticks().length}};
+    const second = await summarised();
+    out.second = {{gate: gate(), differs: second.digest !== first.digest, ticks: ticks().length,
+      checked: ticks().filter(t => t.checked).length}};
+    tickAll(); approve();
+    out.again = gate();
+    await removeFile('memo.txt');
+    out.file = {{gate: gate(), summary: SUMMARY ? SUMMARY.digest : null}};
+    gotoStep('review');
+    const third = await summarised();
+    out.third = {{gate: gate(), differs: third.digest !== second.digest}};
+    return out;
+    """)
+    assert seen["approved"] == {"approve": False, "approved": True, "submit": False}
+    assert seen["answer"]["gate"] == {"approve": True, "approved": False, "submit": True}
+    assert seen["answer"]["digest"] != "" and seen["answer"]["ticks"] in (
+        0,
+        seen["second"]["ticks"],
+    )
+    assert seen["second"]["gate"]["approved"] is False and seen["second"]["differs"]
+    assert seen["second"]["checked"] == 0  # a new summary needs its ticks again
+    assert seen["again"] == {"approve": False, "approved": True, "submit": False}
+    assert seen["file"]["gate"] == {"approve": True, "approved": False, "submit": True}
+    assert seen["third"]["differs"] and seen["third"]["gate"]["approved"] is False
+
+
+def _submit(page, count):
+    return page.run(f"""
+    const calls = [];
+    const real = window.fetch;
+    window.fetch = (path, init) => {{ calls.push(String(path)); return real(path, init); }};
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review();
+    tickAll(); approve();
+    const sid = SUB, out = {{start: gate()}};
+    const button = document.getElementById('submit');
+    for (let i = 0; i < {count}; i++) {{ button.click(); submitRun(); }}  // click and function
+    out.clicked = gate();
+    for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
+    out.submits = calls.filter(c => c.endsWith('/submit')).length;
+    out.progress = {{hidden: document.getElementById('run-progress').hidden,
+      text: document.getElementById('run-progress').textContent,
+      form: document.getElementById('f').hidden,
+      id: document.getElementById('run-id').textContent,
+      modules: [...document.querySelectorAll('#run-progress [data-module]')]
+        .map(m => [m.dataset.module, m.dataset.state]),
+      link: [...document.querySelectorAll('#run-progress a')]
+        .map(a => [a.getAttribute('href'), a.textContent])}};
+    out.storage = Object.keys(localStorage);
+    const late = await fetch(`/api/submissions/${{sid}}/files?name=late.txt`,
+      {{method: 'POST', body: 'x'}});
+    out.late = [late.status, (await late.json()).error];
+    return out;
+    """)
+
+
+def test_submit_starts_one_run_and_the_page_shows_its_progress(page):
+    seen = _submit(page, 1)
+    [record] = _records(page)
+    assert seen["start"] == {"approve": False, "approved": True, "submit": False}
+    assert seen["clicked"]["submit"] is True  # disabled from the first click
+    assert seen["submits"] == 1
+    progress = seen["progress"]
+    assert not progress["hidden"] and progress["form"] is True
+    assert progress["id"] == record.id and "queued" in progress["text"]
+    assert next(m for m, _ in progress["modules"]) == "CP-0"
+    assert [m for m, _ in progress["modules"]][-1] == "Report"
+    assert {state for _, state in progress["modules"]} == {"waiting"}
+    assert ["/library/#CP-OS/activity", "Run activity"] in progress["link"]
+    assert seen["storage"] == ["run-start/run"]  # the answers and submission id are forgotten
+    # The service releases the folder once the files move to the run, so it answers "unknown
+    # submission" (404); "this submission has been submitted" (400) holds between seal and release.
+    assert seen["late"][0] in (400, 404) and seen["late"][1] in (
+        "unknown submission",
+        "this submission has been submitted",
+    )
+    again = page.run("""
+    return {hidden: document.getElementById('run-progress').hidden,
+      id: document.getElementById('run-id').textContent, form: document.getElementById('f').hidden,
+      storage: Object.keys(localStorage),
+      rows: document.querySelectorAll('#doclist tbody tr').length};
+    """)
+    assert again == {
+        "hidden": False,
+        "id": record.id,
+        "form": True,
+        "storage": ["run-start/run"],
+        "rows": 0,
+    }
+
+
+def test_a_double_click_on_submit_starts_one_run(page):
+    seen = _submit(page, 3)
+    assert seen["submits"] == 1
+    assert len(_records(page)) == 1
+
+
+def test_a_refused_digest_returns_to_the_review_with_the_services_text(page):
+    seen = page.run(f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review();
+    tickAll(); approve();
+    // A file added behind the page's back: the digest the page holds no longer matches the files.
+    await fetch(`/api/submissions/${{SUB}}/files?name=sneaky.txt`, {{method: 'POST', body: 'x'}});
+    document.getElementById('submit').click();
+    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
+    return {{refusal: document.getElementById('rv-submit-error').textContent, gate: gate(),
+      hidden: $('run-progress').hidden, stage: cur, storage: Object.keys(localStorage)}};
+    """)
+    assert "changed after approval" in seen["refusal"]
+    assert seen["gate"]["approved"] is False and seen["gate"]["submit"] is True
+    assert seen["hidden"] is True and seen["stage"] == "review"
+    assert "run-start/run" not in seen["storage"]
+    assert _records(page) == []
+
+
+def test_the_documents_changed_error_is_retried_not_shown(page):
+    seen = page.run(f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    const real = window.fetch;
+    let n = 0;
+    window.fetch = async (path, init) => {{
+      if (String(path).endsWith('/summary') && n++ === 0) {{
+        await real(path, init);  // the real summary runs, then the first answer is lost
+        const lost = 'the documents changed while the summary was being made; '
+          + 'open the summary again';
+        return new Response(JSON.stringify({{error: lost}}),
+          {{status: 200, headers: {{'Content-Type': 'application/json'}}}});
+      }}
+      return real(path, init);
+    }};
+    const S = await review();
+    return {{n, refusal: S.error, digest: !!S.digest, state: $('rv-state').textContent}};
+    """)
+    assert seen["n"] == 2 and seen["refusal"] == "" and seen["digest"]
+    assert "changed while" not in seen["state"]
+
+
+def test_the_research_text_is_fixed(page):
+    seen = page.run("""
+    pick('data-k="pathway"', 'relative_value');
+    return {text: document.querySelector('#research-src .strip-text').textContent};
+    """)
+    assert seen["text"] == (
+        "Research works from the supplied files only. "
+        "Add peers' filings to the documents if you want them used."
+    )
+
+
+def test_upload_to_filed_report_with_the_real_launcher(
+    root, tmp_path, monkeypatch, page_with_launcher
+):
+    # No provider is called: the launcher is the real one with canned module answers.
+    from inbox_fixtures import HERE, layout, pump, status
+    from test_cpos_launch import AS_OF, ISSUER, issuer_folder
+
+    from deploy_workflow.inbox.runs import load_all
+    from deploy_workflow.owners import cpos_launch
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", update_library_at)
+    folder = issuer_folder(tmp_path)
+    body = "\n".join(
+        f"await uploadFiles([file({json.dumps(p.name)}, {json.dumps(p.read_text())})]);"
+        for p in sorted(folder.rglob("*.*"))
+        if p.suffix in (".txt", ".md")
+    )
+    page, watcher = page_with_launcher(str(HERE / "fixtures/canned_provider_launcher.py"))
+    first = page.run(f"""
+    level('basic');
+    pick('data-k="pathway"', 'credit_snapshot');
+    {body}
+    await uploadFiles([file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
+    choose('legal-file', 'credit-agreement.txt');
+    // The canned answers name this issuer and date (tests/test_cpos_launch.py ISSUER, AS_OF).
+    type('i-issuer_name', {json.dumps(ISSUER)}); type('d-as_of', {json.dumps(AS_OF)});
+    pick('data-k="issue_classification"', 'high_yield');
+    await review();
+    tickAll(); approve();
+    document.getElementById('submit').click();
+    for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
+    return {{id: document.getElementById('run-id').textContent, ticks: ticks().length}};
+    """)
+    pump(watcher, lambda: status(root) not in ([], ["queued"], ["running"]), limit=120)
+    [record] = load_all(layout(root))
+    assert record.id == first["id"]
+    assert record.status == "finished", record.reason
+    assert record.report.startswith("issuers/") or "/issuers/" in record.report
+    assert (root / record.report).is_file()
+    assert f'"{record.id}"' in (root / "_engine/library/data.js").read_text(encoding="utf-8")
+    after = page.run("""
+    const text = () => $('run-progress').textContent;
+    for (let i = 0; i < 100 && !/finished/.test(text()); i++) await settle(100);
+    return {text: document.getElementById('run-progress').textContent,
+      modules: [...document.querySelectorAll('#run-progress [data-module]')]
+        .map(m => m.dataset.state)};
+    """)
+    assert "finished" in after["text"]
+    assert set(after["modules"]) == {"done"}

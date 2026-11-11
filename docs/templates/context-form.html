@@ -88,8 +88,16 @@ svg.i{width:16px;height:16px;flex:none}
 .text-button:hover{text-decoration:underline;text-underline-offset:3px}
 
 /* Stage content. */
-.run-step>h2{display:flex;align-items:baseline;gap:10px;font:600 18px/28px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.run-step>h2,.run-progress>h2{display:flex;align-items:baseline;gap:10px;font:600 18px/28px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
 .run-step>h2:focus{outline:0}.run-step>h2:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.run-progress>h2:focus{outline:0}
+.run-stages .mod{display:block;padding:10px 0 0;border-top:4px solid var(--border-secondary);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.run-stages .mod .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
+.run-stages.modules{--n:4;row-gap:16px}
+.rv-tick{display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+.rv-tick input{margin:2px 0 0;flex:none;accent-color:var(--blue)}
+.rv-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 24px;margin:10px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
+.rv-facts dt{font-weight:600;color:var(--text-primary)}.rv-facts dd{margin:0;overflow-wrap:anywhere}
 .run-step>h2 .n{font:500 var(--fs-control)/20px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
 .stepline{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
 .lead{max-width:68ch;margin:12px 0 4px;font-size:var(--fs-control);line-height:22px;color:var(--text-secondary)}
@@ -500,15 +508,20 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
 <!-- 8 Review -->
 <section class="run-step" id="st-review" data-st="review" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Check and download</span></h2>
+  <h2 tabindex="-1"><span class="n"></span> <span>Summary and start</span></h2>
   <p class="stepline"></p>
-  <p class="lead">This is the run you are about to start. Fix what you can now: a changed context means a new run.</p>
+  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap): read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+  <div id="rv-state" role="status" aria-live="polite"></div>
+  <dl class="rv-facts" id="rv-facts"></dl>
   <h3 class="sub">What each module is expected to do</h3>
   <div id="rv-ready"></div>
+  <h3 class="sub">Inputs left at their defaults</h3>
+  <div id="rv-defaults"></div>
   <h3 class="sub">Your answers</h3>
   <dl class="review-summary" id="rv-steps"></dl>
-  <label class="start-confirm" id="ackbox" hidden><input type="checkbox" id="ack"><span id="acktext"></span></label>
-  <div class="dl"><button type="button" class="primary-action" id="download"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>Download context.json</button><span id="dlnote" class="muted"></span></div>
+  <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
+  <p class="err" id="rv-submit-error" role="alert" hidden></p>
+  <div class="dl"><button type="button" class="primary-action" id="submit" disabled>Submit and start the run</button><span id="submitnote" class="muted"></span></div>
 </section>
 </form>
 <div class="step-actions">
@@ -516,6 +529,15 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <span id="nextlive" class="live" role="status" aria-live="polite"></span>
   <button type="button" class="primary-action" id="next"><span id="next-t">Next</span><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
 </div>
+<section class="run-progress" id="run-progress" hidden aria-live="polite">
+  <h2 tabindex="-1">Run started</h2>
+  <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
+  <dl class="rv-facts"><dt>Run</dt><dd id="run-id"></dd><dt>State</dt><dd id="run-state"></dd><dt>Why</dt><dd id="run-reason"></dd></dl>
+  <h3 class="sub">Modules</h3>
+  <ol class="run-stages modules" id="run-modules"></ol>
+  <p class="err" id="run-error" hidden></p>
+  <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="another">Start another run</button></div>
+</section>
 </div></main>
 
 <details class="inspector" id="panel">
@@ -1274,7 +1296,7 @@ function readiness(o) {
 
 /* ======================================================================= Stages */
 const STAGES = ['pathway', 'documents', 'issuer', 'legal', 'market', 'valuation', 'assumptions', 'review'];
-const SHORT = {pathway:'Pathway', documents:'Documents', issuer:'Issuer and dates', legal:'Legal', market:'Market', valuation:'Valuation', assumptions:'Assumptions', review:'Check & download'};
+const SHORT = {pathway:'Pathway', documents:'Documents', issuer:'Issuer and dates', legal:'Legal', market:'Market', valuation:'Valuation', assumptions:'Assumptions', review:'Summary and start'};
 const BLOCK_USES = {deal:['CP-3'], quote:['CP-3','CP-3D'], rating:['CP-2H'], cp3mode:['CP-3'], cp6:['CP-6']};
 // How much is asked: Basic the first four stages, Standard adds market, valuation and questions, Advanced everything.
 const RANK = {basic:0, standard:1, advanced:2};
@@ -1337,7 +1359,7 @@ function stepLine(st, o) {
     case 'market': return o.run.run_type === 'primary' ? 'Required: at least one facility' : 'Optional, but each block says what is lost without it';
     case 'valuation': return has('CP-DR') ? 'Optional: by default the research module finds the peers' : 'Optional';
     case 'assumptions': return has('CP-DR') ? 'Optional: the research module answers your questions first' : 'Optional: leave each on "Let the module choose" unless you have a house view';
-    default: return 'Nothing to fill in: read, acknowledge, download';
+    default: return 'Nothing to fill in: read, accept each limit, approve, submit once';
   }
 }
 function renderSteps(sq, o) {
@@ -1375,7 +1397,7 @@ function renderNav(sq, o) {
   $('back').hidden = i === 0;
   nx.hidden = cur === 'review';
   $('nextlive').hidden = cur === 'review';
-  $('next-t').textContent = sq[i + 1] === 'review' ? 'Check & download' : optionalStage(cur, o) && !entered(cur, o) ? 'Skip' : 'Next';
+  $('next-t').textContent = sq[i + 1] === 'review' ? 'Summary and start' : optionalStage(cur, o) && !entered(cur, o) ? 'Skip' : 'Next';
   const mine = errs.filter(e => e.st === cur);
   const req = mine.filter(e => /^(required|choose|add |say whether|tick)/.test(e.short)).length, oth = mine.length - req;
   const nw = warns.filter(w => w.st === cur).length;
@@ -1532,15 +1554,6 @@ function readyList(R) {
     return `<li><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
   }).join('');
 }
-// The review's table: one row a module, as the run report's module matrix (name, state, words).
-function readyTable(R) {
-  const go = it => it.go && it.go !== cur ? ` <button type="button" class="text-button" data-goto="${it.go}">Go to ${SHORT[it.go]}</button>` : '';
-  const item = it => `<p>${esc(it.reason)}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(it.fix)}${go(it)}</span>` : go(it)}</p>`;
-  const rows = [];
-  if (R.run.length) rows.push(`<tr><td><span class="mod-name">Whole run</span></td><td>${badgeFor(worst(R.run.map(x => x.outcome)))}</td><td>${R.run.map(item).join('')}</td></tr>`);
-  R.mods.forEach(m => rows.push(`<tr><td><span class="mod-name">${esc(mname(m.id))}</span><span class="code">${m.id}</span></td><td>${badgeFor(m.status)}</td><td>${m.items.length ? m.items.map(item).join('') : '<span class="muted">Nothing missing.</span>'}</td></tr>`));
-  return `<div class="table-scroll"><table><colgroup><col style="width:28%"><col style="width:132px"><col></colgroup><thead><tr><th scope="col">Module</th><th scope="col">Expected</th><th scope="col">Why, and what fixes it</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
-}
 function tally(R) {
   const n = {};
   R.mods.forEach(m => { n[m.status] = (n[m.status] || 0) + 1; });
@@ -1593,9 +1606,160 @@ function summaryLines(st, o) {
     default: return [];
   }
 }
-let ackKey = '';
-function renderReview(sq, o, R) {
-  setHTML($('rv-ready'), readyTable(R));
+/* ======================================================================= Summary, approval and submit */
+// The review is the service's own forecast (POST /api/submissions/<id>/summary): its items, in its
+// module order, replace the page's live forecast, which stays in the side panel while editing. The
+// digest the service issues is what Submit sends; the page never makes one. Any change to an answer or a
+// document drops the summary and the approval, and the next look at the review asks again.
+const RUN_STORE = 'run-start/run';
+const SUMMARY_CHANGED = 'the documents changed while the summary was being made; open the summary again';
+const SUMMARY_TRIES = 3;
+const POLL_MS = 10000;
+const ENDED = ['finished', 'failed', 'capped', 'rejected', 'interrupted'];
+const NEEDS_TICK = ['gap', 'limited', 'will_refuse'];
+// The stage that fixes each rule the service can fire (run_expectations.RULES keys; tests/test_run_start_page.py
+// keeps this table to them). '' = nothing on this page fixes it.
+const STAGE_OF_RULE = {
+  'investment-grade': 'issuer', 'run-financials-management-claims': 'documents', 'cp1-no-financial-report-recognised': 'documents',
+  'chart-strip-usd': 'issuer', 'cp1c-no-peer-source': 'valuation', 'cp2-primary-no-cp1d': 'pathway', 'cp2d-non-usd': 'market',
+  'cp2h-no-ratings': 'market', 'cp3-talk-no-observed-quote': 'market', 'cp3-no-quotes-no-talk': 'market', 'cp3d-no-quotes': 'market',
+  'cp4-declared-none': 'legal', 'cp4-declared-executed-none-recognised': 'legal', 'cp4-declared-draft-none-recognised': 'legal',
+  'cp4-declared-draft-or-primary-no-executed-agreement': 'legal', 'cp4-only-amendment': 'documents',
+  'cp4-governing-terms-rest-on-final-om': 'documents', 'portfolio-workbook-false': 'issuer'
+};
+// A refusal's sentence names no stage; these words do.
+function errorStage(text) {
+  if (/submitted_by/.test(text)) return 'pathway';
+  if (/\b(files?|documents?|sources?|folder)\b/i.test(text)) return 'documents';
+  if (/\b(modules?|turns|level)\b/i.test(text)) return 'pathway';
+  return '';
+}
+let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted} for the answers and files held
+let SUMMARY_BUSY = false;
+let RENDERED = null;       // the summary the module table was built for
+let SUBMITTING = false;
+let SUBMIT_ERROR = '';
+let RUN = '';              // the run id once Submit has succeeded
+const summaryKey = () => JSON.stringify([SUB, answers(), READING]);
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  Object.assign(el, props || {});
+  el.append(...kids);
+  return el;
+}
+const button = (text, data) => { const b = h('button', {type: 'button', className: 'text-button', textContent: text}); Object.assign(b.dataset, data); return b; };
+async function requestSummary(key) {
+  SUMMARY_BUSY = true;
+  const sent = answers();
+  let result;
+  try {
+    for (let tries = 1; ; tries++) {
+      result = await call('POST', `/api/submissions/${SUB}/summary`, JSON.stringify(sent));
+      if (result.error !== SUMMARY_CHANGED || tries >= SUMMARY_TRIES) break; // the service says the documents moved: ask again
+    }
+  } catch (err) { result = {error: err.message}; }
+  finally { SUMMARY_BUSY = false; }
+  // An answer given meanwhile makes this one stale; update() then asks again for the newer one.
+  if (summaryKey() === key) SUMMARY = Object.assign({key, answers: sent}, result);
+  update();
+}
+function syncSummary() {
+  const key = summaryKey();
+  if (SUMMARY && SUMMARY.key !== key) { SUMMARY = null; RENDERED = null; $('approve').checked = false; }
+  if (cur === 'review' && !SUMMARY && !SUMMARY_BUSY && SUB && !errs.length) requestSummary(key);
+}
+const summaryOk = () => !!(SUMMARY && !SUMMARY.error && SUMMARY.digest);
+const tickBoxes = () => [...document.querySelectorAll('#rv-ready [data-tick]')];
+function syncApproval() {
+  const ok = summaryOk() && !errs.length && RENDERED === SUMMARY, all = ok && tickBoxes().every(t => t.checked), a = $('approve');
+  if (!all) a.checked = false;
+  a.disabled = !all || SUBMITTING;
+  $('submit').disabled = !(all && a.checked) || SUBMITTING;
+  $('submitnote').textContent = SUBMITTING ? 'Starting the run…' : !ok ? '' : !all ? 'Accept each limit above to approve.' : !a.checked ? 'Approve to enable Submit.' : '';
+}
+function renderState() {
+  const box = $('rv-state'), want = errs.length ? 'errs' : !SUB ? 'nodocs' : !SUMMARY ? 'busy' : SUMMARY.error ? 'err:' + SUMMARY.error : '';
+  if (box._for === want) return;
+  box._for = want;
+  box.textContent = '';
+  if (!want) return;
+  if (want === 'errs') box.append(h('p', {className: 'err', textContent: 'Fix the stages marked Needs attention first.'}));
+  else if (want === 'nodocs') box.append(h('p', {className: 'err', textContent: 'Upload the documents first.'}));
+  else if (want === 'busy') box.append(h('p', {className: 'muted', textContent: 'Making the summary from your documents and answers…'}));
+  else {
+    const p = h('p', {className: 'err'}, h('span', {textContent: SUMMARY.error}));
+    const stage = errorStage(SUMMARY.error);
+    if (stage) p.append(' ', button('Go to ' + SHORT[stage], {goto: stage}));
+    p.append(' ', button('Check again', {again: '1'}));
+    box.append(p);
+  }
+}
+function itemRow(item, sq) {
+  const stage = STAGE_OF_RULE[item.id.slice(item.id.indexOf(':') + 1)] || ''; // the service's id is <scope>:<rule key>
+  const li = h('p', {}, h('span', {textContent: item.reason}));
+  if (item.fix) li.append(h('span', {className: 'fix'}, h('b', {textContent: 'Fix: '}), item.fix));
+  if (stage && stage !== 'review') {
+    const hidden = !sq.includes(stage);
+    li.append(' ', button(hidden ? 'Answer this now' : 'Go to ' + SHORT[stage], hidden ? {goto: stage, now: stage} : {goto: stage}));
+  }
+  if (NEEDS_TICK.includes(item.outcome)) li.append(h('label', {className: 'rv-tick'}, h('input', {type: 'checkbox'}), h('span', {textContent: 'I accept this limit.'})));
+  const tick = li.querySelector('input');
+  if (tick) tick.dataset.tick = item.id;
+  return li;
+}
+function readyTable(sq) {
+  const scopes = [...new Set(SUMMARY.items.map(i => i.scope))], order = [...(scopes.includes('run') ? ['run'] : []), ...SUMMARY.modules, ...scopes.filter(x => x !== 'run' && !SUMMARY.modules.includes(x))];
+  const body = h('tbody');
+  order.forEach(id => {
+    const items = SUMMARY.items.filter(i => i.scope === id), outcome = worst(items.map(i => i.outcome));
+    const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}), h('span', {className: 'code', textContent: id}));
+    const state = h('td'); state.innerHTML = badgeFor(outcome);
+    const why = h('td', {}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
+    const tr = h('tr', {}, h('td', {}, name), state, why);
+    tr.dataset.module = id; tr.dataset.outcome = outcome;
+    body.append(tr);
+  });
+  const table = h('table', {innerHTML: '<colgroup><col style="width:28%"><col style="width:132px"><col></colgroup><thead><tr><th scope="col">Module</th><th scope="col">Expected</th><th scope="col">Why, and what fixes it</th></tr></thead>'}, body);
+  return h('div', {className: 'table-scroll'}, table);
+}
+function renderFacts(o) {
+  const box = $('rv-facts'), rows = [];
+  if (summaryOk()) {
+    const dates = [['As-of', o.run.as_of], ['Cutoff', o.run.cutoff], ['Current period', o.run.current_period], ['Prior period', o.run.prior_period]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(', ');
+    rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
+      ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
+      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'], ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+  }
+  box.textContent = '';
+  rows.forEach(([k, v]) => box.append(h('dt', {textContent: k}), h('dd', {textContent: v})));
+}
+// What the level did not ask, with what the run will use: the current value, marked as the default or as the analyst's answer.
+function defaultedInputs(o) {
+  const v = o.valuation, mo = o.module_options || {}, listed = o.identity.listed_equity ? 'yes' : 'no', count = (n, one) => n ? n + ' ' + one + (n > 1 ? 's' : '') + ' entered' : 'None';
+  const row = (label, value, isDefault) => [label, value, isDefault];
+  const pinned = Object.values(o.assumptions).filter(Boolean).length;
+  const basis = row('Valuation basis', shown_('basis', v.basis), v.basis === BASIS_DEFAULT[listed]);
+  const multiple = row('Your own multiple', v.basis === 'user_multiple' ? nz(v.user_multiple) : 'None', v.basis !== 'user_multiple');
+  const assumptions = row('Pinned assumptions', pinned ? pinned + ' pinned' : 'None: the modules choose', pinned === 0);
+  if (LEVEL === 'advanced') return [];
+  if (LEVEL === 'standard') return [assumptions, basis, multiple];
+  return [row('Peer figures', shown_('peer_source', v.peer_source), v.peer_source === 'cp_dr_public'), basis, row('Quotes', count(o.quotes.length, 'quote'), !o.quotes.length),
+    row('Ratings', count(o.ratings.length, 'rating'), !o.ratings.length), assumptions, row('Research questions', count(o.research_questions.length, 'question'), !o.research_questions.length),
+    row('Relative value mode', mo.cp3_mode ? shown_('cp3_mode', mo.cp3_mode) : 'Left to the module', !mo.cp3_mode), row('Deep Debate', mo.cp6_deep_debate ? 'On' : 'Off', !mo.cp6_deep_debate)];
+}
+function renderReview(sq, o) {
+  renderState();
+  if (RENDERED !== SUMMARY) {
+    RENDERED = SUMMARY;
+    $('rv-ready').textContent = '';
+    if (summaryOk()) $('rv-ready').append(readyTable(sq));
+  }
+  renderFacts(o);
+  const defaults = $('rv-defaults');
+  defaults.textContent = '';
+  const list = defaultedInputs(o);
+  if (list.length) defaults.append(h('ul', {}, ...list.map(([label, value, isDefault]) => h('li', {textContent: `${label}: ${value}` + (isDefault ? ' (default)' : ' (your answer)')}))));
+  else defaults.append(h('p', {className: 'muted', textContent: 'None: this level asks for every input.'}));
   const box = $('rv-steps');
   box.innerHTML = '';
   sq.filter(st => st !== 'review').forEach((st, i) => {
@@ -1611,16 +1775,69 @@ function renderReview(sq, o, R) {
     warns.filter(w => w.st === st).forEach(w => { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = icon('triangle-alert') + '<span></span>'; p.lastChild.textContent = w.msg; dd.appendChild(p); });
     box.append(dt, dd);
   });
-  const key = R.counted.map(x => x.scope + ':' + x.reason).join('|');
-  if (key !== ackKey) { ackKey = key; $('ack').checked = false; }
-  const n = R.counted.length;
-  $('ackbox').hidden = n === 0 || errs.length > 0;
-  $('acktext').textContent = `I have read the ${n} expected limit${n > 1 ? 's' : ''} above and still want this context.`;
+  const err = $('rv-submit-error');
+  err.hidden = !SUBMIT_ERROR;
+  err.textContent = SUBMIT_ERROR;
 }
-function syncDownload(R) {
-  const needAck = R.counted.length > 0 && !$('ack').checked;
-  $('download').disabled = errs.length > 0 || needAck;
-  $('dlnote').textContent = errs.length ? 'Fix the stages marked Needs attention first.' : needAck ? 'Acknowledge the expected limits above to download.' : '';
+// Submit: one request per click that is allowed, and none while one is in flight.
+async function submitRun() {
+  const S = SUMMARY;
+  if (SUBMITTING || RUN || !summaryOk() || !$('approve').checked || $('submit').disabled) return;
+  SUBMITTING = true;
+  SUBMIT_ERROR = '';
+  $('submit').disabled = true;
+  try {
+    RUN = (await call('POST', `/api/submissions/${SUB}/submit`, JSON.stringify({answers: S.answers, digest: S.digest}))).run;
+    forget();
+    try { localStorage.setItem(RUN_STORE, JSON.stringify({v: 1, id: RUN})); } catch (err) { storeFailed(err); }
+    showProgress();
+  } catch (err) {
+    if (err.status === 400) { // the service no longer holds this approval: back to the review, to be made and approved again
+      SUBMIT_ERROR = err.message + ' The summary is made again: read it and approve it again.';
+      SUMMARY = null; RENDERED = null; $('approve').checked = false;
+    } else SUBMIT_ERROR = err.message + ' Submitting again is safe: a submission starts at most one run.';
+  } finally { SUBMITTING = false; }
+  update();
+}
+/* ----- The run's progress (GET /api/runs/<id>), every 10 seconds until the run has ended */
+let pollTimer = 0;
+const FORM_PARTS = () => [$('f'), document.querySelector('.stagebar'), document.querySelector('.step-actions'), $('panel'), $('steperr'), $('loadmsg')];
+function showProgress() {
+  FORM_PARTS().forEach(el => { el.hidden = true; });
+  $('run-progress').hidden = false;
+  $('run-id').textContent = RUN;
+  $('scope').textContent = '';
+  $('run-progress').querySelector('h2').focus();
+  pollRun();
+}
+function renderRun(r) {
+  $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
+  $('run-reason').textContent = r.reason || 'none given';
+  const list = $('run-modules');
+  list.textContent = '';
+  list.style.setProperty('--n', 4);
+  r.modules.forEach(([module, state]) => {
+    const box = h('div', {className: 'mod' + (state === 'done' ? ' done' : '')}, h('span', {className: 'nm', textContent: mname(module)}), h('span', {className: 'sstate', textContent: state}));
+    box.dataset.module = module; box.dataset.state = state;
+    if (state === 'running') box.setAttribute('aria-current', 'step');
+    list.append(h('li', {}, box));
+  });
+}
+async function pollRun() {
+  clearTimeout(pollTimer);
+  const err = $('run-error');
+  let again = true;
+  try {
+    const r = await call('GET', `/api/runs/${encodeURIComponent(RUN)}`);
+    renderRun(r);
+    err.hidden = true;
+    again = !ENDED.includes(r.status);
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = 'Could not read the run: ' + e.message;
+    if (e.status === 404) again = false;
+  }
+  if (again) pollTimer = setTimeout(pollRun, POLL_MS);
 }
 
 /* ======================================================================= Documents (the start service) */
@@ -1646,10 +1863,10 @@ const hiddenName = name => name.split('/').some(part => part.startsWith('.'));
 async function call(method, path, body) {
   let r;
   try { r = await fetch(path, {method, body}); }
-  catch (err) { throw new Error('the start service could not be reached (' + err.message + ')'); }
+  catch (err) { throw Object.assign(new Error('the start service could not be reached (' + err.message + ')'), {status: 0}); }
   let data = null;
   try { data = await r.json(); } catch (err) { data = null; } // not JSON: reported below as its status
-  if (!r.ok) throw new Error((data && data.error) || 'the start service answered ' + r.status);
+  if (!r.ok) throw Object.assign(new Error((data && data.error) || 'the start service answered ' + r.status), {status: r.status});
   return data;
 }
 function renderFailed() {
@@ -1807,10 +2024,16 @@ function forget() {
   try { localStorage.removeItem(STORE); } catch (err) { storeFailed(err); }
 }
 async function restore() {
-  let saved = null;
+  let saved = null, run = null;
   if (SERVED) {
-    try { saved = JSON.parse(localStorage.getItem(STORE) || 'null'); }
+    try { saved = JSON.parse(localStorage.getItem(STORE) || 'null'); run = JSON.parse(localStorage.getItem(RUN_STORE) || 'null'); }
     catch (err) { storeFailed(err); }
+  }
+  if (isObj(run) && run.v === 1 && typeof run.id === 'string' && /^[0-9A-Za-z._-]{1,80}$/.test(run.id)) {
+    RUN = run.id; // a submitted run: its progress, not the form
+    kept = true;
+    showProgress();
+    return;
   }
   try {
     if (isObj(saved) && saved.v === 1 && isObj(saved.context) && !shapeProblem(saved.context)) {
@@ -1960,6 +2183,7 @@ function vis() {
 
 /* ======================================================================= Update loop */
 function update() {
+  if (RUN) return null; // submitted: the page shows the run, and the answers are not kept
   vis();
   const o = build();
   advise(o);
@@ -1972,8 +2196,9 @@ function update() {
   const R = readiness(o);
   renderPanel(o, R);
   $('panel').hidden = cur === 'review';
-  if (cur === 'review') renderReview(sq, o, R);
-  syncDownload(R);
+  syncSummary();
+  if (cur === 'review') renderReview(sq, o);
+  syncApproval();
   save(o);
   return o;
 }
@@ -2004,6 +2229,7 @@ $('f').addEventListener('click', e => {
     row.remove(); update(); add.focus();
   }
   else if (t.dataset.goto) gotoStep(t.dataset.goto);
+  else if (t.dataset.again) { SUMMARY = null; RENDERED = null; update(); }
   else if (t.dataset.go) { e.preventDefault(); go(t.dataset.go); }
 });
 // A blur can add a message and move what is under the pointer between mousedown and mouseup, so the
@@ -2054,16 +2280,7 @@ $('docresult').addEventListener('click', e => {
   const b = e.target instanceof Element ? e.target.closest('[data-remove-file]') : null;
   if (b) removeFile(b.dataset.removeFile);
 });
-$('download').addEventListener('click', () => {
-  const o = update();
-  if ($('download').disabled) return;
-  const blob = new Blob([JSON.stringify(o, null, 2) + '\n'], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'context.json';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  loadMsg('Downloaded context.json. Put it at the top of the issuer folder.', false);
-});
+$('submit').addEventListener('click', submitRun);
 
 /* ======================================================================= Load / reset */
 function loadMsg(text, isErr) {
@@ -2110,7 +2327,7 @@ function resetAll() {
   for (const k in ROWS) $(ROWS[k].box).innerHTML = '';
   document.querySelectorAll('[data-touched]').forEach(e => delete e.dataset.touched);
   $('moreid').open = false;
-  visited.clear(); visited.add('pathway'); tried = {}; cur = 'pathway'; loadedNotes = false; ackKey = '';
+  visited.clear(); visited.add('pathway'); tried = {}; cur = 'pathway'; loadedNotes = false;
   rtTouched = basisTouched = idTouched = cutTouched = newestTouched = false;
   SKIPPED.clear();
   renderModules(runOf(getV($('st-pathway'), 'pathway')));
@@ -2198,14 +2415,24 @@ function fillAssumptions(a, warn) {
     }
   }
 }
-$('reset').addEventListener('click', () => {
-  if (!window.confirm('Clear every answer and start again?')) return;
+function startAgain() {
+  clearTimeout(pollTimer);
+  RUN = ''; SUMMARY = null; RENDERED = null; SUBMIT_ERROR = ''; SUBMITTING = false; $('approve').checked = false;
+  try { localStorage.removeItem(RUN_STORE); } catch (err) { storeFailed(err); }
+  FORM_PARTS().forEach(el => { el.hidden = false; });
+  $('steperr').hidden = true;
+  $('run-progress').hidden = true;
   resetAll();
   SUB = ''; READING = null; FAILED.length = 0; LEVEL = 'basic';
   renderFailed(); renderDocs(); renderFileSelects(); say('');
   forget();
   gotoStep('pathway'); loadMsg('Started again.', false);
+}
+$('reset').addEventListener('click', () => {
+  if (!window.confirm(RUN ? 'Leave this run and start a new one?' : 'Clear every answer and start again?')) return;
+  startAgain();
 });
+$('another').addEventListener('click', startAgain);
 
 /* ======================================================================= Init */
 const wide = window.matchMedia('(min-width:960px)');
