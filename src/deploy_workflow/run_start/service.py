@@ -427,18 +427,20 @@ class Handler(BaseHTTPRequestHandler):
         return answer
 
     def _library_report(self, run_id: str) -> str:
-        """The library's own copy of a finished run's report, as a path under ``/library/``.
+        """The library page's link for a finished run, as a path under ``/library/``.
 
-        The filed copy under ``issuers/`` is not served; this one is. ``""`` when the library holds
-        none yet (it is rebuilt after a run ends)."""
-        library = self._layout.engine / "library"
+        The library no longer files report copies; its Reports history page shows the run
+        (``index.html#W-Report/history?c=<run>``). ``""`` when the library has no index yet (it is
+        rebuilt after a run ends)."""
+        index = self._layout.engine / "library" / "index.html"
         try:
-            for copy in sorted((library / "reports" / run_id).glob("*/report.html")):
-                if copy.is_file() and not copy.is_symlink():
-                    return copy.relative_to(library).as_posix()
+            present = index.is_file() and not index.is_symlink()
         except OSError as error:
-            log.info("run %s: library copy not listed: %s", run_id, error)
-        return ""
+            log.info("run %s: library page not checked: %s", run_id, error)
+            return ""
+        if not present:
+            return ""
+        return f"index.html#W-Report/history?c={urllib.parse.quote(run_id, safe='')}"
 
     def _file(self, base: Path, relative: str, *, direct: bool) -> None:
         """Serve a regular file inside ``base``; anything else is a 404.

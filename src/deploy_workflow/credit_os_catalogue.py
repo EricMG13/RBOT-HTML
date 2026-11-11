@@ -236,6 +236,28 @@ def forecast_published(folder: Path, relative: str, files: Mapping[str, str]) ->
 NO_REPORT_PAGE = "this delivery has no report page; the library shows the run itself"
 
 
+def model_artifact(
+    report: dict[str, Any], delivered: str, files: Mapping[str, str]
+) -> dict[str, Any]:
+    """The Forecast artifact of a delivery, pinned to a file the delivery publishes.
+
+    An earlier-format delivery shows it through its report page. A newer one has no report page, so
+    the reader-facing published file (``model.html``, else ``annual.md``) is pinned instead; with
+    neither, the artifact is listed as unavailable with the reason."""
+    model = {**report, "kind": "model", "label": "Forecast"}
+    if "report.html" in files:
+        return {**model, "issue": "", "available": True}
+    name = next((n for n in ("model.html", "annual.md") if n in files), None)
+    if name is None:
+        return {**model, "issue": "the delivery publishes no forecast file", "available": False}
+    return {
+        **model,
+        "issue": "",
+        "available": True,
+        "href": pinned_url(f"{delivered}/{name}", files[name]),
+    }
+
+
 def delivery_fields(
     workspace: Path,
     run: dict[str, Any],
@@ -289,9 +311,7 @@ def delivery_fields(
         metrics = handoff_metrics(name, pin, text, sources, issues)
     artifacts = [artifact]
     if published:
-        artifacts.append(
-            {**artifact, "kind": "model", "label": "Forecast", "issue": "", "available": True}
-        )
+        artifacts.append(model_artifact(artifact, delivered, files))
     return artifacts, metrics
 
 

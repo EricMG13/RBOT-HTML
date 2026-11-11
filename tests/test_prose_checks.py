@@ -320,6 +320,18 @@ def test_check_8_iso_codes_are_currencies(code: str) -> None:
     assert prose_issues(bottom(f"Debt was {code} 250 million.")) == ()
 
 
+def test_iso_4217_has_the_2025_guilder_and_no_non_currency_codes() -> None:
+    from deploy_workflow.prose_checks import ISO_4217
+
+    assert {"XCG", "ANG"} <= ISO_4217
+    assert not {"XXX", "XTS"} & ISO_4217
+
+
+def test_check_8_xcg_is_a_currency_and_xxx_is_not() -> None:
+    assert prose_issues(bottom("Debt was XCG 250 million.")) == ()
+    assert found(prose_issues(bottom("Debt was XXX 250 million."))) == [(8, 7)]
+
+
 @pytest.mark.parametrize("marker", ["```", "### Method"])
 def test_marker_inside_multiline_comment_does_not_hide_later_text(marker: str) -> None:
     text = bottom("The view holds.", f"<!--\n{marker}\n-->\nSee CP-2D here.\n")

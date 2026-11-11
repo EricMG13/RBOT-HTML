@@ -1860,7 +1860,10 @@ function renderRun(r) {
   const copy = typeof r.library_report === 'string' ? r.library_report : '';
   $('run-report').hidden = !copy;
   if (copy) {
-    $('run-report-link').href = '/library/' + copy.split('/').map(encodeURIComponent).join('/');
+    // A '#...' tail is the library page's own route; only the path before it is encoded here.
+    const cut = copy.indexOf('#');
+    const path = cut < 0 ? copy : copy.slice(0, cut);
+    $('run-report-link').href = '/library/' + path.split('/').map(encodeURIComponent).join('/') + (cut < 0 ? '' : copy.slice(cut));
     $('run-report-link').textContent = r.issuer_name ? r.issuer_name + ': report' : 'Open the report';
   }
   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
