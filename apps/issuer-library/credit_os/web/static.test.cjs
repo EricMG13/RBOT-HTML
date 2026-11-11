@@ -163,8 +163,12 @@ test('Evidence: handoffs and calculations are download links; Download all is th
 test('Evidence: nothing recorded says so and invents nothing', () => {
   const none = { sources: [], unused: [], unrecorded: [], noSourcesModules: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } };
   const html = evidenceView({ r: { evidence: none } })('r');
-  for (const want of ['No handoff’s Sources section names a supplied file', 'This run holds no handoff', 'No calculation or Model file was published', 'The run records no hash', 'Provider cap: USD Not recorded']) assert.ok(html.includes(want), want);
+  for (const want of ['The run record lists no supplied files.', 'This run holds no handoff', 'No calculation or Model file was published', 'The run records no hash', 'Provider cap: USD Not recorded']) assert.ok(html.includes(want), want);
   assert.ok(!html.includes('Download all') && !html.includes('<table'));
+  assert.ok(!html.includes('Every supplied file is named') && !html.includes('Supplied, not used'), 'no supplied file recorded is not "every supplied file used"');
+  // Supplied files that a handoff names, with none left over, do say so.
+  const all = evidenceView({ r: { evidence: { ...none, sources: EVIDENCE.sources } } })('r');
+  assert.ok(all.includes('Every supplied file is named in a handoff’s Sources section.') && !all.includes('The run record lists no supplied files.'));
   assert.ok(evidenceView({ r: {} })('r').includes('No evidence record was read'));
 });
 
@@ -2068,6 +2072,18 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
   assert.ok(/function nameCodes[^]*?nameCodes\(\$\('search-results'\),null,false\)/.test(screen), 'search hits borrow no step title');
   assert.ok(/updateLibrary\([^]*?nameCodes\(\$\(id\)\)/.test(read('views.js')), 'a redrawn library is named');
   assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;if\(!keepsCodes\(current\)\)nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
+});
+
+test('names, not codes (L3): the Evidence page keeps its file names and hashes as stored: it is never passed through nameCodes', () => {
+  const screen = read('screen.js');
+  const keepsCodes = new Function('contexts', 'earlierFormat', 'isAnalytical', 'data', 'isNewFormat', `${screen.slice(screen.indexOf('const keepsCodes='), screen.indexOf('const reportPage='))}; return keepsCodes;`)(
+    { r: {} }, () => true, () => false, {}, () => false);
+  assert.equal(keepsCodes({ module: 'W-Evidence', context: 'r' }), true);
+  // The other run pages are decided as before: Forecast has no output and is not analytical; an earlier-format Overview is named.
+  assert.equal(keepsCodes({ module: 'W-Forecast', context: 'r' }), false);
+  assert.equal(keepsCodes({ module: 'W-Overview', context: 'r' }), false);
+  // Both callers skip a page that keeps its codes.
+  assert.ok(screen.includes("if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}") && screen.includes('if(!keepsCodes(current))nameCodes(content);'));
 });
 
 test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; sub-rows, semicolons, ranges, files and runbooks read right', () => {

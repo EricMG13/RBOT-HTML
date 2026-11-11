@@ -478,7 +478,8 @@ function contextPrefix({module,context}) {
   return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
 }
 // New-format handoff text is shown as written (decision 7: codes stay); an earlier-format page keeps names, not codes (the owner's standing rule).
-const keepsCodes=route=>route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections);
+// The Evidence page lists file names and hashes, which identify files: it is drawn with its names already and is never rewritten.
+const keepsCodes=route=>route.module==='W-Evidence'||(route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections));
 const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 // The reading position of a page: a module report is one page whatever part is scrolled to.
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;

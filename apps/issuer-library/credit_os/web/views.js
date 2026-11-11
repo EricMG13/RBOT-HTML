@@ -1303,13 +1303,16 @@ const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="
 const scrollRegion=(label,table)=>`<div class="table-scroll" role="region" aria-label="${esc(label)}" tabindex="0">${table}</div>`;
 const evidenceTable=(caption,heads,rows)=>scrollRegion(caption,`<table class="history-table"><caption>${esc(caption)}</caption><thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
 function evidenceSources(ev) {
+  const head='<section class="run-section" id="evidence-sources"><h2>Source files used</h2><p class="intro">Listed only: source files are not included here and page references point to the originals.</p>';
+  // A run that records no supplied file (no list in its record) is not one whose every file was used: missing is not zero.
+  if(!ev.sources.length&&!ev.unused.length&&!(ev.unrecorded||[]).length)return `${head}<p class="empty">The run record lists no supplied files.</p></section>`;
   const used=ev.sources.length?evidenceTable('Supplied files that a handoff’s Sources section names',['Name','Type','Document date','Read by'],ev.sources.map(f=>[esc(f.name),esc(shownOrNot(f.type)),esc(shownOrNot(f.documentDate)),readers(f.readBy)])):'<p class="empty">No handoff’s Sources section names a supplied file.</p>';
   const fileList=files=>`<ul class="report-list">${files.map(f=>`<li class="report-row"><span>${esc(f.name)}</span><span class="muted">${esc(shownOrNot(f.type))} · document date ${esc(shownOrNot(f.documentDate))}</span></li>`).join('')}</ul>`;
   const unused=ev.unused.length?fileList(ev.unused):'<p class="empty">Every supplied file is named in a handoff’s Sources section.</p>';
   const lacking=ev.noSourcesModules&&ev.noSourcesModules.length&&!ev.unrecorded.length?`<p class="intro">No Sources section in the handoff of ${readers(ev.noSourcesModules)}, so a file those modules read may be listed here.</p>`:'';
   const unrecorded=ev.unrecorded&&ev.unrecorded.length?`<h3>Use not recorded</h3><p class="intro">None of this run’s handoffs has a Sources section, so the run does not record which supplied files were read.</p>${fileList(ev.unrecorded)}`:'';
   const notUsed=ev.unrecorded&&ev.unrecorded.length&&!ev.unused.length?'':`<h3>Supplied, not used</h3>${lacking}${unused}`;
-  return `<section class="run-section" id="evidence-sources"><h2>Source files used</h2><p class="intro">Listed only: source files are not included here and page references point to the originals.</p>${used}${notUsed}${unrecorded}</section>`;
+  return `${head}${used}${notUsed}${unrecorded}</section>`;
 }
 function evidenceHandoffs(ev) {
   const rows=ev.handoffs.map(h=>[`${esc(moduleTitle(h.module))} <span class="module-code">${esc(h.module)}</span>`,downloadLink(h.name,h.href,`${moduleTitle(h.module)} handoff`)]);

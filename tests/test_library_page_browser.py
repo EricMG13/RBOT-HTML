@@ -1113,3 +1113,19 @@ def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route
     assert seen["pageFits"] is True
     assert seen["tables"] == seen["inRegion"] == tables
     assert seen["scrolling"] >= 1
+
+
+def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_recorded(tmp_path):
+    """L3, L4: the Hashes table shows `instructions/CP-0.md`, not a module name; a run record with no
+    supplied-file list does not claim every supplied file was used."""
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/sources?c=run-a")
+    assert console == []
+    cells = re.findall(r"<td>(instructions/[^<]*)</td>", dom)
+    assert cells == ["instructions/CP-0.md", "instructions/CP-1.md"]
+    assert "The run record lists no supplied files." in dom
+    assert "Every supplied file is named" not in dom
+    # Each handoff and instruction link stays inside library/, where the served page can open it.
+    assert 'href="downloads/run-a/CP-0.md" download' in dom
+    assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom
