@@ -7,8 +7,8 @@ Reads ``FOLDER/runs`` (default: this checkout; the Windows package needs ``--wor
 scripts, styles, fonts and icons, ``data.js`` (the catalogue and the workspace store, as data) and
 ``downloads/<run folder>/`` (the run's delivered handoffs and instruction files, byte for byte, one
 file each, and ``handoffs.zip`` for "Download all"). The runs' own files are never changed. The page
-opens from disk or served from the library folder: no network access. Which runs it lists is decided by ``deploy_workflow.library_index``.
-No analysis is run and no provider is called.
+opens from disk or served from the library folder: no network access. Which runs it lists is
+decided by ``deploy_workflow.library_index``. No analysis is run and no provider is called.
 """
 
 from __future__ import annotations

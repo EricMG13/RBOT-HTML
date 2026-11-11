@@ -159,7 +159,10 @@ def chrome() -> str:
     return found
 
 
-EARLIER_LEAD = "This run is in the earlier format: its handoffs carry no reader passages for Overview to select."
+EARLIER_LEAD = (
+    "This run is in the earlier format: "
+    "its handoffs carry no reader passages for Overview to select."
+)
 
 
 def visit(page: Path, route: str = "", width: int = 1280) -> tuple[str, list[str]]:
@@ -565,6 +568,9 @@ def nine_part_library(tmp_path: Path) -> Path:
 CODES_PROBE = """(async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [];
   const code = /\\bCP-[A-Z0-9]+\\b|\\bT\\d+[A-Z]?(?:\\.\\d+)?\\b/;
+  // A file name is the file's identity, shown as stored (Evidence's handoff and
+  // instruction names), not a module code.
+  const fileName = /^(?:instructions\\/)?CP-[A-Z0-9]+\\.md$/;
   const scan = where => {
     const walker = document.createTreeWalker(
       document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
@@ -572,7 +578,7 @@ CODES_PROBE = """(async () => {
       const node = walker.currentNode, text = node.nodeType === 3;
       const seen = text
         ? [node.parentElement.closest('script,style,#probe,.module-code')
-            ? '' : node.data]
+            || fileName.test(node.data.trim()) ? '' : node.data]
         : ['title', 'aria-label'].map(a => node.getAttribute(a) || '');
       for (const value of seen) if (code.test(value)) hits.push(where + ': ' + value.slice(0, 80));
     }
@@ -1116,8 +1122,8 @@ def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route
 
 
 def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_recorded(tmp_path):
-    """L3, L4: the Hashes table shows `instructions/CP-0.md`, not a module name; a run record with no
-    supplied-file list does not claim every supplied file was used."""
+    """L3, L4: the Hashes table shows `instructions/CP-0.md`, not a module name; a run record
+    with no supplied-file list does not claim every supplied file was used."""
     make_run(tmp_path, "run-a")
     update_library.update_library(tmp_path)
     dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/sources?c=run-a")
