@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -120,3 +121,12 @@ def test_an_earlier_bundle_whose_report_page_differs_from_its_views_is_refused(
     old = _earlier_format(comparison_files(RUN, answer(ALL_DIMENSIONS), {}), page=b"<p>other</p>")
     with pytest.raises(ValueError, match="^cp8_bundle_binding: HTML differs"):
         _comparison_bundle(tmp_path, _written(folder, old))
+
+
+def test_dimension_refusal_names_the_eight_labels() -> None:
+    labels = (
+        "Values, Periods, Assumptions, Conclusions, Sources, Limitations, "
+        "Output scope, Presentation"
+    )
+    with pytest.raises(ValueError, match=re.escape(labels)):
+        comparison_files(RUN, answer(OLD_DIMENSIONS), {})

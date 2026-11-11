@@ -9,7 +9,7 @@ them are here.
 
 ```
 Issuer source files → Run workflow (CP-OS runs the analytical modules) → Markdown handoffs →
-delivery → runs/<run>/deliveries/<id>/report.html → Update library → library/index.html
+delivery → runs/<run>/deliveries/<id>/ (no delivered page) → Update library → library/index.html
 ```
 
 Excel files are analytical inputs only; no deliverable is an Excel workbook.
@@ -17,8 +17,8 @@ Excel files are analytical inputs only; no deliverable is an Excel workbook.
 The owner's ruling of 2026-11-11 ([`docs/rulings/2026-11-11-reader-and-issuer-report.md`](docs/rulings/2026-11-11-reader-and-issuer-report.md))
 retires the delivered `report.html` as a deliverable: a report becomes one run shown natively in the
 issuer library (Report history, then Overview, Modules, Forecast and Evidence), with the HTML Model,
-charts and calculation JSON as parts of it. The code below still publishes and lists `report.html`
-until the follow-up changes land.
+charts and calculation JSON as parts of it. New runs publish no delivered `report.html`; the library
+shows each run natively, and earlier runs keep the page they were delivered with.
 
 The two steps can be run by hand (sections 1 and 2) or from the run start page (section 3), where
 an analyst uploads the issuer's documents, answers staged questions and approves a summary; Submit
@@ -68,7 +68,7 @@ uv run python -m deploy_workflow.owners.cpos_launch \
 Add `--live --ruling docs/rulings/<file>.md` to start the paid run. The ruling must name the
 selected config, and the provider key must be in the launching environment (for Copilot,
 `COPILOT_GITHUB_TOKEN`, or `COPILOT_USE_GH_LOGIN=1` to use the gh CLI login (its account pays), and `COPILOT_CLI_PATH`; see `docs/COPILOT.md`). CP-OS runs the modules in
-order and publishes `deliveries/<id>/report.html` inside the run folder.
+order and publishes the delivery (handoff files, model and calculation outputs, no report page) under `deliveries/<id>/` inside the run folder.
 
 **Web search for the research module.** CP-DR searches the web for the peers only when the
 ruling's `configs:` line also lists `web-search` (for example `configs: sol-medium, web-search`),
@@ -87,8 +87,8 @@ It rebuilds `library/` (git-ignored) as static files that open from disk: the Cr
 and, for each listed run, an issuer report with its tabs (Overview, Modules, Calendar, Forecast,
 Reports, Evidence). There are no run controls; new runs are made by the launcher, and
 `update_library.py` is the step that shows them. Each run's report is shown from a presented copy
-under `library/reports/`; the delivered report in the run folder is never changed. It lists only
-runs CP-OS completed with a verified report in which every module ran on the current methodology,
+under `library/reports/` for earlier runs that have a delivered page (a new run is shown natively and has none); the delivered files in the run folder are never changed. It lists only
+runs CP-OS completed with a verified delivery in which every module ran on the current methodology,
 and says why each other run folder is left out.
 
 ## 3. The run start page

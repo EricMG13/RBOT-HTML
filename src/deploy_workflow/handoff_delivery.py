@@ -664,7 +664,9 @@ def comparison_files(run: Run, response: bytes, inputs: dict[str, str]) -> dict[
         }
     ):
         raise ValueError(
-            "cp8_dimensions: one comparison table must cover the eight requested dimensions"
+            "cp8_dimensions: one comparison table, its first column headed `Dimension`, must "
+            "have exactly eight rows labelled Values, Periods, Assumptions, Conclusions, "
+            "Sources, Limitations, Output scope, Presentation"
         )
     if len(comparisons[0].columns) < 2 or any(
         f.status != "known" for f in facts if f.table_id == comparisons[0].table_id

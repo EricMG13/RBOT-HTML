@@ -194,9 +194,11 @@ def test_check_6_whole_token_only() -> None:
     assert prose_issues(bottom("Cases AC-1 and C-12 differ.", CALCULATIONS)) == ()
 
 
-def test_check_6_first_calculations_cell_is_an_id() -> None:
+def test_check_6_calculations_id_is_the_id_column_not_the_first_cell() -> None:
     table = "\n## Calculations\n\n| Metric | Value |\n| --- | --- |\n| M2 | 5 |\n"
-    assert found(prose_issues(bottom("Measure M2 is high.", table))) == [(6, 7)]
+    assert prose_issues(bottom("Measure M2 is high.", table)) == ()
+    keyed = "\n## Calculations\n\n| Metric | ID |\n| --- | --- |\n| Leverage | M2 |\n"
+    assert found(prose_issues(bottom("Measure M2 is high.", keyed))) == [(6, 7)]
 
 
 def test_check_6_register_id_column_anywhere() -> None:
@@ -353,3 +355,17 @@ def test_basis_line_ending_a_paragraph_or_item_stays_exempt() -> None:
 
 def test_figure_touching_a_letter_is_not_rejudged_as_its_tail() -> None:
     assert prose_issues(bottom("Revenue was USD1,250 million.")) == ()
+
+
+def test_check_6_a_calculations_first_cell_is_not_an_id_unless_its_column_is() -> None:
+    period_keyed = "\n## Calculations\n\n| Period | Value |\n| --- | --- |\n| FY2024 | 3.1x |\n"
+    assert prose_issues(bottom("FY2024 leverage is high.", period_keyed)) == ()
+    suffixed = "\n## Calculations\n\n| Run ID | Value |\n| --- | --- |\n| C-1 | 3.1x |\n"
+    assert found(prose_issues(bottom("Leverage per C-1 is high.", suffixed))) == [(6, 7)]
+
+
+def test_check_8_a_figure_with_no_unit_is_told_to_reword_or_use_a_table() -> None:
+    (issue,) = prose_issues(bottom("The issuer operates 1,200 stores."))
+    assert "reword it in words or move it to a table" in issue
+    (decimals,) = prose_issues(bottom("The ratio is 3.456%."))
+    assert "round to at most two decimals" in decimals

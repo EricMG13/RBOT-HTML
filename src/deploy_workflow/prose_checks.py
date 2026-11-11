@@ -289,25 +289,22 @@ def _cells(row: str) -> list[str]:
     return [c.strip().strip("`* ") for c in re.split(r"(?<!\\)\|", inner)]
 
 
-def _tables(text: str) -> list[tuple[bool, list[list[str]]]]:
-    """Pipe tables outside fences as (inside `## Calculations`, rows of cells)."""
-    tagged: list[tuple[bool, str | None]] = []
-    in_calculations = fenced = False
+def _tables(text: str) -> list[list[list[str]]]:
+    """Pipe tables outside fences, each as rows of cells."""
+    rows: list[str | None] = []
+    fenced = False
     for line in text.splitlines():
         if line.lstrip().startswith(FENCE):
             fenced = not fenced
-            tagged.append((in_calculations, None))
+            rows.append(None)
             continue
-        heading = None if fenced else HEADING.fullmatch(line)
-        if heading is not None and len(heading[1]) <= 2:
-            in_calculations = len(heading[1]) == 2 and heading[2] == "Calculations"
         is_row = not fenced and line.lstrip().startswith("|")
-        tagged.append((in_calculations, line if is_row else None))
+        rows.append(line if is_row else None)
     return [
-        (rows[0][0], [_cells(row) for _, row in rows if row is not None])
-        for is_row, group in groupby(tagged, key=lambda item: item[1] is not None)
+        [_cells(row) for row in run if row is not None]
+        for is_row, chunk in groupby(rows, key=lambda item: item is not None)
         if is_row
-        for rows in [list(group)]
+        for run in [list(chunk)]
     ]
 
 
@@ -322,13 +319,12 @@ def _is_id_header(header: str) -> bool:
 
 def _register_ids(text: str) -> set[str]:
     ids: set[str] = set()
-    for in_calculations, rows in _tables(text):
+    for rows in _tables(text):
         if len(rows) < 3 or not all(re.fullmatch(r":?-+:?", c) for c in rows[1]):
             continue
         id_columns = [i for i, h in enumerate(rows[0]) if _is_id_header(h)]
         for row in rows[2:]:
-            wanted = ([0] if in_calculations else []) + id_columns
-            ids.update(row[i] for i in wanted if i < len(row) and _has_letter_and_digit(row[i]))
+            ids.update(row[i] for i in id_columns if i < len(row) and _has_letter_and_digit(row[i]))
     return ids
 
 
@@ -577,7 +573,11 @@ CURRENCY_BEFORE = re.compile(r"(?:(?<![A-Za-z])(?P<code>[A-Z]{3})\s+|[$€£¥]\
 FIGURE_ADVICE = {
     "decimals": "round to at most two decimals.",
     "scale": "put a currency (`USD` or a symbol) before a scaled amount, or reword a count.",
-    "unit": "add a unit or currency (for example `USD 1,250 million`, `45%`, `3.1x`, `18 months`).",
+    "unit": (
+        "a number with no unit does not belong in a reader sentence: reword it in words or move "
+        "it to a table, or add a unit or currency if it is an amount or ratio (for example "
+        "`USD 1,250 million`, `45%`, `3.1x`, `18 months`)."
+    ),
 }
 
 

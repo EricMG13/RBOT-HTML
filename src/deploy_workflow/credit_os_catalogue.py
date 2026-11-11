@@ -242,14 +242,12 @@ def model_artifact(
     """The Forecast artifact of a delivery, pinned to a file the delivery publishes.
 
     An earlier-format delivery shows it through its report page. A newer one has no report page, so
-    the reader-facing published file (``model.html``, else ``annual.md``) is pinned instead; with
-    neither, the artifact is listed as unavailable with the reason."""
+    the reader-facing published file (``model.html``, else ``annual.md``) is pinned instead. A
+    caller reaches this only when ``forecast_published`` held, which requires ``annual.md``."""
     model = {**report, "kind": "model", "label": "Forecast"}
     if "report.html" in files:
         return {**model, "issue": "", "available": True}
-    name = next((n for n in ("model.html", "annual.md") if n in files), None)
-    if name is None:
-        return {**model, "issue": "the delivery publishes no forecast file", "available": False}
+    name = "model.html" if "model.html" in files else "annual.md"
     return {
         **model,
         "issue": "",

@@ -1115,7 +1115,7 @@ PROSE_BLOCK_START = (
     "read the source documents. After the analysis is finished, open `## Findings` with these "
     "four sections, each exactly once, in this order, before any other `## Findings` content:\n"
     "- `### Bottom line`: one or two paragraphs. The first sentence states this module's view "
-    "and its consequence for creditors.\n"
+    "and its consequence for creditors. Start it with a word, not a figure or a symbol.\n"
     "- `### Key findings`: one paragraph or one list item per finding, each starting with the "
     "judgement; give figures only where they move the view.\n"
     "- `### Contrary evidence and what would change the view`: prose giving the strongest "
@@ -1127,8 +1127,10 @@ DATA_BLOCK = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
     "read the source documents. Open `## Findings` with `### Bottom line`: one or two "
     "paragraphs whose first sentence states this module's view and its consequence for "
-    "creditors (if blocked: that it is not assessable and why). Your tables follow as the main "
-    "content, unchanged and exact.\n\n"
+    "creditors. If this module is blocked, its `### Bottom line` begins exactly "
+    "`Not assessable: ` followed by why (the exact words that mark it blocked); a module that "
+    'is not blocked must not use the words "not assessable" in its Bottom line. Your tables '
+    "follow as the main content, unchanged and exact.\n\n"
 )
 READER_LAYER_SECTIONS = (
     "docs/reuse/selected-methods/CANON_SHARED.md § Reader-facing research layer",
@@ -3641,3 +3643,26 @@ def test_each_cp3_mode_names_its_label(tmp_path, mode, label):
 
 def test_cp3_labels_cover_exactly_the_modes_the_context_allows():
     assert set(cpos_launch.CP3_MODE_LABELS) == set(typing.get_args(Cp3Mode)) - {""}
+
+
+def test_instruction_states_the_reader_voice_rulings(tmp_path):
+    texts = all_texts(tmp_path)
+    for module, text in texts.items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        assert "begins exactly `Not assessable: `" in head, module
+        assert 'must not use the words "not assessable"' in head, module
+    prose = next(t for m, t in texts.items() if m not in DATA_MODULE_IDS)
+    head = prose.partition(cpos_launch.METHOD_MARK)[0]
+    for phrase in (
+        "Name a note by its maturity and rank",
+        "Never round an exact value",
+        "basis points, percentage points, pp, times, notch(es), day(s), week(s)",
+        "does not belong in a reader sentence",
+        "- No limitation changes the conclusions of <plain module name>.",
+        "column headed `ID` or ending ` ID`",
+        "exact table header with one row stating not assessable",
+        "govern over the reader layer's table rules (6 columns and 8 body rows)",
+        "Start it with a word, not a figure or a symbol",
+        "on one line",
+    ):
+        assert phrase in head, phrase
