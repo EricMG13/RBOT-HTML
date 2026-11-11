@@ -305,7 +305,7 @@ test('(f) Calculations is a closed fold of the calculations sections, whole', ()
   const html = report().reportCalculations(OUT);
   assert.ok(!/\bopen\b/.test(/<details[^>]*id="calculations"[^>]*>/.exec(html)[0]));
   assert.equal(summaryOf(html, 'calculations'), 'Calculations · 8 words');
-  assert.ok(html.includes('id="s-56"') && html.includes('Net debt is 1,200 less 3,472.') && html.includes(`data-paragraph="${OUT}:57"`) && html.includes('aria-label="Basis for paragraph: Net debt is 1,200 less 3,472."'));
+  assert.ok(html.includes('id="s-56"') && html.includes('Net debt is 1,200 less 3,472.') && !html.includes('data-paragraph='), 'an earlier paragraph with no citation and no chip has no Basis button');
 });
 
 test('(g) a leading method code is dropped from a displayed heading and kept nowhere', () => {
@@ -349,12 +349,12 @@ test('(i) the declared status is a badge beside the acceptance badge; none decla
 
 test('(j) Analysis holds only the view sections, open, in handoff order, each with its line id', () => {
   const html = report().reportAnalysis(OUT);
-  // Decisions 7 and 14, H7 (earlier format): no chip is printed in prose; each of its two paragraphs has one quiet Basis button that opens the inspector.
+  // Decisions 7 and 14, H7 (earlier format): no chip is printed in prose; a paragraph with no citation and no chip in the build has no Basis button.
   assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>') && !html.includes('<details class="fold"'));
-  assert.equal(countOf(html, /<button type="button" class="basis-link"/g), 2);
+  assert.equal(countOf(html, /<button type="button" class="basis-link"/g), 0, 'no citation and no chip in the build: no Basis button');
   assert.ok(!/class="chips"|class="chip/.test(html) && !html.includes('basis-fold'), 'no chip is printed in prose');
   assert.deepEqual([...html.matchAll(/class="analysis-section" id="(s-\d+)"/g)].map(m => m[1]), ['s-34', 's-36']);
-  assert.ok(html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes(`data-paragraph="${OUT}:35"`) && html.includes('aria-label="Basis for paragraph: Liquidity is ample through FY2025."'));
+  assert.ok(html.includes('Liquidity is <strong>ample</strong> through FY2025.') && !html.includes('data-paragraph='));
   for (const other of ['Liquidity table', 'Debt register', 'Calculation trace', 'Coupons', 'Reader summary', 'Extra notes']) assert.ok(!html.includes(other), other);
 });
 
@@ -431,7 +431,7 @@ test('findings are articles with impact, confidence and chips', () => {
 test('limits come from the limits-placed sections with chips and their line ids; audit lists the rest by line', () => {
   const r = report();
   const limits = r.reportLimits(OUT);
-  assert.ok(limits.includes('id="s-50"') && limits.includes('Coupons are <strong>not supplied</strong>.') && limits.includes(`data-paragraph="${OUT}:52"`) && !limits.includes('class="chip'));
+  assert.ok(limits.includes('id="s-50"') && limits.includes('Coupons are <strong>not supplied</strong>.') && limits.includes(`data-paragraph="${OUT}:52"`) && !limits.includes('class="chip'), 'the build holds a chip for this paragraph, so it has a Basis button');
   const audit = r.reportAudit(OUT);
   assert.ok(audit.includes('<span>L10</span>') && audit.includes('<span>L60</span>') && audit.includes('<span>L64</span>') && !audit.includes('<span>L20</span>') && !audit.includes('Gaps &amp; limitations'));
   assert.ok(audit.includes('<details class="audit" id="audit">') && audit.includes('hidden'));
@@ -653,7 +653,7 @@ test('a reference section renders whole inside Statements and registers, in orde
   assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
   for (const line of [75, 77]) assert.ok(html.includes(`aria-label="Handoff row, line ${line}"`), line); // earlier-format table rows keep their chip column
-  for (const line of [72, 79, 82]) assert.ok(html.includes(`data-paragraph="${OUT}:${line}"`), line); // earlier-format paragraphs have a Basis button
+  assert.ok(!html.includes('data-paragraph='), 'no earlier-format paragraph here has a citation or a chip, so none has a Basis button');
   assert.ok(html.includes('class="table-card"') && !html.includes('K.'));
 });
 
@@ -1174,7 +1174,7 @@ test('module page (H4): an earlier-format handoff keeps its parts and sections, 
   assert.deepEqual(parts, NINE);
   const html = r.moduleReport(OUT);
   assert.ok(html.includes('class="band"') && html.includes('Leverage rose.') && html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes('Debt register'));
-  assert.ok(!/class="chips"/.test(r.reportAnalysis(OUT)) && countOf(r.reportAnalysis(OUT), /class="basis-link"/g) === 2, 'no chip in prose; each paragraph has its Basis button');
+  assert.ok(!/class="chips"/.test(r.reportAnalysis(OUT)) && countOf(r.reportAnalysis(OUT), /class="basis-link"/g) === 0, 'no chip in prose; no citation and no chip in the build, so no Basis button');
 });
 
 test('module page: s-<line> routes are the new-format sections that are not passages; a passage is a part', () => {

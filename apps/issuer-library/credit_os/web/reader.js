@@ -80,6 +80,30 @@ function basisItem(item) {
   return {kind: 'text', text: item};
 }
 
+// One Basis item resolved for the inspector (H3), shared by the page and its tests. `ctx` is {sections, chips, ran(code)}: the handoff's sections
+// (for `calculation <id>`), the chips the build holds for the paragraph's key, and whether a module code ran in this run. A source item takes the
+// issuer_page chips of its file (and page when it names one); a calculation item takes its `## Calculations` row (or null); a module item says
+// whether it ran; any other item is `text`, verbatim.
+function inspectorItem(raw, ctx) {
+  const item = basisItem(raw);
+  const out = {...item, raw};
+  if (item.kind === 'source') out.chips = ctx.chips.filter(c => c.kind === 'issuer_page' && c.file === item.file && (item.page === undefined || c.page === item.page));
+  else if (item.kind === 'calculation') out.row = calculationRow(ctx.sections, item.id);
+  else if (item.kind === 'module') out.ran = Boolean(ctx.ran(item.code));
+  return out;
+}
+
+// The chips of one key with a chip the build holds twice listed once (same content), in first-seen order.
+function uniqueChips(chips) {
+  const seen = new Set();
+  return chips.filter(chip => { const id = JSON.stringify(chip); return seen.has(id) ? false : (seen.add(id), true); });
+}
+
+// The inspector's Basis items for one paragraph's text (new format), in the handoff's order.
+function inspectorItems(text, ctx) {
+  return splitBasis(text).items.map(raw => inspectorItem(raw, ctx));
+}
+
 // ---- Figures (H6 check 8). A figure is a number with optional thousands commas and decimals, with its currency prefix and unit
 // suffix as written. Not figures: a number touching a letter or hyphen-joined to one (10-K, B-1, FY2024, 3rd), a four-digit year
 // 1900-2099, a date or a day/year beside a month name, a whole number below 100 that carries no currency, no symbolic unit
@@ -213,19 +237,30 @@ function paragraphBody(text, earlier = false) {
 
 // One prose paragraph's inline HTML. New format (decision 7): the Basis line is never printed; each figure of a paragraph that has Basis items or
 // chips is a button wrapping the figure's exact text; a paragraph with no figure gets one quiet Basis button at its end. Earlier format
-// (decision 14, H7): the wording stays, its trailing citations sit behind one Basis button, which every earlier paragraph has (its chips and handoff row open from it).
+// (decision 14, H7): the wording stays, its trailing citations sit behind one Basis button; an earlier paragraph with no citation and no chip in the build gets none (decision 7: nothing when neither).
 // `chips` is how many chips the build holds for the paragraph's key.
 function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
   const {item, body, items} = paragraphBody(text, earlier);
-  const referenced = earlier || items.length > 0 || chips > 0;
+  const referenced = items.length > 0 || chips > 0;
   const figures = !earlier && referenced ? figureSpans(body) : [];
+  // Each figure is replaced by a sentinel so the **bold** / `code` markup can still span it. The sentinel character is the first private-use
+  // character the paragraph does not itself contain, so no text of the handoff can be mistaken for one.
+  let sentinel = 0xE000;
+  while (body.includes(String.fromCharCode(sentinel))) sentinel += 1;
+  const mark = String.fromCharCode(sentinel);
   let marked = '', at = 0;
-  figures.forEach((figure, i) => { marked += `${body.slice(at, figure.start)}${i}`; at = figure.end; });
+  figures.forEach((figure, i) => { marked += `${body.slice(at, figure.start)}${mark}${i}${mark}`; at = figure.end; });
   marked += body.slice(at);
   const attributes = `data-paragraph="${escapeHtml(key)}" data-basis="${escapeHtml(JSON.stringify(items))}"`;
-  let html = richText(marked).replace(/(\d+)/g, (_, i) => `<button type="button" class="figure" ${attributes} data-figure="${i}">${escapeHtml(figures[Number(i)].text)}</button>`);
+  let html = richText(marked).replace(new RegExp(`${mark}(\\d+)${mark}`, 'g'), (_, i) => `<button type="button" class="figure" ${attributes} data-figure="${i}">${escapeHtml(figures[Number(i)].text)}</button>`);
   if (referenced && !figures.length) html += ` ${basisButton(key, items, `Basis for paragraph: ${plainText(body).split(/\s+/).slice(0, 8).join(' ')}`)}`;
   return {item, html};
+}
+
+// A cell of a new-format table exactly as written: a missing, dash or "Not supplied" cell is drawn as it stands, never as "n.a." (H4).
+function writtenCell(cell, numeric, after = '') {
+  const text = String(cell ?? '');
+  return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${richText(text)}${after}</td>`;
 }
 
 // A table of a new-format handoff exactly as written: its own columns and cells, none of the app's. A row the build holds chips for carries a
@@ -236,7 +271,7 @@ function tableView(caption, block, ctx) {
   const rows = block.rows.map(row => {
     const key = `${ctx.id}:${row.line}`;
     const control = ctx.chips(key) ? ` ${basisButton(key, [], `Basis for row: ${plainText(row.cells[0] ?? '')}`)}` : '';
-    return `<tr>${row.cells.map((cell, c) => cellView(cell, numeric[c], c === 0 ? control : '')).join('')}</tr>`;
+    return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '')).join('')}</tr>`;
   }).join('');
   return `<div class="table-card"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -318,4 +353,4 @@ function nearestDates(items, asOf, n = 5) {
     .slice(0, n).map(entry => entry.item);
 }
 
-if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};
+if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};

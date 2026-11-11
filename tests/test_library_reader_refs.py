@@ -129,10 +129,6 @@ def basis_items(text: str) -> list[str] | None:
     ]
 
 
-def shown(cell: str) -> str:
-    return "n.a." if cell in {"", "—", "–", "-", "Not supplied"} else cell
-
-
 def basis_data(control: dict[str, str]) -> list[str]:
     items: list[str] = json.loads(html.unescape(control["data-basis"]))
     return items
@@ -180,11 +176,8 @@ def test_every_reference_of_a_new_format_handoff_is_reachable(name: str) -> None
     # the app's), same rows.
     written = [b for section in sections for b in section["blocks"] if b["type"] == "table"]
     assert [t["headers"] for t in page.tables] == [b["headers"] for b in written]
-    # A cell that says there is no value (empty, a dash, "Not supplied") is drawn as "n.a." with the
-    # written text in its title: never as zero.
-    assert [t["rows"] for t in page.tables] == [
-        [[shown(c) for c in r["cells"]] for r in b["rows"]] for b in written
-    ]
+    # Every cell is drawn exactly as written (H4): empty, a dash and "Not supplied" included.
+    assert [t["rows"] for t in page.tables] == [[r["cells"] for r in b["rows"]] for b in written]
 
 
 EARLIER = """# CP-1 handoff
@@ -227,12 +220,16 @@ def test_earlier_format_citations_sit_behind_a_basis_control_not_in_the_sentence
     ]
     for markup, (items, sentence), block in zip(drawn, expected, blocks, strict=True):
         page = read(markup)
-        # Every earlier-format paragraph has one Basis control and no figure button; each moved
+        visible = re.sub(r"\s+", " ", "".join(page.text)).strip()
+        if not items:
+            # Ruling (a): no moved citation and no chip in the build, so no control at all.
+            assert page.controls == [] and visible == sentence and "<button" not in markup
+            continue
+        # A paragraph with citations has one Basis control and no figure button; each moved
         # citation is in its data.
         assert [c["data-paragraph"] for c in page.controls] == [f"{OUT}:{block['line']}"]
         assert 'class="basis-link"' in markup and 'class="figure"' not in markup
         assert basis_data(page.controls[0]) == items
-        visible = re.sub(r"\s+", " ", "".join(page.text)).strip()
         assert visible == f"{sentence} Basis"
         for citation in items:
             assert citation not in visible

@@ -511,7 +511,7 @@ function readingSections(id,sections,base=4) {
     const tag='h'+Math.min(6,base+(section.level-top||0));
     return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,tag)}${section.blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
-      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true}).html}</p>`;
+      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`;
     }).join('')}</div>`;
   }).join('');
 }
@@ -533,7 +533,7 @@ function reportCalculations(id) {
 }
 function reportLimits(id) {
   const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
-  const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(r=>row(`${id}:${r.line}`,r.cells[0],`<strong>${rich(r.cells[0])}</strong> ${r.cells.slice(1).map(rich).join(' · ')}`)):[`<p>${paragraphView(block.text,`${id}:${block.line}`,{earlier:true}).html}</p>`]).join('')}</div>`);
+  const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(r=>row(`${id}:${r.line}`,r.cells[0],`<strong>${rich(r.cells[0])}</strong> ${r.cells.slice(1).map(rich).join(' · ')}`)):[`<p>${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`]).join('')}</div>`);
   return cards.length?`<section class="part" id="limits"><h3>Limits &amp; monitoring</h3><div class="limits">${cards.join('')}</div></section>`:'';
 }
 // The sections no part draws, as a line-numbered list; a section's content is drawn when it is opened (screen.js). An entry is listed when a section it holds

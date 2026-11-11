@@ -967,3 +967,93 @@ def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_pat
         assert [row.split("|")[1] for row in seen["historyRows"]] == ["true", "null"]
         assert seen["historyRows"][0].startswith("31 December 2025")
         assert seen["historyRows"][1].startswith("30 June 2025")
+
+
+INSPECTOR_PROBE = Path(__file__).with_name("browser_probe_inspector.js").read_text(encoding="utf-8")
+# Hand-counted from SYNTHETIC-CP-2.md: Basis items per paragraph line (the file's own lines).
+CP2_BASIS_ITEMS_BY_PARAGRAPH = 7  # paragraphs with a Basis line
+CP2_BASIS_ITEMS = 10
+
+
+def test_the_inspector_draws_every_basis_item_of_every_paragraph_as_the_handoff_has_it(tmp_path):
+    """Reads the inspector the reader sees, not the control's data-basis: the answer key is the
+    handoff's own Basis lines (parsed here from the Markdown), item by item and in order."""
+    fixtures = ROOT / "apps/issuer-library/fixtures"
+    subprocess.run(
+        [
+            sys.executable,
+            str(fixtures / "build_synthetic_run.py"),
+            "--workspace",
+            str(tmp_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    # The synthetic run's page is built by the real entry point and method, not the stand-in.
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "apps/issuer-library/update_library.py"),
+            "--workspace",
+            str(tmp_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(INSPECTOR_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-2?c=synthetic-nbg-new-format-001")
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen, "no paragraph control on the CP-2 page"
+
+    lines = (
+        (fixtures / "synthetic-new-format/SYNTHETIC-CP-2.md")
+        .read_text(encoding="utf-8")
+        .split("\n")
+    )
+    k1 = next(line for line in lines if line.startswith("| K1 |"))
+    k1_cells = [c.strip() for c in k1.strip("|").split("|")]
+    k1_headers = ["ID", "Calculation", "Steps", "Result"]  # the Calculations table's header row
+    assert (
+        next(line for line in lines if line.startswith("| ID |")).strip("|").split("|")[0].strip()
+        == "ID"
+    )
+
+    by_line: dict[int, list[str]] = {}
+    for number, line in enumerate(lines, start=1):
+        if line.startswith("Basis: "):
+            by_line[number - 1] = [
+                i.strip() for i in line.removeprefix("Basis: ").removesuffix(".").split("; ")
+            ]
+    assert len(by_line) == CP2_BASIS_ITEMS_BY_PARAGRAPH
+    assert sum(len(v) for v in by_line.values()) == CP2_BASIS_ITEMS
+    ran = {"CP-0", "CP-1", "CP-1A", "CP-2", "CP-2D"}
+
+    drawn_lines = set()
+    for record in seen:
+        assert record["hidden"] is False, record
+        line = int(record["key"].rsplit(":", 1)[1])
+        # Each paragraph here is one line then its Basis line; the key's line is the paragraph's.
+        want = by_line.get(line)
+        if want is None:
+            continue
+        drawn_lines.add(line)
+        got = record["items"]
+        assert len(got) == len(want), (record["key"], [g["text"][:50] for g in got], want)
+        for item, drawn in zip(want, got, strict=True):
+            if item.startswith("calculation "):
+                assert drawn["cells"] == [
+                    x for pair in zip(k1_headers, k1_cells, strict=True) for x in pair
+                ], drawn
+            elif m := re.fullmatch(r"(.+) \((CP-[A-Z0-9]+)\)", item):
+                assert item in drawn["text"]
+                assert bool(drawn["links"]) == (m[2] in ran), drawn
+                assert ("Not run in this run" in drawn["text"]) == (m[2] not in ran)
+            else:
+                file, _, pages = item.partition(", page")
+                assert drawn["text"].startswith(file), (item, drawn["text"])
+                if pages:
+                    assert f"page{pages}" in drawn["text"], (item, drawn["text"])
+    assert len(drawn_lines) == CP2_BASIS_ITEMS_BY_PARAGRAPH
+    assert console == []

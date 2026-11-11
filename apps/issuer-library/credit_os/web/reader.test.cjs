@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates} = require('./reader.js');
+const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItems, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates} = require('./reader.js');
 
 // Shapes are store.py's: section {heading, level, line, blocks[]}, text block {type, line, end, text}. Expected values are literals.
 const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
@@ -276,7 +276,9 @@ test('paragraphView, earlier format: trailing citations move behind one Basis bu
   const {html} = paragraphView('Cash interest was 1,158 in FY2024 [K, page:123]. A mid-sentence [note] stays.', 'o:5', {earlier: true});
   assert.equal(visible(html), 'Cash interest was 1,158 in FY2024. A mid-sentence [note] stays. Basis');
   assert.ok(html.includes('data-basis="[&quot;[K, page:123]&quot;]"') && !html.includes('class="figure"'));
-  assert.ok(paragraphView('Plain earlier paragraph.', 'o:6', {earlier: true}).html.includes('class="basis-link"'), 'its chips and handoff row open from it');
+  // Ruling (a): no moved citation and no chip in the build (the handoff-row chip is not one) means no Basis button.
+  assert.equal(paragraphView('Plain earlier paragraph.', 'o:6', {earlier: true}).html, 'Plain earlier paragraph.');
+  assert.ok(paragraphView('Plain earlier paragraph.', 'o:6', {earlier: true, chips: 1}).html.includes('class="basis-link"'), 'a chip of the build opens from it');
 });
 
 test('paragraphBody: the Basis items and the body on one line', () => {
@@ -299,10 +301,12 @@ test('sectionBodyHtml: list items share one list, paragraphs stand alone, tables
   assert.ok(!sectionBodyHtml(section, {...ctx, tables: false}).includes('<table>'));
 });
 
-test('tableView: a missing cell is n.a. with the written text in its title; a numeric column aligns', () => {
+test('tableView (H4): a missing cell is drawn as written, never "n.a."; a numeric column aligns', () => {
   const html = tableView('T', {headers: ['Item', 'Value'], rows: [{line: 1, cells: ['A', '1,200']}, {line: 2, cells: ['B', '—']}]}, {id: 'o', chips: () => 0});
   assert.ok(html.includes('<th scope="col" class="num">Value</th>') && html.includes('<td class="num">1,200</td>'));
-  assert.ok(html.includes('<td class="num"><span class="na" title="—">n.a.</span></td>'));
+  assert.ok(html.includes('<td class="num">—</td>') && !html.includes('n.a.'));
+  const blank = tableView('T', {headers: ['Item', 'Value'], rows: [{line: 1, cells: ['A', '']}, {line: 2, cells: ['B', 'Not supplied']}]}, {id: 'o', chips: () => 0});
+  assert.ok(blank.includes('<td></td>') && blank.includes('<td>Not supplied</td>') && !blank.includes('n.a.'));
 });
 
 test('calculationRow: the row of the Calculations table whose ID column equals the id, headers and cells as written', () => {
@@ -317,4 +321,39 @@ test('calculationRow: the row of the Calculations table whose ID column equals t
   assert.equal(calculationRow(sections, 'K4'), null, 'a table outside Calculations is not searched');
   assert.equal(calculationRow(sections.slice(0, 1), 'K1'), null);
   assert.equal(calculationRow(sections, 'K9'), null);
+});
+
+test('inspectorItems: a paragraph\'s Basis items resolved in the handoff\'s order (the list the inspector draws)', () => {
+  const sections = [{heading: 'Calculations', level: 2, line: 5, blocks: [{type: 'table', line: 6, headers: ['ID', 'Steps'], rows: [{line: 8, cells: ['K1', 'a less b']}]}]}];
+  const chip = {kind: 'issuer_page', file: 'A.pdf', page: 7};
+  const other = {kind: 'issuer_page', file: 'A.pdf', page: 8};
+  const ctx = {sections, chips: [chip, other], ran: code => code === 'CP-1'};
+  const items = inspectorItems('- Debt is 4.2x.\nBasis: A.pdf, page 7; B.pdf; calculation K1; calculation K9; Foundation (CP-1); Ghost (CP-9Z); odd text.', ctx);
+  assert.deepEqual(items.map(i => i.raw), ['A.pdf, page 7', 'B.pdf', 'calculation K1', 'calculation K9', 'Foundation (CP-1)', 'Ghost (CP-9Z)', 'odd text']);
+  assert.deepEqual(items.map(i => i.kind), ['source', 'source', 'calculation', 'calculation', 'module', 'module', 'text']);
+  assert.deepEqual(items[0].chips, [chip], 'a page-named source takes only that page\'s chips');
+  assert.deepEqual(items[1].chips, [], 'another file\'s chips are not taken');
+  assert.deepEqual(inspectorItems('x\nBasis: A.pdf', ctx)[0].chips, [chip, other], 'a source without a page takes the file\'s chips');
+  assert.deepEqual(items[2].row, {headers: ['ID', 'Steps'], cells: ['K1', 'a less b'], line: 8});
+  assert.equal(items[3].row, null);
+  assert.deepEqual([items[4].ran, items[5].ran], [true, false]);
+  assert.deepEqual(inspectorItems('No basis here.', ctx), []);
+});
+
+test('paragraphView: text holding the private-use marker characters is drawn as written, one button per figure', () => {
+  for (const digit of ['0', '7']) {
+    const html = paragraphView(`Code \uE000${digit}\uE001 then 4.2x leverage.\nBasis: a.pdf`, 'k:1').html;
+    assert.equal((html.match(/class="figure"/g) || []).length, 1);
+    assert.ok(html.includes(`Code \uE000${digit}\uE001 then <button`), html);
+    assert.ok(html.includes('>4.2x</button> leverage.'));
+  }
+  const plain = paragraphView('Code 7 then 4.2x leverage.\nBasis: a.pdf', 'k:2').html;
+  assert.ok(plain.startsWith('Code 7 then <button') && (plain.match(/class="figure"/g) || []).length === 1);
+});
+
+test('uniqueChips: a chip the build holds twice is listed once, in first-seen order; distinct chips stay', () => {
+  const a = {kind: 'issuer_page', file: 'A.pdf', page: 7, quote: 'x'};
+  const b = {kind: 'issuer_page', file: 'A.pdf', page: 8, quote: 'x'};
+  assert.deepEqual(uniqueChips([a, b, {...a}, {kind: 'gap', label: 'Citation gap'}, {kind: 'gap', label: 'Citation gap'}, {...b}]), [a, b, {kind: 'gap', label: 'Citation gap'}]);
+  assert.deepEqual(uniqueChips([]), []);
 });

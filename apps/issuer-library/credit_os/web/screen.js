@@ -335,26 +335,25 @@ function chipSection(chip,output) {
 const itemPages=item=>item.pageEnd!==undefined?`pages ${item.page}–${item.pageEnd}`:item.page!==undefined?`page ${item.page}`:'';
 // One Basis item of a new-format paragraph in words, resolved where the data allows (H3). `used` collects the chips an item took.
 function basisItemHtml(raw,output,chips,used) {
-  const item=basisItem(raw);
+  const item=inspectorItem(raw,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)}); // reader.js: the same resolution the tests read
   if(item.kind==='source') {
-    const matched=chips.filter(c=>c.kind==='issuer_page'&&c.file===item.file&&(item.page===undefined||c.page===item.page));
-    matched.forEach(c=>used.add(c));
-    return `<li><strong>${esc(item.file)}</strong>${itemPages(item)?`, ${esc(itemPages(item))}`:''}${matched.map(c=>chipSection(c,output)).join('')}</li>`;
+    item.chips.forEach(c=>used.add(c));
+    return `<li><strong>${esc(item.file)}</strong>${itemPages(item)?`, ${esc(itemPages(item))}`:''}${item.chips.map(c=>chipSection(c,output)).join('')}</li>`;
   }
   if(item.kind==='calculation') {
-    const row=calculationRow(output.sections,item.id);
+    const row=item.row;
     return row?`<li>Calculation ${esc(item.id)}<dl class="calculation-row">${row.headers.map((header,i)=>`<div><dt>${esc(header)}</dt><dd>${rich(row.cells[i]??'')}</dd></div>`).join('')}</dl></li>`
       :`<li>${esc(raw)}<span class="small"> (no row with this ID in the handoff's Calculations table)</span></li>`;
   }
   if(item.kind==='module') {
-    const run=output.run,id=defaultOutput(item.code,run);
-    return id?`<li><a class="text-action" href="${moduleHref(item.code)}">${esc(raw)}${icon('arrow-right')}</a></li>`:`<li>${esc(raw)}<span class="small"> · Not run in this run</span></li>`;
+    return item.ran?`<li><a class="text-action" href="${moduleHref(item.code)}">${esc(raw)}${icon('arrow-right')}</a></li>`:`<li>${esc(raw)}<span class="small"> · Not run in this run</span></li>`;
   }
   return `<li>${esc(raw)}</li>`;
 }
 // The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
 // in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
 function paragraphBasisHtml(key,item,output,mode,chips) {
+  chips=uniqueChips(chips);
   const earlier=!isNewFormat(output.sections),used=new Set();
   let figure='',items='';
   if(item.text!==undefined) {
