@@ -37,6 +37,12 @@ from a checkout) serves the start page. Analysts open `http://<address>:8765/`, 
 documents, answer the staged questions, approve the summary and choose Submit; Submit starts a
 paid run. The root README (section 3) has the stages, the three levels and the steps.
 
+The summary joins the launcher's forecast with the page's own rules (the worse outcome per module,
+both reasons). Approval needs a tick for every Gap, Limited and Will refuse item from either
+source, and for every Check that has a fix (a stage to go to); Ready, Note and a Check with
+nothing the analyst can do need none. An as-of date before the newest document and a legal answer
+the launcher's reading disagrees with are Limited for the whole run.
+
 - **Address:** `127.0.0.1` unless one is given; pass this machine's own address to serve
   colleagues. `0.0.0.0` is refused. The service also serves the library and Run activity,
   read-only; `../runs/...` download links are not served.

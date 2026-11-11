@@ -149,7 +149,7 @@ it, and a later stage stays locked while an earlier one has an error.
    executed) and which files it will not read. Each kind the pathway uses and the folder lacks is
    listed as a limitation with the module it affects.
 3. **Issuer and dates.** Issuer name and ID (at most 40 characters), as-of date, periods and
-   currency. An as-of date before the newest document is a limit you must tick.
+   currency. An as-of date before the newest document is a limit for the whole run, and you must tick it on the summary.
 4. **Legal.** Where CP-4, CP-2A or CP-4C runs: choose the uploaded agreement file, or say there is
    none. `executed` and `draft` can be chosen only by selecting a file.
 5. **Market and ratings.** Standard and Advanced.
@@ -158,7 +158,13 @@ it, and a later stage stays locked while an earlier one has an error.
 7. **Assumptions and questions.** Research questions at Standard; pinned assumptions at Advanced.
 8. **Summary.** The forecast for each module in run order (Ready, Check, Gap, Limited or Will
    refuse), with the reason and the stage that fixes it, and each defaulted input with its
-   default. Approval needs one tick per remaining limit; an error blocks approval.
+   default. The table joins the launcher's forecast and the page's own rules; where both speak of a
+   module it shows the worse outcome and both reasons. Approval needs one tick for every Gap,
+   Limited and Will refuse item, from either source, and for every Check that has a fix (a stage to
+   go to: "I have checked this"). Ready, Note and a Check with nothing you can do need none. A
+   legal answer the launcher's reading disagrees with, and an as-of date before the newest
+   document, are Limited for the whole run. On an earnings run, fewer than two recognised reporting
+   periods is a Check that links to Documents. An error blocks approval.
 9. **Submit.** Starts the run; the page moves to its progress in Run activity.
 
 Submit is refused if a file, an answer, the module list or the turns changed after the summary, and

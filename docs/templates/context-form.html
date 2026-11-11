@@ -1192,47 +1192,50 @@ const OUTCOMES = ['will_refuse', 'gap', 'limited', 'check', 'information', 'read
 const WORD = {will_refuse:'Will refuse', gap:'Gap', limited:'Limited', check:'Check', information:'Note', ready:'Ready'};
 const worst = list => list.reduce((a, b) => OUTCOMES.indexOf(a) <= OUTCOMES.indexOf(b) ? a : b, 'ready');
 const PEER_GAP = {none:'No peer source: no peer universe and no peer multiple.', user_list:'Named peers only: nothing looks up their figures in this run (the research module joins only when it finds the peers), so the benchmark has no peer figures.'};
+// The modules of this run among the ones a run-level limit names.
+const affected = (f, modules, otherwise) => modules.filter(f.has).join(', ') || otherwise;
 // Live evidence behind the wording: tdg-forecast-003 and -004 (legal declaration, CP-2A), and
 // cpos-tdg-sol-medium-all-001 (as-of 2024-09-30; CP-2G left out the December-quarter results).
 const RULES = [
-  {s:'run', o:'check', c:f => validDate(f.newest) && validDate(f.o.run.as_of) && f.o.run.as_of < f.newest, r:f => `The as-of date (${f.o.run.as_of}) is before your newest file (${f.newest}): modules may set that file aside as not yet available (in a TDG run as of 2024-09-30, the forecast module left out the December-quarter results).`, fix:'Use a date on or after the newest file.', go:'issuer'},
+  {s:'run', o:'limited', c:f => validDate(f.newest) && validDate(f.o.run.as_of) && f.o.run.as_of < f.newest, r:f => `The as-of date (${f.o.run.as_of}) is before your newest file (${f.newest}): modules may set that file aside as not yet available (in a TDG run as of 2024-09-30, the forecast module left out the December-quarter results). Affected: ${affected(f, ['CP-1', 'CP-1B', 'CP-2G'], 'the modules that read that file')}.`, fix:'Use a date on or after the newest file.', go:'issuer'},
   {s:'run', o:'check', c:f => { const e = calEnd(f.o.run.current_period); return !!e && validDate(f.o.run.as_of) && f.o.run.as_of <= e; }, r:f => `The as-of date (${f.o.run.as_of}) is not after the end of ${f.o.run.current_period} (${calEnd(f.o.run.current_period)}, for a calendar fiscal year): its report cannot have been published yet.`, fix:'Use the date you run the analysis, or check the period.', go:'issuer'},
-  {s:'run', o:'information', c:f => f.o.identity.issue_classification === 'investment_grade', r:'Investment grade: the methods are written for high-yield and leveraged-loan credit. The run notes this; whether it changes a conclusion is not asserted.', go:'issuer'},
-  {s:'CP-1', o:'check', c:f => f.chk.fin === 'no', r:'No filed financial report among the documents: financials would rest on management claims.', fix:'Add the annual or quarterly report.', go:'documents'},
-  {s:'CP-1', o:'limited', np:true, c:f => /^[A-Z]{3}$/.test(f.o.run.reporting_currency) && f.o.run.reporting_currency !== 'USD', r:'Not USD: the report\'s chart strip is US$ millions only; its money cells read "Not supplied".', fix:'Nothing to add; the report states the limit.', go:'issuer'},
-  {s:'CP-1B', o:'check', nc:true, c:f => f.chk.periods === '', r:'Whether the documents hold the report for each of the two periods is confirmed when the summary is made.'},
+  {s:'run', k:'investment-grade', o:'information', c:f => f.o.identity.issue_classification === 'investment_grade', r:'Investment grade: the methods are written for high-yield and leveraged-loan credit. The run notes this; whether it changes a conclusion is not asserted.', go:'issuer'},
+  {s:'CP-1', k:'cp1-no-financial-report-recognised', o:'check', c:f => f.chk.fin === 'no', r:'No filed financial report among the documents: financials would rest on management claims.', fix:'Add the annual or quarterly report.', go:'documents'},
+  {s:'CP-1', k:'chart-strip-usd', o:'limited', np:true, c:f => /^[A-Z]{3}$/.test(f.o.run.reporting_currency) && f.o.run.reporting_currency !== 'USD', r:'Not USD: the report\'s chart strip is US$ millions only; its money cells read "Not supplied".', fix:'Nothing to add; the report states the limit.', go:'issuer'},
+  // Owner ruling 2026-11-11: only the reading's period ends decide this; with two or more recognised the page claims nothing.
+  {s:'CP-1B', o:'check', c:f => !!READING && READING.documents.length > 0 && f.periodEnds < 2, r:'Only one reporting period was recognised in the documents. The earnings comparison needs the prior period\'s report.', fix:'Add the prior period\'s report to the documents.', go:'documents'},
   // Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they specifically
   // want to in the context file." The research module searches the web only when the run's ruling lists
   // web-search (owners/cpos.py WEB_SEARCH_GRANT); without it, in live run tdg-all-001, it came back
   // Blocked and the peer benchmark had no peers.
   {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web only when the run\'s ruling allows it (web-search). Without that it cannot reach public sources: in a TDG run it came back Blocked and the peer benchmark had no peers. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
-  {s:'CP-1C', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
+  {s:'CP-1C', k:'cp1c-no-peer-source', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
   {s:'CP-1C', o:'gap', c:f => f.o.valuation.basis === 'auto' && f.o.valuation.peer_source === 'user_comps' && f.peersIn < MIN_ADMITTED && f.precIn < MIN_ADMITTED,
     r:f => `Automatic basis: ${f.peersIn} peer${f.peersIn === 1 ? '' : 's'} admitted (needs ${MIN_ADMITTED}, at most ${PEER_MONTHS} months old) and ${f.precIn} precedent${f.precIn === 1 ? '' : 's'} (needs ${MIN_ADMITTED}, at most ${PRECEDENT_MONTHS} months old): no multiple is selected.`, fix:'Add peers or precedents, or choose another basis.', go:'valuation'},
   {s:'CP-1D', o:'limited', c:f => f.raw.bridge === 'no', r:'No management EBITDA bridge chosen: every bridge cell is not applicable (a TDG run came back Restricted this way).', fix:'Add the bridge to the documents and choose it under Issuer and dates.', go:'issuer'},
-  {s:'CP-2', o:'gap', c:f => f.o.run.run_type === 'primary' && !f.has('CP-1D'), r:'A new issue without Earnings quality in the run: the pro forma base row has no add-back verdicts.', fix:'Nothing to add in this pathway; read the pro forma base as unverified.'},
+  {s:'CP-2', k:'cp2-primary-no-cp1d', o:'gap', c:f => f.o.run.run_type === 'primary' && !f.has('CP-1D'), r:'A new issue without Earnings quality in the run: the pro forma base row has no add-back verdicts.', fix:'Nothing to add in this pathway; read the pro forma base as unverified.'},
   {s:'CP-2A', o:'limited', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the downside path has no covenant or financing-document evidence (a TDG run came back Restricted this way).', fix:'Add the executed agreement if you have it, and choose it under Legal.', go:'legal'},
   {s:'CP-2D', o:'limited', c:f => f.o.deal_terms.some(d => d.currency && d.currency !== f.o.run.reporting_currency), r:'A facility is in another currency than the reporting currency: it is not calculable (no FX conversion).', fix:'Nothing to add; read that facility as excluded.', go:'market'},
-  {s:'CP-2G', o:'check', nc:true, c:f => f.chk.guidance === '', r:'Whether the documents state company guidance is confirmed when the summary is made.'},
+  {s:'CP-2G', o:'check', nc:true, c:f => f.chk.guidance === '', r:'Whether the documents state company guidance is confirmed when the summary is made.', rv:'Whether the documents state company guidance is not checked before the run: Source readiness checks it during the run.'},
   {s:'CP-2G', o:'check', c:f => { const b = pkey(f.o.run.current_period); return b && !(b.kind === 'fy' || b.kind === 'q' && b.n === 4); }, r:'The forecast base is not a fiscal year: the model forecasts the three fiscal years after it.', fix:'Use fy-YYYY or q4-YYYY as the current period.', go:'issuer'},
-  {s:'CP-2H', o:'gap', c:f => !f.o.ratings.length && f.chk.ratingsfile !== 'yes', r:'No ratings entered and no rating report in the folder: Insufficient Information.', fix:'Enter the ratings under Market, or add the agency report to the documents.', go:'market'},
+  {s:'CP-2H', k:'cp2h-no-ratings', o:'gap', c:f => !f.o.ratings.length && f.chk.ratingsfile !== 'yes', r:'No ratings entered and no rating report in the folder: Insufficient Information.', fix:'Enter the ratings under Market, or add the agency report to the documents.', go:'market'},
   {s:'CP-2H', o:'gap', c:f => ratingProblems(f.o.ratings).length > 0, r:'A rating row it cannot place (another agency, two rows for one agency, or a rating off the scale): the ratings are set aside.', fix:'One row per agency (S&P, Moody\'s, Fitch), each rating as the agency writes it.', go:'market'},
   {s:'CP-2H', o:'check', c:f => f.o.ratings.length > 0 && f.chk.ratingsfile === 'no', r:'No rating report in the folder: rating-linked trigger terms are not found.', fix:'Add the agency report if triggers matter.', go:'documents'},
-  {s:'CP-3', o:'limited', c:f => f.talk && !f.observed, r:'Price talk only: relative-value confidence is capped below High.', fix:'Add an observed quote.', go:'market'},
-  {s:'CP-3', o:'gap', c:f => !f.o.quotes.length && !f.talk && f.chk.quotesfile !== 'yes', r:'No quotes and no price talk: relative value states Insufficient Information.', fix:'Enter quotes under Market, or add a quotes file.', go:'market'},
+  {s:'CP-3', k:'cp3-talk-no-observed-quote', o:'limited', c:f => f.talk && !f.observed, r:'Price talk only: relative-value confidence is capped below High.', fix:'Add an observed quote.', go:'market'},
+  {s:'CP-3', k:'cp3-no-quotes-no-talk', o:'gap', c:f => !f.o.quotes.length && !f.talk && f.chk.quotesfile !== 'yes', r:'No quotes and no price talk: relative value states Insufficient Information.', fix:'Enter quotes under Market, or add a quotes file.', go:'market'},
   {s:'CP-3', o:'limited', c:f => f.observed && f.fresh === 0, r:`Every observed quote is more than ${STALE_DAYS} days old: stale, confidence capped.`, fix:'Add a recent quote.', go:'market'},
-  {s:'CP-3D', o:'gap', c:f => !f.o.quotes.length && f.chk.quotesfile !== 'yes', r:'No quotes: nothing for market-implied risk to read.', fix:'Enter quotes under Market, or add a quotes file.', go:'market'},
-  {s:'CP-4', o:'will_refuse', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the method stops with "No executed governing document".', fix:'Add the executed agreement (or its EDGAR Ex-10/Ex-4 exhibit) to the documents and choose it under Legal, or choose a pathway without Legal & covenants.', go:'legal'},
+  {s:'CP-3D', k:'cp3d-no-quotes', o:'gap', c:f => !f.o.quotes.length && f.chk.quotesfile !== 'yes', r:'No quotes: nothing for market-implied risk to read.', fix:'Enter quotes under Market, or add a quotes file.', go:'market'},
+  {s:'CP-4', k:'cp4-declared-none', o:'will_refuse', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the method stops with "No executed governing document".', fix:'Add the executed agreement (or its EDGAR Ex-10/Ex-4 exhibit) to the documents and choose it under Legal, or choose a pathway without Legal & covenants.', go:'legal'},
   // The launcher's rules for the legal answer (run_expectations.RULES, cp4-*): they read the whole set of
   // documents, so each one is judged on the launcher's reading of every file, not on the chosen file alone.
-  {s:'CP-4', o:'check', c:f => f.legal === 'executed' && !!READING && !f.execAgr, r:f => `You declared ${f.legalFile || 'an agreement'} executed, but the launcher recognises no executed credit agreement or indenture among the files${f.legalFile ? ` (${legalRead(f.legalFile)})` : ''}.`, fix:'Add the executed agreement and choose it under Legal.', go:'legal'},
-  {s:'CP-4', o:'check', c:f => f.legal === 'draft' && !!READING && !f.draftAgr, r:f => `You declared ${f.legalFile || 'an agreement'} a draft, but the launcher recognises no draft credit agreement or indenture among the files${f.legalFile ? ` (${legalRead(f.legalFile)})` : ''}.`, fix:'Add the draft agreement to the documents.', go:'legal'},
-  {s:'CP-4', o:'limited', c:f => f.legal !== 'none' && (f.legal === 'draft' || f.o.run.run_type === 'primary') && !f.execAgr, r:'Legal terms are Provisional: the run is a new issue or the legal documents are drafts, and the launcher recognises no executed agreement.', fix:'Add the executed agreement when it exists.', go:'legal'},
-  {s:'CP-4', o:'limited', c:f => f.legal !== 'none' && f.kinds.includes('amendment') && !f.kinds.some(k => AGREEMENTS.includes(k)), r:'Only an amendment is recognised and no base agreement, so the amendment alone cannot show the covenants it changes.', fix:'Add the base credit agreement or indenture.', go:'documents'},
-  {s:'CP-4', o:'limited', c:f => f.legal !== 'none' && ['secondary', 'research'].includes(f.o.run.run_type) && !f.kinds.some(k => AGREEMENTS.includes(k)) && !!f.om && f.om.executed !== false, r:'Governing terms would rest on a final offering memorandum, which is a summary, not the governing document.', fix:'Add the executed agreement or indenture.', go:'documents'},
+  {s:'CP-4', k:'cp4-declared-executed-none-recognised', o:'check', c:f => f.legal === 'executed' && !!READING && !f.execAgr, r:f => `You declared ${f.legalFile || 'an agreement'} executed, but the launcher recognises no executed credit agreement or indenture among the files${f.legalFile ? ` (${legalRead(f.legalFile)})` : ''}.`, fix:'Add the executed agreement and choose it under Legal.', go:'legal'},
+  {s:'CP-4', k:'cp4-declared-draft-none-recognised', o:'check', c:f => f.legal === 'draft' && !!READING && !f.draftAgr, r:f => `You declared ${f.legalFile || 'an agreement'} a draft, but the launcher recognises no draft credit agreement or indenture among the files${f.legalFile ? ` (${legalRead(f.legalFile)})` : ''}.`, fix:'Add the draft agreement to the documents.', go:'legal'},
+  {s:'CP-4', k:'cp4-declared-draft-or-primary-no-executed-agreement', o:'limited', c:f => f.legal !== 'none' && (f.legal === 'draft' || f.o.run.run_type === 'primary') && !f.execAgr, r:'Legal terms are Provisional: the run is a new issue or the legal documents are drafts, and the launcher recognises no executed agreement.', fix:'Add the executed agreement when it exists.', go:'legal'},
+  {s:'CP-4', k:'cp4-only-amendment', o:'limited', c:f => f.legal !== 'none' && f.kinds.includes('amendment') && !f.kinds.some(k => AGREEMENTS.includes(k)), r:'Only an amendment is recognised and no base agreement, so the amendment alone cannot show the covenants it changes.', fix:'Add the base credit agreement or indenture.', go:'documents'},
+  {s:'CP-4', k:'cp4-governing-terms-rest-on-final-om', o:'limited', c:f => f.legal !== 'none' && ['secondary', 'research'].includes(f.o.run.run_type) && !f.kinds.some(k => AGREEMENTS.includes(k)) && !!f.om && f.om.executed !== false, r:'Governing terms would rest on a final offering memorandum, which is a summary, not the governing document.', fix:'Add the executed agreement or indenture.', go:'documents'},
   // The analyst points to a file; the launcher's own reading of it decides the forecast, and a disagreement is a limit to tick.
-  {s:'run', o:'check', c:f => f.legalIssue !== '', r:f => f.legalIssue, fix:'Choose the file that is the agreement, or say there is none.', go:'legal'},
-  {s:'CP-6', o:'gap', c:f => f.o.run.pathway === 'portfolio_decision' && f.raw.workbook === 'no', r:'No portfolio workbook chosen: portfolio fit shows gaps.', fix:'Add the workbook to the documents and choose it under Issuer and dates.', go:'issuer'}
+  {s:'run', o:'limited', c:f => f.legalIssue !== '', r:f => `${f.legalIssue} Affects: ${affected(f, ['CP-4', 'CP-2A', 'CP-4C'], 'the legal modules')}.`, fix:'Choose the file that is the agreement, or say there is none.', go:'legal'},
+  {s:'CP-6', k:'portfolio-workbook-false', o:'gap', c:f => f.o.run.pathway === 'portfolio_decision' && f.raw.workbook === 'no', r:'No portfolio workbook chosen: portfolio fit shows gaps.', fix:'Add the workbook to the documents and choose it under Issuer and dates.', go:'issuer'}
 ];
 // What the service's reading says of the documents, in the terms the rules below use: 'yes' when a
 // document of that kind was read, 'no' when the reading is in and none was, '' until then.
@@ -1274,7 +1277,8 @@ function readiness(o) {
     peersIn: admitted(o.valuation.peers, 'as_of', PEER_MONTHS, o.run.as_of),
     precIn: admitted(o.valuation.precedents, 'date', PRECEDENT_MONTHS, o.run.as_of)};
   f.newest = getC('newest');
-  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, np:!!r.np, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', counted: r.o !== 'information' && !r.nc}));
+  f.periodEnds = new Set(docs.filter(d => FINANCIAL_KINDS.includes(d.kind) && d.period_end).map(d => d.period_end)).size;
+  const fired = RULES.filter(r => (r.s === 'run' || has(r.s)) && r.c(f)).map(r => ({scope:r.s, outcome:r.o, np:!!r.np, reason: typeof r.r === 'function' ? r.r(f) : r.r, fix:r.fix || '', go:r.go || '', key:r.k || '', review:r.rv || '', counted: r.o !== 'information' && !r.nc}));
   const effective = {}, mods = [];
   for (const m of order) {
     const own = fired.filter(x => x.scope === m), items = own.slice();
@@ -1283,7 +1287,7 @@ function readiness(o) {
     const reach = Object.entries(EDGES[m] || {}).filter(([p]) => p in effective).map(([p, e]) => [p, effective[p] === 'limited' || e === 'r' ? 'limited' : 'will_refuse']);
     if (reach.length) {
       const w = worst(reach.map(x => x[1]));
-      items.push({scope:m, outcome:w, reason:`Reads ${reach.map(x => mname(x[0])).join(', ')}: expected to be ${WORD[w].toLowerCase()} through ${reach.length > 1 ? 'them' : 'it'}.`, fix:'', go:'', counted:false, inherited:true});
+      items.push({scope:m, outcome:w, key:'', reason:`Reads ${reach.map(x => mname(x[0])).join(', ')}: expected to be ${WORD[w].toLowerCase()} through ${reach.length > 1 ? 'them' : 'it'}.`, fix:'', go:'', counted:false, inherited:true});
       levels.push(w);
     }
     if (levels.length) effective[m] = worst(levels);
@@ -1568,7 +1572,7 @@ function renderPanel(o, R) {
   setHTML($('pn-tally'), tally(R));
   setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(x.reason)}</li>`).join('')}</ul></div>` : '');
   setHTML($('pn-mods'), readyList(R));
-  const bad = R.mods.filter(m => m.status === 'will_refuse').length, gaps = R.mods.filter(m => ['gap', 'limited'].includes(m.status)).length;
+  const bad = R.mods.filter(m => m.status === 'will_refuse').length, gaps = R.mods.filter(m => ['gap', 'limited'].includes(m.status)).length + (R.run.some(x => ['gap', 'limited'].includes(x.outcome)) ? 1 : 0);
   // Only checks with a fix the analyst can act on: "confirmed when the summary is made" is not counted.
   const acts = x => x.outcome === 'check' && x.counted;
   const checks = R.mods.filter(m => m.items.some(acts)).length + (R.run.some(acts) ? 1 : 0);
@@ -1698,8 +1702,22 @@ function renderState() {
     box.append(p);
   }
 }
+// The stage that fixes an item: the page's own rule names it; the service's id is <scope>:<rule key>.
+const stageOf = item => item.go !== undefined ? item.go : STAGE_OF_RULE[item.id.slice(item.id.indexOf(':') + 1)] || '';
+const hasFix = item => { const stage = stageOf(item); return !!stage && stage !== 'review'; };
+// A tick is asked for every gap, limited and will-refuse item, from either source, and for a check the analyst can fix.
+const needsTick = item => NEEDS_TICK.includes(known(item.outcome)) || known(item.outcome) === 'check' && hasFix(item);
+// The page's own forecast, as items for the review. Where the service gave the same rule (or an inherited
+// row for the same module) at the same or a worse outcome, that one stands for it, so a limit is not ticked twice.
+function pageItems(o, modules, service) {
+  const R = readiness(o), rank = x => OUTCOMES.indexOf(known(x));
+  const own = [...R.run, ...R.mods.filter(m => modules.includes(m.id)).flatMap(m => m.items)];
+  const covered = x => service.some(sv => sv.scope === x.scope && rank(sv.outcome) <= rank(x.outcome) &&
+    (x.inherited ? sv.inherited_from && sv.inherited_from.length : !!x.key && sv.id === `${x.scope}:${x.key}`));
+  return own.filter(x => !covered(x)).map((x, i) => ({id: `page:${x.scope}:${i}`, scope: x.scope, outcome: x.outcome, reason: x.review || x.reason, fix: x.fix, go: x.go}));
+}
 function itemRow(item, sq) {
-  const stage = STAGE_OF_RULE[item.id.slice(item.id.indexOf(':') + 1)] || ''; // the service's id is <scope>:<rule key>
+  const stage = stageOf(item);
   const li = h('p', {}, h('span', {textContent: item.reason}));
   if (item.fix) li.append(h('span', {className: 'fix'}, h('b', {textContent: 'Fix: '}), item.fix));
   if (stage && stage !== 'review') {
@@ -1707,16 +1725,17 @@ function itemRow(item, sq) {
     li.append(' ', button(hidden ? 'Answer this now' : 'Go to ' + SHORT[stage], hidden ? {goto: stage, now: stage} : {goto: stage}));
   }
   if (!OUTCOMES.includes(item.outcome)) li.append(' ', h('span', {className: 'muted', textContent: 'Unrecognised outcome: ' + String(item.outcome)}));
-  if (NEEDS_TICK.includes(known(item.outcome))) li.append(h('label', {className: 'rv-tick'}, h('input', {type: 'checkbox'}), h('span', {textContent: 'I accept this limit.'})));
+  if (needsTick(item)) li.append(h('label', {className: 'rv-tick'}, h('input', {type: 'checkbox'}), h('span', {textContent: known(item.outcome) === 'check' ? 'I have checked this.' : 'I accept this limit.'})));
   const tick = li.querySelector('input');
   if (tick) tick.dataset.tick = item.id;
   return li;
 }
-function readyTable(sq) {
-  const scopes = [...new Set(SUMMARY.items.map(i => i.scope))], order = [...(scopes.includes('run') ? ['run'] : []), ...SUMMARY.modules, ...scopes.filter(x => x !== 'run' && !SUMMARY.modules.includes(x))];
+function readyTable(sq, own = []) {
+  const all = [...SUMMARY.items, ...own];
+  const scopes = [...new Set(all.map(i => i.scope))], order = [...(scopes.includes('run') ? ['run'] : []), ...SUMMARY.modules, ...scopes.filter(x => x !== 'run' && !SUMMARY.modules.includes(x))];
   const body = h('tbody');
   order.forEach(id => {
-    const items = SUMMARY.items.filter(i => i.scope === id), outcome = worst(items.map(i => known(i.outcome)));
+    const items = all.filter(i => i.scope === id), outcome = worst(items.map(i => known(i.outcome)));
     const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}), h('span', {className: 'code', textContent: id}));
     const state = h('td'); state.innerHTML = badgeFor(outcome);
     const why = h('td', {}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
@@ -1757,7 +1776,7 @@ function renderReview(sq, o) {
   if (RENDERED !== SUMMARY) {
     RENDERED = SUMMARY;
     $('rv-ready').textContent = '';
-    if (summaryOk()) $('rv-ready').append(readyTable(sq));
+    if (summaryOk()) $('rv-ready').append(readyTable(sq, pageItems(o, SUMMARY.modules, SUMMARY.items)));
   }
   renderFacts(o);
   const defaults = $('rv-defaults');

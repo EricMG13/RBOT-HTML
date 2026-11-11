@@ -587,8 +587,9 @@ def test_two_reports_of_one_period_do_not_make_the_period_comparison_ready(page)
     type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');""",
     )
     # The reading states kind and period end, not which periods the pair covers.
+    # Ruling 4 (final wave): the reading's period ends decide, and the placeholder is gone.
     assert seen["status"]["CP-1B"] == "check"
-    assert "confirmed when the summary is made" in " ".join(seen["reasons"]["CP-1B"])
+    assert "Only one reporting period was recognised" in " ".join(seen["reasons"]["CP-1B"])
     assert "Ready" not in seen["headline"], seen["headline"]
 
 
@@ -694,12 +695,15 @@ def test_the_services_outcome_replaces_the_confirmed_when_the_summary_is_made_ch
     const row = document.querySelector('#rv-ready [data-module="CP-1B"]');
     return {{before, S, text: row.textContent, outcome: row.dataset.outcome}};
     """)
-    assert any("confirmed when the summary is made" in r for r in seen["before"])
+    # Ruling 4 (final wave): the page's own reading rule replaces the placeholder, in the panel and
+    # on the review, where it joins whatever the service says (the worse outcome is the row's).
+    assert any("Only one reporting period was recognised" in r for r in seen["before"])
     assert "confirmed when the summary is made" not in seen["text"]
     own = [i for i in seen["S"]["items"] if i["scope"] == "CP-1B"]
     for item in own:
         assert item["reason"] in seen["text"]
-    want = min((i["outcome"] for i in own), key=ORDER.index) if own else "ready"
+    assert "Only one reporting period was recognised" in seen["text"]
+    want = min([*(i["outcome"] for i in own), "check"], key=ORDER.index)
     assert seen["outcome"] == want
 
 
@@ -737,7 +741,9 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
     return out;
     """)
     need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
-    assert need and seen["n"] == len(need)  # one tick per gap, limited or will-refuse item
+    # One tick per gap, limited or will-refuse item of the service, and one per check it can fix;
+    # the page's own items (final wave, ruling 2) are ticked as well.
+    assert need and seen["n"] >= len(need)
     assert set(seen["rowOutcomes"]) <= set(LIMITS)
     assert seen["start"] == {"approve": True, "approved": False, "submit": True}
     assert seen["partial"]["approve"] is True  # one tick still missing
@@ -992,15 +998,16 @@ def test_checks_confirmed_when_the_summary_is_made_do_not_count_as_to_check(page
     seen = _forecast(
         page,
         f"""
-    await issuer('earnings_update', [file('annual.txt', {json.dumps(REPORT)}),
-      file('annual-copy.txt', {json.dumps(REPORT)})]);
-    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
-    choose('f-bridge', 'annual.txt');""",
+    await issuer('distressed_restructuring', [file('annual.txt', {json.dumps(REPORT)}),
+      file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
+    type('d-current_period', 'fy-2025');
+    choose('legal-file', 'credit-agreement.txt');""",
     )
-    # CP-1B is only "confirmed when the summary is made": nothing the analyst can act on yet.
-    assert seen["status"]["CP-1B"] == "check"
+    # CP-2G is only "confirmed when the summary is made": nothing the analyst can act on yet.
+    assert seen["status"]["CP-2G"] == "check"
     assert "to check" not in seen["headline"], seen["headline"]
-    assert seen["headline"] == "Ready", seen["headline"]
+    assert seen["status"]["CP-2H"] == "gap"  # no ratings: the one thing the headline counts here
+    assert seen["headline"] == "1 limited or gap", seen["headline"]
 
 
 def test_a_check_with_a_fix_still_counts_as_to_check(page):
@@ -1013,8 +1020,8 @@ def test_a_check_with_a_fix_still_counts_as_to_check(page):
     choose('legal-file', 'credit-agreement.txt');
     type('d-as_of', '2025-06-01');""",
     )
-    # the as-of date is before the newest file: a check with a fix the analyst can act on
-    assert seen["headline"] == "1 to check", seen
+    # Ruling 3 (final wave): an as-of date before the newest file is a run-level limit to tick.
+    assert seen["headline"] == "1 limited or gap", seen
 
 
 def test_an_outcome_the_page_does_not_know_renders_as_the_worst_and_never_as_markup(page):
@@ -1091,3 +1098,149 @@ def test_the_pages_cp4_rules_match_the_launchers(page):
         (c, got, _launcher_cp4(*c)) for c, got in zip(_COMBOS, out["r"]) if got != _launcher_cp4(*c)
     ]
     assert diffs == [], diffs[:10]
+
+
+# What the review shows and gates after the service's summary has come back, read where the analyst
+# sees it: each row's outcome, its ticks, the gate, and what the page's own forecast says.
+_REVIEW_STATE = """
+    const S = await review();
+    const shown = Object.fromEntries([...document.querySelectorAll('#rv-ready [data-module]')]
+      .map(r => [r.dataset.module, {outcome: r.dataset.outcome, text: r.textContent,
+        ticks: [...r.querySelectorAll('[data-tick]')].map(t => t.parentElement.textContent)}]));
+    const live = readiness(build());
+    const out = {refusal: S.error, rows: shown, gate: gate(), ticks: ticks().length,
+      serviceWorst: Object.fromEntries(S.modules.map(m => [m,
+        S.items.filter(i => i.scope === m).map(i => i.outcome)])),
+      live: Object.fromEntries(live.mods.map(m => [m.id, m.status]))};
+    tickAll();
+    out.afterTicks = gate();
+    return out;
+"""
+
+_AS_OF_EARLY = f"""
+    pick('data-k="pathway"', 'earnings_update');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    type('i-issuer_name', 'Acme Corp'); pick('data-k="issue_classification"', 'high_yield');
+    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
+    type('d-as_of', '2025-06-30');"""
+_EXECUTED_ON_MEMO = f"""
+    pick('data-k="pathway"', 'distressed_restructuring');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
+      file('memo.txt', {json.dumps(MEMO)})]);
+    type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
+    pick('data-k="issue_classification"', 'high_yield'); type('d-current_period', 'fy-2025');
+    choose('legal-file', 'memo.txt');"""
+_LEGAL_NONE = f"""
+    pick('data-k="pathway"', 'distressed_restructuring');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
+    pick('data-k="issue_classification"', 'high_yield'); type('d-current_period', 'fy-2025');"""
+_ONE_PERIOD = f"""
+    pick('data-k="pathway"', 'earnings_update');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
+      file('annual-copy.txt', {json.dumps(REPORT)})]);
+    type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
+    pick('data-k="issue_classification"', 'high_yield');
+    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');"""
+
+
+def _reviewed(page, setup):
+    seen = page.run(setup + _REVIEW_STATE)
+    assert seen["refusal"] == "", seen["refusal"]
+    return seen
+
+
+def _blocked_until_ticked(seen):
+    assert seen["ticks"] > 0 and seen["gate"]["approve"] is True  # nothing can be approved yet
+    assert seen["afterTicks"]["approve"] is False  # approval opens once every tick is given
+
+
+def test_the_review_needs_a_tick_for_an_as_of_date_before_the_newest_document(page):
+    seen = _reviewed(page, _AS_OF_EARLY)
+    row = seen["rows"]["run"]
+    assert row["outcome"] == "limited" and "before your newest file" in row["text"]
+    assert "CP-1" in row["text"] and len(row["ticks"]) >= 1
+    assert row["ticks"][0] == "I accept this limit."
+    _blocked_until_ticked(seen)
+
+
+def test_the_review_needs_a_tick_for_an_executed_answer_on_a_file_that_is_no_agreement(page):
+    seen = _reviewed(page, _EXECUTED_ON_MEMO)
+    cp4 = seen["rows"]["CP-4"]
+    assert cp4["outcome"] == "check" and len(cp4["ticks"]) >= 1
+    assert "I have checked this." in cp4["ticks"]  # a check with a fix is ticked
+    run = seen["rows"]["run"]  # the page's own limit, run level, naming the file and the modules
+    assert run["outcome"] == "limited" and "memo.txt" in run["text"]
+    assert "CP-4" in run["text"] and "CP-2A" in run["text"] and len(run["ticks"]) >= 1
+    _blocked_until_ticked(seen)
+
+
+def test_the_review_is_as_severe_as_the_pages_legal_none_limit(page):
+    seen = _reviewed(page, _LEGAL_NONE)
+    assert seen["live"]["CP-2A"] == "limited" and seen["live"]["CP-2G"] == "limited"
+    for module in ("CP-2A", "CP-2G"):
+        row = seen["rows"][module]
+        assert row["outcome"] == "limited", (module, row["outcome"])
+        assert len(row["ticks"]) >= 1
+    assert "No legal documents" in seen["rows"]["CP-2A"]["text"]  # the page's reason is shown
+    _blocked_until_ticked(seen)
+
+
+def test_the_review_is_not_ready_for_the_earnings_comparison_with_one_period_recognised(page):
+    seen = _reviewed(page, _ONE_PERIOD)
+    row = seen["rows"]["CP-1B"]
+    assert row["outcome"] == "check" and "Nothing missing." not in row["text"]
+    assert "Only one reporting period was recognised in the documents." in row["text"]
+    assert "The earnings comparison needs the prior period's report." in row["text"]
+    assert row["ticks"] == ["I have checked this."]  # a check with a fix (Documents)
+    _blocked_until_ticked(seen)
+
+
+def test_the_earnings_comparison_claims_nothing_when_two_periods_are_recognised(page):
+    seen = _reviewed(
+        page,
+        f"""
+    pick('data-k="pathway"', 'earnings_update');
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
+      file('prior.txt', {json.dumps(REPORT.replace("2025", "2024"))})]);
+    type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
+    pick('data-k="issue_classification"', 'high_yield');
+    type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');""",
+    )
+    assert "reporting period was recognised" not in seen["rows"]["CP-1B"]["text"]
+
+
+@pytest.mark.parametrize(
+    "setup", [_AS_OF_EARLY, _EXECUTED_ON_MEMO, _LEGAL_NONE, _ONE_PERIOD], ids="abcd"
+)
+def test_the_review_never_shows_a_better_outcome_than_either_source(page, setup):
+    seen = _reviewed(page, setup)
+    for module, row in seen["rows"].items():
+        if module == "run":
+            continue
+        sources = [*seen["serviceWorst"].get(module, []), seen["live"][module]]
+        worst = min(sources, key=ORDER.index)
+        assert ORDER.index(row["outcome"]) <= ORDER.index(worst), (module, row["outcome"], sources)
+
+
+def test_a_check_with_no_fix_needs_no_tick_and_one_with_a_fix_does(page):
+    seen = page.run("""
+    const item = (id, outcome, fix) => ({id, scope: 'CP-1', outcome, reason: id, fix});
+    SUMMARY = {key: 'k', answers: {}, error: '', digest: 'd', modules: ['CP-1'], documents: [],
+      ignored: [], omitted: [], items: [item('CP-1:nothing-to-do', 'check', '')]};
+    const bare = readyTable(['documents']).querySelectorAll('[data-tick]').length;
+    SUMMARY.items = [item('CP-1:cp1-no-financial-report-recognised', 'check', 'Add the report.')];
+    const fixable = [...readyTable(['documents']).querySelectorAll('[data-tick]')]
+      .map(t => t.parentElement.textContent);
+    // The page's own items follow the same rule.
+    SUMMARY.items = [];
+    const own = [...readyTable(['documents'], [
+      {id: 'page:CP-1:a', scope: 'CP-1', outcome: 'check', reason: 'a', fix: '', go: ''},
+      {id: 'page:CP-1:b', scope: 'CP-1', outcome: 'check', reason: 'b', fix: 'f', go: 'documents'},
+      {id: 'page:CP-1:c', scope: 'CP-1', outcome: 'information', reason: 'c', fix: '', go: ''}])
+      .querySelectorAll('[data-tick]')].map(t => t.dataset.tick);
+    return {bare, fixable, own};
+    """)
+    assert seen["bare"] == 0
+    assert seen["fixable"] == ["I have checked this."]
+    assert seen["own"] == ["page:CP-1:b"]
