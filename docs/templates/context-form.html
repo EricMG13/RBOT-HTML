@@ -536,7 +536,13 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <h3 class="sub">Modules</h3>
   <ol class="run-stages modules" id="run-modules"></ol>
   <p class="err" id="run-error" hidden></p>
+  <p id="run-report" hidden>Report: <a id="run-report-link" href="/library/"></a></p>
   <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="another">Start another run</button></div>
+</section>
+<section class="run-progress" id="submission-gone" hidden>
+  <h2 tabindex="-1">Submission</h2>
+  <p class="lead">This submission is no longer open. If you submitted it, its run is in Run activity.</p>
+  <div class="dl"><a class="secondary-action" id="gone-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="new-submission">Start a new submission</button></div>
 </section>
 </div></main>
 
@@ -611,7 +617,7 @@ const MODULES = {
   'CP-4C': ['Recovery & fulcrum', 'Recovery waterfall and the fulcrum security.'],
   'CP-5': ['Evidence validation', 'Traces every figure back to its source.'],
   'CP-6': ['Committee decision', 'Challenges the thesis as an investment committee would.'],
-  'CP-8': ['Deliverable comparison', 'Compares this run with an earlier one (not run from the inbox).'],
+  'CP-8': ['Deliverable comparison', 'Compares this run with an earlier one (not run from the run page).'],
   'CP-DR': ['Research questions', 'Finds the peers and their figures, and answers your research questions.']
 };
 const mname = m => (MODULES[m] || [m])[0];
@@ -954,7 +960,7 @@ function fld(scope, k, r) {
   else if (r.t === 'period' && !pkey(v)) bad(el, 'use q1-2026, h2-2026 or fy-2025 (lowercase).');
   else if (r.t === 'slug' && !/^[a-z0-9][a-z0-9-]*$/.test(v)) bad(el, 'use lowercase letters, digits and hyphens only, not starting with a hyphen.');
   // Form-only rule: the inbox refuses a longer issuer_id (inbox/drops.py MAX_ISSUER_ID); the reader allows it.
-  else if (r.maxLen && v.length > r.maxLen) bad(el, `is ${v.length} characters; use at most ${r.maxLen} (the inbox refuses a longer ID).`);
+  else if (r.maxLen && v.length > r.maxLen) bad(el, `is ${v.length} characters; use at most ${r.maxLen} (the run page refuses a longer ID).`);
   return v;
 }
 function readSpec(scope, spec) {
@@ -1753,6 +1759,10 @@ function renderFacts(o) {
     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
       ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'], ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+    // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
+    const sent = SUMMARY.answers || {}, left = runOf(o.run.pathway).filter(m => Array.isArray(sent.modules) && sent.modules.length && !sent.modules.includes(m));
+    if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
+    if (left.length) rows.push(['Modules left out', left.map(m => `${mname(m)} (${m})`).join(', ')]);
   }
   box.textContent = '';
   rows.forEach(([k, v]) => box.append(h('dt', {textContent: k}), h('dd', {textContent: v})));
@@ -1835,6 +1845,13 @@ function showProgress() {
   pollRun();
 }
 function renderRun(r) {
+  // The library's own copy of a finished run's report (the filed copy under issuers/ is not served).
+  const copy = typeof r.library_report === 'string' ? r.library_report : '';
+  $('run-report').hidden = !copy;
+  if (copy) {
+    $('run-report-link').href = '/library/' + copy.split('/').map(encodeURIComponent).join('/');
+    $('run-report-link').textContent = r.issuer_name ? r.issuer_name + ': report' : 'Open the report';
+  }
   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
   $('run-reason').textContent = r.reason || 'none given';
   const list = $('run-modules');
@@ -2062,11 +2079,17 @@ async function restore() {
   try {
     if (isObj(saved) && saved.v === 1 && isObj(saved.context) && !shapeProblem(saved.context)) {
       if (saved.level in RANK) LEVEL = saved.level;
-      let lost = '';
+      let lost = '', gone = false;
       if (typeof saved.id === 'string' && /^[0-9a-f]{32}$/.test(saved.id)) {
         SUB = saved.id;
         try { READING = await call('GET', `/api/submissions/${SUB}/reading`); }
-        catch (err) { SUB = ''; READING = null; lost = ' The documents you uploaded are no longer held (' + err.message + '): choose them again.'; }
+        catch (err) {
+          SUB = ''; READING = null;
+          // The service does not know this submission: if it was submitted, it became a run (its answer may have been lost). Say so and
+          // keep the saved record until the analyst starts a new submission; only that is an explicit second start.
+          if (err.status === 404) gone = true;
+          else lost = ' The documents you uploaded are no longer held (' + err.message + '): choose them again.';
+        }
       }
       renderDocs(); renderFileSelects();
       const x = isObj(saved.extra) ? saved.extra : {};
@@ -2077,12 +2100,26 @@ async function restore() {
       newestTouched = x.newestTouched === true;
       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();
       loadMsg('Your earlier answers are back.' + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
+      if (gone) showGone();
     }
   } finally {
-    kept = true;
+    kept = $('submission-gone').hidden; // nothing is saved over the old record until a new submission is chosen
     update();
   }
 }
+// A saved submission the service no longer holds: the run it may have become is in Run activity. Starting a new one is a separate click.
+function showGone() {
+  FORM_PARTS().forEach(el => { el.hidden = true; });
+  $('submission-gone').hidden = false;
+  $('submission-gone').querySelector('h2').focus();
+}
+$('new-submission').addEventListener('click', () => {
+  FORM_PARTS().forEach(el => { el.hidden = false; });
+  $('submission-gone').hidden = true;
+  kept = true;
+  loadMsg('Your earlier answers are back. Choose the documents again to start a new submission.', false);
+  update();
+});
 
 /* ======================================================================= Visibility */
 let rtTouched = false, basisTouched = false, idTouched = false, cutTouched = false;

@@ -971,6 +971,13 @@ test('live run activity shows spend, chips and escapes names', () => {
   assert.ok(html.includes('chip-done') && html.includes('chip-running') && html.includes('chip-waiting'));
   assert.ok(html.includes('href="../../issuers/Initech%20(ini)/2026-11-09%20credit_snapshot.html"'));
 });
+test('live run activity names who submitted a run, as text', () => {
+  const html = liveActivityView({cap:'20', held:'', runs:[
+    {id:'a', status:'queued', pathway:'credit_snapshot', folder:'x', submitted_by:'Dana <b>Reyes</b>'},
+    {id:'b', status:'queued', pathway:'credit_snapshot', folder:'y'}]});
+  assert.ok(html.includes('<span class="run-by">submitted by Dana &lt;b&gt;Reyes&lt;/b&gt;</span>'));
+  assert.strictEqual(countOf(html, /run-by/g), 1);
+});
 test('no live activity adds nothing', () => { assert.strictEqual(liveActivityView(undefined), ''); });
 
 test('malformed live activity shows nothing and does not throw', () => {

@@ -70,8 +70,8 @@ the launcher's reading disagrees with are Limited for the whole run.
   under Waiting and names the daily limit when that is the cause. After a restart, a run that was
   being started when the service stopped is shown as interrupted and is not started again; check
   whether its process is still running before submitting it again. Runs and records the folder
-  watcher left still load and show in Run activity; one it had queued but not checked is shown as
-  failed with the reason. If the library cannot be rebuilt, Run activity says so and ended runs
+  watcher left still load and show in Run activity; every run it had queued (a record with no
+  submission) is marked failed, with the reason, at the service's first start and is never started. If the library cannot be rebuilt, Run activity says so and ended runs
   wait for it.
 - **At boot:** Task Scheduler, "At startup", under a service account whose environment holds the
   key, running `Start run page.cmd <root> <address>`. Only the service's account writes `_engine\`,

@@ -181,42 +181,6 @@ def command(  # noqa: PLR0913 - the signature the scheduler calls
     return argv
 
 
-def prepare(  # noqa: PLR0913 - the signature the scheduler calls
-    layout: Layout,
-    record: Record,
-    context: Path,
-    *,
-    launcher: Sequence[str],
-    config: str,
-    cap: Decimal,
-    timeout: float = 600,
-) -> str:
-    """Dry run (no ruling, no spend). Returns "" on success, else the refusal text."""
-    argv = command(layout, record, context, launcher=launcher, config=config, cap=cap, ruling=None)
-    try:
-        done = subprocess.run(
-            argv,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-            env=child_environment(),
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        reason = f"the offline check did not finish in {timeout:g} s"
-        with (layout.logs / f"{record.id}.log").open("a", encoding="utf-8") as log_file:
-            log_file.write(reason + "\n")
-        return reason
-    with (layout.logs / f"{record.id}.log").open("a", encoding="utf-8") as log_file:
-        log_file.write(done.stdout)
-        log_file.write(done.stderr)
-    if done.returncode == 0:
-        return ""
-    lines = [line.strip() for line in done.stderr.splitlines() if line.strip()]
-    return lines[-1] if lines else f"launcher exited {done.returncode}"
-
-
 def start(  # noqa: PLR0913 - the signature the scheduler calls
     layout: Layout,
     record: Record,

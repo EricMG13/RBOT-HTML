@@ -1244,3 +1244,162 @@ def test_a_check_with_no_fix_needs_no_tick_and_one_with_a_fix_does(page):
     assert seen["bare"] == 0
     assert seen["fixable"] == ["I have checked this."]
     assert seen["own"] == ["page:CP-1:b"]
+
+
+def _served_dom(page: Page, path: str) -> str:
+    """The DOM Chrome builds for a page of the service (the library, over http)."""
+    done = subprocess.run(
+        [
+            chrome(),
+            "--headless=new",
+            "--disable-gpu",
+            "--window-size=1280,900",
+            f"--user-data-dir={page.profile}",
+            "--virtual-time-budget=20000",
+            "--dump-dom",
+            page.base + path,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    )
+    return done.stdout
+
+
+def test_a_finished_runs_report_and_submitter_show_when_the_library_is_served(
+    root, tmp_path, monkeypatch, page_with_launcher
+):
+    """Run activity names who submitted the run, and links a finished run to the library's own copy
+    of its report (the filed copy under issuers/ is not served); the page's finished view links to
+    the same. Final-review findings 2 and 3; the real launcher, canned provider answers."""
+    import html
+    import urllib.request
+
+    from inbox_fixtures import HERE, layout, pump, status
+    from test_cpos_launch import AS_OF, ISSUER, issuer_folder
+
+    from deploy_workflow.inbox.runs import load_all
+    from deploy_workflow.owners import cpos_launch
+
+    monkeypatch.setattr(cpos_launch, "update_library_at", update_library_at)
+    body = "\n".join(
+        f"await uploadFiles([file({json.dumps(p.name)}, {json.dumps(p.read_text())})]);"
+        for p in sorted(issuer_folder(tmp_path).rglob("*.*"))
+        if p.suffix in (".txt", ".md")
+    )
+    page, watcher = page_with_launcher(str(HERE / "fixtures/canned_provider_launcher.py"))
+    page.run(f"""
+    level('basic'); type('submitter', 'Dana Reyes');
+    pick('data-k="pathway"', 'credit_snapshot');
+    {body}
+    await uploadFiles([file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
+    choose('legal-file', 'credit-agreement.txt');
+    type('i-issuer_name', {json.dumps(ISSUER)}); type('d-as_of', {json.dumps(AS_OF)});
+    pick('data-k="issue_classification"', 'high_yield');
+    await review();
+    tickAll(); approve();
+    document.getElementById('submit').click();
+    for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
+    return {{}};
+    """)
+    pump(watcher, lambda: status(root) not in ([], ["queued"], ["running"]), limit=120)
+    [record] = load_all(layout(root))
+    assert record.status == "finished", record.reason
+    after = page.run("""
+    for (let i = 0; i < 100 && $('run-report').hidden; i++) await settle(100);
+    return {href: $('run-report-link').getAttribute('href'), shown: !$('run-report').hidden};
+    """)
+    assert after["shown"] and after["href"].startswith(f"/library/reports/{record.id}/")
+    with urllib.request.urlopen(page.base + after["href"], timeout=20) as reply:
+        assert reply.status == 200 and reply.read()
+    dom = html.unescape(_served_dom(page, "/library/#CP-OS/activity"))
+    assert "submitted by Dana Reyes" in dom
+    link = re.search(rf'<a class="text-action" data-run="{record.id}" href="([^"]+)"', dom)
+    assert link is not None, dom[-1500:]
+    assert link[1].startswith(f"reports/{record.id}/") and not link[1].startswith("..")
+    with urllib.request.urlopen(page.base + "/library/" + link[1], timeout=20) as reply:
+        assert reply.status == 200
+
+
+def test_a_reload_with_a_saved_run_shows_that_run_and_never_the_upload_stage(page):
+    first = page.run(f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review(); tickAll(); approve();
+    document.getElementById('submit').click();
+    for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
+    // A tab that still holds its old saved submission beside the run it became.
+    localStorage.setItem('run-start/1', JSON.stringify({{v: 1, id: '0'.repeat(32), level: 'basic',
+      context: build(), files: {{}}, extra: {{}}}}));
+    return {{id: $('run-id').textContent}};
+    """)
+    again = page.run("""
+    return {progress: !$('run-progress').hidden, id: $('run-id').textContent, form: $('f').hidden,
+      gone: $('submission-gone').hidden};
+    """)
+    assert again == {"progress": True, "id": first["id"], "form": True, "gone": True}
+
+
+def test_a_reload_with_a_submission_the_service_no_longer_knows_does_not_say_upload_again(page):
+    page.run(f"""
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    type('i-issuer_name', 'Acme Corp');
+    const saved = JSON.parse(localStorage.getItem('run-start/1'));
+    saved.id = 'f'.repeat(32);  // a submission the service does not hold: it may have become a run
+    localStorage.setItem('run-start/1', JSON.stringify(saved));
+    return {{}};
+    """)
+    seen = page.run("""
+    const out = {gone: $('submission-gone').textContent.replace(/\\s+/g, ' ').trim(),
+      goneShown: !$('submission-gone').hidden, form: $('f').hidden,
+      message: $('loadmsg').textContent,
+      link: $('gone-activity').getAttribute('href'),
+      saved: JSON.parse(localStorage.getItem('run-start/1')).id};
+    // Nothing is saved over the old record while the notice is up.
+    type('i-issuer_name', 'Acme Corp II');
+    out.stillSaved = JSON.parse(localStorage.getItem('run-start/1')).id;
+    $('new-submission').click();
+    out.after = {goneShown: !$('submission-gone').hidden, form: $('f').hidden, sub: SUB,
+      message: $('loadmsg').textContent};
+    type('i-issuer_name', 'Acme Corp III');
+    out.resaved = JSON.parse(localStorage.getItem('run-start/1')).id;
+    return out;
+    """)
+    assert seen["goneShown"] and seen["form"] is True
+    assert (
+        "This submission is no longer open. If you submitted it, its run is in Run activity."
+        in seen["gone"]
+    )
+    assert "choose them again" not in seen["message"] and seen["link"] == "/library/#CP-OS/activity"
+    assert seen["saved"] == seen["stillSaved"] == "f" * 32
+    assert seen["after"]["goneShown"] is False and seen["after"]["form"] is False
+    assert seen["after"]["sub"] == "" and "Choose the documents again" in seen["after"]["message"]
+    assert seen["resaved"] == ""  # only now is the old record replaced
+
+
+def test_the_review_shows_turns_and_left_out_modules_at_every_level_when_they_differ(page):
+    seen = page.run(f"""
+    level('advanced');
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    const out = {{}};
+    await review();
+    out.defaults = $('rv-facts').textContent;
+    type('turns', '2');
+    const box = document.querySelector('[data-c="mod"][value="CP-6"]');
+    const other = document.querySelector('[data-c="mod"][value="CP-5"]');
+    const pick1 = box || other;
+    pick1.checked = false; pick1.dispatchEvent(new Event('change', {{bubbles: true}}));
+    const left = (box || other).value;
+    for (const lvl of ['advanced', 'standard', 'basic']) {{
+      level(lvl);
+      await review();
+      out[lvl] = $('rv-facts').textContent;
+    }}
+    out.left = left;
+    return out;
+    """)
+    assert "Turns per module" not in seen["defaults"] and "left out" not in seen["defaults"]
+    for lvl in ("advanced", "standard", "basic"):
+        text = seen[lvl]
+        assert "Turns per module2 (the default is 32)" in text, (lvl, text)
+        assert "Modules left out" in text and f"({seen['left']})" in text, (lvl, text)

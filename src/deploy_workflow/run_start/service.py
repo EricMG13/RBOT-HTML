@@ -80,7 +80,6 @@ import mimetypes
 import os
 import re
 import socket
-import stat
 import sys
 import threading
 import time
@@ -94,6 +93,8 @@ from typing import Any, BinaryIO, cast
 from deploy_workflow.inbox import activity, runs, startup
 from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.inbox.scheduler import Scheduler, Settings
+from deploy_workflow.platform_io import flags as flag_bits
+from deploy_workflow.platform_io import regular_open
 from deploy_workflow.run_start import submissions
 from deploy_workflow.run_start.submissions import Answers
 
@@ -130,6 +131,24 @@ _RUN_FIELDS = (
     "stalled",
 )
 _LIBRARY = "/library/"
+
+
+class _ClientGone(Exception):
+    """The client's connection failed while its request body was being read."""
+
+
+class _Body:
+    """The request body, whose reads turn a reset or timeout of the client's connection into
+    ``_ClientGone``, so that the same errors raised elsewhere are not taken for a client leaving."""
+
+    def __init__(self, stream: Any) -> None:
+        self._stream = stream
+
+    def read(self, size: int = -1) -> bytes:
+        try:
+            return cast(bytes, self._stream.read(size))
+        except (ConnectionError, TimeoutError) as error:
+            raise _ClientGone(str(error)) from error
 
 
 class _Reply(Exception):  # control flow: it carries the response, not a failure
@@ -216,9 +235,11 @@ class Handler(BaseHTTPRequestHandler):
             raise _refuse(404, "not found")
         except _Reply as reply:
             self._send(reply)
-        except (ConnectionError, TimeoutError) as error:
-            # A client that reset or stalled mid-body is not a service failure: one info line.
-            log.info("%s %s: connection lost (%s)", self.command, self.path, error)
+        except _ClientGone as gone:
+            # A client that reset or stalled mid-body is not a service failure: one info line. Only
+            # the reading of the request body raises this; the same errors met anywhere else (a
+            # timeout on the shared folder) fall to the 500 below.
+            log.info("%s %s: connection lost (%s)", self.command, self.path, gone)
             self.close_connection = True
         except Exception:
             # The only catch-all, documented: whatever a handler raises becomes a 500 with fixed
@@ -290,7 +311,7 @@ class Handler(BaseHTTPRequestHandler):
         length = self._length()
         if length > MAX_JSON:
             raise _refuse(413, f"a request body is at most {MAX_JSON // 1024} KiB")
-        data = self.rfile.read(length)
+        data = _Body(self.rfile).read(length)
         if len(data) != length:
             raise _refuse(400, "the request body ended early")
         try:
@@ -367,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
         length = self._length()
         stored = self._guarded(
             lambda: submissions.add_file(
-                self._layout, sid, name, cast(BinaryIO, self.rfile), length
+                self._layout, sid, name, cast(BinaryIO, _Body(self.rfile)), length
             )
         )
         raise _Reply(200, {"name": stored})
@@ -400,7 +421,24 @@ class Handler(BaseHTTPRequestHandler):
         ][0]
         # A run with no folder yet has no events: every module waits.
         shown.setdefault("modules", activity.module_states(record.pathway, []))
-        return {key: shown[key] for key in _RUN_FIELDS if key in shown}
+        answer = {key: shown[key] for key in _RUN_FIELDS if key in shown}
+        if record.status == "finished":
+            answer["library_report"] = self._library_report(record.id)
+        return answer
+
+    def _library_report(self, run_id: str) -> str:
+        """The library's own copy of a finished run's report, as a path under ``/library/``.
+
+        The filed copy under ``issuers/`` is not served; this one is. ``""`` when the library holds
+        none yet (it is rebuilt after a run ends)."""
+        library = self._layout.engine / "library"
+        try:
+            for copy in sorted((library / "reports" / run_id).glob("*/report.html")):
+                if copy.is_file() and not copy.is_symlink():
+                    return copy.relative_to(library).as_posix()
+        except OSError as error:
+            log.info("run %s: library copy not listed: %s", run_id, error)
+        return ""
 
     def _file(self, base: Path, relative: str, *, direct: bool) -> None:
         """Serve a regular file inside ``base``; anything else is a 404.
@@ -437,25 +475,22 @@ class Handler(BaseHTTPRequestHandler):
 def _read_regular(path: Path) -> bytes | None:
     """The bytes of ``path`` read from one handle, or None when it is not a regular file.
 
-    The handle is opened without following a link (where the platform can) and its own ``fstat``
-    decides, so a file swapped for a link after the path was checked is not read."""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    The handle is opened by ``platform_io.regular_open`` (binary where the platform has the flag,
+    without following a link, without waiting on a FIFO) and its own ``fstat`` decides, so a file
+    swapped for a link after the path was checked is not read."""
+    # O_NONBLOCK: opening a FIFO must not wait for a writer (it would hold this handler's thread).
+    flags = flag_bits("O_RDONLY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK")
     try:
-        fd = os.open(path, flags)
+        fd = regular_open(
+            path, flags
+        )  # adds O_BINARY where it exists; refuses a link or a non-file
     except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
         return None
     except OSError as error:  # a link where O_NOFOLLOW forbids it (ELOOP), or not readable
         log.info("library file %s not served: %s", path.name, error)
         return None
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            return None
-        with os.fdopen(fd, "rb") as handle:
-            fd = -1  # the handle owns it now
-            return handle.read()
-    finally:
-        if fd >= 0:
-            os.close(fd)
+    with os.fdopen(fd, "rb") as handle:  # the handle owns the descriptor now
+        return handle.read()
 
 
 def _wildcard(host: str) -> bool:

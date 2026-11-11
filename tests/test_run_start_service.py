@@ -6,6 +6,7 @@ boundary, the upload limits, the approval digest and that no response carries th
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 import os
@@ -755,3 +756,71 @@ def test_start_up_refuses_a_root_path_that_is_too_long(root, capsys):
     long_root.mkdir()
     assert service.main(["--root", str(long_root), "--port", "0"]) == 2
     assert "use a shorter path" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "error", [TimeoutError("share"), OSError(errno.ETIMEDOUT, "network share")]
+)
+def test_a_timeout_met_by_the_service_is_a_500_not_a_client_leaving(
+    svc, monkeypatch, caplog, error
+):
+    """A share timeout during a route, not while reading the body, is the service's failure."""
+    sid = svc.new()
+
+    def timed_out(*_args: Any, **_kwargs: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr(submissions, "summary", timed_out)
+    with caplog.at_level(logging.INFO, logger=service.__name__):
+        reply = svc.call("POST", f"/api/submissions/{sid}/summary", answers_for())
+    assert reply.status == 500 and reply.json() == {"error": "the service failed; see its log"}
+    assert any(r.levelno >= logging.ERROR and r.exc_info for r in caplog.records), caplog.text
+    assert "connection lost" not in caplog.text
+
+
+def test_a_fifo_at_a_library_path_is_refused_without_waiting(tmp_path):
+    fifo = tmp_path / "data.js"
+    os.mkfifo(fifo)
+    seen: list[object] = []
+    reader = threading.Thread(target=lambda: seen.append(service._read_regular(fifo)), daemon=True)
+    reader.start()
+    reader.join(5)
+    assert not reader.is_alive(), "reading a FIFO blocked the handler"
+    assert seen == [None]
+
+
+def test_a_library_file_is_opened_in_binary_mode_where_the_platform_has_the_flag(
+    tmp_path, monkeypatch
+):
+    """Windows corrupts a file opened without O_BINARY; the project's own opener adds it."""
+    from deploy_workflow import platform_io
+
+    asked: list[tuple[str, ...]] = []
+    real = platform_io.flags
+
+    def spy(*names: str) -> int:
+        asked.append(names)
+        return real(*names)
+
+    monkeypatch.setattr(platform_io, "flags", spy)
+    target = tmp_path / "a.bin"
+    target.write_bytes(b"\x1a\r\n\x00x")
+    assert service._read_regular(target) == b"\x1a\r\n\x00x"
+    assert ("O_BINARY",) in asked
+    link = tmp_path / "link.bin"
+    link.symlink_to(target)
+    assert service._read_regular(link) is None  # the link refusal is kept
+
+
+def test_main_stops_on_interrupt_and_releases_the_folder_lock(root, fake_env, monkeypatch):
+    """What the deleted ``Scheduler.run_forever`` test pinned, now at the loop's owner."""
+    from deploy_workflow.inbox import scheduler as scheduler_module
+
+    fake_env({"sleep": 30})
+
+    def interrupt(_scheduler: Any) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(service, "_loop", interrupt)
+    assert service.main(["--root", str(root), "--port", "0", "--host", "127.0.0.1"]) == 0
+    scheduler_module.Scheduler(settings(root)).close()  # the lock was released

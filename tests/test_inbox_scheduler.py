@@ -256,17 +256,6 @@ def test_r2_the_lock_dies_with_the_scheduler_and_close_releases_it(root):
     last.close()  # closing twice is harmless
 
 
-def test_r2_run_forever_releases_the_lock_on_exit(root, monkeypatch):
-    w = Scheduler(settings(root))
-
-    def interrupt(_seconds: float) -> None:
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(scheduler_module.time, "sleep", interrupt)
-    w.run_forever()
-    Scheduler(settings(root)).close()
-
-
 def test_f1_two_schedulers_started_together_one_refuses(root):
     gate = threading.Barrier(2)
     results: list[str] = []

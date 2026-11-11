@@ -199,8 +199,9 @@ and your answers; no model is called. A paid run can still differ from it.
 `_engine\drops\<id>` holds each submitted run's source files and its `context.json`. A filed report
 is never overwritten: a second report for the same date and pathway is filed as `-2`, `-3` and so
 on. A `<root>\inbox\` folder left by the earlier folder watcher is never created, read or changed;
-runs it recorded still load and show in Run activity. One it had queued but not checked is shown
-as failed, with the reason; submit it again from the page.
+runs it recorded still load and show in Run activity. Every one it had queued (a record with no
+submission) is marked failed, with the reason, the first time the service starts, and is never
+started; submit it again from the page.
 
 Run activity re-loads every 30 seconds while it is showing. A running run's spend counts a call in
 flight at its full reserved amount, so it can read a little high until that call settles. A run

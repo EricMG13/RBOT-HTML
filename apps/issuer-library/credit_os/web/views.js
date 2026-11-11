@@ -1306,14 +1306,21 @@ function liveRunSpend(run,cap) {
   if(typeof run.spent!=='string')return '';
   return `<span class="run-spend">USD ${liveText(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${liveText(cap)}`}</span>`;
 }
+// Served over HTTP, the filed copy under issuers/ is not served; the library's own copy of the report is, and the catalogue names it.
+// From disk the filed link stays. Returns null when the catalogue has no copy of this run (the row then shows the path as text).
+function servedReportHref(run) {
+  const held=catalogueRuns().find(r=>r&&r.id===run.id),artifact=held&&Array.isArray(held.artifacts)?primaryArtifact(held):null;
+  return artifact&&typeof artifact.href==='string'&&artifact.href.startsWith('reports/')&&libraryPath(artifact.href)?artifact.href:null;
+}
+const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location.protocol);
 function liveRunRow(run,cap) {
   const ended=run.status!=='running'&&run.status!=='queued',files=Array.isArray(run.files)?run.files:[];
   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
   const chips=Array.isArray(run.modules)?run.modules.filter(Array.isArray).map(([name,state])=>`<span class="chip chip-${['done','running','waiting'].includes(state)?state:'waiting'}">${liveText(name)}</span>`).join(''):'';
-  const href=run.status==='finished'?reportHref(run.report):null;
+  const href=run.status==='finished'?(servedOverHttp()?servedReportHref(run):reportHref(run.report)):null;
   const report=run.status==='finished'&&run.report?(href?`<a class="text-action"${tag} href="${esc(href)}">${liveText(run.report)}</a>`:`<span class="code">${liveText(run.report)}</span>`):'';
   const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
-  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${ended?`<span class="run-status">${liveText(run.status)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${ended&&run.ended_at?`<span class="run-time">ended ${liveText(run.ended_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${report}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
+  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${run.submitted_by?`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`:''}${ended?`<span class="run-status">${liveText(run.status)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${ended&&run.ended_at?`<span class="run-time">ended ${liveText(run.ended_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${report}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
 }
 function liveActivityView(live) {
   if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';

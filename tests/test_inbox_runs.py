@@ -23,7 +23,6 @@ from deploy_workflow.inbox.runs import (
     command,
     load_all,
     outcome,
-    prepare,
     save,
     start,
 )
@@ -150,25 +149,6 @@ def test_outcome_treats_an_unreadable_event_file_as_no_events(layout):
     assert outcome(layout, RECORD, 3) == ("failed", "launcher exited 3; see logs/id1.log")
 
 
-def test_prepare_returns_the_refusal_text(layout, fake_env):
-    fake_env({"prepare_exit": 2, "prepare_error": "--sources: cannot read a.pdf: bad"})
-    assert (
-        prepare(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP)
-        == "--sources: cannot read a.pdf: bad"
-    )
-    assert "cannot read a.pdf" in (layout.logs / "id1.log").read_text(encoding="utf-8")
-
-
-def test_prepare_success_and_silent_failure(layout, fake_env):
-    fake_env({})
-    assert prepare(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP) == ""
-    fake_env({"prepare_exit": 2})
-    assert (
-        prepare(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP)
-        == "launcher exited 2"
-    )
-
-
 def test_start_runs_the_plan_and_logs(layout, fake_env, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake-key-for-the-test")
     fake_env(
@@ -225,25 +205,6 @@ def test_an_exited_unwaited_child_is_not_alive():
 
 def test_alive_answers_false_for_a_pid_the_platform_refuses():
     assert alive(2**31) is False and alive(2**63) is False
-
-
-def test_prepare_survives_output_that_is_not_valid_text(layout, tmp_path):
-    script = tmp_path / "launcher.py"
-    script.write_text(
-        "import sys\nsys.stdout.buffer.write(b'\\xff\\xfe ok\\n')\n"
-        "sys.stderr.buffer.write(b'--sources: \\xff refused\\n')\nsys.exit(2)\n",
-        encoding="utf-8",
-    )
-    text = prepare(
-        layout, RECORD, CTX, launcher=[sys.executable, str(script)], config="sol-medium", cap=CAP
-    )
-    assert "refused" in text and (layout.logs / "id1.log").is_file()
-
-
-def test_prepare_gives_up_on_a_launcher_that_hangs(layout):
-    hang = [sys.executable, "-c", "import time; time.sleep(30)"]
-    text = prepare(layout, RECORD, CTX, launcher=hang, config="sol-medium", cap=CAP, timeout=0.5)
-    assert text == "the offline check did not finish in 0.5 s"
 
 
 def test_save_refuses_an_id_that_is_not_a_plain_file_name(layout):

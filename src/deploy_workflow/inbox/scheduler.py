@@ -9,8 +9,8 @@ process starts, and is shown as finished only when the library lists it.
 poll) it saves the run's record, then renames the sealed files folder to ``drops/<id>``. A record
 whose folder is still missing is finished by the next poll or restart; one submission is never
 two records. Records written by the earlier folder watcher still load and show in Run activity;
-one it left queued and unchecked is marked failed at start-up, and a run it queued is started
-only if its ``context.json`` is in its folder.
+every run it left queued (one with no submission) is marked failed at start-up, and none of them
+is ever started: only Submit on an approved summary starts a run.
 """
 
 from __future__ import annotations
@@ -388,17 +388,6 @@ class Scheduler:
             )
             activity.write(self.layout, snapshot)
 
-    def run_forever(self) -> None:
-        """Poll until interrupted. The runs it started keep going."""
-        try:
-            while True:
-                self.step()
-                time.sleep(self.settings.poll_seconds)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.close()
-
     # -- reap and finish --------------------------------------------------------------------
 
     def _exit_of(self, record: Record) -> tuple[bool, int | None]:
@@ -522,12 +511,11 @@ class Scheduler:
             self._fail(record, _OLD_WATCHER)  # only Submit on an approved summary starts a run
             return False
         drop = self.layout.drops / record.id
-        if record.submission and not os.path.lexists(drop) and self._sealed(record).is_dir():
+        if not os.path.lexists(drop) and self._sealed(record).is_dir():
             return False  # its move is not finished yet (a failed rename): _finish_moves retries
         context = drop / "context.json"
         if context.is_symlink() or not context.is_file():
-            # An earlier folder watcher's run (its context file may have any name), or a folder
-            # that has lost its file: failed with the reason, never started.
+            # A folder that has lost its context file: failed with the reason, never started.
             self._put(
                 replace(
                     record,
