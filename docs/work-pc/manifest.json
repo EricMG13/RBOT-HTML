@@ -7,10 +7,10 @@
   ".impeccable/config.json": "6ed6bcae86b639b4e2ce19caff54f08673bd95d5",
   ".impeccable/critique/2026-11-10T07-05-51Z__apps-issuer-library-credit-os-web-index-html.md": "02ad9bd8d69064b0dc34dc4bdcb3b2b57114e301",
   ".python-version": "4de75f8d77a3e872d8883636a5d65deefb47fbe6",
-  "AGENTS.md": "5c834a3774196176ffda1d54a9e45677d892bffa",
-  "METHODOLOGY-REVIEW.md": "27ddbce8300925f6208e20b0a5211c740b24aa82",
-  "README.md": "75ac1b66659c1678f3153cf42d2d44799b30fca1",
-  "VERIFICATION.md": "73f951ddd33adc443eac6b6ea14958bade3bce3c",
+  "AGENTS.md": "b40d0a489b5e271f328aee71d77b20715a05a6a5",
+  "METHODOLOGY-REVIEW.md": "8d74142b627d5be04aa0ac64068f9b4110bc093a",
+  "README.md": "53dd4fbcb715892d85af820651d8170bcf9b0d75",
+  "VERIFICATION.md": "ca0bbf3ad55cf6db9763fa35e80c89ca19b8c5d9",
   "apps/issuer-library/README.md": "d89a46fece821d829618613d484362cf4328ac11",
   "apps/issuer-library/credit_os/SOURCE.md": "aa527b35023bb464c19803fcdb236088b8691d7f",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -299,6 +299,7 @@
   "docs/rulings/2026-11-10-all-modules-live-test.md": "985679f669f8e090a111f7c7fb4b63d54428f3c3",
   "docs/rulings/2026-11-10-cpdr-web-search-test.md": "ae9500b29951967be30b4051dec24d93f2e45946",
   "docs/rulings/2026-11-10-short-live-test.md": "dab8c130f0a357be4566b2e7da0dd4664b061136",
+  "docs/rulings/2026-11-11-reader-and-issuer-report.md": "8e3cd221a2b6509b1c7b013b4fe4a1df74a40db2",
   "docs/rulings/2026-11-11-run-start-submit.md": "e31c697a5d725d0b63171c3acc7fbf20bd4bfaaa",
   "docs/superpowers/plans/2026-11-09-credit-os-static-pages.md": "a922f9f672b7b4dab2de6353848c7ed9fb811929",
   "docs/superpowers/plans/2026-11-09-inbox-automation.md": "985896a47b63bead5736d3db6aa07cf6640b14f0",
@@ -734,6 +735,6 @@
   "tools/work_pc_delta.py": "d51d308e63de38dbc4284157b978feeea8038557",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "cac9cf1081dd950d5d5304b9d96e71b7307c6b68",
- "head_date": "2026-11-11T13:49:32Z"
+ "head": "94f29dda33f288aac59c721001abf351c14aff2a",
+ "head_date": "2026-11-11T22:15:58Z"
 }
