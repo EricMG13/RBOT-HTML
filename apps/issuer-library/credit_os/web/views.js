@@ -490,7 +490,6 @@ function runAcceptanceText(context) {
   const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===contexts[context].folder);
   return record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
 }
-const runAcceptance=context=>`<span class="badge badge-gray">${esc(runAcceptanceText(context))}</span>`;
 function reportHead(id) {
   const out=data[id],{module,run:context}=out;
   const {meta,flag}=headTools(module,context,id);

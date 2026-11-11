@@ -896,6 +896,16 @@ test('Overview lead: a blocked CP-6 falls back to CP-2, and CP-6 is listed with 
   assert.ok(entry.includes('Not assessable</span>') && readText(entry).includes('The committee view is not assessable: no upstream module concluded.'));
 });
 
+test('Overview lead: an unblocked earlier-format CP-6 has no Bottom line, so the new-format CP-2 leads and CP-6 reads "No bottom line in this handoff."', () => {
+  const earlier = [sec('Findings', 2, 1, 'view', []), sec('Cash is up and leverage is high.', 3, 2, 'view', [text(3, 'Old reader summary text.')])];
+  const html = overviewPage({ 'CP-6': earlier, 'CP-2': passageSections({ bottom: 'Credit view: refinancing risk.', key: ['- Leverage is moderate.'] }) }).runReport(RUN);
+  assert.ok(readText(part(html, 'overview-lead')).includes('Credit view: refinancing risk.'));
+  assert.ok(/Written by <a class="text-action" href="#CP-2\/[^"]*">Credit view/.test(html));
+  const entry = bottomEntry(part(html, 'overview-bottom-lines'), 'CP-6');
+  assert.ok(readText(entry).includes('No bottom line in this handoff.') && !entry.includes('Not assessable'));
+  assert.ok(!html.includes('Old reader summary text.'));
+});
+
 test('Overview lead: neither CP-6 nor CP-2 usable gives the one sentence; both blocked is the same', () => {
   const none = overviewPage({ 'CP-0': FIXTURE['CP-0'], 'CP-1': FIXTURE['CP-1'] }).runReport(RUN);
   assert.equal(readText(part(none, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
@@ -1030,26 +1040,8 @@ test('Overview shell: no navigator or Browse modules button, no outline, and the
   for (const gone of ['.story-module', '.story-group', '.na-line', 'a.cov', '.coverage{', 'table.register', 'table.open-items', 'table.matrix', '.register-tools', '.run-count', '#run-matrix']) assert.ok(!css.includes(gone), gone);
   for (const sel of ['.overview-part', '.passage-list', '.basis{', '.dates-table']) assert.ok(css.includes(sel), sel);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // A module with saved outputs and no default (two unnumbered variants): counted, listed as a choose line, never given an output by the page.
 const CP0_TWO = modules => ({ ...modules, 'CP-0': { outputs: [`${RUN}/deliveries/d1/CP-0-a.md`, `${RUN}/deliveries/d1/CP-0-b.md`], default: null } });
-
 
 // Live run activity: pull the live functions (between activityView and workspaceView) out of views.js.
 const liveFns = () => {
@@ -1233,7 +1225,6 @@ test('rows carry the run id for restoring, and unchanged data is not re-rendered
 });
 
 // Design pass 2026-11-10 (docs/design/2026-11-10-impeccable-pass.md).
-
 
 test('charts: one chip-dot legend per set of charts, under the last card', () => {
   const html = runPage().chartCards(['<i>a</i>', '<i>b</i>', '<i>c</i>']);
@@ -1431,8 +1422,6 @@ test('reader charts: a bridge whose running position dips below zero is drawn in
   assert.ok(Math.abs(rects[1].bottom - 210) < 0.01, 'the outflow ends at the lowest running position');
 });
 
-
-
 const TAIL = ['Reporting unit', 'Basis and limitation'];
 const STACK = { title: 'Debt stack', unit: 'US$m', table: 92, kind: 'stack', label: 0, rank: 1, secured: 2, amount: 3, leverage: 4, columns: [3, 4] };
 const BULLET = { title: 'Covenant headroom', unit: '', table: 102, kind: 'bullet', label: [0], threshold: 1, current: 2, headroom: 3, direction: 4, columns: [1, 2] };
@@ -1501,7 +1490,6 @@ test('structure views: no amber or red in the series, stack, tick or limit rules
   const html = runPage(d => { const t = withStructure(d)[outId('CP-1')].sections.flatMap(x => x.blocks).find(b => b.line === 92); t.rows[2].cells[3] = '0'; return d; }).readerChart(outId('CP-1'), STACK);
   assert.ok(!html.includes('no stated amount'));
 });
-
 
 // ---- Package 3 views (2026-11-10): prior and current results, margin and KPI changes, peer ranges and yield against maturity. Every value is synthetic.
 const PAIR_HEAD = ['Measure', 'Prior period', 'Prior', 'Current period', 'Current', ...TAIL];
@@ -1674,8 +1662,6 @@ test('library filters: Reset shows only while something is filtered or sorted; C
   assert.ok(read('views.js').includes("completion:runs.some(run=>run.completion!=null)?[['75','75% or above']"));
 });
 
-
-
 test('screens pass: one word for a run, in-app actions carry no out-arrow, and the styles the markup needs exist', () => {
   const views = read('views.js'), css = read('screen.css'), screen = read('screen.js');
   assert.ok(!/Change case|another case|for this case|other cases/.test(views));
@@ -1829,7 +1815,7 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
   assert.equal(name('T2E.2–T2E.4'), 'Beginning register to Cash uses');
   assert.equal(page.namedText('CP-0-a.md and CP-4_RUNBOOK.md and CP-1.md', null), 'Source readiness handoff (a) and unnamed module runbook and Financial foundation handoff');
   assert.equal(page.handoffLabel('r--deliveries--h--CP-0-a.md'), 'Source readiness handoff (a)');
-  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt')"), 'a source excerpt is the issuer\'s text, as quoted');
+  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt,.basis')"), 'a source excerpt is the issuer\'s text, as quoted, and a Basis line is printed as written (T3 review L1)');
 });
 
 // ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.
@@ -1898,7 +1884,6 @@ test('calendar lanes: a Scenario event is drawn with a dashed outline, not by co
   assert.ok(rule && /dashed/.test(rule) && !/amber|--red/.test(rule));
 });
 
-
 test('calendar lanes: a module filter draws only that module lane, and the Sources page draws the Sources lane', () => {
   const sources = d => { d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [laneRow(403, '2025-02-14', 'day', '—', 'Filing published', 'Historical — filed')])])], events: [{ lane: 'Sources', table: 402, gap: null }] }); return withLanes(d); };
   const page = runPage(sources), only = page.eventLanesView(RUN, { at: 'Evidence', compact: true });
@@ -1962,7 +1947,6 @@ test('maps: a map of only Not supplied draws no diagram and says why', () => {
   assert.ok(gap.includes('Not established for this run') && gap.includes('no scenario stated'));
   assert.ok(!gap.includes('<svg') && !gap.includes('Not supplied'));
 });
-
 
 test('maps: the new rules use only existing tokens, no amber or red', () => {
   const css = read('screen.css').split('\n').filter(line => /\.map-|\.state-shape|\.status-/.test(line));
@@ -2095,7 +2079,6 @@ test('chart index: a lane opens the module section that holds its events table, 
   const lane = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*?Financing events.*?<\/tr>/s.exec(html)[0];
   assert.equal(/<a href="([^"]+)">Table form/.exec(lane)[1], '#CP-1/additional?c=run-a', lane);
 });
-
 
 test('chart index never claims or links charts hidden by a not-assessable module', () => {
   const page = runPage(d => {

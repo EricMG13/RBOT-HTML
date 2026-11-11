@@ -68,7 +68,7 @@ function nameCodes(root,output=current?.output,marks=true) {
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.excerpt'))continue; // a source excerpt is the issuer's own text, quoted as it is
+    if(parent.closest('.ref,.excerpt,.basis'))continue; // a source excerpt is the issuer's own text, quoted as it is
     const named=namedText(node.data,output);
     if(named!==node.data)node.data=named;
     // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
