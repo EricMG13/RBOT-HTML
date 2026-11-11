@@ -21,8 +21,13 @@ reference (decision 11) is not done.
   passages; a failure is repair feedback naming check, line and text, inside the existing retry and
   cap. Hand-written passing and failing passages per check (`tests/test_prose_checks.py`); check 7
   across a run shown with the fake provider. Instructions and checks were cross-checked by a
-  whole-branch review: every instructed form passes all eight checks. The old rule that every Reader-summary figure appears
-  elsewhere in the handoff was retired with the Reader summary.
+  whole-branch review: every instructed form passes all eight checks. The Reader-summary figure rule was restored
+  for the new passages as a fidelity check (`figure_issues`, labelled `Fidelity check:`, not a ninth
+  prose check): every reader-passage figure must appear outside the reader passages with the same
+  sign, unit and scale (owner, 2026-11-11). Review fixes in the same entry: the library build skips
+  a delivery with no `report.html` (`apps/issuer-library/update_library.py`, the cause of the 14
+  failures above); check 6 also takes the first-column letter+digit cells of `## Calculations`
+  tables (period labels excepted); a Basis line after a blank line is sentence text.
 - CP-8 requires an eighth dimension, Presentation (`tests/test_cp8_comparison.py`).
 - Delivery: new deliveries write no `report.html`; completion records carry `delivery_sha256`
   (of `delivery.json`); HTML Model, charts, calculation JSON and forecast files unchanged. Earlier
@@ -32,9 +37,10 @@ reference (decision 11) is not done.
   `test_credit_os_catalogue`, inbox tests, `test_run_start_page`, `test_update_library`,
   `test_credit_os_store`; `-m "not live and not browser"`) on this branch merged with the library
   branch (`claude/library-layout-637b87` at 3294c8d) in a scratch worktree: 899 passed;
-  `tools/quality_gate.py`: 0 findings. On this branch alone, 14 of those tests fail only on
-  `apps/issuer-library/update_library.py` reading `report.html`, which the library branch removes:
-  this branch merges after it.
+  `tools/quality_gate.py`: 0 findings. Before the `update_library.py` fix, 14 of those tests failed on
+  its `report.html` read.
+- Limitation (owner ruling: left as is): `owner_rendering.py:992`, `financial_rendering.py:167` and
+  `rendering.py:162` still write `report.html` outside CP-OS.
 - Not verified: any real model response to the new instructions; the reading check against VMO2;
   the browser test of the library's Run activity link (library side); the full weekly suite.
 

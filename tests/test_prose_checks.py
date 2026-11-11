@@ -7,6 +7,7 @@ import pytest
 from deploy_workflow.prose_checks import (
     DATA_MODULES,
     READER_HEADINGS,
+    figure_issues,
     limitation_items,
     prose_issues,
     reader_passages,
@@ -194,9 +195,15 @@ def test_check_6_whole_token_only() -> None:
     assert prose_issues(bottom("Cases AC-1 and C-12 differ.", CALCULATIONS)) == ()
 
 
-def test_check_6_calculations_id_is_the_id_column_not_the_first_cell() -> None:
-    table = "\n## Calculations\n\n| Metric | Value |\n| --- | --- |\n| M2 | 5 |\n"
-    assert prose_issues(bottom("Measure M2 is high.", table)) == ()
+def test_check_6_a_calculations_first_column_id_is_refused_outside_calculations_not() -> None:
+    # Owner 2026-11-11 (L1): an ID in `## Calculations` is its first column's letter+digit cell.
+    table = "\n## Calculations\n\n| Calculation | Value |\n| --- | --- |\n| C3 | 5 |\n"
+    assert found(prose_issues(bottom("See C3 for it.", table))) == [(6, 7)]
+    elsewhere = "\n## Gaps\n\n| Metric | Value |\n| --- | --- |\n| M2 | 5 |\n"
+    assert prose_issues(bottom("Measure M2 is high.", elsewhere)) == ()
+
+
+def test_check_6_an_id_column_cell_is_an_id_in_any_table() -> None:
     keyed = "\n## Calculations\n\n| Metric | ID |\n| --- | --- |\n| Leverage | M2 |\n"
     assert found(prose_issues(bottom("Measure M2 is high.", keyed))) == [(6, 7)]
 
@@ -353,6 +360,11 @@ def test_basis_line_ending_a_paragraph_or_item_stays_exempt() -> None:
     assert prose_issues(text) == ()
 
 
+def test_a_basis_line_after_a_blank_line_is_sentence_text() -> None:
+    text = bottom("The view holds.", "\nBasis: CP-2D p. 4.\n")
+    assert [c for c, n in found(prose_issues(text)) if n == 9] == [2, 3]
+
+
 def test_figure_touching_a_letter_is_not_rejudged_as_its_tail() -> None:
     assert prose_issues(bottom("Revenue was USD1,250 million.")) == ()
 
@@ -369,3 +381,154 @@ def test_check_8_a_figure_with_no_unit_is_told_to_reword_or_use_a_table() -> Non
     assert "reword it in words or move it to a table" in issue
     (decimals,) = prose_issues(bottom("The ratio is 3.456%."))
     assert "round to at most two decimals" in decimals
+
+
+def fidelity(passage: str, detail: str, heading: str = "Key findings") -> tuple[str, ...]:
+    """A handoff whose reader passage is `passage` and whose Calculations section is `detail`."""
+    text = (
+        "# Handoff\n\n## Findings\n\n### Bottom line\n\nCredit is mixed.\n\n"
+        f"### {heading}\n\n{passage}\n\n## Calculations\n\n{detail}\n"
+    )
+    return figure_issues(text)
+
+
+def test_a_reader_figure_the_handoff_does_not_hold_is_refused() -> None:
+    issues = fidelity("Leverage is 9.87x.", "| ID | Value |\n| --- | --- |\n| C-1 | 3.1x |")
+    assert issues == (
+        (
+            'Fidelity check, line 11: "9.87x" does not appear elsewhere in the handoff (tables, '
+            "calculations or other findings), with the same sign, unit and scale: add it there or "
+            "remove it from the passage."
+        ),
+    )
+
+
+def test_a_bottom_line_figure_the_handoff_does_not_hold_is_refused() -> None:
+    text = "# H\n\n## Findings\n\n### Bottom line\n\nCover was 9.87x.\n\n## Gaps\n\nNone.\n"
+    assert len(figure_issues(text)) == 1
+
+
+def test_a_figure_held_in_a_table_outside_the_passages_is_accepted() -> None:
+    assert fidelity("Leverage is 3.1x.", "| ID | Value |\n| --- | --- |\n| C-1 | 3.1x |") == ()
+    assert fidelity("Leverage is 3.1x.", "| ID | Value |\n| --- | --- |\n| C-1 | 3.1 |") == ()
+
+
+def test_a_figure_held_only_inside_a_reader_passage_is_refused() -> None:
+    text = (
+        "# H\n\n## Findings\n\n### Bottom line\n\nCover was 3.1x.\n\n"
+        "### Key findings\n\nCover was 3.1x.\n"
+    )
+    assert len(figure_issues(text)) == 2
+
+
+@pytest.mark.parametrize(
+    ("passage", "detail", "accepted"),
+    [
+        # Sign: the handoff writes a decline as (12.3)%; 12.3% states a rise.
+        ("Revenue grew 12.3%.", "Revenue change was (12.3)%.", False),
+        ("Revenue fell by (12.3)%.", "Revenue change was (12.3)%.", True),
+        ("Revenue fell by -12.3%.", "Revenue change was (12.3)%.", True),
+        ("Revenue fell by (12.3%).", "Revenue change was (12.3)%.", True),
+        ("Revenue fell by -12.3%.", "Revenue change was 12.3%.", False),
+        # Unit: 4.1x is a multiple, not a percentage; a bare number states no unit.
+        ("Leverage is 4.1%.", "Net leverage was 4.1x.", False),
+        ("Leverage is 4.1x.", "Net leverage was 4.1x.", True),
+        ("Leverage is 4.1.", "Net leverage was 4.1x.", True),
+        ("Leverage is 4.1x.", "Net leverage was 4.1.", True),
+        # Scale: 250 thousand is not 250 million.
+        ("Cash was US$250 million.", "Cash was 250 US$ thousands.", False),
+        ("Cash was US$250 thousand.", "Cash was 250 US$ thousands.", True),
+        ("Cash was 250 million.", "Cash was 250 millions.", True),
+        # Hyphens in ranges and compounds are not minus signs; a footnote marker is not a sign.
+        ("Margins held in 2023-2024.", "The years 2023-2024 and a 5-year plan.", True),
+        ("A 5-year plan.", "A 5-year plan, see 1) below.", True),
+    ],
+)
+def test_a_reader_figure_keeps_the_sign_unit_and_scale_the_handoff_wrote(
+    passage: str, detail: str, accepted: bool
+) -> None:
+    issues = fidelity(passage, detail)
+    assert (issues == ()) is accepted, issues
+    if not accepted:
+        assert len(issues) == 1 and "does not match the handoff" in issues[0]
+        assert detail.split(" was ")[-1].rstrip(".") in issues[0]
+
+
+@pytest.mark.parametrize(
+    ("passage", "absent"),
+    [
+        # A malformed figure is read as its digit runs; none is in the handoff.
+        ("Version 1.2.3 applies.", ("1.2", "3")),
+        ("Dated 28.12.2024.", ("28.12", "2024")),
+        ("Margin was 12,5%.", ("12", "5%")),
+        ("Debt was 1,2345.", ("1", "2345")),
+    ],
+)
+def test_a_malformed_reader_figure_is_still_checked(passage: str, absent: tuple[str, ...]) -> None:
+    issues = fidelity(passage, "Nothing numeric here.")
+    assert [i.split('"')[1] for i in issues] == list(absent)
+
+
+def test_a_number_only_inside_a_longer_number_does_not_match() -> None:
+    for number, longer in {"3.14": "13.14", "940": "7,940", "14": "3.14"}.items():
+        assert len(fidelity(f"Cover was {number}.", f"The value was {longer}.")) == 1, number
+
+
+def test_a_date_in_a_passage_needs_no_matching_figure() -> None:
+    assert fidelity("The notes mature on 30 September 2029.", "None.") == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "detail"),
+    [
+        (
+            "The 2029 secured notes carry the risk.",
+            "| Notes | Due |\n| --- | --- |\n| A | 15 January 2029 |",
+        ),
+        (
+            "The 2029 secured notes carry the risk.",
+            "| Notes | Due |\n| --- | --- |\n| A | 2029-01-15 |",
+        ),
+        ("Cover fell in Q3.", "| Period | Cover |\n| --- | --- |\n| 30 September 2024 | 3.1x |"),
+        ("Cover fell in FY2025E and 9M.", "None."),
+    ],
+)
+def test_a_year_or_period_held_only_as_a_date_or_a_label_is_accepted(
+    passage: str, detail: str
+) -> None:
+    assert fidelity(passage, detail) == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "detail"),
+    [
+        ("Spread widened 50 bp.", "| Spread | 50% |"),
+        ("Spread widened 50 bps.", "| Spread | 50% |"),
+        ("Margin rose 2.5 pp.", "| Margin | 2.5x |"),
+    ],
+)
+def test_a_basis_point_or_point_figure_does_not_match_another_unit(
+    passage: str, detail: str
+) -> None:
+    assert len(fidelity(passage, detail)) == 1
+
+
+def test_a_basis_point_figure_matches_its_own_unit() -> None:
+    assert fidelity("Spread widened 50 bps.", "| Spread | 50 bp |") == ()
+    assert fidelity("Margin rose 2.5 pp.", "| Margin | 2.5pp |") == ()
+
+
+@pytest.mark.parametrize("label", ["FY2025E", "Q3 2024", "H1 2024", "FY2024", "Q3", "9M"])
+def test_check_6_a_period_label_first_cell_in_calculations_is_not_an_id(label: str) -> None:
+    table = f"\n## Calculations\n\n| Period | Value |\n| --- | --- |\n| {label} | 3.1x |\n"
+    assert prose_issues(bottom(f"Cover in {label} was 3.1x.", table)) == ()
+
+
+def test_a_minus_held_figure_may_be_narrated_as_its_magnitude() -> None:
+    assert fidelity("Margin fell 5%.", "| Margin change | -5% |") == ()
+    assert len(fidelity("Margin was -5%.", "| Margin change | 5% |")) == 1
+
+
+def test_a_padded_decimal_matches_its_trimmed_form() -> None:
+    assert fidelity("Leverage is 4.1x.", "| Leverage | 4.10x |") == ()
+    assert len(fidelity("Leverage is 4.1x.", "| Leverage | 4.15x |")) == 1

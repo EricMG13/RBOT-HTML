@@ -406,7 +406,7 @@ PASSAGES = (
     "### Contrary evidence and what would change the view\n\n"
     "Nothing supplied contradicts the view; a USD 1,250 million refinancing would.\n\n"
     "### Limitations\n\n- Synthetic data only in the {case} case, so no conclusion carries "
-    "weight for a real issuer.\n"
+    "weight.\n"
 )
 
 
@@ -417,7 +417,13 @@ def answer(context: dict, plan_routes: list) -> str:
     lines += [f"- {n} {h['sha256']}" for n, h in context["handoffs"].items()]
     lines += ["", "## Findings", "", "### Bottom line", "", READER_BOTTOM_LINE, ""]
     if context["module_id"] not in DATA_MODULE_IDS:
-        case = context["module_id"].replace("-", " ").lower()  # Check 7: one limitation per module.
+        # Check 7: one limitation per module. Digits are spelled out: a bare figure in a passage
+        # must be held in a table (fidelity check).
+        case = context["module_id"].replace("-", " ").lower()
+        words = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+        for digit, word in enumerate(words):
+            case = case.replace(str(digit), f" {word} ")
+        case = " ".join(case.split())
         lines += [*PASSAGES.format(case=case).splitlines(), ""]
     passages = {"Bottom line", "Key findings", "Contrary evidence and what would change the view"}
     own = [r for r in plan_routes if r.module_id == context["module_id"]]
@@ -433,7 +439,15 @@ def answer(context: dict, plan_routes: list) -> str:
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
     for heading in ("Calculations", "Gaps", "Next module"):
-        lines += [f"## {heading}", "", "None.", ""]
+        held = heading == "Calculations" and context["module_id"] not in DATA_MODULE_IDS
+        # The passage figures (fidelity check) are held in a table outside the passages.
+        table = [
+            "| Item | Value |",
+            "| --- | --- |",
+            "| Cover | 3.1x |",
+            "| Refinancing | USD 1,250 million |",
+        ]
+        lines += [f"## {heading}", "", *(table if held else ["None."]), ""]
     return "\n".join(lines)
 
 
@@ -1284,9 +1298,7 @@ def test_the_checker_rejects_a_bare_figure(tmp_path):
 
 
 def test_a_limitation_repeated_from_an_accepted_handoff_is_rejected(tmp_path):
-    limitation = (
-        "Synthetic data only in the cp 4 case, so no conclusion carries weight for a real issuer."
-    )
+    limitation = "Synthetic data only in the cp four case, so no conclusion carries weight."
     accepted = {"CP-2": f"## Findings\n\n### Limitations\n\n- {limitation}\n".encode()}
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
@@ -3654,7 +3666,12 @@ def test_instruction_states_the_reader_voice_rulings(tmp_path):
     prose = next(t for m, t in texts.items() if m not in DATA_MODULE_IDS)
     head = prose.partition(cpos_launch.METHOD_MARK)[0]
     for phrase in (
-        "Name a note by its maturity and rank",
+        "A coupon with more than two decimals (6.375%) is named by the note's maturity and rank",
+        (
+            "Every figure in a reader passage must also appear in the handoff's tables or "
+            "`## Calculations` with the same sign, unit and scale."
+        ),
+        "the `[Insufficient Information]` tag belongs in tables and registers only",
         "Never round an exact value",
         "basis points, percentage points, pp, times, notch(es), day(s), week(s)",
         "does not belong in a reader sentence",
@@ -3666,3 +3683,12 @@ def test_instruction_states_the_reader_voice_rulings(tmp_path):
         "on one line",
     ):
         assert phrase in head, phrase
+
+
+def test_checker_rejects_a_reader_number_the_handoff_does_not_hold(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-4")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    wrong = raw.replace("cover is thin at 3.1x", "leverage is 9.87x")
+    issues = _checked_handoff(task, wrong.encode(), checker(prepared.layout))
+    assert any(i.startswith("Fidelity check, line ") and '"9.87x"' in i for i in issues)
+    assert not any("Prose check 9" in i for i in issues)

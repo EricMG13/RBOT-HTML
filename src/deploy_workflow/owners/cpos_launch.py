@@ -68,7 +68,12 @@ from deploy_workflow.owners.cpos import (
     web_search_ruled,
     with_notes,
 )
-from deploy_workflow.prose_checks import DATA_MODULES, READER_HEADINGS, prose_issues
+from deploy_workflow.prose_checks import (
+    DATA_MODULES,
+    READER_HEADINGS,
+    figure_issues,
+    prose_issues,
+)
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
 
@@ -299,12 +304,17 @@ VOICE_RULES = (
     "only with a currency. Any other number (a count of 100 or more, a model, section or "
     "index number) does not belong in a reader sentence: reword it in words or put it in a "
     "table. Never round an exact value to fit the two-decimal rule: an exact value with more "
-    'decimals stays in a table. Name a note by its maturity and rank ("the 2029 secured '
-    'notes"), not by its coupon. Keep a figure and its currency on one line. Years, dates, '
+    "decimals stays in a table. A coupon with more than two decimals (6.375%) is named by "
+    'the note\'s maturity and rank instead ("the 2029 secured notes"). Keep a figure and its '
+    "currency on one line. Years, dates, "
     "period labels (`Q3`, `FY2024`, `LTM`, `9M`) and whole counts below 100 need no unit. "
     "Write a range with the unit on both ends (`100 bp to 150 bp`). This overrides any method "
     "rule against bare figures or for `{ref|unit}` references in text fields: those belong to "
     "the JSON transport.\n"
+    "- Every figure in a reader passage must also appear in the handoff's tables or "
+    "`## Calculations` with the same sign, unit and scale.\n"
+    "- In reader passages, when the documents do not state an item, say so in words; the "
+    "`[Insufficient Information]` tag belongs in tables and registers only.\n"
     "- A table that cites sources has a column headed `Source` naming the file and page in the "
     "Basis item form. Raw locators, hashes and IDs stay where the method puts them: "
     "`## Sources`, tables and registers.\n"
@@ -1829,6 +1839,7 @@ def checker(layout: MarkdownLayout) -> Check:
         if not any(digest in text for digest in evidence):
             issues.append("List each issuer source relied on with its exact name and sha256.")
         issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
+        issues += figure_issues(text)
         routes = tuple(r for r in layout.routes if r.module_id == task.module_id)
         try:
             if routes:

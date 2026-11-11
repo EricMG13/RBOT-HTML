@@ -26,7 +26,8 @@ comments, list markers removed. Decisions where the ruling is silent:
   non-figure, as does a hyphen-joined letter either side (`10-K`, `B-1`, `12-month`).
 - Comments are removed before fences and headings are recognised, so a marker inside a multi-line
   comment toggles nothing. A `Basis: ` line is exempt only as the last line of its paragraph or
-  item (next line blank, a heading, a list item or a fence, or none); otherwise it is sentence text.
+  item (next line blank, a heading, a list item or a fence, or none) with no blank line before it;
+  otherwise it is sentence text.
 - Blocked and data modules owe only `### Bottom line`; this module never demands the other three
   headings. `DATA_MODULES` names the data modules for callers.
 """
@@ -159,7 +160,8 @@ def _sentence_lines(body: list[tuple[int, str]]) -> list[_Line]:
         if visible.skipped:
             continue
         stripped = line.strip()
-        is_basis = stripped.startswith(BASIS) and _ends_paragraph(lines[index + 1 :])
+        joined = index > 0 and bool(lines[index - 1].raw.strip())  # No blank line before it.
+        is_basis = stripped.startswith(BASIS) and joined and _ends_paragraph(lines[index + 1 :])
         if is_basis or stripped.startswith("|") or HEADING.fullmatch(line):
             continue
         marker = LIST_MARKER.match(line)
@@ -317,8 +319,35 @@ def _is_id_header(header: str) -> bool:
     return folded == "id" or folded.endswith(" id")
 
 
+PERIOD_LABEL = re.compile(
+    r"(?:FY\d+E?|[QH]\d|LTM|\d+M)(?:\s+\d{4})?", re.IGNORECASE
+)  # A period, not an ID.
+
+
+def _calculation_tables(text: str) -> list[list[list[str]]]:
+    """Pipe tables under `## Calculations`, up to the next H2 outside a fence."""
+    kept: list[str] = []
+    in_calculations = fenced = False
+    for line in text.splitlines():
+        if line.lstrip().startswith(FENCE):
+            fenced = not fenced
+        heading = None if fenced else HEADING.fullmatch(line)
+        if heading is not None and len(heading[1]) <= 2:
+            in_calculations = heading[2] == "Calculations"
+        if in_calculations:
+            kept.append(line)
+    return _tables("\n".join(kept))
+
+
 def _register_ids(text: str) -> set[str]:
     ids: set[str] = set()
+    for rows in _calculation_tables(text):
+        header = len(rows) >= 2 and all(re.fullmatch(r":?-+:?", c) for c in rows[1])
+        ids.update(
+            row[0]
+            for row in rows[2 if header else 0 :]
+            if row and _has_letter_and_digit(row[0]) and not PERIOD_LABEL.fullmatch(row[0])
+        )
     for rows in _tables(text):
         if len(rows) < 3 or not all(re.fullmatch(r":?-+:?", c) for c in rows[1]):
             continue
@@ -642,3 +671,122 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
         + _check_limitation_repeats(text, accepted)
         + _check_figures(lines)
     )
+
+
+# Fidelity check (decision 11, owner 2026-11-11), ported from the retired Reader-summary figure
+# check: it is not one of the eight prose checks. A number as the reader sees it is the longest
+# run of digits at that place (3.14 is read whole, never as 3.1; a malformed 1.2.3 or 12,5 is
+# still read, as 1.2 and 3, or 12 and 5), with the sign it was written with (a leading minus, or
+# parentheses) and the unit or scale beside it. On the passage side dates and period labels
+# are masked as in check 8. A held currency code is not compared with the passage's (old behaviour).
+CODE = re.compile(r"\bCP-[A-Z0-9]+\b|\bT\d+[A-Z]?\.\d+\b|\b[0-9A-Fa-f]{16,}\b")
+_NUMBER_UNIT = (
+    r"%|x\b|\s?pp\b|\s?bps\b|\s?bp\b|\s?per ?cent\b"
+    r"|(?:\s?(?:US\$|USD|\$|EUR|€|GBP|£))?\s?(?:thousands?|millions?|billions?|trillions?|bn|mm|k|m)\b"
+)
+NUMBER = re.compile(
+    r"(?<!\d)(?P<open>\()?(?P<minus>(?<![\w)])[-\u2212])?"
+    r"(?P<n>\d+(?:,\d{3}(?!\d))*(?:\.\d+)?)"
+    rf"(?P<u1>{_NUMBER_UNIT})?(?P<close>\))?(?P<u2>{_NUMBER_UNIT})?",
+    re.IGNORECASE,
+)
+SCALES = {
+    "thousand": "k",
+    "thousands": "k",
+    "k": "k",
+    "million": "m",
+    "millions": "m",
+    "mm": "m",
+    "m": "m",
+    "bps": "bp",
+    "billion": "b",
+    "billions": "b",
+    "bn": "b",
+    "trillion": "t",
+    "trillions": "t",
+}
+
+
+class _Figure(NamedTuple):
+    number: str  # Trailing decimal zeros dropped: 4.10 is 4.1.
+    negative: bool
+    bracketed: bool  # The sign was written as parentheses, not a minus.
+    unit: str | None
+    shown: str
+
+
+def _unit(written: str | None) -> str | None:
+    """The unit or scale of a figure, spelled one way: `%`, `x`, `k`, `m`, `b`, ..."""
+    if not written:
+        return None
+    word = re.sub(r"^(?:us\$|usd|\$|eur|€|gbp|£)?\s*", "", written.strip().casefold())
+    return "%" if "cent" in word else SCALES.get(word, word)
+
+
+PERIOD_WORD = re.compile(r"\b(?:[QH][1-4]|FY\d{2,4}E?|LTM|\d+M)\b")
+
+
+def _figures(text: str, passage: bool = False) -> list[_Figure]:
+    """Figures of `text`. On the passage side dates and period labels are not figures (as in
+    check 8); held text is read unmasked, so a year held only in a date still matches."""
+    masked = CODE.sub(" ", text)
+    if passage:
+        masked = PERIOD_WORD.sub(
+            lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), masked)
+        )
+    return [
+        _Figure(
+            found["n"].rstrip("0").rstrip(".") if "." in found["n"] else found["n"],
+            bool(found["minus"] or (found["open"] and found["close"])),
+            bool(found["open"] and found["close"] and not found["minus"]),
+            _unit(found["u1"] or found["u2"]),
+            found[0].strip(),
+        )
+        for found in NUMBER.finditer(masked)
+    ]
+
+
+def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
+    """Why a passage figure is not held in the handoff, or None: 12.3% is not (12.3)%, 4.1x is
+    not 4.1%, 250 thousand is not 250 million; a number matches only as a whole number."""
+    same = [h for h in held if h.number == figure.number]
+    where = "elsewhere in the handoff (tables, calculations or other findings)"
+    if not same:
+        return (
+            f'"{figure.shown}" does not appear {where}, with the same sign, unit and scale: add '
+            "it there or remove it from the passage."
+        )
+    # A figure the handoff writes with a minus may be narrated as its magnitude ("fell 5%");
+    # one written in parentheses, or a minus the handoff does not write, may not.
+    if any(
+        (h.negative == figure.negative or (h.negative and not h.bracketed and not figure.negative))
+        and (h.unit == figure.unit or None in (h.unit, figure.unit))
+        for h in same
+    ):
+        return None
+    written = ", ".join(dict.fromkeys(h.shown for h in same[:3]))
+    return (
+        f'"{figure.shown}" does not match the handoff, which writes it as {written}: keep the '
+        "sign and unit as written."
+    )
+
+
+def figure_issues(text: str) -> tuple[str, ...]:
+    """Every figure of a reader passage not held, with its sign, unit and scale, in the handoff
+    outside the reader passages. Sentence text only, as in the prose checks."""
+    passages = _pooled(_findings_sections(text) or [])
+    inside = {number for body in passages.values() for number, _ in body}
+    held = _figures(
+        "\n".join(line for number, line in enumerate(text.splitlines(), 1) if number not in inside)
+    )
+    lines = sorted(
+        (line for body in passages.values() for line in _sentence_lines(body) if line.text.strip()),
+        key=lambda line: line.number,
+    )
+    issues = []
+    for line in lines:
+        for figure in dict.fromkeys(_figures(line.text, passage=True)):
+            problem = _fidelity_problem(figure, held)
+            if problem is not None:
+                issues.append(f"Fidelity check, line {line.number}: {problem}")
+    return tuple(issues)
