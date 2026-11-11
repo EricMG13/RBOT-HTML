@@ -1,7 +1,8 @@
 {
  "files": {
-  ".github/workflows/checks.yml": "a3c41cdeb87ff016ecc0e275a5e1442a3477c02c",
+  ".github/workflows/checks.yml": "c9f5ed7aeb16a0317f546dd0ca98158ff8dc8e6f",
   ".github/workflows/weekly-tests.yml": "43163285e75f4c6e36a313c7c1e9ac4ea8ee68a4",
+  ".github/workflows/work-pc-pack.yml": "9fad1851a8feadfa0dc69354ba275a678fdf525f",
   ".gitignore": "5e33b5af7feb9685d7fc01602561d901bbf5ace9",
   ".impeccable/config.json": "6ed6bcae86b639b4e2ce19caff54f08673bd95d5",
   ".impeccable/critique/2026-11-10T07-05-51Z__apps-issuer-library-credit-os-web-index-html.md": "02ad9bd8d69064b0dc34dc4bdcb3b2b57114e301",
@@ -9,7 +10,7 @@
   "AGENTS.md": "4f14bd97feb80189914c0a1ac0b33693d1f4d48b",
   "METHODOLOGY-REVIEW.md": "27ddbce8300925f6208e20b0a5211c740b24aa82",
   "README.md": "038dc1efe1a802b9fd0dac54daeac564bb03fc75",
-  "VERIFICATION.md": "b20ce6abd75a97cc6886dd580349a96a6be93d87",
+  "VERIFICATION.md": "87831649612ca1f81cdec8df1246e5c0393034e5",
   "apps/issuer-library/README.md": "4ae46ab673fea02600b7dada182170190f4c92c2",
   "apps/issuer-library/credit_os/SOURCE.md": "aa527b35023bb464c19803fcdb236088b8691d7f",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -714,12 +715,12 @@
   "tests/test_quality_gate.py": "af3296903fd6a78974ae9dc78e7b2102f03cc6fb",
   "tests/test_reader_summary.py": "35a9941c4f2099958cd516428e444f17477f3e1a",
   "tests/test_update_library.py": "1e7d09e3b3b97c1767e621f822ce6b04bf9a8a43",
-  "tests/test_work_pc_delta.py": "c5e88ee3377f9716311cc365a246c8d41b2c1bba",
+  "tests/test_work_pc_delta.py": "dcfa8d91aef036e2a44cd163e41da580e13574f2",
   "tools/quality_gate.py": "3565f1a10894896b20358e173a7f02636d81701e",
   "tools/ruff-gate.toml": "78c34ecf217d14801f5b34912d32b89f359aeb63",
-  "tools/work_pc_delta.py": "46c7930849ade36afe90dcd8ba2d356c4a384f13",
+  "tools/work_pc_delta.py": "d51d308e63de38dbc4284157b978feeea8038557",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "6f5ac16d7c71d263f62e55061739e4be1da7958d",
- "head_date": "2026-11-11T09:27:00+00:00"
+ "head": "e7ed261f178a8ef4f58bab82512a2b5bce584982",
+ "head_date": "2026-11-11T10:48:35Z"
 }
