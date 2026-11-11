@@ -841,6 +841,8 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const plain = v => String(v).replace(/\*\*|`/g, '');
   const rich = v => esc(v).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   const data = mutate(runData());
+  // The store places each section of an output (data[id].placement, parallel to its sections); the fixtures' own `where` is that placement.
+  for (const out of Object.values(data)) out.placement ??= out.sections.map(s => s.where);
   const evidence = new Map();
   for (const [id, out] of Object.entries(data)) for (const s of out.sections) for (const b of s.blocks) {
     for (const r of b.type === 'table' ? b.rows : [b]) evidence.set(`${id}:${r.line}`, { module: out.module, line: r.line });
@@ -2248,7 +2250,7 @@ test('chart index: one row per chart, map and lane the run holds, whatever its s
   assert.deepEqual(rows, [
     ['Leverage', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
     ['Cover', 'Financial foundation', 'Drawn', 'K', 'x', 'FY2024', OVERVIEW],
-    ['Financing events', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', 'Overview'],
+    ['Financing events', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', 'Financial foundation page, Overview'],
     ['Credit-risk transmission map', 'Financial foundation', 'Drawn', 'Not stated', 'Not stated', 'Not stated', 'Financial foundation page, Overview'],
     ['Stress scenario map', 'Financial foundation', 'Not established for this run', 'no scenario stated', 'Not stated', 'Not stated', 'Not drawn'],
     ['Broken peer set', 'Financial foundation', 'Sent back', 'Chart data: broken peer set is not in its fixed table', 'Not stated', 'Not stated', 'Not drawn'],
@@ -2265,7 +2267,7 @@ test('chart index: the table form and the handoff line are links that keep the r
   assert.ok(source.startsWith('#CP-1/') && source.includes('c=run-a') && source.includes(`e=${encodeURIComponent(`${outId('CP-1')}:43`)}`), source);
   assert.ok(!leverage.includes('data-evidence'), 'a plain route works from every page the index sits on');
   const lane = cellsOf(html, 'data-chart')[2];
-  assert.ok(/<tr data-chart="[^"]*">(?:(?!<\/tr>).)*href="#CP-1\/head\?c=run-a"/s.test(html.slice(html.indexOf('Financing events') - 120)), 'a lane opens its owning module page');
+  assert.ok(/<tr data-chart="[^"]*">(?:(?!<\/tr>).)*href="#CP-1\/timeline\?c=run-a"/s.test(html.slice(html.indexOf('Financing events') - 120)), 'a lane whose section is not a routable section opens the Timeline part, never the page head');
   assert.equal(lane[7], 'Table form');
   const map = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*Credit-risk transmission map.*?<\/tr>/s.exec(html)[0];
   assert.ok(map.includes('#CP-1/maps?c=run-a'), 'a map opens its module’s Maps part');
@@ -2276,11 +2278,30 @@ test('chart index: Overview in "Shown in" comes from the visuals catalogue row, 
   assert.deepEqual(rows.slice(0, 2), ['Financial foundation page', 'Financial foundation page'], 'no catalogue row names Overview for this module');
 });
 
-test('chart index: a lane opens the module section that holds its events table, not the module head', () => {
-  const sections = { [outId('CP-1')]: [['head', 'Head', ['Reader']], ['additional', 'Additional findings', ['=Events: Financing']]] };
-  const html = runPage(withIndex, [], m => m, { sections }).chartIndex(RUN);
+test('chart index: a lane opens the routable s-<line> section that holds its events table, not the module head', () => {
+  // The Events section (line 300) is placed in the view, so it is a routable section of the module page.
+  const html = runPage(d => { withIndex(d); d[outId('CP-1')].placement = d[outId('CP-1')].sections.map(s => (s.line === 300 ? 'view' : s.where)); return d; }).chartIndex(RUN);
   const lane = /<tr data-chart="[^"]*">(?:(?!<\/tr>).)*?Financing events.*?<\/tr>/s.exec(html)[0];
-  assert.equal(/<a href="([^"]+)">Table form/.exec(lane)[1], '#CP-1/additional?c=run-a', lane);
+  assert.equal(/<a href="([^"]+)">Table form/.exec(lane)[1], '#CP-1/s-300?c=run-a', lane);
+});
+
+test('chart index: a new-format chart opens the page\'s Charts part, an earlier-format one Key numbers; both are parts of the module page', () => {
+  const fixture = fixturePage();
+  const cp1a = fixture.chartIndex(RUN);
+  const forms = [...cp1a.matchAll(/<a href="([^"]+)">Table form/g)].map(m => m[1]);
+  assert.ok(forms.length >= 1 && forms.every(href => !/#CP-[0-9A-Z]+\/(?:numbers|s\d)/.test(href)), forms.join('\n'));
+  const outline = id => new Set(fixture.reportParts(id).map(p => p[0]));
+  // A new-format output with one chart: the link names the Charts part, which the page draws.
+  const sections = [...passageSections({ bottom: 'Cash is up.' }), sec('Chart data: leverage', 3, 40, 'view', [chartTable(42, [[43, 'FY2024', '6.57', 'x', 'K']])])];
+  const chart = runPage(() => { const d = overviewData({ 'CP-1': sections }); d[outId('CP-1')].charts = [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }]; return d; }, [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  const [chartForm] = [...chart.chartIndex(RUN).matchAll(/<a href="([^"]+)">Table form/g)].map(m => m[1]);
+  assert.equal(chartForm, '#CP-1/charts?c=run-a');
+  assert.ok(chart.reportParts(outId('CP-1')).some(p => p[0] === 'charts'));
+  for (const href of forms) {
+    const [, module, part] = /^#(CP-[0-9A-Z]+)\/([^?]+)/.exec(href);
+    const id = outId(module);
+    assert.ok(outline(id).has(part) || fixture.drawnAnchors(id).has(part), `${href} is not a part of ${module}'s page`);
+  }
 });
 
 test('chart index never claims or links charts hidden by a not-assessable module', () => {

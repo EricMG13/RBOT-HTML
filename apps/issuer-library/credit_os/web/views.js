@@ -749,7 +749,14 @@ const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3
 const CHART_HEADING=/^(Chart data|Map|Events): /;
 const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';
 const raised=text=>text.charAt(0).toUpperCase()+text.slice(1);
-const shownIn=(out,kind,name)=>[...kind==='lane'?[]:[`${moduleTitle(out.module)} page`],...PLACEMENT.filter(([k,,test])=>k===kind&&test(out,name)).map(([,where])=>where)];
+const shownIn=(out,kind,name)=>[`${moduleTitle(out.module)} page`,...PLACEMENT.filter(([k,,test])=>k===kind&&test(out,name)).map(([,where])=>where)];
+// The part of the module page that holds a chart, map or lane table: charts (earlier format: Key numbers), maps, and for a lane the routable s-<line>
+// section that holds its table, else the page's Timeline part. Every one is an anchor of reportParts, so the link never lands on the page head.
+function tableForm(id,kind,section) {
+  if(kind==='map')return 'maps';
+  if(kind==='chart')return isNewFormat(data[id].sections)?'charts':'numbers';
+  return drawnAnchors(id).has(`s-${section.line}`)?`s-${section.line}`:'timeline';
+}
 function chartRows(context) {
   const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]);
   return ids.flatMap(id=>{
@@ -769,7 +776,7 @@ function chartRows(context) {
       const unit=drawn&&kind==='chart'?(here.unit===''?'Stated per row':here.unit??NOT_STATED):NOT_STATED;
       const period=drawn&&kind==='chart'&&table.headers[0]==='Period'?[...new Set([table.rows[0].cells[0],table.rows.at(-1).cells[0]])].map(plain).join(' to '):NOT_STATED;
       const line=table.rows[0]?.line,key=`${id}:${line}`;
-      const form=!drawn?null:kind==='lane'?routeHref(out.module,modules[id].sections.find(([,,patterns])=>patterns.some(p=>matchesHeading(section.heading,p)))?.[0]||modules[id].first,null,out.run,out.source):routeHref(out.module,kind==='map'?'maps':'numbers',null,out.run,out.source);
+      const form=!drawn?null:routeHref(out.module,tableForm(id,kind,section),null,out.run,out.source);
       return [{key,title,owner:moduleTitle(out.module),state,limitation,unit,period,where:drawn?shownIn(out,kind,here.name).join(', '):'Not drawn',form,source:evidence.has(key)?evidenceHref(id,line):null,line}];
     });
   });
