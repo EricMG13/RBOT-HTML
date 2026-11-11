@@ -39,18 +39,16 @@ const groups = [
 // A module the reading groups do not name still gets a place, as an unnamed module.
 const unnamed=[...new Set(Object.values(data).map(output=>output.module))].filter(id=>id!=='CP-MODEL'&&!groups.some(group=>group[1].some(item=>item[0]===id))).sort();
 if(unnamed.length)groups.push(['Other modules',unnamed.map(id=>[id,'Unnamed module'])]);
-const moduleNames = Object.fromEntries(groups.flatMap(g=>g[1]));
+const moduleNames = {...Object.fromEntries(groups.flatMap(g=>g[1])),[MODEL_ENTRY[0]]:MODEL_ENTRY[1]}; // the delivered model is a Modules entry (decision 5) that no reading group names
 delete modules.undefined; // A pin this workspace does not hold.
 const isAnalytical = id => !id.startsWith('W-')&&id!=='CP-OS';
 const $ = id => document.getElementById(id);
-const esc = value => String(value ?? '').replace(/[&<>"'\r]/g, c => ({'\r':'&#13;','&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const plain = value => String(value).replace(/\*\*|`/g,'');
-const rich = value => esc(value).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+const esc = escapeHtml, plain = plainText, rich = richText; // reader.js: the page and the node tests draw prose and tables with the same code
 const icon = name => `<img src="icons/${name}.svg" alt="">`;
 const matchesHeading = (heading,prefix) => prefix.startsWith('=') ? heading===prefix.slice(1) : heading.startsWith(prefix) && (!/^T\d+\.\d+$/.test(prefix) || !/\d/.test(heading.charAt(prefix.length)));
 const evidence = new Map();
 const lastSection = new Map(), lastFile = new Map();
-const readingPositions = new Map(), expandedGroups = new Map();
+const readingPositions = new Map();
 // Screening state, kept while the reader is on another screen. Filter names are LibraryLogic's.
 const LIBRARY_DEFAULTS = {search:'',sector:'',workflow:'',completion:'',availability:'',basis:'',period:'',leverageMin:'',leverageMax:'',coverageMin:'',coverageMax:'',issuer:'',runs:'latest',classification:'',currency:'',ratingBelow:'',ratingAbove:'',ratingScope:'issuer',netLeverageMin:'',netLeverageMax:'',cashMin:'',cashMax:'',undrawnMin:'',undrawnMax:'',talkMin:'',talkMax:'',marginMin:'',marginMax:'',couponMin:'',couponMax:'',priceMin:'',priceMax:'',yieldMin:'',yieldMax:'',limitation:''};
 const libraryFilters = {...LIBRARY_DEFAULTS};
@@ -58,7 +56,7 @@ const libraryState = {selected:'',sortKey:'',direction:'asc',hidden:''};
 let current = null, returnTrigger = null, returnScroll = 0, returnContentScroll = 0;
 installDestinations();
 const appDestinations=new Set(['W-Library','CP-OS']); // These need no selected run.
-const aliases = {'CP-MODEL':'W-Forecast','CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
+const aliases = {'CP-2F':'CP-2E','CP-2C':'CP-1A','CP-1E':'CP-1D','CP-5A':'CP-5','CP-6A':'CP-6'};
 for(const visual of window.DESIGN_WORKSPACE.visuals)for(const alias of String(visual.aliases||'').split(/[;,\s]+/).filter(Boolean))aliases[alias]??=visual.module;
 // Every page shows names (views.js namedText). Text and the title and aria-label attributes only, so downloads, links and the retained files are untouched.
 // Register references (F, K, C, S plus digits) are not codes of this kind: they stay, as a quiet mark.
@@ -68,7 +66,7 @@ function nameCodes(root,output=current?.output,marks=true) {
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.excerpt'))continue; // a source excerpt is the issuer's own text, quoted as it is
+    if(parent.closest('.ref,.excerpt,.basis,.module-code'))continue; // a source excerpt is the issuer's own text, quoted as it is; a Basis line is printed as written; a navigator code is the code
     const named=namedText(node.data,output);
     if(named!==node.data)node.data=named;
     // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
@@ -97,7 +95,7 @@ for (const [id, output] of Object.entries(data)) {
       const basis=priorText||output.basis?.text;
       evidence.set(`${id}:${row.line}`, {...located,line:row.line,title:plain(row.cells[0]), fields:block.headers.map((label,i)=>[label,row.cells[i]]),section:section.heading,basis});
     }
-    else evidence.set(`${id}:${block.line}`, {...located,line:block.line,title:section.heading,fields:[['Retained finding',block.text]],section:section.heading});
+    else evidence.set(`${id}:${block.line}`, {...located,line:block.line,title:section.heading,fields:[['Retained finding',block.text]],section:section.heading,text:block.text});
   }
   // Unknown nonempty sections remain visible rather than being silently omitted.
   const known = modules[id].sections.flatMap(s=>s[2]);
@@ -185,13 +183,13 @@ function performanceView() {
   const retainedNotes=sectionData(id,'performance').flatMap(s=>s.blocks.filter(b=>b.type==='text')).map(b=>narrativeMarkup(id,b)).join('');
   return `<div class="section-heading"><h2>Performance</h2><span>${esc(table.headers[3])}–${esc(table.headers[1])}</span></div>${trendChart(id,'Net sales')}<div class="section-heading compact"><h3>Exact financial measures</h3></div>${tableMarkup(id,table)}${retainedNotes}`;
 }
-function eventTimeline(id,table) {
+function eventTimeline(id,table,tag='h2') {
   const rowMarkup=row=>{
     const order=eventOrder(row.cells[0]),precision=order===null?'No year stated':order[1]===0?'Year only':'';
     const details=table.headers.slice(1).map((header,i)=>row.cells[i+1]?`<div class="event-detail"><strong>${esc(header)}</strong> ${rich(row.cells[i+1])}</div>`:'').join('');
     return `<li><div class="event-date"><strong>${esc(row.cells[0])}</strong>${precision?`<span>${precision}</span>`:''}</div><div class="event-body">${details}${sourceFooter(`${id}:${row.line}`)}</div></li>`;
   };
-  return `<div class="section-heading"><h2>Issuer events</h2><span>Historical record</span></div><p class="intro">Events are ordered by the first year and month named in each date cell; rows with no year follow. Row text is shown as retained.</p><ol class="timeline">${orderEvents(table.rows).map(rowMarkup).join('')}</ol>`;
+  return `<div class="section-heading"><${tag}>Issuer events</${tag}><span>Historical record</span></div><p class="intro">Events are ordered by the first year and month named in each date cell; rows with no year follow. Row text is shown as retained.</p><ol class="timeline">${orderEvents(table.rows).map(rowMarkup).join('')}</ol>`;
 }
 function businessVisual() {
   const row=findRow(pins['CP-1A'],'Company, business','End markets / concentration');
@@ -270,25 +268,11 @@ function renderSearch(query) {
   nameCodes($('search-results'),null,false); // hits come from several outputs, so no step title is borrowed from the open one (a step id reads "a method step"); register references stay as they are
 }
 function renderNavigator(module) {
-  const query=$('module-search').value.trim().toLowerCase(),context=current.context;
-  let count=0;
-  // Search matches the module's named sections; the module page itself is the report, so a match opens its top.
-  const sectionsOf=id=>{const output=defaultOutput(id,context);return output&&isAnalytical(id)?modules[output].sections:navigationSections(id,context).filter(s=>s[0]!=='status');};
-  const catalogue=groups.concat([['Workspace tools',[['W-Forecast','Published model']]]]).map(([title,items])=>{
-    const matches=items.filter(([id,name])=>`${id} ${Object.keys(aliases).filter(k=>aliases[k]===id).join(' ')} ${name} ${sectionsOf(id).map(s=>s[1]).join(' ')} ${isAnalytical(id)?availability(id,context):''}`.toLowerCase().includes(query));
-    count+=matches.length;
-    if(!matches.length)return '';
-    const open=query||matches.some(([id])=>id===module)||(expandedGroups.get(title)??false);
-    return `<details class="nav-group" data-group="${esc(title)}" ${open?'open':''}><summary>${esc(title)}</summary>${matches.map(([id,name])=>{
-      const section=query&&sectionsOf(id).find(s=>s[1].toLowerCase().includes(query));
-      return `<a href="${routeHref(id,section?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item ${id===module?'selected':''}" ${id===module?'aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code"><span>${isAnalytical(id)?availability(id,context):'Run record'}</span></span>${section?`<small>${esc(section[1])}</small>`:''}</a>`;
-    }).join('')}</details>`;
-  }).join('')+(!count?'<p class="empty">No match. Try another name or topic.</p>':'');
-  // A module report and the run report have parts to list; Run activity (CP-OS) has no output and no outline.
-  const analytical=!module.startsWith('W-'),outline=query?'':analytical&&current.output?outlineMarkup(current.output):module==='W-Overview'?runOutline():'';
-  $('module-list').innerHTML=`<details class="module-catalogue" data-group="catalogue" ${query||(!analytical&&!outline)||expandedGroups.get('catalogue')?'open':''}><summary>Browse analysis & tools</summary>${catalogue}</details>${outline&&`<div class="outline-heading">On this page</div>${outline}`}`;
+  const query=$('module-search').value.trim().toLowerCase(),{html,count}=navigatorView(module,query);
+  // Flat and always open (decision 5): the list is the run's modules, the open one with its page outline under it.
+  $('module-list').innerHTML=html;
   nameCodes($('module-list'));
-  document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Analysis & tools'} <span>${count}</span>`;
+  document.querySelector('.nav-filter').innerHTML=`${query?'Matches':'Modules'} <span>${count}</span>`;
   $('module-search-clear').hidden=!$('module-search').value;
   renderSearch(query);
 }
@@ -300,28 +284,27 @@ function parseRoute() {
   let requestedModule=encodedModule,requestedSection=encodedSection;
   try{requestedModule=decodeURIComponent(encodedModule);}catch(error){if(!(error instanceof URIError))throw error;}
   try{if(encodedSection!==undefined)requestedSection=decodeURIComponent(encodedSection);}catch(error){if(!(error instanceof URIError))throw error;requestedSection=null;}
+  // The Calendar and Reports pages are retired (decisions 1 and 12 of the reader ruling): their old hashes open the run's Report history, or the library when no run is known.
+  if(requestedModule==='W-Calendar'||requestedModule==='W-Reports'){requestedModule='W-Report';requestedSection='history';}
   const resolved=!Object.hasOwn(moduleNames,requestedModule)&&Object.hasOwn(aliases,requestedModule)?aliases[requestedModule]:requestedModule;
   let module=Object.hasOwn(moduleNames,resolved)?resolved:'W-Library';
   const params=new URLSearchParams(query);
   let fallback=data[pins[module]]?.run;
-  if(!fallback&&module==='W-Calendar')fallback=calendarRun(requestedSection==='lanes'?'lanes':requestedSection==='hedges'?'CP-2E':'CP-1A')||calendarRun('lanes');
   const requestedContext=params.get('c');
   let context=Object.hasOwn(contexts,requestedContext)?requestedContext:fallback||current?.context||Object.keys(contexts)[0]||null;
-  // A deliverable opens under a run of its own issuer, or under none if no run file matches.
-  const report=module==='W-Reports'&&window.DESIGN_WORKSPACE.reports.find(r=>r.id===requestedSection);
-  if(report&&!sameIssuer(contexts[context]?.issuerKey,report.issuerKey))context=tracedRun(report);
-  if(!context&&!appDestinations.has(module)&&module!=='W-Reports')module='W-Library';
+  if(!context&&!appDestinations.has(module))module='W-Library';
   const output=resolveOutput(module,context,params.get('o'));
   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
   // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
   const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
   const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===first)||sections[0];
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
-  const permitted=item&&item.run===context&&(item.output===output||module==='W-Calendar'||module==='W-Overview');
+  const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
   // A chip index names one of the key's chips, and `gaps` its citations without a page; one that is not there opens the row alone.
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
-  const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':null;
+  // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
+  const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
   return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
@@ -348,16 +331,46 @@ function chipSection(chip,output) {
   const open=chip.file&&!absent?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
   return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${chip.file&&chip.source?`<p class="small chip-key">Cited as ${esc(chip.source)}</p>`:''}${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }
+// One resolved Basis item of a new-format paragraph in words (reader.js inspectorItemHtml); `deps` is built once per paragraph. `used` collects the chips an item took.
+function basisItemHtml(item,deps,used) {
+  if(item.kind==='source') item.chips.forEach(c=>used.add(c));
+  return inspectorItemHtml(item,deps);
+}
+// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
+// in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
+function paragraphBasisHtml(key,item,output,mode,chips) {
+  chips=uniqueChips(chips);
+  const earlier=!isNewFormat(output.sections),used=new Set();
+  let figure='',items='';
+  if(item.text!==undefined) {
+    const {body}=paragraphBody(item.text,earlier);
+    const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
+    figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
+    // reader.js draws the list (the same code the node tests read). New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
+    const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
+    const ev=contexts[output.run]?.evidence||{},files=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name);
+    items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,files,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
+  }
+  const rest=chips.filter(c=>!used.has(c));
+  return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
+}
 function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
-  const chipHtml=chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
+  const paragraph=typeof chipIndex==='string'&&chipIndex!=='gaps';
+  const chipHtml=paragraph?paragraphBasisHtml(key,item,output,chipIndex,keyChips):chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
+  // A paragraph shows its wording without its Basis line or citations; they are listed below it.
+  const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
   $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${item.fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
   document.querySelectorAll('.chip').forEach(el=>{
     const pressed=el.dataset.chip===key?Number(el.dataset.index)===chipIndex:el.dataset.evidence===key&&chipIndex===null;
     if(pressed)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
+  });
+  document.querySelectorAll('[data-paragraph]').forEach(el=>{
+    const mode=el.dataset.figure===undefined?'p':`f${el.dataset.figure}`;
+    if(el.dataset.paragraph===key&&mode===chipIndex)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
   });
   if(returnTrigger) {
     if(window.innerWidth<=1050) $('inspector').scrollIntoView({block:'start'});
@@ -366,6 +379,7 @@ function showInspector(key,chipIndex=null) {
 }
 function moduleBody({module,context,output}) {
   try {
+    if(module===MODEL_ENTRY[0])return forecastView(context,current.section);
     if(output||!isAnalytical(module))return renderContent(output||module,current.section);
     return moduleEntry(module,context)?.outputs.length?outputChooser(module):unavailableView(module);
   } catch(error) {
@@ -374,7 +388,7 @@ function moduleBody({module,context,output}) {
     return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Couldn’t present this output</h2><p>The screen could not render this view. The saved file is unchanged.</p>${output?`<a class="text-action" href="${esc(data[output].href)}" download>Download the original handoff</a>`:''}</div>`;
   }
 }
-let cancelReportFrame=null;
+let cancelModelFrame=null;
 // A number box with text it cannot read is 'invalid', which excludes every run rather than being ignored.
 function readLibraryFilters() {
   const before=JSON.stringify(libraryFilters);
@@ -439,7 +453,7 @@ function libraryClick(target) {
 function openAuditSection(button) {
   const body=$(button.getAttribute('aria-controls')),open=body.hidden;
   if(open&&!body.dataset.drawn) {
-    try {body.innerHTML=sectionView(current.output,button.dataset.audit);nameCodes(body);body.dataset.drawn='1';}
+    try {body.innerHTML=sectionView(current.output,button.dataset.audit);if(!keepsCodes(current))nameCodes(body);body.dataset.drawn='1';}
     catch(error) {
       // Documented fail-open, as in moduleBody: logged, and the item says it could not be drawn; the saved file is unchanged.
       console.error(error);
@@ -464,18 +478,14 @@ function contextPrefix({module,context}) {
   const ctx=contexts[context];
   return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
 }
+// New-format handoff text is shown as written (decision 7: codes stay); an earlier-format page keeps names, not codes (the owner's standing rule).
+// The Evidence page lists file names and hashes, which identify files: it is drawn with its names already and is never rewritten.
+const keepsCodes=route=>route.module==='W-Evidence'||(route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections));
 const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 // The reading position of a page: a module report is one page whatever part is scrolled to.
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
 // Scroll the canvas to one of the report's parts or sections; the head is the top. Unknown names never reach here: parseRoute maps them to the head.
 // Every closed <details> that is or holds the target is opened first, so a route into a folded part shows what it names.
-// The run report's parts are places on one page: #W-Overview/<part id> keeps the Overview route and scrolls to the part.
-const runPart=()=>{const part=/^#W-Overview\/(run-[a-z0-9-]+)/.exec(location.hash)?.[1];return part&&$('content').querySelector(`#${part}[data-run-part]`)?part:null;};
-// Read from the page as drawn: a part the run does not have has no entry.
-const runOutline=()=>{
-  const parts=[...$('content').querySelectorAll('[data-run-part]')],here=runPart();
-  return parts.length?`<nav class="section-outline" aria-label="On this page"><ol>${parts.map(part=>`<li><a class="section-item" href="${routeHref('W-Overview',part.id)}" ${here===part.id?'aria-current="location"':''}>${esc(part.dataset.runPart)}</a></li>`).join('')}</ol></nav>`:'';
-};
 function scrollToPart(part) {
   const content=$('content'),target=part==='head'?null:$(part);
   if(target)openFolds(target);
@@ -499,37 +509,34 @@ function renderRoute() {
     const sections=navigationSections(next.module,next.context,next.output),index=sections.findIndex(s=>s[0]===next.section);
     $('module-head').innerHTML=moduleHead(next);
     // A page with one section already says its name in the heading above.
-    // So does the list of reports: it is a page of links, and a pager there would step into the first report.
-    const only=(sections.length===1&&!isAnalytical(next.module))||(next.module==='W-Reports'&&next.section==='list');
+    const only=sections.length===1&&!isAnalytical(next.module);
     // The pager names what it steps through on the page where the sections are models.
-    const pagerNoun={'W-Forecast':'model'}[next.module]||'section';
+    const pagerNoun={'W-Forecast':'model',[MODEL_ENTRY[0]]:'model'}[next.module]||'section';
     const report=reportPage(next);
     // A module report has no heading above this one but the issuer's h1, so there it is an h2; elsewhere it sits under the page's h2.
     const level=report?'h2':'h3';
-    const title=`<${level} id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report?moduleNames[next.module]:sections[index][1])}</${level}>`;
+    const title=`<${level} id="section-title" tabindex="-1" ${only||report||(isAnalytical(next.module)&&!next.output)?'class="sr-only"':''}>${esc(report||next.module===MODEL_ENTRY[0]?moduleNames[next.module]:sections[index][1])}</${level}>`;
     // The bar sticks at narrow widths, so it names the run and the module (or destination) it belongs to.
     $('section-nav').innerHTML=contextPrefix(next)+(only||report||(isAnalytical(next.module)&&!next.output)?title:`${title}<span>${index+1} / ${sections.length}</span><button id="previous-section" ${index===0?'disabled':''} aria-label="Previous ${pagerNoun}">${icon('arrow-left')}</button><button id="next-section" ${index===sections.length-1?'disabled':''} aria-label="Next ${pagerNoun}">${icon('arrow-right')}</button>`);
     nameCodes($('section-nav'));
     updateWorkspaceChrome(next.module);
     nameCodes($('context-bar'));
     $('content').innerHTML=moduleBody(next);
-    // watchFrame returns the callback that stops its timer; the previous report's timer must not fire against a detached element.
-    if(cancelReportFrame)cancelReportFrame();
-    cancelReportFrame=null;
-    const modelFrame=$('model-preview'),frame=$('report-preview');
+    // watchFrame returns the callback that stops its timer; the previous model's timer must not fire against a detached element.
+    if(cancelModelFrame)cancelModelFrame();
+    cancelModelFrame=null;
+    const modelFrame=$('model-preview');
     // The published model loads only when its disclosure is first opened: the frame gets its address and its watch then.
     const disclosure=$('content').querySelector('details.model-original');
     if(modelFrame&&disclosure){
       const openModel=()=>{
         if(!disclosure.open||modelFrame.getAttribute('src'))return;
         modelFrame.setAttribute('src',modelFrame.dataset.src);
-        cancelReportFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;});
+        cancelModelFrame=watchFrame(modelFrame,disclosure.querySelector('.frame-status'),'Loading model…','The model did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',modelFrame.dataset.download);link.download='';link.textContent='Download original HTML';return link;});
       };
       disclosure.addEventListener('toggle',openModel);
     }
-    if(frame)cancelReportFrame=watchFrame(frame,$('content').querySelector('.frame-status'),'Loading report…','The report did not load.',()=>{const link=document.createElement('a');link.setAttribute('href',window.DESIGN_WORKSPACE.reports.find(r=>r.id===next.section).download);link.download='';link.textContent='Download original HTML';return link;});
-    nameCodes($('module-head'));
-    nameCodes($('content'));
+    if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
     showNavigator(false);
@@ -538,26 +545,24 @@ function renderRoute() {
     renderNavigator(next.module);
     titleBase=moduleNames[next.module];applyTitle();
     if(previous) {
-      const report=isReportRoute(next.module,next.section),library=appDestinations.has(next.module)||!contexts[next.context];
-      const restored=!report&&!library&&focusId&&$(focusId);
+      const library=appDestinations.has(next.module)||!contexts[next.context];
+      const restored=!library&&focusId&&$(focusId);
       const link=window.innerWidth>720&&focused?.classList.contains('section-item')&&focusHref&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
-      const destination=report?$('report-select'):next.module==='W-Forecast'&&$('model-select')?$('model-select'):library?$('canvas'):$('section-title');
+      const destination=(next.module==='W-Forecast'||next.module===MODEL_ENTRY[0])&&$('model-select')?$('model-select'):library?$('canvas'):$('section-title');
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
   }
-  const runMove=next.module==='W-Overview'&&runPart();
-  if(runMove)scrollToPart(runMove);
-  // A move inside the run report redraws the outline only, so its current part follows the route.
-  if(partMove||(next.module==='W-Overview'&&!changed)) {
-    if(partMove)scrollToPart(next.section);
+  if(partMove) {
+    scrollToPart(next.section);
     renderNavigator(next.module);
     const link=focused?.classList.contains('section-item')&&[...$('module-list').querySelectorAll('.section-item')].find(el=>el.getAttribute('href')===focusHref);
     if(link)link.focus({preventScroll:true});
   }
   if(next.evidence) {
     // A route to a row inside a folded part (a link, a reload) opens the part holding its trigger; Esc then returns to that trigger.
-    const trigger=reportPage(next)?($(next.section)||$('content')).querySelector(`.chip[data-evidence="${CSS.escape(next.evidence)}"]`)||$('content').querySelector(`.chip[data-evidence="${CSS.escape(next.evidence)}"]`):null;
+    const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`;
+    const trigger=reportPage(next)||next.module==='W-Overview'?($(next.section)||$('content')).querySelector(opener)||$('content').querySelector(opener):null;
     if(trigger) {
       openFolds(trigger);
       if(!returnTrigger?.isConnected){returnTrigger=trigger;returnContentScroll=$('content').scrollTop;}
@@ -567,7 +572,7 @@ function renderRoute() {
   else {
     $('inspector').hidden=true; $('workbench').classList.remove('has-evidence');
     document.querySelectorAll('.source-selected').forEach(el=>el.classList.remove('source-selected'));
-    document.querySelectorAll('.chip[aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
+    document.querySelectorAll('.chip[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
     if(previous?.evidence&&!changed) {
       $('content').scrollTop=returnContentScroll;
       if(window.innerWidth<=1050) window.scrollTo(0,returnScroll);
@@ -581,15 +586,8 @@ function renderRoute() {
 }
 document.addEventListener('change',event=>{
   if(event.target.matches('[data-library-filter]'))readLibraryFilters();
-  if(event.target.id==='model-select')go('W-Forecast',event.target.value);
-  if(event.target.id==='report-select')go('W-Reports',event.target.value);
+  if(event.target.id==='model-select')go(current.module,event.target.value);
   if(event.target.id==='output-select')go(current.module,current.section,null,event.target.value);
-  if(event.target.matches('[data-register-filter], #register-all')) {
-    const filter={group:$('register-group').value,confidence:$('register-confidence').value,all:$('register-all').checked};
-    const rows=[...document.querySelectorAll('table.register tbody tr[data-group]')];
-    for(const row of rows)row.hidden=!registerRowShown({group:row.dataset.group,confidence:row.dataset.confidence,established:row.dataset.established==='true'},filter);
-    document.querySelector('table.register tr.register-empty').hidden=rows.some(row=>!row.hidden);
-  }
   if(event.target.id==='chart-metric') {
     $('module-visual').innerHTML=comparisonChart(current.output,data[current.output].visual,Number(event.target.value));
     nameCodes($('module-visual'));
@@ -600,12 +598,12 @@ document.addEventListener('click',event=>{
   if(event.target.closest('#rail-search')){focusSearch();return;}
   const searchHit=event.target.closest('.search-hit');
   if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
-  const summary=event.target.closest('summary');
-  if(summary?.parentElement.dataset.group)expandedGroups.set(summary.parentElement.dataset.group,!summary.parentElement.open);
   if(libraryClick(event.target))return;
   if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,current.section);}else $('canvas').focus();return;}
   const chip=event.target.closest('[data-chip]');
   if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
+  const paragraph=event.target.closest('[data-paragraph]');
+  if(paragraph){event.preventDefault();returnTrigger=paragraph;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,paragraph.dataset.paragraph,undefined,paragraph.dataset.figure===undefined?'p':`f${paragraph.dataset.figure}`);return;}
   const gaps=event.target.closest('[data-gaps]');
   if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,gaps.dataset.gaps,undefined,'gaps');return;}
   const audit=event.target.closest('.audit-open');
@@ -616,7 +614,7 @@ document.addEventListener('click',event=>{
   if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,source.dataset.evidence);return;}
   if(event.target.closest('#back-analysis'))go(current.module,current.section);
   const moduleLink=event.target.closest('.module-item');
-  if(moduleLink){$('module-search').value='';expandedGroups.set('catalogue',false);if(moduleLink.hash===location.hash)renderNavigator(current.module);}
+  if(moduleLink){$('module-search').value='';if(moduleLink.hash===location.hash)renderNavigator(current.module);}
   const step=event.target.closest('#next-section')?1:event.target.closest('#previous-section')?-1:0;
   if(step){const sections=navigationSections(current.module,current.context),index=sections.findIndex(s=>s[0]===current.section);if(sections[index+step])go(current.module,sections[index+step][0]);}
 });
@@ -709,7 +707,7 @@ window.onRunActivity=()=>{
   lastActivity=seen;
   const kept=recordActivityView(content,document.activeElement);
   content.innerHTML=moduleBody(current);
-  nameCodes(content);
+  if(!keepsCodes(current))nameCodes(content);
   restoreActivityView(content,kept);
   content.scrollTop=top;
 };

@@ -1316,13 +1316,13 @@ def test_a_finished_runs_report_and_submitter_show_when_the_library_is_served(
     assert after["href"] == f"/library/index.html#W-Report/history?c={record.id}"
     with urllib.request.urlopen(page.base + after["href"], timeout=20) as reply:
         assert reply.status == 200 and reply.read()
+    # Decision 10: a finished run is not in Run activity (live runs only); it is reached from the
+    # library, through its Report history.
     dom = html.unescape(_served_dom(page, "/library/#CP-OS/activity"))
-    assert "submitted by Dana Reyes" in dom
-    link = re.search(rf'<a class="text-action" data-run="{record.id}" href="([^"]+)"', dom)
-    assert link is not None, dom[-1500:]
-    assert link[1].startswith(f"reports/{record.id}/") and not link[1].startswith("..")
-    with urllib.request.urlopen(page.base + "/library/" + link[1], timeout=20) as reply:
-        assert reply.status == 200
+    assert f'data-run="{record.id}"' not in dom and "submitted by Dana Reyes" not in dom
+    assert "reports/" not in dom
+    dom = html.unescape(_served_dom(page, f"/library/#W-Report/history?c={record.id}"))
+    assert record.id.upper() in dom.upper() and "history-table" in dom
 
 
 def test_a_reload_with_a_saved_run_shows_that_run_and_never_the_upload_stage(page):

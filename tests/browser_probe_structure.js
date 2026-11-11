@@ -1,7 +1,7 @@
 (async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  for (let i = 0; i < 200 && !document.querySelector('.story-module .limits-chart'); i++) await sleep(50);
-  const story = document.querySelector('.limits-chart')?.closest('.story-module');
+  for (let i = 0; i < 200 && !document.querySelector('.limits-chart'); i++) await sleep(50);
+  const story = document.querySelector('.limits-chart')?.closest('#content');
   const count = selector => story ? story.querySelectorAll(selector).length : 0;
   const de = document.documentElement, content = document.getElementById('content');
   const out = document.createElement('pre');

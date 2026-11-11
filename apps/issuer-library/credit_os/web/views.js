@@ -86,10 +86,9 @@ function installDestinations() {
   }
   const destinations={
     'W-Library':['Issuer library',[['cases','Issuer cases',[]]]],
+    'W-Report':['Report history',[['history','Report history',[]]]],
     'W-Overview':['Overview',[['overview','Overview',[]]]],
-    'W-Calendar':['Event calendar',[['unavailable','Calendar availability',[]]]],
-    'W-Reports':['Reports',[['list','Reports',[]]]],
-    'W-Evidence':['Evidence library',[['sources','Retained outputs',[]]]],
+    'W-Evidence':['Evidence',[['sources','Evidence',[]]]],
     'W-Forecast':['Forecast',[['forecast','Forecast',[]]]],
     'CP-OS':['Run activity',[['activity','Run activity',[]]]]
   };
@@ -114,9 +113,6 @@ function availability(module,context) {
 const contextModules=context=>Object.keys(contexts[context].modules).filter(id=>contexts[context].modules[id].outputs.length);
 // One issuer is one issuerKey, whatever names its runs were recorded under; an unrecorded issuer (null) equals nothing.
 const sameIssuer=(a,b)=>a!=null&&a===b;
-const issuerReports=context=>window.DESIGN_WORKSPACE.reports.filter(r=>!context||sameIssuer(r.issuerKey,contexts[context]?.issuerKey));
-const reportsBuiltFrom=context=>window.DESIGN_WORKSPACE.reports.filter(r=>r.builtFrom.some(b=>b.run===context));
-const reportsUsing=output=>window.DESIGN_WORKSPACE.reports.filter(r=>r.builtFrom.some(b=>b.source===output));
 // A run's published models: those recorded for its folder and those built from a file it holds.
 const publishedModels=()=>window.DESIGN_WORKSPACE.models;
 const byModelId=(a,b)=>b.id.localeCompare(a.id);
@@ -133,11 +129,6 @@ function modelRelationship(model,models) {
   const successor=models.find(m=>m.previous===model.id);
   return model.previous?`supersedes ${model.previous}`:successor?`superseded by ${successor.id}`:'relationship not recorded';
 }
-const tracedRun=report=>report.builtFrom.find(b=>b.run)?.run||null;
-const reportName=report=>report.build?`Build ${report.build} · ${report.label.trim()}`:report.label.trim();
-// Reports of one issuer and date share a name, so a list that offers several also names the run each was built from.
-const reportRunLabel=report=>contexts[tracedRun(report)]?.run||null;
-const byBuild=(a,b)=>(b.build||0)-(a.build||0)||a.label.trim().localeCompare(b.label.trim());
 // A frame has no error event for a page that never arrives, so a missing load within the timeout is the failure.
 const frameTimeout=()=>Number.isFinite(window.DESIGN_FRAME_TIMEOUT_MS)?window.DESIGN_FRAME_TIMEOUT_MS:6000;
 function watchFrame(frame,status,loadingText,failedText,link) {
@@ -156,7 +147,6 @@ function watchFrame(frame,status,loadingText,failedText,link) {
   wait();
   return loaded;
 }
-const isReportRoute=(module,section)=>module==='W-Reports'&&window.DESIGN_WORKSPACE.reports.some(r=>r.id===section);
 function firstSection(module,context) {
   const output=defaultOutput(module,context);
   return output?REPORT_PARTS[0][0]:navigationSections(module,context)[0][0];
@@ -166,26 +156,18 @@ const plural=(n,word)=>`${n} ${word}${n===1?'':'s'}`;
 function headTools(module,context,output) {
   const files=moduleEntry(module,context)?.outputs||[],out=output&&data[output];
   const meta=!out?'':files.length>1?`<label class="output-meta output-select">Saved output <select id="output-select">${files.map(id=>`<option value="${esc(data[id].source)}" ${id===output?'selected':''}>${esc(data[id].label)}</option>`).join('')}</select></label>`:out.label===module?'':`<span class="output-meta">Saved output · ${esc(out.label)}</span>`;
-  const used=output?reportsUsing(output):[];
-  const usedIn=used.length===1?`<a class="output-meta" href="${routeHref('W-Reports',used[0].id)}">Used in ${esc(reportName(used[0]))}</a>`:used.length?`<a class="output-meta" href="${routeHref('W-Reports','list')}">Used in ${used.length} deliverables</a>`:'';
   const flag=out?.parseError?`<span class="output-meta">Shown unstructured: ${esc(out.parseError)}</span>`:'';
-  return {meta,usedIn,flag};
+  return {meta,flag};
 }
 function moduleHead({module,context,output}) {
   if(output&&isAnalytical(module))return ''; // The module report draws its own head.
-  const {meta,usedIn,flag}=headTools(module,context,output);
-  return `<div class="module-title"><h2>${esc(moduleNames[module])}</h2>${meta}${usedIn}${flag}</div>`;
+  const {meta,flag}=headTools(module,context,output);
+  return `<div class="module-title"><h2>${esc(moduleNames[module])}</h2>${meta}${flag}</div>`;
 }
 function fixtureTable(module,line) {
   const table=data[module].sections.flatMap(s=>s.blocks).find(b=>b.type==='table'&&b.line===line);
   if(!table)throw new Error(`Missing visual table ${module}:${line}`);
   return table;
-}
-function chartNumber(value) {
-  const clean=plain(value).trim().replace(/,/g,'');
-  if(!/^(?:[-+]?\d+(?:\.\d+)?|\(\d+(?:\.\d+)?\))(?:%|x)?$/.test(clean))return null;
-  const number=Number(clean.replace(/[()%x]/g,''))*(clean.startsWith('(')?-1:1);
-  return Number.isFinite(number)?number:null;
 }
 function chartIntro(id,v) {
   const label=[v.unit,data[id].period].filter(Boolean).join(' · ');
@@ -422,7 +404,7 @@ const headingView=(heading,tag)=>`<${tag}>${rich(heading.replace(METHOD_CODE,'')
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
-const drawnAnchors=id=>new Set(DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)).map(section=>`s-${section.line}`));
+const drawnAnchors=id=>new Set((isNewFormat(data[id].sections)?newFormatRest(id):DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where))).map(section=>`s-${section.line}`));
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
 function chipView(chip,rowModule) {
@@ -454,20 +436,6 @@ function chipsMarkup(key,counted=true) {
     return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${title?`title="${esc(namedText(title,item?.output))}"`:''}>${view.av?`<span class="av ${view.avClass}">${esc(view.av)}</span>`:''}${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
   }),count].filter(Boolean));
 }
-const MISSING_CELL=/^(|[—–-]|Not supplied)$/i;
-// A cell that says there is no value; it neither makes a column numeric nor stops it being numeric.
-const NO_VALUE=/^(|[—–-]|n\.?a\.?|Not supplied\b[\s\S]*)$/i;
-// A column is numeric when every cell that has a value parses as a number, and at least one does.
-function numericColumn(block,c) {
-  const cells=block.rows.map(r=>plain(r.cells[c]??'').trim()).filter(text=>!NO_VALUE.test(text));
-  return c>0&&cells.length>0&&cells.every(text=>chartNumber(text)!==null);
-}
-const cellView=(cell,numeric)=>{
-  const text=plain(cell??'').trim();
-  if(MISSING_CELL.test(text))return `<td${numeric?' class="num"':''}><span class="na" title="${esc(text||'Empty in the handoff')}">n.a.</span></td>`;
-  // A number in a column that also holds text keeps the figure face where it stands; only a wholly numeric column aligns right.
-  return `<td${numeric?' class="num"':chartNumber(text)!==null?' class="fig"':''}>${rich(text)}</td>`;
-};
 const isFindingsTable=b=>b.type==='table'&&b.headers[0]==='Finding'&&b.headers[1]==='Creditor impact';
 // The first table of the reference sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).
 function keyNumbersChoice(id) {
@@ -502,13 +470,13 @@ function runAcceptanceText(context) {
   const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===contexts[context].folder);
   return record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
 }
-const runAcceptance=context=>`<span class="badge badge-gray">${esc(runAcceptanceText(context))}</span>`;
 function reportHead(id) {
   const out=data[id],{module,run:context}=out;
-  const {meta,usedIn,flag}=headTools(module,context,id);
+  const {meta,flag}=headTools(module,context,id);
   const acceptance=runAcceptanceText(context);
   const declared=declaredBadge(out.state.declared);
-  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools"><span class="badge badge-gray">${acceptance}</span>${declared}${meta}${usedIn}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  const notAssessable=isNewFormat(out.sections)&&blocked(out.sections,out.state)?badge('gray','Not assessable'):'';
+  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
@@ -524,26 +492,26 @@ const lastPeriodChart=charts=>charts.findLastIndex(c=>!c.kind||c.kind==='grouped
 const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.
-  const charts=chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all)))),table=keyNumbers(id);
+  const charts=reportChartCards(id),table=keyNumbers(id);
   return charts||table?`<section class="part" id="numbers"><h3>Key numbers</h3>${charts+table}</section>`:'';
 }
 // Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
 const findingRows=id=>data[id].summary?.findings??[];
-function findingArticle(id,row,counted=true) {
-  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${chipsMarkup(`${id}:${row.line}`,counted)}</aside></article>`;
+function findingArticle(id,row) {
+  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</aside></article>`;
 }
 function reportFindings(id) {
   const articles=findingRows(id).map(row=>findingArticle(id,row));
   return articles.length?`<section class="part" id="findings"><h3>Findings</h3>${articles.join('')}</section>`:'';
 }
 // Sections drawn whole, in the order given. Heading tags are relative to the shallowest section (R33a), one step per level, capped at h6; the part heading stays the only h3.
-function readingSections(id,sections) {
+function readingSections(id,sections,base=4) {
   const top=Math.min(...sections.map(section=>section.level));
   return sections.map(section=>{
-    const tag='h'+Math.min(6,4+(section.level-top||0));
+    const tag='h'+Math.min(6,base+(section.level-top||0));
     return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,tag)}${section.blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
-      return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))} ${chipsMarkup(`${id}:${block.line}`)}</p>`;
+      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`;
     }).join('')}</div>`;
   }).join('');
 }
@@ -564,8 +532,8 @@ function reportCalculations(id) {
   return sections.length?fold('calculations',`Calculations · ${data[id].words.calculations} words`,readingSections(id,sections)):'';
 }
 function reportLimits(id) {
-  const line=(key,html)=>`<p>${html} ${chipsMarkup(key)}</p>`;
-  const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(row=>line(`${id}:${row.line}`,`<strong>${rich(row.cells[0])}</strong> ${row.cells.slice(1).map(rich).join(' · ')}`)):[line(`${id}:${block.line}`,rich(block.text.replace(/\n/g,' ')))]).join('')}</div>`);
+  const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
+  const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(r=>row(`${id}:${r.line}`,r.cells[0],`<strong>${rich(r.cells[0])}</strong> ${r.cells.slice(1).map(rich).join(' · ')}`)):[`<p>${paragraphView(block.text,`${id}:${block.line}`,{earlier:true,chips:bodyContext(id,false).chips(`${id}:${block.line}`)}).html}</p>`]).join('')}</div>`);
   return cards.length?`<section class="part" id="limits"><h3>Limits &amp; monitoring</h3><div class="limits">${cards.join('')}</div></section>`:'';
 }
 // The sections no part draws, as a line-numbered list; a section's content is drawn when it is opened (screen.js). An entry is listed when a section it holds
@@ -580,14 +548,50 @@ function reportAudit(id) {
 }
 // A module that reaches no conclusion (established false) keeps its head, band, findings and limits; the reading and reference parts fold under one closed disclosure.
 function reportParts(id) {
-  const out=data[id],folded=out.state.established===false,label=anchor=>anchor==='maps'?'Maps':REPORT_PARTS.find(part=>part[0]===anchor)[1];
+  if(isNewFormat(data[id].sections))return newFormatParts(id);
+  const out=data[id],folded=out.state.established===false,label=anchor=>anchor==='maps'?'Maps':anchor==='timeline'?'Timeline':REPORT_PARTS.find(part=>part[0]===anchor)[1];
   const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
   const {view,reference:referenceWords,calculations:calculationWords}=out.words;
   const parts=[['head',reportHead(id)],['bottom-line',reportBand(id)]];
-  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
-  else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations],['maps',reportMaps(id)]);
+  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
+  else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations],['maps',reportMaps(id)],['timeline',reportTimeline(id)]);
   parts.push(['audit',reportAudit(id)]);
   return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
+}
+// ---- The module page of a new-format handoff (ruling H1, H4): the reader passages first, each under its own heading and drawn by the one paragraph
+// renderer (passageHtml); then the module's charts, maps and timeline; then every other section of the handoff, unchanged, in handoff order.
+const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrary-evidence',limits:'limitations'};
+const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
+const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
+// The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
+const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
+// An output with Events lanes draws them; an earlier-format one that has an event table and no lane draws that table as a timeline.
+function reportTimeline(id) {
+  const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
+  if(html)return `<section class="part" id="timeline">${html}</section>`;
+  const table=eventTable(data[id].sections);
+  return table?`<section class="part" id="timeline">${eventTimeline(id,table,'h3')}</section>`:'';
+}
+// The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
+const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
+// What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
+const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,caption:heading=>plain(heading).replace(METHOD_CODE,'')});
+const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
+function newFormatParts(id) {
+  const out=data[id],passages=readerPassages(out.sections);
+  const parts=[['head','Module',reportHead(id)]];
+  const findings=out.sections.find(section=>section.level===2&&section.heading==='Findings');
+  let heading=findings&&!findings.blocks.length?`<h3>${rich(findings.heading)}</h3>`:'';
+  for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key]) {
+    parts.push([anchor,passages[key].heading,`<section class="part" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]))}${passageHtml(passages[key],id)}</section>`]);
+    heading='';
+  }
+  const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
+  if(charts)parts.push(['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]);
+  if(timeline)parts.push(['timeline','Timeline',timeline]);
+  if(maps)parts.push(['maps','Maps',maps]);
+  for(const section of newFormatRest(id))parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
+  return parts;
 }
 const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
 // What the outline and the section list show: each present part's anchor and label. Presence depends on the data only, so it is built once per output.
@@ -610,7 +614,8 @@ function comparisonView() {
   const id=pins['CP-8'],run=data[id].run,compare=data[id].compare,recheck=data[compare.recheck];
   const parts=heading=>sectionData(id,'comparison').find(s=>s.heading.startsWith(heading)).blocks;
   const tableOf=heading=>parts(heading).find(b=>b.type==='table'),notes=heading=>parts(heading).filter(b=>b.type==='text').map(b=>narrativeMarkup(id,b)).join('');
-  const reportLink=reportId=>`<a class="text-action" href="${routeHref('W-Reports',reportId,null,run)}">${esc(reportName(window.DESIGN_WORKSPACE.reports.find(r=>r.id===reportId)))}${icon('arrow-right')}</a>`;
+  // A compared deliverable is named by its build folder: the delivered report is retired, so there is nothing in the app to open.
+  const reportLink=reportId=>`<span class="code">${esc(reportId)}</span>`;
   const field=(table,row,i)=>`<div class="record-field"><h4>${esc(table.headers[i])}</h4><div>${rich(row.cells[i])}</div></div>`;
   const quoted=(blocks,pattern)=>blocks.filter(b=>b.type==='text').map(b=>b.text.replace(/\n/g,' ').match(pattern)?.[0]).find(Boolean);
   const heading=(title,count)=>`<div class="section-heading compact"><h2>${esc(title)}</h2><span>${count}</span></div>`;
@@ -639,7 +644,7 @@ function routeHref(module,section,key=null,context=current?.context,file=lastFil
 }
 function outlineMarkup(id) {
   const module=data[id].module||id;
-  return `<nav class="section-outline" aria-label="On this page"><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
+  return `<nav class="section-outline" aria-label="On this page"><p class="outline-heading" aria-hidden="true">On this page</p><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
 }
 function unavailableView(module) {
   const ctx=contexts[current.context];
@@ -650,15 +655,6 @@ function outputChooser(module) {
   const ctx=contexts[current.context],files=moduleEntry(module,current.context).outputs;
   return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>Choose a saved output</h2><p>${files.length} versions of this analysis. Choose one to read.</p></div><div class="output-choices">${files.map(id=>`<a class="text-action" href="${routeHref(module,modules[id].first,null,current.context,data[id].source)}">${esc(data[id].label)}${icon('arrow-right')}</a>`).join('')}</div>`;
 }
-// Events come from the run's own CP-1A event table (calendar.js eventTable); no dates are inferred from other runs.
-// The CP-1A output holding that table, default output first, or null.
-function eventsOutput(context) {
-  const entry=moduleEntry('CP-1A',context);
-  return entry?[entry.default,...entry.outputs].find(id=>id&&eventTable(data[id].sections))||null:null;
-}
-const hedgesOutput=context=>{const entry=moduleEntry('CP-2E',context);return entry?.default||entry?.outputs[0]||null;};
-// The first run that has the module's calendar source (route fallback when no run is chosen).
-const calendarRun=module=>Object.keys(contexts).find(context=>module==='lanes'?eventLanes(context).length:module==='CP-1A'?eventsOutput(context):hedgesOutput(context));
 // ---- Calendar lanes: one lane per module output that carries an `Events: <lane>` table (store.py event lanes), on one shared date axis.
 // A lane is named by the table's heading, so no module code is shown. `gap` is the stated reason when the module supplied no dated event.
 function eventLanes(context) {
@@ -668,12 +664,16 @@ function eventLanes(context) {
   });
 }
 // A day is a point; a month, quarter or year is drawn across its whole span (calendar.js eventSpan), never on a day the source does not state.
-// `compact` is the lanes alone with a Calendar link; `at` selects their placement. Scenario events have an outline.
+// `compact` is the lanes alone, without the intro and the event table. Scenario events have an outline.
 // Where each kind of chart table is drawn besides its module page. The views that draw them and the chart index both read this table.
-const PLACEMENT=[['chart','Overview',out=>out?.state.established===true],['map','Overview',(out,name)=>name==='credit-risk transmission'],['map','Evidence',out=>out.module==='CP-5'],['lane','Calendar',()=>true],['lane','Overview',()=>true],['lane','Evidence',out=>out.module==='CP-0']];
+// Overview charts and maps are the visuals catalogue's own placement (docs/visualisations/catalogue.csv, window.DESIGN_WORKSPACE.visuals) for a module that is not blocked.
+const onOverview=out=>{const code=aliases[out.module]??out.module;return window.DESIGN_WORKSPACE.visuals.some(visual=>visual.module===code&&/\bOverview\b/.test(visual.placement))&&!blocked(out.sections,out.state);};
+// A lane is not drawn on the Overview: its dated rows feed the Overview's nearest dates (overviewDates), which is what 'Overview' means for a lane.
+const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['lane','Overview',()=>true]];
 const placed=(kind,where,out,name)=>PLACEMENT.some(([k,w,test])=>k===kind&&w===where&&test(out,name));
-function eventLanesView(context,{compact=false,at=null}={}) {
-  const lanes=eventLanes(context).filter(lane=>(!at||placed('lane',at,data[lane.id]))).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
+function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event lanes'}={}) {
+  // `only` is one output's own lanes, whichever saved output it is; otherwise the run's lanes (each module's default output).
+  const lanes=(only?(data[only]?.events||[]).map(lane=>({...lane,id:only})):eventLanes(context)).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
   if(!lanes.length)return '';
   const scenario=row=>/^Scenario — /.test(row.cells[4]);
   const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
@@ -690,8 +690,7 @@ function eventLanesView(context,{compact=false,at=null}={}) {
   })).join('');
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
   const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
-  const open=compact?`<p class="run-inventory"><a class="text-action" href="${routeHref('W-Calendar','lanes',null,context)}">Open the Calendar tab${icon('arrow-right')}</a></p>`:'';
-  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><h2>Event lanes</h2><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${compact?open:''}${!compact&&body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${!compact&&body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
 }
 // ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.
@@ -711,9 +710,8 @@ function mapLayers(edges,nodes=[]) {
   return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
 }
 const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:46,gx:120,gy:22,pad:12};
-// `marks` (name to {shape,word}) puts a module's state in its box by word and shape; `alone` adds names that have no edge.
-function mapDiagram(id,map,rows,marks=null,alone=[]) {
-  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges,alone),{w,h,gx,gy,pad}=BOX;
+function mapDiagram(id,map,rows) {
+  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gx,gy,pad}=BOX;
   const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
   for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
   const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
@@ -724,17 +722,12 @@ function mapDiagram(id,map,rows,marks=null,alone=[]) {
     const low=Math.max(a.y,b.y)+h+34,x1=a.x+w/2+(from===to?-30:0),x2=b.x+w/2+(from===to?30:0);
     return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,x:(x1+x2)/2,y:low-8};
   };
-  const lines=name=>marks?.has(name)?[name.length>18?name.slice(0,17)+'…':name,marks.get(name).word]:[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
-  const glyph=(name,p)=>{
-    const mark=marks?.get(name),cx=p.x+w-14,cy=p.y+14,cls=`class="map-state shape-${mark?.shape}"`;
-    if(!mark)return '';
-    return mark.shape==='open'?`<rect ${cls} x="${cx-5}" y="${cy-5}" width="10" height="10"/>`:mark.shape==='unsummarised'?`<rect ${cls} x="${cx-4}" y="${cy-4}" width="8" height="8" transform="rotate(45 ${cx} ${cy})"/>`:`<circle ${cls} cx="${cx}" cy="${cy}" r="5"/>`;
-  };
+  const lines=name=>[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
   const drawn=edges.map((edge,at)=>{
     const p=path(edge,cut[at]),dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length];
     return `<path class="map-edge${cut[at]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${p.x}" y="${p.y}" text-anchor="middle">${esc(edge.type)}</text>`;
   }).join('');
-  const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text>${glyph(name,p)}</g>`;}).join('');
+  const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
   const label=`${map.name}: ${names.length} nodes, ${edges.length} edges. The edge table follows.`;
   const marker=`<defs><marker id="map-arrow-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
   const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
@@ -750,43 +743,20 @@ function mapsView(id,tag='h2',keep=()=>true) {
     return `<div class="map-card">${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
   }).join('');
 }
-// Maps placed on the Overview or Evidence page; the module page uses reportMaps.
-function mapsPlaced(context,{at=null}={}) {
-  const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(Boolean);
-  const html=ids.map(id=>mapsView(id,'h2',map=>!at||placed('map',at,data[id],map.name))).join('');
-  return html?`<section class="map-section">${html}</section>`:'';
-}
+// Maps on a module page.
 const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4')}</section>`:'';
-// The run's own records. Dependencies are the method registry's edges for the modules the run requested and times are the run's event log, both read when the library was built (update_library.py `run_record`); a module with no event has no time.
-const EDGE_WORD={block:'Block',restricted:'Restricted'};
-function statusMapView(context,{timeline=false}={}) {
-  const record=contexts[context]?.record;
-  const entry=module=>{const id=defaultOutput(module,context);return {module,out:id?data[id]:null,choices:(moduleEntry(module,context)?.outputs||[]).length};};
-  const entries=record?record.steps.map(({module})=>entry(module)):contexts[context]?runGroups(context).flatMap(([,items])=>items):[];
-  if(!entries.length)return '';
-  const shape=({out})=>!out?'none':out.state.established===true?'established':out.state.established===false?'open':'unsummarised';
-  const word=({out,choices})=>out?stateWord(out.state.established):choices?`${choices} saved outputs, none chosen`:'No saved output';
-  const items=entries.map(item=>{
-    const why=item.out?.state.established===false&&item.out.summary?.limitation?` <span class="status-why">${rich(item.out.summary.limitation)}</span>`:'';
-    return `<li class="status-item"><span class="state-shape shape-${shape(item)}" aria-hidden="true"></span>${moduleLink(item.module)} <strong class="status-word">${esc(word(item))}</strong>${why}</li>`;
-  }).join('');
-  const title=`<h2>${timeline?'Run progress':'Readiness by module'}</h2>`;
-  if(!record)return `<section class="run-section status-map">${title}<p class="intro">No run record was read for this run, so no dependency or time is shown. Each module’s state is its own handoff’s; modules are listed in reading-group order.</p><ol class="status-list">${items}</ol></section>`;
-  const rows=record.edges.map(([from,to,rule])=>({cells:[moduleTitle(from),'supplies',EDGE_WORD[rule]||rule,moduleTitle(to)]}));
-  const marks=new Map(entries.map(item=>[moduleTitle(item.module),{shape:shape(item),word:word(item)}]));
-  const diagram=mapDiagram('run',{name:'Module dependencies',table:'run'},rows,marks,entries.map(item=>moduleTitle(item.module)));
-  const edgeTable=rows.length?`<table class="map-table"><caption>Required dependencies, producer to consumer</caption><thead><tr>${['From','Relationship','Edge type','To'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(({cells})=>`<tr>${cells.map(cell=>`<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'';
-  const at=time=>time?esc(time):'Not recorded';
-  const logIssue=record.eventsIssue?`<p class="intro">Event log could not be read: ${esc(record.eventsIssue)}. No execution times are shown.</p>`:'';
-  const steps=timeline&&record.timed?`<table class="timeline-table"><caption>Execution order and times, as the run’s event log states them</caption><thead><tr>${['Step','Module','State','Started','Accepted'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${entries.map((item,n)=>`<tr><td>${n+1}</td><td>${moduleLink(item.module)}</td><td>${esc(word(item))}</td><td>${at(record.steps[n].started)}</td><td>${at(record.steps[n].accepted)}</td></tr>`).join('')}</tbody></table>`:`${timeline&&!record.eventsIssue?'<p class="intro">Order only, no times recorded.</p>':''}<ol class="status-list">${items}</ol>`;
-  const order=record.timed?'the recorded order of the run’s event log, modules never started last in plan order':'plan order from the method registry';
-  return `<section class="run-section status-map">${title}<p class="intro">Edges are the method registry’s required dependencies for the modules this run requested (Block: the consumer needs the producer; Restricted: it runs with a limit). Each box shows that module’s state from its own handoff, by word and shape: filled circle reaches a conclusion, empty square not assessable, dotted diamond no reader summary, dashed circle no output chosen. Modules are listed in ${order}.</p>${diagram}${edgeTable}${logIssue}${steps}</section>`;
-}
 // ---- Chart index (CP-MODEL-V02): one row per `Chart data:`, `Map:` or `Events:` table the run's handoffs hold, in the state the build gave it. It lists and links; nothing is drawn or recomputed here.
 const CHART_HEADING=/^(Chart data|Map|Events): /;
 const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';
 const raised=text=>text.charAt(0).toUpperCase()+text.slice(1);
-const shownIn=(out,kind,name)=>[...kind==='lane'?[]:[`${moduleTitle(out.module)} page`],...PLACEMENT.filter(([k,,test])=>k===kind&&test(out,name)).map(([,where])=>where)];
+const shownIn=(out,kind,name)=>[`${moduleTitle(out.module)} page`,...PLACEMENT.filter(([k,,test])=>k===kind&&test(out,name)).map(([,where])=>where)];
+// The part of the module page that holds a chart, map or lane table: charts (earlier format: Key numbers), maps, and for a lane the routable s-<line>
+// section that holds its table, else the page's Timeline part. Every one is an anchor of reportParts, so the link never lands on the page head.
+function tableForm(id,kind,section) {
+  if(kind==='map')return 'maps';
+  if(kind==='chart')return isNewFormat(data[id].sections)?'charts':'numbers';
+  return drawnAnchors(id).has(`s-${section.line}`)?`s-${section.line}`:'timeline';
+}
 function chartRows(context) {
   const ids=Object.values(contexts[context]?.modules||{}).map(entry=>entry.default||entry.outputs[0]).filter(id=>id&&data[id]);
   return ids.flatMap(id=>{
@@ -806,79 +776,91 @@ function chartRows(context) {
       const unit=drawn&&kind==='chart'?(here.unit===''?'Stated per row':here.unit??NOT_STATED):NOT_STATED;
       const period=drawn&&kind==='chart'&&table.headers[0]==='Period'?[...new Set([table.rows[0].cells[0],table.rows.at(-1).cells[0]])].map(plain).join(' to '):NOT_STATED;
       const line=table.rows[0]?.line,key=`${id}:${line}`;
-      const form=!drawn?null:kind==='lane'?routeHref('W-Calendar','lanes',null,out.run,null):routeHref(out.module,kind==='map'?'maps':'numbers',null,out.run,out.source);
+      const form=!drawn?null:routeHref(out.module,tableForm(id,kind,section),null,out.run,out.source);
       return [{key,title,owner:moduleTitle(out.module),state,limitation,unit,period,where:drawn?shownIn(out,kind,here.name).join(', '):'Not drawn',form,source:evidence.has(key)?evidenceHref(id,line):null,line}];
     });
   });
 }
 function chartIndex(context) {
   if(!contexts[context])return '';
-  const rows=chartRows(context),open='<section class="run-section chart-index" id="run-charts" data-run-part="Chart index"><h2>Chart index</h2>';
+  const rows=chartRows(context),open='<section class="run-section chart-index" id="run-charts"><h2>Chart index</h2>';
   if(!rows.length)return `${open}<p class="intro">No chart, map or calendar lane table is held in this run’s handoffs.</p></section>`;
   const head=['Chart','Module','State','Limitation','Unit','Period','Shown in','Table form','Source'];
   const body=rows.map(row=>`<tr data-chart="${esc(row.key)}"><th scope="row">${esc(row.title)}</th><td>${esc(row.owner)}</td><td>${esc(row.state)}</td><td class="index-limit">${esc(row.limitation)}</td><td>${esc(row.unit)}</td><td>${esc(row.period)}</td><td>${esc(row.where)}</td><td>${row.form?`<a href="${esc(row.form)}">Table form</a>`:'Not drawn'}</td><td>${row.source?`<a href="${esc(row.source)}">Line ${row.line}</a>`:NOT_STATED}</td></tr>`).join('');
   return `${open}<p class="intro">Every chart, map and calendar lane in this run’s handoffs, as the handoff states it. A chart drawn in several places is one row. This index lists them; it recalculates nothing.</p><div class="table-scroll" role="region" aria-label="Chart index" tabindex="0"><table class="index-table"><thead><tr>${head.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></section>`;
 }
-// ---- Run, revision and file navigation (CP-OS-V03). Only what the store records: the run's issuer and as-of, the issuer's other runs, and the run's files by role. No run records a revision of another, so none is claimed.
-function contextBar(module,context) {
+// ---- The run label (decision 12 of the 2026-11-11 reader ruling): every run page says which run it shows, and where the issuer's other runs are.
+// H7: a run is "Earlier format" when any of its handoffs (every saved output of every module, not only the defaults) has no Bottom line first under Findings.
+const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).flatMap(entry=>entry.outputs).filter(id=>data[id]).map(id=>data[id].sections));
+const EARLIER_FORMAT_BADGE='<span class="badge badge-gray earlier-format">Earlier format</span>';
+const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
+const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
+// "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
+function runLabel(module,context) {
   const ctx=contexts[context];
   if(!ctx)return '';
-  const asOf=run=>run.asOf?`As of ${displayDate(run.asOf)}`:'As-of date not recorded';
-  const here=['W-Calendar','W-Forecast','W-Evidence'].includes(module)?module:'W-Overview';
-  const others=Object.entries(contexts).filter(([key,run])=>key!==context&&sameIssuer(run.issuerKey,ctx.issuerKey));
-  const runs=others.length?`<details class="context-pop"><summary>Other runs of this issuer (${others.length})</summary><div class="context-list"><ul>${others.map(([key,run])=>`<li><a href="${esc(routeHref(here,navigationSections(here,key)[0][0],null,key,null))}">${esc(`${run.run} · ${asOf(run)}`)}</a></li>`).join('')}</ul></div></details>`:'<span class="context-none">No other run of this issuer</span>';
+  const here=['W-Forecast','W-Evidence'].includes(module)?module:'W-Overview';
   const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${contexts[r.run].run}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
-  const revised=revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:'<span class="context-none">No revision order is recorded between runs</span>';
-  const entries=Object.entries(ctx.modules),link=(href,label,download=false)=>`<li><a href="${esc(href)}"${download?' download':''}>${esc(label)}</a></li>`;
-  const source=entries.flatMap(([,entry])=>entry.inputs).map(id=>link(store.inputs[id].href,handoffLabel(store.inputs[id].source),true));
-  const analysis=entries.flatMap(([module,entry])=>entry.outputs.map(id=>link(routeHref(module,modules[id].first,null,context,data[id].source),data[id].label===module?moduleTitle(module):`${moduleTitle(module)} · ${data[id].label}`)));
-  const exported=reportsBuiltFrom(context).flatMap(report=>[link(routeHref('W-Reports',report.id,null,context,null),reportName(report)),...report.files.filter(f=>EXPORT_FILE(f.name)).map(f=>link(f.href,`${reportName(report)} · ${handoffLabel(f.name)}`,true))]);
-  const role=(name,title,items)=>`<section class="context-role" data-role="${name}"><h3>${title}</h3>${items.length?`<ul>${items.join('')}</ul>`:`<p class="small">None retained for this run</p>`}</section>`;
-  const count=source.length+analysis.length+exported.length;
-  return `<p class="context-run"><strong>${esc(ctx.title)}</strong> <span class="code">${esc(ctx.run)}</span> <span>${esc(asOf(ctx))}</span></p>${revised}${runs}<details class="context-pop"><summary>Files (${count})</summary><div class="context-list">${role('source','Source',source)}${role('analysis','Analysis',analysis)}${role('export','Export',exported)}</div></details>`;
+  return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))} · <span class="code">${esc(ctx.run)}</span>${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
 }
-function calendarSections(context) {
-  const sections=[];
-  if(eventLanes(context).length)sections.push(['lanes','Event lanes',[]]);
-  if(eventsOutput(context))sections.push(['tdg','Issuer events',[]]);
-  if(hedgesOutput(context))sections.push(['hedges','Hedge schedule',[]]);
-  return sections.length?sections:[['unavailable','Calendar availability',[]]];
+// ---- Report history (decision 4): one row per run of the issuer, latest as-of date first. Each row opens that run's Overview.
+const SOURCE_NOT_RECORDED='Not recorded';
+function historyView(context) {
+  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
+  const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey)));
+  const row=run=>{
+    const key=keyOf.get(run),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}, ${run.run}`;
+    const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
+    const modulesRun=codes.length?`<ul class="history-modules">${codes.map(code=>`<li>${esc(moduleTitle(code))} (<small class="ref">${esc(code)}</small>)</li>`).join('')}</ul>`:SOURCE_NOT_RECORDED;
+    const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
+    return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}</td></tr>`;
+  };
+  return `<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
 }
 function forecastSections(context) {
   const models=runModels(context);
   return models.length?models.map(m=>[m.id,m.id,[]]):[['none','Forecast availability',[]]];
 }
-// The run's issuer reports, then any other report built from this run's files (parseRoute sends such a report to this run).
-function runReports(context) {
-  const own=issuerReports(context);
-  return [...own,...(context?reportsBuiltFrom(context).filter(r=>!own.includes(r)):[])];
-}
-function reportSections(context) {
-  const reports=runReports(context);
-  return reports.length?[['list','Reports',[]],...reports.map(r=>[r.id,reportName(r),[]])]:[['none','Report availability',[]]];
-}
 function navigationSections(module,context,output=defaultOutput(module,context)) {
-  if(module==='W-Calendar')return calendarSections(context);
-  if(module==='W-Evidence')return [['sources','Retained outputs',[]]];
-  if(module==='W-Reports')return reportSections(context);
-  if(module==='W-Forecast')return forecastSections(context);
+  if(module==='W-Evidence')return [['sources','Evidence',[]]];
+  if(module==='W-Forecast'||module===MODEL_ENTRY[0])return forecastSections(context);
   if(isAnalytical(module)&&output)return reportOutline(output);
   if(Object.hasOwn(modules,module))return modules[module].sections;
   return [['status',moduleEntry(module,context)?.outputs.length?'Choose a saved output':availability(module,context),[]]];
 }
+// ---- The Modules navigator (ruling decision 5): flat and always open, only the modules this run holds, under plain group headings. Each entry is the plain
+// name, then the code in the code style (screen.js nameCodes leaves .module-code alone). The open entry carries its page outline directly under it.
+const MODEL_ENTRY=['CP-MODEL','Cash flow model'];
+function navigatorGroups(context) {
+  if(!contexts[context])return []; // the library page has no run, so no module list
+  const ran=new Set(contextModules(context)),named=groups.map(([title,items])=>[title,items.filter(([id])=>ran.has(id))]).filter(([,items])=>items.length);
+  return runModels(context).length?[...named,['Delivered model',[MODEL_ENTRY]]]:named;
+}
+// The section titles a navigator entry is searched by: the model's, or those of the module's default output.
+const entrySections=(id,context)=>{const output=defaultOutput(id,context);return id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];};
+function navigatorEntry(id,name,module,context,query) {
+  const output=defaultOutput(id,context),sections=entrySections(id,context);
+  const hit=query&&sections.find(s=>s[1].toLowerCase().includes(query));
+  const open=id===module,notAssessable=output&&blocked(data[output].sections,data[output].state);
+  const outline=open&&current.output&&isAnalytical(id)?outlineMarkup(current.output):'';
+  return `<li><a href="${routeHref(id,hit?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item${open?' selected':''}"${open?' aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code">${esc(id)}</span>${notAssessable?badge('gray','Not assessable'):''}${hit?`<small>${esc(hit[1])}</small>`:''}</a>${outline}</li>`;
+}
+// The entries that match `query` (name, code, aliases, section titles; lower case), as markup and a count.
+function navigatorView(module,query) {
+  const context=current.context;
+  let count=0;
+  const html=navigatorGroups(context).map(([title,items])=>{
+    const shown=items.filter(([id,name])=>{
+      const sections=entrySections(id,context);
+      return `${id} ${Object.keys(aliases).filter(k=>aliases[k]===id).join(' ')} ${name} ${sections.map(s=>s[1]).join(' ')}`.toLowerCase().includes(query);
+    });
+    count+=shown.length;
+    return shown.length?`<div class="nav-group"><h2 class="nav-heading">${esc(title)}</h2><ul class="module-list">${shown.map(([id,name])=>navigatorEntry(id,name,module,context,query)).join('')}</ul></div>`:'';
+  }).join('')+(count?'':'<p class="empty">No match. Try another name or topic.</p>');
+  return {html,count};
+}
 const moduleHref=id=>routeHref(id,lastSection.get(current?.context+':'+id)||firstSection(id,current?.context));
 function moduleLink(id,label){return `<a class="text-action" href="${moduleHref(id)}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}
-// Rows repeat the same two actions, so each is an icon; its accessible name and tooltip still say what it does.
-const iconAction=(action,target,href,name,download=false)=>`<a class="icon-action" href="${esc(href)}" ${download?'download':''} aria-label="${esc(`${action}: ${target}`)}" title="${action}">${icon(name)}</a>`;
-function sourceInventory(context) {
-  const identity=f=>`<details><summary>File identity</summary><p>${esc(handoffLabel(f.file))}</p><p class="hash">SHA-256 ${f.sha256}</p></details>`;
-  const rows=Object.entries(contexts[context].modules).flatMap(([module,entry])=>[
-    ...entry.outputs.map(id=>{const out=data[id];const target=out.label===module?moduleTitle(module):`${moduleTitle(module)}, ${out.label}`;return `<section><div><h3>${esc(moduleTitle(module))}</h3>${out.label===module?'':`<p>${esc(out.label)}</p>`}${out.scope==='Retained module output'?'':`<span class="badge badge-gray">${esc(out.scope)}</span>`}</div><div>${iconAction('Open output',target,routeHref(module,modules[id].first,null,context,out.source),'arrow-right')}${iconAction('Download original handoff',target,out.href,'download',true)}</div>${identity(out)}</section>`;}),
-    ...entry.inputs.map(id=>{const f=store.inputs[id];return `<section><div><h3>${esc(moduleTitle(module))}</h3><p>${esc(f.source)}</p><span class="badge badge-gray">Input</span></div><div>${iconAction('Download original file',`${moduleTitle(module)}, ${f.source}`,f.href,'download',true)}</div>${identity(f)}</section>`;})
-  ]);
-  if(!rows.length)return `<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>No retained files for this run</h2><p>No module outputs or inputs were found in this run’s folder.</p></div><a class="text-action switch-case" href="#W-Library/cases">Choose another run</a>`;
-  return `<div class="source-inventory">${rows.join('')}</div>`;
-}
 const badge=(kind,text)=>`<span class="badge badge-${kind}">${esc(text)}</span>`;
 // The acceptance state a report declares, as the badge and muted qualification text every report listing shows.
 const QUALIFICATIONS=['unrun','partial','qualified','blocked'];
@@ -976,7 +958,7 @@ function forecastView(context,id) {
 }
 // The Library screen. The served catalogue (window.DESIGN_CATALOGUE) is screened and sorted by LibraryLogic (screening.js); this places it. Nothing here calculates, converts or rescales a value.
 const METRIC_NAMES={revenue:'Revenue',ebitda:'EBITDA',leverage:'Leverage',net_leverage:'Net leverage',coverage:'Interest coverage',cash:'Closing cash',undrawn:'Undrawn facilities',cashflow:'Cash flow measure'};
-const LIBRARY_COLUMNS=[['name','Issuer'],[null,'Run'],[null,'Sector'],['date','Evidence date'],['leverage','Leverage'],['net_leverage','Net leverage'],['coverage','Coverage'],['rating','Rating'],['completion','Completeness'],[null,'Deliverable']];
+const LIBRARY_COLUMNS=[['name','Issuer'],[null,'Run'],[null,'Sector'],['date','Evidence date'],['leverage','Leverage'],['net_leverage','Net leverage'],['coverage','Coverage'],['rating','Rating'],['completion','Completeness'],[null,'Open']];
 const TERM_LABELS={size_m:'Size',tenor_years:'Tenor',talk_spread_bps_low:'Spread talk, low',talk_spread_bps_high:'Spread talk, high',talk_oid_low:'OID talk, low',talk_oid_high:'OID talk, high',floor_pct:'Floor',coupon_pct:'Coupon',margin_bps:'Margin',bid:'Bid',ask:'Ask',price:'Price',yield_pct:'Yield',spread_bps:'Spread'};
 const CLASSIFICATIONS={investment_grade:'Investment grade',high_yield:'High yield'},RATING_SCOPES={issuer:'Issuer',facility:'Facility'};
 // Coverage group names as the screen says them; the first four hold no figure, so their hidden rows have none recorded.
@@ -989,10 +971,10 @@ function libraryDate(value) {
   const day=new Date(`${value}T12:00:00Z`);
   return Number.isNaN(day.getTime())||day.toISOString().slice(0,10)!==value?String(value):day.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});
 }
-// Only a file of this workspace is linked, in the two forms the library build writes: a presented report (reports/…) or a retained file beside the library (../…).
+// Only a file of this workspace is linked, in the one form the library build writes: a retained file beside the library (../…).
 // No scheme, no root, no further climbing, plain or percent-encoded: a record cannot send the reader elsewhere.
 const libraryPath=href=>{
-  const rest=/^(?:reports\/|\.\.\/)([\w.~%\/-]+)$/.exec(href??'')?.[1];
+  const rest=/^\.\.\/([\w.~%\/-]+)$/.exec(href??'')?.[1];
   return !!rest&&!/%(2e|2f|5c)/i.test(rest)&&rest.split('/').every(part=>part&&part!=='.'&&part!=='..');
 };
 // A value as served: grouping and its own decimals only; no value is missing-as-zero.
@@ -1005,23 +987,22 @@ function libraryMetric(metric) {
 }
 // A catalogue row joins the store by folder: a match opens that run's Overview; no match keeps the row without the link.
 const libraryRunKey=run=>Object.keys(contexts).find(key=>contexts[key].folder===run.id)??null;
-const primaryArtifact=run=>run.artifacts.find(a=>a.available&&a.state!=='superseded');
-// A pinned report or published model the store holds opens inside the app; any other file opens in its own tab.
+const primaryArtifact=run=>run.artifacts.find(a=>a.kind==='model'&&a.available&&a.state!=='superseded');
+// A published model the store holds opens inside the app (its Forecast page); any other model file opens in its own tab. The delivered report is retired
+// (decision 1 of the reader ruling): a report artifact is named, never linked.
 function libraryArtifactLink(artifact,key,text,cls,aria='') {
-  // The build writes one address for a file wherever it is named, so the catalogue's artifact and the store's report or model match by it.
-  const report=window.DESIGN_WORKSPACE.reports.find(r=>r.href===artifact.href);
+  // The build writes one address for a file wherever it is named, so the catalogue's artifact and the store's model match by it.
   const model=window.DESIGN_WORKSPACE.models.find(m=>m.href===artifact.href),owner=model&&modelOwnRun(model);
-  const inApp=report?routeHref('W-Reports',report.id,null,key&&sameIssuer(report.issuerKey,contexts[key].issuerKey)?key:tracedRun(report)):owner?routeHref('W-Forecast',model.id,null,owner):null;
-  const href=inApp??(libraryPath(artifact.href)?artifact.href:null);
+  const inApp=owner?routeHref('W-Forecast',model.id,null,owner):null;
+  const href=inApp??(artifact.kind==='model'&&libraryPath(artifact.href)?artifact.href:null);
   if(!href)return `<span>${esc(text)}</span>`;
   return `<a class="${cls}" href="${esc(href)}" ${inApp?'':'target="_blank" rel="noopener"'} ${aria?`aria-label="${esc(aria)}"`:''}>${esc(text)}${inApp?'':' ↗'}</a>`;
 }
-// What a deliverable is called: the report or model the store holds at its address, else the label as catalogued (often the folder's hash).
+// What a deliverable is called: the model the store holds at its address, else the label as catalogued; a label that is only the delivery folder's hash is "Delivered report".
 function libraryArtifactName(artifact) {
-  const report=window.DESIGN_WORKSPACE.reports.find(r=>r.href===artifact.href),model=window.DESIGN_WORKSPACE.models.find(m=>m.href===artifact.href);
-  return report?reportName(report):model?model.id:artifact.label;
+  const model=window.DESIGN_WORKSPACE.models.find(m=>m.href===artifact.href);
+  return model?model.id:/^[0-9a-f]{64}$/.test(artifact.label)?'Delivered report':artifact.label;
 }
-const libraryOpenText=artifact=>artifact.kind==='model'?'Open model':artifact.relationship==='related'?'Related report':'Open report';
 function libraryRows() {
   const runs=catalogueRuns(),f={...libraryFilters};
   // Search also reads the issuer name and terms the store recorded for the joined run, appended to the title the search reads; counts, hidden rows and the list all see the same text.
@@ -1059,7 +1040,9 @@ function libraryRow(run,selected,skipped) {
   const key=libraryRunKey(run),artifact=primaryArtifact(run);
   const name=`<td><button class="library-run-name" type="button" data-library-select="${esc(run.id)}" aria-expanded="${selected}" aria-controls="run-detail" aria-label="${esc(`View ${run.name}: ${run.title}`)}">${esc(run.name)}</button></td>`;
   const id=`<td class="run-id" title="${esc(run.id)}">${key?`<a href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open run: ${run.name}, ${run.id}`)}">${esc(run.id)}</a>`:esc(run.id)}</td>`;
-  const deliverable=artifact?libraryArtifactLink(artifact,key,libraryOpenText(artifact),'report-link',`${libraryOpenText(artifact)}: ${run.name}, ${artifact.label}`):skipped?'No report · not screened':'Handoffs only';
+  const label=`${run.name}, ${run.id}`,links=key?[`<a class="report-link" href="${routeHref('W-Overview','overview',null,key)}" aria-label="${esc(`Open run: ${label}`)}">Open run</a>`,`<a class="report-link" href="${routeHref('W-Report','history',null,key)}" aria-label="${esc(`Report history: ${label}`)}">History</a>`]:[];
+  if(artifact)links.push(libraryArtifactLink(artifact,key,'Open model','report-link',`Open model: ${run.name}, ${artifact.label}`));
+  const deliverable=links.length?links.join(' · '):skipped?'Not screened':'Handoffs only';
   return `<tr${selected?' class="selected"':''}>${name}${id}<td>${esc(run.sector)}</td><td>${esc(libraryDate(run.date))}</td>${libraryMetricCell(run,'leverage')}${libraryMetricCell(run,'net_leverage')}${libraryMetricCell(run,'coverage')}${libraryRatingCell(run)}<td>${esc(run.completion===null?'Not assessed':`${run.completion}%`)}</td><td>${deliverable}</td></tr>`;
 }
 function libraryResults({runs,rows,skipped,hidden}) {
@@ -1104,7 +1087,7 @@ function libraryDetail({rows}) {
   const run=rows.find(r=>r.id===libraryState.selected);
   if(!run)return '';
   const key=libraryRunKey(run),artifact=primaryArtifact(run);
-  const open=[key?`<a class="secondary-action" href="${routeHref('W-Overview','overview',null,key)}">Open run</a>`:'',artifact?libraryArtifactLink(artifact,key,libraryOpenText(artifact),'primary-action'):libraryPath(run.handoff_href)?`<a class="primary-action" href="${esc(run.handoff_href)}" target="_blank" rel="noopener">Open primary handoff ↗</a>`:''].join('');
+  const open=[key?`<a class="secondary-action" href="${routeHref('W-Overview','overview',null,key)}">Open run</a><a class="secondary-action" href="${routeHref('W-Report','history',null,key)}">History</a>`:'',artifact?libraryArtifactLink(artifact,key,'Open model','primary-action'):libraryPath(run.handoff_href)?`<a class="primary-action" href="${esc(run.handoff_href)}" target="_blank" rel="noopener">Open primary handoff ↗</a>`:''].join('');
   const done=run.completion===null?['Workflow completeness · Not assessed','A verified checklist for this workflow has not been supplied. Available files and checked ratios do not establish end-to-end completion.']:[`Workflow completeness · ${run.completion}%`,run.checkpoints?`${run.checkpoints.done} of ${run.checkpoints.total} required checkpoints completed. This is workflow progress, not a credit score.`:'This is workflow progress, not a credit score.'];
   const artifacts=run.artifacts.length?run.artifacts.map(a=>`<li>${a.available?libraryArtifactLink(a,key,libraryArtifactName(a),''):`<span>${esc(libraryArtifactName(a))} · Unavailable</span>`}<small>${esc(a.issue||(a.state==='superseded'?'Retained failed attempt':`${a.relationship==='related'?'Related annual report · ':''}${reportAcceptance({mode:a.state}).state}`))}</small></li>`).join(''):'<li>No final deliverable has been indexed for this run.</li>';
   return `<div class="detail-head"><div><h2>${esc(run.name)}</h2><p class="cell-secondary">${esc(`${run.issuer} · ${run.id} / ${run.title}`)}</p><p class="cell-secondary">${esc(['Evidence date',libraryDate(run.date),run.period].filter(Boolean).join(' · '))}</p></div><div class="detail-actions">${artifact?`<span class="badge badge-gray">${esc(reportAcceptance({mode:artifact.state}).state)}</span>`:''}${open}</div></div><div class="detail-layout"><div><p>${esc(run.summary)}</p><h3>Scope &amp; open questions</h3><ul class="gap-list">${run.gaps.map(g=>`<li>${esc(g)}</li>`).join('')}</ul><h3>Classification &amp; currency</h3>${[['Classification',CLASSIFICATIONS[run.classification],run.classification_source],...(run.private_side===true?[['Private-side','Yes',run.private_side_source]]:[]),['Currency',run.currency]].map(([name,value,source])=>`<p>${esc(`${name} · ${value||'Not stated'}`)} ${librarySourceAction(run,source)}</p>`).join('')}${run.ratings.length?`<h3>Dated ratings</h3>${run.ratings.map(r=>`<p>${esc(`${r.label} · ${libraryRatingText(r)}`)} ${librarySourceAction(run,r.source)}</p>`).join('')}`:''}<div class="completion-box"><strong>${esc(done[0])}</strong>${esc(done[1])}</div></div><div>${libraryMetrics(run)}${libraryFacilities(run)}<h3>Deliverables &amp; revision history</h3><ul class="artifact-list">${artifacts}</ul>${librarySources(run)}</div></div>`;
@@ -1136,10 +1119,19 @@ function libraryPanel() {
 }
 // A panel rebuild shows an unreadable number box empty, so its stored 'invalid' bound is dropped to keep the filter and the control in agreement.
 const clearInvalidBounds=()=>Object.keys(libraryFilters).forEach(k=>{if(libraryFilters[k]==='invalid')libraryFilters[k]='';});
+// Read when the library was built: the run folders it does not show, with the reason, and the issues the build found. Closed by default; it changes nothing.
+function libraryNotShown(activity) {
+  if(!activity)return '<p class="intro">The build’s list of folders not shown and its issues could not be read; nothing is claimed about them.</p>';
+  const {excluded,issues}=activity;
+  if(!excluded.length&&!issues.length)return '';
+  const folders=excluded.length?`<h3>Run folders not shown</h3><ol class="report-list">${excluded.map(([folder,reason])=>`<li class="report-row"><span class="code">${esc(folder)}</span><span>${esc(reason)}</span></li>`).join('')}</ol>`:'';
+  const found=issues.length?`<h3>Issues</h3><ul class="report-list">${issues.map(i=>`<li class="report-row">${esc(i)}</li>`).join('')}</ul>`:'';
+  return `<details class="library-not-shown"><summary>Not shown (${excluded.length} folders, ${issues.length} issues)</summary>${folders}${found}</details>`;
+}
 function libraryView() {
   clearInvalidBounds();
   const view=libraryRows();
-  return `<div class="library-main"><form id="library-filters" class="library-panel" role="search" aria-label="Screen issuer runs">${libraryPanel()}</form><section class="library-results-panel" aria-label="Run results"><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected run details" tabindex="-1" ${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>`;
+  return `<div class="library-main"><form id="library-filters" class="library-panel" role="search" aria-label="Screen issuer runs">${libraryPanel()}</form><section class="library-results-panel" aria-label="Run results"><p id="library-count" role="status" aria-live="polite">${libraryCount(view)}</p><div id="library-coverage" class="library-coverage" role="status" aria-live="polite">${libraryCoverage(view)}</div><div id="library-results">${libraryResults(view)}</div></section><section id="run-detail" class="run-detail" aria-label="Selected run details" tabindex="-1" ${view.rows.some(r=>r.id===libraryState.selected)?'':'hidden'}>${libraryDetail(view)}</section></div>${libraryNotShown(window.DESIGN_ACTIVITY)}`;
 }
 // Re-places the results from the current filters; the panel itself is only rebuilt on a reset so typing keeps its focus.
 function updateLibrary(panel=false) {
@@ -1157,50 +1149,8 @@ function updateLibrary(panel=false) {
   for(const group of Object.keys(LIBRARY_GROUPS))$(`${group}-filter-count`).textContent=libraryActive(group)?`· ${libraryActive(group)} active`:'';
   writeLibraryHash();
 }
-function reportList(context) {
-  const ctx=contexts[context],all=window.DESIGN_WORKSPACE.reports,built=reportsBuiltFrom(context),others=ctx?issuerReports(context).filter(r=>!built.includes(r)):[];
-  const rest=all.filter(r=>!built.includes(r)&&!others.includes(r));
-  const none='No report was built from this run’s files';
-  // The run a report was built from, where it is not the run being read.
-  const builtRun=r=>tracedRun(r)!==context&&reportRunLabel(r)?`<span class="code">${esc(reportRunLabel(r))}</span>`:'';
-  const row=r=>`<li class="report-row">${ctx&&!sameIssuer(r.issuerKey,ctx.issuerKey)&&!r.label.trim().startsWith(r.issuer)?`<span class="report-issuer">${esc(r.issuer)} · </span>`:''}<a class="text-action" href="${routeHref('W-Reports',r.id,null,ctx&&sameIssuer(r.issuerKey,ctx.issuerKey)?context:tracedRun(r))}" title="${esc(`Delivery ${r.id}`)}">${esc(reportName(r))}${icon('arrow-right')}</a>${builtRun(r)}${r.status?`<span class="badge badge-gray">${esc(r.status)}</span>`:''} ${reportAcceptance(r).html}</li>`;
-  const list=(cls,title,reports)=>reports.length?`<section class="${cls}"><h2>${esc(title)}</h2><ol class="report-list">${[...reports].sort(byBuild).map(row).join('')}</ol></section>`:'';
-  if(!ctx)return `<p class="intro">${plural(all.length,'deliverable')} in this workspace.</p>${list('report-other','All deliverables',all)}${all.length?'':`<div class="missing-state"><h2>No deliverables yet</h2><p>A run writes its report here when it finishes.</p></div>`}`;
-  const heading=!built.length&&!others.length?`<div class="missing-state"><div class="empty-symbol">${icon('file-text')}</div><h2>${none}</h2></div><a class="text-action" href="#W-Library/cases">Choose another run</a>`:built.length?'':`<p class="intro">${none}.</p>`;
-  return `${heading}${list('report-built','Built from this run',built)}${list('report-other',`Other ${ctx.issuer} reports`,others)}${list('report-rest','Other issuers’ reports',rest)}`;
-}
-// ---- Report manifest (DELIVERY-V03). Figures and tables are the delivery's own report-view.json as the store read it (hash-verified, read only); the library recomputes nothing. A delivery that lists none shows its handoffs only, and says so.
-// A handoff input (*.md) and an internal record (*.json) are files of the delivery, not exports of it.
-const EXPORT_FILE=name=>!/\.(md|json)$/i.test(name);
-const statedOr=value=>value==null||value===''?NOT_STATED:value;
-function figureRow(f) {
-  const unit=f.unit?(f.unitClass?`${f.unit} (${f.unitClass})`:f.unit):NOT_STATED;
-  const sources=f.sources.map(s=>`${/^CP-/.test(s.source)?moduleTitle(s.source):s.source} · ${s.pin}`).join('; ');
-  return `<tr data-figure="${esc(f.title)}"><th scope="row">${esc(f.title)}</th><td>${esc(f.kind)}</td><td>${esc(f.periods.join('; ')||NOT_STATED)}</td><td>${esc(unit)}</td><td>${esc(namedText(statedOr(f.note)))}</td><td>${f.points}</td><td class="hash">${esc(sources||NOT_STATED)}</td></tr>`;
-}
-function reportManifest(report) {
-  const formats=[...new Set(report.files.filter(f=>EXPORT_FILE(f.name)).map(f=>/\.([a-z0-9]+)$/i.exec(f.name)?.[1]?.toLowerCase()).filter(Boolean).map(ext=>ext.toUpperCase()))];
-  const period=run=>[run?.period,run?.asOf&&`as of ${displayDate(run.asOf)}`].filter(Boolean).join(' · ')||'Not recorded';
-  const rows=report.builtFrom.map(b=>`<tr data-pin="${esc(b.sha256)}"><th scope="row">${esc(moduleTitle(b.module))}</th><td>${b.run?esc(contexts[b.run].run):'No matching run file'}</td><td class="hash">${esc(b.sha256)}</td><td>${esc(period(contexts[b.run]))}</td></tr>`).join('');
-  const figures=report.figures;
-  const head=heads=>`<thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead>`;
-  const figured=figures?`<p class="small">Each figure and table as the delivery’s report-view.json states it. Nothing is recomputed here.</p><div class="table-scroll"><table>${head(['Figure or table','Kind','Period','Unit','Basis and limitation','Points','Source pin'])}<tbody>${figures.map(figureRow).join('')}</tbody></table></div><h4>Built from</h4>`:`<p class="small">${report.figuresIssue?`This delivery lists report-view.json but it could not be read (${esc(report.figuresIssue)}), so only its handoffs are shown.`:report.files.some(f=>f.name==='report-view.json')?'This delivery lists report-view.json but no figures were read from it, so only its handoffs are shown.':'This delivery lists no report-view.json, so only its handoffs are shown.'}</p>`;
-  return `<details class="manifest-fold"><summary>Manifest · ${figures?`${plural(figures.length,'figure and table')} · `:''}${plural(report.builtFrom.length,'handoff')} pinned · ${formats.length?esc(formats.join(', ')):'no export file'}</summary><section class="report-manifest" aria-label="Report manifest">${figured}<div class="table-scroll"><table>${head(['Handoff','Run','SHA-256 pin','Run period and as-of'])}<tbody>${rows}</tbody></table></div><p class="small">${formats.length?`Formats present: ${esc(formats.join(', '))}.`:'No export file is held for this report.'}</p></section></details>`;
-}
-function reportView(report,context) {
-  const ctx=contexts[context],rows=report.builtFrom.map(b=>{
-    if(!b.run)return `<tr><th scope="row">${esc(moduleTitle(b.module))}</th><td>No matching run file</td><td>Handoff</td><td>${b.sha256.slice(0,12)}</td></tr>`;
-    const href=b.output?routeHref(b.module,modules[b.source].first,null,b.run,data[b.source].source):routeHref('W-Evidence','sources',null,b.run);
-    return `<tr><th scope="row">${esc(moduleTitle(b.module))}</th><td>${esc(contexts[b.run].run)}</td><td><a href="${href}">Handoff</a></td><td>${b.sha256.slice(0,12)}</td></tr>`;
-  }).join('');
-  const handoffs=new Set(report.builtFrom.map(b=>b.module)).size,unmatched=new Set(report.builtFrom.filter(b=>!b.run).map(b=>b.module)).size;
-  const files=report.files.length?`<h3>Files in this deliverable</h3><ul>${report.files.map(f=>`<li><a href="${esc(f.href)}" download>${esc(handoffLabel(f.name))}</a></li>`).join('')}</ul>`:'';
-  const status=[report.status,ctx?'':'No matching run'].filter(Boolean).join(' · ');
-  return `<div class="report-tools"><label for="report-select">Report</label><select id="report-select">${[...runReports(context)].sort(byBuild).map(r=>`<option value="${esc(r.id)}" ${r.id===report.id?'selected':''}>${esc([reportName(r),reportRunLabel(r)].filter(Boolean).join(' · '))}</option>`).join('')}</select>${status?`<span>${esc(status)}</span><i class="tool-sep" aria-hidden="true"></i>`:''}${reportAcceptance(report).html}<a href="${esc(report.download)}" download>Download original HTML</a><a href="${routeHref('W-Reports','list')}">All reports</a></div><details class="built-from"><summary>Built from ${plural(handoffs,'handoff')} · ${unmatched?`${unmatched} with no matching run file`:'each matches its run file'}${report.files.length?` · ${plural(report.files.length,'file')}`:''}</summary><div class="table-scroll"><table><thead><tr><th scope="col">Module</th><th scope="col">Run</th><th scope="col">File</th><th scope="col">SHA-256 prefix</th></tr></thead><tbody>${rows}</tbody></table></div>${files}</details>${reportManifest(report)}<div class="frame-host"><p class="frame-status" role="status">Loading report…</p><iframe id="report-preview" title="${esc(reportName(report))} · ${esc(report.issuer)} report" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer" src="${esc(report.href)}"></iframe></div>`;
-}
 // ---- The run report: the run's landing page. Every sentence is a handoff cell verbatim; the counts, the state and the words come from
 // Python (data[id].state, data[id].words). The page makes no judgement of its own.
-const COMMITTEE='CP-6';
 const NO_SUMMARY='No reader summary';
 // Every module that has an output in the run, in reading-group order: [group title, [{module, id, out}]]. A module with saved outputs but no
 // default has id and out null and the number of its outputs in choices: the page does not pick one for it.
@@ -1212,92 +1162,102 @@ function runGroups(context) {
   return groups.map(([title,items])=>[title,items.map(([module])=>item(module)).filter(item=>item.id||item.choices)]).filter(([,items])=>items.length);
 }
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
-function coverageStrip(entries) {
-  // The fill is not the only carrier of the state: the accessible label says it in words.
-  return `<nav class="coverage" aria-label="Module coverage">${entries.map(({module,out,choices})=>{
-    const state=out?stateWord(out.state.established):`${choices} saved outputs`;
-    return `<a class="cov${out?.state.established===true?' filled':''}" href="${esc(moduleHref(module))}" title="${esc(`${moduleNames[module]} · ${state}`)}" aria-label="${esc(`${moduleNames[module]}, ${state}`)}">${esc(moduleNames[module])}</a>`;
-  }).join('')}</nav>`;
+// ---- The Overview (ruling H5): selection and ordering of the handoffs' own passages, text unchanged. Nothing is written, counted or
+// judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
+const LEAD_MODULES=['CP-6','CP-2'];
+const NO_LEAD='No credit view module completed in this run.';
+const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
+// The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
+// The one place a handoff's prose is drawn (Overview and the module page): a list item loses its "- " marker, the Basis line is not printed, and its
+// figures (or one Basis button) open the inspector. `tables` false draws prose only (Overview).
+function passageHtml(section,id,tables=true) {
+  return section?sectionBodyHtml(section,bodyContext(id,tables)):'';
 }
-function storyCharts(id,noted) {
-  const charts=data[id].charts||[];
-  return chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts))));
+// The run's modules in the order CP-OS ran them, each with its default output and that output's reader passages.
+function overviewEntries(context) {
+  return runModuleCodes(contexts[context]).map(module=>{
+    const id=defaultOutput(module,context);
+    if(!id)return {module,id:null,out:null,passages:null,choices:(moduleEntry(module,context)?.outputs||[]).length};
+    const out=data[id];
+    return {module,id,out,passages:readerPassages(out.sections),choices:0};
+  });
 }
-function storyModule({module,id,out},noted) {
-  const {summary,state}=out;
-  const declared=declaredBadge(state.declared);
-  const findings=findingRows(id).map(row=>findingArticle(id,row,false));
-  return `<div class="story-module" data-module="${esc(module)}"><div class="story-head"><h3>${moduleLink(module)}</h3><span class="pill">${esc(summary.confidence)}</span>${declared}</div><p class="bottom-line">${rich(summary.bottomLine.replace(/\n/g,' '))}</p>${findings.join('')}<p class="main-limit"><b>Main limitation</b>${rich(summary.limitation)}</p>${storyCharts(id,noted)}</div>`;
+const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.out.state);
+const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
+function overviewLead(entries,earlier) {
+  const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
+  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
+  const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}`:'';
+  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}${key}</section>`};
 }
-// One line, no card and no findings: a module that does not reach a conclusion, or has no reader summary at all (R41).
-function storyLine({module,out,choices}) {
-  if(!out)return `<p class="choose-line">${esc(moduleNames[module])} · ${choices} saved outputs. <a class="text-action" href="#${encodeURIComponent(module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p>`;
-  if(out.state.established===null)return `<p class="nosum-line">${moduleLink(module)} · ${NO_SUMMARY}</p>`;
-  const {declared}=out.state,{limitation}=out.summary;
-  return `<p class="na-line">${moduleLink(module)} · <span>Not assessable</span>${declared==null?'':` · ${declaredBadge(declared)}`}${limitation?` · ${rich(limitation)}`:''}</p>`;
+function overviewBottomLines(entries,lead) {
+  const rows=entries.filter(entry=>entry!==lead).map(entry=>{
+    if(!entry.out)return `<div class="bottom-entry"><h3>${moduleLink(entry.module)}</h3><p class="intro">${entry.choices} saved outputs, none chosen. <a class="text-action" href="#${encodeURIComponent(entry.module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p></div>`;
+    const body=entry.passages.bottom?passageHtml(entry.passages.bottom,entry.id,false):'<p class="intro">No bottom line in this handoff.</p>';
+    return `<div class="bottom-entry" data-module="${esc(entry.module)}"><h3>${moduleLink(entry.module)}${notAssessable(entry)?` ${NOT_ASSESSABLE_BADGE}`:''}</h3>${body}</div>`;
+  });
+  return rows.length?`<section class="overview-part" id="overview-bottom-lines"><h2>Bottom line by module</h2>${rows.join('')}</section>`:'';
 }
-function creditStory(grouped) {
-  return grouped.map(([title,items],at)=>{
-    let noted=false;
-    const body=items.map(item=>{
-      if(!placed('chart','Overview',item.out))return storyLine(item);
-      const html=storyModule(item,noted);
-      noted=noted||lastPeriodChart(item.out.charts||[])>=0;
-      return html;
-    }).join('');
-    return `<section class="story-group" id="run-group-${at+1}" data-run-part="${esc(title)}"><h2>${esc(title)}</h2>${body}</section>`;
-  }).join('');
+// Every Limitations item of every module, first occurrence kept (verbatim) when the normalised text repeats.
+function overviewLimitations(entries) {
+  const seen=new Set(),items=[];
+  for(const entry of entries)for(const block of (entry.passages?.limits?.blocks||[]).filter(b=>b.type==='text')) {
+    const key=normaliseLimitation(block.text);
+    if(key!==''&&seen.has(key))continue;
+    seen.add(key);
+    const ref=`${entry.id}:${block.line}`,{html}=paragraphView(block.text,ref,{chips:bodyContext(entry.id,false).chips(ref)});
+    items.push(`<li class="limit-item">${html}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
+  }
+  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<ul class="passage-list">${items.join('')}</ul>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
 }
-// A register row shows when its module is established (or the box is ticked) and it matches the group and confidence filters ('' is all).
-const registerRowShown=(row,filter)=>(filter.all||row.established)&&(!filter.group||row.group===filter.group)&&(!filter.confidence||row.confidence===filter.confidence);
-function findingsRegister(grouped) {
-  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out).flatMap(({module,id,out})=>findingRows(id).map(row=>({group,module,established:out.state.established,finding:row.finding,impact:row.impact,confidence:plain(row.confidence)}))));
-  if(!rows.length)return '';
-  const unique=values=>[...new Set(values)];
-  const select=(kind,label,all,values)=>`<label for="register-${kind}">${label}</label><select id="register-${kind}" data-register-filter="${kind}"><option value="">${all}</option>${values.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select>`;
-  const body=rows.map(row=>`<tr data-group="${esc(row.group)}" data-confidence="${esc(row.confidence)}" data-established="${row.established}"${row.established?'':' hidden'}><td>${esc(row.group)}</td><td>${moduleLink(row.module)}${row.established?'':' <span class="badge badge-gray">Not assessable</span>'}</td><td>${rich(row.finding)}</td><td>${rich(row.impact)}</td><td>${esc(row.confidence)}</td></tr>`).join('');
-  return `<section class="run-section" id="run-register" data-run-part="Findings register"><h2>Findings register</h2><div class="register-tools">${select('group','Group','All groups',unique(rows.map(row=>row.group)))}${select('confidence','Confidence','All confidences',unique(rows.map(row=>row.confidence)))}<input type="checkbox" id="register-all"><label for="register-all">Include not-assessable modules (${rows.filter(row=>!row.established).length})</label></div><div class="table-scroll"><table class="register"><thead><tr>${['Group','Module','Finding','Creditor impact','Confidence'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}<tr class="register-empty"${rows.some(row=>row.established)?' hidden':''}><td colspan="5">No findings match</td></tr></tbody></table></div></section>`;
+// The drawn charts and maps of the modules the visuals catalogue places on Overview (PLACEMENT); a blocked module draws none. Lanes are the dates section.
+function overviewCharts(entries) {
+  let noted=false;
+  const html=entries.filter(entry=>entry.out).map(({id,out})=>{
+    if(!placed('chart','Overview',out))return '';
+    const charts=out.charts||[];
+    const cards=chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts))));
+    noted=noted||lastPeriodChart(charts)>=0;
+    return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
+  }).filter(html=>/class="(panel-card|map-card)"/.test(html));
+  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${html.join('')}</section>`:'';
 }
-function openItems(grouped) {
-  const rows=grouped.flatMap(([group,items])=>items.filter(item=>item.out?.summary).map(({module,out})=>`<tr><td>${esc(group)}</td><th scope="row"><a class="text-action" href="${esc(routeHref(module,'limits'))}">${esc(moduleNames[module])}</a></th><td>${rich(out.summary.limitation)}</td></tr>`));
-  if(!rows.length)return '';
-  return `<section class="run-section" id="run-open-items" data-run-part="Open items"><h2>Open items</h2><div class="table-scroll"><table class="open-items"><thead><tr>${['Group','Module','Main limitation'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
-}
-function moduleMatrix(grouped) {
-  const rows=grouped.flatMap(([,items])=>items.map(({module,out,choices})=>out?`<tr><th scope="row">${moduleLink(module)}</th><td>${esc(out.summary?out.summary.confidence:NO_SUMMARY)}</td><td>${esc(out.state.declared??'not declared')}</td></tr>`:`<tr><th scope="row">${moduleLink(module)}</th><td>${choices} saved outputs</td><td>not declared</td></tr>`));
-  return `<section class="run-section" id="run-matrix" data-run-part="Module matrix"><h2>Module matrix</h2><div class="table-scroll"><table class="matrix"><thead><tr>${['Module','Confidence','Declared status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
+// Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.
+// A period-dated item (month, quarter or year) is sorted by its period end and shown with that date text as written. The sentence when none is drawn names its cause.
+const runHoldsEventTable=context=>runModuleCodes(contexts[context]).some(module=>{const id=defaultOutput(module,context);return Boolean(id)&&Boolean(eventTable(data[id].sections));});
+function overviewDates(context) {
+  const asOf=contexts[context].asOf;
+  const head='<section class="overview-part" id="overview-dates"><h2>Nearest dates</h2>';
+  if(!asOf)return `${head}<p class="intro">This run records no as-of date, so no nearest dates are selected.</p></section>`;
+  const lanes=eventLanes(context);
+  if(!lanes.length)return `${head}<p class="intro">${runHoldsEventTable(context)?'This run’s handoffs hold an event table but no dated lane, so no nearest dates are selected.':'No event timeline in this run’s handoffs.'}</p></section>`;
+  const items=lanes.filter(lane=>lane.gap===null).flatMap(lane=>fixtureTable(lane.id,lane.table).rows.map(row=>({date:row.cells[0],text:row.cells[3],module:data[lane.id].module,line:row.line})));
+  const next=nearestDates(items,asOf);
+  if(!next.length)return `${head}<p class="intro">No dated item on or after ${esc(asOf)} in this run’s handoffs.</p></section>`;
+  const caption=`The next ${next.length} dated item${next.length===1?'':'s'} on or after ${asOf}`;
+  const table=scrollRegion(caption,`<table class="dates-table"><caption>${esc(caption)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${next.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('')}</tbody></table>`);
+  return `${head}${table}</section>`;
 }
 function runReport(context) {
-  const grouped=runGroups(context),entries=grouped.flatMap(([,items])=>items),built=reportsBuiltFrom(context);
-  const inventory=`<p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Source inventory${icon('arrow-right')}</a></p>`;
-  // A run that holds no module output has no report to draw: it says so and keeps the way to its sources.
-  if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The run report is drawn from module handoffs, and this run holds none.</p></div>${inventory}`;
-  const count=established=>entries.filter(entry=>entry.out&&entry.out.state.established===established).length;
-  const unsummarised=count(null),unchosen=entries.filter(entry=>!entry.out).length,line=`${count(true)} of ${entries.length} modules reach a conclusion · ${count(false)} not assessable${unsummarised?` · ${unsummarised} without a reader summary`:''}${unchosen?` · ${unchosen} without a chosen output`:''}`;
-  const committee=entries.find(entry=>entry.module===COMMITTEE&&entry.out?.state.established===true);
-  const deliverables=built.length?`<section class="summary-deliverables" id="run-deliverables" data-run-part="Deliverables from this run"><h2>Deliverables from this run</h2>${built.map(r=>`<div class="deliverable"><a class="text-action" href="${routeHref('W-Reports',r.id,null,context)}">${esc(reportName(r))}${icon('arrow-right')}</a>${reportAcceptance(r).html}</div>`).join('')}</section>`:'';
-  return `<div class="run-summary"><p class="run-count">${esc(line)}</p>${runAcceptance(context)}</div>${coverageStrip(entries)}${committee?reportBand(committee.id):''}${creditStory(grouped)}${findingsRegister(grouped)}${openItems(grouped)}${moduleMatrix(grouped)}${deliverables}${eventLanesView(context,{at:'Overview',compact:true})}${statusMapView(context)}${mapsPlaced(context,{at:'Overview'})}${chartIndex(context)}${inventory}`;
+  const entries=overviewEntries(context);
+  // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
+  if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
+  const {lead,html}=overviewLead(entries,earlierFormat(contexts[context]));
+  return html+overviewBottomLines(entries,lead)+overviewLimitations(entries)+overviewCharts(entries)+overviewDates(context);
 }
-// Read-only: the folders the library does not show (with the reason) and the issues found when it was built.
-function activityView(activity,live) {
+// Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
+// library does not show and the build's issues are on the library page.
+function activityView(live) {
   const top=liveActivityView(live);
-  if(!activity)return top+ '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>The data file did not supply it, so nothing is claimed about excluded runs or issues. Rebuild the data file and open this page again.</p></div>';
-  const excluded=activity.excluded,issues=activity.issues;
-  if(!excluded.length&&!issues.length)return top+'<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Nothing to report</h2><p>Every run folder in this workspace is shown in the library, and building it raised no issues.</p></div>';
-  return top+`<p class="intro">Read when the library was built. It lists run folders that are not shown and any issues found; it changes nothing.</p>${excluded.length?`<section class="activity-excluded"><h2>Run folders not shown</h2><ol class="report-list">${excluded.map(([folder,reason])=>`<li class="report-row"><span class="code">${esc(folder)}</span><span>${esc(reason)}</span></li>`).join('')}</ol></section>`:''}${issues.length?`<section class="activity-issues"><h2>Issues</h2><ul class="report-list">${issues.map(i=>`<li class="report-row">${esc(i)}</li>`).join('')}</ul></section>`:''}`;
+  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>No live run data was supplied, so nothing is claimed about runs in progress or waiting.</p></div>';
+  if(!top.includes('<section'))return top+'<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p></div>';
+  return top;
 }
 // Live runs from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed:
-// then nothing live is shown. Each value passes through esc; a report path becomes a link only when it is a plain relative path.
+// then nothing live is shown. Each value passes through esc. Only runs that are running or queued are drawn.
 const ACTIVITY_RELOAD_MS=30000;
+// Statuses of runs that have ended: not drawn here (decision 10); the list stays so a test can check it against the run start service's statuses.
 const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
-// Report links stay under issuers/<folder>/<file>.html: the one place only the run start service writes. Nothing else becomes a link.
-function reportHref(report) {
-  if(typeof report!=='string'||!report||report.startsWith('/')||/^[a-z][a-z0-9+.-]*:/i.test(report)||report.includes('\\'))return null;
-  const parts=report.split('/');
-  if(parts.length!==3||parts[0]!=='issuers'||!/\.html$/i.test(parts[2])||parts.some(p=>p===''||p==='.'||p==='..'))return null;
-  try {return '../../'+parts.map(encodeURIComponent).join('/');}
-  catch(error) {if(error instanceof URIError)return null;throw error;} // a lone surrogate cannot be a link; the path is still shown as text
-}
 // Only strings and finite numbers reach the page; any other value in a field renders as empty text.
 function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
 const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted'];
@@ -1306,21 +1266,13 @@ function liveRunSpend(run,cap) {
   if(typeof run.spent!=='string')return '';
   return `<span class="run-spend">USD ${liveText(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${liveText(cap)}`}</span>`;
 }
-// Served over HTTP, the filed copy under issuers/ is not served; the library's own copy of the report is, and the catalogue names it.
-// From disk the filed link stays. Returns null when the catalogue has no copy of this run (the row then shows the path as text).
-function servedReportHref(run) {
-  const held=catalogueRuns().find(r=>r&&r.id===run.id),artifact=held&&Array.isArray(held.artifacts)?primaryArtifact(held):null;
-  return artifact&&typeof artifact.href==='string'&&artifact.href.startsWith('reports/')&&libraryPath(artifact.href)?artifact.href:null;
-}
 const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location.protocol);
 function liveRunRow(run,cap) {
-  const ended=run.status!=='running'&&run.status!=='queued',files=Array.isArray(run.files)?run.files:[];
+  const files=Array.isArray(run.files)?run.files:[];
   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
   const chips=Array.isArray(run.modules)?run.modules.filter(Array.isArray).map(([name,state])=>`<span class="chip chip-${['done','running','waiting'].includes(state)?state:'waiting'}">${liveText(name)}</span>`).join(''):'';
-  const href=run.status==='finished'?(servedOverHttp()?servedReportHref(run):reportHref(run.report)):null;
-  const report=run.status==='finished'&&run.report?(href?`<a class="text-action"${tag} href="${esc(href)}">${liveText(run.report)}</a>`:`<span class="code">${liveText(run.report)}</span>`):'';
   const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
-  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${run.submitted_by?`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`:''}${ended?`<span class="run-status">${liveText(run.status)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${ended&&run.ended_at?`<span class="run-time">ended ${liveText(run.ended_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${report}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
+  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${run.submitted_by?`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
 }
 function liveActivityView(live) {
   if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
@@ -1328,9 +1280,8 @@ function liveActivityView(live) {
   const section=(title,cls,list,note='')=>list.length||note?`<section class="${cls}"><h2>${title}</h2>${note}${list.length?`<ul class="report-list">${list.map(r=>liveRunRow(r,live.cap)).join('')}</ul>`:''}</section>`:'';
   const waiting=runs.filter(r=>r.status==='queued');
   const held=live.held&&liveText(live.held)?`<p class="run-held">${liveText(live.held)}</p>`:'';
-  const ended=runs.filter(r=>r.status!=='running'&&r.status!=='queued');
   const stamp=`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`;
-  return stamp+section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held)+section('Ended','activity-ended',ended);
+  return stamp+section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held);
 }
 // The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
 function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}
@@ -1342,57 +1293,82 @@ function swapActivityScript(doc,now) {
   doc.head.append(script);
   if(previous)previous.remove();
 }
+// ---- Evidence (ruling decisions 9, 10): four lists for the run, every value as the store copied it from the run's own files; a value the run does not record reads "Not recorded". Source files are listed only.
+const shownOrNot=value=>value===null||value===undefined||value===''?'Not recorded':String(value);
+const readers=codes=>codes.map(code=>`${esc(moduleTitle(code))} <span class="module-code">${esc(code)}</span>`).join(', ');
+const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="${esc(href)}" download aria-label="Download ${esc(named)}">${esc(label)}${icon('download')}</a>`:`<span>${esc(label)}</span> <span class="muted">No link</span>`;
+// A wide table scrolls inside its own focusable region, never the page (the region pattern of the library and chart index tables).
+const scrollRegion=(label,table)=>`<div class="table-scroll" role="region" aria-label="${esc(label)}" tabindex="0">${table}</div>`;
+const evidenceTable=(caption,heads,rows)=>scrollRegion(caption,`<table class="history-table"><caption>${esc(caption)}</caption><thead><tr>${heads.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+function evidenceSources(ev) {
+  const head='<section class="run-section" id="evidence-sources"><h2>Source files used</h2><p class="intro">Listed only: source files are not included here and page references point to the originals.</p>';
+  // A run that records no supplied file (no list in its record) is not one whose every file was used: missing is not zero.
+  if(!ev.sources.length&&!ev.unused.length&&!(ev.unrecorded||[]).length)return `${head}<p class="empty">The run record lists no supplied files.</p></section>`;
+  const used=ev.sources.length?evidenceTable('Supplied files that a handoff’s Sources section names',['Name','Type','Document date','Read by'],ev.sources.map(f=>[esc(f.name),esc(shownOrNot(f.type)),esc(shownOrNot(f.documentDate)),readers(f.readBy)])):'<p class="empty">No handoff’s Sources section names a supplied file.</p>';
+  const fileList=files=>`<ul class="report-list">${files.map(f=>`<li class="report-row"><span>${esc(f.name)}</span><span class="muted">${esc(shownOrNot(f.type))} · document date ${esc(shownOrNot(f.documentDate))}</span></li>`).join('')}</ul>`;
+  const unused=ev.unused.length?fileList(ev.unused):'<p class="empty">Every supplied file is named in a handoff’s Sources section.</p>';
+  const lacking=ev.noSourcesModules&&ev.noSourcesModules.length&&!ev.unrecorded.length?`<p class="intro">No Sources section in the handoff of ${readers(ev.noSourcesModules)}, so a file those modules read may be listed here.</p>`:'';
+  const unrecorded=ev.unrecorded&&ev.unrecorded.length?`<h3>Use not recorded</h3><p class="intro">None of this run’s handoffs has a Sources section, so the run does not record which supplied files were read.</p>${fileList(ev.unrecorded)}`:'';
+  const notUsed=ev.unrecorded&&ev.unrecorded.length&&!ev.unused.length?'':`<h3>Supplied, not used</h3>${lacking}${unused}`;
+  return `${head}${used}${notUsed}${unrecorded}</section>`;
+}
+function evidenceHandoffs(ev) {
+  const rows=ev.handoffs.map(h=>[`${esc(moduleTitle(h.module))} <span class="module-code">${esc(h.module)}</span>`,downloadLink(h.name,h.href,`${moduleTitle(h.module)} handoff`)]);
+  const all=ev.zip?`<p>${downloadLink('Download all',ev.zip,'all handoffs (zip)')}</p>`:'';
+  return `<section class="run-section" id="evidence-handoffs"><h2>Handoffs</h2>${rows.length?evidenceTable('The delivered Markdown of each module',['Module','Original Markdown'],rows)+all:'<p class="empty">This run holds no handoff.</p>'}</section>`;
+}
+function evidenceDownloads(ev) {
+  const rows=ev.downloads.map(d=>`<li class="report-row">${downloadLink(d.label,d.href)}</li>`).join('');
+  return `<section class="run-section" id="evidence-downloads"><h2>Calculations and Model</h2>${rows?`<ul class="report-list">${rows}</ul>`:'<p class="empty">No calculation or Model file was published from this run.</p>'}</section>`;
+}
+function evidenceRecord(ev) {
+  const r=ev.record;
+  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc(h.name),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
+  const sent=r.instructions.length?`<ul class="report-list">${r.instructions.map(i=>`<li class="report-row">${downloadLink(`${moduleTitle(i.module)} instructions`,i.href)}</li>`).join('')}</ul>`:'<p class="empty">The run records no instructions.</p>';
+  const calls=r.calls.length?evidenceTable('Model calls, in the order recorded',['Module','Attempt','Started','HTTP status','Error','Settled (USD)'],r.calls.map(c=>[esc(moduleTitle(c.module)),esc(shownOrNot(c.attempt)),esc(shownOrNot(c.started)),esc(shownOrNot(c.http_status)),esc(shownOrNot(c.error_class)),esc(shownOrNot(c.settled_usd))])):'<p class="empty">The run records no model call.</p>';
+  return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary><h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;
+}
+function evidenceView(context) {
+  const ev=contexts[context]?.evidence;
+  if(!ev)return '<div class="missing-state"><h2>No evidence record was read for this run</h2><p>Rebuild the library and open this page again.</p></div>';
+  return evidenceSources(ev)+evidenceHandoffs(ev)+evidenceDownloads(ev)+evidenceRecord(ev);
+}
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
   if(module==='W-Library')return libraryView();
   if(module==='W-Overview')return runReport(context);
-  if(module==='W-Calendar') {
-    if(eventLanes(context).length&&!['tdg','hedges'].includes(section))return eventLanesView(context);
-    const events=eventsOutput(context),hedges=hedgesOutput(context),showHedges=hedges&&(section==='hedges'||!events);
-    if(!events&&!hedges)return `<div class="missing-state"><h2>No calendar retained for this run</h2><p>No dates are inferred from other runs.</p></div>${moduleLink('W-Evidence','Review available evidence')}<a class="text-action switch-case" href="#W-Library/cases">Choose another run</a>`;
-    const hedgeView=hedges&&(data[hedges].visual?.kind==='hedges'?hedgeChart(hedges,data[hedges].visual):`<div class="missing-state"><h2>No hedge schedule view for this output</h2><p>The retained CP-2E output is available in its module.</p></div>`);
-    return `${showHedges?hedgeView:eventTimeline(events,eventTable(data[events].sections))}${moduleLink(showHedges?'CP-2E':'CP-1A','Open owning module')}`;
-  }
-  if(module==='W-Evidence')return `<p class="intro">Source PDFs aren’t included; page references point to the originals.</p>${eventLanesView(context,{at:'Evidence',compact:true})}${statusMapView(context)}${mapsPlaced(context,{at:'Evidence'})}${sourceInventory(context)}`;
-  if(module==='W-Reports') {
-    const report=window.DESIGN_WORKSPACE.reports.find(r=>r.id===section);
-    return report?reportView(report,context):reportList(context);
-  }
+  if(module==='W-Report')return historyView(context);
+  if(module==='W-Evidence')return evidenceView(context);
   if(module==='W-Forecast')return forecastView(context,section)+chartIndex(context);
-  if(module==='CP-OS')return statusMapView(context,{timeline:true})+activityView(window.DESIGN_ACTIVITY,window.RUN_ACTIVITY);
+  if(module==='CP-OS')return activityView(window.RUN_ACTIVITY);
   return '';
 }
 function updateWorkspaceChrome(module) {
   const ctx=contexts[current.context],isHome=!ctx||appDestinations.has(module);
   const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first),period=current.output?data[current.output].period:ctx?.period;
   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
-  document.querySelector('.issuer').innerHTML=`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${isHome?'':`<div class="issuer-meta"><span class="code">${esc(ctx.run)}</span><a href="#W-Library/cases">Change run</a></div>`}</div>${module==='W-Library'?`<div class="page-actions"><a class="secondary-action" href="#W-Reports/list">${icon('files')}All reports</a></div>`:''}${isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`}`;
+  document.querySelector('.issuer').innerHTML=`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${isHome?'':`<div class="issuer-meta"><span class="code">${esc(ctx.run)}</span><a href="#W-Library/cases">Change run</a></div>`}</div>${isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`}`;
   document.querySelector('.workspace-tabs').hidden=isHome;
-  $('context-bar').hidden=isHome;
-  if(!isHome)$('context-bar').innerHTML=contextBar(module,current.context);
-  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Overview','Overview','layout-grid'],[moduleId,'Modules','layers'],['W-Calendar','Calendar','calendar-days'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Reports','Reports','files'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
+  $('context-bar').hidden=isHome||module==='W-Report';
+  if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
+  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
     return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${icon(img)}${label}</a>`;
   }).join('');
-  const report=isReportRoute(module,current.section);
-  $('workbench').classList.toggle('report-workspace',report);
   $('workbench').classList.toggle('library-workspace',isHome);
+  // The Overview is a page of selected passages: no module navigator beside it and no Browse modules button above it.
+  $('workbench').classList.toggle('overview-workspace',!isHome&&module==='W-Overview');
   // The navigator is resident only where its modules are the subject; elsewhere it opens from the Modules button.
-  $('workbench').classList.toggle('tools-workspace',!isHome&&!report&&module!=='W-Overview'&&!isAnalytical(module));
-  $('content').classList.toggle('report-content',report);
+  $('workbench').classList.toggle('tools-workspace',!isHome&&module!=='W-Overview'&&!isAnalytical(module));
   // The rail shows where you are, and its run-level links keep the selected run.
   const rail=label=>document.querySelector(`.rail [data-place="${label}"]`);
-  const place={'W-Library':'Issuer library','W-Reports':'Reports','CP-OS':'Run activity'}[module];
+  const place={'W-Library':'Issuer library','CP-OS':'Run activity'}[module];
   document.querySelectorAll('.rail a[data-place]:not([data-place="Start a run"])').forEach(link=>{
     const here=link.dataset.place===place;
     link.classList.toggle('rail-active',here);
     if(here)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
   rail('Start a run').hidden=!servedOverHttp(); // the start page exists only when the service serves the library
-  rail('Reports').hidden=!window.DESIGN_WORKSPACE.reports.length&&!Object.keys(contexts).length;
-  if(ctx) {
-    rail('Reports').href=routeHref('W-Reports','list');
-  }
   const app=window.DESIGN_APP||{};
   $('app-problem').hidden=!app.problem;
   $('app-problem').textContent=app.problem?`The workspace could not be read: ${app.problem}`:'';

@@ -84,12 +84,15 @@ uv run python apps/issuer-library/update_library.py --workspace "$PWD"
 ```
 
 It rebuilds `library/` (git-ignored) as static files that open from disk: the Credit OS library
-and, for each listed run, an issuer report with its tabs (Overview, Modules, Calendar, Forecast,
-Reports, Evidence). There are no run controls; new runs are made by the launcher, and
-`update_library.py` is the step that shows them. Each run's report is shown from a presented copy
-under `library/reports/` for earlier runs that have a delivered page (a new run is shown natively and has none); the delivered files in the run folder are never changed. It lists only
-runs CP-OS completed with a verified delivery in which every module ran on the current methodology,
-and says why each other run folder is left out.
+and, for each listed run, an issuer report with its tabs (Report history, Overview, Modules,
+Forecast, Evidence). There are no run controls; new runs are made by the launcher, and
+`update_library.py` is the step that shows them. Every page is built from the run's own handoffs:
+the library presents no delivered report and has no Calendar or Reports tab, and nothing is
+written under `library/reports/`. Evidence's handoff and instruction downloads are byte-for-byte
+copies under `library/downloads/<run>/`; the run folder is never changed. It lists only runs
+CP-OS completed (the completion record, delivery manifest and delivered files still match the
+hashes they record) in which every module ran on the current methodology, and says why each other
+run folder is left out.
 
 ## 3. The run start page
 

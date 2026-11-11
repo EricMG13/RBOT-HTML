@@ -159,6 +159,12 @@ def chrome() -> str:
     return found
 
 
+EARLIER_LEAD = (
+    "This run is in the earlier format: "
+    "its handoffs carry no reader passages for Overview to select."
+)
+
+
 def visit(page: Path, route: str = "", width: int = 1280) -> tuple[str, list[str]]:
     """The page's DOM after it ran, and its console messages."""
     done = subprocess.run(
@@ -203,26 +209,52 @@ def test_the_library_works_from_disk_without_any_request(tmp_path):
     )
     assert 'id="library-nav"' not in dom  # Issuers are a filter, not a second navigation.
     delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name
-    # The deliverable opens the report inside the app, from the row and from the selected run.
-    report = f'href="#W-Reports/{delivery}?c=run-a"'
-    assert f'<a class="report-link" {report}' in dom
-    assert f'<a class="primary-action" {report}' in dom
+    # The delivered report is retired (decision 1): the row opens the run and its history.
+    assert '<a class="report-link" href="#W-Overview/overview?c=run-a"' in dom
+    assert '<a class="report-link" href="#W-Report/history?c=run-a"' in dom
+    assert "#W-Reports" not in dom and "report.html" not in dom and "Open report" not in dom
     # A cited source links the retained file it quotes.
     assert f'href="../runs/run-a/deliveries/{delivery}/CP-1.md" target="_blank"' in dom
     dom, console = visit(page, "#W-Overview/overview?c=run-a")
     assert console == []
+    # The Overview selects (ruling H5): this earlier-format run has no reader passages, so no
+    # lead, and the visuals catalogue places no CP-1 chart on it; the charts stay with the module.
+    assert 'id="overview-lead"' in dom and EARLIER_LEAD in dom
+    assert "No bottom line in this handoff." in dom and 'id="overview-dates"' in dom
+    assert 'class="navigator"' in dom and 'class="workbench overview-workspace"' in dom
+    assert len(re.findall(r'<div class="panel-card">', dom)) == 0
+    dom, console = visit(page, "#CP-1/performance?c=run-a")
+    assert console == []
     assert (
         len(re.findall(r'<div class="panel-card">', dom)) == 4
-    )  # Leverage, cover, liquidity, maturities, each under the module that owns it.
-    dom, console = visit(page, "#W-Reports/list?c=run-a")
-    delivery = re.search(r'href="#W-Reports/([0-9a-f]{64})\?c=run-a"', dom)
-    assert delivery, "the Reports tab lists the run's report"
-    dom, console = visit(page, f"#W-Reports/{delivery[1]}?c=run-a")
-    assert console == []  # The presented report ran its adapter and the policy allowed it.
-    frame = re.search(r'<iframe id="report-preview"[^>]*src="([^"]*)"', dom)
-    assert frame and frame[1] == f"reports/run-a/{delivery[1]}/report.html"
-    assert (page.parent / frame[1]).is_file()
-    assert re.search(r'frame-status"[^>]*hidden', dom)  # Loaded: the loading notice is gone.
+    )  # Leverage, cover, liquidity, maturities.
+    # The Report history lists the run; no report frame is drawn and no report copy is held.
+    dom, console = visit(page, "#W-Report/history?c=run-a")
+    assert console == []
+    assert '<table class="history-table">' in dom and 'aria-current="true"' in dom
+    assert "<iframe" not in dom.replace('id="model-preview"', "")
+    assert not (page.parent / "reports").exists()
+    assert not (page.parent / "report-adapter.js").exists()
+    # An old Reports or Calendar hash opens the run's Report history, not a blank page.
+    old_hashes = (
+        "#W-Reports/list?c=run-a",
+        f"#W-Reports/{delivery}?c=run-a",
+        "#W-Calendar?c=run-a",
+    )
+    for old in old_hashes:
+        dom, console = visit(page, old)
+        assert console == []
+        assert '<table class="history-table">' in dom, old
+    # With no run named, the page opens the workspace's first run, as every run page does.
+    dom, console = visit(page, "#W-Reports/list")
+    assert console == [] and '<table class="history-table">' in dom
+
+
+def test_an_old_reports_hash_opens_the_library_when_no_run_is_known(tmp_path):
+    update_library.update_library(tmp_path)  # No runs.
+    dom, console = visit(tmp_path / "library/index.html", "#W-Reports/list")
+    assert console == []
+    assert "history-table" not in dom and "No runs in this workspace yet" in dom
 
 
 def test_run_activity_and_forecast_not_run_from_disk(tmp_path):
@@ -235,12 +267,20 @@ def test_run_activity_and_forecast_not_run_from_disk(tmp_path):
     page = tmp_path / "library/index.html"
     dom, console = visit(page, "#CP-OS/activity")
     assert console == []
-    assert "Run folders not shown" in dom and "run-half" in dom
-    assert html.escape(reason, quote=False) in dom
+    # Run activity is live runs only (decision 10): from disk there is no live data, and the
+    # excluded folder is no longer listed there.
+    assert "Run activity could not be read" in dom and "run-half" not in dom
+    assert "Run folders not shown" not in dom
     assert (
         'data-place="Run activity"' in dom
         and "<button" not in dom.split('id="content"', 1)[1].split("</article>")[0]
     )
+    # The folder and its reason are on the library page, in a details element that is closed.
+    dom, console = visit(page, "#W-Library/cases")
+    assert console == []
+    shown = re.search(r'<details class="library-not-shown">(.*?)</details>', dom, re.DOTALL)
+    assert shown and "Run folders not shown" in shown[1] and "run-half" in shown[1]
+    assert html.escape(reason, quote=False) in shown[1]
     dom, console = visit(page, "#W-Forecast/none?c=run-a")
     assert console == []
     assert "No forecast model was published from this run’s files" in dom
@@ -372,7 +412,9 @@ GAPS_PROBE = Path(__file__).with_name("browser_probe_gaps.js").read_text(encodin
 UNKEYED = "\n### Unkeyed citations\n\nThe figure is printed in Z, page:9 and in Y, page:8.\n"
 
 
-def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_returns(tmp_path):
+def test_a_paragraph_citing_no_page_lists_them_behind_its_basis_button_and_escape_returns(
+    tmp_path,
+):
     digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
     run = make_run(
         tmp_path,
@@ -391,16 +433,17 @@ def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_retur
     dom, console = visit(page, "#CP-1/head?c=run-a")
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    # The count under the UNKEYED paragraph (two citations), not the first count on the page (one).
-    assert seen["count"] == "2 citations without a page", seen
-    assert seen["verified"] >= 1 and seen["singleGaps"] == 0
+    # The Basis button of the UNKEYED paragraph (two citations no inventory knows): no chip or
+    # count is printed in prose.
+    assert seen["control"] == "Basis", seen
+    assert seen["verified"] >= 1 and seen["proseChips"] == 0
     opened = seen["open"]
-    assert opened["hidden"] is False and "chip=gaps" in opened["hash"]
-    assert opened["items"] == opened["expected"] == 2
-    assert opened["focusInInspector"] is True
+    assert opened["hidden"] is False and "chip=p" in opened["hash"]
+    assert opened["items"] == 2  # one citation-gap section per citation
+    assert opened["focusInInspector"] is True and opened["pressed"] == "true"
     assert seen["escaped"] == {
         "hidden": True,
-        "focusOnCount": True,
+        "focusOnControl": True,
         "hash": "#CP-1/head?c=run-a",
     }
 
@@ -438,7 +481,13 @@ def test_the_reference_part_fits_the_page(tmp_path, width):
     update_library.update_library(tmp_path)
     dom, console = visit(tmp_path / "library/index.html", "#CP-1/reference?c=run-a", width)
     assert console == []
-    found = re.search(r'<details class="fold" id="reference"[^>]*>(.*?)</details>', dom, re.DOTALL)
+    # The fold holds Basis disclosures (earlier-format chips, ruling H4), so its end is the first
+    # </details> outside one.
+    fold = (
+        r'<details class="fold" id="reference"[^>]*>'
+        r'((?:<details class="basis-fold".*?</details>|(?!</details>).)*)</details>'
+    )
+    found = re.search(fold, dom, re.DOTALL)
     assert found and re.search(r'<details class="fold" id="reference" open', dom)
     reference = found[1]
     assert "Debt structure" in reference and "Term loan" in reference
@@ -457,36 +506,25 @@ def test_the_reference_part_fits_the_page(tmp_path, width):
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_run_report_fits_and_the_register_checkbox_adds_rows(tmp_path, width):
+def test_the_overview_fits_and_has_no_module_navigator(tmp_path, width):
     page = report_library(tmp_path, cp0_confidence="Not assessable")
     (page.parent / "probe.js").write_text(OVERVIEW_PROBE, encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert seen["rows"] > 0, "the run report drew no chart rows"
-    assert seen["valueInCard"] is True and seen["fits"] is True
-    assert 0 < seen["established"] < seen["total"], "the run has no not-assessable row"
-    assert seen["before"] == seen["established"]  # Not-assessable rows start hidden.
-    assert seen["after"] == seen["total"]  # Ticking the checkbox shows every row.
-    assert seen["emptyBefore"] is False  # Rows are shown, so the empty row is not.
-    # Unticked and filtered to a not-assessable row's group: none is shown, the empty row is.
-    assert seen["filtered"] == {"shown": 0, "emptyShown": True}
-    # Design pass 2026-11-10: parts listed and reachable, tables whole and in the text face.
-    assert seen["outline"][-5:] == [
-        "Findings register",
-        "Open items",
-        "Module matrix",
-        "Deliverables from this run",
-        "Chart index",
+    # Decision 6: no module navigator, Browse modules button or outline; the parts are H5's.
+    assert seen["navigatorShown"] is False and seen["moduleToggleShown"] is False
+    assert seen["outline"] == 0 and seen["fits"] is True
+    assert seen["parts"] == [
+        "overview-lead",
+        "overview-bottom-lines",
+        "overview-limitations",
+        "overview-dates",
     ]
-    assert seen["jump"] == {
-        "hash": "#W-Overview/run-matrix",
-        "current": ["Module matrix"],
-        "inView": True,
-    }
-    assert seen["scrollers"] == 0 and seen["monoProse"] == 0
-    assert seen["coverage"] == ["Source readiness", "Financial foundation"]  # Names, not codes.
+    # An earlier-format run has no passages (H7): no lead or bottom line; modules still listed.
+    assert EARLIER_LEAD in seen["lead"]
+    assert seen["bottomLines"][:2] == ["Source readiness Not assessable", "Financial foundation"]
 
 
 # A handoff with all nine parts: prose under Findings (Analysis), the tables above (Reference), then
@@ -525,17 +563,22 @@ def nine_part_library(tmp_path: Path) -> Path:
 
 # Names, not codes: the module page with its audit section and the inspector open, then the Evidence
 # tab, Run activity and a search, read as a reader sees and hears them (text, title, aria-label).
-# Register references (C1, K) are not codes of this kind.
+# Register references (C1, K) are not codes of this kind. A navigator entry shows its module code
+# in the code style (ruling decision 5), so `.module-code` text is the one place a code appears.
 CODES_PROBE = """(async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [];
   const code = /\\bCP-[A-Z0-9]+\\b|\\bT\\d+[A-Z]?(?:\\.\\d+)?\\b/;
+  // A file name is the file's identity, shown as stored (Evidence's handoff and
+  // instruction names), not a module code.
+  const fileName = /^(?:instructions\\/)?CP-[A-Z0-9]+\\.md$/;
   const scan = where => {
     const walker = document.createTreeWalker(
       document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
     while (walker.nextNode()) {
       const node = walker.currentNode, text = node.nodeType === 3;
       const seen = text
-        ? [node.parentElement.closest('script,style,#probe') ? '' : node.data]
+        ? [node.parentElement.closest('script,style,#probe,.module-code')
+            || fileName.test(node.data.trim()) ? '' : node.data]
         : ['title', 'aria-label'].map(a => node.getAttribute(a) || '');
       for (const value of seen) if (code.test(value)) hits.push(where + ': ' + value.slice(0, 80));
     }
@@ -817,7 +860,7 @@ def test_a_liquidity_bridge_is_a_waterfall_with_its_table_form_and_fits_the_page
     probe = Path(__file__).with_name("browser_probe_bridge.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    dom, console = visit(page, "#CP-1/performance?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert seen["title"] == "Liquidity bridge"
@@ -836,7 +879,7 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
     probe = Path(__file__).with_name("browser_probe_structure.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    dom, console = visit(page, "#CP-1/performance?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["segments"], seen["bulletRows"], seen["limitRows"]) == (2, 2, 1)
@@ -850,28 +893,33 @@ def test_the_credit_structure_views_are_drawn_with_their_table_forms_and_fit_the
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_calendar_draws_the_event_lane_with_its_table_and_fits_the_page(tmp_path, width):
-    make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + EVENTS)
+def test_the_overview_lists_the_nearest_dates_instead_of_drawing_lanes_and_fits_the_page(
+    tmp_path, width
+):
+    make_run(tmp_path, "run-a", as_of="2025-03-31", cp1_extra=CHARTS + EVENTS)
     update_library.update_library(tmp_path)
     page = tmp_path / "library/index.html"
-    probe = Path(__file__).with_name("browser_probe_calendar.js")
+    probe = Path(__file__).with_name("browser_probe_overview.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Calendar?c=run-a", width)
-    assert console == []
-    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert (seen["lanes"], seen["points"], seen["spans"], seen["tableRows"]) == (1, 1, 3, 4)
-    assert seen["laneName"] == "Financing" and seen["focusable"] is True
-    assert seen["tableAfterLanes"] is True and seen["fits"] is True
-    # The Overview draws the same lanes compactly, linked to the Calendar tab, with no table.
+    # The Calendar tab is retired (decision 12) and the Overview draws no lane (H5): it lists the
+    # dated items on or after the as-of date in one list, five at most (M2, H5.5): day-dated and
+    # period-dated items share one ordering, by the day or the period end, nearest first.
     dom, console = visit(page, "#W-Overview?c=run-a", width)
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert console == [] and (seen["lanes"], seen["tableRows"], seen["fits"]) == (1, 0, True)
-    assert 'class="event-lanes compact"' in dom and "Open the Calendar tab" in dom
+    assert console == [] and seen["fits"] is True
+    assert seen["dates"] == [
+        "2025-03-31Synthetic noteFinancial foundation",
+        "2025-06Synthetic callFinancial foundation",
+        "2025-Q3Synthetic reviewFinancial foundation",
+        "2025Synthetic maturity yearFinancial foundation",
+    ]
+    assert "Dated to a month, quarter or year" not in dom
+    assert "event-lanes" not in dom and "W-Calendar" not in dom
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_the_page(
+def test_the_map_with_its_table_is_drawn_and_fits_the_page_and_no_status_map_remains(
     tmp_path, width
 ):
     make_run(tmp_path, "run-a", as_of="2025-12-31", cp1_extra=CHARTS + MAPS)
@@ -880,19 +928,28 @@ def test_the_overview_draws_the_map_with_its_table_and_the_status_map_and_fits_t
     probe = Path(__file__).with_name("browser_probe_maps.js")
     (page.parent / "probe.js").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    # The map is drawn by its owning module (the catalogue places no CP-1 map on the Overview) ...
+    dom, console = visit(page, "#CP-1/maps?c=run-a", width)
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["nodes"], seen["edges"], seen["labels"], seen["tableRows"]) == (11, 12, 12, 12)
-    assert seen["statusNodes"] >= 1 and seen["statusStates"] == seen["statusNodes"]
     assert seen["wide"] is True and seen["scrolls"] is True  # Natural width, scrolled in its card.
-    assert seen["scrollFocusable"] is True and seen["fits"] is True and seen["statusItems"] >= 1
+    assert seen["scrollFocusable"] is True and seen["fits"] is True
     assert seen["tableAfterDiagram"] is True and seen["cutEdges"] == 1
+    # ... the status map is retired with the old Evidence content (decision 9); neither the
+    # Evidence page nor the Overview draws a map.
+    dom, console = visit(page, "#W-Evidence/sources?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["statusNodes"] == 0 and seen["statusItems"] == 0 and seen["fits"] is True
+    assert "status-map" not in dom and "map-card" not in dom
+    dom, console = visit(page, "#W-Overview?c=run-a", width)
+    assert console == [] and "map-card" not in dom and "status-map" not in dom
 
 
 @pytest.mark.parametrize("width", [1440, 1280])
-def test_the_context_bar_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_path, width):
-    # Long names: a 38-character issuer and 80-character run folders, with every popover open.
+def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_path, width):
+    # Long names: a 38-character issuer and 80-character run folders.
     long = "cpos-tdg-copilot-sol-medium-revision-with-a-very-long-folder-name-0000000000000001"
     issuer = "Synthetic Holding Company Incorporated Ltd"
     make_run(
@@ -910,18 +967,171 @@ def test_the_context_bar_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_p
         seen = json.loads(
             html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1])
         )
-        assert seen["shown"] is True and "As of 31 December 2025" in seen["text"]
-        assert len(seen["others"]) == 1 and f"c={long}-other" in seen["others"][0]
-        assert seen["roles"] == ["source", "analysis", "export"]
-        assert seen["indexRows"] == [
-            "Leverage|Drawn",
-            "Interest cover|Drawn",
-            "Liquidity|Drawn",
-            "Financing events|Drawn",
-            "Credit-risk transmission map|Drawn",
-        ]
-        assert seen["indexScrollFocusable"] is True
-        assert seen["summaryFocus"] is True and seen["listInView"] is True and seen["fits"] is True
-        assert (
-            f"c={long}" in seen["after"] and seen["barAfter"] is True
-        )  # Moving to a file keeps the run.
+        # One line under the tabs: the run's date, pathway and code, and the way to the history.
+        assert seen["shown"] is True
+        assert seen["text"].startswith("Showing run: 31 December 2025 · Credit snapshot · ")
+        assert long.upper() in seen["text"]
+        assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
+        assert seen["tabs"] == ["Report", "Overview", "Modules", "Forecast", "Evidence"]
+        assert seen["current"] == [route.split("?")[0][3:]]
+        # The chart index is the Forecast page's; the Overview selects passages instead.
+        assert seen["indexRows"] == (
+            []
+            if "Overview" in route
+            else [
+                "Leverage|Drawn",
+                "Interest cover|Drawn",
+                "Liquidity|Drawn",
+                "Financing events|Drawn",
+                "Credit-risk transmission map|Drawn",
+            ]
+        )
+        assert seen["indexScrollFocusable"] is ("Forecast" in route) and seen["fits"] is True
+        # The link opens the issuer's Report history under the same run; the label is hidden there.
+        assert seen["after"] == f"#W-Report/history?c={long}"
+        assert seen["barOnHistory"] is True and seen["historyFits"] is True
+        assert [row.split("|")[1] for row in seen["historyRows"]] == ["true", "null"]
+        assert seen["historyRows"][0].startswith("31 December 2025")
+        assert seen["historyRows"][1].startswith("30 June 2025")
+
+
+INSPECTOR_PROBE = Path(__file__).with_name("browser_probe_inspector.js").read_text(encoding="utf-8")
+# Hand-counted from SYNTHETIC-CP-2.md: Basis items per paragraph line (the file's own lines).
+CP2_BASIS_ITEMS_BY_PARAGRAPH = 7  # paragraphs with a Basis line
+CP2_BASIS_ITEMS = 10
+
+
+def test_the_inspector_draws_every_basis_item_of_every_paragraph_as_the_handoff_has_it(tmp_path):
+    """Reads the inspector the reader sees, not the control's data-basis: the answer key is the
+    handoff's own Basis lines (parsed here from the Markdown), item by item and in order."""
+    fixtures = ROOT / "apps/issuer-library/fixtures"
+    subprocess.run(
+        [
+            sys.executable,
+            str(fixtures / "build_synthetic_run.py"),
+            "--workspace",
+            str(tmp_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    # The synthetic run's page is built by the real entry point and method, not the stand-in.
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "apps/issuer-library/update_library.py"),
+            "--workspace",
+            str(tmp_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(INSPECTOR_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-2?c=synthetic-nbg-new-format-001")
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen, "no paragraph control on the CP-2 page"
+
+    lines = (
+        (fixtures / "synthetic-new-format/SYNTHETIC-CP-2.md")
+        .read_text(encoding="utf-8")
+        .split("\n")
+    )
+    k1 = next(line for line in lines if line.startswith("| K1 |"))
+    k1_cells = [c.strip() for c in k1.strip("|").split("|")]
+    k1_headers = ["ID", "Calculation", "Steps", "Result"]  # the Calculations table's header row
+    assert (
+        next(line for line in lines if line.startswith("| ID |")).strip("|").split("|")[0].strip()
+        == "ID"
+    )
+
+    by_line: dict[int, list[str]] = {}
+    for number, line in enumerate(lines, start=1):
+        if line.startswith("Basis: "):
+            by_line[number - 1] = [
+                i.strip() for i in line.removeprefix("Basis: ").removesuffix(".").split("; ")
+            ]
+    assert len(by_line) == CP2_BASIS_ITEMS_BY_PARAGRAPH
+    assert sum(len(v) for v in by_line.values()) == CP2_BASIS_ITEMS
+    ran = {"CP-0", "CP-1", "CP-1A", "CP-2", "CP-2D"}
+
+    drawn_lines = set()
+    for record in seen:
+        assert record["hidden"] is False, record
+        line = int(record["key"].rsplit(":", 1)[1])
+        # Each paragraph here is one line then its Basis line; the key's line is the paragraph's.
+        want = by_line.get(line)
+        if want is None:
+            continue
+        drawn_lines.add(line)
+        got = record["items"]
+        assert len(got) == len(want), (record["key"], [g["text"][:50] for g in got], want)
+        for item, drawn in zip(want, got, strict=True):
+            if item.startswith("calculation "):
+                assert drawn["cells"] == [
+                    x for pair in zip(k1_headers, k1_cells, strict=True) for x in pair
+                ], drawn
+            elif m := re.fullmatch(r"(.+) \((CP-[A-Z0-9]+)\)", item):
+                assert item in drawn["text"]
+                assert bool(drawn["links"]) == (m[2] in ran), drawn
+                assert ("Not run in this run" in drawn["text"]) == (m[2] not in ran)
+            else:
+                file, _, pages = item.partition(", page")
+                assert drawn["text"].startswith(file), (item, drawn["text"])
+                if pages:
+                    assert f"page{pages}" in drawn["text"], (item, drawn["text"])
+    assert len(drawn_lines) == CP2_BASIS_ITEMS_BY_PARAGRAPH
+    assert console == []
+
+
+NARROW_PROBE = (
+    Path(__file__).with_name("browser_probe_narrow_tables.js").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize(
+    ("route", "tables"),
+    [
+        ("#W-Overview?c=synthetic-nbg-new-format-001", 1),
+        ("#W-Evidence?c=synthetic-nbg-new-format-001", 4),
+    ],
+)
+def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route, tables):
+    """W1: the Overview nearest dates and the Evidence tables do not widen a phone-width page."""
+    for script, args in (("fixtures/build_synthetic_run.py", []), ("update_library.py", [])):
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "apps/issuer-library" / script),
+                "--workspace",
+                str(tmp_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(NARROW_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, route, 500)
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert console == []
+    assert seen["pageFits"] is True
+    assert seen["tables"] == seen["inRegion"] == tables
+    assert seen["scrolling"] >= 1
+
+
+def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_recorded(tmp_path):
+    """L3, L4: the Hashes table shows `instructions/CP-0.md`, not a module name; a run record
+    with no supplied-file list does not claim every supplied file was used."""
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/sources?c=run-a")
+    assert console == []
+    cells = re.findall(r"<td>(instructions/[^<]*)</td>", dom)
+    assert cells == ["instructions/CP-0.md", "instructions/CP-1.md"]
+    assert "The run record lists no supplied files." in dom
+    assert "Every supplied file is named" not in dom
+    # Each handoff and instruction link stays inside library/, where the served page can open it.
+    assert 'href="downloads/run-a/CP-0.md" download' in dom
+    assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom

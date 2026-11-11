@@ -81,6 +81,7 @@ class RunSpec:
     cp1_findings: str = ""  # Text inserted into the CP-1 handoff just before its Sources section.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
+    supplied: tuple[str, ...] = ()  # Supplied file names, as workflow.json `sources` lists them.
     report_page: bool = True  # False: a current delivery, with no report.html, stated by receipt.
 
 
@@ -142,13 +143,23 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         path = f"requests/{module}/{folder_sha}/1.response.md"
         handoffs[module] = {"path": path, "sha256": put(run_dir / path, answer.encode())}
         selected[module] = path
-    put(run_dir / "workflow.json", json.dumps({"run": run, "instructions": instructions}).encode())
+    workflow = {"run": run, "instructions": instructions, "provider_cap_usd": "12"}
+    if spec.supplied:
+        workflow["sources"] = {
+            name: {
+                "path": f"source-text/{name}.txt",
+                "sha256": put(run_dir / f"source-text/{name}.txt", f"text of {name}\n".encode()),
+            }
+            for name in spec.supplied
+        }
+    put(run_dir / "workflow.json", json.dumps(workflow).encode())
     manifest = json.dumps({"run": run, "handoffs": handoffs}, indent=2).encode()
     manifest_sha = sha(manifest)
     put(run_dir / f"delivery-{manifest_sha}.json", manifest)
     view_run = dict(run, issuer_id=spec.view_issuer or issuer_id)
-    # The parts of a CP-OS report that the library's report-adapter.js reads: the report data, the
-    # view root, and the evidence inspector with its head and content.
+    # A legacy CP-OS report.html, as older deliveries carry it. The library no longer reads or
+    # shows it (the report adapter is retired); it is listed and hash-checked like any delivered
+    # file, and without_report() builds the same delivery without it.
     payload = json.dumps(
         {"run": {"issuer_name": issuer_name}, "report": {"pathway": {"title": "Credit snapshot"}}}
     ).replace("<", "\\u003c")
@@ -217,6 +228,26 @@ def rewrite_completion(run_dir: Path, change) -> None:
     old.unlink()
     raw = json.dumps(record, indent=2).encode()
     put(run_dir / f"completed-{sha(raw)}.json", raw)
+
+
+def without_report(run_dir: Path) -> Path:
+    """Make the run's delivery one of the new kind.
+
+    No report.html in the folder or in its delivery.json, and a completion record that carries
+    delivery_sha256 (of delivery.json) instead of report_sha256. Returns the delivery folder."""
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    (delivered / "report.html").unlink()
+    receipt = json.loads((delivered / "delivery.json").read_text())
+    del receipt["files"]["report.html"]
+    raw = json.dumps(receipt).encode()
+    (delivered / "delivery.json").write_bytes(raw)
+
+    def swap(record: dict) -> None:
+        del record["report_sha256"]
+        record["delivery_sha256"] = sha(raw)
+
+    rewrite_completion(run_dir, swap)
+    return delivered
 
 
 # Cited handoff text and its source-text file, for tests/test_credit_os_chips.py.

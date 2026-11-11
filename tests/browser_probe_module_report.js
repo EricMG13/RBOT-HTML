@@ -10,13 +10,14 @@
     const de = document.documentElement;
     seen[name] = {fits: de.scrollWidth <= de.clientWidth && document.getElementById('content').scrollWidth <= document.getElementById('content').clientWidth, valueInCard: inside(), chipsInCard: within('.chart-row .chip'), rows: document.querySelectorAll('.chart-row').length};
   };
-  for (let i = 0; i < 200 && !document.querySelector('#findings .chip[data-chip]'); i++) await sleep(50);
+  for (let i = 0; i < 200 && !document.querySelector('#findings .basis-link'); i++) await sleep(50);
   measure('closed');
   const rowButton = document.querySelector('#numbers .chart-open');
   rowButton.focus();
   const box = rowButton.getBoundingClientRect();
   seen.rowFocus = {focused: document.activeElement === rowButton, box: box.width > 0 && box.height > 0};
-  const chip = [...document.querySelectorAll('#findings .chip[data-chip]')].find(c => c.textContent.includes('p.123'));
+  // A finding's citations sit behind its Basis button (decision 14, H7); activating it opens the inspector on the page it cites.
+  const chip = document.querySelector('#findings .basis-link');
   chip.focus();
   chip.click();
   await sleep(300);

@@ -94,16 +94,17 @@ CURATED_RUNS: dict[str, tuple[str, ...]] = {
         "29 June 2020 disclosure · historical case",
     ),
 }
-# Build history recorded in README.md and VERIFICATION.md; builds 4-6 matched by diff.
-CURATED_REPORTS = {
-    "tdg-fy2024-snapshot": ("Initial snapshot · failed date presentation", "Superseded"),
-    "tdg-fy2024-snapshot-2": ("Annual snapshot · reviewed", None),
-    "tdg-fy2024-snapshot-3": ("Integrated · macro/ESG and conditional forecast", None),
-    "tdg-fy2024-snapshot-4": ("Peer comparison · first delivery, gap rows dropped", None),
-    "tdg-fy2024-snapshot-5": ("Peer comparison · gap boundary repaired", None),
-    "tdg-fy2024-snapshot-6": ("Peer comparison · exact fiscal dates added", None),
-    "tdg-fy2024-snapshot-7": ("Repairs from the deliverable comparison", "Latest build"),
-}
+# The TransDigm builds kept under deliverables/ (history in README.md, VERIFICATION.md): a curated
+# pin's compared deliverables must be among them.
+CURATED_BUILDS = (
+    "tdg-fy2024-snapshot",
+    "tdg-fy2024-snapshot-2",
+    "tdg-fy2024-snapshot-3",
+    "tdg-fy2024-snapshot-4",
+    "tdg-fy2024-snapshot-5",
+    "tdg-fy2024-snapshot-6",
+    "tdg-fy2024-snapshot-7",
+)
 SAFE_FOLDER = re.compile(r"[\w. -]+")
 MONTHS = (
     "January",
@@ -426,86 +427,6 @@ def listed_bytes(folder: Path, delivery: dict[str, Any], name: str) -> bytes | N
     except (OSError, UnreadableFile):
         return None
     return data if hashlib.sha256(data).hexdigest() == delivery["files"][name] else None
-
-
-def _passport_sources(
-    refs: list[str], passports: dict[str, dict[str, str]]
-) -> list[dict[str, str]]:
-    """The distinct (source, pin) pairs the report's passports state for these cell references."""
-    pairs: list[dict[str, str]] = []
-    for ref in refs:
-        fields = passports.get(ref, {})
-        pair = {"source": fields.get("Source", ""), "pin": fields.get("SHA-256", "")}
-        if pair["source"] and pair["pin"] and pair not in pairs:
-            pairs.append(pair)
-    return pairs
-
-
-def _view_figures(view: dict[str, Any]) -> list[dict[str, Any]]:
-    """One entry per figure and per table of a report-view.json, as it states them: title, periods,
-    unit, note, point count and the sources its cells cite. Nothing is recomputed."""
-    passports = {
-        p["ref_id"]: {f["name"]: f["value"] for f in p["fields"]} for p in view["passports"]
-    }
-
-    def refs(rows: list[dict[str, Any]]) -> list[str]:
-        return [c["ref_id"] for r in rows for c in r["cells"] if c.get("ref_id")]
-
-    found: list[dict[str, Any]] = []
-    for block in view["blocks"]:
-        for figure in block["figures"]:
-            chart = figure["chart"]
-            rows = chart["table_twin"]["rows"]
-            periods = [
-                r["label"].partition(" \u00b7 ")[2] for r in rows if " \u00b7 " in r["label"]
-            ]
-            found.append(
-                {
-                    "title": figure["title"],
-                    "kind": "Figure",
-                    "periods": list(dict.fromkeys(periods)),
-                    "unit": chart.get("unit") or chart["table_twin"].get("scale"),
-                    "unitClass": chart.get("unit_class"),
-                    "note": block.get("note") or figure.get("summary"),
-                    "points": len(rows),
-                    "sources": _passport_sources(refs(rows), passports),
-                }
-            )
-        if block["kind"] in ("period_grid", "dense", "keyvalue") and block["rows"]:
-            found.append(
-                {
-                    "title": block["title"],
-                    "kind": "Table",
-                    "periods": [c for c in block["columns"] if re.search(r"\d{4}", c)]
-                    if block["kind"] == "period_grid"
-                    else [],
-                    "unit": block.get("scale")
-                    or ("Stated per row" if "Unit" in block["columns"] else None),
-                    "unitClass": None,
-                    "note": block.get("note"),
-                    "points": len(block["rows"]),
-                    "sources": _passport_sources(refs(block["rows"]), passports),
-                }
-            )
-    return found
-
-
-def report_figures(
-    folder: Path, delivery: dict[str, Any]
-) -> tuple[list[dict[str, Any]] | None, str | None]:
-    """The figures and tables of folder/report-view.json when delivery.json lists it with a hash
-    that matches, read only. (None, None) when the delivery lists none; (None, issue) when the
-    listed file does not match or cannot be read: named, never silent."""
-    files = delivery.get("files")
-    if not isinstance(files, dict) or "report-view.json" not in files:
-        return None, None
-    try:
-        raw = listed_bytes(folder, delivery, "report-view.json")
-        if raw is None:
-            return None, f"{folder.name}: report-view.json is not the plain file its delivery lists"
-        return _view_figures(json.loads(raw.decode("utf-8"))), None
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as error:
-        return None, f"{folder.name}: report-view.json could not be read ({describe(error)})"
 
 
 def recorded_revisions(run_dir: Path, issues: list[str]) -> list[tuple[str, str]]:
@@ -1141,7 +1062,6 @@ def collect_runs(
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
-    dict[str, list[dict[str, Any]]],
     dict[str, str],
     list[str],
 ]:
@@ -1155,7 +1075,6 @@ def collect_runs(
     runs: dict[str, Any] = {}
     outputs: dict[str, Any] = {}
     inputs: dict[str, Any] = {}
-    sources: dict[str, list[dict[str, Any]]] = {}
     pins: dict[str, str] = {}
     issues: list[str] = []
     for key, (folder, issuer, title, label, sector, period) in shown.items():
@@ -1170,9 +1089,6 @@ def collect_runs(
         for path, handoff in read.items():
             kind = "inputs" if INPUT_NAME.search(path.name) else "outputs"
             grouped.setdefault(handoff.module, {"outputs": [], "inputs": []})[kind].append(path)
-            sources.setdefault(handoff.sha256, []).append(
-                {"run": key, "source": f"{folder}/{relative(path)}", "output": kind == "outputs"}
-            )
         modules: dict[str, Any] = {}
         first: str | None = None
         for module, files in grouped.items():
@@ -1257,142 +1173,30 @@ def collect_runs(
             "first": first or (with_outputs[0] if with_outputs else "W-Overview"),
             "modules": modules,
         }
-    return runs, outputs, inputs, sources, pins, issues
-
-
-def built_from(
-    files: dict[str, str], sources: dict[str, list[dict[str, Any]]]
-) -> list[dict[str, Any]]:
-    """Each handoff the verified delivery lists, traced to the run files holding the same bytes.
-
-    The names and hashes are delivery.json's, which the server verified; a handoff-looking file
-    beside the report that the delivery does not list was not verified and is not "built from".
-    """
-    rows = []
-    for name, digest in sorted(files.items()):
-        match = HANDOFF_NAME.match(name)
-        if not match or not name.endswith(".md"):
-            continue
-        matches = sources.get(digest) or [{"run": None, "source": name, "output": False}]
-        rows += [{"module": match[0], "sha256": digest, **found} for found in matches]
-    return rows
+    return runs, outputs, inputs, pins, issues
 
 
 # Each folder's (delivery.json, listed view.json), or describe(error) when it cannot be read.
 Manifests = dict[str, "tuple[dict[str, Any], dict[str, Any]] | str"]
 
 
-def delivery_and_view(
-    root: Path, folder: str, manifests: Manifests | None
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The folder's (delivery.json, listed view.json): from `manifests` when it was read there,
-    else read here, so a folder that could not be read raises its own error."""
-    manifest = (manifests or {}).get(folder)
-    if isinstance(manifest, tuple):
-        return manifest
-    delivery = delivery_json(root / folder)
-    return delivery, listed_view(root / folder, delivery)
+def curated_builds(catalogue: dict[str, Any], manifests: Manifests) -> set[str]:
+    """Names of the curated TransDigm builds the library holds as verified deliverables.
 
-
-def report_record(
-    folder: str,
-    artifact: dict[str, Any],
-    sources: dict[str, list[dict[str, Any]]],
-    keys: dict[str, str],
-    read: tuple[dict[str, Any], dict[str, Any]],
-) -> dict[str, Any]:
-    """One verified deliverable as the app shows it; `read` is its (delivery.json, view.json)."""
-    name = Path(folder).name
-    delivery, view = read
-    identity = view["run"]
-    issuer_name, as_of = identity["issuer_name"], identity["as_of"]
-    issuer_key = report_issuer_key(keys, identity.get("issuer_id"))
-    files = {str(n): str(h) for n, h in delivery["files"].items()}
-    mode, qualification = view.get("mode"), view.get("analytical_qualification")
-    # The hand-written labels describe the TransDigm builds under deliverables/; a folder of that
-    # name elsewhere or for another issuer keeps the issuer its own view.json records.
-    curated = (
-        folder == f"deliverables/{name}"
-        and name in CURATED_REPORTS
-        and str(issuer_name).startswith("TransDigm Group")
-    )
-    issuer = "TransDigm Group" if curated else issuer_name
-    if curated:
-        label, status = CURATED_REPORTS[name]
-    else:
-        label = (
-            artifact["label"]
-            if artifact["label"] != name
-            else f"{issuer} · as of {display_date(as_of)}"
-        )
-        status = "Superseded" if artifact.get("state") == "superseded" else None
-    return {
-        "id": name,
-        "build": list(CURATED_REPORTS).index(name) + 1 if curated else None,
-        "label": label,
-        "status": status,
-        "mode": mode if isinstance(mode, str) else None,
-        "qualification": qualification if isinstance(qualification, str) else None,
-        "issuer": issuer,
-        "issuerKey": issuer_key,
-        "sha256": files["report.html"],
-        "scope": delivery.get("scope"),
-        "modelPublished": delivery.get("cp_model_published", False),
-        "href": artifact["href"] + "&embedded=1",
-        "download": artifact["href"] + "&download=1",
-        "files": [
-            {"name": n, "href": f"/files/{quote(f'{folder}/{n}')}?sha256={h}&download=1"}
-            for n, h in sorted(files.items())
-        ],
-        "builtFrom": built_from(files, sources),
-    }
-
-
-def catalogue_reports(
-    root: Path,
-    catalogue: dict[str, Any],
-    sources: dict[str, list[dict[str, Any]]],
-    keys: dict[str, str],
-    manifests: Manifests | None = None,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Deliverables the server verified, each once, with what it was built from.
-
-    `keys` maps issuer IDs to group keys; `manifests` are the folders' model_manifests.
+    A build is curated when its folder is deliverables/<name> for a name in CURATED_BUILDS and its
+    view.json records TransDigm Group as the issuer: a folder that merely has the name is not one.
+    Only delivery.json and view.json (the `manifests`) are read; no report file is needed.
     """
-    reports, seen, issues = [], set(), []
-    for run in catalogue["real"]:
-        for artifact in run.get("artifacts") or []:
-            folder = artifact["folder"]
-            name = Path(folder).name
-            if (
-                not artifact.get("available")
-                or artifact.get("kind", "report") != "report"
-                or name in seen
-            ):
-                continue
-            seen.add(name)
-            # Documented fail-open: reported in Settings; the other deliverables stay readable.
-            try:
-                read = delivery_and_view(root, folder, manifests)
-                record = report_record(folder, artifact, sources, keys, read)
-                record["figures"], figure_issue = report_figures(root / folder, read[0])
-                # Set exactly when the delivery lists report-view.json and it failed: the page
-                # tells that apart from a delivery that lists none.
-                record["figuresIssue"] = figure_issue
-                if figure_issue:
-                    issues.append(figure_issue)
-                reports.append(record)
-            except (
-                OSError,
-                ValueError,
-                KeyError,
-                TypeError,
-                AttributeError,
-                RecursionError,
-                MemoryError,
-            ) as error:
-                issues.append(f"{folder}: could not be read ({describe(error)})")
-    return reports, issues
+    builds = set()
+    for found in delivery_identities(Path(), catalogue, manifests):
+        name = Path(found["folder"]).name
+        if (
+            found["folder"] == f"deliverables/{name}"
+            and name in CURATED_BUILDS
+            and str(found["issuer_name"]).startswith("TransDigm Group")
+        ):
+            builds.add(name)
+    return builds
 
 
 def register_of(sections: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -3170,14 +2974,28 @@ def recorded_run(run_dir: Path, issues: list[str] | None = None) -> dict[str, st
         return {}
 
 
+def delivery_identity(folder: str, manifest: dict[str, Any]) -> dict[str, Any] | str:
+    """A deliverable's recorded run and issuer, or the reason its view.json states none."""
+    try:
+        identity = manifest["run"]
+        run_id, name = identity["run_id"], identity["issuer_name"]
+        issuer_id = identity.get("issuer_id") or None
+    except MANIFEST_ERRORS as error:
+        return f"view.json states no run identity ({describe(error)})"
+    if not (isinstance(run_id, str) and isinstance(name, str) and name):
+        return "view.json states no run identity (run_id and issuer_name must be text)"
+    valid_id = issuer_id if isinstance(issuer_id, str) else None
+    return {"folder": folder, "run_id": run_id, "issuer_id": valid_id, "issuer_name": name}
+
+
 def delivery_identities(
     root: Path, catalogue: dict[str, Any], manifests: Manifests | None = None
 ) -> list[dict[str, Any]]:
     """What each available (hash-verified) deliverable says about its own run and issuer.
 
-    A deliverable whose view.json cannot be read is skipped here; catalogue_reports names it in
-    Workspace issues, so the failure is reported once and no run takes an identity from it.
-    `manifests` are the folders' model_manifests, read when omitted.
+    A deliverable whose view.json cannot be read, or states no run identity, is skipped here;
+    workspace_store names it in Workspace issues, so the failure is reported once and no run
+    takes an identity from it. `manifests` are the folders' model_manifests, read when omitted.
     """
     manifests = (
         model_manifests(root, available_folders(catalogue)) if manifests is None else manifests
@@ -3191,19 +3009,10 @@ def delivery_identities(
                 continue
             seen.add(folder)
             manifest = manifests.get(folder)
-            if not isinstance(manifest, tuple):
-                continue
-            try:
-                identity = manifest[1]["run"]
-                run_id, name = identity["run_id"], identity["issuer_name"]
-                issuer_id = identity.get("issuer_id") or None
-            except MANIFEST_ERRORS:
-                continue
-            if isinstance(run_id, str) and isinstance(name, str) and name:
-                valid_id = issuer_id if isinstance(issuer_id, str) else None
-                found.append(
-                    {"folder": folder, "run_id": run_id, "issuer_id": valid_id, "issuer_name": name}
-                )
+            if isinstance(manifest, tuple) and isinstance(
+                identity := delivery_identity(folder, manifest[1]), dict
+            ):
+                found.append(identity)
     return sorted(found, key=lambda item: item["folder"])
 
 
@@ -3400,6 +3209,286 @@ def shown_runs(
     return shown, recorded
 
 
+SHA_TEXT = re.compile(r"[0-9a-f]{64}")
+EXTENSION_WORDS = re.compile(r"((?:\.[A-Za-z]+)+)$")
+CALL_FIELDS = (
+    ("module", "module_id"),
+    ("attempt", "attempt"),
+    ("started", "started_at"),
+    ("http_status", "http_status"),
+    ("error_class", "error_class"),
+    ("settled_usd", "settled_usd"),
+)
+
+
+def stored_text(value: Any) -> str | None:
+    """A stored string as it is; anything else is missing, never a made-up value."""
+    return value if isinstance(value, str) else None
+
+
+def run_json(path: Path, issues: list[str], what: str) -> Any:
+    """A run file's JSON, or None with an issue naming why not (a documented fail-open: the
+    Evidence page then lacks that part; the failure is in Workspace issues)."""
+    try:
+        return json.loads(b"".join(regular_chunks(path, follow=False)).decode("utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as error:
+        issues.append(f"{what} could not be read ({describe(error)})")
+        return None
+
+
+def file_type(name: str) -> str | None:
+    """The file's trailing alphabetic extension words as written (`pdf`, `htm.jsonl`)."""
+    found = EXTENSION_WORDS.search(name)
+    return found[1][1:] if found else None
+
+
+def sources_section_text(sections: list[dict[str, Any]]) -> str:
+    """Every cell and paragraph under the handoff's `## Sources` heading (its subsections too)."""
+    parts: list[str] = []
+    inside = False
+    for section in sections:
+        if section["level"] <= 2:
+            inside = section["level"] == 2 and section["heading"].strip() == "Sources"
+        if not inside:
+            continue
+        for block in section["blocks"]:
+            if block["type"] == "text":
+                parts.append(block["text"])
+            elif block["type"] == "table":
+                parts.extend(block["headers"])
+                parts.extend(cell for row in block["rows"] for cell in row["cells"])
+    return "\n".join(parts)
+
+
+def names_file(sources_text: str, name: str) -> bool:
+    """Whether the Sources text names the file exactly: the whole name, with only the start or end
+    of the text, white space, `|` or `,` on either side. `report.pdf` is not named by
+    `annual-report.pdf`."""
+    return re.search(rf"(?<![^\s|,]){re.escape(name)}(?![^\s|,])", sources_text) is not None
+
+
+def has_sources_section(sections: list[dict[str, Any]]) -> bool:
+    """Whether the handoff has a `## Sources` heading at all (even an empty one)."""
+    return any(s["level"] == 2 and s["heading"].strip() == "Sources" for s in sections)
+
+
+def document_dates(sections: list[dict[str, Any]]) -> dict[str, str]:
+    """The Document date a handoff's table records for a file: in a table with `Source` and
+    `Document date` columns, the date cell of the row whose Source cell is exactly the file name,
+    copied as written. A blank cell records nothing; no date is parsed or read from a file name."""
+    found: dict[str, str] = {}
+    for section in sections:
+        for block in section["blocks"]:
+            if block["type"] != "table":
+                continue
+            heads = [h.strip() for h in block["headers"]]
+            if "Source" not in heads or "Document date" not in heads:
+                continue
+            name_at, date_at = heads.index("Source"), heads.index("Document date")
+            for row in block["rows"]:
+                if row["cells"][date_at].strip():
+                    found.setdefault(row["cells"][name_at].strip(), row["cells"][date_at].strip())
+    return found
+
+
+def run_calls(run_dir: Path, folder: str, issues: list[str]) -> list[dict[str, Any]]:
+    """live/calls.jsonl as recorded: one row per call with the fields as stored. A file that is not
+    UTF-8 text lists no call and is named in the issues (documented fail-open: no byte is replaced
+    with a guess)."""
+    try:
+        raw = b"".join(regular_chunks(run_dir / "live" / "calls.jsonl", follow=False))
+    except FileNotFoundError:
+        return []
+    except OSError as error:
+        issues.append(f"{folder}: live/calls.jsonl could not be read ({describe(error)})")
+        return []
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        bad = raw[: error.start].count(b"\n") + 1
+        issues.append(
+            f"{folder}: live/calls.jsonl is not UTF-8 text (line {bad}); no call is listed"
+        )
+        return []
+    calls: list[dict[str, Any]] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            call = json.loads(line)
+        except ValueError:
+            call = None
+        if not isinstance(call, dict):
+            issues.append(f"{folder}: live/calls.jsonl line {number} is not a call record")
+            continue
+        calls.append({key: call.get(field) for key, field in CALL_FIELDS})
+    return calls
+
+
+def run_hashes(run_dir: Path, workflow: dict[str, Any], issues: list[str]) -> list[dict[str, Any]]:
+    """The hashes a run records: its supplied files and instructions (workflow.json), then its
+    delivery manifest and completion record, hashed from the files themselves."""
+    rows: list[dict[str, Any]] = []
+    for part in ("sources", "instructions"):
+        entries = workflow.get(part)
+        for name, entry in (entries if isinstance(entries, dict) else {}).items():
+            entry = entry if isinstance(entry, dict) else {}
+            label = name if part == "sources" else str(entry.get("path") or name)
+            rows.append({"name": label, "sha256": stored_text(entry.get("sha256"))})
+    for pattern in ("delivery-*.json", "completed-*.json"):
+        for path in sorted(run_dir.glob(pattern)):
+            try:
+                rows.append({"name": path.name, "sha256": sha256(path)})
+            except OSError as error:
+                issues.append(
+                    f"{run_dir.name}: {path.name} could not be hashed ({describe(error)})"
+                )
+                rows.append({"name": path.name, "sha256": None})
+    return rows
+
+
+def instruction_rows(
+    workflow: dict[str, Any], folder: str, issues: list[str]
+) -> list[dict[str, Any]]:
+    """The instructions each module was sent, as the run's workflow.json records them. A usable
+    row links to the copy update_library writes under the library folder (so it opens when the
+    library is served too)."""
+    entries = workflow.get("instructions")
+    rows: list[dict[str, Any]] = []
+    for module, entry in (entries if isinstance(entries, dict) else {}).items():
+        entry = entry if isinstance(entry, dict) else {}
+        path, digest = entry.get("path"), stored_text(entry.get("sha256"))
+        parts = PurePosixPath(path).parts if isinstance(path, str) else ()
+        safe = (
+            isinstance(path, str)
+            and bool(parts)
+            and not (path.startswith("/") or ".." in parts or "\\" in path or ":" in path)
+        )
+        usable = safe and digest is not None and SHA_TEXT.fullmatch(digest) is not None
+        named = isinstance(module, str) and HANDOFF_NAME.fullmatch(module) is not None
+        if not named:
+            issues.append(f"{folder}: instructions key {module!r} is not a module code; no link")
+        elif not usable:
+            issues.append(f"{folder}: instructions for {module} have no usable path or hash")
+        usable = usable and named
+        rows.append(
+            {
+                "module": module,
+                "href": f"downloads/{quote(folder)}/instructions/{quote(module)}.md"
+                if usable
+                else None,
+                "sha256": digest,
+            }
+        )
+    return rows
+
+
+def run_downloads(
+    run: dict[str, Any], key: str, models: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The Model and calculation files of the models this run's Forecast lists (the rule of
+    views.js runModels), each as a label and a download link."""
+    rows: list[dict[str, Any]] = []
+    for model in sorted(models, key=lambda m: m["id"]):
+        holds = model["issuerKey"] == run["issuerKey"] and (
+            (model["runId"] is not None and model["runId"] == run["folder"])
+            or model["runFolder"] == run["folder"]
+            or any(source["run"] == key for source in model["sources"])
+        )
+        if not holds:
+            continue
+        rows.append({"label": f"Model {model['id']}", "href": model["download"]})
+        rows.extend(
+            {"label": f"{model['id']}: {f['name']}", "href": f["href"]}
+            for f in model["files"]
+            if f["name"] in ("calculation.json", "forecast_exact.json")
+        )
+    return rows
+
+
+class EvidenceReads(NamedTuple):
+    """What the store holds when Evidence is built: the workspace root, the outputs, the parsed
+    handoffs by hash and the models."""
+
+    root: Path
+    outputs: dict[str, Any]
+    sections: dict[str, list[dict[str, Any]]]
+    models: list[dict[str, Any]]
+
+
+def run_evidence(
+    key: str, run: dict[str, Any], held: EvidenceReads, issues: list[str]
+) -> dict[str, Any]:
+    """The run's Evidence page, as data: supplied files and who read them, the delivered
+    handoffs, the downloads and the run record. Every value is as stored; one the run does not
+    record is None."""
+    folder = run["folder"]
+    run_dir = held.root / "runs" / folder
+    workflow = run_json(run_dir / "workflow.json", issues, f"{folder}: workflow.json")
+    workflow = workflow if isinstance(workflow, dict) else {}
+    handoffs = []
+    read_by: dict[str, list[str]] = {}
+    no_sources: list[str] = []
+    dates: dict[str, str] = {}
+    supplied = workflow.get("sources")
+    supplied = supplied if isinstance(supplied, dict) else {}
+    names = [name for name in supplied if name != "context"]
+    for module, entry in run["modules"].items():
+        output = held.outputs.get(entry["default"] or "")
+        if output is None:
+            continue
+        handoffs.append(
+            {
+                "module": module,
+                "name": f"{module}.md",
+                "href": f"downloads/{quote(folder)}/{quote(module)}.md",
+            }
+        )
+        parsed = held.sections[output["sha256"]]
+        for name, date in document_dates(parsed).items():
+            dates.setdefault(name, date)
+        if not has_sources_section(parsed):
+            no_sources.append(module)
+        text = sources_section_text(parsed)
+        for name in names:
+            if names_file(text, name):
+                read_by.setdefault(name, []).append(module)
+    rows = [
+        {
+            "name": name,
+            "sha256": stored_text(supplied[name].get("sha256"))
+            if isinstance(supplied[name], dict)
+            else None,
+            "type": file_type(name),
+            "documentDate": dates.get(name),
+            "readBy": read_by.get(name, []),
+        }
+        for name in names
+    ]
+    cap = workflow.get("provider_cap_usd")
+    # No delivered handoff has a Sources section: the run recorded nothing about use, so an
+    # unnamed file is "use not recorded", not "not used" (missing is not zero).
+    nothing_recorded = len(no_sources) == len(handoffs)
+    unnamed = [row for row in rows if not row["readBy"]]
+    return {
+        "sources": [row for row in rows if row["readBy"]],
+        "unused": [] if nothing_recorded else unnamed,
+        "unrecorded": unnamed if nothing_recorded else [],
+        "noSourcesModules": no_sources,
+        "handoffs": handoffs,
+        "zip": f"downloads/{quote(folder)}/handoffs.zip" if handoffs else None,
+        "downloads": run_downloads(run, key, held.models),
+        "record": {
+            "hashes": run_hashes(run_dir, workflow, issues),
+            "instructions": instruction_rows(workflow, folder, issues),
+            "calls": run_calls(run_dir, folder, issues),
+            "cap": cap if isinstance(cap, (str, int, float)) else None,
+        },
+    }
+
+
 def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, Any]:
     """Everything the app reads. A curated pin that stopped matching is dropped, not fatal."""
     root = Path(root)
@@ -3414,7 +3503,6 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
     runs: dict[str, Any] = {}
     outputs: dict[str, Any] = {}
     inputs: dict[str, Any] = {}
-    sources: dict[str, list[dict[str, Any]]] = {}
     pins: dict[str, Any] = {}
     handoffs = Handoffs(strict=False)
     found: list[str] = []
@@ -3428,10 +3516,8 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
         runs |= part[0]
         outputs |= part[1]
         inputs |= part[2]
-        for digest, matches in part[3].items():
-            sources.setdefault(digest, []).extend(matches)
-        pins |= part[4]
-        found += part[5]
+        pins |= part[3]
+        found += part[4]
     # A recorded earlier run is linked only when the library holds a run with that id.
     by_id = {run["runId"]: key for key, run in runs.items() if run["runId"]}
     for run in runs.values():
@@ -3440,13 +3526,23 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
     fields, keys = issuer_groups({key: recorded[key] for key in runs}, found)
     for key, identity in fields.items():
         runs[key].update(identity)
-    reports, unread = catalogue_reports(root, catalogue, sources, keys, manifests)
-    found += unread
     models, unread = catalogue_models(
         root, catalogue, WorkspaceReads(outputs, keys, runs, manifests)
     )
     found += unread
+    held = EvidenceReads(root, outputs, {h: p[0] for h, p in handoffs.parsed.items()}, models)
+    for key, run in runs.items():
+        run["evidence"] = run_evidence(key, run, held, found)
+    # A deliverable that cannot be read is named here (read_model names a model's own folder).
+    for folder, manifest in manifests.items():
+        reason = manifest if isinstance(manifest, str) else delivery_identity(folder, manifest[1])
+        if (
+            isinstance(reason, str)
+            and (message := f"{folder}: could not be read ({reason})") not in found
+        ):
+            found.append(message)
     # A compared deliverable is a curated build, not a folder that merely has its name.
+    builds = curated_builds(catalogue, manifests)
     for module, config in catalog.items():
         compare = config.get("compare")
         if (
@@ -3454,8 +3550,7 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
             and compare
             and not (
                 compare["recheck"] in outputs
-                and {compare["prior"], compare["current"], compare["repaired"]}
-                <= {r["id"] for r in reports if r["build"]}
+                and {compare["prior"], compare["current"], compare["repaired"]} <= builds
             )
         ):
             del pins[module]
@@ -3469,7 +3564,6 @@ def workspace_store(root: str | Path, catalogue: dict[str, Any]) -> dict[str, An
         "handoffs": {o["sha256"]: handoffs.parsed[o["sha256"]][0] for o in outputs.values()},
         "inputs": inputs,
         "pins": pins,
-        "reports": reports,
         "models": models,
         "visuals": visual_catalogue(),
         "issues": issues + found,

@@ -1,6 +1,5 @@
 """The update script: the static Credit OS library, written only to library/, from fixtures."""
 
-import hashlib
 import json
 import re
 import sys
@@ -39,11 +38,6 @@ def data_of(workspace: Path) -> dict:
     return json.loads(text.removeprefix(PREFIX).rstrip().removesuffix(";"))
 
 
-def delivered_report(run_dir: Path) -> Path:
-    (report,) = run_dir.glob("deliveries/*/report.html")
-    return report
-
-
 def strings(value):
     if isinstance(value, str):
         yield value
@@ -56,7 +50,7 @@ def strings(value):
 
 
 def test_writes_static_library(tmp_path):
-    run_dir = make_run(tmp_path, "run-a")
+    make_run(tmp_path, "run-a")
     before = tree(tmp_path)
     library = update_library.update_library(tmp_path)
     after = tree(tmp_path)
@@ -67,52 +61,27 @@ def test_writes_static_library(tmp_path):
     for name in ("index.html", "data.js", "static-boot.js", "screen.css", "fonts/OFL.txt"):
         assert (tmp_path / "library" / name).is_file()
     assert not [k for k in after if k.endswith(".test.cjs")]
-    presented = [k for k in after if k.startswith("library/reports/")]
-    delivery = delivered_report(run_dir).parent.name
-    assert presented == [f"library/reports/run-a/{delivery}/report.html"]
+    # The delivered report is retired (decision 1): no copy of it, no adapter, no reports list.
+    assert not [k for k in after if k.startswith("library/reports/") or "report-adapter" in k]
     data = data_of(tmp_path)
     assert data["catalogue"]["real"][0]["id"] == "run-a"
-    assert data["workspace"]["reports"][0]["href"] == (f"reports/run-a/{delivery}/report.html")
+    assert "reports" not in data["workspace"]
     assert not [s for s in strings(data) if s.startswith("/files/")]
     assert "../runs/run-a/" in "\n".join(strings(data))
-    assert not [s for s in strings(data) if "sha256=" in s and s.startswith(("../", "reports/"))]
+    assert not [s for s in strings(data) if "sha256=" in s and s.startswith("../")]
     page = (tmp_path / "library/index.html").read_text(encoding="utf-8")
     assert "default-src 'none'" in page and "connect-src 'none'" in page
     assert re.findall(r'\b(?:src|href)="(?:https?:)?//', page) == []
 
 
-def test_presented_report_keeps_original(tmp_path):
+def test_the_runs_own_files_are_not_changed_or_copied(tmp_path):
     run_dir = make_run(tmp_path, "run-a")
-    original = delivered_report(run_dir)
-    raw = original.read_bytes()
-    digest = hashlib.sha256(raw).hexdigest()
+    before = tree(tmp_path)
     update_library.update_library(tmp_path)
-    assert hashlib.sha256(original.read_bytes()).hexdigest() == digest
-    (copy,) = (tmp_path / "library/reports").rglob("report.html")
-    shown = copy.read_bytes()
-    assert shown.startswith(raw[: raw.rindex(b"</body>")])
-    assert b"<style data-library-presentation>" in shown
-    assert b"<script data-library-presentation>" in shown
-    assert shown.count(b"data-library-presentation") == 2
-
-
-def test_a_new_format_run_has_no_presented_report_and_does_not_stop_the_build(tmp_path):
-    make_run(tmp_path, "run-old")
-    make_run(tmp_path, "run-new", report_page=False, issuer_id="other", issuer_name="Other plc")
-    library = update_library.update_library(tmp_path)
-    assert sorted(r["id"] for r in library.runs) == ["run-new", "run-old"]
-    presented = [
-        p.relative_to(tmp_path).parts[2] for p in (tmp_path / "library/reports").rglob("*.html")
-    ]
-    assert presented == ["run-old"]
-
-
-def test_presentation_goes_before_the_last_body_close():
-    html = b"<body>a</body><p>b</P></BODY>tail"
-    shown = update_library.present_report(html)
-    start = shown.index(b"<style data-library-presentation>")
-    assert shown[:start] == b"<body>a</body><p>b</P>"
-    assert shown.endswith(b"</script></BODY>tail")
+    after = tree(tmp_path)
+    assert {k: v for k, v in after.items() if not k.startswith("library/")} == before
+    assert (run_dir / "deliveries").is_dir()
+    assert not any(p.name == "report.html" for p in (tmp_path / "library").rglob("*"))
 
 
 def test_refuses_library_symlink(tmp_path):
@@ -124,6 +93,33 @@ def test_refuses_library_symlink(tmp_path):
     with pytest.raises(Refused, match="is a link or a file"):
         update_library.update_library(workspace)
     assert list(elsewhere.iterdir()) == []
+
+
+def test_checked_bytes_refuses_a_link_even_when_the_hash_matches(tmp_path):
+    # The store never lists a linked handoff; this is the guard for a file swapped for a link after
+    # the store read it (the bytes and so the hash still match).
+    import hashlib
+
+    target = tmp_path / "elsewhere.md"
+    target.write_bytes(b"handoff\n")
+    link = tmp_path / "CP-0.md"
+    link.symlink_to(target)
+    with pytest.raises(Refused, match="not a plain file"):
+        update_library.checked_bytes(
+            link, hashlib.sha256(b"handoff\n").hexdigest(), "run-a/CP-0.md"
+        )
+
+
+def test_a_symlinked_delivered_handoff_is_not_copied(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    real = delivered / "CP-0.md"
+    elsewhere = tmp_path / "elsewhere.md"
+    elsewhere.write_bytes(real.read_bytes())
+    real.unlink()
+    real.symlink_to(elsewhere)
+    update_library.update_library(tmp_path)
+    assert not (tmp_path / "library/downloads/run-a/CP-0.md").exists()
 
 
 def test_empty_workspace(tmp_path):
@@ -146,8 +142,7 @@ def test_unlisted_run_contributes_nothing(tmp_path):
     assert [name for name, _ in data["activity"]["excluded"]] == ["legacy", "run-half"]
     listed = json.dumps({k: v for k, v in data.items() if k != "activity"})
     assert "run-half" not in listed and "Zeta Synthetic" not in json.dumps(data)
-    assert not (tmp_path / "library/reports/run-half").exists()
-    assert [p.name for p in (tmp_path / "library/reports").iterdir()] == ["run-a"]
+    assert not (tmp_path / "library/reports").exists()
 
 
 def test_hostile_run_text_cannot_leave_the_data_file(tmp_path):
@@ -201,6 +196,32 @@ def test_a_missing_workspace_is_refused(tmp_path):
 def test_the_command_turns_a_refusal_into_an_exit(tmp_path):
     with pytest.raises(SystemExit, match="Workspace not found"):
         update_library.main(["--workspace", str(tmp_path / "absent")])
+
+
+def test_a_run_with_no_delivered_report_page_is_listed_with_every_page_and_an_earlier_run_still_is(
+    tmp_path,
+):
+    """M1: the library lists a run from its handoffs; no report.html is needed or written."""
+    make_run(tmp_path, "run-old", issuer_id="old", issuer_name="Old Synthetic", report_page=True)
+    new = make_run(tmp_path, "run-new", report_page=False)
+    assert not list(new.glob("deliveries/*/report.html"))
+    library = update_library.update_library(tmp_path)
+    assert sorted(r["id"] for r in library.runs) == ["run-new", "run-old"]
+    assert library.excluded == []
+    assert not [p for p in tree(tmp_path) if p.startswith("library/reports")]
+    data = data_of(tmp_path)
+    assert sorted(r["id"] for r in data["catalogue"]["real"]) == ["run-new", "run-old"]
+    workspace = data["workspace"]
+    (run,) = [r for r in workspace["runs"].values() if r["folder"] == "run-new"]
+    assert sorted(run["modules"]) == ["CP-0", "CP-1"]
+    outputs = [o for o in workspace["outputs"].values() if o["run"] == run["folder"]]
+    assert sorted(o["module"] for o in outputs) == ["CP-0", "CP-1"]
+    assert all(o["firstHeading"] and o["sha256"] in workspace["handoffs"] for o in outputs)
+    evidence = run["evidence"]
+    assert [h["module"] for h in evidence["handoffs"]] == ["CP-0", "CP-1"]
+    assert evidence["record"] is not None and evidence["zip"]
+    # The earlier run's own file list names its report.html as stored; the new run's names none.
+    assert not [s for s in strings(run) if "report.html" in s]
 
 
 def test_data_js_carries_excluded_runs(tmp_path):
@@ -307,10 +328,10 @@ EVENTS = [
 ]
 
 
-def test_a_run_record_has_registry_edges_and_the_recorded_event_order_with_its_times(tmp_path):
+def test_a_run_record_has_the_recorded_event_order_with_its_times(tmp_path):
     record, issues = record_of(tmp_path, EVENTS)
     assert issues == []
-    assert record["edges"] == [["CP-0", "CP-1", "block"], ["CP-0", "CP-1A", "block"]]
+    assert "edges" not in record
     started = "2026-01-01T10:00:00Z"
     assert record["timed"] is True and record["steps"] == [
         {"module": "CP-0", "started": started, "accepted": "2026-01-01T10:05:00Z"},
@@ -333,9 +354,9 @@ def test_a_run_without_a_workflow_record_has_no_run_record(tmp_path):
     assert "record" not in store["runs"]["r1"] and store["issues"] == []
 
 
-def test_an_unreadable_event_log_keeps_the_edges_draws_no_time_and_names_the_failure(tmp_path):
+def test_an_unreadable_event_log_draws_no_time_and_names_the_failure(tmp_path):
     record, issues = record_of(tmp_path, '{"event": "module_started"\nnot json\n{}\n')
-    assert record["timed"] is False and record["edges"]
+    assert record["timed"] is False and record["steps"]
     assert any("r1: events.jsonl could not be read" in i for i in issues)
     assert record["eventsIssue"] == "ValueError", (
         "the record says the log failed, not that it is absent"
@@ -355,3 +376,59 @@ def test_a_json_line_that_is_not_an_object_names_the_failure_and_does_not_stop_t
     record, issues = record_of(tmp_path, f"{line}\n{good}\n")
     assert record["timed"] is False and record["eventsIssue"] == "ValueError"
     assert any("r1: events.jsonl could not be read" in i for i in issues)
+
+
+def test_handoffs_zip_holds_the_delivered_markdown_byte_for_byte(tmp_path):
+    import zipfile
+
+    run_dir = make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    delivered = next((run_dir / "deliveries").iterdir())
+    with zipfile.ZipFile(tmp_path / "library/downloads/run-a/handoffs.zip") as archive:
+        assert archive.namelist() == ["CP-0.md", "CP-1.md"]
+        for name in archive.namelist():
+            assert archive.read(name) == (delivered / name).read_bytes()
+    zip_path = data_of(tmp_path)["workspace"]["runs"]["run-a"]["evidence"]["zip"]
+    assert (tmp_path / "library" / zip_path).is_file()
+
+
+def test_each_handoff_and_instruction_is_a_library_file_the_evidence_links_to(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    delivered = next((run_dir / "deliveries").iterdir())
+    library = tmp_path / "library"
+    evidence = data_of(tmp_path)["workspace"]["runs"]["run-a"]["evidence"]
+    assert [h["href"] for h in evidence["handoffs"]] == [
+        "downloads/run-a/CP-0.md",
+        "downloads/run-a/CP-1.md",
+    ]
+    for handoff in evidence["handoffs"]:
+        assert (library / handoff["href"]).read_bytes() == (
+            delivered / handoff["name"]
+        ).read_bytes()
+    instructions = evidence["record"]["instructions"]
+    assert [i["href"] for i in instructions] == [
+        "downloads/run-a/instructions/CP-0.md",
+        "downloads/run-a/instructions/CP-1.md",
+    ]
+    for row in instructions:
+        assert (library / row["href"]).read_bytes() == (
+            run_dir / f"instructions/{row['module']}.md"
+        ).read_bytes()
+
+
+def test_an_instruction_file_that_changed_during_the_build_is_refused(tmp_path, monkeypatch):
+    run_dir = make_run(tmp_path, "run-a")
+    (run_dir / "instructions/CP-0.md").write_text("changed\n")
+    with pytest.raises(Refused, match="instructions/CP-0.md changed during the build"):
+        update_library.update_library(tmp_path)
+
+
+def test_a_download_outside_the_library_folder_is_refused(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    with pytest.raises(Refused, match="outside the library folder"):
+        update_library.write_download(library, library / "../escaped.md", b"x")
+    assert not (tmp_path / "escaped.md").exists()
+    update_library.write_download(library, library / "downloads/ok.md", b"x")
+    assert (library / "downloads/ok.md").read_bytes() == b"x"

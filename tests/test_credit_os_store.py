@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from library_fixtures import make_run
+import library_fixtures
+from library_fixtures import make_run, without_report
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
@@ -45,9 +46,7 @@ def test_store_reads_a_listed_run(tmp_path):
         for p in (tmp_path / "runs/run-a/deliveries").glob("*/CP-*.md")
     }
     assert {o["sha256"] for o in result["outputs"].values()} == handoff_digests
-    (report,) = result["reports"]
-    assert "/files/runs/run-a/deliveries/" in report["href"]
-    assert report["href"].split("?")[0].endswith("/report.html")
+    assert "reports" not in result
     assert result["issues"] == []
 
 
@@ -55,11 +54,8 @@ def test_store_has_no_legacy_routes(tmp_path):
     result = read_store(tmp_path)
     assert result["pins"] == {}
     assert set(result["runs"]) == {"run-a"}
-    assert result["outputs"] and result["reports"]
-    links = [o["href"] for o in result["outputs"].values()]
-    for report in result["reports"]:
-        links += [report["href"], report["download"], *(f["href"] for f in report["files"])]
-    for link in links:
+    assert result["outputs"]
+    for link in [o["href"] for o in result["outputs"].values()]:
         assert link.startswith("/files/runs/run-a/"), link
 
 
@@ -957,135 +953,7 @@ def test_an_edge_whose_evidence_is_a_dash_is_not_drawn(dash):
     assert fields["maps"] == [] and "is not in its fixed table" in fields["issue"]
 
 
-# ---- Package 7 fix round: report-view.json figures and revisions (synthetic values).
-SYNTHETIC_VIEW = {
-    "blocks": [
-        {
-            "block_id": "intro",
-            "kind": "prose",
-            "title": "Intro",
-            "figures": [],
-            "rows": [],
-            "note": None,
-        },
-        {
-            "block_id": "strip",
-            "kind": "chart",
-            "title": "Strip",
-            "note": "Synthetic note.",
-            "rows": [],
-            "figures": [
-                {
-                    "fig_id": "S.1",
-                    "title": "Chart data: synthetic leverage — Period",
-                    "summary": "Synthetic summary.",
-                    "chart": {
-                        "unit": "x",
-                        "unit_class": "multiple",
-                        "table_twin": {
-                            "scale": "x",
-                            "rows": [
-                                {
-                                    "label": "Debt · FY2023 / 2023-09-30",
-                                    "cells": [{"text": "6.3x", "ref_id": "C1"}],
-                                },
-                                {
-                                    "label": "Debt · FY2024 / 2024-09-30",
-                                    "cells": [{"text": "5.9x", "ref_id": "C2"}],
-                                },
-                            ],
-                        },
-                    },
-                }
-            ],
-        },
-        {
-            "block_id": "grid",
-            "kind": "period_grid",
-            "title": "Synthetic grid",
-            "scale": None,
-            "note": None,
-            "columns": ["FY2024", "FY2023", "Unit"],
-            "figures": [],
-            "rows": [
-                {
-                    "cells": [
-                        {"text": "1", "ref_id": "C1"},
-                        {"text": "2", "ref_id": "C3"},
-                        {"text": "US$m", "ref_id": "C1"},
-                    ]
-                }
-            ],
-        },
-    ],
-    "passports": [
-        {
-            "ref_id": "C1",
-            "fields": [{"name": "Source", "value": "CP-0"}, {"name": "SHA-256", "value": "a" * 64}],
-        },
-        {
-            "ref_id": "C2",
-            "fields": [{"name": "Source", "value": "CP-0"}, {"name": "SHA-256", "value": "a" * 64}],
-        },
-        {
-            "ref_id": "C3",
-            "fields": [{"name": "Source", "value": "CP-1"}, {"name": "SHA-256", "value": "b" * 64}],
-        },
-    ],
-}
-
-
-def listed(folder, view_bytes, listed_hash=None):
-    (folder / "report-view.json").write_bytes(view_bytes)
-    return {"files": {"report-view.json": listed_hash or hashlib.sha256(view_bytes).hexdigest()}}
-
-
-def test_report_figures_are_read_as_stated_from_the_listed_report_view(tmp_path):
-    raw = json.dumps(SYNTHETIC_VIEW).encode()
-    figures, issue = store.report_figures(tmp_path, listed(tmp_path, raw))
-    assert issue is None
-    assert [f["title"] for f in figures] == [
-        "Chart data: synthetic leverage — Period",
-        "Synthetic grid",
-    ]
-    figure, table = figures
-    assert (
-        figure["kind"],
-        figure["periods"],
-        figure["unit"],
-        figure["unitClass"],
-        figure["points"],
-    ) == ("Figure", ["FY2023 / 2023-09-30", "FY2024 / 2024-09-30"], "x", "multiple", 2)
-    assert figure["note"] == "Synthetic note."
-    assert figure["sources"] == [{"source": "CP-0", "pin": "a" * 64}]
-    assert (table["kind"], table["periods"], table["unit"], table["note"]) == (
-        "Table",
-        ["FY2024", "FY2023"],
-        "Stated per row",
-        None,
-    )
-    assert table["sources"] == [
-        {"source": "CP-0", "pin": "a" * 64},
-        {"source": "CP-1", "pin": "b" * 64},
-    ]
-
-
-def test_a_delivery_that_lists_no_report_view_has_no_figures_and_no_issue(tmp_path):
-    assert store.report_figures(tmp_path, {"files": {"report.html": "x"}}) == (None, None)
-
-
-@pytest.mark.parametrize("hash_wrong", [True, False])
-def test_a_report_view_that_does_not_match_or_cannot_be_read_is_an_issue_not_silence(
-    tmp_path, hash_wrong
-):
-    raw = json.dumps(SYNTHETIC_VIEW).encode()
-    delivery = listed(tmp_path, raw, "0" * 64 if hash_wrong else None)
-    if not hash_wrong:
-        (tmp_path / "report-view.json").unlink()
-    figures, issue = store.report_figures(tmp_path, delivery)
-    assert figures is None and issue and "report-view.json" in issue
-
-
+# ---- Package 7 fix round: revisions (synthetic values).
 def test_recorded_revisions_read_the_cap_and_attachments_files(tmp_path):
     (tmp_path / "research").mkdir()
     (tmp_path / "cap.json").write_text(
@@ -1130,27 +998,295 @@ def test_a_rerun_links_to_the_run_it_replays_through_the_store(tmp_path):
         {"word": "Rerun of", "id": earlier, "run": "run-a"}
     ]
     assert built["runs"]["run-a"]["revisions"] == []
-    assert all("figures" in report for report in built["reports"])
 
 
-def test_a_listed_report_view_that_fails_is_told_apart_from_an_unlisted_one(tmp_path):
+def test_a_delivery_without_report_html_builds_the_store(tmp_path):
+    """New CP-OS deliveries carry no report.html (their completion record has delivery_sha256)."""
     run_dir = make_run(tmp_path, "run-a")
-    (delivery,) = (run_dir / "deliveries").iterdir()
-    record = json.loads((delivery / "delivery.json").read_text())
-    folder = f"runs/run-a/deliveries/{delivery.name}"
-    digest = hashlib.sha256((delivery / "report.html").read_bytes()).hexdigest()
+    delivered = without_report(run_dir)
+    assert not (delivered / "report.html").exists()
+    folder = f"runs/run-a/deliveries/{delivered.name}"
+    artifact = {"folder": folder, "label": "r", "state": "final", "available": True, "href": None}
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert result["issues"] == []
+    assert set(result["runs"]) == {"run-a"}
+    assert {o["module"] for o in result["outputs"].values()} == set(MODULES)
+
+
+@pytest.mark.parametrize(
+    "view",
+    [{"no_run": True}, {"run": {"issuer_name": "Issuer"}}, {"run": {"run_id": "run-a"}}, [1]],
+    ids=["no-run", "no-run-id", "no-issuer-name", "not-an-object"],
+)
+def test_a_delivery_whose_view_states_no_run_identity_is_named_in_the_issues(tmp_path, view):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    raw = json.dumps(view).encode()
+    (delivered / "view.json").write_bytes(raw)
+    receipt = json.loads((delivered / "delivery.json").read_text())
+    receipt["files"]["view.json"] = hashlib.sha256(raw).hexdigest()
+    (delivered / "delivery.json").write_text(json.dumps(receipt))
     artifact = {
-        "folder": folder,
+        "folder": f"runs/run-a/deliveries/{delivered.name}",
         "label": "r",
         "state": "final",
         "available": True,
-        "href": f"/files/{folder}/report.html?sha256={digest}",
+        "href": None,
     }
     row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
-    plain = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
-    assert (plain["figures"], plain["figuresIssue"]) == (None, None)
-    (delivery / "report-view.json").write_text("{}")
-    record["files"]["report-view.json"] = "0" * 64
-    (delivery / "delivery.json").write_text(json.dumps(record))
-    failed = store.workspace_store(tmp_path, {"real": [row], "issues": []})["reports"][0]
-    assert failed["figures"] is None and "report-view.json" in failed["figuresIssue"]
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert [i for i in result["issues"] if "could not be read" in i and delivered.name in i]
+
+
+def test_a_delivery_that_cannot_be_read_is_named_in_the_issues(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    (delivered / "delivery.json").write_text("{not json")
+    artifact = {
+        "folder": f"runs/run-a/deliveries/{delivered.name}",
+        "label": "r",
+        "state": "final",
+        "available": True,
+        "href": None,
+    }
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": [artifact]}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert [i for i in result["issues"] if "could not be read" in i and delivered.name in i]
+
+
+def evidence_of(tmp_path: Path, **changes) -> dict:
+    """The Evidence record of one fixture run (no published model)."""
+    make_run(tmp_path, "run-a", **changes)
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": []}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert result["issues"] == []
+    return result["runs"]["run-a"]["evidence"]
+
+
+def test_evidence_lists_supplied_files_by_who_read_them(tmp_path):
+    names = ("A_report.pdf", "B_filing.htm.jsonl", "C_unread.pdf")
+    # CP-0's Sources section names A and B; CP-1's names only A. Nothing names C.
+    evidence = evidence_of(
+        tmp_path, supplied=names, cp0_extra="- A_report.pdf\n- B_filing.htm.jsonl\n"
+    )
+    assert [
+        (s["name"], s["type"], s["documentDate"], s["readBy"]) for s in evidence["sources"]
+    ] == [
+        ("A_report.pdf", "pdf", None, ["CP-0"]),
+        ("B_filing.htm.jsonl", "htm.jsonl", None, ["CP-0"]),
+    ]
+    assert [(s["name"], s["type"], s["readBy"]) for s in evidence["unused"]] == [
+        ("C_unread.pdf", "pdf", [])
+    ]
+    expected = hashlib.sha256(b"text of C_unread.pdf\n").hexdigest()
+    assert evidence["unused"][0]["sha256"] == expected
+
+
+def test_evidence_document_date_is_the_cell_a_handoff_table_records_for_the_file(tmp_path):
+    names = ("A_report.pdf", "B_2024-01-01_filing.pdf", "C_other.pdf")
+    # Hand-written: the date text is copied as stored (not parsed, not taken from a file name);
+    # B's row has an empty date cell; C appears in no Document date table.
+    register = (
+        "\n| Source | Type | Document date | Readiness |\n| --- | --- | --- | --- |\n"
+        "| A_report.pdf | Annual report | 31 March 2025 (audited) | Readable |\n"
+        "| B_2024-01-01_filing.pdf | Filing |  | Readable |\n"
+    )
+    evidence = evidence_of(tmp_path, supplied=names, cp0_extra=register)
+    found = {s["name"]: s["documentDate"] for s in evidence["sources"] + evidence["unused"]}
+    assert found == {
+        "A_report.pdf": "31 March 2025 (audited)",
+        "B_2024-01-01_filing.pdf": None,
+        "C_other.pdf": None,
+    }
+
+
+def test_evidence_a_name_outside_the_sources_section_is_not_a_read(tmp_path):
+    # The name appears in CP-1's Findings (cp1_findings sits before Sources), not in its Sources.
+    evidence = evidence_of(
+        tmp_path, supplied=("A_report.pdf",), cp1_findings="Mentioned: A_report.pdf.\n\n"
+    )
+    assert evidence["sources"] == []
+    assert [s["name"] for s in evidence["unused"]] == ["A_report.pdf"]
+
+
+def test_evidence_no_sources_section_anywhere_is_use_not_recorded(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        library_fixtures,
+        "HANDOFF",
+        library_fixtures.HANDOFF.replace("## Sources\n- fixture\n", "## Gaps\n- none\n"),
+    )
+    evidence = evidence_of(tmp_path, supplied=("A_report.pdf", "B_filing.pdf"))
+    assert evidence["unused"] == []
+    assert [s["name"] for s in evidence["unrecorded"]] == ["A_report.pdf", "B_filing.pdf"]
+    assert evidence["noSourcesModules"] == ["CP-0", "CP-1"]
+
+
+def test_evidence_some_handoffs_without_sources_stay_unused_and_are_named(tmp_path, monkeypatch):
+    class WithoutSourcesInCP1(str):
+        def format(self, **fields):
+            text = str(self)
+            if fields["module"] == "CP-1":
+                text = text.replace("## Sources\n- fixture\n", "## Gaps\n- none\n")
+            return str.format(text, **fields)
+
+    monkeypatch.setattr(library_fixtures, "HANDOFF", WithoutSourcesInCP1(library_fixtures.HANDOFF))
+    evidence = evidence_of(
+        tmp_path, supplied=("A_report.pdf", "B_other.pdf"), cp0_extra="- A_report.pdf\n"
+    )
+    assert evidence["noSourcesModules"] == ["CP-1"]
+    assert evidence["unrecorded"] == []
+    assert [s["name"] for s in evidence["sources"]] == ["A_report.pdf"]
+    assert [s["name"] for s in evidence["unused"]] == ["B_other.pdf"]
+
+
+def test_evidence_a_file_is_read_only_when_a_sources_token_is_exactly_its_name(tmp_path):
+    names = ("report.pdf", "annual-report.pdf", "Q3 results.pdf", "notes.txt", "other.pdf")
+    sources = (
+        "- annual-report.pdf\n"  # a list item: only the longer name is named
+        "Also: Q3 results.pdf, notes.txt.\n"  # a name with a space; "notes.txt." is not the name
+        "\n| File | Role |\n| --- | --- |\n| other.pdf | Primary |\n"  # a table cell
+    )
+    evidence = evidence_of(tmp_path, supplied=names, cp0_extra=sources)
+    read = {f["name"]: f["readBy"] for f in evidence["sources"]}
+    assert read == {
+        "annual-report.pdf": ["CP-0"],
+        "Q3 results.pdf": ["CP-0"],
+        "other.pdf": ["CP-0"],
+    }
+    assert [f["name"] for f in evidence["unused"]] == ["report.pdf", "notes.txt"]
+
+
+def test_evidence_handoffs_hashes_calls_and_cap_are_as_recorded(tmp_path):
+    evidence = evidence_of(tmp_path, supplied=("A_report.pdf",))
+    folder = tmp_path / "runs/run-a"
+    assert [(h["module"], h["name"]) for h in evidence["handoffs"]] == [
+        ("CP-0", "CP-0.md"),
+        ("CP-1", "CP-1.md"),
+    ]
+    for handoff in evidence["handoffs"]:
+        # Inside the library folder, so it also opens when the library is served.
+        assert handoff["href"] == f"downloads/run-a/{handoff['module']}.md"
+    assert evidence["zip"] == "downloads/run-a/handoffs.zip"
+    record = evidence["record"]
+    assert record["cap"] == "12"
+    assert record["calls"] == [
+        {
+            "module": "CP-0",
+            "attempt": None,
+            "started": "2026-11-01T10:00:00Z",
+            "http_status": None,
+            "error_class": None,
+            "settled_usd": "0.10",
+        },
+        {
+            "module": "CP-1",
+            "attempt": None,
+            "started": "2026-11-02T10:00:00Z",
+            "http_status": None,
+            "error_class": None,
+            "settled_usd": "0.20",
+        },
+    ]
+    delivery = next(folder.glob("delivery-*.json"))
+    completion = next(folder.glob("completed-*.json"))
+    hashes = {h["name"]: h["sha256"] for h in record["hashes"]}
+    assert hashes[delivery.name] == hashlib.sha256(delivery.read_bytes()).hexdigest()
+    assert hashes[completion.name] == hashlib.sha256(completion.read_bytes()).hexdigest()
+    assert hashes["A_report.pdf"] == hashlib.sha256(b"text of A_report.pdf\n").hexdigest()
+    assert [i["module"] for i in record["instructions"]] == ["CP-0", "CP-1"]
+    first = record["instructions"][0]
+    assert first["href"] == "downloads/run-a/instructions/CP-0.md"
+    assert first["sha256"] == hashes["instructions/CP-0.md"]
+
+
+def test_evidence_without_a_workflow_record_is_empty_not_invented(tmp_path):
+    make_run(tmp_path, "run-a")
+    (tmp_path / "runs/run-a/workflow.json").write_text("{}")
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": []}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    record = result["runs"]["run-a"]["evidence"]["record"]
+    assert record["cap"] is None and record["instructions"] == []
+    assert result["runs"]["run-a"]["evidence"]["sources"] == []
+
+
+def test_a_malformed_call_line_is_named_in_the_issues(tmp_path):
+    make_run(tmp_path, "run-a")
+    calls = tmp_path / "runs/run-a/live/calls.jsonl"
+    calls.write_text(calls.read_text() + "not json\n")
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": []}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert result["issues"] == ["run-a: live/calls.jsonl line 3 is not a call record"]
+    assert len(result["runs"]["run-a"]["evidence"]["record"]["calls"]) == 2
+
+
+def test_an_undecodable_call_file_is_named_in_the_issues_and_lists_no_call(tmp_path):
+    make_run(tmp_path, "run-a")
+    calls = tmp_path / "runs/run-a/live/calls.jsonl"
+    calls.write_bytes(calls.read_bytes() + b'{"module_id": "CP-0", "note": "\xff"}\n')
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": []}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    assert result["issues"] == [
+        "run-a: live/calls.jsonl is not UTF-8 text (line 3); no call is listed"
+    ]
+    assert result["runs"]["run-a"]["evidence"]["record"]["calls"] == []
+
+
+@pytest.mark.parametrize(
+    ("name", "kind"),
+    [
+        ("a.pdf", "pdf"),
+        ("x.htm.jsonl", "htm.jsonl"),
+        ("report v1.2.pdf", "pdf"),
+        ("noext", None),
+    ],
+)
+def test_file_type_is_the_extension_words_as_written(name, kind):
+    assert store.file_type(name) == kind
+
+
+def test_downloads_are_the_calculation_and_model_files_of_the_models_the_run_lists():
+    def model(mid, run_folder, **extra):
+        return {
+            "id": mid,
+            "issuerKey": "nbg",
+            "runId": None,
+            "runFolder": run_folder,
+            "sources": [],
+            "download": f"/files/{mid}.html?download=1",
+            "files": [
+                {"name": "calculation.json", "href": f"/files/{mid}/calc"},
+                {"name": "forecast.md", "href": f"/files/{mid}/md"},
+                {"name": "forecast_exact.json", "href": f"/files/{mid}/exact"},
+            ],
+        } | extra
+
+    run = {"folder": "run-a", "issuerKey": "nbg"}
+    models = [
+        model("m-b", "run-a"),
+        model("m-other", "run-z"),
+        model("m-src", "run-z", sources=[{"run": "run-a"}]),
+        model("m-issuer", "run-a", issuerKey="zzz"),
+    ]
+    assert store.run_downloads(run, "run-a", models) == [
+        {"label": "Model m-b", "href": "/files/m-b.html?download=1"},
+        {"label": "m-b: calculation.json", "href": "/files/m-b/calc"},
+        {"label": "m-b: forecast_exact.json", "href": "/files/m-b/exact"},
+        {"label": "Model m-src", "href": "/files/m-src.html?download=1"},
+        {"label": "m-src: calculation.json", "href": "/files/m-src/calc"},
+        {"label": "m-src: forecast_exact.json", "href": "/files/m-src/exact"},
+    ]
+
+
+def test_an_instruction_key_that_is_not_a_module_code_gets_no_link(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    path = run_dir / "workflow.json"
+    workflow = json.loads(path.read_text())
+    workflow["instructions"]["../../escaped"] = dict(workflow["instructions"]["CP-0"])
+    path.write_text(json.dumps(workflow))
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": []}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    rows = {r["module"]: r for r in result["runs"]["run-a"]["evidence"]["record"]["instructions"]}
+    assert rows["../../escaped"]["href"] is None
+    assert rows["CP-0"]["href"] == "downloads/run-a/instructions/CP-0.md"
+    assert any("'../../escaped'" in i and "no link" in i for i in result["issues"])

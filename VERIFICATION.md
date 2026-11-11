@@ -4,6 +4,40 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
+
+Owner waiver 2026-11-11: the 800-line PR limit is waived for #47 (5,969 changed lines).
+
+Scope: offline, macOS, headless Chrome; the library app (`apps/issuer-library`) only. No provider was
+called, no run was started, no stored handoff or run folder was changed (retained runs were read through
+a symlinked `runs` folder in a scratch workspace). No run in the new handoff format exists yet: the new
+format was seen only on a hand-made synthetic fixture (`apps/issuer-library/fixtures/synthetic-new-format/`,
+built into a scratch workspace by `fixtures/build_synthetic_run.py`); the earlier format on the three
+listed retained TDG runs (`cpos-tdg-sol-high-001`, `cpos-tdg-sol-high-cp2-001`,
+`cpos-tdg-copilot-sol-medium-002`). This is not the reader check against the September VMO2 reference
+that AGENTS.md requires for a presentation change: that needs a real new-format run and stays open.
+- Built (decisions 3-7, 9, 10, 12, 14; H1, H3, H4, H5, H7): rail without Reports; per issuer Report
+  history, Overview, Modules, Forecast, Evidence with a run label; delivered report view, its adapter and
+  the Calendar tab retired; Overview selects passages only (CP-6 else CP-2 lead, bottom lines, limitations
+  de-duplicated by the check-7 normalisation, key charts, nearest dates); flat Modules navigator of the
+  modules that ran; figures and a quiet Basis link open the inspector; earlier-format trailing citations
+  move verbatim behind Basis; Evidence's four lists with handoff and instruction copies under
+  `library/downloads/`; Run activity shows live runs only.
+- Gates (HEAD of the branch at push): `node --test` reader/static/calendar 245 pass, exit 0; `uv run
+  pytest -m "not live and not browser"` on the eight library test files 348 passed, exit 0;
+  `tests/test_library_page_browser.py` 38 passed; `uv run python tools/quality_gate.py` 0 findings, exit 0.
+  `tests/test_library_reader_refs.py` asserts every Basis item and Source cell of each synthetic handoff is
+  reachable from the rendered page, with hand-written counts.
+- Walk-through at 1440 px and 375 px on both libraries: every page renders with no console error except
+  the pre-existing missing `../activity.js` when opened outside the run start service; a figure opens the
+  inspector by keyboard (Enter) and Esc returns focus; no horizontal overflow at 375 px.
+- Known limits: the inspector shows a source page's excerpt for a Basis item only once the engine's
+  `credit_os_chips` change (PR #46) is merged; earlier-format dates written as text cannot feed Nearest
+  dates; document dates of source files are not recorded anywhere, so Evidence shows "Not recorded";
+  key charts are selected per module from the catalogue (rows carry no chart identity);
+  `src/deploy_workflow/run_start/service.py` still links finished runs to `library/reports/`, which this
+  branch no longer writes (fixed on the engine branch).
+
 ## 2026-11-11 — Reader standard and checks in CP-OS; delivered report retired (branch `claude/reader-engine-d46913`)
 
 Scope: instructions, checks and delivery changed; proven by synthetic passages and offline tests
