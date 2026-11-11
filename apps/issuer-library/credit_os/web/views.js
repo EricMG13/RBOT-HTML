@@ -790,8 +790,8 @@ function chartIndex(context) {
   return `${open}<p class="intro">Every chart, map and calendar lane in this run’s handoffs, as the handoff states it. A chart drawn in several places is one row. This index lists them; it recalculates nothing.</p><div class="table-scroll" role="region" aria-label="Chart index" tabindex="0"><table class="index-table"><thead><tr>${head.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></section>`;
 }
 // ---- The run label (decision 12 of the 2026-11-11 reader ruling): every run page says which run it shows, and where the issuer's other runs are.
-// H7: a run is "Earlier format" when any of its default handoffs has no Bottom line first under Findings.
-const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).map(entry=>entry.default).filter(Boolean).map(id=>data[id].sections));
+// H7: a run is "Earlier format" when any of its handoffs (every saved output of every module, not only the defaults) has no Bottom line first under Findings.
+const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).flatMap(entry=>entry.outputs).filter(id=>data[id]).map(id=>data[id].sections));
 const EARLIER_FORMAT_BADGE='<span class="badge badge-gray earlier-format">Earlier format</span>';
 const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
 const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
@@ -1222,9 +1222,8 @@ function overviewCharts(entries) {
   }).filter(html=>/class="(panel-card|map-card)"/.test(html));
   return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${html.join('')}</section>`:'';
 }
-// Nearest dates: the next five day-dated items on or after the run's as-of date from every module's event lanes, then (under their own heading)
-// the items dated only to a month, quarter or year whose period has not ended. The sentence when none is drawn names its cause.
-const DAY_DATE=/^\d{4}-\d{2}-\d{2}$/;
+// Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.
+// A period-dated item (month, quarter or year) is sorted by its period end and shown with that date text as written. The sentence when none is drawn names its cause.
 const runHoldsEventTable=context=>runModuleCodes(contexts[context]).some(module=>{const id=defaultOutput(module,context);return Boolean(id)&&Boolean(eventTable(data[id].sections));});
 function overviewDates(context) {
   const asOf=contexts[context].asOf;
@@ -1233,12 +1232,11 @@ function overviewDates(context) {
   const lanes=eventLanes(context);
   if(!lanes.length)return `${head}<p class="intro">${runHoldsEventTable(context)?'This run’s handoffs hold an event table but no dated lane, so no nearest dates are selected.':'No event timeline in this run’s handoffs.'}</p></section>`;
   const items=lanes.filter(lane=>lane.gap===null).flatMap(lane=>fixtureTable(lane.id,lane.table).rows.map(row=>({date:row.cells[0],text:row.cells[3],module:data[lane.id].module,line:row.line})));
-  const next=nearestDates(items,asOf),days=next.filter(item=>DAY_DATE.test(item.date)),periods=next.filter(item=>!DAY_DATE.test(item.date));
+  const next=nearestDates(items,asOf);
   if(!next.length)return `${head}<p class="intro">No dated item on or after ${esc(asOf)} in this run’s handoffs.</p></section>`;
-  const table=(caption,list)=>scrollRegion(caption,`<table class="dates-table"><caption>${esc(caption)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${list.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('')}</tbody></table>`);
-  const dated=days.length?table(`The next ${days.length} dated items on or after ${asOf}`,days):'';
-  const coarse=periods.length?`<h3>Dated to a month, quarter or year</h3>${table(`Items dated to a period that ends on or after ${asOf}`,periods)}`:'';
-  return `${head}${dated}${coarse}</section>`;
+  const caption=`The next ${next.length} dated item${next.length===1?'':'s'} on or after ${asOf}`;
+  const table=scrollRegion(caption,`<table class="dates-table"><caption>${esc(caption)}</caption><thead><tr>${['Date','Event','Module'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${next.map(item=>`<tr><th scope="row">${esc(item.date)}</th><td>${rich(item.text)}</td><td>${moduleLink(item.module)}</td></tr>`).join('')}</tbody></table>`);
+  return `${head}${table}</section>`;
 }
 function runReport(context) {
   const entries=overviewEntries(context);

@@ -140,6 +140,13 @@ test('Evidence: four lists in order; sources are listed only, with Not recorded 
   assert.ok(!html.includes('A &lt;report&gt;.pdf</a>') && !/<a [^>]*>[^<]*(report|unread)/.test(html), 'no link for a source file');
 });
 
+test('Evidence: a document date the run records is shown as stored, in the used and the unused list', () => {
+  const ev = { ...EVIDENCE, sources: [{ ...EVIDENCE.sources[0], documentDate: '31 March 2025 (audited)' }], unused: [{ ...EVIDENCE.unused[0], documentDate: '2024-12-31' }] };
+  const html = evidenceView({ r: { evidence: ev } })('r');
+  assert.equal(strip(/<tbody><tr>(.*?)<\/tr>/s.exec(html)[1].replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|31 March 2025 (audited)|Source readiness CP-0, Financial foundation CP-1|');
+  assert.ok(html.includes('document date 2024-12-31'));
+});
+
 test('Evidence: files whose use no handoff records are "Use not recorded", not "Supplied, not used"', () => {
   const ev = { ...EVIDENCE, sources: [], unused: [], unrecorded: [{ name: 'D_file.pdf', sha256: 'd'.repeat(64), type: 'pdf', documentDate: null, readBy: [] }], noSourcesModules: ['CP-0', 'CP-1'] };
   const html = evidenceView({ r: { evidence: ev } })('r');
@@ -1061,20 +1068,28 @@ const laneRun = (rows, asOf = '2025-03-31') => runPage(() => {
 }, [], m => m, { record: steps(['CP-1A']), runFields: { asOf }, names: FIXTURE_NAMES });
 const dateRows = html => [...html.matchAll(/<tr><th scope="row">([^<]*)<\/th><td>(.*?)<\/td>/gs)].map(m => [m[1], readText(m[2])]);
 
-test('Overview nearest dates: items dated to a month, quarter or year that has not ended follow the five, verbatim, under their own heading', () => {
+test('Overview nearest dates: items dated to a month, quarter or year that has not ended share the one nearest-first list, verbatim', () => {
   const rows = [[12, '2025-05-15', 'day', 'First quarter results'], [13, '2025-Q3', 'quarter', 'Rating review'], [14, '2025-06', 'month', 'Refinancing window'], [15, '2025-02', 'month', 'Past month'], [16, '2024', 'year', 'Past year'], [17, '2025', 'year', 'Capex programme']];
   const html = part(laneRun(rows).runReport(RUN), 'overview-dates');
   assert.deepEqual(dateRows(html), [['2025-05-15', 'First quarter results'], ['2025-06', 'Refinancing window'], ['2025-Q3', 'Rating review'], ['2025', 'Capex programme']]);
-  assert.ok(html.includes('<caption>The next 1 dated items on or after 2025-03-31</caption>'));
-  const heading = html.indexOf('<h3>Dated to a month, quarter or year</h3>');
-  assert.ok(heading > html.indexOf('First quarter results') && heading < html.indexOf('Refinancing window'), 'under their own heading, after the five');
+  assert.ok(html.includes('<caption>The next 4 dated items on or after 2025-03-31</caption>'));
+  assert.ok(!html.includes('Dated to a month, quarter or year'), 'one list, no second heading');
   assert.ok(!html.includes('Past month') && !html.includes('Past year'), 'a period that ended before the as-of date is left out');
 });
 
-test('Overview nearest dates: only period-dated items still on or after the as-of date are listed, with no empty day table', () => {
+test('Overview nearest dates: five items in all, 6 day-dated and 3 period-dated merged by day or period end', () => {
+  // As of 2025-03-31; period ends: 2025-04 -> 04-30, 2025-Q2 -> 06-30, 2025-07 -> 07-31.
+  const days = ['01', '02', '03', '04', '05', '06'].map((d, i) => [20 + i, `2025-07-${d}`, 'day', `Day ${d}`]);
+  const periods = [[30, '2025-07', 'month', 'July item'], [31, '2025-04', 'month', 'April item'], [32, '2025-Q2', 'quarter', 'Q2 item']];
+  const html = part(laneRun([...days, ...periods]).runReport(RUN), 'overview-dates');
+  assert.deepEqual(dateRows(html), [['2025-04', 'April item'], ['2025-Q2', 'Q2 item'], ['2025-07-01', 'Day 01'], ['2025-07-02', 'Day 02'], ['2025-07-03', 'Day 03']]);
+  assert.ok(html.includes('<caption>The next 5 dated items on or after 2025-03-31</caption>'));
+});
+
+test('Overview nearest dates: only period-dated items still on or after the as-of date are listed', () => {
   const html = part(laneRun([[12, '2025-Q3', 'quarter', 'Rating review']]).runReport(RUN), 'overview-dates');
   assert.deepEqual(dateRows(html), [['2025-Q3', 'Rating review']]);
-  assert.ok(!html.includes('The next') && html.includes('<h3>Dated to a month, quarter or year</h3>') && !html.includes('No dated item'));
+  assert.ok(html.includes('<caption>The next 1 dated item on or after 2025-03-31</caption>') && !html.includes('No dated item'));
 });
 
 test('Overview nearest dates: the sentence names the cause: a run with no event table says so, one that holds an event table but no lane says that', () => {
@@ -1094,9 +1109,9 @@ test('narrow pages (W1): every Evidence table and the Overview nearest-dates tab
   for (const label of ['Supplied files that a handoff’s Sources section names', 'The delivered Markdown of each module', 'Hashes the run records', 'Model calls, in the order recorded']) assert.ok(html.includes(region(label)), label);
   const rows = [[12, '2025-05-15', 'day', 'First quarter results'], [13, '2025-Q3', 'quarter', 'Rating review']];
   const dates = part(laneRun(rows).runReport(RUN), 'overview-dates');
-  assert.equal(countOf(dates, /<table/g), 2);
-  assert.ok(dates.includes(region('The next 1 dated items on or after 2025-03-31')) && dates.includes(region('Items dated to a period that ends on or after 2025-03-31')));
-  assert.equal(countOf(dates, /<\/table><\/div>/g), 2, 'each table closes inside its region');
+  assert.equal(countOf(dates, /<table/g), 1);
+  assert.ok(dates.includes(region('The next 2 dated items on or after 2025-03-31')));
+  assert.equal(countOf(dates, /<\/table><\/div>/g), 1, 'the table closes inside its region');
 });
 
 test('Overview of an earlier-format run: no lead, no bottom lines, no limitations from the old summary; modules still listed by name', () => {

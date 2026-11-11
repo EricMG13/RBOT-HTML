@@ -56,28 +56,57 @@ function blocked(sections, state) {
 }
 
 // H3: the paragraph's last line, when it starts exactly `Basis: `, is the Basis line. Items split on "; ", one final full stop dropped.
-function splitBasis(text) {
+// `known` (optional) lists source file names: a known name that itself contains "; " is kept whole (with its ", page N" tail) instead of
+// being split into two items. With no list, or no match, the split is on every "; ".
+function splitBasis(text, known = []) {
   const lines = String(text).split('\n');
   const last = lines[lines.length - 1];
   if (!last.startsWith('Basis: ')) return {body: String(text), items: []};
-  const items = last.slice('Basis: '.length).trimEnd().replace(/\.$/, '').split('; ').map(item => item.trim()).filter(item => item !== '');
-  return {body: lines.slice(0, -1).join('\n'), items};
+  const pieces = last.slice('Basis: '.length).trimEnd().replace(/\.$/, '').split('; ');
+  const split = known.filter(name => name.includes('; ')).sort((a, b) => b.length - a.length);
+  const items = [];
+  for (let i = 0; i < pieces.length; i += 1) {
+    const hit = split.map(name => ({name, take: name.split('; ').length})).find(({name, take}) => {
+      const joined = pieces.slice(i, i + take).join('; ');
+      return joined === name || joined.startsWith(`${name},`);
+    });
+    if (hit) { items.push(pieces.slice(i, i + hit.take).join('; ').trim()); i += hit.take - 1; }
+    else items.push(pieces[i].trim());
+  }
+  return {body: lines.slice(0, -1).join('\n'), items: items.filter(item => item !== '')};
 }
 
-// H3 item forms. Anything else is kept as text, never dropped.
-function basisItem(item) {
+const PAGES = /^(?:, page (\d+)|, pages (\d+)[–-](\d+))?$/;
+function sourceItem(file, tail) {
+  const pages = PAGES.exec(tail);
+  if (!pages) return null;
+  const out = {kind: 'source', file};
+  if (pages[1] !== undefined) out.page = Number(pages[1]);
+  if (pages[2] !== undefined) { out.page = Number(pages[2]); out.pageEnd = Number(pages[3]); }
+  return out;
+}
+
+// H3 item forms. Anything else is kept as text, never dropped. `known` (optional) lists source file names: an item that is exactly a known name
+// (with an optional ", page N" / ", pages N-M" tail) is a source even when the name has no extension; nothing else is guessed.
+function basisItem(item, known = []) {
   const calculation = /^calculation (\S+)$/.exec(item);
   if (calculation) return {kind: 'calculation', id: calculation[1]};
   const upstream = /^(.+) \((CP-[A-Z0-9]+)\)$/.exec(item);
   if (upstream) return {kind: 'module', name: upstream[1], code: upstream[2]};
-  const source = /^(.+?\.[A-Za-z][A-Za-z0-9]{0,4})(?:, page (\d+)|, pages (\d+)–(\d+))?$/.exec(item);
-  if (source) {
-    const out = {kind: 'source', file: source[1]};
-    if (source[2] !== undefined) out.page = Number(source[2]);
-    if (source[3] !== undefined) { out.page = Number(source[3]); out.pageEnd = Number(source[4]); }
-    return out;
+  // Array.prototype.map passes an index as a second argument: anything but a list is no list.
+  for (const name of [...(Array.isArray(known) ? known : [])].sort((a, b) => b.length - a.length)) {
+    if (item === name || item.startsWith(`${name},`)) {
+      const found = sourceItem(name, item.slice(name.length));
+      if (found) return found;
+    }
   }
-  return {kind: 'text', text: item};
+  const source = /^(.+?\.[A-Za-z][A-Za-z0-9]{0,4})((?:, page \d+|, pages \d+[–-]\d+)?)$/.exec(item);
+  return (source && sourceItem(source[1], source[2])) || {kind: 'text', text: item};
+}
+
+// The source file names at hand for a paragraph: `ctx.files` when the caller supplies the run's files, and the file of every source-page chip of the key.
+function knownFiles(ctx) {
+  return [...new Set([...(ctx.files || []), ...ctx.chips.filter(c => c.kind === 'issuer_page' && c.file).map(c => c.file)])];
 }
 
 // One Basis item resolved for the inspector (H3), shared by the page and its tests. `ctx` is {sections, chips, ran(code)}: the handoff's sections
@@ -85,7 +114,7 @@ function basisItem(item) {
 // issuer_page chips of its file (and page when it names one); a calculation item takes its `## Calculations` row (or null); a module item says
 // whether it ran; any other item is `text`, verbatim.
 function inspectorItem(raw, ctx) {
-  const item = basisItem(raw);
+  const item = basisItem(raw, knownFiles(ctx));
   const out = {...item, raw};
   if (item.kind === 'source') out.chips = ctx.chips.filter(c => c.kind === 'issuer_page' && c.file === item.file && (item.page === undefined || c.page === item.page));
   else if (item.kind === 'calculation') out.row = calculationRow(ctx.sections, item.id);
@@ -101,7 +130,7 @@ function uniqueChips(chips) {
 
 // The inspector's Basis items for one paragraph's text (new format), in the handoff's order.
 function inspectorItems(text, ctx) {
-  return splitBasis(text).items.map(raw => inspectorItem(raw, ctx));
+  return splitBasis(text, knownFiles(ctx)).items.map(raw => inspectorItem(raw, ctx));
 }
 
 // The pages of a source item as words: "page 41", "pages 43–45", or nothing.
@@ -134,7 +163,7 @@ function inspectorItemHtml(item, deps) {
 function inspectorBasisBlock(text, earlier, ctx, drawItem) {
   if (earlier) {
     const raw = earlierBasis(text).items;
-    return raw.length ? `<div><h3>Basis</h3><ul class="basis-items">${raw.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : '';
+    return raw.length ? `<div class="basis"><h3>Basis</h3><ul class="basis-items">${raw.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : '';
   }
   const items = inspectorItems(text, ctx);
   return items.length ? `<div class="basis"><h3>Basis</h3><ul class="basis-items">${items.map(item => drawItem(item)).join('')}</ul></div>` : '';
@@ -397,13 +426,16 @@ function periodEnd(date) {
   return found ? `${found[1]}-12-31` : null;
 }
 
-// H5: the next n items dated on or after asOf, earliest first (a day-dated item is YYYY-MM-DD), then every item dated only to a month, quarter or year
-// whose period ends on or after asOf, earliest end first; the caller tells them apart by the date text. An item with no such date is left out.
+// H5.5 / drafting choice 8: the next n items (five) in total on or after asOf, nearest first. A day-dated item (YYYY-MM-DD) sorts by that day; an item
+// dated only to a month, quarter or year sorts by its period end; both kinds share one ordering. Ties: a day-dated item before a period-dated one,
+// then input order. An item with no such date is left out. The caller tells the kinds apart by the date text.
 function nearestDates(items, asOf, n = 5) {
-  const byKey = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.index - b.index);
-  const days = items.map((item, index) => ({item, index, key: String(item.date)})).filter(entry => /^\d{4}-\d{2}-\d{2}$/.test(entry.key) && entry.key >= asOf);
-  const periods = items.map((item, index) => ({item, index, key: periodEnd(item.date)})).filter(entry => entry.key !== null && entry.key >= asOf);
-  return [...days.sort(byKey).slice(0, n), ...periods.sort(byKey)].map(entry => entry.item);
+  const entries = items.map((item, index) => {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(item.date));
+    return {item, index, day, key: day ? String(item.date) : periodEnd(item.date)};
+  }).filter(entry => entry.key !== null && entry.key >= asOf);
+  const order = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.day !== b.day ? (a.day ? -1 : 1) : a.index - b.index);
+  return entries.sort(order).slice(0, n).map(entry => entry.item);
 }
 
 if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};

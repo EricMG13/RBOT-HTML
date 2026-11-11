@@ -3274,6 +3274,25 @@ def has_sources_section(sections: list[dict[str, Any]]) -> bool:
     return any(s["level"] == 2 and s["heading"].strip() == "Sources" for s in sections)
 
 
+def document_dates(sections: list[dict[str, Any]]) -> dict[str, str]:
+    """The Document date a handoff's table records for a file: in a table with `Source` and
+    `Document date` columns, the date cell of the row whose Source cell is exactly the file name,
+    copied as written. A blank cell records nothing; no date is parsed or read from a file name."""
+    found: dict[str, str] = {}
+    for section in sections:
+        for block in section["blocks"]:
+            if block["type"] != "table":
+                continue
+            heads = [h.strip() for h in block["headers"]]
+            if "Source" not in heads or "Document date" not in heads:
+                continue
+            name_at, date_at = heads.index("Source"), heads.index("Document date")
+            for row in block["rows"]:
+                if row["cells"][date_at].strip():
+                    found.setdefault(row["cells"][name_at].strip(), row["cells"][date_at].strip())
+    return found
+
+
 def run_calls(run_dir: Path, folder: str, issues: list[str]) -> list[dict[str, Any]]:
     """live/calls.jsonl as recorded: one row per call with the fields as stored. A file that is not
     UTF-8 text lists no call and is named in the issues (documented fail-open: no byte is replaced
@@ -3412,6 +3431,7 @@ def run_evidence(
     handoffs = []
     read_by: dict[str, list[str]] = {}
     no_sources: list[str] = []
+    dates: dict[str, str] = {}
     supplied = workflow.get("sources")
     supplied = supplied if isinstance(supplied, dict) else {}
     names = [name for name in supplied if name != "context"]
@@ -3427,6 +3447,8 @@ def run_evidence(
             }
         )
         parsed = held.sections[output["sha256"]]
+        for name, date in document_dates(parsed).items():
+            dates.setdefault(name, date)
         if not has_sources_section(parsed):
             no_sources.append(module)
         text = sources_section_text(parsed)
@@ -3440,7 +3462,7 @@ def run_evidence(
             if isinstance(supplied[name], dict)
             else None,
             "type": file_type(name),
-            "documentDate": None,
+            "documentDate": dates.get(name),
             "readBy": read_by.get(name, []),
         }
         for name in names

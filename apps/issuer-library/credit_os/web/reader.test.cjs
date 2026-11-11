@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItems, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates} = require('./reader.js');
+const {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItems, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates, inspectorBasisBlock} = require('./reader.js');
 
 // Shapes are store.py's: section {heading, level, line, blocks[]}, text block {type, line, end, text}. Expected values are literals.
 const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
@@ -95,7 +95,7 @@ test('basisItem reads the three H3 forms and keeps anything else as text', () =>
 });
 
 test('basisItem keeps an unrecognised item verbatim', () => {
-  for (const odd of ['NBG_2025-03-31_annual-report.pdf, pages 43-45', 'see note 3.5', 'Liquidity (not a code)', 'calculation', 'management said so']) {
+  for (const odd of ['NBG_2025-03-31_annual-report.pdf, pages 43-x', 'see note 3.5', 'Liquidity (not a code)', 'calculation', 'management said so']) {
     assert.deepEqual(basisItem(odd), {kind: 'text', text: odd});
   }
 });
@@ -213,15 +213,63 @@ test('nearestDates ignores an item with no date or a date that is not a day, mon
   assert.deepEqual(nearestDates(items, '2025-01-01').map(i => i.id), [3, 4]);
 });
 
-test('nearestDates lists after the day-dated items those dated only to a month, quarter or year whose period ends on or after the as-of date, earliest end first', () => {
+test('nearestDates lists after the day-dated items those dated only to a month, quarter or year whose period ends on or after the as-of date, in the one nearest-first ordering', () => {
   const items = [{date: '2025-Q3', id: 'q3'}, {date: '2025', id: 'y'}, {date: '2025-06-30', id: 'd'}, {date: '2025-03', id: 'mar'}, {date: '2025-02', id: 'feb'}, {date: '2024', id: 'old'}, {date: '2025-Q1', id: 'q1'}];
   // As of 2025-03-31: February and 2024 have ended; March and Q1 end on that day; Q3 ends 2025-09-30; the year ends 2025-12-31.
-  assert.deepEqual(nearestDates(items, '2025-03-31').map(i => i.id), ['d', 'mar', 'q1', 'q3', 'y']);
+  // One ordering by day or period end: mar and q1 (03-31, input order), d (06-30), q3 (09-30), y (12-31).
+  assert.deepEqual(nearestDates(items, '2025-03-31').map(i => i.id), ['mar', 'q1', 'd', 'q3', 'y']);
   assert.deepEqual(nearestDates(items, '2025-04-01').map(i => i.id), ['d', 'q3', 'y']);
-  // The five-item limit applies to the day-dated items only.
-  const many = ['01', '02', '03', '04', '05', '06'].map(day => ({date: `2025-07-${day}`, id: day}));
-  assert.deepEqual(nearestDates([...many, {date: '2025-Q4', id: 'q4'}], '2025-03-31').map(i => i.id), ['01', '02', '03', '04', '05', 'q4']);
 });
+
+test('nearestDates shows five items in total, day-dated and period-dated merged, nearest first; a tie keeps day-dated before period-dated, then input order', () => {
+  // As of 2025-03-31. Period ends: 2025-04 -> 04-30, 2025-Q2 -> 06-30, 2025-07 -> 07-31.
+  const days = ['01', '02', '03', '04', '05', '06'].map(day => ({date: `2025-07-${day}`, id: day}));
+  const periods = [{date: '2025-07', id: 'jul'}, {date: '2025-04', id: 'apr'}, {date: '2025-Q2', id: 'q2'}];
+  assert.deepEqual(nearestDates([...days, ...periods], '2025-03-31').map(i => i.id), ['apr', 'q2', '01', '02', '03']);
+  assert.equal(nearestDates([...days, ...periods], '2025-03-31').length, 5);
+  // A day equal to a period end sorts before it; two periods ending the same day keep input order.
+  const tie = [{date: '2025-Q2', id: 'q2'}, {date: '2025-06', id: 'jun'}, {date: '2025-06-30', id: 'day'}];
+  assert.deepEqual(nearestDates(tie, '2025-03-31').map(i => i.id), ['day', 'q2', 'jun']);
+});
+
+test('splitBasis and basisItem: an ASCII hyphen page range reads like an en dash', () => {
+  assert.deepEqual(basisItem('Q3.pdf, pages 43-45'), {kind: 'source', file: 'Q3.pdf', page: 43, pageEnd: 45});
+  assert.deepEqual(basisItem('Q3.pdf, pages 43–45'), {kind: 'source', file: 'Q3.pdf', page: 43, pageEnd: 45});
+});
+
+test('basisItem used as a map callback (its second argument is an index) reads as with no list', () => {
+  assert.deepEqual(['a.pdf, page 2'].map(basisItem), [{kind: 'source', file: 'a.pdf', page: 2}]);
+});
+
+test('splitBasis keeps a known file name containing "; " whole; without the list the split is as before', () => {
+  const text = 'T.\nBasis: Q3 results; final.pdf, page 4; other.pdf';
+  assert.deepEqual(splitBasis(text, ['Q3 results; final.pdf']).items, ['Q3 results; final.pdf, page 4', 'other.pdf']);
+  assert.deepEqual(splitBasis(text).items, ['Q3 results', 'final.pdf, page 4', 'other.pdf']);
+  assert.deepEqual(splitBasis(text, ['unrelated.pdf']).items, ['Q3 results', 'final.pdf, page 4', 'other.pdf']);
+  assert.deepEqual(basisItem('Q3 results; final.pdf, page 4', ['Q3 results; final.pdf']), {kind: 'source', file: 'Q3 results; final.pdf', page: 4});
+});
+
+test('inspectorItems: a "; " file name never resolves to another file\'s chips; an extension-less name resolves only on an exact known name', () => {
+  const split = {kind: 'issuer_page', file: 'Q3 results; final.pdf', page: 4};
+  const other = {kind: 'issuer_page', file: 'final.pdf', page: 4};
+  const bare = {kind: 'issuer_page', file: 'Annual report 2024', page: 4};
+  const ctx = {sections: [], chips: [split, other, bare], ran: () => false};
+  const items = inspectorItems('x\nBasis: Q3 results; final.pdf, page 4', ctx);
+  assert.deepEqual(items.map(i => i.raw), ['Q3 results; final.pdf, page 4']);
+  assert.deepEqual(items[0].chips, [split], 'the whole name resolves to its own chips, not final.pdf\'s');
+  const noExt = inspectorItems('x\nBasis: Annual report 2024, page 4; Annual report 2023, page 4', ctx);
+  assert.deepEqual(noExt.map(i => i.kind), ['source', 'text']);
+  assert.deepEqual(noExt[0].chips, [bare]);
+});
+
+test('an earlier-format citation keeps class basis, so the page\'s name rewriting leaves [CP-1 T3] as written', () => {
+  const html = inspectorBasisBlock('Leverage is 5.2x [CP-1 T3].', true, {sections: [], chips: [], ran: () => false}, () => '');
+  assert.match(html, /^<div class="basis">/);
+  assert.ok(html.includes('<li>[CP-1 T3]</li>'));
+  const screen = fs.readFileSync(path.join(__dirname, 'screen.js'), 'utf8');
+  assert.ok(screen.includes("parent.closest('.ref,.excerpt,.basis,.module-code')"), 'nameCodes skips .basis');
+});
+
 
 test('figureSpans: only an ISO currency code is a prefix', () => {
   const t = text => figureSpans(text).map(f => f.text);
@@ -398,9 +446,9 @@ test('the inspector draws two sources, then a page range and an upstream module,
   ]));
 });
 
-test('an earlier-format paragraph lists its citations in a div with no empty class attribute', () => {
+test('an earlier-format paragraph lists its citations in a div of class basis (so name rewriting skips it)', () => {
   const html = require('./reader.js').inspectorBasisBlock('Cash rose. [CP-1: D4]', true, {sections: [], chips: [], ran: () => false}, () => '');
-  assert.equal(html, '<div><h3>Basis</h3><ul class="basis-items"><li>[CP-1: D4]</li></ul></div>');
+  assert.equal(html, '<div class="basis"><h3>Basis</h3><ul class="basis-items"><li>[CP-1: D4]</li></ul></div>');
 });
 
 test('screen.js draws each resolved Basis item as it is: it does not resolve an item again or rebuild the drawing helpers per item', () => {

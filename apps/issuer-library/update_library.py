@@ -33,7 +33,7 @@ if str(ROOT / "src") not in sys.path:
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from credit_os.store import regular_chunks, workspace_store
+from credit_os.store import UnreadableFile, regular_chunks, workspace_store
 
 from deploy_vii.registry import plan
 from deploy_workflow.credit_os_catalogue import catalogue
@@ -139,7 +139,10 @@ def run_records(workspace: Path, store: dict[str, Any]) -> None:
 
 def checked_bytes(path: Path, digest: str, label: str) -> bytes:
     """The bytes of a run file, refused when they no longer have the hash the store holds."""
-    raw = b"".join(regular_chunks(path))
+    try:
+        raw = b"".join(regular_chunks(path, follow=False))
+    except UnreadableFile as error:  # a link, a FIFO or an oversize file is not a delivered handoff
+        raise Refused(f"Not written: {label} is not a plain file ({error})") from error
     if hashlib.sha256(raw).hexdigest() != digest:
         raise Refused(f"Not written: {label} changed during the build")
     return raw

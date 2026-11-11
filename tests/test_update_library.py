@@ -95,6 +95,33 @@ def test_refuses_library_symlink(tmp_path):
     assert list(elsewhere.iterdir()) == []
 
 
+def test_checked_bytes_refuses_a_link_even_when_the_hash_matches(tmp_path):
+    # The store never lists a linked handoff; this is the guard for a file swapped for a link after
+    # the store read it (the bytes and so the hash still match).
+    import hashlib
+
+    target = tmp_path / "elsewhere.md"
+    target.write_bytes(b"handoff\n")
+    link = tmp_path / "CP-0.md"
+    link.symlink_to(target)
+    with pytest.raises(Refused, match="not a plain file"):
+        update_library.checked_bytes(
+            link, hashlib.sha256(b"handoff\n").hexdigest(), "run-a/CP-0.md"
+        )
+
+
+def test_a_symlinked_delivered_handoff_is_not_copied(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    (delivered,) = (run_dir / "deliveries").iterdir()
+    real = delivered / "CP-0.md"
+    elsewhere = tmp_path / "elsewhere.md"
+    elsewhere.write_bytes(real.read_bytes())
+    real.unlink()
+    real.symlink_to(elsewhere)
+    update_library.update_library(tmp_path)
+    assert not (tmp_path / "library/downloads/run-a/CP-0.md").exists()
+
+
 def test_empty_workspace(tmp_path):
     library = update_library.update_library(tmp_path)
     assert library.runs == [] and library.excluded == []

@@ -1083,6 +1083,24 @@ def test_evidence_lists_supplied_files_by_who_read_them(tmp_path):
     assert evidence["unused"][0]["sha256"] == expected
 
 
+def test_evidence_document_date_is_the_cell_a_handoff_table_records_for_the_file(tmp_path):
+    names = ("A_report.pdf", "B_2024-01-01_filing.pdf", "C_other.pdf")
+    # Hand-written: the date text is copied as stored (not parsed, not taken from a file name);
+    # B's row has an empty date cell; C appears in no Document date table.
+    register = (
+        "\n| Source | Type | Document date | Readiness |\n| --- | --- | --- | --- |\n"
+        "| A_report.pdf | Annual report | 31 March 2025 (audited) | Readable |\n"
+        "| B_2024-01-01_filing.pdf | Filing |  | Readable |\n"
+    )
+    evidence = evidence_of(tmp_path, supplied=names, cp0_extra=register)
+    found = {s["name"]: s["documentDate"] for s in evidence["sources"] + evidence["unused"]}
+    assert found == {
+        "A_report.pdf": "31 March 2025 (audited)",
+        "B_2024-01-01_filing.pdf": None,
+        "C_other.pdf": None,
+    }
+
+
 def test_evidence_a_name_outside_the_sources_section_is_not_a_read(tmp_path):
     # The name appears in CP-1's Findings (cp1_findings sits before Sources), not in its Sources.
     evidence = evidence_of(
