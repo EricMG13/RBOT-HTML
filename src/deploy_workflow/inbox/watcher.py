@@ -58,6 +58,8 @@ _CUT_SHORT = (
 _PID_GRACE_SECONDS = 60
 _SID = re.compile(r"[0-9a-f]{32}")
 _CHANGED = "the submitted documents changed before the run could start"
+# Ceiling on submissions waiting for a slot: their files sit outside the uploads store limit.
+MAX_QUEUED = 30
 
 
 @dataclass(frozen=True)
@@ -209,31 +211,27 @@ class Watcher:
             )
             return
         os.rename(sealed, self.layout.drops / record.id)
+        submissions.release(self.layout, record.submission)
 
     def _sealed_digest(self, record: Record, sealed: Path) -> str:
-        """The approval digest of the sealed files as ``submit`` computed it, without the
-        ``context.json`` it wrote there; "" when that cannot be recomputed (it then fails)."""
-        context = sealed / "context.json"
+        """The approval digest of the sealed files as ``submit`` computed it (the digest ignores the
+        ``context.json`` it wrote there); "" when that cannot be recomputed (it then fails)."""
         try:
-            text = context.read_bytes()
             answers = submissions.validated(
                 {
-                    "context": json.loads(text),
+                    "context": json.loads((sealed / "context.json").read_bytes()),
                     "modules": list(record.modules),
                     "max_turns": record.max_turns,
                     "level": record.level,
                     "submitted_by": record.submitted_by,
                 }
             )
-            context.unlink()
-        except (OSError, ValueError):  # no or unreadable context.json, a link inside: it changed
+        except (OSError, ValueError):  # no or unreadable context.json: it changed
             return ""
         try:
             return submissions.digest(self.layout, record.submission, answers)
         except submissions.Refused:
             return ""
-        finally:
-            context.write_bytes(text)
 
     def submit(self, sid: str, answers: Answers, approved_digest: str) -> Record:
         """Start one run for an approved submission. Repeating a submission returns its record.
@@ -253,6 +251,8 @@ class Watcher:
             for name in answers["modules"]:
                 if name not in cpos_launch.METHODS:
                     raise submissions.Refused(f"unknown module {name}")
+            if len(self._with_status("queued")) >= MAX_QUEUED:
+                raise submissions.Refused("too many runs are waiting; try again later")
             sealed = submissions.seal(self.layout, sid)
             try:
                 record = self._record_for(sid, answers, approved_digest, sealed)
@@ -260,6 +260,7 @@ class Watcher:
                 submissions.unseal(self.layout, sid)
                 raise
             os.rename(sealed, self.layout.drops / record.id)
+            submissions.release(self.layout, sid)
             return record
 
     def _record_for(self, sid: str, answers: Answers, approved_digest: str, sealed: Path) -> Record:
@@ -385,6 +386,9 @@ class Watcher:
     def _step(self) -> None:
         self._track_untracked()
         self._finish_moves()
+        with self._guard("sweep of the uploads"):
+            queued = frozenset(r.submission for r in self._with_status("queued") if r.submission)
+            submissions.sweep(self.layout, self.clock(), queued)
         self._reap()
         self._scan()
         self._prepare_queued()
@@ -673,6 +677,25 @@ class Watcher:
             context = drops.check(self.layout.drops / record.id, record.pathway).context
         except DropRejected as error:  # changed since the offline check
             reason = str(error)
+            self._put(
+                replace(record, status="failed", reason=reason, ended_at=self._utc(self.now()))
+            )
+            return False
+        try:
+            runs.command(  # a record that cannot become a command fails here, before it is counted
+                self.layout,
+                record,
+                context,
+                launcher=self.settings.launcher,
+                config=self.settings.config,
+                cap=self.settings.cap,
+                ruling=startup.STANDING_RULING,
+            )
+        except (ValueError, TypeError) as error:
+            # Documented fail-open: a hand-edited or wrongly typed field must not stop the poll for
+            # every other run. Logged with the run's ID; the record is failed and uses no slot.
+            self._logger.exception("run %s cannot be built into a command", record.id)
+            reason = f"could not be started: {error}"
             self._put(
                 replace(record, status="failed", reason=reason, ended_at=self._utc(self.now()))
             )

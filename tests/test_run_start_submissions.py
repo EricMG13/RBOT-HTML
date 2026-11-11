@@ -8,6 +8,7 @@ import logging
 import os
 import tempfile
 import threading
+import time
 from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
@@ -187,6 +188,14 @@ def test_concurrent_uploads_hold_the_count_limit(layout, monkeypatch):
     monkeypatch.setattr(submissions, "MAX_FILES", 2)
     sid = new(layout)
     barrier = threading.Barrier(2, timeout=10)  # the two admitted uploads are in flight together
+    real_stored = submissions._stored
+
+    def slow(root, **kwargs):  # widens the check-then-reserve window: only the lock closes it
+        found = real_stored(root, **kwargs)
+        time.sleep(0.05)
+        return found
+
+    monkeypatch.setattr(submissions, "_stored", slow)
     outcomes: list[str] = []
 
     def work(i: int) -> None:
@@ -195,12 +204,16 @@ def test_concurrent_uploads_hold_the_count_limit(layout, monkeypatch):
             outcomes.append("ok")
         except Refused:
             outcomes.append("refused")
+        except threading.BrokenBarrierError:  # a third admitted upload: a failure, not a refusal
+            outcomes.append("broken barrier")
 
     threads = [threading.Thread(target=work, args=(i,)) for i in range(8)]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+    assert len(outcomes) == 8  # every worker reported, and none raised
+    assert sorted(set(outcomes)) == ["ok", "refused"]
     assert outcomes.count("ok") == 2
     assert len(list(files_folder(layout, sid).iterdir())) == 2
 
@@ -701,3 +714,148 @@ def test_an_issued_digest_is_not_part_of_the_files_and_survives_the_seal(layout,
 def test_issued_is_refused_for_an_unknown_submission(layout):
     with pytest.raises(Refused):
         submissions.issued(layout, "0" * 32)
+
+
+# ---- review round 2 ----
+
+
+def test_what_a_submitted_submission_leaves_behind_is_not_an_open_one(layout, monkeypatch):
+    monkeypatch.setattr(submissions, "MAX_OPEN", 1)
+    sid = new(layout)
+    submissions.seal(layout, sid)
+    os.rename(layout.uploads / sid / "sealed", layout.drops / "run")
+    (layout.uploads / sid / "issued").write_text("0" * 64 + "\n")
+    assert submissions._open_folders(layout) == []
+    assert new(layout)
+
+
+def test_release_removes_the_leftover_folder_but_never_live_uploads(layout):
+    done, live = new(layout), new(layout)
+    submissions.seal(layout, done)
+    os.rename(layout.uploads / done / "sealed", layout.drops / "run")
+    (layout.uploads / done / "issued").write_text("x\n")
+    submissions.release(layout, live)  # still has files/: kept
+    submissions.release(layout, done)
+    submissions.release(layout, "../x")  # not an id: nothing happens
+    assert (layout.uploads / live / "files").is_dir()
+    assert not (layout.uploads / done).exists()
+
+
+def test_a_failed_release_is_logged_and_does_not_raise(layout, monkeypatch, caplog):
+    sid = new(layout)
+    os.rmdir(layout.uploads / sid / "files")
+    monkeypatch.setattr(submissions.shutil, "rmtree", _failing_rmtree)
+    with caplog.at_level(logging.WARNING, logger=submissions.__name__):
+        submissions.release(layout, sid)
+    assert "could not remove" in caplog.text
+
+
+def test_a_sealed_or_files_link_is_an_unknown_submission(layout, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "a.txt").write_bytes(b"Net sales were 100.")
+    sid = new(layout)
+    os.symlink(outside, layout.uploads / sid / "sealed")
+    for call in (
+        lambda: files_folder(layout, sid),
+        lambda: submissions.seal(layout, sid),
+        lambda: digest(layout, sid, answers_for(tmp_path)),
+        lambda: reading(layout, sid),
+        lambda: summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20)),
+    ):
+        with pytest.raises(Refused, match="unknown submission"):
+            call()
+    assert not submissions._is_sealed(layout.uploads / sid)
+    assert (outside / "a.txt").is_file() and not (outside / "sealed").exists()
+
+
+def test_a_digest_taken_while_a_seal_renames_the_folder_still_covers_the_files(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    expected = digest(layout, sid, answers)
+    real = submissions.files_folder
+    calls = []
+
+    def stale(lay, x):
+        root = real(lay, x)
+        if not calls:  # the first look resolves files/, then the seal lands before the walk
+            calls.append(1)
+            submissions.seal(lay, x)
+        return root
+
+    submissions.files_folder = stale
+    try:
+        got = digest(layout, sid, answers)
+    finally:
+        submissions.files_folder = real
+    assert got == expected
+
+
+def test_a_file_that_vanishes_while_the_summary_reads_it_is_the_changed_error(
+    layout, tmp_path, monkeypatch
+):
+    sid, _ = upload_issuer(layout, tmp_path)
+
+    def vanishing(*args, **kwargs):
+        remove_file(layout, sid, "annual.txt")
+        raise FileNotFoundError(2, "gone")
+
+    monkeypatch.setattr(submissions, "prepare", vanishing)
+    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    assert got == {"error": submissions._CHANGED}
+    assert submissions.issued(layout, sid) == ""
+
+
+def test_a_failed_temporary_unlink_releases_the_reservation_and_refuses(
+    layout, monkeypatch, caplog
+):
+    sid = new(layout)
+    real = Path.unlink
+
+    def failing(self, missing_ok=False):
+        if self.name.startswith(".part-") and self.exists():
+            raise PermissionError(13, "held open", str(self))
+        return real(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", failing)
+    with caplog.at_level(logging.WARNING, logger=submissions.__name__), pytest.raises(Refused):
+        add_file(layout, sid, "a.txt", io.BytesIO(b"ab"), 3)  # cut short: the temp file stays
+    assert "temporary upload" in caplog.text
+    assert sid not in submissions._PENDING
+    monkeypatch.undo()
+    submissions.seal(layout, sid)  # not blocked by a leaked reservation
+
+
+def test_the_servers_path_is_not_in_a_reading_or_summary_error(layout, tmp_path):
+    sid = new(layout)
+    put(layout, sid, "a.bin", b"\x00\x01 not a document")
+    root = str(files_folder(layout, sid))
+    seen = [reading(layout, sid)["error"]]
+    seen.append(
+        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
+    )
+    assert all(seen), seen
+    for text in seen:
+        assert root not in text and str(layout.uploads) not in text
+    assert any("the uploaded documents" in text for text in seen), seen
+
+
+def test_the_digest_ignores_a_top_level_context_json_only(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path)
+    before = digest(layout, sid, answers)
+    (files_folder(layout, sid) / "context.json").write_bytes(b"{}")
+    assert digest(layout, sid, answers) == before
+    (files_folder(layout, sid) / "sub").mkdir()
+    (files_folder(layout, sid) / "sub" / "context.json").write_bytes(b"{}")
+    assert digest(layout, sid, answers) != before
+
+
+def test_the_sweep_keeps_a_submission_it_is_told_to_keep(layout):
+    kept, gone = new(layout), new(layout)
+    now = (layout.uploads / kept).stat().st_mtime + STALE_SECONDS + 10
+    sweep(layout, now, keep={kept})
+    assert (layout.uploads / kept).is_dir()
+    assert not (layout.uploads / gone).exists()
+    sweep(layout, now)
+    assert not (layout.uploads / kept).exists()

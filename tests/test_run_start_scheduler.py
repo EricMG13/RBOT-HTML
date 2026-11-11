@@ -475,3 +475,149 @@ def test_a_queued_submission_with_neither_folder_fails(root, fake_env):
     [after] = load_all(layout(root))
     assert after.status == "failed"
     w.close()
+
+
+# ---- review round 2 ----
+
+
+def test_fifty_submissions_in_a_day_do_not_block_a_new_one(root, fake_env, monkeypatch):
+    fake_env({"sleep": 30})
+    monkeypatch.setattr(submissions, "MAX_OPEN", 3)
+    w = Watcher(settings(root, max_running=3))
+    _submit_n(root, w, 4)  # more than MAX_OPEN, all submitted
+    lay = layout(root)
+    assert submissions._open_folders(lay) == []
+    assert submissions.new(lay)
+    assert not [p for p in lay.uploads.iterdir() if (p / "sealed").exists()]
+    w.close()
+
+
+def test_a_failed_removal_of_the_moved_uploads_folder_is_logged_and_the_run_goes_on(
+    root, fake_env, monkeypatch, caplog
+):
+    fake_env({"sleep": 30})
+    w = Watcher(settings(root))
+    answers = answers_for()
+    sid = upload(root)
+    real = submissions.shutil.rmtree
+
+    def busy(path: Any, *a: Any, **k: Any) -> None:
+        if Path(path).name == sid:  # only the uploads folder: the summary's cleanup still works
+            raise OSError("busy")
+        real(path, *a, **k)
+
+    monkeypatch.setattr(submissions.shutil, "rmtree", busy)
+    with caplog.at_level("WARNING", logger=submissions.__name__):
+        record = w.submit(sid, answers, approved(root, sid, answers))
+    assert "could not remove" in caplog.text
+    assert (layout(root).drops / record.id / "a.txt").is_file()
+    assert submissions._open_folders(layout(root)) == []
+    w.close()
+
+
+def test_a_cut_short_rename_finished_by_a_poll_also_removes_the_uploads_folder(
+    root, fake_env, monkeypatch
+):
+    fake_env({"sleep": 30})
+    w = Watcher(settings(root))
+    sid = _cut_short_submit(root, w, monkeypatch)
+    w.step()
+    assert not (layout(root).uploads / sid).exists()
+    w.close()
+
+
+def test_a_planted_sealed_link_is_refused_by_submit_and_never_becomes_a_run(root, fake_env):
+    fake_env({"sleep": 30})
+    lay = layout(root)
+    sid = upload(root)
+    answers = answers_for()
+    digest = approved(root, sid, answers)
+    outside = root / "outside"
+    outside.mkdir()
+    (outside / "a.txt").write_bytes(b"Net sales were 100.")  # the same bytes: the digest matches
+    (lay.uploads / sid / "sealed").symlink_to(outside, target_is_directory=True)
+    w = Watcher(settings(root))
+    with pytest.raises(Refused):
+        w.submit(sid, answers, digest)
+    assert load_all(lay) == []
+    assert not any(p.is_symlink() for p in lay.drops.iterdir())
+    w.close()
+
+
+def test_a_record_that_cannot_become_a_command_uses_no_daily_slot(root, fake_env):
+    fake_env({"sleep": 30})
+    w = Watcher(settings(root, max_running=3, max_per_day=2))
+    first, second, third = _submit_n(root, w, 3)
+    w._put(replace(first, modules=("--cap", "1000")))
+    w.step()
+    w.step()
+    by_id = {r.id: r for r in load_all(layout(root))}
+    assert by_id[first.id].status == "failed" and by_id[first.id].started_at == ""
+    assert w._children.keys() == {second.id, third.id}  # the limit of 2 still held two runs
+    w.close()
+
+
+def test_the_recheck_of_a_cut_short_move_never_touches_context_json(root, fake_env, monkeypatch):
+    fake_env({"sleep": 30})
+    w = Watcher(settings(root))
+    sid = _cut_short_submit(root, w, monkeypatch)
+    context = layout(root).uploads / sid / "sealed" / "context.json"
+    before = context.read_bytes()
+    real = submissions.digest
+    seen = []
+
+    def killed(lay, s, answers):
+        seen.append(context.read_bytes())
+        raise KeyboardInterrupt  # a kill inside the recheck
+
+    monkeypatch.setattr(submissions, "digest", killed)
+    with pytest.raises(KeyboardInterrupt):
+        w.step()
+    monkeypatch.setattr(submissions, "digest", real)
+    assert seen == [before] and context.read_bytes() == before
+    w.step()
+    [record] = load_all(layout(root))
+    assert record.status == "running"
+    w.close()
+
+
+def test_the_sweep_does_not_delete_the_files_of_a_queued_submission(root, fake_env, monkeypatch):
+    fake_env({"sleep": 30})
+    w = Watcher(settings(root))
+    sid = _cut_short_submit(root, w, monkeypatch)
+    stale = (layout(root).uploads / sid).stat().st_mtime + submissions.STALE_SECONDS + 10
+    real_rename = os.rename
+
+    def refuse(src: Any, dst: Any, *a: Any, **k: Any) -> None:
+        if Path(dst).parent == layout(root).drops:
+            raise OSError("still cut short")
+        real_rename(src, dst, *a, **k)
+
+    monkeypatch.setattr(watcher_module.os, "rename", refuse)
+    w.clock = lambda: stale
+    w.step()
+    assert (layout(root).uploads / sid / "sealed" / "a.txt").is_file()
+    assert [r.status for r in load_all(layout(root))] == ["queued"]
+    monkeypatch.undo()
+    w.step()
+    w.step()
+    assert [r.status for r in load_all(layout(root))] == ["running"]
+    w.close()
+
+
+def test_a_full_queue_refuses_a_submission_before_sealing_it(root, fake_env, monkeypatch):
+    fake_env({"sleep": 30})
+    monkeypatch.setattr(watcher_module, "MAX_QUEUED", 2)
+    w = Watcher(settings(root, max_running=1))
+    _submit_n(root, w, 2)
+    answers = answers_for()
+    sid = upload(root)
+    digest = approved(root, sid, answers)
+    with pytest.raises(Refused, match="too many runs are waiting; try again later"):
+        w.submit(sid, answers, digest)
+    assert (layout(root).uploads / sid / "files" / "a.txt").is_file()  # not sealed, not moved
+    assert len(load_all(layout(root))) == 2
+    w.step()  # one starts, one slot frees up in the queue
+    w.step()
+    assert w.submit(sid, answers, digest).status == "queued"
+    w.close()

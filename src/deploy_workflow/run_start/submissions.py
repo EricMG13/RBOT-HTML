@@ -17,6 +17,7 @@ import shutil
 import tempfile
 import threading
 import uuid
+from collections.abc import Collection
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, BinaryIO, TypedDict
@@ -95,7 +96,9 @@ def validated(answers: object) -> Answers:
 
 
 def _open_folders(layout: Layout) -> list[Path]:
-    """The unsubmitted submissions: an id folder with no ``sealed`` folder."""
+    """The unsubmitted submissions: an id folder that has ``files`` and no ``sealed`` folder.
+
+    What a submitted submission leaves behind (an ``issued`` file, an empty folder) is not one."""
     if not layout.uploads.is_dir():
         return []
     return [
@@ -104,6 +107,7 @@ def _open_folders(layout: Layout) -> list[Path]:
         if _ID.fullmatch(entry.name)
         and not entry.is_symlink()
         and entry.is_dir()
+        and (entry / "files").is_dir()
         and not (entry / "sealed").exists()
     ]
 
@@ -124,15 +128,20 @@ def _folder(layout: Layout, sid: str) -> Path:
     folder = layout.uploads / sid
     if folder.is_symlink():
         raise Refused("unknown submission")
+    real = False
     for name in ("sealed", "files"):
         inside = folder / name
-        if inside.is_dir() and not inside.is_symlink():
-            return folder
+        if inside.is_symlink():  # a link planted here would be followed by every reader
+            raise Refused("unknown submission")
+        real = real or inside.is_dir()
+    if real:
+        return folder
     raise Refused("unknown submission")
 
 
 def _is_sealed(folder: Path) -> bool:
-    return (folder / "sealed").is_dir()
+    sealed = folder / "sealed"
+    return sealed.is_dir() and not sealed.is_symlink()
 
 
 def _active(folder: Path) -> Path:
@@ -288,6 +297,16 @@ def _place(folder: Path, parts: list[str], temp_path: Path) -> None:
             raise Refused(f"{stored!r} clashes with a file or folder already stored") from error
 
 
+def _unlink_temporary(temp_path: Path) -> None:
+    try:
+        temp_path.unlink(missing_ok=True)
+    except OSError as error:
+        # Not fail-open: the caller is refused. The leftover is outside ``files`` (not part of the
+        # documents) and the sweep removes it with the folder.
+        log.warning("could not remove the temporary upload %s (%s)", temp_path, error)
+        raise Refused("the upload could not be cleaned up; try again") from error
+
+
 def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -> str:
     """Store ``length`` bytes from ``body`` under a safe version of ``name``; return that name.
 
@@ -309,12 +328,14 @@ def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -
         _write(body, temp_path, length)
         _place(folder, parts, temp_path)
     finally:
-        temp_path.unlink(missing_ok=True)
+        # The reservation is released first: a failed unlink must not hold it for the life of the
+        # process (it blocks ``seal`` and the sweep).
         with _LOCK:
             held = _PENDING.get(sid, {})
             held.pop(tmp, None)
             if not held:
                 _PENDING.pop(sid, None)
+        _unlink_temporary(temp_path)
     _touch(folder)
     return stored
 
@@ -343,8 +364,18 @@ def reading(layout: Layout, sid: str) -> dict[str, Any]:
         _stored(root, strict=True)
         got = read_documents(root)
     except (LaunchRefused, Refused) as refusal:
-        return {"documents": [], "ignored": [], "error": str(refusal)}
+        return {"documents": [], "ignored": [], "error": _without_path(str(refusal), root)}
     return {"documents": list(got.documents), "ignored": list(got.ignored), "error": ""}
+
+
+_DOCUMENTS = "the uploaded documents"
+
+
+def _without_path(text: str, root: Path) -> str:
+    """``text`` with the server's path to the documents replaced: it is not the analyst's to see."""
+    for shown in sorted({str(root), str(root.resolve())}, key=len, reverse=True):
+        text = text.replace(shown, _DOCUMENTS)
+    return text
 
 
 def context_bytes(answers: Answers) -> bytes:
@@ -358,6 +389,8 @@ def context_bytes(answers: Answers) -> bytes:
 def _digest(root: Path, answers: Answers) -> str:
     files = []
     for rel in sorted(_stored(root, strict=True)):
+        if rel == _CONTEXT_NAME:  # made from the answers (the watcher writes it); never uploaded
+            continue
         sha = hashlib.sha256()
         with (root / rel).open("rb") as stream:
             while chunk := stream.read(_CHUNK):
@@ -377,7 +410,12 @@ def digest(layout: Layout, sid: str, answers: Answers) -> str:
     """SHA-256 over the context, each stored file's name and hash, the modules and the turns.
 
     ``level`` and ``submitted_by`` are not covered: they change what the page shows, not the run."""
-    return _digest(files_folder(layout, sid), validated(answers))
+    answers = validated(answers)
+    root = files_folder(layout, sid)
+    value = _digest(root, answers)
+    if not root.is_dir():  # a seal renamed the folder before the walk: it saw nothing
+        value = _digest(files_folder(layout, sid), answers)
+    return value
 
 
 def _remove(folder: Path) -> None:
@@ -388,6 +426,22 @@ def _remove(folder: Path) -> None:
         shutil.rmtree(folder)
     except OSError as error:
         log.warning("could not remove %s (%s); the sweep will try again", folder, error)
+
+
+def release(layout: Layout, sid: str) -> None:
+    """Remove ``uploads/<id>`` once its files have moved on to a run; what is left is ``issued``.
+
+    Nothing is removed while ``files`` or ``sealed`` is still there. A failed removal is logged and
+    the sweep tries again (see ``_remove``), so the open count is not what depends on it."""
+    if not isinstance(sid, str) or not _ID.fullmatch(sid):
+        return
+    folder = layout.uploads / sid
+    with _LOCK:
+        if folder.is_symlink() or not folder.is_dir():
+            return
+        if any(os.path.lexists(folder / name) for name in ("files", "sealed")):
+            return
+        _remove(folder)
 
 
 _ISSUED = "issued"
@@ -456,23 +510,29 @@ def _summarise(
         work = Path(tempfile.mkdtemp(prefix="summary-", dir=layout.state))
         try:
             try:
-                before = _digest(files, answers)
+                try:
+                    before = _digest(files, answers)
+                except OSError:
+                    return {"error": _CHANGED}
                 load_context(context_bytes(answers))
                 context_dir = work / "context"
                 context_dir.mkdir()
                 context = context_dir / _CONTEXT_NAME
                 context.write_bytes(context_bytes(answers))
-                prepared = prepare(
-                    context,
-                    files,
-                    work / "run",
-                    config=config,
-                    cap=cap,
-                    modules=answers["modules"] or None,
-                )
-                after = _digest(files, answers)
+                try:
+                    prepared = prepare(
+                        context,
+                        files,
+                        work / "run",
+                        config=config,
+                        cap=cap,
+                        modules=answers["modules"] or None,
+                    )
+                    after = _digest(files, answers)
+                except OSError:  # a file went away while it was being read: the folder changed
+                    return {"error": _CHANGED}
             except ValueError as refusal:  # Refused, ContextRefused and LaunchRefused included
-                return {"error": str(refusal)}
+                return {"error": _without_path(str(refusal), files)}
             if before != after:
                 return {"error": _CHANGED}
             return {
@@ -488,16 +548,17 @@ def _summarise(
             _remove(work)
 
 
-def sweep(layout: Layout, now: float) -> None:
+def sweep(layout: Layout, now: float, keep: Collection[str] = ()) -> None:
     """Delete each ``uploads/<id>`` and ``state/summary-*`` not modified for ``STALE_SECONDS``.
 
-    A submission with an upload in flight is kept. Other entries are left."""
+    A submission with an upload in flight, or whose id is in ``keep`` (one the scheduler still
+    holds a queued record for), is kept. Other entries are left."""
     if layout.uploads.is_dir():
         for entry in layout.uploads.iterdir():
             if not _ID.fullmatch(entry.name) or entry.is_symlink() or not entry.is_dir():
                 continue
             with _LOCK:
-                if _PENDING.get(entry.name):
+                if _PENDING.get(entry.name) or entry.name in keep:
                     continue
                 if now - entry.stat().st_mtime >= STALE_SECONDS:
                     _remove(entry)
