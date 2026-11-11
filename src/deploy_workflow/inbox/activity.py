@@ -25,10 +25,10 @@ log = logging.getLogger(__name__)
 
 STALLED_AFTER = 3600  # seconds without a new event
 KEPT_ENDED = 200
-# Ended statuses whose launcher the watcher knows is gone: _reap saw it exit, or it never started.
+# Ended statuses whose launcher the scheduler knows is gone: _reap saw it exit, or it never started.
 # "interrupted" is excluded: a run cut short before its process ID was saved may still spend.
 # So is a run with a start time but no process ID, whatever its status: "failed: could not be
-# started" after Popen (watcher start path) leaves a live child; see _shown.
+# started" after Popen (scheduler start path) leaves a live child; see _shown.
 _SETTLED = frozenset({"finished", "failed", "capped", "rejected"})
 _TIME = "%Y-%m-%dT%H:%M:%SZ"
 _ORDER = {"running": 0, "queued": 1}

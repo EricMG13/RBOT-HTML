@@ -45,9 +45,9 @@ _CUT_SHORT = (
     "the service stopped while starting this run; its process may still be running"
     " \N{EM DASH} check before submitting it again"
 )
-_UNCHECKED = (
-    "the earlier folder watcher took this folder in but never checked it"
-    " \N{EM DASH} submit it again from the run page"
+_OLD_WATCHER = (
+    "queued by the folder watcher before the run start page replaced it;"
+    " submit it again from the run start page"
 )
 _NO_CONTEXT = "no context.json in _engine/drops/{}; submit it again from the run page"
 # ponytail: a run whose launcher writes its PID file after 60 s is cut short; a reused process ID
@@ -134,20 +134,18 @@ class Scheduler:
         self._fail_unchecked()
 
     def _fail_unchecked(self) -> None:
-        """A queued record that is not ``prepared`` came from the folder watcher, which checked a
-        drop before it started it. Nothing now checks it: fail it, with the reason, rather than
-        leave it waiting (and counted against the queue limit) for ever."""
+        """A queued record with no ``submission`` was queued by the old folder watcher. Only a run
+        started by Submit on an approved summary may start (ruling 2026-11-11): fail it, with the
+        reason, rather than leave it waiting (and counted against the queue limit) for ever."""
         for record in self._with_status("queued"):
-            if not record.prepared:
+            if not record.submission:
                 with self._guard(f"run {record.id}"):
-                    self._put(
-                        replace(
-                            record,
-                            status="failed",
-                            reason=_UNCHECKED,
-                            ended_at=self._utc(self.now()),
-                        )
-                    )
+                    self._fail(record, _OLD_WATCHER)
+
+    def _fail(self, record: Record, reason: str) -> None:
+        self._put(
+            replace(record, status="failed", reason=reason, ended_at=self._utc(self.now()))
+        )
 
     def _track_untracked(self) -> None:
         """A running record with no PID and no child of this scheduler was cut short between the
@@ -522,6 +520,9 @@ class Scheduler:
 
     def _launch(self, record: Record) -> bool:
         """Start one run. True once it is recorded as started (and so counted for the day)."""
+        if not record.submission or not record.digest:
+            self._fail(record, _OLD_WATCHER)  # only Submit on an approved summary starts a run
+            return False
         drop = self.layout.drops / record.id
         if record.submission and not os.path.lexists(drop) and self._sealed(record).is_dir():
             return False  # its move is not finished yet (a failed rename): _finish_moves retries

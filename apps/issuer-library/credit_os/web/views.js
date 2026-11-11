@@ -1290,7 +1290,7 @@ function activityView(activity,live) {
 // then nothing live is shown. Each value passes through esc; a report path becomes a link only when it is a plain relative path.
 const ACTIVITY_RELOAD_MS=30000;
 const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
-// Report links stay under issuers/<folder>/<file>.html: the one place only the watcher writes. Nothing else becomes a link.
+// Report links stay under issuers/<folder>/<file>.html: the one place only the run start service writes. Nothing else becomes a link.
 function reportHref(report) {
   if(typeof report!=='string'||!report||report.startsWith('/')||/^[a-z][a-z0-9+.-]*:/i.test(report)||report.includes('\\'))return null;
   const parts=report.split('/');

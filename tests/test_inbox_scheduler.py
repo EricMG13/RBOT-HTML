@@ -1168,7 +1168,52 @@ def test_a_queued_record_the_folder_watcher_never_checked_is_failed_with_the_rea
         w.close()
     record = _only(root)
     assert record.status == "failed" and record.ended_at
-    assert "never checked" in record.reason and "submit it again" in record.reason
+    assert record.reason == _OLD_WATCHER
+
+
+_OLD_WATCHER = (
+    "queued by the folder watcher before the run start page replaced it;"
+    " submit it again from the run start page"
+)
+
+
+def test_an_old_prepared_record_with_no_submission_is_failed_and_never_started(root, monkeypatch):
+    started = _track_starts(monkeypatch)
+    lay = ensure_layout(root)
+    run_id = "20261109-100000-01"
+    (lay.drops / run_id).mkdir()
+    (lay.drops / run_id / "context.json").write_text("{}", encoding="utf-8")
+    scheduler_module.runs.save(
+        lay, Record(run_id, "credit_snapshot", "acme", "queued", "t", prepared=True)
+    )
+    w = Scheduler(settings(root))
+    try:
+        w.step()
+    finally:
+        w.close()
+    record = _only(root)
+    assert started == []
+    assert record.status == "failed" and record.reason == _OLD_WATCHER
+
+
+def test_launch_refuses_a_record_with_no_submission_or_no_digest(root, monkeypatch):
+    started = _track_starts(monkeypatch)
+    lay = ensure_layout(root)
+    w = Scheduler(settings(root))
+    try:
+        for run_id, extra in (
+            ("20261109-100000-01", {"submission": "", "digest": "d"}),
+            ("20261109-100000-02", {"submission": "s" * 32, "digest": ""}),
+        ):
+            (lay.drops / run_id).mkdir()
+            (lay.drops / run_id / "context.json").write_text("{}", encoding="utf-8")
+            record = Record(run_id, "credit_snapshot", "acme", "queued", "t", prepared=True, **extra)
+            scheduler_module.runs.save(lay, record)
+            assert w._launch(record) is False
+    finally:
+        w.close()
+    assert started == []
+    assert {r.status for r in load_all(lay)} == {"failed"}
 
 
 def test_a_queued_run_with_no_context_json_in_its_folder_fails_and_starts_nothing(
@@ -1182,7 +1227,10 @@ def test_a_queued_run_with_no_context_json_in_its_folder_fails_and_starts_nothin
     (lay.drops / run_id / "ctx.json").write_text("{}", encoding="utf-8")  # any other name
     scheduler_module.runs.save(
         lay,
-        Record(run_id, "credit_snapshot", "acme", "queued", "t", prepared=True),
+        Record(
+            run_id, "credit_snapshot", "acme", "queued", "t", prepared=True,
+            submission="s" * 32, digest="d",
+        ),
     )
     w = Scheduler(settings(root))
     try:

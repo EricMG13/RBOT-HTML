@@ -1970,7 +1970,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-library",
         action="store_true",
-        help="do not rebuild the library; the inbox watcher does",
+        help="do not rebuild the library; the run start service does",
     )
     return parser
 
@@ -2018,7 +2018,7 @@ def _refresh_library(directory: Path) -> None:
 
 
 def _record_own_pid() -> None:
-    """Write this process's ID to the file the inbox watcher names, atomically (same folder)."""
+    """Write this process's ID to the file the run start service names, atomically (same folder)."""
     target = os.environ.get("DEPLOY_WORKFLOW_PID_FILE")  # the name inbox.runs sets
     if not target:
         return

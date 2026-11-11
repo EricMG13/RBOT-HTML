@@ -43,4 +43,7 @@ jobs:
             tests/test_credit_os_chips.py tests/test_quality_gate.py \
             tests/test_inbox_activity.py tests/test_inbox_filing.py \
             tests/test_inbox_layout.py tests/test_inbox_runs.py tests/test_inbox_scheduler.py \
+            tests/test_run_start_submissions.py tests/test_run_start_scheduler.py \
+            tests/test_run_start_service.py tests/test_run_start_page.py \
+            tests/test_context_module_options.py \
             tests/test_handoff_loop.py tests/test_context_form.py
