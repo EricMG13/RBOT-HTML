@@ -6,6 +6,8 @@ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflo
 
 ## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
 
+Owner waiver 2026-11-11: the 800-line PR limit is waived for #47 (5,969 changed lines).
+
 Scope: offline, macOS, headless Chrome; the library app (`apps/issuer-library`) only. No provider was
 called, no run was started, no stored handoff or run folder was changed (retained runs were read through
 a symlinked `runs` folder in a scratch workspace). No run in the new handoff format exists yet: the new
