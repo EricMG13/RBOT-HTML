@@ -52,6 +52,9 @@ LegalDocuments = Literal["executed", "draft", "none"]
 IssueClassification = Literal["", "investment_grade", "high_yield"]
 QuoteKind = Literal["observed", "indicative_talk"]
 RatingScope = Literal["issuer", "facility"]
+Cp3Mode = Literal[
+    "", "clo_screening", "single_name_rv", "capital_structure_rv", "watchlist_monitoring"
+]
 
 # Row maxima: ROWS[...].max in the form.
 _MAX_DEAL, _MAX_QUOTE, _MAX_RATING, _MAX_PEER = 20, 40, 20, 30
@@ -274,6 +277,13 @@ class ResearchQuestion(Contract):
     focus_module: str
 
 
+class ModuleOptions(Contract):
+    """Optional per-module choices; the defaults mean "the user chose nothing"."""
+
+    cp3_mode: Cp3Mode = ""
+    cp6_deep_debate: bool = False
+
+
 class RunContext(Contract):
     run: RunSettings
     identity: Identity
@@ -284,6 +294,7 @@ class RunContext(Contract):
     assumptions: Assumptions
     attachments: Attachments
     research_questions: tuple[ResearchQuestion, ...]
+    module_options: ModuleOptions = ModuleOptions()
 
 
 def amount(text: str) -> Decimal | None:

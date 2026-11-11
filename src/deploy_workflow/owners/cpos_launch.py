@@ -1564,6 +1564,20 @@ def _method_file(name: str) -> str:
 
 
 # The method block follows this line and runs to the end of a module's instructions.
+CP3_MODE_LABELS = {
+    "clo_screening": "CLO Screening",
+    "single_name_rv": "Single-Name RV",
+    "capital_structure_rv": "Capital-Structure RV",
+    "watchlist_monitoring": "Watchlist Monitoring",
+}
+CP3_MODE_BLOCK = (
+    "The user selected the execution mode {label} (source `context`, module_options.cp3_mode). "
+    "Use it at Step 1; do not choose another.\n\n"
+)
+DEEP_DEBATE_BLOCK = (
+    "The user explicitly asks for a full debate (source `context`, "
+    "module_options.cp6_deep_debate). Deep Debate Mode is ON.\n\n"
+)
 METHOD_MARK = "Selected method, verbatim:\n\n"
 
 
@@ -1684,6 +1698,7 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         )
         for m in ordered
     }
+    options = settings.module_options
     forecast = {"CP-1", "CP-2G"} <= set(ordered)
     peer_pack = settings.valuation.peer_source == "cp_dr_public" and {"CP-DR", "CP-1C"} <= set(
         ordered
@@ -1693,6 +1708,12 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),
+        (
+            "CP-3",
+            CP3_MODE_BLOCK.format(label=CP3_MODE_LABELS.get(options.cp3_mode, "")),
+            bool(options.cp3_mode),
+        ),
+        ("CP-6", DEEP_DEBATE_BLOCK, options.cp6_deep_debate),
     ):
         if wanted and module in texts:
             head, mark, method = texts[module].partition(METHOD_MARK.encode())
