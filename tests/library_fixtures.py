@@ -82,6 +82,7 @@ class RunSpec:
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
     supplied: tuple[str, ...] = ()  # Supplied file names, as workflow.json `sources` lists them.
+    report_page: bool = True  # False: a current delivery, with no report.html, stated by receipt.
 
 
 def make_run(workspace: Path, folder: str, **changes) -> Path:
