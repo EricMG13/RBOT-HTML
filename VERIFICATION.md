@@ -4,6 +4,52 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Run start page: the inbox watcher and folder drop removed (branch `claude/no-nothing-6d5113`)
+
+Scope: offline, macOS, with stand-in launchers (the fake launcher `tests/fixtures/fake_launcher.py`
+and the canned-provider launcher `tests/fixtures/canned_provider_launcher.py`). No provider was
+called and nothing ran on Windows. This is not proof of a paid run.
+- Built: `inbox/watcher.py` is now `inbox/scheduler.py` (`Scheduler`; the folder scan, claim,
+  settle timer, rejection into `inbox/failed`, `_template` copies and the watcher's own command
+  line are gone); `Layout` and `ensure_layout` moved to `inbox/layout.py` and make no `inbox`;
+  `inbox/drops.py` and `Start watcher.cmd` are deleted; `Start run page.cmd <root> [address]`
+  runs `-m deploy_workflow.run_start`; the package ships the 2026-11-11 ruling; the issuer-ID
+  length limit moved from the drop check to the summary. Records the watcher wrote still load and
+  show; every run it queued (a record with no submission) is marked failed at start-up with a
+  reason and is never started.
+- Passed on this tree, exit 0 (final wave, after the whole-branch review): `uv run pytest` on
+  `tests/test_inbox_scheduler.py`, `test_inbox_runs.py`, `test_inbox_activity.py`,
+  `test_inbox_filing.py`, `test_inbox_layout.py`, `test_run_start_submissions.py`,
+  `test_run_start_scheduler.py`, `test_run_start_service.py`, `test_run_start_page.py`,
+  `test_context_form.py`, `test_context_module_options.py`, `test_cpos_launch.py`,
+  `test_issuer_library_packaging.py`, `test_library_page_browser.py` and `test_library_index.py`:
+  933 passed, 1 skipped (the paid test), in Chrome, so the 55 page tests ran;
+  `uv run python tools/quality_gate.py`: 0 findings; `node --test` on `static.test.cjs` and
+  `calendar.test.cjs`: 187 passed (the library's own JavaScript, which CI runs).
+- Final wave, what it changed: the summary joins the launcher's forecast with the page's own
+  rules and asks a tick for every gap, limited and will-refuse item and every check that has a
+  fix; the as-of and legal-disagreement rules are limited for the whole run; Run activity shows the
+  submitter and, when served, links the library's own copy of a finished run's report (the page's
+  finished view links the same copy); library files are opened with `platform_io.regular_open`
+  (binary, no wait on a FIFO); a timeout the service meets itself is a 500; a reload with a
+  saved submission the service no longer holds says so and offers a new submission as a
+  separate click; `runs.prepare` and `Scheduler.run_forever` are deleted.
+- Reviewer probes after the wave (`.superpowers/sdd/2026-11-11-staged-run-start/probes/`): the four
+  review gaps, the served library report, the FIFO and the issuer-ID wording pass. Three probes
+  still fail by ruling or scope and are explained in `final-wave-report.md`: the filed
+  `issuers/...` link (the ruling links the library's copy, no new route), the service's answer
+  for a submitted submission (the ruling makes the page, not the service, say it), and the refused
+  folder's file list (not in this wave). `t8r1_server_side_timeout.py` tests Python's own
+  exception classes and cannot pass; `tests/test_run_start_service.py` covers the behaviour.
+- CI deselects every page test (they need Chrome), so no CI run touches the approval or Submit.
+- The real launcher ran in one scheduler test (canned provider answers, the real library
+  rebuild); the others stand in a launcher.
+- Not verified: a paid run through Submit; whether CP-3 and CP-6 honour `module_options`; Windows
+  (`Start run page.cmd`, the file lock, paths); browsers other than Chrome; more than two
+  analysts submitting at once; `../runs/...` download links, which the service does not serve; the
+  full test suite (weekly job); the page tests in CI (CI deselects them); Windows file opening
+  (`O_BINARY` is requested through `platform_io`, not run there).
+
 ## 2026-11-11 — Work-PC change packs (`tools/work_pc_delta.py`)
 
 Scope: offline tooling only; no analytical module, provider call or deliverable changed.

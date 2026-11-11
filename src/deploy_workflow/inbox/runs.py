@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Literal, get_args
 
 from deploy_workflow import platform_io
-from deploy_workflow.inbox.drops import Layout
+from deploy_workflow.inbox.layout import Layout
+from deploy_workflow.owners.cpos_launch import METHODS
 from deploy_workflow.run_events import EVENTS, read_events
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,8 @@ log = logging.getLogger(__name__)
 Status = Literal["queued", "running", "finished", "failed", "capped", "rejected", "interrupted"]
 
 _REGISTRY = "issuers.json"
+DEFAULT_MAX_TURNS = 32
+_TURNS = (1, 64)  # the range submissions.validated accepts
 
 
 @dataclass
@@ -42,6 +45,12 @@ class Record:
     report: str = ""  # posix path relative to the root
     name_differs: bool = False
     prepared: bool = False  # the offline check passed; only then may the run be started
+    submission: str = ""  # the start page's submission ID; empty for a folder drop
+    modules: tuple[str, ...] = ()  # () = the pathway's modules
+    max_turns: int = DEFAULT_MAX_TURNS
+    level: str = ""
+    submitted_by: str = ""
+    digest: str = ""  # the approved digest of the submitted files; the move is checked against it
 
 
 PID_FILE_VARIABLE = "DEPLOY_WORKFLOW_PID_FILE"  # the launcher reads the same name
@@ -78,6 +87,7 @@ def _load(path: Path) -> Record:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         data["files"] = tuple(data.get("files", ()))
+        data["modules"] = tuple(data.get("modules", ()))
         record = Record(**data)
         if record.status not in get_args(Status):
             raise ValueError(f"unknown status {record.status!r}")
@@ -131,7 +141,18 @@ def alive(pid: int) -> bool:
     return True
 
 
-def command(  # noqa: PLR0913 - the signature the watcher calls
+def _check_options(record: Record) -> None:
+    """``ValueError`` unless the record's modules are method names and its turns a whole number
+    in range: a hand-edited record must not put an option of its own into the launcher's argv."""
+    for name in record.modules:
+        if not isinstance(name, str) or name not in METHODS:
+            raise ValueError(f"run {record.id}: {name!r} is not a module")
+    turns = record.max_turns
+    if not isinstance(turns, int) or isinstance(turns, bool) or not _TURNS[0] <= turns <= _TURNS[1]:
+        raise ValueError(f"run {record.id}: max_turns {turns!r} is not a whole number 1 to 64")
+
+
+def command(  # noqa: PLR0913 - the signature the scheduler calls
     layout: Layout,
     record: Record,
     context: Path,
@@ -141,6 +162,7 @@ def command(  # noqa: PLR0913 - the signature the watcher calls
     cap: Decimal,
     ruling: Path | None,
 ) -> list[str]:
+    _check_options(record)
     argv = [
         *launcher,
         "--context", str(context),
@@ -150,48 +172,16 @@ def command(  # noqa: PLR0913 - the signature the watcher calls
         "--out", str(layout.runs / record.id),
         "--no-library",
     ]  # fmt: skip
+    if record.modules:
+        argv += ["--modules", *record.modules]
+    if record.max_turns != DEFAULT_MAX_TURNS:
+        argv += ["--max-turns", str(record.max_turns)]
     if ruling is not None:
         argv += ["--live", "--ruling", str(ruling)]
     return argv
 
 
-def prepare(  # noqa: PLR0913 - the signature the watcher calls
-    layout: Layout,
-    record: Record,
-    context: Path,
-    *,
-    launcher: Sequence[str],
-    config: str,
-    cap: Decimal,
-    timeout: float = 600,
-) -> str:
-    """Dry run (no ruling, no spend). Returns "" on success, else the refusal text."""
-    argv = command(layout, record, context, launcher=launcher, config=config, cap=cap, ruling=None)
-    try:
-        done = subprocess.run(
-            argv,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-            env=child_environment(),
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        reason = f"the offline check did not finish in {timeout:g} s"
-        with (layout.logs / f"{record.id}.log").open("a", encoding="utf-8") as log_file:
-            log_file.write(reason + "\n")
-        return reason
-    with (layout.logs / f"{record.id}.log").open("a", encoding="utf-8") as log_file:
-        log_file.write(done.stdout)
-        log_file.write(done.stderr)
-    if done.returncode == 0:
-        return ""
-    lines = [line.strip() for line in done.stderr.splitlines() if line.strip()]
-    return lines[-1] if lines else f"launcher exited {done.returncode}"
-
-
-def start(  # noqa: PLR0913 - the signature the watcher calls
+def start(  # noqa: PLR0913 - the signature the scheduler calls
     layout: Layout,
     record: Record,
     context: Path,
@@ -210,7 +200,7 @@ def start(  # noqa: PLR0913 - the signature the watcher calls
     child: subprocess.Popen[bytes] | None = None
     try:
         with (layout.logs / f"{record.id}.log").open("ab") as log_file:
-            if sys.platform == "win32":  # a Ctrl-C to the watcher must not stop its runs
+            if sys.platform == "win32":  # a Ctrl-C to the service must not stop its runs
                 child = subprocess.Popen(
                     argv,
                     stdout=log_file,
@@ -218,7 +208,7 @@ def start(  # noqa: PLR0913 - the signature the watcher calls
                     env=env,
                     creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                 )
-            else:  # a new session keeps a terminal Ctrl-C (SIGINT to the watcher's group) off it
+            else:  # a new session keeps a terminal Ctrl-C (SIGINT to the service group) off it
                 child = subprocess.Popen(
                     argv, stdout=log_file, stderr=log_file, env=env, start_new_session=True
                 )

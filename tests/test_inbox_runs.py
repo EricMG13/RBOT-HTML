@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from deploy_workflow.inbox.drops import Layout, ensure_layout
+from deploy_workflow.inbox.layout import Layout, ensure_layout
 from deploy_workflow.inbox.runs import (
     Record,
     alive,
@@ -23,7 +23,6 @@ from deploy_workflow.inbox.runs import (
     command,
     load_all,
     outcome,
-    prepare,
     save,
     start,
 )
@@ -150,25 +149,6 @@ def test_outcome_treats_an_unreadable_event_file_as_no_events(layout):
     assert outcome(layout, RECORD, 3) == ("failed", "launcher exited 3; see logs/id1.log")
 
 
-def test_prepare_returns_the_refusal_text(layout, fake_env):
-    fake_env({"prepare_exit": 2, "prepare_error": "--sources: cannot read a.pdf: bad"})
-    assert (
-        prepare(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP)
-        == "--sources: cannot read a.pdf: bad"
-    )
-    assert "cannot read a.pdf" in (layout.logs / "id1.log").read_text(encoding="utf-8")
-
-
-def test_prepare_success_and_silent_failure(layout, fake_env):
-    fake_env({})
-    assert prepare(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP) == ""
-    fake_env({"prepare_exit": 2})
-    assert (
-        prepare(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP)
-        == "launcher exited 2"
-    )
-
-
 def test_start_runs_the_plan_and_logs(layout, fake_env, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake-key-for-the-test")
     fake_env(
@@ -225,25 +205,6 @@ def test_an_exited_unwaited_child_is_not_alive():
 
 def test_alive_answers_false_for_a_pid_the_platform_refuses():
     assert alive(2**31) is False and alive(2**63) is False
-
-
-def test_prepare_survives_output_that_is_not_valid_text(layout, tmp_path):
-    script = tmp_path / "launcher.py"
-    script.write_text(
-        "import sys\nsys.stdout.buffer.write(b'\\xff\\xfe ok\\n')\n"
-        "sys.stderr.buffer.write(b'--sources: \\xff refused\\n')\nsys.exit(2)\n",
-        encoding="utf-8",
-    )
-    text = prepare(
-        layout, RECORD, CTX, launcher=[sys.executable, str(script)], config="sol-medium", cap=CAP
-    )
-    assert "refused" in text and (layout.logs / "id1.log").is_file()
-
-
-def test_prepare_gives_up_on_a_launcher_that_hangs(layout):
-    hang = [sys.executable, "-c", "import time; time.sleep(30)"]
-    text = prepare(layout, RECORD, CTX, launcher=hang, config="sol-medium", cap=CAP, timeout=0.5)
-    assert text == "the offline check did not finish in 0.5 s"
 
 
 def test_save_refuses_an_id_that_is_not_a_plain_file_name(layout):
@@ -444,3 +405,51 @@ def test_an_event_line_nested_too_deep_to_parse_leaves_the_exit_code_to_decide(l
     log.parent.mkdir(parents=True)
     log.write_text("[" * 100_000 + "]" * 100_000 + "\n{}\n", encoding="utf-8")
     assert outcome(layout, RECORD, 3) == ("failed", "launcher exited 3; see logs/id1.log")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"modules": ("CP-0", "--cap", "1000")},
+        {"modules": ("--sources", "/etc")},
+        {"modules": ("CP-0", "--out", "/tmp/elsewhere")},
+        {"modules": ("NOT-A-MODULE",)},
+        {"modules": (1,)},
+        {"max_turns": 0},
+        {"max_turns": 65},
+        {"max_turns": -1},
+        {"max_turns": True},
+        {"max_turns": "7"},
+        {"max_turns": 1.5},
+        {"max_turns": 10**12},
+    ],
+)
+def test_command_refuses_a_record_whose_modules_or_turns_could_inject_an_option(layout, change):
+    record = Record("id1", "credit_snapshot", "acme", "queued", "t", **change)
+    with pytest.raises(ValueError):
+        command(
+            layout,
+            record,
+            Path("c.json"),
+            launcher=["py"],
+            config="sol-medium",
+            cap=Decimal(20),
+            ruling=None,
+        )
+
+
+def test_command_takes_every_method_name_and_the_turn_limits(layout):
+    from deploy_workflow.owners.cpos_launch import METHODS
+
+    for turns in (1, 64):
+        record = Record("id1", "p", "a", "queued", "t", modules=tuple(METHODS), max_turns=turns)
+        argv = command(
+            layout,
+            record,
+            Path("c.json"),
+            launcher=["py"],
+            config="sol-medium",
+            cap=Decimal(20),
+            ruling=None,
+        )
+        assert argv[argv.index("--modules") + 1 :][: len(METHODS)] == list(METHODS)

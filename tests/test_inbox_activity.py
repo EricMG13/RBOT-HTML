@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from deploy_workflow.inbox.activity import module_states, snapshot, spent, write
-from deploy_workflow.inbox.drops import Layout, ensure_layout
+from deploy_workflow.inbox.layout import Layout, ensure_layout
 from deploy_workflow.inbox.runs import Record
 from deploy_workflow.model.budget import Budget, OverrunStop
 from deploy_workflow.run_events import append_event
@@ -438,3 +438,10 @@ def test_a_line_or_marker_nested_too_deep_to_parse_is_unreadable_not_fatal(layou
     marker.write_text(deep, encoding="utf-8")
     [entry] = snapshot(layout, [record], cap=Decimal(20), now=_NOW)["runs"]
     assert {state for _, state in entry["modules"]} == {"waiting"} and entry["spent"] is None
+
+
+def test_the_submitters_name_is_published_in_the_runs_entry(layout):
+    record = Record("1", "credit_snapshot", "acme", "queued", "t", submitted_by="Dana Reyes")
+    now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+    [entry] = snapshot(layout, [record], cap=Decimal(20), now=now)["runs"]
+    assert entry["submitted_by"] == "Dana Reyes"

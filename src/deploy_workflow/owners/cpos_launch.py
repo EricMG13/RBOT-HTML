@@ -376,6 +376,38 @@ def _issuer_files(
     return pinned, converted, tuple(ignored), covers
 
 
+@dataclass(frozen=True)
+class Reading:
+    documents: tuple[dict[str, Any], ...]  # Each pinned source's guess, as Prepared.documents.
+    ignored: tuple[str, ...]  # Names the launcher skips without reading.
+
+
+def _documents(
+    covers: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+    """Each source's guess, and the same guesses as ``Prepared.documents`` rows."""
+    guesses = {key: guess_kind(name, pages) for key, (name, pages) in covers.items()}
+    rows = tuple(
+        {
+            "source": key,
+            "kind": g.kind,
+            "signal": g.signal,
+            "executed": g.executed,
+            "period_end": g.period_end,
+        }
+        for key, g in guesses.items()
+    )
+    return guesses, rows
+
+
+def read_documents(folder: Path) -> Reading:
+    """What the launcher makes of each file in ``folder``, before any context exists. Writes
+    nothing; refuses a folder or file the launcher would refuse, with the launcher's own text."""
+    source = Path(folder).expanduser().resolve()
+    _, _, ignored, covers = _issuer_files(source, source.parent / ".no-context", source.parent)
+    return Reading(_documents(covers)[1], ignored)
+
+
 # Fixed so any run's charts can be read without issuer-specific row selectors.
 CHART_TABLES: dict[str, tuple[str, tuple[str, ...], str]] = {
     "S.1": ("Chart data: leverage", ("Total debt / EBITDA", "Net debt / EBITDA"), "x"),
@@ -1563,6 +1595,20 @@ def _method_file(name: str) -> str:
     return text[start:] if end < 0 else text[start : end + 1]
 
 
+CP3_MODE_LABELS = {
+    "clo_screening": "CLO Screening",
+    "single_name_rv": "Single-Name RV",
+    "capital_structure_rv": "Capital-Structure RV",
+    "watchlist_monitoring": "Watchlist Monitoring",
+}
+CP3_MODE_BLOCK = (
+    "The user selected the execution mode {label} (source `context`, module_options.cp3_mode). "
+    "Use it at Step 1; do not choose another.\n\n"
+)
+DEEP_DEBATE_BLOCK = (
+    "The user explicitly asks for a full debate (source `context`, "
+    "module_options.cp6_deep_debate). Deep Debate Mode is ON.\n\n"
+)
 # The method block follows this line and runs to the end of a module's instructions.
 METHOD_MARK = "Selected method, verbatim:\n\n"
 
@@ -1684,6 +1730,7 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         )
         for m in ordered
     }
+    options = settings.module_options
     forecast = {"CP-1", "CP-2G"} <= set(ordered)
     peer_pack = settings.valuation.peer_source == "cp_dr_public" and {"CP-DR", "CP-1C"} <= set(
         ordered
@@ -1693,23 +1740,21 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),
+        (
+            "CP-3",
+            CP3_MODE_BLOCK.format(label=CP3_MODE_LABELS[options.cp3_mode])
+            if options.cp3_mode
+            else "",
+            bool(options.cp3_mode),
+        ),
+        ("CP-6", DEEP_DEBATE_BLOCK, options.cp6_deep_debate),
     ):
         if wanted and module in texts:
             head, mark, method = texts[module].partition(METHOD_MARK.encode())
             texts[module] = head + block.encode() + mark + method
-    guesses = {key: guess_kind(name, pages) for key, (name, pages) in covers.items()}
+    guesses, documents = _documents(covers)
     items = expectations(
         ordered, tuple(guesses.values()), settings, edges_for(ordered), omitted=omitted
-    )
-    documents = tuple(
-        {
-            "source": key,
-            "kind": g.kind,
-            "signal": g.signal,
-            "executed": g.executed,
-            "period_end": g.period_end,
-        }
-        for key, g in guesses.items()
     )
     request = HandoffPlan(
         run=run,
@@ -1926,7 +1971,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-library",
         action="store_true",
-        help="do not rebuild the library; the inbox watcher does",
+        help="do not rebuild the library; the run start service does",
     )
     return parser
 
@@ -1974,7 +2019,7 @@ def _refresh_library(directory: Path) -> None:
 
 
 def _record_own_pid() -> None:
-    """Write this process's ID to the file the inbox watcher names, atomically (same folder)."""
+    """Write this process's ID to the file the run start service names, atomically (same folder)."""
     target = os.environ.get("DEPLOY_WORKFLOW_PID_FILE")  # the name inbox.runs sets
     if not target:
         return

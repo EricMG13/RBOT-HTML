@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import typing
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -13,6 +14,7 @@ import pytest
 
 from deploy_vii.registry import plan
 from deploy_vii.report_view import ReportView
+from deploy_workflow.context import Cp3Mode
 from deploy_workflow.handoff_delivery import (
     HEADINGS,
     DeliveryRequest,
@@ -3487,3 +3489,119 @@ def test_the_value_allocation_rules_are_sent_once_to_their_module(tmp_path):
 def test_shared_edge_rules_are_sent_once_per_module(tmp_path, module):
     text = instruction_text(tmp_path, module)
     assert text.count(cpos_launch.EDGE_RULES) == 1
+
+
+# --- module_options reach CP-3 and CP-6 -------------------------------------------------------
+
+
+def context_with_options(tmp_path: Path, **options: object) -> Path:
+    path = context_file(tmp_path, "portfolio_decision")
+    if options:
+        data = json.loads(path.read_text())
+        data["module_options"] = options
+        path.write_text(json.dumps(data))
+    return path
+
+
+def test_the_chosen_cp3_mode_and_deep_debate_reach_their_instructions(tmp_path):
+    prepared = prepare(
+        context_with_options(tmp_path, cp3_mode="single_name_rv", cp6_deep_debate=True),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="20",
+    )
+    cp3 = (prepared.directory / "instructions/CP-3.md").read_text()
+    cp6 = (prepared.directory / "instructions/CP-6.md").read_text()
+    assert "The user selected the execution mode Single-Name RV" in cp3
+    assert "Deep Debate Mode is ON" in cp6
+    assert "Deep Debate Mode is ON" not in cp3
+
+
+def test_without_options_the_instructions_carry_neither_block(tmp_path):
+    prepared = prepare(
+        context_with_options(tmp_path),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="20",
+    )
+    for path in (prepared.directory / "instructions").glob("*.md"):
+        text = path.read_text()
+        assert "The user selected the execution mode" not in text, path.name
+        assert "Deep Debate Mode is ON" not in text, path.name
+
+
+def test_options_only_change_the_instruction_they_name(tmp_path):
+    texts = {}
+    for name, options in (("plain", {}), ("chosen", {"cp3_mode": "clo_screening"})):
+        base = tmp_path / name
+        base.mkdir()
+        prepared = prepare(
+            context_with_options(base, **options),
+            issuer_folder(base),
+            base / "out",
+            config="sol-medium",
+            cap="20",
+        )
+        texts[name] = {
+            p.name: p.read_text() for p in (prepared.directory / "instructions").glob("*.md")
+        }
+    assert texts["plain"].keys() == texts["chosen"].keys()
+    changed = {n for n in texts["plain"] if texts["plain"][n] != texts["chosen"][n]}
+    assert changed == {"CP-3.md"}
+
+
+# --- the offline document reading on its own --------------------------------------------------
+
+
+def test_read_documents_gives_what_prepare_gives(tmp_path):
+    folder = issuer_folder(tmp_path)
+    reading = cpos_launch.read_documents(folder)
+    prepared = prepare(
+        context_file(tmp_path), folder, tmp_path / "out", config="sol-medium", cap="20"
+    )
+    assert reading.documents == prepared.documents and reading.documents
+    assert reading.ignored == prepared.ignored
+
+
+def test_read_documents_lists_a_skipped_file_and_refuses_an_empty_one(tmp_path):
+    folder = tmp_path / "mixed"
+    folder.mkdir()
+    (folder / "a.txt").write_text("Net sales were 100.")
+    (folder / "deck.pptx").write_bytes(b"PK")
+    (folder / "_notes.txt").write_text("private")
+    reading = cpos_launch.read_documents(folder)
+    assert reading.ignored == ("_notes.txt", "deck.pptx")
+    assert [d["source"] for d in reading.documents] == ["a.txt"]
+    assert sorted(p.name for p in folder.iterdir()) == ["_notes.txt", "a.txt", "deck.pptx"]
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "blank.txt").write_text("")
+    with pytest.raises(LaunchRefused, match="blank.txt"):
+        cpos_launch.read_documents(empty)
+
+
+@pytest.mark.parametrize(
+    ("mode", "label"),
+    [
+        ("clo_screening", "CLO Screening"),
+        ("single_name_rv", "Single-Name RV"),
+        ("capital_structure_rv", "Capital-Structure RV"),
+        ("watchlist_monitoring", "Watchlist Monitoring"),
+    ],
+)
+def test_each_cp3_mode_names_its_label(tmp_path, mode, label):
+    prepared = prepare(
+        context_with_options(tmp_path, cp3_mode=mode),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="20",
+    )
+    cp3 = (prepared.directory / "instructions/CP-3.md").read_text()
+    assert f"The user selected the execution mode {label} (source" in cp3
+
+
+def test_cp3_labels_cover_exactly_the_modes_the_context_allows():
+    assert set(cpos_launch.CP3_MODE_LABELS) == set(typing.get_args(Cp3Mode)) - {""}

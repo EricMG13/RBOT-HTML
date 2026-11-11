@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from deploy_workflow.inbox.drops import Layout, ensure_layout
+from deploy_workflow.inbox.layout import Layout, ensure_layout
 from deploy_workflow.inbox.filing import file_report, issuer_folder, safe_name
 
 

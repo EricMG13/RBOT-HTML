@@ -16,17 +16,23 @@ from deploy_vii.contracts import PATHWAY_MODULES
 from deploy_vii.registry import plan
 from deploy_workflow.context import (
     ASSUMPTION_LIMITS,
+    Cp3Mode,
     IssueClassification,
     Limit,
     RatingScope,
     RunContext,
     load_context,
 )
-from deploy_workflow.inbox.drops import MAX_ISSUER_ID
+from deploy_workflow.inbox.layout import MAX_ISSUER_ID
 from deploy_workflow.inbox.runs import Status
 from deploy_workflow.owners import cp2h, valuation_basis
 from deploy_workflow.owners.cpos_launch import SOURCE_SUFFIXES, pathway_modules
-from deploy_workflow.run_expectations import edges_for
+from deploy_workflow.run_expectations import (
+    AGREEMENTS,
+    FINANCIAL_KINDS,
+    KINDS,
+    edges_for,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FORM = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
@@ -166,3 +172,49 @@ def test_the_design_tokens_are_the_librarys() -> None:
     shared = sorted(form.keys() & library.keys())
     assert len(shared) >= len(form) - 3  # Only --ring-error, --red-bg and --red-border are its own.
     assert {k: form[k] for k in shared} == {k: library[k] for k in shared}
+
+
+def test_the_stages_are_the_start_pages() -> None:
+    assert re.findall(r"'([^']*)'", constant("STAGES")) == [
+        "pathway",
+        "documents",
+        "issuer",
+        "legal",
+        "market",
+        "valuation",
+        "assumptions",
+        "review",
+    ]
+
+
+def test_the_cp3_modes_are_the_contexts() -> None:
+    block = re.search(r"\bcp3_mode: \[(.*?)\n  \],", FORM, re.DOTALL)
+    assert block is not None
+    offered = re.findall(r"\{v:'(\w*)'", block[1])
+    assert offered == [
+        "",
+        *[mode for mode in get_args(Cp3Mode) if mode],
+    ]  # "" is "let the module decide"
+
+
+def test_the_launchers_reading_is_the_run_expectations() -> None:
+    assert re.findall(r"'([^']*)'", constant("AGREEMENTS")) == list(AGREEMENTS)
+    assert re.findall(r"'([^']*)'", constant("FINANCIAL_KINDS")) == list(FINANCIAL_KINDS)
+    labelled = re.findall(r"(\w+):'", constant("KIND_LABEL"))
+    assert labelled == list(KINDS)  # Every kind the reading can name has a label, in its order.
+
+
+def test_the_page_may_call_its_own_service_and_nothing_wider() -> None:
+    meta = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]*)"', FORM)
+    assert meta is not None
+    policy = dict(part.strip().split(" ", 1) for part in meta[1].split(";") if part.strip())
+    assert policy["connect-src"] == "'self'"
+    assert policy["default-src"] == "'none'" and policy["form-action"] == "'none'"
+    assert "http" not in meta[1]  # No external origin.
+    assert not re.search(r"<(?:script|link)[^>]+(?:src|href)=[\"']https?:", FORM)
+
+
+def test_the_rail_links_to_the_library_the_service_serves() -> None:
+    assert 'href="/library/#W-Library/cases"' in FORM
+    assert 'href="/library/#CP-OS/activity"' in FORM
+    assert "data-pathway" not in FORM and "dataset.pathway" not in FORM  # No fixed-pathway copy.

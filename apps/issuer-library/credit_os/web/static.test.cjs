@@ -15,6 +15,19 @@ test('index.html carries no run-control destinations', () => {
   assert.ok(html.includes('href="#CP-OS/activity"'), 'the rail links to Run activity');
 });
 
+test('the rail opens the run start page first, hidden until the library is served', () => {
+  const html = read('index.html');
+  const entry = html.match(/<a [^>]*data-place="Start a run"[^>]*>.*?<\/a>/);
+  assert.ok(entry, 'the rail has a Start a run entry');
+  assert.ok(/\shref="\/"/.test(entry[0]), 'it goes to the service root');
+  assert.ok(/\shidden[\s>]/.test(entry[0]), 'it is hidden when the page is opened from disk');
+  assert.ok(entry[0].includes('<span class="rail-label">Start a run</span>'));
+  assert.ok(html.indexOf('data-place="Start a run"') < html.indexOf('data-place="Issuer library"'), 'it comes first');
+  const views = read('views.js');
+  assert.ok(/rail\('Start a run'\)\.hidden\s*=\s*!servedOverHttp\(\)/.test(views), 'views.js shows it only when served');
+  assert.ok(views.includes(".rail a[data-place]:not([data-place=\"Start a run\"])"), 'the active-place code leaves it alone');
+});
+
 test('the shell has no run controls: no form, no start/resume/stop button, no run strip', () => {
   for (const name of ['index.html', 'static-boot.js', 'views.js', 'screen.js', 'shared.js']) {
     const text = read(name);
@@ -970,6 +983,13 @@ test('live run activity shows spend, chips and escapes names', () => {
   assert.ok(html.includes('USD 3.10 of 20') && html.includes('spend could not be read'));
   assert.ok(html.includes('chip-done') && html.includes('chip-running') && html.includes('chip-waiting'));
   assert.ok(html.includes('href="../../issuers/Initech%20(ini)/2026-11-09%20credit_snapshot.html"'));
+});
+test('live run activity names who submitted a run, as text', () => {
+  const html = liveActivityView({cap:'20', held:'', runs:[
+    {id:'a', status:'queued', pathway:'credit_snapshot', folder:'x', submitted_by:'Dana <b>Reyes</b>'},
+    {id:'b', status:'queued', pathway:'credit_snapshot', folder:'y'}]});
+  assert.ok(html.includes('<span class="run-by">submitted by Dana &lt;b&gt;Reyes&lt;/b&gt;</span>'));
+  assert.strictEqual(countOf(html, /run-by/g), 1);
 });
 test('no live activity adds nothing', () => { assert.strictEqual(liveActivityView(undefined), ''); });
 
