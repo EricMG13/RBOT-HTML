@@ -3348,8 +3348,12 @@ def instruction_rows(
             and not (path.startswith("/") or ".." in parts or "\\" in path or ":" in path)
         )
         usable = safe and digest is not None and SHA_TEXT.fullmatch(digest) is not None
-        if not usable:
+        named = isinstance(module, str) and HANDOFF_NAME.fullmatch(module) is not None
+        if not named:
+            issues.append(f"{folder}: instructions key {module!r} is not a module code; no link")
+        elif not usable:
             issues.append(f"{folder}: instructions for {module} have no usable path or hash")
+        usable = usable and named
         rows.append(
             {
                 "module": module,

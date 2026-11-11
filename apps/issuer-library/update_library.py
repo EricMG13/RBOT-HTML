@@ -145,7 +145,10 @@ def checked_bytes(path: Path, digest: str, label: str) -> bytes:
     return raw
 
 
-def write_download(path: Path, raw: bytes) -> None:
+def write_download(root: Path, path: Path, raw: bytes) -> None:
+    """Write a download, refused when its target does not resolve inside the library folder."""
+    if root.resolve() not in path.resolve().parents:
+        raise Refused(f"Not written: {path} is outside the library folder {root}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(raw)
 
@@ -159,6 +162,8 @@ def handoff_zip(folder: Path, workspace: Path, run: dict[str, Any], store: dict[
     run_dir = workspace / "runs" / run["folder"]
     if run["evidence"]["zip"]:
         target = folder / unquote(run["evidence"]["zip"])
+        if folder.resolve() not in target.resolve().parents:
+            raise Refused(f"Not written: {target} is outside the library folder {folder}")
         target.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
             for handoff in run["evidence"]["handoffs"]:
@@ -168,7 +173,7 @@ def handoff_zip(folder: Path, workspace: Path, run: dict[str, Any], store: dict[
                     output["sha256"],
                     f"{run['folder']}/{output['source']}",
                 )
-                write_download(folder / unquote(handoff["href"]), raw)
+                write_download(folder, folder / unquote(handoff["href"]), raw)
                 # A fixed date makes the same handoffs give the same zip.
                 archive.writestr(zipfile.ZipInfo(handoff["name"], (1980, 1, 1, 0, 0, 0)), raw)
     recorded = json.loads(b"".join(regular_chunks(run_dir / "workflow.json", follow=False)))
@@ -176,7 +181,7 @@ def handoff_zip(folder: Path, workspace: Path, run: dict[str, Any], store: dict[
         if row["href"]:
             path = recorded["instructions"][row["module"]]["path"]
             raw = checked_bytes(run_dir / path, row["sha256"], f"{run['folder']}/{path}")
-            write_download(folder / unquote(row["href"]), raw)
+            write_download(folder, folder / unquote(row["href"]), raw)
 
 
 def handoff_zips(folder: Path, workspace: Path, store: dict[str, Any]) -> None:

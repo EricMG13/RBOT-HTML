@@ -1258,3 +1258,17 @@ def test_downloads_are_the_calculation_and_model_files_of_the_models_the_run_lis
         {"label": "m-src: calculation.json", "href": "/files/m-src/calc"},
         {"label": "m-src: forecast_exact.json", "href": "/files/m-src/exact"},
     ]
+
+
+def test_an_instruction_key_that_is_not_a_module_code_gets_no_link(tmp_path):
+    run_dir = make_run(tmp_path, "run-a")
+    path = run_dir / "workflow.json"
+    workflow = json.loads(path.read_text())
+    workflow["instructions"]["../../escaped"] = dict(workflow["instructions"]["CP-0"])
+    path.write_text(json.dumps(workflow))
+    row = {"id": "run-a", "name": "run-a", "sector": "", "period": "", "artifacts": []}
+    result = store.workspace_store(tmp_path, {"real": [row], "issues": []})
+    rows = {r["module"]: r for r in result["runs"]["run-a"]["evidence"]["record"]["instructions"]}
+    assert rows["../../escaped"]["href"] is None
+    assert rows["CP-0"]["href"] == "downloads/run-a/instructions/CP-0.md"
+    assert any("'../../escaped'" in i and "no link" in i for i in result["issues"])

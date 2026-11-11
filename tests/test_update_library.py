@@ -369,3 +369,13 @@ def test_an_instruction_file_that_changed_during_the_build_is_refused(tmp_path, 
     (run_dir / "instructions/CP-0.md").write_text("changed\n")
     with pytest.raises(Refused, match="instructions/CP-0.md changed during the build"):
         update_library.update_library(tmp_path)
+
+
+def test_a_download_outside_the_library_folder_is_refused(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    with pytest.raises(Refused, match="outside the library folder"):
+        update_library.write_download(library, library / "../escaped.md", b"x")
+    assert not (tmp_path / "escaped.md").exists()
+    update_library.write_download(library, library / "downloads/ok.md", b"x")
+    assert (library / "downloads/ok.md").read_bytes() == b"x"
