@@ -43,9 +43,7 @@ const moduleNames = {...Object.fromEntries(groups.flatMap(g=>g[1])),[MODEL_ENTRY
 delete modules.undefined; // A pin this workspace does not hold.
 const isAnalytical = id => !id.startsWith('W-')&&id!=='CP-OS';
 const $ = id => document.getElementById(id);
-const esc = value => String(value ?? '').replace(/[&<>"'\r]/g, c => ({'\r':'&#13;','&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const plain = value => String(value).replace(/\*\*|`/g,'');
-const rich = value => esc(value).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+const esc = escapeHtml, plain = plainText, rich = richText; // reader.js: the page and the node tests draw prose and tables with the same code
 const icon = name => `<img src="icons/${name}.svg" alt="">`;
 const matchesHeading = (heading,prefix) => prefix.startsWith('=') ? heading===prefix.slice(1) : heading.startsWith(prefix) && (!/^T\d+\.\d+$/.test(prefix) || !/\d/.test(heading.charAt(prefix.length)));
 const evidence = new Map();
@@ -97,7 +95,7 @@ for (const [id, output] of Object.entries(data)) {
       const basis=priorText||output.basis?.text;
       evidence.set(`${id}:${row.line}`, {...located,line:row.line,title:plain(row.cells[0]), fields:block.headers.map((label,i)=>[label,row.cells[i]]),section:section.heading,basis});
     }
-    else evidence.set(`${id}:${block.line}`, {...located,line:block.line,title:section.heading,fields:[['Retained finding',block.text]],section:section.heading});
+    else evidence.set(`${id}:${block.line}`, {...located,line:block.line,title:section.heading,fields:[['Retained finding',block.text]],section:section.heading,text:block.text});
   }
   // Unknown nonempty sections remain visible rather than being silently omitted.
   const known = modules[id].sections.flatMap(s=>s[2]);
@@ -305,7 +303,8 @@ function parseRoute() {
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
   // A chip index names one of the key's chips, and `gaps` its citations without a page; one that is not there opens the row alone.
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
-  const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':null;
+  // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
+  const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
   return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
@@ -332,16 +331,59 @@ function chipSection(chip,output) {
   const open=chip.file&&!absent?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
   return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${chip.file&&chip.source?`<p class="small chip-key">Cited as ${esc(chip.source)}</p>`:''}${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }
+// The pages of a source item as words: "page 41", "pages 43–45", or nothing.
+const itemPages=item=>item.pageEnd!==undefined?`pages ${item.page}–${item.pageEnd}`:item.page!==undefined?`page ${item.page}`:'';
+// One Basis item of a new-format paragraph in words, resolved where the data allows (H3). `used` collects the chips an item took.
+function basisItemHtml(raw,output,chips,used) {
+  const item=basisItem(raw);
+  if(item.kind==='source') {
+    const matched=chips.filter(c=>c.kind==='issuer_page'&&c.file===item.file&&(item.page===undefined||c.page===item.page));
+    matched.forEach(c=>used.add(c));
+    return `<li><strong>${esc(item.file)}</strong>${itemPages(item)?`, ${esc(itemPages(item))}`:''}${matched.map(c=>chipSection(c,output)).join('')}</li>`;
+  }
+  if(item.kind==='calculation') {
+    const row=calculationRow(output.sections,item.id);
+    return row?`<li>Calculation ${esc(item.id)}<dl class="calculation-row">${row.headers.map((header,i)=>`<div><dt>${esc(header)}</dt><dd>${rich(row.cells[i]??'')}</dd></div>`).join('')}</dl></li>`
+      :`<li>${esc(raw)}<span class="small"> (no row with this ID in the handoff's Calculations table)</span></li>`;
+  }
+  if(item.kind==='module') {
+    const run=output.run,id=defaultOutput(item.code,run);
+    return id?`<li><a class="text-action" href="${moduleHref(item.code)}">${esc(raw)}${icon('arrow-right')}</a></li>`:`<li>${esc(raw)}<span class="small"> · Not run in this run</span></li>`;
+  }
+  return `<li>${esc(raw)}</li>`;
+}
+// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
+// in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
+function paragraphBasisHtml(key,item,output,mode,chips) {
+  const earlier=!isNewFormat(output.sections),used=new Set();
+  let figure='',items='';
+  if(item.text!==undefined) {
+    const {body,items:raw}=paragraphBody(item.text,earlier);
+    const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
+    figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
+    // New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
+    items=raw.length?`<div class="${earlier?'':'basis'}"><h3>Basis</h3><ul class="basis-items">${earlier?raw.map(r=>`<li>${esc(r)}</li>`).join(''):raw.map(r=>basisItemHtml(r,output,chips,used)).join('')}</ul></div>`:'';
+  }
+  const rest=chips.filter(c=>!used.has(c));
+  return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
+}
 function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
-  const chipHtml=chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
+  const paragraph=typeof chipIndex==='string'&&chipIndex!=='gaps';
+  const chipHtml=paragraph?paragraphBasisHtml(key,item,output,chipIndex,keyChips):chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
+  // A paragraph shows its wording without its Basis line or citations; they are listed below it.
+  const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
   $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${item.fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
   document.querySelectorAll('.chip').forEach(el=>{
     const pressed=el.dataset.chip===key?Number(el.dataset.index)===chipIndex:el.dataset.evidence===key&&chipIndex===null;
     if(pressed)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
+  });
+  document.querySelectorAll('[data-paragraph]').forEach(el=>{
+    const mode=el.dataset.figure===undefined?'p':`f${el.dataset.figure}`;
+    if(el.dataset.paragraph===key&&mode===chipIndex)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
   });
   if(returnTrigger) {
     if(window.innerWidth<=1050) $('inspector').scrollIntoView({block:'start'});
@@ -424,7 +466,7 @@ function libraryClick(target) {
 function openAuditSection(button) {
   const body=$(button.getAttribute('aria-controls')),open=body.hidden;
   if(open&&!body.dataset.drawn) {
-    try {body.innerHTML=sectionView(current.output,button.dataset.audit);nameCodes(body);body.dataset.drawn='1';}
+    try {body.innerHTML=sectionView(current.output,button.dataset.audit);if(!keepsCodes(current))nameCodes(body);body.dataset.drawn='1';}
     catch(error) {
       // Documented fail-open, as in moduleBody: logged, and the item says it could not be drawn; the saved file is unchanged.
       console.error(error);
@@ -449,6 +491,8 @@ function contextPrefix({module,context}) {
   const ctx=contexts[context];
   return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
 }
+// New-format handoff text is shown as written (decision 7: codes stay); an earlier-format page keeps names, not codes (the owner's standing rule).
+const keepsCodes=route=>route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections);
 const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 // The reading position of a page: a module report is one page whatever part is scrolled to.
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
@@ -504,8 +548,7 @@ function renderRoute() {
       };
       disclosure.addEventListener('toggle',openModel);
     }
-    nameCodes($('module-head'));
-    nameCodes($('content'));
+    if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
     showNavigator(false);
@@ -530,7 +573,8 @@ function renderRoute() {
   }
   if(next.evidence) {
     // A route to a row inside a folded part (a link, a reload) opens the part holding its trigger; Esc then returns to that trigger.
-    const trigger=reportPage(next)?($(next.section)||$('content')).querySelector(`.chip[data-evidence="${CSS.escape(next.evidence)}"]`)||$('content').querySelector(`.chip[data-evidence="${CSS.escape(next.evidence)}"]`):null;
+    const opener=`.chip[data-evidence="${CSS.escape(next.evidence)}"],[data-paragraph="${CSS.escape(next.evidence)}"]`;
+    const trigger=reportPage(next)||next.module==='W-Overview'?($(next.section)||$('content')).querySelector(opener)||$('content').querySelector(opener):null;
     if(trigger) {
       openFolds(trigger);
       if(!returnTrigger?.isConnected){returnTrigger=trigger;returnContentScroll=$('content').scrollTop;}
@@ -540,7 +584,7 @@ function renderRoute() {
   else {
     $('inspector').hidden=true; $('workbench').classList.remove('has-evidence');
     document.querySelectorAll('.source-selected').forEach(el=>el.classList.remove('source-selected'));
-    document.querySelectorAll('.chip[aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
+    document.querySelectorAll('.chip[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
     if(previous?.evidence&&!changed) {
       $('content').scrollTop=returnContentScroll;
       if(window.innerWidth<=1050) window.scrollTo(0,returnScroll);
@@ -570,6 +614,8 @@ document.addEventListener('click',event=>{
   if(event.target.closest('.skip')){event.preventDefault();if(current.evidence){returnTrigger=$('canvas');go(current.module,current.section);}else $('canvas').focus();return;}
   const chip=event.target.closest('[data-chip]');
   if(chip){event.preventDefault();returnTrigger=chip;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,chip.dataset.chip,undefined,Number(chip.dataset.index));return;}
+  const paragraph=event.target.closest('[data-paragraph]');
+  if(paragraph){event.preventDefault();returnTrigger=paragraph;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,paragraph.dataset.paragraph,undefined,paragraph.dataset.figure===undefined?'p':`f${paragraph.dataset.figure}`);return;}
   const gaps=event.target.closest('[data-gaps]');
   if(gaps){event.preventDefault();returnTrigger=gaps;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,gaps.dataset.gaps,undefined,'gaps');return;}
   const audit=event.target.closest('.audit-open');
@@ -673,7 +719,7 @@ window.onRunActivity=()=>{
   lastActivity=seen;
   const kept=recordActivityView(content,document.activeElement);
   content.innerHTML=moduleBody(current);
-  nameCodes(content);
+  if(!keepsCodes(current))nameCodes(content);
   restoreActivityView(content,kept);
   content.scrollTop=top;
 };

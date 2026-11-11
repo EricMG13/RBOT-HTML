@@ -170,6 +170,116 @@ function earlierBasis(text) {
   return {body: body + text.slice(at), items};
 }
 
+// ---- Prose and tables of a handoff, as HTML strings (decisions 7 and 14, H3, H4, H7). Pure: the page and the node tests draw with the same code.
+const escapeHtml = value => String(value ?? '').replace(/[&<>"'\r]/g, c => ({'\r': '&#13;', '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const plainText = value => String(value).replace(/\*\*|`/g, '');
+const richText = value => escapeHtml(value).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+
+// A number as a chart or a table column reads it: thousands commas, a bracketed negative, an optional % or x.
+function chartNumber(value) {
+  const clean = plainText(value).trim().replace(/,/g, '');
+  if (!/^(?:[-+]?\d+(?:\.\d+)?|\(\d+(?:\.\d+)?\))(?:%|x)?$/.test(clean)) return null;
+  const number = Number(clean.replace(/[()%x]/g, '')) * (clean.startsWith('(') ? -1 : 1);
+  return Number.isFinite(number) ? number : null;
+}
+const MISSING_CELL = /^(|[—–-]|Not supplied)$/i;
+// A cell that says there is no value; it neither makes a column numeric nor stops it being numeric.
+const NO_VALUE = /^(|[—–-]|n\.?a\.?|Not supplied\b[\s\S]*)$/i;
+// A column is numeric when every cell that has a value parses as a number, and at least one does.
+function numericColumn(block, c) {
+  const cells = block.rows.map(r => plainText(r.cells[c] ?? '').trim()).filter(text => !NO_VALUE.test(text));
+  return c > 0 && cells.length > 0 && cells.every(text => chartNumber(text) !== null);
+}
+// `after` is markup placed inside the cell, after its text.
+function cellView(cell, numeric, after = '') {
+  const text = plainText(cell ?? '').trim();
+  if (MISSING_CELL.test(text)) return `<td${numeric ? ' class="num"' : ''}><span class="na" title="${escapeHtml(text || 'Empty in the handoff')}">n.a.</span>${after}</td>`;
+  // A number in a column that also holds text keeps the figure face where it stands; only a wholly numeric column aligns right.
+  return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${richText(text)}${after}</td>`;
+}
+
+// The quiet "Basis" control. `items` are the raw references it carries (a Basis line's items, or an earlier paragraph's bracket citations).
+function basisButton(key, items, label) {
+  return `<button type="button" class="basis-link" data-paragraph="${escapeHtml(key)}" data-basis="${escapeHtml(JSON.stringify(items))}" aria-label="${escapeHtml(label)}">Basis</button>`;
+}
+
+// A paragraph's text as read: `item` when it is a "- " list item, the body on one line, and the raw references taken out of it
+// (new format: the Basis line's items; earlier format: the trailing bracket citations, H7).
+function paragraphBody(text, earlier = false) {
+  const split = earlier ? earlierBasis(text) : splitBasis(text);
+  const item = !earlier && split.body.startsWith('- ');
+  return {item, body: (item ? split.body.slice(2) : split.body).replace(/\n/g, ' '), items: split.items};
+}
+
+// One prose paragraph's inline HTML. New format (decision 7): the Basis line is never printed; each figure of a paragraph that has Basis items or
+// chips is a button wrapping the figure's exact text; a paragraph with no figure gets one quiet Basis button at its end. Earlier format
+// (decision 14, H7): the wording stays, its trailing citations sit behind one Basis button, which every earlier paragraph has (its chips and handoff row open from it).
+// `chips` is how many chips the build holds for the paragraph's key.
+function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
+  const {item, body, items} = paragraphBody(text, earlier);
+  const referenced = earlier || items.length > 0 || chips > 0;
+  const figures = !earlier && referenced ? figureSpans(body) : [];
+  let marked = '', at = 0;
+  figures.forEach((figure, i) => { marked += `${body.slice(at, figure.start)}${i}`; at = figure.end; });
+  marked += body.slice(at);
+  const attributes = `data-paragraph="${escapeHtml(key)}" data-basis="${escapeHtml(JSON.stringify(items))}"`;
+  let html = richText(marked).replace(/(\d+)/g, (_, i) => `<button type="button" class="figure" ${attributes} data-figure="${i}">${escapeHtml(figures[Number(i)].text)}</button>`);
+  if (referenced && !figures.length) html += ` ${basisButton(key, items, `Basis for paragraph: ${plainText(body).split(/\s+/).slice(0, 8).join(' ')}`)}`;
+  return {item, html};
+}
+
+// A table of a new-format handoff exactly as written: its own columns and cells, none of the app's. A row the build holds chips for carries a
+// quiet Basis button in its first cell, so the chips stay reachable. `ctx` is {id, chips(key)}; `caption` is the table's accessible name.
+function tableView(caption, block, ctx) {
+  const numeric = block.headers.map((_, c) => numericColumn(block, c));
+  const head = block.headers.map((header, c) => `<th scope="col"${numeric[c] ? ' class="num"' : ''}>${escapeHtml(header)}</th>`).join('');
+  const rows = block.rows.map(row => {
+    const key = `${ctx.id}:${row.line}`;
+    const control = ctx.chips(key) ? ` ${basisButton(key, [], `Basis for row: ${plainText(row.cells[0] ?? '')}`)}` : '';
+    return `<tr>${row.cells.map((cell, c) => cellView(cell, numeric[c], c === 0 ? control : '')).join('')}</tr>`;
+  }).join('');
+  return `<div class="table-card"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// A new-format section's content: prose paragraphs (list items grouped in one list) and, when `ctx.tables`, its tables.
+// ctx: {id (the output), tables, chips(key) -> count, caption(heading) -> text}.
+function sectionBodyHtml(section, ctx) {
+  let html = '', open = false;
+  const close = () => { if (open) html += '</ul>'; open = false; };
+  for (const block of section.blocks) {
+    if (block.type === 'table') {
+      if (!ctx.tables) continue;
+      close();
+      html += tableView(ctx.caption(section.heading), block, ctx);
+      continue;
+    }
+    const key = `${ctx.id}:${block.line}`;
+    const {item, html: inner} = paragraphView(block.text, key, {chips: ctx.chips(key)});
+    if (item && !open) html += '<ul class="passage-list">';
+    if (!item) close();
+    open = item;
+    html += item ? `<li>${inner}</li>` : `<p class="passage-text">${inner}</p>`;
+  }
+  close();
+  return html;
+}
+
+// `calculation <id>` (H3): the row of the handoff's `## Calculations` tables (the H2 and its H3 children) whose ID column (header `ID`
+// or ending ` ID`, any case) equals the id; its headers and every cell as written. Null when there is none.
+function calculationRow(sections, id) {
+  const list = sections || [];
+  const start = list.findIndex(s => s.level === 2 && s.heading === 'Calculations');
+  if (start < 0) return null;
+  for (let i = start; i < list.length && (i === start || list[i].level > 2); i++) {
+    for (const block of list[i].blocks.filter(b => b.type === 'table')) {
+      const column = block.headers.findIndex(header => /^id$|\sid$/i.test(header.trim()));
+      const row = column < 0 ? undefined : block.rows.find(r => (r.cells[column] ?? '').trim() === id);
+      if (row) return {headers: block.headers, cells: row.cells, line: row.line};
+    }
+  }
+  return null;
+}
+
 // ---- Report history (decision 4): as-of date descending, then first start time descending (no time sorts after a time), then folder.
 function historyRows(runs) {
   const started = run => (run.record && run.record.steps && run.record.steps[0] && run.record.steps[0].started) || null;
@@ -208,4 +318,4 @@ function nearestDates(items, asOf, n = 5) {
     .slice(0, n).map(entry => entry.item);
 }
 
-if (typeof module !== 'undefined') module.exports = {readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};
+if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};

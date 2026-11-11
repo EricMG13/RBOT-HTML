@@ -169,12 +169,6 @@ function fixtureTable(module,line) {
   if(!table)throw new Error(`Missing visual table ${module}:${line}`);
   return table;
 }
-function chartNumber(value) {
-  const clean=plain(value).trim().replace(/,/g,'');
-  if(!/^(?:[-+]?\d+(?:\.\d+)?|\(\d+(?:\.\d+)?\))(?:%|x)?$/.test(clean))return null;
-  const number=Number(clean.replace(/[()%x]/g,''))*(clean.startsWith('(')?-1:1);
-  return Number.isFinite(number)?number:null;
-}
 function chartIntro(id,v) {
   const label=[v.unit,data[id].period].filter(Boolean).join(' · ');
   return `<div class="section-heading"><h2>${esc(v.title)}</h2>${label?`<span>${esc(label)}</span>`:''}</div>${v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>${sourceFooter(`${id}:${v.quote.line}`)}`:''}`;
@@ -426,14 +420,6 @@ function chipView(chip,rowModule) {
   }
   return {label:chip.label||'no page',av:'?',avClass:'gap',dot:'gap',cls:'gap'};
 }
-// Earlier-format prose carries no printed chips: they sit behind a quiet per-paragraph Basis control (a disclosure after the paragraph, a <p> cannot hold one, holding the same chips, which still open the inspector).
-// A disclosure with no chips draws nothing. Tables and charts keep their visible Source columns.
-// `rowChip` false (a new-format page) draws it only for a paragraph that has a citation of its own, not for the bare handoff-row chip every paragraph has.
-function basisControl(key,rowChip=true) {
-  if(!rowChip&&!(window.CREDIT_OS_DATA?.chips?.[key]||[]).length)return '';
-  const chips=chipsMarkup(key);
-  return chips?`<details class="basis-fold"><summary>Basis</summary>${chips}</details>`:'';
-}
 const chipSet=chips=>chips.length?`<span class="chips">${chips.join('')}</span>`:'';
 // A gap chip that is not a plain "Not supplied" is a citation with no page: it is counted, not drawn.
 const unresolvedGap=chip=>chip.kind==='gap'&&chip.label!=='Not supplied';
@@ -450,20 +436,6 @@ function chipsMarkup(key,counted=true) {
     return `<button type="button" class="chip ${view.cls}" data-chip="${esc(key)}" data-index="${index}" ${title?`title="${esc(namedText(title,item?.output))}"`:''}>${view.av?`<span class="av ${view.avClass}">${esc(view.av)}</span>`:''}${esc(view.label)}<span class="dot ${view.dot}"></span></button>`;
   }),count].filter(Boolean));
 }
-const MISSING_CELL=/^(|[—–-]|Not supplied)$/i;
-// A cell that says there is no value; it neither makes a column numeric nor stops it being numeric.
-const NO_VALUE=/^(|[—–-]|n\.?a\.?|Not supplied\b[\s\S]*)$/i;
-// A column is numeric when every cell that has a value parses as a number, and at least one does.
-function numericColumn(block,c) {
-  const cells=block.rows.map(r=>plain(r.cells[c]??'').trim()).filter(text=>!NO_VALUE.test(text));
-  return c>0&&cells.length>0&&cells.every(text=>chartNumber(text)!==null);
-}
-const cellView=(cell,numeric)=>{
-  const text=plain(cell??'').trim();
-  if(MISSING_CELL.test(text))return `<td${numeric?' class="num"':''}><span class="na" title="${esc(text||'Empty in the handoff')}">n.a.</span></td>`;
-  // A number in a column that also holds text keeps the figure face where it stands; only a wholly numeric column aligns right.
-  return `<td${numeric?' class="num"':chartNumber(text)!==null?' class="fig"':''}>${rich(text)}</td>`;
-};
 const isFindingsTable=b=>b.type==='table'&&b.headers[0]==='Finding'&&b.headers[1]==='Creditor impact';
 // The first table of the reference sections with two or more numeric columns, capped at 8 rows and 6 columns (5 handoff columns and the Source column).
 function keyNumbersChoice(id) {
@@ -526,20 +498,20 @@ function reportNumbers(id) {
 // Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
 const findingRows=id=>data[id].summary?.findings??[];
 function findingArticle(id,row) {
-  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${basisControl(`${id}:${row.line}`)}</aside></article>`;
+  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</aside></article>`;
 }
 function reportFindings(id) {
   const articles=findingRows(id).map(row=>findingArticle(id,row));
   return articles.length?`<section class="part" id="findings"><h3>Findings</h3>${articles.join('')}</section>`:'';
 }
 // Sections drawn whole, in the order given. Heading tags are relative to the shallowest section (R33a), one step per level, capped at h6; the part heading stays the only h3.
-function readingSections(id,sections,base=4,rowChip=true) {
+function readingSections(id,sections,base=4) {
   const top=Math.min(...sections.map(section=>section.level));
   return sections.map(section=>{
     const tag='h'+Math.min(6,base+(section.level-top||0));
     return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,tag)}${section.blocks.map(block=>{
       if(block.type==='table')return `${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
-      return `<p class="analysis-text">${rich(block.text.replace(/\n/g,' '))}</p>${basisControl(`${id}:${block.line}`,rowChip)}`;
+      return `<p class="analysis-text">${paragraphView(block.text,`${id}:${block.line}`,{earlier:true}).html}</p>`;
     }).join('')}</div>`;
   }).join('');
 }
@@ -560,8 +532,8 @@ function reportCalculations(id) {
   return sections.length?fold('calculations',`Calculations · ${data[id].words.calculations} words`,readingSections(id,sections)):'';
 }
 function reportLimits(id) {
-  const line=(key,html)=>`<p>${html}</p>${basisControl(key)}`;
-  const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(row=>line(`${id}:${row.line}`,`<strong>${rich(row.cells[0])}</strong> ${row.cells.slice(1).map(rich).join(' · ')}`)):[line(`${id}:${block.line}`,rich(block.text.replace(/\n/g,' ')))]).join('')}</div>`);
+  const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
+  const cards=drawn(id,'limits').map(section=>`<div id="s-${section.line}">${headingView(section.heading,'h4')}${section.blocks.flatMap(block=>block.type==='table'?block.rows.map(r=>row(`${id}:${r.line}`,r.cells[0],`<strong>${rich(r.cells[0])}</strong> ${r.cells.slice(1).map(rich).join(' · ')}`)):[`<p>${paragraphView(block.text,`${id}:${block.line}`,{earlier:true}).html}</p>`]).join('')}</div>`);
   return cards.length?`<section class="part" id="limits"><h3>Limits &amp; monitoring</h3><div class="limits">${cards.join('')}</div></section>`:'';
 }
 // The sections no part draws, as a line-numbered list; a section's content is drawn when it is opened (screen.js). An entry is listed when a section it holds
@@ -597,15 +569,25 @@ function reportTimeline(id) {
   const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
   return html?`<section class="part" id="timeline">${html}</section>`:'';
 }
+// The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
+const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
+// What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
+const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,caption:heading=>plain(heading).replace(METHOD_CODE,'')});
+const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
 function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections);
   const parts=[['head','Module',reportHead(id)]];
-  for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key])parts.push([anchor,passages[key].heading,`<section class="part" id="${anchor}"><h3>${rich(passages[key].heading)}</h3>${passageHtml(passages[key],id)}</section>`]);
+  const findings=out.sections.find(section=>section.level===2&&section.heading==='Findings');
+  let heading=findings&&!findings.blocks.length?`<h3>${rich(findings.heading)}</h3>`:'';
+  for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key]) {
+    parts.push([anchor,passages[key].heading,`<section class="part" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]))}${passageHtml(passages[key],id)}</section>`]);
+    heading='';
+  }
   const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
   if(charts)parts.push(['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]);
   if(timeline)parts.push(['timeline','Timeline',timeline]);
   if(maps)parts.push(['maps','Maps',maps]);
-  for(const section of newFormatRest(id))parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${readingSections(id,[section],3,false)}</section>`]);
+  for(const section of newFormatRest(id))parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
   return parts;
 }
 const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
@@ -659,7 +641,7 @@ function routeHref(module,section,key=null,context=current?.context,file=lastFil
 }
 function outlineMarkup(id) {
   const module=data[id].module||id;
-  return `<nav class="section-outline" aria-label="On this page"><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
+  return `<nav class="section-outline" aria-label="On this page"><p class="outline-heading" aria-hidden="true">On this page</p><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
 }
 function unavailableView(module) {
   const ctx=contexts[current.context];
@@ -880,8 +862,10 @@ function navigatorGroups(context) {
   const ran=new Set(contextModules(context)),named=groups.map(([title,items])=>[title,items.filter(([id])=>ran.has(id))]).filter(([,items])=>items.length);
   return runModels(context).length?[...named,['Delivered model',[MODEL_ENTRY]]]:named;
 }
+// The section titles a navigator entry is searched by: the model's, or those of the module's default output.
+const entrySections=(id,context)=>{const output=defaultOutput(id,context);return id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];};
 function navigatorEntry(id,name,module,context,query) {
-  const output=defaultOutput(id,context),sections=id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];
+  const output=defaultOutput(id,context),sections=entrySections(id,context);
   const hit=query&&sections.find(s=>s[1].toLowerCase().includes(query));
   const open=id===module,notAssessable=output&&blocked(data[output].sections,data[output].state);
   const outline=open&&current.output&&isAnalytical(id)?outlineMarkup(current.output):'';
@@ -893,7 +877,7 @@ function navigatorView(module,query) {
   let count=0;
   const html=navigatorGroups(context).map(([title,items])=>{
     const shown=items.filter(([id,name])=>{
-      const output=defaultOutput(id,context),sections=id===MODEL_ENTRY[0]?navigationSections(id,context):output?modules[output].sections:[];
+      const sections=entrySections(id,context);
       return `${id} ${Object.keys(aliases).filter(k=>aliases[k]===id).join(' ')} ${name} ${sections.map(s=>s[1]).join(' ')}`.toLowerCase().includes(query);
     });
     count+=shown.length;
@@ -1211,31 +1195,10 @@ const stateWord=established=>established===true?'Reaches a conclusion':establish
 const LEAD_MODULES=['CP-6','CP-2'];
 const NO_LEAD='No credit view module completed in this run.';
 // The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
-// A list item loses its "- " marker; its Basis line stays under it exactly as written.
-// showBasis false (the module page) prints the body alone and keeps the Basis line and its parsed items in a data-basis attribute, so nothing is lost until the inspector reads it.
-function passageParagraph(block,showBasis=true) {
-  const {body,items}=splitBasis(block.text),lines=block.text.split('\n'),has=body!==block.text;
-  const item=body.startsWith('- '),basisLine=lines[lines.length-1];
-  return {item,text:rich((item?body.slice(2):body).replace(/\n/g,' ')),basis:has&&showBasis?`<small class="basis">${rich(basisLine)}</small>`:'',attr:has&&!showBasis?` data-basis="${esc(JSON.stringify({line:basisLine,items:items.map(basisItem)}))}"`:''};
-}
-// `id` set: the module page of that output, where a table inside a passage is kept (with its Source column) and Basis is not printed.
-function passageHtml(section,id=null) {
-  if(!section)return '';
-  let open=false,html='';
-  const close=()=>{if(open)html+='</ul>';open=false;};
-  for(const block of section.blocks) {
-    if(block.type==='table') {
-      if(id===null)continue;
-      close();html+=`${sourceTable(id,section.heading,block,block.headers.map((_,c)=>numericColumn(block,c)),block.headers.map((_,c)=>c),block.rows)}</div>`;
-      continue;
-    }
-    const {item,text,basis,attr}=passageParagraph(block,id===null);
-    if(item&&!open)html+='<ul class="passage-list">';
-    if(!item)close();
-    open=item;html+=item?`<li${attr}>${text}${basis}</li>`:`<p class="passage-text"${attr}>${text}${basis}</p>`;
-  }
-  close();
-  return html;
+// The one place a handoff's prose is drawn (Overview and the module page): a list item loses its "- " marker, the Basis line is not printed, and its
+// figures (or one Basis button) open the inspector. `tables` false draws prose only (Overview).
+function passageHtml(section,id,tables=true) {
+  return section?sectionBodyHtml(section,bodyContext(id,tables)):'';
 }
 // The run's modules in the order CP-OS ran them, each with its default output and that output's reader passages.
 function overviewEntries(context) {
@@ -1251,13 +1214,13 @@ const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>
 function overviewLead(entries) {
   const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
   if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${NO_LEAD}</p></section>`};
-  const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key)}`:'';
-  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom)}${key}</section>`};
+  const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}`:'';
+  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}${key}</section>`};
 }
 function overviewBottomLines(entries,lead) {
   const rows=entries.filter(entry=>entry!==lead).map(entry=>{
     if(!entry.out)return `<div class="bottom-entry"><h3>${moduleLink(entry.module)}</h3><p class="intro">${entry.choices} saved outputs, none chosen. <a class="text-action" href="#${encodeURIComponent(entry.module)}?${new URLSearchParams({c:current.context})}">Choose one</a></p></div>`;
-    const body=entry.passages.bottom?passageHtml(entry.passages.bottom):'<p class="intro">No bottom line in this handoff.</p>';
+    const body=entry.passages.bottom?passageHtml(entry.passages.bottom,entry.id,false):'<p class="intro">No bottom line in this handoff.</p>';
     return `<div class="bottom-entry" data-module="${esc(entry.module)}"><h3>${moduleLink(entry.module)}${notAssessable(entry)?` ${NOT_ASSESSABLE_BADGE}`:''}</h3>${body}</div>`;
   });
   return rows.length?`<section class="overview-part" id="overview-bottom-lines"><h2>Bottom line by module</h2>${rows.join('')}</section>`:'';
@@ -1269,8 +1232,8 @@ function overviewLimitations(entries) {
     const key=normaliseLimitation(block.text);
     if(key!==''&&seen.has(key))continue;
     seen.add(key);
-    const {text,basis}=passageParagraph(block);
-    items.push(`<li class="limit-item">${text}${basis}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
+    const ref=`${entry.id}:${block.line}`,{html}=paragraphView(block.text,ref,{chips:bodyContext(entry.id,false).chips(ref)});
+    items.push(`<li class="limit-item">${html}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
   }
   return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<ul class="passage-list">${items.join('')}</ul>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
 }

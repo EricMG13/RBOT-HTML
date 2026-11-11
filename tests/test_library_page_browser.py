@@ -398,7 +398,9 @@ GAPS_PROBE = Path(__file__).with_name("browser_probe_gaps.js").read_text(encodin
 UNKEYED = "\n### Unkeyed citations\n\nThe figure is printed in Z, page:9 and in Y, page:8.\n"
 
 
-def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_returns(tmp_path):
+def test_a_paragraph_citing_no_page_lists_them_behind_its_basis_button_and_escape_returns(
+    tmp_path,
+):
     digest = hashlib.sha256(SOURCE_PAGES).hexdigest()
     run = make_run(
         tmp_path,
@@ -417,16 +419,17 @@ def test_the_count_of_citations_without_a_page_opens_their_list_and_escape_retur
     dom, console = visit(page, "#CP-1/head?c=run-a")
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
-    # The count under the UNKEYED paragraph (two citations), not the first count on the page (one).
-    assert seen["count"] == "2 citations without a page", seen
-    assert seen["verified"] >= 1 and seen["singleGaps"] == 0
+    # The Basis button of the UNKEYED paragraph (two citations no inventory knows): no chip or
+    # count is printed in prose.
+    assert seen["control"] == "Basis", seen
+    assert seen["verified"] >= 1 and seen["proseChips"] == 0
     opened = seen["open"]
-    assert opened["hidden"] is False and "chip=gaps" in opened["hash"]
-    assert opened["items"] == opened["expected"] == 2
-    assert opened["focusInInspector"] is True
+    assert opened["hidden"] is False and "chip=p" in opened["hash"]
+    assert opened["items"] == 2  # one citation-gap section per citation
+    assert opened["focusInInspector"] is True and opened["pressed"] == "true"
     assert seen["escaped"] == {
         "hidden": True,
-        "focusOnCount": True,
+        "focusOnControl": True,
         "hash": "#CP-1/head?c=run-a",
     }
 

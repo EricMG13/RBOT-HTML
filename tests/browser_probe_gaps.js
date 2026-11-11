@@ -1,26 +1,22 @@
 (async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const seen = {};
-  // The count under the UNKEYED paragraph in Analysis (two citations), not the first count on the page (a finding row with one).
-  // Earlier-format chips sit behind the paragraph's Basis control (the disclosure after it); the reader opens it first.
-  const unkeyed = () => [...document.querySelectorAll('#analysis .analysis-text')].find(p => p.textContent.includes('The figure is printed in Z'))?.nextElementSibling;
+  // The Basis control of the UNKEYED paragraph in Analysis (two citations with no page), not the first control on the page.
+  const unkeyed = () => [...document.querySelectorAll('#analysis .analysis-text')].find(p => p.textContent.includes('The figure is printed in Z'))?.querySelector('.basis-link');
   for (let i = 0; i < 200 && !unkeyed(); i++) await sleep(50);
-  const fold = unkeyed();
-  if (fold) fold.open = true;
-  const count = fold?.querySelector('.chip-count');
-  seen.count = count ? count.textContent : null;
+  const control = unkeyed();
+  seen.control = control ? control.textContent : null;
   seen.verified = document.querySelectorAll('.chip.verified').length;
-  seen.singleGaps = [...document.querySelectorAll('.chip.gap')].filter(c => !/Not supplied/.test(c.textContent)).length;
-  if (count) {
-    const expected = Number(count.textContent.match(/^\d+/)[0]);
-    count.focus();
-    count.click();
+  seen.proseChips = document.querySelectorAll('#analysis .chip, #analysis .chip-count').length;
+  if (control) {
+    control.focus();
+    control.click();
     await sleep(300);
     const inspector = document.getElementById('inspector');
-    seen.open = {hidden: inspector.hidden, items: inspector.querySelectorAll('.chip-source').length, expected, hash: location.hash, focusInInspector: inspector.contains(document.activeElement)};
+    seen.open = {hidden: inspector.hidden, items: inspector.querySelectorAll('.chip-source').length, hash: location.hash, focusInInspector: inspector.contains(document.activeElement), pressed: control.getAttribute('aria-pressed')};
     document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
     await sleep(300);
-    seen.escaped = {hidden: inspector.hidden, focusOnCount: document.activeElement === count, hash: location.hash};
+    seen.escaped = {hidden: inspector.hidden, focusOnControl: document.activeElement === control, hash: location.hash};
   }
   const out = document.createElement('pre');
   out.id = 'probe';

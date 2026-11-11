@@ -230,3 +230,91 @@ test('runModuleCodes lists the modules that hold an output in record order, then
   assert.deepEqual(runModuleCodes({modules: {'CP-1': entry(['c']), 'CP-0': entry(['b'])}}), ['CP-1', 'CP-0']);
   assert.deepEqual(runModuleCodes({}), []);
 });
+
+// ---- Prose and tables (decisions 7 and 14, H3, H4, H7). Expected strings are written by hand.
+const {paragraphView, paragraphBody, sectionBodyHtml, tableView, calculationRow} = require('./reader.js');
+const visible = html => html.replace(/<[^>]+>/g, '');
+
+test('paragraphView: each figure is a button wrapping exactly its text; the Basis line is not printed', () => {
+  const {html} = paragraphView('Net debt of USD 1,390 million is 4.2x EBITDA, up 38%.\nBasis: A.pdf, page 4; calculation K1', 'o:7');
+  const data = '[&quot;A.pdf, page 4&quot;,&quot;calculation K1&quot;]';
+  assert.equal(html, `Net debt of <button type="button" class="figure" data-paragraph="o:7" data-basis="${data}" data-figure="0">USD 1,390 million</button> is `
+    + `<button type="button" class="figure" data-paragraph="o:7" data-basis="${data}" data-figure="1">4.2x</button> EBITDA, up `
+    + `<button type="button" class="figure" data-paragraph="o:7" data-basis="${data}" data-figure="2">38%</button>.`);
+  assert.equal(visible(html), 'Net debt of USD 1,390 million is 4.2x EBITDA, up 38%.');
+  assert.ok(!html.includes('Basis:'));
+});
+
+test('paragraphView: a figure inside bold keeps its markup and its exact text', () => {
+  const {html} = paragraphView('Leverage is **4.2x** net.\nBasis: A.pdf', 'o:1');
+  assert.ok(html.startsWith('Leverage is <strong><button type="button" class="figure" data-paragraph="o:1"'));
+  assert.ok(html.includes('data-figure="0">4.2x</button></strong> net.'));
+});
+
+test('paragraphView: no figure and a Basis line gives one quiet Basis button at the end, named by the first words', () => {
+  const {html} = paragraphView('Liquidity rests on an undrawn revolver that steps down over the coming year.\nBasis: Q4.pdf, page 7', 'o:9');
+  assert.equal(html, 'Liquidity rests on an undrawn revolver that steps down over the coming year. '
+    + '<button type="button" class="basis-link" data-paragraph="o:9" data-basis="[&quot;Q4.pdf, page 7&quot;]" aria-label="Basis for paragraph: Liquidity rests on an undrawn revolver that steps">Basis</button>');
+  assert.equal(visible(html), 'Liquidity rests on an undrawn revolver that steps down over the coming year. Basis');
+});
+
+test('paragraphView: no Basis items and no chips means no button, even with figures; chips alone make the control', () => {
+  assert.equal(paragraphView('Leverage is 4.2x.', 'o:2').html, 'Leverage is 4.2x.');
+  assert.equal(paragraphView('No source here.', 'o:3').html, 'No source here.');
+  assert.ok(paragraphView('Leverage is 4.2x.', 'o:2', {chips: 1}).html.includes('class="figure"'));
+  assert.ok(paragraphView('No figure here.', 'o:3', {chips: 2}).html.includes('class="basis-link"'));
+});
+
+test('paragraphView: a list item loses its marker and the item flag is set; text is escaped', () => {
+  const view = paragraphView('- Debt <b> & 12%\nBasis: A.pdf', 'o:4');
+  assert.equal(view.item, true);
+  assert.equal(visible(view.html), 'Debt &lt;b&gt; &amp; 12%');
+  assert.ok(!view.html.includes('<b>'));
+});
+
+test('paragraphView, earlier format: trailing citations move behind one Basis button, the wording is otherwise untouched, no figure buttons', () => {
+  const {html} = paragraphView('Cash interest was 1,158 in FY2024 [K, page:123]. A mid-sentence [note] stays.', 'o:5', {earlier: true});
+  assert.equal(visible(html), 'Cash interest was 1,158 in FY2024. A mid-sentence [note] stays. Basis');
+  assert.ok(html.includes('data-basis="[&quot;[K, page:123]&quot;]"') && !html.includes('class="figure"'));
+  assert.ok(paragraphView('Plain earlier paragraph.', 'o:6', {earlier: true}).html.includes('class="basis-link"'), 'its chips and handoff row open from it');
+});
+
+test('paragraphBody: the Basis items and the body on one line', () => {
+  assert.deepEqual(paragraphBody('- One\ntwo\nBasis: A.pdf; B.pdf, page 2.'), {item: true, body: 'One two', items: ['A.pdf', 'B.pdf, page 2']});
+});
+
+test('sectionBodyHtml: list items share one list, paragraphs stand alone, tables only when asked, tables as written with a row control only where chips exist', () => {
+  const section = {heading: 'Findings', level: 3, line: 1, blocks: [
+    {type: 'text', line: 2, end: 2, text: '- A 5%\nBasis: X.pdf'}, {type: 'text', line: 4, end: 4, text: '- B'},
+    {type: 'text', line: 6, end: 6, text: 'Plain.'},
+    {type: 'table', line: 8, headers: ['Item', 'Source'], rows: [{line: 10, cells: ['Debt', 'X.pdf, page 3']}, {line: 11, cells: ['Cash', 'X.pdf, page 4']}]},
+  ]};
+  const ctx = {id: 'o', tables: true, chips: key => (key === 'o:11' ? 1 : 0), caption: heading => heading};
+  const html = sectionBodyHtml(section, ctx);
+  assert.ok(html.startsWith('<ul class="passage-list"><li>A <button type="button" class="figure" data-paragraph="o:2"'));
+  assert.ok(html.includes('</button></li><li>B</li></ul><p class="passage-text">Plain.</p><div class="table-card">'));
+  assert.ok(html.includes('<thead><tr><th scope="col">Item</th><th scope="col">Source</th></tr></thead>'), 'the handoff\'s own columns, none added');
+  assert.equal((html.match(/<th /g) || []).length, 2);
+  assert.ok(html.includes('<td>Debt</td><td>X.pdf, page 3</td>') && html.includes('<td>Cash <button type="button" class="basis-link" data-paragraph="o:11"'));
+  assert.ok(!sectionBodyHtml(section, {...ctx, tables: false}).includes('<table>'));
+});
+
+test('tableView: a missing cell is n.a. with the written text in its title; a numeric column aligns', () => {
+  const html = tableView('T', {headers: ['Item', 'Value'], rows: [{line: 1, cells: ['A', '1,200']}, {line: 2, cells: ['B', '—']}]}, {id: 'o', chips: () => 0});
+  assert.ok(html.includes('<th scope="col" class="num">Value</th>') && html.includes('<td class="num">1,200</td>'));
+  assert.ok(html.includes('<td class="num"><span class="na" title="—">n.a.</span></td>'));
+});
+
+test('calculationRow: the row of the Calculations table whose ID column equals the id, headers and cells as written', () => {
+  const sections = [
+    {heading: 'Findings', level: 2, line: 1, blocks: [{type: 'table', line: 2, headers: ['ID', 'x'], rows: [{line: 3, cells: ['K1', 'wrong table']}]}]},
+    {heading: 'Calculations', level: 2, line: 5, blocks: [{type: 'table', line: 6, headers: ['Calculation ID', 'Name', 'Steps'], rows: [{line: 8, cells: ['K1', 'Net debt', 'a less b']}, {line: 9, cells: ['K2', 'Cover', 'c over d']}]}]},
+    {heading: 'Detail', level: 3, line: 11, blocks: [{type: 'table', line: 12, headers: ['id', 'Result'], rows: [{line: 14, cells: ['K3', '4.2x']}]}]},
+    {heading: 'Gaps', level: 2, line: 16, blocks: [{type: 'table', line: 17, headers: ['ID'], rows: [{line: 19, cells: ['K4']}]}]},
+  ];
+  assert.deepEqual(calculationRow(sections, 'K2'), {headers: ['Calculation ID', 'Name', 'Steps'], cells: ['K2', 'Cover', 'c over d'], line: 9});
+  assert.deepEqual(calculationRow(sections, 'K3'), {headers: ['id', 'Result'], cells: ['K3', '4.2x'], line: 14}, 'an H3 child of Calculations, header ID in any case');
+  assert.equal(calculationRow(sections, 'K4'), null, 'a table outside Calculations is not searched');
+  assert.equal(calculationRow(sections.slice(0, 1), 'K1'), null);
+  assert.equal(calculationRow(sections, 'K9'), null);
+});

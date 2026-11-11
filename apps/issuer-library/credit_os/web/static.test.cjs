@@ -228,9 +228,9 @@ function report(overrides = {}, modSections = null) {
   }
   const win = { CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
-  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem'];
+  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'];
   const reader = require('./reader.js');
-  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem];
+  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem, ...['chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => reader[name])];
   return new Function(...names, `${src}; return {moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE, moduleTitle, handoffLabel};`)(...args);
 }
 const strip = html => html.replace(/<[^>]+>/g, '');
@@ -305,7 +305,7 @@ test('(f) Calculations is a closed fold of the calculations sections, whole', ()
   const html = report().reportCalculations(OUT);
   assert.ok(!/\bopen\b/.test(/<details[^>]*id="calculations"[^>]*>/.exec(html)[0]));
   assert.equal(summaryOf(html, 'calculations'), 'Calculations · 8 words');
-  assert.ok(html.includes('id="s-56"') && html.includes('Net debt is 1,200 less 3,472.') && html.includes('aria-label="Handoff row, line 57"'));
+  assert.ok(html.includes('id="s-56"') && html.includes('Net debt is 1,200 less 3,472.') && html.includes(`data-paragraph="${OUT}:57"`) && html.includes('aria-label="Basis for paragraph: Net debt is 1,200 less 3,472."'));
 });
 
 test('(g) a leading method code is dropped from a displayed heading and kept nowhere', () => {
@@ -349,12 +349,12 @@ test('(i) the declared status is a badge beside the acceptance badge; none decla
 
 test('(j) Analysis holds only the view sections, open, in handoff order, each with its line id', () => {
   const html = report().reportAnalysis(OUT);
-  // Ruling H4 (earlier format): chips in prose sit behind a quiet per-paragraph Basis control, so the part itself has no fold but the Basis disclosures.
+  // Decisions 7 and 14, H7 (earlier format): no chip is printed in prose; each of its two paragraphs has one quiet Basis button that opens the inspector.
   assert.ok(html.startsWith('<section class="part" id="analysis"><h3>Analysis</h3>') && !html.includes('<details class="fold"'));
-  assert.equal(countOf(html, /<details class="basis-fold"><summary>Basis<\/summary><span class="chips">/g), 2);
-  assert.ok(!/class="chips"/.test(html.replace(/<details class="basis-fold">.*?<\/details>/gs, '')), 'no chip is printed outside a Basis control');
+  assert.equal(countOf(html, /<button type="button" class="basis-link"/g), 2);
+  assert.ok(!/class="chips"|class="chip/.test(html) && !html.includes('basis-fold'), 'no chip is printed in prose');
   assert.deepEqual([...html.matchAll(/class="analysis-section" id="(s-\d+)"/g)].map(m => m[1]), ['s-34', 's-36']);
-  assert.ok(html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes('aria-label="Handoff row, line 35"'));
+  assert.ok(html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes(`data-paragraph="${OUT}:35"`) && html.includes('aria-label="Basis for paragraph: Liquidity is ample through FY2025."'));
   for (const other of ['Liquidity table', 'Debt register', 'Calculation trace', 'Coupons', 'Reader summary', 'Extra notes']) assert.ok(!html.includes(other), other);
 });
 
@@ -431,7 +431,7 @@ test('findings are articles with impact, confidence and chips', () => {
 test('limits come from the limits-placed sections with chips and their line ids; audit lists the rest by line', () => {
   const r = report();
   const limits = r.reportLimits(OUT);
-  assert.ok(limits.includes('id="s-50"') && limits.includes('Coupons are <strong>not supplied</strong>.') && limits.includes('Not supplied'));
+  assert.ok(limits.includes('id="s-50"') && limits.includes('Coupons are <strong>not supplied</strong>.') && limits.includes(`data-paragraph="${OUT}:52"`) && !limits.includes('class="chip'));
   const audit = r.reportAudit(OUT);
   assert.ok(audit.includes('<span>L10</span>') && audit.includes('<span>L60</span>') && audit.includes('<span>L64</span>') && !audit.includes('<span>L20</span>') && !audit.includes('Gaps &amp; limitations'));
   assert.ok(audit.includes('<details class="audit" id="audit">') && audit.includes('hidden'));
@@ -502,8 +502,8 @@ function chartFn(name, headers, rows, asOf = '2024-09-30') {
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const id = 'run-a/deliveries/d1/CP-2E.md';
   const out = { module: 'CP-2E', run: 'run-a', period: '', sections: [{ heading: 'T2F.4', line: 1, blocks: [table(80, headers, rows)] }] };
-  const names = ['data', 'contexts', 'esc', 'rich', 'plain', 'evidence', 'modules', 'moduleNames', 'current', 'icon', 'window', 'store', 'pins', 'lastFile', 'isAnalytical', 'sectionData'];
-  const fn = new Function(...names, `${text}; return ${name};`)({ [id]: out }, { 'run-a': { asOf } }, esc, esc, esc, new Map(), {}, {}, {}, () => '', { CREDIT_OS_DATA: { chips: {} } }, {}, {}, new Map(), () => true, () => []);
+  const names = ['data', 'contexts', 'esc', 'rich', 'plain', 'evidence', 'modules', 'moduleNames', 'current', 'icon', 'window', 'store', 'pins', 'lastFile', 'isAnalytical', 'sectionData', 'chartNumber', 'numericColumn', 'cellView'];
+  const fn = new Function(...names, `${text}; return ${name};`)({ [id]: out }, { 'run-a': { asOf } }, esc, esc, esc, new Map(), {}, {}, {}, () => '', { CREDIT_OS_DATA: { chips: {} } }, {}, {}, new Map(), () => true, () => [], require('./reader.js').chartNumber, require('./reader.js').numericColumn, require('./reader.js').cellView);
   return [fn, id];
 }
 function hedgeHtml(headers, rows, asOf) {
@@ -572,7 +572,7 @@ test('an audit item that cannot be drawn says so instead of staying silent', () 
   const errors = [], log = console.error;
   console.error = e => errors.push(e);
   try {
-    new Function('$', 'current', 'sectionView', `${text.slice(start, end)}; openAuditSection(arguments[3]);`)(() => body, { output: 'o' }, () => { throw new Error('boom'); }, button);
+    new Function('$', 'current', 'sectionView', 'button', 'keepsCodes', `${text.slice(start, end)}; openAuditSection(button);`)(() => body, { output: 'o' }, () => { throw new Error('boom'); }, button, () => false);
   } finally { console.error = log; }
   assert.ok(body.innerHTML.includes('Couldn’t present this item') && errors.length === 1 && body.hidden === false && !body.dataset.drawn);
 });
@@ -652,7 +652,8 @@ test('a reference section renders whole inside Statements and registers, in orde
   assert.ok(at('Debt is <strong>mostly secured</strong>. Second line.') > at('Debt structure') && at('Term loan') > at('mostly secured') && at('Closing remark.') > at('Revolver'));
   assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
-  for (const line of [72, 75, 77, 79, 82]) assert.ok(html.includes(`aria-label="Handoff row, line ${line}"`), line);
+  for (const line of [75, 77]) assert.ok(html.includes(`aria-label="Handoff row, line ${line}"`), line); // earlier-format table rows keep their chip column
+  for (const line of [72, 79, 82]) assert.ok(html.includes(`data-paragraph="${OUT}:${line}"`), line); // earlier-format paragraphs have a Basis button
   assert.ok(html.includes('class="table-card"') && !html.includes('K.'));
 });
 
@@ -778,8 +779,8 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem'];
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem'].map(name => require('./reader.js')[name])];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name])];
   return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, sourceInventory, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, mapsPlaced, statusMapView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, drawnAnchors, defaultOutput, firstSection};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -854,7 +855,10 @@ test('Overview lead: CP-6 absent, so CP-2 leads with its Bottom line then Key fi
   let at = key;
   for (const item of items) { const next = text.indexOf(item, at); assert.ok(next > at, item); at = next; }
   assert.equal(countOf(lead, /<li>/g), 3);
-  assert.ok(lead.includes('<small class="basis">Basis: NBG_2025-03-31_annual-report.pdf, pages 43–45; Financial foundation (CP-1)</small>'), 'the Basis line stays under its item, as written');
+  assert.ok(!text.includes('Basis:') && !lead.includes('class="basis"'), 'the Basis line is not printed');
+  // Hand count: Bottom line has USD 1,390 million and 4.2x; the key findings 4.2x and 38% (24 months is a span of time, not a figure); the third item has no figure, so one Basis link.
+  assert.equal(countOf(lead, /<button type="button" class="figure"/g), 4);
+  assert.equal(countOf(lead, /<button type="button" class="basis-link"/g), 1);
   assert.ok(!text.includes('Contrary evidence') && !text.includes('The strongest evidence against concern'), 'only the two lead passages');
 });
 
@@ -922,10 +926,10 @@ test('Overview limitations: every item in module order, the repeated covenant it
   const list = part(fixturePage().runReport(RUN), 'overview-limitations');
   const items = [...list.matchAll(/<li class="limit-item">(.*?)<\/li>/gs)].map(m => readText(m[1]));
   assert.deepEqual(items, [
-    'The covenant package was not reviewed, so covenant headroom is not assessed.Basis: NBG_2025-03-31_annual-report.pdfBusiness and structure',
+    'The covenant package was not reviewed, so covenant headroom is not assessed. BasisBusiness and structure',
     'Dates after the annual report are scheduled, not confirmed, so the nearest-date list may move.Business and structure',
-    'Peer leverage was not compared, so the 4.2x reading has no market anchor.Basis: calculation K1Credit view',
-    'The liquidity assessment is not available, so cash cover of the maturities is unverified.Basis: Financial foundation (CP-1)Credit view',
+    'Peer leverage was not compared, so the 4.2x reading has no market anchor.Credit view',
+    'The liquidity assessment is not available, so cash cover of the maturities is unverified. BasisCredit view',
   ]);
   assert.ok(!list.includes('The Covenant package was not reviewed,  so'), 'CP-2 repeats the covenant item: it is not shown again');
 });
@@ -1120,7 +1124,7 @@ test('module page (H1): the four reader passages come first under their headings
   for (const old of ['id="numbers"', 'id="findings"', 'class="band"', 'Quoted from the handoff', 'id="analysis"']) assert.ok(!html.includes(old), `${old} is the old reader-summary page`);
 });
 
-test('module page (H1): passage text exactly as written, the Basis line not printed and kept in data-basis', () => {
+test('module page (H1, decision 7): passage text exactly as written, the Basis line not printed, figures and Basis links carry its items', () => {
   const html = fixturePage().moduleReport(outId('CP-2')), text = readText(html);
   for (const kept of [
     'Creditors are exposed to refinancing risk rather than to weak earnings: net debt of USD 1,390 million is 4.2x earnings, and the next maturities fall inside two years.',
@@ -1130,12 +1134,17 @@ test('module page (H1): passage text exactly as written, the Basis line not prin
     'The Covenant package was not reviewed,  so covenant headroom is not assessed',
   ]) assert.ok(text.includes(kept), kept);
   assert.ok(!text.includes('Basis:') && !html.includes('class="basis"'), 'the Basis line is not printed');
-  const attr = /<p class="passage-text" data-basis="([^"]*)">Creditors are exposed/.exec(html)[1].replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-  assert.deepEqual(JSON.parse(attr), { line: 'Basis: NBG_2025-03-31_annual-report.pdf, page 41; calculation K1', items: [{ kind: 'source', file: 'NBG_2025-03-31_annual-report.pdf', page: 41 }, { kind: 'calculation', id: 'K1' }] });
-  // Key findings: three items, each with a Basis line. Limitations: the first item has none, the second and third have one.
-  assert.equal(countOf(html, /<li data-basis="/g), 5);
-  assert.equal(countOf(html, /<li>/g), 1, 'the one list item with no Basis line carries no data-basis');
-  assert.ok(/<p class="passage-text">The company has not said how it intends to fund the step-down\.<\/p>/.test(html), 'a paragraph with no Basis line has no data-basis');
+  const key = `${outId('CP-2')}:17`;
+  // Bottom line (line 17) has Basis items and two figures; each figure button wraps its exact text and carries the paragraph key and both items, as written.
+  const items = '[&quot;NBG_2025-03-31_annual-report.pdf, page 41&quot;,&quot;calculation K1&quot;]';
+  assert.ok(html.includes(`<button type="button" class="figure" data-paragraph="${key}" data-basis="${items}" data-figure="0">USD 1,390 million</button>`));
+  assert.ok(html.includes(`<button type="button" class="figure" data-paragraph="${key}" data-basis="${items}" data-figure="1">4.2x</button>`));
+  // Hand count of referenced paragraphs: Bottom line 1, Key findings 3, Contrary evidence 1 (its second paragraph has no Basis line), Limitations 2 (items 2 and 3).
+  assert.equal(new Set([...html.matchAll(/data-paragraph="([^"]+)"/g)].map(m => m[1])).size, 7);
+  assert.equal(countOf(html, /<li>/g), 6, 'the six list items of Key findings and Limitations, no attribute on them');
+  assert.ok(/<p class="passage-text">The company has not said how it intends to fund the step-down\.<\/p>/.test(html), 'a paragraph with no Basis line has no control');
+  // The Basis link only where a referenced paragraph has no figure: key finding 3, the first Contrary evidence paragraph and limitation 3.
+  assert.equal(countOf(html, /<button type="button" class="basis-link" data-paragraph="[^"]+" data-basis="[^"]*" aria-label="Basis for paragraph: [^"]+">Basis<\/button>/g), 3);
 });
 
 test('module page (H1): the other sections are kept exact, tables with their Source column, in handoff order', () => {
@@ -1160,12 +1169,12 @@ test('module page: a module with event lanes draws its own timeline, and one wit
   assert.ok(page.reportParts(outId('CP-1A')).some(p => p[0] === 'timeline' && p[1] === 'Timeline'));
 });
 
-test('module page (H4): an earlier-format handoff keeps its parts and sections, with chips behind Basis and no data-basis', () => {
+test('module page (H4): an earlier-format handoff keeps its parts and sections, with its chips behind a Basis button, not in the prose', () => {
   const r = report(), parts = r.reportParts(OUT).map(p => p[0]);
   assert.deepEqual(parts, NINE);
   const html = r.moduleReport(OUT);
-  assert.ok(html.includes('class="band"') && html.includes('Leverage rose.') && html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes('Debt register') && !html.includes('data-basis'));
-  assert.ok(!/class="chips"/.test(r.reportAnalysis(OUT).replace(/<details class="basis-fold">.*?<\/details>/gs, '')), 'no chip in prose outside a Basis control');
+  assert.ok(html.includes('class="band"') && html.includes('Leverage rose.') && html.includes('Liquidity is <strong>ample</strong> through FY2025.') && html.includes('Debt register'));
+  assert.ok(!/class="chips"/.test(r.reportAnalysis(OUT)) && countOf(r.reportAnalysis(OUT), /class="basis-link"/g) === 2, 'no chip in prose; each paragraph has its Basis button');
 });
 
 test('module page: s-<line> routes are the new-format sections that are not passages; a passage is a part', () => {
@@ -1353,9 +1362,9 @@ test('rows carry the run id for restoring, and unchanged data is not re-rendered
   // Run the real handler against stubs: same runs and held again => no replacement, only the stamp text changes.
   const content = { scrollTop: 0, writes: 0, stamp: { textContent: '' }, set innerHTML(v) { this.writes++; }, get innerHTML() { return ''; }, querySelector: () => content.stamp };
   const win = { RUN_ACTIVITY: { updated: 'T1', held: '', runs: [{ id: 'a' }] } };
-  const fn = new Function('window', 'document', '$', 'moduleBody', 'nameCodes', 'nextActivityReload', 'state',
+  const fn = new Function('window', 'document', '$', 'moduleBody', 'nameCodes', 'nextActivityReload', 'state', 'keepsCodes',
     `${screen.slice(screen.indexOf('let lastActivity'), screen.indexOf('window.onRunActivity=')).replace(/\bcurrent\b/g, 'state.current')}${handler.replace(/\bcurrent\b/g, 'state.current')}; return window.onRunActivity;`)(
-    win, {}, () => content, () => 'body', () => {}, () => 30000, { current: { module: 'CP-OS' } });
+    win, {}, () => content, () => 'body', () => {}, () => 30000, { current: { module: 'CP-OS' } }, () => false);
   fn(); assert.strictEqual(content.writes, 1);
   win.RUN_ACTIVITY = { updated: 'T2', held: '', runs: [{ id: 'a' }] }; fn();
   assert.strictEqual(content.writes, 1, 'unchanged runs: no replacement'); assert.strictEqual(content.stamp.textContent, 'T2');
@@ -1941,7 +1950,7 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
   assert.ok(screen.includes('Retained fields from this historical run, with module codes and method step ids shown as names.') && !screen.includes('exact retained fields'));
   assert.ok(/function nameCodes[^]*?nameCodes\(\$\('search-results'\),null,false\)/.test(screen), 'search hits borrow no step title');
   assert.ok(/updateLibrary\([^]*?nameCodes\(\$\(id\)\)/.test(read('views.js')), 'a redrawn library is named');
-  assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
+  assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;if\(!keepsCodes\(current\)\)nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
 });
 
 test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; sub-rows, semicolons, ranges, files and runbooks read right', () => {
