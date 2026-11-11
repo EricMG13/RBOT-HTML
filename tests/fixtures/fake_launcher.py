@@ -49,9 +49,13 @@ def main() -> int:
     for name, fields in plan.get("events", []):
         append_event(out, name, **fields)
     if plan.get("report"):
-        target = out / "deliveries" / "d1" / "report.html"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("<html><body>report</body></html>", encoding="utf-8")
+        folder = out / "deliveries" / "d1"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "delivery.json").write_text('{"files": {}}', encoding="utf-8")
+        if plan.get("report_page"):  # an earlier-format delivery also holds a rendered report
+            (folder / "report.html").write_text(
+                "<html><body>report</body></html>", encoding="utf-8"
+            )
     time.sleep(float(plan.get("sleep", 0.0)))
     return int(plan.get("exit", 0))
 

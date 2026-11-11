@@ -221,6 +221,17 @@ text, within the existing retry and cost cap; nothing else about retries changes
    - if followed by `thousand`, `million`, `billion`, `trillion`, `k`, `m` or `bn`, also be
      preceded by a currency code or symbol.
 
+Fidelity check (decision 11, owner 2026-11-11): every figure in a reader passage (the four prose
+passages, and a data module's Bottom line) must also appear in the handoff outside the reader
+passages (tables, `## Calculations`, other `## Findings` content) with the same sign, unit and
+scale: `12.3%` is not `(12.3)%`, `4.1x` is not `4.1%`, `250 thousand` is not `250 million`, and a
+number matches only as a whole number. A bare figure matches a held figure with a unit, and the
+reverse. On the passage side, dates and period labels are not figures, as in check 8. An owner
+ruling of 2026-11-11 adds this fidelity check for the reader passages, based on the retired
+Reader-summary figure check. It is a fidelity check that blocks like H6, with a repair request
+labelled `Fidelity check:` inside the same retry and cost cap, and it is not one of the eight prose
+checks.
+
 Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
 judgement-first wording, and whether a limitation truly changes a conclusion. These are judged
 by reading one real run per change against the VMO2 reference, recorded in `VERIFICATION.md`.

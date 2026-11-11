@@ -141,6 +141,9 @@ class HandoffTask:
     attempt: int
     feedback: tuple[str, ...]
     draft: bytes | None = None  # Explicit targeted repair; never automatic retry of a sent call.
+    # Every handoff accepted so far in the run: read by the checker alone (prose check 7), so it
+    # is not in the request fingerprint.
+    accepted: Mapping[str, bytes] = MappingProxyType({})
 
 
 def _pinned_inputs(base: Path, entries: Mapping[str, HandoffInput]) -> dict[str, bytes]:
@@ -431,6 +434,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 MappingProxyType(supplied),
                 1,
                 (),
+                accepted=MappingProxyType(dict(handoffs)),
             )
             if events is not None:
                 append_event(events, "module_started", module=module_id)
@@ -507,7 +511,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             verify_delivery(delivery_manifest, staging)
             destination.parent.mkdir(parents=True, exist_ok=True)
             platform_io.replace(staging, destination)
-        report = verify_delivery(delivery_manifest, destination)
+        receipt = verify_delivery(delivery_manifest, destination)
         completion = {
             "kind": "cpos-handoff-snapshot/1"
             if request.layout is None
@@ -529,13 +533,13 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             "cp_forecast_published": forecast,
             "forecast_failure": failure,
             "delivery_manifest_sha256": manifest_id,
-            "report_sha256": _sha(report.read_bytes()),
+            "delivery_sha256": _sha(receipt.read_bytes()),
         }
         completion_raw = json.dumps(completion, indent=2).encode()
         _put(directory / f"completed-{_sha(completion_raw)}.json", completion_raw)
         if events is not None:
             append_event(events, "delivered")
-        return report
+        return receipt
 
 
 def _module_execution(
@@ -705,7 +709,7 @@ def _comparison_bundle(base: Path, spec: HandoffInput) -> tuple[View, dict[str, 
         raise ValueError("cp8_bundle_changed: delivery receipt")
     receipt = json.loads(receipt_raw)
     hashes = TypeAdapter(dict[str, Hash]).validate_python(receipt["files"])
-    required = {"report.html", "view.json", "report-view.json"}
+    required = {"view.json", "report-view.json"}
     if (
         not required <= set(hashes)
         or "delivery.json" in hashes
@@ -723,9 +727,12 @@ def _comparison_bundle(base: Path, spec: HandoffInput) -> tuple[View, dict[str, 
     from deploy_vii.report_view import ReportView
 
     report = ReportView.model_validate_json(files["report-view.json"])
-    if files["report.html"].decode().count(OPEN_TAG) != 1 or _extract(
-        files["report.html"]
-    ) != _extract(render(view, report).encode()):
+    # Earlier bundles also carry the rendered report page: it must still match the retained
+    # views. Later bundles carry none and are bound by the receipt and file hashes checked above.
+    if "report.html" in files and (
+        files["report.html"].decode().count(OPEN_TAG) != 1
+        or _extract(files["report.html"]) != _extract(render(view, report).encode())
+    ):
         raise ValueError("cp8_bundle_binding: HTML differs from retained View/ReportView")
     if "model.html" in files:
         if not {"model-view.json", "model-report-view.json", "calculation.json"} <= set(files):
@@ -858,7 +865,7 @@ def run_comparison(
             verify_files(staging, files)
             destination.parent.mkdir(parents=True, exist_ok=True)
             platform_io.replace(staging, destination)
-        report = verify_files(destination, files)
+        receipt = verify_files(destination, files)
         completion = {
             "kind": "cpos-deliverable-comparison/1",
             "execution": request.execution,
@@ -869,11 +876,11 @@ def run_comparison(
             "response_sha256": _sha(response),
             "input_files": source_hashes,
             "delivery_id": delivery_id,
-            "report_sha256": _sha(report.read_bytes()),
+            "delivery_sha256": _sha(receipt.read_bytes()),
         }
         raw_completion = json.dumps(completion, indent=2).encode()
         _put(directory / f"completed-{_sha(raw_completion)}.json", raw_completion)
-        return report
+        return receipt
 
 
 def run_live_comparison(

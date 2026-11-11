@@ -81,6 +81,7 @@ class RunSpec:
     cp1_findings: str = ""  # Text inserted into the CP-1 handoff just before its Sources section.
     cp1_extra: str = ""  # Text appended to the CP-1 handoff, such as chart data tables.
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
+    report_page: bool = True  # False: a current delivery, with no report.html, stated by receipt.
 
 
 def make_run(workspace: Path, folder: str, **changes) -> Path:
@@ -159,14 +160,14 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         f'</aside><script id="report-data" type="application/json">{payload}</script></body>'
     ).encode()
     files = {
-        "report.html": report,
+        **({"report.html": report} if spec.report_page else {}),
         "view.json": json.dumps({"run": view_run}).encode(),
         **{f"{m}.md": (run_dir / handoffs[m]["path"]).read_bytes() for m in modules},
     }
     delivery_id = sha(json.dumps({n: sha(r) for n, r in sorted(files.items())}).encode())
     delivered = run_dir / "deliveries" / delivery_id
     receipt = {"files": {name: put(delivered / name, raw) for name, raw in files.items()}}
-    put(delivered / "delivery.json", json.dumps(receipt).encode())
+    receipt_sha = put(delivered / "delivery.json", json.dumps(receipt).encode())
     completion = {
         "kind": "cpos-markdown-delivery/1",
         "execution": "live-provider",
@@ -175,7 +176,9 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         "modules": selected,
         "module_execution": {m: spec.execution for m in modules},
         "delivery_manifest_sha256": manifest_sha,
-        "report_sha256": sha(report),
+        **(
+            {"report_sha256": sha(report)} if spec.report_page else {"delivery_sha256": receipt_sha}
+        ),
     }
     raw = json.dumps(completion, indent=2).encode()
     put(run_dir / f"completed-{sha(raw)}.json", raw)

@@ -96,6 +96,17 @@ def test_presented_report_keeps_original(tmp_path):
     assert shown.count(b"data-library-presentation") == 2
 
 
+def test_a_new_format_run_has_no_presented_report_and_does_not_stop_the_build(tmp_path):
+    make_run(tmp_path, "run-old")
+    make_run(tmp_path, "run-new", report_page=False, issuer_id="other", issuer_name="Other plc")
+    library = update_library.update_library(tmp_path)
+    assert sorted(r["id"] for r in library.runs) == ["run-new", "run-old"]
+    presented = [
+        p.relative_to(tmp_path).parts[2] for p in (tmp_path / "library/reports").rglob("*.html")
+    ]
+    assert presented == ["run-old"]
+
+
 def test_presentation_goes_before_the_last_body_close():
     html = b"<body>a</body><p>b</P></BODY>tail"
     shown = update_library.present_report(html)
@@ -238,9 +249,9 @@ def count_work(monkeypatch) -> dict[str, int]:
         return listed
 
     def checking(real):
-        def check(*args):
+        def check(*args, **kwargs):
             counts["delivery_checks"] += 1
-            return real(*args)
+            return real(*args, **kwargs)
 
         return check
 

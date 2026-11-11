@@ -6,9 +6,11 @@ current methodology:
 - completed: a ``completed-<sha256>.json`` record named by its own hash, of the launcher's report
   kind, names a ``delivery-<sha256>.json`` manifest named by its own hash. One folder under
   ``deliveries/`` holds exactly the files its ``delivery.json`` lists, with those hashes, and its
-  ``report.html`` has the hash the completion record states. The handoffs the manifest names
-  still have their hashes, and the manifest, the delivery's ``view.json`` and ``workflow.json``
-  name the same run. The report is not rebuilt: a renderer change since the run does not unlist it.
+  ``delivery.json`` has the ``delivery_sha256`` the completion record states. An earlier run
+  states ``report_sha256`` instead, and its ``report.html`` has that hash. The handoffs the
+  manifest names still have their hashes, and the manifest, the delivery's ``view.json`` and
+  ``workflow.json`` name the same run. Nothing is rebuilt: a renderer change since the run does
+  not unlist it.
 - current methodology: each module was answered in this run (not replayed from another run, not
   synthetic). The request record beside its accepted answer still has the fingerprint CP-OS named
   its folder by (``cpos.request_fingerprint``), so it holds the instructions actually sent, and
@@ -141,9 +143,16 @@ def report_completion(folder: Path) -> dict[str, Any]:
 
 
 def delivery_folder(
-    folder: Path, report_sha256: str, view: dict[str, bytes] | None = None
+    folder: Path,
+    stated: str,
+    view: dict[str, bytes] | None = None,
+    *,
+    receipt_hash: bool = False,
 ) -> tuple[str, Mapping[str, str]]:
-    """The folder under ``deliveries/`` holding exactly its listed files and the stated report.
+    """The folder under ``deliveries/`` holding exactly its listed files and the stated hash.
+
+    The hash is that of the folder's ``delivery.json`` when ``receipt_hash`` (a run that states
+    ``delivery_sha256``), otherwise that of its ``report.html`` (an earlier run).
 
     When ``view`` is given, the verified bytes of ``view.json`` are put in it, so the caller need
     not read that file a second time."""
@@ -153,9 +162,13 @@ def delivery_folder(
         relative = f"deliveries/{name}"
         if name.startswith(".") or not os.path.lexists(folder / relative / "delivery.json"):
             continue  # Not a delivery: it has no receipt.
-        receipt = json_object(read_inside(folder, f"{relative}/delivery.json"), "delivery.json")
+        raw_receipt = read_inside(folder, f"{relative}/delivery.json")
+        receipt = json_object(raw_receipt, "delivery.json")
         files = receipt.get("files")
-        if not isinstance(files, dict) or files.get("report.html") != report_sha256:
+        if not isinstance(files, dict):
+            continue
+        found = sha256(raw_receipt) if receipt_hash else files.get("report.html")
+        if found != stated:
             continue
         # Exactly, as CP-OS checks a publication: hidden entries count too.
         if set(os.listdir(folder / relative)) != set(files) | {"delivery.json"}:
@@ -165,7 +178,7 @@ def delivery_folder(
             if view is not None and entry == "view.json":
                 view[entry] = raw
         return relative, files
-    raise Refused("no delivery folder holds the report the completion record names")
+    raise Refused("no delivery folder holds the delivery the completion record names")
 
 
 def run_identity(run: Mapping[str, Any]) -> dict[str, str]:
@@ -185,17 +198,20 @@ def same_identity(other: object, identity: Mapping[str, str], what: str) -> None
 
 
 def verified_delivery(folder: Path, completion: Mapping[str, Any]) -> dict[str, Any]:
-    """The checked delivery: its manifest, folder, report hash and handoffs."""
+    """The checked delivery: its manifest, folder, receipt or report hash and handoffs."""
     manifest_sha = completion.get("delivery_manifest_sha256")
+    delivery_sha = completion.get("delivery_sha256")
     report_sha = completion.get("report_sha256")
     if not isinstance(manifest_sha, str) or not _SHA.match(manifest_sha):
         raise Refused("the completion record names no delivery manifest")
-    if not isinstance(report_sha, str) or not _SHA.match(report_sha):
-        raise Refused("the completion record names no report")
+    by_receipt = isinstance(delivery_sha, str) and _SHA.match(delivery_sha) is not None
+    stated = delivery_sha if by_receipt else report_sha
+    if not isinstance(stated, str) or not _SHA.match(stated):
+        raise Refused("the completion record names no delivery receipt or report")
     name = f"delivery-{manifest_sha}.json"
     manifest = json_object(read_pinned(folder, name, manifest_sha), name)
     checked: dict[str, bytes] = {}
-    relative, files = delivery_folder(folder, report_sha, checked)
+    relative, files = delivery_folder(folder, stated, checked, receipt_hash=by_receipt)
     if "view.json" not in checked:  # The folder holds exactly its listed files, so it is missing.
         raise Refused(f"{relative}/view.json is missing")
     view = json_object(checked["view.json"], "view.json")
@@ -221,7 +237,8 @@ def verified_delivery(folder: Path, completion: Mapping[str, Any]) -> dict[str, 
         "view": view,
         "folder": relative,
         "files": files,
-        "report_sha256": report_sha,
+        "delivery_sha256": stated if by_receipt else None,
+        "report_sha256": None if by_receipt else stated,
         "handoffs": {m: handoffs[m] for m in modules},
     }
 
@@ -416,7 +433,6 @@ def admit_run(
     same_identity(delivered["view"].get("run"), identity, "the delivered report")
     execution = completion["module_execution"]
     check_methodology(folder, delivered, execution, identity, method)
-    report = folder / delivered["folder"] / "report.html"
     requested = run.get("requested_modules")
     cap = completion.get("provider_cap_usd")
     record = {
@@ -429,7 +445,14 @@ def admit_run(
         "modules": module_entries(folder, page_dir, delivered, execution),
         "scope": text_or_none(completion.get("scope")) or "",
         "cap_usd": cap if decimal_text(cap) is not None else None,
-        "report": {"href": link(page_dir, report), "sha256": delivered["report_sha256"]},
+        # Only an earlier run has a rendered report page; a later run's report is the library's.
+        "report": {
+            "href": link(page_dir, folder / delivered["folder"] / "report.html"),
+            "sha256": delivered["report_sha256"],
+        }
+        if delivered["report_sha256"] is not None
+        else None,
+        "delivery_sha256": delivered["delivery_sha256"],
         "execution": execution_record(folder),
     }
     if deliveries is not None:  # Only a run that is listed is kept.

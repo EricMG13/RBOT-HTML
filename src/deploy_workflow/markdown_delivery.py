@@ -8,7 +8,6 @@ calculation, journal promotion or analytical execution.
 from __future__ import annotations
 
 import hashlib
-import html
 import json
 import re
 from collections.abc import Mapping
@@ -32,7 +31,6 @@ from deploy_vii.contracts import (
 )
 from deploy_vii.display import UnitClass
 from deploy_vii.registry import modules
-from deploy_vii.render import render
 from deploy_vii.report_view import (
     Block,
     BlockTab,
@@ -728,80 +726,6 @@ EXECUTION_WORDS = {
     "host-session": "Produced in a host session and accepted by the CP-OS check.",
     "synthetic": "Synthetic test content, not issuer analysis.",
 }
-NOT_STATED = "not stated in the handoff"
-
-
-def _front_table(
-    route: MarkdownRoute, module: ModuleView, meta: dict[str, tuple[str, str]]
-) -> tuple[str, str, str] | None:
-    """(sentence, line, entry id) of the first data row of the table with the routed header."""
-    table = next(
-        (
-            t
-            for t in module.tables
-            if meta[t.table_id] == (route.heading, "table")
-            and " | ".join([t.row_header or "", *(c.label for c in t.columns)])
-            == route.table_header
-            and t.rows
-        ),
-        None,
-    )
-    if table is None:
-        return None
-    facts = {f.fact_id: f for f in module.facts}
-    row = table.rows[0]
-    cells = [
-        f"{column.label.lower()}{':' if index else ''} {facts[fid].text or NOT_STATED}"
-        for index, (column, fid) in enumerate(zip(table.columns, row.fact_ids, strict=True))
-    ]
-    number = facts[row.fact_ids[0]].citations[0].locator.split()[-1]
-    return "; ".join(cells), number, table.table_id
-
-
-def _front_prose(
-    route: MarkdownRoute, module: ModuleView, meta: dict[str, tuple[str, str]]
-) -> tuple[str, str, str] | None:
-    """(paragraph, line, entry id) of the first paragraph of the section opening with the prefix."""
-    fact = next(
-        (
-            f
-            for f in module.facts
-            if _names_section(meta.get(f.table_id), route.heading)
-            and (route.prefix is None or _opens_with(f.text, route.prefix))
-        ),
-        None,
-    )
-    if fact is None:
-        return None
-    return fact.text or NOT_STATED, fact.citations[0].locator.split()[-1], fact.table_id
-
-
-def front_lines(
-    routes: tuple[MarkdownRoute, ...],
-    module_views: list[ModuleView],
-    metadata: dict[str, dict[str, tuple[str, str]]],
-) -> tuple[list[str], set[tuple[str, str]]]:
-    """One cited sentence per front route and the (module, entry id) each was read from. No match
-    gives `not stated in the handoff` (a blank cell too, never zero). A table route reads the first
-    data row of the table with the routed header (`<column> <cell>`, then `<column>: <cell>`); a
-    prose route the first paragraph opening with the prefix, without the label."""
-    lines: list[str] = []
-    sources: set[tuple[str, str]] = set()
-    for route in routes:
-        module = next((m for m in module_views if m.module_id == route.module_id), None)
-        if module is None:
-            raise ValueError(f"markdown_front: {route.module_id} is not a supplied module")
-        label = route.label or route.heading
-        meta = metadata[module.module_id]
-        got = (_front_table if route.kind == "table" else _front_prose)(route, module, meta)
-        if got is None:
-            lines.append(f"{label}: {NOT_STATED}")
-        else:
-            text, number, entry = got
-            shown = text if route.kind == "prose" else f"{label}: {text}"
-            lines.append(f"{shown} ({module.module_id} line {number})")
-            sources.add((module.module_id, entry))
-    return lines, sources
 
 
 def coverage_record(
@@ -1282,48 +1206,13 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
         index=index,
         unplaced=_unplaced(view, pathway, maps),
     )
-    rendered = render(view, report)
-    if request.model is not None:
-        nav = '["model", "Model", "#CP-1"]'
-        if rendered.count(nav) != 1:
-            raise ValueError("model_shell: main report Model destination changed")
-        rendered = rendered.replace(nav, '["model", "Model", "model.html"]')
-    anchor = '<div id="call-root"></div>'
-    if rendered.count(anchor) != 1:
-        raise ValueError("Existing renderer scope-banner location changed")
-    front_text, front_sources = front_lines(layout.front, module_views, metadata)
     record_of = coverage_record(module_views, metadata, owner_lines, entries, source_of)
-    for module_id, listed in record_of["modules"].items():  # `front` goes last in blocks
-        for entry in listed:
-            if (module_id, entry["id"]) in front_sources:
-                entry["blocks"].append("front")
     check_coverage({m: files[m + ".md"].decode() for m in owner_lines}, record_of)
     files["coverage.json"] = (json.dumps(record_of, indent=2) + "\n").encode()
     files.update(
         {
             "view.json": view.model_dump_json(indent=2).encode(),
             "report-view.json": report.model_dump_json(indent=2).encode(),
-            "report.html": rendered.replace(
-                anchor,
-                '<section id="delivery-scope-banner" class="banner" role="note">'
-                + html.escape(layout.scope)
-                + "</section>"
-                + (
-                    '<section id="delivery-limits" class="banner" role="note"><ul>'
-                    + "".join(f"<li>{html.escape(line)}</li>" for line in front_text)
-                    + "</ul></section>"
-                    if front_text
-                    else ""
-                )
-                + (
-                    '<nav aria-label="Published deliverables">'
-                    '<a href="model.html">HTML Model and charts</a> · '
-                    '<a href="calculation.json">Calculation JSON</a></nav>'
-                    if request.model is not None
-                    else ""
-                )
-                + anchor,
-            ).encode(),
         }
     )
     record = {

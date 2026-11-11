@@ -1312,7 +1312,8 @@ def test_a_finished_runs_report_and_submitter_show_when_the_library_is_served(
     for (let i = 0; i < 100 && $('run-report').hidden; i++) await settle(100);
     return {href: $('run-report-link').getAttribute('href'), shown: !$('run-report').hidden};
     """)
-    assert after["shown"] and after["href"].startswith(f"/library/reports/{record.id}/")
+    assert after["shown"]
+    assert after["href"] == f"/library/index.html#W-Report/history?c={record.id}"
     with urllib.request.urlopen(page.base + after["href"], timeout=20) as reply:
         assert reply.status == 200 and reply.read()
     dom = html.unescape(_served_dom(page, "/library/#CP-OS/activity"))

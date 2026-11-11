@@ -293,3 +293,54 @@ def test_a_library_built_by_hand_still_catalogues_without_the_shared_deliveries(
     by_hand = Library(runs=listed.runs)  # no shared deliveries: each is verified again
     assert by_hand.deliveries == {}
     assert catalogue(tmp_path, by_hand)["real"] == catalogue(tmp_path, listed)["real"]
+
+
+def test_a_delivery_without_a_report_page_has_no_report_link_and_still_catalogues(tmp_path):
+    make_run(tmp_path, "run-a", report_page=False)
+    listed = build_library(tmp_path, tmp_path / "library", method())
+    by_hand = Library(runs=listed.runs)  # verified again here, by the receipt's hash
+    for library in (listed, by_hand):
+        result = catalogue(tmp_path, library)
+        (artifact,) = result["real"][0]["artifacts"]
+        assert artifact["available"] is False and artifact["href"] == ""
+        assert "no report page" in artifact["issue"]
+        assert result["issues"] == []
+
+
+def published_forecast(tmp_path, report_page, extra=()):
+    from deploy_workflow.credit_os_catalogue import MODEL_FILES, delivery_fields
+
+    files = {name: f"{i:064x}" for i, name in enumerate((*MODEL_FILES, "view.json", *extra), 1)}
+    if report_page:
+        files["report.html"] = "a" * 64
+    folder = tmp_path / "runs" / "r1" / "deliveries" / "d1"
+    folder.mkdir(parents=True)
+    (folder / "delivery.json").write_text(json.dumps({"cp_forecast_published": True}))
+    artifacts, _ = delivery_fields(
+        tmp_path,
+        {"id": "r1", "modules": []},
+        {},
+        [],
+        {"folder": "deliveries/d1", "files": files, "view": {}},
+    )
+    return {a["kind"]: a for a in artifacts}, files
+
+
+def test_forecast_of_a_delivery_without_a_report_page_is_pinned_to_its_own_file(tmp_path):
+    by_kind, files = published_forecast(tmp_path, report_page=False)
+    model = by_kind["model"]
+    assert model["available"] is True and model["issue"] == ""
+    assert model["href"].startswith("/files/runs/r1/deliveries/d1/annual.md")
+    assert files["annual.md"] in model["href"]
+
+
+def test_forecast_prefers_model_html_when_the_delivery_has_it(tmp_path):
+    by_kind, files = published_forecast(tmp_path, report_page=False, extra=("model.html",))
+    assert by_kind["model"]["href"].startswith("/files/runs/r1/deliveries/d1/model.html")
+    assert files["model.html"] in by_kind["model"]["href"]
+
+
+def test_forecast_of_an_earlier_format_delivery_still_shares_the_report_href(tmp_path):
+    by_kind, _ = published_forecast(tmp_path, report_page=True)
+    assert by_kind["model"]["href"] == by_kind["report"]["href"] != ""
+    assert by_kind["model"]["available"] is True

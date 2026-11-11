@@ -90,6 +90,8 @@ def write_presented_reports(workspace: Path, library: Library, folder: Path) -> 
         run_dir = workspace / "runs" / run["id"]
         verified = library.deliveries[run["id"]]  # This build verified every file of it already.
         relative, files = verified["folder"], verified["files"]
+        if "report.html" not in files:  # A new-format delivery has no report page to present.
+            continue
         original = read_pinned(run_dir, f"{relative}/report.html", files["report.html"])
         target = folder / "reports" / run["id"] / relative.split("/", 1)[1] / "report.html"
         target.parent.mkdir(parents=True)

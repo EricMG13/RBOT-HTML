@@ -11,7 +11,6 @@ needs issuer-specific row selectors; add it when a run can derive those from CP-
 """
 
 import argparse
-from collections import Counter
 import hashlib
 import importlib.util
 import json
@@ -20,6 +19,7 @@ import re
 import sys
 import tempfile
 import textwrap
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -34,14 +34,13 @@ from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import platform_io
 from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
+from deploy_workflow.docx_text import docx_text
 from deploy_workflow.handoff_delivery import (
     DeliveryRequest,
     HandoffInput,
     MarkdownLayout,
     MarkdownRoute,
-    section,
 )
-from deploy_workflow.docx_text import docx_text
 from deploy_workflow.html_text import convert_html
 from deploy_workflow.markdown_delivery import (
     STRIP_FIGURES,
@@ -69,13 +68,11 @@ from deploy_workflow.owners.cpos import (
     web_search_ruled,
     with_notes,
 )
-from deploy_workflow.reader_summary import (
-    BOTTOM_LINE_WORDS,
-    CONFIDENCE,
-    FINDING_WORDS,
-    LIMITATION_WORDS,
-    MAX_FINDINGS,
-    reader_issues,
+from deploy_workflow.prose_checks import (
+    DATA_MODULES,
+    READER_HEADINGS,
+    figure_issues,
+    prose_issues,
 )
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
 from deploy_workflow.workflow import _put
@@ -102,7 +99,9 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
 # or binding (a runbook, a phase's method bundle), copied from cp-os at b57a344 and listed in
 # docs/reuse/selected-methods/manifest.json. Companions the SKILL opens only "to resolve an
-# ambiguity" (CANON_SHARED.md, the schema and system references) are archived, not sent.
+# ambiguity" (the schema and system references) are archived, not sent. CANON_SHARED.md is sent
+# only as the two reader-layer sections of READER_LAYER, to every prose module (ruling
+# 2026-11-11, decision 8); the rest of it is archived.
 _SELECTED: dict[str, tuple[str, ...]] = {
     "CP-0": (_VII + "cp0.md",),
     "CP-1": ("prompts/CP-1.md",),  # Plus CP1_STEPS; no standalone CP-1 method file exists.
@@ -187,8 +186,17 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _VII + "cpdr.md",
     ),
 }
+_CANON = "docs/reuse/selected-methods/CANON_SHARED.md"
+# The reader-facing layer every prose module is sent (not the data modules).
+READER_LAYER = (
+    f"{_CANON} § Reader-facing research layer",
+    f"{_CANON} § Credit-research reading order",
+)
 METHODS: dict[str, tuple[str, ...]] = {
-    module: (*paths, _SCORE) if any(p.startswith(_SKILLS) for p in paths) else paths
+    module: (
+        *((*paths, _SCORE) if any(p.startswith(_SKILLS) for p in paths) else paths),
+        *(() if module in DATA_MODULES else READER_LAYER),
+    )
     for module, paths in _SELECTED.items()
 }
 CP1_STEPS = ("source_context", "financials", "narrative", "readiness", "quality")
@@ -217,39 +225,8 @@ BLOCK_OWNERS: dict[str, tuple[str, ...]] = {
 }
 # CP-8 owns this section and compares two completed deliveries; a single run has nothing to compare.
 SECOND_RUN_ONLY = "what-changed"
-# The H3 that opens every module's `## Findings`: prose stating the module's view in plain English
-# before any table (owner ruling, 2026-11-05; Deploy V's M365 runs for VMO2 and Wood Mackenzie open
-# each module's analysis that way). "Credit view" (CP-1C, CP-2) and "Downside view" (CP-2A) are the
-# M365 headings. A module added to METHODS needs an entry here; a test fails otherwise.
-# This launcher route only: the owner route (`deploy_vii.cp2_synthesis`, Python-composed
-# Markdown) is unchanged.
-OPENING: dict[str, str] = {
-    "CP-0": "Readiness view",
-    "CP-1": "Financial base view",
-    "CP-1A": "Business and transaction view",
-    "CP-1B": "Earnings delta view",
-    "CP-1C": "Credit view",
-    "CP-1D": "Earnings quality view",
-    "CP-2": "Credit view",
-    "CP-2A": "Downside view",
-    "CP-2D": "Liquidity view",
-    "CP-2E": "Macro and FX view",
-    "CP-2G": "Forward model view",
-    "CP-2H": "Ratings view",
-    "CP-3": "Relative value view",
-    "CP-3C": "Funding gap view",
-    "CP-3D": "Market-implied view",
-    "CP-4": "Covenant view",
-    "CP-4C": "Restructuring view",
-    "CP-5": "Evidence trace view",
-    "CP-6": "Challenge view",
-    "CP-DR": "Research view",
-}
-# Only CP-2 gets READER_STANDARD (owner ruling, 2026-11-05): M365 output did not follow the
-# CANON_SHARED rules, so they stay scoped to the one module that had them.
-READER_STANDARD_MODULES = frozenset({"CP-2"})
-# The user's Microsoft 365 Copilot custom instruction (supplied 2026-11-05, every clause kept):
-# a persona that applies to every module (owner ruling, 2026-11-05). ponytail: instructions only.
+# The user's Microsoft 365 Copilot custom instruction (supplied 2026-11-05, every clause kept),
+# plus the one line the 2026-11-11 ruling (decision 8) adds: a persona that applies to every module.
 READER_PERSONA = (
     "You are a senior credit research analyst at a leading credit fund, specialising in high "
     "yield credit and leveraged loans. Your research is used throughout the firm for key "
@@ -258,25 +235,91 @@ READER_PERSONA = (
     "reasoned with explicit links from data to risk to credit implication. Say nothing generic "
     "unless it is tied to issuer-specific mechanics. Write in a detailed, structured style "
     "grounded in the provided data, and say when information is insufficient. State explicitly "
-    "when information comes from external sources.\n\n"
+    "when information comes from external sources. Lead with the judgement; use data to support "
+    "it, not to narrate it.\n\n"
 )
-# For READER_STANDARD_MODULES only: CANON_SHARED.md's reader-facing layer, and two habits of Deploy
-# V's M365 handoffs (VMO2 2026-09-20, Wood Mackenzie 2026-08-27): units on amounts, the issuer as
-# subject. The checker enforces the opening, not the prose.
-READER_STANDARD = (
-    "Presentation rules, from the reader-facing standard of Deploy V's CANON_SHARED.md. They "
-    "never remove a method duty, category tag, limitation or gap:\n"
-    "- In the opening section, state the credit view in plain English in the first sentence. In "
-    "90–150 words, give the strongest support, the weakest point and what decides the outcome.\n"
+# Reader passages (ruling 2026-11-11, H1-H3, decision 8): the checker enforces the mechanical
+# checks of `prose_checks`, not the judgement.
+PROSE_PASSAGES = (
+    "Reader passages. The reader is a portfolio manager or credit committee member who has not "
+    "read the source documents. After the analysis is finished, open `## Findings` with these "
+    "four sections, each exactly once, in this order, before any other `## Findings` content:\n"
+    "- `### Bottom line`: one or two paragraphs. The first sentence states this module's view "
+    "and its consequence for creditors. Start it with a word, not a figure or a symbol.\n"
+    "- `### Key findings`: one paragraph or one list item per finding, each starting with the "
+    "judgement; give figures only where they move the view.\n"
+    "- `### Contrary evidence and what would change the view`: prose giving the strongest "
+    "evidence against the view and what would change it.\n"
+    "- `### Limitations`: a bulleted list, one limitation per item, each saying which "
+    "conclusion it changes and how. A limitation that changes no conclusion goes in the "
+    "`## Gaps` table instead; if no limitation changes a conclusion, write one item naming "
+    "this module: `- No limitation changes the conclusions of <plain module name>.` CP-OS "
+    "refuses a limitation that any handoff accepted earlier in "
+    "this run already states, so word each limitation for this module's own conclusion.\n"
+    "Everything else in `## Findings` (method sections, registers, tables, report selectors) "
+    "follows `### Limitations`, unchanged and exact. If this module is blocked, write only "
+    "`### Bottom line` of these four sections; a blocked module's `### Bottom line` begins "
+    "exactly `Not assessable: ` followed by why (the exact words that mark it blocked), and a "
+    'module that is not blocked must not use the words "not assessable" in its Bottom line. '
+    "The report selectors below are still each written exactly once even if blocked: a "
+    "table selector keeps its exact table header with one row stating not assessable "
+    "(as a table row, in its table), and a prose selector holds one sentence saying so. Where the "
+    "credit-research reading order's opening H3 or front sequence (the 90-150 word view, "
+    "quantified drivers and front metrics table) differs from these passages, these passages "
+    "govern; its table and appendix rules still apply after `### Limitations`, except that the "
+    "report selectors' exact headings and table headers govern over the reader layer's table "
+    "rules (6 columns and 8 body rows).\n\n"
+)
+DATA_PASSAGE = (
+    "Reader passage. The reader is a portfolio manager or credit committee member who has not "
+    "read the source documents. Open `## Findings` with `### Bottom line`: one or two "
+    "paragraphs whose first sentence states this module's view and its consequence for "
+    "creditors. If this module is blocked, its `### Bottom line` begins exactly "
+    "`Not assessable: ` followed by why (the exact words that mark it blocked); a module that "
+    'is not blocked must not use the words "not assessable" in its Bottom line. Your tables '
+    "follow as the main content, unchanged and exact.\n\n"
+)
+VOICE_RULES = (
+    "- Write evidence, risk mechanism and credit implication as ordinary sentences, never as "
+    "labels (no `Evidence:`, `Mechanic:` or `Implication:` lead-ins). This overrides method "
+    "templates that write `Evidence:`, `Risk Mechanic:`, `Credit Implication:` or similar "
+    "labels in prose or registers: write those as sentences.\n"
+    "- In the reader passages write no module code, page number, bracket, chip, hash, or "
+    "table, register or calculation ID in a sentence. Name a source in words only when it "
+    "matters to the argument.\n"
+    "- End a paragraph or list item that rests on a source, an upstream handoff or a "
+    "calculation with a Basis line: its last line, with no blank line before it, starting "
+    "exactly `Basis: `, items separated by `; `, with an optional final full stop. An item is "
+    "`<source file name>`, `<source file name>, page <n>` or `<source file name>, pages "
+    "<n>–<m>` (the file name exactly as listed in `## Sources`); `<plain module name> (<code>)` "
+    "for an upstream handoff, for example `Liquidity (CP-2D)`; or `calculation <id>` for a row "
+    "of this handoff's `## Calculations`, whose table has a column headed `ID` or ending ` ID` "
+    "holding that id. A paragraph that rests on none of these has no Basis line. Write the "
+    "Basis line on one line, never wrapped.\n"
+    "- In the reader passages give every figure its currency or unit, with at most two "
+    "decimals: `USD 1,250 million`, `$3.2bn`, `3.1x`, `61 bp`, `45%`, `18 months`. The accepted "
+    "units are exactly: %, x, bp, bps, basis points, percentage points, pp, times, notch(es), "
+    "day(s), week(s), month(s), quarter(s), year(s), or a currency code or symbol before the "
+    "figure; the scale words thousand, million, billion, trillion, k, m and bn are accepted "
+    "only with a currency. Any other number (a count of 100 or more, a model, section or "
+    "index number) does not belong in a reader sentence: reword it in words or put it in a "
+    "table. Never round an exact value to fit the two-decimal rule: an exact value with more "
+    "decimals stays in a table. A coupon with more than two decimals (6.375%) is named by "
+    'the note\'s maturity and rank instead ("the 2029 secured notes"). Keep a figure and its '
+    "currency on one line. Years, dates, "
+    "period labels (`Q3`, `FY2024`, `LTM`, `9M`) and whole counts below 100 need no unit. "
+    "Write a range with the unit on both ends (`100 bp to 150 bp`). This overrides any method "
+    "rule against bare figures or for `{ref|unit}` references in text fields: those belong to "
+    "the JSON transport.\n"
+    "- Every figure in a reader passage must also appear in the handoff's tables or "
+    "`## Calculations` with the same sign, unit and scale.\n"
+    "- In reader passages, when the documents do not state an item, say so in words; the "
+    "`[Insufficient Information]` tag belongs in tables and registers only.\n"
+    "- A table that cites sources has a column headed `Source` naming the file and page in the "
+    "Basis item form. Raw locators, hashes and IDs stay where the method puts them: "
+    "`## Sources`, tables and registers.\n"
     "- Keep `## Request` to the issuer, as-of date, pathway and scope, in at most three "
-    "sentences. Readiness status, revision history and scope disclaimers belong in `## Gaps`.\n"
-    "- State each limitation once, where it changes a conclusion, and say what it changes. Do not "
-    "repeat a caveat in sentence after sentence.\n"
-    "- In prose, give every amount its currency and unit, for example USD 1,250 million, 3.1x "
-    "or 61 bp.\n"
-    "- Make the issuer, its debt or its creditors the subject of a sentence, not a module. Cite "
-    "modules and locators in brackets or tables.\n"
-    "- Use plain-English labels. Hashes and raw locators belong in `## Sources` and tables.\n\n"
+    "sentences.\n\n"
 )
 
 
@@ -1292,50 +1335,12 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
     return tuple(issues)
 
 
-# The lines the report states above the call, front-most first: the Reader summary's first table
-# (instructed by READER_SECTION_RULES) of each module that is in the run, and CP-6's instructed
-# `Final Action Bias:` paragraph. Nothing is read that no instruction asks the module to write.
-FRONT_TITLES = {
-    "CP-6": "Committee decision",
-    "CP-5": "Evidence validation",
-    "CP-2": "Fundamental credit",
-    "CP-0": "Source readiness",
-}
-READER_SUMMARY_HEADER = "Bottom line | Confidence | Main limitation"
-
-
-def _front_routes(ordered: tuple[str, ...]) -> tuple[MarkdownRoute, ...]:
-    routes = [
-        MarkdownRoute(
-            module_id=module_id,
-            heading="Reader summary",
-            kind="table",
-            block_id="front",
-            table_header=READER_SUMMARY_HEADER,
-            label=title,
-        )
-        for module_id, title in FRONT_TITLES.items()
-        if module_id in ordered
-    ]
-    if "CP-6" in ordered:
-        routes.append(
-            MarkdownRoute(
-                module_id="CP-6",
-                heading="Action Bias Determination",
-                kind="prose",
-                block_id="front",
-                prefix="Final Action Bias:",
-                label="Committee action bias",
-            )
-        )
-    return tuple(routes)
-
-
 HTML_MODEL_SCOPE = "The HTML Model and calculation JSON are not published by this launcher."
 FORECAST_SCOPE = (
-    "The HTML Model is not published by this launcher. A forecast table is published beside the "
-    "report when the CP-2G handoff's inputs block validates; Python computes its figures from the "
-    "inputs the handoff states, and the inputs are not independently reviewed."
+    "The HTML Model is not published by this launcher. A forecast table is published with the "
+    "issuer report in the library when the CP-2G handoff's inputs block validates; Python "
+    "computes its figures from the inputs the handoff states, and the inputs are not "
+    "independently reviewed."
 )
 
 
@@ -1370,8 +1375,8 @@ def _layout(
     scope = (
         f"User-launched {preset.title} run for {run.issuer_name} as of {run.as_of}, using {config} "
         "on the selected issuer folder. Automated checks cover handoff structure, issuer and date "
-        "anchors, source and upstream references and report selectors; analytical accuracy has "
-        "not been independently reviewed. "
+        "anchors, source and upstream references and issuer-report section selectors; analytical "
+        "accuracy has not been independently reviewed. "
         + (FORECAST_SCOPE if {"CP-1", "CP-2G"} <= set(ordered) else HTML_MODEL_SCOPE)
         + f" Sections not produced: {', '.join(omitted) or 'none'}."
     )
@@ -1381,22 +1386,9 @@ def _layout(
         scope=scope,
         title=f"{run.issuer_name} — {preset.title}",
         issuer_aliases=aliases,
-        front=_front_routes(ordered),
+        front=(),
     )
     return layout, tuple(omitted)
-
-
-READER_SECTION_RULES = (
-    "Write `### Reader summary` after the analysis is finished and place it first under "
-    "`## Findings`. It restates conclusions already in this handoff in plain language for a "
-    "credit analyst: add no new fact, figure or conclusion. Use no module codes, table IDs or "
-    "hashes. Every number must match the handoff exactly. Use these two tables, one row in the "
-    f"first (bottom line at most {BOTTOM_LINE_WORDS} words, main limitation at most "
-    f"{LIMITATION_WORDS}) and 1 to {MAX_FINDINGS} rows in the second (each finding and creditor "
-    f"impact at most {FINDING_WORDS} words). Confidence is one of {', '.join(CONFIDENCE)}.\n\n"
-    "| Bottom line | Confidence | Main limitation |\n| --- | --- | --- |\n\n"
-    "| Finding | Creditor impact | Confidence |\n| --- | --- | --- |\n\n"
-)
 
 
 # Every module (owner, 2026-11-10, "Fix all"). Retained run cpos-tdg-sol-medium-all-001 and the
@@ -1585,14 +1577,18 @@ def method_sections(module: str) -> list[tuple[str, str]]:
 
 
 def _method_file(name: str) -> str:
-    """A method file's text; `path § heading` gives that `## heading` section alone."""
+    """A method file's text; `path § heading` gives the one heading line of any level
+    `#{2,6} heading` and everything under it, to the next heading of the same or higher level."""
     path, _, heading = name.partition(" § ")
     text = (ROOT / path).read_text(encoding="utf-8")
     if not heading:
         return text
-    start = text.index(f"## {heading}\n")
-    end = text.find("\n## ", start + 1)
-    return text[start:] if end < 0 else text[start : end + 1]
+    found = list(re.finditer(rf"^(#{{2,6}}) {re.escape(heading)}\n", text, re.MULTILINE))
+    if len(found) != 1:
+        raise ValueError(f"{path}: expected one heading {heading!r}, found {len(found)}")
+    start, level = found[0].start(), len(found[0][1])
+    after = re.compile(rf"^#{{1,{level}}} ", re.MULTILINE).search(text, found[0].end())
+    return text[start:] if after is None else text[start : after.start()]
 
 
 CP3_MODE_LABELS = {
@@ -1634,11 +1630,20 @@ def _instructions(
     legal_documents: str,
 ) -> bytes:
     asked: list[MarkdownRoute | OwnerTable] = [r for r in routes if r.module_id == module]
+    # A report selector named like a reader passage (CP-2's `Key findings`) is that passage: it
+    # is written once, as the passage, or the section would repeat and delivery would refuse it.
+    named = [r.heading for r in asked if r.heading in READER_HEADINGS]
+    asked = [r for r in asked if r.heading not in named]
     selectors = "\n".join(_selector(r) for r in (*asked, *OWNER_TABLES.get(module, ())))
+    if named:
+        selectors += (
+            f"\n- {', '.join(f'`### {h}`' for h in named)}: the reader passage of that name is "
+            "this report selector; write it once, not twice, and write it even if this module is "
+            "blocked (state that nothing is assessable)."
+        )
     first, shared, rest = selectors.partition(EDGE_RULES)
     selectors = first + shared + rest.replace(EDGE_RULES, "")
     method = method_text(module)
-    opening = OPENING.get(module)
     return (
         f"# {module} for {run.issuer_name} ({run.issuer_id}), as of {run.as_of}\n\n"
         f"Pathway: {run.pathway}. Run the complete selected method below on this issuer's supplied "
@@ -1655,16 +1660,10 @@ def _instructions(
         + "A handoff is rejected unless it does all of this:\n"
         f"- name {run.issuer_name} in `## Request`, and state the as-of date {run.as_of} there;\n"
         "- list each issuer source it relied on in `## Sources`, with its exact name and sha256;\n"
-        "- list each supplied handoff in `## Sources`, with its module and exact sha256"
-        + (
-            f";\n- place `### {opening}` directly after `### Reader summary`, once: prose that "
-            "states the view, before any table.\n\n"
-            if opening
-            else ".\n\n"
-        )
-        + READER_SECTION_RULES
+        "- list each supplied handoff in `## Sources`, with its module and exact sha256.\n\n"
         + READER_PERSONA
-        + (READER_STANDARD if module in READER_STANDARD_MODULES else "")
+        + (DATA_PASSAGE if module in DATA_MODULES else PROSE_PASSAGES)
+        + VOICE_RULES
         + (
             "Report selectors, each exactly once inside `## Findings`, using these exact "
             f"headings. They place content in the report and are not analytical completion:\n"
@@ -1839,13 +1838,8 @@ def checker(layout: MarkdownLayout) -> Check:
         evidence = {_sha(v) for k, v in task.sources.items() if k != CONTEXT_SOURCE_ID}
         if not any(digest in text for digest in evidence):
             issues.append("List each issuer source relied on with its exact name and sha256.")
-        issues += reader_issues(text)
-        opening = OPENING.get(task.module_id)
-        if opening and not _opens_with(text.splitlines(), opening):
-            issues.append(
-                f"Place ### {opening} directly after ### Reader summary, once: prose that "
-                "states the view, before any table."
-            )
+        issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
+        issues += figure_issues(text)
         routes = tuple(r for r in layout.routes if r.module_id == task.module_id)
         try:
             if routes:
@@ -1893,25 +1887,6 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
                 f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
             )
     return ()
-
-
-def _opens_with(lines: list[str], heading: str) -> bool:
-    """`## Findings` starts with `### Reader summary`, then the one `### heading`, whose first
-    content is a paragraph: a line opening with a letter, a quote mark or bold, not a table, list,
-    fence, comment or heading.
-    """
-    try:
-        findings = [line for _, line in section(lines, "Findings") if line.strip()]
-        body = [line.strip() for _, line in section(lines, heading) if line.strip()]
-    except ValueError:  # Missing or repeated.
-        return False
-    first = body[0] if body else ""
-    headings = [line for line in findings if line.startswith("### ")]
-    return (
-        findings[:1] == ["### Reader summary"]
-        and headings[1:2] == [f"### {heading}"]
-        and (first[:1].isalpha() or first.startswith(("**", '"', "“")))
-    )
 
 
 def _cap(text: str) -> Decimal:
@@ -2070,7 +2045,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("No provider was called. Add --live --ruling <file> to start the paid run.")
         return 0
     try:
-        report = run_live_handoffs(
+        receipt = run_live_handoffs(
             prepared.manifest,
             prepared.directory,
             ruling=args.ruling,
@@ -2087,7 +2062,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
     spent = Budget(prepared.plan.provider_cap_usd, prepared.directory / "live").spent
-    print(f"Report:   {report}\nCharged:  USD {spent}")
+    print(f"Delivery: {receipt}\nCharged:  USD {spent}")
     if not args.no_library:
         _refresh_library(prepared.directory)
     print("Automated checks only: review the handoffs against the sources before relying on this.")
