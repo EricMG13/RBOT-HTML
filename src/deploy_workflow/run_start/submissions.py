@@ -390,14 +390,62 @@ def _remove(folder: Path) -> None:
         log.warning("could not remove %s (%s); the sweep will try again", folder, error)
 
 
+_ISSUED = "issued"
+
+
+def issued(layout: Layout, sid: str) -> str:
+    """The digest the latest summary of this submission returned; empty when there is none."""
+    path = _folder(layout, sid) / _ISSUED
+    if path.is_symlink():
+        return ""
+    try:
+        return path.read_text(encoding="ascii", errors="replace").strip()
+    except FileNotFoundError:
+        return ""
+
+
+def _record_issued(layout: Layout, sid: str, value: str) -> None:
+    """Replace the submission's issued digest with ``value`` (none when empty), under the lock."""
+    folder = _folder(layout, sid)
+    with _LOCK:
+        path = folder / _ISSUED
+        if not value:
+            path.unlink(missing_ok=True)
+            return
+        temp = folder / f".issued-{uuid.uuid4().hex}"
+        try:
+            temp.write_text(value + "\n", encoding="ascii")
+            os.replace(temp, path)
+        finally:
+            temp.unlink(missing_ok=True)
+
+
 def summary(
     layout: Layout, sid: str, answers: Answers, *, config: str, cap: Decimal
 ) -> dict[str, Any]:
     """The launcher's own forecast for these files and answers, with the digest to approve.
 
-    The context is written to a temporary folder and the run folder is another one; both are under
-    the state folder, never in the files, and both are removed. A refusal comes back as ``error``
-    with no digest, and so does a change to the documents while the forecast was being made."""
+    The digest it returns is the one approval this service will accept for the submission: it is
+    recorded in ``uploads/<id>/issued``, replaced by each later summary and removed when a summary
+    returns an error. The context is written to a temporary folder and the run folder is another
+    one; both are under the state folder, never in the files, and both are removed. A refusal
+    comes back as ``error`` with no digest, and so does a change to the documents while the
+    forecast was being made."""
+    result = _summarise(layout, sid, answers, config=config, cap=cap)
+    digest_issued = result.get("digest", "")
+    try:
+        _record_issued(layout, sid, digest_issued)
+    except Refused:
+        if digest_issued:  # a digest was made for a submission that is not there: not possible
+            raise
+        # An error answer for an unknown submission has no issued digest to clear; the answer
+        # (the refusal text) is still returned unchanged.
+    return result
+
+
+def _summarise(
+    layout: Layout, sid: str, answers: Answers, *, config: str, cap: Decimal
+) -> dict[str, Any]:
     try:
         answers = validated(answers)
     except Refused as refusal:

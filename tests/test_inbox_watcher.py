@@ -4,8 +4,6 @@ Tests start real child processes (tests/fixtures/fake_launcher.py), which call n
 spend nothing. Every wait has a limit, and the ``root`` fixture kills any run still alive.
 """
 
-# ruff: noqa: F811 - fixtures imported from inbox_fixtures are redefined as test parameters
-
 from __future__ import annotations
 
 import gc
@@ -33,15 +31,11 @@ from inbox_fixtures import (
     HERE,
     REPO,
     STAMP,
-    _no_leaked_log_handlers,  # noqa: F401 - an autouse fixture
     activity_js,
-    fake_env,  # noqa: F401 - fixtures
     go,
     layout,
-    listed,  # noqa: F401
     make_drop,
     pump,
-    root,  # noqa: F401
     settings,
     status,
 )
@@ -56,6 +50,8 @@ from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
 from deploy_workflow.owners.cpos_launch import update_library_at
+
+pytest_plugins = ["inbox_fixtures"]
 
 
 def test_a_drop_becomes_a_filed_report_exactly_once(root, fake_env, listed):

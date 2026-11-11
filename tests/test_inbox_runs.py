@@ -444,3 +444,51 @@ def test_an_event_line_nested_too_deep_to_parse_leaves_the_exit_code_to_decide(l
     log.parent.mkdir(parents=True)
     log.write_text("[" * 100_000 + "]" * 100_000 + "\n{}\n", encoding="utf-8")
     assert outcome(layout, RECORD, 3) == ("failed", "launcher exited 3; see logs/id1.log")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"modules": ("CP-0", "--cap", "1000")},
+        {"modules": ("--sources", "/etc")},
+        {"modules": ("CP-0", "--out", "/tmp/elsewhere")},
+        {"modules": ("NOT-A-MODULE",)},
+        {"modules": (1,)},
+        {"max_turns": 0},
+        {"max_turns": 65},
+        {"max_turns": -1},
+        {"max_turns": True},
+        {"max_turns": "7"},
+        {"max_turns": 1.5},
+        {"max_turns": 10**12},
+    ],
+)
+def test_command_refuses_a_record_whose_modules_or_turns_could_inject_an_option(layout, change):
+    record = Record("id1", "credit_snapshot", "acme", "queued", "t", **change)
+    with pytest.raises(ValueError):
+        command(
+            layout,
+            record,
+            Path("c.json"),
+            launcher=["py"],
+            config="sol-medium",
+            cap=Decimal(20),
+            ruling=None,
+        )
+
+
+def test_command_takes_every_method_name_and_the_turn_limits(layout):
+    from deploy_workflow.owners.cpos_launch import METHODS
+
+    for turns in (1, 64):
+        record = Record("id1", "p", "a", "queued", "t", modules=tuple(METHODS), max_turns=turns)
+        argv = command(
+            layout,
+            record,
+            Path("c.json"),
+            launcher=["py"],
+            config="sol-medium",
+            cap=Decimal(20),
+            ruling=None,
+        )
+        assert argv[argv.index("--modules") + 1 :][: len(METHODS)] == list(METHODS)

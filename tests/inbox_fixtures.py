@@ -79,8 +79,12 @@ def fake_env(monkeypatch: pytest.MonkeyPatch) -> Callable[[dict[str, Any]], None
 
 
 @pytest.fixture(autouse=True)
-def listed(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
-    """Replace the library rebuild: ``"*"`` lists every run folder, None excludes each."""
+def listed(request: pytest.FixtureRequest) -> Callable[..., None]:
+    """Replace the library rebuild: ``"*"`` lists every run folder, None excludes each.
+
+    The replacement is installed for each test that uses ``root``. This fixture is autouse and a
+    plugin's autouse fixtures reach every test in the session, so it asks for ``monkeypatch`` only
+    when it installs: a test of another module keeps its own fixture teardown order."""
 
     def install(which: str | None = "*", reason: str = "") -> None:
         def build(workspace: Path) -> SimpleNamespace:
@@ -89,9 +93,10 @@ def listed(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
             left = [] if which == "*" else [(n, reason) for n in names]
             return SimpleNamespace(runs=runs, excluded=left)
 
-        monkeypatch.setattr(cpos_launch, "update_library_at", build)
+        request.getfixturevalue("monkeypatch").setattr(cpos_launch, "update_library_at", build)
 
-    install("*")
+    if "root" in request.fixturenames:
+        install("*")
     return install
 
 

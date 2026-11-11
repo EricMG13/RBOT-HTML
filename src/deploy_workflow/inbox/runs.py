@@ -15,6 +15,7 @@ from typing import Literal, get_args
 
 from deploy_workflow import platform_io
 from deploy_workflow.inbox.drops import Layout
+from deploy_workflow.owners.cpos_launch import METHODS
 from deploy_workflow.run_events import EVENTS, read_events
 
 log = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ Status = Literal["queued", "running", "finished", "failed", "capped", "rejected"
 
 _REGISTRY = "issuers.json"
 DEFAULT_MAX_TURNS = 32
+_TURNS = (1, 64)  # the range submissions.validated accepts
 
 
 @dataclass
@@ -48,6 +50,7 @@ class Record:
     max_turns: int = DEFAULT_MAX_TURNS
     level: str = ""
     submitted_by: str = ""
+    digest: str = ""  # the approved digest of the submitted files; the move is checked against it
 
 
 PID_FILE_VARIABLE = "DEPLOY_WORKFLOW_PID_FILE"  # the launcher reads the same name
@@ -138,6 +141,17 @@ def alive(pid: int) -> bool:
     return True
 
 
+def _check_options(record: Record) -> None:
+    """``ValueError`` unless the record's modules are method names and its turns a whole number
+    in range: a hand-edited record must not put an option of its own into the launcher's argv."""
+    for name in record.modules:
+        if not isinstance(name, str) or name not in METHODS:
+            raise ValueError(f"run {record.id}: {name!r} is not a module")
+    turns = record.max_turns
+    if not isinstance(turns, int) or isinstance(turns, bool) or not _TURNS[0] <= turns <= _TURNS[1]:
+        raise ValueError(f"run {record.id}: max_turns {turns!r} is not a whole number 1 to 64")
+
+
 def command(  # noqa: PLR0913 - the signature the watcher calls
     layout: Layout,
     record: Record,
@@ -148,6 +162,7 @@ def command(  # noqa: PLR0913 - the signature the watcher calls
     cap: Decimal,
     ruling: Path | None,
 ) -> list[str]:
+    _check_options(record)
     argv = [
         *launcher,
         "--context", str(context),

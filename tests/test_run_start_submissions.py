@@ -669,3 +669,35 @@ def test_the_sweep_leaves_a_submission_with_an_upload_in_flight(layout):
     release.set()
     thread.join()
     assert result == ["big.pdf"]
+
+
+def test_a_summary_records_the_digest_it_returns_and_an_error_clears_it(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    assert submissions.issued(layout, sid) == ""
+    first = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    assert first["error"] == ""
+    assert submissions.issued(layout, sid) == first["digest"]
+    second = summary(
+        layout, sid, answers_for(tmp_path, max_turns=8), config="sol-medium", cap=Decimal(20)
+    )
+    assert second["digest"] != first["digest"]
+    assert submissions.issued(layout, sid) == second["digest"]  # replaced, not appended
+    bad = answers_for(tmp_path)
+    bad["context"] = {"schema": "nonsense"}
+    assert summary(layout, sid, bad, config="sol-medium", cap=Decimal(20))["error"]
+    assert submissions.issued(layout, sid) == ""
+    assert not (layout.uploads / sid / "issued").exists()
+
+
+def test_an_issued_digest_is_not_part_of_the_files_and_survives_the_seal(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    assert "issued" not in os.listdir(files_folder(layout, sid))
+    submissions.seal(layout, sid)
+    assert submissions.issued(layout, sid) == got["digest"]
+    assert digest(layout, sid, answers_for(tmp_path)) == got["digest"]
+
+
+def test_issued_is_refused_for_an_unknown_submission(layout):
+    with pytest.raises(Refused):
+        submissions.issued(layout, "0" * 32)

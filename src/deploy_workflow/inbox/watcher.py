@@ -15,7 +15,9 @@ never two records.
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import re
 import os
 import subprocess
 import sys
@@ -54,6 +56,8 @@ _CUT_SHORT = (
 # ponytail: a run whose launcher writes its PID file after 60 s is cut short; a reused process ID
 # after a reboot reads as alive. Both are known ceilings, not handled.
 _PID_GRACE_SECONDS = 60
+_SID = re.compile(r"[0-9a-f]{32}")
+_CHANGED = "the submitted documents changed before the run could start"
 
 
 @dataclass(frozen=True)
@@ -179,55 +183,119 @@ class Watcher:
 
     def _finish_moves(self) -> None:
         """A queued submission whose folder is still in ``uploads`` was cut short between its
-        record and the rename: finish the rename."""
+        record and the rename: finish the rename, once the files are shown to be the approved ones.
+
+        A record is failed only when that check fails; a rename that fails is retried."""
         for record in self._with_status("queued"):
             if record.submission and not os.path.lexists(self.layout.drops / record.id):
                 with self._guard(f"submission {record.submission}"):
                     self._move_files(record)
 
+    def _sealed(self, record: Record) -> Path:
+        return self.layout.uploads / record.submission / "sealed"
+
     def _move_files(self, record: Record) -> None:
-        files = self.layout.uploads / record.submission / "files"
-        if files.is_dir() and not files.is_symlink():
-            os.rename(files, self.layout.drops / record.id)
+        sealed = self._sealed(record)
+        if not sealed.is_dir() or sealed.is_symlink():
+            return
+        if self._sealed_digest(record, sealed) != record.digest or not record.digest:
+            self._put(
+                replace(
+                    record,
+                    status="failed",
+                    reason=_CHANGED,
+                    ended_at=self._utc(self.now()),
+                )
+            )
+            return
+        os.rename(sealed, self.layout.drops / record.id)
+
+    def _sealed_digest(self, record: Record, sealed: Path) -> str:
+        """The approval digest of the sealed files as ``submit`` computed it, without the
+        ``context.json`` it wrote there; "" when that cannot be recomputed (it then fails)."""
+        context = sealed / "context.json"
+        try:
+            text = context.read_bytes()
+            answers = submissions.validated(
+                {
+                    "context": json.loads(text),
+                    "modules": list(record.modules),
+                    "max_turns": record.max_turns,
+                    "level": record.level,
+                    "submitted_by": record.submitted_by,
+                }
+            )
+            context.unlink()
+        except (OSError, ValueError):  # no or unreadable context.json, a link inside: it changed
+            return ""
+        try:
+            return submissions.digest(self.layout, record.submission, answers)
+        except submissions.Refused:
+            return ""
+        finally:
+            context.write_bytes(text)
 
     def submit(self, sid: str, answers: Answers, approved_digest: str) -> Record:
         """Start one run for an approved submission. Repeating a submission returns its record.
 
-        ``Refused`` if the files or answers differ from what was approved. The record is saved
-        before the rename, so an interruption between them is finished by the next poll."""
+        ``Refused`` if the answers are not valid, a module is unknown, or the approval is not the
+        digest this service issued for exactly the files and answers now held. The files are
+        sealed first (no upload or removal lands after that), checked, then the record is saved
+        and only then is the sealed folder renamed, so an interruption between them is finished
+        by the next poll against the digest the record keeps."""
         with self.lock:
+            answers = submissions.validated(answers)
+            if not isinstance(sid, str) or not _SID.fullmatch(sid):
+                raise submissions.Refused("unknown submission")
             for record in self._records.values():
                 if record.submission == sid:
                     return record
-            files = submissions.files_folder(self.layout, sid)
-            # context.json is made here from the answers; a left-over one (an earlier cut-short
-            # attempt) is ours, since an upload may not carry that name.
-            (files / "context.json").unlink(missing_ok=True)
-            if submissions.digest(self.layout, sid, answers) != approved_digest:
-                raise submissions.Refused(
-                    "the documents or answers changed after approval; review the summary again"
-                )
-            (files / "context.json").write_bytes(submissions.context_bytes(answers))
-            context = answers["context"]
-            record = Record(
-                self._new_id(),
-                context["run"]["pathway"],
-                context["identity"]["issuer_name"],
-                "queued",
-                self._utc(self.now()),
-                issuer_id=context["identity"]["issuer_id"],
-                issuer_name=context["identity"]["issuer_name"],
-                as_of=context["run"]["as_of"],
-                prepared=True,  # a submission arrives already checked
-                submission=sid,
-                modules=tuple(answers["modules"]),
-                max_turns=answers["max_turns"],
-                level=answers["level"],
-                submitted_by=answers["submitted_by"],
-            )
-            self._put(record)
-            self._move_files(record)
+            for name in answers["modules"]:
+                if name not in cpos_launch.METHODS:
+                    raise submissions.Refused(f"unknown module {name}")
+            sealed = submissions.seal(self.layout, sid)
+            try:
+                record = self._record_for(sid, answers, approved_digest, sealed)
+            except BaseException:
+                submissions.unseal(self.layout, sid)
+                raise
+            os.rename(sealed, self.layout.drops / record.id)
             return record
+
+    def _record_for(self, sid: str, answers: Answers, approved_digest: str, sealed: Path) -> Record:
+        """Check the sealed files against the issued approval, write ``context.json`` into them
+        and save the queued record. Nothing has moved when this raises."""
+        # context.json is made here from the answers; a left-over one (an earlier cut-short
+        # attempt) is ours, since an upload may not carry that name.
+        (sealed / "context.json").unlink(missing_ok=True)
+        current = submissions.digest(self.layout, sid, answers)
+        if not approved_digest or not (
+            approved_digest == submissions.issued(self.layout, sid) == current
+        ):
+            raise submissions.Refused(
+                "the documents or answers changed after approval; review the summary again"
+            )
+        (sealed / "context.json").write_bytes(submissions.context_bytes(answers))
+        context = answers["context"]
+        record = Record(
+            self._new_id(),
+            context["run"]["pathway"],
+            context["identity"]["issuer_name"],
+            "queued",
+            self._utc(self.now()),
+            issuer_id=context["identity"]["issuer_id"],
+            issuer_name=context["identity"]["issuer_name"],
+            as_of=context["run"]["as_of"],
+            prepared=True,  # a submission arrives already checked
+            submission=sid,
+            modules=tuple(answers["modules"]),
+            max_turns=answers["max_turns"],
+            level=answers["level"],
+            submitted_by=answers["submitted_by"],
+            digest=current,
+        )
+        self._put(record)
+        return record
 
     def _reject_unrecorded_folders(self) -> None:
         """A folder or file in ``_engine/drops`` with no record was cut short before its record.
@@ -598,6 +666,9 @@ class Watcher:
 
     def _launch(self, record: Record) -> bool:
         """Start one run. True once it is recorded as started (and so counted for the day)."""
+        drop = self.layout.drops / record.id
+        if record.submission and not os.path.lexists(drop) and self._sealed(record).is_dir():
+            return False  # its move is not finished yet (a failed rename): _finish_moves retries
         try:
             context = drops.check(self.layout.drops / record.id, record.pathway).context
         except DropRejected as error:  # changed since the offline check
@@ -618,7 +689,11 @@ class Watcher:
                 cap=self.settings.cap,
                 ruling=startup.STANDING_RULING,  # start-up proved settings.ruling is this file
             )
-        except OSError as error:
+        except (OSError, ValueError, TypeError) as error:
+            # Documented fail-open: one record that cannot be turned into a command or started (a
+            # hand-edited or wrongly typed field raises ValueError or TypeError, not only OSError)
+            # must not stop the poll for every other run. The traceback is logged with the run's
+            # ID and the record is marked failed with the error text; nothing else is hidden.
             self._logger.exception("run %s could not be started", record.id)
             reason = f"could not be started: {error}"
             self._put(
