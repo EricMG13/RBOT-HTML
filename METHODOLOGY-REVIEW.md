@@ -1,5 +1,15 @@
 # Methodology across the related projects
 
+**Presentation selection, 2026-11-11 (owner; `docs/rulings/2026-11-11-reader-and-issuer-report.md`):**
+the reader layer of `docs/reuse/selected-methods/CANON_SHARED.md` (its reader-facing research
+layer and credit-research reading order, in `CP_AB_EXPORT_SPEC.md`) is selected for every module
+that writes prose, not only CP-2. Its rule that raw source locators belong in the appendix
+applies: locators sit in each paragraph's Basis line, tables' Source columns and `## Sources`,
+never in narrative sentences. Where its opening H3s differ from the ruling's fixed passage
+headings, the ruling governs. Data modules (CP-0/CP-PARSE, CP-1, CP-1C) owe only the bottom
+line. The CP-2-only reader scope of 2026-11-05 and the delivered report renderer are superseded:
+the issuer library shows each run natively. Not yet in the code; the findings below are unchanged.
+
 **Live execution adaptation, 2026-11-05:** reuse cp-os `b57a344`'s `SourceTools`,
 bounded module loop and atomic handoff edits in the existing final-workflow
 CP-OS exchange. Retain final-workflow `54a88165`'s selected analytical instructions,
@@ -684,7 +694,8 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
   reference that maps the Sector RV workbook; CP-4 its runbook and the CP-4A and CP-4B runbooks and
   step bundles; CP-5 its runbook; CP-6 `REF_CP-6A_STEPS.md`; CP-DR the research brief. Every skill
   module also gets `CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`, the rules its score script applies.
-- Archived but not sent: the rest of `CANON_SHARED.md` and the schema and system references, which
+- Archived but not sent: the rest of `CANON_SHARED.md` (its reader layer is selected for
+  sending from 2026-11-11; see the top of this file) and the schema and system references, which
   the SKILLs open only to resolve a named ambiguity. Not archived: the skills' scripts (not run in
   this transport) and three `.xlsx` deployment placeholders (enterprise data replaces them).
 - CP-2A stress sizes: `src/deploy_vii/methods/cp2a.md` (analyst-chosen, labelled, anchored
