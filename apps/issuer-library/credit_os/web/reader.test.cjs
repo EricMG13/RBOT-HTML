@@ -71,6 +71,11 @@ test('splitBasis takes the last line starting exactly "Basis: " and drops one fi
   assert.deepEqual(splitBasis('T\nBasis: a.pdf, pages 43–45; calculation K1'), {body: 'T', items: ['a.pdf, pages 43–45', 'calculation K1']});
 });
 
+test('splitBasis drops the final full stop even when white space follows it', () => {
+  assert.deepEqual(splitBasis('Text.\nBasis: a.pdf, page 4. ').items, ['a.pdf, page 4']);
+  assert.deepEqual(splitBasis('Text.\nBasis: a.pdf; b.pdf.\t').items, ['a.pdf', 'b.pdf']);
+});
+
 test('splitBasis does not treat other lines as a Basis line', () => {
   const notLast = 'Intro.\nBasis: a.pdf\nMore text.';
   assert.deepEqual(splitBasis(notLast), {body: notLast, items: []});
@@ -149,10 +154,20 @@ test('synthetic CP-2 Basis lines resolve to every item form', () => {
 test('earlierBasis moves a citation ending a sentence or the paragraph, with only its preceding space', () => {
   assert.deepEqual(earlierBasis('Cash was strong [CP-1: D4]. Next sentence [CP-2: F1].'), {body: 'Cash was strong. Next sentence.', items: ['[CP-1: D4]', '[CP-2: F1]']});
   assert.deepEqual(earlierBasis('Cash was 5. [CP-1: D4] Next sentence.'), {body: 'Cash was 5. Next sentence.', items: ['[CP-1: D4]']});
-  assert.deepEqual(earlierBasis('No stop [x]'), {body: 'No stop', items: ['[x]']});
-  assert.deepEqual(earlierBasis('Line one.\nLine two [x]'), {body: 'Line one.\nLine two', items: ['[x]']});
-  assert.deepEqual(earlierBasis('Two  spaces [x].  Next'), {body: 'Two  spaces.  Next', items: ['[x]']});
-  assert.deepEqual(earlierBasis('Rose [a] [b].'), {body: 'Rose.', items: ['[a]', '[b]']});
+  assert.deepEqual(earlierBasis('No stop [D4]'), {body: 'No stop', items: ['[D4]']});
+  assert.deepEqual(earlierBasis('Line one.\nLine two [D4]'), {body: 'Line one.\nLine two', items: ['[D4]']});
+  assert.deepEqual(earlierBasis('Two  spaces [D4].  Next'), {body: 'Two  spaces.  Next', items: ['[D4]']});
+  assert.deepEqual(earlierBasis('Rose [D1] [D2].'), {body: 'Rose.', items: ['[D1]', '[D2]']});
+});
+
+test('earlierBasis moves only bracketed text that looks like a citation: module code, page marker, register code, dagger or the 【】 form', () => {
+  for (const cite of ['[CP-1: D1]', '[K, p.41]', '[K, pp. 41-43]', '[Annual report, page 12]', '[F1]', '[C9, D4]', '[4:2†source]', '【4:2】']) {
+    assert.deepEqual(earlierBasis(`Cash rose. ${cite}`), {body: 'Cash rose.', items: [cite]}, cite);
+  }
+  for (const word of ['[sic]', '[TBD]', '[emphasis added]', '[Insufficient Information]', '[●]']) {
+    const text = `The quarter was called transformative ${word}. Margins rose.`;
+    assert.deepEqual(earlierBasis(text), {body: text, items: []}, word);
+  }
 });
 
 test('earlierBasis moves chips like 【4:2†source】 verbatim', () => {
@@ -193,9 +208,19 @@ test('nearestDates returns the next n items on or after the as-of date, ascendin
   assert.deepEqual(nearestDates(items, '2027-01-01'), []);
 });
 
-test('nearestDates ignores items without a day date and keeps input order for equal dates', () => {
-  const items = [{date: '2025-Q3', id: 1}, {date: '2025', id: 2}, {date: '2025-06-30', id: 3}, {date: '2025-06-30', id: 4}, {id: 5}];
+test('nearestDates ignores an item with no date or a date that is not a day, month, quarter or year, and keeps input order for equal dates', () => {
+  const items = [{date: 'sometime', id: 1}, {date: '2025-06-30', id: 3}, {date: '2025-06-30', id: 4}, {id: 5}, {date: '2025-13', id: 6}, {date: '2025-Q5', id: 7}];
   assert.deepEqual(nearestDates(items, '2025-01-01').map(i => i.id), [3, 4]);
+});
+
+test('nearestDates lists after the day-dated items those dated only to a month, quarter or year whose period ends on or after the as-of date, earliest end first', () => {
+  const items = [{date: '2025-Q3', id: 'q3'}, {date: '2025', id: 'y'}, {date: '2025-06-30', id: 'd'}, {date: '2025-03', id: 'mar'}, {date: '2025-02', id: 'feb'}, {date: '2024', id: 'old'}, {date: '2025-Q1', id: 'q1'}];
+  // As of 2025-03-31: February and 2024 have ended; March and Q1 end on that day; Q3 ends 2025-09-30; the year ends 2025-12-31.
+  assert.deepEqual(nearestDates(items, '2025-03-31').map(i => i.id), ['d', 'mar', 'q1', 'q3', 'y']);
+  assert.deepEqual(nearestDates(items, '2025-04-01').map(i => i.id), ['d', 'q3', 'y']);
+  // The five-item limit applies to the day-dated items only.
+  const many = ['01', '02', '03', '04', '05', '06'].map(day => ({date: `2025-07-${day}`, id: day}));
+  assert.deepEqual(nearestDates([...many, {date: '2025-Q4', id: 'q4'}], '2025-03-31').map(i => i.id), ['01', '02', '03', '04', '05', 'q4']);
 });
 
 test('figureSpans: only an ISO currency code is a prefix', () => {
@@ -371,6 +396,18 @@ test('the inspector draws two sources, then a page range and an upstream module,
     '<li><strong>NBG_2025-03-31_annual-report.pdf</strong>, pages 43–45</li>',
     '<li><a class="text-action" href="#/CP-1">Financial foundation (CP-1)<img src="arrow-right"></a></li>',
   ]));
+});
+
+test('an earlier-format paragraph lists its citations in a div with no empty class attribute', () => {
+  const html = require('./reader.js').inspectorBasisBlock('Cash rose. [CP-1: D4]', true, {sections: [], chips: [], ran: () => false}, () => '');
+  assert.equal(html, '<div><h3>Basis</h3><ul class="basis-items"><li>[CP-1: D4]</li></ul></div>');
+});
+
+test('screen.js draws each resolved Basis item as it is: it does not resolve an item again or rebuild the drawing helpers per item', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'screen.js'), 'utf8');
+  const draw = text.slice(text.indexOf('function basisItemHtml('), text.indexOf('// The inspector part for a paragraph'));
+  assert.ok(!draw.includes('inspectorItem(') && !draw.includes('chipSection:'), draw);
+  assert.equal((text.match(/inspectorItemHtml\(/g) || []).length, 1);
 });
 
 test('paragraphView: text holding the private-use marker characters is drawn as written, one button per figure', () => {

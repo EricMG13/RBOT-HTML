@@ -60,7 +60,7 @@ function splitBasis(text) {
   const lines = String(text).split('\n');
   const last = lines[lines.length - 1];
   if (!last.startsWith('Basis: ')) return {body: String(text), items: []};
-  const items = last.slice('Basis: '.length).replace(/\.$/, '').split('; ').map(item => item.trim()).filter(item => item !== '');
+  const items = last.slice('Basis: '.length).trimEnd().replace(/\.$/, '').split('; ').map(item => item.trim()).filter(item => item !== '');
   return {body: lines.slice(0, -1).join('\n'), items};
 }
 
@@ -134,7 +134,7 @@ function inspectorItemHtml(item, deps) {
 function inspectorBasisBlock(text, earlier, ctx, drawItem) {
   if (earlier) {
     const raw = earlierBasis(text).items;
-    return raw.length ? `<div class=""><h3>Basis</h3><ul class="basis-items">${raw.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : '';
+    return raw.length ? `<div><h3>Basis</h3><ul class="basis-items">${raw.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : '';
   }
   const items = inspectorItems(text, ctx);
   return items.length ? `<div class="basis"><h3>Basis</h3><ul class="basis-items">${items.map(item => drawItem(item)).join('')}</ul></div>` : '';
@@ -202,12 +202,15 @@ function normaliseLimitation(text) {
 
 // ---- Earlier format (H7): a bracket citation or chip that ends a sentence or the paragraph moves, verbatim, to the items.
 const CITATION = /\[[^\]]*\]|【[^】]*】/g;
+// Only bracketed text that looks like a citation moves: a module code, a page marker, a register code (letter and digits), a dagger or the 【】 form.
+// Other brackets ([sic], [TBD], [emphasis added], a status word) are wording and stay in the sentence.
+const CITATION_SHAPE = /CP-[A-Z0-9]+|\bpp?\.|\bpages?\b|\b[A-Z]\d{1,3}\b|†|^【/;
 const SENTENCE_END_BEFORE = /[.!?]["')”’]*\s?$/;
 const SENTENCE_END_AFTER = /^(?:\s*$|[.!?]+["')”’]*(?:\s|$))/;
 
 function earlierBasis(text) {
   text = String(text);
-  const found = [...text.matchAll(CITATION)].map(m => ({start: m.index, end: m.index + m[0].length, text: m[0]}));
+  const found = [...text.matchAll(CITATION)].filter(m => CITATION_SHAPE.test(m[0])).map(m => ({start: m.index, end: m.index + m[0].length, text: m[0]}));
   const clusters = [];
   for (const citation of found) {
     const last = clusters[clusters.length - 1];
@@ -381,12 +384,26 @@ function runModuleCodes(run) {
   return [...new Set([...ordered, ...held])];
 }
 
-// H5: the next n items dated on or after asOf, earliest first; an item without a YYYY-MM-DD date is not dated and is left out.
+// The last day of a period dated to a month (YYYY-MM), a quarter (YYYY-Qn) or a year (YYYY) as YYYY-MM-DD; null for any other text.
+function periodEnd(date) {
+  const text = String(date);
+  const pad = n => String(n).padStart(2, '0');
+  const endOfMonth = (year, month) => `${year}-${pad(month)}-${pad(new Date(Date.UTC(Number(year), month, 0)).getUTCDate())}`;
+  let found = /^(\d{4})-(\d{2})$/.exec(text);
+  if (found) return Number(found[2]) >= 1 && Number(found[2]) <= 12 ? endOfMonth(found[1], Number(found[2])) : null;
+  found = /^(\d{4})-Q([1-4])$/.exec(text);
+  if (found) return endOfMonth(found[1], 3 * Number(found[2]));
+  found = /^(\d{4})$/.exec(text);
+  return found ? `${found[1]}-12-31` : null;
+}
+
+// H5: the next n items dated on or after asOf, earliest first (a day-dated item is YYYY-MM-DD), then every item dated only to a month, quarter or year
+// whose period ends on or after asOf, earliest end first; the caller tells them apart by the date text. An item with no such date is left out.
 function nearestDates(items, asOf, n = 5) {
-  const dated = items.filter(item => /^\d{4}-\d{2}-\d{2}$/.test(String(item.date)) && item.date >= asOf);
-  return dated.map((item, index) => ({item, index}))
-    .sort((a, b) => (a.item.date < b.item.date ? -1 : a.item.date > b.item.date ? 1 : a.index - b.index))
-    .slice(0, n).map(entry => entry.item);
+  const byKey = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.index - b.index);
+  const days = items.map((item, index) => ({item, index, key: String(item.date)})).filter(entry => /^\d{4}-\d{2}-\d{2}$/.test(entry.key) && entry.key >= asOf);
+  const periods = items.map((item, index) => ({item, index, key: periodEnd(item.date)})).filter(entry => entry.key !== null && entry.key >= asOf);
+  return [...days.sort(byKey).slice(0, n), ...periods.sort(byKey)].map(entry => entry.item);
 }
 
 if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};

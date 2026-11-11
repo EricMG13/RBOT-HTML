@@ -331,11 +331,10 @@ function chipSection(chip,output) {
   const open=chip.file&&!absent?`<a class="btn" href="${esc(`${root}/source-text/${encodeURIComponent(chip.file)}`)}">${icon('file-text')}Open source file</a>`:'';
   return `<div class="chip-source"><h3>Source page · ${esc(chip.file||chip.source)} p.${esc(pages)}</h3><div class="chip-flags">${hash}${quote}</div>${chip.file&&chip.source?`<p class="small chip-key">Cited as ${esc(chip.source)}</p>`:''}${reason}${excerpt}${chip.sha256?`<p class="hash">SHA-256 ${esc(chip.sha256)}</p>`:''}<p>${open}</p></div>`;
 }
-// One Basis item of a new-format paragraph in words (reader.js inspectorItemHtml), resolved where the data allows (H3). `used` collects the chips an item took.
-function basisItemHtml(raw,output,chips,used) {
-  const item=inspectorItem(raw,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)});
+// One resolved Basis item of a new-format paragraph in words (reader.js inspectorItemHtml); `deps` is built once per paragraph. `used` collects the chips an item took.
+function basisItemHtml(item,deps,used) {
   if(item.kind==='source') item.chips.forEach(c=>used.add(c));
-  return inspectorItemHtml(item,{chipSection:c=>chipSection(c,output),moduleHref,icon});
+  return inspectorItemHtml(item,deps);
 }
 // The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
 // in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
@@ -348,7 +347,8 @@ function paragraphBasisHtml(key,item,output,mode,chips) {
     const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
     figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
     // reader.js draws the list (the same code the node tests read). New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
-    items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it.raw,output,chips,used));
+    const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
+    items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
   }
   const rest=chips.filter(c=>!used.has(c));
   return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
