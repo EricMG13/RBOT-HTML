@@ -41,14 +41,17 @@ def source(layout: Layout, run_id: str) -> tuple[Record, Path | None]:
 
 def _read_context(folder: Path) -> dict[str, Any] | None:
     try:
-        data = json.loads((folder / "context.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
+        with submissions.open_regular(folder / "context.json") as handle:
+            data = json.loads(handle.read().decode("utf-8"))
+    except (OSError, ValueError) as error:  # Refused is a ValueError
         # Not fail-open: the answer says there is no context, and the page then asks for one.
         log.warning("earlier run context unreadable at %s (%s)", folder, error)
         return None
     if not isinstance(data, dict):
+        log.warning("earlier run context at %s is not an object", folder)
         return None
     if not isinstance(data.get("run"), dict) or not isinstance(data.get("identity"), dict):
+        log.warning("earlier run context at %s lacks a run or identity object", folder)
         return None
     for key in _DATES:
         data["run"][key] = ""
@@ -74,7 +77,7 @@ def inputs(layout: Layout, run_id: str) -> dict[str, Any]:
         "issuer_name": record.issuer_name,
         "pathway": record.pathway,
         "context": context,
-        "files": _files(folder) if folder and context is not None else [],
+        "files": _files(folder) if folder else [],
         "level": record.level,
         "modules": list(record.modules),
         "max_turns": record.max_turns,

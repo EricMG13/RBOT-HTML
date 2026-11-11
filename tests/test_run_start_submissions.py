@@ -8,6 +8,7 @@ import logging
 import os
 import shutil
 import tempfile
+import unicodedata
 import threading
 import time
 from collections.abc import Iterator
@@ -1019,3 +1020,180 @@ def test_the_digest_of_carried_files_equals_the_digest_of_the_same_files_uploade
         put(layout, sid_b, name, data)
     answers = answers_for(tmp_path)
     assert digest(layout, sid_a, answers) == digest(layout, sid_b, answers)
+
+
+def _case_insensitive(folder: Path) -> bool:
+    probe = folder / "CaSeProbe"
+    probe.write_text("x")
+    try:
+        return (folder / "caseprobe").exists()
+    finally:
+        probe.unlink()
+
+
+def test_a_name_that_sanitises_to_a_stored_name_is_kept_not_replaced(layout, tmp_path):
+    sid = new(layout)
+    put(layout, sid, "a b.txt", b"mine")
+    src = _source(tmp_path, **{"a  b.txt": b"theirs", "a:b.txt": b"also"})
+    got = submissions.carry(layout, sid, src)
+    assert got == {"carried": [], "kept": ["a b.txt", "a b.txt"]}
+    assert (files_folder(layout, sid) / "a b.txt").read_bytes() == b"mine"
+
+
+def test_two_source_names_that_sanitise_to_one_copy_only_the_first(layout, tmp_path):
+    src = _source(tmp_path, **{"a  b.txt": b"1", "a:b.txt": b"2"})
+    sid = new(layout)
+    got = submissions.carry(layout, sid, src)
+    assert len(got["carried"]) == 1 and len(got["kept"]) == 1
+    assert list(_held(layout, sid)) == ["a b.txt"]
+
+
+def test_a_name_differing_in_case_or_form_is_kept_not_replaced(layout, tmp_path):
+    if not _case_insensitive(tmp_path):
+        pytest.skip("case-sensitive disk")
+    sid = new(layout)
+    put(layout, sid, "Report.txt", b"mine")
+    put(layout, sid, unicodedata.normalize("NFC", "é.txt"), b"mine")
+    src = _source(
+        tmp_path, **{"report.txt": b"theirs", unicodedata.normalize("NFD", "é.txt"): b"theirs"}
+    )
+    submissions.carry(layout, sid, src)
+    held = files_folder(layout, sid)
+    assert sorted(p.read_bytes() for p in held.iterdir()) == [b"mine", b"mine"]
+
+
+def test_a_failed_carry_does_not_delete_the_analysts_file(layout, tmp_path, monkeypatch):
+    sid = new(layout)
+    put(layout, sid, "a b.txt", b"mine")
+    src = _source(tmp_path, **{"a  b.txt": b"theirs", "z.txt": b"later"})
+    real = submissions.add_file
+
+    def failing(lay, s, name, body, length):
+        if name == "z.txt":
+            raise Refused("boom")
+        return real(lay, s, name, body, length)
+
+    monkeypatch.setattr(submissions, "add_file", failing)
+    with pytest.raises(Refused, match="boom"):
+        submissions.carry(layout, sid, src)
+    assert (files_folder(layout, sid) / "a b.txt").read_bytes() == b"mine"
+
+
+def test_an_upload_landing_during_the_carry_is_not_replaced(layout, tmp_path, monkeypatch):
+    src = _source(tmp_path, **{"a.txt": b"theirs"})
+    sid = new(layout)
+    real = submissions.add_file
+
+    def racing(lay, s, name, body, length):
+        if not isinstance(body, io.BytesIO):
+            real(lay, s, "a.txt", io.BytesIO(b"mine"), 4)  # the analyst's upload lands first
+        return real(lay, s, name, body, length)
+
+    monkeypatch.setattr(submissions, "add_file", racing)
+    assert submissions.carry(layout, sid, src) == {"carried": [], "kept": ["a.txt"]}
+    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
+
+
+def test_a_rollback_does_not_delete_an_upload_that_replaced_a_carried_file(
+    layout, tmp_path, monkeypatch
+):
+    src = _source(tmp_path, **{"a.txt": b"theirs", "b.txt": b"later"})
+    sid = new(layout)
+    real = submissions.add_file
+
+    def racing(lay, s, name, body, length):
+        if name == "b.txt":
+            real(lay, s, "a.txt", io.BytesIO(b"mine"), 4)  # the analyst re-uploads a.txt
+            raise Refused("boom")
+        return real(lay, s, name, body, length)
+
+    monkeypatch.setattr(submissions, "add_file", racing)
+    with pytest.raises(Refused, match="boom"):
+        submissions.carry(layout, sid, src)
+    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
+
+
+def _after_listing(monkeypatch, change):
+    real = submissions.listing
+
+    def wrapped(source):
+        got = real(source)
+        if source.name == "source":
+            change(source)
+        return got
+
+    monkeypatch.setattr(submissions, "listing", wrapped)
+
+
+def _nothing_secret_copied(layout, sid):
+    held = files_folder(layout, sid)
+    assert b"SECRET" not in [p.read_bytes() for p in held.rglob("*") if p.is_file()]
+
+
+def test_a_file_link_swapped_in_after_the_listing_is_not_followed(layout, tmp_path, monkeypatch):
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"SECRET")
+    src = _source(tmp_path, **{"a.txt": b"public"})
+
+    def swap(source):
+        (source / "a.txt").unlink()
+        (source / "a.txt").symlink_to(secret)
+
+    _after_listing(monkeypatch, swap)
+    sid = new(layout)
+    with pytest.raises(Refused):
+        submissions.carry(layout, sid, src)
+    _nothing_secret_copied(layout, sid)
+
+
+def test_a_folder_link_swapped_in_after_the_listing_is_not_followed(layout, tmp_path, monkeypatch):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "b.txt").write_bytes(b"SECRET")
+    src = _source(tmp_path, **{"sub/b.txt": b"public"})
+
+    def swap(source):
+        (source / "sub" / "b.txt").unlink()
+        (source / "sub").rmdir()
+        (source / "sub").symlink_to(outside, target_is_directory=True)
+
+    _after_listing(monkeypatch, swap)
+    sid = new(layout)
+    with pytest.raises(Refused):
+        submissions.carry(layout, sid, src)
+    _nothing_secret_copied(layout, sid)
+
+
+def test_a_file_that_grew_after_the_listing_is_refused(layout, tmp_path, monkeypatch):
+    src = _source(tmp_path, **{"a.txt": b"Net sales were 100"})
+
+    def grow(source):
+        with (source / "a.txt").open("ab") as out:
+            out.write(b"0 million")
+
+    _after_listing(monkeypatch, grow)
+    sid = new(layout)
+    with pytest.raises(Refused, match="changed"):
+        submissions.carry(layout, sid, src)
+    assert _held(layout, sid) == {}
+
+
+def test_a_hard_link_to_a_file_outside_is_refused(layout, tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"SECRET")
+    src = _source(tmp_path)
+    os.link(secret, src / "a.txt")
+    sid = new(layout)
+    with pytest.raises(Refused):
+        submissions.carry(layout, sid, src)
+    _nothing_secret_copied(layout, sid)
+
+
+def test_a_source_folder_that_is_itself_a_link_is_refused(layout, tmp_path):
+    real = _source(tmp_path, **{"a.txt": b"SECRET"})
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    sid = new(layout)
+    with pytest.raises(Refused):
+        submissions.carry(layout, sid, linked)
+    _nothing_secret_copied(layout, sid)

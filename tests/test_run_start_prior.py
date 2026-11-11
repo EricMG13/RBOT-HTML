@@ -115,3 +115,17 @@ def test_the_latest_run_is_the_greatest_as_of_then_the_greatest_id(root):
     assert got["runs"] == 3 and got["latest_as_of"] == "2026-11-09"
     assert got["latest_run"] == "20261103-000000-01"
     assert got["issuer_name"] == "20261103-000000-01"
+
+
+def test_files_are_listed_when_the_context_is_not_usable(scheduler, root, caplog):
+    record = submit_run(scheduler, root, "acme")
+    context = layout(root).drops / record.id / "context.json"
+    pump(scheduler, context.is_file)
+    context.write_text("[]")
+    got = prior.inputs(layout(root), record.id)
+    assert got["context"] is None
+    assert got["files"] == [{"name": "a.txt", "size": len(b"Net sales were 100 for acme.")}]
+    assert "not an object" in caplog.text
+    context.write_text('{"run": 1, "identity": {}}')
+    assert prior.inputs(layout(root), record.id)["context"] is None
+    assert "lacks a run or identity object" in caplog.text

@@ -8,14 +8,17 @@ a path outside the submission's own ``files`` folder. A refusal leaves no file b
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
 import re
 import secrets
 import shutil
+import stat
 import tempfile
 import threading
+import unicodedata
 import uuid
 from collections.abc import Collection
 from decimal import Decimal
@@ -281,7 +284,7 @@ def _write(body: BinaryIO, target: Path, length: int) -> None:
             left -= len(chunk)
 
 
-def _place(folder: Path, parts: list[str], temp_path: Path) -> None:
+def _place(folder: Path, parts: list[str], temp_path: Path, *, replace: bool = True) -> None:
     """Move a finished upload into ``files``; the folder creation and the rename are one step."""
     with _LOCK:
         root = _usable_root(folder)
@@ -292,6 +295,8 @@ def _place(folder: Path, parts: list[str], temp_path: Path) -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_dir():
                 raise Refused(f"{stored!r} is already a folder")
+            if not replace and os.path.lexists(target):
+                raise _Taken(f"{stored!r} is already stored")
             os.replace(temp_path, target)
         except (NotADirectoryError, FileExistsError) as error:
             raise Refused(f"{stored!r} clashes with a file or folder already stored") from error
@@ -312,7 +317,7 @@ def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -
 
     The bytes go to a temporary name in the submission folder and are renamed into place on
     success, so a refusal or a cut-off upload leaves nothing behind. A name already stored is
-    replaced."""
+    replaced, except for a file opened by ``open_regular`` (a carry), which is refused as taken."""
     folder = _folder(layout, sid)
     if _is_sealed(folder):
         raise Refused("this submission has been submitted")
@@ -326,7 +331,7 @@ def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -
     temp_path = folder / tmp
     try:
         _write(body, temp_path, length)
-        _place(folder, parts, temp_path)
+        _place(folder, parts, temp_path, replace=not isinstance(body, _Carried))
     finally:
         # The reservation is released first: a failed unlink must not hold it for the life of the
         # process (it blocks ``seal`` and the sweep).
@@ -368,10 +373,52 @@ def listing(source: Path) -> dict[str, int]:
     }
 
 
-def _check_carry(root: Path, sid: str, wanted: dict[str, int]) -> list[str]:
-    """The names to copy, after the limits are checked against what is stored and in flight."""
+class _Taken(Refused):
+    """A carried file's name is already stored; the carry keeps the stored file."""
+
+
+class _Carried(io.BufferedReader):
+    """A source file opened by ``open_regular``; ``add_file`` never replaces a file for one."""
+
+
+def open_regular(path: Path, size: int | None = None) -> _Carried:
+    """Open ``path`` for reading; ``Refused`` unless it is a regular file with one link (and
+    ``size`` bytes when given). The last part is not followed if it is a link."""
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as error:
+        raise Refused(f"{path.name!r} cannot be read as a regular file") from error
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise Refused(f"{path.name!r} is a link, not an uploaded file")
+        if size is not None and info.st_size != size:
+            raise Refused(f"{path.name!r} changed while it was being copied")
+        return _Carried(io.FileIO(fd, "rb"))
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _fold(name: str) -> str:
+    """A stored name as a case- and normalisation-insensitive disk sees it."""
+    return unicodedata.normalize("NFC", "/".join(_parts(name))).casefold()
+
+
+def _check_carry(root: Path, sid: str, wanted: dict[str, int]) -> tuple[list[str], list[str]]:
+    """The names to copy and the names kept (in stored form), the limits checked against what is
+    stored and in flight. A name is compared in its stored form, as the disk compares it."""
     existing = _stored(root)
-    names = sorted(set(wanted) - set(existing))
+    taken = {_fold(name) for name in existing}
+    names: list[str] = []
+    kept: list[str] = []
+    for name in sorted(wanted):
+        key = _fold(name)
+        if key in taken:
+            kept.append("/".join(_parts(name)))
+        else:
+            taken.add(key)
+            names.append(name)
     for name in names:
         if wanted[name] > MAX_FILE:
             raise Refused(f"a file is at most {MAX_FILE // (1024 * 1024)} MB")
@@ -381,36 +428,56 @@ def _check_carry(root: Path, sid: str, wanted: dict[str, int]) -> list[str]:
     total = sum(existing.values()) + sum(size for _, size in own.values())
     if total + sum(wanted[name] for name in names) > MAX_TOTAL:
         raise Refused(f"more than {MAX_TOTAL // (1024 * 1024)} MB in total")
-    return names
+    return names, kept
+
+
+def _roll_back(layout: Layout, sid: str, made: list[tuple[str, int]]) -> None:
+    """Remove the files this carry created, each only while it still has the size it wrote."""
+    try:
+        root = files_folder(layout, sid)
+    except Refused as error:
+        log.warning("carry %s: the files could not be rolled back (%s)", sid, error)
+        return
+    for stored, size in made:
+        path = root.joinpath(*stored.split("/"))
+        try:
+            if path.is_symlink() or not path.is_file() or path.lstat().st_size != size:
+                continue  # replaced since: no longer this call's file
+            remove_file(layout, sid, stored)
+        except (Refused, OSError) as error:  # logged; the caller sees the original failure
+            log.warning("carry %s: could not remove %s (%s)", sid, stored, error)
 
 
 def carry(layout: Layout, sid: str, source: Path) -> dict[str, list[str]]:
     """Copy each file under ``source`` (but its context.json) into the submission.
 
-    A name already stored is kept, not replaced. Nothing is copied when a link is found or a limit
-    would be passed; a copy that fails part-way removes what this call added. Returns the names
-    carried and the names kept, each sorted."""
+    A name already stored is kept, never replaced, and is reported as kept. Nothing is copied when
+    a link is found or a limit would be passed; a copy that fails part-way removes the files this
+    call created. Returns the names carried and the names kept, each sorted."""
     folder = _folder(layout, sid)
+    if source.is_symlink() or not source.is_dir():
+        raise Refused("the earlier run's files are not a plain folder")
     wanted = listing(source)
     with _LOCK:
         root = _usable_root(folder)
-        names = _check_carry(root, sid, wanted)
-        kept = sorted(set(wanted) - set(names))
-    # ponytail: the pre-check and the copies are not one atomic step; ``add_file`` re-checks each
-    # file against the limits, and the rollback below restores the folder.
-    added: list[str] = []
+        names, kept = _check_carry(root, sid, wanted)
+    # ponytail: the pre-check and the copies are not one atomic step. Each copy is created without
+    # replacing (``_place`` refuses a name taken since, and the file is then kept), ``add_file``
+    # re-checks the limits, and a failure removes only what this call created. A seal landing
+    # between two copies leaves the earlier ones in the sealed folder (a wider lock is needed).
+    made: list[tuple[str, int]] = []
     try:
         for name in names:
-            with (source / name).open("rb") as handle:
-                added.append(add_file(layout, sid, name, handle, wanted[name]))
+            _refuse_links(source, name.split("/"))
+            with open_regular(source / name, wanted[name]) as handle:
+                try:
+                    made.append((add_file(layout, sid, name, handle, wanted[name]), wanted[name]))
+                except _Taken:
+                    kept.append("/".join(_parts(name)))
     except BaseException:
-        for stored in added:
-            try:
-                remove_file(layout, sid, stored)
-            except Refused as error:  # logged; the original failure is what the caller sees
-                log.warning("carry %s: could not remove %s (%s)", sid, stored, error)
+        _roll_back(layout, sid, made)
         raise
-    return {"carried": sorted(added), "kept": kept}
+    return {"carried": sorted(stored for stored, _ in made), "kept": sorted(kept)}
 
 
 def reading(layout: Layout, sid: str) -> dict[str, Any]:
