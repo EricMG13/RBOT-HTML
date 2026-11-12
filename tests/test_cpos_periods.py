@@ -787,6 +787,19 @@ def test_the_dated_more_than_once_limit_follows_the_operand_reasons():
     assert limits[2].startswith("CP-1's period table dates FY2024 more than once")
 
 
+def test_history_is_published_only_when_asked():
+    default = model_files(CP1.encode(), forecast_block().encode())
+    asked = model_files(CP1.encode(), forecast_block().encode(), history=True)
+    assert "history" not in json.loads(default["calculation.json"])
+    assert default == model_files(CP1.encode(), forecast_block().encode(), history=False)
+    assert "history" in json.loads(asked["calculation.json"])
+    for name in ("annual.md", "forecast.md", "forecast_exact.json", "quarter.md"):
+        assert asked[name] == default[name]
+    without = json.loads(asked["calculation.json"])
+    del without["history"]
+    assert without == json.loads(default["calculation.json"])
+
+
 PRIOR_LTM_CP1 = """| Reported label | Q3 2025 | Q3 2024 revised | 9M 2025 | 9M 2024 | 9M 2023 \
 | FY2024 | FY2023 | Locator |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -818,6 +831,32 @@ def test_the_prior_ltm_built_without_dates_is_flagged_and_a_checked_one_is_not()
     assert flag not in checked["limits"]
 
 
+def test_model_files_publishes_the_history_record():
+    files = model_files(CP1.encode(), forecast_block().encode(), history=True)
+    record = json.loads(files["calculation.json"])["history"]
+    ltm = next(c for c in record["columns"] if c["id"] == "LTM")
+    assert D(ltm["values"]["revenue"]["amount"]) == D("1060")
+    assert json.loads(files["calculation.json"])["annual_periods"] == []
+
+
+def test_a_cp1_without_tables_still_publishes_the_forecast():
+    files = model_files(" ".join(BASE.values()).encode(), forecast_block().encode(), history=True)
+    record = json.loads(files["calculation.json"])["history"]
+    assert [c["kind"] for c in record["columns"]] == [
+        "QUARTER",
+        "YTD",
+        "PYTD",
+        "FY",
+        "LTM",
+        "PRIOR_LTM",
+        "PF",
+    ]
+    assert all(
+        v["amount"] is None and v["reason"] for c in record["columns"] for v in c["values"].values()
+    )
+    assert "REFERENCE" in json.loads(files["forecast_exact.json"])["outputs"]
+
+
 def test_the_forecast_figures_do_not_change():
     with_tables = model_files(CP1.encode(), forecast_block().encode())
     without = model_files(" ".join(BASE.values()).encode(), forecast_block().encode())
@@ -825,6 +864,14 @@ def test_the_forecast_figures_do_not_change():
         json.loads(with_tables["forecast_exact.json"])["outputs"]
         == json.loads(without["forecast_exact.json"])["outputs"]
     )
+
+
+def test_a_cell_too_long_to_read_exactly_does_not_end_the_forecast():
+    long = "| Other | (" + "1" * 40 + ") |"
+    cp1 = CP1 + "\n| Item | FY2024 |\n| --- | --- |\n" + long + "\n"
+    files = model_files(cp1.encode(), forecast_block().encode(), history=True)
+    record = json.loads(files["calculation.json"])["history"]
+    assert D(cell(record, "LTM", "revenue")["amount"]) == D("1060")
 
 
 BIG = "1000.000000000000000000000000000000000001"
@@ -1007,6 +1054,25 @@ def test_layer_one_names_a_period_that_is_not_one():
     )
 
 
+def test_model_files_reads_a_layer_one_forecast_through_its_named_rows():
+    # The CP-1 handoff is its own forecast source: the base operands name row and period.
+    base = {
+        k: {"amount": v, "reason": None, "row": NAMED[k][0], "period": NAMED[k][1]}
+        for k, v in BASE.items()
+    }
+    block = json.loads(forecast_block(base=base).split("```json\n")[1].split("\n```")[0])
+    block["downside_shock"] = None  # a layer-1 forecast states no shock
+    text = (
+        CP1
+        + "\n### Forecast inputs (machine-readable)\n\n```json\n"
+        + json.dumps(block)
+        + "\n```\n"
+    )
+    files = model_files(text.encode(), text.encode(), "CP-1", history=True)
+    record = json.loads(files["calculation.json"])["history"]
+    assert D(cell(record, "LTM", "revenue")["amount"]) == D("1060")
+
+
 # --- ruling 2: a row's sign comes from its base cell --------------------------------------------
 def test_a_net_refund_in_one_period_keeps_its_sign():  # adv_outflow_refund_sign
     cp1 = CP1.replace("| Income taxes paid | (15) | (14) |", "| Income taxes paid | (15) | 8 |")
@@ -1060,6 +1126,22 @@ def test_a_transition_year_has_no_full_year_ratios():  # adv_short_fiscal_year_r
 
 
 # --- ruling 6: a numeral of more than 38 digits is not a figure ---------------------------------
+def test_an_ebitda_cell_of_a_million_digits_is_not_a_figure_and_nothing_raises():
+    tiny = "0." + "0" * 999_999 + "1"
+    cp1 = (
+        CP1
+        + "\n"
+        + _md(
+            ["Reported label", "FY2024", "FY2022"],
+            [["EBITDA", "300", tiny], ["Total debt", "600", "600"]],
+        )
+    )
+    record = _hist(cp1)
+    assert cell(record, "FY2022", "total_leverage")["amount"] is None
+    files = model_files(cp1.encode(), forecast_block().encode(), history=True)
+    assert json.loads(files["calculation.json"])["history"]["columns"][-1]["id"] == "PF"
+
+
 # --- ruling 7: handoff text is bounded ----------------------------------------------------------
 def test_a_header_quoted_in_a_reason_is_cut_to_80_characters():
     cp1 = CP1.replace("| Metric | FY2024 |", "| Metric | " + "x" * 200 + " 2024 |")

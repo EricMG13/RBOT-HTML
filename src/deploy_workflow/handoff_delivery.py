@@ -149,6 +149,9 @@ class DeliveryRequest(Contract):
     handoffs: dict[str, HandoffInput]
     model: ModelDelivery | None = None
     forecast: bool = Field(default=False, exclude_if=lambda v: not v)
+    # Written only when true, so a forecast delivery made before the history record existed
+    # re-derives byte for byte from its request.
+    history: bool = Field(default=False, exclude_if=lambda v: not v)
     layout: MarkdownLayout | None = None
     # CP-8's comparison pack (`deploy_workflow.changes`), published unchanged as `changes.json`.
     changes: HandoffInput | None = Field(default=None, exclude_if=lambda v: v is None)
