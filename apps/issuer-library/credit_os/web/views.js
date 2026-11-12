@@ -806,6 +806,14 @@ const EARLIER_METHODS_BADGE='<span class="badge badge-gray earlier-methods">Earl
 const earlierMethods=run=>(run.methodChanges||[]).length>0;
 const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
 const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
+// The header's meta line under the issuer title: the ticker and sector the catalogue holds for this run and the number of the issuer's runs it holds (the runs
+// the store joins to the same issuer, this one included). A part the catalogue lacks is left out; with none the line is not drawn.
+function issuerMeta(context) {
+  const ctx=contexts[context],row=catalogueRuns().find(run=>run.id===ctx?.folder);
+  if(!row)return '';
+  const runs=catalogueRuns().filter(run=>run===row||sameIssuer(contexts[libraryRunKey(run)]?.issuerKey,ctx.issuerKey)).length;
+  return [row.issuer,row.sector,plural(runs,'run')].filter(Boolean).join(' · ');
+}
 // "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
 function runLabel(module,context) {
   const ctx=contexts[context];
@@ -1383,13 +1391,15 @@ function updateWorkspaceChrome(module) {
   const ctx=contexts[current.context],isHome=!ctx||appDestinations.has(module);
   const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first),period=current.output?data[current.output].period:ctx?.period;
   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
-  document.querySelector('.issuer').innerHTML=`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${isHome?'':`<div class="issuer-meta"><span class="code">${esc(ctx.run)}</span><a href="#W-Library/cases">Change run</a></div>`}</div>${isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`}`;
+  const header=document.querySelector('.issuer'),meta=isHome?'':issuerMeta(current.context);
+  header.classList.toggle('run-header',!isHome);
+  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}</div><div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div></div>`;
   document.querySelector('.workspace-tabs').hidden=isHome;
   $('context-bar').hidden=isHome||module==='W-Report';
   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
-  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],['W-Changes','Changes','git-compare'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
+  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report'],['W-Overview','Overview'],['W-Changes','Changes'],[moduleId,'Modules'],['W-Forecast','Forecast'],['W-Evidence','Evidence']].map(([id,label])=>{
     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
-    return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${icon(img)}${label}</a>`;
+    return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${label}</a>`;
   }).join('');
   $('workbench').classList.toggle('library-workspace',isHome);
   // The Overview is a page of selected passages: no module navigator beside it and no Browse modules button above it.

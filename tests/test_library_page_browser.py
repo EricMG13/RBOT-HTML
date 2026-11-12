@@ -1279,3 +1279,43 @@ def test_report_history_has_no_start_link_from_a_file(tmp_path):
     dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
     assert console == [] and '<table class="history-table">' in dom
     assert "start-run" not in dom and ">Start a run</a>" not in dom
+
+
+CHROME_PROBE = Path(__file__).with_name("browser_probe_chrome.js").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_path, width):
+    page = report_library(tmp_path)
+    (page.parent / "probe.js").write_text(CHROME_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/head?c=run-a", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["width"] == width
+    # The header: the way back to the library, the title at 24px, no run chip or Change run.
+    assert seen["back"] == {"text": "Issuer library", "href": "#W-Library/cases"}
+    assert "Change run" not in seen["headerText"] and seen["headerCodes"] == 0
+    assert seen["h1Size"] == "24px"
+    # The fixture issuer has a ticker (the catalogue's issuer field), no sector, and one run.
+    assert seen["meta"] == "NBG · 1 run"
+    # The tabs are text only, in the same six names and order as before.
+    assert [t["text"] for t in seen["tabs"]] == [
+        "Report",
+        "Overview",
+        "Changes",
+        "Modules",
+        "Forecast",
+        "Evidence",
+    ]
+    assert [t["art"] for t in seen["tabs"]] == [0] * 6
+    # The navigator: 250px (220px at 1280), uppercase 11px group headings, the open entry in blue.
+    assert abs(seen["navWidth"] - (250 if width == 1440 else 220)) <= 1
+    assert (seen["headingTransform"], seen["headingSize"]) == ("uppercase", "11px")
+    assert (seen["itemBackground"], seen["itemWeight"]) == ("rgb(238, 240, 255)", "600")
+    # The strip: the link to every run of the issuer at the right edge; the run code as stored.
+    assert seen["allText"] == "All runs of this issuer" and 0 <= seen["allGap"] <= 30
+    assert seen["codeTransform"] == "none" and seen["codeText"] == "RUN-A"
+    assert seen["fits"] is True and seen["fitsOpen"] is True
+    # The inspector: 340px at 1440, 300px at 1280.
+    assert abs(seen["inspectorWidth"] - (340 if width == 1440 else 300)) <= 1

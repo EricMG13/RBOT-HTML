@@ -602,3 +602,53 @@ td .basis-link{margin-left:6px}
 .ledger-legend i{width:12px;height:12px;border-radius:2px}
 .trend-list{list-style:none;padding:0;margin:8px 0 16px;display:grid;gap:6px}.trend-list li{display:grid;grid-template-columns:minmax(150px,1fr) 160px minmax(0,2fr);gap:12px;align-items:center;font-size:var(--fs-compact)}.trend-list li>.muted:nth-child(2){grid-column:2/-1}.trend line{stroke:var(--muted);stroke-width:1.5}.trend circle{fill:var(--blue)}
 @media(max-width:720px){.change-module>summary{grid-template-columns:1fr auto}.change-then,.change-now{grid-column:1/-1}.change-pair{grid-template-columns:1fr}.trend-list li{grid-template-columns:1fr}.trend-list li>.muted:nth-child(2){grid-column:auto}}
+/* Redesign pass 1 (2026-11-12): run chrome, workbench columns and the Modules navigator, after the Claude Design screens L3 and L4. Layout and type only; widths hold from 1301px, 1300px and below use 220px and 300px, 1050px and 720px keep the rules above. */
+:root{--strip:#f6f7fb}
+.issuer.run-header{display:block;padding:18px 28px 0}
+.issuer-back{display:inline-flex;align-items:center;gap:4px;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--blue);text-decoration:none}
+.issuer-back:hover{text-decoration:underline;text-underline-offset:3px}
+.issuer-back svg{flex:none}
+.issuer-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:12px}
+.issuer-row .issuer-title{display:block}
+.issuer-row h1{margin-top:8px}
+.issuer-row .scope{margin-top:8px}
+.issuer-row .issuer-meta{display:block;margin:0;font:400 14px/20px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
+@media(min-width:721px){
+.workspace-tabs{gap:0;padding:0 16px;border-bottom-color:var(--gray-200)}
+.workspace-tabs>a{height:auto;padding:10px 12px 12px;font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-tertiary)}
+.workspace-tabs>a:hover{color:var(--text-primary)}
+.workspace-tabs>a[aria-current]{color:var(--blue-700);border-color:var(--blue)}
+.context-bar{padding:10px 28px;background:var(--strip);border-bottom-color:var(--gray-200);font-size:13px;line-height:18px}
+}
+.context-bar .context-run strong{font-weight:600;color:var(--text-primary)}
+.context-bar .code{font:500 13px/18px 'Red Hat Mono',monospace;text-transform:none;color:var(--text-secondary);background:none;border:0;padding:0}
+.context-bar>.text-action{margin-left:auto;font-size:13px;line-height:18px;gap:4px}
+.context-bar .context-revision{flex:1 0 100%}
+@media(min-width:1301px){
+.workbench:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:250px minmax(0,1fr)}
+.workbench.has-evidence:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:250px minmax(0,1fr) 340px}
+.workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:250px minmax(0,1fr)}
+.workbench.tools-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 340px}
+.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:250px minmax(0,1fr) 340px}
+.workbench.overview-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 340px}
+}
+@media(min-width:1051px) and (max-width:1300px){
+.workbench:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:220px minmax(0,1fr)}
+.workbench.has-evidence:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:220px minmax(0,1fr) 300px}
+.workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr)}
+.workbench.tools-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 300px}
+.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr) 300px}
+.workbench.overview-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 300px}
+}
+.navigator{padding:16px 12px}
+.navigator-head{top:-16px}
+.navigator .search{height:36px;padding:0 10px;border-color:var(--gray-300);border-radius:8px}
+.navigator .search input{font-size:13px}
+.nav-group{border-top:0;padding:16px 0 0}
+.nav-heading{font:600 11px/16px 'Red Hat Text',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--text-quaternary);padding:0 10px 6px}
+.module-item{padding:7px 10px;border-radius:7px;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.module-item .module-label{font:inherit}
+.module-item.selected{background:var(--blue-50);color:var(--blue-700);font-weight:600}
+.section-outline{margin:2px 0 8px 14px;padding-left:10px;border-left:1px solid var(--gray-200)}
+.section-item{padding:3px 8px;border-radius:5px;font:400 12px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.section-item[aria-current]{background:var(--blue-50);color:var(--blue-700);font-weight:600}

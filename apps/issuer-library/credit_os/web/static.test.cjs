@@ -24,8 +24,8 @@ test('the rail is Start a run, Issuer library, Run activity, Search: no Reports 
 
 test('the issuer tabs are Report, Overview, Changes, Modules, Forecast, Evidence; no Calendar or Reports tab and no report frame or adapter remains (decisions 1, 12)', () => {
   const views = read('views.js');
-  const tabs = views.slice(views.indexOf("querySelector('.workspace-tabs').innerHTML=["), views.indexOf(".map(([id,label,img])"));
-  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)','[^']+'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
+  const tabs = views.slice(views.indexOf("querySelector('.workspace-tabs').innerHTML=["), views.indexOf(".map(([id,label])"));
+  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
   for (const name of fs.readdirSync(__dirname).filter(f => /\.(js|css|html)$/.test(f))) {
     const text = read(name);
     for (const gone of ['report-adapter', 'report-preview', 'report-workspace', 'report-content', 'cancelReportFrame', 'isReportRoute', 'reportList', 'reportView', 'reportManifest', 'runReports', 'calendarSections']) {
@@ -912,7 +912,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, drawnAnchors, defaultOutput, firstSection};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, drawnAnchors, defaultOutput, firstSection};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -2023,7 +2023,7 @@ test('library filters: Reset shows only while something is filtered or sorted; C
 test('screens pass: one word for a run, in-app actions carry no out-arrow, and the styles the markup needs exist', () => {
   const views = read('views.js'), css = read('screen.css'), screen = read('screen.js');
   assert.ok(!/Change case|another case|for this case|other cases/.test(views));
-  assert.ok(views.includes('>Change run</a>') && !views.includes('View source ↗'));
+  assert.ok(views.includes('</svg>Issuer library</a>') && !views.includes('Change run') && !views.includes('View source ↗'));
   for (const sel of ['.metric-absent{', '.library-table td.run-id{white-space:nowrap']) assert.ok(css.includes(sel), sel);
   // Never assessed is a fact, not an alert: the completeness note no longer uses the amber of states that need action.
   const box = css.slice(css.lastIndexOf('.completion-box{'));
@@ -2581,3 +2581,23 @@ test('package 7: the new rules use only existing tokens, no amber or red', () =>
   for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b|badge-attention/i.test(rule), rule);
 });
 
+
+// ---- The run header's meta line (redesign pass 1): ticker, sector and the run count, each only when the catalogue holds it. Expected text written by hand.
+test('the meta line under the issuer title joins ticker, sector and run count with a dot, and leaves out what the catalogue does not hold', () => {
+  const all = runPage(d => d, [], m => m, { catalogue: [zedRun()] });
+  assert.equal(all.issuerMeta(RUN), 'ZED · Telecoms · 1 run');
+  const none = runPage(d => d, [], m => m, { catalogue: [zedRun({ issuer: '', sector: '' })] });
+  assert.equal(none.issuerMeta(RUN), '1 run');
+  const sectorOnly = runPage(d => d, [], m => m, { catalogue: [zedRun({ issuer: '' })] });
+  assert.equal(sectorOnly.issuerMeta(RUN), 'Telecoms · 1 run');
+  // Two catalogue runs of the same issuer are counted; a run of another issuer is not.
+  const held = (folder, issuerKey) => ({ folder, issuerKey, modules: {} });
+  const three = runPage(d => d, [], m => m, {
+    runFields: { issuerKey: 'zed' },
+    contexts: { 'run-b': held('run-b', 'zed'), 'run-c': held('run-c', 'other') },
+    catalogue: [zedRun(), zedRun({ id: 'run-b' }), zedRun({ id: 'run-c', issuer: 'OTH' })],
+  });
+  assert.equal(three.issuerMeta(RUN), 'ZED · Telecoms · 2 runs');
+  // No catalogue row for the run: nothing is guessed, no line.
+  assert.equal(runPage(d => d, [], m => m, { catalogue: [] }).issuerMeta(RUN), '');
+});
