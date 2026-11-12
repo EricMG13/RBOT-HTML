@@ -12,7 +12,7 @@ from typing import Any
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_cpos_launch import answer
+from test_cpos_launch import covenant_answer
 
 from deploy_workflow.model.adapter import AdapterReply, LiveAdapter
 from deploy_workflow.model.turn import ToolCall, Turn, Usage
@@ -38,7 +38,7 @@ def main(argv: list[str]) -> int:
             output_tokens=5,
             reasoning_tokens=0,
         )
-        call = ToolCall("1", "write_handoff", {"markdown": answer(context, routes)})
+        call = ToolCall("1", "write_handoff", {"markdown": covenant_answer(context, routes)})
         turn = Turn("", (call,), usage, "tool_use", "fake", "fake", 200)
         return AdapterReply("ok", turn, None, 200, None, None, 1, 2, usage)
 
