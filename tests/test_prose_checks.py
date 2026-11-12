@@ -1,6 +1,7 @@
 """Answer keys here are written by hand: literal check numbers and line numbers, never computed."""
 
 import re
+import time
 
 import pytest
 
@@ -1022,3 +1023,33 @@ def test_a_note_on_the_passage_side_is_read_as_written() -> None:
     held = annotated("3,395 | 51.6%")
     assert fidelity("Ebitda was 3,395 (51.6%).", held) == ()
     assert len(fidelity("Ebitda was 3,395 (51.6%).", annotated("3,395 | (51.6%)"))) == 1
+
+
+@pytest.mark.parametrize(
+    ("cell", "positive", "negative"),
+    [
+        ("-1,291.272 (1,291.27)", "Debt was 1,291.27.", "Debt was (1,291.27)."),
+        ("−4.5 (4)", "Debt was 4.", "Debt was (4)."),
+    ],
+)
+def test_an_unsigned_bracket_after_a_negative_figure_is_a_negative_not_a_note(
+    cell: str, positive: str, negative: str
+) -> None:
+    assert len(fidelity(positive, annotated(cell))) == 1
+    assert fidelity(negative, annotated(cell)) == ()
+
+
+def test_a_minus_repeated_in_the_bracket_after_a_negative_figure_is_read_as_written() -> None:
+    cell = annotated("-11.5147826087 (-11.51)")
+    assert fidelity("Debt was -11.51.", cell) == ()
+    # A minus the handoff writes may be narrated as its magnitude, or in parentheses.
+    assert fidelity("Debt was 11.51.", cell) == ()
+    assert fidelity("Debt was (11.51).", cell) == ()
+    assert len(fidelity("Debt was 11.5.", cell)) == 1
+
+
+def test_a_long_line_of_notes_is_checked_in_linear_time() -> None:
+    line = "1,234.5 (1,234) " * 2500  # 40,000 characters; quadratic look-behind took about 5.5 s
+    started = time.monotonic()
+    figure_issues(f"## Findings\n\n### Bottom line\n\n{line}\n")
+    assert time.monotonic() - started < 2

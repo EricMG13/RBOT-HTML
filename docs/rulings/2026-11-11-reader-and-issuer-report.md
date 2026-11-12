@@ -285,6 +285,13 @@ that refused correct handoffs in paid runs `tdg-proof-short-001`, `tdg-reader-fo
    decimals (`4,173.4 (4,173)`, `0.5 (1)`) is read as a note; a bracketed ratio after a small
    unitless whole number (`45 (12.3%)`) is read as a negative; reference words outside the list
    (`Fig. 3`, `line 12`) are not recognised.
+   A label number that is 100 or more or has a decimal part (`Tranche 300 (45%)`,
+   `Clause 22.1 (5%)`) counts as an amount, so a bracketed ratio after it is read as a note.
+   A note whose figure is wrapped in bold or quote marks (`**3,395 (51.6%)**`) or follows a period
+   word (`Q3 1,200 (51.6%)`) is read as a negative.
+   When the figure before a bracket is negative (a minus sign) and the bracket carries no minus
+   and no `%` or `x`, the bracket is not a rounding of it and stays an accounting negative
+   (`-1,291.272 (1,291.27)`, `−4.5 (4)`); `-11.5147826087 (-11.51)` reads the bracket as -11.51.
 
 Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
 judgement-first wording, and whether a limitation truly changes a conclusion. These are judged

@@ -934,15 +934,30 @@ _PERIOD_BEFORE = re.compile(
 )
 
 
+# The longest word these three patterns match is `sections` (8), plus at most one space for the
+# currency and period patterns; 40 characters before the figure cover that with room to spare.
+_LOOK_BEHIND = 40
+
+
+def _ends_at(pattern: re.Pattern[str], base: str, end: int) -> re.Match[str] | None:
+    """`pattern` (anchored with `$`) matched against `base[:end]`, reading only the last
+    `_LOOK_BEHIND` characters (after any run of spaces, which `_REFERENCE` allows) instead of
+    copying the whole text before the figure."""
+    first = end
+    while first > 0 and base[first - 1].isspace():
+        first -= 1
+    return pattern.search(base, max(first - _LOOK_BEHIND, 0), end)
+
+
 def _is_amount_alone(found: re.Match[str], base: str) -> bool:
     """An amount, not a label number or a glued token: after a space, `|`, `(`, `:` or the start
     (a currency sign or code and a minus sign aside), and carrying a unit, a decimal part, a
     thousands separator or 100 or more (`Year 2`, `FY 24`, `Sep-24`, `A1`, `v2.5` are not)."""
-    head = base[: found.start("minus") if found["minus"] else found.start("n")]
-    currency = _CURRENCY_BEFORE.search(head)
-    head = head[: currency.start()] if currency else head
+    end = found.start("minus") if found["minus"] else found.start("n")
+    currency = _ends_at(_CURRENCY_BEFORE, base, end)
+    end = currency.start() if currency else end
     unit = found["u1"] or found["u2"] or currency or "." in found["n"] or "," in found["n"]
-    return (not head or head[-1].isspace() or head[-1] in "|(:") and bool(
+    return (end == 0 or base[end - 1].isspace() or base[end - 1] in "|(:") and bool(
         unit or len(found["n"].lstrip("0")) >= 3
     )
 
@@ -957,8 +972,8 @@ def _is_real_figure(found: re.Match[str], base: str, labels: list[tuple[int, int
         or found["close"]
         or any(a < end and start < b for a, b in labels)
         or (_YEAR.fullmatch(found["n"]) and not (found["u1"] or found["u2"]))
-        or _REFERENCE.search(base[:start])
-        or _PERIOD_BEFORE.search(base[:start])
+        or _ends_at(_REFERENCE, base, start)
+        or _ends_at(_PERIOD_BEFORE, base, start)
     )
 
 
@@ -971,6 +986,8 @@ def _is_note_on(found: re.Match[str], before: re.Match[str]) -> bool:
     if unit in ("%", "x"):
         return True
     if unit not in (None, _unit(before["u1"] or before["u2"])):
+        return False
+    if before["minus"]:  # `-1,291.272 (1,291.27)`: an unsigned bracket is not a rounding of it
         return False
     original, written = before["n"], found["n"]
     places = len(written.partition(".")[2])
