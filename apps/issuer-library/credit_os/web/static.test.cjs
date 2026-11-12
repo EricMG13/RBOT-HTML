@@ -1812,6 +1812,53 @@ test('reader charts: the real nine-step bridge labels break only between words, 
   assert.ok(Math.max(...boxes.flat()) <= Number(/viewBox="(-?[\d.]+) -?[\d.]+ ([\d.]+)/.exec(html)[2]), 'inside the viewBox');
 });
 
+test('reader charts: a bridge label of three lines stays inside the svg at both label sizes', () => {
+  const names = ['Net income (reported, US GAAP) FY2024', 'Depreciation and amortization expense', 'Non-cash stock and deferred compensation expense', 'Other, net'];
+  for (const count of [4, 9]) {
+    const rows = Array.from({ length: count }, (_, i) => [63 + i, names[i % 4] + (i > 3 ? ` ${i}` : ''), i === 0 ? '1000' : i === count - 1 ? String(1000 + 50 * (count - 2)) : '50', 'US$m', 'Synthetic.']);
+    const html = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; }).readerChart(outId('CP-1'), BRIDGE_CHART);
+    const [, , top, , height] = /viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/.exec(html).map(Number);
+    const bottom = top + height;
+    for (const [, y, body] of html.matchAll(/<text class="axis-label" x="[\d.]+" y="([\d.]+)"[^>]*>(.*?)<\/text>/g)) {
+      const lines = [...body.matchAll(/<tspan/g)].length;
+      for (const px of [11, 14]) assert.ok(Number(y) + (lines - 1) * 1.2 * px + 0.3 * px <= bottom, `${count} steps: ${lines} lines at ${px}px end at ${Number(y) + (lines - 1) * 1.2 * px + 0.3 * px}, past ${bottom}`);
+    }
+  }
+});
+
+test('reader charts: a wide bridge scrolls inside its card as a keyboard-reachable region and is never drawn smaller than before', () => {
+  const rows = Array.from({ length: 9 }, (_, i) => [63 + i, `Step ${i}`, i === 0 ? '1000' : i === 8 ? '1350' : '50', 'US$m', 'Synthetic.']);
+  const html = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; }).readerChart(outId('CP-1'), BRIDGE_CHART);
+  assert.match(html, /<div class="vector-chart bridge-wide" role="region" tabindex="0" aria-label="[^"]*Liquidity bridge[^"]*scroll/);
+  const min = Number(/<svg [^>]*style="min-width:(\d+)px"/.exec(html)[1]), box = Number(/viewBox="-?[\d.]+ -?[\d.]+ ([\d.]+)/.exec(html)[1]);
+  // Before the wide geometry the 11px label was drawn at 368/680 of its size in the 400px overview aside.
+  assert.ok(min / box >= 0.7, `drawn at ${min / box} of its size at the narrowest`);
+  // A bridge that is not wide is not a scroll region.
+  assert.ok(!runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows.slice(0, 3).map((r, i) => i === 2 ? [r[0], r[1], '1050', r[3], r[4]] : r))])); return d; }).readerChart(outId('CP-1'), BRIDGE_CHART).includes('role="region"'));
+});
+
+test('reader charts: a bridge label never exceeds its line budget, a lone word of exactly the budget included', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'views.js'), 'utf8');
+  const axisLines = new Function(src.slice(src.indexOf('const AXIS_CHAR'), src.indexOf('function bridgeChart')) + ';return axisLines;')();
+  for (const step of [60, 80, 110, 142]) {
+    const room = Math.max(4, Math.floor((step - 6) / 8.4));
+    for (const label of ['alpha beta gamma delta', 'one two three ' + 'x'.repeat(room), 'one two three ' + 'x'.repeat(room + 3), 'a b ' + 'y'.repeat(room) + ' tail', 'Depreciation amortization and other items', ['a', 'b', 'c'].map(c => c.repeat(room)).join(' ') + ' tail']) for (const line of axisLines(label, step)) assert.ok(line.length <= room, `${step}: "${line}" in ${label}`);
+  }
+});
+
+test('structure views: five or more ranking and security pairs are told apart by a pattern and the legend swatch matches its segments', () => {
+  const html = stackOf([['1', 'Yes', '100'], ['2', 'Yes', '100'], ['3', 'No', '100'], ['4', 'No', '100'], ['5', 'No', '100'], ['1', 'Yes', '100']]);
+  const classes = [...html.matchAll(/<a class="stack-seg ([^"]*)"/g)].map(m => m[1]);
+  assert.equal(new Set(classes.slice(0, 5)).size, 5);
+  assert.equal(classes[5], classes[0]);
+  assert.ok(classes[4].includes('hatch') && !classes[0].includes('hatch'));
+  const swatches = [...html.matchAll(/<i class="([^"]*)"><\/i>Rank/g)].map(m => m[1]);
+  assert.deepEqual(swatches, classes.slice(0, 5));
+  assert.deepEqual([...html.matchAll(/<i class="swatch ([^"]*)"/g)].map(m => m[1]), classes);
+  const eight = stackOf(Array.from({ length: 8 }, (_, i) => [String(i + 1), 'Yes', '100']));
+  assert.equal(new Set([...eight.matchAll(/<a class="stack-seg ([^"]*)"/g)].map(m => m[1])).size, 8);
+});
+
 test('reader charts: every chart has its table form, the handoff table as written with its chips', () => {
   const page = runPage(withBridge);
   const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
@@ -1903,7 +1950,7 @@ test('structure views: a debt stack row with no ranking or an unreadable Secured
   assert.equal(countOf(html, /<a class="stack-seg stack-neutral"/g), 2);
   assert.equal(countOf(html, /<i class="swatch stack-neutral"/g), 2);
   const legend = strip(/<div class="chart-legend stack-legend">(.*?)<\/div>/s.exec(html)[1]);
-  assert.equal(legend, 'Rank 1 \u00b7 securedRanking not stated');
+  assert.equal(legend, 'Rank 1 \u00b7 securedRanking not statedRank 2 \u00b7 security not stated');
 });
 
 test('structure views: a bullet chart marks the stated threshold and current, the passing side and the stated headroom', () => {

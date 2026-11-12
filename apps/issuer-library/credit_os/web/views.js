@@ -202,7 +202,9 @@ function comparisonChart(module,v,selection=0,chips=false,note=true) {
 // A step label wraps word-wise to what one step can hold (the 14px monospace axis label advances 8.4 viewBox units a character, less a gap
 // between neighbours), in at most three lines. A word is cut only when it alone is wider than a line; the ellipsis marks a cut word or text
 // left after the third line (the last line then drops whole words to make room for it). The title and key carry the full text.
-const AXIS_CHAR=8.4,AXIS_LINES=3,WIDE_STEPS=7,WIDE_STEP=142;
+// Labels start at AXIS_Y and drop 1.2em a line (up to 14px type on a narrow screen), so the viewBox runs to AXIS_BOTTOM to hold three lines and their descenders
+// at either size. A wide bridge is drawn at no less than WIDE_SCALE of its viewBox, whatever its container: a narrow card scrolls it sideways.
+const AXIS_CHAR=8.4,AXIS_LINES=3,WIDE_STEPS=7,WIDE_STEP=142,AXIS_Y=226,BRIDGE_HEIGHT=282,WIDE_SCALE=.75;
 function axisLines(label,step) {
   const room=Math.max(4,Math.floor((step-6)/AXIS_CHAR)),lines=[];
   for(const word of label.split(' ').filter(Boolean)){
@@ -213,7 +215,8 @@ function axisLines(label,step) {
   if(lines.length<=AXIS_LINES)return lines.length?lines:[label];
   const kept=lines.slice(0,AXIS_LINES),end=kept[AXIS_LINES-1].split(' ');
   while(end.length>1&&end.join(' ').length+1>room)end.pop();
-  kept[AXIS_LINES-1]=`${end.join(' ')}${end.at(-1).endsWith('\u2026')?'':'\u2026'}`;
+  const tail=end.join(' ');
+  kept[AXIS_LINES-1]=tail.endsWith('\u2026')?tail:tail.length+1>room?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
   return kept;
 }
 function bridgeChart(module,v) {
@@ -235,7 +238,7 @@ function bridgeChart(module,v) {
   // The scale covers every running start and end, so a position that dips below zero (repay before refinancing) stays inside the frame; the axis is the zero rule.
   const high=Math.max(0,...points.map(p=>Math.max(p.start,p.end)))*1.16,low=Math.min(0,...points.map(p=>Math.min(p.start,p.end)));
   const wide=points.length>=WIDE_STEPS,width=wide?points.length*WIDE_STEP:660,height=210,step=width/points.length,y=n=>height-(n-low)/((high-low)||1)*height;
-  return `${chartIntro(module,v)}<div class="vector-chart${wide?' bridge-wide':''}"><svg viewBox="-5 -12 ${width+20} 270" role="group" aria-label="${esc(v.title)}. Select a movement to inspect its source."><line x1="0" y1="${y(0)}" x2="${width}" y2="${y(0)}" class="axis"/>${points.map((p,i)=>`<a class="plot-point" href="${evidenceHref(module,p.row.line)}" data-evidence="${esc(`${module}:${p.row.line}`)}" aria-label="${esc(p.label||plain(p.row.cells[0]))}, ${esc(p.display??p.row.cells[v.amount])} ${esc(v.unit)}. View source"><title>${esc(p.label||plain(p.row.cells[0]))}: ${esc(p.display??p.row.cells[v.amount])}</title><rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="232" text-anchor="middle">${axisLines(p.label||plain(p.row.cells[0]),step).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}</a>`).join('')}</svg></div><div class="bridge-key">${points.map((p,i)=>`<span>${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}</span>`).join('')}</div>`;
+  return `${chartIntro(module,v)}<div class="vector-chart${wide?' bridge-wide':''}"${wide?` role="region" tabindex="0" aria-label="${esc(v.title)}; scroll horizontally for every step"`:''}><svg${wide?` style="min-width:${Math.round((width+20)*WIDE_SCALE)}px"`:''} viewBox="-5 -12 ${width+20} ${BRIDGE_HEIGHT}" role="group" aria-label="${esc(v.title)}. Select a movement to inspect its source."><line x1="0" y1="${y(0)}" x2="${width}" y2="${y(0)}" class="axis"/>${points.map((p,i)=>`<a class="plot-point" href="${evidenceHref(module,p.row.line)}" data-evidence="${esc(`${module}:${p.row.line}`)}" aria-label="${esc(p.label||plain(p.row.cells[0]))}, ${esc(p.display??p.row.cells[v.amount])} ${esc(v.unit)}. View source"><title>${esc(p.label||plain(p.row.cells[0]))}: ${esc(p.display??p.row.cells[v.amount])}</title><rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="${AXIS_Y}" text-anchor="middle">${axisLines(p.label||plain(p.row.cells[0]),step).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}</a>`).join('')}</svg></div><div class="bridge-key">${points.map((p,i)=>`<span>${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}</span>`).join('')}</div>`;
 }
 function pathChart(module,v) {
   const table=fixtureTable(module,v.table),series=['Reference','Downside','Upside'];
@@ -290,17 +293,22 @@ function structureOpen(id,row,inner,label,chips) {
   return chips?`${button}${chipsMarkup(key)}`:button;
 }
 // A facility's series is its ranking and security together: one per distinct pair in order of first appearance. A row with no stated ranking, or a
-// Secured value that is neither Yes nor No, is neutral and the legend says the ranking is not stated.
+// Secured value that is neither Yes nor No, is neutral and the legend says which of the two is not stated.
+const stackRank=(row,v)=>{const rank=String(row.cells[v.rank]??'').trim();return !rank||/^Not supplied:/.test(rank)?'':rank;};
 function stackPair(row,v) {
-  const rank=String(row.cells[v.rank]??'').trim(),secured=String(row.cells[v.secured]??'').trim().toLowerCase();
-  return !rank||/^Not supplied:/.test(rank)||!['yes','no'].includes(secured)?null:{rank,secured:secured==='yes'};
+  const rank=stackRank(row,v),secured=String(row.cells[v.secured]??'').trim().toLowerCase();
+  return !rank||!['yes','no'].includes(secured)?null:{rank,secured:secured==='yes'};
 }
+// Four fills, then the same four with a hatch: eight styles that differ by more than colour. A ninth distinct pair repeats the first style; the legend
+// and each facility's own line state the ranking and security in words, so nothing rests on the swatch alone.
+const stackClass=i=>`series-${i%4}${i%8>=4?' hatch':''}`;
 function stackChart(id,v,chips=false) {
   const table=fixtureTable(id,v.table),amounts=table.rows.map(r=>chartNumber(r.cells[v.amount])),total=amounts.reduce((sum,n)=>sum+(n>0?n:0),0);
   const pairs=table.rows.map(r=>stackPair(r,v)),names=[];
   for(const p of pairs)if(p&&!names.includes(`${p.rank}|${p.secured}`))names.push(`${p.rank}|${p.secured}`);
-  const series=pairs.map(p=>p?`series-${names.indexOf(`${p.rank}|${p.secured}`)%4}`:'stack-neutral');
-  const legend=[...names.map((n,i)=>{const[rank,secured]=n.split('|');return `<span><i class="series-${i%4}"></i>Rank ${esc(rank)} \u00b7 ${secured==='true'?'secured':'unsecured'}</span>`;}),...pairs.includes(null)?['<span><i class="stack-neutral"></i>Ranking not stated</span>']:[]].join('');
+  const series=pairs.map(p=>p?stackClass(names.indexOf(`${p.rank}|${p.secured}`)):'stack-neutral');
+  const unstated=[...new Set(pairs.flatMap((p,i)=>{const rank=stackRank(table.rows[i],v);return p?[]:[rank?`Rank ${esc(rank)} \u00b7 security not stated`:'Ranking not stated'];}))];
+  const legend=[...names.map((n,i)=>{const[rank,secured]=n.split('|');return `<span><i class="${stackClass(i)}"></i>Rank ${esc(rank)} \u00b7 ${secured==='true'?'secured':'unsecured'}</span>`;}),...unstated.map(t=>`<span><i class="stack-neutral"></i>${t}</span>`)].join('');
   const bar=table.rows.map((row,i)=>amounts[i]>0?`<a class="stack-seg ${series[i]}" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${row.cells[v.label]}, ${row.cells[v.amount]} ${v.unit}. View source`)}" title="${esc(row.cells[v.label])}: ${esc(row.cells[v.amount])}"></a>`:'').join('');
   const key=table.rows.map((row,i)=>`<li><i class="swatch ${series[i]}"></i><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(row.cells[v.amount])} · Cumulative leverage ${stated(row.cells[v.leverage],'x')}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
   return `${chartIntro(id,v)}<div class="chart-legend stack-legend">${legend}</div><div class="stack-bar" role="group" aria-label="${esc(v.title)} in stated rank order. Select a facility to inspect its source.">${bar}</div>${amounts.includes(null)?'<p class="matrix-note">A facility with no stated amount has no segment.</p>':''}<ol class="stack-key">${key}</ol>`;
