@@ -2851,3 +2851,52 @@ def test_a_register_cell_stating_values_or_a_quotable_difference_is_still_accept
     pack, handoff, sentence, cell
 ):
     assert cp8_issues(_in_cell(handoff, cell, sentence), pack) == ()
+
+
+_POST_BS_HEAD = (
+    "### Post-balance-sheet adjustments\n\n"
+    "| Event | Date | Amount | Pro forma net debt | Pro forma net leverage "
+    "| Reporting unit | Basis and limitation |\n| --- | --- | --- | --- | --- | --- | --- |\n"
+)
+_POST_BS_NONE = (
+    _POST_BS_HEAD + "| None found in the sources read | — | — | — | — | US$m | Read. |\n\n"
+)
+_POST_BS_EVENT = (
+    _POST_BS_HEAD
+    + "| Notes issued | 2025-02-05 | 500 | 1625 | 3.4 | US$m | Proceeds not applied. |\n\n"
+)
+
+
+@pytest.mark.parametrize("where", ["after", "before"])
+@pytest.mark.parametrize("table", [_POST_BS_NONE, _POST_BS_EVENT], ids=["none row", "event row"])
+def test_the_post_balance_sheet_table_leaves_the_changes_pack_unchanged(table, where):
+    """Decision 10: the table is CP-1's and adds no measure; the pack ignores it in any place."""
+
+    def cp1(gross: str, cash: str, net: str, period: str, with_table: bool) -> str:
+        nd = netdebt(gross, cash, net, period)
+        if not with_table:
+            return "## Findings\n\n" + nd
+        return "## Findings\n\n" + (nd + table if where == "after" else table + nd)
+
+    base = pair_pack(
+        cp1("1500", "300", "1200", "FY2023", False), cp1("1400", "275", "1125", "FY2024", False)
+    )
+    got = pair_pack(
+        cp1("1500", "300", "1200", "FY2023", True), cp1("1400", "275", "1125", "FY2024", True)
+    )
+    assert got == base
+    found = measures_of(got)
+    assert set(found) == set(measures_of(base))
+    assert not any("pro_forma" in key for key in found)
+    # Hand-written from the fixture: gross debt 1500 -> 1400 and net debt 1200 -> 1125, US$m.
+    assert (found["gross_debt"]["prior"]["value"], found["gross_debt"]["current"]["value"]) == (
+        "1500",
+        "1400",
+    )
+    assert found["gross_debt"]["difference"] == "-100"
+    assert (found["net_debt"]["prior"]["value"], found["net_debt"]["current"]["value"]) == (
+        "1200",
+        "1125",
+    )
+    assert found["net_debt"]["difference"] == "-75"
+    assert found["net_debt"]["unit"] == "US$m"

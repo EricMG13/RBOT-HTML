@@ -406,7 +406,8 @@ VOICE_RULES = (
     "- When you quote year-end net debt, net leverage or cash from Financial foundation and its "
     "`Post-balance-sheet adjustments` table has a row for an event, state the pro forma figure "
     "beside it, with its unit and the event's date. When the table says none was found, add "
-    "nothing.\n"
+    "nothing. When Financial foundation does not state the pro forma figure, say it is not "
+    "established; never work one out yourself.\n"
     "- In every sentence under `## Findings`, `## Calculations` and `## Gaps`, write for the "
     "reader, not for the pipeline. Write no module code, page locator, bracket or hash, and "
     'none of these words: "handoff", "this transport", "the pack", "fact pack", "source pack", '
@@ -711,8 +712,10 @@ POST_BS = OwnerTable(
     rules=(
         "One row per event after the balance-sheet date that changes net debt, such as an issue, "
         "repayment, acquisition, disposal or dividend that the sources state. Date is the event "
-        "date. Amount is the event's cash effect and Pro forma net debt is year-end net debt "
-        "after the event, both in the Reporting unit; Pro forma net leverage is the same net "
+        "date: YYYY-MM-DD only when the source states the day; when it gives only a month or "
+        "quarter, write `Not supplied: the source states <month or quarter> only` and never "
+        "invent a day. Amount is the event's cash effect and Pro forma net debt is year-end net "
+        "debt after the event, both in the Reporting unit; Pro forma net leverage is the same net "
         "debt over the same EBITDA as the year-end net leverage, as times without an `x`. "
         "Work each figure with `calculate`; a figure you cannot state is `Not supplied: "
         "<reason>`; Basis and limitation names the event's source and what is not yet reflected. "
@@ -1422,7 +1425,10 @@ def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None
         issue = _number_issue(spec, name, cell, unit)
     elif name in spec.dates:
         issue = (
-            None if _stated_gap(cell) or _iso_date(cell) else f"{name} `{cell}` must be YYYY-MM-DD."
+            None
+            if _stated_gap(cell) or _iso_date(cell)
+            else f"{name} `{cell}` must be YYYY-MM-DD; when the source states no day, write "
+            "`Not supplied: the source states <month or quarter> only`."
         )
     elif allowed is not None:
         issue = None if cell in allowed else f"{name} `{cell}` must be one of {', '.join(allowed)}."
