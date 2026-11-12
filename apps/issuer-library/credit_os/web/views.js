@@ -1267,7 +1267,7 @@ function liveRunSpend(run,cap) {
   if(typeof run.spent!=='string')return '';
   return `<span class="run-spend">USD ${liveText(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${liveText(cap)}`}</span>`;
 }
-const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location.protocol);
+const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location?.protocol); // a page with no location (the node tests) is not served
 function liveRunRow(run,cap) {
   const files=Array.isArray(run.files)?run.files:[];
   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
