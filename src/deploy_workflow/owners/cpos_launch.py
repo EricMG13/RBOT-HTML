@@ -294,7 +294,8 @@ PROSE_PASSAGES = (
     "read the source documents. After the analysis is finished, open `## Findings` with these "
     "four sections, each exactly once, in this order, before any other `## Findings` content:\n"
     "- `### Bottom line`: one or two paragraphs. The first sentence states this module's view "
-    "and its consequence for creditors. Start it with a word, not a figure or a symbol.\n"
+    "and its consequence for creditors, in at most 45 words. Start it with a word, not a figure "
+    "or a symbol. The whole Bottom line is at most 180 words.\n"
     "- `### Key findings`: one paragraph or one list item per finding, each starting with the "
     "judgement; give figures only where they move the view.\n"
     "- `### Contrary evidence and what would change the view`: prose giving the strongest "
@@ -323,11 +324,42 @@ DATA_PASSAGE = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
     "read the source documents. Open `## Findings` with `### Bottom line`: one or two "
     "paragraphs whose first sentence states this module's view and its consequence for "
-    "creditors. If this module is blocked, its `### Bottom line` begins exactly "
+    "creditors, in at most 45 words; the whole Bottom line is at most 180 words. If this module "
+    "is blocked, its `### Bottom line` begins exactly "
     "`Not assessable: ` followed by why (the exact words that mark it blocked); a module that "
     'is not blocked must not use the words "not assessable" in its Bottom line. Your tables '
     "follow as the main content, unchanged and exact.\n\n"
 )
+# Display names of the modules, the same pairs as `groups` in apps/issuer-library/credit_os/web/
+# screen.js (a test compares them). Decision 11 of 2026-11-12: a module is named in prose by this
+# name, never by its code, and the launcher sends the list so the model does not invent names.
+MODULE_NAMES = {
+    "CP-0": "Source readiness",
+    "CP-1A": "Business & governance",
+    "CP-DR": "Research questions",
+    "CP-1": "Financial foundation",
+    "CP-1B": "Earnings changes",
+    "CP-L10": "Short credit snapshot",
+    "CP-1D": "Earnings quality",
+    "CP-1C": "Peer benchmark",
+    "CP-2D": "Liquidity",
+    "CP-3C": "Refinancing & LME",
+    "CP-2": "Fundamental credit",
+    "CP-2A": "Downside",
+    "CP-2G": "Forward credit model",
+    "CP-2E": "Rates, FX & hedging",
+    "CP-2H": "Ratings & triggers",
+    "CP-4": "Legal & covenants",
+    "CP-4A": "Covenant capacity",
+    "CP-4B": "Structural priority",
+    "CP-4D": "Intercreditor control",
+    "CP-4C": "Recovery & fulcrum",
+    "CP-3": "Security selection",
+    "CP-3D": "Market-implied risk",
+    "CP-6": "Committee decision",
+    "CP-5": "Evidence validation",
+    "CP-8": "Changes since the last run",
+}
 VOICE_RULES = (
     "- Write evidence, risk mechanism and credit implication as ordinary sentences, never as "
     "labels (no `Evidence:`, `Mechanic:` or `Implication:` lead-ins). This overrides method "
@@ -368,8 +400,26 @@ VOICE_RULES = (
     "Basis item form. Raw locators, hashes and IDs stay where the method puts them: "
     "`## Sources`, tables and registers.\n"
     "- Keep `## Request` to the issuer, as-of date, pathway and scope, in at most three "
-    "sentences.\n\n"
+    "sentences.\n"
+    "- In every sentence under `## Findings`, `## Calculations` and `## Gaps`, write for the "
+    "reader, not for the pipeline. Write no module code, page locator, bracket or hash, and "
+    'none of these words: "handoff", "this transport", "the pack", "fact pack", "source pack", '
+    '"canonical", "re-anchor", "helper script", "upstream module", "downstream" before module, '
+    "owner, work, analysis or use, a snake_case token or a CAPS_WITH_UNDERSCORE token. Name "
+    "the document (for example the 2024 annual report), the module by its plain name or the "
+    "analysis instead. Tables, fenced blocks and Basis lines are not sentence text.\n"
+    "- Refer to another module only by its plain name from this list, never by its code or "
+    "an invented name: "
+    + ", ".join(MODULE_NAMES.values())
+    + ". In a Basis item the form stays `<plain module name> (<code>)`.\n"
+    "\n"
 )
+# Sent only to a module that is asked for a chart table or a map (decision 11 of 2026-11-12).
+CHART_NOTE_RULE = (
+    "After each `### Chart data:` table write one sentence stating the main qualification a "
+    'reader needs to read the figures correctly, or "No qualification." if there is none.\n\n'
+)
+MAP_TEXT_RULE = "Text in a map node or edge is at most 60 characters.\n\n"
 
 
 class LaunchRefused(ValueError):
@@ -1545,8 +1595,10 @@ TRANSPORT_RULES = (
     "acceptance receipt, invocation digest, settled-head verification or fresh snapshot. The "
     "method's helper scripts (`prepare_invocation.py`, `validate_handoff.py`, "
     "`confidence_score.py`, `completeness_check.py` and any other `scripts/*.py`) cannot be run "
-    "here: record each as not run, do its check or arithmetic yourself (with `calculate`, by the "
-    "rules in the method block), and do not block for it. A companion file the method names that "
+    "here: do each check or calculation yourself, with `calculate` and by the rules in the "
+    "method block, and do not block for it. Never mention the scripts, the tooling or anything "
+    "that could not be run anywhere in the handoff. Do not state a confidence score, a "
+    "confidence band or a QA status. A companion file the method names that "
     "is not in the method block below is unavailable: say so where the method relies on it, and do "
     "not block the module for it. CP-OS supplies only the handoffs of the modules the registry "
     "names as this module's producers (CP-5: every analyst before it); an upstream module the "
@@ -1677,7 +1729,8 @@ FORECAST_BLOCK = (
     "[cases: base/upside/downside]`. CP-OS has locked these: do not ask for them and do not block "
     "the forecast for them. The horizon is the block's `years`. The method's helper scripts "
     "(`prepare_invocation.py`, `validate_handoff.py`, the scoring script) cannot be run in this "
-    "transport: record each as not run. That, and the lack of an acceptance receipt for a handoff "
+    "transport: do each check yourself, with `calculate`, and do not mention the scripts in the "
+    "handoff. That, and the lack of an acceptance receipt for a handoff "
     "CP-OS supplied, is not a reason to block.\n\n"
     # Owner, 2026-11-10 ("Yes, allow judgment"): run tdg-forecast-002 gave no driver at all
     # because the filings carry no numeric three-year guidance.
@@ -1875,6 +1928,16 @@ DEEP_DEBATE_BLOCK = (
     "The user explicitly asks for a full debate (source `context`, "
     "module_options.cp6_deep_debate). Deep Debate Mode is ON.\n\n"
 )
+SOURCES_RULES = (
+    "In the `## Sources` table of issuer sources, `Source` is the exact file name as supplied "
+    "(it is the key that joins the row to the file; never shorten or reword it). `Document` says "
+    'in plain words what the document is, for example "Annual report on Form 10-K for the year '
+    'ended 30 September 2024". `Document date` is the date the document was filed or published '
+    'if the document states it, otherwise "not stated". `sha256` is the exact hash and `Use` '
+    "says what this module used it for. Do not list the run settings (the context file) as a "
+    "source. A web page found by search is listed by the rules of this module's web section, "
+    "which add a Source type cell.\n\n"
+)
 # The method block follows this line and runs to the end of a module's instructions.
 METHOD_MARK = "Selected method, verbatim:\n\n"
 
@@ -1929,11 +1992,15 @@ def _instructions(
         + TRANSPORT_RULES
         + "A handoff is rejected unless it does all of this:\n"
         f"- name {run.issuer_name} in `## Request`, and state the as-of date {run.as_of} there;\n"
-        "- list each issuer source it relied on in `## Sources`, with its exact name and sha256;\n"
+        "- list each issuer source it relied on in `## Sources`, as a table with the columns "
+        "`Source | Document | Document date | sha256 | Use`;\n"
         "- list each supplied handoff in `## Sources`, with its module and exact sha256.\n\n"
+        + SOURCES_RULES
         + READER_PERSONA
         + (DATA_PASSAGE if module in DATA_MODULES else PROSE_PASSAGES)
         + VOICE_RULES
+        + (CHART_NOTE_RULE if "### Chart data:" in selectors else "")
+        + (MAP_TEXT_RULE if "### Map:" in selectors else "")
         + (
             "Report selectors, each exactly once inside `## Findings`, using these exact "
             f"headings. They place content in the report and are not analytical completion:\n"

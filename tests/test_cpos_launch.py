@@ -1439,7 +1439,8 @@ PROSE_BLOCK_START = (
     "read the source documents. After the analysis is finished, open `## Findings` with these "
     "four sections, each exactly once, in this order, before any other `## Findings` content:\n"
     "- `### Bottom line`: one or two paragraphs. The first sentence states this module's view "
-    "and its consequence for creditors. Start it with a word, not a figure or a symbol.\n"
+    "and its consequence for creditors, in at most 45 words. Start it with a word, not a figure "
+    "or a symbol. The whole Bottom line is at most 180 words.\n"
     "- `### Key findings`: one paragraph or one list item per finding, each starting with the "
     "judgement; give figures only where they move the view.\n"
     "- `### Contrary evidence and what would change the view`: prose giving the strongest "
@@ -1451,7 +1452,8 @@ DATA_BLOCK = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
     "read the source documents. Open `## Findings` with `### Bottom line`: one or two "
     "paragraphs whose first sentence states this module's view and its consequence for "
-    "creditors. If this module is blocked, its `### Bottom line` begins exactly "
+    "creditors, in at most 45 words; the whole Bottom line is at most 180 words. If this module "
+    "is blocked, its `### Bottom line` begins exactly "
     "`Not assessable: ` followed by why (the exact words that mark it blocked); a module that "
     'is not blocked must not use the words "not assessable" in its Bottom line. Your tables '
     "follow as the main content, unchanged and exact.\n\n"
@@ -1744,7 +1746,7 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
             "`prepare_invocation.py`",
             "`validate_handoff.py`",
             "`confidence_score.py`",
-            "record each as not run",
+            "do each check or calculation yourself",
             "Nobody can answer a question during this run",
             "then the method's declared safe default",
             "block only the decision the method ties to it",
@@ -1752,6 +1754,94 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
             "Missing evidence still blocks exactly what the method says it blocks",
         ):
             assert phrase in head, (module, phrase)
+
+
+# sha256 of method_text(module) at commit 1b41e65, before decisions 7, 9 and 11 changed the shared
+# text (computed by calling method_text on that commit). The library marks a run "Earlier
+# methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
+# one of these as it was.
+METHOD_TEXT_SHA256_AT_1B41E65 = {
+    "CP-0": "ff1c92c296681a7dce3325f2ce588d7ff3af9a13c3a0aa8c21289642195873f7",
+    "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
+    "CP-1A": "6a85341f7ce9d89189027ccba0a88504873819f2a6d498df2814f991120cbd6e",
+    "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
+    "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
+    "CP-1D": "50cc8ec34ed140f22859fd384eb7f16d81acc3404728b0493f642d5ba4daf4b1",
+    "CP-2": "bef6d197f08b0b66ae137a209e056d553baf383b18dc40173c27fa734cff2de8",
+    "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
+    "CP-2D": "2f977243550b0c76f1cccf41d7d11e66061280e8743d2fe5454a9cacdf9b9d1a",
+    "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",
+    "CP-2G": "6d15e5eee90a18410466fad2d60efb05740f7eb0972595ceae8116ba1f0db76f",
+    "CP-2H": "e98d0b0c5c84059ef7f10e595c270c4532cf29246c612bb0f108809010c3e3a8",
+    "CP-3": "144798da83e3aab842f8a2e187008a95ecc5c7b387f9e5bc1b31b92ffdf20f1c",
+    "CP-3C": "51efb56c61d6f8051d134efbfcdc76aa8eb2af3c3a7331b449c093d24279803e",
+    "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
+    "CP-4": "fb2e764ed645f3d65112aebe8db12feb215763ffdaca25e6d70a627250d1c6bc",
+    "CP-4C": "2e70ce4fd894deba7bc2a6234953689f898d73c0ac093336806d70fd16815d8e",
+    "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
+    "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
+    "CP-8": "9ba6a9992739ed84837843bf3bbd7066fbb8961f86f767e064bd565b3677e654",
+    "CP-DR": "54a57f559181087df17e476d271b71c67b00f38e87288f95c7831cbd3e3a056e",
+    "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
+}
+
+
+def test_the_method_block_is_byte_identical_so_no_past_run_is_marked_earlier_methods():
+    now = {m: hashlib.sha256(cpos_launch.method_text(m).encode()).hexdigest() for m in METHODS}
+    assert now == METHOD_TEXT_SHA256_AT_1B41E65
+
+
+def screen_module_names():
+    source = (ROOT / "apps/issuer-library/credit_os/web/screen.js").read_text()
+    groups = source.partition("const groups = [")[2].partition("\n];")[0]
+    return dict(re.findall(r"\['(CP-[0-9A-Z]+)','([^']+)'\]", groups))
+
+
+def test_module_names_equal_the_display_names_screen_js_shows():
+    assert cpos_launch.MODULE_NAMES == screen_module_names()
+    assert len(cpos_launch.MODULE_NAMES) >= 20
+
+
+def test_every_module_is_told_the_reader_vocabulary_names_sources_and_chart_notes(tmp_path):
+    """Owner decisions 7, 8, 9 and 11 of 2026-11-12: shared text before the method."""
+    _, texts = all_instructions(tmp_path, modules=tuple(m for m in METHODS if m != "CP-8"))
+    for module, text in texts.items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        assert "record each as not run" not in head, module
+        for phrase in (
+            "Never mention the scripts, the tooling or anything that could not be run",
+            "Do not state a confidence score, a confidence band or a QA status",
+            "In every sentence under `## Findings`, `## Calculations` and `## Gaps`",
+            (
+                '"handoff", "this transport", "the pack", "fact pack", "source pack", '
+                '"canonical", "re-anchor", "helper script", "upstream module"'
+            ),
+            "snake_case",
+            "Refer to another module only by its plain name from this list",
+            "Financial foundation, Earnings changes, Short credit snapshot",
+            "`Source | Document | Document date | sha256 | Use`",
+            "exact file name as supplied",
+            "not stated",
+            "Do not list the run settings",
+            "at most 45 words",
+            "at most 180 words",
+        ):
+            assert phrase in head, (module, phrase)
+        assert "with its exact name and sha256" not in head, module
+        assert ("one sentence stating the main qualification" in head) == (
+            "### Chart data:"
+            in text.partition(cpos_launch.METHOD_MARK)[0].partition(
+                "Report selectors, each exactly once"
+            )[2]
+        ), module
+        assert ("at most 60 characters" in head) == (
+            "### Map:" in head.partition("Report selectors, each exactly once")[2]
+        ), module
+    chart = [m for m, t in texts.items() if "one sentence stating the main qualification" in t]
+    assert {"CP-1", "CP-2D"} <= set(chart) and any(
+        "at most 60 characters" in t for t in texts.values()
+    )
+    assert all('"No qualification."' in texts[m] for m in chart)
 
 
 def test_modules_run_after_the_handoffs_their_methods_consume(tmp_path):
