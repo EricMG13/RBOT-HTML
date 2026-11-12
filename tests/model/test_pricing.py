@@ -84,16 +84,18 @@ def test_reservation_equals_exact_fraction(i: int, w: int, o: int, n_in: int, n_
     assert Fraction(got) == expected
 
 
-def test_table_is_the_six_configs_dated() -> None:
+def test_table_is_the_seven_configs_dated() -> None:
     assert set(PRICES) == set(CONFIG_PROVIDERS)
     assert set(PRICES) == {
         "sol-medium",
         "sol-high",
         "opus-medium",
+        "opus-high",
         "deepseek-max",
         "copilot-sol-medium",
         "copilot-opus-medium",
     }
+    assert PRICES["opus-high"] is PRICES["opus-medium"]
     assert pricing_module.PRICES_AS_OF.isoformat() == "2026-10-31"
     assert pricing_module.COPILOT_PRICES_AS_OF.isoformat() == "2026-11-06"
     sol = PRICES["sol-medium"]
@@ -177,9 +179,9 @@ def test_copilot_live_charge_is_billed_only() -> None:
 
 def test_unlisted_config_has_no_price() -> None:
     with pytest.raises(NoPrice):
-        price_of("opus-high")
+        price_of("opus-max")
     with pytest.raises(NoPrice):
-        price_usage("opus-high", Usage(input_tokens=1, output_tokens=1))
+        price_usage("opus-max", Usage(input_tokens=1, output_tokens=1))
 
 
 def test_sol_over_272k_input_is_refused() -> None:

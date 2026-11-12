@@ -41,14 +41,17 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
     200 ``{"documents": [...], "ignored": [...], "error": ""}``: what the launcher makes of each
     uploaded file offline. ``error`` is a sentence when the files cannot be read.
 ``POST /api/submissions/<id>/summary``
-    Body: the answers object ``{"context", "modules", "max_turns", "level", "submitted_by"}``.
-    200 ``{"error": "", "digest", "modules", "items", "documents", "ignored", "omitted",
-    "changes", "prior"}``, the launcher's own forecast and the digest to approve (``changes`` says
-    whether CP-8 will run, and against which earlier run: its pathway and as-of date; ``prior`` is
-    ``{"id", "as_of", "pathway"}`` of that run or null for a first run, and is part of the digest:
-    the launcher is started with that run, ``--prior <id>`` or ``--prior none``; the modules list
-    holds CP-8 when it will); or 200 ``{"error": "<sentence>"}`` with no
-    digest when the answers or files are refused. Only the latest digest issued is accepted.
+    Body: the answers object ``{"context", "modules", "max_turns", "level", "submitted_by",
+    "model", "effort"}``. ``model`` is "gpt" or "claude", ``effort`` "fast", "balanced" or "high";
+    other than "gpt" and "balanced" only at the "advanced" level.
+    200 ``{"error": "", "digest", "modules", "items", "documents", "ignored", "omitted", "model",
+    "effort", "changes", "prior"}``, the launcher's own forecast and the digest to approve
+    (``changes`` says whether CP-8 will run, and against which earlier run: its pathway and as-of
+    date; ``prior`` is ``{"id", "as_of", "pathway"}`` of that run or null for a first run, and is
+    part of the digest: the launcher is started with that run, ``--prior <id>`` or ``--prior
+    none``; the modules list holds CP-8 when it will); or 200 ``{"error": "<sentence>"}`` with no
+    digest when the answers or files are refused (Claude Opus without an Anthropic key on the
+    service included). Only the latest digest issued is accepted.
 ``POST /api/submissions/<id>/submit``
     Body: ``{"answers": <the answers object>, "digest": "<digest of the latest summary>"}``.
     200 ``{"run": "<run id>", "status": "queued"}``. Repeating it returns the same run. 400 when
@@ -436,9 +439,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
         settings = self._service.scheduler.settings
-        return submissions.summary(
-            self._layout, sid, answers, config=settings.config, cap=settings.cap
-        )
+        return submissions.summary(self._layout, sid, answers, cap=settings.cap)
 
     def _submit(self, sid: str, body: Any) -> None:
         if not isinstance(body, dict) or not isinstance(body.get("digest"), str):

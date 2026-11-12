@@ -17,7 +17,8 @@ PROVIDERS: tuple[Provider, ...] = get_args(Provider)  # the one provider list
 Role = Literal["system", "user", "assistant", "tool"]
 StopReason = Literal["end", "tool_use", "max_tokens", "other"]
 
-# The four spec §7.1 configurations, plus the two copilot configurations, which CP-OS selects
+# The four spec §7.1 configurations, opus-high (same model and price), plus the two copilot
+# configurations, which CP-OS selects
 # explicitly and which are priced only from the runtime's reported usage. pricing.PRICES asserts
 # its keys and providers against this.
 CONFIG_PROVIDERS: Mapping[str, Provider] = MappingProxyType(
@@ -25,6 +26,7 @@ CONFIG_PROVIDERS: Mapping[str, Provider] = MappingProxyType(
         "sol-medium": "openai",
         "sol-high": "openai",
         "opus-medium": "anthropic",
+        "opus-high": "anthropic",
         "deepseek-max": "openrouter",
         "copilot-sol-medium": "copilot",
         "copilot-opus-medium": "copilot",
@@ -37,6 +39,7 @@ CONFIG_MODELS: Mapping[str, str] = MappingProxyType(
         "sol-medium": "gpt-6.1-sol",
         "sol-high": "gpt-6.1-sol",
         "opus-medium": "claude-opus-5-5",
+        "opus-high": "claude-opus-5-5",
         "deepseek-max": "deepseek/deepseek-v4.1-flash-1017",
         "copilot-sol-medium": "gpt-6.1-sol",
         "copilot-opus-medium": "claude-opus-5.5",
@@ -46,7 +49,7 @@ CONFIG_MODELS: Mapping[str, str] = MappingProxyType(
 # Spec §7.1 uses per model (controller ruling). Any other (model, effort) pair is refused.
 MODEL_EFFORTS: Mapping[str, frozenset[str]] = {
     "gpt-6.1-sol": frozenset({"medium", "high"}),
-    "claude-opus-5-5": frozenset({"medium"}),
+    "claude-opus-5-5": frozenset({"medium", "high"}),
     "claude-opus-5.5": frozenset({"medium"}),
     "deepseek/deepseek-v4.1-flash-1017": frozenset({"max"}),
 }

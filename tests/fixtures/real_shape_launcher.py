@@ -34,6 +34,7 @@ def main() -> int:
     for flag in ("--context", "--sources", "--config", "--cap", "--out", "--ruling", "--prior"):
         parser.add_argument(flag)
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--balanced", action="store_true")
     parser.add_argument("--no-library", action="store_true")
     args = parser.parse_args()
     if not args.no_library:

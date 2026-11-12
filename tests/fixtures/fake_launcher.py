@@ -25,6 +25,7 @@ def main() -> int:
     parser.add_argument("--config", choices=tuple(CONFIGS), required=True)
     parser.add_argument("--modules", nargs="+")
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--balanced", action="store_true")
     parser.add_argument("--no-library", action="store_true")
     args = parser.parse_args()
     plan = json.loads(os.environ.get("FAKE_PLAN", "{}"))

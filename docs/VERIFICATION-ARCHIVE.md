@@ -156,3 +156,58 @@ and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
   below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
   Confidence cell reads as established (neither occurs in retained data); the Overview opened with
   no run context; the branch diff is 2,245 lines against the 800-line cap.
+
+## 2026-11-10 — Design pass on the run report and library (branch `claude/impeccable-report-library-595877`)
+
+Scope: `/impeccable` critique, harden, layout and polish on `apps/issuer-library/credit_os/web/`
+(page parts only; no Python under `src/` or `apps/issuer-library/*.py` changed). What changed and
+the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `origin/main` c145b16.
+- Real-data check: the four retained TDG runs built into a scratch folder through a link to `runs/`
+  (nothing written under `runs/` or the checkout's `library/`; no model call). Word-level diff of the
+  drawn page text against the `origin/main` page parts on `cpos-tdg-sol-medium-all-001` (Overview,
+  CP-1, CP-6), `cpos-tdg-sol-high-001` (Overview) and the library table: the only differences are
+  coverage labels (module names to codes), three repeated chart legends and three repeated
+  "Missing values have no bar" notes removed, and four run ids added to library rows. CP-6: none.
+- Measured in headless Chrome from disk at 1440 and 1280: no horizontal overflow on the four
+  routes; library table 922px in a 922px box at 1280 (was 964px); run-report tables are not scroll
+  boxes and their headers stick at 0px; heading levels have no skip on Overview, CP-1, CP-6; long
+  unbroken, RTL, CJK and emoji text injected into every bottom line, finding and limitation does not
+  widen the page at 1280 or 500px; the Overview prints as 15 pages and CP-1 as 8.
+- Driven in the app's browser pane at 1440: library row to run, outline click and Tab+Enter to a
+  part (route, scroll, current entry, focus ring), count of citations without a page to the
+  inspector and Esc back to the count, a chart chip to the inspector, the Reference route.
+- Gates, all exit 0: `node --test` on `static.test.cjs` and `calendar.test.cjs` (104 pass);
+  `uv run pytest tests/test_library_page_browser.py tests/test_update_library.py
+  tests/test_library_index.py tests/test_credit_os_store.py` (94 passed, browser tests included);
+  `uv run python tools/quality_gate.py --base origin/main`.
+- Reviews: critique by two independent agents; confidence review fixed three findings (a
+  half-retagged chart heading, the catalogue opening on a no-output module, print without
+  background fills); rewrite tournament run inline (one hoist applied, the rest held).
+- Detector after the pass (1280): no skipped-heading or line-length finding on the four routes;
+  the remaining tiny-text findings are the committed 11px label size and nested-cards is the app frame.
+- Basis clamp (owner, 2026-11-10, after the PR opened): the library's ratio basis shows three lines
+  per row. Probe at 1440 and 1280: 12 of 12 basis cells clamped, each cell's title equals its full
+  text, rows 145–161px, table 922px in 922px at 1280. Node 105 pass; the three library pytest files
+  70 passed.
+- Second hardening pass (CSS only, `/impeccable harden`): headless Chrome probes on the built TDG
+  library. Six routes × seven widths (1440–500px), inspector open and closed: no page or canvas
+  overflow. Hostile text (240-character unbroken words, long URLs, Arabic/Japanese/emoji) in handoff
+  fields and library rows at 1280 and 500px: none after the fix (before: band +1,194px, library
+  table 7,802px in 922px). Edge states (malformed and unknown run-part routes, nothing established,
+  no reader summaries, 400 findings, no outputs, 404 library rows in 50ms): no script errors.
+  Library and run report printed to PDF and read. 106 node tests, 94 pytest (library set, browser
+  included), quality gate exit 0. Known: on portrait A4 the printed library table runs 8px past
+  its card edge (nine columns of whole words); nothing is cut. Module tables with hostile cell text
+  scroll sideways in their own box, as before.
+- Library simplification (owner: one item per column; `/impeccable` distill): ten single-value
+  columns, issuer rail replaced by an Issuer select, filters as a toolbar. Headless Chrome on the
+  built TDG library: rows 41px at 1440 and 1280 (one 31-character run id wraps at 1280); six routes
+  × six widths without overflow; hostile text contained at 1280 and 500px; a flow probe with a
+  synthetic second issuer covered `?issuer=zzz` in the address, the select, Reset, Any run, sort,
+  row selection and the panel heading, with no script error. Printed to PDF and read (the run id
+  column wraps to several lines on portrait A4). 106 node tests; 103 pytest (library set, browser
+  included). Superseded by this: the basis clamp and its focus rule above.
+- Not verified: a real print dialog and printers; Safari and Firefox; a screen reader; Windows
+  forced colours (rule written, not rendered); touch input; the inbox-built library with Run
+  activity; runs without charts or with a committee band; whether a keyboard-only reader finds
+  the full basis (it is in the selected-run panel, not on focus).

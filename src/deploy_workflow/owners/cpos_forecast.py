@@ -13,7 +13,7 @@ import json
 import re
 from dataclasses import fields
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Annotated
 
 from pydantic import Field, ValidationError, model_validator
@@ -22,6 +22,7 @@ from deploy_vii.contracts import Contract
 from deploy_vii.live.schema import exact_json, json_object
 from deploy_vii.readiness import shape_issues
 from deploy_workflow.owners import cp2g
+from deploy_workflow.owners.cpos_facilities import Facility, Schedule, schedule
 from deploy_workflow.prose_checks import FORECAST_HEADING, reader_passages
 
 HEADING = FORECAST_HEADING
@@ -98,6 +99,7 @@ class ForecastInputs(Contract):
     upside_drivers: CaseDrivers | None = None
     downside_drivers: CaseDrivers | None = None
     years: tuple[Span, Span, Span]
+    facilities: Annotated[tuple[Facility, ...], Field(min_length=1, max_length=40)] | None = None
     scope_limits: tuple[str, ...]
 
     @model_validator(mode="after")
@@ -114,6 +116,10 @@ class ForecastInputs(Contract):
             for a, b in zip(self.years, self.years[1:], strict=False)
         ):
             raise ValueError("each year must start the day after the previous one ends")
+        if self.facilities is not None and len({f.name.casefold() for f in self.facilities}) < len(
+            self.facilities
+        ):
+            raise ValueError("facility names must be unique")
         return self
 
 
@@ -140,6 +146,12 @@ def _printed(text: str, amount: str) -> bool:
     return any(
         re.search(rf"(?<![0-9.,]){re.escape(form)}(?![0-9]|[.,][0-9])", text) for form in forms
     )
+
+
+def _printed_percent(text: str, value: str) -> bool:
+    """Whether CP-1 prints the rate term as stated, as a percent: `6.00%` or `6.00 %`, the number
+    not the tail of a longer one."""
+    return re.search(rf"(?<![0-9.,]){re.escape(value)} ?%", text) is not None
 
 
 _CELL = re.compile(r"(?:\+|(?P<minus>[-\u2212]))?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
@@ -298,6 +310,8 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
         inputs.downside_shock or inputs.upside_drivers or inputs.downside_drivers
     ):
         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
+    if source == "CP-1" and inputs.facilities:
+        raise ValueError("CP-1: a layer-1 forecast states no facilities")
     for key, operand in inputs.base.items():
         if source == "CP-2G":
             if operand.row is not None or operand.period is not None:
@@ -306,7 +320,57 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
                 raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
         elif (problem := _layer1_problem(cp1_text, key, operand)) is not None:
             raise ValueError(f"{source}: {problem}")
+    if inputs.facilities:
+        _check_facilities(inputs, inputs.facilities, cp1_text)
     return inputs
+
+
+def _check_facilities(
+    inputs: ForecastInputs, facilities: tuple[Facility, ...], cp1_text: str
+) -> None:
+    """Each stated term is printed in CP-1, the balances fit the base debt, and no case names a
+    driver the schedule replaces."""
+    for facility in facilities:
+        if not _printed(cp1_text, facility.balance):
+            raise ValueError(
+                f"CP-2G: facility {facility.name} balance {facility.balance} is not printed in CP-1"
+            )
+        for field in ("fixed_rate_pct", "spread_pct", "floor_pct"):
+            value = getattr(facility, field)
+            if value is not None and not _printed_percent(cp1_text, value):
+                raise ValueError(
+                    f"CP-2G: facility {facility.name} {field} {value}% is not printed in CP-1"
+                )
+    debt = inputs.base["debt"].amount
+    if debt is not None:
+        with localcontext(cp2g._EXACT):
+            total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
+            too_much = total > Decimal("1.25") * Decimal(debt)
+            repaid = sum((r for _, r in schedule(facilities).totals()), Decimal(0))
+            over_debt = repaid > Decimal(debt)
+        if too_much:
+            raise ValueError(
+                f"CP-2G: facility balances total {format(total, 'f')}, more than 1.25 times base "
+                f"debt {debt}; check the unit"
+            )
+        if over_debt:
+            raise ValueError(
+                f"CP-2G: scheduled repayments total {_plain_amount(repaid)}, more than base debt "
+                f"{_plain_amount(Decimal(debt))}"
+            )
+    for name in ("upside_drivers", "downside_drivers"):
+        case: CaseDrivers | None = getattr(inputs, name)
+        if case is not None and case.debt_repayment is not None:
+            raise ValueError(
+                f"CP-2G: {name} states debt_repayment, which is not used when facilities are stated"
+            )
+
+
+_FACILITY_YEAR = ("opening", "rate", "interest", "repaid", "closing")
+FACILITY_LIMIT = (
+    "Cash interest on the stated facilities and scheduled repayment are computed from the "
+    "facility terms the CP-2G handoff stated; the analyst's repayment assumption is not used."
+)
 
 
 def _cell(value: cp2g.Val) -> dict[str, str | None]:
@@ -318,12 +382,100 @@ def _stated(key: str, case: CaseDrivers | None) -> dict[str, object]:
     return {} if case is None else {key: case.model_dump(mode="json", exclude_none=True)}
 
 
+def _plain_amount(amount: Decimal) -> str:
+    return format(amount.normalize(), "f")
+
+
+def _facility_detail(
+    inputs: ForecastInputs, facilities: tuple[Facility, ...], plan: Schedule
+) -> tuple[dict[str, object], list[str]]:
+    """The published facility keys and the three appended scope limits."""
+    per_facility = [
+        {
+            "name": facility.name,
+            "years": [
+                {"year": span.year, **{k: format(getattr(y, k), "f") for k in _FACILITY_YEAR}}
+                for span, y in zip(inputs.years, row, strict=True)
+            ],
+        }
+        for facility, row in zip(facilities, plan.rows, strict=True)
+    ]
+    debt = inputs.base["debt"]
+    with localcontext(cp2g._EXACT):
+        unallocated = (
+            None
+            if debt.amount is None
+            else Decimal(debt.amount) - sum((Decimal(f.balance) for f in facilities), Decimal(0))
+        )
+    limits = [FACILITY_LIMIT]
+    if unallocated is None:
+        limits.append("Base debt is missing, so debt outside the stated facilities is not known.")
+    elif unallocated > 0:
+        limits.append(
+            f"Debt of {_plain_amount(unallocated)} is not in a stated facility; it bears interest "
+            "at the analyst's assumed rate and is not repaid in this forecast."
+        )
+    elif unallocated < 0:
+        limits.append(
+            f"Stated facility balances exceed base debt by {_plain_amount(-unallocated)}; "
+            "interest is computed on the stated balances."
+        )
+    spans = [(date.fromisoformat(s.start), date.fromisoformat(s.end), s.year) for s in inputs.years]
+    for facility in facilities:
+        if facility.maturity is None:
+            continue
+        due = date.fromisoformat(facility.maturity)
+        if due < spans[0][0]:
+            limits.append(
+                f"{facility.name} has a stated maturity of {facility.maturity}, before the "
+                "forecast; it is assumed refinanced and no repayment at maturity is modelled."
+            )
+        elif due <= spans[2][1]:
+            year = next(y for start, end, y in spans if start <= due <= end)
+            limits.append(
+                f"{facility.name} matures in FY{year} and is assumed refinanced; "
+                "no repayment at maturity is modelled."
+            )
+    return {
+        "facilities": [f.model_dump(mode="json") for f in facilities],
+        "facility_schedule": per_facility,
+        "unallocated_debt": {
+            "amount": None if unallocated is None else format(unallocated, "f"),
+            "reason": debt.reason if unallocated is None else None,
+        },
+    }, limits
+
+
 def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
 def _json(document: object) -> bytes:
     return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+
+
+def _unallocated(debt: Decimal | None, facilities: tuple[Facility, ...] | None) -> Decimal | None:
+    """Base debt not in a stated facility, when known and positive; else None."""
+    if debt is None or facilities is None:
+        return None
+    with localcontext(cp2g._EXACT):
+        rest = Decimal(debt) - sum((Decimal(f.balance) for f in facilities), Decimal(0))
+    return rest if rest > 0 else None
+
+
+def _with_remainder(
+    totals: tuple[tuple[Decimal, Decimal], ...] | None,
+    remainder: Decimal | None,
+    rate: cp2g.Triple,
+) -> tuple[tuple[Decimal, Decimal], ...] | None:
+    """The schedule's pairs with the unallocated debt's interest at the case's own rate added;
+    it is not repaid."""
+    if totals is None or remainder is None:
+        return totals
+    with localcontext(cp2g._EXACT):
+        return tuple(
+            (i + remainder * r, repaid) for (i, repaid), r in zip(totals, rate, strict=True)
+        )
 
 
 def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
@@ -349,10 +501,19 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, 
     if inputs.downside_shock is not None:
         shock = inputs.downside_shock
         cases["DOWNSIDE"] = (base, (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase)))
+    facilities = inputs.facilities
+    plan = None if facilities is None else schedule(facilities)
+    totals = None if plan is None else plan.totals()
+    remainder = _unallocated(operands.debt.amount, facilities)
     outputs = {}
     for case, (submitted, shock_pair) in cases.items():
         drivers = cp2g.Drivers.from_submission(submitted)
-        result = cp2g.forecast(operands=operands, drivers=drivers, shock=shock_pair)
+        result = cp2g.forecast(
+            operands=operands,
+            drivers=drivers,
+            shock=shock_pair,
+            schedule=_with_remainder(totals, remainder, drivers.interest_rate),
+        )
         outputs[case] = {
             "years": [
                 {
@@ -364,6 +525,11 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, 
                 for span, year in zip(inputs.years, result.years, strict=True)
             ]
         }
+    detail, limits = (
+        ({}, [])
+        if facilities is None or plan is None
+        else _facility_detail(inputs, facilities, plan)
+    )
     exact = _json(
         {
             "schema_version": "cpos-forecast-exact/1",
@@ -381,7 +547,12 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, 
             **_stated("upside_drivers", inputs.upside_drivers),
             **_stated("downside_drivers", inputs.downside_drivers),
             "outputs": outputs,
-            "scope_limits": [LIMIT if source == "CP-2G" else LAYER1_LIMIT, *inputs.scope_limits],
+            **detail,
+            "scope_limits": [
+                LIMIT if source == "CP-2G" else LAYER1_LIMIT,
+                *inputs.scope_limits,
+                *limits,
+            ],
         }
     )
     calculation = _json(

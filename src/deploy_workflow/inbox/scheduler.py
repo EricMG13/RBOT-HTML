@@ -62,7 +62,6 @@ MAX_QUEUED = 30
 @dataclass(frozen=True)
 class Settings:
     root: Path
-    config: str = "sol-medium"
     cap: Decimal = Decimal(20)
     max_running: int = 3
     max_per_day: int = 30
@@ -103,7 +102,7 @@ class Scheduler:
     ) -> None:
         self.settings, self.clock, self.now = settings, clock, now
         self.layout = layout.ensure_layout(settings.root)
-        startup.check_launchable(settings.config, settings.ruling, settings.cap)
+        startup.check_launchable(settings.ruling, settings.cap)
         self._lock: IO[str] | None = startup.take_lock(self.layout)
         self._logger = startup.open_log(self.layout, __name__)  # only the lock holder logs
         self.lock = threading.Lock()  # held by step() and submit(): a submit never splits a poll
@@ -229,6 +228,8 @@ class Scheduler:
                     "modules": list(record.modules),
                     "max_turns": record.max_turns,
                     "level": record.level,
+                    "model": record.model,
+                    "effort": record.effort,
                     "submitted_by": record.submitted_by,
                 }
             )
@@ -251,6 +252,7 @@ class Scheduler:
         by the next poll against the digest the record keeps."""
         with self.lock:
             answers = submissions.validated(answers)
+            submissions.require_provider_key(answers)
             if not isinstance(sid, str) or not _SID.fullmatch(sid):
                 raise submissions.Refused("unknown submission")
             for record in self._records.values():
@@ -301,6 +303,8 @@ class Scheduler:
             modules=tuple(answers["modules"]),
             max_turns=answers["max_turns"],
             level=answers["level"],
+            model=answers["model"],
+            effort=answers["effort"],
             submitted_by=answers["submitted_by"],
             digest=current,
             prior=prior,
@@ -538,7 +542,6 @@ class Scheduler:
                 record,
                 context,
                 launcher=self.settings.launcher,
-                config=self.settings.config,
                 cap=self.settings.cap,
                 ruling=startup.STANDING_RULING,
             )
@@ -559,7 +562,6 @@ class Scheduler:
                 running,
                 context,
                 launcher=self.settings.launcher,
-                config=self.settings.config,
                 cap=self.settings.cap,
                 ruling=startup.STANDING_RULING,  # start-up proved settings.ruling is this file
             )

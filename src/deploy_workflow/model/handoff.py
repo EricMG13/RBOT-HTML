@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, DecimalException, localcontext
 from functools import partial
 from pathlib import Path, PurePath
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 from uuid import uuid4
@@ -54,6 +55,7 @@ from deploy_workflow.model.record import CallLog, CallRecord, arguments_sha256
 from deploy_workflow.model.redact import Redactor
 from deploy_workflow.model.reply_classes import ADAPTER_ERROR
 from deploy_workflow.model.turn import (
+    MODEL_EFFORTS,
     Message,
     ToolSpec,
     Turn,
@@ -639,6 +641,7 @@ class HandoffExecutor:
         max_output_tokens: int = 16000,
         events: Path | None = None,
         web_search: bool = False,
+        effort_by_module: Mapping[str, str] | None = None,
     ) -> None:
         if (
             adapter.config_id not in CONFIGS
@@ -650,6 +653,14 @@ class HandoffExecutor:
         if web_search and self.config.provider != "openai":
             raise ValueError(f"web search is offered on OpenAI only, not {adapter.config_id}")
         self.web_search = web_search
+        efforts = dict(effort_by_module or {})
+        known = {m.module_id for m in modules()}
+        allowed = MODEL_EFFORTS[self.config.model]
+        if bad := sorted(set(efforts) - known) or sorted(
+            f"{k}={v}" for k, v in efforts.items() if v not in allowed
+        ):
+            raise ValueError(f"effort_by_module refused for {self.config.model}: {bad}")
+        self.effort_by_module: Mapping[str, str] = MappingProxyType(efforts)
         self._query_check: tuple[Mapping[str, str], str] | None = None
         self.directory, self.adapter, self.check = directory, adapter, check
         self.events = events
@@ -667,10 +678,14 @@ class HandoffExecutor:
                     "max_output_tokens": max_output_tokens,
                     "execution": "live-provider" if adapter.ruling is not None else "offline",
                     **({"web_search": WEB_SEARCH_MODULE} if web_search else {}),
+                    **({"effort_by_module": efforts} if efforts else {}),
                     **({"auth": auth} if (auth := getattr(adapter, "auth", None)) else {}),
                 }
             ).encode(),
         )
+
+    def _effort(self, task: HandoffTask) -> str:
+        return self.effort_by_module.get(task.module_id, self.config.effort)
 
     def __call__(self, task: HandoffTask) -> bytes:
         from deploy_workflow.run_pathway import _single_writer
@@ -734,9 +749,10 @@ class HandoffExecutor:
             },
         }
         history = [Message("system", system), Message("user", dump_json(context))]
+        effort = self._effort(task)
         seed = redacted_request(
             self.redactor,
-            TurnRequest(tuple(history), tools, self.max_output_tokens, self.config.effort),
+            TurnRequest(tuple(history), tools, self.max_output_tokens, effort),
         )
         encoded = dump_json(asdict(seed)).encode()
         digest = hashlib.sha256(encoded).hexdigest()
@@ -760,7 +776,7 @@ class HandoffExecutor:
         for index in range(self.max_turns):
             request = redacted_request(
                 self.redactor,
-                TurnRequest(tuple(history), tools, self.max_output_tokens, self.config.effort),
+                TurnRequest(tuple(history), tools, self.max_output_tokens, effort),
             )
             returned = self._turn(task, folder, digest, index, request)
             history.append(
@@ -938,7 +954,7 @@ class HandoffExecutor:
                 provider=self.config.provider,
                 requested_model=self.config.model,
                 reported_model=None if turn is None else turn.reported_model,
-                requested_effort=self.config.effort,
+                requested_effort=self._effort(task),
                 invocation_digest=digest,
                 request_id=None if turn is None else turn.request_id,
                 http_status=reply.http_status,
