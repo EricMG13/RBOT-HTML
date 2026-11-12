@@ -136,9 +136,19 @@ const modelRun=model=>Object.keys(contexts).find(key=>runModels(key).includes(mo
 const modelOwnRun=model=>Object.keys(contexts).find(key=>(contexts[key].folder===model.runId||contexts[key].folder===model.runFolder)&&runModels(key).includes(model))||modelRun(model);
 // Not superseded by another listed model; one that records a predecessor comes first, then the later folder name.
 const modelOrder=models=>[...models].sort((a,b)=>(models.some(m=>m.previous===a.id)-models.some(m=>m.previous===b.id))||((b.previous!=null)-(a.previous!=null))||byModelId(a,b));
-function modelRelationship(model,models) {
+// The relationship a delivery records with another, or null when it records none. The other delivery is named by name(id): its picker label when it is listed, its id when not.
+function modelRelationship(model,models,name) {
   const successor=models.find(m=>m.previous===model.id);
-  return model.previous?`supersedes ${model.previous}`:successor?`superseded by ${successor.id}`:'relationship not recorded';
+  return model.previous?`supersedes ${name(model.previous)}`:successor?`superseded by ${name(successor.id)}`:null;
+}
+// A delivery in the Model select reads "<run date> · <pathway> · <run id>" from its own run, then its run folder, then its delivery id. Two deliveries that
+// read alike each add the first eight characters of the delivery id, or the whole id when those still tie; a relationship is added only when one is recorded.
+function modelOptionLabels(models) {
+  const base=models.map(m=>{const ctx=Object.values(contexts).find(run=>sameIssuer(m.issuerKey,run.issuerKey)&&(run.folder===m.runFolder||run.folder===m.runId));return ctx?`${runDate(ctx)} · ${runPathway(ctx)} · ${ctx.run}`:m.runFolder||m.id;});
+  const tagged=models.map((m,i)=>base.filter(text=>text===base[i]).length>1?`${base[i]} · ${m.id.slice(0,8)}`:base[i]);
+  const names=models.map((m,i)=>tagged.filter(text=>text===tagged[i]).length>1&&tagged[i]!==base[i]?`${base[i]} · ${m.id}`:tagged[i]);
+  const listed=id=>{const at=models.findIndex(m=>m.id===id);return at<0?id:names[at];};
+  return models.map((m,i)=>{const relationship=modelRelationship(m,models,listed);return `${names[i]}${relationship==null?'':` · ${relationship}`}`;});
 }
 // A frame has no error event for a page that never arrives, so a missing load within the timeout is the failure.
 const frameTimeout=()=>Number.isFinite(window.DESIGN_FRAME_TIMEOUT_MS)?window.DESIGN_FRAME_TIMEOUT_MS:6000;
@@ -1069,7 +1079,7 @@ function notAvailableLines(c) {
   return lines;
 }
 // The calculation record as a line-item by period grid. The store formatted every cell; this only places it.
-function cashflowTable(c) {
+function cashflowTable(c,rows=c.rows) {
   const groups=[];
   for(const col of c.columns){const last=groups[groups.length-1];if(last&&last.name===col.group)last.span++;else groups.push({name:col.group,span:1});}
   // The first column of each group carries a rule; the Base case and Downside columns sit on a quiet ground.
@@ -1081,7 +1091,7 @@ function cashflowTable(c) {
     return `<td${attr(colClass(i))}${title==null?'':` title="${esc(title)}"`}${label==null?'':` aria-label="${esc(label)}"`}>${esc(cell.display)}</td>`;
   };
   let band=null,body='';
-  for(const row of c.rows){
+  for(const row of rows){
     if(row.band!==band){band=row.band;body+=`<tr class="band-row"><th scope="colgroup" colspan="${c.columns.length+1}">${esc(band)}</th></tr>`;}
     body+=`<tr${row.total?' class="total-row"':''}><th scope="row">${esc(row.label)}</th>${row.cells.map((cell,i)=>td(cell,row.kind,i)).join('')}</tr>`;
   }
@@ -1094,8 +1104,11 @@ function cashflowSection(model) {
   const periods=c.columns.filter(col=>!(col.group==='Downside case'&&!/^FY\d+E$/.test(col.label)));
   const na=notAvailableLines(c),first=periods[0],last=periods[periods.length-1];
   const caption=[c.units==null?'Units not recorded':c.units,...first?[`${first.label} to ${last.label}`]:[],'history as retained in the handoffs; forecasts are conditional illustrations from the calculation record'].join(' · ');
+  // A line with no figure in any column (the store's `empty`) is folded; its cells stay reachable, and a heading goes with the lines under it.
+  const shown=c.rows.filter(row=>!row.empty),folded=c.rows.filter(row=>row.empty);
+  const empty=folded.length?`<details class="cashflow-empty"><summary>Lines with no figure in this run (${folded.length})</summary><div class="table-scroll" role="region" aria-label="Lines with no figure in this run" tabindex="0">${cashflowTable(c,folded)}</div></details>`:'';
   const other=c.other?`<details class="cashflow-other"><summary>${esc(`Other forecast cases: ${[...new Set(c.other.columns.map(col=>col.group))].join(', ')}`)}</summary><div class="table-scroll" role="region" aria-label="Other forecast cases" tabindex="0">${cashflowTable(c.other)}</div></details>`:'';
-  return `<section class="forecast-cashflow"><h2 id="cashflow-heading">Cash flow model</h2><p class="forecast-caption">${esc(caption)}</p><div class="table-scroll" role="region" aria-labelledby="cashflow-heading" tabindex="0">${cashflowTable(c)}</div>${c.notes.length?`<ul class="cashflow-notes">${c.notes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}${other}${na.length?`<details class="cashflow-na"><summary>Why cells show n.a. (${na.length} lines)</summary><ul>${na.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}</section>`;
+  return `<section class="forecast-cashflow"><h2 id="cashflow-heading">Cash flow model</h2><p class="forecast-caption">${esc(caption)}</p><div class="table-scroll" role="region" aria-labelledby="cashflow-heading" tabindex="0">${cashflowTable(c,shown)}</div>${empty}${c.notes.length?`<ul class="cashflow-notes">${c.notes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}${other}${na.length?`<details class="cashflow-na"><summary>Why cells show n.a. (${na.length} lines)</summary><ul>${na.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}</section>`;
 }
 // The roles a delivery's sources are declared under; an unknown role shows its own token.
 const SOURCE_ROLES={annual:'Annual handoff',quarter:'Quarterly handoff',forecast:'Forecast handoff',forecast_exact:'Forecast calculations',current_synthesis:'Current synthesis'};
@@ -1112,7 +1125,8 @@ function forecastView(context,id) {
   if(!models.length)return forecastEmpty(context);
   const model=models.find(m=>m.id===id)||models[0];
   const acceptance=reportAcceptance(model);
-  const select=`<label for="model-select">Model</label><select id="model-select">${models.map(m=>`<option value="${esc(m.id)}" ${m.id===model.id?'selected':''}>${esc(`${m.id} · ${modelRelationship(m,models)}`)}</option>`).join('')}</select>`;
+  const optionLabels=modelOptionLabels(models);
+  const select=`<label for="model-select">Model</label><select id="model-select">${models.map((m,i)=>`<option value="${esc(m.id)}" ${m.id===model.id?'selected':''}>${esc(optionLabels[i])}</option>`).join('')}</select>`;
   const why=`<section class="forecast-why"><h2>Why this model was built</h2>${model.scope==null?'':`<p class="forecast-scope">${esc(model.scope)}</p>`}${model.inputContract==null?'':`<p class="forecast-input">${esc(`Input contract: ${model.inputContract}`)}</p>`}${model.revisionNote==null?'':`<p class="forecast-revision">${esc(`Revision note: ${model.revisionNote}`)}</p>`}</section>`;
   const forecast=model.sources.find(s=>s.role==='forecast'),register=model.register;
   // The link opens the module that wrote the forecast handoff: CP-2G's forward model, or CP-1 for a layer-1 forecast.

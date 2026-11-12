@@ -1762,8 +1762,17 @@ FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. "
     "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
     "read the amount from, and `period` the exact header text of that table's column (for "
-    'example `"row": "Net sales", "period": "FY2024"`). Name both for every operand that has an '
-    'amount. Copy the amount as that cell prints it (with `"scale": 1000` a cell printing '
+    'example `"row": "Net sales", "period": "FY2024"`). Name the cell of every operand that has '
+    "an amount: `row` and `period`, or in a table with one row per period (CP-1's `Chart data:` "
+    "tables and `Net debt data`) `row` and `column`, the row being the period exactly as printed "
+    'and the column the measure\'s exact header (`{"amount": "<decimal>", "reason": null, '
+    '"row": "FY2024", "column": "Cash"}`); leave out `period` there. '
+    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
+    "missing with the reason. "
+    "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
+    "expense you may name that cell and must say in `scope_limits` that interest is interest "
+    "expense, not cash paid. "
+    'Copy the amount as that cell prints it (with `"scale": 1000` a cell printing '
     '2,620,995 is `"2620995"`; at most nine digits and one decimal place); for interest, taxes '
     "and capex "
     "write the positive magnitude whatever sign the cell shows; for working capital write the "
@@ -1774,7 +1783,8 @@ FORECAST_BLOCK = (
     "in USD millions where the statements are in thousands) is stated as missing, with the "
     "reason; do not rescale it. Where CP-1 prints the amount under more than one column, name "
     "a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the "
-    "Forecast page shows history only for a line named under such a header. `base_drivers` is "
+    "Forecast page shows history only for a line named under such a header, or in a row "
+    "labelled with one. `base_drivers` is "
     "the method's base-case driver "
     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
@@ -1845,9 +1855,13 @@ PERIOD_TABLE_BLOCK = (
     "financial tables. `Period` is that header's text exactly as you print it (for example "
     "`9M 2025` or `FY2024`); `Start` and `End` are the period's first and last day as "
     "YYYY-MM-DD. Head period columns as `FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`, the year "
-    "being the fiscal year the period belongs to. Python uses this table only to check that the "
-    "fiscal year, the year to date and the prior year to date make twelve months; add no figure "
-    "to it and change no other table.\n\n"
+    "being the fiscal year the period belongs to. Python uses this table to check that the "
+    "last twelve months are twelve months and to date a balance printed under an `LTM Qn YYYY` "
+    "label; add no figure to it. Where another table labels a row or column `LTM Qn YYYY`, give "
+    "that exact label a row in this table with its Start and End dates. "
+    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
+    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
+    "in the row label or the Source, not in the cell.\n\n"
 )
 # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
 # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
@@ -1866,8 +1880,18 @@ LAYER1_FORECAST_BLOCK = (
     '`{"amount": null, "reason": "<why you do not state it>"}`: '
     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
     "your own tables that you read the amount from, and `period` the exact header text of that "
-    'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). Copy '
-    'the amount as that cell prints it (with `"scale": 1000` a cell printing 2,620,995 is '
+    'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). '
+    "Name the cell of every operand that has an amount: `row` and `period`, or in a table with "
+    "one row per period (your `Chart data:` tables and `Net debt data`) `row` and `column`, "
+    "the row being the period exactly as printed and the column the measure's exact header "
+    '(`{"amount": "<decimal>", "reason": null, "row": "FY2024", "column": "Cash"}`); leave out '
+    "`period` there. "
+    "Those tables are in US$ million: at `scale` 1000 do not name them; state that operand as "
+    "missing with the reason. "
+    "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
+    "expense you may name that cell and must say in `scope_limits` that interest is interest "
+    "expense, not cash paid. "
+    'Copy the amount as that cell prints it (with `"scale": 1000` a cell printing 2,620,995 is '
     '`"2620995"`; at most nine digits and one decimal place); for interest, taxes and capex '
     "write the positive magnitude whatever sign the cell shows; for working capital write the "
     "cell's value with its sign reversed (a cell printing (45), an investment, is 45; a cell "
@@ -1876,7 +1900,8 @@ LAYER1_FORECAST_BLOCK = (
     "sources is not a cell. An amount your tables print only in the other unit is stated as "
     "missing, with the reason. Where your tables print the amount under more than one column, "
     "name a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): "
-    "the Forecast page shows history only for a line named under such a header. "
+    "the Forecast page shows history only for a line named under such a header, or in a row "
+    "labelled with one. "
     "`base_drivers` is a run-rate base case and nothing more "
     "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
     "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
@@ -2648,6 +2673,14 @@ _FACILITY_REFUSAL = re.compile(
     r"|forecast inputs: (?:\d+ problems; first: )?"
     r"(?:facilities[.:]|\(root\): Value error, facility names must be unique))"
 )
+_BOTH_KEYS = re.compile(
+    r"^[\w-]+: forecast inputs: (?:\d+ problems; first: )?base\.(\w+): Value error, an operand "
+    r"names the `period` header or the `column` header, not both"
+)
+_BOTH_KEY_OPERAND = re.compile(
+    r"base\.(\w+): Value error, an operand names the `period` header or the `column` header, "
+    r"not both"
+)
 _UNNAMED_AT_SCALE = re.compile(r"^[\w-]+: a block at scale 1000 must name the row and period")
 
 
@@ -2664,13 +2697,20 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         operand = re.search(r"^[\w-]+: base (\w+)\b", message)
         if operand:  # a wrong row label should not cost the forecast
             name = operand.group(1)
-            fix = f"Correct the row, period or amount of {name}; if you cannot, state {name} "
-            missing = "as missing: amount null, no row or period, and the reason."
+            fix = f"Correct the row, period, column or amount of {name}; "
+            fix += f"if you cannot, state {name} "
+            missing = "as missing: amount null, no row, period or column, and the reason."
             return (f"Forecast inputs: {error}. {fix}{missing}",)
         if re.match(r"^[\w-]+: the handoff gives no forecast drivers", message):
             return ()  # declining stays the method's call
+        both = _BOTH_KEYS.match(message)
+        if both:
+            names = list(dict.fromkeys(_BOTH_KEY_OPERAND.findall(message)))
+            who = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+            advice = f"State either `period` or `column` for {who}, not both."
+            return (f"Forecast inputs: {error}. {advice}",)
         if _UNNAMED_AT_SCALE.match(message):
-            fix = "Name the row and period of each base operand; if you cannot, "
+            fix = "Name the row and the period or column of each base operand; if you cannot, "
             advice = (
                 f"{fix}set every driver's values to [null, null, null] and say why in scope_limits."
             )

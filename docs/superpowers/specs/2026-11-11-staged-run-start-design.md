@@ -2,6 +2,24 @@
 
 Replaces the inbox watcher and folder drop. Status: for owner approval.
 
+## Amendment 2026-11-12: four steps, documents first
+
+Owner, 2026-11-12: step order "Four steps"; prefill "Today's prefill". Record:
+`docs/design/2026-11-12-run-start-four-steps.md`.
+
+- The stages of section 4 are now groups shown under five steps: Documents (documents), Purpose
+  (pathway), Confirm (issuer and dates, legal), More context (market, valuation, assumptions) and
+  Start (review). A step is shown when the level shows any of its groups.
+- Decision 4, "Stage 1 is pathway selection", is replaced: the page opens on Documents, and Purpose
+  follows once a file is read.
+- Basic asks Documents, Purpose, Confirm and Start. More context appears at Basic only for a primary
+  run, a held answer, an error or "Answer this now".
+- Standard adds the market, valuation and research-question groups under More context; Advanced asks
+  everything, as section 5 says.
+- The short snapshot shows Documents, Purpose, Confirm and Start at every level.
+- Every other rule of this spec stands: the levels' defaults, locks after an error, the summary and
+  its ticks, Submit, the USD 20 cap. No field moved between groups.
+
 ## 1. Intent
 
 Paid runs are repeated because of human error. Most of it is context that is missing or wrong, or
@@ -48,7 +66,7 @@ run. The analyst never handles a context file.
    replaces the folder drop named in `AGENTS.md` and `docs/rulings/2026-11-09-inbox-automation.md`.
 3. The start page offers each module's modes and qualifiers, and three levels: Basic, Standard,
    Advanced.
-4. Stage 1 is pathway selection.
+4. Stage 1 is pathway selection. (replaced 2026-11-12, see the amendment)
 
 ## 4. Stages
 
