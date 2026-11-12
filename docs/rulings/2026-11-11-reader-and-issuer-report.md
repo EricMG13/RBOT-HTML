@@ -257,12 +257,22 @@ that refused correct handoffs in paid runs `tdg-proof-short-001`, `tdg-reader-fo
    `2024, 437` is two numbers and `1,25` is `1` and `25`. Sign, unit, scale and decimal places as
    written are unchanged (`5.89` is not `5.8905`), and a number still matches only as a whole number.
    A refusal quotes the figure as the passage wrote it.
-2. **A bracketed figure after a figure is a note, not a negative.** A parenthesised figure that
-   directly follows another figure (its optional unit and spaces or tabs, then the opening
-   parenthesis) in the same cell or phrase is read as written inside the parentheses:
-   `3,395 (51.6%)` holds `3,395` and `51.6%`; `100 (-5.2%)` holds `100` and `-5.2%`. A parenthesised
-   figure alone in a cell, after words, or after another cell stays an accounting negative
-   (`(12.3)%`, `| Net debt change | (120) |`, `a loss of (45)`). The same reading applies to a passage.
+2. **A bracketed figure is a note on the figure before it only as a ratio or a rounding of it.** A
+   parenthesised figure is an accounting negative unless all of these hold, and then it is read as
+   written inside the parentheses (positive unless it carries a minus): (1) it directly follows a
+   figure (that figure, its optional unit, spaces or tabs only, then the opening parenthesis);
+   (2) that figure is real and unbracketed: not itself in parentheses, not a digit run glued to
+   letters (`FY2024`, `Q3`, `C12`), not part of a date or period label (`2024-09-30`,
+   `31 Dec 2024`, `H1 2024`, `Q2`), not a bare year, and not a reference after `Note`, `page`,
+   `p.`, `row`, `item`, `step`, `section` or `table`; (3) the bracketed figure either carries `%` or
+   `x` (`3,395 (51.6%)`, `5.8905x (5.89x)`) or is the preceding figure rounded to the bracketed
+   figure's decimal places (ROUND_HALF_UP or ROUND_HALF_EVEN, same unit or none:
+   `1291.272 (1,291.27)`). `100 (-5.2%)` holds `100` and `-5.2%`. Everything else stays an
+   accounting negative, on the held side and on a passage: `100 (25)`, `40% (364)`,
+   `2,200 (20) 2,180`, `Capital expenditures (42) (36)`, `FY2024 (120)`, `(12.3)%`, `a loss of (45)`.
+   Limit, accepted: a bracketed non-ratio note of a different quantity (`40% (364)`) is still read as
+   a negative, as before this amendment; an identical bracket (`100 (100)`) is a rounding of itself
+   and is read as positive.
 
 Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
 judgement-first wording, and whether a limitation truly changes a conclusion. These are judged

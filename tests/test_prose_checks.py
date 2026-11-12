@@ -897,3 +897,78 @@ def test_a_key_figure_with_a_thousands_separator_is_the_figure_cp1_states_plainl
     assert key_figures("USD 6,261 million", "| Cash | 6,261 |") == ()
     assert len(key_figures("USD 6,262 million")) == 1
     assert len(key_figures("USD 6,261 thousand", "| Cash | 6261 million |")) == 1
+
+
+NEGATIVE_AFTER_A_LABEL_OR_FIGURE = [
+    ("FY2024 (120)", "120"),
+    ("Q3 (45)", "45"),
+    ("C12 (30)", "30"),
+    ("Note 5 (120)", "120"),
+    ("10-K page 120 (45)", "45"),
+    ("2023-2024 (120)", "120"),
+    ("H1 2024 (45)", "45"),
+    ("31 Dec 2024 (45)", "45"),
+    ("2024-09-30 (45)", "45"),
+    ("D02 (22)/(48)", "22"),
+    ("Q1 calculated CFO less capex 41,374; Q2 (26,306); LTM 105,927", "26,306"),
+    ("FY2024 (165); FY2023 (139); FY2022 (119)", "139"),
+    ("Capital expenditures (42) (36)", "36"),
+    ("Dividends paid (30,199) (29,958)", "29,958"),
+    ("2,200 (20) 2,180", "20"),
+    ("2,248,030 (9,419) (21,140) 2,217,471", "21,140"),
+    ("100 (25)", "25"),
+    ("40% (364)", "364"),
+    ("row 7 (12)", "12"),
+    ("p. 9 (12)", "12"),
+    ("1291.272 (1,291.28)", "1,291.28"),
+]
+
+
+@pytest.mark.parametrize(("cell", "figure"), NEGATIVE_AFTER_A_LABEL_OR_FIGURE)
+def test_a_bracketed_figure_that_is_not_a_note_is_a_negative_on_the_held_side(
+    cell: str, figure: str
+) -> None:
+    assert len(fidelity(f"The line was {figure}.", annotated(cell))) == 1
+    assert fidelity(f"The line was ({figure}).", annotated(cell)) == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "figure"),
+    [
+        ("Net debt was 100 (25).", "25"),
+        ("Net debt was 100 (364).", "364"),
+        ("Net debt was 2,200 (20) 2,180.", "20"),
+    ],
+)
+def test_a_bracketed_figure_on_the_passage_side_keeps_its_sign(passage: str, figure: str) -> None:
+    (issue,) = fidelity(passage, annotated("100 | 25 | 364 | 2,200 | 20 | 2,180"))
+    assert f'"({figure})"' in issue
+
+
+@pytest.mark.parametrize(
+    ("passage", "cell"),
+    [
+        ("Margin was 51.6%.", "3,395 (51.6%)"),
+        ("Leverage was 5.89x.", "5.8905x (5.89x)"),
+        ("Margin was 45.05%.", "0.45052 (45.05%)"),
+        ("Debt was 1,291.27.", "1291.272 (1,291.27)"),
+        ("Debt was 1291.27.", "1291.272 (1,291.27)"),
+        ("Leverage was 4.72x.", "USD 19,702 million (4.72x)"),
+        ("Margin was 16.2%.", "USD 1,067 million (16.2%)"),
+        ("Leverage was 5.89x.", "5.885x (5.89x)"),
+        ("Leverage was 5.88x.", "5.885x (5.88x)"),
+        ("Leverage was 5.90x.", "5.8905x (5.90x)"),
+        ("Cover was 100.", "100 (100)"),
+    ],
+)
+def test_a_ratio_or_a_rounding_after_a_figure_is_a_note_read_as_positive(
+    passage: str, cell: str
+) -> None:
+    assert fidelity(passage, annotated(cell)) == ()
+    assert len(fidelity(passage.replace(" was ", " was ("), annotated(cell))) <= 1
+
+
+def test_a_note_on_the_passage_side_is_read_as_written() -> None:
+    held = annotated("3,395 | 51.6%")
+    assert fidelity("Ebitda was 3,395 (51.6%).", held) == ()
+    assert len(fidelity("Ebitda was 3,395 (51.6%).", annotated("3,395 | (51.6%)"))) == 1

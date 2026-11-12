@@ -35,6 +35,7 @@ comments, list markers removed. Decisions where the ruling is silent:
 
 import re
 from collections.abc import Mapping
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 from itertools import groupby
 from typing import NamedTuple
 
@@ -872,10 +873,10 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
 # run of digits at that place (3.14 is read whole, never as 3.1; a malformed 1.2.3 or 12,5 is
 # still read, as 1.2 and 3, or 12 and 5), with the sign it was written with (a leading minus, or
 # parentheses) and the unit or scale beside it. A comma between digit groups of three is a
-# thousands separator (4,173 is 4173); a parenthesised figure directly after another figure
-# (`3,395 (51.6%)`) is a note on it, read as written inside the parentheses, not a negative. On
-# the passage side dates and period labels are masked as in check 8. A held currency code is not
-# compared with the passage's (old behaviour).
+# thousands separator (4,173 is 4173); a parenthesised figure is a negative unless it directly
+# follows a real figure and is a ratio or a rounding of it (`3,395 (51.6%)`), a note read as
+# written. On the passage side dates and period labels are masked as in check 8. A held currency
+# code is not compared with the passage's (old behaviour).
 CODE = re.compile(r"\bCP-[A-Z0-9]+\b|\bT\d+[A-Z]?\.\d+\b|\b[0-9A-Fa-f]{16,}\b")
 _NUMBER_UNIT = (
     r"%|x\b|\s?pp\b|\s?bps\b|\s?bp\b|\s?per ?cent\b"
@@ -923,25 +924,67 @@ def _unit(written: str | None) -> str | None:
 PERIOD_WORD = re.compile(r"\b(?:[QH][1-4]|FY\d{2,4}E?|LTM|\d+M)\b")
 
 
+_REFERENCE = re.compile(
+    r"\b(?:notes?|pages?|pp?\.|rows?|items?|steps?|sections?|tables?)\s*$", re.IGNORECASE
+)
+_YEAR = re.compile(r"(?:19|20)\d\d")
+
+
+def _is_real_figure(found: re.Match[str], base: str, labels: list[tuple[int, int]]) -> bool:
+    """A figure that is not in parentheses, not a digit run glued to letters (`FY2024`, `C12`), not
+    part of a date or period label, not a bare year, not a reference after `Note`, `page`, ..."""
+    start, end = found.start("n"), found.end("n")
+    return not (
+        found["open"]
+        or found["close"]
+        or any(a < end and start < b for a, b in labels)
+        or (start and base[start - 1].isalpha())
+        or (_YEAR.fullmatch(found["n"]) and not (found["u1"] or found["u2"]))
+        or _REFERENCE.search(base[:start])
+    )
+
+
+def _is_note_on(found: re.Match[str], before: re.Match[str]) -> bool:
+    """A bracketed figure that is a ratio (`%` or `x`) or a rounding of the figure before it (the
+    same number to the bracketed figure's decimal places, same unit or none)."""
+    unit = _unit(found["u1"] or found["u2"])
+    if unit in ("%", "x"):
+        return True
+    if unit not in (None, _unit(before["u1"] or before["u2"])):
+        return False
+    places = Decimal(1).scaleb(-len(found["n"].partition(".")[2]))
+    written = Decimal(found["n"].replace(",", ""))
+    original = Decimal(before["n"].replace(",", ""))
+    return written in (
+        original.quantize(places, ROUND_HALF_UP),
+        original.quantize(places, ROUND_HALF_EVEN),
+    )
+
+
 def _figures(text: str, passage: bool = False) -> list[_Figure]:
     """Figures of `text`. On the passage side dates and period labels are not figures (as in
     check 8); held text is read unmasked, so a year held only in a date still matches."""
-    masked = CODE.sub(" ", text)
+    base = CODE.sub(" ", text)
+    spans = [m.span() for pattern in (DATE, PERIOD_WORD) for m in pattern.finditer(base)]
+    masked = base
     if passage:
         masked = PERIOD_WORD.sub(
-            lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), masked)
+            lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), base)
         )
     figures: list[_Figure] = []
-    previous_end: int | None = None
+    before: re.Match[str] | None = None
     for found in NUMBER.finditer(masked):
         bracketed = bool(found["open"] and found["close"] and not found["minus"])
-        # A bracketed figure right after another figure (and its unit) annotates it: 3,395 (51.6%).
+        # A bracketed figure right after a real figure annotates it when it is a ratio or a
+        # rounding of it: 3,395 (51.6%). Any other bracketed figure is an accounting negative.
         annotation = (
             bracketed
-            and previous_end is not None
-            and masked[previous_end : found.start()].strip(" \t") == ""
+            and before is not None
+            and base[before.end() : found.start()].strip(" \t") == ""
+            and _is_real_figure(before, base, spans)
+            and _is_note_on(found, before)
         )
-        previous_end = found.end()
+        before = found
         number = found["n"].replace(",", "")  # a comma in a figure is a thousands separator
         figures.append(
             _Figure(
