@@ -3,6 +3,7 @@ Python computes, and the check of its handoff. Synthetic and hand-written: every
 below was written from the fixtures by hand, not computed by the code under test. A fake provider
 proves wiring only, not analytical quality."""
 
+import ast
 import dataclasses
 import hashlib
 import importlib.util
@@ -20,8 +21,8 @@ from test_cpos_launch import (
     PATHWAY_MODULES,
     ROOT,
     RULING,
-    context_file,
     answer,
+    context_file,
     covenant_answer,
     good_task,
     issuer_folder,
@@ -2939,11 +2940,6 @@ def test_a_bare_count_that_equals_no_withheld_size_is_accepted(sentence):
     assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
 
 
-def test_a_bare_count_equal_to_a_withheld_size_is_refused():  # recorded limit
-    found = cp8_issues(with_row(LEVERAGE_ROW, "The handoff states 30 limitations.\n\n"), _ndpack())
-    assert any("30" in i and "reword" in i for i in found), found
-
-
 def test_a_module_code_or_list_number_is_no_bare_count():
     pack = _ndpack()
     pack["net_debt_change"] |= {"change_in_cash": "-2", "current_cash": "908"}
@@ -3258,3 +3254,431 @@ def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack)
 def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
     found = _says(f"Cash fell by thirty{hyphen}five.", _cash_pack("-35", "875"))
     assert any("figure 35" in i for i in found), found
+
+
+# --- the year problem, the counts and a spelled size across lines (owner, 2026-11-12: "fix 1 and
+# 2"; controller rulings R1 to R3). Expectations hand-written from the rulings.
+
+
+def _hold(text, pack=None, held=()):
+    return cp8_issues(with_row(LEVERAGE_ROW, text + "\n\n"), pack or _ndpack(), held)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash fell by 2010 US$m.",
+        "Cash fell by US$2010m.",
+        "Cash fell by USD 2010.",
+        "Cash fell by 2010m.",
+        "Cash fell by 2010 million.",
+        "Cash fell by 2010 USDm.",
+    ],
+)
+def test_a_year_shaped_withheld_size_with_a_unit_is_refused(sentence):
+    found = _hold(sentence, _cash_pack("-2010", "-1100"))
+    assert any("figure 2010 is the difference" in i and "reword" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    ("sentence", "size"),
+    [
+        ("Cash fell by 2010 US$m.", "2010"),
+        ("Cash fell by US$2010m.", "2010"),
+        ("Cash was 2010.5 US$m.", "2010.5"),
+        ("Cash was USD 1913.", "1913"),
+        ("Cash was 1913 million.", "1913"),
+    ],
+)
+def test_a_year_shaped_figure_with_a_unit_held_nowhere_is_refused(sentence, size):
+    found = _hold(sentence)
+    assert any(f"figure {size} is held in neither" in i for i in found), found
+
+
+def test_a_year_shaped_figure_in_a_table_body_row_is_a_figure_and_in_a_header_row_is_not():
+    table = "| Item | {} |\n| --- | --- |\n| Cash | {} |"
+    body = table.format("Value", "2010 US$m")
+    found = _hold(body, _cash_pack("-2010", "-1100"))
+    assert any("figure 2010 is the difference" in i for i in found), found
+    header = table.format("2024 / 2023 US$m", "not stated")
+    assert _hold(header) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The September 2024 US$4,216 million balance is a declared distribution.",
+        "H1 2025 USD 30,199 thousand of dividends were paid.",
+        "Debt due July 2025\u2013June 2026 USD 22,873 thousand is spread out.",
+        "At 30 September 2024 US$m 437 was drawn.",
+        "In 2024 cash was flat.",
+        "FY2024 US$m is the unit.",
+        "FY 2024 is the year.",
+        "Fiscal 2024 was flat.",
+        "Both 2023 and 2024 were flat.",
+        "Q3 2024 US$m is the unit.",
+    ],
+)
+def test_a_year_is_no_figure_with_a_marker_a_bare_or_a_currency_for_the_next_number(sentence):
+    assert _hold(sentence, held=("4,216 30,199 22,873 437",)) == ()
+
+
+def test_the_year_beside_a_figure_is_not_read_only_the_figure_is():
+    found = _hold("Leverage was flat (2023: 6.57x).")
+    assert any("figure 6.57 is held in neither" in i for i in found), found
+    assert not any("2023" in i for i in found), found
+    assert _hold("Leverage was flat (2023: 6.57x).", held=("6.57",)) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "All 30 modules ran in both runs.",
+        "thirty sources were read.",
+        "See page 30.",
+        "Note 30 describes the facility.",
+        "The loan matures in 30 months.",
+        "The handoff states 30 limitations.",
+        "Cash fell by 30 days.",
+    ],
+)
+def test_a_count_beside_a_count_noun_or_a_reference_word_is_no_withheld_size(sentence):
+    assert _hold(sentence) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash fell by 30.",
+        "Cash fell by thirty.",
+        "A change of 30 in cash.",
+        "30 new modules ran.",
+        "Cash fell by 30 quarter-on-quarter.",
+        "Cash fell by 30 US$m.",
+        "Cash fell by 30 times.",
+    ],
+)
+def test_a_bare_number_beside_no_count_noun_is_still_a_withheld_size(sentence):
+    found = _hold(sentence)
+    assert any("figure 30 is the difference" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Gross debt changed by one hundred\nand ten.",
+        "Gross debt changed by one hundred and\nten.",
+        "Gross debt changed by one\nhundred ten.",
+    ],
+)
+def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
+    found = [i for i in _hold(sentence) if "figure 110" in i]
+    assert len(found) == 1, found
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Debt is one hundred\n\nten.",
+        "Debt is one hundred\n| Cash | ten |",
+        "Debt is one hundred\n- ten",
+        "Debt is one hundred\n### ten",
+        "Debt is one hundred\nand then nothing.",
+    ],
+)
+def test_a_spelled_number_is_not_joined_over_a_blank_line_row_heading_or_item(text):
+    assert _hold(text) == ()
+
+
+# --- fix round 1 of the counts branch: a year before a comma, ISO dates whole, two nouns dropped,
+# a count noun on the next line, a table delimiter without outer pipes, a code after a year.
+# Expectations hand-written from the controller's rulings.
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "In 2024, the issuer refinanced its notes.",
+        "Revenue grew in 2023, 2024 and 2025.",
+        "The notes due 2029, 2031 and 2032 were extended.",
+        "By December 2025, Q3 2024, and 2026, cash held.",
+    ],
+)
+def test_a_year_before_a_comma_is_a_year_and_no_figure(sentence):
+    assert _hold(sentence) == ()
+
+
+def test_a_year_before_a_comma_leaves_the_figure_after_it_read():
+    found = _hold("In 2024, US$437m was drawn.")
+    assert any("figure 437 is held in neither" in i for i in found), found
+    assert not any("2024" in i for i in found), found
+    assert _hold("In 2024, US$437m was drawn.", held=("437",)) == ()
+
+
+def test_a_year_before_a_comma_in_a_table_row_and_a_header_row_is_a_year():
+    table = "| Item | {} |\n| --- | --- |\n| Cash | {} |"
+    assert _hold(table.format("2024, 2025 US$m", "not stated")) == ()
+    found = _hold(table.format("Value", "In 2024, 2025 and 2026"))
+    assert not any("held in neither" in i for i in found), found
+
+
+def test_a_year_before_a_comma_in_held_evidence_holds_no_figure():
+    held = ("On September 19, 2024, the Company completed the issuance of $3,000 million.",)
+    found = _hold("Cash was US$2024m in both runs.", held=held)
+    assert any("figure 2024 is held in neither" in i for i in found), found
+    assert _hold("Cash was US$3,000m in both runs.", held=held) == ()
+
+
+def test_a_comma_is_part_of_a_number_only_as_a_thousands_separator():
+    held = ("The facility is 2,024 and 1,913 US$m.",)
+    assert _hold("Cash was US$2,024m and US$1,913m.", held=held) == ()
+    found = _hold("Cash was US$2,024m.", held=("In 2024, nothing.",))
+    assert any("figure 2024 is held in neither" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The LTM 2023-10-01 through 2024-09-30 base.",
+        "Cash was stated at Q3 2024-09-30 in both runs.",
+        "As of September 2024-09-30 data.",
+        "H1 2024-06 was flat.",
+    ],
+)
+def test_an_iso_date_is_exempt_as_a_whole_after_a_period_marker_or_month(sentence):
+    assert _hold(sentence) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash shows a 30 difference between the runs.",
+        "Cash shows a thirty difference.",
+        "Cash records a 30 change.",
+        "Cash records a thirty change.",
+        "Cash shows 30 differences.",
+    ],
+)
+def test_change_and_difference_are_not_count_nouns(sentence):
+    found = _hold(sentence)
+    assert any("figure 30 is the difference" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence", ["Both runs used thirty\nmodules.", "Both runs used 30\nmodules."]
+)
+def test_a_count_noun_on_the_next_line_of_the_paragraph_makes_a_count(sentence):
+    assert _hold(sentence) == ()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cash fell by 30\n\nmodules.",
+        "Cash fell by 30\n- modules",
+        "Cash fell by 30\n### modules",
+        "Cash fell by thirty\n| modules |",
+        "Cash fell by thirty\n\nmodules.",
+    ],
+)
+def test_a_count_noun_over_a_blank_line_heading_row_or_item_makes_no_count(text):
+    found = _hold(text)
+    assert any("figure 30 is the difference" in i for i in found), found
+
+
+def test_a_table_delimiter_without_outer_pipes_still_marks_the_header():
+    assert _hold("| Item | 2024 US$m |\n--- | ---\n| Cash | 5 |") == ()
+
+
+def test_a_code_after_a_year_with_no_scale_or_number_is_no_unit():
+    assert _hold("In 2024 USD strengthened against the euro.") == ()
+    for sentence in ("Cash was 2010 USDm.", "Cash was 2010 US$m.", "Cash was 2010 USD million."):
+        found = _hold(sentence)
+        assert any("figure 2010 is held in neither" in i for i in found), (sentence, found)
+    found = _hold("Cash was 2010 USD 31.")
+    assert any("figure 31 is held in neither" in i for i in found), found
+    assert not any("2010" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2010 USD millions",
+        "2010 USD mn",
+        "2010 EUR billions",
+        "2010 USD thousands",
+        "2010 US$ million",
+        "2010 US$ millions",
+        "2010 US$m",
+        "2010 USDm",
+        "2010 USD m",
+        "2010USD Millions",
+    ],
+)
+def test_a_year_shaped_number_with_a_plural_or_mn_scale_is_a_figure(text):
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures(text)] == ["2010"], text
+
+
+@pytest.mark.parametrize("text", ["In 2024 USD strengthened", "2024 US$4,216 million"])
+def test_a_year_before_a_currency_of_the_next_number_stays_a_year(text):
+    from deploy_workflow.changes_check import _figures
+
+    assert "2024" not in [str(f.size) for f in _figures(text)], text
+
+
+def test_a_hyphenated_number_after_a_month_year_is_not_cut_mid_number():
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures("September 2024-437")] == ["437"]
+    assert _figures("FY 2024-25") == []
+
+
+@pytest.mark.parametrize("row", ["| - | -", "| - | - |", "| -- | --- |"])
+def test_a_row_of_short_dash_cells_is_no_table_separator(row):
+    text = f"| Item | Cash 2010 US$m |\n{row}\n| a | b |"
+    found = _hold(text, _cash_pack("-2010", "-1100"))
+    assert any("figure 2010 is the difference" in i for i in found), (row, found)
+
+
+def test_a_range_of_two_years_reads_no_figure_and_k10_accepts_it():
+    from deploy_workflow.changes_check import _figures
+
+    text = "Finance lease obligations, 2025-2045 maturities"
+    assert _figures(text) == []
+    assert _hold(text) == ()
+
+
+_YEARISH = re.compile(r"(?<![\d,.])(?:19|20)\d{2}(?:\.\d+)?(?![\d,])")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2010 US$m",
+        "2010m",
+        "2010 million",
+        "2010 USDm",
+        "1913 million",
+        "2010.5 US$m",
+        "US$2010m",
+        "USD 2010",
+        "USD 1913",
+        "2010 USD millions",
+        "2010 USD mn",
+        "2010 EUR billions",
+        "2010 USD thousands",
+        "2010 US$ million",
+        "2010 US$ millions",
+        "2010 USD m",
+        "2010USD Millions",
+        "2010bn",
+        "2010x",
+        "2010%",
+        "2024 bn",
+        "2024 mn",
+        "2024 EUR m.",
+        "2024 thousand employees",
+        "2010 m",
+        "2024 x",
+        "2024 %",
+        "2024 percent",
+        "2024 bps",
+        "2010m-2011m",
+        "In 2024 k.",
+        "In 2024 $ millions were raised",
+        "In 2024 £ billions",
+        "2024 £bn",
+        "2010 US$M",
+        "2010 $MM",
+        "2010 €M",
+        "2010 US$BN",
+        "2010 $K",
+        "2010 USD M",
+        "2010 USDM",
+        "In 2024 USD mm",
+        "cash of US$1913 million and liquidity",
+        "FY2024 USD 2045 million; FY2023",
+        "CP-1's US$2038 million total",
+    ],
+)
+def test_a_19xx_20xx_number_with_a_unit_ending_its_word_is_a_figure(text):
+    from deploy_workflow.changes_check import _figures
+
+    sizes = [str(f.size) for f in _figures(text)]
+    assert any(t in sizes for t in _YEARISH.findall(text)), (text, sizes)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "In 2024 m&a activity rose.",
+        "The 2024 k-shaped recovery helped.",
+        "In 2024 millions of customers switched.",
+        "In 2024 USD millionaires bought bonds.",
+        "In 2024 € m-commerce grew.",
+        "In 2024 millions switched.",
+        "In 2024 thousands left.",
+        "In 2024 millions, not thousands, switched.",
+        "2010 millions",
+        "Cash was 2010 millions.",
+        "In 2024 million-dollar deals rose.",
+        "In 2024 m/m growth slowed.",
+        "In 2024 bn-dollar deals.",
+        "In 2024 x-ray use rose.",
+        "In 2024 percentages rose.",
+        "In 2024 USD billionaires",
+        "In 2024 $US rose",
+        "In 2024 €m-commerce grew.",
+        "In 2024 ABCm rose",
+        "In 2024 bps-style",
+        "In 2024 thousandths",
+        "2010 USD m&a",
+        "In 2024 USD M&A deals",
+        "In 2024 kWh fell",
+        "2024 US$ 5m",
+        "In 2024 USD strengthened against the euro.",
+        "2024 US$4,216 million",
+        "Cash was 2010 USD 31.",
+        "H1 2025 USD 30,199 thousand",
+        "In 2024, the issuer refinanced.",
+        "2024 M&A",
+        "2024 Mn",
+        "2024 management",
+        "2024 markets",
+        "FY2024 m",
+        "2024 USD mid-market",
+        "2025 OEM build rates",
+        "2024 AND 2023",
+        "2024 M",
+        "2024 K",
+    ],
+)
+def test_a_19xx_20xx_number_before_a_word_that_only_starts_like_a_unit_is_a_year(text):
+    from deploy_workflow.changes_check import _figures
+
+    sizes = [str(f.size) for f in _figures(text)]
+    assert not [t for t in _YEARISH.findall(text) if t in sizes], (text, sizes)
+
+
+def test_a_percent_hyphen_word_after_a_small_number_is_still_a_unit():
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures("30 percent-owned", counts=False)] == ["30"]
+
+
+def test_no_module_level_name_in_the_checker_is_assigned_twice():
+    # A second `_UNITS = ...` once silently replaced a regex with a dict; the quality gate
+    # checks changed lines only and did not see it.
+    from deploy_workflow import changes_check
+
+    source = Path(changes_check.__file__).read_text(encoding="utf-8")
+    names = [
+        target.id
+        for node in ast.parse(source).body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name)
+    ]
+    assert sorted({name for name in names if names.count(name) > 1}) == []

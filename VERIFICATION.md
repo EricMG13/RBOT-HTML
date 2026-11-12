@@ -9,7 +9,13 @@ Plan: `docs/superpowers/plans/2026-11-12-forecast-reader-findings.md`, Tasks E1-
 Scope: offline. Synthetic fixture with a hand answer key (plan lines 43-87); 459 recorded calls replayed before and after (429 identical, 24 differ only where CP-1 holds an LTM label, 6 only in two refusal texts); the real LTH CP-1 of run `20261112-164724-01` read with a HAND-NAMED block (no model ran): FY2024 cash 10.879 and net debt 1,544.718; YTD and LTM cash 175.509, debt 1,534.356, net debt 1,358.847; LTM leverage equals CP-1's own C3 and C4; with the run's block unchanged only one limit line differs. No provider called: no model has yet used `column`.
 Commands: pytest (cpos launch, facilities, periods, scale, store, handoff loop) exit 0; quality gate 0 findings, exit 0. Reviews: task reviews (mx-precise), two adversarial reviews (mx-adversary: no flow leaked, no balance in a column ending another day; one Medium on mixed units, fixed), whole-branch review with confidence review and rewrite tournament (mx-architect), two fix waves. Hand-picked mutants 34/40 killed, then the four untested ones (M03, M06, M19, M35) killed by new tests; M10 and M11 survive singly.
 Known, for the owner: an operand with no base amount cannot name a history-only cell, so LTH's June 2025 undrawn 618.5 and LTM liquidity stay n.a. (R3); the delivered LTH run does not change, cash and debt balances appear only when a model names them by `column` or CP-1 prints plain balances (`1,534.356 at 2025-06-30` is not read); a scale-1000 issuer cannot name the US$m chart tables; nothing checks that a stock is named at the base period (R6); two tables that state one balance in different units and disagree publish the same-unit figure unflagged (CP-1's validation refuses such a handoff); a currency difference between rows is not detected; re-delivering a run whose CP-1 has an LTM label gives a new delivery id; the branch is about 1,400 changed lines against the 800-line limit.
-Not verified: any model response to the new instructions; a paid run; the Forecast page's rendering of the new reasons and limits; the layer-1 `column` path through a delivery; the weekly and live suites; mutation testing beyond the hand-picked mutants.
+Not verified: any model response to the new instructions; a paid run; the Forecast page's rendering of the new reasons and limits; the layer-1 `column` path through a delivery; the weekly and live suites; mutation testing beyond the hand-picked mutants. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 Library and report screens entry.
+
+## 2026-11-12 — CP-8 checker: a year with a unit is a figure, counts beside a count noun, a spelled size across lines (branch `claude/cp8-checker-counts`, owner "fix 1 and 2")
+Scope: offline, synthetic plus read-only reading of retained runs; no provider. R1 years, R2 counts, R3 line breaks as in the amendment at the end of the presets ruling. Tests first: 19 of the new cases failed on the unchanged checker, all pass after; the one old case that pinned the count limit now asserts acceptance. `gaps_real_run.py` on `tdg-proof-snapshot-opus-002` is byte-identical before and after. The figure reading over 37 held CP-1/CP-2 handoffs of the preview workspace reads 6 year-shaped tokens as figures, all in two contexts that are real figures (`USD 1913 million`, `FY2024 USD 2045 million`); a first version read `AND 2023` as a currency, fixed by a currency-code list.
+Fix round 2 (M-A plural/`mn` scale after a year, `US$ million`; L-A1 ISO exemption stops mid-number; L-B separator needs three dashes in every cell, 0 of 10,319 real separator rows in 974 retained files had fewer): figure readings over those files differ only where a year range's second year or an ISO-shaped digit run is no longer cut (e.g. `2025-2045`), listed in the amendment.
+Fix round 3 (a year with a unit: one `_YEAR_UNIT` test with explicit word ends, separate from the small-number `_UNITED`; duplicate `_UNITS` removed, `mypy --strict` errors in the file 9 to 0; `2010 millions` moved from figure to year): 25 new cases failed first; corpus counts and held sizes identical to 404fb77.
+Not verified: a real model; the reader view (no presentation change); bare years (always years); counts of 100 or more beside a noun (raw reading).
 
 ## 2026-11-12 — Reader check of the Forecast page on a real run (LTH, run `20261112-164724-01`; closes the check left pending for PRs 59, 60, 63, 70, 71)
 Scope: ONE live run started from the run start page by the controller on the owner's instruction ("you do it", "Yes, submit"): Life Time Group Holdings, Credit Snapshot, Advanced, modules CP-0, CP-1, CP-2A, CP-2G only, as-of 2025-08-18, current period fy-2024, no legal documents declared, five retained LTH files (10-K 2024, 10-Q June 2025, three credit amendments). Model: `claude-sonnet-5-5` (requested and reported on all 51 model-call records), by a temporary uncommitted local patch of the `opus-medium`/`opus-high` configurations made on the owner's instruction ("use sonnet just for this test") and reverted after the run; the run's own text says "opus-medium", which is wrong for this run. Spend recorded USD 3.71 at Opus rates (an overstatement; Sonnet is cheaper), cap USD 20. One retained response per module; the live record holds up to three drafts for some modules, not examined. Run root `~/rbot-run-root`, outside the repository. This is one issuer on a model the service does not offer; it is not a GPT Sol or Claude Opus result and not a complete Credit Snapshot.
@@ -26,6 +32,7 @@ Not verified: a real model; a bare count equal to a withheld size is refused and
 Limits fixed (owner "Fix the limits first", L1-L4): a number after a bullet line is a marker only if `1`; a day beside a month is a date only with a four-digit year, and a complete date is blanked before both readings; whole numbers in English words (2 to 999,999) are read in the bare K9 reading. 22 new test cases failed on the unchanged checker; two tests that pinned the old limits now assert the rulings.
 Not verified (limits): decimals, fractions, ordinals, `a hundred`, `a dozen` in words; a real model.
 Fix round 2: a year is 19xx/20xx only (a figure after a yearless date is read again); a decimal, fraction or ordinal in words is not read in part; U+2010-U+2015 hyphens join a spelled number. 20 new test cases failed first; probes gaps3_year_not_year, gaps3_words_limits (line-break case remains) run.
+Fix round 3 (H1 year before a comma, M1 ISO dates, M2 `change`/`difference` not count nouns, L1 count noun on the next line, L2 delimiter without pipes, L3 code after a year): new cases failed first, all pass. Over 974 retained `.md` files vs `5db96a9`: 0 year-comma tokens and 0 ISO-date parts read, 39 newly read year-shaped tokens all with a currency or unit (`US$1913 million`, `FY2024 USD 2045 million`), no non-year figure lost.
 
 ## 2026-11-12 — A withheld difference is refused in the analysis register's Why and the ledger (branch `claude/cp8-why-cell-withheld`, owner "fine, PR and merge")
 Scope: offline, synthetic; no provider. K9's register exemption narrowed to the Effect cell of the measure's own issuer row (`Same definition` with `Correction` or `Method change`); the analysis Why, ledger, fact rows and other measures' rows refuse a withheld size (pack `no`, said `Not comparable`, same-period flagged, same-period net debt change incl. cash), as before in passages. Same functions, per-line exemption. 295 tests in `tests/test_changes.py` pass, none changed or weakened; 9 new cases failed on the old code first. CI fast-tests: exit 0, 3000 passed; node set: exit 0, 298 passed; `tools/quality_gate.py`: exit 0, 0 findings; reviewer probes ndsame_why, ndsame_k9, ndsame_flag, netdebt2_attacks, seam3_verdicts, realfix_check (real accepted-then-corrected handoff), t4r4_same_period: all exit 0.
@@ -957,29 +964,3 @@ Offline only; no provider call.
   here. Gates for market data (CP-3, CP-3D), executed legal documents (CP-4), rating reports (CP-2H)
   and distress (CP-4C) are unchanged and untested with such files. The skills' scripts and three
   `.xlsx` placeholders were not copied. Output-side loss of analysis was checked for CP-2G only.
-
-## 2026-11-10 — Library and report screens: reader value against production detail (branch `claude/forecast-publication-screens`)
-
-Scope: the static library page only (`apps/issuer-library/credit_os/web/`), on
-`claude/forecast-publication` (PR 19) merged with `claude/period-charts` (PR 20). One agent, no
-sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-screens-pass.md`.
-
-- Change: production detail leaves the reading path (SHA-256 ids as link text, file names and line
-  numbers in heads and bands, handoff word counts, "file hashes checked at build", a citation count
-  on every Overview finding, five empty metric cards, a Completeness filter no run can match). It
-  stays in a title, the evidence inspector or one "Built from" disclosure. Reports and the report
-  selector name their run; the acceptance state sits beside Open report; "run" replaces "case";
-  a missing figure reads `n.a.`; a sorted column shows its direction.
-- Adversarial design review (breaker, newcomer, truster): BLOCK before the fixes (D1), CONCERNS
-  after them; D1 to D8 fixed, D9 to D14 left with the owner (design doc table).
-- Tests: twelve static tests changed or added and seen failing against the unchanged screens
-  (`git archive` of HEAD). `node --test` static + calendar 116 pass, 0 fail; CI fast pytest list
-  1441 passed, 7 deselected; `tests/test_library_page_browser.py` 20 passed; quality gate 0
-  findings, exit 0.
-- Looked at: headless Chrome at 1440 and 1280 over `file://`, and the built-in browser over a
-  local server, on a library rebuilt from the four retained TDG runs: library, Overview, module
-  matrix, CP-1 charts, reports list, report reader. No console error from the page (the one 404
-  is the optional `activity.js`, absent without a live run).
-- Not verified: phone and tablet widths; Windows and Edge; a library with many issuers or with an
-  accepted report (fixture only); a live run's activity view; the delivered report's own layout
-  inside the frame, which belongs to the delivery renderer; no independent review of this pass.
