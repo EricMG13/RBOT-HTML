@@ -2103,3 +2103,11 @@ def test_a_huge_count_hides_no_other_run_output(tmp_path):
     (cp0,) = (o for o in result["outputs"].values() if o["module"] == "CP-0")
     assert list(cp0["confidence"]) == ["missing"]
     assert len(result["outputs"]) > 1
+
+
+def test_a_lane_or_map_of_only_not_supplied_lists_each_distinct_reason_once():
+    first, second = "Not supplied: no legal event is settled here", "Not supplied: undated triggers"
+    lane = lane_fields(f"| {first} |" + f" {first} |" * 5 + f" {second} |")
+    assert lane["events"][0]["gap"] == "no legal event is settled here; undated triggers"
+    edge = map_fields(f"| {first} |" + f" {first} |" * 3 + f" {second} |")
+    assert edge["maps"][0]["gap"] == "no legal event is settled here; undated triggers"

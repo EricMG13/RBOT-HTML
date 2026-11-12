@@ -221,7 +221,7 @@ function figureSpans(text) {
     const dashed = before === '\u2013' && (SYMBOLS.includes(text[start - 2]) || (gap(text[start - 2]) && CURRENCY_BEFORE.test(text.slice(0, start - 2))));
     const at = (minus(before) && alone(text[start - 2])) || dashed ? start - 1 : start, lead = text[at - 1] || '';
     let from = at;
-    if (SYMBOLS.includes(lead)) {
+    if (lead && SYMBOLS.includes(lead)) {
       from = at - 1;
       if (at === start && minus(text[from - 1]) && alone(text[from - 2])) from--;
     } else if (gap(lead) && CURRENCY_BEFORE.test(text.slice(0, at - 1))) from = at - 4;

@@ -281,6 +281,8 @@ function chartTableForm(id,chart) {
   const table=fixtureTable(id,chart.table),columns=table.headers.map((_,c)=>c);
   return `<details class="chart-table"><summary>Table form</summary>${sourceTable(id,chart.title,table,columns.map(c=>numericColumn(table,c)),columns,table.rows)}</div></details>`;
 }
+// A drawing that states none (a chart, lane or map the store holds as a gap) keeps its section's table as the same fold: every cell as the module wrote it, a Source button per row.
+const gapTableForm=(id,title,table)=>chartTableForm(id,{title,table});
 // ---- Structure views (a "Chart data:" row table that is not by period or step): drawn from the stated numbers only. A value that is
 // not a number is n.a. with its stated reason as the title; it is never a zero position. Nothing is computed for display: headroom and
 // cumulative leverage are shown as stated, and the geometry uses the stated numbers.
@@ -649,7 +651,7 @@ function newFormatChartCards(id) {
   const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,true,at===last)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
   const lastChart=cards.findLastIndex(card=>!card.gap);
   return cards.map((card,at)=>{
-    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4></div><p class="lane-gap">${NOT_ESTABLISHED}<small>${esc(card.gap.gap)}</small></p>`:cardTitle(card.html);
+    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4></div><p class="lane-gap">${NOT_ESTABLISHED}<small>${esc(card.gap.gap)}</small></p>${gapTableForm(id,card.gap.title,card.table)}`:cardTitle(card.html);
     return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}${at===lastChart?LEGEND:''}</div>`;
   }).join('');
 }
@@ -787,7 +789,7 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
     return `<a class="lane-event ${span.point?'point':'span'}${anchored?' anchored':''}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`Event ${no}: ${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="${anchored?`right:${Math.round((100-left-width)*100)/100}%`:`left:${left}%`}${span.point?'':`;width:${width}%`};bottom:${LANE_BASE+level*LANE_ROW}px"><span class="lane-no">${no}</span></a>`;
   };
   const own=Boolean(only)&&isNewFormat(data[only].sections); // a new-format module page: each lane is its section's route and caption, its events a Table form
-  const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"${own?drawingAnchor(lane.id,lane.table):''}><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>${own?drawingCaption(lane.id,lane.table):''}`).join('');
+  const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"${own?drawingAnchor(lane.id,lane.table):''}><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>${own?drawingCaption(lane.id,lane.table)+(lane.gap!==null?gapTableForm(lane.id,lane.lane,lane.table):''):''}`).join('');
   const key=drawn.filter(({items})=>items.length).map(({lane,items,start})=>`<p class="lane-key-name">${esc(lane.lane)}</p><ol class="lane-key" start="${start}">${[...items].sort((a,b)=>a.no-b.no).map(({row})=>`<li><span class="lane-key-date">${esc(row.cells[0])}</span> ${rich(row.cells[3])}${scenario(row)?' (Scenario event)':''}</li>`).join('')}</ol>`).join('');
   const asOf=contexts[context]?.asOf,asOfAt=eventAsOf(axis,asOf);
   const ticks=eventTicks(axis);
@@ -873,7 +875,7 @@ function mapsView(id,tag='h2',keep=()=>true,own=false) {
   return (data[id]?.maps||[]).filter(keep).map(map=>{
     const title=`<${tag}>${esc(map.name[0].toUpperCase()+map.name.slice(1))}</${tag}>`;
     const anchor=own?drawingAnchor(id,map.table):'',caption=own?drawingCaption(id,map.table):'';
-    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${caption}</div>`;
+    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${own?gapTableForm(id,map.name,map.table):''}${caption}</div>`;
     const rows=fixtureTable(id,map.table).rows,link=row=>`<a class="event-link" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}">${rich(row.cells[1])}</a>`;
     const body=rows.map(row=>`<tr><td>${rich(row.cells[0])}</td><td>${link(row)}</td><td>${esc(row.cells[2])}</td><td>${rich(row.cells[3])}</td><td>${rich(row.cells[4])}</td></tr>`).join('');
     return `<div class="map-card"${anchor}>${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>${caption}</div>`;

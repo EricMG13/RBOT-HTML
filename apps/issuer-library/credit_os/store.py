@@ -639,6 +639,11 @@ def _bridge_amounts(table: dict[str, Any]) -> list[decimal.Decimal] | None:
     return values if sum(values[:-1], decimal.Decimal(0)) == values[-1] else None
 
 
+def _gap_reasons(cells: list[str]) -> str:
+    """Each distinct reason of `Not supplied: <reason>` cells, once, in the order stated."""
+    return "; ".join(dict.fromkeys(c.partition(":")[2].strip() for c in cells))
+
+
 def _chart_gap(section: dict[str, Any]) -> dict[str, Any] | None:
     """A fixed owner table explicitly stating no data; preserve its reason without a chart."""
     tables = [b for b in section["blocks"] if b["type"] == "table"]
@@ -655,8 +660,7 @@ def _chart_gap(section: dict[str, Any]) -> dict[str, Any] | None:
     cells = [c for row in rows for c in (row[1:2] if step else row[:-2])]
     if not all(STATED_GAP.match(c) for c in cells):
         return None
-    reasons = list(dict.fromkeys(c.partition(":")[2].strip() for c in cells))
-    return {**_chart_head(section, table), "gap": "; ".join(reasons)}
+    return {**_chart_head(section, table), "gap": _gap_reasons(cells)}
 
 
 def _row_relations_ok(rows: list[dict[str, Any]], kind: str | None) -> bool:
@@ -826,7 +830,7 @@ def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:
     rows = [row["cells"] for row in tables[0]["rows"]]
     lane = {"lane": section["heading"].removeprefix(EVENT_PREFIX), "table": tables[0]["line"]}
     if all(STATED_GAP.match(c) for cells in rows for c in cells):
-        return {**lane, "gap": rows[0][0].partition(":")[2].strip()}
+        return {**lane, "gap": _gap_reasons([c for cells in rows for c in cells])}
     return {**lane, "gap": None} if all(_event_row_ok(cells) for cells in rows) else None
 
 
@@ -862,7 +866,7 @@ def _edge_map(section: dict[str, Any]) -> dict[str, Any] | None:
     rows = [row["cells"] for row in tables[0]["rows"]]
     drawn = {"name": name, "table": tables[0]["line"]}
     if rows and all(STATED_GAP.match(c) for cells in rows for c in cells):
-        return {**drawn, "gap": rows[0][0].partition(":")[2].strip()}
+        return {**drawn, "gap": _gap_reasons([c for cells in rows for c in cells])}
     stated = all(c and not STATED_GAP.match(c) for cells in rows for c in cells)
     stated = stated and all(cells[4] not in ("\u2014", "-", "\u2013") for cells in rows)
     legal = stated and all(cells[2] in MAP_EDGES[name] for cells in rows)

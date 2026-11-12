@@ -3126,7 +3126,7 @@ test('module page (A1): a chart with no numbers is a card saying Not established
   const order = [...charts.matchAll(/<div class="panel-card" id="s-(\d+)">/g)].map(m => m[1]);
   assert.deepEqual(order, ['35', '40', '50'], 'the gap card sits where its table is');
   const card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(charts)[0];
-  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && strip(card).includes('no covenant is stated') && !card.includes('Not supplied'));
+  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && strip(card).includes('no covenant is stated') && !card.replace(/<details.*?<\/details>/s, '').includes('Not supplied'), 'the reason is shown without its prefix; the table as written is in the Table form fold (H1)');
   assert.ok(!html.includes('Chart data:'));
 });
 
@@ -3227,4 +3227,31 @@ test('timeline: a span too thin to hold its number at the right end is drawn fro
   const tag = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]).find(m => m.includes('Last quarter'));
   assert.match(tag, /class="lane-event span anchored"/);
   assert.match(tag, /style="right:0%;width:0\.\d+%;bottom:4px"/);
+});
+
+// ---- Whole-branch H1: a drawing whose table states none keeps its table as the Table form fold, every cell as written.
+const h1Page = (extra, set) => a1Page(a1Sections(extra), { ...a1Set, ...set });
+const foldOf = (html, from) => /<details class="chart-table">.*?<\/details>/s.exec(html.slice(html.indexOf(from)))[0];
+
+test('module page (H1): a chart card with no numbers keeps its table as a Table form fold, its unit and Basis cells as written', () => {
+  const page = h1Page([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x (net debt to EBITDA)', 'not established for this run and not a compliance opinion']])])], { chartGaps: [{ title: 'Covenant headroom', table: 37, gap: 'no covenant is stated; no test date is stated' }] });
+  const html = page.moduleReport(a1Id), card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(html)[0];
+  assert.ok(strip(card).replace(strip(foldOf(card, '<details')), '').includes('no covenant is stated; no test date is stated'), 'the visible reason lists every distinct reason');
+  const fold = foldOf(card, '<details');
+  assert.ok(fold.includes('<summary>Table form</summary>') && strip(fold).includes('x (net debt to EBITDA)') && strip(fold).includes('not established for this run and not a compliance opinion') && strip(fold).includes('Not supplied: no covenant is stated'), fold);
+});
+
+test('module page (H1): an events lane with no event keeps its table as a Table form fold, every cell as written', () => {
+  const row = [313, 'Not supplied: no legal event is settled here', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: these are undated triggers recorded in other lanes'];
+  const page = h1Page([sec('Events: Legal', 3, 310, 'consumed', [table(312, LANE_HEAD, [row]), text(314, 'Legal lane caption.')])], { events: [{ lane: 'Legal', table: 312, gap: 'no legal event is settled here' }] });
+  const html = page.moduleReport(a1Id), lane = /<div class="lane-row" id="s-310">.*?Legal lane caption\./s.exec(html)[0];
+  assert.ok(strip(lane).includes('no legal event is settled here') && strip(lane).includes('Legal lane caption.'));
+  const timeline = /<section class="part" id="timeline">.*?<\/section>/s.exec(html)[0];
+  assert.ok(strip(timeline).includes('these are undated triggers recorded in other lanes') && /<summary>Table form<\/summary>/.test(timeline), 'the gap lane row is in the Table form');
+});
+
+test('module page (H1): a map with no edge keeps its table as a Table form fold, every cell as written', () => {
+  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, 'Not supplied: no edge is stated', 'Not supplied: x', 'Not supplied: x', 'Not supplied: x', 'no edge with applicable document and jurisdiction can be drawn', 'Not supplied: p']]), text(414, 'Map caption.')])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
+  const html = page.moduleReport(a1Id), card = /<div class="map-card" id="s-410">.*?Map caption\./s.exec(html)[0];
+  assert.ok(/<summary>Table form<\/summary>/.test(card) && strip(foldOf(card, '<details')).includes('no edge with applicable document and jurisdiction can be drawn'), card);
 });

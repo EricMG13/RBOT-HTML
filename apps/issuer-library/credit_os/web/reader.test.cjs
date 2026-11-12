@@ -586,3 +586,12 @@ test('tableView: a Source cell with a trailing full stop still gets its button; 
   const b = html.slice(html.indexOf('o:5'));
   assert.ok(b.includes('data-index="2">A.pdf, page 5</button>; <button type="button" class="source-cell" data-chip="o:5" data-index="1">B.pdf, page 3</button></td>'), 'A.pdf opens chip 2, B.pdf chip 1');
 });
+
+test('figureSpans (whole-branch L1): a text that starts with a number or a negative figure is drawn once, with no empty figure button', () => {
+  for (const t of ['45 days of cash', '1. Leverage rose to 4.5x.', '-5% margin.']) {
+    assert.ok(figureSpans(t).every(s => s.start >= 0), t);
+    const {html} = paragraphView(t, 'o:1', {chips: 1});
+    assert.equal(html.replace(/<button[^>]*basis-link[^>]*>.*?<\/button>/g, '').replace(/<[^>]+>/g, '').trim(), t);
+  }
+  assert.deepEqual(figureSpans('-5% margin.'), [{start: 0, end: 3, text: '-5%'}]);
+});
