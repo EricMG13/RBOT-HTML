@@ -3,6 +3,7 @@ Python computes, and the check of its handoff. Synthetic and hand-written: every
 below was written from the fixtures by hand, not computed by the code under test. A fake provider
 proves wiring only, not analytical quality."""
 
+import ast
 import dataclasses
 import hashlib
 import importlib.util
@@ -20,8 +21,8 @@ from test_cpos_launch import (
     PATHWAY_MODULES,
     ROOT,
     RULING,
-    context_file,
     answer,
+    context_file,
     covenant_answer,
     good_task,
     issuer_folder,
@@ -3665,3 +3666,19 @@ def test_a_percent_hyphen_word_after_a_small_number_is_still_a_unit():
     from deploy_workflow.changes_check import _figures
 
     assert [str(f.size) for f in _figures("30 percent-owned", counts=False)] == ["30"]
+
+
+def test_no_module_level_name_in_the_checker_is_assigned_twice():
+    # A second `_UNITS = ...` once silently replaced a regex with a dict; the quality gate
+    # checks changed lines only and did not see it.
+    from deploy_workflow import changes_check
+
+    source = Path(changes_check.__file__).read_text(encoding="utf-8")
+    names = [
+        target.id
+        for node in ast.parse(source).body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name)
+    ]
+    assert sorted({name for name in names if names.count(name) > 1}) == []

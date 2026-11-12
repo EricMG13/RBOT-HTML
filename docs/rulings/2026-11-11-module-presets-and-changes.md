@@ -457,4 +457,6 @@ separate from the small-number test (`_UNITED`), so a boundary fixed for one no 
 letter, a digit or `&`, and before a hyphen or slash followed by a letter (`2024 m&a`, `2024 k-shaped`, `2024 m/m` stay years). A
 plural scale word (`millions`) counts only after a currency (`2010 USD millions`); alone it is a year (`In 2024 millions of
 customers`, and `2010 millions`, which the round-2 test had listed as a figure and is moved). The duplicate `_UNITS` name is gone,
-so `mypy --strict` reports no error in the file.
+so `mypy --strict` reports no error in the file. Recorded limit: a unit directly followed by a hyphenated word or a
+superscript footnote mark (`2010 US$m-equivalent`, `2010 USD million-plus`, `2010 US$m¹`) is not read as a unit, so that
+year-shaped number stays a year.
