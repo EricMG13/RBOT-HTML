@@ -127,6 +127,9 @@ _STOCKS = frozenset({"debt", "cash", "undrawn"})
 NOT_UNDER_A_PERIOD = (
     "CP-1 prints the base amount only under a column header that is not a period ({header})"
 )
+NOT_A_PERIOD_ROW = (
+    "the forecast inputs name {column} as a column, and the row {row} is not a period"
+)
 _YEAR = re.compile(r"(?<!\d)(?:19|20)\d\d(?!\d)")
 _MAX_DIGITS = 38  # a numeral of more digits than the exact context holds is not a figure
 _MAX_REASON = 200
@@ -364,18 +367,27 @@ def _named_base(named: Mapping[str, tuple[str, str]]) -> Period | None:
     return max(periods, key=lambda p: (p[1], p[2]), default=None)
 
 
+def _is_unit_header(name: str) -> bool:
+    return _plain(name).casefold() == "reporting unit"
+
+
 IN_OTHER_UNIT = "CP-1 states {label} in another unit ({unit})"
 
 
-def _other_unit(row: list[str], index: int, named: frozenset[str]) -> str | None:
-    """The cell of a period row, other than its amount cell at `index`, that names a unit the
-    named row does not; None when the row names none or shares one (a row that names no unit is
-    read, as the unit guard reads the named row that names none)."""
-    for i, cell in enumerate(row):
-        units = _units_named(cell) if i != index else frozenset()
-        if units and named and units.isdisjoint(named):
-            return cell
-    return None
+def _row_unit(
+    row: list[str], index: int, header: list[str], unit_column: int | None
+) -> tuple[frozenset[str], str]:
+    """The unit words that a period row states, and the cell that states them: its `Reporting unit`
+    cell when the table has that column, else its other cells (never the amount cell at `index`);
+    when it names none, the named column's header and the table's first header cell."""
+    if unit_column is not None:
+        cells = [row[unit_column]] if unit_column < len(row) else []
+    else:
+        cells = [cell for i, cell in enumerate(row) if i != index]
+    for cell in (*cells, header[index], header[0]):
+        if units := _units_named(cell):
+            return units, cell
+    return frozenset(), ""
 
 
 def _transposed(
@@ -392,18 +404,15 @@ def _transposed(
         header, rows = (table[0], table[1:]) if table else ([], [])
         for index in (i for i, name in enumerate(header) if i > 0 and _plain(name) == column):
             kept = [row for row in rows if row and len(row) > index]
+            unit_column = next((i for i, name in enumerate(header) if _is_unit_header(name)), None)
+            units = {id(row): _row_unit(row, index, header, unit_column) for row in kept}
             named = frozenset().union(
-                *(
-                    _units_named(cell)
-                    for row in kept
-                    if period_of(row[0]) == target
-                    for i, cell in enumerate(row)
-                    if i != index
-                )
+                *(units[id(row)][0] for row in kept if period_of(row[0]) == target)
             )
             cells = []
             for row in kept:
-                unit = _other_unit(row, index, named)
+                own, text = units[id(row)]
+                unit = text if own and own != named else None
                 if unit is not None:
                     other[_plain(row[0])] = IN_OTHER_UNIT.format(
                         label=_cut(_plain(row[0]), 40), unit=_cut(_plain(unit), 40)
@@ -427,7 +436,11 @@ def _named_line(
     if isinstance(name, ByColumn):
         target = period_of(name[0])
         if target is None:
-            return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[0]))))
+            return Line(
+                reason=NOT_A_PERIOD_ROW.format(
+                    column=_cut(_plain(name[1])), row=_cut(_plain(name[0]))
+                )
+            )
         read, other = _transposed(tables, _plain(name[1]), target)
         line = _line(read, key, amount, _plain(name[1]), target)
         gaps = {
@@ -470,6 +483,10 @@ NOT_BUILT = (
     "nothing to check against its period dates."
 )
 NOT_TWELVE = "{fy} is not twelve months by CP-1's period dates ({days} days)"
+OWN_BALANCES = (
+    "CP-1's own {label} figures for revenue, earnings and cash flow are not read; its balances "
+    "are read as of {end}."
+)
 OWN_LTM = (
     "CP-1's own {label} figures for revenue, earnings and cash flow are not read; the LTM column "
     "is built from {fy} + {ytd} - {pytd}."
@@ -768,6 +785,23 @@ def _balances(ctx: _Context, reads: Reads, period: Period) -> Reads:
     }
 
 
+def _label_read(
+    ctx: _Context, before: Reads, after: Reads, period: Period
+) -> tuple[str, str] | None:
+    """The `LTM Qn YYYY` label and its limit line, when a stock of the column of `period` was read
+    from the figure printed under that label (it had no figure of the period's own)."""
+    label = f"LTM Q{period[2]} {period[1]}"
+    spans = ctx.labels.get(label)
+    if not spans or not any(
+        after[key].amount is not None and before[key].amount is None
+        for key in _STOCKS
+        if key in after
+    ):
+        return None
+    ((_, end),) = spans
+    return label, OWN_BALANCES.format(label=label, end=end.isoformat())
+
+
 def _ytd_reads(ctx: _Context, period: Period) -> Reads:
     """A year-to-date column's values: its period's cells, or NEEDS when no located line prints
     the period (a quarter is never summed into it)."""
@@ -875,6 +909,7 @@ def _interim(
     n, k = anchor.year, anchor.quarters
     ytd_p, pytd_p, older_p = _ytd_period(n, k), _ytd_period(n - 1, k), _ytd_period(n - 2, k)
     ytd, pytd = _ytd_reads(ctx, ytd_p), _ytd_reads(ctx, pytd_p)
+    ytd_read = ytd
     ytd = _balances(ctx, ytd, ytd_p)
     ltm, prior = dict(ytd), dict(pytd)
     for key in _FLOWS:
@@ -905,15 +940,20 @@ def _interim(
     return (
         [*columns, *_twelve_months(label, ltm_values, ltm_check, prior_values, prior_check)],
         _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
-        (label, own) if ltm_built and (ltm_check is None or ltm_check.reason is None) else None,
+        (label, own)
+        if ltm_built and (ltm_check is None or ltm_check.reason is None)
+        else _label_read(ctx, ytd_read, ytd, ytd_p),
     )
 
 
-def _fiscal(ctx: _Context, anchor: _Anchor) -> tuple[list[Column], list[str], None]:
+def _fiscal(
+    ctx: _Context, anchor: _Anchor
+) -> tuple[list[Column], list[str], tuple[str, str] | None]:
     """At a fiscal-year anchor: no year to date; LTM is the year, Prior LTM the year before."""
     n = anchor.year
     reason = NO_YTD.format(label=period_label(("FY", n, 4)))
     ltm = {key: _needs(ctx.found[key], ("FY", n, 4)) for key in _READ}
+    ltm_read = ltm
     ltm = _balances(ctx, ltm, ("FY", n, 4))
     prior = {key: _needs(ctx.found[key], ("FY", n - 1, 4)) for key in _READ}
     ltm_values = _derived(ltm, False)
@@ -929,7 +969,7 @@ def _fiscal(ctx: _Context, anchor: _Anchor) -> tuple[list[Column], list[str], No
             *_twelve_months(f"LTM FY{n}", ltm_values, ltm_check, prior_values, prior_check),
         ],
         _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
-        None,
+        _label_read(ctx, ltm_read, ltm, ("FY", n, 4)),
     )
 
 

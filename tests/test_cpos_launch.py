@@ -5374,3 +5374,16 @@ def test_several_operands_naming_both_period_and_column_are_all_named_in_the_rep
     )
     (issue,) = _repair_issues(forecast_block(base=base), COLUMN_CP1)
     assert issue.endswith("State either `period` or `column` for cash and undrawn, not both.")
+
+
+def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-branch review L3, L4
+    table = cpos_launch.PERIOD_TABLE_BLOCK
+    assert "to date a balance printed under an `LTM Qn YYYY` label; add no figure to it." in table
+    assert "give that exact label a row in this table with its Start and End dates." in table
+    assert "only to check" not in table and "change no other table" not in table
+    shown = "history only for a line named under such a header, or in a row labelled with one."
+    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
+        assert shown in block
+        assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
+    assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
+    assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK

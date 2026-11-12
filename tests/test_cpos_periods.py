@@ -1565,7 +1565,9 @@ def test_a_period_row_labelled_by_a_date_is_accepted_and_not_read_as_history(): 
     files, record = _e1_record(cp1, _e1_block(base=base))
     assert D(json.loads(files["forecast_exact.json"])["base"]["cash"]["amount"]) == D(100)
     reason = cell(record, "FY2024", "closing_cash")["reason"]
-    assert reason == NOT_UNDER_A_PERIOD.format(header="2024-12-31")
+    assert reason == (
+        "the forecast inputs name Cash as a column, and the row 2024-12-31 is not a period"
+    )
 
 
 def test_at_scale_1000_the_unit_guard_reads_the_named_cells_row():  # (g)
@@ -1831,5 +1833,154 @@ def test_an_ltm_label_dated_twice_gives_a_cell_reason_without_a_full_stop():
 def test_an_ltm_whose_date_check_failed_does_not_say_it_is_built():
     cp1 = E1_CP1.replace("| H1 2025 | 2025-01-01 |", "| H1 2025 | 2025-02-01 |")
     _, record = _e1_record(cp1)
-    assert not any(x.startswith("CP-1's own") for x in record["limits"])
-    assert any("LTM Q2 2025" in x and "not read as periods" in x for x in record["limits"])
+    assert not any("is built from" in x for x in record["limits"])
+    # the balances are read from the label (L2), so the label is not listed as unread
+    assert any(x.startswith("CP-1's own LTM Q2 2025 figures") for x in record["limits"])
+    assert not any("LTM Q2 2025" in x and "not read as periods" in x for x in record["limits"])
+
+
+# --- Whole-branch review, fix round 2 ------------------------------------------------------------
+LIQ_FY = "| FY2024 | 100 | 50 | US$m | Year end. |"
+LIQ_LTM = "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |"
+NO_UNIT_HEAD = (
+    "| Period | Cash | Undrawn | Reporting unit | Basis and limitation |\n"
+    "| --- | --- | --- | --- | --- |"
+)
+
+
+def _undrawn_at_ytd_and_ltm(cp1, **changes):
+    _, record = _e1_record(cp1, _e1_block(base=_e1_base(**changes)))
+    return [cell(record, column, "undrawn") for column in ("YTD", "LTM")]
+
+
+def test_a_basis_cell_naming_a_thousands_amount_does_not_blank_a_row_in_the_named_unit():  # M1 U1
+    note = "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025; excludes USD 740 thousand of cash. |"
+    for got in _undrawn_at_ytd_and_ltm(E1_CP1.replace(LIQ_LTM, note)):
+        assert got == {"amount": "60", "reason": None}
+
+
+def test_a_row_in_another_reporting_unit_is_n_a_when_the_named_rows_basis_names_thousands():  # U2
+    cp1 = E1_CP1.replace(
+        LIQ_FY, "| FY2024 | 100 | 50 | US$m | Year end; excludes USD 740 thousand of cash. |"
+    ).replace(LIQ_LTM, "| LTM Q2 2025 | 120000 | 60000 | US$ thousands | 30 June 2025. |")
+    for got in _undrawn_at_ytd_and_ltm(cp1):
+        assert got == {
+            "amount": None,
+            "reason": "CP-1 states LTM Q2 2025 in another unit (US$ thousands)",
+        }
+
+
+def test_a_row_in_another_unit_is_n_a_when_the_unit_is_in_the_headers_only():  # U3
+    cp1 = (
+        E1_CP1.replace(
+            NO_UNIT_HEAD,
+            "| Period | Cash, US$m | Undrawn, US$m | Basis and limitation |\n"
+            "| --- | --- | --- | --- |",
+        )
+        .replace(LIQ_FY, "| FY2024 | 100 | 50 | Year end. |")
+        .replace(LIQ_LTM, "| LTM Q2 2025 | 120000 | 60000 | 30 June 2025; in US$ thousands. |")
+    )
+    undrawn = {"amount": "50", "reason": None, **_by_column("FY2024", "Undrawn, US$m")}
+    for got in _undrawn_at_ytd_and_ltm(cp1, undrawn=undrawn):
+        assert got["amount"] is None
+        assert got["reason"].startswith("CP-1 states LTM Q2 2025 in another unit (")
+
+
+def test_a_row_in_thousands_is_n_a_when_the_named_row_and_headers_name_no_unit():  # U4
+    cp1 = (
+        E1_CP1.replace(
+            NO_UNIT_HEAD,
+            "| Period | Cash | Undrawn | Basis and limitation |\n| --- | --- | --- | --- |",
+        )
+        .replace(LIQ_FY, "| FY2024 | 100 | 50 | Year end. |")
+        .replace(LIQ_LTM, "| LTM Q2 2025 | 120000 | 60000 | 30 June 2025; in US$ thousands. |")
+    )
+    for got in _undrawn_at_ytd_and_ltm(cp1):
+        assert got["amount"] is None and "in another unit" in got["reason"]
+
+
+def test_a_row_naming_no_unit_is_read_beside_a_named_row_with_a_unit():
+    cp1 = E1_CP1.replace(LIQ_LTM, "| LTM Q2 2025 | 120 | 60 |  | 30 June 2025. |")
+    for got in _undrawn_at_ytd_and_ltm(cp1):
+        assert got == {"amount": "60", "reason": None}
+
+
+def test_stocks_read_from_the_label_are_not_listed_as_unread_when_the_ltm_is_not_built():  # L2
+    cp1 = E1_CP1.replace("| H1 2024 | 2024-01-01 | 2024-06-30 |\n", "")
+    cp1 = cp1.replace(
+        "| Line, USD million | FY2024 | H1 2025 | H1 2024 | LTM Q2 2025 |\n"
+        "| --- | --- | --- | --- | --- |",
+        "| Line, USD million | FY2024 | H1 2025 | LTM Q2 2025 |\n| --- | --- | --- | --- |",
+    )
+    for old, new in (
+        ("| 1000 | 540 | 500 | 1040 |", "| 1000 | 540 | 1040 |"),
+        ("| 300 | 170 | 150 | 320 |", "| 300 | 170 | 320 |"),
+        ("| 36 | 17 | 18 | 35 |", "| 36 | 17 | 35 |"),
+        (
+            "| 600 | Not applicable (balance date) | Not applicable (balance date) | 590 |",
+            "| 600 | Not applicable (balance date) | 590 |",
+        ),
+    ):
+        assert old in cp1, old
+        cp1 = cp1.replace(old, new)
+    debt = {"amount": "600", "reason": None, "row": "Total debt", "period": "FY2024"}
+    _, record = _e1_record(cp1, _e1_block(base=_e1_base(debt=debt)))
+    assert D(cell(record, "YTD", "closing_cash")["amount"]) == D(120)
+    assert not any("not read as periods" in x and "LTM Q2 2025" in x for x in record["limits"])
+    assert (
+        "CP-1's own LTM Q2 2025 figures for revenue, earnings and cash flow are not read; "
+        "its balances are read as of 2025-06-30."
+    ) in record["limits"]
+
+
+def test_two_different_figures_for_the_ytd_period_stop_the_label_figure():  # M19
+    cp1 = E1_CP1.replace(
+        LIQ_LTM,
+        LIQ_LTM + "\n| H1 2025 | 130 | 55 | US$m | One. |\n| H1 2025 | 140 | 56 | US$m | Two. |",
+    )
+    _, record = _e1_record(cp1)
+    assert cell(record, "YTD", "closing_cash") == {
+        "amount": None,
+        "reason": "CP-1 prints different figures for this line in H1 2025",
+    }
+
+
+def test_the_base_period_of_revenue_named_by_column_is_its_row_not_its_header():  # M35
+    tables = cpos_forecast._tables(
+        _md(
+            ["Period", "Revenue", "EBITDA", "Reporting unit"],
+            [["FY2024", "900", "250", "US$m"], ["FY2025", "1000", "300", "US$m"]],
+        )
+    )
+    ops = cp2g.Operands(
+        **{
+            key: cp2g.Val(D(amount), None) if amount else cp2g.Val(None, "not stated")
+            for key, amount in {**dict.fromkeys(BASE, None), "revenue": 1000, "ebitda": 300}.items()
+        }
+    )
+    named = {
+        "revenue": cpos_periods.ByColumn("FY2025", "Revenue"),
+        "ebitda": cpos_periods.ByColumn("FY2025", "EBITDA"),
+    }
+    record = cpos_periods.history(tables, ops, named=named, forecast_year=2025)
+    assert "FY2025" in [c["id"] for c in record["columns"]]
+    assert not any("forecast years" in x for x in record["limits"])
+
+
+def test_an_operand_without_an_amount_may_not_name_only_a_column():  # M03
+    operand = {"amount": None, "reason": "x", "column": "Cash"}
+    with pytest.raises(ValueError) as caught:
+        model_files(E1_CP1.encode(), _e1_block(base=_e1_base(cash=operand)).encode())
+    assert str(caught.value) == (
+        "CP-2G: base cash states no amount, so it names no row, period or column"
+    )
+
+
+def test_a_block_whose_only_naming_key_is_column_is_judged_as_named():  # M06
+    base = {key: {"amount": None, "reason": "not stated"} for key in _e1_base()}
+    base["cash"] = {"amount": "100000", "reason": None, "column": "Cash"}
+    with pytest.raises(ValueError, match="base cash must name the `row` label"):
+        model_files(
+            _e1_cp1(1000, unit="n.a.", first="USD thousands").encode(),
+            _e1_block(1000, base=base).encode(),
+        )
