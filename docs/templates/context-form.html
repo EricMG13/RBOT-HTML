@@ -345,6 +345,12 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
     <p class="help">By default every module of the pathway runs. A module you leave out does not run, and the modules a chosen module depends on are added.</p>
     <fieldset><legend>Modules to run</legend><div id="modbox"></div></fieldset>
     <div class="grid"><div class="f"><label for="turns">Turns per module</label><input type="text" id="turns" data-c="turns" value="32" inputmode="numeric" aria-describedby="turns-h"><p class="help" id="turns-h">A whole number from 1 to 64. The default is 32.</p></div></div>
+    <fieldset id="effortf" aria-describedby="effort-h"><legend>Effort</legend>
+      <div class="seg" role="radiogroup" aria-label="Effort"><label><input type="radio" name="effort" data-c="effort" value="fast">Fast</label><label><input type="radio" name="effort" data-c="effort" value="balanced" checked>Balanced</label><label><input type="radio" name="effort" data-c="effort" value="high">High</label></div>
+      <p class="help" id="effort-h">Fast runs every module at medium effort. Balanced uses high effort on the judgement modules (business context, earnings quality, credit synthesis, downside, relative value, refinancing, covenants, restructuring, committee challenge) and medium on the rest. High runs every module at high effort and costs the most.</p></fieldset>
+    <fieldset id="modelf" aria-describedby="model-h"><legend>Model</legend>
+      <div class="seg" role="radiogroup" aria-label="Model"><label><input type="radio" name="model" data-c="model" value="gpt" checked>GPT Sol</label><label><input type="radio" name="model" data-c="model" value="claude">Claude Opus</label></div>
+      <p class="help" id="model-h">Claude Opus is available only where the service has it set up.</p></fieldset>
   </div>
   <div class="run-strip" data-tone="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">A run cannot be corrected once it starts</span><p class="strip-text">If the context changes, every module runs again: a resumed run refuses changed context. The cheapest fix is the right pathway now.</p></div></div>
 </section>
@@ -511,7 +517,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 <section class="run-step" id="st-review" data-st="review" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Summary and start</span></h2>
   <p class="stepline"></p>
-  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, unless the case is synthetic, the research module's web searches go to OpenAI's search: it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
   <div id="rv-state" role="status" aria-live="polite"></div>
   <dl class="rv-facts" id="rv-facts"></dl>
   <h3 class="sub">What each module is expected to do</h3>
@@ -1106,6 +1112,13 @@ function turnsValue(check) {
   if (check) record(errs, el, `enter a whole number from 1 to ${MAX_TURNS}.`);
   return NaN;
 }
+// The model and effort the service accepts; only the Advanced level may choose, every other level sends the defaults.
+const MODELS = {gpt: 'GPT Sol', claude: 'Claude Opus'}, EFFORTS = {fast: 'Fast', balanced: 'Balanced', high: 'High'};
+function modelEffort() {
+  if (LEVEL !== 'advanced') return {model: 'gpt', effort: 'balanced'};
+  const model = getC('model'), effort = getC('effort');
+  return {model: model in MODELS ? model : 'gpt', effort: effort in EFFORTS ? effort : 'balanced'};
+}
 // One pinned-assumption block: null when the module chooses, otherwise the values plus rationale.
 function asm(key, spec, extra, check) {
   const sc = $('as-' + key);
@@ -1214,7 +1227,7 @@ const RULES = [
   // want to in the context file." The research module searches the web only when the run's ruling lists
   // web-search (owners/cpos.py WEB_SEARCH_GRANT); without it, in live run tdg-all-001, it came back
   // Blocked and the peer benchmark had no peers. The standing ruling lists it from 2026-11-12.
-  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web for public peers unless the case is synthetic: the standing ruling for runs from this page lists web-search (2026-11-12). It is told to use public names only, its searches go to OpenAI\'s search, and the queries it sent are kept in the run record. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
+  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web for public peers unless the case is synthetic or the run uses Claude (web search is offered on GPT Sol only): the standing ruling for runs from this page lists web-search (2026-11-12). It is told to use public names only, its searches go to OpenAI\'s search, and the queries it sent are kept in the run record. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
   {s:'CP-1C', k:'cp1c-no-peer-source', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
   {s:'CP-1C', o:'gap', c:f => f.o.valuation.basis === 'auto' && f.o.valuation.peer_source === 'user_comps' && f.peersIn < MIN_ADMITTED && f.precIn < MIN_ADMITTED,
     r:f => `Automatic basis: ${f.peersIn} peer${f.peersIn === 1 ? '' : 's'} admitted (needs ${MIN_ADMITTED}, at most ${PEER_MONTHS} months old) and ${f.precIn} precedent${f.precIn === 1 ? '' : 's'} (needs ${MIN_ADMITTED}, at most ${PRECEDENT_MONTHS} months old): no multiple is selected.`, fix:'Add peers or precedents, or choose another basis.', go:'valuation'},
@@ -1646,7 +1659,7 @@ const STAGE_OF_RULE = {
 function errorStage(text) {
   if (/submitted_by/.test(text)) return 'pathway';
   if (/\b(files?|documents?|sources?|folder)\b/i.test(text)) return 'documents';
-  if (/\b(modules?|turns|level)\b/i.test(text)) return 'pathway';
+  if (/\b(modules?|turns|level|model|effort|Claude Opus)\b/i.test(text)) return 'pathway';
   return '';
 }
 let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted} for the answers and files held
@@ -1762,7 +1775,11 @@ function readyTable(sq, own = []) {
 // a private case searches the web, a synthetic one does not. The research module is TOLD to use
 // public names only; the queries it sent are kept in the run record and checked afterwards.
 const SEARCH_KINDS = ['public', 'private'];
-function webSearchNote(kind) {
+// Web search is OpenAI's hosted tool: a Claude run has none (HandoffExecutor refuses it), so the
+// launcher runs it with search off and the page must not say otherwise.
+const webSearches = (kind, model) => SEARCH_KINDS.includes(kind) && model !== 'claude';
+function webSearchNote(kind, model) {
+  if (model === 'claude' && kind !== 'synthetic') return 'Web search is offered on GPT Sol only: this Claude run does not search the web and reads only the supplied files.';
   const told = ' It is told to search with public names only, and the queries it actually sent are kept in the run record.';
   if (kind === 'synthetic') return 'This is a synthetic case: the research module does not search the web and reads only the supplied files.';
   if (kind === 'private') return "This is a private case: the research module will search the web, and the issuer's name and the questions it researches go to OpenAI's search." + told;
@@ -1774,11 +1791,13 @@ function renderFacts(o) {
     const dates = [['As-of', o.run.as_of], ['Cutoff', o.run.cutoff], ['Current period', o.run.current_period], ['Prior period', o.run.prior_period]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(', ');
     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
-      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'],
-      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', SEARCH_KINDS.includes(o.run.case_kind) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : 'No: a synthetic case reads only its files']] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+      ['Cap', 'USD 20 for this run'],
+      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', webSearches(o.run.case_kind, (SUMMARY.answers || {}).model) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : (o.run.case_kind !== 'synthetic' ? 'No: web search is offered on GPT Sol only, so this Claude run reads only its files' : 'No: a synthetic case reads only its files')]] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
     // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
     const sent = SUMMARY.answers || {}, left = runOf(o.run.pathway).filter(m => Array.isArray(sent.modules) && sent.modules.length && !sent.modules.includes(m));
     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
+    const me = `${MODELS[sent.model] || sent.model}, ${EFFORTS[sent.effort] || sent.effort}`;
+    rows.push(['Model and effort', sent.model === 'gpt' && sent.effort === 'balanced' ? me + ' (the default)' : me]);
     if (left.length) rows.push(['Modules left out', left.map(m => `${mname(m)} (${m})`).join(', ')]);
   }
   box.textContent = '';
@@ -2082,7 +2101,7 @@ function renderModules(order) {
 // What the service takes at /summary (run_start/submissions.py Answers).
 function answers() {
   const o = build(), order = runOf(o.run.pathway), kept = order.filter(m => !SKIPPED.has(m));
-  return {context: o, modules: kept.length === order.length ? [] : kept, max_turns: turnsValue(false), level: LEVEL, submitted_by: getC('submitter')};
+  return {context: o, modules: kept.length === order.length ? [] : kept, max_turns: turnsValue(false), ...modelEffort(), level: LEVEL, submitted_by: getC('submitter')};
 }
 
 /* ======================================================================= Keeping the answers (localStorage) */
@@ -2098,7 +2117,7 @@ function storeFailed(err) {
 const fileChoices = () => Object.fromEntries(Object.keys(FILE_SELECTS).map(c => [c, getC(c)]));
 function save(o) {
   if (!SERVED || !kept) return;
-  const extra = {submitter: getC('submitter'), turns: getC('turns'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
+  const extra = {submitter: getC('submitter'), turns: getC('turns'), model: getC('model'), effort: getC('effort'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
   if (CARRIED.run) extra.carried = {run: CARRIED.run, files: [...CARRIED.files], fields: [...CARRIED.fields], locked: CARRIED.locked};
   try { localStorage.setItem(STORE, JSON.stringify({v: 1, id: SUB, level: LEVEL, context: o, files: fileChoices(), extra})); }
   catch (err) { storeFailed(err); }
@@ -2343,6 +2362,8 @@ async function restore() {
       applyRowKeys();
       if (typeof x.submitter === 'string') $('submitter').value = x.submitter;
       if (typeof x.turns === 'string') $('turns').value = x.turns;
+      for (const c of ['model', 'effort']) cEls(c).forEach(r => { r.checked = r.value === x[c]; });
+      for (const c of ['model', 'effort']) if (!getC(c)) cEls(c).forEach(r => { r.checked = r.defaultChecked; });
       if (Array.isArray(x.skipped)) x.skipped.forEach(m => SKIPPED.add(String(m)));
       newestTouched = x.newestTouched === true;
       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();
@@ -2465,7 +2486,7 @@ function vis() {
   $('cp3f').hidden = !(has('CP-3') || getV(sv, 'cp3_mode'));
   $('cp6f').hidden = !(has('CP-6') || getV(sv, 'cp6_deep_debate'));
   $('research-src').hidden = !has('CP-DR');
-  $('research-src-text').textContent = webSearchNote(getV(si, 'case_kind')) + " Add peers' filings to the documents if you want them used.";
+  $('research-src-text').textContent = webSearchNote(getV(si, 'case_kind'), modelEffort().model) + " Add peers' filings to the documents if you want them used.";
   $('b-modes').hidden = $('cp3f').hidden && $('cp6f').hidden && !has('CP-DR');
   document.querySelectorAll('[data-uses="cp3mode"],[data-uses="cp6"]').forEach(u => setHTML(u, usesList(BLOCK_USES[u.dataset.uses].filter(has))));
 

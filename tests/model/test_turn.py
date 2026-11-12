@@ -41,6 +41,7 @@ def test_config_providers_are_the_section_7_1_ids_and_the_copilot_pair() -> None
         "sol-medium": "openai",
         "sol-high": "openai",
         "opus-medium": "anthropic",
+        "opus-high": "anthropic",
         "deepseek-max": "openrouter",
         "copilot-sol-medium": "copilot",
         "copilot-opus-medium": "copilot",
@@ -119,6 +120,7 @@ def test_config_models_cover_the_same_ids() -> None:
         "sol-medium": "gpt-6.1-sol",
         "sol-high": "gpt-6.1-sol",
         "opus-medium": "claude-opus-5-5",
+        "opus-high": "claude-opus-5-5",
         "deepseek-max": "deepseek/deepseek-v4.1-flash-1017",
         "copilot-sol-medium": "gpt-6.1-sol",
         "copilot-opus-medium": "claude-opus-5.5",
@@ -179,7 +181,7 @@ def test_only_assistant_message_carries_provider_blocks() -> None:
     [
         ("sol-medium", "openai", "gpt-6.1-sol-mini", "medium"),
         ("sol-medium", "openai", "gpt-6.1-sol", "max"),
-        ("opus-medium", "anthropic", "claude-opus-5-5", "high"),
+        ("opus-medium", "anthropic", "claude-opus-5-5", "xhigh"),
         ("sol-medium", "openai", "claude-opus-5-5", "medium"),
         ("x", "openrouter", "mistralai/some-model", "high"),
     ],
@@ -193,6 +195,7 @@ def test_spec_refuses_pair_outside_the_section_7_1_table(
 
 def test_spec_accepts_the_section_7_1_pairs() -> None:
     ModelSpec("sol-high", "openai", "gpt-6.1-sol", "high")
+    ModelSpec("opus-high", "anthropic", "claude-opus-5-5", "high")
     ModelSpec("deepseek-max", "openrouter", "deepseek/deepseek-v4.1-flash-1017", "max")
 
 

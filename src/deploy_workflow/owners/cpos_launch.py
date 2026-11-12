@@ -64,6 +64,7 @@ from deploy_workflow.model.handoff import (
     web_search_offered,
 )
 from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
+from deploy_workflow.model.turn import MODEL_EFFORTS
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cp2g, cpos_forecast
 from deploy_workflow.owners.cpos import (
@@ -72,6 +73,7 @@ from deploy_workflow.owners.cpos import (
     HandoffTask,
     run_live_handoffs,
     web_search_ruled,
+    web_search_run,
     with_notes,
 )
 from deploy_workflow.prose_checks import (
@@ -1991,11 +1993,13 @@ def _cap(text: str) -> Decimal:
     return value
 
 
-def _web_line(prepared: Prepared, ruling: Path | None) -> tuple[str, ...]:
+def _web_line(prepared: Prepared, config: str, ruling: Path | None) -> tuple[str, ...]:
     """Whether the research module searches the web, when it runs."""
     if "CP-DR" not in prepared.ordered:
         return ()
     kind = prepared.plan.run.case_kind
+    if web_search_ruled(ruling) and CONFIGS[config].provider != "openai":
+        return ("Web:      off: web search is offered on GPT Sol only, not on this config",)
     if web_search_ruled(ruling) and kind not in WEB_SEARCH_CASE_KINDS:
         return (f"Web:      off: {kind} case",)
     if web_search_ruled(ruling):
@@ -2019,9 +2023,43 @@ def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> s
             f"Report:   {', '.join(prepared.layout.blocks)}",
             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
             f"Manifest: {prepared.manifest}",
-            *_web_line(prepared, ruling),
+            *_web_line(prepared, config, ruling),
         )
     )
+
+
+# Evidence: runs/tdg-mixed-effort-comparison.md. CP-1D and CP-2 measured gains, CP-1A modest; the
+# rest (CP-2A, CP-3, CP-3C, CP-4, CP-4C, CP-6) are inferred judgement modules and untested.
+# CP-0, CP-1, CP-1B, CP-1C, CP-DR measured adequate at medium; CP-2D, CP-2E, CP-2G, CP-2H, CP-3D
+# and CP-5 stay at medium, untested.
+BALANCED_HIGH_MODULES = (
+    "CP-1A",
+    "CP-1D",
+    "CP-2",
+    "CP-2A",
+    "CP-3",
+    "CP-3C",
+    "CP-4",
+    "CP-4C",
+    "CP-6",
+)
+
+
+def _high_efforts(
+    config: str,
+    modules: Sequence[str],
+    ordered: Sequence[str] | None = None,
+    flag: str = "--high-modules",
+) -> dict[str, str]:
+    """The per-module effort map for ``flag``; refuses what the model cannot run."""
+    selected = CONFIGS[config]
+    if "high" not in MODEL_EFFORTS[selected.model] or selected.effort == "high":
+        raise LaunchRefused(
+            f"{flag} needs a config whose model allows high and runs another effort, not {config}"
+        )
+    if ordered is not None and (stray := [m for m in modules if m not in ordered]):
+        raise LaunchRefused(f"--high-modules names modules outside this run: {', '.join(stray)}")
+    return {m: "high" for m in modules}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -2038,6 +2076,18 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, help="run folder; default runs/<run id>")
     parser.add_argument("--live", action="store_true", help="make paid provider calls")
     parser.add_argument("--ruling", type=Path, help="docs/rulings/<file>.md naming this config")
+    parser.add_argument(
+        "--high-modules",
+        nargs="+",
+        default=(),
+        metavar="MODULE",
+        help="send these modules at high effort; the rest keep the config's effort",
+    )
+    parser.add_argument(
+        "--balanced",
+        action="store_true",
+        help="send high effort to the balanced effort map's modules in this run",
+    )
     parser.add_argument(
         "--no-library",
         action="store_true",
@@ -2124,6 +2174,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         copilot_live = args.live and CONFIGS[args.config].provider == "copilot"
         if copilot_live and not Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, "")).is_file():
             raise LaunchRefused(f"--live needs {COPILOT_RUNTIME_VARIABLE} to name an existing file")
+        if args.balanced and args.high_modules:
+            raise LaunchRefused("--balanced and --high-modules cannot be combined")
+        if args.balanced or args.high_modules:
+            _high_efforts(
+                args.config,
+                args.high_modules,
+                flag="--balanced" if args.balanced else "--high-modules",
+            )
         prepared = prepare(
             args.context,
             args.sources,
@@ -2131,12 +2189,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             config=args.config,
             cap=args.cap,
             modules=args.modules,
-            web_search=web_search_ruled(args.ruling),
+            web_search=web_search_run(args.config, args.ruling),
+        )
+        efforts = (
+            _high_efforts(
+                args.config,
+                [m for m in BALANCED_HIGH_MODULES if m in prepared.ordered],
+                flag="--balanced",
+            )
+            if args.balanced
+            else _high_efforts(args.config, args.high_modules, prepared.ordered)
+            if args.high_modules
+            else {}
         )
     except (ValueError, OSError, LivePauseInForce) as error:
         print(error, file=sys.stderr)
         return 2
     print(_readiness(prepared, args.config, args.ruling), flush=True)
+    if efforts:
+        print(
+            f"Effort:   high for {', '.join(efforts)}; {CONFIGS[args.config].effort} otherwise",
+            flush=True,
+        )
     if not args.live:
         print("No provider was called. Add --live --ruling <file> to start the paid run.")
         return 0
@@ -2150,6 +2224,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_output_tokens=MAX_OUTPUT_TOKENS,
             on_handoff=lambda task, _: print(f"Accepted: {task.module_id}", flush=True),
             config=args.config,
+            effort_by_module=efforts,
         )
     except (ValueError, RuntimeError) as error:
         print(

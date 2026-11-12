@@ -517,7 +517,15 @@ def test_the_pathway_stage_takes_the_name_and_the_answers_object_is_the_services
     return {keys: Object.keys(a).sort(), by: a.submitted_by, level: a.level, turns: a.max_turns,
       modules: a.modules, context: a.context.schema};
     """)
-    assert seen["keys"] == ["context", "level", "max_turns", "modules", "submitted_by"]
+    assert seen["keys"] == [
+        "context",
+        "effort",
+        "level",
+        "max_turns",
+        "model",
+        "modules",
+        "submitted_by",
+    ]
     assert (seen["by"], seen["level"], seen["turns"], seen["modules"]) == ("Dana", "basic", 32, [])
     assert seen["context"] == "context/1"
 
@@ -683,7 +691,7 @@ def test_the_review_shows_the_services_forecast_per_module(page):
         assert item["reason"] in seen["ready"]
     assert by_module["CP-4"]["outcome"] == "will_refuse"  # legal documents: none, on CP-4
     assert ["legal", "Go to Legal"] in seen["goto"]
-    for text in ("sol-medium", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
+    for text in ("GPT Sol, Balanced (the default)", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
         assert text in seen["facts"], text
     for section in summary["omitted"]:
         assert section in seen["facts"]
@@ -1537,6 +1545,99 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
         assert "<h1>Run context</h1>" in reply.read().decode("utf-8")
     with urllib.request.urlopen(page.base + "/library/icons/plus.svg", timeout=20) as reply:
         assert reply.status == 200
+
+
+def test_model_and_effort_are_chosen_at_advanced_only_and_default_everywhere_else(page):
+    seen = page.run("""
+    const sent = () => { const a = answers(); return [a.model, a.effort]; };
+    const shown = () => ['modelf', 'effortf'].map(id => $(id).offsetParent !== null);
+    const out = {basicShown: shown(), basicDefault: sent()};
+    level('advanced');
+    out.advShown = shown();
+    out.advDefault = sent();
+    pick('data-c="model"', 'claude'); pick('data-c="effort"', 'high');
+    out.advChosen = sent();
+    level('standard'); out.standard = sent(); out.standardShown = shown();
+    level('basic'); out.basic = sent();
+    level('advanced'); out.back = sent();
+    out.names = [$('modelf').querySelector('[role=radiogroup]').getAttribute('aria-label'),
+      $('effortf').querySelector('[role=radiogroup]').getAttribute('aria-label')];
+    return out;
+    """)
+    assert seen["basicShown"] == [False, False] and seen["standardShown"] == [False, False]
+    assert seen["advShown"] == [True, True]
+    assert seen["basicDefault"] == seen["advDefault"] == ["gpt", "balanced"]
+    assert seen["advChosen"] == seen["back"] == ["claude", "high"]
+    assert seen["standard"] == seen["basic"] == ["gpt", "balanced"]
+    assert seen["names"] == ["Model", "Effort"]
+
+
+@pytest.mark.parametrize(
+    ("choice", "row"),
+    [
+        ("", "Model and effortGPT Sol, Balanced (the default)"),
+        (
+            "pick('data-c=\"model\"', 'claude'); pick('data-c=\"effort\"', 'high');",
+            "Model and effortClaude Opus, High",
+        ),
+    ],
+)
+def test_the_review_always_shows_the_model_and_effort_sent(page, choice, row):
+    seen = page.run(f"""
+    level('advanced');
+    {choice}
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review();
+    const advanced = $('rv-facts').textContent;
+    level('basic');
+    await review();
+    return {{advanced, basic: $('rv-facts').textContent}};
+    """)
+    assert row in seen["advanced"], seen["advanced"]
+    # Back at Basic the page sends the defaults, and the summary shows what is sent.
+    assert "Model and effortGPT Sol, Balanced (the default)" in seen["basic"], seen["basic"]
+
+
+# _CLAUDE_UNAVAILABLE in run_start/submissions.py
+CLAUDE_REFUSAL = "Claude Opus is not available on this service"
+
+
+def test_the_claude_refusal_maps_to_the_pathway_stage_and_the_review_offers_the_button(page):
+    seen = page.run(f"""
+    const text = {json.dumps(CLAUDE_REFUSAL)};
+    const out = {{stage: errorStage(text)}};
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review();
+    SUMMARY = {{key: 'k', answers: {{}}, error: text, digest: '', modules: [], documents: [],
+      ignored: [], omitted: [], items: []}};
+    renderState();
+    out.goto = [...document.querySelectorAll('#rv-state [data-goto]')]
+      .map(b => [b.dataset.goto, b.textContent]);
+    return out;
+    """)
+    assert seen["stage"] == "pathway"
+    assert seen["goto"] == [["pathway", "Go to Pathway"]]
+
+
+def test_a_draft_saved_at_advanced_restores_the_model_and_effort_and_a_bad_one_the_defaults(page):
+    page.run("""
+    await uploadFiles([file('annual.txt', 'x')]);
+    level('advanced');
+    pick('data-c="model"', 'claude'); pick('data-c="effort"', 'high');
+    return {};
+    """)
+    kept = page.run("""
+    return {level: LEVEL, sent: [getC('model'), getC('effort')]};
+    """)
+    assert kept == {"level": "advanced", "sent": ["claude", "high"]}
+    page.run("""
+    const saved = JSON.parse(localStorage.getItem('run-start/1'));
+    saved.extra.model = 'unknown'; delete saved.extra.effort;
+    localStorage.setItem('run-start/1', JSON.stringify(saved));
+    return {};
+    """)
+    bad = page.run("return {sent: [getC('model'), getC('effort')]};")
+    assert bad == {"sent": ["gpt", "balanced"]}
 
 
 # ---- starting from an earlier run of the same issuer (/?from=<run id>) --------------------------
@@ -2397,3 +2498,17 @@ def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypa
     assert "could not be listed" in got["msg"] and "link.txt" in got["msg"]
     assert str(root) not in got["msg"]
     assert got["files"] == [] and got["rows"] == []
+
+
+def test_the_research_text_for_claude_says_it_does_not_search(page):
+    seen = page.run("""
+    pick('data-k="pathway"', 'relative_value');
+    level('advanced'); pick('data-c="model"', 'claude');
+    update();
+    return {text: document.querySelector('#research-src .strip-text').textContent};
+    """)
+    assert seen["text"] == (
+        "Web search is offered on GPT Sol only: this Claude run does not search the web and "
+        "reads only the supplied files. "
+        "Add peers' filings to the documents if you want them used."
+    )

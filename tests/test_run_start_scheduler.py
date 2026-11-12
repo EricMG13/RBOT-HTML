@@ -40,6 +40,8 @@ def answers_for(**change: Any) -> Answers:
         "modules": [],
         "max_turns": 32,
         "level": "basic",
+        "model": "gpt",
+        "effort": "balanced",
         "submitted_by": "analyst",
     }
     base.update(change)
@@ -55,9 +57,7 @@ def upload(root: Path, payload: bytes = b"Net sales were 100.") -> str:
 
 def approved(root: Path, sid: str, answers: Answers) -> str:
     """The digest the service issues for these answers: only ``summary`` can make one."""
-    got = submissions.summary(
-        layout(root), sid, answers, config=settings(root).config, cap=settings(root).cap
-    )
+    got = submissions.summary(layout(root), sid, answers, cap=settings(root).cap)
     assert got["error"] == "", got["error"]
     return str(got["digest"])
 
@@ -179,7 +179,6 @@ def test_modules_and_turns_reach_the_launcher_command(root):
         record,
         Path("c.json"),
         launcher=("L",),
-        config="sol-medium",
         cap=Decimal(20),
         ruling=None,
     )
@@ -192,7 +191,6 @@ def test_modules_and_turns_reach_the_launcher_command(root):
         Record("r2", PATHWAY, "Acme", "queued", "t"),
         Path("c.json"),
         launcher=("L",),
-        config="sol-medium",
         cap=Decimal(20),
         ruling=None,
     )

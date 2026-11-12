@@ -4231,6 +4231,120 @@ def test_checker_rejects_a_reader_number_the_handoff_does_not_hold(tmp_path):
     assert not any("Prose check 9" in i for i in issues)
 
 
+def test_high_modules_outside_the_run_are_refused(tmp_path, capsys):
+    assert main([*launch(tmp_path), "--modules", "CP-4", "--high-modules", "CP-1A"]) == 2
+    assert "CP-1A" in capsys.readouterr().err
+
+
+def test_high_modules_are_refused_when_the_config_already_runs_high(tmp_path, capsys):
+    argv = [*launch(tmp_path), "--high-modules", "CP-4"]
+    argv[argv.index("sol-medium")] = "sol-high"
+    assert main(argv) == 2
+    assert "--high-modules" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_balanced_and_high_modules_together_are_refused_before_any_folder(tmp_path, capsys):
+    argv = [*launch(tmp_path), "--balanced", "--high-modules", "CP-4"]
+    assert main(argv) == 2
+    assert "--balanced" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_balanced_is_refused_when_the_config_already_runs_high(tmp_path, capsys):
+    argv = [*launch(tmp_path), "--balanced"]
+    argv[argv.index("sol-medium")] = "sol-high"
+    assert main(argv) == 2
+    assert "--balanced needs a config whose model allows high" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_balanced_is_refused_when_the_model_lacks_high(tmp_path, capsys):
+    argv = [*launch(tmp_path), "--balanced"]
+    argv[argv.index("sol-medium")] = "deepseek-max"
+    assert main(argv) == 2
+    err = capsys.readouterr().err
+    assert "--balanced needs a config whose model allows high" in err
+    assert "--high-modules" not in err
+    assert not (tmp_path / "out").exists()
+
+
+def test_balanced_sends_high_to_the_balanced_modules_in_the_run_only(tmp_path, capsys):
+    assert main([*launch(tmp_path), "--balanced", "--modules", "CP-4"]) == 0
+    out = capsys.readouterr().out
+    assert "Effort:   high for CP-4; medium otherwise" in out
+
+
+def test_balanced_with_no_balanced_module_in_the_run_prints_no_effort_line(tmp_path, capsys):
+    assert main([*launch(tmp_path), "--balanced", "--modules", "CP-1"]) == 0
+    assert "Effort:" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        (("--high-modules", "CP-4"), {"CP-4": "high"}),
+        (
+            ("--balanced",),
+            {"CP-1A": "high", "CP-2": "high", "CP-2A": "high", "CP-3C": "high", "CP-4": "high"},
+        ),
+        ((), {}),
+    ],
+)
+def test_an_accepted_run_hands_its_effort_map_to_run_live_handoffs(
+    tmp_path, monkeypatch, copilot_ruling, flags, expected
+):
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_" + "Z" * 36)
+    runtime = tmp_path / "copilot-runtime"
+    runtime.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
+    seen = {}
+
+    def fake_run(manifest, directory, **kwargs):
+        seen.update(kwargs)
+        return directory / "delivery.json"
+
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", fake_run)
+    argv = copilot_argv(
+        tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling), *flags
+    )
+    assert main(argv) == 0
+    assert seen["effort_by_module"] == expected
+
+
+def test_run_live_handoffs_hands_the_effort_map_to_the_executor(tmp_path, monkeypatch):
+    from deploy_workflow.model import handoff
+    from deploy_workflow.owners import cpos
+
+    seen = {}
+
+    class Stop(Exception):
+        pass
+
+    def executor(*args, **kwargs):
+        seen.update(kwargs)
+        raise Stop
+
+    monkeypatch.setattr(handoff, "HandoffExecutor", executor)
+    monkeypatch.setattr(cpos, "live_adapter_for", lambda *a, **k: object())
+    prepare(
+        context_file(tmp_path),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
+    )
+    with pytest.raises(Stop):
+        cpos.run_live_handoffs(
+            tmp_path / "out/workflow.json",
+            tmp_path / "live",
+            ruling=RULING,
+            check=lambda *_: (),
+            effort_by_module={"CP-4": "high"},
+        )
+    assert seen["effort_by_module"] == {"CP-4": "high"}
+
+
 def test_the_service_standing_ruling_lists_web_search_so_runs_from_the_page_search():
     from deploy_workflow.inbox.startup import STANDING_RULING
     from deploy_workflow.owners.cpos import web_search_ruled
@@ -4258,3 +4372,72 @@ def test_cp2g_is_told_how_to_state_facilities(tmp_path):
     ):
         assert word in head
     assert "`facilities`" not in texts["CP-1"]
+
+
+def test_web_search_is_ruled_for_openai_configs_only(monkeypatch):
+    # The standing ruling lists web-search and both providers' configs; search is OpenAI's tool.
+    from deploy_workflow.owners.cpos import web_search_run
+
+    assert web_search_run("sol-medium", STANDING) is True
+    assert web_search_run("opus-medium", STANDING) is False
+    assert web_search_run("opus-high", STANDING) is False
+    assert web_search_run("sol-medium", RULING) is False  # this ruling lists no web-search
+    assert web_search_run("sol-medium", None) is False
+
+
+def test_a_claude_run_under_a_ruling_that_lists_web_search_runs_with_search_off(
+    tmp_path, monkeypatch
+):
+    from deploy_workflow.model import handoff
+    from deploy_workflow.owners import cpos
+
+    seen: dict[str, object] = {}
+
+    class Stop(Exception):
+        pass
+
+    def recording(*args, **kwargs):
+        seen["web_search"] = kwargs["web_search"]
+        raise Stop
+
+    monkeypatch.setattr(handoff, "HandoffExecutor", recording)
+    monkeypatch.setattr(cpos, "live_adapter_for", lambda *args: object())
+    monkeypatch.setattr(cpos, "_release", lambda adapter: None)
+    prepared = prepare(
+        context_file(tmp_path),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="opus-medium",
+        cap="50",
+        modules=("CP-DR",),
+    )
+    for config, searching in (("opus-medium", False), ("sol-medium", True)):
+        with pytest.raises(Stop):
+            cpos.run_live_handoffs(
+                prepared.manifest,
+                tmp_path / config,
+                ruling=STANDING,
+                check=lambda *_: (),
+                config=config,
+                environ={},
+            )
+        assert seen["web_search"] is searching
+
+
+def test_a_claude_launch_says_search_is_off_and_holds_no_search_fee(tmp_path, capsys):
+    argv = launch(tmp_path, "--modules", "CP-DR", "--ruling", str(STANDING))
+    argv[argv.index("sol-medium")] = "opus-medium"
+    with_case_kind(tmp_path / "context.json", "public")
+    plain = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "probe",
+        config="opus-medium",
+        cap="50",
+        modules=("CP-DR",),
+    )
+    argv[argv.index("--cap") + 1] = str(plain.hold + Decimal("0.05"))  # a 0.16 fee would not fit
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert "Web:      off: web search is offered on GPT Sol only" in out
+    assert "CP-DR searches the web" not in out

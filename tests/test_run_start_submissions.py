@@ -50,6 +50,8 @@ def answers_for(tmp_path: Path, **change: object) -> Answers:
         "modules": [],
         "max_turns": 32,
         "level": "basic",
+        "model": "gpt",
+        "effort": "balanced",
         "submitted_by": "analyst",
     }
     base.update(change)
@@ -233,7 +235,7 @@ def test_a_file_can_be_removed_and_a_bad_name_is_refused(layout):
 def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     sid, source = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path)
-    s = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    s = summary(layout, sid, answers, cap=Decimal(20))
     ref = tmp_path / "ref"
     ref.mkdir()
     expected = prepare(context_file(tmp_path), source, ref / "out", config="sol-medium", cap="20")
@@ -243,6 +245,17 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     assert s["omitted"] == list(expected.omitted)
     assert s["ignored"] == list(expected.ignored)
     assert s["digest"] == digest(layout, sid, answers)
+
+
+def test_the_summary_carries_the_model_and_effort_it_was_made_for(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    default = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    high = summary(
+        layout, sid, answers_for(tmp_path, level="advanced", effort="high"), cap=Decimal(20)
+    )
+    assert default["error"] == "" and high["error"] == "", (default.get("error"), high.get("error"))
+    assert (default["model"], default["effort"]) == ("gpt", "balanced")
+    assert (high["model"], high["effort"]) == ("gpt", "high")
 
 
 def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
@@ -256,11 +269,24 @@ def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
         return prepare(*args, **kwargs)
 
     monkeypatch.setattr(submissions, "prepare", watching)
-    assert (
-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
-        == ""
-    )
-    assert seen == [True]  # the standing ruling lists web-search
+    assert summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"] == ""
+    assert seen == [True]  # the standing ruling lists web-search and GPT Sol is OpenAI
+
+
+def test_a_claude_summary_checks_the_cap_with_web_search_off(layout, tmp_path, monkeypatch):
+    # The ruling lists web-search, but search is OpenAI's hosted tool: a Claude run has none.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "present")
+    sid, _ = upload_issuer(layout, tmp_path)
+    seen = []
+
+    def watching(*args, **kwargs):
+        seen.append((kwargs["config"], kwargs["web_search"]))
+        return prepare(*args, **kwargs)
+
+    monkeypatch.setattr(submissions, "prepare", watching)
+    answers = answers_for(tmp_path, level="advanced", model="claude")
+    assert summary(layout, sid, answers, cap=Decimal(20))["error"] == ""
+    assert seen == [("opus-medium", False)]
 
 
 def test_the_summary_is_for_the_module_list_the_digest_covers(layout, tmp_path):
@@ -269,7 +295,6 @@ def test_the_summary_is_for_the_module_list_the_digest_covers(layout, tmp_path):
         layout,
         sid,
         answers_for(tmp_path, modules=["CP-0", "CP-1"]),
-        config="sol-medium",
         cap=Decimal(20),
     )
     assert s["error"] == ""
@@ -280,10 +305,10 @@ def test_a_refused_context_or_folder_comes_back_as_the_error_with_no_digest(layo
     sid, _ = upload_issuer(layout, tmp_path)
     bad = answers_for(tmp_path)
     bad["context"] = {"schema": "nonsense"}
-    s = summary(layout, sid, bad, config="sol-medium", cap=Decimal(20))
+    s = summary(layout, sid, bad, cap=Decimal(20))
     assert s["error"] and "digest" not in s
     empty = new(layout)
-    s = summary(layout, empty, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    s = summary(layout, empty, answers_for(tmp_path), cap=Decimal(20))
     assert s["error"] and "digest" not in s
 
 
@@ -315,13 +340,10 @@ def test_the_digest_changes_with_a_file_the_context_the_modules_or_the_turns_onl
 def test_the_summary_leaves_no_run_folder_and_no_temporary_file(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
     before = sorted(p.relative_to(layout.root).as_posix() for p in layout.root.rglob("*"))
-    assert (
-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
-        == ""
-    )
+    assert summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"] == ""
     bad = answers_for(tmp_path)
     bad["context"] = {}
-    assert summary(layout, sid, bad, config="sol-medium", cap=Decimal(20))["error"]
+    assert summary(layout, sid, bad, cap=Decimal(20))["error"]
     after = sorted(p.relative_to(layout.root).as_posix() for p in layout.root.rglob("*"))
     assert after == before
 
@@ -352,7 +374,7 @@ def test_a_file_landing_while_the_summary_is_made_gives_no_digest(layout, tmp_pa
         return out
 
     monkeypatch.setattr(submissions, "prepare", racing)
-    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
     assert "digest" not in got
     assert got["error"] == (
         "the documents changed while the summary was being made; open the summary again"
@@ -380,7 +402,7 @@ def test_a_file_landing_while_the_summary_is_made_gives_no_digest(layout, tmp_pa
 def test_hostile_answers_are_refusals_not_exceptions(layout, tmp_path, change):
     sid, _ = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path, **change)
-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    got = summary(layout, sid, answers, cap=Decimal(20))
     assert got["error"] and "digest" not in got
     if change != {"modules": ["NOPE"]}:  # a well-formed name the launcher refuses, not the shape
         with pytest.raises(Refused):
@@ -388,12 +410,14 @@ def test_hostile_answers_are_refusals_not_exceptions(layout, tmp_path, change):
     assert list(layout.state.iterdir()) == []
 
 
-def test_answers_need_exactly_the_five_keys(layout, tmp_path):
+def test_answers_need_exactly_the_seven_keys(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path)
     extra = {**answers, "more": 1}
     missing = {k: v for k, v in answers.items() if k != "level"}
-    for bad in (extra, missing, "x", None):
+    no_model = {k: v for k, v in answers.items() if k != "model"}
+    no_effort = {k: v for k, v in answers.items() if k != "effort"}
+    for bad in (extra, missing, no_model, no_effort, "x", None):
         with pytest.raises(Refused):
             digest(layout, sid, bad)  # type: ignore[arg-type]
 
@@ -404,7 +428,7 @@ def test_a_lone_surrogate_in_the_context_is_a_refusal(layout, tmp_path):
     answers["context"]["identity"]["issuer_name"] = "\ud800"
     with pytest.raises(Refused):
         submissions.context_bytes(answers)
-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    got = summary(layout, sid, answers, cap=Decimal(20))
     assert got["error"] and "digest" not in got
     with pytest.raises(Refused):
         digest(layout, sid, answers)
@@ -467,7 +491,7 @@ def test_summaries_run_one_at_a_time(layout, tmp_path, monkeypatch):
         threading.Thread(
             target=summary,
             args=(layout, sid, answers),
-            kwargs={"config": "sol-medium", "cap": Decimal(20)},
+            kwargs={"cap": Decimal(20)},
         )
         for _ in range(4)
     ]
@@ -488,7 +512,7 @@ def test_a_failed_summary_cleanup_is_logged_and_the_result_stands(
     sid, _ = upload_issuer(layout, tmp_path)
     monkeypatch.setattr(submissions.shutil, "rmtree", _failing_rmtree)
     with caplog.at_level(logging.WARNING, logger=submissions.log.name):
-        got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+        got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
     assert got["error"] == "" and got["digest"]
     left = [p for p in layout.state.iterdir() if p.name.startswith("summary-")]
     assert len(left) == 1
@@ -525,7 +549,7 @@ def test_seal_freezes_the_uploads_and_unseal_restores_them(layout, tmp_path):
     assert submissions.seal(layout, sid) == sealed  # again: the same folder
     assert digest(layout, sid, answers) == before
     assert reading(layout, sid)["documents"]
-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    got = summary(layout, sid, answers, cap=Decimal(20))
     assert got["error"] == "" and got["digest"] == before
     for call in (
         lambda: put(layout, sid, "new.txt"),
@@ -707,24 +731,22 @@ def test_the_sweep_leaves_a_submission_with_an_upload_in_flight(layout):
 def test_a_summary_records_the_digest_it_returns_and_an_error_clears_it(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
     assert submissions.issued(layout, sid) == ""
-    first = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    first = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
     assert first["error"] == ""
     assert submissions.issued(layout, sid) == first["digest"]
-    second = summary(
-        layout, sid, answers_for(tmp_path, max_turns=8), config="sol-medium", cap=Decimal(20)
-    )
+    second = summary(layout, sid, answers_for(tmp_path, max_turns=8), cap=Decimal(20))
     assert second["digest"] != first["digest"]
     assert submissions.issued(layout, sid) == second["digest"]  # replaced, not appended
     bad = answers_for(tmp_path)
     bad["context"] = {"schema": "nonsense"}
-    assert summary(layout, sid, bad, config="sol-medium", cap=Decimal(20))["error"]
+    assert summary(layout, sid, bad, cap=Decimal(20))["error"]
     assert submissions.issued(layout, sid) == ""
     assert not (layout.uploads / sid / "issued").exists()
 
 
 def test_an_issued_digest_is_not_part_of_the_files_and_survives_the_seal(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
-    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
     assert "issued" not in os.listdir(files_folder(layout, sid))
     submissions.seal(layout, sid)
     assert submissions.issued(layout, sid) == got["digest"]
@@ -781,7 +803,7 @@ def test_a_sealed_or_files_link_is_an_unknown_submission(layout, tmp_path):
         lambda: submissions.seal(layout, sid),
         lambda: digest(layout, sid, answers_for(tmp_path)),
         lambda: reading(layout, sid),
-        lambda: summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20)),
+        lambda: summary(layout, sid, answers_for(tmp_path), cap=Decimal(20)),
     ):
         with pytest.raises(Refused, match="unknown submission"):
             call()
@@ -821,7 +843,7 @@ def test_a_file_that_vanishes_while_the_summary_reads_it_is_the_changed_error(
         raise FileNotFoundError(2, "gone")
 
     monkeypatch.setattr(submissions, "prepare", vanishing)
-    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
     assert got == {"error": submissions._CHANGED}
     assert submissions.issued(layout, sid) == ""
 
@@ -849,7 +871,7 @@ def test_a_summary_racing_the_removal_of_its_folder_is_refused_not_an_oserror(
     monkeypatch.setattr(submissions, "_summarise", summarise)
     monkeypatch.setattr(submissions, "_folder", folder)
     with pytest.raises(Refused, match="unknown submission"):
-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+        summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
 
 
 def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change(
@@ -861,7 +883,7 @@ def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change
     victim.chmod(0)
     try:
         with caplog.at_level(logging.WARNING, logger=submissions.__name__):
-            got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+            got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
     finally:
         victim.chmod(0o600)
     assert got == {"error": submissions._CHANGED}
@@ -893,9 +915,7 @@ def test_the_servers_path_is_not_in_a_reading_or_summary_error(layout, tmp_path)
     put(layout, sid, "a.bin", b"\x00\x01 not a document")
     root = str(files_folder(layout, sid))
     seen = [reading(layout, sid)["error"]]
-    seen.append(
-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
-    )
+    seen.append(summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"])
     assert all(seen), seen
     for text in seen:
         assert root not in text and str(layout.uploads) not in text
@@ -928,11 +948,96 @@ def test_an_issuer_id_over_the_limit_is_refused_by_the_summary(layout, tmp_path)
     sid, _ = upload_issuer(layout, tmp_path)
     answers = answers_for(tmp_path)
     answers["context"]["identity"]["issuer_id"] = "a" * 41
-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
+    got = summary(layout, sid, answers, cap=Decimal(20))
     assert got["error"] == "issuer_id is 41 characters; use at most 40"
     assert "digest" not in got
     answers["context"]["identity"]["issuer_id"] = "a" * 40
-    assert summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))["error"] == ""
+    assert summary(layout, sid, answers, cap=Decimal(20))["error"] == ""
+
+
+@pytest.mark.parametrize("model", ["gpt", "claude"])
+@pytest.mark.parametrize("effort", ["fast", "balanced", "high"])
+def test_advanced_accepts_every_model_and_effort(tmp_path, model, effort):
+    answers = answers_for(tmp_path, level="advanced", model=model, effort=effort)
+    assert submissions.validated(answers)["model"] == model
+    assert submissions.validated(answers)["effort"] == effort
+
+
+@pytest.mark.parametrize("level", ["basic", "standard"])
+def test_the_default_model_and_effort_are_accepted_below_advanced(tmp_path, level):
+    answers = answers_for(tmp_path, level=level, model="gpt", effort="balanced")
+    assert submissions.validated(answers) == answers
+
+
+@pytest.mark.parametrize("level", ["basic", "standard"])
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"model": "claude"},
+        {"effort": "fast"},
+        {"effort": "high"},
+        {"model": "claude", "effort": "high"},
+    ],
+)
+def test_a_model_or_effort_other_than_the_default_needs_advanced(tmp_path, level, change):
+    with pytest.raises(Refused, match="can be changed only at the Advanced level"):
+        submissions.validated(answers_for(tmp_path, level=level, **change))
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"model": "gemini"},
+        {"model": ""},
+        {"model": None},
+        {"model": ["gpt"]},
+        {"effort": "medium"},
+        {"effort": "max"},
+        {"effort": 3},
+        {"effort": None},
+    ],
+)
+def test_an_unknown_model_or_effort_is_refused_even_at_advanced(tmp_path, change):
+    with pytest.raises(Refused, match=r"model is one of gpt, claude|effort is one of fast"):
+        submissions.validated(answers_for(tmp_path, level="advanced", **change))
+
+
+def test_a_claude_submission_is_refused_without_an_anthropic_key(layout, tmp_path, monkeypatch):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path, level="advanced", model="claude", effort="high")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    got = summary(layout, sid, answers, cap=Decimal(20))
+    assert got["error"] == "Claude Opus is not available on this service"
+    assert "digest" not in got
+    with pytest.raises(Refused, match="Claude Opus is not available on this service"):
+        submissions.require_provider_key(answers)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    with pytest.raises(Refused, match="not available"):
+        submissions.require_provider_key(answers)
+
+
+def test_a_claude_submission_is_accepted_with_an_anthropic_key_and_no_key_is_shown(
+    layout, tmp_path, monkeypatch
+):
+    sid, _ = upload_issuer(layout, tmp_path)
+    answers = answers_for(tmp_path, level="advanced", model="claude", effort="fast")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    got = summary(layout, sid, answers, cap=Decimal(20))
+    assert got["error"] == "" and got["digest"]
+    assert "test-key-not-real" not in json.dumps(got)
+    submissions.require_provider_key(answers)
+
+
+def test_a_gpt_submission_needs_no_anthropic_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    submissions.require_provider_key(answers_for(tmp_path))
+
+
+def test_the_digest_covers_the_model_and_effort(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    base = digest(layout, sid, answers_for(tmp_path, level="advanced"))
+    assert base != digest(layout, sid, answers_for(tmp_path, level="advanced", effort="high"))
+    assert base != digest(layout, sid, answers_for(tmp_path, level="advanced", model="claude"))
 
 
 def _source(tmp_path: Path, **files: bytes) -> Path:
