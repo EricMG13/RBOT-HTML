@@ -831,6 +831,13 @@ def test_the_net_debt_change_is_built_when_both_runs_state_it_under_one_definiti
             "raises it; a two-point identity of the stated balances, not an analysis of what "
             "drove the change"
         ),
+        "same_period": False,
+        "prior_period": "FY2023",
+        "current_period": "FY2024",
+        "prior_gross_debt": "2100",
+        "prior_cash": "300",
+        "current_gross_debt": "2000",
+        "current_cash": "250",
     }
     assert "net_debt_bridge" not in pack
     assert pack["omitted"] == {
@@ -2610,6 +2617,13 @@ def test_the_net_debt_change_takes_all_three_figures_from_the_net_debt_table_row
         "change_in_gross_debt": "-100",
         "change_in_cash": "-100",
         "current_net_debt": "1800",
+        "same_period": False,
+        "prior_period": "FY2023",
+        "current_period": "FY2025",
+        "prior_gross_debt": "2100",
+        "prior_cash": "300",
+        "current_gross_debt": "2000",
+        "current_cash": "200",
     }
     assert "net_debt_change" not in pack["omitted"]
 
@@ -2629,3 +2643,106 @@ def test_a_net_debt_row_without_its_cash_is_omitted_naming_the_cash():
     later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
     pack = pair_pack(earlier, later)
     assert pack["omitted"]["net_debt_change"] == "cash cannot be compared (a value is not stated)"
+
+
+# --- one period's net debt change (owner, 2026-11-12): the analysis changed, not the issuer ---
+
+
+def _bridge(prior_period, current_period, current=("2,000", "250", "1,750")):
+    prior = handoff("CP-1", "Earlier.", tables=netdebt("2,100", "300", "1,800", prior_period))
+    now = handoff("CP-1", "Now.", tables=netdebt(*current, current_period))
+    return pair_pack(prior, now)
+
+
+@pytest.mark.parametrize(
+    ("prior_period", "current_period", "flag"),
+    [
+        ("FY2024", "FY2024", True),
+        ("FY2024", "FY2024 / 2024-09-30", True),  # one period, written two ways
+        ("FY2023", "FY2024", False),
+    ],
+)
+def test_the_net_debt_change_says_whether_both_rows_are_one_period(
+    prior_period, current_period, flag
+):
+    change = _bridge(prior_period, current_period)["net_debt_change"]
+    assert change["same_period"] is flag
+    assert (change["prior_period"], change["current_period"]) == (prior_period, current_period)
+    # the stated balances of each row, read and not computed
+    assert (change["prior_gross_debt"], change["prior_cash"]) == ("2100", "300")
+    assert (change["current_gross_debt"], change["current_cash"]) == ("2000", "250")
+
+
+def test_equal_net_debt_rows_of_one_period_are_flagged_with_zero_differences():
+    change = _bridge("FY2024", "FY2024", ("2,100", "300", "1,800"))["net_debt_change"]
+    assert change["same_period"] is True
+    assert (change["change_in_gross_debt"], change["change_in_cash"]) == ("0", "0")
+
+
+def _nd_measure(key, label, values, difference, same_period=True):
+    prior, current = values
+    side = {**CASH_PRIOR, "label": label, "period": "FY2024"}
+    return {
+        "key": key,
+        "label": label,
+        "unit": "US$m",
+        "comparable": "yes",
+        "reason": None,
+        "prior": {**side, "value": prior},
+        "current": {**side, "value": current},
+        "difference": difference,
+        "same_period": same_period,
+    }
+
+
+def _ndpack(same_period=True, with_flag=True):
+    change = {
+        "unit": "US$m",
+        "prior_net_debt": "6190",
+        "change_in_gross_debt": "-110",
+        "change_in_cash": "-30",
+        "current_net_debt": "6110",
+        "convention": "net debt = gross debt - cash",
+    }
+    if with_flag:
+        change |= {
+            "same_period": same_period,
+            "prior_period": "FY2024",
+            "current_period": "FY2024",
+            "prior_gross_debt": "7100",
+            "prior_cash": "910",
+            "current_gross_debt": "6990",
+            "current_cash": "880",
+        }
+    return {
+        **PACK,
+        "measures": [
+            *PACK["measures"],
+            _nd_measure("gross_debt", "Gross debt", ("7100", "6990"), "-110", same_period),
+            _nd_measure("net_debt", "Net debt", ("6190", "6110"), "-80", same_period),
+        ],
+        "net_debt_change": change,
+    }
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Net debt fell by 80 US$m.",
+        "Gross debt fell by 110 US$m.",
+        "Cash fell by 30 US$m.",
+        "Cash is 30 US$m lower.",
+    ],
+)
+def test_a_same_period_net_debt_difference_is_printed_in_no_passage(sentence):
+    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()), "accepted"
+
+
+def test_the_two_values_of_a_same_period_net_debt_may_be_stated():
+    said = "Net debt is 6,190 US$m earlier and 6,110 US$m now; cash is 910 and 880 US$m.\n\n"
+    assert cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack()) == ()
+
+
+@pytest.mark.parametrize("pack", [_ndpack(same_period=False), _ndpack(with_flag=False)])
+def test_a_net_debt_change_of_two_periods_or_without_the_flag_may_be_said_to_have_moved(pack):
+    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()

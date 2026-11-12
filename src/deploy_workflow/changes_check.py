@@ -221,6 +221,31 @@ def _flagged(measure: Mapping[str, Any]) -> bool:
     return bool(measure["same_period"]) and difference is not None and difference != 0
 
 
+# The net debt change's two differences, each a measure's difference (`change_in_cash` is the
+# difference of the cash the pack reads from the same table; it is no measure of the pack).
+_CHANGE_KEYS = (("change_in_gross_debt", "gross_debt"), ("change_in_cash", "net_debt_cash"))
+
+
+def _net_debt_cash(pack: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The net debt change's cash as a measure-shaped record (key, label, difference, values,
+    same_period), so that it is withheld by the rules that withhold a measure; none when the pack
+    has no net debt change or it is of two periods."""
+    change = pack.get("net_debt_change")
+    if not change or not change.get("same_period"):
+        return []
+    return [
+        {
+            "key": "net_debt_cash",
+            "label": "Cash",
+            "comparable": "yes",
+            "difference": change.get("change_in_cash"),
+            "prior": {"value": change.get("prior_cash")},
+            "current": {"value": change.get("current_cash")},
+            "same_period": True,
+        }
+    ]
+
+
 def _pack_differences(
     pack: Mapping[str, Any], *, without: frozenset[str] = frozenset()
 ) -> set[Decimal]:
@@ -230,7 +255,7 @@ def _pack_differences(
     return _present(
         [
             *(_signed(m["difference"]) for m in pack["measures"] if m["key"] not in without),
-            *(_signed(change.get(k)) for k in ("change_in_gross_debt", "change_in_cash")),
+            *(_signed(change.get(field)) for field, key in _CHANGE_KEYS if key not in without),
             *(_signed(row["difference"]) for row in rows),
         ]
     )
@@ -241,7 +266,17 @@ def _pack_values(pack: Mapping[str, Any]) -> set[Decimal]:
     change = pack.get("net_debt_change") or {}
     rows = (pack.get("maturity_profile") or {}).get("rows", ())
     found = _pack_differences(pack) | _present(
-        [_signed(change.get(k)) for k in ("prior_net_debt", "current_net_debt")]
+        [
+            _signed(change.get(k))
+            for k in (
+                "prior_net_debt",
+                "current_net_debt",
+                "prior_gross_debt",
+                "current_gross_debt",
+                "prior_cash",
+                "current_cash",
+            )
+        ]
         + [_signed(row[k]) for row in rows for k in ("prior", "current")]
     )
     for measure in pack["measures"]:
@@ -725,7 +760,7 @@ def _withheld(pack: Mapping[str, Any], said_nc: frozenset[str]) -> frozenset[str
     `Not comparable`, or both runs state them for one period with different values."""
     return frozenset(
         m["key"]
-        for m in pack["measures"]
+        for m in (*pack["measures"], *_net_debt_cash(pack))
         if m["comparable"] == "no" or m["key"] in said_nc or _flagged(m)
     )
 
@@ -737,7 +772,7 @@ def _withheld_sizes(
     of one period with two values, not said `Not comparable`, may print its difference in register
     rows; a difference equal to a value of its own measure is no difference."""
     found: dict[Decimal, str] = {}
-    for measure in pack["measures"]:
+    for measure in (*pack["measures"], *_net_debt_cash(pack)):
         difference = _signed(measure["difference"])
         barred = measure["comparable"] == "no" or measure["key"] in said_nc
         if difference is None or difference == 0 or not (barred or _flagged(measure)):

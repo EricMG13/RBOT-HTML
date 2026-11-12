@@ -46,11 +46,15 @@ a decimal string; missing is null, never zero):
   (`definition_resolved` false). A year after an instrument word (`notes 2027`, `due 2030`) is part
   of the definition; page and locator numbers are not.
 - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
-  current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
-  unit (gross and net debt are read only from the Gross debt and Net debt columns of CP-1's
-  `### Net debt data` table; a run without that table does not state them, and `omitted` says
-  which run), each under the same definition ("yes"), and each
-  run's net debt is its gross debt less its cash. A two-point identity of stated balances; it does
+  current_net_debt, convention, same_period, prior_period, current_period, prior_gross_debt,
+  prior_cash, current_gross_debt, current_cash}`, only when both runs state gross debt, net debt
+  and cash in one unit (gross and net debt are read only from the Gross debt and Net debt columns
+  of CP-1's `### Net debt data` table; a run without that table does not state them, and `omitted`
+  says which run), each under the same definition ("yes"), and each run's net debt is its gross
+  debt less its cash. `same_period` is true when all three measures are (the rows of both runs are
+  one period): a difference is then the analysis's, never the issuer's. The added keys are the
+  stated balances and periods of the two rows, read and not computed; the schema is not bumped (a
+  reader of `/3` ignores keys it does not know). A two-point identity of stated balances; it does
   not say what drove the change. An increase in cash reduces net debt.
 - `maturity_profile`: `{unit, rows: [{period, prior, current, difference}]}` from the CP-1
   "Chart data: debt maturities" tables (the table directly under that heading), only when both
@@ -609,7 +613,7 @@ _READS = {
 }
 
 
-def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, str] | None, str]:
+def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, Any] | None, str]:
     """The net debt change, or None and why not. It needs gross debt, net debt and cash stated in
     both runs in one unit under the same definition, and each run's net debt to be its gross debt
     less its cash."""
@@ -637,6 +641,13 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
         "change_in_cash": format(cc - pc, "f"),
         "current_net_debt": format(cn, "f"),
         "convention": NET_DEBT_CONVENTION,
+        "same_period": all(by_key[k]["same_period"] for k in pairs),
+        "prior_period": str(by_key["net_debt"]["prior"]["period"]),
+        "current_period": str(by_key["net_debt"]["current"]["period"]),
+        "prior_gross_debt": format(pg, "f"),
+        "prior_cash": format(pc, "f"),
+        "current_gross_debt": format(cg, "f"),
+        "current_cash": format(cc, "f"),
     }, ""
 
 
