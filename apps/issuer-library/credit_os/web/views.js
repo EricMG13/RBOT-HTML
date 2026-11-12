@@ -206,21 +206,21 @@ function comparisonChart(module,v,selection=0,chips=false,note=true) {
 // Labels start at AXIS_Y and drop 1.2em a line (up to 14px type on a narrow screen), so the viewBox runs to AXIS_BOTTOM to hold three lines and their descenders
 // at either size. A wide bridge is drawn at no less than WIDE_SCALE of its viewBox, whatever its container: a narrow card scrolls it sideways.
 const AXIS_CHAR=8.4,AXIS_LINES=3,WIDE_STEPS=7,WIDE_STEP=142,AXIS_Y=226,BRIDGE_HEIGHT=282,WIDE_SCALE=.75;
-function axisLines(label,step,char=AXIS_CHAR,hard=false) {
+function axisLines(label,step,char=AXIS_CHAR,hard=false,most=AXIS_LINES) {
   const room=Math.max(4,Math.floor((step-6)/char)),lines=[];
   for(const long of label.split(' ').filter(Boolean)){
-    // `hard` (map nodes): a word wider than a line breaks across lines, whole, before any ellipsis; the bridge cuts it with an ellipsis.
+    // `hard` (map nodes): a word wider than a line breaks across lines, whole, before any ellipsis; the bridge cuts it with an ellipsis; 'keep' (map edge labels) leaves it whole on its own line.
     let word=long;
-    while(hard&&word.length>room){lines.push(word.slice(0,room));word=word.slice(room);}
-    const w=word.length>room?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
+    while(hard===true&&word.length>room){lines.push(word.slice(0,room));word=word.slice(room);}
+    const w=word.length>room&&hard!=='keep'?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
     if(last>=0&&lines[last].length+1+w.length<=room&&!lines[last].endsWith('\u2026'))lines[last]+=` ${w}`;
     else lines.push(w);
   }
-  if(lines.length<=AXIS_LINES)return lines.length?lines:[label];
-  const kept=lines.slice(0,AXIS_LINES),end=kept[AXIS_LINES-1].split(' ');
+  if(lines.length<=most)return lines.length?lines:[label];
+  const kept=lines.slice(0,most),end=kept[most-1].split(' ');
   while(end.length>1&&end.join(' ').length+1>room)end.pop();
   const tail=end.join(' ');
-  kept[AXIS_LINES-1]=tail.endsWith('\u2026')?tail:tail.length+1>room?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
+  kept[most-1]=tail.endsWith('\u2026')?tail:tail.length+1>room&&hard!=='keep'?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
   return kept;
 }
 function bridgeChart(module,v) {
@@ -819,11 +819,13 @@ function mapLayers(edges,nodes=[]) {
   names.forEach(depth);
   return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
 }
-const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:54,gx:120,gy:22,pad:12},MAP_CHAR=6.6,MAP_T=Array.from({length:39},(_,i)=>(i+1)/40).sort((a,b)=>Math.abs(a-.5)-Math.abs(b-.5)),LABEL_CHAR=6.6,LABEL_STEP=15,LABEL_MARGIN=20,LABEL_STEPS=12;
+const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:54,gx:120,gy:22,pad:12},MAP_CHAR=6.6,MAP_T=Array.from({length:39},(_,i)=>(i+1)/40).sort((a,b)=>Math.abs(a-.5)-Math.abs(b-.5)),LABEL_CHAR=6.6,LABEL_STEP=15,LABEL_MARGIN=20,LABEL_STEPS=24,LABEL_WRAP=106,LABEL_LINES=2,LABEL_LINE=13;
 function mapDiagram(id,map,rows) {
   const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gy,pad}=BOX;
   // The column gap holds the longest label of an edge drawn between columns (a cut edge's label sits below the nodes), never under BOX.gx, so a map of short labels stays compact.
-  const gx=Math.max(BOX.gx,Math.ceil(Math.max(0,...edges.filter((_,i)=>!cut[i]).map(e=>e.type.length*LABEL_CHAR))+LABEL_MARGIN));
+  // A label wraps on whole words to at most two lines (LABEL_WRAP holds 15 characters; one longer word keeps its own line), so the gap follows the longest line.
+  const wrap=edges.map(e=>axisLines(e.type,LABEL_WRAP,LABEL_CHAR,'keep',LABEL_LINES)),wide=wrap.map(ls=>Math.max(...ls.map(l=>l.length))*LABEL_CHAR);
+  const gx=Math.max(BOX.gx,Math.ceil(Math.max(0,...wide.filter((_,i)=>!cut[i]))+LABEL_MARGIN));
   const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
   for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
   const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
@@ -838,24 +840,27 @@ function mapDiagram(id,map,rows) {
   const boxes=names.map(name=>({...at(name),w,h})),placed=[],paths=edges.map((edge,i)=>path(edge,cut[i]));
   const near=paths.map(p=>Array.from({length:61},(_,k)=>bezier(p.c,k/60)));
   const gap=(pts,x,y)=>Math.min(...pts.map(([px,py])=>Math.hypot(px-x,py-y)));
-  // A label is a box of its text's width set on its own line. It tries the line's midpoint, then slides along its own line (t), and only then moves up or down by whole steps,
-  // to the first clear spot (no placed label, no node) that is not nearer another edge than its own. Room is made, not borrowed: a spot below the drawing grows its height.
-  const clear=(x,y,lw)=>placed.every(o=>Math.abs(o.x-x)>=(o.w+lw)/2||Math.abs(o.y-y)>=LABEL_STEP-1)&&boxes.every(b=>x+lw/2<=b.x-2||x-lw/2>=b.x+b.w+2||y+3<=b.y-2||y-9>=b.y+b.h+2);
-  const spot=(i,lw)=>{
+  // A label is a box: its longest line wide, 12px tall a line (13px apart), centred on its spot. It tries a spot on its own line, then moves up or down by whole steps,
+  // to the first clear spot (no placed label, no node) that is not nearer another edge than its own. Where another edge crosses its middle it tries nearer its source end
+  // (t .25) or its target end (t .75) first, alternating by edge, so crossing labels are not stacked at the shared middle. Room is made, not borrowed: a spot below the drawing grows its height.
+  const span=(y,n)=>[y-9-(n-1)*LABEL_LINE/2,y+3+(n-1)*LABEL_LINE/2];
+  const clear=(x,y,lw,n)=>{const [top,bot]=span(y,n);return placed.every(o=>Math.abs(o.x-x)>=(o.w+lw)/2||top>=o.bot+2||o.top>=bot+2)&&boxes.every(b=>x+lw/2<=b.x-2||x-lw/2>=b.x+b.w+2||bot<=b.y-2||top>=b.y+b.h+2);};
+  const spot=(i,lw,n)=>{
     const c=paths[i].c,steps=[0];for(let k=1;k<=LABEL_STEPS;k++)steps.push(-k,k);
-    for(const own of [true,false])for(const dy of steps)for(const t of MAP_T){
+    const [mx,my]=bezier(c,.5),crossed=near.some((pts,k)=>k!==i&&gap(pts,mx,my)<LABEL_STEP*2),pref=i%2?.75:.25,ts=crossed?[...MAP_T].sort((p,q)=>Math.abs(p-pref)-Math.abs(q-pref)):MAP_T;
+    for(const own of [true,false])for(const dy of steps)for(const t of ts){
       const [x,y]=bezier(c,t),at=y-4+dy*LABEL_STEP;
-      if(at>=10&&clear(x,at,lw)&&(!own||near.every((pts,k)=>k===i||gap(pts,x,at-4)>=gap(near[i],x,at-4))))return {x,y:at};
+      if(at-(n-1)*LABEL_LINE/2>=10&&clear(x,at,lw,n)&&(!own||near.every((pts,k)=>k===i||gap(pts,x,at-4)>=gap(near[i],x,at-4))))return {x,y:at};
     }
-    // ponytail: LABEL_STEPS (12 steps, 180px) is the bound; past it the label sits at the line's midpoint, over its neighbours, rather than grow the drawing without end.
+    // ponytail: LABEL_STEPS (24 steps, 360px) is the bound; past it the label sits at the line's midpoint, over its neighbours, rather than grow the drawing without end.
     const [x,y]=bezier(c,.5);return {x,y:y-4};
   };
   const drawn=edges.map((edge,i)=>{
-    const p=paths[i],dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length],lw=edge.type.length*LABEL_CHAR,q=spot(i,lw);
-    placed.push({...q,w:lw});
-    return `<path class="map-edge${cut[i]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${id.replace(/\W/g,'-')}-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${Math.round(q.x*10)/10}" y="${Math.round(q.y*10)/10}" text-anchor="middle">${esc(edge.type)}</text>`;
+    const p=paths[i],dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length],lines=wrap[i],lw=wide[i],q=spot(i,lw,lines.length),[top,bot]=span(q.y,lines.length),y0=q.y-(lines.length-1)*LABEL_LINE/2;
+    placed.push({...q,w:lw,top,bot});
+    return `<path class="map-edge${cut[i]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${id.replace(/\W/g,'-')}-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${Math.round(q.x*10)/10}" y="${Math.round(y0*10)/10}" text-anchor="middle">${lines.map((line,k)=>`<tspan x="${Math.round(q.x*10)/10}" dy="${k?LABEL_LINE:0}">${esc(line)}</tspan>`).join('')}${lines.join(' ')===edge.type?'':`<title>${esc(edge.type)}</title>`}</text>`;
   }).join('');
-  const height=Math.ceil(Math.max(base,...placed.map(o=>o.y+6)));
+  const height=Math.ceil(Math.max(base,...placed.map(o=>o.bot+3)));
   const nodes=names.map(name=>{const p=at(name),lines=axisLines(name,w-10,MAP_CHAR,true);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+4-7*(lines.length-1)}">${lines.map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
   const label=`${map.name}: ${names.length} nodes, ${edges.length} edges`;
   const marker=`<defs><marker id="map-arrow-${id.replace(/\W/g,'-')}-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;

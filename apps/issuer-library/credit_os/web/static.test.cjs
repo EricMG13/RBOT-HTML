@@ -2544,7 +2544,7 @@ test('maps: one SVG, a box per node, a word and a line style per edge type, and 
   const html = runPage(withMaps).mapsView(outId('CP-1'), 'h3');
   const svg = /<svg.*?<\/svg>/s.exec(html)[0];
   assert.equal(countOf(svg, /<g class="map-node"/g), 4, 'driver, mechanism, outcome and the long holding company: the loop adds no node');
-  for (const word of ['Documentary Fact', 'Management Language', 'Analyst Interpretation', 'Insufficient Information']) assert.ok(strip(svg).includes(word), word);
+  for (const word of ['Documentary Fact', 'Management Language', 'Analyst Interpretation', 'Insufficient Information']) assert.ok(labelsOf(svg).some(l => l.lines.join(' ') === word), word);
   const dashes = [...svg.matchAll(/<path class="map-edge[^"]*"[^>]*>/g)].map(m => /stroke-dasharray="([^"]*)"/.exec(m[0])?.[1] ?? '');
   assert.equal(dashes.length, 5);
   assert.ok(new Set(dashes).size >= 4, 'each edge type has its own line style');
@@ -2585,6 +2585,13 @@ test('maps: a wide map keeps its natural width and scrolls inside its card', () 
 const mapHtml = rowsFor => runPage(d => { const o = d[outId('CP-1')]; o.sections.push(sec('Map: credit-risk transmission', 3, 890, 'consumed', [table(892, MAP_HEAD, rowsFor)])); o.maps = [{ name: 'credit-risk transmission', table: 892, gap: null }]; return d; }).mapsView(outId('CP-1'), 'h3');
 const nodeLines = (svg, title) => { const g = [...svg.matchAll(/<g class="map-node"><title>(.*?)<\/title>.*?<\/g>/gs)].find(m => m[1] === title); return [...g[0].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(m => m[1]); };
 
+// An edge label is a text whose first baseline is its x, y, one tspan per line (13px apart); its box is its longest line wide (6.6px a character) and 12px tall a line.
+const labelsOf = svg => [...svg.matchAll(/<text class="map-edge-label" x="([\d.-]+)" y="([\d.-]+)"[^>]*>(.*?)<\/text>/g)].map(m => {
+  const lines = [...m[3].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(t => t[1]);
+  return { x: +m[1], y: +m[2], lines, w: Math.max(...lines.map(l => l.length)) * 6.6, top: +m[2] - 9, bot: +m[2] + 13 * (lines.length - 1) + 3 };
+});
+const labelHit = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && a.top < b.bot && b.top < a.bot;
+
 test('maps: node text wraps on whole words and numbers, in at most three lines', () => {
   const name = 'Net leverage 6.01x covenant headroom narrowing sharply';
   const html = mapHtml([edgeRow(900, name, 'drives', 'Documentary Fact', 'Synthetic outcome')]);
@@ -2610,12 +2617,11 @@ test('maps: edge labels do not overlap one another or a node', () => {
     edgeRow(904, 'Synthetic driver', 'feeds', 'Documentary Fact', 'Synthetic mechanism'),
   ]);
   const svg = /<svg.*?<\/svg>/s.exec(html)[0];
-  const labels = [...svg.matchAll(/<text class="map-edge-label" x="([\d.-]+)" y="([\d.-]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: +m[1], y: +m[2], w: m[3].length * 6.6 }));
+  const labels = labelsOf(svg);
   assert.equal(labels.length, 4);
-  const hit = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < 12;
-  for (let i = 0; i < labels.length; i++) for (let j = i + 1; j < labels.length; j++) assert.ok(!hit(labels[i], labels[j]), `labels ${i} and ${j}: ${JSON.stringify([labels[i], labels[j]])}`);
+  for (let i = 0; i < labels.length; i++) for (let j = i + 1; j < labels.length; j++) assert.ok(!labelHit(labels[i], labels[j]), `labels ${i} and ${j}: ${JSON.stringify([labels[i], labels[j]])}`);
   const boxes = [...svg.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.]+)" height="([\d.]+)"/g)].map(m => m.slice(1).map(Number));
-  for (const l of labels) for (const [x, y, w, h] of boxes) assert.ok(!(l.x + l.w / 2 > x && l.x - l.w / 2 < x + w && l.y > y && l.y - 9 < y + h), `a label sits on a node: ${JSON.stringify(l)}`);
+  for (const l of labels) for (const [x, y, w, h] of boxes) assert.ok(!(l.x + l.w / 2 > x && l.x - l.w / 2 < x + w && l.bot > y && l.top < y + h), `a label sits on a node: ${JSON.stringify(l)}`);
 });
 
 test('maps: a map wider than its card is a keyboard-reachable scroll region that says so, as the bridge and tables do', () => {
@@ -2633,8 +2639,37 @@ const chainOf = (n, type) => [...Array(n)].map((_, i) => edgeRow(900 + i, `Layer
 test('maps: the column gap follows the longest edge label, never under 120, so short-label maps stay compact', () => {
   // 4 layers, label "Fact" (4*6.6 = 26.4px) + 20 margin fits in the 120 minimum: 2*12 pad + 4*(150 box + 120 gap) - 120 = 984, the width before labels had their own room.
   assert.equal(widthOf(chainOf(3, 'Fact')), 984);
-  // "Analyst Interpretation" is 22 characters, 22*6.6 = 145.2px; + 20 margin, rounded up = 166 gap: 24 + 4*(150+166) - 166 = 1122.
-  assert.equal(widthOf(chainOf(3, 'Analyst Interpretation')), 1122);
+  // A single word wider than a label line stays whole and widens the gap: "Interpretations-and-views" is 25 characters, 25*6.6 = 165px; + 20 margin = 185 gap: 24 + 4*(150+185) - 185 = 1179.
+  assert.equal(widthOf(chainOf(3, 'Interpretations-and-views')), 1179);
+});
+
+test('maps: an edge label wraps on whole words to two lines, so the gap follows the longest line, not the whole label', () => {
+  // Old expectation 1122 (one line of 22 characters, gap 166) is now 984: the longest line is "Interpretation" (14 characters, 92.4px) + 20 margin = 112.4, under the 120 minimum: 24 + 4*(150+120) - 120 = 984.
+  assert.equal(widthOf(chainOf(3, 'Analyst Interpretation')), 984);
+  const svg = svgOf(mapHtml(chainOf(3, 'Analyst Interpretation')));
+  assert.deepEqual(labelsOf(svg).map(l => l.lines), [...Array(3)].map(() => ['Analyst', 'Interpretation']), 'two tspans, whole words, nothing dropped');
+  assert.equal(countOf(svg, /<tspan[^>]*>Analyst<\/tspan>/g), 3);
+  // "Insufficient Information" (12 and 11 characters) and "Management Language" (19 characters, wraps) fit too.
+  assert.equal(widthOf(chainOf(3, 'Insufficient Information')), 984);
+  assert.equal(widthOf(chainOf(3, 'Management Language')), 984);
+  // More than two lines ends in an ellipsis; the edge table holds the whole text.
+  const three = labelsOf(svgOf(mapHtml(chainOf(1, 'one two three four five six seven'))))[0].lines;
+  assert.equal(three.length, 2);
+  assert.ok(three[1].endsWith('\u2026'), three.join('|'));
+});
+
+test('maps: a two-line label is placed by its real box: two of them into one target do not overlap or sit on a node', () => {
+  const svg = svgOf(mapHtml([
+    edgeRow(901, 'Synthetic driver', 'Analyst Interpretation', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(902, 'Synthetic mechanism', 'Management Language', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(903, 'Synthetic driver', 'Analyst Interpretation', 'Documentary Fact', 'Synthetic mechanism'),
+  ]));
+  const labels = labelsOf(svg);
+  assert.equal(labels.length, 3);
+  assert.ok(labels.every(l => l.lines.length === 2));
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) assert.ok(!labelHit(labels[i], labels[j]), `labels ${i} and ${j}: ${JSON.stringify([labels[i], labels[j]])}`);
+  const boxes = [...svg.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.]+)" height="([\d.]+)"/g)].map(m => m.slice(1).map(Number));
+  for (const l of labels) for (const [x, y, w, h] of boxes) assert.ok(!(l.x + l.w / 2 > x && l.x - l.w / 2 < x + w && l.bot > y && l.top < y + h), `a label sits on a node: ${JSON.stringify(l)}`);
 });
 
 test('maps: a node word wider than a line breaks across lines before any ellipsis; the bridge keeps its ellipsis', () => {
@@ -2650,10 +2685,10 @@ test('maps: a node word wider than a line breaks across lines before any ellipsi
 test('maps: with many parallel edges every label still gets a clear spot, and the drawing grows to hold them', () => {
   const rows = [...Array(8)].map((_, i) => edgeRow(900 + i, 'A', 'drives', 'Analyst Interpretation', 'B'));
   const svg = svgOf(mapHtml(rows)), height = Number(/<svg[^>]*height="(\d+)"/.exec(svg)[1]);
-  const labels = [...svg.matchAll(/<text class="map-edge-label" x="([\d.-]+)" y="([\d.-]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: +m[1], y: +m[2], w: m[3].length * 6.6 }));
+  const labels = labelsOf(svg);
   assert.equal(labels.length, 8);
-  for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) assert.ok(Math.abs(labels[i].x - labels[j].x) >= (labels[i].w + labels[j].w) / 2 || Math.abs(labels[i].y - labels[j].y) >= 12, `labels ${i}, ${j} overlap`);
-  assert.ok(Math.max(...labels.map(l => l.y)) + 4 <= height, 'every label is inside the drawing');
+  for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) assert.ok(!labelHit(labels[i], labels[j]), `labels ${i}, ${j} overlap`);
+  assert.ok(Math.max(...labels.map(l => l.bot)) + 1 <= height, 'every label is inside the drawing');
 });
 
 test('maps: the region label has no stray punctuation', () => {
