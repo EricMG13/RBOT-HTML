@@ -369,3 +369,46 @@ measure is of one period with two values and its row says `Same definition` with
 it, naming the figure and the word "difference"; the net debt change's cash, which has no issuer row, is printed
 nowhere. A size equal to a value of the measure itself stays accepted. Same functions (`_withheld_sizes`), per-line
 exemption (`_may_print`). `cp8.md` states the rule.
+
+Amendment, 2026-11-12 (owner: asked "Fix the two remaining checker gaps in one small follow-up?", the owner
+answered "Yes, fix both"). (A) K9 also refuses a withheld difference written without a unit: a whole number below 100
+is a count everywhere but here, and for the withheld-difference rule only a bare number equal in magnitude to a
+withheld size is refused, on the same lines and with the same exemptions (the measure's own issuer row under its
+condition; a size equal to one of the measure's own values). Counts under K10 are unchanged; for the bare-number reading only, module codes, the number of a line that really
+begins a list item (the first line, or after a blank line, a heading or a list item; never a table cell or a line that
+continues a paragraph) and a one- or two-digit day beside a month name are not read as numbers. Limits, recorded: a legitimate bare count equal to a withheld size ("30
+limitations" while a difference of 30 is withheld) is refused and must be reworded (the message names the figure, the
+measure and the word "difference"); a size written in words ("thirty") was not read (closed by the amendment
+below). (B) The verdict words `Same
+definition` and `Not comparable` are read from the start of the Effect cell only, by the checker and by
+`page_verdicts` alike (`_says`); the same words starting another cell of the measure's row are refused, naming the
+cell, not ignored. Unchanged: for a measure the pack marks `no`, `Not comparable` is accepted anywhere in its row.
+The shared fixture `tests/fixtures/changes-seam/rows.json` gains five cases; no existing case changed.
+
+Amendment, 2026-11-12 (owner: "Fix the limits first"; controller rulings L1 to L4). (L1) After a bulleted item line a
+leading number is a list marker only if it is `1` (CommonMark: a list not starting at 1 cannot interrupt a
+paragraph), so a hard-wrapped `- Cash fell by` / `30. The rest holds.` is read as a figure; after a blank line, a
+heading, the first line or a numbered item the earlier rule stands. (L2) A day beside a month name is a date only when
+a four-digit year completes it (`30 September 2024`, `30th Sep 2024`, `September 30 2024`, `Sep 30, 2024`); a day and
+month with no year is a number, so "The period ends 30 September." with 30 withheld is refused (accepted cost: reword).
+(L3) A complete date is blanked from the line before both readings (the raw K9/K10 reading and the bare reading);
+`_FIGURE` is unchanged, so `September 30, 2024` no longer reads `30,`, and an unheld figure on a line that also holds a
+date is still refused by K10. (L4) In the bare-number K9 reading only, whole numbers from two to 999,999 in English
+words (`thirty`, `one hundred and sixty-three`, `two thousand five`; hyphenated or spaced, any case) are read as the
+number they spell, with the same exemptions and message; `one` alone is never read. Remaining limits, recorded: a
+legitimate bare count (or a spelled one) equal to a withheld size is refused, since the checker cannot tell a count
+from a size; decimals, fractions, ordinals (`thirtieth`), `a hundred` and `a dozen` in words are not read. The two
+tests that pinned the old limits (a size in words accepted; `- First point.` then `80. ...` accepted) now assert the
+new rulings; no other expectation and no `rows.json` case changed.
+
+Amendment, 2026-11-12 (reviewer findings M1, Low A, Low B). A date's year is `(?:19|20)\d{2}` only, as `_EXEMPT` has it, so
+a figure such as `4370` or `1006` straight after a yearless `30 June` is read again. A spelled number is not read when it
+directly follows or precedes `point`, or is directly followed (space or hyphen) by an ordinal or fraction word (`first`,
+`thirty-first`, `thirds`, `quarters`, `-th`/`-ieth` forms, also after `and`: `one hundred and first`) or by `and a half` /
+`and a quarter`. U+2010 to U+2015 count as a hyphen inside a spelled number. Remaining limits: a spelled size broken across
+lines (`one hundred` / `and ten`) is not read; a legitimate count equal to a withheld size is refused.
+Narrowed (controller rulings, same day): `and` plus an ordinal exempts only a number containing `hundred` or `thousand`;
+an ordinal or fraction word hyphen-joined to a following word (`second-lien`, `quarter-on-quarter`) is not an ordinal;
+`point` exempts a number only inside number-word `point` number-word (`zero point five`), so `At that point thirty`,
+`a thirty-point swing` and a bare `point five` are read (accepted false refusal); `and a half` / `and a quarter` exempt
+only when not followed by `of`; `two halves` is not read. When in doubt the number is read.

@@ -187,10 +187,24 @@ def _plain(text: str) -> str:
     return " ".join(text.replace("**", "").replace("`", "").split())
 
 
+EFFECT = 4  # the column of an issuer row that holds the verdict (`Effect on the credit view`)
+
+
 def _says(row: Sequence[str], word: str) -> bool:
-    """Whether a cell of the row starts with the verdict word; the word anywhere else in a cell is
-    no verdict."""
-    return any(_plain(cell).lower().startswith(word) for cell in row)
+    """Whether the Effect cell of an issuer row starts with the verdict word; the word anywhere else
+    in that cell, or at the start of another cell (`_misplaced`), is no verdict."""
+    return len(row) > EFFECT and _plain(row[EFFECT]).lower().startswith(word)
+
+
+def _misplaced(where: str, row: Sequence[str], word: str) -> list[str]:
+    """A verdict word at the start of a cell of the row other than the Effect cell: refused, naming
+    the cell, never silently read as the verdict."""
+    return [
+        f"{where}: `{word}` starts the {COLUMNS[ISSUER][i]} cell, where it is no verdict; write it "
+        "first in the Effect cell."
+        for i, cell in enumerate(row)
+        if i != EFFECT and _plain(cell).lower().startswith(word)
+    ]
 
 
 def _signed(value: Any) -> Decimal | None:
@@ -380,11 +394,10 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
     text = " ".join(_plain(cell) for cell in row).lower()
     issues = []
     for word in (SAME, NOT_COMPARABLE):
-        if measure["comparable"] != "no" and word in text and not _says(row, word):
-            issues.append(
-                f"{where}: `{word}` is a verdict only at the start of a cell; write it first in "
-                "the Effect cell."
-            )
+        if measure["comparable"] == "no" or word not in text:
+            continue
+        elsewhere = f"{where}: `{word}` is a verdict only at the start of the Effect cell."
+        issues += _misplaced(where, row, word) or ([] if _says(row, word) else [elsewhere])
     if measure["comparable"] == "judge":
         said = [word for word in (SAME, NOT_COMPARABLE) if word in text]
         if len(said) != 1:
@@ -397,7 +410,7 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
             f"{where}: the pack marks this measure not comparable ({measure['reason']}); say "
             '"not comparable" and give no difference.'
         )
-    if NOT_COMPARABLE in text and _TREND.search(row[4]):
+    if NOT_COMPARABLE in text and _TREND.search(row[EFFECT]):
         issues.append(f"{where}: a `Not comparable` row draws no trend from the two values.")
     return issues
 
@@ -807,6 +820,189 @@ def _may_print(
     return frozenset()
 
 
+_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
+_BULLET_ITEM = re.compile(r"\s*[-*+]\s")
+_LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
+_FIRST_NUMBER = re.compile(r"\s*1[.)]\s")
+_MONTH = (
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
+    r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
+)
+_DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
+_YEAR = r"(?:19|20)\d{2}\b(?![.,]\d)"
+# A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
+# and month with no year is read as a number.
+_DATE = re.compile(
+    rf"(?<![\w.,])(?:{_DAY}\s+{_MONTH},?\s+{_YEAR}|\b{_MONTH}\s+{_DAY},?\s+{_YEAR})",
+    re.IGNORECASE,
+)
+_UNITS = {
+    word: n
+    for n, word in enumerate(
+        (
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+        ),
+        1,
+    )
+}
+_TENS = {
+    word: 10 * n
+    for n, word in enumerate(
+        ("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"), 2
+    )
+}
+_HYPHENS = "-\u2010-\u2015"
+_WORD_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
+_ORDINALS = frozenset(
+    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halve", "quarter")
+)
+
+
+def _ordinal(word: str) -> bool:
+    """Whether `word` is an ordinal or fraction word: `first`, `fourth`, `thirtieth`, `thirds`."""
+    word = word.removesuffix("s")
+    if word in _ORDINALS:
+        return True
+    if word.endswith("ieth"):
+        return word[:-4] + "y" in _TENS
+    return word.endswith("th") and word[:-2] in {*_UNITS, *_TENS, "hundred", "thousand"}
+
+
+def _number_word(word: str) -> bool:
+    return word in _UNITS or word in _TENS or word in ("zero", "hundred", "thousand")
+
+
+def _decimal(words: Sequence[str], i: int, j: int) -> bool:
+    """Whether the number in `words[i:j]` sits in `number-word point number-word` on either side."""
+    after = words[j : j + 2]
+    before = words[max(i - 2, 0) : i]
+    return (len(after) == 2 and after[0] == "point" and _number_word(after[1])) or (
+        len(before) == 2 and before[1] == "point" and _number_word(before[0])
+    )
+
+
+def _part_of_fraction(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
+    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction. `joined[k]`
+    says `words[k]` is hyphen-joined to the next word. Not read: a decimal (`zero point five`,
+    both sides); an ordinal word ending it (`thirty-first`) unless it is joined on to a further
+    word (`second-lien`); `and` plus an ordinal only after `hundred` or `thousand` (`one hundred
+    and first`); `and a half` / `and a quarter` not followed by `of`."""
+
+    def ends(k: int) -> bool:
+        return k < len(words) and _ordinal(words[k]) and not joined[k]
+
+    big = "hundred" in words[i:j] or "thousand" in words[i:j]
+    return (
+        _decimal(words, i, j)
+        or ends(j)
+        or (big and words[j : j + 1] == ["and"] and ends(j + 1))
+        or (
+            words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
+            and words[j + 3 : j + 4] != ["of"]
+        )
+    )
+
+
+def _starts_list_item(lines: Sequence[str], i: int) -> bool:
+    """Whether line `i` can begin a list item: the first line of the passage, or one after a blank
+    line, a heading or a list item. A line that continues a paragraph cannot, and after a bulleted
+    item only `1.` can (CommonMark: a list not starting at 1 cannot interrupt a paragraph)."""
+    if i == 0:
+        return True
+    before = lines[i - 1]
+    if _BULLET_ITEM.match(before):
+        return bool(_FIRST_NUMBER.match(lines[i]))
+    return not before.strip() or bool(_HEADING.match(before) or _LIST_ITEM.match(before))
+
+
+def _group(words: Sequence[str], i: int) -> tuple[int, int]:
+    """(value, next index) of the words from `i` that spell a number below 1,000: `[N hundred]
+    [and] [tens [unit] | 1-19]`. Value 0 and the same index when none."""
+    start, value = i, 0
+    if i + 1 < len(words) and words[i] in _UNITS and words[i + 1] == "hundred":
+        value, i = _UNITS[words[i]] * 100, i + 2
+        if (
+            i + 1 < len(words)
+            and words[i] == "and"
+            and (words[i + 1] in _UNITS or words[i + 1] in _TENS)
+        ):
+            i += 1
+    if i < len(words) and words[i] in _TENS:
+        value, i = value + _TENS[words[i]], i + 1
+        if i < len(words) and words[i] in _UNITS and _UNITS[words[i]] < 10:
+            value, i = value + _UNITS[words[i]], i + 1
+    elif i < len(words) and words[i] in _UNITS:
+        value, i = value + _UNITS[words[i]], i + 1
+    return (value, i) if i > start else (0, start)
+
+
+def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
+    """(value, next index) of the whole number in English words that starts at `i`, up to 999,999
+    (`two thousand five`); value 0 and the same index when none starts there."""
+    value, j = _group(words, i)
+    if j < len(words) and words[j] == "thousand" and value:
+        value, j = value * 1000, j + 1
+        if j + 1 < len(words) and words[j] == "and" and _group(words, j + 1)[0]:
+            j += 1
+        rest, j = _group(words, j)
+        value += rest
+    return (value, j) if j > i else (0, i)
+
+
+def _spelled(line: str) -> list[Decimal]:
+    """The whole numbers from two up that the line writes in English words, any case, hyphenated or
+    spaced (any Unicode hyphen). Not read: `one` alone, `a hundred`, `a dozen`, and a part of a
+    decimal, fraction or ordinal."""
+    found: list[Decimal] = []
+    for run in _WORD_RUN.finditer(line):
+        words = re.findall(r"[a-z]+", run[0].lower())
+        joined = [
+            bool(re.search(rf"[{_HYPHENS}]", g)) for g in re.findall(r"[^a-z]+", run[0].lower())
+        ]
+        joined.append(False)
+        i = 0
+        while i < len(words):
+            value, j = _spelled_number(words, i)
+            if j == i:
+                i += 1
+                continue
+            if value >= 2 and not _part_of_fraction(words, joined, i, j):
+                found.append(Decimal(value))
+            i = j
+    return found
+
+
+def _bare(line: str, *, listed: bool) -> str:
+    """The line as the bare-number reading of the withheld-difference rule (K9) takes it: module
+    codes blanked and a leading list number blanked when `listed` (the line begins a list item,
+    never a table cell). Complete dates are blanked by the caller, for both readings."""
+    if listed:
+        line = _LIST_NUMBER.sub(_blanks, line)
+    return _MODULE.sub(_blanks, line)
+
+
+def _blanks(match: re.Match[str]) -> str:
+    return " " * len(match[0])
+
+
 def _passage_issues(
     lines: list[str],
     pack: Mapping[str, Any],
@@ -831,7 +1027,7 @@ def _passage_issues(
     kept = _withheld_sizes(pack, said_nc)
     in_issuer, h2 = False, ""
     issues: list[str] = []
-    for line in lines:
+    for i, line in enumerate(lines):
         if _HEADING.match(line):
             in_issuer = line.strip() == f"### {ISSUER}"
             if line.startswith("## "):
@@ -849,14 +1045,20 @@ def _passage_issues(
         )
         if h2 in NOT_PASSAGES:
             continue
-        for size in dict.fromkeys(f.size for f in _figures(line, counts=False)):
+        line = _DATE.sub(_blanks, line)
+        figures = [f.size for f in _figures(line, counts=False)]
+        listed = not row and _starts_list_item(lines, i)
+        bare_line = _bare(line, listed=listed)
+        bare = [f.size for f in _figures(bare_line)] + _spelled(bare_line)
+        for size in dict.fromkeys([*figures, *bare]):
             if size in sizes:
                 issues.append(
                     f"A passage: the figure {size} is the difference of {sizes[size]}, which "
                     "this handoff withholds (not comparable, or one period with two values); a "
-                    "difference of it is not printed here."
+                    "difference of it is not printed here, with a unit or without one. A count "
+                    f"that happens to equal it ({size}) is refused too: reword it."
                 )
-            elif size not in allowed:
+            elif size in figures and size not in allowed:
                 issues.append(_not_held("A passage", size))
     return issues
 
@@ -947,7 +1149,7 @@ def _page_measure(measure: Mapping[str, Any], found: list[list[str]]) -> dict[st
         return _verdict("not_comparable", "Not comparable", measure.get("reason"))
     for said_not in found:
         if _says(said_not, NOT_COMPARABLE):
-            return _verdict("not_comparable", "Not comparable", said_not[4])
+            return _verdict("not_comparable", "Not comparable", said_not[EFFECT])
     row = found[0] if found else None
     flagged = _flagged(measure)
     where = measure["label"]
