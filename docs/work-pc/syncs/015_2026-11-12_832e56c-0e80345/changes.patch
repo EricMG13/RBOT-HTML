@@ -1,0 +1,1317 @@
+diff --git a/.github/workflows/checks.yml b/.github/workflows/checks.yml
+index ce5a8f3..9feae83 100644
+--- a/.github/workflows/checks.yml
++++ b/.github/workflows/checks.yml
+@@ -48,4 +48,6 @@ jobs:
+             tests/test_run_start_service.py tests/test_run_start_page.py \
+             tests/test_context_module_options.py \
+             tests/test_handoff_loop.py tests/test_context_form.py \
+-            tests/test_library_reader_refs.py
++            tests/test_library_reader_refs.py \
++            tests/test_changes.py tests/test_citation_markers.py \
++            tests/test_web_search_scope.py tests/test_prose_checks.py
+diff --git a/AGENTS.md b/AGENTS.md
+index b40d0a4..079b502 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -35,9 +35,9 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
+   narrative sentences.
+ - Analytical modules own analysis and inter-module Markdown communication.
+   Markdown handoffs are intermediate artifacts, not completion of the user task.
+-- CP-8 compares deliverables from prior runs with the latest current run:
+-  values, periods, assumptions, conclusions, sources, limitations, output scope and
+-  presentation.
++- CP-8 runs last in a run with an earlier listed run of the same issuer and pathway and compares
++  the two: values, periods, assumptions, conclusions, sources and limitations. Its handoff is
++  shown in the issuer library's Changes page.
+   It explains material changes and unresolved differences. The imported investment
+   decision post-mortem/calibration task is superseded; it is not an input gate.
+ - CP-MEMO is replaced by the actual deliverables. Do not schedule a separate
+@@ -50,7 +50,7 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
+   conclusions across that boundary. Delivery adds no analysis: it only selects and
+   orders module-written passages, every number and qualification exact. Missing
+   handoff content remains an explicit gap or a targeted repair request.
+-- Completion requires the issuer library's Overview, Modules, Forecast and Evidence
++- Completion requires the issuer library's Overview, Changes, Modules, Forecast and Evidence
+   pages for the run populated from its actual module handoffs and checked against
+   them, not just successful handoff generation. The HTML Model, charts and calculation
+   JSON are parts of that issuer report; the separately delivered HTML report is retired.
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index c43e715..69420db 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,17 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Changes seam round 3: one reader of CP-8's registers (branch `claude/changes-seams-r3`, base c9f84e1)
++Scope: `changes_check.page_verdicts` derives the measure verdicts, module rows and ledger counts; `update_library.changes_data` carries them as `run.changes.verdicts` (null without a pack, or with a note or problem; an unreadable CP-8 output is a stated problem); `changes.js` only displays them (no register parsed for a verdict); a fact row that looks like a pack label (NFKC, alphanumerics, casefold) is refused. Offline. Expected verdicts are hand-written in `tests/fixtures/changes-seam/rows.json` (`page` per case; new cases: hidden-character label, `\x85`, `\x1f`, two Same definition rows, no closing pipe), read by `test_changes.py`, `test_update_library.py` (checker and library agree) and `changes.test.cjs`. Gates: CI fast tests exit 0 (node 18 changes tests; pytest 2683 passed), browser subset 151 passed exit 0, quality gate exit 0. Reviewer probes that call the deleted page functions (`wbr1_seam`, `wbr2_seam`, `rc_store_path`, `wb_*`, `t5_*` expecting the page to read a pack's `yes` or a table) break or pass vacuously by design.
++Not verified: any real model output; the Changes tab against the September VMO2 reference; old handoffs against K9/K10 (known limit in the ruling).
++
++## 2026-11-12 — Whole-branch review fixes (branch `claude/changes-seams`, stacked on `claude/short-snapshot`)
++Scope: M1 one reading of CP-8's registers (shape: the checker requires exactly the forms the tab reads, plus one shared fixture `tests/fixtures/changes-seam/rows.json` read by a Python and a node test; a Python-side verdict hand-off was larger); M2 Over time compares run folders; L1 recorded no-comparison reasons reach the library verbatim; L2 scope no longer says "delivered whole" with "not produced"; L3 four test files added to CI fast-tests (about 7 s). M3, L4, L5 recorded only (ruling amendment). Offline, no model call.
++Gates: CI fast-tests command from `checks.yml` 2631 passed, exit 0; browser `-k "run_start or context_form or library or inbox"` 151 passed, exit 0; library node set 276 passed, exit 0; `tools/quality_gate.py` 0 findings, exit 0 (also `--base origin/claude/short-snapshot`).
++Probes (`wb_*`, then `t5_*`, `t4r4_*`): not_comparable_position, measure_label, module_cell(.py, .cjs), test_seams f1 and f4, changes_tab.cjs flipped to exit 0 or to the defect gone (f1, f4 now fail their reproduce assertions); wb_join_ids.cjs still exit 1 because it models the old `views.js` argument (the real call is covered by the browser test `test_over_time_joins_two_runs_the_pack_names_by_run_folder`); M3 and L4 probes still exit 1 (recorded limits). t5_*, t4r4_* exit 0.
++Fix round 2: one row per pack measure (a second is refused); white space (non-breaking, doubled) normalised before a verdict is read, in the checker and in `changes.js`; `cp8.md` now states the Effect-cell rule and the one-row rule (git blob `ba25e4d`, new method revision; the library fixtures stand in for it); the ruling sentence on unreadable verdicts is stated per `yes` / `judge` / `no`. Rows added to the shared fixture. `wbr1_seam.py` exit 0; test_changes 195, CI fast 2635, browser 151, node 276 passed; quality gate 0 findings.
++Not verified: any real model output; the Changes tab against the September VMO2 reference. A real model following the revised `cp8.md`.
++
+ ## 2026-11-12 — Short Credit Snapshot pathway (branch `claude/short-snapshot`, stacked on `claude/changes-section`, decision M6)
+ Scope: `short_snapshot` = CP-0, CP-1, CP-L10 (hand-written preset key); CP-L10 method rewritten as a one-page prose module with a Key figures table; CP-L10 leads the Overview; offline, canned provider, no paid call. Tests written by hand: the preset, the order, the other presets without CP-L10, an end-to-end canned run to a verified delivery, four refused variants (a passage figure in no table, no Bottom line, a module code in a sentence, no Key figures table), node tests (lead, label), browser tests (run start page card and the service's three-module review; the library lists the run as "Short credit snapshot" with CP-L10 as lead). Fix round 2: Key figures sign exact, one table, missing CP-1 refused, browser test renamed to be selected by the browser gate. Fix round 1: methodology.json title and purpose; Key figures header and Value figures checked against the CP-1 handoff (`prose_checks.key_figures_issues`; proves a figure exists in CP-1, not that it is the right measure or period). Gates, exit 0 each: CI fast list 2,277 passed; node 271; browser gate 148; test_cpos_launch.py 532 passed; quality gate 0 findings.
+ Not verified: that a Key figures figure is the right measure or period in CP-1 (only that it exists there); a real CP-L10 answer from a model; a reader check against the VMO2 reference; an earlier-format or CP-8-compared short snapshot in the library; Chrome only. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 library-links entry.
+diff --git a/apps/issuer-library/credit_os/web/changes.js b/apps/issuer-library/credit_os/web/changes.js
+index 9ffae89..a67ff85 100644
+--- a/apps/issuer-library/credit_os/web/changes.js
++++ b/apps/issuer-library/credit_os/web/changes.js
+@@ -2,8 +2,9 @@
+ // Pure rendering of the Changes tab (docs/rulings/2026-11-11-module-presets-and-changes.md, decision M8): no DOM, no store, no globals written.
+ // Browser: one global, ChangesView (reader.js is loaded first; nothing else leaks into the page's scope). Node: module.exports.
+ // Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2) or CP-8's
+-// handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. A measure that is not comparable
+-// shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is
++// handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. This page reads no register for a
++// verdict: the library's build derives them once, with CP-8's checker (`changes.verdicts`: measures, modules, ledger), and the page displays them.
++// A measure that is not comparable, is not judged, or has no verdict shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is
+ // escaped before it reaches the page.
+ const ChangesView = (() => {
+ const ChangesReader = typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, paragraphBody, readerPassages, tableView};
+@@ -12,7 +13,6 @@ const FIRST_RUN = 'First run of this pathway';
+ const NO_RECORD = 'No comparison was recorded for this run';
+ const NOT_COMPARABLE = 'Not comparable';
+ const NOT_STATED = 'Not stated';
+-const LEDGER_STATUSES = ['Closed', 'Remaining', 'New', 'No longer stated'];
+ const TREND_MEASURES = [['leverage', 'Total debt / EBITDA'], ['net_leverage', 'Net debt / EBITDA'], ['coverage', 'EBITDA / cash interest'], ['cash', 'Cash'], ['undrawn', 'Undrawn committed facilities']];
+ const REASON_PREFIX = /^changes: not produced\s*[—-]\s*/;
+ const esc = value => ChangesReader.escapeHtml(value);
+@@ -28,7 +28,7 @@ function changesState(changes) {
+   return changes.first_run === true ? 'first' : 'unrecorded';
+ }
+ 
+-// CP-8's handoff (the store's sections) as its reader passages and its three registers; each is null when the handoff has none.
++// CP-8's handoff (the store's sections) as its reader passages and, as verbatim tables, its issuer and ledger registers; each is null when the handoff has none.
+ function cp8Parts(sections) {
+   const list = sections || [];
+   const passages = ChangesReader.readerPassages(list);
+@@ -41,39 +41,22 @@ function cp8Parts(sections) {
+     bottom: passages.bottom,
+     key: passages.key,
+     issuer: register('What changed: the issuer'),
+-    analysis: register('What changed: the analysis'),
+     ledger: register('Limitations ledger'),
+   };
+ }
+ 
+-const column = (table, name) => (table ? table.headers.findIndex(header => header.trim() === name) : -1);
+-const cell = (row, index) => (index >= 0 && row ? String(row.cells[index] ?? '') : '');
+-const bare = text => String(text).replace(/\*\*|`/g, '').trim();
+-
+ // A value with its unit as the pack states them: `x` and `%` follow the figure, any other unit follows after a space.
+ const withUnit = (value, unit) => (unit == null || unit === '' ? String(value) : /^[x%]$/.test(unit) ? `${value}${unit}` : `${value} ${unit}`);
+ const sideText = side => (side && side.value != null ? `${withUnit(side.value, side.unit)}${side.period ? ` (${side.period})` : ''}` : NOT_STATED);
+ 
+-// Whether the two values of a measure may be set against each other, and so whether its difference may be shown.
+-// `comparable` is the pack's: no, yes, or judge (CP-8's row for the measure says Same definition or Not comparable). A row CP-8 marks Not comparable
+-// is never compared, whatever the pack says. A judge row with no verdict from CP-8 is left unjudged: no difference.
+-function measureVerdict(measure, issuerTable) {
+-  const first = column(issuerTable, 'Measure or fact');
+-  const row = issuerTable ? issuerTable.rows.find(r => bare(cell(r, first < 0 ? 0 : first)) === measure.label) : null;
+-  const says = pattern => Boolean(row) && row.cells.some(text => pattern.test(bare(text)));
+-  const note = row ? cell(row, row.cells.length - 1) : null;
+-  if (measure.comparable === 'no') return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: measure.reason || null};
+-  if (says(/^Not comparable/i)) return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: note};
+-  // One period with two values and a difference is the analysis changing (a definition, a correction), never the issuer moving: the difference
+-  // is shown only under CP-8's own word Same definition, beside its cause, and no line or trend joins the two.
+-  if (measure.same_period === true && measure.difference != null && !/^-?0+(\.0+)?$/.test(String(measure.difference))) {
+-    if (!says(/^Same definition/i)) return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null, analysisChange: null};
+-    const cause = cell(row, column(issuerTable, 'Cause'));
+-    return {kind: 'comparable', label: 'Same definition', reason: null, analysisChange: cause || `${NOT_STATED} by CP-8`};
+-  }
+-  if (measure.comparable === 'yes') return {kind: 'comparable', label: 'Comparable', reason: null};
+-  if (says(/^Same definition/i)) return {kind: 'comparable', label: 'Same definition', reason: null};
+-  return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null};
++// Whether the two values of a measure may be set against each other, and so whether its difference may be shown: the verdict the build derived
++// (`changes.verdicts.measures[key]`: kind comparable | not_comparable | unjudged, label, reason, analysis_change). A measure with no entry, an unknown kind,
++// or a run with no verdicts is not judged: no difference, no line.
++const NOT_JUDGED = 'Comparability not judged';
++function measureVerdict(measure, changes) {
++  const found = changes && changes.verdicts && changes.verdicts.measures ? changes.verdicts.measures[measure.key] : null;
++  if (!found || !['comparable', 'not_comparable', 'unjudged'].includes(found.kind)) return {kind: 'unjudged', label: NOT_JUDGED, reason: measure.reason || null};
++  return {kind: found.kind, label: found.label, reason: found.reason || null, analysisChange: found.analysis_change || null};
+ }
+ 
+ const differenceText = (measure, verdict) => (verdict.kind === 'comparable' && measure.difference != null ? withUnit(measure.difference, measure.unit) : null);
+@@ -130,9 +113,9 @@ const omittedNote = omitted => {
+ 
+ const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`CP-8's handoff has no ${caption.toLowerCase()} table.`)}</p>`);
+ 
+-function issuerPart(pack, parts) {
++function issuerPart(pack, parts, changes) {
+   const measures = pack.measures || [];
+-  const verdicts = measures.map(m => measureVerdict(m, parts && parts.issuer));
++  const verdicts = measures.map(m => measureVerdict(m, changes));
+   const register = parts ? `<h3>Each change and its cause</h3>${verbatim('What changed: the issuer', parts.issuer)}` : '';
+   return `<section class="run-section" id="changes-issuer"><h2>The issuer</h2>${thenAndNowChart(measures, verdicts)}${measures.length ? measureTable(measures, verdicts) : '<p class="empty">The comparison pack states no measure.</p>'}${netDebtView(pack.net_debt_change)}${maturityView(pack.maturity_profile)}${omittedNote(pack.omitted)}${register}</section>`;
+ }
+@@ -158,38 +141,35 @@ function whatChangedPart(parts) {
+   return `<section class="run-section" id="changes-what"><h2>What changed</h2><h3>Bottom line</h3>${passageView(parts.bottom)}<h3>Key findings</h3>${passageView(parts.key)}</section>`;
+ }
+ 
+-// ---- Part 3: one row per module of the pack; CP-8's status and reason read from its register by the module code in the first cell.
+-const moduleCode = text => { const found = /\(([A-Z0-9][A-Z0-9-]*)\)\s*$/.exec(bare(text)); return found ? found[1] : null; };
+-function analysisPart(pack, parts) {
+-  const table = parts && parts.analysis, status = column(table, 'Status'), cause = column(table, 'Cause'), why = column(table, 'Why');
++// ---- Part 3: one row per module of the pack; CP-8's status and reason are the build's (`changes.verdicts.modules[code]`, only a code with exactly one row).
++function analysisPart(pack, parts, changes) {
++  const modules = (changes && changes.verdicts && changes.verdicts.modules) || {};
+   const rows = (pack.modules || []).map(m => {
+-    const row = table ? table.rows.find(r => moduleCode(r.cells[0]) === m.module) : null;
+-    const state = !parts ? 'Explanation not produced' : row ? cell(row, status) || NOT_STATED : `${NOT_STATED} by CP-8`;
++    const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
++    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by CP-8`;
+     const side = (ran, text) => (text != null ? text : ran ? NOT_STATED : 'Did not run');
+     const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line);
+-    const reason = row ? [cell(row, cause), cell(row, why)].filter(Boolean) : [];
++    const reason = row ? [row.cause, row.why].filter(Boolean) : [];
+     return `<details class="change-module"><summary><span class="change-name">${esc(m.title)} <span class="module-code">${esc(m.module)}</span></span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
+   }).join('');
+   return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2><p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
+ }
+ 
+-// ---- Part 4: counts of each status as one bar (segment sizes are the counts), the ledger itself beneath.
+-function limitationsPart(parts) {
+-  const table = parts.ledger, status = column(table, 'Status');
++// ---- Part 4: counts of each status as one bar (segment sizes are the counts, the build's: `changes.verdicts.ledger`, null when it could not read the ledger), the ledger itself beneath.
++function limitationsPart(parts, changes) {
++  const table = parts.ledger, counts = changes && changes.verdicts ? changes.verdicts.ledger : null;
+   if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in CP-8's handoff.</p></section>`;
+-  const counts = LEDGER_STATUSES.map(name => [name, table.rows.filter(r => bare(cell(r, status)) === name).length]);
+-  const other = table.rows.length - counts.reduce((sum, [, n]) => sum + n, 0);
+-  if (other) counts.push(['Other', other]);
++  if (!counts) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2>${verbatim('Limitations ledger', table)}</section>`;
+   const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
+   const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
+   const legend = counts.map(([name, n]) => `<span><i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}"></i>${esc(name)} <strong>${n}</strong></span>`).join('');
+   return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><div class="ledger-bar" role="img" aria-label="${esc(`Limitations: ${label}`)}">${segments}</div><div class="chart-legend ledger-legend">${legend}</div>${verbatim('Limitations ledger', table)}</section>`;
+ }
+ 
+-// ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes, cp8}]:
+-// `metrics` are the library's own quotes ({value, unit, period} per measure), `changes` the run's pack record, `cp8` its CP-8 sections or null.
++// ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes}], `runId` being the run's folder name (the pack names its prior run by folder):
++// `metrics` are the library's own quotes ({value, unit, period} per measure), `changes` the run's record (pack and verdicts).
+ // A segment joins two neighbouring points only where the later run's own pack compares exactly those two values under one definition.
+-function joined(runs, i, key, measureOf) {
++function joined(runs, i, key) {
+   const [before, after] = [runs[i - 1], runs[i]];
+   const [a, b] = [before.metrics && before.metrics[key], after.metrics && after.metrics[key]];
+   const pack = after.changes && after.changes.pack;
+@@ -197,7 +177,7 @@ function joined(runs, i, key, measureOf) {
+   const measure = (pack.measures || []).find(m => m.key === key);
+   if (!measure || !measure.prior || !measure.current || measure.prior.value !== a.value || measure.current.value !== b.value) return false;
+   if (measure.prior.period !== a.period || measure.current.period !== b.period) return false;
+-  const verdict = measureVerdict(measure, cp8Parts(after.cp8).issuer);
++  const verdict = measureVerdict(measure, after.changes);
+   return verdict.kind === 'comparable' && !verdict.analysisChange;
+ }
+ function trendLine(runs, key, label) {
+@@ -250,9 +230,9 @@ function changesHtml(input) {
+   }
+   const sections = [
+     parts ? whatChangedPart(parts) : '',
+-    pack ? issuerPart(pack, parts) : '',
+-    pack ? analysisPart(pack, parts) : '',
+-    parts ? limitationsPart(parts) : '',
++    pack ? issuerPart(pack, parts, changes) : '',
++    pack ? analysisPart(pack, parts, changes) : '',
++    parts ? limitationsPart(parts, changes) : '',
+     overTimePart(runs, fmtDate),
+   ].join('');
+   return `<div class="changes">${heading}${notice}${sections}</div>`;
+diff --git a/apps/issuer-library/credit_os/web/changes.test.cjs b/apps/issuer-library/credit_os/web/changes.test.cjs
+index 46d6059..e7a1961 100644
+--- a/apps/issuer-library/credit_os/web/changes.test.cjs
++++ b/apps/issuer-library/credit_os/web/changes.test.cjs
+@@ -4,7 +4,7 @@
+ // nothing is derived by calling the code under test.
+ const test = require('node:test');
+ const assert = require('node:assert/strict');
+-const {changesState, measureVerdict, withUnit, leadBottom, changesHtml, FIRST_RUN} = require('./changes.js');
++const {changesState, measureVerdict, differenceText, analysisPart, withUnit, leadBottom, changesHtml, FIRST_RUN} = require('./changes.js');
+ 
+ const fmtDate = iso => ({'2024-09-30': '30 September 2024', '2025-03-31': '31 March 2025', '2023-09-30': '30 September 2023'}[iso] || iso);
+ const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
+@@ -51,8 +51,22 @@ const CP8 = [
+     ['E3', 'C1', 'Carried over.', 'Remaining', '—'],
+     ['—', 'C2', 'A current limitation in words.', 'New', '—'])),
+ ];
++// What the library's build derives from CP-8's registers (`changes.verdicts`, from changes_check.page_verdicts) for the handoff above: literals, hand-written.
++const verdict = (kind, label, reason = null, analysis_change = null) => ({kind, label, reason, analysis_change});
++const VERDICTS = {
++  measures: {
++    leverage: verdict('not_comparable', 'Not comparable', 'Not comparable: reported EBITDA against EBITDA As Defined.'),
++    coverage: verdict('comparable', 'Same definition', null, 'Unresolved'),
++    cash: verdict('comparable', 'Same definition'),
++  },
++  modules: {
++    'CP-0': {status: 'Unchanged', cause: 'Presentation', why: 'The headings differ only.'},
++    'CP-2E': {status: 'Not run this time', cause: 'Unresolved', why: 'Not in the current run.'},
++  },
++  ledger: [['Closed', 0], ['Remaining', 1], ['New', 1], ['No longer stated', 2]],
++};
+ const here = {key: 'k3', href: '#W-Changes/changes/k3', asOf: '2024-09-30', runId: 'r-now', current: true, bottom: 'Now.', metrics: {}, changes: null, cp8: null};
+-const base = (over = {}) => ({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
++const base = (over = {}) => ({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: VERDICTS}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
+ const count = (html, needle) => html.split(needle).length - 1;
+ 
+ test('a run with no comparison is a first run: the one line and nothing else', () => {
+@@ -102,7 +116,8 @@ test('a measure that is not comparable shows both values, no difference, no join
+   assert.ok(!/[←-⇿▲△▼▽⬆⬇]/.test(html), 'no direction arrow anywhere');
+   // comparable "no" from the pack itself: unit differs.
+   const pack = {...PACK, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'no', side('6.57', 'FY2024'), side('62', 'FY2024', '%'), null, {reason: 'the units differ'})]};
+-  const no = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}}));
++  const verdicts = {measures: {leverage: verdict('not_comparable', 'Not comparable', 'the units differ')}};
++  const no = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts}}));
+   assert.ok(no.includes('<td>6.57x (FY2024)</td><td>62% (FY2024)</td><td><strong>Not comparable</strong><small>the units differ</small></td>'));
+   assert.equal(count(no, 'class="dumbbell-link"'), 0);
+ });
+@@ -113,13 +128,18 @@ test('a judge measure without a verdict from CP-8 is left unjudged, with no diff
+   assert.ok(html.includes('<strong>Comparability not judged</strong>'));
+   assert.ok(!html.includes('-0.56'));
+   assert.equal(count(html, 'class="dumbbell-link"'), 0);
+-  assert.deepEqual(measureVerdict(PACK.measures[2], null), {kind: 'unjudged', label: 'Comparability not judged', reason: 'the label or definition text differs; CP-8 judges'});
+-  assert.equal(measureVerdict({...PACK.measures[2], comparable: 'yes'}, null).kind, 'comparable');
++  const unjudged = {kind: 'unjudged', label: 'Comparability not judged', reason: 'the label or definition text differs; CP-8 judges'};
++  assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: null}), unjudged);
++  assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: {measures: {}}}), unjudged);
++  // The page never reads a pack's `yes` or a register itself: only the build's verdict makes a measure comparable.
++  assert.deepEqual(measureVerdict({...PACK.measures[2], comparable: 'yes'}, null), unjudged);
++  assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: {measures: {cash: verdict('comparable', 'Same definition', null, 'Correction')}}}), {kind: 'comparable', label: 'Same definition', reason: null, analysisChange: 'Correction'});
+ });
+ 
+ test('a value the pack does not state is shown as not stated, never as zero', () => {
+   const pack = {...PACK, measures: [measure('coverage', 'EBITDA / cash interest', 'x', 'no', side('3.29', 'FY2024'), null, null, {reason: 'the current run does not state it'})]};
+-  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}}));
++  const verdicts = {measures: {coverage: verdict('not_comparable', 'Not comparable', 'the current run does not state it')}};
++  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts}}));
+   assert.ok(html.includes('<td>3.29x (FY2024)</td><td>Not stated</td><td><strong>Not comparable</strong>'));
+   assert.ok(html.includes('Earlier 3.29x (FY2024) · Current Not stated · Not comparable'));
+   assert.equal(count(html, 'class="dumbbell-dot'), 1, 'one point, the stated one');
+@@ -172,11 +192,11 @@ test('handoff and pack text is escaped before it reaches the page', () => {
+ 
+ test('Over time lists every run earliest first; a line joins two points only where the later run compares them under one definition', () => {
+   const metric = (value, period) => ({leverage: {value, unit: 'x', period, basis: 'b'}});
+-  const packOf = (priorRun, comparable, prior, current, pp = 'FY2022', pc = 'FY2023') => ({...PACK, prior: {...PACK.prior, run: priorRun}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', comparable, side(prior, pp), side(current, pc), '0.50', {same_period: false})]});
++  const packOf = (priorRun, comparable, prior, current, pp = 'FY2022', pc = 'FY2023') => ({pack: {...PACK, prior: {...PACK.prior, run: priorRun}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', comparable, side(prior, pp), side(current, pc), '0.50', {same_period: false})]}, verdicts: {measures: {leverage: comparable === 'yes' ? verdict('comparable', 'Comparable') : verdict('not_comparable', 'Not comparable', 'unit')}}});
+   const runs = [
+     {key: 'a', href: '#a', asOf: '2023-09-30', runId: 'r-a', current: false, bottom: 'Earlier view.', metrics: metric('5.00', 'FY2022'), changes: null, cp8: null},
+-    {key: 'b', href: '#b', asOf: '2024-09-30', runId: 'r-b', current: false, bottom: null, metrics: metric('5.50', 'FY2023'), changes: {pack: packOf('r-a', 'yes', '5.00', '5.50')}, cp8: null},
+-    {key: 'c', href: '#c', asOf: '2025-03-31', runId: 'r-c', current: true, bottom: 'Latest view.', metrics: metric('6.00', 'FY2024'), changes: {pack: packOf('r-b', 'yes', '5.50', '6.00', 'FY2023', 'FY2024')}, cp8: null},
++    {key: 'b', href: '#b', asOf: '2024-09-30', runId: 'r-b', current: false, bottom: null, metrics: metric('5.50', 'FY2023'), changes: packOf('r-a', 'yes', '5.00', '5.50'), cp8: null},
++    {key: 'c', href: '#c', asOf: '2025-03-31', runId: 'r-c', current: true, bottom: 'Latest view.', metrics: metric('6.00', 'FY2024'), changes: packOf('r-b', 'yes', '5.50', '6.00', 'FY2023', 'FY2024'), cp8: null},
+   ];
+   const lines = html => (/<li><strong>Total debt \/ EBITDA<\/strong>(.*?)<\/li>/.exec(html)[1].match(/<line /g) || []).length;
+   const html = changesHtml(base({runs}));
+@@ -186,10 +206,10 @@ test('Over time lists every run earliest first; a line joins two points only whe
+   assert.ok(html.includes('<td>5.00x<small>FY2022</small></td>') && html.includes('<td>6.00x<small>FY2024</small></td>'));
+   assert.ok(html.includes('<td>Earlier view.</td>') && html.includes('<td>Not stated</td>') && html.includes('<td>Latest view.</td>'));
+   // Not comparable in the later run's pack: points only.
+-  const apart = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-a', 'no', '5.00', '5.50')}}, runs[2]]}));
++  const apart = changesHtml(base({runs: [runs[0], {...runs[1], changes: packOf('r-a', 'no', '5.00', '5.50')}, runs[2]]}));
+   assert.equal(lines(apart), 1);
+   // A pack that compares other values than the two points, or another prior run, joins nothing.
+-  const other = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-x', 'yes', '5.00', '5.50')}}, {...runs[2], changes: {pack: packOf('r-b', 'yes', '5.51', '6.00', 'FY2023', 'FY2024')}}]}));
++  const other = changesHtml(base({runs: [runs[0], {...runs[1], changes: packOf('r-x', 'yes', '5.00', '5.50')}, {...runs[2], changes: packOf('r-b', 'yes', '5.51', '6.00', 'FY2023', 'FY2024')}]}));
+   assert.equal(lines(other), 0);
+   // Units that differ between runs are not put on one scale.
+   const mixed = changesHtml(base({runs: [runs[0], {...runs[1], metrics: {leverage: {value: '50', unit: '%', period: 'FY2023'}}}]}));
+@@ -210,26 +230,43 @@ test('the chart has a text alternative, is keyboard reachable and every row name
+   assert.equal(count(html, 'aria-hidden="true"') >= 3, true, 'tracks are decoration; the text beside them carries the values');
+ });
+ 
+-test('one period with two values is the analysis changing: no line, and the difference only under Same definition beside its cause', () => {
++test('one period with two values is the analysis changing: no line, and the difference only under the build\u2019s Same definition beside its cause', () => {
+   const lev = (extra = {}) => measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2024'), side('6.01', 'FY2024'), '-0.56', extra);
+-  const withRow = effect => [h3('What changed: the issuer', table(ISSUER_HEAD, ['Total debt / EBITDA', '6.57x', '6.01x', 'Correction', effect]))];
+-  const draw = (cp8, measures) => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures}, note: null, problem: null}, cp8}));
++  const draw = (leverage, measures) => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures}, note: null, problem: null, verdicts: leverage ? {measures: {leverage, cash: verdict('comparable', 'Comparable')}} : null}}));
+   const issuer = html => html.slice(html.indexOf('id="changes-issuer"'), html.indexOf('id="changes-analysis"'));
+-  const same = issuer(draw(withRow('Same definition; corrected.'), [lev()]));
++  const same = issuer(draw(verdict('comparable', 'Same definition', null, 'Correction'), [lev()]));
+   assert.ok(same.includes('<td>-0.56x<small>The analysis changed, not the issuer: Correction</small></td>'));
+   assert.ok(!same.includes('dumbbell-link'));
+-  for (const html of [issuer(draw(withRow('Not comparable: basis.'), [lev()])), issuer(draw(null, [lev()]))]) {
++  for (const html of [issuer(draw(verdict('not_comparable', 'Not comparable', 'Not comparable: basis.'), [lev()])), issuer(draw(verdict('unjudged', 'Comparability not judged'), [lev()])), issuer(draw(null, [lev()]))]) {
+     assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link'));
+     assert.ok(html.includes('Earlier 6.57x (FY2024) · Current 6.01x (FY2024)'));
+   }
+   // The same period with a zero difference is unaffected.
+-  const zero = issuer(draw(null, [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]));
++  const zero = issuer(draw(verdict('comparable', 'Comparable'), [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]));
+   assert.ok(zero.includes('<td>0 US$m</td>') && zero.includes('dumbbell-link'));
+   // Over time draws no segment between two values of one period.
+-  const runs = [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2024'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev()]}}}];
++  const runs = [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2024'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev()]}, verdicts: {measures: {leverage: verdict('comparable', 'Same definition', null, 'Correction')}}}}];
+   assert.ok(!/<line /.test(changesHtml(base({runs}))));
+ });
+ 
++test('only a comparable verdict shows a difference and a joining line; not comparable, not judged, an unknown kind and no verdicts show neither', () => {
++  const lev = measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2023'), side('6.01', 'FY2024'), '-0.56', {same_period: false});
++  const draw = verdicts => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures: [lev]}, note: null, problem: null, verdicts}}));
++  const comparable = draw({measures: {leverage: verdict('comparable', 'Comparable')}});
++  assert.ok(comparable.includes('<td>-0.56x</td>') && comparable.includes('dumbbell-link'));
++  for (const verdicts of [{measures: {leverage: verdict('not_comparable', 'Not comparable', 'basis')}}, {measures: {leverage: verdict('unjudged', 'Comparability not judged')}}, {measures: {leverage: verdict('maybe', 'Comparable')}}, {measures: {}}, {}, null]) {
++    const html = draw(verdicts);
++    assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link') && !/<line /.test(html), JSON.stringify(verdicts));
++    assert.ok(html.includes('Earlier 6.57x (FY2023) · Current 6.01x (FY2024)'));
++  }
++  // Over time reads the later run's verdicts, never a register: a join needs a comparable verdict.
++  const runs = verdicts => [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2023'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev]}, verdicts}}];
++  const lines = verdicts => (changesHtml(base({runs: runs(verdicts)})).match(/<line /g) || []).length;
++  assert.equal(lines({measures: {leverage: verdict('comparable', 'Comparable')}}), 1);
++  assert.equal(lines({measures: {leverage: verdict('not_comparable', 'Not comparable')}}), 0);
++  assert.equal(lines(null), 0);
++});
++
+ test('a run that records no comparison is not a first run: it says so, and still shows Over time when other runs are listed', () => {
+   const other = {...here, key: 'a', runId: 'r-a', asOf: '2023-09-30', current: false, bottom: 'Earlier view.'};
+   for (const changes of [null, {lead: 'CP-2', first_run: false, pack: null, note: null, problem: null}]) {
+@@ -244,8 +281,36 @@ test('a run that records no comparison is not a first run: it says so, and still
+ test('Over time joins only points whose periods are the periods the later pack compares', () => {
+   const metric = (value, period) => ({leverage: {value, unit: 'x', period}});
+   const packWith = (pp, pc) => ({...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('5', pp), side('6', pc), '1', {same_period: false})]});
+-  const runs = pack => [{...here, key: 'a', runId: 'r-a', current: false, metrics: metric('5', 'FY2022')}, {...here, key: 'b', runId: 'r-b', metrics: metric('6', 'FY2023'), changes: {pack}}];
++  const runs = pack => [{...here, key: 'a', runId: 'r-a', current: false, metrics: metric('5', 'FY2022')}, {...here, key: 'b', runId: 'r-b', metrics: metric('6', 'FY2023'), changes: {pack, verdicts: {measures: {leverage: verdict('comparable', 'Comparable')}}}}];
+   const lines = html => (html.match(/<line /g) || []).length;
+   assert.equal(lines(changesHtml(base({runs: runs(packWith('FY2022', 'FY2023'))}))), 1);
+   assert.equal(lines(changesHtml(base({runs: runs(packWith('H1 FY2022', 'H1 FY2023'))}))), 0);
+ });
++
++// The shared fixture (tests/fixtures/changes-seam/rows.json) states, per case, the verdict kind the build derives (`page`, checked in tests/test_changes.py and
++// tests/test_update_library.py): the tab shows a difference for a comparable verdict and for no other.
++const SEAM = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../../tests/fixtures/changes-seam/rows.json'), 'utf8'));
++test('the tab shows a difference exactly where the fixture states a comparable verdict', () => {
++  for (const c of SEAM.measure_rows) {
++    const m = SEAM.measures[c.measure];
++    const changes = {verdicts: {measures: {[c.measure]: verdict(c.page, c.page)}}};
++    assert.equal(differenceText(m, measureVerdict(m, changes)), c.page === 'comparable' ? c.difference : null, c.name);
++  }
++});
++test('a module row is the build\u2019s: its status and reason are shown, and a module with no entry is not stated by CP-8', () => {
++  const pack = {...PACK, modules: [{module: 'CP-2', title: 'Credit view', ran_prior: true, ran_current: true, prior_bottom_line: null, current_bottom_line: null}]};
++  const changes = status => ({verdicts: {modules: status ? {'CP-2': {status, cause: 'New period', why: 'Why.'}} : {}}});
++  for (const c of SEAM.module_cells.filter(r => r.accepted)) {
++    const html = analysisPart(pack, {}, changes(c.status));
++    assert.ok(html.includes(`change-status">${c.status}<`) && html.includes('<p class="change-why">New period · Why.</p>'), c.name);
++  }
++  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by CP-8<'));
++  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by CP-8<'));
++  assert.ok(analysisPart(pack, null, changes('Unchanged')).includes('change-status">Explanation not produced<'));
++});
++test('the ledger bar is the build\u2019s counts; a ledger it could not read keeps the verbatim table and draws no bar', () => {
++  const unread = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: null}}}));
++  assert.ok(!unread.includes('class="ledger-bar"') && unread.includes('<td>An earlier limitation in words.</td>'));
++  const other = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: [['Closed', 0], ['Remaining', 0], ['New', 0], ['No longer stated', 0], ['Other', 3]]}}}));
++  assert.ok(other.includes('aria-label="Limitations: Closed 0, Remaining 0, New 0, No longer stated 0, Other 3"'));
++});
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 96e5f22..62c6d6f 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -1349,8 +1349,8 @@ function changesView(context) {
+   const sections=run=>{const id=run.modules['CP-8']?.default;return id&&data[id]?data[id].sections:null;};
+   const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||(sameIssuer(run.issuerKey,ctx.issuerKey)&&run.pathway===ctx.pathway))).reverse().map(run=>{
+     const key=keyOf.get(run),lead=run.changes?.lead&&run.modules[run.changes.lead]?.default,out=lead&&data[lead];
+-    return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.runId,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
+-      metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null,cp8:sections(run)};
++    return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.folder,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
++      metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null};
+   });
+   return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),pathway:runPathway(ctx),fmtDate:displayDate,runs});
+ }
+diff --git a/apps/issuer-library/update_library.py b/apps/issuer-library/update_library.py
+index cbf9e51..5f199fe 100644
+--- a/apps/issuer-library/update_library.py
++++ b/apps/issuer-library/update_library.py
+@@ -37,6 +37,7 @@ from credit_os.store import UnreadableFile, regular_chunks, workspace_store
+ 
+ from deploy_vii.registry import plan
+ from deploy_workflow.changes import DEFAULT_LEAD, LEAD_MODULE, PACK_SCHEMA
++from deploy_workflow.changes_check import page_verdicts
+ from deploy_workflow.credit_os_catalogue import catalogue
+ from deploy_workflow.credit_os_chips import chips
+ from deploy_workflow.library_index import (
+@@ -166,14 +167,42 @@ def pack_of(workspace: Path, run: dict[str, Any]) -> tuple[dict[str, Any] | None
+     return value, None
+ 
+ 
++def cp8_verdicts(
++    workspace: Path, store: dict[str, Any], run: dict[str, Any], pack: dict[str, Any]
++) -> tuple[dict[str, Any] | None, str | None]:
++    """(verdicts, problem) of a run whose pack is readable: what the Changes tab shows of CP-8's
++    handoff, read here by the checker's own rules (`page_verdicts`); the page reads no register for
++    a verdict. None when the run holds no CP-8 output; an output that cannot be read (changed since
++    the build read it, not a plain file, not UTF-8) is a problem the run states."""
++    default = run["modules"].get("CP-8", {}).get("default")
++    if default is None:
++        return None, None
++    output = store["outputs"][default]
++    label = f"{run['folder']}/{output['source']}"
++    try:
++        raw = checked_bytes(
++            workspace / "runs" / run["folder"] / output["source"], output["sha256"], label
++        )
++        return page_verdicts(raw.decode("utf-8"), pack), None
++    except Refused as error:
++        return None, f"CP-8's handoff {output['source']} could not be read ({error})"
++    except UnicodeDecodeError:
++        return None, f"CP-8's handoff {output['source']} is not valid UTF-8"
++
++
+ def changes_data(workspace: Path, store: dict[str, Any], library: Library) -> None:
+     """Carry each listed run's comparison to its store run, as ``changes``: the lead module of its
+-    pathway, the pack CP-8 was given (unchanged), the recorded reason CP-8 was not produced, and
+-    the problem when the published pack cannot be read (also named in the build's issues)."""
++    pathway, the pack CP-8 was given (unchanged), the recorded reason CP-8 was not produced, the
++    problem when the published pack or CP-8's handoff cannot be read (also named in the build's
++    issues) and ``verdicts``, what the Changes tab shows of CP-8's registers (`cp8_verdicts`;
++    null without a pack, or with a note or a problem)."""
+     listed = {run["id"]: run for run in library.runs}
+     for run in store["runs"].values():
+         record = listed[run["folder"]]
+         pack, problem = pack_of(workspace, record)
++        verdicts = None
++        if pack is not None and not record["changes"]["note"]:
++            verdicts, problem = cp8_verdicts(workspace, store, run, pack)
+         if problem:
+             store["issues"].append(f"{record['id']}: {problem}")
+         run["changes"] = {
+@@ -182,6 +211,7 @@ def changes_data(workspace: Path, store: dict[str, Any], library: Library) -> No
+             "pack": pack,
+             "note": record["changes"]["note"],
+             "problem": problem,
++            "verdicts": verdicts,
+         }
+ 
+ 
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index 3a50a89..d97b9cf 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -45,9 +45,7 @@ Owner's words, in order:
+ Built: M1 and M2 (presets, and CP-2G added to credit_snapshot and covenant_refinancing from M3's
+ preset list; CP-8 leaves portfolio_decision).
+ 
+-Decided, not yet built: M3 (layer-1 forecast), M4 (standing ruling; waits on the paid test), M5 (CP-8
+-run and Changes section; only its removal from the preset is done), M6 (short snapshot), M7 (ledger
+-statuses).
++Decided, not yet built at the time of that change: M3 to M7; see the amendment of 2026-11-12 at the end.
+ 
+ ## Amendment 2026-11-12: M5, M7 and the CP-8 half of M8 built (engine and method; no paid call)
+ 
+@@ -188,7 +186,7 @@ The nine prose checks and the
+ reader-figure check apply as to every prose module. The module's display name, on the run page and in the
+ library, is "Changes since the last run".
+ 
+-Not decided here: charts and visuals for the Changes section (T5).
++Charts and visuals for the Changes section (T5): built, see the last amendment.
+ 
+ ## Amendment 2026-11-12: M6 built (Short Credit Snapshot)
+ 
+@@ -213,3 +211,46 @@ Known limits: a figure is proven to exist in
+ CP-1, not that it is the right measure or period; a unit CP-1 carries only in a column header (`Reporting unit`) is not matched, so a bare CP-1 `3.1` accepts `3.1x`, because CP-1's own tables write plain numbers with a separate unit column; that rests on the reader's check of a real run.
+ CP-L10 leads the Overview of a short snapshot (amendment to H5 in
+ `2026-11-11-reader-and-issuer-report.md`). The library names the pathway "Short credit snapshot".
++
++## Amendment 2026-11-12: built, and the seams the whole-branch review found
++
++Built: M1 and M2 presets (#49), the layer-1 forecast of M3 (#50), web search of M4 (#51), CP-8 with its
++checker and pack, M5 and M7 (#55), the Changes tab, the issuer library's page for M8 (#56), and the Short
++Credit Snapshot, M6 (#57). Two departures from M8 part 5 as built: Over time lists runs of the same
++pathway only, not every run of the issuer; its lead line is the lead module's bottom line, not a committee
++conclusion.
++
++Whole-branch review fixes (branch claude/changes-seams): (1) one reading of CP-8's registers. The checker
++(`changes_check`) now accepts only the forms the tab reads: a verdict word (`Same definition`, `Not
++comparable`) starts a cell of the issuer row (the word elsewhere in the row is refused, except for a measure
++the pack marks `no`), the issuer row's label is the pack's label exactly (bold or code marks aside), and the
++Module cell of the analysis register ends with the code in brackets, as `Credit view (CP-2)`.
++`tests/fixtures/changes-seam/rows.json` is read by a Python test and a node test with the same expected
++verdicts. A measure the pack marks `no`, and a row that begins with `Not comparable`, shows both values and no difference and no line. A `judge` measure with no verdict word shows no difference ("Comparability not judged"). A `yes` measure with no verdict word shows its difference and its line, as the pack states it. (2) Over time compares
++the run folder name on both sides (the pack names its prior by folder). (3) A reason the run records for
++making no comparison reaches the library verbatim. (4) The published scope no longer says CP-8's handoff is
++delivered whole when CP-8 was not produced.
++
++Known limits, recorded (owner decision pending on the first): four pathways (relative_value,
++distressed_restructuring, portfolio_decision, short_snapshot) never ask CP-1 for the chart tables the pack
++reads (`cpos_launch.py` layout rule), so their pack states no measure and their Changes tab says so; the
++layout rule is unchanged. L4: `find_prior` accepts any listed run folder name, including one the launcher
++refuses at launch (a space, a leading underscore, non-ASCII); that fails closed with no spend. L5: the
++forecast inputs block can vouch for a Key figure when only CP-0, CP-1, CP-MODEL and CP-L10 run.
++
++## Amendment 2026-11-12: one reader of CP-8's registers (branch claude/changes-seams, round 3)
++
++Two earlier rounds aligned the checker and the page rule by rule and each left a divergence, so the page no
++longer reads a register for a verdict. `changes_check.page_verdicts` derives, with the checker's own reading
++of the registers, a verdict per pack measure, the module rows that have exactly one row, and the ledger
++counts; `update_library.changes_data` carries them as `run.changes.verdicts` (null without a pack, with a
++note or a problem); `changes.js` displays them: only a `comparable` verdict shows a difference or a line, and
++a missing entry, an unknown kind or `verdicts: null` shows both values and neither. A fact row whose label,
++after NFKC, with only letters and digits kept and case folded, equals a pack label is refused (a hidden
++character cannot leave a `Not comparable` row beside a difference). Delivery computes nothing.
++
++Known limits, recorded: (1) the verbatim register tables are still split by the store's parser, so a row
++without its closing pipe, or a second table, stays visible as text although it counts for no verdict. (2) Old
++handoffs are re-read only through the checker's per-row rules; their passages are not re-checked against
++K9 and K10. (3) A malformed issuer register counts as having no rows, so a measure the pack marks `yes`
++still shows the pack's difference.
+diff --git a/src/deploy_vii/methods/cp8.md b/src/deploy_vii/methods/cp8.md
+index 2594b48..ba25e4d 100644
+--- a/src/deploy_vii/methods/cp8.md
++++ b/src/deploy_vii/methods/cp8.md
+@@ -64,17 +64,19 @@ accepted, the run is delivered without it.
+    (`fell by 0.60x` for -0.60); do not write a sign after a word of direction. Where the pack gives
+    no difference, write none. A value the pack states as null is missing, not zero: write that it is
+    not stated.
+-   - A row that names a pack measure uses the measure's label exactly as the pack gives it. A fact
++   - A row that names a pack measure uses the measure's label exactly as the pack gives it, and
++     there is one row per pack measure. A fact
+      row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
+      earlier run's under Earlier and the current run's under Current, but never a pack measure's
+      value or a difference; a difference belongs to its measure's own row.
+    - `comparable: yes`: the definitions match; report the values and the difference.
+    - `comparable: no` (a unit differs, or a run does not state the value): the pack gives no
+-     difference. Say the row is `Not comparable` or the value is not stated, give the values the pack
++     difference. Say the row is `Not comparable` (the Effect cell begins with those words) or the value is not stated, give the values the pack
+      does hold, and write no difference and no trend.
+    - `comparable: judge`: the pack gives the difference and both definition texts. Read both and
+      write in that row exactly one of `Same definition` or `Not comparable`, with the reason in
+-     the last cell. With `Same definition` report the values and the difference. With
++     the last cell: begin the Effect cell with exactly one of them, then the reason
++     (`Not comparable: the EBITDA basis changed.`); the words elsewhere in a cell are refused. With `Same definition` report the values and the difference. With
+      `Not comparable` give both values with their periods, never print the difference and draw no
+      trend from the two (no "rose", "fell", "weakened", "improved"). A difference of a measure
+      whose row says `Not comparable` is written nowhere in the handoff, in no passage, register or
+@@ -85,7 +87,7 @@ accepted, the run is delivered without it.
+      the method changed (cause `Method change`). Decide which before writing the row. When a
+      definition text points to another row (`identical definition`, a calculation ID), read the row
+      or calculation it points to in that run's CP-1 handoff first. The row says `Not comparable`,
+-     or says `Same definition` with the cause `Correction` or `Method change`; the causes
++     or says `Same definition` with the cause `Correction` or `Method change`, in the first words of the Effect cell; the causes
+      `New period` and `New source` are refused for it. `Same definition` followed by a sentence
+      that contradicts it ("but the EBITDA basis changed") is an error: say `Not comparable`. Such a
+      difference is written only in the register rows. A passage may give the two values and say the
+diff --git a/src/deploy_workflow/changes.py b/src/deploy_workflow/changes.py
+index a25dce6..e3a477b 100644
+--- a/src/deploy_workflow/changes.py
++++ b/src/deploy_workflow/changes.py
+@@ -100,6 +100,7 @@ PRIOR_PREFIX = "prior/"
+ PACK_NAME = "changes.json"
+ PACK_SCHEMA = "cpos-changes/2"
+ FIRST_RUN = "first run of this pathway"
++DELIVERED_WHOLE = " The changes since the last run are CP-8's handoff, delivered whole."
+ NO_LIMITATION = re.compile(r"no limitation changes\b", re.IGNORECASE)
+ NOT_SUPPLIED = "Not supplied"
+ # (key, CP-1 chart table, value column): the five measures the library already quotes.
+diff --git a/src/deploy_workflow/changes_check.py b/src/deploy_workflow/changes_check.py
+index 71ef8c8..63f037a 100644
+--- a/src/deploy_workflow/changes_check.py
++++ b/src/deploy_workflow/changes_check.py
+@@ -45,6 +45,7 @@ below 100 without a unit (a count); in a measure's Earlier and Current cells eve
+ from __future__ import annotations
+ 
+ import re
++import unicodedata
+ from collections.abc import Mapping, Sequence
+ from decimal import Decimal
+ from typing import Any
+@@ -70,6 +71,7 @@ COUNT_BELOW = 100  # a whole number below this, without a unit, is a count
+ SAME = "same definition"
+ NOT_COMPARABLE = "not comparable"
+ _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
++_MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in brackets
+ _REF = re.compile(r"\b[EC]\d+\b")
+ _REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
+ _HEADING = re.compile(r"#{1,6}\s")
+@@ -160,10 +162,16 @@ def _section(lines: list[str], title: str) -> tuple[list[str], list[list[str]]]
+     return rows[0], rows[1:]
+ 
+ 
+-def _plain(name: str) -> str:
+-    """A row's first cell compared with a measure's label: no emphasis, no trailing brackets."""
+-    bare = re.sub(r"\s*\([^)]*\)\s*$", "", name.replace("*", "").replace("`", ""))
+-    return " ".join(bare.lower().split())
++def _plain(text: str) -> str:
++    """A cell as `page_verdicts` reads it: without bold or code marks, with every run of white space
++    (a non-breaking space too) one space."""
++    return " ".join(text.replace("**", "").replace("`", "").split())
++
++
++def _says(row: Sequence[str], word: str) -> bool:
++    """Whether a cell of the row starts with the verdict word; the word anywhere else in a cell is
++    no verdict."""
++    return any(_plain(cell).lower().startswith(word) for cell in row)
+ 
+ 
+ def _signed(value: Any) -> Decimal | None:
+@@ -309,8 +317,14 @@ def _value_cell_issues(
+ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any]) -> list[str]:
+     """The row's statement on whether the two values share a definition; a row that says
+     `Not comparable` draws no trend."""
+-    text = " ".join(row).lower()
++    text = " ".join(_plain(cell) for cell in row).lower()
+     issues = []
++    for word in (SAME, NOT_COMPARABLE):
++        if measure["comparable"] != "no" and word in text and not _says(row, word):
++            issues.append(
++                f"{where}: `{word}` is a verdict only at the start of a cell; write it first in "
++                "the Effect cell."
++            )
+     if measure["comparable"] == "judge":
+         said = [word for word in (SAME, NOT_COMPARABLE) if word in text]
+         if len(said) != 1:
+@@ -340,7 +354,6 @@ def _same_period_issues(name: str, row: Sequence[str], cause: str) -> list[str]:
+     change. The row says `Not comparable`, or `Same definition` with the cause `Correction` or
+     `Method change`; never `New period` or `New source`."""
+     where = f"Issuer register, {name!r}"
+-    text = " ".join(row).lower()
+     if cause in ("New period", "New source"):
+         return [
+             (
+@@ -349,7 +362,7 @@ def _same_period_issues(name: str, row: Sequence[str], cause: str) -> list[str]:
+                 "(`Not comparable`), a `Correction` or a `Method change`."
+             )
+         ]
+-    if NOT_COMPARABLE in text or (SAME in text and cause in SAME_PERIOD_CAUSES):
++    if _says(row, NOT_COMPARABLE) or (_says(row, SAME) and cause in SAME_PERIOD_CAUSES):
+         return []
+     return [
+         (
+@@ -397,13 +410,50 @@ def _fact_row_issues(
+     return issues
+ 
+ 
++def _rows_by_measure(
++    rows: Sequence[list[str]], pack: Mapping[str, Any]
++) -> dict[str, list[list[str]]]:
++    """The issuer rows of each pack measure (by key), a row's label read through `_plain`: the one
++    reading of which row is a measure's, shared by the check and the page's verdicts."""
++    keys = {m["label"]: m["key"] for m in pack["measures"]}
++    found: dict[str, list[list[str]]] = {}
++    for row in rows:
++        key = keys.get(_plain(row[0]))
++        if key is not None:
++            found.setdefault(key, []).append(row)
++    return found
++
++
++def _module_code(cell: str) -> str | None:
++    """The module code a cell of the analysis register ends with, in brackets (`Name (CP-2)`)."""
++    named = _MODULE_CELL.search(_plain(cell))
++    return named[1] if named else None
++
++
++def _rows_by_module(rows: Sequence[list[str]]) -> dict[str, list[list[str]]]:
++    """The analysis rows of each module code their first cell names."""
++    found: dict[str, list[list[str]]] = {}
++    for row in rows:
++        code = _module_code(row[0])
++        if code is not None:
++            found.setdefault(code, []).append(row)
++    return found
++
++
++def _alnum(text: str) -> str:
++    """A label as it looks: NFKC, only letters and digits, case folded."""
++    return "".join(c for c in unicodedata.normalize("NFKC", text) if c.isalnum()).casefold()
++
++
+ def _issuer_issues(
+     rows: list[list[str]], pack: Mapping[str, Any], held: frozenset[Decimal] = frozenset()
+ ) -> list[str]:
+     issues: list[str] = []
+     if not rows:
+         return [f"`### {ISSUER}` needs a row; if nothing changed, one `{NO_CHANGE}` row."]
+-    labels = {m["label"].lower(): m for m in pack["measures"]}
++    labels = {m["label"]: m for m in pack["measures"]}
++    looks_like = {_alnum(label) for label in labels}
++    first = {key: found[0] for key, found in _rows_by_measure(rows, pack).items()}
+     for row in rows:
+         name, cause = row[0], row[3]
+         if name.strip().strip("*") == NO_CHANGE:
+@@ -411,6 +461,18 @@ def _issuer_issues(
+                 issues.append(f"The `{NO_CHANGE}` row's Cause is `None`.")
+             continue
+         measure = labels.get(_plain(name))
++        if measure is None and _alnum(name) in looks_like:
++            issues.append(
++                f"Issuer register, {name!r}: the label looks like a pack measure's but is not "
++                "its exact label (a hidden character?); name a pack measure by its exact label."
++            )
++            continue
++        if measure is not None and first[measure["key"]] is not row:
++            issues.append(
++                f"Issuer register, {name!r}: a second row for this pack measure; write one "
++                "row per measure."
++            )
++            continue
+         flagged = measure is not None and _flagged(measure)
+         causes = (*ISSUER_CAUSES, *(SAME_PERIOD_CAUSES if flagged else ()))
+         if cause not in causes:
+@@ -430,15 +492,16 @@ def _issuer_issues(
+ 
+ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str]:
+     issues = []
+-    seen: dict[str, int] = {}
+     ran = {m["module"]: (m["ran_prior"], m["ran_current"]) for m in pack["modules"]}
++    seen = {code: len(found) for code, found in _rows_by_module(rows).items() if code in ran}
+     for module, status, cause, _ in rows:
+-        codes = _MODULE.findall(module)
+-        if len(codes) != 1 or codes[0] not in ran:
+-            issues.append(f"Analysis register: {module!r} does not name one module of the pack.")
++        code = _module_code(module)
++        if code is None or code not in ran:
++            issues.append(
++                f"Analysis register: {module!r} does not name one module of the pack; the cell "
++                "ends with its code in brackets, as `Credit view (CP-2)`."
++            )
+             continue
+-        code = codes[0]
+-        seen[code] = seen.get(code, 0) + 1
+         before, now = ran[code]
+         if status not in STATUSES:
+             issues.append(f"Analysis register, {code}: Status {status!r} is not one of {STATUSES}.")
+@@ -701,13 +764,97 @@ def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) ->
+         issues += _analysis_issues(tables[ANALYSIS][1], pack)
+     if LEDGER in tables:
+         issues += _ledger_issues(tables[LEDGER][1], pack)
+-    labels = {m["label"].lower(): m["key"] for m in pack["measures"]}
+     issuer = tables[ISSUER][1] if ISSUER in tables else []
+     said_nc = frozenset(
+-        labels[_plain(row[0])]
+-        for row in issuer
+-        if _plain(row[0]) in labels and NOT_COMPARABLE in " ".join(row).lower()
++        key
++        for key, found in _rows_by_measure(issuer, pack).items()
++        if any(_says(row, NOT_COMPARABLE) for row in found)
+     )
+     issues += _outside_ref_issues(lines, pack)
+     issues += _passage_issues(lines, pack, said_nc, sizes)
+     return tuple(dict.fromkeys(issues))
++
++
++def _verdict(
++    kind: str, label: str, reason: str | None, change: str | None = None
++) -> dict[str, str | None]:
++    return {"kind": kind, "label": label, "reason": reason, "analysis_change": change}
++
++
++def _page_measure(measure: Mapping[str, Any], found: list[list[str]]) -> dict[str, str | None]:
++    """The verdict the Changes tab shows for one pack measure, from the pack and its issuer rows
++    (the first rule that applies):
++
++    1. the pack says `no`: not comparable, with the pack's reason;
++    2. a row says `Not comparable`: not comparable, with that row's Effect cell;
++    3. two rows, a row the check would refuse on its definition statement, or (one period with two
++       values) one it would refuse on that: not judged;
++    4. one period with two values: `Same definition`, with the row's Cause as the analysis change,
++       when the row says it, else not judged;
++    5. the pack says `yes`: comparable;
++    6. the single row says `Same definition`: comparable;
++    7. otherwise not judged."""
++    unjudged = _verdict("unjudged", "Comparability not judged", measure.get("reason"))
++    if measure["comparable"] == "no":
++        return _verdict("not_comparable", "Not comparable", measure.get("reason"))
++    for said_not in found:
++        if _says(said_not, NOT_COMPARABLE):
++            return _verdict("not_comparable", "Not comparable", said_not[4])
++    row = found[0] if found else None
++    flagged = _flagged(measure)
++    where = measure["label"]
++    refused = row is not None and (
++        _definition_issues(where, row, measure)
++        or (flagged and bool(_same_period_issues(where, row, row[3])))
++    )
++    if len(found) > 1 or refused:
++        return unjudged
++    said = row is not None and _says(row, SAME)
++    if flagged:
++        change = row[3] or "Not stated by CP-8" if row is not None else None
++        return _verdict("comparable", "Same definition", None, change) if said else unjudged
++    if measure["comparable"] == "yes":
++        return _verdict("comparable", "Comparable", None)
++    return _verdict("comparable", "Same definition", None) if said else unjudged
++
++
++def _ledger_counts(rows: list[list[str]] | None) -> list[list[Any]] | None:
++    """The ledger rows counted per Status (`LEDGER_STATUSES` in order, then `Other` when any row has
++    another); None when the ledger has no readable table."""
++    if rows is None:
++        return None
++    counts: list[list[Any]] = [
++        [s, sum(1 for r in rows if _plain(r[3]) == s)] for s in LEDGER_STATUSES
++    ]
++    if other := len(rows) - sum(n for _, n in counts):
++        counts.append(["Other", other])
++    return counts
++
++
++def page_verdicts(text: str | None, pack: Mapping[str, Any]) -> dict[str, Any]:
++    """What the Changes tab shows of CP-8's registers, read once, here: the page never parses a
++    register for a verdict. `text` is CP-8's handoff (None: none is held). A register that is
++    missing or malformed counts as having no rows.
++
++    - `measures`: per pack measure key, `{kind, label, reason, analysis_change}` (`_page_measure`);
++    - `modules`: per pack module whose code has exactly one analysis row, its `status`, `cause`
++      and `why`;
++    - `ledger`: the count of ledger rows per status (`LEDGER_STATUSES`, then `Other`), or None when
++      the ledger has no readable table."""
++    lines = (text or "").replace("\r\n", "\n").split("\n")
++
++    def rows_of(title: str) -> list[list[str]] | None:
++        found = _section(lines, title)
++        if isinstance(found, str) or _columns(found, title):
++            return None
++        return found[1]
++
++    by_measure = _rows_by_measure(rows_of(ISSUER) or [], pack)
++    measures = {m["key"]: _page_measure(m, by_measure.get(m["key"], [])) for m in pack["measures"]}
++    by_module = _rows_by_module(rows_of(ANALYSIS) or [])
++    modules = {}
++    for m in pack["modules"]:
++        once = by_module.get(m["module"], [])
++        if len(once) == 1:
++            modules[m["module"]] = {"status": once[0][1], "cause": once[0][2], "why": once[0][3]}
++    return {"measures": measures, "modules": modules, "ledger": _ledger_counts(rows_of(LEDGER))}
+diff --git a/src/deploy_workflow/library_index.py b/src/deploy_workflow/library_index.py
+index 221999c..08b1746 100644
+--- a/src/deploy_workflow/library_index.py
++++ b/src/deploy_workflow/library_index.py
+@@ -417,18 +417,23 @@ def module_entries(
+ 
+ 
+ CHANGES_PACK = "changes.json"  # `deploy_workflow.changes.PACK_NAME`, which imports this module
++FIRST_RUN_LINE = "changes: first run of this pathway"  # `changes.describe(None)`
+ 
+ 
+ def changes_record(delivered: Mapping[str, Any], completion: Mapping[str, Any]) -> dict[str, Any]:
+     """What the verified delivery says about CP-8's comparison: the pack it publishes (path inside
+-    the run folder and hash; None when it holds none) and the reason CP-8 was planned and not
+-    produced (`changes_note`; None otherwise). Neither: a first run of the pathway."""
++    the run folder and hash; None when it holds none) and the reason there is no explanation
++    (`note`: the manifest's `changes_note` when CP-8 was planned and not produced, else the run's
++    own recorded line when it says why no comparison was made; None otherwise). A first run of the
++    pathway is the run whose record is the bare first-run line; one that records nothing is not."""
+     digest = delivered["files"].get(CHANGES_PACK)
+     note = delivered["manifest"].get("changes_note")
+-    # The run's own record that the approval named no earlier run (`changes: first run of this
+-    # pathway`, deploy_workflow.changes.describe); a run that records nothing is not a first run.
++    line = completion.get("changes")  # `deploy_workflow.changes.describe` and the launcher's lines
++    if not isinstance(note, str) and isinstance(line, str):
++        compares = line.startswith("changes: CP-8 compares with ")
++        note = None if line == FIRST_RUN_LINE or compares else line
+     return {
+-        "first_run": completion.get("changes") == "changes: first run of this pathway",
++        "first_run": line == FIRST_RUN_LINE,
+         "pack": {"path": f"{delivered['folder']}/{CHANGES_PACK}", "sha256": digest}
+         if isinstance(digest, str)
+         else None,
+diff --git a/src/deploy_workflow/owners/cpos.py b/src/deploy_workflow/owners/cpos.py
+index c714698..d45c68e 100644
+--- a/src/deploy_workflow/owners/cpos.py
++++ b/src/deploy_workflow/owners/cpos.py
+@@ -45,7 +45,14 @@ from deploy_vii.registry import dependencies, idle_statuses, plan
+ from deploy_vii.render import render
+ from deploy_vii.report_view import navigator
+ from deploy_workflow import platform_io
+-from deploy_workflow.changes import PACK_NAME, PRIOR_PREFIX, PriorRun, pack_builder, prior_sources
++from deploy_workflow.changes import (
++    DELIVERED_WHOLE,
++    PACK_NAME,
++    PRIOR_PREFIX,
++    PriorRun,
++    pack_builder,
++    prior_sources,
++)
+ from deploy_workflow.handoff_delivery import (
+     HEADINGS,
+     DeliveryRequest,
+@@ -538,7 +545,8 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
+         if not_produced is not None:
+             changes_note = f"{NOT_PRODUCED}{not_produced}"
+             if layout is not None:
+-                scope = f"{layout.scope} Changes since the last run (CP-8): {changes_note}."
++                scope = layout.scope.replace(DELIVERED_WHOLE, "")
++                scope += f" Changes since the last run (CP-8): {changes_note}."
+                 layout = layout.model_copy(update={"scope": scope})
+         forecast, failure = request.publish_forecast, None
+         if forecast:
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 01809e8..0402288 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -34,6 +34,7 @@ from deploy_vii.registry import modules, plan
+ from deploy_vii.report_view import _spec_of, pathways
+ from deploy_workflow import platform_io
+ from deploy_workflow.changes import (
++    DELIVERED_WHOLE,
+     PACK_NAME,
+     PRIOR_PREFIX,
+     PriorRun,
+@@ -1429,11 +1430,7 @@ def _layout(
+             else LAYER1_FORECAST_SCOPE
+         )
+         + f" Sections not produced: {', '.join(omitted) or 'none'}."
+-        + (
+-            " The changes since the last run are CP-8's handoff, delivered whole."
+-            if "CP-8" in ordered
+-            else ""
+-        )
++        + (DELIVERED_WHOLE if "CP-8" in ordered else "")
+     )
+     layout = MarkdownLayout(
+         blocks=tuple(dict.fromkeys(r.block_id for r in routes)),
+diff --git a/tests/fixtures/changes-seam/rows.json b/tests/fixtures/changes-seam/rows.json
+new file mode 100644
+index 0000000..7476e82
+--- /dev/null
++++ b/tests/fixtures/changes-seam/rows.json
+@@ -0,0 +1,32 @@
++{
++  "note": "Rows of CP-8's registers, read by the checker (tests/test_changes.py) and by the Changes tab (apps/issuer-library/credit_os/web/changes.test.cjs): what the checker accepts, the tab must read to the verdict written here. Expected values are written by hand. The pack measures equal test_changes.PACK's.",
++  "measures": {
++    "leverage": {"key": "leverage", "label": "Total debt / EBITDA", "unit": "x", "comparable": "yes", "reason": null, "prior": {"label": "Total debt / EBITDA", "unit": "x", "value": "4.20", "period": "FY2023", "definition": null}, "current": {"label": "Total debt / EBITDA", "unit": "x", "value": "3.60", "period": "FY2024", "definition": null}, "difference": "-0.60", "same_period": false},
++    "cash": {"key": "cash", "label": "Cash", "unit": "US$m", "comparable": "judge", "reason": "the definition text differs after normalisation", "prior": {"label": "Cash", "unit": "US$m", "value": "300", "period": "FY2023", "definition": "Cash."}, "current": {"label": "Cash", "unit": "US$m", "value": "250", "period": "FY2024", "definition": "Other."}, "difference": "-50", "same_period": false}
++  },
++  "measure_rows": [
++    {"name": "comparable, plain effect", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "New period", "Leverage fell by 0.60x."], "accepted": true, "verdict": "comparable", "difference": "-0.60x", "page": "comparable"},
++    {"name": "not comparable at the start of the cell", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "Not comparable: the EBITDA basis changed."], "accepted": true, "verdict": "not_comparable", "difference": null, "page": "not_comparable"},
++    {"name": "not comparable in the middle of a sentence", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "The two figures are not comparable: the EBITDA basis changed."], "accepted": false, "page": "unjudged"},
++    {"name": "not comparable with a non-breaking space inside", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "Not\u00a0comparable: the EBITDA basis changed."], "accepted": true, "verdict": "not_comparable", "difference": null, "page": "not_comparable"},
++    {"name": "not comparable with a double space inside", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "Not  comparable: the EBITDA basis changed."], "accepted": true, "verdict": "not_comparable", "difference": null, "page": "not_comparable"},
++    {"name": "not comparable after a leading non-breaking space", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "\u00a0Not comparable: the EBITDA basis changed."], "accepted": true, "verdict": "not_comparable", "difference": null, "page": "not_comparable"},
++    {"name": "two rows for one pack measure", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "New period", "Leverage fell by 0.60x."], "extra_rows": [["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "Not comparable: the EBITDA basis changed."]], "accepted": false, "refusal": "a second row for this pack measure", "page": "not_comparable"},
++    {"name": "judged, exact label", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m", "page": "comparable"},
++    {"name": "judged, label in emphasis", "measure": "cash", "cells": ["**Cash**", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m", "page": "comparable"},
++    {"name": "judged, label in lower case", "measure": "cash", "cells": ["cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": false, "page": "unjudged"},
++    {"name": "judged, label with a unit in brackets", "measure": "cash", "cells": ["Cash (US$m)", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": false, "page": "unjudged"},
++    {"name": "a zero-width no-break space after the label of a row saying Same definition, with a Cash row saying Not comparable", "measure": "cash", "cells": ["Cash\ufeff", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "extra_rows": [["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "Unresolved", "Not comparable: the definition changed."]], "accepted": false, "refusal": "looks like a pack measure's", "page": "not_comparable"},
++    {"name": "a next-line control after the label", "measure": "cash", "cells": ["Cash\u0085", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m", "page": "comparable"},
++    {"name": "a unit separator control after the label", "measure": "cash", "cells": ["Cash\u001f", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m", "page": "comparable"},
++    {"name": "two rows for one measure that both say Same definition", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "extra_rows": [["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."]], "accepted": false, "refusal": "a second row for this pack measure", "page": "unjudged"},
++    {"name": "a row without its closing pipe, then a row saying Not comparable", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition."], "unclosed": true, "extra_rows": [["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "Unresolved", "Not comparable: the definition changed."]], "accepted": true, "verdict": "not_comparable", "difference": null, "page": "not_comparable"}
++  ],
++  "module_cells": [
++    {"name": "name and code in brackets", "cell": "Credit view (CP-2)", "accepted": true, "status": "Strengthened"},
++    {"name": "code alone", "cell": "CP-2", "accepted": false},
++    {"name": "code after the name", "cell": "CP-2 credit view", "accepted": false},
++    {"name": "code after a dash", "cell": "Credit view - CP-2", "accepted": false},
++    {"name": "text after the bracketed code", "cell": "Credit view (CP-2) handoff", "accepted": false}
++  ]
++}
+diff --git a/tests/library_fixtures.py b/tests/library_fixtures.py
+index bf997e5..bf0191b 100644
+--- a/tests/library_fixtures.py
++++ b/tests/library_fixtures.py
+@@ -362,11 +362,16 @@ FIRST_RUN_RECORD = "changes: first run of this pathway"
+ 
+ 
+ def with_changes(
+-    run_dir: Path, pack: bytes | None = None, note: str | None = None, first: bool = False
++    run_dir: Path,
++    pack: bytes | None = None,
++    note: str | None = None,
++    first: bool = False,
++    line: str | None = None,
+ ) -> None:
+     """Make a current-kind delivery (see without_report) carry CP-8's comparison pack as
+     `changes.json` (the bytes given, listed in the receipt and hashed in the completion record)
+-    and/or the manifest's `changes_note` (why CP-8 was planned and not produced)."""
++    and/or the manifest's `changes_note` (why CP-8 was planned and not produced); `line` is the
++    completion record's own `changes` line, as the launcher writes it."""
+     if pack is not None:
+         (delivered,) = (run_dir / "deliveries").iterdir()
+         receipt = json.loads((delivered / "delivery.json").read_text())
+@@ -376,5 +381,7 @@ def with_changes(
+         rewrite_completion(run_dir, lambda record: record.update(delivery_sha256=sha(raw)))
+     if first:
+         rewrite_completion(run_dir, lambda record: record.update(changes=FIRST_RUN_RECORD))
++    if line is not None:
++        rewrite_completion(run_dir, lambda record: record.update(changes=line))
+     if note is not None:
+         rewrite_manifest(run_dir, lambda manifest: manifest.update(changes_note=note))
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index 243ef66..e938b04 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -36,7 +36,7 @@ from deploy_workflow.changes import (
+     observations,
+     workspace_of,
+ )
+-from deploy_workflow.changes_check import cp8_issues
++from deploy_workflow.changes_check import cp8_issues, page_verdicts
+ from deploy_workflow.owners.cpos import HandoffPlan
+ from deploy_workflow.owners.cpos_launch import LaunchRefused, main, prepare
+ from deploy_workflow.prose_checks import bottom_line_text, is_earlier_format
+@@ -1796,7 +1796,9 @@ def test_a_cp8_that_is_not_accepted_loses_only_itself_and_the_run_says_why(tmp_p
+         {k: v for k, v in e.items() if k != "at"} for e in events
+     ]
+     assert events[-1]["event"] == "delivered"
+-    assert "Changes since the last run (CP-8): " + reason in manifest["layout"]["scope"]
++    scope = manifest["layout"]["scope"]
++    assert "Changes since the last run (CP-8): " + reason in scope
++    assert "delivered whole" not in scope  # one true thing: CP-8's handoff was not produced
+ 
+ 
+ @pytest.mark.usefixtures("provider")
+@@ -2177,3 +2179,77 @@ def test_a_difference_of_the_pack_is_never_printed_in_a_fact_row(row):
+     found = cp8_issues(real_text(fact=row + "\n"), REAL, REAL_HELD)
+     assert any("difference" in i for i in found), found
+     assert cp8_issues(real_text(fact=FACT_LOAN), REAL, REAL_HELD) == ()
++
++
++SEAM_FILE = Path(__file__).parent / "fixtures" / "changes-seam" / "rows.json"
++SEAM = json.loads(SEAM_FILE.read_text())
++
++
++def _seam_row(cells):
++    return "| " + " | ".join(cells) + " |"
++
++
++def test_the_seam_fixture_states_the_packs_measures():
++    for key, measure in SEAM["measures"].items():
++        assert measure == next(m for m in PACK["measures"] if m["key"] == key)
++
++
++def _seam_text(case):
++    leverage = next(r for r in REGISTERS.splitlines() if r.startswith("| Total debt / EBITDA"))
++    old = {"leverage": leverage, "cash": CASH_ROW}[case["measure"]]
++    quiet = "| Credit view (CP-2) | Unchanged | None | No change. |"
++    first = _seam_row(case["cells"])
++    first = first.removesuffix(" |") if case.get("unclosed") else first
++    rows = "\n".join([first, *(_seam_row(r) for r in case.get("extra_rows", []))])
++    return REGISTERS.replace(old, rows, 1).replace(
++        "| Credit view (CP-2) | Strengthened | New period | Leverage fell. |", quiet, 1
++    )
++
++
++@pytest.mark.parametrize("case", SEAM["measure_rows"], ids=lambda c: c["name"])
++def test_the_checker_accepts_a_measure_row_only_in_the_form_the_tab_reads(case):
++    found = cp8_issues(_seam_text(case), PACK)
++    assert (found == ()) is case["accepted"]
++    assert any(case["refusal"] in i for i in found) if "refusal" in case else True
++
++
++@pytest.mark.parametrize("case", SEAM["measure_rows"], ids=lambda c: c["name"])
++def test_the_page_verdict_of_a_measure_is_the_one_the_fixture_states(case):
++    """One reader: the verdict the page shows is derived here, by the checker's own reading of the
++    register; for a handoff the checker accepts it is the verdict written beside the row."""
++    got = page_verdicts(_seam_text(case), PACK)["measures"][case["measure"]]["kind"]
++    assert got == case["page"]
++    if case["accepted"]:
++        assert case["page"] == case["verdict"]
++
++
++@pytest.mark.parametrize("case", SEAM["module_cells"], ids=lambda c: c["name"])
++def test_the_page_reads_a_module_row_only_where_the_checker_does(case):
++    text = REGISTERS.replace("| Credit view (CP-2) |", f"| {case['cell']} |", 1)
++    modules = page_verdicts(text, PACK)["modules"]
++    if case["accepted"]:
++        assert modules["CP-2"]["status"] == case["status"]
++    else:
++        assert "CP-2" not in modules
++
++
++def test_the_page_reads_the_ledger_counts_and_a_missing_register_as_nothing():
++    got = page_verdicts(REGISTERS, PACK)
++    assert got["ledger"] == [["Closed", 1], ["Remaining", 1], ["New", 1], ["No longer stated", 0]]
++    none = page_verdicts("## Findings\n\nNo registers.\n", PACK)
++    assert none["ledger"] is None
++    assert none["modules"] == {}
++    assert none["measures"]["leverage"]["kind"] == "comparable"  # the pack says yes
++    assert none["measures"]["cash"]["kind"] == "unjudged"  # the pack leaves it to CP-8
++    assert page_verdicts(None, PACK)["measures"]["coverage"] == {
++        "kind": "not_comparable",
++        "label": "Not comparable",
++        "reason": "the earlier run does not state it",
++        "analysis_change": None,
++    }
++
++
++@pytest.mark.parametrize("case", SEAM["module_cells"], ids=lambda c: c["name"])
++def test_the_checker_accepts_a_module_cell_only_in_the_form_the_tab_reads(case):
++    text = REGISTERS.replace("| Credit view (CP-2) |", f"| {case['cell']} |", 1)
++    assert (cp8_issues(text, PACK) == ()) is case["accepted"]
+diff --git a/tests/test_library_changes_browser.py b/tests/test_library_changes_browser.py
+index e58a756..c4418e1 100644
+--- a/tests/test_library_changes_browser.py
++++ b/tests/test_library_changes_browser.py
+@@ -210,3 +210,31 @@ def test_a_run_with_no_recorded_comparison_is_not_called_a_first_run(tmp_path):
+     assert console == []
+     assert "No comparison was recorded for this run" in dom
+     assert "First run of this pathway" not in dom
++
++
++def test_over_time_joins_two_runs_the_pack_names_by_run_folder(tmp_path):
++    """The pack names the earlier run by its folder, as the run start service names folders (not by
++    the manifest's run_id); a line joins the points where the later pack compares exactly them."""
++    run_of(
++        tmp_path,
++        "20261101-090000-01",
++        as_of="2024-09-30",
++        modules=("CP-0", "CP-1", "CP-2"),
++        cp1_extra=CHARTS,
++    )
++    now = run_of(
++        tmp_path,
++        "20261112-090000-01",
++        as_of="2025-03-31",
++        modules=("CP-0", "CP-1", "CP-2", "CP-8"),
++        cp1_extra=CHARTS,
++        cp8=CP8,
++    )
++    held = {"label": "Cash", "unit": "US$m", "value": "6261", "period": "2024-09-30"}
++    cash = {**PACK["measures"][1], "prior": held, "current": held, "difference": "0"}
++    pack = {**PACK, "prior": {**PACK["prior"], "run": "20261101-090000-01"}, "measures": [cash]}
++    with_changes(now, pack=json.dumps(pack).encode())
++    dom, console = visit(build(tmp_path), "#W-Changes/changes?c=20261112-090000-01")
++    assert console == []
++    over = dom[dom.index('id="changes-over-time"') :]
++    assert over.count("<line ") == 1
+diff --git a/tests/test_update_library.py b/tests/test_update_library.py
+index 2e29675..6a41cfb 100644
+--- a/tests/test_update_library.py
++++ b/tests/test_update_library.py
+@@ -7,12 +7,14 @@ from pathlib import Path
+ from types import SimpleNamespace
+ 
+ import pytest
++import test_changes as seam
+ from library_fixtures import make_run, method, with_changes, without_report
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+ sys.path.insert(0, str(ROOT / "apps/issuer-library"))
+ import update_library
+ 
++from deploy_workflow.changes_check import cp8_issues
+ from deploy_workflow.library_index import Refused
+ 
+ PREFIX = "window.CREDIT_OS_DATA="
+@@ -485,6 +487,7 @@ def test_a_run_that_records_no_comparison_is_not_a_first_run(tmp_path):
+         "pack": None,
+         "note": None,
+         "problem": None,
++        "verdicts": None,
+     }
+ 
+ 
+@@ -497,6 +500,28 @@ def test_a_first_run_is_the_run_that_records_it(tmp_path):
+         "pack": None,
+         "note": None,
+         "problem": None,
++        "verdicts": None,
++    }
++
++
++@pytest.mark.parametrize(
++    "line",
++    [
++        "changes: first run of this pathway (not used: prior-1: its issuer name is another's)",
++        "changes: not compared: the earlier run named at approval is no longer available",
++        "changes: not compared: CP-8's first request would be over the cap",
++    ],
++)
++def test_a_reason_the_run_records_for_no_comparison_reaches_the_library_verbatim(tmp_path, line):
++    with_changes(current_run(tmp_path, "reasoned"), line=line)
++    update_library.update_library(tmp_path)
++    assert changes_of(tmp_path, "reasoned") == {
++        "lead": "CP-2",
++        "first_run": False,
++        "pack": None,
++        "note": line,
++        "problem": None,
++        "verdicts": None,
+     }
+ 
+ 
+@@ -543,3 +568,83 @@ def test_a_pack_that_cannot_be_read_is_said_so_and_is_never_a_first_run(tmp_path
+     assert why in got["problem"]
+     issues = data_of(tmp_path)["workspace"]["issues"]
+     assert any(i.startswith("later: ") and "changes.json" in i and why in i for i in issues)
++
++
++# ---- One reader: the library carries the verdicts the Changes tab shows, read by the CP-8 checker.
++SEAM_PACK = {
++    **seam.PACK,
++    "schema": "cpos-changes/2",
++    "prior": {"run": "earlier", "as_of": "2024-09-30"},
++}
++
++
++def run_with_cp8(workspace: Path, text: str) -> Path:
++    """A current run whose delivery lists the comparison pack (as `changes.json`) and whose CP-8
++    handoff is `text`."""
++    run = without_report(
++        make_run(workspace, "later", modules=("CP-0", "CP-1", "CP-8"), cp8=text)
++    ).parent.parent
++    with_changes(run, pack=json.dumps(SEAM_PACK).encode())
++    return run
++
++
++@pytest.mark.parametrize("case", seam.SEAM["measure_rows"], ids=lambda c: c["name"])
++def test_the_library_carries_the_verdict_of_every_seam_case_the_fixture_states(tmp_path, case):
++    text = seam._seam_text(case)
++    run_with_cp8(tmp_path, text)
++    update_library.update_library(tmp_path)
++    verdicts = changes_of(tmp_path, "later")["verdicts"]
++    assert verdicts["measures"][case["measure"]]["kind"] == case["page"]
++    assert (cp8_issues(text, SEAM_PACK) == ()) is case["accepted"]
++
++
++def test_the_library_carries_the_modules_and_the_ledger_counts_of_the_handoff(tmp_path):
++    run_with_cp8(tmp_path, seam.REGISTERS)
++    update_library.update_library(tmp_path)
++    verdicts = changes_of(tmp_path, "later")["verdicts"]
++    assert verdicts["modules"]["CP-2"] == {
++        "status": "Strengthened",
++        "cause": "New period",
++        "why": "Leverage fell.",
++    }
++    assert verdicts["ledger"] == [
++        ["Closed", 1],
++        ["Remaining", 1],
++        ["New", 1],
++        ["No longer stated", 0],
++    ]
++    assert verdicts["measures"]["coverage"]["reason"] == "the earlier run does not state it"
++
++
++@pytest.mark.parametrize("kind", ["no handoff", "no pack", "a note"])
++def test_the_library_carries_no_verdicts_without_a_pack_and_a_handoff(tmp_path, kind):
++    run = without_report(
++        make_run(
++            tmp_path,
++            "later",
++            modules=("CP-0", "CP-1") if kind == "no handoff" else ("CP-0", "CP-1", "CP-8"),
++            cp8=seam.REGISTERS,
++        )
++    ).parent.parent
++    if kind == "no handoff":
++        with_changes(run, pack=json.dumps(SEAM_PACK).encode())
++    else:
++        with_changes(run, note=NOTE if kind == "a note" else None)
++    update_library.update_library(tmp_path)
++    assert changes_of(tmp_path, "later")["verdicts"] is None
++
++
++def test_a_cp8_output_that_is_not_utf8_is_a_stated_problem_not_a_silent_null(tmp_path, monkeypatch):
++    run_with_cp8(tmp_path, seam.REGISTERS)
++    real = update_library.checked_bytes
++    monkeypatch.setattr(
++        update_library,
++        "checked_bytes",
++        lambda path, digest, label: b"\xff\xfe" if "CP-8" in label else real(path, digest, label),
++    )
++    update_library.update_library(tmp_path)
++    got = changes_of(tmp_path, "later")
++    assert got["verdicts"] is None
++    assert "CP-8" in got["problem"] and "not valid UTF-8" in got["problem"]
++    issues = data_of(tmp_path)["workspace"]["issues"]
++    assert any(i.startswith("later: ") and "not valid UTF-8" in i for i in issues)
