@@ -237,3 +237,20 @@ reads (`cpos_launch.py` layout rule), so their pack states no measure and their 
 layout rule is unchanged. L4: `find_prior` accepts any listed run folder name, including one the launcher
 refuses at launch (a space, a leading underscore, non-ASCII); that fails closed with no spend. L5: the
 forecast inputs block can vouch for a Key figure when only CP-0, CP-1, CP-MODEL and CP-L10 run.
+
+## Amendment 2026-11-12: one reader of CP-8's registers (branch claude/changes-seams, round 3)
+
+Two earlier rounds aligned the checker and the page rule by rule and each left a divergence, so the page no
+longer reads a register for a verdict. `changes_check.page_verdicts` derives, with the checker's own reading
+of the registers, a verdict per pack measure, the module rows that have exactly one row, and the ledger
+counts; `update_library.changes_data` carries them as `run.changes.verdicts` (null without a pack, with a
+note or a problem); `changes.js` displays them: only a `comparable` verdict shows a difference or a line, and
+a missing entry, an unknown kind or `verdicts: null` shows both values and neither. A fact row whose label,
+after NFKC, with only letters and digits kept and case folded, equals a pack label is refused (a hidden
+character cannot leave a `Not comparable` row beside a difference). Delivery computes nothing.
+
+Known limits, recorded: (1) the verbatim register tables are still split by the store's parser, so a row
+without its closing pipe, or a second table, stays visible as text although it counts for no verdict. (2) Old
+handoffs are re-read only through the checker's per-row rules; their passages are not re-checked against
+K9 and K10. (3) A malformed issuer register counts as having no rows, so a measure the pack marks `yes`
+still shows the pack's difference.

@@ -2,8 +2,9 @@
 // Pure rendering of the Changes tab (docs/rulings/2026-11-11-module-presets-and-changes.md, decision M8): no DOM, no store, no globals written.
 // Browser: one global, ChangesView (reader.js is loaded first; nothing else leaks into the page's scope). Node: module.exports.
 // Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2) or CP-8's
-// handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. A measure that is not comparable
-// shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is
+// handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. This page reads no register for a
+// verdict: the library's build derives them once, with CP-8's checker (`changes.verdicts`: measures, modules, ledger), and the page displays them.
+// A measure that is not comparable, is not judged, or has no verdict shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is
 // escaped before it reaches the page.
 const ChangesView = (() => {
 const ChangesReader = typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, paragraphBody, readerPassages, tableView};
@@ -12,7 +13,6 @@ const FIRST_RUN = 'First run of this pathway';
 const NO_RECORD = 'No comparison was recorded for this run';
 const NOT_COMPARABLE = 'Not comparable';
 const NOT_STATED = 'Not stated';
-const LEDGER_STATUSES = ['Closed', 'Remaining', 'New', 'No longer stated'];
 const TREND_MEASURES = [['leverage', 'Total debt / EBITDA'], ['net_leverage', 'Net debt / EBITDA'], ['coverage', 'EBITDA / cash interest'], ['cash', 'Cash'], ['undrawn', 'Undrawn committed facilities']];
 const REASON_PREFIX = /^changes: not produced\s*[—-]\s*/;
 const esc = value => ChangesReader.escapeHtml(value);
@@ -28,7 +28,7 @@ function changesState(changes) {
   return changes.first_run === true ? 'first' : 'unrecorded';
 }
 
-// CP-8's handoff (the store's sections) as its reader passages and its three registers; each is null when the handoff has none.
+// CP-8's handoff (the store's sections) as its reader passages and, as verbatim tables, its issuer and ledger registers; each is null when the handoff has none.
 function cp8Parts(sections) {
   const list = sections || [];
   const passages = ChangesReader.readerPassages(list);
@@ -41,39 +41,22 @@ function cp8Parts(sections) {
     bottom: passages.bottom,
     key: passages.key,
     issuer: register('What changed: the issuer'),
-    analysis: register('What changed: the analysis'),
     ledger: register('Limitations ledger'),
   };
 }
-
-const column = (table, name) => (table ? table.headers.findIndex(header => header.trim() === name) : -1);
-const cell = (row, index) => (index >= 0 && row ? String(row.cells[index] ?? '') : '');
-const bare = text => String(text).replace(/\*\*|`/g, '').replace(/\s+/g, ' ').trim();
 
 // A value with its unit as the pack states them: `x` and `%` follow the figure, any other unit follows after a space.
 const withUnit = (value, unit) => (unit == null || unit === '' ? String(value) : /^[x%]$/.test(unit) ? `${value}${unit}` : `${value} ${unit}`);
 const sideText = side => (side && side.value != null ? `${withUnit(side.value, side.unit)}${side.period ? ` (${side.period})` : ''}` : NOT_STATED);
 
-// Whether the two values of a measure may be set against each other, and so whether its difference may be shown.
-// `comparable` is the pack's: no, yes, or judge (CP-8's row for the measure says Same definition or Not comparable). A row CP-8 marks Not comparable
-// is never compared, whatever the pack says. A judge row with no verdict from CP-8 is left unjudged: no difference.
-function measureVerdict(measure, issuerTable) {
-  const first = column(issuerTable, 'Measure or fact');
-  const row = issuerTable ? issuerTable.rows.find(r => bare(cell(r, first < 0 ? 0 : first)) === measure.label) : null;
-  const says = pattern => Boolean(row) && row.cells.some(text => pattern.test(bare(text)));
-  const note = row ? cell(row, row.cells.length - 1) : null;
-  if (measure.comparable === 'no') return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: measure.reason || null};
-  if (says(/^Not comparable/i)) return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: note};
-  // One period with two values and a difference is the analysis changing (a definition, a correction), never the issuer moving: the difference
-  // is shown only under CP-8's own word Same definition, beside its cause, and no line or trend joins the two.
-  if (measure.same_period === true && measure.difference != null && !/^-?0+(\.0+)?$/.test(String(measure.difference))) {
-    if (!says(/^Same definition/i)) return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null, analysisChange: null};
-    const cause = cell(row, column(issuerTable, 'Cause'));
-    return {kind: 'comparable', label: 'Same definition', reason: null, analysisChange: cause || `${NOT_STATED} by CP-8`};
-  }
-  if (measure.comparable === 'yes') return {kind: 'comparable', label: 'Comparable', reason: null};
-  if (says(/^Same definition/i)) return {kind: 'comparable', label: 'Same definition', reason: null};
-  return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null};
+// Whether the two values of a measure may be set against each other, and so whether its difference may be shown: the verdict the build derived
+// (`changes.verdicts.measures[key]`: kind comparable | not_comparable | unjudged, label, reason, analysis_change). A measure with no entry, an unknown kind,
+// or a run with no verdicts is not judged: no difference, no line.
+const NOT_JUDGED = 'Comparability not judged';
+function measureVerdict(measure, changes) {
+  const found = changes && changes.verdicts && changes.verdicts.measures ? changes.verdicts.measures[measure.key] : null;
+  if (!found || !['comparable', 'not_comparable', 'unjudged'].includes(found.kind)) return {kind: 'unjudged', label: NOT_JUDGED, reason: measure.reason || null};
+  return {kind: found.kind, label: found.label, reason: found.reason || null, analysisChange: found.analysis_change || null};
 }
 
 const differenceText = (measure, verdict) => (verdict.kind === 'comparable' && measure.difference != null ? withUnit(measure.difference, measure.unit) : null);
@@ -130,9 +113,9 @@ const omittedNote = omitted => {
 
 const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`CP-8's handoff has no ${caption.toLowerCase()} table.`)}</p>`);
 
-function issuerPart(pack, parts) {
+function issuerPart(pack, parts, changes) {
   const measures = pack.measures || [];
-  const verdicts = measures.map(m => measureVerdict(m, parts && parts.issuer));
+  const verdicts = measures.map(m => measureVerdict(m, changes));
   const register = parts ? `<h3>Each change and its cause</h3>${verbatim('What changed: the issuer', parts.issuer)}` : '';
   return `<section class="run-section" id="changes-issuer"><h2>The issuer</h2>${thenAndNowChart(measures, verdicts)}${measures.length ? measureTable(measures, verdicts) : '<p class="empty">The comparison pack states no measure.</p>'}${netDebtView(pack.net_debt_change)}${maturityView(pack.maturity_profile)}${omittedNote(pack.omitted)}${register}</section>`;
 }
@@ -158,36 +141,33 @@ function whatChangedPart(parts) {
   return `<section class="run-section" id="changes-what"><h2>What changed</h2><h3>Bottom line</h3>${passageView(parts.bottom)}<h3>Key findings</h3>${passageView(parts.key)}</section>`;
 }
 
-// ---- Part 3: one row per module of the pack; CP-8's status and reason read from its register by the module code in the first cell.
-const moduleCode = text => { const found = /\(([A-Z0-9][A-Z0-9-]*)\)\s*$/.exec(bare(text)); return found ? found[1] : null; };
-function analysisPart(pack, parts) {
-  const table = parts && parts.analysis, status = column(table, 'Status'), cause = column(table, 'Cause'), why = column(table, 'Why');
+// ---- Part 3: one row per module of the pack; CP-8's status and reason are the build's (`changes.verdicts.modules[code]`, only a code with exactly one row).
+function analysisPart(pack, parts, changes) {
+  const modules = (changes && changes.verdicts && changes.verdicts.modules) || {};
   const rows = (pack.modules || []).map(m => {
-    const row = table ? table.rows.find(r => moduleCode(r.cells[0]) === m.module) : null;
-    const state = !parts ? 'Explanation not produced' : row ? cell(row, status) || NOT_STATED : `${NOT_STATED} by CP-8`;
+    const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
+    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by CP-8`;
     const side = (ran, text) => (text != null ? text : ran ? NOT_STATED : 'Did not run');
     const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line);
-    const reason = row ? [cell(row, cause), cell(row, why)].filter(Boolean) : [];
+    const reason = row ? [row.cause, row.why].filter(Boolean) : [];
     return `<details class="change-module"><summary><span class="change-name">${esc(m.title)} <span class="module-code">${esc(m.module)}</span></span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
   }).join('');
   return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2><p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
 }
 
-// ---- Part 4: counts of each status as one bar (segment sizes are the counts), the ledger itself beneath.
-function limitationsPart(parts) {
-  const table = parts.ledger, status = column(table, 'Status');
+// ---- Part 4: counts of each status as one bar (segment sizes are the counts, the build's: `changes.verdicts.ledger`, null when it could not read the ledger), the ledger itself beneath.
+function limitationsPart(parts, changes) {
+  const table = parts.ledger, counts = changes && changes.verdicts ? changes.verdicts.ledger : null;
   if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in CP-8's handoff.</p></section>`;
-  const counts = LEDGER_STATUSES.map(name => [name, table.rows.filter(r => bare(cell(r, status)) === name).length]);
-  const other = table.rows.length - counts.reduce((sum, [, n]) => sum + n, 0);
-  if (other) counts.push(['Other', other]);
+  if (!counts) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2>${verbatim('Limitations ledger', table)}</section>`;
   const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
   const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
   const legend = counts.map(([name, n]) => `<span><i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}"></i>${esc(name)} <strong>${n}</strong></span>`).join('');
   return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><div class="ledger-bar" role="img" aria-label="${esc(`Limitations: ${label}`)}">${segments}</div><div class="chart-legend ledger-legend">${legend}</div>${verbatim('Limitations ledger', table)}</section>`;
 }
 
-// ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes, cp8}], `runId` being the run's folder name (the pack names its prior run by folder):
-// `metrics` are the library's own quotes ({value, unit, period} per measure), `changes` the run's pack record, `cp8` its CP-8 sections or null.
+// ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes}], `runId` being the run's folder name (the pack names its prior run by folder):
+// `metrics` are the library's own quotes ({value, unit, period} per measure), `changes` the run's record (pack and verdicts).
 // A segment joins two neighbouring points only where the later run's own pack compares exactly those two values under one definition.
 function joined(runs, i, key) {
   const [before, after] = [runs[i - 1], runs[i]];
@@ -197,7 +177,7 @@ function joined(runs, i, key) {
   const measure = (pack.measures || []).find(m => m.key === key);
   if (!measure || !measure.prior || !measure.current || measure.prior.value !== a.value || measure.current.value !== b.value) return false;
   if (measure.prior.period !== a.period || measure.current.period !== b.period) return false;
-  const verdict = measureVerdict(measure, cp8Parts(after.cp8).issuer);
+  const verdict = measureVerdict(measure, after.changes);
   return verdict.kind === 'comparable' && !verdict.analysisChange;
 }
 function trendLine(runs, key, label) {
@@ -250,9 +230,9 @@ function changesHtml(input) {
   }
   const sections = [
     parts ? whatChangedPart(parts) : '',
-    pack ? issuerPart(pack, parts) : '',
-    pack ? analysisPart(pack, parts) : '',
-    parts ? limitationsPart(parts) : '',
+    pack ? issuerPart(pack, parts, changes) : '',
+    pack ? analysisPart(pack, parts, changes) : '',
+    parts ? limitationsPart(parts, changes) : '',
     overTimePart(runs, fmtDate),
   ].join('');
   return `<div class="changes">${heading}${notice}${sections}</div>`;

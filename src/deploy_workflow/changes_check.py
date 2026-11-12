@@ -45,6 +45,7 @@ below 100 without a unit (a count); in a measure's Earlier and Current cells eve
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
@@ -70,7 +71,7 @@ COUNT_BELOW = 100  # a whole number below this, without a unit, is a count
 SAME = "same definition"
 NOT_COMPARABLE = "not comparable"
 _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
-_MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # as changes.js moduleCode reads the cell
+_MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in brackets
 _REF = re.compile(r"\b[EC]\d+\b")
 _REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
 _HEADING = re.compile(r"#{1,6}\s")
@@ -162,14 +163,14 @@ def _section(lines: list[str], title: str) -> tuple[list[str], list[list[str]]] 
 
 
 def _plain(text: str) -> str:
-    """A cell as the Changes tab reads it (changes.js `bare`): without bold or code marks, with
-    every run of white space (a non-breaking space too) one space."""
+    """A cell as `page_verdicts` reads it: without bold or code marks, with every run of white space
+    (a non-breaking space too) one space."""
     return " ".join(text.replace("**", "").replace("`", "").split())
 
 
 def _says(row: Sequence[str], word: str) -> bool:
-    """Whether a cell of the row starts with the verdict word, as the Changes tab reads a verdict
-    (changes.js `says`); the word anywhere else in a cell is no verdict."""
+    """Whether a cell of the row starts with the verdict word; the word anywhere else in a cell is
+    no verdict."""
     return any(_plain(cell).lower().startswith(word) for cell in row)
 
 
@@ -409,6 +410,41 @@ def _fact_row_issues(
     return issues
 
 
+def _rows_by_measure(
+    rows: Sequence[list[str]], pack: Mapping[str, Any]
+) -> dict[str, list[list[str]]]:
+    """The issuer rows of each pack measure (by key), a row's label read through `_plain`: the one
+    reading of which row is a measure's, shared by the check and the page's verdicts."""
+    keys = {m["label"]: m["key"] for m in pack["measures"]}
+    found: dict[str, list[list[str]]] = {}
+    for row in rows:
+        key = keys.get(_plain(row[0]))
+        if key is not None:
+            found.setdefault(key, []).append(row)
+    return found
+
+
+def _module_code(cell: str) -> str | None:
+    """The module code a cell of the analysis register ends with, in brackets (`Name (CP-2)`)."""
+    named = _MODULE_CELL.search(_plain(cell))
+    return named[1] if named else None
+
+
+def _rows_by_module(rows: Sequence[list[str]]) -> dict[str, list[list[str]]]:
+    """The analysis rows of each module code their first cell names."""
+    found: dict[str, list[list[str]]] = {}
+    for row in rows:
+        code = _module_code(row[0])
+        if code is not None:
+            found.setdefault(code, []).append(row)
+    return found
+
+
+def _alnum(text: str) -> str:
+    """A label as it looks: NFKC, only letters and digits, case folded."""
+    return "".join(c for c in unicodedata.normalize("NFKC", text) if c.isalnum()).casefold()
+
+
 def _issuer_issues(
     rows: list[list[str]], pack: Mapping[str, Any], held: frozenset[Decimal] = frozenset()
 ) -> list[str]:
@@ -416,7 +452,8 @@ def _issuer_issues(
     if not rows:
         return [f"`### {ISSUER}` needs a row; if nothing changed, one `{NO_CHANGE}` row."]
     labels = {m["label"]: m for m in pack["measures"]}
-    named: set[str] = set()
+    looks_like = {_alnum(label) for label in labels}
+    first = {key: found[0] for key, found in _rows_by_measure(rows, pack).items()}
     for row in rows:
         name, cause = row[0], row[3]
         if name.strip().strip("*") == NO_CHANGE:
@@ -424,14 +461,18 @@ def _issuer_issues(
                 issues.append(f"The `{NO_CHANGE}` row's Cause is `None`.")
             continue
         measure = labels.get(_plain(name))
-        if measure is not None:
-            if measure["key"] in named:
-                issues.append(
-                    f"Issuer register, {name!r}: a second row for this pack measure; write one "
-                    "row per measure."
-                )
-                continue
-            named.add(measure["key"])
+        if measure is None and _alnum(name) in looks_like:
+            issues.append(
+                f"Issuer register, {name!r}: the label looks like a pack measure's but is not "
+                "its exact label (a hidden character?); name a pack measure by its exact label."
+            )
+            continue
+        if measure is not None and first[measure["key"]] is not row:
+            issues.append(
+                f"Issuer register, {name!r}: a second row for this pack measure; write one "
+                "row per measure."
+            )
+            continue
         flagged = measure is not None and _flagged(measure)
         causes = (*ISSUER_CAUSES, *(SAME_PERIOD_CAUSES if flagged else ()))
         if cause not in causes:
@@ -451,18 +492,16 @@ def _issuer_issues(
 
 def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str]:
     issues = []
-    seen: dict[str, int] = {}
     ran = {m["module"]: (m["ran_prior"], m["ran_current"]) for m in pack["modules"]}
+    seen = {code: len(found) for code, found in _rows_by_module(rows).items() if code in ran}
     for module, status, cause, _ in rows:
-        named = _MODULE_CELL.search(_plain(module))
-        if named is None or named[1] not in ran:
+        code = _module_code(module)
+        if code is None or code not in ran:
             issues.append(
                 f"Analysis register: {module!r} does not name one module of the pack; the cell "
                 "ends with its code in brackets, as `Credit view (CP-2)`."
             )
             continue
-        code = named[1]
-        seen[code] = seen.get(code, 0) + 1
         before, now = ran[code]
         if status not in STATUSES:
             issues.append(f"Analysis register, {code}: Status {status!r} is not one of {STATUSES}.")
@@ -725,13 +764,97 @@ def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> 
         issues += _analysis_issues(tables[ANALYSIS][1], pack)
     if LEDGER in tables:
         issues += _ledger_issues(tables[LEDGER][1], pack)
-    labels = {m["label"]: m["key"] for m in pack["measures"]}
     issuer = tables[ISSUER][1] if ISSUER in tables else []
     said_nc = frozenset(
-        labels[_plain(row[0])]
-        for row in issuer
-        if _plain(row[0]) in labels and _says(row, NOT_COMPARABLE)
+        key
+        for key, found in _rows_by_measure(issuer, pack).items()
+        if any(_says(row, NOT_COMPARABLE) for row in found)
     )
     issues += _outside_ref_issues(lines, pack)
     issues += _passage_issues(lines, pack, said_nc, sizes)
     return tuple(dict.fromkeys(issues))
+
+
+def _verdict(
+    kind: str, label: str, reason: str | None, change: str | None = None
+) -> dict[str, str | None]:
+    return {"kind": kind, "label": label, "reason": reason, "analysis_change": change}
+
+
+def _page_measure(measure: Mapping[str, Any], found: list[list[str]]) -> dict[str, str | None]:
+    """The verdict the Changes tab shows for one pack measure, from the pack and its issuer rows
+    (the first rule that applies):
+
+    1. the pack says `no`: not comparable, with the pack's reason;
+    2. a row says `Not comparable`: not comparable, with that row's Effect cell;
+    3. two rows, a row the check would refuse on its definition statement, or (one period with two
+       values) one it would refuse on that: not judged;
+    4. one period with two values: `Same definition`, with the row's Cause as the analysis change,
+       when the row says it, else not judged;
+    5. the pack says `yes`: comparable;
+    6. the single row says `Same definition`: comparable;
+    7. otherwise not judged."""
+    unjudged = _verdict("unjudged", "Comparability not judged", measure.get("reason"))
+    if measure["comparable"] == "no":
+        return _verdict("not_comparable", "Not comparable", measure.get("reason"))
+    for said_not in found:
+        if _says(said_not, NOT_COMPARABLE):
+            return _verdict("not_comparable", "Not comparable", said_not[4])
+    row = found[0] if found else None
+    flagged = _flagged(measure)
+    where = measure["label"]
+    refused = row is not None and (
+        _definition_issues(where, row, measure)
+        or (flagged and bool(_same_period_issues(where, row, row[3])))
+    )
+    if len(found) > 1 or refused:
+        return unjudged
+    said = row is not None and _says(row, SAME)
+    if flagged:
+        change = row[3] or "Not stated by CP-8" if row is not None else None
+        return _verdict("comparable", "Same definition", None, change) if said else unjudged
+    if measure["comparable"] == "yes":
+        return _verdict("comparable", "Comparable", None)
+    return _verdict("comparable", "Same definition", None) if said else unjudged
+
+
+def _ledger_counts(rows: list[list[str]] | None) -> list[list[Any]] | None:
+    """The ledger rows counted per Status (`LEDGER_STATUSES` in order, then `Other` when any row has
+    another); None when the ledger has no readable table."""
+    if rows is None:
+        return None
+    counts: list[list[Any]] = [
+        [s, sum(1 for r in rows if _plain(r[3]) == s)] for s in LEDGER_STATUSES
+    ]
+    if other := len(rows) - sum(n for _, n in counts):
+        counts.append(["Other", other])
+    return counts
+
+
+def page_verdicts(text: str | None, pack: Mapping[str, Any]) -> dict[str, Any]:
+    """What the Changes tab shows of CP-8's registers, read once, here: the page never parses a
+    register for a verdict. `text` is CP-8's handoff (None: none is held). A register that is
+    missing or malformed counts as having no rows.
+
+    - `measures`: per pack measure key, `{kind, label, reason, analysis_change}` (`_page_measure`);
+    - `modules`: per pack module whose code has exactly one analysis row, its `status`, `cause`
+      and `why`;
+    - `ledger`: the count of ledger rows per status (`LEDGER_STATUSES`, then `Other`), or None when
+      the ledger has no readable table."""
+    lines = (text or "").replace("\r\n", "\n").split("\n")
+
+    def rows_of(title: str) -> list[list[str]] | None:
+        found = _section(lines, title)
+        if isinstance(found, str) or _columns(found, title):
+            return None
+        return found[1]
+
+    by_measure = _rows_by_measure(rows_of(ISSUER) or [], pack)
+    measures = {m["key"]: _page_measure(m, by_measure.get(m["key"], [])) for m in pack["measures"]}
+    by_module = _rows_by_module(rows_of(ANALYSIS) or [])
+    modules = {}
+    for m in pack["modules"]:
+        once = by_module.get(m["module"], [])
+        if len(once) == 1:
+            modules[m["module"]] = {"status": once[0][1], "cause": once[0][2], "why": once[0][3]}
+    return {"measures": measures, "modules": modules, "ledger": _ledger_counts(rows_of(LEDGER))}

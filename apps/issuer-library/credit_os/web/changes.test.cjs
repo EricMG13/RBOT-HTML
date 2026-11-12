@@ -51,8 +51,22 @@ const CP8 = [
     ['E3', 'C1', 'Carried over.', 'Remaining', '—'],
     ['—', 'C2', 'A current limitation in words.', 'New', '—'])),
 ];
+// What the library's build derives from CP-8's registers (`changes.verdicts`, from changes_check.page_verdicts) for the handoff above: literals, hand-written.
+const verdict = (kind, label, reason = null, analysis_change = null) => ({kind, label, reason, analysis_change});
+const VERDICTS = {
+  measures: {
+    leverage: verdict('not_comparable', 'Not comparable', 'Not comparable: reported EBITDA against EBITDA As Defined.'),
+    coverage: verdict('comparable', 'Same definition', null, 'Unresolved'),
+    cash: verdict('comparable', 'Same definition'),
+  },
+  modules: {
+    'CP-0': {status: 'Unchanged', cause: 'Presentation', why: 'The headings differ only.'},
+    'CP-2E': {status: 'Not run this time', cause: 'Unresolved', why: 'Not in the current run.'},
+  },
+  ledger: [['Closed', 0], ['Remaining', 1], ['New', 1], ['No longer stated', 2]],
+};
 const here = {key: 'k3', href: '#W-Changes/changes/k3', asOf: '2024-09-30', runId: 'r-now', current: true, bottom: 'Now.', metrics: {}, changes: null, cp8: null};
-const base = (over = {}) => ({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
+const base = (over = {}) => ({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: VERDICTS}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
 const count = (html, needle) => html.split(needle).length - 1;
 
 test('a run with no comparison is a first run: the one line and nothing else', () => {
@@ -102,7 +116,8 @@ test('a measure that is not comparable shows both values, no difference, no join
   assert.ok(!/[←-⇿▲△▼▽⬆⬇]/.test(html), 'no direction arrow anywhere');
   // comparable "no" from the pack itself: unit differs.
   const pack = {...PACK, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'no', side('6.57', 'FY2024'), side('62', 'FY2024', '%'), null, {reason: 'the units differ'})]};
-  const no = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}}));
+  const verdicts = {measures: {leverage: verdict('not_comparable', 'Not comparable', 'the units differ')}};
+  const no = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts}}));
   assert.ok(no.includes('<td>6.57x (FY2024)</td><td>62% (FY2024)</td><td><strong>Not comparable</strong><small>the units differ</small></td>'));
   assert.equal(count(no, 'class="dumbbell-link"'), 0);
 });
@@ -113,13 +128,18 @@ test('a judge measure without a verdict from CP-8 is left unjudged, with no diff
   assert.ok(html.includes('<strong>Comparability not judged</strong>'));
   assert.ok(!html.includes('-0.56'));
   assert.equal(count(html, 'class="dumbbell-link"'), 0);
-  assert.deepEqual(measureVerdict(PACK.measures[2], null), {kind: 'unjudged', label: 'Comparability not judged', reason: 'the label or definition text differs; CP-8 judges'});
-  assert.equal(measureVerdict({...PACK.measures[2], comparable: 'yes'}, null).kind, 'comparable');
+  const unjudged = {kind: 'unjudged', label: 'Comparability not judged', reason: 'the label or definition text differs; CP-8 judges'};
+  assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: null}), unjudged);
+  assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: {measures: {}}}), unjudged);
+  // The page never reads a pack's `yes` or a register itself: only the build's verdict makes a measure comparable.
+  assert.deepEqual(measureVerdict({...PACK.measures[2], comparable: 'yes'}, null), unjudged);
+  assert.deepEqual(measureVerdict(PACK.measures[2], {verdicts: {measures: {cash: verdict('comparable', 'Same definition', null, 'Correction')}}}), {kind: 'comparable', label: 'Same definition', reason: null, analysisChange: 'Correction'});
 });
 
 test('a value the pack does not state is shown as not stated, never as zero', () => {
   const pack = {...PACK, measures: [measure('coverage', 'EBITDA / cash interest', 'x', 'no', side('3.29', 'FY2024'), null, null, {reason: 'the current run does not state it'})]};
-  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}}));
+  const verdicts = {measures: {coverage: verdict('not_comparable', 'Not comparable', 'the current run does not state it')}};
+  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null, verdicts}}));
   assert.ok(html.includes('<td>3.29x (FY2024)</td><td>Not stated</td><td><strong>Not comparable</strong>'));
   assert.ok(html.includes('Earlier 3.29x (FY2024) · Current Not stated · Not comparable'));
   assert.equal(count(html, 'class="dumbbell-dot'), 1, 'one point, the stated one');
@@ -172,11 +192,11 @@ test('handoff and pack text is escaped before it reaches the page', () => {
 
 test('Over time lists every run earliest first; a line joins two points only where the later run compares them under one definition', () => {
   const metric = (value, period) => ({leverage: {value, unit: 'x', period, basis: 'b'}});
-  const packOf = (priorRun, comparable, prior, current, pp = 'FY2022', pc = 'FY2023') => ({...PACK, prior: {...PACK.prior, run: priorRun}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', comparable, side(prior, pp), side(current, pc), '0.50', {same_period: false})]});
+  const packOf = (priorRun, comparable, prior, current, pp = 'FY2022', pc = 'FY2023') => ({pack: {...PACK, prior: {...PACK.prior, run: priorRun}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', comparable, side(prior, pp), side(current, pc), '0.50', {same_period: false})]}, verdicts: {measures: {leverage: comparable === 'yes' ? verdict('comparable', 'Comparable') : verdict('not_comparable', 'Not comparable', 'unit')}}});
   const runs = [
     {key: 'a', href: '#a', asOf: '2023-09-30', runId: 'r-a', current: false, bottom: 'Earlier view.', metrics: metric('5.00', 'FY2022'), changes: null, cp8: null},
-    {key: 'b', href: '#b', asOf: '2024-09-30', runId: 'r-b', current: false, bottom: null, metrics: metric('5.50', 'FY2023'), changes: {pack: packOf('r-a', 'yes', '5.00', '5.50')}, cp8: null},
-    {key: 'c', href: '#c', asOf: '2025-03-31', runId: 'r-c', current: true, bottom: 'Latest view.', metrics: metric('6.00', 'FY2024'), changes: {pack: packOf('r-b', 'yes', '5.50', '6.00', 'FY2023', 'FY2024')}, cp8: null},
+    {key: 'b', href: '#b', asOf: '2024-09-30', runId: 'r-b', current: false, bottom: null, metrics: metric('5.50', 'FY2023'), changes: packOf('r-a', 'yes', '5.00', '5.50'), cp8: null},
+    {key: 'c', href: '#c', asOf: '2025-03-31', runId: 'r-c', current: true, bottom: 'Latest view.', metrics: metric('6.00', 'FY2024'), changes: packOf('r-b', 'yes', '5.50', '6.00', 'FY2023', 'FY2024'), cp8: null},
   ];
   const lines = html => (/<li><strong>Total debt \/ EBITDA<\/strong>(.*?)<\/li>/.exec(html)[1].match(/<line /g) || []).length;
   const html = changesHtml(base({runs}));
@@ -186,10 +206,10 @@ test('Over time lists every run earliest first; a line joins two points only whe
   assert.ok(html.includes('<td>5.00x<small>FY2022</small></td>') && html.includes('<td>6.00x<small>FY2024</small></td>'));
   assert.ok(html.includes('<td>Earlier view.</td>') && html.includes('<td>Not stated</td>') && html.includes('<td>Latest view.</td>'));
   // Not comparable in the later run's pack: points only.
-  const apart = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-a', 'no', '5.00', '5.50')}}, runs[2]]}));
+  const apart = changesHtml(base({runs: [runs[0], {...runs[1], changes: packOf('r-a', 'no', '5.00', '5.50')}, runs[2]]}));
   assert.equal(lines(apart), 1);
   // A pack that compares other values than the two points, or another prior run, joins nothing.
-  const other = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-x', 'yes', '5.00', '5.50')}}, {...runs[2], changes: {pack: packOf('r-b', 'yes', '5.51', '6.00', 'FY2023', 'FY2024')}}]}));
+  const other = changesHtml(base({runs: [runs[0], {...runs[1], changes: packOf('r-x', 'yes', '5.00', '5.50')}, {...runs[2], changes: packOf('r-b', 'yes', '5.51', '6.00', 'FY2023', 'FY2024')}]}));
   assert.equal(lines(other), 0);
   // Units that differ between runs are not put on one scale.
   const mixed = changesHtml(base({runs: [runs[0], {...runs[1], metrics: {leverage: {value: '50', unit: '%', period: 'FY2023'}}}]}));
@@ -210,24 +230,41 @@ test('the chart has a text alternative, is keyboard reachable and every row name
   assert.equal(count(html, 'aria-hidden="true"') >= 3, true, 'tracks are decoration; the text beside them carries the values');
 });
 
-test('one period with two values is the analysis changing: no line, and the difference only under Same definition beside its cause', () => {
+test('one period with two values is the analysis changing: no line, and the difference only under the build\u2019s Same definition beside its cause', () => {
   const lev = (extra = {}) => measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2024'), side('6.01', 'FY2024'), '-0.56', extra);
-  const withRow = effect => [h3('What changed: the issuer', table(ISSUER_HEAD, ['Total debt / EBITDA', '6.57x', '6.01x', 'Correction', effect]))];
-  const draw = (cp8, measures) => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures}, note: null, problem: null}, cp8}));
+  const draw = (leverage, measures) => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures}, note: null, problem: null, verdicts: leverage ? {measures: {leverage, cash: verdict('comparable', 'Comparable')}} : null}}));
   const issuer = html => html.slice(html.indexOf('id="changes-issuer"'), html.indexOf('id="changes-analysis"'));
-  const same = issuer(draw(withRow('Same definition; corrected.'), [lev()]));
+  const same = issuer(draw(verdict('comparable', 'Same definition', null, 'Correction'), [lev()]));
   assert.ok(same.includes('<td>-0.56x<small>The analysis changed, not the issuer: Correction</small></td>'));
   assert.ok(!same.includes('dumbbell-link'));
-  for (const html of [issuer(draw(withRow('Not comparable: basis.'), [lev()])), issuer(draw(null, [lev()]))]) {
+  for (const html of [issuer(draw(verdict('not_comparable', 'Not comparable', 'Not comparable: basis.'), [lev()])), issuer(draw(verdict('unjudged', 'Comparability not judged'), [lev()])), issuer(draw(null, [lev()]))]) {
     assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link'));
     assert.ok(html.includes('Earlier 6.57x (FY2024) · Current 6.01x (FY2024)'));
   }
   // The same period with a zero difference is unaffected.
-  const zero = issuer(draw(null, [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]));
+  const zero = issuer(draw(verdict('comparable', 'Comparable'), [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]));
   assert.ok(zero.includes('<td>0 US$m</td>') && zero.includes('dumbbell-link'));
   // Over time draws no segment between two values of one period.
-  const runs = [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2024'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev()]}}}];
+  const runs = [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2024'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev()]}, verdicts: {measures: {leverage: verdict('comparable', 'Same definition', null, 'Correction')}}}}];
   assert.ok(!/<line /.test(changesHtml(base({runs}))));
+});
+
+test('only a comparable verdict shows a difference and a joining line; not comparable, not judged, an unknown kind and no verdicts show neither', () => {
+  const lev = measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2023'), side('6.01', 'FY2024'), '-0.56', {same_period: false});
+  const draw = verdicts => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures: [lev]}, note: null, problem: null, verdicts}}));
+  const comparable = draw({measures: {leverage: verdict('comparable', 'Comparable')}});
+  assert.ok(comparable.includes('<td>-0.56x</td>') && comparable.includes('dumbbell-link'));
+  for (const verdicts of [{measures: {leverage: verdict('not_comparable', 'Not comparable', 'basis')}}, {measures: {leverage: verdict('unjudged', 'Comparability not judged')}}, {measures: {leverage: verdict('maybe', 'Comparable')}}, {measures: {}}, {}, null]) {
+    const html = draw(verdicts);
+    assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link') && !/<line /.test(html), JSON.stringify(verdicts));
+    assert.ok(html.includes('Earlier 6.57x (FY2023) · Current 6.01x (FY2024)'));
+  }
+  // Over time reads the later run's verdicts, never a register: a join needs a comparable verdict.
+  const runs = verdicts => [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2023'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev]}, verdicts}}];
+  const lines = verdicts => (changesHtml(base({runs: runs(verdicts)})).match(/<line /g) || []).length;
+  assert.equal(lines({measures: {leverage: verdict('comparable', 'Comparable')}}), 1);
+  assert.equal(lines({measures: {leverage: verdict('not_comparable', 'Not comparable')}}), 0);
+  assert.equal(lines(null), 0);
 });
 
 test('a run that records no comparison is not a first run: it says so, and still shows Over time when other runs are listed', () => {
@@ -244,26 +281,36 @@ test('a run that records no comparison is not a first run: it says so, and still
 test('Over time joins only points whose periods are the periods the later pack compares', () => {
   const metric = (value, period) => ({leverage: {value, unit: 'x', period}});
   const packWith = (pp, pc) => ({...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('5', pp), side('6', pc), '1', {same_period: false})]});
-  const runs = pack => [{...here, key: 'a', runId: 'r-a', current: false, metrics: metric('5', 'FY2022')}, {...here, key: 'b', runId: 'r-b', metrics: metric('6', 'FY2023'), changes: {pack}}];
+  const runs = pack => [{...here, key: 'a', runId: 'r-a', current: false, metrics: metric('5', 'FY2022')}, {...here, key: 'b', runId: 'r-b', metrics: metric('6', 'FY2023'), changes: {pack, verdicts: {measures: {leverage: verdict('comparable', 'Comparable')}}}}];
   const lines = html => (html.match(/<line /g) || []).length;
   assert.equal(lines(changesHtml(base({runs: runs(packWith('FY2022', 'FY2023'))}))), 1);
   assert.equal(lines(changesHtml(base({runs: runs(packWith('H1 FY2022', 'H1 FY2023'))}))), 0);
 });
 
-// The rows tests/test_changes.py shows the CP-8 checker accepting or refusing (one shared fixture): every row the checker accepts is read here to the verdict written beside it.
+// The shared fixture (tests/fixtures/changes-seam/rows.json) states, per case, the verdict kind the build derives (`page`, checked in tests/test_changes.py and
+// tests/test_update_library.py): the tab shows a difference for a comparable verdict and for no other.
 const SEAM = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../../tests/fixtures/changes-seam/rows.json'), 'utf8'));
-test('a row the checker accepts is read by the tab to the verdict the shared fixture states', () => {
-  for (const c of SEAM.measure_rows.filter(r => r.accepted)) {
+test('the tab shows a difference exactly where the fixture states a comparable verdict', () => {
+  for (const c of SEAM.measure_rows) {
     const m = SEAM.measures[c.measure];
-    const verdict = measureVerdict(m, table(ISSUER_HEAD, c.cells, ...(c.extra_rows || [])));
-    assert.equal(verdict.kind, c.verdict, c.name);
-    assert.equal(differenceText(m, verdict), c.difference, c.name);
+    const changes = {verdicts: {measures: {[c.measure]: verdict(c.page, c.page)}}};
+    assert.equal(differenceText(m, measureVerdict(m, changes)), c.page === 'comparable' ? c.difference : null, c.name);
   }
 });
-test('a module cell the checker accepts is found by the tab and shows the status written in it', () => {
+test('a module row is the build\u2019s: its status and reason are shown, and a module with no entry is not stated by CP-8', () => {
   const pack = {...PACK, modules: [{module: 'CP-2', title: 'Credit view', ran_prior: true, ran_current: true, prior_bottom_line: null, current_bottom_line: null}]};
+  const changes = status => ({verdicts: {modules: status ? {'CP-2': {status, cause: 'New period', why: 'Why.'}} : {}}});
   for (const c of SEAM.module_cells.filter(r => r.accepted)) {
-    const parts = {analysis: table(['Module', 'Status', 'Cause', 'Why'], [c.cell, c.status, 'New period', 'Why.'])};
-    assert.ok(analysisPart(pack, parts).includes(`change-status">${c.status}<`), c.name);
+    const html = analysisPart(pack, {}, changes(c.status));
+    assert.ok(html.includes(`change-status">${c.status}<`) && html.includes('<p class="change-why">New period · Why.</p>'), c.name);
   }
+  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by CP-8<'));
+  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by CP-8<'));
+  assert.ok(analysisPart(pack, null, changes('Unchanged')).includes('change-status">Explanation not produced<'));
+});
+test('the ledger bar is the build\u2019s counts; a ledger it could not read keeps the verbatim table and draws no bar', () => {
+  const unread = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: null}}}));
+  assert.ok(!unread.includes('class="ledger-bar"') && unread.includes('<td>An earlier limitation in words.</td>'));
+  const other = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: [['Closed', 0], ['Remaining', 0], ['New', 0], ['No longer stated', 0], ['Other', 3]]}}}));
+  assert.ok(other.includes('aria-label="Limitations: Closed 0, Remaining 0, New 0, No longer stated 0, Other 3"'));
 });

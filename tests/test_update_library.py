@@ -7,12 +7,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import test_changes as seam
 from library_fixtures import make_run, method, with_changes, without_report
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
 import update_library
 
+from deploy_workflow.changes_check import cp8_issues
 from deploy_workflow.library_index import Refused
 
 PREFIX = "window.CREDIT_OS_DATA="
@@ -485,6 +487,7 @@ def test_a_run_that_records_no_comparison_is_not_a_first_run(tmp_path):
         "pack": None,
         "note": None,
         "problem": None,
+        "verdicts": None,
     }
 
 
@@ -497,6 +500,7 @@ def test_a_first_run_is_the_run_that_records_it(tmp_path):
         "pack": None,
         "note": None,
         "problem": None,
+        "verdicts": None,
     }
 
 
@@ -517,6 +521,7 @@ def test_a_reason_the_run_records_for_no_comparison_reaches_the_library_verbatim
         "pack": None,
         "note": line,
         "problem": None,
+        "verdicts": None,
     }
 
 
@@ -563,3 +568,83 @@ def test_a_pack_that_cannot_be_read_is_said_so_and_is_never_a_first_run(tmp_path
     assert why in got["problem"]
     issues = data_of(tmp_path)["workspace"]["issues"]
     assert any(i.startswith("later: ") and "changes.json" in i and why in i for i in issues)
+
+
+# ---- One reader: the library carries the verdicts the Changes tab shows, read by the CP-8 checker.
+SEAM_PACK = {
+    **seam.PACK,
+    "schema": "cpos-changes/2",
+    "prior": {"run": "earlier", "as_of": "2024-09-30"},
+}
+
+
+def run_with_cp8(workspace: Path, text: str) -> Path:
+    """A current run whose delivery lists the comparison pack (as `changes.json`) and whose CP-8
+    handoff is `text`."""
+    run = without_report(
+        make_run(workspace, "later", modules=("CP-0", "CP-1", "CP-8"), cp8=text)
+    ).parent.parent
+    with_changes(run, pack=json.dumps(SEAM_PACK).encode())
+    return run
+
+
+@pytest.mark.parametrize("case", seam.SEAM["measure_rows"], ids=lambda c: c["name"])
+def test_the_library_carries_the_verdict_of_every_seam_case_the_fixture_states(tmp_path, case):
+    text = seam._seam_text(case)
+    run_with_cp8(tmp_path, text)
+    update_library.update_library(tmp_path)
+    verdicts = changes_of(tmp_path, "later")["verdicts"]
+    assert verdicts["measures"][case["measure"]]["kind"] == case["page"]
+    assert (cp8_issues(text, SEAM_PACK) == ()) is case["accepted"]
+
+
+def test_the_library_carries_the_modules_and_the_ledger_counts_of_the_handoff(tmp_path):
+    run_with_cp8(tmp_path, seam.REGISTERS)
+    update_library.update_library(tmp_path)
+    verdicts = changes_of(tmp_path, "later")["verdicts"]
+    assert verdicts["modules"]["CP-2"] == {
+        "status": "Strengthened",
+        "cause": "New period",
+        "why": "Leverage fell.",
+    }
+    assert verdicts["ledger"] == [
+        ["Closed", 1],
+        ["Remaining", 1],
+        ["New", 1],
+        ["No longer stated", 0],
+    ]
+    assert verdicts["measures"]["coverage"]["reason"] == "the earlier run does not state it"
+
+
+@pytest.mark.parametrize("kind", ["no handoff", "no pack", "a note"])
+def test_the_library_carries_no_verdicts_without_a_pack_and_a_handoff(tmp_path, kind):
+    run = without_report(
+        make_run(
+            tmp_path,
+            "later",
+            modules=("CP-0", "CP-1") if kind == "no handoff" else ("CP-0", "CP-1", "CP-8"),
+            cp8=seam.REGISTERS,
+        )
+    ).parent.parent
+    if kind == "no handoff":
+        with_changes(run, pack=json.dumps(SEAM_PACK).encode())
+    else:
+        with_changes(run, note=NOTE if kind == "a note" else None)
+    update_library.update_library(tmp_path)
+    assert changes_of(tmp_path, "later")["verdicts"] is None
+
+
+def test_a_cp8_output_that_is_not_utf8_is_a_stated_problem_not_a_silent_null(tmp_path, monkeypatch):
+    run_with_cp8(tmp_path, seam.REGISTERS)
+    real = update_library.checked_bytes
+    monkeypatch.setattr(
+        update_library,
+        "checked_bytes",
+        lambda path, digest, label: b"\xff\xfe" if "CP-8" in label else real(path, digest, label),
+    )
+    update_library.update_library(tmp_path)
+    got = changes_of(tmp_path, "later")
+    assert got["verdicts"] is None
+    assert "CP-8" in got["problem"] and "not valid UTF-8" in got["problem"]
+    issues = data_of(tmp_path)["workspace"]["issues"]
+    assert any(i.startswith("later: ") and "not valid UTF-8" in i for i in issues)
