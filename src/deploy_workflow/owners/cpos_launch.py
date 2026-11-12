@@ -1515,15 +1515,16 @@ LAYER1_FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence, after your tables. You state inputs only; Python "
     "computes every forecast figure, so put no forecast figure in the block. `base` holds exactly "
-    'these ten operands in USD millions, each `{"amount": "<decimal>", "reason": null}` copied '
-    "exactly as your own tables print it (outflows as positive magnitudes), or "
+    'these ten operands in USD millions, each `{"amount": "<decimal>", "reason": null, "row": '
+    '"<label>", "period": "<header>"}` or '
     '`{"amount": null, "reason": "<why you do not state it>"}`: '
-    f"{', '.join(cp2g.OPERAND_METRIC)}. Each stated amount must also be a cell of a Markdown "
-    "table row in your findings whose first cell is exactly that operand's name above (for "
-    "example `| revenue | 1,234.5 |`), with the same sign and digits; a figure in prose, a basis "
-    "line or the sources does not count. Add that row to a table you already print, or print a "
-    "small `### Base operands` table of them. `base_drivers` is a run-rate base case and nothing "
-    "more "
+    f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
+    "your own tables that you read the amount from, and `period` the exact header text of that "
+    'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). Copy '
+    "the amount as that cell prints it, in millions; for interest, taxes, working capital and "
+    "capex write the positive magnitude whatever sign the cell shows. Print your tables as "
+    "you normally would; add nothing for this block. A figure in prose, a basis line or the "
+    "sources is not a cell. `base_drivers` is a run-rate base case and nothing more "
     "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
     "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
     "`rationale` and `limitation`). Anchor every driver to a figure you state: carry the latest "
@@ -1538,7 +1539,7 @@ LAYER1_FORECAST_BLOCK = (
     'three consecutive fiscal years after the base period, each `{"year": <int>, "start": '
     '"YYYY-MM-DD", "end": "YYYY-MM-DD"}`. `scope_limits` is a list of text limits. Set '
     f"`schema_version` to `{cpos_forecast.SCHEMA_VERSION}`. This block does not change your "
-    "findings or any other table, except for those operand rows.\n\n"
+    "findings or any table.\n\n"
 )
 
 

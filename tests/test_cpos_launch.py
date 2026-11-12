@@ -2174,7 +2174,7 @@ def forecast_answer(
         alone = mark in text and "### Chart data: debt maturities" not in text
         lead = "" if alone else "### Base operands\n\n"
         mark = mark if mark in text else "## Calculations"
-        text = text.replace(mark, f"{lead}| Base | USD m |\n| --- | --- |\n{rows}\n\n{mark}", 1)
+        text = text.replace(mark, f"{lead}| Base | FY2025 |\n| --- | --- |\n{rows}\n\n{mark}", 1)
         if cp1_block is not None:
             text = text.replace("## Calculations", f"{cp1_block}\n## Calculations", 1)
         return text
@@ -2319,55 +2319,175 @@ def test_cp2g_run_publishes_model_delivery(tmp_path, provider, capsys):
 
 
 def layer1_block(**changes) -> str:
-    return forecast_block(downside_shock=None, **changes)
+    """CP-1's block: each stated operand names the label and period header of the cell it read."""
+    base = changes.pop("base", None) or {
+        k: {"amount": v, "reason": None, "row": k, "period": "FY2025"} for k, v in BASE.items()
+    }
+    return forecast_block(downside_shock=None, base=base, **changes)
 
 
-def _cp1_text(findings: str = "", revenue_row: bool = True, tail: str = "") -> str:
-    rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items() if k != "revenue")
-    rows += "\n| revenue | 1000 |" if revenue_row else ""
+def _operand(amount, row="revenue", period="FY2025"):
+    return {"amount": amount, "reason": None, "row": row, "period": period}
+
+
+def _cp1_doc(revenue_table: str, key: str = "revenue", head: str = "", tail: str = "") -> str:
+    """A CP-1 handoff: the other nine operands in a plain table, `key`'s in the given one."""
+    rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items() if k != key)
     return (
-        "# CP-1\n\n## Findings\n\n### Bottom line\n\nText.\n\n"
-        f"{findings}\n| Base | USD m |\n| --- | --- |\n{rows}\n\n"
-        f"{layer1_block()}\n## Calculations\n\nNone.\n{tail}"
+        f"# CP-1\n\n## Findings\n\n### Bottom line\n\nText.\n\n### Base operands\n\n{head}"
+        f"| Base | FY2025 |\n| --- | --- |\n{rows}\n\n{revenue_table}\n\n__BLOCK__\n"
+        f"## Calculations\n\nNone.\n{tail}"
     )
 
 
+def _parse_layer1(doc: str, key: str = "revenue", **operand):
+    base = {k: _operand(v, k) for k, v in BASE.items()}
+    base[key] = _operand(**{"row": key, **operand})
+    full = doc.replace("__BLOCK__", layer1_block(base=base))
+    return cpos_forecast.parse(full, full, "CP-1")
+
+
+TWO_YEARS = "| Metric | FY2024 | FY2025 |\n| --- | --- | --- |\n| revenue | 900 | 1,000 |"
+
+
+def test_a_layer1_operand_is_the_cell_at_its_row_and_period():
+    inputs = _parse_layer1(_cp1_doc(TWO_YEARS), amount="1000", period="FY2025")
+    assert inputs.base["revenue"].amount == "1000"
+    assert _parse_layer1(_cp1_doc(TWO_YEARS), amount="900", period="FY2024")
+
+
 @pytest.mark.parametrize(
-    ("text", "revenue"),
+    ("table", "operand", "complaint"),
     [
-        (_cp1_text(revenue_row=False), "1000"),
-        (_cp1_text("Basis: revenue 1,234 per annual report", revenue_row=False), "1234"),
-        (_cp1_text(revenue_row=False, tail="\n## Sources\n\n- report.pdf page 1234\n"), "1234"),
-        (_cp1_text("As of 2025-03-31.", revenue_row=False), "2025"),
-        (_cp1_text(revenue_row=False), "300"),
-        (_cp1_text(), "-1000"),
+        (TWO_YEARS, {"amount": "900", "period": "FY2025"}, "is not CP-1's cell"),
+        (TWO_YEARS, {"amount": "1000", "period": "FY2024"}, "is not CP-1's cell"),
+        (TWO_YEARS, {"amount": "1000", "period": "FY2023"}, "no table cell"),
         (
-            _cp1_text(
-                '#### Forecast inputs (draft)\n\n```json\n{"base": {"revenue": 1234}}\n```\n',
-                revenue_row=False,
-            ),
-            "1234",
+            "| Metric | FY2025 | Growth % |\n| --- | --- | --- |\n| revenue | 1,000 | 12 |",
+            {"amount": "12", "period": "FY2025"},
+            "is not CP-1's cell",
+        ),
+        (
+            "| Metric | FY2025 | Growth % |\n| --- | --- | --- |\n| revenue | 1,000 | 12% |",
+            {"amount": "12", "period": "Growth %"},
+            "is not one number",
+        ),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | (1,000) |", {"amount": "1000"}, "is not"),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000k |", {"amount": "1000"}, "number"),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000m |", {"amount": "1000"}, "number"),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | n.a. |", {"amount": "1000"}, "number"),
+        (
+            "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |",
+            {"amount": "1000", "row": "Revenue"},
+            "no table cell",
+        ),
+        (
+            "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |\n| revenue | 1,100 |",
+            {"amount": "1000"},
+            "is not one number",
         ),
     ],
-    ids=["block-only", "basis", "sources", "date", "other-row", "sign", "json-copy"],
+    ids=[
+        "prior-period-cell",
+        "neighbour-period",
+        "unknown-period",
+        "growth-column",
+        "percent-cell",
+        "bracket-negative",
+        "k-suffix",
+        "m-suffix",
+        "not-a-number",
+        "label-case",
+        "ambiguous-label",
+    ],
 )
-def test_a_layer1_operand_must_be_a_cell_of_its_own_row_in_cp1s_tables(text, revenue):
-    base = {
-        k: {"amount": revenue if k == "revenue" else v, "reason": None} for k, v in BASE.items()
-    }
-    block = layer1_block(base=base)
-    full = text.replace(layer1_block(), block)
-    with pytest.raises(ValueError, match="is not printed in CP-1's tables"):
+def test_a_layer1_operand_that_is_not_its_named_cell_is_refused(table, operand, complaint):
+    with pytest.raises(ValueError, match=complaint) as caught:
+        _parse_layer1(_cp1_doc(table), **operand)
+    assert "CP-1: base revenue" in str(caught.value)
+
+
+_ROW = "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1234 |"
+
+
+@pytest.mark.parametrize(
+    "doc",
+    [
+        _cp1_doc("", head=f"```text\n{_ROW}\n```\n\n"),
+        _cp1_doc("", tail=f"\n## Sources\n\n{_ROW}\n"),
+        _cp1_doc("").replace("Text.", f"Text.\n\n{_ROW}"),
+        _cp1_doc("| Metric | FY2025 |\n| revenue | 1234 |"),
+        _cp1_doc("", head="Basis: revenue 1,234 per annual report\n\n"),
+    ],
+    ids=["fenced", "sources", "reader-passage", "no-delimiter", "prose"],
+)
+def test_a_layer1_operand_outside_cp1s_tables_is_refused(doc):
+    with pytest.raises(ValueError, match="no table cell"):
+        _parse_layer1(doc, amount="1234")
+
+
+def test_a_layer1_table_under_a_later_heading_still_counts_after_sources_ends():
+    row = "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,234 |"
+    doc = _cp1_doc("", tail=f"\n## Sources\n\nx\n\n## Appendix\n\n{row}\n")
+    assert _parse_layer1(doc, amount="1234")
+
+
+@pytest.mark.parametrize("printed", ["85", "-85", "(85)", "\u221285", "**(85)**"])
+def test_a_layer1_outflow_is_stated_as_a_magnitude_however_cp1_prints_it(printed):
+    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Interest paid | {printed} |", "interest")
+    assert _parse_layer1(doc, "interest", amount="85", row="Interest paid").base["interest"]
+
+
+def test_a_layer1_outflow_stated_negative_is_refused():
+    doc = _cp1_doc("| Metric | FY2025 |\n| --- | --- |\n| Interest paid | -85 |", "interest")
+    with pytest.raises(ValueError, match="is not CP-1's cell"):
+        _parse_layer1(doc, "interest", amount="-85", row="Interest paid")
+
+
+@pytest.mark.parametrize(
+    ("printed", "amount", "accepted"),
+    [("(50)", "50", False), ("(50)", "-50", True), ("50", "-50", False), ("\u221250", "-50", True)],
+)
+def test_a_layer1_non_outflow_compares_with_its_sign(printed, amount, accepted):
+    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Free cash flow | {printed} |", "fcf")
+    if accepted:
+        assert _parse_layer1(doc, "fcf", amount=amount, row="Free cash flow")
+    else:
+        with pytest.raises(ValueError, match="is not CP-1's cell"):
+            _parse_layer1(doc, "fcf", amount=amount, row="Free cash flow")
+
+
+def test_a_layer1_label_is_compared_without_emphasis_and_a_repeated_row_that_agrees_is_one_cell():
+    table = "| Metric | FY2025 |\n| --- | --- |\n|  **Net sales**  | 1,000 |\n| Net sales | 1000 |"
+    assert _parse_layer1(_cp1_doc(table), amount="1000", row="Net sales")
+
+
+@pytest.mark.parametrize(
+    "operand",
+    [
+        {"amount": "1000", "reason": None},
+        {"amount": "1000", "reason": None, "row": "revenue"},
+        {"amount": None, "reason": "unknown", "row": "revenue", "period": "FY2025"},
+    ],
+)
+def test_a_layer1_operand_must_name_its_cell_exactly_when_it_states_an_amount(operand):
+    doc = _cp1_doc("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |")
+    base = {k: _operand(v, k) for k, v in BASE.items()} | {"revenue": operand}
+    full = doc.replace("__BLOCK__", layer1_block(base=base))
+    with pytest.raises(ValueError, match="CP-1: base revenue"):
         cpos_forecast.parse(full, full, "CP-1")
 
 
-def test_a_layer1_operand_in_its_own_row_is_accepted_with_thousands_commas():
-    text = _cp1_text().replace("| revenue | 1000 |", "| Revenue | USD 1,000 |")
-    cpos_forecast.parse(text, text, "CP-1")
+def test_a_cp2g_operand_names_no_row_or_period():
+    base = {k: _operand(v, k) for k, v in BASE.items()}
+    with pytest.raises(ValueError, match="only CP-1 does"):
+        cpos_forecast.parse(forecast_block(base=base), " ".join(BASE.values()))
 
 
-def test_the_layer1_instruction_names_the_row_label_of_each_operand():
-    assert "first cell" in cpos_launch.LAYER1_FORECAST_BLOCK
+def test_the_layer1_instruction_asks_for_the_row_and_period_not_for_extra_rows():
+    block = cpos_launch.LAYER1_FORECAST_BLOCK
+    assert '"row"' in block and '"period"' in block and "exact first-cell text" in block
+    assert "Base operands" not in block and "positive magnitude" in block
 
 
 def test_cp_model_without_cp2g_publishes_a_model_from_cp1s_block(tmp_path, provider, capsys):
@@ -2439,12 +2559,9 @@ def test_cp2gs_block_wins_when_both_modules_state_one(tmp_path, provider, capsys
         (forecast_block(), "CP-1: a layer-1 forecast states no shock and no cases"),
         (
             layer1_block(
-                base={
-                    k: {"amount": "1234" if k == "revenue" else v, "reason": None}
-                    for k, v in BASE.items()
-                }
+                base={k: _operand("1234" if k == "revenue" else v, k) for k, v in BASE.items()}
             ),
-            "CP-1: base revenue 1234 is not printed in CP-1",
+            "CP-1: base revenue 1234 is not CP-1's cell at row `revenue`, period `FY2025`",
         ),
     ],
 )

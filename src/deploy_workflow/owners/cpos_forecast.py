@@ -22,7 +22,7 @@ from deploy_vii.contracts import Contract
 from deploy_vii.live.schema import exact_json, json_object
 from deploy_vii.readiness import shape_issues
 from deploy_workflow.owners import cp2g
-from deploy_workflow.prose_checks import FORECAST_HEADING
+from deploy_workflow.prose_checks import FORECAST_HEADING, reader_passages
 
 HEADING = FORECAST_HEADING
 SCHEMA_VERSION = "cpos-forecast-inputs/1"
@@ -42,8 +42,13 @@ Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 
 class Operand(Contract):
+    """A base operand. CP-1's layer-1 block also says where it read an amount: the first cell of
+    the table row (`row`) and the header of the period column (`period`)."""
+
     amount: Signed | None
     reason: str | None
+    row: str | None = None
+    period: str | None = None
 
     @model_validator(mode="after")
     def one_of(self) -> "Operand":
@@ -128,21 +133,6 @@ def _block(text: str, source: str = "CP-2G") -> str:
     return str(found[0])
 
 
-def _without_block(text: str) -> str:
-    """The handoff less its inputs block, so a CP-1 operand is checked against CP-1's own tables
-    and not against the block that states it."""
-    kept: list[str] = []
-    inside = False
-    for line in text.replace("\r\n", "\n").split("\n"):
-        if line.strip() == HEADING:
-            inside = True
-        elif inside and re.match(r"#{1,6}\s", line):
-            inside = False
-        if not inside:
-            kept.append(line)
-    return "\n".join(kept)
-
-
 def _printed(text: str, amount: str) -> bool:
     """Whether CP-1 prints the amount as a whole number token, with or without thousands commas."""
     whole, dot, fraction = amount.lstrip("-").partition(".")
@@ -152,23 +142,109 @@ def _printed(text: str, amount: str) -> bool:
     )
 
 
-_AMOUNT = re.compile(r"(?<![0-9.,])-?[0-9][0-9,]*(?:\.[0-9]+)?(?![0-9]|[.,][0-9])")
+_CELL = re.compile(r"(?P<minus>[-\u2212])?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
+_BRACKET = re.compile(r"\((?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\)")
 
 
-def _in_row(text: str, key: str, amount: str) -> bool:
-    """Whether a Markdown table row of the text has `key` as its first cell and a later cell
-    holding the amount as a whole number token, same sign, thousands commas allowed. Only table
-    rows count: not prose, Basis lines, dates, sources or JSON."""
-    for line in text.split("\n"):
+def _plain(cell: str) -> str:
+    """A label or header as compared: trimmed, without Markdown emphasis; case kept."""
+    return cell.strip().strip("*_`").strip()
+
+
+def _signed(cell: str) -> Decimal | None:
+    """`1,000`, `-1,000`, `\u22121,000` and `(1,000)` as signed numbers; anything else, such as a
+    unit or scale suffix, a percentage or `n.a.`, is not a number."""
+    text = _plain(cell)
+    if (bracket := _BRACKET.fullmatch(text)) is not None:
+        return -Decimal(bracket["digits"].replace(",", ""))
+    if (plain := _CELL.fullmatch(text)) is None:
+        return None
+    value = Decimal(plain["digits"].replace(",", ""))
+    return -value if plain["minus"] else value
+
+
+def _tables(text: str) -> list[list[list[str]]]:
+    """The Markdown tables of CP-1 outside fenced code, `## Sources`, the forecast block and the
+    reader passages: each a list of rows of cells, header first, delimiter row dropped."""
+    skipped = {number for body in reader_passages(text).values() for number, _ in body}
+    tables: list[list[list[str]]] = []
+    run: list[list[str]] = []
+    seen_delimiter = False
+    fenced = False
+    block = sources = False
+    for number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
-        if not (stripped.startswith("|") and stripped.endswith("|")):
+        if stripped.startswith("```"):
+            fenced = not fenced
+        heading = None if fenced else re.match(r"(#{1,6})\s+(.*?)\s*#*\s*$", line)
+        if heading is not None:
+            block = stripped == HEADING
+            if len(heading[1]) <= 2:
+                sources = len(heading[1]) == 2 and heading[2] == "Sources"
+        cells = (
+            [c.strip() for c in stripped[1:-1].split("|")]
+            if stripped.startswith("|") and stripped.endswith("|") and len(stripped) > 1
+            else None
+        )
+        if cells is None or fenced or block or sources or number in skipped:
+            if len(run) > 1:
+                tables.append(run)
+            run, seen_delimiter = [], False
             continue
-        first, *rest = (c.strip().strip("*`").strip().lower() for c in stripped[1:-1].split("|"))
-        if first == key and any(
-            token.replace(",", "") == amount for cell in rest for token in _AMOUNT.findall(cell)
-        ):
-            return True
-    return False
+        if run and not seen_delimiter:
+            if all(re.fullmatch(r":?-+:?", c) for c in cells):
+                seen_delimiter = True
+            else:
+                run = [cells]  # no delimiter row under the first row: not a table
+        else:
+            run.append(cells)
+    if len(run) > 1:
+        tables.append(run)
+    return tables
+
+
+def _cells(text: str, label: str, period: str) -> set[str]:
+    """The distinct texts of the cells at `label` (a row's first cell) and `period` (a header
+    cell) over every table of the handoff."""
+    found: set[str] = set()
+    for table in _tables(text):
+        header, *rows = table
+        for column in (i for i, h in enumerate(header) if i > 0 and _plain(h) == _plain(period)):
+            found.update(
+                row[column] for row in rows if len(row) > column and _plain(row[0]) == _plain(label)
+            )
+    return found
+
+
+def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
+    """The one sign rule: the block takes an outflow as a positive magnitude, so an outflow
+    compares by magnitude however CP-1 prints it; every other operand compares signed."""
+    return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
+
+
+def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
+    """Why the operand is not the cell it names, or None when it is."""
+    if operand.amount is None:
+        return (
+            None
+            if operand.row is None and operand.period is None
+            else (f"base {key} states no amount, so it names no row or period")
+        )
+    if not operand.row or not operand.period:
+        return f"base {key} must name the `row` label and `period` header it was read from"
+    where = f"row `{operand.row}`, period `{operand.period}`"
+    found = _cells(text, operand.row, operand.period)
+    if not found:
+        return f"base {key}: no table cell of CP-1 is at {where}"
+    values = {_signed(cell) for cell in found}
+    if len(found) > 1 and len(values) > 1 or None in values:
+        return (
+            f"base {key}: {where} is not one number in CP-1 ({len(found)} cells: {sorted(found)})"
+        )
+    (value,) = values
+    if value is None or not _agrees(key, value, Decimal(operand.amount)):
+        return f"base {key} {operand.amount} is not CP-1's cell at {where} ({min(found)})"
+    return None
 
 
 def _declined(document: dict[str, object], source: str) -> None:
@@ -216,18 +292,14 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
         inputs.downside_shock or inputs.upside_drivers or inputs.downside_drivers
     ):
         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
-    cp1_only = source == "CP-1"
-    printed = _without_block(cp1_text) if cp1_only else cp1_text
     for key, operand in inputs.base.items():
-        if operand.amount is None:
-            continue
-        if cp1_only and not _in_row(printed, key, operand.amount):
-            raise ValueError(
-                f"{source}: base {key} {operand.amount} is not printed in CP-1's tables, in a "
-                f"row whose first cell is `{key}`, with that sign"
-            )
-        if not cp1_only and not _printed(printed, operand.amount):
-            raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
+        if source == "CP-2G":
+            if operand.row is not None or operand.period is not None:
+                raise ValueError(f"{source}: base {key} names a row or period; only CP-1 does")
+            if operand.amount is not None and not _printed(cp1_text, operand.amount):
+                raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
+        elif (problem := _layer1_problem(cp1_text, key, operand)) is not None:
+            raise ValueError(f"{source}: {problem}")
     return inputs
 
 

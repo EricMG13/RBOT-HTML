@@ -18,12 +18,18 @@ tests/test_credit_os_store.py -q -m "not live and not browser"` 666 passed, exit
 tools/quality_gate.py` 0 findings, exit 0. Changed expectations: `--modules CP-MODEL` is no longer refused;
 earnings_update's report scope now names the run-rate forecast; the publish-failure stub takes a source
 argument.
-Fix round 1 (reviewer probes `m3_layer1_operand.py`, `m3_block_vouches_reader.py`, both exit 0 now): a CP-1
-operand must be a cell of a CP-1 table row whose first cell is the operand's name, same sign (prose, Basis
-lines, Sources, dates, other JSON copies and other rows no longer count; the layer-1 instruction asks for
-those rows, outflows as positive magnitudes); the forecast block no longer vouches for a reader figure in
-`figure_issues` (both sources); the library link names the module it opens. CP-2G's operand check is
-unchanged and keeps its known weakness (any matching number in CP-1's text), reported separately.
+Fix round 1 (the operand-key row rule) was replaced in round 2 after re-review: CP-1 keeps its natural
+tables; each layer-1 base operand states `{"amount","reason":null,"row","period"}`, the exact first-cell
+label and period header it was read from, and Python reads that one cell (tables outside fences, `## Sources`,
+the block and the reader passages; trimmed and emphasis-stripped, case-sensitive; `1,000`, `-1,000`, `(1,000)`,
+U+2212 parse as signed; `1,000k`, `12%`, `n.a.` do not). Outflows (cp2g.OUTFLOWS) compare by magnitude, all
+others signed; zero, or several differing, cells refuse the operand by name (fail-open unchanged). CP-2G
+refuses a `row`/`period` and keeps its check byte for byte. The block still does not vouch for a reader
+figure in `figure_issues`. Probes `r2_m1_row_defeats.py`, `m3_layer1_operand.py`, `m3_block_vouches_reader.py`,
+`r2_m2_block_edges.py` exit 0 (the first two pass partly because the old-shape blocks they build carry no
+row/period and are refused; the accept/refuse cases are in the new tests). `uv run pytest tests/test_cpos_launch.py
+tests/test_prose_checks.py tests/test_handoff_loop.py tests/test_update_library.py -q -m "not live and not browser"`
+690 passed, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
 Known limits: driver values are not checked against their anchors (the rationale is free text); runs
 interrupted before this change refuse to resume. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
 store tests; `tests/test_financial_workflow.py`.
