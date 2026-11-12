@@ -1765,6 +1765,28 @@ test('reader charts: a step table is a waterfall of its stated amounts, each bar
   assert.ok(html.includes('<h2>Liquidity bridge</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
 });
 
+test('reader charts: nine long step labels wrap word-wise inside their step, at most three lines, an ellipsis where cut, the full text in the title', () => {
+  const names = ['Opening: FY2024 EBITDA', 'Acquisition transaction and integration-related expenses', 'Non-cash stock and deferred compensation expense', 'Refinancing costs', 'Other, net', 'Restructuring and impairment charges', 'Foreign currency translation effect', 'Share of equity-method investees', 'Closing: FY2024 EBITDA As Defined'];
+  const rows = names.map((n, i) => [63 + i, n, i === 0 ? '3813' : i === 8 ? String(3813 + 70 * 7) : '70', 'US$m', 'Synthetic.']);
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; });
+  const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
+  const labels = [...html.matchAll(/<text class="axis-label" x="([\d.]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: Number(m[1]), lines: [...m[2].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(t => t[1]) }));
+  assert.equal(labels.length, 9);
+  const CHAR = 14 * 0.6; // monospace advance of the 14px axis label, in viewBox units
+  const boxes = labels.map(l => [l.x - Math.max(...l.lines.map(t => t.length)) * CHAR / 2, l.x + Math.max(...l.lines.map(t => t.length)) * CHAR / 2]);
+  for (let i = 1; i < boxes.length; i++) assert.ok(boxes[i - 1][1] < boxes[i][0], `labels ${i - 1} and ${i} overprint: ${boxes[i - 1]} ${boxes[i]}`);
+  labels.forEach((l, i) => {
+    assert.ok(l.lines.length >= 1 && l.lines.length <= 3, l.lines.join('|'));
+    // Every word shown is a whole word of the label, or ends in an ellipsis; a label cut anywhere ends in one.
+    const words = names[i].split(' ');
+    for (const line of l.lines) for (const w of line.split(' ')) assert.ok(w.endsWith('\u2026') || words.includes(w), `${w} is cut without an ellipsis`);
+    const shown = l.lines.join(' ');
+    assert.equal(shown === names[i] || shown.endsWith('\u2026') || l.lines.some(t => t.includes('\u2026')), true);
+    assert.ok(html.includes(`<title>${names[i].replace(/&/g, '&amp;')}: `), 'the full step name is in the title');
+  });
+  assert.ok(labels[3].lines.join(' ') === 'Refinancing costs' || labels[3].lines.length <= 3);
+});
+
 test('reader charts: every chart has its table form, the handoff table as written with its chips', () => {
   const page = runPage(withBridge);
   const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
@@ -1826,6 +1848,7 @@ const withStructure = d => {
 test('structure views: a debt stack is segments in stated rank order, widths from the stated amounts, leverage as stated', () => {
   const html = runPage(withStructure).readerChart(outId('CP-1'), STACK);
   const segments = [...html.matchAll(/<a class="stack-seg series-(\d)" href="[^"]*" data-evidence="[^"]*:(\d+)" style="width:([\d.]+)%"/g)].map(m => [m[1], m[2], m[3]]);
+  // Ranking 1 secured and ranking 2 unsecured are two pairs, so two series; the widths are unchanged.
   assert.deepEqual(segments, [['0', '93', '60'], ['1', '94', '40']]);
   const key = strip(/<ol class="stack-key">(.*?)<\/ol>/s.exec(html)[1]);
   assert.ok(key.indexOf('Term loan') < key.indexOf('Notes') && key.indexOf('Notes') < key.indexOf('Subordinated'));
@@ -1835,6 +1858,27 @@ test('structure views: a debt stack is segments in stated rank order, widths fro
   assert.ok(html.includes('<p class="matrix-note">A facility with no stated amount has no segment.</p>'));
   assert.ok(html.includes('<h2>Debt stack</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
   assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+const stackOf = rows => runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: debt stack', 3, 90, 'consumed', [table(92, ['Facility', 'Ranking', 'Secured', 'Amount', 'Cumulative leverage', ...TAIL], rows.map(([r, s, a], i) => [93 + i, `F${i}`, r, s, a, '1.0', 'US$m', 'Synthetic.']))])); d[outId('CP-1')].charts.push(STACK); return d; }).readerChart(outId('CP-1'), STACK);
+
+test('structure views: debt stack segments of equal ranking and security share a series, others differ, and a legend names each pair', () => {
+  const html = stackOf([['1', 'Yes', '100'], ['1', 'Yes', '200'], ['2', 'No', '300'], ['2', 'Yes', '50']]);
+  const classes = [...html.matchAll(/<a class="stack-seg series-(\d)"/g)].map(m => m[1]);
+  assert.equal(classes[0], classes[1]);
+  assert.equal(new Set(classes).size, 3);
+  const legend = strip(/<div class="chart-legend stack-legend">(.*?)<\/div>/s.exec(html)[1]);
+  assert.equal(legend, 'Rank 1 \u00b7 securedRank 2 \u00b7 unsecuredRank 2 \u00b7 secured');
+  // The per-facility swatches use the same classes as the segments.
+  assert.deepEqual([...html.matchAll(/<i class="swatch series-(\d)"/g)].map(m => m[1]), classes);
+});
+
+test('structure views: a debt stack row with no ranking or an unreadable Secured value keeps a neutral class and the legend says so', () => {
+  const html = stackOf([['1', 'Yes', '100'], ['Not supplied: not stated', 'Yes', '100'], ['2', 'Maybe', '100']]);
+  assert.equal(countOf(html, /<a class="stack-seg stack-neutral"/g), 2);
+  assert.equal(countOf(html, /<i class="swatch stack-neutral"/g), 2);
+  const legend = strip(/<div class="chart-legend stack-legend">(.*?)<\/div>/s.exec(html)[1]);
+  assert.equal(legend, 'Rank 1 \u00b7 securedRanking not stated');
 });
 
 test('structure views: a bullet chart marks the stated threshold and current, the passing side and the stated headroom', () => {

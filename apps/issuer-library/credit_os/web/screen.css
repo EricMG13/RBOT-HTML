@@ -808,3 +808,9 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .workbench.overview-workspace #module-head{padding-left:28px}
 }
 @media screen{.overview-aside .column-chart .periods{grid-template-columns:repeat(var(--periods),minmax(140px,1fr))}}
+/* Debt stack: one series per ranking and security pair (blue, light slate, navy, grey; no amber or red here); an unstated ranking is neutral with an outline. */
+.stack-seg.series-1,.stack-key .series-1,.stack-legend .series-1{background:#7482a1}
+.stack-seg.series-2,.stack-key .series-2,.stack-legend .series-2{background:var(--navy)}
+.stack-seg.series-3,.stack-key .series-3,.stack-legend .series-3{background:var(--muted)}
+.stack-seg.stack-neutral,.stack-key .stack-neutral,.stack-legend .stack-neutral{background:var(--rule);box-shadow:inset 0 0 0 1px var(--muted)}
+.stack-legend i{height:12px;width:12px;border-radius:2px}
