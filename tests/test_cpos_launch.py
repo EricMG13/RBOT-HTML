@@ -55,7 +55,10 @@ ISSUER = "Northbridge Synthetic Group"
 AS_OF = "2025-03-31"
 
 # Written by hand from the registry's dependency rules and the block titles on the Front Page.
-COVENANT_MODULES = ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-4", "CP-2D", "CP-3C", "CP-5")
+COVENANT_MODULES = (
+    *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2D", "CP-2G"),
+    *("CP-3C", "CP-5"),
+)
 COVENANT_ROUTES = {
     ("covenant-tests-headroom", "CP-4", "Covenant tests and headroom", "table"),
     ("liquidity-runway", "CP-2D", "Liquidity and cash runway", "table"),
@@ -69,21 +72,39 @@ COVENANT_ROUTES = {
     ("documents-structure", "CP-4", "Documents and structure", "table"),
     ("maturity-wall", "CP-1", "Chart data: debt maturities", "chart"),
 }
+# Run order for each pathway (registry.plan over the preset, CP-MODEL and CP-8 removed; required
+# producers such as CP-1A are added). Owner, 2026-11-11: CP-DR and CP-2E are in every preset.
 PATHWAY_MODULES = {
-    "credit_snapshot": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-4", "CP-3", "CP-5", "CP-6"),
-    "earnings_update": ("CP-0", "CP-1", "CP-1B", "CP-1D", "CP-5"),
-    # The fixture context's peer source is CP-DR, so the two pathways with CP-1C gain CP-DR.
+    "credit_snapshot": (
+        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3"),
+        *("CP-5", "CP-6"),
+    ),
+    "earnings_update": ("CP-0", "CP-1", "CP-1B", "CP-DR", "CP-2E", "CP-1D", "CP-5"),
     "relative_value": (
-        *("CP-0", "CP-1", "CP-1A", "CP-3D", "CP-DR", "CP-1C", "CP-2", "CP-2D", "CP-3C", "CP-3"),
-        "CP-5",
+        *("CP-0", "CP-1", "CP-1A", "CP-3D", "CP-DR", "CP-1C", "CP-2", "CP-2E", "CP-2D", "CP-3C"),
+        *("CP-3", "CP-5"),
     ),
     "covenant_refinancing": COVENANT_MODULES,
-    # CP-2 before CP-2A since 2026-11-10 (cp-2a SKILL.md: "Upstream: CP-1, CP-1B, CP-2").
     "distressed_restructuring": (
-        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-1C", "CP-2", "CP-2A", "CP-2G", "CP-2H"),
-        *("CP-4C", "CP-5"),
+        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-1C", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
+        *("CP-2H", "CP-4C", "CP-5"),
     ),
-    "portfolio_decision": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-3", "CP-5", "CP-6"),
+    "portfolio_decision": (
+        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
+    ),
+}
+# The owner's preset answer key (2026-11-11), hand-written as sets: what each pathway requests.
+PRESET_ANSWER_KEY = {
+    "credit_snapshot": "CP-0 CP-1 CP-MODEL CP-1A CP-DR CP-2 CP-2A CP-2E CP-2G CP-4 CP-3 CP-5 CP-6",
+    "earnings_update": "CP-0 CP-1 CP-MODEL CP-1B CP-1D CP-DR CP-2E CP-5",
+    "relative_value": "CP-0 CP-1 CP-MODEL CP-1C CP-DR CP-2 CP-2D CP-2E CP-3 CP-3C CP-3D CP-5",
+    "covenant_refinancing": (
+        "CP-0 CP-1 CP-MODEL CP-1A CP-DR CP-2 CP-2A CP-2D CP-2E CP-2G CP-4 CP-3C CP-5"
+    ),
+    "distressed_restructuring": (
+        "CP-0 CP-1 CP-1A CP-1C CP-DR CP-2 CP-2A CP-2E CP-2G CP-2H CP-4 CP-4C CP-5"
+    ),
+    "portfolio_decision": "CP-0 CP-1 CP-MODEL CP-DR CP-2 CP-2E CP-3 CP-5 CP-6",
 }
 
 
@@ -961,12 +982,27 @@ COVENANT_PRODUCERS = {
     "CP-0": [],
     "CP-1": ["CP-0"],
     "CP-1A": ["CP-0"],
-    "CP-2": ["CP-0", "CP-1", "CP-1A"],
+    "CP-DR": ["CP-0", "CP-1"],
+    "CP-2": ["CP-0", "CP-1", "CP-1A", "CP-DR"],
     "CP-4": ["CP-0", "CP-1", "CP-1A"],
+    "CP-2A": ["CP-0", "CP-1", "CP-2"],
+    "CP-2E": ["CP-0", "CP-1", "CP-1A", "CP-2"],
     "CP-2D": ["CP-0", "CP-1", "CP-2"],
-    "CP-3C": ["CP-0", "CP-1", "CP-1A", "CP-2D", "CP-4"],
-    "CP-5": ["CP-0", "CP-1", "CP-1A", "CP-2", "CP-2D", "CP-3C", "CP-4"],
+    "CP-2G": ["CP-0", "CP-1", "CP-2A", "CP-2D"],
+    "CP-3C": ["CP-0", "CP-1", "CP-1A", "CP-2A", "CP-2D", "CP-4"],
+    "CP-5": [
+        *("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-3C", "CP-4"),
+        "CP-DR",  # CP-5 takes every analyst before it.
+    ],
 }
+
+
+def covenant_answer(context: dict, routes: list) -> str:
+    """The covenant pathway now runs CP-2G (owner, 2026-11-11), which must end in a forecast
+    block; the declined one publishes no model."""
+    if context["module_id"] == "CP-2G":
+        return forecast_answer(context, routes, REAL_DECLINED_BLOCK)
+    return answer(context, routes)
 
 
 def test_each_module_is_sent_only_its_producers_handoffs(tmp_path, provider):
@@ -978,7 +1014,7 @@ def test_each_module_is_sent_only_its_producers_handoffs(tmp_path, provider):
 
     def answering(context):
         sent[context["module_id"]] = sorted(context["handoffs"])
-        return answer(context, routes)
+        return covenant_answer(context, routes)
 
     provider.answer = answering
     assert main(argv) == 0
@@ -989,7 +1025,7 @@ def test_answers_pinned_to_their_producers_are_replayed_unsent(tmp_path, provide
     """CP-OS replays a retained answer whose pins are exactly the producers it is sent."""
     argv = launch(tmp_path, "--live", "--ruling", str(RULING))
     routes = prepare_routes(tmp_path, "sol-medium", modules=None)
-    provider.answer = lambda context: answer(context, routes)
+    provider.answer = lambda context: covenant_answer(context, routes)
     assert main(argv) == 0
     sent = list(provider.calls)
     out = tmp_path / "out"
@@ -1472,27 +1508,31 @@ def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
     assert "Stress design" not in texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
 
 
-@pytest.mark.parametrize(
-    ("pathway", "peer_source", "added"),
-    [
-        ("relative_value", "cp_dr_public", True),
-        ("distressed_restructuring", "cp_dr_public", True),
-        ("relative_value", "none", False),
-        ("credit_snapshot", "cp_dr_public", False),  # no CP-1C in this pathway
-    ],
-)
-def test_a_pathway_with_cp1c_adds_cpdr_when_cpdr_is_the_peer_source(
-    tmp_path, pathway, peer_source, added
-):
-    """Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default". No
-    pathway lists CP-DR, so the default peer source used to leave CP-1C without a producer."""
+def test_the_presets_are_the_owners_answer_key():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+
+    assert {p: set(m) for p, m in PRESETS.items()} == {
+        p: set(key.split()) for p, key in PRESET_ANSWER_KEY.items()
+    }
+    assert all(len(m) == len(set(m)) for m in PRESETS.values())
+
+
+@pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+@pytest.mark.parametrize("peer_source", ["cp_dr_public", "user_list", "user_comps", "none"])
+def test_cpdr_and_cp2e_are_in_every_pathway_and_run_in_order(tmp_path, pathway, peer_source):
+    """Owner, 2026-11-11: "cp-dr should be on every run or cp-1c wont work. so should cp-2e."
+    The peer source no longer adds or drops CP-DR; the preset carries it."""
     prepared, _ = all_instructions(tmp_path, pathway, peer_source=peer_source)
     order = list(prepared.plan.instructions)
-    assert ("CP-DR" in order) is added
-    assert set(order) - {"CP-DR"} == set(PATHWAY_MODULES[pathway]) - {"CP-DR"}
-    if added:
+    assert order == list(PATHWAY_MODULES[pathway])
+    assert {"CP-DR", "CP-2E"} <= set(order)
+    assert "CP-DR" in prepared.plan.run.requested_modules
+    if "CP-1C" in order:
         assert order.index("CP-DR") < order.index("CP-1C")
-        assert "CP-DR" in prepared.plan.run.requested_modules
+    if "CP-2" in order:
+        assert order.index("CP-2E") > order.index("CP-2")
+    if "CP-2G" in order:
+        assert order.index("CP-2A") < order.index("CP-2G")
 
 
 def test_explicit_modules_are_run_as_given(tmp_path):
@@ -1539,7 +1579,7 @@ def test_the_bottom_line_is_retained_in_the_accepted_handoff(tmp_path, provider)
             cap="50",
         ).plan.layout.routes
     )
-    provider.answer = lambda context: answer(context, routes)
+    provider.answer = lambda context: covenant_answer(context, routes)
     assert main(argv) == 0
     folder = next((tmp_path / "out/deliveries").glob("*/delivery.json")).parent
     handoffs = [p for p in folder.rglob("*.md") if READER_BOTTOM_LINE in p.read_text()]
@@ -1646,9 +1686,15 @@ def test_yield_against_maturity_stays_omitted(tmp_path):
 
 
 def test_the_report_scope_no_longer_says_charts_are_unpublished(tmp_path):
-    prepared, *_ = good_task(tmp_path, "CP-1", "credit_snapshot")
+    # credit_snapshot runs CP-2G since 2026-11-11, so the scope without a forecast is read on
+    # earnings_update, and the one with it on credit_snapshot.
+    prepared, *_ = good_task(tmp_path, "CP-1", "earnings_update")
     assert "The HTML Model and calculation JSON are not published" in prepared.layout.scope
     assert "charts" not in prepared.layout.scope.lower()
+    (tmp_path / "f").mkdir()
+    forecast, *_ = good_task(tmp_path / "f", "CP-1", "credit_snapshot")
+    assert "A forecast table is published with the issuer report" in forecast.layout.scope
+    assert "charts" not in forecast.layout.scope.lower()
 
 
 def test_six_handoff_headings_are_still_enforced(tmp_path):

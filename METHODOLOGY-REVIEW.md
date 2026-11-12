@@ -703,3 +703,8 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
 - Dependency edges added as optional (order and supply, never a block): CP-2A after CP-1B and CP-2;
   CP-2E after CP-1, CP-1A and CP-2; CP-1C and CP-2 after CP-DR. CP-DR joins a pathway that has
   CP-1C when the context's peer source is `cp_dr_public`.
+
+**Presets of 2026-11-11 (owner: decisions M1, M2, M5 in
+`docs/rulings/2026-11-11-module-presets-and-changes.md`).** CP-DR and CP-2E are now selected for every
+pathway; CP-1C needs CP-DR's peers and CP-2E follows CP-2. CP-8 leaves the portfolio_decision preset
+pending its redesign as a same-pathway comparison.

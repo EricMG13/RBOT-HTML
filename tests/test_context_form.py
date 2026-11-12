@@ -37,7 +37,7 @@ from deploy_workflow.run_expectations import (
 ROOT = Path(__file__).resolve().parents[1]
 FORM = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
 WEB = ROOT / "apps/issuer-library/credit_os/web"
-# With cp_dr_public the research module joins a pathway that has CP-1C; with any other source not.
+# CP-DR and CP-2E are in every preset since 2026-11-11: the peer source no longer changes the run.
 PEER_SOURCES = ("cp_dr_public", "user_comps")
 
 
@@ -74,9 +74,10 @@ def test_the_pathways_are_the_contracts() -> None:
 
 @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
 def test_the_run_order_is_the_launchers_for_each_peer_source(pathway: str) -> None:
-    base, with_research = lists("RUN_ORDER"), lists("WITH_RESEARCH")
-    assert base[pathway] == launched(pathway, "user_comps")
-    assert with_research.get(pathway, base[pathway]) == launched(pathway, "cp_dr_public")
+    order = lists("RUN_ORDER")[pathway]
+    for peer_source in PEER_SOURCES:
+        assert order == launched(pathway, peer_source)
+    assert "WITH_RESEARCH" not in FORM
 
 
 def test_the_dependency_edges_are_the_registrys() -> None:
