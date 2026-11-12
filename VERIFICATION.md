@@ -4,6 +4,11 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — CP-8 checker: a currency code glued to digits, more currency and scale forms, bond names (branch `claude/cp8-checker-currency`, owner "complete 1")
+Scope: offline, synthetic plus read-only reading of 974 retained `.md` handoffs; no provider. C1 `EUR437m`, `USD2010` read as figures; C2 `C$`/`A$`/`R$` prefixes, `mln`/`bln`, `'000`, 18 more currency codes (`_CODES` 22 to 40) around a year-shaped number; C3 `2029s` is a bond name, a year. Tests first: 29 of the new cases failed on the unchanged checker, all pass after; `counts_code_glued.py` flipped 1 to 0.
+Corpus (both `counts` modes, token level, old vs new): 1,559 token diffs, 59 files with different held sizes; every one is K-a (`USD`/`EUR` glued to digits, 502 tokens new in each mode: `USD710 million`, `EUR1,000m`, `USD35/share`, all real money; the old reading kept only the fragment `000` of `USD1,000m`, 270 and 265 fragments gone) or K-c (`EUR 2029s, 480bp`, 10 tokens gone, held 2029 lost). K-b (a year-shaped number with a C2 form) 0 tokens, K-d (`mln`/`bln` after a small number) 0 tokens. `gaps_real_run.py` output byte-identical before and after; every other probe exits as on main (three recorded limits unchanged).
+Not verified: a real model; `30 C$m` (a small number after a one-letter-prefixed sign is still no unit); a code standing alone before digits that is really a name (`COP26`: 26 is read as a figure; none in the corpus).
+
 ## 2026-11-12 — Module output review changes: sources resolve, each drawing shown once, reader vocabulary checked everywhere (branch `claude/modules-page-sources-charts`, ruling `2026-11-12-module-output-review-changes.md`)
 Scope: offline only. No provider or model call was made. Decisions 7 to 11 (launcher text, checker, confidence score, post-balance-sheet table) are proven by tests and hand-written handoffs only, not by a model run. Display changes were checked on a copy of the retained real run `tdg-proof-snapshot-opus-002` (TDG, as of 2024-09-30, credit snapshot): one run, 1440 px, headless Chrome.
 Library:
