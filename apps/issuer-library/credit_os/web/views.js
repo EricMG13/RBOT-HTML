@@ -59,8 +59,15 @@ function stepText(text,output) {
   });
 }
 // CP-<x>-GAP-<n> is "Gap <n>" on module x's own page and "<Name of x> gap <n>" elsewhere; a code with no known name is "unnamed module".
-function namedText(text,output=current?.output) {
-  return stepText(text.replace(MODULE_REF,(code,...rest)=>{
+// A name already written before its own parenthesised code ("Liquidity (CP-2D)") is not said twice: the parenthetical is dropped.
+const NAME_THEN_CODE=/\s*\((CP-[A-Z0-9]+)\)/g;
+const dropRepeat=(text,lead='')=>text.replace(NAME_THEN_CODE,(whole,code,at)=>{const name=moduleLabel(code)?.toLowerCase(),before=(lead+text.slice(0,at)).toLowerCase();return name&&before.endsWith(name)&&!/[\p{L}\p{N}]$/u.test(before.slice(0,-name.length))?'':whole;});
+function namedText(text,output=current?.output,lead='') {
+  // A stored source file name of the run is shown exactly as stored, even when it holds a code.
+  const ev=contexts[data[output]?.run??current?.context]?.evidence||{};
+  const file=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name).filter(Boolean).sort((a,b)=>b.length-a.length).find(name=>text.includes(name));
+  if(file!==undefined){const at=text.indexOf(file);return namedText(text.slice(0,at),output,lead)+file+namedText(text.slice(at+file.length),output);}
+  return stepText(dropRepeat(text,lead).replace(MODULE_REF,(code,...rest)=>{
     const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
     if(book!==undefined)return `${name(`CP-${book}`)} runbook`;
     if(file!==undefined)return handoffName(file,suffix);
@@ -815,7 +822,7 @@ function historyView(context) {
   const row=run=>{
     const key=keyOf.get(run),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}, ${run.run}`;
     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
-    const modulesRun=codes.length?`<ul class="history-modules">${codes.map(code=>`<li>${esc(moduleTitle(code))} (<small class="ref">${esc(code)}</small>)</li>`).join('')}</ul>`:SOURCE_NOT_RECORDED;
+    const modulesRun=codes.length?`<ul class="history-modules">${codes.map(code=>`<li>${esc(moduleTitle(code))}</li>`).join('')}</ul>`:SOURCE_NOT_RECORDED;
     const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
     return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
   };
@@ -834,7 +841,7 @@ function navigationSections(module,context,output=defaultOutput(module,context))
   return [['status',moduleEntry(module,context)?.outputs.length?'Choose a saved output':availability(module,context),[]]];
 }
 // ---- The Modules navigator (ruling decision 5): flat and always open, only the modules this run holds, under plain group headings. Each entry is the plain
-// name, then the code in the code style (screen.js nameCodes leaves .module-code alone). The open entry carries its page outline directly under it.
+// name only. The open entry carries its page outline directly under it.
 const MODEL_ENTRY=['CP-MODEL','Cash flow model'];
 function navigatorGroups(context) {
   if(!contexts[context])return []; // the library page has no run, so no module list
@@ -848,7 +855,7 @@ function navigatorEntry(id,name,module,context,query) {
   const hit=query&&sections.find(s=>s[1].toLowerCase().includes(query));
   const open=id===module,notAssessable=output&&blocked(data[output].sections,data[output].state);
   const outline=open&&current.output&&isAnalytical(id)?outlineMarkup(current.output):'';
-  return `<li><a href="${routeHref(id,hit?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item${open?' selected':''}"${open?' aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code">${esc(id)}</span>${notAssessable?badge('gray','Not assessable'):''}${hit?`<small>${esc(hit[1])}</small>`:''}</a>${outline}</li>`;
+  return `<li><a href="${routeHref(id,hit?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item${open?' selected':''}"${open?' aria-current="page"':''}><span class="module-label">${esc(name)}</span>${notAssessable?badge('gray','Not assessable'):''}${hit?`<small>${esc(hit[1])}</small>`:''}</a>${outline}</li>`;
 }
 // The entries that match `query` (name, code, aliases, section titles; lower case), as markup and a count.
 function navigatorView(module,query) {
@@ -1309,7 +1316,7 @@ function swapActivityScript(doc,now) {
 }
 // ---- Evidence (ruling decisions 9, 10): four lists for the run, every value as the store copied it from the run's own files; a value the run does not record reads "Not recorded". Source files are listed only.
 const shownOrNot=value=>value===null||value===undefined||value===''?'Not recorded':String(value);
-const readers=codes=>codes.map(code=>`${esc(moduleTitle(code))} <span class="module-code">${esc(code)}</span>`).join(', ');
+const readers=codes=>codes.map(code=>esc(moduleTitle(code))).join(', ');
 const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="${esc(href)}" download aria-label="Download ${esc(named)}">${esc(label)}${icon('download')}</a>`:`<span>${esc(label)}</span> <span class="muted">No link</span>`;
 // A wide table scrolls inside its own focusable region, never the page (the region pattern of the library and chart index tables).
 const scrollRegion=(label,table)=>`<div class="table-scroll" role="region" aria-label="${esc(label)}" tabindex="0">${table}</div>`;
@@ -1327,7 +1334,7 @@ function evidenceSources(ev) {
   return `${head}${used}${notUsed}${unrecorded}</section>`;
 }
 function evidenceHandoffs(ev) {
-  const rows=ev.handoffs.map(h=>[`${esc(moduleTitle(h.module))} <span class="module-code">${esc(h.module)}</span>`,downloadLink(h.name,h.href,`${moduleTitle(h.module)} handoff`)]);
+  const rows=ev.handoffs.map(h=>[esc(moduleTitle(h.module)),downloadLink('Download',h.href,`${moduleTitle(h.module)} handoff`)]);
   const all=ev.zip?`<p>${downloadLink('Download all',ev.zip,'all handoffs (zip)')}</p>`:'';
   return `<section class="run-section" id="evidence-handoffs"><h2>Handoffs</h2>${rows.length?evidenceTable('The delivered Markdown of each module',['Module','Original Markdown'],rows)+all:'<p class="empty">This run holds no handoff.</p>'}</section>`;
 }
@@ -1335,10 +1342,17 @@ function evidenceDownloads(ev) {
   const rows=ev.downloads.map(d=>`<li class="report-row">${downloadLink(d.label,d.href)}</li>`).join('');
   return `<section class="run-section" id="evidence-downloads"><h2>Calculations and Model</h2>${rows?`<ul class="report-list">${rows}</ul>`:'<p class="empty">No calculation or Model file was published from this run.</p>'}</section>`;
 }
+// A file named after a module is labelled by its module; any other file keeps its name. The hash beside it is the file's own.
+const hashLabel=name=>{
+  const sent=/^instructions\/(CP-[A-Z0-9]+)(-[a-z0-9]+)?\.md$/.exec(name);
+  return sent?`${moduleTitle(sent[1])} instructions${sent[2]?` (${sent[2].slice(1)})`:''}`:handoffLabel(name);
+};
+// A module code in a method-change line ("CP-0: src/…/cp0.md changed") is named; a code inside a file path (…/CP-1.md) is part of the path and stays.
+const CODE_NOT_IN_PATH=/(?<![\w/.-])CP-[A-Z0-9]+(?![\w-]|\.md)/g;
 function evidenceRecord(ev,methodChanges) {
   const r=ev.record;
-  const changed=(methodChanges||[]).length?`<h3>Methods changed since this run</h3><ul class="report-list">${methodChanges.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>`:'';
-  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc(h.name),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
+  const changed=(methodChanges||[]).length?`<h3>Methods changed since this run</h3><ul class="report-list">${methodChanges.map(c=>`<li>${esc(c.replace(CODE_NOT_IN_PATH,moduleTitle))}</li>`).join('')}</ul>`:'';
+  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc([...ev.sources,...ev.unused,...(ev.unrecorded||[])].some(f=>f.name===h.name)?h.name:hashLabel(h.name)),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
   const sent=r.instructions.length?`<ul class="report-list">${r.instructions.map(i=>`<li class="report-row">${downloadLink(`${moduleTitle(i.module)} instructions`,i.href)}</li>`).join('')}</ul>`:'<p class="empty">The run records no instructions.</p>';
   const calls=r.calls.length?evidenceTable('Model calls, in the order recorded',['Module','Attempt','Started','HTTP status','Error','Settled (USD)'],r.calls.map(c=>[esc(moduleTitle(c.module)),esc(shownOrNot(c.attempt)),esc(shownOrNot(c.started)),esc(shownOrNot(c.http_status)),esc(shownOrNot(c.error_class)),esc(shownOrNot(c.settled_usd))])):'<p class="empty">The run records no model call.</p>';
   return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary>${changed}<h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;

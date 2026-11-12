@@ -116,8 +116,8 @@ const evidenceView = contexts => {
   const text = read('views.js');
   const start = text.indexOf('// ---- Evidence (ruling decisions 9, 10)'), end = text.indexOf('function workspaceView(');
   assert.ok(start >= 0 && end > start, 'evidence view not found');
-  const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation' };
-  return new Function('esc', 'icon', 'moduleTitle', 'contexts', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, contexts);
+  const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance' };
+  return new Function('esc', 'icon', 'moduleTitle', 'handoffLabel', 'contexts', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, runPage().handoffLabel, contexts);
 };
 const EVIDENCE = {
   sources: [{ name: 'A <report>.pdf', sha256: 'a'.repeat(64), type: 'pdf', documentDate: null, readBy: ['CP-0', 'CP-1'] }],
@@ -126,7 +126,7 @@ const EVIDENCE = {
   handoffs: [{ module: 'CP-0', name: 'CP-0.md', href: '../runs/r/CP-0.md?sha256=1' }, { module: 'CP-1', name: 'CP-1.md', href: '../runs/r/CP-1.md?sha256=2' }],
   zip: 'downloads/r/handoffs.zip',
   downloads: [{ label: 'Model m', href: '/files/m.html' }],
-  record: { hashes: [{ name: 'delivery-x.json', sha256: 'd'.repeat(64) }], instructions: [{ module: 'CP-0', href: '../runs/r/instructions/CP-0.md', sha256: 'e'.repeat(64) }],
+  record: { hashes: [{ name: 'delivery-x.json', sha256: 'd'.repeat(64) }, { name: 'CP-1.md', sha256: '1'.repeat(64) }, { name: 'instructions/CP-0.md', sha256: '2'.repeat(64) }, { name: 'r--deliveries--d--CP-1-a.md', sha256: '3'.repeat(64) }], instructions: [{ module: 'CP-0', href: '../runs/r/instructions/CP-0.md', sha256: 'e'.repeat(64) }],
     calls: [{ module: 'CP-0', attempt: 0, started: '2026-11-09T15:13:51Z', http_status: 200, error_class: null, settled_usd: '0.00941950' }], cap: '12' },
 };
 
@@ -135,7 +135,7 @@ test('Evidence: four lists in order; sources are listed only, with Not recorded 
   const at = ['Source files used', 'Handoffs', 'Calculations and Model', 'Run record'].map(t => html.indexOf(`<h2>${t}</h2>`) >= 0 ? html.indexOf(`<h2>${t}</h2>`) : html.indexOf(`<summary>${t}</summary>`));
   assert.ok(at.every((n, i) => n >= 0 && (!i || n > at[i - 1])), at.join());
   const row = /<tbody><tr>(.*?)<\/tr>/s.exec(html)[1];
-  assert.equal(strip(row.replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|Not recorded|Source readiness CP-0, Financial foundation CP-1|');
+  assert.equal(strip(row.replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|Not recorded|Source readiness, Financial foundation|');
   assert.ok(html.indexOf('Supplied, not used') > html.indexOf('A &lt;report&gt;.pdf') && html.includes('C_unread.htm.jsonl'));
   assert.ok(!html.includes('A &lt;report&gt;.pdf</a>') && !/<a [^>]*>[^<]*(report|unread)/.test(html), 'no link for a source file');
 });
@@ -143,7 +143,7 @@ test('Evidence: four lists in order; sources are listed only, with Not recorded 
 test('Evidence: a document date the run records is shown as stored, in the used and the unused list', () => {
   const ev = { ...EVIDENCE, sources: [{ ...EVIDENCE.sources[0], documentDate: '31 March 2025 (audited)' }], unused: [{ ...EVIDENCE.unused[0], documentDate: '2024-12-31' }] };
   const html = evidenceView({ r: { evidence: ev } })('r');
-  assert.equal(strip(/<tbody><tr>(.*?)<\/tr>/s.exec(html)[1].replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|31 March 2025 (audited)|Source readiness CP-0, Financial foundation CP-1|');
+  assert.equal(strip(/<tbody><tr>(.*?)<\/tr>/s.exec(html)[1].replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|31 March 2025 (audited)|Source readiness, Financial foundation|');
   assert.ok(html.includes('document date 2024-12-31'));
 });
 
@@ -167,13 +167,45 @@ test('Evidence: handoffs and calculations are download links; Download all is th
   assert.ok(strip(/<table class="history-table"><caption>Model calls.*?<\/table>/s.exec(html)[0]).includes('Not recorded'), 'a missing error class is not a value');
 });
 
+test('Evidence (R3): Read by and the Handoffs rows show names only; the link reads Download, named for its handoff', () => {
+  const html = evidenceView({ r: { evidence: EVIDENCE } })('r');
+  assert.ok(!html.includes('module-code') && !/\bCP-[A-Z0-9]+\b/.test(html.replace(/ href="[^"]*"/g, '')), 'no module code in any text or label');
+  const handoffs = html.slice(html.indexOf('<h2>Handoffs</h2>'), html.indexOf('<h2>Calculations and Model</h2>'));
+  assert.ok(handoffs.includes('<td>Source readiness</td><td><a class="text-action" href="../runs/r/CP-0.md?sha256=1" download aria-label="Download Source readiness handoff">Download<i>download</i></a></td>'), handoffs);
+  assert.ok(handoffs.includes('aria-label="Download Financial foundation handoff"') && !/>CP-[01]\.md</.test(handoffs));
+});
+
+test('Evidence (R6): the Run record labels a module-named file by its module, keeps other names and every hash', () => {
+  const record = evidenceView({ r: { evidence: EVIDENCE } })('r');
+  const hashes = record.slice(record.indexOf('<caption>Hashes the run records'), record.indexOf('<h3>Instructions sent</h3>'));
+  assert.deepEqual([...hashes.matchAll(/<td>([^<]*)<\/td><td><span class="hash">([^<]*)</g)].map(m => [m[1], m[2][0]]),
+    [['delivery-x.json', 'd'], ['Financial foundation handoff', '1'], ['Source readiness instructions', '2'], ['Financial foundation handoff (a)', '3']]);
+  assert.ok(!/\bCP-[A-Z0-9]+\b/.test(record.replace(/ href="[^"]*"/g, '')));
+  assert.equal(runPage().handoffLabel('CP-1.md'), 'Financial foundation handoff');
+});
+
 test('Evidence: Run record lists the methods changed since the run, escaped; no line for a run on today\'s methods', () => {
   const changed = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: methods/cp0.md changed', 'CP-1: <b>x</b> no longer selected'] } })('r');
   const record = changed.slice(changed.indexOf('<summary>Run record</summary>'));
   assert.ok(record.includes('Methods changed since this run'));
-  assert.ok(record.includes('<li>CP-0: methods/cp0.md changed</li>') && record.includes('<li>CP-1: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
+  assert.ok(record.includes('<li>Source readiness: methods/cp0.md changed</li>') && record.includes('<li>Financial foundation: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
   assert.ok(!changed.includes('<b>x</b>'));
   for (const none of [[], undefined]) assert.ok(!evidenceView({ r: { evidence: EVIDENCE, methodChanges: none } })('r').includes('Methods changed since this run'));
+});
+
+test('Evidence (fix round 2): a method change leads with its module name; any other module code is named; file paths stay verbatim', () => {
+  const html = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: src/deploy_vii/methods/cp0.md changed', 'CP-1A: src/deploy_vii/methods/cp1a.md, docs/x.md changed', 'CP-0: reads CP-1 and src/deploy_vii/methods/CP-1.md'] } })('r');
+  const list = /<h3>Methods changed since this run<\/h3>.*?<\/ul>/s.exec(html)[0];
+  assert.ok(list.includes('<li>Source readiness: src/deploy_vii/methods/cp0.md changed</li>'), list);
+  assert.ok(list.includes('<li>Business &amp; governance: src/deploy_vii/methods/cp1a.md, docs/x.md changed</li>'), list);
+  assert.ok(list.includes('<li>Source readiness: reads Financial foundation and src/deploy_vii/methods/CP-1.md</li>'), 'a code in the detail is named; a path is not');
+  assert.ok(!/\bCP-[A-Z0-9]+\b/.test(list.replace(/src\/deploy_vii\/methods\/CP-1\.md/, '')), list);
+});
+
+test('Evidence: a hash row named like a stored source file keeps its name', () => {
+  const file = { name: 'Board-CP-1.md', sha256: 'b'.repeat(64), type: 'md', documentDate: null, readBy: [] };
+  const html = evidenceView({ r: { evidence: { ...EVIDENCE, sources: [file], record: { ...EVIDENCE.record, hashes: [{ name: 'Board-CP-1.md', sha256: 'b'.repeat(64) }] } } } })('r');
+  assert.equal(countOf(html, />Board-CP-1\.md</g), 2, 'the source row and the hash row');
 });
 
 test('Evidence: nothing recorded says so and invents nothing', () => {
@@ -1241,7 +1273,8 @@ test('navigator (decision 5): no details or summary anywhere, plain group headin
 test('navigator (decision 5): only modules that ran are listed, and the count is that number', () => {
   const { html, count } = navPage();
   assert.equal(count, 5);
-  assert.deepEqual([...html.matchAll(/<span class="module-code">([^<]*)<\/span>/g)].map(m => m[1]), ['CP-0', 'CP-1', 'CP-1A', 'CP-2', 'CP-2D']);
+  assert.ok(!html.includes('module-code'), 'no module code is drawn');
+  assert.deepEqual([...html.matchAll(/<span class="module-label">([^<]*)<\/span>/g)].map(m => m[1]), ['Source readiness', 'Financial foundation', 'Business and structure', 'Credit view', 'Liquidity']);
   assert.ok(!html.includes('CP-1B') && !html.includes('CP-2A') && !html.includes('CP-6'), 'a module the run did not hold is not listed');
 });
 
@@ -1253,12 +1286,12 @@ test('navigator (decision 5): a module with no saved output is not listed even w
   assert.ok(!html.includes('CP-1B'));
 });
 
-test('navigator (decision 5): plain name first, then the code in the code style; a blocked module is marked Not assessable, no other is', () => {
+test('navigator (decision 5, amended 2026-11-12): the plain name only, no code; a blocked module is marked Not assessable, no other is', () => {
   const { html } = navPage();
-  assert.ok(html.includes('<span class="module-label">Source readiness</span><span class="module-code">CP-0</span>'));
-  assert.ok(html.includes('<span class="module-label">Credit view</span><span class="module-code">CP-2</span>'));
+  assert.ok(html.includes('<span class="module-label">Source readiness</span>'));
+  assert.ok(html.includes('<span class="module-label">Credit view</span>'));
   const liquidity = /<a [^>]*><span class="module-label">Liquidity<\/span>.*?<\/a>/s.exec(html)[0];
-  assert.ok(liquidity.indexOf('>Liquidity<') < liquidity.indexOf('>CP-2D<') && liquidity.includes('<span class="badge badge-gray">Not assessable</span>'));
+  assert.ok(!liquidity.replace(/ href="[^"]*"/g, '').includes('CP-2D') && liquidity.includes('<span class="badge badge-gray">Not assessable</span>'));
   assert.equal(countOf(html, /Not assessable<\/span>/g), 1);
 });
 
@@ -1286,7 +1319,7 @@ test('navigator (decision 5): the Cash flow model entry (code CP-MODEL) is prese
   const withModel = navPage({ models: [NAV_MODEL] });
   assert.equal(withModel.count, 6);
   assert.ok(withModel.html.includes('<h2 class="nav-heading">Delivered model</h2>'));
-  assert.ok(withModel.html.includes('<span class="module-label">Cash flow model</span><span class="module-code">CP-MODEL</span>'));
+  assert.ok(withModel.html.includes('<span class="module-label">Cash flow model</span>'));
   assert.ok(/href="#CP-MODEL\/model-1\?c=run-a"/.test(withModel.html), 'it opens the model view in the Modules workbench, not the Forecast tab');
 });
 
@@ -2096,7 +2129,7 @@ test('names, not codes: a table column of bare step ids is not drawn; a heading 
 // nameCodes over a minimal DOM: text nodes with a parent that knows which zones it sits in, and elements with title and aria-label.
 function nameCodesIn(texts, elements = [], zone = '') {
   const src = read('screen.js'), body = src.slice(src.indexOf('const REFERENCE='), src.indexOf('for (const [id, output]'));
-  const nodes = texts.map(data => ({ data, parentElement: { closest: selector => (selector.includes(zone) && zone ? {} : null) }, replaceWith(fragment) { this.fragment = fragment; } }));
+  const nodes = texts.map((data, i) => ({ data, previousSibling: i ? { textContent: texts[i - 1] } : null, parentElement: { closest: selector => (selector.includes(zone) && zone ? {} : null) }, replaceWith(fragment) { this.fragment = fragment; } }));
   let at = -1;
   const document = { createTreeWalker: () => ({ currentNode: null, nextNode() { this.currentNode = nodes[++at]; return Boolean(this.currentNode); } }), createDocumentFragment: () => ({ parts: [], append(...p) { this.parts.push(...p); } }), createElement: () => ({}) };
   const page = runPage();
@@ -2116,20 +2149,21 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
   assert.equal(chip.data, 'Row F12 and Financial foundation', 'a chip takes the name and keeps its reference as text');
   const screen = read('screen.js');
   assert.ok(!screen.includes('showsCodes') && !screen.includes('module-ref') && !/closest\('[^']*details\.audit/.test(screen));
+  assert.equal(nameCodesIn(['Source readiness', ' (CP-0)'])[1].data, '', 'a parenthesised code after the module name in the node before is dropped');
   assert.ok(screen.includes('Retained fields from this historical run, with module codes and method step ids shown as names.') && !screen.includes('exact retained fields'));
   assert.ok(/function nameCodes[^]*?nameCodes\(\$\('search-results'\),null,false\)/.test(screen), 'search hits borrow no step title');
   assert.ok(/updateLibrary\([^]*?nameCodes\(\$\(id\)\)/.test(read('views.js')), 'a redrawn library is named');
   assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;if\(!keepsCodes\(current\)\)nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
 });
 
-test('names, not codes (L3): the Evidence page keeps its file names and hashes as stored: it is never passed through nameCodes', () => {
+test('names, not codes (R4, R6): only the Evidence page escapes nameCodes (its file names stay as stored); module pages and the Overview of either format are named', () => {
   const screen = read('screen.js');
   const keepsCodes = new Function('contexts', 'earlierFormat', 'isAnalytical', 'data', 'isNewFormat', `${screen.slice(screen.indexOf('const keepsCodes='), screen.indexOf('const reportPage='))}; return keepsCodes;`)(
-    { r: {} }, () => true, () => false, {}, () => false);
+    { r: {} }, () => false, () => true, { o: { sections: [] } }, () => true);
   assert.equal(keepsCodes({ module: 'W-Evidence', context: 'r' }), true);
-  // The other run pages are decided as before: Forecast has no output and is not analytical; an earlier-format Overview is named.
   assert.equal(keepsCodes({ module: 'W-Forecast', context: 'r' }), false);
-  assert.equal(keepsCodes({ module: 'W-Overview', context: 'r' }), false);
+  assert.equal(keepsCodes({ module: 'W-Overview', context: 'r' }), false, 'a new-format Overview is named');
+  assert.equal(keepsCodes({ module: 'CP-1', output: 'o', context: 'r' }), false, 'a new-format module page is named');
   // Both callers skip a page that keeps its codes.
   assert.ok(screen.includes("if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}") && screen.includes('if(!keepsCodes(current))nameCodes(content);'));
 });
@@ -2146,7 +2180,21 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
   assert.equal(name('T2E.2–T2E.4'), 'Beginning register to Cash uses');
   assert.equal(page.namedText('CP-0-a.md and CP-4_RUNBOOK.md and CP-1.md', null), 'Source readiness handoff (a) and unnamed module runbook and Financial foundation handoff');
   assert.equal(page.handoffLabel('r--deliveries--h--CP-0-a.md'), 'Source readiness handoff (a)');
-  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt,.basis,.module-code')"), 'a source excerpt is the issuer\'s text, as quoted; a Basis line is printed as written (T3 review L1); a navigator code is the code (decision 5)');
+  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt')") && !read('screen.js').includes('.module-code'), 'a source excerpt is the issuer\'s text, as quoted, and a register reference stays; a Basis line and a navigator entry show names (owner ruling 2026-11-12)');
+  // A name already written before its parenthesised code is not said twice; any other parenthesised code becomes its name.
+  assert.equal(page.namedText('Source readiness (CP-0) and Foundation (CP-1) and Ghost (CP-9Z)', null), 'Source readiness and Foundation (Financial foundation) and Ghost (unnamed module)');
+  assert.equal(page.namedText('the source readiness (CP-0) check', null), 'the source readiness check', 'a name written in other case is not said twice');
+});
+
+test('names, not codes: a stored source file name of the run is shown as stored', () => {
+  const stored = { names: { 'CP-2D': 'Liquidity' }, runFields: { evidence: { sources: [{ name: 'CP-2025-Info-Memo.pdf' }], unused: [{ name: 'CP-1 Board resolution.pdf' }], unrecorded: [] } } };
+  const page = runPage(d => d, [], m => m, stored);
+  assert.equal(page.namedText('CP-2025-Info-Memo.pdf, page 3; Liquidity (CP-2D)', null), 'CP-2025-Info-Memo.pdf, page 3; Liquidity');
+  assert.equal(page.namedText('CP-1 Board resolution.pdf, page 2; Financial foundation (CP-1) and CP-1', null), 'CP-1 Board resolution.pdf, page 2; Financial foundation and Financial foundation');
+  assert.equal(page.namedText('Illiquidity (CP-2D) risk', null), 'Illiquidity (Liquidity) risk');
+  assert.equal(page.namedText(' (CP-2D)', null, 'Liquidity'), '');
+  assert.equal(page.namedText(' (CP-2D)', null, 'Illiquidity'), ' (Liquidity)');
+  assert.equal(runPage().namedText('CP-2025-Info-Memo.pdf, page 3', null), 'unnamed module-Info-Memo.pdf, page 3');
 });
 
 // ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.
@@ -2448,10 +2496,10 @@ test('Report history: columns are Date, Pathway, Modules run, Status in a captio
   assert.deepEqual(strip(d.cells[0]), '31 March 2025Run D');
   assert.deepEqual([strip(c.cells[0]), strip(c.cells[1]), strip(c.cells[2])], ['Not recordedRun C', 'Not recorded', 'Not recorded']);
   const modulesOf = row => [...row.cells[2].matchAll(/<li>(.*?)<\/li>/g)].map(m => strip(m[1]));
-  assert.deepEqual(modulesOf(a), ['Financial foundation (CP-1)', 'Downside (CP-2A)', 'Committee decision (CP-6)', 'Unnamed module (CP-X)']);
-  assert.deepEqual(modulesOf(b), ['Source readiness (CP-0)', 'Downside (CP-2A)'], 'in the run\'s own order');
-  assert.deepEqual(modulesOf(d), ['Source readiness (CP-0)'], 'a partial re-run is its own row with the modules it ran');
-  assert.ok(b.cells[2].includes('<small class="ref">CP-0</small>'), 'the code is a quiet reference, which naming leaves as it is');
+  assert.deepEqual(modulesOf(a), ['Financial foundation', 'Downside', 'Committee decision', 'Unnamed module']);
+  assert.deepEqual(modulesOf(b), ['Source readiness', 'Downside'], 'in the run\'s own order');
+  assert.deepEqual(modulesOf(d), ['Source readiness'], 'a partial re-run is its own row with the modules it ran');
+  assert.ok(!/CP-/.test(a.html + b.html + d.html + c.html), 'R2: no module code in the Modules run column');
 });
 
 test('Report history: Status is Completed, plus the count not assessable; Earlier format only where H7 holds', () => {

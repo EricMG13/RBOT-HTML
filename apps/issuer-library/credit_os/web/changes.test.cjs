@@ -304,8 +304,8 @@ test('a module row is the build\u2019s: its status and reason are shown, and a m
     const html = analysisPart(pack, {}, changes(c.status));
     assert.ok(html.includes(`change-status">${c.status}<`) && html.includes('<p class="change-why">New period · Why.</p>'), c.name);
   }
-  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by CP-8<'));
-  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by CP-8<'));
+  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by Changes since the last run<'));
+  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by Changes since the last run<'));
   assert.ok(analysisPart(pack, null, changes('Unchanged')).includes('change-status">Explanation not produced<'));
 });
 test('the ledger bar is the build\u2019s counts; a ledger it could not read keeps the verbatim table and draws no bar', () => {
@@ -313,4 +313,17 @@ test('the ledger bar is the build\u2019s counts; a ledger it could not read keep
   assert.ok(!unread.includes('class="ledger-bar"') && unread.includes('<td>An earlier limitation in words.</td>'));
   const other = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: [['Closed', 0], ['Remaining', 0], ['New', 0], ['No longer stated', 0], ['Other', 3]]}}}));
   assert.ok(other.includes('aria-label="Limitations: Closed 0, Remaining 0, New 0, No longer stated 0, Other 3"'));
+});
+
+test('what the Changes tab itself writes names things and shows no module code', () => {
+  // The pack and handoff text are stored data (a code there is named by screen.js, the library browser test reads it); these carry none.
+  const clean = {...PACK, measures: PACK.measures.map(m => ({...m, reason: 'the definition text differs'}))};
+  const noCode = /\bCP-[A-Z0-9]+\b/;
+  const html = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: {measures: {}, modules: {}, ledger: []}}, cp8: []}));
+  assert.ok(html.includes('The Changes handoff has no') && html.includes('Not stated in the Changes handoff.'));
+  assert.ok(html.includes('change-status">Not stated by Changes since the last run<'));
+  assert.ok(html.includes('<span class="change-name">Source readiness</span>') && !html.includes('module-code'));
+  assert.ok(!noCode.test(html.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')), html.match(noCode)?.[0]);
+  const notHeld = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: null}, cp8: null}));
+  assert.ok(notHeld.includes('The explanation of the changes is not held for this run.') && !noCode.test(notHeld.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')));
 });

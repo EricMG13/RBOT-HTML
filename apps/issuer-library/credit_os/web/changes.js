@@ -111,7 +111,7 @@ const omittedNote = omitted => {
   return lines.length ? `<p class="intro changes-omitted">${lines.map(esc).join(' ')}</p>` : '';
 };
 
-const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`CP-8's handoff has no ${caption.toLowerCase()} table.`)}</p>`);
+const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`The Changes handoff has no ${caption.toLowerCase()} table.`)}</p>`);
 
 function issuerPart(pack, parts, changes) {
   const measures = pack.measures || [];
@@ -122,7 +122,7 @@ function issuerPart(pack, parts, changes) {
 
 // ---- Part 1: CP-8's own words, verbatim; a Basis line is shown as the source line it is, never dropped.
 function passageView(section) {
-  if (!section) return `<p class="empty">${NOT_STATED} in CP-8's handoff.</p>`;
+  if (!section) return `<p class="empty">${NOT_STATED} in the Changes handoff.</p>`;
   let html = '', open = false;
   const close = () => { if (open) html += '</ul>'; open = false; };
   for (const block of section.blocks.filter(b => b.type === 'text')) {
@@ -146,11 +146,11 @@ function analysisPart(pack, parts, changes) {
   const modules = (changes && changes.verdicts && changes.verdicts.modules) || {};
   const rows = (pack.modules || []).map(m => {
     const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
-    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by CP-8`;
+    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by Changes since the last run`;
     const side = (ran, text) => (text != null ? text : ran ? NOT_STATED : 'Did not run');
     const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line);
     const reason = row ? [row.cause, row.why].filter(Boolean) : [];
-    return `<details class="change-module"><summary><span class="change-name">${esc(m.title)} <span class="module-code">${esc(m.module)}</span></span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
+    return `<details class="change-module"><summary><span class="change-name">${esc(m.title)}</span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
   }).join('');
   return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2><p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
 }
@@ -158,7 +158,7 @@ function analysisPart(pack, parts, changes) {
 // ---- Part 4: counts of each status as one bar (segment sizes are the counts, the build's: `changes.verdicts.ledger`, null when it could not read the ledger), the ledger itself beneath.
 function limitationsPart(parts, changes) {
   const table = parts.ledger, counts = changes && changes.verdicts ? changes.verdicts.ledger : null;
-  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in CP-8's handoff.</p></section>`;
+  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in the Changes handoff.</p></section>`;
   if (!counts) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2>${verbatim('Limitations ledger', table)}</section>`;
   const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
   const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
@@ -226,7 +226,7 @@ function changesHtml(input) {
   } else if (state === 'unreadable') {
     notice = `<div class="caution changes-unreadable" role="note"><strong>The comparison with the earlier run could not be read.</strong><p>${esc(changes.problem)}</p></div>`;
   } else if (!parts) {
-    notice = '<div class="caution changes-not-produced" role="note"><strong>CP-8’s explanation is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
+    notice = '<div class="caution changes-not-produced" role="note"><strong>The explanation of the changes is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
   }
   const sections = [
     parts ? whatChangedPart(parts) : '',
