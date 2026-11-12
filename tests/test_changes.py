@@ -444,14 +444,14 @@ def test_the_scope_and_omitted_sections_do_not_say_what_changed_was_not_produced
 def test_cp8_is_left_out_with_a_note_when_its_first_request_would_not_fit_the_cap(tmp_path):
     """opus-medium holds 8 USD per million input tokens. The earlier run's CP-1 handoff is 200 KB,
     so CP-8's first request, estimated from the earlier handoffs (this run's are unwritten) holds
-    more than 3 USD; the other modules' calls hold about 2.34."""
+    more than 3.5 USD; the other modules' calls hold no more than about 3."""
     workspace = tmp_path / "ws"
     make_run(
         workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY, cp1_extra="\n" + "x" * 200_000
     )
     context, folder = snapshot_context(tmp_path)
     out = workspace / "runs/cur"
-    prepared = prepare(context, folder, out, config="opus-medium", cap="3")
+    prepared = prepare(context, folder, out, config="opus-medium", cap="3.5")
     assert "CP-8" not in prepared.ordered
     assert prepared.prior is None
     assert prepared.plan.changes_note is not None
@@ -460,7 +460,7 @@ def test_cp8_is_left_out_with_a_note_when_its_first_request_would_not_fit_the_ca
     )
     assert "estimated from the earlier run's handoff sizes" in prepared.plan.changes_note
     assert prepared.plan.changes_note.endswith(
-        "over the cap USD 3; the run is planned without CP-8"
+        "over the cap USD 3.5; the run is planned without CP-8"
     )
     assert not [n for n in prepared.plan.sources if n.startswith("prior/")]
     # With a cap that holds it, CP-8 is planned.

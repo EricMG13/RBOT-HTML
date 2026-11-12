@@ -3590,7 +3590,9 @@ def has_sources_section(sections: list[dict[str, Any]]) -> bool:
 def document_dates(sections: list[dict[str, Any]]) -> dict[str, str]:
     """The Document date a handoff's table records for a file: in a table with `Source` and
     `Document date` columns, the date cell of the row whose Source cell is exactly the file name,
-    copied as written. A blank cell records nothing; no date is parsed or read from a file name."""
+    copied as written. A blank cell, or one reading "not stated" (any case, surrounding space
+    ignored), records nothing, so a later module that saw the date supplies it; no date is parsed
+    or read from a file name."""
     found: dict[str, str] = {}
     for section in sections:
         for block in section["blocks"]:
@@ -3601,8 +3603,9 @@ def document_dates(sections: list[dict[str, Any]]) -> dict[str, str]:
                 continue
             name_at, date_at = heads.index("Source"), heads.index("Document date")
             for row in block["rows"]:
-                if row["cells"][date_at].strip():
-                    found.setdefault(row["cells"][name_at].strip(), row["cells"][date_at].strip())
+                date = row["cells"][date_at].strip()
+                if date and date.casefold() != "not stated":
+                    found.setdefault(row["cells"][name_at].strip(), date)
     return found
 
 

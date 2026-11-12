@@ -1,4 +1,5 @@
-"""Mechanical prose checks (H6) for a handoff's reader passages.
+"""Mechanical prose checks (H6) for a handoff's reader passages and, for checks 2-5 and 10, the
+sentence text of every shown section (`## Findings`, `## Calculations`, `## Gaps`).
 
 Pure module: no I/O. The specification is `docs/rulings/2026-11-11-reader-and-issuer-report.md`
 (H1, H2, H3, H6); where this file and the ruling differ, the ruling wins.
@@ -384,7 +385,9 @@ SIMPLE_CHECKS = (
     (
         4,
         "no bracket citation or chip",
-        re.compile(r".{0,20}[\[\]【】].{0,20}"),
+        # One issue per bracket pair, the bracketed text whole when it is at most 80 characters; a
+        # bracket with no partner (or a longer pair) is one issue per bracket character.
+        re.compile(r"\[[^\[\]]{0,80}\]|【[^【】]{0,80}】|[\[\]【】]"),
         "remove the brackets; put the source in the paragraph's Basis line.",
     ),
     (

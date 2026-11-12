@@ -757,3 +757,25 @@ def test_a_decimal_or_a_closing_bold_does_not_hide_a_long_first_sentence() -> No
         1
     ]
     assert prose_issues(bottom(f"**Short view.** {words(60)}.")) == ()
+
+
+def test_check_4_reports_one_issue_per_bracket_pair_with_the_text_whole() -> None:
+    issues = [
+        i
+        for i in prose_issues(bottom("The view holds [Insufficient Information] here."))
+        if "check 4" in i
+    ]
+    assert len(issues) == 1
+    assert '"[Insufficient Information]"' in issues[0]
+
+
+def test_check_4_two_pairs_on_a_line_are_two_issues() -> None:
+    issues = [
+        i for i in prose_issues(bottom("The view [a] holds and then [b] ends.")) if "check 4" in i
+    ]
+    assert [i.split('"')[1] for i in issues] == ["[a]", "[b]"]
+
+
+def test_check_4_an_unpaired_bracket_is_one_issue_with_context() -> None:
+    issues = [i for i in prose_issues(bottom("The view holds [ here.")) if "check 4" in i]
+    assert len(issues) == 1

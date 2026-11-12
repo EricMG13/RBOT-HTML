@@ -1824,6 +1824,19 @@ def test_every_module_is_told_the_reader_vocabulary_names_sources_and_chart_note
         for phrase in (
             "Never mention the scripts, the tooling or anything that could not be run",
             "Do not state a confidence score, a confidence band or a QA status",
+            (
+                "this overrides the method's `qa_status`, confidence score and band fields, its "
+                "Audit Summary score and its helper-script steps, so leave those fields and "
+                "steps out"
+            ),
+            (
+                "say in the Limitations passage or under `## Gaps`, in plain words, what could "
+                "not be established and why it matters, without naming the file, script or "
+                "module code"
+            ),
+            "a register written as bullets or prose follows the sentence rules",
+            "Basis lines and the chart, map, event and forecast input sections",
+            'write "not established" in plain words instead of the tag',
             "In every sentence under `## Findings`, `## Calculations` and `## Gaps`",
             (
                 '"handoff", "this transport", "the pack", "fact pack", "source pack", '
@@ -1831,7 +1844,7 @@ def test_every_module_is_told_the_reader_vocabulary_names_sources_and_chart_note
             ),
             "snake_case",
             "Refer to another module only by its plain name from this list",
-            "Financial foundation, Earnings changes, Short credit snapshot",
+            "Financial foundation; Earnings changes; Short credit snapshot",
             "`Source | Document | Document date | sha256 | Use`",
             "exact file name as supplied",
             "not stated",
@@ -4732,7 +4745,7 @@ def test_instruction_states_the_reader_voice_rulings(tmp_path):
             "Every figure in a reader passage must also appear in the handoff's tables or "
             "`## Calculations` with the same sign, unit and scale."
         ),
-        "the `[Insufficient Information]` tag belongs in tables and registers only",
+        "the `[Insufficient Information]` tag belongs in tables only",
         "Never round an exact value",
         "basis points, percentage points, pp, times, notch(es), day(s), week(s)",
         "does not belong in a reader sentence",

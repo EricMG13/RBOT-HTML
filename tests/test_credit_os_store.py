@@ -2018,3 +2018,27 @@ def test_a_fence_right_after_a_paragraph_line_is_its_own_block():
     blocks = store.parse_source(f"## S\nIntro line.\n{fence}\nAfter.\n")[0]["blocks"]
     assert [b["text"] for b in blocks] == ["Intro line.", fence, "After."]
     assert (blocks[1]["line"], blocks[1]["end"]) == (3, 7)
+
+
+def _dates_handoff(date: str) -> str:
+    return (
+        "## Findings\n\n### Bottom line\n\nx.\n\n## Sources\n\n"
+        "| Source | Document | Document date | sha256 | Use |\n|---|---|---|---|---|\n"
+        f"| a.pdf | Annual report | {date} | {'a' * 64} | Debt |\n"
+    )
+
+
+@pytest.mark.parametrize("cell", ["not stated", "Not stated", "  NOT STATED  ", ""])
+def test_document_dates_treats_not_stated_as_no_date(cell: str) -> None:
+    sections = store.sections_of(_dates_handoff(cell))
+    assert store.document_dates(sections) == {}
+
+
+def test_document_dates_keeps_a_real_date_and_a_later_module_supplies_it() -> None:
+    first = store.document_dates(store.sections_of(_dates_handoff("not stated")))
+    later = store.document_dates(store.sections_of(_dates_handoff("2024-11-12")))
+    merged: dict[str, str] = {}
+    for found in (first, later):
+        for name, date in found.items():
+            merged.setdefault(name, date)
+    assert merged == {"a.pdf": "2024-11-12"}
