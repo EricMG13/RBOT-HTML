@@ -2668,7 +2668,8 @@ test('the start-run link is a primary action with a plus icon, drawn only when t
   // Report history no longer draws it: the header carries it on every run tab.
   assert.ok(!served.historyView(RUN).includes('start-run'));
   const chrome = read('views.js').slice(read('views.js').indexOf('function updateWorkspaceChrome'));
-  assert.ok(chrome.includes('${startRunLink(current.context)}'), 'the run header draws it');
+  assert.ok(chrome.includes('startRunLink(current.context)'), 'the run header draws it');
+  assert.ok(chrome.includes('startRun?`<div class="issuer-side">'), 'the side group exists only with the link');
 });
 
 // ---- The module page (redesign pass 1, task 2). Expected text is written by hand.

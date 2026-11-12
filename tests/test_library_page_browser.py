@@ -1291,6 +1291,41 @@ def test_the_run_header_has_no_start_link_from_a_file(tmp_path, route):
     update_library.update_library(tmp_path)
     seen = read_probe(tmp_path / "library/index.html", route, 1280, START_RUN_PROBE)
     assert seen["inAnyFormOfTheClass"] is False and seen["inDocument"] == 0 and seen["fits"] is True
+    if route.startswith("#W-Report/history"):
+        # `#content .history-table`: the table is still drawn without the link.
+        assert seen["historyTable"] == 1, seen
+
+
+SCOPE_PROBE = Path(__file__).with_name("browser_probe_header_scope.js").read_text(encoding="utf-8")
+# The run header's height at commit 1f1691c (no start link, no `.issuer-side`) for this file's
+# fixture (`make_run(..., as_of="2024-12-31")`, route #CP-1/head?c=run-a), measured by running
+# this test's probe on `git archive 1f1691c`: 113.140625px at both widths.
+BASE_HEADER_HEIGHT = {1440: 113.14, 1280: 113.14}
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_run_header_is_unchanged_from_a_file_and_as_of_stays_on_one_line(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_probe(tmp_path / "library/index.html", "#CP-1/head?c=run-a", width, SCOPE_PROBE)
+    assert seen["sideCount"] == 0, seen
+    assert seen["scopeHeight"] <= 24, seen
+    assert abs(seen["headerHeight"] - BASE_HEADER_HEIGHT[width]) <= 0.5, seen
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_run_header_keeps_as_of_on_one_line_beside_the_start_link_when_served(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_served_probe(
+        tmp_path / "library/index.html", "#CP-1/head?c=run-a", width, SCOPE_PROBE
+    )
+    assert seen["scopeHeight"] <= 24, seen  # one line
+    assert seen["iconGap"] <= 12, seen  # the calendar icon sits against the text
+    assert seen["scopeOverlapsTitle"] is False and seen["linkOverlapsTitle"] is False, seen
+    assert seen["fits"] is True, seen
+    if width == 1440:
+        assert seen["sameRow"] <= 12, seen  # the block and the link share a row
 
 
 def inject_probe(page: Path, script: str, config=None) -> None:

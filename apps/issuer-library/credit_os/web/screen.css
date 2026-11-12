@@ -605,8 +605,9 @@ td .basis-link{margin-left:6px}
 .issuer-back:hover{text-decoration:underline;text-underline-offset:3px}
 .issuer-back svg{flex:none}
 .issuer-row{align-items:flex-start;gap:16px;padding-bottom:12px}
-@media(min-width:721px){.issuer-row{display:flex;flex-wrap:wrap;justify-content:space-between}.issuer-row .issuer-title{flex:1 1 320px}}
-@media(min-width:721px){.issuer-side{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 16px;margin:4px 0 0 auto}.issuer-side .scope{margin-top:0}}
+@media(min-width:721px){.issuer-row{display:flex;justify-content:space-between}.issuer-row.has-start-link{flex-wrap:wrap}.issuer-row.has-start-link .issuer-title{flex:1 1 320px}}
+@media(min-width:721px){.issuer-side{display:flex;flex:none;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 16px;margin:4px 0 0 auto}}
+.issuer-side .scope{max-width:none;white-space:nowrap}
 @media(max-width:720px){.issuer-side .start-run{display:flex;justify-content:center;margin-top:12px}}
 .issuer-row .issuer-title{display:block}
 .issuer-row h1{margin-top:8px}
