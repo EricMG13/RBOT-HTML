@@ -553,6 +553,21 @@ class OwnerTable:
         return self.events or self.edges
 
 
+def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTable, ...]:
+    """The tables a module is asked for beside its report routes. CP-1 is on every pathway asked
+    for all four chart tables CP-8's pack reads (owner, 2026-11-12, "Yes, all pathways"): those
+    its report's chart blocks do not already route are asked as owner tables, with no new
+    report section."""
+    tables = OWNER_TABLES.get(module, ())
+    if module != "CP-1":
+        return tables
+    routed = {r.heading for r in routes}
+    chart = tuple(
+        OwnerTable(h, cols, unit) for h, cols, unit in CHART_TABLES.values() if h not in routed
+    )
+    return (*chart, *tables)
+
+
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
 
 
@@ -1752,7 +1767,7 @@ def _instructions(
     # is written once, as the passage, or the section would repeat and delivery would refuse it.
     named = [r.heading for r in asked if r.heading in READER_HEADINGS]
     asked = [r for r in asked if r.heading not in named]
-    selectors = "\n".join(_selector(r) for r in (*asked, *OWNER_TABLES.get(module, ())))
+    selectors = "\n".join(_selector(r) for r in (*asked, *_owner_tables(module, routes)))
     if named:
         selectors += (
             f"\n- {', '.join(f'`### {h}`' for h in named)}: the reader passage of that name is "
@@ -2252,7 +2267,7 @@ def checker(layout: MarkdownLayout) -> Check:
         for route in routes:
             if route.kind == "chart":
                 issues += chart_issues(text, route)
-        for owned in OWNER_TABLES.get(task.module_id, ()):
+        for owned in _owner_tables(task.module_id, routes):
             issues += chart_issues(text, owned)
         return (*issues, *_forecast_issues(task, text))
 

@@ -462,6 +462,11 @@ def answer(context: dict, plan_routes: list) -> str:
             lines += ["| Item | Value |", "| --- | --- |", "| Observed | 1 |", ""]
         else:
             lines += ["A located finding.", ""]
+    if context["module_id"] == "CP-1":  # Every pathway asks CP-1 for all four chart tables.
+        routed = {r.heading for r in own}
+        for heading, table in CHART_TABLES.items():
+            if heading not in routed:
+                lines += [f"### {heading}", "", table, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
     for heading in ("Calculations", "Gaps", "Next module"):
@@ -1912,6 +1917,42 @@ def test_checker_refuses_each_broken_chart_table(tmp_path, old, new, complaint):
     assert old in raw
     issues = _checked_handoff(task, raw.replace(old, new).encode(), checker(prepared.layout))
     assert any(complaint in issue for issue in issues), issues
+
+
+def _header(*columns: str) -> str:
+    return (
+        "`| " + " | ".join(("Period", *columns, "Reporting unit", "Basis and limitation")) + " |`"
+    )
+
+
+CHART_HEADERS = {
+    "Chart data: leverage": _header("Total debt / EBITDA", "Net debt / EBITDA"),
+    "Chart data: interest cover": _header("EBITDA / cash interest"),
+    "Chart data: liquidity": _header("Cash", "Undrawn committed facilities"),
+    "Chart data: debt maturities": _header("Debt maturing"),
+}
+
+
+@pytest.mark.parametrize(
+    "pathway",
+    [
+        *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
+        *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+    ],
+)
+def test_every_pathway_asks_cp1_for_the_four_chart_tables_and_requires_them(tmp_path, pathway):
+    """Owner, 2026-11-12, "Yes, all pathways": CP-8's pack reads these tables on each one."""
+    prepared, task, context = good_task(tmp_path, "CP-1", pathway)
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
+    for heading, header in CHART_HEADERS.items():
+        assert text.count(f"`### {heading}`") == 1, heading
+        assert header in text, heading
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    for heading in CHART_HEADERS:
+        cut = raw.replace(f"### {heading}", "### Dropped")
+        issues = _checked_handoff(task, cut.encode(), checker(prepared.layout))
+        assert any(heading in issue for issue in issues), (heading, issues)
 
 
 def test_the_instructions_give_the_exact_chart_table_header(tmp_path):
