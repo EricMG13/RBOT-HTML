@@ -116,7 +116,7 @@ const evidenceView = contexts => {
   const text = read('views.js');
   const start = text.indexOf('// ---- Evidence (ruling decisions 9, 10)'), end = text.indexOf('function workspaceView(');
   assert.ok(start >= 0 && end > start, 'evidence view not found');
-  const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation' };
+  const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance' };
   return new Function('esc', 'icon', 'moduleTitle', 'handoffLabel', 'contexts', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, runPage().handoffLabel, contexts);
 };
 const EVIDENCE = {
@@ -188,9 +188,18 @@ test('Evidence: Run record lists the methods changed since the run, escaped; no 
   const changed = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: methods/cp0.md changed', 'CP-1: <b>x</b> no longer selected'] } })('r');
   const record = changed.slice(changed.indexOf('<summary>Run record</summary>'));
   assert.ok(record.includes('Methods changed since this run'));
-  assert.ok(record.includes('<li>CP-0: methods/cp0.md changed</li>') && record.includes('<li>CP-1: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
+  assert.ok(record.includes('<li>Source readiness: methods/cp0.md changed</li>') && record.includes('<li>Financial foundation: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
   assert.ok(!changed.includes('<b>x</b>'));
   for (const none of [[], undefined]) assert.ok(!evidenceView({ r: { evidence: EVIDENCE, methodChanges: none } })('r').includes('Methods changed since this run'));
+});
+
+test('Evidence (fix round 2): a method change leads with its module name; any other module code is named; file paths stay verbatim', () => {
+  const html = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: src/deploy_vii/methods/cp0.md changed', 'CP-1A: src/deploy_vii/methods/cp1a.md, docs/x.md changed', 'CP-0: reads CP-1 and src/deploy_vii/methods/CP-1.md'] } })('r');
+  const list = /<h3>Methods changed since this run<\/h3>.*?<\/ul>/s.exec(html)[0];
+  assert.ok(list.includes('<li>Source readiness: src/deploy_vii/methods/cp0.md changed</li>'), list);
+  assert.ok(list.includes('<li>Business &amp; governance: src/deploy_vii/methods/cp1a.md, docs/x.md changed</li>'), list);
+  assert.ok(list.includes('<li>Source readiness: reads Financial foundation and src/deploy_vii/methods/CP-1.md</li>'), 'a code in the detail is named; a path is not');
+  assert.ok(!/\bCP-[A-Z0-9]+\b/.test(list.replace(/src\/deploy_vii\/methods\/CP-1\.md/, '')), list);
 });
 
 test('Evidence: nothing recorded says so and invents nothing', () => {
