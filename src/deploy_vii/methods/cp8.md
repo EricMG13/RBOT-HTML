@@ -99,7 +99,8 @@ accepted, the run is delivered without it.
      analysis changed; it never says the issuer's measure moved. The same holds for the pack's
      `net_debt_change` when its `same_period` is true and a difference is not zero: the gross debt,
      cash and net debt differences are the analysis's, so give both runs' values and never a
-     movement ("net debt rose", "cash fell by"); the checker refuses any of those sizes.
+     movement ("net debt rose", "cash fell by"); the checker refuses those sizes in
+     passages, `## Gaps` and fact rows; only the register rows may carry them.
 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
    for a module's. If you think a module's change of view is unexplained, say so and mark the row
