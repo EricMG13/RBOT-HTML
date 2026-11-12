@@ -45,9 +45,7 @@ Owner's words, in order:
 Built: M1 and M2 (presets, and CP-2G added to credit_snapshot and covenant_refinancing from M3's
 preset list; CP-8 leaves portfolio_decision).
 
-Decided, not yet built: M3 (layer-1 forecast), M4 (standing ruling; waits on the paid test), M5 (CP-8
-run and Changes section; only its removal from the preset is done), M6 (short snapshot), M7 (ledger
-statuses).
+Decided, not yet built at the time of that change: M3 to M7; see the amendment of 2026-11-12 at the end.
 
 ## Amendment 2026-11-12: M5, M7 and the CP-8 half of M8 built (engine and method; no paid call)
 
@@ -188,7 +186,7 @@ The nine prose checks and the
 reader-figure check apply as to every prose module. The module's display name, on the run page and in the
 library, is "Changes since the last run".
 
-Not decided here: charts and visuals for the Changes section (T5).
+Charts and visuals for the Changes section (T5): built, see the last amendment.
 
 ## Amendment 2026-11-12: M6 built (Short Credit Snapshot)
 
@@ -213,3 +211,46 @@ Known limits: a figure is proven to exist in
 CP-1, not that it is the right measure or period; a unit CP-1 carries only in a column header (`Reporting unit`) is not matched, so a bare CP-1 `3.1` accepts `3.1x`, because CP-1's own tables write plain numbers with a separate unit column; that rests on the reader's check of a real run.
 CP-L10 leads the Overview of a short snapshot (amendment to H5 in
 `2026-11-11-reader-and-issuer-report.md`). The library names the pathway "Short credit snapshot".
+
+## Amendment 2026-11-12: built, and the seams the whole-branch review found
+
+Built: M1 and M2 presets (#49), the layer-1 forecast of M3 (#50), web search of M4 (#51), CP-8 with its
+checker and pack, M5 and M7 (#55), the Changes tab, the issuer library's page for M8 (#56), and the Short
+Credit Snapshot, M6 (#57). Two departures from M8 part 5 as built: Over time lists runs of the same
+pathway only, not every run of the issuer; its lead line is the lead module's bottom line, not a committee
+conclusion.
+
+Whole-branch review fixes (branch claude/changes-seams): (1) one reading of CP-8's registers. The checker
+(`changes_check`) now accepts only the forms the tab reads: a verdict word (`Same definition`, `Not
+comparable`) starts a cell of the issuer row (the word elsewhere in the row is refused, except for a measure
+the pack marks `no`), the issuer row's label is the pack's label exactly (bold or code marks aside), and the
+Module cell of the analysis register ends with the code in brackets, as `Credit view (CP-2)`.
+`tests/fixtures/changes-seam/rows.json` is read by a Python test and a node test with the same expected
+verdicts. A measure the pack marks `no`, and a row that begins with `Not comparable`, shows both values and no difference and no line. A `judge` measure with no verdict word shows no difference ("Comparability not judged"). A `yes` measure with no verdict word shows its difference and its line, as the pack states it. (2) Over time compares
+the run folder name on both sides (the pack names its prior by folder). (3) A reason the run records for
+making no comparison reaches the library verbatim. (4) The published scope no longer says CP-8's handoff is
+delivered whole when CP-8 was not produced.
+
+Known limits, recorded (owner decision pending on the first): four pathways (relative_value,
+distressed_restructuring, portfolio_decision, short_snapshot) never ask CP-1 for the chart tables the pack
+reads (`cpos_launch.py` layout rule), so their pack states no measure and their Changes tab says so; the
+layout rule is unchanged. L4: `find_prior` accepts any listed run folder name, including one the launcher
+refuses at launch (a space, a leading underscore, non-ASCII); that fails closed with no spend. L5: the
+forecast inputs block can vouch for a Key figure when only CP-0, CP-1, CP-MODEL and CP-L10 run.
+
+## Amendment 2026-11-12: one reader of CP-8's registers (branch claude/changes-seams, round 3)
+
+Two earlier rounds aligned the checker and the page rule by rule and each left a divergence, so the page no
+longer reads a register for a verdict. `changes_check.page_verdicts` derives, with the checker's own reading
+of the registers, a verdict per pack measure, the module rows that have exactly one row, and the ledger
+counts; `update_library.changes_data` carries them as `run.changes.verdicts` (null without a pack, with a
+note or a problem); `changes.js` displays them: only a `comparable` verdict shows a difference or a line, and
+a missing entry, an unknown kind or `verdicts: null` shows both values and neither. A fact row whose label,
+after NFKC, with only letters and digits kept and case folded, equals a pack label is refused (a hidden
+character cannot leave a `Not comparable` row beside a difference). Delivery computes nothing.
+
+Known limits, recorded: (1) the verbatim register tables are still split by the store's parser, so a row
+without its closing pipe, or a second table, stays visible as text although it counts for no verdict. (2) Old
+handoffs are re-read only through the checker's per-row rules; their passages are not re-checked against
+K9 and K10. (3) A malformed issuer register counts as having no rows, so a measure the pack marks `yes`
+still shows the pack's difference.

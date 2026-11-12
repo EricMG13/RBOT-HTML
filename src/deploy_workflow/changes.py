@@ -100,6 +100,7 @@ PRIOR_PREFIX = "prior/"
 PACK_NAME = "changes.json"
 PACK_SCHEMA = "cpos-changes/2"
 FIRST_RUN = "first run of this pathway"
+DELIVERED_WHOLE = " The changes since the last run are CP-8's handoff, delivered whole."
 NO_LIMITATION = re.compile(r"no limitation changes\b", re.IGNORECASE)
 NOT_SUPPLIED = "Not supplied"
 # (key, CP-1 chart table, value column): the five measures the library already quotes.

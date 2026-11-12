@@ -36,7 +36,7 @@ from deploy_workflow.changes import (
     observations,
     workspace_of,
 )
-from deploy_workflow.changes_check import cp8_issues
+from deploy_workflow.changes_check import cp8_issues, page_verdicts
 from deploy_workflow.owners.cpos import HandoffPlan
 from deploy_workflow.owners.cpos_launch import LaunchRefused, main, prepare
 from deploy_workflow.prose_checks import bottom_line_text, is_earlier_format
@@ -1796,7 +1796,9 @@ def test_a_cp8_that_is_not_accepted_loses_only_itself_and_the_run_says_why(tmp_p
         {k: v for k, v in e.items() if k != "at"} for e in events
     ]
     assert events[-1]["event"] == "delivered"
-    assert "Changes since the last run (CP-8): " + reason in manifest["layout"]["scope"]
+    scope = manifest["layout"]["scope"]
+    assert "Changes since the last run (CP-8): " + reason in scope
+    assert "delivered whole" not in scope  # one true thing: CP-8's handoff was not produced
 
 
 @pytest.mark.usefixtures("provider")
@@ -2177,3 +2179,77 @@ def test_a_difference_of_the_pack_is_never_printed_in_a_fact_row(row):
     found = cp8_issues(real_text(fact=row + "\n"), REAL, REAL_HELD)
     assert any("difference" in i for i in found), found
     assert cp8_issues(real_text(fact=FACT_LOAN), REAL, REAL_HELD) == ()
+
+
+SEAM_FILE = Path(__file__).parent / "fixtures" / "changes-seam" / "rows.json"
+SEAM = json.loads(SEAM_FILE.read_text())
+
+
+def _seam_row(cells):
+    return "| " + " | ".join(cells) + " |"
+
+
+def test_the_seam_fixture_states_the_packs_measures():
+    for key, measure in SEAM["measures"].items():
+        assert measure == next(m for m in PACK["measures"] if m["key"] == key)
+
+
+def _seam_text(case):
+    leverage = next(r for r in REGISTERS.splitlines() if r.startswith("| Total debt / EBITDA"))
+    old = {"leverage": leverage, "cash": CASH_ROW}[case["measure"]]
+    quiet = "| Credit view (CP-2) | Unchanged | None | No change. |"
+    first = _seam_row(case["cells"])
+    first = first.removesuffix(" |") if case.get("unclosed") else first
+    rows = "\n".join([first, *(_seam_row(r) for r in case.get("extra_rows", []))])
+    return REGISTERS.replace(old, rows, 1).replace(
+        "| Credit view (CP-2) | Strengthened | New period | Leverage fell. |", quiet, 1
+    )
+
+
+@pytest.mark.parametrize("case", SEAM["measure_rows"], ids=lambda c: c["name"])
+def test_the_checker_accepts_a_measure_row_only_in_the_form_the_tab_reads(case):
+    found = cp8_issues(_seam_text(case), PACK)
+    assert (found == ()) is case["accepted"]
+    assert any(case["refusal"] in i for i in found) if "refusal" in case else True
+
+
+@pytest.mark.parametrize("case", SEAM["measure_rows"], ids=lambda c: c["name"])
+def test_the_page_verdict_of_a_measure_is_the_one_the_fixture_states(case):
+    """One reader: the verdict the page shows is derived here, by the checker's own reading of the
+    register; for a handoff the checker accepts it is the verdict written beside the row."""
+    got = page_verdicts(_seam_text(case), PACK)["measures"][case["measure"]]["kind"]
+    assert got == case["page"]
+    if case["accepted"]:
+        assert case["page"] == case["verdict"]
+
+
+@pytest.mark.parametrize("case", SEAM["module_cells"], ids=lambda c: c["name"])
+def test_the_page_reads_a_module_row_only_where_the_checker_does(case):
+    text = REGISTERS.replace("| Credit view (CP-2) |", f"| {case['cell']} |", 1)
+    modules = page_verdicts(text, PACK)["modules"]
+    if case["accepted"]:
+        assert modules["CP-2"]["status"] == case["status"]
+    else:
+        assert "CP-2" not in modules
+
+
+def test_the_page_reads_the_ledger_counts_and_a_missing_register_as_nothing():
+    got = page_verdicts(REGISTERS, PACK)
+    assert got["ledger"] == [["Closed", 1], ["Remaining", 1], ["New", 1], ["No longer stated", 0]]
+    none = page_verdicts("## Findings\n\nNo registers.\n", PACK)
+    assert none["ledger"] is None
+    assert none["modules"] == {}
+    assert none["measures"]["leverage"]["kind"] == "comparable"  # the pack says yes
+    assert none["measures"]["cash"]["kind"] == "unjudged"  # the pack leaves it to CP-8
+    assert page_verdicts(None, PACK)["measures"]["coverage"] == {
+        "kind": "not_comparable",
+        "label": "Not comparable",
+        "reason": "the earlier run does not state it",
+        "analysis_change": None,
+    }
+
+
+@pytest.mark.parametrize("case", SEAM["module_cells"], ids=lambda c: c["name"])
+def test_the_checker_accepts_a_module_cell_only_in_the_form_the_tab_reads(case):
+    text = REGISTERS.replace("| Credit view (CP-2) |", f"| {case['cell']} |", 1)
+    assert (cp8_issues(text, PACK) == ()) is case["accepted"]

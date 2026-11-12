@@ -210,3 +210,31 @@ def test_a_run_with_no_recorded_comparison_is_not_called_a_first_run(tmp_path):
     assert console == []
     assert "No comparison was recorded for this run" in dom
     assert "First run of this pathway" not in dom
+
+
+def test_over_time_joins_two_runs_the_pack_names_by_run_folder(tmp_path):
+    """The pack names the earlier run by its folder, as the run start service names folders (not by
+    the manifest's run_id); a line joins the points where the later pack compares exactly them."""
+    run_of(
+        tmp_path,
+        "20261101-090000-01",
+        as_of="2024-09-30",
+        modules=("CP-0", "CP-1", "CP-2"),
+        cp1_extra=CHARTS,
+    )
+    now = run_of(
+        tmp_path,
+        "20261112-090000-01",
+        as_of="2025-03-31",
+        modules=("CP-0", "CP-1", "CP-2", "CP-8"),
+        cp1_extra=CHARTS,
+        cp8=CP8,
+    )
+    held = {"label": "Cash", "unit": "US$m", "value": "6261", "period": "2024-09-30"}
+    cash = {**PACK["measures"][1], "prior": held, "current": held, "difference": "0"}
+    pack = {**PACK, "prior": {**PACK["prior"], "run": "20261101-090000-01"}, "measures": [cash]}
+    with_changes(now, pack=json.dumps(pack).encode())
+    dom, console = visit(build(tmp_path), "#W-Changes/changes?c=20261112-090000-01")
+    assert console == []
+    over = dom[dom.index('id="changes-over-time"') :]
+    assert over.count("<line ") == 1

@@ -37,6 +37,7 @@ from credit_os.store import UnreadableFile, regular_chunks, workspace_store
 
 from deploy_vii.registry import plan
 from deploy_workflow.changes import DEFAULT_LEAD, LEAD_MODULE, PACK_SCHEMA
+from deploy_workflow.changes_check import page_verdicts
 from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.credit_os_chips import chips
 from deploy_workflow.library_index import (
@@ -166,14 +167,42 @@ def pack_of(workspace: Path, run: dict[str, Any]) -> tuple[dict[str, Any] | None
     return value, None
 
 
+def cp8_verdicts(
+    workspace: Path, store: dict[str, Any], run: dict[str, Any], pack: dict[str, Any]
+) -> tuple[dict[str, Any] | None, str | None]:
+    """(verdicts, problem) of a run whose pack is readable: what the Changes tab shows of CP-8's
+    handoff, read here by the checker's own rules (`page_verdicts`); the page reads no register for
+    a verdict. None when the run holds no CP-8 output; an output that cannot be read (changed since
+    the build read it, not a plain file, not UTF-8) is a problem the run states."""
+    default = run["modules"].get("CP-8", {}).get("default")
+    if default is None:
+        return None, None
+    output = store["outputs"][default]
+    label = f"{run['folder']}/{output['source']}"
+    try:
+        raw = checked_bytes(
+            workspace / "runs" / run["folder"] / output["source"], output["sha256"], label
+        )
+        return page_verdicts(raw.decode("utf-8"), pack), None
+    except Refused as error:
+        return None, f"CP-8's handoff {output['source']} could not be read ({error})"
+    except UnicodeDecodeError:
+        return None, f"CP-8's handoff {output['source']} is not valid UTF-8"
+
+
 def changes_data(workspace: Path, store: dict[str, Any], library: Library) -> None:
     """Carry each listed run's comparison to its store run, as ``changes``: the lead module of its
-    pathway, the pack CP-8 was given (unchanged), the recorded reason CP-8 was not produced, and
-    the problem when the published pack cannot be read (also named in the build's issues)."""
+    pathway, the pack CP-8 was given (unchanged), the recorded reason CP-8 was not produced, the
+    problem when the published pack or CP-8's handoff cannot be read (also named in the build's
+    issues) and ``verdicts``, what the Changes tab shows of CP-8's registers (`cp8_verdicts`;
+    null without a pack, or with a note or a problem)."""
     listed = {run["id"]: run for run in library.runs}
     for run in store["runs"].values():
         record = listed[run["folder"]]
         pack, problem = pack_of(workspace, record)
+        verdicts = None
+        if pack is not None and not record["changes"]["note"]:
+            verdicts, problem = cp8_verdicts(workspace, store, run, pack)
         if problem:
             store["issues"].append(f"{record['id']}: {problem}")
         run["changes"] = {
@@ -182,6 +211,7 @@ def changes_data(workspace: Path, store: dict[str, Any], library: Library) -> No
             "pack": pack,
             "note": record["changes"]["note"],
             "problem": problem,
+            "verdicts": verdicts,
         }
 
 
