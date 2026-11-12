@@ -159,18 +159,32 @@ by calculation ID is not. For a measure with `same_period` true and a non-zero d
 not change: its issuer row must say `Not comparable`, or `Same definition` with the cause `Correction` or
 `Method change` (issuer rows may then carry those two causes); `New period` and `New source` are refused.
 The difference of a measure whose row says `Not comparable` (or the pack marks `no`) is printed nowhere,
-and that of a same-period non-zero measure only in the register rows; no direction or trend word may be
-attached to such a measure's name in a passage unless the sentence names the correction or method change
-(a deterministic word test: `correct*`, `method change`, `restat*`). Every figure of a reader passage
-(`### Limitations` and the Request, Sources, Calculations and Next module sections aside) must be a pack
-value of a measure its sentence names (by label or a short alias list), or a pack value when it names none,
-or a figure a CP-8 register row prints; a percentage the pack does not hold is refused. A year after an
+and that of a same-period non-zero measure only in the register rows. (Round 2's sentence-level word
+tests and its figure rule were replaced in round 3, below.) A year after an
 instrument word (`notes 2027`, `due 2030`) is kept in the definition key. A ref in any case in a sentence
 is refused. CP-8 is never the library's lead or summary module (`summary_fields`). Known limits, kept:
-a fact row may not carry a figure, even one from the current handoffs; `Closed` evidence is checked for
+`Closed` evidence is checked for
 presence of a current-run module, not for substance; issuer names must match exactly after case and
 whitespace folding (the approval shows the reason when they do not). A refusal is a targeted repair inside
-the existing attempt cap. The nine prose checks and the
+the existing attempt cap. Fix round 3 (2026-11-12, controller-approved after a root-cause investigation: round 2 policed the meaning of
+free prose with sentence-level word lists, each leaky and each refusing correct sentences). The word lists
+(`ALIASES`, the correction/restatement escape, the per-sentence trend test) are deleted; the check reads
+structure, lists and numbers only. (a) `same_period` is `changes.same_period`: a period is `FY2024`,
+`FY2024 / 2024-09-30` or `2024-09-30`; two dates are the same only if equal, otherwise only the same fiscal year
+is; `H1 FY2024`, `LTM Q3 FY2024`, `FY2024 pro forma` are never the same as `FY2024`. (b) A figure written in
+a checked line (all but Request, Sources, Calculations and Next module; of an issuer row the Effect cell) must
+be held in the evidence: the pack's values, the figures of its definition texts, the handoffs CP-8 was sent
+(`cp8_issues(text, pack, held)`, the caller passes this run's handoffs and the `prior/*.md` sources) and the earlier
+run's; a rounded or worked-out figure and an unstated threshold are refused. (c) The difference of a measure
+that is `no`, said `Not comparable`, or of one period with two values is printed in no checked line (a same-period
+measure said `Same definition` may print it in register rows). (d) A fact row may carry figures a handoff states,
+never a pack measure's value (`name a pack measure by its exact label`). Known limits, kept: a movement in words
+for a withheld measure ("Leverage improved.") is not checked mechanically (the method text, the enforced register
+row beside it and a human reader carry it); a held figure proves a number exists in the evidence, not what it
+means (on the real pair "about 0.6x lower" passes because 0.6 is a weight in a current handoff); fact-row figures
+are not tied to their column's run; `FY2024` against a bare date is treated as different; "56 basis points" is not
+read as a figure; a `Same definition` row with a contradicting sentence is accepted.
+The nine prose checks and the
 reader-figure check apply as to every prose module. The module's display name, on the run page and in the
 library, is "Changes since the last run".
 
