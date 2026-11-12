@@ -423,6 +423,10 @@ NOT_BUILT = (
     "nothing to check against its period dates."
 )
 NOT_TWELVE = "{fy} is not twelve months by CP-1's period dates ({days} days)"
+OWN_LTM = (
+    "CP-1's own {label} figures for revenue, earnings and cash flow are not read; the LTM column "
+    "is built from {fy} + {ytd} - {pytd}."
+)
 IN_FORECAST = "CP-1 column {label} is in the forecast years and is not read as history."
 SHOWN = "Only the latest {n} {kind} columns are shown."
 _KIND_WORDS = {"QUARTER": "quarter", "FY": "fiscal-year"}
@@ -814,8 +818,12 @@ def _twelve_months(
     ]
 
 
-def _interim(ctx: _Context, anchor: _Anchor) -> tuple[list[Column], list[str]]:
-    """YTD, PYTD, LTM and Prior LTM for an anchor inside a fiscal year, and the LTM's check."""
+def _interim(
+    ctx: _Context, anchor: _Anchor
+) -> tuple[list[Column], list[str], tuple[str, str] | None]:
+    """YTD, PYTD, LTM and Prior LTM for an anchor inside a fiscal year, the LTM's check, and the
+    LTM's label with the line saying it is built (CP-1's own figures under that label are not
+    read) when it was built."""
     n, k = anchor.year, anchor.quarters
     ytd_p, pytd_p, older_p = _ytd_period(n, k), _ytd_period(n - 1, k), _ytd_period(n - 2, k)
     ytd, pytd = _ytd_reads(ctx, ytd_p), _ytd_reads(ctx, pytd_p)
@@ -839,13 +847,21 @@ def _interim(ctx: _Context, anchor: _Anchor) -> tuple[list[Column], list[str]]:
     ]
     columns[0] = _dated(columns[0], ctx.dates.get(ytd_p))
     columns[1] = _dated(columns[1], ctx.dates.get(pytd_p))
-    return [
-        *columns,
-        *_twelve_months(f"LTM Q{k} {n}", ltm_values, ltm_check, prior_values, prior_check),
-    ], _first_limits(ltm_check, ltm_built, prior_built and prior_check is None)
+    label = f"LTM Q{k} {n}"
+    own = OWN_LTM.format(
+        label=label,
+        fy=period_label(("FY", n - 1, 4)),
+        ytd=period_label(ytd_p),
+        pytd=period_label(pytd_p),
+    )
+    return (
+        [*columns, *_twelve_months(label, ltm_values, ltm_check, prior_values, prior_check)],
+        _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
+        (label, own) if ltm_built else None,
+    )
 
 
-def _fiscal(ctx: _Context, anchor: _Anchor) -> tuple[list[Column], list[str]]:
+def _fiscal(ctx: _Context, anchor: _Anchor) -> tuple[list[Column], list[str], None]:
     """At a fiscal-year anchor: no year to date; LTM is the year, Prior LTM the year before."""
     n = anchor.year
     reason = NO_YTD.format(label=period_label(("FY", n, 4)))
@@ -858,16 +874,20 @@ def _fiscal(ctx: _Context, anchor: _Anchor) -> tuple[list[Column], list[str]]:
     prior_values = _derived(prior, False)
     prior_built = _built(prior_values)
     prior_check = _check_year(ctx.dates, ("FY", n - 1, 4)) if prior_built else None
-    return [
-        _why(_column("YTD", "YTD", "YTD", "PYTD", _blanket(reason)), reason),
-        _why(_column("PYTD", "PYTD", "PYTD", None, _blanket(reason)), reason),
-        *_twelve_months(f"LTM FY{n}", ltm_values, ltm_check, prior_values, prior_check),
-    ], _first_limits(ltm_check, ltm_built, prior_built and prior_check is None)
+    return (
+        [
+            _why(_column("YTD", "YTD", "YTD", "PYTD", _blanket(reason)), reason),
+            _why(_column("PYTD", "PYTD", "PYTD", None, _blanket(reason)), reason),
+            *_twelve_months(f"LTM FY{n}", ltm_values, ltm_check, prior_values, prior_check),
+        ],
+        _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
+        None,
+    )
 
 
-def _four(ctx: _Context) -> tuple[list[Column], list[str]]:
-    """YTD, PYTD, LTM and Prior LTM, in that order, and the first limit line (what the LTM's date
-    check found)."""
+def _four(ctx: _Context) -> tuple[list[Column], list[str], tuple[str, str] | None]:
+    """YTD, PYTD, LTM and Prior LTM, in that order, the first limit line (what the LTM's date
+    check found), and the LTM label and line when it was built from the interim periods."""
     if ctx.anchor is None:
         values = _no_anchor_values(ctx.found, ctx.no_anchor)
         return [
@@ -875,7 +895,7 @@ def _four(ctx: _Context) -> tuple[list[Column], list[str]]:
             _why(_column("PYTD", "PYTD", "PYTD", None, values), ctx.no_anchor),
             _why(_column("LTM", "LTM", "LTM", "PRIOR_LTM", values), ctx.no_anchor),
             _why(_column("PRIOR_LTM", "PRIOR_LTM", "Prior LTM", None, values), ctx.no_anchor),
-        ], [NOT_BUILT]  # fmt: skip
+        ], [NOT_BUILT], None  # fmt: skip
     if ctx.anchor.fiscal:
         return _fiscal(ctx, ctx.anchor)
     return _interim(ctx, ctx.anchor)
@@ -896,7 +916,11 @@ def _first_limits(check: _Checked | None, built: bool, prior_unchecked: bool) ->
 
 
 def _limits(
-    found: dict[str, Line], first: list[str], twice: tuple[str, ...], forecast: tuple[str, ...]
+    found: dict[str, Line],
+    first: list[str],
+    twice: tuple[str, ...],
+    forecast: tuple[str, ...],
+    own: tuple[str, str] | None,
 ) -> list[str]:
     limits = list(first)
     limits += [
@@ -906,8 +930,8 @@ def _limits(
     ]
     limits += [IN_FORECAST.format(label=label) for label in forecast]
     limits += [DATED_TWICE.format(label=label) for label in twice]
-    for what, kind in (("column headers", "unread"), ("row labels", "unread_rows")):
-        unread = list(
+    lists = {
+        what: list(
             dict.fromkeys(
                 _cut(_plain(header))
                 for line in found.values()
@@ -915,6 +939,12 @@ def _limits(
                 for header in getattr(line, kind)
             )
         )
+        for what, kind in (("column headers", "unread"), ("row labels", "unread_rows"))
+    }
+    if own is not None and any(own[0] in unread for unread in lists.values()):
+        limits.append(own[1])
+        lists = {what: [h for h in unread if h != own[0]] for what, unread in lists.items()}
+    for what, unread in lists.items():
         if unread:
             names = ", ".join(unread[:_MAX_UNREAD])
             more = f" and {len(unread) - _MAX_UNREAD} more" if len(unread) > _MAX_UNREAD else ""
@@ -977,11 +1007,11 @@ def history(
     ctx = _Context(
         found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR, labels
     )
-    (ytd, pytd, ltm, prior), first = _four(ctx)
+    (ytd, pytd, ltm, prior), first, own = _four(ctx)
     pf = _why(_column("PF", "PF", "PF LTM", None, _blanket(NO_PF)), NO_PF)
     quarters, quarter_cut = _group(ctx, "QUARTER", "Quarter", _MAX_QUARTERS)
     years, year_cut = _group(ctx, "FY", "Fiscal year", _MAX_YEARS)
-    limits = _limits(found, first, twice, forecast)
+    limits = _limits(found, first, twice, forecast, own)
     limits += [cut for cut in (quarter_cut, year_cut) if cut is not None]
     return {
         "schema_version": "cpos-history/1",

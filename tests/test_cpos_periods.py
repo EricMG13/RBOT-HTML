@@ -1689,10 +1689,14 @@ def test_a_fiscal_year_anchor_reads_the_label_only_at_the_fiscal_years_end():
 
 
 def test_row_labels_of_a_table_read_by_column_are_listed_apart_from_column_headers():
-    _, record = _e1_record()
+    cp1 = E1_CP1.replace(
+        "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |",
+        "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |\n| Plan 2026 | 130 | 70 | US$m | x |",
+    )
+    _, record = _e1_record(cp1)
     limits = record["limits"]
-    assert "CP-1 row labels not read as periods: LTM Q2 2025." in limits
-    assert not any("column headers" in x and "Cash" in x for x in limits)
+    assert "CP-1 row labels not read as periods: Plan 2026." in limits
+    assert not any("column headers" in x for x in limits)
 
 
 def test_a_column_form_unit_refusal_says_column_header_and_the_no_amount_refusal_names_column():
@@ -1708,3 +1712,44 @@ def test_a_column_form_unit_refusal_says_column_header_and_the_no_amount_refusal
     assert str(caught.value) == (
         "CP-2G: base cash states no amount, so it names no row, period or column"
     )
+
+
+# --- Task E3: the "not read as periods" limit for the LTM label ---------------------------------
+E3_LINE = (
+    "CP-1's own LTM Q2 2025 figures for revenue, earnings and cash flow are not read; "
+    "the LTM column is built from FY2024 + H1 2025 - H1 2024."
+)
+
+
+def test_a_built_ltm_says_its_own_figures_are_not_read_and_does_not_list_the_label():
+    cp1 = E1_CP1.replace(
+        "| H1 2024 | LTM Q2 2025 |\n| --- | --- | --- | --- | --- |",
+        "| H1 2024 | LTM Q2 2025 | Ref 2030 |\n| --- | --- | --- | --- | --- | --- |",
+    )
+    _, record = _e1_record(cp1)
+    limits = record["limits"]
+    assert E3_LINE in limits
+    assert "CP-1 column headers not read as periods: Ref 2030." in limits
+    assert not any("LTM Q2 2025" in x for x in limits if "not read as periods" in x)
+
+
+def test_a_built_ltm_with_no_other_unread_header_has_no_not_read_line_for_it():
+    _, record = _e1_record()
+    assert E3_LINE in record["limits"]
+    assert not any("column headers not read as periods" in x for x in record["limits"])
+    assert not any("row labels not read as periods" in x for x in record["limits"])
+
+
+def test_an_ltm_that_was_not_built_keeps_the_old_line():
+    cp1 = """| Line | FY2024 | H1 2025 | LTM Q2 2025 |
+| --- | --- | --- | --- |
+| Total revenue | 1000 | n.a. | 1040 |
+"""
+    ops = replace(OPERANDS, revenue=cp2g.Val(D(1000), None))
+    record = history(
+        cpos_forecast._tables(cp1), ops, named={"revenue": ("Total revenue", "FY2024")}
+    )
+    limits = record["limits"]
+    assert limits[0] == NOT_BUILT
+    assert "CP-1 column headers not read as periods: LTM Q2 2025." in limits
+    assert not any("own LTM" in x for x in limits)
