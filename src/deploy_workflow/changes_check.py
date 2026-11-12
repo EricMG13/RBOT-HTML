@@ -1,5 +1,5 @@
 """The check of CP-8's handoff against its comparison pack (`deploy_workflow.changes`, schema
-`cpos-changes/2`). Pure: no I/O, no provider.
+`cpos-changes/3`). Pure: no I/O, no provider.
 
 CP-8 explains and never calculates (owner, 2026-11-11). The check reads no sentence for its
 meaning: it tests structure, lists and numbers only. Beside the prose checks every handoff meets,
@@ -28,9 +28,11 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a measure the pack gives a difference of zero, and that the row does not say `Not comparable`,
   has a Cause other than `None`: nothing changed, so `Unresolved` is refused for it (K2);
 - a `New` or `Not run this time` module, when the pack says both runs' modules were the pathway's
-  preset (`prior.selection` and `current.selection` both `preset`), has a Cause other than
-  `Method change` or a Why that says the pack does not say (K12); with either run an explicit
-  subset or not recorded, nothing is required;
+  preset (`current.selection` is `preset` and `prior.selection` is `preset` or null: a prior run
+  with no recorded selection was accepted as a base only because it ran the pathway's lead
+  module, so it is a whole-pathway run), has a Cause other than `Method change` or a Why that
+  says the pack does not say (K12); with either run `explicit`, or a pack of the earlier shape
+  (no `selection` key), nothing is required;
 - a `Basis: ` line names `changes.json` or a `prior/` file, gives a page for an earlier-run
   handoff, or writes the two forms CP-8 may add in another way: `Run comparison` for the comparison
   pack and `<plain module name> (<code>), earlier run` for an earlier run's handoff (K13);
@@ -81,7 +83,9 @@ SAME = "same definition"
 NOT_COMPARABLE = "not comparable"
 COMPARISON = "Run comparison"  # CP-8's Basis item for the comparison pack; an earlier handoff is
 # `<plain module name> (<code>), earlier run`
-_HANDOFF_PAGE = re.compile(r"\(CP-[A-Z0-9]+\).*\bpages?\b", re.IGNORECASE)
+_HANDOFF_PAGE = re.compile(
+    r"\(CP-[A-Z0-9]+\).*(?:\bpages?\b|\bpp?\.\s*\d)", re.IGNORECASE
+)  # any page locator on a handoff item
 _DOES_NOT_SAY = re.compile(r"\bthe\s+pack\s+does\s+not\s+say\b", re.IGNORECASE)
 _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
 _MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in brackets
@@ -517,9 +521,6 @@ def _issuer_issues(
     return issues
 
 
-PAIR = ("prior", "current")
-
-
 def _preset_issues(code: str, cause: str, why: str) -> list[str]:
     """A module that ran in one run only, between two runs of the pathway's own module set: the
     pathway's module set changed, so the cause is known (`Method change`) and the pack is not
@@ -544,7 +545,13 @@ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str
     issues = []
     ran = {m["module"]: (m["ran_prior"], m["ran_current"]) for m in pack["modules"]}
     seen = {code: len(found) for code, found in _rows_by_module(rows).items() if code in ran}
-    both_preset = all((pack.get(side) or {}).get("selection") == "preset" for side in PAIR)
+    prior, current = pack.get("prior") or {}, pack.get("current") or {}
+    # An absent `selection` key is a pack of the earlier shape; a null is a run that predates it.
+    both_preset = (
+        "selection" in prior
+        and current.get("selection") == "preset"
+        and prior["selection"] in ("preset", None)
+    )
     for module, status, cause, why in rows:
         code = _module_code(module)
         if code is None or code not in ran:

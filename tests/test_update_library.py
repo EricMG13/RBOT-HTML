@@ -535,6 +535,20 @@ def test_the_lead_module_of_the_pathway_travels_with_the_run(tmp_path, pathway, 
     assert changes_of(tmp_path, "r")["lead"] == lead
 
 
+def test_a_pack_of_the_newer_schema_is_carried_unchanged(tmp_path):
+    pack = {
+        **PACK,
+        "schema": "cpos-changes/3",
+        "prior": {**PACK["prior"], "selection": None},
+        "current": {"as_of": "2025-03-31", "selection": "preset"},
+    }
+    with_changes(current_run(tmp_path, "later"), pack=json.dumps(pack).encode())
+    update_library.update_library(tmp_path)
+    got = changes_of(tmp_path, "later")
+    assert got["pack"] == pack
+    assert got["problem"] is None
+
+
 def test_the_published_pack_is_carried_unchanged(tmp_path):
     with_changes(current_run(tmp_path, "later"), pack=json.dumps(PACK).encode())
     update_library.update_library(tmp_path)

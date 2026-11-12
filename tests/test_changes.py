@@ -487,6 +487,27 @@ def test_cp8s_instructions_carry_the_method_and_the_earlier_run(tmp_path):
     assert not any("changes.json" in t for t in others)
 
 
+def test_cp8s_instructions_state_its_basis_forms_and_no_other_module_does(tmp_path):
+    workspace = tmp_path / "ws"
+    make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
+    context, folder = snapshot_context(tmp_path)
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    texts = {
+        m: (workspace / "runs/cur" / spec.path).read_text()
+        for m, spec in prepared.plan.instructions.items()
+    }
+    forms = (
+        "`<plain module name> (<code>)` for a handoff of this run",
+        "`<plain module name> (<code>), earlier run`",
+        "`Run comparison`",
+        "never named in a Basis line",
+    )
+    assert all(f in texts["CP-8"] for f in forms)
+    for module, text in texts.items():
+        if module != "CP-8":
+            assert not any(f in text for f in forms) and "Run comparison" not in text
+
+
 def test_a_resume_keeps_its_pins_when_a_newer_run_has_appeared(tmp_path):
     workspace = tmp_path / "ws"
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
@@ -2320,6 +2341,8 @@ def test_cp8s_basis_line_accepts_the_comparison_and_an_earlier_run_handoff_by_na
         ("Basis: Financial data foundation (CP-1), prior/CP-1.md", "prior/"),
         ("Basis: Financial data foundation (CP-1), earlier run, page 4", "page"),
         ("Basis: Financial data foundation (CP-1), earlier run, pages 4–5", "page"),
+        ("Basis: Financial data foundation (CP-1), p. 4", "page"),
+        ("Basis: Financial data foundation (CP-1), pp. 4-5", "page"),
     ],
 )
 def test_cp8s_basis_line_refuses_pipeline_file_names_and_a_page_of_a_handoff(basis, fragment):
@@ -2327,11 +2350,21 @@ def test_cp8s_basis_line_refuses_pipeline_file_names_and_a_page_of_a_handoff(bas
     assert any("Basis" in i and fragment in i for i in found), found
 
 
-def test_the_library_reads_the_two_cp8_basis_forms_without_a_gap():
+def test_the_library_reads_the_two_cp8_basis_forms_in_a_cp8_handoff_only_and_exactly():
     from deploy_workflow.credit_os_chips import basis_locators
 
     line = "Basis: Run comparison; Financial data foundation (CP-1), earlier run"
-    assert basis_locators(line, {}) == []
+    assert basis_locators(line, {}, "CP-8") == []
+    for module in (None, "CP-2"):  # no other module has an earlier run or a comparison pack
+        assert len(basis_locators(line, {}, module)) == 2
+    for item in (
+        "annual-report.pdf, page 4 (CP-1), earlier run",
+        "Run comparison, page 4",
+        "Financial data foundation (CP-99), earlier run",  # no such module
+        "Financial data foundation (CP-1), earlier run, page 4",
+    ):
+        (gap,) = basis_locators(f"Basis: {item}", {"annual-report.pdf": "k"}, "CP-8")
+        assert gap["kind"] == "gap", item
 
 
 ZERO = {**PACK["measures"][0]}
@@ -2406,12 +2439,45 @@ def test_the_phrase_the_pack_does_not_say_is_refused_between_two_preset_runs():
     "pack",
     [
         {**PACK, "prior": {"selection": "preset"}, "current": {"selection": "explicit"}},
-        {**PACK, "prior": {"selection": None}, "current": {"selection": "preset"}},
+        {**PACK, "prior": {"selection": None}, "current": {"selection": "explicit"}},
         PACK,  # a pack of the earlier shape records no selection
     ],
 )
 def test_where_a_run_was_not_a_preset_the_cause_stays_unresolved(pack):
     assert module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY) == ()
+
+
+def test_a_prior_with_no_recorded_selection_counts_as_a_preset_run():
+    """tdg-reader-format-001's manifest has no `selection` key; it was a base because it ran the
+    pathway's lead module. The pack states null as recorded; the rule still fires."""
+    pack = {**PACK, "prior": {"selection": None}, "current": {"selection": "preset"}}
+    found = module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY)
+    assert any("CP-DR" in i and "`Method change`" in i for i in found), found
+    assert any("CP-2E" in i and "does not say" in i for i in found), found
+    assert module_issues(pack, "Method change", CHANGED_SET, "Method change", CHANGED_SET) == ()
+
+
+def test_a_prior_without_a_recorded_selection_is_stated_null_in_the_pack(tmp_path):
+    make_run(tmp_path, "old", as_of="2024-12-31", selection=None, modules=("CP-0", "CP-1", "CP-2"))
+    found = find_prior(
+        tmp_path,
+        folder="cur",
+        issuer_id="nbg",
+        **ME,
+        pathway="credit_snapshot",
+        as_of="2025-03-31",
+        method=method(),
+    )
+    assert found is not None and found[0].selection is None
+    pack = build_pack(
+        found[0],
+        {"CP-1": "x"},
+        {"CP-1": "x"},
+        as_of="2025-03-31",
+        pathway="credit_snapshot",
+        selection="preset",
+    )
+    assert pack["prior"]["selection"] is None  # null stays null: no value is invented
 
 
 def test_the_pack_states_both_selections_and_the_schema_says_so():

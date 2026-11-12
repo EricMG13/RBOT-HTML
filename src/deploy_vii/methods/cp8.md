@@ -141,11 +141,12 @@ by the code in brackets, for example `Liquidity (CP-2D)`. Status is one of `Unch
 now and not before, `Not run this time` one that ran before and not now, and the rest compare the
 earlier and current bottom line as the credit view of that module. Cause is one of the six
 causes, or `None` for an `Unchanged` row that differs in nothing. `Presentation` goes only with
-`Unchanged`. A `New` or `Not run this time` module: when the pack's `prior.selection` and
-`current.selection` are both `preset`, the pathway's module set changed between the runs, so the
+`Unchanged`. A `New` or `Not run this time` module: when the pack's
+`current.selection` is `preset` and `prior.selection` is `preset` or null (a run that predates the
+field), the pathway's module set changed between the runs, so the
 Cause is `Method change` and the Why says that (the pathway's module set changed between the runs;
-the words "the pack does not say" are refused there); when either run's selection is `explicit` or
-null, the Cause is `Unresolved` and the Why says what is missing. Why is one sentence.
+the words "the pack does not say" are refused there); when either run's selection is `explicit`,
+the Cause is `Unresolved` and the Why says what is missing. Why is one sentence.
 
 ### Limitations ledger
 
@@ -163,14 +164,9 @@ earlier and a current ref is `Remaining`; only a current ref is `New`; only an e
 
 ### Basis lines
 
-The Basis line of a reader passage follows the instructions' item forms, with these two additions,
-which replace the file names in `## Sources` for CP-8's own sources: the comparison pack is written
-exactly `Run comparison`, and a handoff of the earlier run is written
-`<plain module name> (<code>), earlier run`, for example
-`Financial data foundation (CP-1), earlier run`. A handoff of this run keeps the instructions' form
-`<plain module name> (<code>)`. Never write `changes.json` or any `prior/...` name in a Basis line,
-and never a page number for a handoff; they stay in `## Sources`, whose file names and hashes are
-unchanged. The checker refuses a Basis item that breaks these forms.
+The Basis item forms for this module are stated once, in the run instructions' paragraph that names
+the earlier run (they replace the general forms there). The checker refuses a Basis item that names
+`changes.json` or a `prior/` file, or gives a page for a handoff.
 
 Keep the words plain. Module codes (for example `CP-2D`) are written only in the tables' Module
 and What closed it cells, limitation refs (`E1`, `C2`) only in the two ref columns, and neither in

@@ -100,7 +100,7 @@ and any other fault of CP-8's call (a provider stop, an overrun, an interrupted 
 still stops the run. A relaunch of such a run folder leaves the delivery as it is, makes no new call and
 says so.
 
-**`changes.json` (schema `cpos-changes/2`, computed by Python before CP-8 is called, given to CP-8 as the
+**`changes.json` (schema `cpos-changes/3`, computed by Python before CP-8 is called, given to CP-8 as the
 source `changes.json`, published unchanged in the delivery).** Every number is a decimal string; missing is
 null, never zero.
 - `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text]}`; `current`:
@@ -300,9 +300,17 @@ it showed four defects. Controller rulings, each implemented with a failing test
 - **D4, new modules marked `Unresolved`.** The pack (schema now `cpos-changes/3`; the library reads `/2` and
   `/3`) states each run's `selection` (`preset`, `explicit` or null) in `prior` and `current`; a prior run's
   selection is read from its manifest. When a module is `New` or `Not run this time` and both selections are
-  `preset`, the pathway's module set changed between the runs: the cause must be `Method change`, and the
-  words "the pack does not say" are refused. With either run an explicit subset, or a selection not recorded
-  (an older run, a `/2` pack), the cause is `Unresolved` as before.
+  `preset` (the prior's may also be null: a run whose manifest predates the field was accepted as a base only
+  because it ran the pathway's lead module, so it is a whole-pathway run; the pack states null as recorded),
+  the pathway's module set changed between the runs: the cause must be `Method change`, and the words "the
+  pack does not say" are refused. With either run an explicit subset, or a pack of the `/2` shape (no
+  `selection` key), nothing is required and the cause is `Unresolved` as before. The real earlier run
+  (`tdg-reader-format-001`) records no selection: the first version of this rule skipped it (the real CP-8
+  was refused 6 times, its four New rows accepted); with it, 14 times (4 D2, 8 D4, 2 D1).
+
+The CP-8 instruction text itself states the Basis forms (`cpos_launch.CP8_BLOCK`, one place; the real draft
+had followed the general rule that lists only file names), and the library reads the two CP-8 forms only in
+a CP-8 handoff, exactly (`Run comparison`; a plain name with a registered module code, `, earlier run`).
 
 Known limits, recorded, not in this change: pack values print as the handoffs state them (`6261 US$m`, a date in
 one run and `FY2024` in the other); CP-DR's web guidance is unproven on Claude; a CP-8 `## Gaps` row may still

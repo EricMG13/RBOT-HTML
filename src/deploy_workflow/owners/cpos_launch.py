@@ -1656,7 +1656,12 @@ CP8_BLOCK = (
     "against the pack measure it names, every difference you print against the pack's, every "
     "module and every limitation ref of the pack for exactly one row, and the fixed Status and "
     "Cause lists, and sends the handoff back if one fails. The earlier run's handoffs and the "
-    "pack are evidence for this module alone.\n\n"
+    "pack are evidence for this module alone.\n"
+    "For this module the Basis item forms above are replaced by these three: `<plain module "
+    "name> (<code>)` for a handoff of this run, `<plain module name> (<code>), earlier run` for "
+    "a handoff of the earlier run, and `Run comparison` for the comparison pack, with no page "
+    "for a handoff. The files `changes.json` and `prior/<module>.md` are listed in `## "
+    "Sources` and are never named in a Basis line.\n\n"
 )
 BRIDGE_RULES = (
     " Each row is one step: the first row is the opening amount and the last row is the closing "
