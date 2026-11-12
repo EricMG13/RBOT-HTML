@@ -245,3 +245,9 @@ The delivered report is retired from the library, so the copied report pages and
 | `store.py` | Each run gains `evidence` (`run_evidence`): supplied files with `readBy` and "Supplied, not used", handoff downloads, calculation and Model downloads, the run record (hashes, instructions, calls, cap), every value as stored | the Evidence page's four lists |
 | `update_library.py` | Writes `library/downloads/<run folder>/handoffs.zip` (delivered Markdown byte for byte) | "Download all" works from disk |
 | `web/views.js` | `evidenceView` replaces the retained-outputs inventory, status map and lanes; `activityView(live)` draws running and queued runs only; `libraryNotShown` holds the excluded folders and build issues, closed, at the end of the library page | decisions 9 and 10 |
+
+## Brand colours (brand application plan, Task 1, Rulings 1-3, 5, 6)
+
+| File | Change | Why |
+| --- | --- | --- |
+| `web/screen.css` | The three `:root` blocks take the brand token values; eight tokens `--series-1..4` and `--series-1..4-ln` are added; `a` uses `--blue-700`; literal greys become tokens; `.series-0..3`, `.path-N`, `.point-N`, `.path-key-N`, `.ledger-other`, `.outflow` and the stack rules use the series tokens (bright fills carry a 1px inset outline in their line value; legend swatches, lines and points use the line values); the select chevron is `#63676e`. Colours only: no font, size or spacing change | brand-spec.md; one commit with `docs/templates/context-form.html` because `tests/test_context_form.py` requires equal token values |

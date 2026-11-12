@@ -347,3 +347,10 @@ def test_the_page_has_no_skip_label_and_says_steps_not_stages_in_the_errors_sent
     assert "'Skip'" not in FORM and "enteredStep" not in FORM and "enteredGroup" not in FORM
     assert "Fix the steps marked Needs attention first." in FORM
     assert "Fix the stages marked" not in FORM
+
+
+@pytest.mark.parametrize(
+    "old", ["#0017e5", "#0e7a46", "#8a5300", "#b3261e", "#4a5068", "#3a4056", "#0b1030"]
+)
+def test_the_replaced_brand_colours_are_gone_from_the_form(old: str) -> None:
+    assert old not in FORM.lower()

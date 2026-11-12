@@ -3358,3 +3358,35 @@ test('model picker: a delivery for a run the library does not list is named by i
   const models = [pickModel(HASH_1, { runId: 'run-not-listed', runFolder: 'run-not-listed', sources: [{ run: RUN }] })];
   assert.deepEqual(pickPage(models).modelOptionLabels(models), ['run-not-listed']);
 });
+
+test('brand colours: screen.css declares each brand token with the plan value (Rulings 1 and 5)', () => {
+  const css = read('screen.css');
+  const expected = {
+    '--navy': '#000533', '--blue': '#001aff', '--ground': '#f4f4f5', '--rule': '#e8e9eb', '--muted': '#474a4f',
+    '--quiet': '#fafafb', '--selection': '#e5e8ff', '--blue-50': '#e5e8ff', '--blue-100': '#c2c9ff', '--blue-700': '#0012b2',
+    '--amber': '#806300', '--amber-bg': '#fff4cc', '--amber-border': '#f2dc8c', '--red': '#8e413e', '--green': '#0f8048',
+    '--text-primary': '#000533', '--text-secondary': '#383b3f', '--text-tertiary': '#474a4f', '--text-quaternary': '#63676e',
+    '--gray-25': '#fcfcfd', '--gray-50': '#fafafb', '--gray-100': '#f4f4f5', '--gray-200': '#e8e9eb', '--gray-300': '#d1d4d8',
+    '--ring': '0 0 0 4px rgba(0,26,255,.16)', '--dot-quiet': '#8d939d',
+    '--series-1': '#001aff', '--series-2': '#1eff8f', '--series-3': '#eaff00', '--series-4': '#a29aff',
+    '--series-1-ln': '#001aff', '--series-2-ln': '#0f8048', '--series-3-ln': '#758000', '--series-4-ln': '#514d80',
+  };
+  const declared = {};
+  for (const block of css.matchAll(/:root\{([^}]*)\}/g)) for (const m of block[1].matchAll(/(--[\w-]+):([^;]+)/g)) declared[m[1]] = m[2].trim();
+  for (const [token, value] of Object.entries(expected)) assert.equal(declared[token], value, token);
+});
+
+test('brand colours: no rule sets text or a thin line in a bright series fill', () => {
+  const css = read('screen.css');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  for (const [, selector, body] of rules) {
+    for (const m of body.matchAll(/(?:^|;)\s*(color|stroke)\s*:\s*var\(--series-([234])\)/g)) {
+      assert.fail(`${selector.trim()} sets ${m[1]} to the bright fill --series-${m[2]}; use --series-${m[2]}-ln`);
+    }
+  }
+});
+
+test('brand colours: the replaced colour values no longer appear in screen.css', () => {
+  const css = read('screen.css');
+  for (const old of ['#0017e5', '#0e7a46', '#8a5300', '#b3261e', '#4a5068', '#3a4056', '#0b1030']) assert.ok(!css.includes(old), `${old} is still in screen.css`);
+});

@@ -2961,7 +2961,7 @@ def test_the_stepper_is_numbered_circles_and_names_with_the_states_in_the_markup
     """
     )
     by = {b["step"]: b for b in seen}
-    assert by["purpose"]["bg"] == "rgb(0, 23, 229)"  # current: blue circle
+    assert by["purpose"]["bg"] == "rgb(0, 26, 255)"  # current: blue circle
     assert by["documents"]["check"] is True  # done: the check
     assert by["purpose"]["check"] is False and by["purpose"]["dotText"] == "2"
     assert by["confirm"]["state"] == "Needs attention" and by["confirm"]["stateShown"] is True
@@ -2998,7 +2998,7 @@ def test_the_pathways_are_rows_in_three_columns_and_the_chosen_row_is_blue_50(pa
     )
     assert (seen["n"], seen["cards"]) == (7, 0), seen
     assert seen["needs"]["left"] > seen["label"]["right"]
-    assert seen["chosen"] == "rgb(238, 240, 255)" and seen["other"] != seen["chosen"]
+    assert seen["chosen"] == "rgb(229, 232, 255)" and seen["other"] != seen["chosen"]
     assert seen["radius"] == "8px" and seen["needsText"].startswith("Needs: ")
 
 
@@ -3054,15 +3054,15 @@ def test_the_documents_zone_is_dashed_then_a_compact_row_and_the_files_are_rows(
         "border": "dashed",
         "width": "1px",  # 1.5px in the sheet, snapped down to a whole pixel at 1x
         "radius": "12px",
-        "bg": "rgb(252, 253, 255)",
+        "bg": "rgb(252, 252, 253)",
         "text": "center",
     }
     assert seen["emptyButtons"] == ["primary", "secondary"] and seen["title"] is True
     assert seen["listed"]["pad"] == "14px"
     assert seen["dots"] == [
-        ["8px", "8px", "rgb(14, 122, 70)"],  # read: green
-        ["8px", "8px", "rgb(138, 83, 0)"],  # not recognised: amber
-        ["8px", "8px", "rgb(179, 38, 30)"],  # will not be read: red
+        ["8px", "8px", "rgb(15, 128, 72)"],  # read: green
+        ["8px", "8px", "rgb(128, 99, 0)"],  # not recognised: amber
+        ["8px", "8px", "rgb(142, 65, 62)"],  # will not be read: red
     ]
     assert seen["remove"] == ["Remove"] * 3 and seen["row"] == "11px" and seen["table"] == "0px"
 
@@ -3093,11 +3093,11 @@ def test_the_readiness_aside_has_dot_rows_and_borderless_tally_pills(page):
     assert seen["details"] and seen["legend"] and seen["hide"] is False
     made = seen["made"]
     assert (
-        made["ready"][:3] == ["rgb(233, 245, 238)", "0px", "none"]
-        and made["ready"][4] == "rgb(14, 122, 70)"
+        made["ready"][:3] == ["rgb(232, 255, 244)", "0px", "none"]
+        and made["ready"][4] == "rgb(15, 128, 72)"
     )
-    assert made["limited"][:3] == ["rgb(255, 241, 199)", "0px", "none"] == made["gap"][:3]
-    assert made["will_refuse"][:3] == ["rgb(254, 243, 242)", "0px", "none"]
+    assert made["limited"][:3] == ["rgb(255, 244, 204)", "0px", "none"] == made["gap"][:3]
+    assert made["will_refuse"][:3] == ["rgb(253, 240, 240)", "0px", "none"]
     assert made["check"][2] == "dashed" and all(m[3] == "24px" for m in made.values())
     assert seen["dot"] == ["8px", "8px"] and seen["head"] == "22px 22px" and seen["name"] == "600"
 
@@ -3211,7 +3211,7 @@ def test_start_is_the_answers_and_a_360px_card_that_holds_approval_and_submit(pa
     # keep Approve and Submit below main's bottom edge (see the M1 test below).
     assert seen["pos"] == "sticky" and seen["top"] == "auto" and seen["align"] == "end"
     assert seen["pad"] == "20px 22px" and seen["radius"] == "12px"
-    assert seen["bg"] == "rgb(248, 249, 251)" and seen["border"] == "1px solid rgb(228, 230, 236)"
+    assert seen["bg"] == "rgb(250, 250, 251)" and seen["border"] == "1px solid rgb(232, 233, 235)"
     assert seen["h3"] == "What Submit does"
     assert seen["leadText"] == "This is the run you are about"
     assert seen["lead"] == "400 13px 19px"
@@ -3298,7 +3298,7 @@ def test_start_keeps_the_approval_gate_and_each_limit_is_a_labelled_tick(page):
     assert seen["tick"] == [
         "4px 10px 4px 6px",
         "1px",
-        "rgb(242, 213, 138)",
+        "rgb(242, 220, 140)",
         "8px",
         "500",
         "13px",
@@ -3429,12 +3429,12 @@ def test_the_run_screen_has_a_status_pill_a_card_and_two_columns_of_modules(page
     )
     assert seen["running"][:2] == ["running", "running"]
     assert seen["queued"][:2] == ["queued", "queued"]
-    assert seen["running"][2:] == ["rgb(238, 240, 255)", "rgb(0, 18, 179)", "24px", "999px"]
-    assert seen["queued"][2:4] == ["rgb(238, 240, 255)", "rgb(0, 18, 179)"]
-    assert seen["finished"][2:] == ["rgb(233, 245, 238)", "rgb(14, 122, 70)", "24px", "999px"]
+    assert seen["running"][2:] == ["rgb(229, 232, 255)", "rgb(0, 18, 178)", "24px", "999px"]
+    assert seen["queued"][2:4] == ["rgb(229, 232, 255)", "rgb(0, 18, 178)"]
+    assert seen["finished"][2:] == ["rgb(232, 255, 244)", "rgb(15, 128, 72)", "24px", "999px"]
     for status in ("failed", "capped"):
         assert seen[status][:2] == [status, status]
-        assert seen[status][2:] == ["rgb(254, 243, 242)", "rgb(179, 38, 30)", "24px", "999px"]
+        assert seen[status][2:] == ["rgb(253, 240, 240)", "rgb(142, 65, 62)", "24px", "999px"]
     assert seen["checks"] == [1, 0, 0, 0]
     assert seen["states"] == ["done", "running", "waiting", "waiting"]
     assert seen["ring"] == [18, 18] and seen["rowCols"] == ["18px"]

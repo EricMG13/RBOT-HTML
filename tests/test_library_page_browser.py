@@ -332,8 +332,8 @@ def test_live_run_chips_show_their_state_colours(tmp_path):
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="chips">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert seen["running"] == ["rgb(0, 5, 51)", "rgb(255, 255, 255)"]
-    assert seen["done"][0] == "rgb(246, 247, 250)"
-    assert seen["waiting"][1] == "rgb(74, 80, 104)"
+    assert seen["done"][0] == "rgb(250, 250, 251)"
+    assert seen["waiting"][1] == "rgb(71, 74, 79)"
 
 
 def test_an_empty_library_says_so(tmp_path):
@@ -1384,7 +1384,7 @@ def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_pat
     # The navigator: 250px (220px at 1280), uppercase 11px group headings, the open entry in blue.
     assert abs(seen["navWidth"] - (250 if width == 1440 else 220)) <= 1
     assert (seen["headingTransform"], seen["headingSize"]) == ("uppercase", "11px")
-    assert (seen["itemBackground"], seen["itemWeight"]) == ("rgb(238, 240, 255)", "600")
+    assert (seen["itemBackground"], seen["itemWeight"]) == ("rgb(229, 232, 255)", "600")
     # The strip: the link to every run of the issuer at the right edge; the run code as stored.
     assert seen["allText"] == "All runs of this issuer" and 0 <= seen["allGap"] <= 30
     assert seen["codeTransform"] == "none" and seen["codeText"] == "RUN-A"
@@ -1396,7 +1396,7 @@ def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_pat
 MODULE_PAGE_PROBE = (
     Path(__file__).with_name("browser_probe_module_page.js").read_text(encoding="utf-8")
 )
-INK = "rgb(11, 16, 48)"  # --text-primary
+INK = "rgb(0, 5, 51)"  # --text-primary
 NEW_FORMAT_RUN = "synthetic-nbg-new-format-001"
 
 
@@ -1461,7 +1461,7 @@ def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
         assert (line["size"], line["line"], line["color"], line["label"]) == (
             "13px",
             "18px",
-            "rgb(58, 64, 86)",
+            "rgb(56, 59, 63)",
             "600",
         )
     assert bottom["badgeClass"] == "badge badge-gray" and bottom["linkBorder"] == "0px"
@@ -1496,14 +1496,14 @@ def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
     ]
     lead = seen["finding0"]
     assert (lead["size"], lead["line"], lead["weight"]) == ("15px", "24px", "600")
-    assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 23, 229)", "0px")
+    assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 26, 255)", "0px")
     assert (lead["impact"]["size"], lead["impact"]["line"]) == ("14px", "21px")
     # Limits: grey dot, 14px/21px secondary.
     limit = seen["limit"]
     assert (limit["size"], limit["line"], limit["color"], limit["dotWidth"]) == (
         "14px",
         "21px",
-        "rgb(58, 64, 86)",
+        "rgb(56, 59, 63)",
         "6px",
     )
     assert seen["fits"] is True
@@ -1545,7 +1545,7 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
     assert bottom["firstText"].startswith("Creditors are exposed to refinancing risk")
     assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
     assert seen["keyItem"]["size"] == "15px"
-    assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 23, 229)")
+    assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 26, 255)")
     assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
     assert seen["prose"]["width"] <= 660
     assert seen["cards"], "the new-format module page draws at least one chart card"
@@ -1558,7 +1558,7 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
     assert fig["figure"]["size"] == "22px" and fig["figure"]["before"] is True
     assert fig["figure"]["text"] == "USD 1,390 million" and fig["h2"]["srOnly"] is True
     assert fig["card"] == "10px" and fig["fits"] is True
-    assert fig["context"]["size"] == "13px" and fig["context"]["color"] == "rgb(58, 64, 86)"
+    assert fig["context"]["size"] == "13px" and fig["context"]["color"] == "rgb(56, 59, 63)"
     for literal in (
         "Back to analysis",
         "Esc",
