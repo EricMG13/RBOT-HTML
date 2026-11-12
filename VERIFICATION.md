@@ -23,6 +23,27 @@ Not verified: any real model writing CP-8's registers (the canned answer is buil
 CP-8's request fits a long run's context (it is sent every handoff, as CP-5 is; the offline hold sizes its
 instructions only), real earlier runs on the lean-copy deliveries, the library's Changes section (next task).
 
+## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
+
+Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
+
+Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
+called, no paid run). The whole branch after its whole-branch review: carry from an earlier run (locked
+ID, documents, answers, pathway, module subset, turns), the existing-issuer notice, "Start again from
+this run", and "Start a run" on the library's Report history. This wave fixed the review's seam findings
+(`?from=` with a submitted run still held, carried-file marks against uploads, the carried pathway and
+subset/turns marks, `open_regular` through `platform_io.regular_open`, hidden names, refused listings).
+- `uv run pytest tests/test_run_start_prior.py tests/test_run_start_submissions.py tests/test_run_start_service.py -q`: exit 0, 170 passed.
+- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 131 passed (91 page, 40 library), none skipped (Chrome ran).
+  `test_upload_to_filed_report_with_the_real_launcher` fails on the base already and is not part of this change.
+- Review probes (`wb_seams.py`: 10 passed; the earlier probes exit as before, `probe_carry_races.py`'s
+  seal-between-copies case still fails: ruled out of this wave).
+- `uv run python tools/quality_gate.py`: exit 0.
+- Fidelity: the notice text, marks, load messages and the progress note are asserted in the DOM Chrome builds.
+- Reader check: not done; pending. No real run was read against the September VMO2 reference.
+- CP-8 summary lines (the "changes section" and the two-prior-runs lines) are not built: the CP-8 redesign has not merged.
+- Windows not run: the `O_BINARY` open of a carried file is from reading `platform_io.regular_open` only.
+
 ## 2026-11-12 — Run start page browser tests after the preset change (branch `claude/web-search-run-page`)
 
 The browser tests (`-m browser`) were not run for the commits from 73b499b (presets) to d185d83. Run then:

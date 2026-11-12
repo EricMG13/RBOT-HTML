@@ -1,0 +1,1088 @@
+diff --git a/METHODOLOGY-REVIEW.md b/METHODOLOGY-REVIEW.md
+index 8d74142..0b6cc5e 100644
+--- a/METHODOLOGY-REVIEW.md
++++ b/METHODOLOGY-REVIEW.md
+@@ -703,3 +703,8 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
+ - Dependency edges added as optional (order and supply, never a block): CP-2A after CP-1B and CP-2;
+   CP-2E after CP-1, CP-1A and CP-2; CP-1C and CP-2 after CP-DR. CP-DR joins a pathway that has
+   CP-1C when the context's peer source is `cp_dr_public`.
++
++**Presets of 2026-11-11 (owner: decisions M1, M2, M5 in
++`docs/rulings/2026-11-11-module-presets-and-changes.md`).** CP-DR and CP-2E are now selected for every
++pathway; CP-1C needs CP-DR's peers and CP-2E follows CP-2. CP-8 leaves the portfolio_decision preset
++pending its redesign as a same-pathway comparison.
+diff --git a/README.md b/README.md
+index 459c0fb..8600e2d 100644
+--- a/README.md
++++ b/README.md
+@@ -91,8 +91,9 @@ the library presents no delivered report and has no Calendar or Reports tab, and
+ written under `library/reports/`. Evidence's handoff and instruction downloads are byte-for-byte
+ copies under `library/downloads/<run>/`; the run folder is never changed. It lists only runs
+ CP-OS completed (the completion record, delivery manifest and delivered files still match the
+-hashes they record) in which every module ran on the current methodology, and says why each other
+-run folder is left out.
++hashes they record) in which every module was answered in that run, and says why each other
++run folder is left out. A run whose module methods have since changed is listed and marked
++"Earlier methods".
+ 
+ ## 3. The run start page
+ 
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index a0ffa62..13c02c5 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,38 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
++
++Decisions M1-M7 are recorded in `docs/rulings/2026-11-11-module-presets-and-changes.md` (a decision
++record; it does not lift the pause).
++
++(a) Live run facts, this dated case only (ruling `docs/rulings/2026-11-11-reader-format-live-test.md`): TDG
++FY2024 public files, context `runs/tdg-context-2024-09-30.json`, `credit_snapshot`, sol-medium, cap USD 15;
++run folder outside the repository. CP-0, CP-1, CP-1A, CP-2, CP-4, CP-3, CP-5 and CP-6 were all accepted and
++delivered; charged USD 3.20906590; two drafts were rejected and repaired within the retry limit (CP-1, CP-3).
++Reader check so far: only CP-6's reader passages were read by the controller: judgement first, sources on
++Basis lines, no codes in sentences. Remaining weakness: pipeline wording in reader text ("producer-owned
++corrections remain open", "canonical financial amount", "open producer QA findings") and dense prose.
++Not verified: the other seven modules' prose; a side-by-side against the VMO2 reference; analytical accuracy.
++
++(b) This change, offline only (no provider call, no run folder read or written): M1 and M2 presets, CP-2G
++added to credit_snapshot and covenant_refinancing, CP-8 removed from portfolio_decision, context-form
++copy. Gate results: `uv run pytest tests/test_cpos_launch.py
++tests/test_context_form.py tests/test_inbox_activity.py -q -m "not live and not browser"` 509 passed, exit 0;
++`tests/test_cp8_comparison.py tests/test_handoff_loop.py` 44 passed, exit 0; `uv run python
++tools/quality_gate.py` 0 findings, exit 0. Plans per pathway were prepared offline by the parametrised
++test (every pathway, four peer sources); `tests/test_financial_workflow.py` was not run (over the
++fast-test limit). M3-M7 are decided and not built here.
++
++## 2026-11-11 — Runs on earlier methods are listed and marked (branch `claude/list-earlier-method-runs`)
++
++Scope: offline, macOS; synthetic fixtures only (`tests/library_fixtures.py`, the fake launcher run). No
++model call, no run folder under `runs/` read or changed. Owner decision 2026-11-11: a run whose module
++methods changed since it ran is listed with `method_changes` and shown as "Earlier methods" (Report history
++status, run label; Run record lists the changes). Other refusals are unchanged. Real TDG runs were not
++rebuilt here.
++- Gates: `uv run pytest tests/test_library_index.py tests/test_update_library.py tests/test_credit_os_catalogue.py -q` 90 passed, exit 0; `node --test` static, reader, calendar 257 pass, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
++
+ ## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
+ 
+ Owner waiver 2026-11-11: the 800-line PR limit is waived for #47 (5,969 changed lines).
+diff --git a/apps/issuer-library/README.md b/apps/issuer-library/README.md
+index b13090b..72a8842 100644
+--- a/apps/issuer-library/README.md
++++ b/apps/issuer-library/README.md
+@@ -107,11 +107,14 @@ hold:
+   the manifest, the delivered `view.json` and `workflow.json` name the same run. The report is not
+   rebuilt, so a later renderer change does not unlist a run. The library shows a run from its
+   handoffs and presents no delivered report (ruling 2026-11-11, decisions 1 to 3).
+-- **On the current methodology:** every module was answered in this run (not reused from another
+-  run, not synthetic). The request record beside its accepted answer still has the fingerprint
+-  CP-OS named its folder by (`cpos.request_fingerprint`), so it holds the instructions actually
+-  sent, and their method block is exactly what the launcher sends that module today
+-  (`cpos_launch.method_text`): no section changed, added or dropped.
++- **Methods:** every module was answered in this run (not reused from another run, not
++  synthetic). The request record beside its accepted answer still has the fingerprint CP-OS named
++  its folder by (`cpos.request_fingerprint`), so it holds the instructions actually sent. Their
++  method block is compared with what the launcher sends that module today
++  (`cpos_launch.method_text`). A run whose methods have since changed (a section changed, added
++  or dropped) is still listed and marked "Earlier methods"; Evidence's Run record names each
++  change (owner, 2026-11-11). A module with no current method is not assumed current: the run is
++  left out.
+ 
+ Every other folder is left out, with its reason in the command output and in a collapsed list at
+ the end of the page; a linked folder is reported and not followed. Each listed run shows its
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index 1ae453c..e25447d 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -167,6 +167,15 @@ test('Evidence: handoffs and calculations are download links; Download all is th
+   assert.ok(strip(/<table class="history-table"><caption>Model calls.*?<\/table>/s.exec(html)[0]).includes('Not recorded'), 'a missing error class is not a value');
+ });
+ 
++test('Evidence: Run record lists the methods changed since the run, escaped; no line for a run on today\'s methods', () => {
++  const changed = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: methods/cp0.md changed', 'CP-1: <b>x</b> no longer selected'] } })('r');
++  const record = changed.slice(changed.indexOf('<summary>Run record</summary>'));
++  assert.ok(record.includes('Methods changed since this run'));
++  assert.ok(record.includes('<li>CP-0: methods/cp0.md changed</li>') && record.includes('<li>CP-1: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
++  assert.ok(!changed.includes('<b>x</b>'));
++  for (const none of [[], undefined]) assert.ok(!evidenceView({ r: { evidence: EVIDENCE, methodChanges: none } })('r').includes('Methods changed since this run'));
++});
++
+ test('Evidence: nothing recorded says so and invents nothing', () => {
+   const none = { sources: [], unused: [], unrecorded: [], noSourcesModules: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } };
+   const html = evidenceView({ r: { evidence: none } })('r');
+@@ -2429,6 +2438,25 @@ test('Report history: Status is Completed, plus the count not assessable; Earlie
+   assert.equal(strip(c.cells[3]), 'Completed', 'a run with no handoff is not called earlier format');
+ });
+ 
++test('Earlier methods: the badge sits beside Earlier format in the Report history status and the run label, only where methods changed', () => {
++  HIST.contexts['run-b'].methodChanges = ['CP-0: methods/cp0.md changed'];
++  HIST.runFields.methodChanges = ['CP-0: methods/cp0.md changed'];
++  try {
++    const page = histPage();
++    const [a, b, d] = histRows(page.historyView(RUN));
++    assert.equal(strip(a.cells[3]), 'Completed · 2 not assessable Earlier format Earlier methods');
++    assert.equal(strip(b.cells[3]), 'Completed · 1 not assessable Earlier methods');
++    assert.equal(strip(d.cells[3]), 'Completed', 'no list, no badge');
++    assert.ok(b.cells[3].includes('<span class="badge badge-gray earlier-methods">Earlier methods</span>'));
++    assert.equal(strip(page.runLabel('W-Evidence', RUN).replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format Earlier methods');
++    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run B Earlier methods');
++    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run D');
++  } finally {
++    delete HIST.contexts['run-b'].methodChanges;
++    delete HIST.runFields.methodChanges;
++  }
++});
++
+ test('Report history: the selected run\'s row is marked aria-current and every row opens a run with a real link', () => {
+   const html = histPage().historyView('run-b');
+   const rows = histRows(html);
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 90f079f..55619df 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -793,6 +793,9 @@ function chartIndex(context) {
+ // H7: a run is "Earlier format" when any of its handoffs (every saved output of every module, not only the defaults) has no Bottom line first under Findings.
+ const earlierFormat=run=>earlierFormatRun(Object.values(run.modules).flatMap(entry=>entry.outputs).filter(id=>data[id]).map(id=>data[id].sections));
+ const EARLIER_FORMAT_BADGE='<span class="badge badge-gray earlier-format">Earlier format</span>';
++// A run whose module methods have changed since it ran is listed and marked (owner, 2026-11-11); the store's own list decides.
++const EARLIER_METHODS_BADGE='<span class="badge badge-gray earlier-methods">Earlier methods</span>';
++const earlierMethods=run=>(run.methodChanges||[]).length>0;
+ const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
+ const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
+ // "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
+@@ -801,7 +804,7 @@ function runLabel(module,context) {
+   if(!ctx)return '';
+   const here=['W-Forecast','W-Evidence'].includes(module)?module:'W-Overview';
+   const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${contexts[r.run].run}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
+-  return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))} · <span class="code">${esc(ctx.run)}</span>${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
++  return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))} · <span class="code">${esc(ctx.run)}</span>${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(ctx)?` ${EARLIER_METHODS_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
+ }
+ // ---- Report history (decision 4): one row per run of the issuer, latest as-of date first. Each row opens that run's Overview.
+ const SOURCE_NOT_RECORDED='Not recorded';
+@@ -813,7 +816,7 @@ function historyView(context) {
+     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
+     const modulesRun=codes.length?`<ul class="history-modules">${codes.map(code=>`<li>${esc(moduleTitle(code))} (<small class="ref">${esc(code)}</small>)</li>`).join('')}</ul>`:SOURCE_NOT_RECORDED;
+     const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
+-    return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}</td></tr>`;
++    return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
+   };
+   return `<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
+ }
+@@ -1321,17 +1324,18 @@ function evidenceDownloads(ev) {
+   const rows=ev.downloads.map(d=>`<li class="report-row">${downloadLink(d.label,d.href)}</li>`).join('');
+   return `<section class="run-section" id="evidence-downloads"><h2>Calculations and Model</h2>${rows?`<ul class="report-list">${rows}</ul>`:'<p class="empty">No calculation or Model file was published from this run.</p>'}</section>`;
+ }
+-function evidenceRecord(ev) {
++function evidenceRecord(ev,methodChanges) {
+   const r=ev.record;
++  const changed=(methodChanges||[]).length?`<h3>Methods changed since this run</h3><ul class="report-list">${methodChanges.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>`:'';
+   const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc(h.name),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
+   const sent=r.instructions.length?`<ul class="report-list">${r.instructions.map(i=>`<li class="report-row">${downloadLink(`${moduleTitle(i.module)} instructions`,i.href)}</li>`).join('')}</ul>`:'<p class="empty">The run records no instructions.</p>';
+   const calls=r.calls.length?evidenceTable('Model calls, in the order recorded',['Module','Attempt','Started','HTTP status','Error','Settled (USD)'],r.calls.map(c=>[esc(moduleTitle(c.module)),esc(shownOrNot(c.attempt)),esc(shownOrNot(c.started)),esc(shownOrNot(c.http_status)),esc(shownOrNot(c.error_class)),esc(shownOrNot(c.settled_usd))])):'<p class="empty">The run records no model call.</p>';
+-  return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary><h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;
++  return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary>${changed}<h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;
+ }
+ function evidenceView(context) {
+   const ev=contexts[context]?.evidence;
+   if(!ev)return '<div class="missing-state"><h2>No evidence record was read for this run</h2><p>Rebuild the library and open this page again.</p></div>';
+-  return evidenceSources(ev)+evidenceHandoffs(ev)+evidenceDownloads(ev)+evidenceRecord(ev);
++  return evidenceSources(ev)+evidenceHandoffs(ev)+evidenceDownloads(ev)+evidenceRecord(ev,contexts[context].methodChanges);
+ }
+ function workspaceView(module,section) {
+   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
+diff --git a/apps/issuer-library/update_library.py b/apps/issuer-library/update_library.py
+index 77310d9..c60d9d2 100644
+--- a/apps/issuer-library/update_library.py
++++ b/apps/issuer-library/update_library.py
+@@ -137,6 +137,14 @@ def run_records(workspace: Path, store: dict[str, Any]) -> None:
+             run["record"] = record
+ 
+ 
++def method_changes(store: dict[str, Any], library: Library) -> None:
++    """Carry each listed run's ``method_changes`` (methods that changed since it ran) to its store
++    run, as ``methodChanges``; empty when none."""
++    changed = {run["id"]: run["method_changes"] for run in library.runs}
++    for run in store["runs"].values():
++        run["methodChanges"] = list(changed[run["folder"]])
++
++
+ def checked_bytes(path: Path, digest: str, label: str) -> bytes:
+     """The bytes of a run file, refused when they no longer have the hash the store holds."""
+     try:
+@@ -197,6 +205,7 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
+     cat = catalogue(workspace, library)
+     store = workspace_store(workspace, cat)
+     run_records(workspace, store)
++    method_changes(store, library)
+     handoff_zips(folder, workspace, store)
+     # Run activity, as data: the folders left out and why, and every issue the build recorded
+     # (the store's list already holds the catalogue's; each is kept once, in order).
+@@ -277,9 +286,10 @@ def main(argv: list[str] | None = None) -> int:
+         library = update_library(args.workspace)
+     except Refused as error:
+         raise SystemExit(str(error)) from error
+-    print(f"Listed {len(library.runs)} run(s) on the current methodology.")
++    print(f"Listed {len(library.runs)} run(s).")
+     for run in library.runs:
+-        print(f"  {run['id']}: {run['issuer_name']}, as of {run['as_of']}")
++        earlier = " (earlier methods)" if run["method_changes"] else ""
++        print(f"  {run['id']}: {run['issuer_name']}, as of {run['as_of']}{earlier}")
+     if library.excluded:
+         print(f"Not shown: {len(library.excluded)} run folder(s).")
+         for name, reason in library.excluded:
+diff --git a/docs/rulings/2026-11-11-cpdr-web-search-live-test.md b/docs/rulings/2026-11-11-cpdr-web-search-live-test.md
+new file mode 100644
+index 0000000..180e042
+--- /dev/null
++++ b/docs/rulings/2026-11-11-cpdr-web-search-live-test.md
+@@ -0,0 +1,24 @@
++# One TDG live test of CP-DR web search before the standing ruling changes
++
++lifts: live-provider-pause
++by: user
++date: 2026-11-11
++configs: sol-medium, web-search
++
++Told "Web search has never been run for real. Recommended: one paid CP-DR search test first, cap
++USD 10, before the standing ruling changes", the user said "approved".
++
++Scope: one CP-OS launch of CP-0, CP-1, CP-DR and CP-1C on OpenAI gpt-6.1-sol at medium effort over
++the retained historical TDG FY2024 public files
++(`~/Documents/Final-workflow-PY/data/public-corpus/v1/TDG`, read only) with the context
++`runs/tdg-context-2024-09-30.json` (peer source `cp_dr_public`). CP-DR may use OpenAI's hosted web
++search (USD 0.01 a search; `cases/pricing/openai-web-search.json`). Cap USD 10 for the run folder.
++Run directory: `/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-cpdr-web-001`, outside this repository and every retained run
++directory. This is the test ruling 2026-11-10-cpdr-web-search-test.md described, which was not run.
++
++Purpose: show, for this dated case, whether OpenAI accepts web search on these requests, whether
++CP-DR ends its searching turns, whether its peer set cites located, dated figures from on or before
++the 2024-09-30 cutoff, and whether CP-1C reads those peers, before CP-DR is added to every pathway.
++Search queries leave the environment, so CP-DR is told to put only public names in them. The
++provider key comes from the launching environment only; no credential file is read. It proves this
++dated case only. Outputs are candidates until reviewed.
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+new file mode 100644
+index 0000000..e04d2ac
+--- /dev/null
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -0,0 +1,50 @@
++# Module presets, forecast, Changes section and short snapshot: decisions M1-M7
++
++by: user
++date: 2026-11-11
++
++This is a decision record. It does not lift the paid-run pause and carries no `lifts:` or `configs:`
++line; paid execution still needs its own explicit action.
++
++Owner's words, in order:
++
++- "cp-dr should be on every run or cp-1c wont work. so should cp-2e. cp-model and forecast are them
++  same. cp-8 - give me some ideas, perhaps compares vs same pathway run etc. cp-10 - re-write to be
++  short version of credit shot."
++- On web search for CP-DR from the run page: "1. approved". On CP-8 ideas (1 same-pathway previous
++  run, 2 view drift over time, 3 limitations ledger): "2. 1,2 and 3". On the short snapshot (own
++  pathway of CP-0, CP-1 and one CP-L10 page): "3. approved". "4. allow forecast to function with
++  just relevant layer 1 modules. but works better with cp-2g included."
++- On four follow-up points (short snapshot gets no CP-DR/CP-2E; CP-2G added to credit_snapshot and
++  covenant_refinancing; one paid CP-DR web-search test first, cap USD 10; amend H5 for Overview
++  additions): "approved but make cp-8 a section just like forecast, overview and the others. it is
++  focused on changes regarding the issuers business and credit profile. as well as, changes
++  regarding the modules findings. in short 'what has changed since the last time i looked at this'.
++  consider how charts and visuals can be used to present this. and if the methodology should be
++  updated."
++
++## Decisions
++
++- M1. CP-DR in every pathway preset except the short snapshot. It orders itself before CP-1C
++  (methodology.json dependencies).
++- M2. CP-2E in every pathway preset except the short snapshot.
++- M3. CP-MODEL means "publish the forecast". It works from layer 1 (CP-1 states base operands and
++  run-rate drivers; non-blocking); CP-2G's drivers and cases replace them when CP-2G ran.
++  credit_snapshot and covenant_refinancing also gain CP-2G (which needs CP-2A).
++- M4. Standing run-start ruling gains `web-search` only after the paid test
++  (docs/rulings/2026-11-11-cpdr-web-search-live-test.md) shows the provider accepts it.
++- M5. CP-8 runs last in a run when an earlier listed run of the same issuer and pathway exists
++  (latest with as-of on or before this run's, ordered by as-of then first call start, earlier
++  format included). It is removed from the portfolio_decision preset. Its findings are shown in
++  their own section of the issuer report ("Changes"), not on Overview.
++- M6. Short Credit Snapshot: pathway id `short_snapshot`, modules CP-0, CP-1, CP-L10.
++- M7. Ledger statuses: Closed, Remaining, New, No longer stated.
++
++## Status in the change that records this
++
++Built: M1 and M2 (presets, and CP-2G added to credit_snapshot and covenant_refinancing from M3's
++preset list; CP-8 leaves portfolio_decision).
++
++Decided, not yet built: M3 (layer-1 forecast), M4 (standing ruling; waits on the paid test), M5 (CP-8
++run and Changes section; only its removal from the preset is done), M6 (short snapshot), M7 (ledger
++statuses).
+diff --git a/docs/rulings/2026-11-11-reader-and-issuer-report.md b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+index e7d7ed4..1d0beb9 100644
+--- a/docs/rulings/2026-11-11-reader-and-issuer-report.md
++++ b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+@@ -271,3 +271,5 @@ Where the decisions left a detail open, the simplest option was taken:
+ 12. "Earlier format" is recognised from the handoffs themselves (H7), with no new manifest field.
+ 13. Report history "date" is the run's as-of date; runs with the same as-of date are ordered by
+     start time, newest first.
++
++Amendment 2026-11-11: a run whose methods have since changed is listed and marked "Earlier methods"; replayed, synthetic and unverified runs stay unlisted.
+diff --git a/docs/rulings/2026-11-11-reader-format-live-test.md b/docs/rulings/2026-11-11-reader-format-live-test.md
+new file mode 100644
+index 0000000..39bf927
+--- /dev/null
++++ b/docs/rulings/2026-11-11-reader-format-live-test.md
+@@ -0,0 +1,23 @@
++# One TDG credit snapshot live run in the reader format
++
++lifts: live-provider-pause
++by: user
++date: 2026-11-11
++configs: sol-medium
++
++The user instructed "run live tests". Asked "Which live test scope should I run?" with the options
++"One credit snapshot on TransDigm, cap USD 15" and "Every pathway", the user said
++"One snapshot, USD 15".
++
++Scope: one CP-OS launch of the `credit_snapshot` pathway preset on OpenAI gpt-6.1-sol at medium
++effort, capped at USD 15 for the run folder, over the retained historical TDG FY2024 public files
++(`~/Documents/Final-workflow-PY/data/public-corpus/v1/TDG`, read only) with the context
++`runs/tdg-context-2024-09-30.json` (sha256 f7b95e1f…, unchanged). Run directory:
++`/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-reader-format-001`,
++outside this repository and every retained run directory.
++
++Purpose: the first real run in the reader format of the 2026-11-11 ruling — reader passages, Basis
++lines and the eight prose checks under a real model — to be read against the September 2026 VMO2
++reference. The provider key comes from the launching environment only; no credential file is read.
++The run proves this dated case and route; automated checks cover handoff structure, not analytical
++accuracy. Outputs are candidates until reviewed.
+diff --git a/docs/superpowers/specs/2026-11-09-credit-os-static-pages.md b/docs/superpowers/specs/2026-11-09-credit-os-static-pages.md
+index 0cdba33..77bbbd2 100644
+--- a/docs/superpowers/specs/2026-11-09-credit-os-static-pages.md
++++ b/docs/superpowers/specs/2026-11-09-credit-os-static-pages.md
+@@ -18,3 +18,4 @@ Owner decisions, 2026-11-09 (session quotes in quotation marks):
+ 6. Only runs listed by `deploy_workflow.library_index` (completed by CP-OS, current methodology)
+    appear. Approved runs today: `runs/cpos-tdg-sol-high-001`, `runs/cpos-tdg-sol-high-cp2-001`.
+    No legacy seed or curated legacy case may appear.
++Amended 2026-11-11: a run whose methods have since changed is listed and marked 'Earlier methods' (docs/rulings/2026-11-11-reader-and-issuer-report.md).
+diff --git a/docs/superpowers/specs/2026-11-09-inbox-automation-design.md b/docs/superpowers/specs/2026-11-09-inbox-automation-design.md
+index ffa3ca5..0aff0a0 100644
+--- a/docs/superpowers/specs/2026-11-09-inbox-automation-design.md
++++ b/docs/superpowers/specs/2026-11-09-inbox-automation-design.md
+@@ -164,6 +164,7 @@ The time prefix keeps two rejected drops with the same name apart.
+   completed with a verified report on the current methodology. **Known behaviour:** after a
+   method update, older runs leave the library list. Their reports stay in `issuers/`, and the
+   page says how many filed reports are not listed and why.
++Amended 2026-11-11: a run whose methods have since changed is listed and marked 'Earlier methods' (docs/rulings/2026-11-11-reader-and-issuer-report.md).
+ - **Run activity** shows, from `activity.js`:
+   - **Running:** issuer, pathway, drop folder, start time, each module's state (from
+     `events.jsonl`), spend against the cap, and the files read.
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index b54ab91..1efb451 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -569,32 +569,28 @@ const $ = id => document.getElementById(id);
+ /* ======================================================================= Reference data */
+ // Requested modules per pathway: src/deploy_vii/contracts.py PATHWAY_MODULES.
+ const PATHWAYS = {
+-  credit_snapshot: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-2','CP-4','CP-3','CP-5','CP-6'],
+-  earnings_update: ['CP-0','CP-1','CP-MODEL','CP-1B','CP-1D','CP-5'],
+-  relative_value: ['CP-0','CP-1','CP-MODEL','CP-1C','CP-2','CP-2D','CP-3','CP-3C','CP-3D','CP-5'],
+-  covenant_refinancing: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-2','CP-2D','CP-4','CP-3C','CP-5'],
+-  distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-1C','CP-2','CP-2A','CP-2G','CP-2H','CP-4','CP-4C','CP-5'],
+-  portfolio_decision: ['CP-0','CP-1','CP-MODEL','CP-2','CP-3','CP-5','CP-6','CP-8']
++  credit_snapshot: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2E','CP-2G','CP-4','CP-3','CP-5','CP-6'],
++  earnings_update: ['CP-0','CP-1','CP-MODEL','CP-1B','CP-1D','CP-DR','CP-2E','CP-5'],
++  relative_value: ['CP-0','CP-1','CP-MODEL','CP-1C','CP-DR','CP-2','CP-2D','CP-2E','CP-3','CP-3C','CP-3D','CP-5'],
++  covenant_refinancing: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2D','CP-2E','CP-2G','CP-4','CP-3C','CP-5'],
++  distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-1C','CP-DR','CP-2','CP-2A','CP-2E','CP-2G','CP-2H','CP-4','CP-4C','CP-5'],
++  portfolio_decision: ['CP-0','CP-1','CP-MODEL','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6']
+ };
+ // What CP-OS runs for an inbox drop, in order: deploy_vii.registry.plan over cpos_launch.pathway_modules
+ // (CP-MODEL and CP-8 have their own routes; required producers such as CP-1A are added). Owner,
+-// 2026-11-10: CP-1C takes its peers from CP-DR by default, so with peer source cp_dr_public CP-DR joins a
+-// pathway that has CP-1C (WITH_RESEARCH). tests/test_context_form.py keeps both tables to the code.
++// 2026-11-11: CP-DR and CP-2E are in every pathway, so CP-1C always has its peer research.
++// tests/test_context_form.py keeps both tables to the code.
+ const RUN_ORDER = {
+-  credit_snapshot: ['CP-0','CP-1','CP-1A','CP-2','CP-4','CP-3','CP-5','CP-6'],
+-  earnings_update: ['CP-0','CP-1','CP-1B','CP-1D','CP-5'],
+-  relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-1C','CP-2','CP-2D','CP-3C','CP-3','CP-5'],
+-  covenant_refinancing: ['CP-0','CP-1','CP-1A','CP-2','CP-4','CP-2D','CP-3C','CP-5'],
+-  distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-1C','CP-4','CP-2','CP-2A','CP-2G','CP-2H','CP-4C','CP-5'],
+-  portfolio_decision: ['CP-0','CP-1','CP-1A','CP-2','CP-3','CP-5','CP-6']
+-};
+-const WITH_RESEARCH = {
+-  relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-DR','CP-1C','CP-2','CP-2D','CP-3C','CP-3','CP-5'],
+-  distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-1C','CP-2','CP-2A','CP-2G','CP-2H','CP-4C','CP-5']
++  credit_snapshot: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2G','CP-3','CP-5','CP-6'],
++  earnings_update: ['CP-0','CP-1','CP-1B','CP-DR','CP-2E','CP-1D','CP-5'],
++  relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-DR','CP-1C','CP-2','CP-2E','CP-2D','CP-3C','CP-3','CP-5'],
++  covenant_refinancing: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2D','CP-2G','CP-3C','CP-5'],
++  distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-1C','CP-2','CP-2A','CP-2E','CP-2G','CP-2H','CP-4C','CP-5'],
++  portfolio_decision: ['CP-0','CP-1','CP-1A','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6']
+ };
+ // Consumer -> producer -> b (a refusal blocks it) | r (it restricts): deploy_vii.registry.edge_rule, as
+ // run_expectations.edges_for returns it for the orders above. Only producers in the run count.
+-const EDGES = {"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-1":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-3":"r","CP-4":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-DR":"r","CP-2A":"r","CP-2G":"r","CP-2H":"r","CP-4C":"r"},"CP-1A":{"CP-0":"b"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-1C":"r","CP-DR":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-4":"r"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"}};
++const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"}};
+ // Reader names: the module groups of apps/issuer-library/credit_os/web/screen.js.
+ const MODULES = {
+   'CP-0': ['Source readiness', 'Classifies every file and checks your declarations against them.'],
+@@ -660,7 +656,7 @@ const OPTIONS = {
+   ],
+   peer_source: [
+     {v:'cp_dr_public', label:'Research finds public peers', def:true, text:"The research module joins the run and finds the peers and their figures; the peer benchmark reads them. Supplying peers is optional: it also reads any peers' filings you add to the folder."},
+-    {v:'user_list', label:"I'll name the peers", planned:true, text:'Names and tickers only. Nothing looks up their figures (the research module joins only when it finds the peers), so the benchmark records "No peer figures".'},
++    {v:'user_list', label:"I'll name the peers", planned:true, text:'Names and tickers only. Nothing looks up their figures, so the benchmark records "No peer figures".'},
+     {v:'user_comps', label:"I'll give peer figures", text:"Only if you want your own set: each peer's EV, EBITDA, date and source. Your figures are labelled user-supplied, and the research module does not look for peers."},
+     {v:'none', label:'No peers', text:'No peer universe and no peer multiple.'}
+   ],
+@@ -980,10 +976,9 @@ const DEAL_SPEC = [['facility_id'],['instrument'],['currency',{t:'cur'}],['size_
+ const PRIMARY_ONLY = ['tenor_years','talk_spread_bps_low','talk_spread_bps_high','talk_oid_low','talk_oid_high'];
+ const QUOTE_SPEC = [['facility_id'],['kind'],['bid',N0],['ask',N0],['price',N0],['yield_pct',N0],['spread_bps',N0],['as_of',{t:'date',req:true,after:true}],['provider',{req:true}]];
+ const RATING_SPEC = [['agency',{req:true}],['scope'],['rating',{req:true}],['outlook'],['as_of',{t:'date',after:true}]];
+-// The modules a run would use: the peer source decides whether the research module joins.
+-function runOf(pathway, peerSource) {
+-  const ps = peerSource === undefined ? getV($('st-valuation'), 'peer_source') : peerSource;
+-  return (ps === 'cp_dr_public' && WITH_RESEARCH[pathway]) || RUN_ORDER[pathway] || [];
++// The modules a run would use: the pathway decides; the peer source no longer adds or drops one.
++function runOf(pathway) {
++  return RUN_ORDER[pathway] || [];
+ }
+ // Whether a saved attachment question applies to this pathway (it is then asked: which file is it?).
+ function attApplies(k, pathway) {
+@@ -1197,7 +1192,7 @@ function advise(o) {
+ const OUTCOMES = ['will_refuse', 'gap', 'limited', 'check', 'information', 'ready'];
+ const WORD = {will_refuse:'Will refuse', gap:'Gap', limited:'Limited', check:'Check', information:'Note', ready:'Ready'};
+ const worst = list => list.reduce((a, b) => OUTCOMES.indexOf(a) <= OUTCOMES.indexOf(b) ? a : b, 'ready');
+-const PEER_GAP = {none:'No peer source: no peer universe and no peer multiple.', user_list:'Named peers only: nothing looks up their figures in this run (the research module joins only when it finds the peers), so the benchmark has no peer figures.'};
++const PEER_GAP = {none:'No peer source: no peer universe and no peer multiple.', user_list:'Named peers only: nothing looks up their figures in this run, so the benchmark has no peer figures.'};
+ // The modules of this run among the ones a run-level limit names.
+ const affected = (f, modules, otherwise) => modules.filter(f.has).join(', ') || otherwise;
+ // Live evidence behind the wording: tdg-forecast-003 and -004 (legal declaration, CP-2A), and
+@@ -2149,7 +2144,7 @@ function renderPathCards() {
+     const id = 'path-' + p, d = PATHS[p];
+     return `<label class="card" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
+       `<span class="ct"><span class="ctl"><b>${d.label}</b></span><span class="q">${d.q}</span><span class="imp">Needs: ${d.needs}</span>` +
+-      `<span class="mods-line">${runOf(p, 'cp_dr_public').length} modules: ${runOf(p, 'cp_dr_public').map(m => `<span title="${m}">${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
++      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span title="${m}">${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
+   }).join('');
+ }
+ function renderTimeline() {
+@@ -2236,7 +2231,7 @@ function vis() {
+   $('cp2a-note').textContent = has('CP-2G') ? 'The forward model takes its downside shock from the downside module\'s scenario, so a scenario you set here can also reach the forecast.' : '';
+   $('asmlead').textContent = lvl >= 2 ? 'Optional. Leave each module on "Let the module choose" unless you have a house view. Your values reach the module as user-supplied assumptions, with your rationale.' : 'Optional. Pinned assumptions are asked at the Advanced level; here, only your research questions.';
+   $('b-questions').hidden = !(has('CP-DR') || $('rows-q').children.length);
+-  $('qlead').textContent = has('CP-DR') ? 'The research module runs in this run and answers your questions before its own. A question goes to the module you name (Peer benchmark or Fundamental credit); any other choice, or none, sends it to both. Items published after the research cutoff are refused.' : 'The research module does not run in this pathway (it joins Relative Value and Distressed & Restructuring when it finds the peers), so these questions are not answered. They stay in the file.';
++  $('qlead').textContent = has('CP-DR') ? 'The research module runs in this run and answers your questions before its own. A question goes to the module you name (Peer benchmark or Fundamental credit); any other choice, or none, sends it to both. Items published after the research cutoff are refused.' : 'The research module does not run (an explicit module list left it out), so these questions are not answered. They stay in the file.';
+ 
+   // The attachments are asked as "which file is it?" where a module reads them (or one is already chosen).
+   ATTACH.forEach(c => {
+diff --git a/src/deploy_vii/contracts.py b/src/deploy_vii/contracts.py
+index 911905f..9dcd9e4 100644
+--- a/src/deploy_vii/contracts.py
++++ b/src/deploy_vii/contracts.py
+@@ -47,28 +47,25 @@ PathwayId = Literal[
+ # (``report_view.pathway_has_model_block`` is the rule; a test keeps this table to it).
+ _PRESETS: dict[PathwayId, tuple[str, ...]] = {
+     "credit_snapshot": (
+-        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-2", "CP-4", "CP-3", "CP-5", "CP-6"),
++        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
++        *("CP-4", "CP-3", "CP-5", "CP-6"),
+     ),
+-    "earnings_update": ("CP-0", "CP-1", "CP-MODEL", "CP-1B", "CP-1D", "CP-5"),
++    "earnings_update": ("CP-0", "CP-1", "CP-MODEL", "CP-1B", "CP-1D", "CP-DR", "CP-2E", "CP-5"),
+     "relative_value": (
+-        *("CP-0", "CP-1", "CP-MODEL", "CP-1C", "CP-2", "CP-2D", "CP-3", "CP-3C", "CP-3D", "CP-5"),
++        *("CP-0", "CP-1", "CP-MODEL", "CP-1C", "CP-DR", "CP-2", "CP-2D", "CP-2E", "CP-3"),
++        *("CP-3C", "CP-3D", "CP-5"),
+     ),
+     "covenant_refinancing": (
+-        "CP-0",
+-        "CP-1",
+-        "CP-MODEL",
+-        "CP-1A",
+-        "CP-2",
+-        "CP-2D",
+-        "CP-4",
+-        "CP-3C",
+-        "CP-5",
++        *("CP-0", "CP-1", "CP-MODEL", "CP-1A", "CP-DR", "CP-2", "CP-2A", "CP-2D", "CP-2E"),
++        *("CP-2G", "CP-4", "CP-3C", "CP-5"),
+     ),
+     "distressed_restructuring": (
+-        *("CP-0", "CP-1", "CP-1A", "CP-1C", "CP-2", "CP-2A", "CP-2G", "CP-2H", "CP-4", "CP-4C"),
+-        "CP-5",
++        *("CP-0", "CP-1", "CP-1A", "CP-1C", "CP-DR", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
++        *("CP-2H", "CP-4", "CP-4C", "CP-5"),
++    ),
++    "portfolio_decision": (
++        *("CP-0", "CP-1", "CP-MODEL", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
+     ),
+-    "portfolio_decision": ("CP-0", "CP-1", "CP-MODEL", "CP-2", "CP-3", "CP-5", "CP-6", "CP-8"),
+ }
+ PATHWAY_MODULES: Mapping[PathwayId, tuple[str, ...]] = MappingProxyType(_PRESETS)
+ 
+diff --git a/src/deploy_workflow/inbox/activity.py b/src/deploy_workflow/inbox/activity.py
+index 6f44c24..c6c3f26 100644
+--- a/src/deploy_workflow/inbox/activity.py
++++ b/src/deploy_workflow/inbox/activity.py
+@@ -46,7 +46,7 @@ def module_states(pathway: str, events: Sequence[Mapping[str, Any]]) -> list[lis
+     accepted = {str(e.get("module")) for e in events if e.get("event") == "module_accepted"}
+     # A pathway the plan does not know (a record edited by hand) has no modules to show.
+     listed = PATHWAY_MODULES.get(cast(PathwayId, pathway), ())
+-    # The launcher may add a module the preset does not list (CP-DR as CP-1C's peer source).
++    # An explicit --modules run may start a module the preset does not list.
+     extra = sorted(m for m in started if m in METHODS and m not in listed)
+     modules = plan((*(m for m in listed if m not in NOT_ANALYTICAL), *extra)) if listed else ()
+     states = [[m, _state(m, started, accepted)] for m in modules]
+diff --git a/src/deploy_workflow/library_index.py b/src/deploy_workflow/library_index.py
+index 228e7ba..b0a4f80 100644
+--- a/src/deploy_workflow/library_index.py
++++ b/src/deploy_workflow/library_index.py
+@@ -1,7 +1,7 @@
+ """Which runs the Issuer Library lists, and what it shows for each. Reads files only.
+ 
+-A run folder under ``runs/`` is listed when CP-OS completed it and every module in it ran on the
+-current methodology:
++A run folder under ``runs/`` is listed when CP-OS completed it and every module in it was answered
++in this run:
+ 
+ - completed: a ``completed-<sha256>.json`` record named by its own hash, of the launcher's report
+   kind, names a ``delivery-<sha256>.json`` manifest named by its own hash. One folder under
+@@ -11,11 +11,13 @@ current methodology:
+   manifest names still have their hashes, and the manifest, the delivery's ``view.json`` and
+   ``workflow.json`` name the same run. Nothing is rebuilt: a renderer change since the run does
+   not unlist it.
+-- current methodology: each module was answered in this run (not replayed from another run, not
++- answered here: each module was answered in this run (not replayed from another run, not
+   synthetic). The request record beside its accepted answer still has the fingerprint CP-OS named
+-  its folder by (``cpos.request_fingerprint``), so it holds the instructions actually sent, and
+-  their method block is exactly the one the launcher sends that module today
+-  (``cpos_launch.method_text``): no section changed, added or dropped.
++  its folder by (``cpos.request_fingerprint``), so it holds the instructions actually sent.
++- methods: the method block sent is compared with the one the launcher sends that module today
++  (``cpos_launch.method_text``). A run whose block differs (a section changed, added or dropped)
++  is still listed and marked: its record carries ``method_changes``, one ``"<module>: <detail>"``
++  per module, empty for a run on today's methods (owner, 2026-11-11).
+ 
+ Every other run folder is left out with its reason. Nothing here runs analysis, calls a provider
+ or writes a file.
+@@ -286,11 +288,13 @@ def check_methodology(
+     execution: Mapping[str, Any],
+     identity: Mapping[str, str],
+     method: tuple[MethodText, MethodHeadings],
+-) -> None:
+-    """Refuse unless every module was answered here on exactly the method it would be sent today."""
++) -> list[str]:
++    """Refuse unless every module was answered here and has a current method. Returns what changed
++    in the method block of a module since it was sent ("<module>: <detail>"); empty when none."""
+     from deploy_workflow.owners.cpos_launch import METHOD_MARK
+ 
+     method_text, method_headings = method
++    changes: list[str] = []
+     for module, pin in delivered["handoffs"].items():
+         how = execution.get(module)
+         if how not in ANSWERED:
+@@ -303,7 +307,8 @@ def check_methodology(
+         _, mark, block = text.partition(METHOD_MARK)
+         if not mark or block != current + "\n":
+             detail = method_difference(block, module, method_headings)
+-            raise Refused(f"{module}: not on the current methodology ({detail})")
++            changes.append(f"{module}: {detail}")
++    return changes
+ 
+ 
+ def reader_summary(text: str) -> dict[str, Any] | None:
+@@ -432,7 +437,7 @@ def admit_run(
+     same_identity(delivered["manifest"].get("run"), identity, "the delivery manifest")
+     same_identity(delivered["view"].get("run"), identity, "the delivered report")
+     execution = completion["module_execution"]
+-    check_methodology(folder, delivered, execution, identity, method)
++    method_changes = check_methodology(folder, delivered, execution, identity, method)
+     requested = run.get("requested_modules")
+     cap = completion.get("provider_cap_usd")
+     record = {
+@@ -454,6 +459,7 @@ def admit_run(
+         else None,
+         "delivery_sha256": delivered["delivery_sha256"],
+         "execution": execution_record(folder),
++        "method_changes": method_changes,
+     }
+     if deliveries is not None:  # Only a run that is listed is kept.
+         deliveries[folder.name] = delivered
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 5c2687f..7222a78 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -1676,14 +1676,10 @@ def _instructions(
+ 
+ 
+ def pathway_modules(settings: RunContext) -> tuple[str, ...]:
+-    """A pathway's analytical modules. Owner, 2026-11-10: CP-1C takes its peers from CP-DR by
+-    default, and no pathway lists CP-DR, so CP-DR joins a pathway that has CP-1C whenever the
+-    context names it as the peer source. Explicit --modules are run as given."""
+-    chosen = tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
+-    peers_from_research = settings.valuation.peer_source == "cp_dr_public"
+-    if "CP-1C" in chosen and "CP-DR" not in chosen and peers_from_research:
+-        return (*chosen, "CP-DR")
+-    return chosen
++    """A pathway's analytical modules: its preset less the modules that have their own route.
++    Owner, 2026-11-11: CP-DR and CP-2E are in every preset (CP-1C needs CP-DR's peers), so the
++    context's peer source no longer adds a module. Explicit --modules are run as given."""
++    return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
+ 
+ 
+ def prepare(  # noqa: PLR0913 - one keyword per run setting
+diff --git a/tests/fixtures/canned_provider_launcher.py b/tests/fixtures/canned_provider_launcher.py
+index 7bcd196..9933584 100644
+--- a/tests/fixtures/canned_provider_launcher.py
++++ b/tests/fixtures/canned_provider_launcher.py
+@@ -12,7 +12,7 @@ from typing import Any
+ from unittest import mock
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+-from test_cpos_launch import answer
++from test_cpos_launch import covenant_answer
+ 
+ from deploy_workflow.model.adapter import AdapterReply, LiveAdapter
+ from deploy_workflow.model.turn import ToolCall, Turn, Usage
+@@ -38,7 +38,7 @@ def main(argv: list[str]) -> int:
+             output_tokens=5,
+             reasoning_tokens=0,
+         )
+-        call = ToolCall("1", "write_handoff", {"markdown": answer(context, routes)})
++        call = ToolCall("1", "write_handoff", {"markdown": covenant_answer(context, routes)})
+         turn = Turn("", (call,), usage, "tool_use", "fake", "fake", 200)
+         return AdapterReply("ok", turn, None, 200, None, None, 1, 2, usage)
+ 
+diff --git a/tests/fixtures/run-expectations/outcome-key.json b/tests/fixtures/run-expectations/outcome-key.json
+index 5848cc0..b423a37 100644
+--- a/tests/fixtures/run-expectations/outcome-key.json
++++ b/tests/fixtures/run-expectations/outcome-key.json
+@@ -494,9 +494,13 @@
+     "CP-0",
+     "CP-1",
+     "CP-1A",
+-    "CP-2",
++    "CP-DR",
+     "CP-4",
++    "CP-2",
++    "CP-2A",
++    "CP-2E",
+     "CP-2D",
++    "CP-2G",
+     "CP-3C",
+     "CP-5"
+    ],
+diff --git a/tests/test_context_form.py b/tests/test_context_form.py
+index 2744db8..23e6763 100644
+--- a/tests/test_context_form.py
++++ b/tests/test_context_form.py
+@@ -37,7 +37,7 @@ from deploy_workflow.run_expectations import (
+ ROOT = Path(__file__).resolve().parents[1]
+ FORM = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
+ WEB = ROOT / "apps/issuer-library/credit_os/web"
+-# With cp_dr_public the research module joins a pathway that has CP-1C; with any other source not.
++# CP-DR and CP-2E are in every preset since 2026-11-11: the peer source no longer changes the run.
+ PEER_SOURCES = ("cp_dr_public", "user_comps")
+ 
+ 
+@@ -74,9 +74,10 @@ def test_the_pathways_are_the_contracts() -> None:
+ 
+ @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+ def test_the_run_order_is_the_launchers_for_each_peer_source(pathway: str) -> None:
+-    base, with_research = lists("RUN_ORDER"), lists("WITH_RESEARCH")
+-    assert base[pathway] == launched(pathway, "user_comps")
+-    assert with_research.get(pathway, base[pathway]) == launched(pathway, "cp_dr_public")
++    order = lists("RUN_ORDER")[pathway]
++    for peer_source in PEER_SOURCES:
++        assert order == launched(pathway, peer_source)
++    assert "WITH_RESEARCH" not in FORM
+ 
+ 
+ def test_the_dependency_edges_are_the_registrys() -> None:
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index e140ee4..2af86cc 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -55,7 +55,10 @@ ISSUER = "Northbridge Synthetic Group"
+ AS_OF = "2025-03-31"
+ 
+ # Written by hand from the registry's dependency rules and the block titles on the Front Page.
+-COVENANT_MODULES = ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-4", "CP-2D", "CP-3C", "CP-5")
++COVENANT_MODULES = (
++    *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2D", "CP-2G"),
++    *("CP-3C", "CP-5"),
++)
+ COVENANT_ROUTES = {
+     ("covenant-tests-headroom", "CP-4", "Covenant tests and headroom", "table"),
+     ("liquidity-runway", "CP-2D", "Liquidity and cash runway", "table"),
+@@ -69,21 +72,39 @@ COVENANT_ROUTES = {
+     ("documents-structure", "CP-4", "Documents and structure", "table"),
+     ("maturity-wall", "CP-1", "Chart data: debt maturities", "chart"),
+ }
++# Run order for each pathway (registry.plan over the preset, CP-MODEL and CP-8 removed; required
++# producers such as CP-1A are added). Owner, 2026-11-11: CP-DR and CP-2E are in every preset.
+ PATHWAY_MODULES = {
+-    "credit_snapshot": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-4", "CP-3", "CP-5", "CP-6"),
+-    "earnings_update": ("CP-0", "CP-1", "CP-1B", "CP-1D", "CP-5"),
+-    # The fixture context's peer source is CP-DR, so the two pathways with CP-1C gain CP-DR.
++    "credit_snapshot": (
++        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-2", "CP-2A", "CP-2E", "CP-2G", "CP-3"),
++        *("CP-5", "CP-6"),
++    ),
++    "earnings_update": ("CP-0", "CP-1", "CP-1B", "CP-DR", "CP-2E", "CP-1D", "CP-5"),
+     "relative_value": (
+-        *("CP-0", "CP-1", "CP-1A", "CP-3D", "CP-DR", "CP-1C", "CP-2", "CP-2D", "CP-3C", "CP-3"),
+-        "CP-5",
++        *("CP-0", "CP-1", "CP-1A", "CP-3D", "CP-DR", "CP-1C", "CP-2", "CP-2E", "CP-2D", "CP-3C"),
++        *("CP-3", "CP-5"),
+     ),
+     "covenant_refinancing": COVENANT_MODULES,
+-    # CP-2 before CP-2A since 2026-11-10 (cp-2a SKILL.md: "Upstream: CP-1, CP-1B, CP-2").
+     "distressed_restructuring": (
+-        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-1C", "CP-2", "CP-2A", "CP-2G", "CP-2H"),
+-        *("CP-4C", "CP-5"),
++        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-4", "CP-1C", "CP-2", "CP-2A", "CP-2E", "CP-2G"),
++        *("CP-2H", "CP-4C", "CP-5"),
++    ),
++    "portfolio_decision": (
++        *("CP-0", "CP-1", "CP-1A", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
++    ),
++}
++# The owner's preset answer key (2026-11-11), hand-written as sets: what each pathway requests.
++PRESET_ANSWER_KEY = {
++    "credit_snapshot": "CP-0 CP-1 CP-MODEL CP-1A CP-DR CP-2 CP-2A CP-2E CP-2G CP-4 CP-3 CP-5 CP-6",
++    "earnings_update": "CP-0 CP-1 CP-MODEL CP-1B CP-1D CP-DR CP-2E CP-5",
++    "relative_value": "CP-0 CP-1 CP-MODEL CP-1C CP-DR CP-2 CP-2D CP-2E CP-3 CP-3C CP-3D CP-5",
++    "covenant_refinancing": (
++        "CP-0 CP-1 CP-MODEL CP-1A CP-DR CP-2 CP-2A CP-2D CP-2E CP-2G CP-4 CP-3C CP-5"
++    ),
++    "distressed_restructuring": (
++        "CP-0 CP-1 CP-1A CP-1C CP-DR CP-2 CP-2A CP-2E CP-2G CP-2H CP-4 CP-4C CP-5"
+     ),
+-    "portfolio_decision": ("CP-0", "CP-1", "CP-1A", "CP-2", "CP-3", "CP-5", "CP-6"),
++    "portfolio_decision": "CP-0 CP-1 CP-MODEL CP-DR CP-2 CP-2E CP-3 CP-5 CP-6",
+ }
+ 
+ 
+@@ -961,14 +982,29 @@ COVENANT_PRODUCERS = {
+     "CP-0": [],
+     "CP-1": ["CP-0"],
+     "CP-1A": ["CP-0"],
+-    "CP-2": ["CP-0", "CP-1", "CP-1A"],
++    "CP-DR": ["CP-0", "CP-1"],
++    "CP-2": ["CP-0", "CP-1", "CP-1A", "CP-DR"],
+     "CP-4": ["CP-0", "CP-1", "CP-1A"],
++    "CP-2A": ["CP-0", "CP-1", "CP-2"],
++    "CP-2E": ["CP-0", "CP-1", "CP-1A", "CP-2"],
+     "CP-2D": ["CP-0", "CP-1", "CP-2"],
+-    "CP-3C": ["CP-0", "CP-1", "CP-1A", "CP-2D", "CP-4"],
+-    "CP-5": ["CP-0", "CP-1", "CP-1A", "CP-2", "CP-2D", "CP-3C", "CP-4"],
++    "CP-2G": ["CP-0", "CP-1", "CP-2A", "CP-2D"],
++    "CP-3C": ["CP-0", "CP-1", "CP-1A", "CP-2A", "CP-2D", "CP-4"],
++    "CP-5": [
++        *("CP-0", "CP-1", "CP-1A", "CP-2", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-3C", "CP-4"),
++        "CP-DR",  # CP-5 takes every analyst before it.
++    ],
+ }
+ 
+ 
++def covenant_answer(context: dict, routes: list) -> str:
++    """The covenant pathway now runs CP-2G (owner, 2026-11-11), which must end in a forecast
++    block; the declined one publishes no model."""
++    if context["module_id"] == "CP-2G":
++        return forecast_answer(context, routes, REAL_DECLINED_BLOCK)
++    return answer(context, routes)
++
++
+ def test_each_module_is_sent_only_its_producers_handoffs(tmp_path, provider):
+     # Run tdg-all-001 (2026-11-10) sent every module every earlier handoff: the first request
+     # grew to 1 MB by CP-5, and six modules had all their source reads refused.
+@@ -978,7 +1014,7 @@ def test_each_module_is_sent_only_its_producers_handoffs(tmp_path, provider):
+ 
+     def answering(context):
+         sent[context["module_id"]] = sorted(context["handoffs"])
+-        return answer(context, routes)
++        return covenant_answer(context, routes)
+ 
+     provider.answer = answering
+     assert main(argv) == 0
+@@ -989,7 +1025,7 @@ def test_answers_pinned_to_their_producers_are_replayed_unsent(tmp_path, provide
+     """CP-OS replays a retained answer whose pins are exactly the producers it is sent."""
+     argv = launch(tmp_path, "--live", "--ruling", str(RULING))
+     routes = prepare_routes(tmp_path, "sol-medium", modules=None)
+-    provider.answer = lambda context: answer(context, routes)
++    provider.answer = lambda context: covenant_answer(context, routes)
+     assert main(argv) == 0
+     sent = list(provider.calls)
+     out = tmp_path / "out"
+@@ -1472,27 +1508,31 @@ def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
+     assert "Stress design" not in texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
+ 
+ 
+-@pytest.mark.parametrize(
+-    ("pathway", "peer_source", "added"),
+-    [
+-        ("relative_value", "cp_dr_public", True),
+-        ("distressed_restructuring", "cp_dr_public", True),
+-        ("relative_value", "none", False),
+-        ("credit_snapshot", "cp_dr_public", False),  # no CP-1C in this pathway
+-    ],
+-)
+-def test_a_pathway_with_cp1c_adds_cpdr_when_cpdr_is_the_peer_source(
+-    tmp_path, pathway, peer_source, added
+-):
+-    """Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default". No
+-    pathway lists CP-DR, so the default peer source used to leave CP-1C without a producer."""
++def test_the_presets_are_the_owners_answer_key():
++    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
++
++    assert {p: set(m) for p, m in PRESETS.items()} == {
++        p: set(key.split()) for p, key in PRESET_ANSWER_KEY.items()
++    }
++    assert all(len(m) == len(set(m)) for m in PRESETS.values())
++
++
++@pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
++@pytest.mark.parametrize("peer_source", ["cp_dr_public", "user_list", "user_comps", "none"])
++def test_cpdr_and_cp2e_are_in_every_pathway_and_run_in_order(tmp_path, pathway, peer_source):
++    """Owner, 2026-11-11: "cp-dr should be on every run or cp-1c wont work. so should cp-2e."
++    The peer source no longer adds or drops CP-DR; the preset carries it."""
+     prepared, _ = all_instructions(tmp_path, pathway, peer_source=peer_source)
+     order = list(prepared.plan.instructions)
+-    assert ("CP-DR" in order) is added
+-    assert set(order) - {"CP-DR"} == set(PATHWAY_MODULES[pathway]) - {"CP-DR"}
+-    if added:
++    assert order == list(PATHWAY_MODULES[pathway])
++    assert {"CP-DR", "CP-2E"} <= set(order)
++    assert "CP-DR" in prepared.plan.run.requested_modules
++    if "CP-1C" in order:
+         assert order.index("CP-DR") < order.index("CP-1C")
+-        assert "CP-DR" in prepared.plan.run.requested_modules
++    if "CP-2" in order:
++        assert order.index("CP-2E") > order.index("CP-2")
++    if "CP-2G" in order:
++        assert order.index("CP-2A") < order.index("CP-2G")
+ 
+ 
+ def test_explicit_modules_are_run_as_given(tmp_path):
+@@ -1539,7 +1579,7 @@ def test_the_bottom_line_is_retained_in_the_accepted_handoff(tmp_path, provider)
+             cap="50",
+         ).plan.layout.routes
+     )
+-    provider.answer = lambda context: answer(context, routes)
++    provider.answer = lambda context: covenant_answer(context, routes)
+     assert main(argv) == 0
+     folder = next((tmp_path / "out/deliveries").glob("*/delivery.json")).parent
+     handoffs = [p for p in folder.rglob("*.md") if READER_BOTTOM_LINE in p.read_text()]
+@@ -1646,9 +1686,15 @@ def test_yield_against_maturity_stays_omitted(tmp_path):
+ 
+ 
+ def test_the_report_scope_no_longer_says_charts_are_unpublished(tmp_path):
+-    prepared, *_ = good_task(tmp_path, "CP-1", "credit_snapshot")
++    # credit_snapshot runs CP-2G since 2026-11-11, so the scope without a forecast is read on
++    # earnings_update, and the one with it on credit_snapshot.
++    prepared, *_ = good_task(tmp_path, "CP-1", "earnings_update")
+     assert "The HTML Model and calculation JSON are not published" in prepared.layout.scope
+     assert "charts" not in prepared.layout.scope.lower()
++    (tmp_path / "f").mkdir()
++    forecast, *_ = good_task(tmp_path / "f", "CP-1", "credit_snapshot")
++    assert "A forecast table is published with the issuer report" in forecast.layout.scope
++    assert "charts" not in forecast.layout.scope.lower()
+ 
+ 
+ def test_six_handoff_headings_are_still_enforced(tmp_path):
+diff --git a/tests/test_inbox_activity.py b/tests/test_inbox_activity.py
+index 8d2419f..8704b21 100644
+--- a/tests/test_inbox_activity.py
++++ b/tests/test_inbox_activity.py
+@@ -40,15 +40,23 @@ def test_module_states_follow_the_events():
+     )
+ 
+ 
+-def test_a_module_the_launcher_added_to_the_pathway_is_shown_once_it_starts():
+-    """CP-DR joins a pathway with CP-1C when it is the peer source (owner, 2026-11-10); the
+-    pathway preset does not list it, so the events are how this view learns of it."""
+-    events = [{"event": "module_started", "module": "CP-DR"}]
+-    states = module_states("relative_value", events)
+-    names = [name for name, _ in states]
+-    assert dict(states)["CP-DR"] == "running"
++def test_cpdr_is_listed_from_the_start_in_every_pathway():
++    """Owner, 2026-11-11: CP-DR and CP-2E are in every preset, so the view lists them before
++    any event and before CP-1C."""
++    for pathway in ("relative_value", "earnings_update", "credit_snapshot"):
++        names = [name for name, _ in module_states(pathway, [])]
++        assert "CP-DR" in names and "CP-2E" in names
++    names = [name for name, _ in module_states("relative_value", [])]
+     assert names.index("CP-DR") < names.index("CP-1C") and names[-1] == "Report"
+-    assert "CP-DR" not in dict(module_states("relative_value", []))
++
++
++def test_a_module_outside_the_preset_is_shown_once_it_starts():
++    """An explicit --modules run can start a module the preset does not list (CP-2H in Relative
++    Value); the events are how this view learns of it."""
++    events = [{"event": "module_started", "module": "CP-2H"}]
++    assert "CP-2H" not in dict(module_states("relative_value", []))
++    states = module_states("relative_value", events)
++    assert dict(states)["CP-2H"] == "running" and states[-1][0] == "Report"
+     # A module name the plan does not know (a hand-edited event) is not shown and does not raise.
+     assert "CP-XX" not in dict(
+         module_states("relative_value", [{"event": "module_started", "module": "CP-XX"}])
+diff --git a/tests/test_library_index.py b/tests/test_library_index.py
+index be8dcff..082f2ad 100644
+--- a/tests/test_library_index.py
++++ b/tests/test_library_index.py
+@@ -65,13 +65,22 @@ def test_completed_run_on_the_current_method_is_listed_with_its_recorded_values(
+     assert run["latest"] is True and run["latest_shared_with"] == 0
+ 
+ 
+-def test_a_changed_method_section_leaves_the_run_out_and_names_it(tmp_path):
++def test_a_changed_method_section_lists_the_run_and_names_the_change(tmp_path):
+     make_run(tmp_path, "run-a", version="")
+     library = listed(tmp_path, version=" Amended.")
+-    assert library.runs == []
+-    assert reasons(library) == {
+-        "run-a": "CP-0: not on the current methodology (methods/cp0.md changed)"
+-    }
++    assert library.excluded == []
++    (run,) = library.runs
++    # Every module whose method changed is named, in the run's module order.
++    assert run["method_changes"] == [
++        "CP-0: methods/cp0.md changed",
++        "CP-1: prompts/CP-1.md changed",
++    ]
++
++
++def test_a_run_on_todays_methods_has_no_method_changes(tmp_path):
++    make_run(tmp_path, "run-a")
++    (run,) = listed(tmp_path).runs
++    assert run["method_changes"] == []
+ 
+ 
+ def test_a_module_with_no_current_method_is_not_assumed_current(tmp_path):
+@@ -217,17 +226,24 @@ def test_edited_instruction_pins_cannot_stand_in_for_the_request_sent(tmp_path):
+     workflow = json.loads((run / "workflow.json").read_text())
+     workflow["instructions"]["CP-0"]["sha256"] = sha(current.encode())
+     (run / "workflow.json").write_text(json.dumps(workflow))
+-    assert reasons(listed(tmp_path)) == {
+-        "run-a": "CP-0: not on the current methodology (methods/cp0.md changed)"
+-    }
++    library = listed(tmp_path)
++    assert library.excluded == []
++    assert [r["method_changes"] for r in library.runs] == [
++        ["CP-0: methods/cp0.md changed", "CP-1: prompts/CP-1.md changed"]
++    ]
+ 
+ 
+ def test_a_method_section_sent_then_dropped_from_the_method_is_not_current(tmp_path):
+     extra = "\n\n=== methods/cp0-old-step.md sha256 " + "1" * 64 + " ===\nAn old step."
+     make_run(tmp_path, "run-a", sent_extra=extra)
+-    assert reasons(listed(tmp_path)) == {
+-        "run-a": "CP-0: not on the current methodology (methods/cp0-old-step.md no longer selected)"
+-    }
++    library = listed(tmp_path)
++    assert library.excluded == []
++    assert [r["method_changes"] for r in library.runs] == [
++        [
++            "CP-0: methods/cp0-old-step.md no longer selected",
++            "CP-1: methods/cp0-old-step.md no longer selected",
++        ]
++    ]
+ 
+ 
+ def test_a_module_only_the_manifest_names_is_not_left_unchecked(tmp_path):
+@@ -430,7 +446,7 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
+     # A new-format handoff has no Reader summary; the library shows older runs only (ruling H7).
+     assert run["modules"][0]["summary"] is None
+ 
+-    # The same run is left out once a method it ran on changes.
++    # The same run is still listed, and marked, once a method it ran on changes.
+     sections = cpos_launch.method_sections
+ 
+     def amended(module):
+@@ -442,17 +458,20 @@ def test_a_run_cpos_completed_with_a_fake_provider_is_listed(tmp_path, monkeypat
+ 
+     monkeypatch.setattr(cpos_launch, "method_sections", amended)
+     library = build_library(tmp_path / "ws", tmp_path / "ws/library", current_method())
+-    assert dict(library.excluded) == {
+-        "fake-run": "CP-1: not on the current methodology (prompts/CP-1.md, "
+-        + ", ".join(f"STEP_CONTRACTS[{s}]" for s in cpos_launch.CP1_STEPS)
+-        + " changed)"
+-    }
++    assert library.excluded == []
++    assert [r["method_changes"] for r in library.runs] == [
++        [
++            "CP-1: prompts/CP-1.md, "
++            + ", ".join(f"STEP_CONTRACTS[{s}]" for s in cpos_launch.CP1_STEPS)
++            + " changed"
++        ]
++    ]
+ 
+     # And once a step it was sent is dropped from the method (a scope reduction).
+     monkeypatch.setattr(cpos_launch, "method_sections", sections)
+     monkeypatch.setattr(cpos_launch, "CP1_STEPS", cpos_launch.CP1_STEPS[:-1])
+     library = build_library(tmp_path / "ws", tmp_path / "ws/library", current_method())
+-    assert dict(library.excluded) == {
+-        "fake-run": "CP-1: not on the current methodology (STEP_CONTRACTS[quality] no longer "
+-        "selected)"
+-    }
++    assert library.excluded == []
++    assert [r["method_changes"] for r in library.runs] == [
++        ["CP-1: STEP_CONTRACTS[quality] no longer selected"]
++    ]
+diff --git a/tests/test_update_library.py b/tests/test_update_library.py
+index bd75039..6d017eb 100644
+--- a/tests/test_update_library.py
++++ b/tests/test_update_library.py
+@@ -4,6 +4,7 @@ import json
+ import re
+ import sys
+ from pathlib import Path
++from types import SimpleNamespace
+ 
+ import pytest
+ from library_fixtures import make_run, method
+@@ -183,7 +184,7 @@ def test_the_command_reports_what_it_listed_and_why_others_are_not_shown(tmp_pat
+     (tmp_path / "runs/legacy").mkdir()
+     assert update_library.main(["--workspace", str(tmp_path)]) == 0
+     out = capsys.readouterr().out
+-    assert "Listed 1 run(s) on the current methodology." in out
++    assert "Listed 1 run(s)." in out
+     assert "  legacy: not a CP-OS launcher run (no workflow.json)" in out
+     assert str(tmp_path.resolve() / "library/index.html") in out
+ 
+@@ -236,6 +237,28 @@ def test_data_js_carries_excluded_runs(tmp_path):
+     assert all(isinstance(i, str) for i in activity["issues"])
+ 
+ 
++def test_data_js_carries_the_method_changes_of_each_listed_run(tmp_path, monkeypatch):
++    make_run(tmp_path, "run-a", version="")
++    make_run(tmp_path, "run-b", version=" Amended.", issuer_id="zzz", issuer_name="Zeta Synthetic")
++    monkeypatch.setattr("deploy_workflow.library_index.current_method", lambda: method(" Amended."))
++    library = update_library.update_library(tmp_path)
++    assert library.excluded == []
++    changes = {
++        r["folder"]: r["methodChanges"] for r in data_of(tmp_path)["workspace"]["runs"].values()
++    }
++    assert changes == {
++        "run-a": ["CP-0: methods/cp0.md changed", "CP-1: prompts/CP-1.md changed"],
++        "run-b": [],
++    }
++
++
++def test_a_store_run_that_is_not_a_listed_run_is_refused_not_shown_as_current():
++    listed = SimpleNamespace(runs=[{"id": "run-a", "method_changes": []}])
++    store = {"runs": {"x": {"folder": "run-z"}}}
++    with pytest.raises(KeyError):
++        update_library.method_changes(store, listed)
++
++
+ def test_data_js_carries_state_placement_and_words(tmp_path):
+     make_run(tmp_path, "run-a")
+     update_library.update_library(tmp_path)
