@@ -16,6 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from library_fixtures import make_run
 from test_cpos_launch import context_file, issuer_folder
 
 from deploy_workflow.inbox.layout import Layout, ensure_layout
@@ -244,7 +245,41 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     assert s["modules"] == list(expected.ordered)
     assert s["omitted"] == list(expected.omitted)
     assert s["ignored"] == list(expected.ignored)
-    assert s["digest"] == digest(layout, sid, answers)
+    assert s["prior"] is None  # no earlier run is listed: the approval names a first run
+    assert s["digest"] == submissions.bound(digest(layout, sid, answers), "none")
+
+
+def test_the_summary_says_whether_cp8_will_run_and_against_which_earlier_run(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    first = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    assert first["error"] == ""
+    assert first["changes"] == "first run of this pathway"
+    assert first["prior"] is None
+    assert "CP-8" not in first["modules"]
+    # An earlier listed run of the same issuer and pathway, in the launcher's own runs folder.
+    make_run(layout.engine, "prior-1", as_of="2024-12-31", pathway="covenant_refinancing")
+    second = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+    assert second["error"] == ""
+    assert second["modules"][-1] == "CP-8"
+    assert second["modules"][:-1] == first["modules"]
+    assert second["changes"] == (
+        "CP-8 compares with the covenant_refinancing run as of 2024-12-31 "
+        "(prior-1; earlier format, earlier methods)"
+    )
+    # The approval names the earlier run (id, as-of, pathway) and binds it with the answers and
+    # files; the earlier run is only read.
+    assert second["prior"] == {
+        "id": "prior-1",
+        "as_of": "2024-12-31",
+        "pathway": "covenant_refinancing",
+    }
+    assert second["digest"] == submissions.bound(
+        digest(layout, sid, answers_for(tmp_path)), "prior-1"
+    )
+    assert second["digest"] != first["digest"]
+    assert submissions.issued_prior(layout, sid) == "prior-1"
+    assert submissions.issued(layout, sid) == second["digest"]
+    assert sorted(p.name for p in (layout.engine / "runs").iterdir()) == ["prior-1"]
 
 
 def test_the_summary_carries_the_model_and_effort_it_was_made_for(layout, tmp_path):
@@ -550,7 +585,7 @@ def test_seal_freezes_the_uploads_and_unseal_restores_them(layout, tmp_path):
     assert digest(layout, sid, answers) == before
     assert reading(layout, sid)["documents"]
     got = summary(layout, sid, answers, cap=Decimal(20))
-    assert got["error"] == "" and got["digest"] == before
+    assert got["error"] == "" and got["digest"] == submissions.bound(before, "none")
     for call in (
         lambda: put(layout, sid, "new.txt"),
         lambda: remove_file(layout, sid, "annual.txt"),
@@ -750,7 +785,9 @@ def test_an_issued_digest_is_not_part_of_the_files_and_survives_the_seal(layout,
     assert "issued" not in os.listdir(files_folder(layout, sid))
     submissions.seal(layout, sid)
     assert submissions.issued(layout, sid) == got["digest"]
-    assert digest(layout, sid, answers_for(tmp_path)) == got["digest"]
+    assert got["digest"] == submissions.bound(
+        digest(layout, sid, answers_for(tmp_path)), submissions.issued_prior(layout, sid)
+    )
 
 
 def test_issued_is_refused_for_an_unknown_submission(layout):

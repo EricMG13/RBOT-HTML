@@ -25,6 +25,7 @@ whose message starts with the prefix).
 import argparse
 import hashlib
 import json
+import logging
 import re
 import sys
 import warnings
@@ -44,7 +45,7 @@ from deploy_vii.registry import dependencies, idle_statuses, plan
 from deploy_vii.render import render
 from deploy_vii.report_view import navigator
 from deploy_workflow import platform_io
-from deploy_workflow.owners import cpos_forecast
+from deploy_workflow.changes import PACK_NAME, PRIOR_PREFIX, PriorRun, pack_builder, prior_sources
 from deploy_workflow.handoff_delivery import (
     HEADINGS,
     DeliveryRequest,
@@ -57,11 +58,13 @@ from deploy_workflow.handoff_delivery import (
     verify_delivery,
     verify_files,
 )
+from deploy_workflow.model.budget import BudgetExhausted
 from deploy_workflow.owner_workflow import (
     OwnerRunReceipt,
     SettledHead,
     verify_owner_run_receipt,
 )
+from deploy_workflow.owners import cpos_forecast
 from deploy_workflow.run_events import append_event, stop_reason
 from deploy_workflow.run_pathway import RunDirBusy, _single_writer
 from deploy_workflow.run_scopes import PUBLIC_S1A_MODULES
@@ -71,6 +74,13 @@ if TYPE_CHECKING:
     from deploy_workflow.model.adapter import LiveAdapter
     from deploy_workflow.model.copilot_adapter import CopilotAdapter
     from deploy_workflow.model_testing.configs import ModelConfig
+
+
+log = logging.getLogger(__name__)
+
+# What a run records when CP-8 was planned and not produced (owner, 2026-11-12): the completion
+# record's `changes` line, the delivery manifest's `changes_note`, a run event and stderr.
+NOT_PRODUCED = "changes: not produced \u2014 "
 
 
 class RetainedHandoff(HandoffInput):
@@ -90,9 +100,32 @@ class HandoffPlan(Contract):
     model: ModelDelivery | None = None
     publish_forecast: bool = Field(default=False, exclude_if=lambda v: not v)
     layout: MarkdownLayout | None = None
+    # The earlier run CP-8 compares with (owner, 2026-11-11; `deploy_workflow.changes`). Its
+    # delivered handoffs are the `prior/<module>.md` sources, given to CP-8 only. `changes_note` is
+    # the line the launch recorded about the comparison, for the completion record.
+    prior: PriorRun | None = Field(default=None, exclude_if=lambda v: v is None)
+    changes_note: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    # How the run's modules were chosen: the pathway's preset or an explicit `--modules` list.
+    # Only a preset run is a comparison base (`deploy_workflow.changes.find_prior`); an older
+    # manifest records neither and is left unchanged.
+    selection: Literal["preset", "explicit"] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     execution: Literal["host-session", "retained-response-replay", "synthetic", "live-provider"]
     max_attempts: int = Field(default=2, ge=1, le=3)
     provider_cap_usd: Decimal = Field(default=Decimal(0), ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def prior_pins(self) -> "HandoffPlan":
+        """CP-8 is requested exactly when an earlier run is pinned, and the `prior/` sources are
+        exactly that run's handoffs."""
+        held = {name for name in self.sources if name.startswith(PRIOR_PREFIX)}
+        wanted = set() if self.prior is None else set(prior_sources(self.prior))
+        if held != wanted or ("CP-8" in self.run.requested_modules) != (self.prior is not None):
+            raise ValueError(
+                "cpos_prior: CP-8 and the prior/ sources go together with the prior run"
+            )
+        return self
 
     @model_validator(mode="after")
     def execution_budget(self) -> "HandoffPlan":
@@ -351,10 +384,11 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
         from deploy_vii.report_view import pathways
 
         selected_modules = set(planned)
-        if selected_modules & {"CP-8", "CP-MODEL", "CP-MEMO", "CP-OS"}:
+        # CP-8 is allowed here: in a run it compares with the pinned earlier run. The comparison
+        # of two delivered bundles (`run_comparison`) is a different route.
+        if selected_modules & {"CP-MODEL", "CP-MEMO", "CP-OS"}:
             raise ValueError(
-                "cpos_scope: select analytical Markdown modules; comparison and Model use their "
-                "existing routes"
+                "cpos_scope: select analytical Markdown modules; the Model uses its existing route"
             )
         preset = next(p for p in pathways() if p.id == request.run.pathway)
         if (
@@ -379,6 +413,9 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
     if set(request.retained_handoffs) - set(ordered):
         raise ValueError("cpos_retained_inputs: handoff names must be selected analytical modules")
     sources = _pinned_inputs(manifest.parent, request.sources)
+    # The earlier run's handoffs are for CP-8 alone: every other module is sent the run's own
+    # sources only.
+    run_sources = {k: v for k, v in sources.items() if not k.startswith(PRIOR_PREFIX)}
     instructions = _pinned_inputs(manifest.parent, request.instructions)
     retained = _pinned_inputs(manifest.parent, request.retained_handoffs)
     # Each module is sent only its declared producers' handoffs (CP-5 every analyst before it).
@@ -418,17 +455,43 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             _put(directory / "inputs" / _sha(raw), raw)
         handoffs: dict[str, bytes] = {}
         selected: dict[str, str] = {}
+        changes: HandoffInput | None = None
+        not_produced = _recorded_not_produced(directory)  # an earlier launch's decision stands
+        if not_produced is not None:
+            ordered = tuple(m for m in ordered if m != "CP-8")
+            print(
+                f"{NOT_PRODUCED}{not_produced} (recorded by the earlier launch of this run; "
+                "no new call, the delivery is left as it is)",
+                file=sys.stderr,
+            )
         for module_id in ordered:
             _refuse_pins_of_replayed(request.retained_handoffs, handoffs)
             spec = request.retained_handoffs.get(module_id)
             supplied = {m: handoffs[m] for m in ordered if m in producers[module_id]}
             if spec is not None and spec.upstream != {m: _sha(raw) for m, raw in supplied.items()}:
                 raise ValueError(f"cpos_retained_stale: {module_id}")
+            task_sources = run_sources
+            if module_id == "CP-8":
+                if request.prior is None:
+                    raise ValueError("cpos_prior: CP-8 needs the pinned earlier run")
+                # Computed by Python from the earlier run's pinned handoffs and this run's accepted
+                # ones before CP-8 is called; it is also published as the delivery's changes.json.
+                try:
+                    pack = pack_builder(
+                        request.prior, request.run.as_of.isoformat(), request.run.pathway
+                    )(sources, supplied)
+                except (ValueError, ArithmeticError) as error:
+                    # The one fail-open of CP-8 (see below): a handoff text the pack cannot read.
+                    not_produced = f"the comparison pack could not be built ({error})"
+                    break
+                _put(directory / "inputs" / _sha(pack), pack)
+                changes = HandoffInput(path="inputs/" + _sha(pack), sha256=_sha(pack))
+                task_sources = {**sources, PACK_NAME: pack}
             task = HandoffTask(
                 request.run,
                 module_id,
                 instructions[module_id],
-                MappingProxyType(sources),
+                MappingProxyType(task_sources),
                 MappingProxyType(supplied),
                 1,
                 (),
@@ -436,20 +499,47 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             )
             if events is not None:
                 append_event(events, "module_started", module=module_id)
-            raw, path = _handoff(
-                task,
-                directory,
-                execute,
-                check,
-                request.max_attempts,
-                retained=retained.get(module_id),
-            )
+            try:
+                raw, path = _handoff(
+                    task,
+                    directory,
+                    execute,
+                    check,
+                    request.max_attempts,
+                    retained=retained.get(module_id),
+                )
+            except (ValueError, RuntimeError) as error:
+                # Fail-open, by design and only for CP-8 (owner, 2026-11-12): the comparison is
+                # optional to completion, so a CP-8 that is not accepted within its bounds, or
+                # whose call does not fit the cap, does not stop the run's delivery of everything
+                # the other modules produced. Any other module's failure, and any other fault of
+                # CP-8's call (a provider stop, an overrun, an interrupted call), still propagates.
+                # The reason is logged, recorded in the completion record, the delivery manifest
+                # and a run event, and printed to stderr.
+                if module_id != "CP-8" or not _cp8_unaccepted(error):
+                    raise
+                not_produced = with_notes(error)
+                break
             handoffs[module_id] = raw
             selected[module_id] = path
             if events is not None:
                 append_event(events, "module_accepted", module=module_id)
             if on_handoff is not None:
                 on_handoff(task, raw)
+        layout = request.layout
+        if "CP-8" in ordered and "CP-8" not in handoffs:
+            ordered = tuple(m for m in ordered if m != "CP-8")
+            changes = None
+            print(f"{NOT_PRODUCED}{not_produced}", file=sys.stderr)
+            log.warning("CP-8 was not produced; the run delivers without it: %s", not_produced)
+            if events is not None:
+                append_event(events, "changes_not_produced", reason=str(not_produced))
+        changes_note = request.changes_note
+        if not_produced is not None:
+            changes_note = f"{NOT_PRODUCED}{not_produced}"
+            if layout is not None:
+                scope = f"{layout.scope} Changes since the last run (CP-8): {changes_note}."
+                layout = layout.model_copy(update={"scope": scope})
         forecast, failure = request.publish_forecast, None
         if forecast:
             try:
@@ -473,8 +563,10 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 m: HandoffInput(path=selected[m], sha256=_sha(handoffs[m]))
                 for m in (ordered if request.layout is not None else ("CP-1", "CP-1A", "CP-2"))
             },
-            layout=request.layout,
+            layout=layout,
             forecast=forecast,
+            changes=changes,
+            changes_note=changes_note if not_produced is not None else None,
             module_execution=_module_execution(ordered, retained, request)
             if request.layout is not None
             else None,
@@ -518,8 +610,8 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             if request.layout is None
             else "cpos-markdown-delivery/1",
             "execution": request.execution,
-            "scope": request.layout.scope
-            if request.layout is not None
+            "scope": layout.scope
+            if layout is not None
             else "public five-section snapshot"
             + (
                 " plus deterministic HTML Model/charts/calculation JSON"
@@ -533,6 +625,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             "cp_model_published": request.model is not None,
             "cp_forecast_published": forecast,
             "forecast_failure": failure,
+            **({} if changes_note is None else {"changes": changes_note}),
             "delivery_manifest_sha256": manifest_id,
             "delivery_sha256": _sha(receipt.read_bytes()),
         }
@@ -541,6 +634,29 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
         if events is not None:
             append_event(events, "delivered")
         return receipt
+
+
+def _cp8_unaccepted(error: BaseException) -> bool:
+    """Whether a failure of CP-8's loop is "not accepted within its bounds" or "its hold does not
+    fit the cap": the two refusals the run survives. A provider stop, an overrun, an interrupted or
+    already started call is not one of them."""
+    return isinstance(error, BudgetExhausted) or str(error).startswith(
+        ("cpos_live_not_accepted: CP-8", "cpos_module_failed: CP-8")
+    )
+
+
+def _recorded_not_produced(directory: Path) -> str | None:
+    """The reason an earlier launch of this run folder recorded for delivering without CP-8, or
+    None. A relaunch keeps that decision: it makes no new call for CP-8."""
+    for path in sorted(directory.glob("completed-*.json")):
+        try:
+            note = json.loads(path.read_bytes()).get("changes")
+        except (OSError, ValueError, AttributeError) as error:
+            log.warning("completion record %s is unreadable (%s)", path.name, error)
+            continue
+        if isinstance(note, str) and note.startswith(NOT_PRODUCED):
+            return note.removeprefix(NOT_PRODUCED)
+    return None
 
 
 def _module_execution(

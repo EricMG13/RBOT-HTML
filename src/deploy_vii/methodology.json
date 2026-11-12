@@ -537,7 +537,7 @@
   },
   {
     "module_id": "CP-8",
-    "title": "Prior/current deliverable comparison",
+    "title": "Changes since the last run",
     "aliases": [],
     "required": [
       "CP-0"
@@ -548,7 +548,7 @@
     "edge_rules": {
       "CP-6": "block"
     },
-    "purpose": "Compares prior-run deliverables with the latest selected current run, explains material changes and unresolved differences, and supplies targeted repairs to the responsible modules and delivery process.",
+    "purpose": "Explains what has changed since the earlier run of the same issuer and pathway, in the issuer's business and credit profile and in the modules' findings, from a Python-computed comparison pack; runs last and calculates nothing.",
     "table_ids": [
       "T7.1",
       "T7.2",

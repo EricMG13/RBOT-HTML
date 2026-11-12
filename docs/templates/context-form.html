@@ -622,7 +622,7 @@ const MODULES = {
   'CP-4C': ['Recovery & fulcrum', 'Recovery waterfall and the fulcrum security.'],
   'CP-5': ['Evidence validation', 'Traces every figure back to its source.'],
   'CP-6': ['Committee decision', 'Challenges the thesis as an investment committee would.'],
-  'CP-8': ['Deliverable comparison', 'Compares this run with an earlier one (not run from the run page).'],
+  'CP-8': ['Changes since the last run', 'What changed since the earlier run of this issuer and pathway; planned for you when there is one.'],
   'CP-DR': ['Research questions', 'Finds the peers and their figures, and answers your research questions.']
 };
 const mname = m => (MODULES[m] || [m])[0];
@@ -1662,7 +1662,7 @@ function errorStage(text) {
   if (/\b(modules?|turns|level|model|effort|Claude Opus)\b/i.test(text)) return 'pathway';
   return '';
 }
-let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted} for the answers and files held
+let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted, changes} for the answers and files held
 let SUMMARY_BUSY = false;
 let RENDERED = null;       // the summary the module table was built for
 let RENDERED_KEY = '';     // the page's own rule items that table was built from (pageKey)
@@ -1792,7 +1792,8 @@ function renderFacts(o) {
     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
       ['Cap', 'USD 20 for this run'],
-      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', webSearches(o.run.case_kind, (SUMMARY.answers || {}).model) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : (o.run.case_kind !== 'synthetic' ? 'No: web search is offered on GPT Sol only, so this Claude run reads only its files' : 'No: a synthetic case reads only its files')]] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', webSearches(o.run.case_kind, (SUMMARY.answers || {}).model) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : (o.run.case_kind !== 'synthetic' ? 'No: web search is offered on GPT Sol only, so this Claude run reads only its files' : 'No: a synthetic case reads only its files')]] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none'],
+      ...(SUMMARY.changes ? [['Changes', SUMMARY.changes]] : []));
     // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
     const sent = SUMMARY.answers || {}, left = runOf(o.run.pathway).filter(m => Array.isArray(sent.modules) && sent.modules.length && !sent.modules.includes(m));
     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);

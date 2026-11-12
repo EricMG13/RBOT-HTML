@@ -709,6 +709,26 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
 pathway; CP-1C needs CP-DR's peers and CP-2E follows CP-2. CP-8 leaves the portfolio_decision preset
 pending its redesign as a same-pathway comparison.
 
+**CP-8 method revision, 2026-11-12 (owner: "what has changed since the last time I looked at this";
+decisions M5, M7, M8).** `src/deploy_vii/methods/cp8.md` is rewritten: CP-8 is now an in-run module that
+runs last when an earlier run of the same issuer and pathway is listed, and explains what changed in the
+issuer's business and credit profile and in the modules' findings, from a comparison pack Python computes
+(`changes.json`). It never calculates; two kinds of change (the issuer's, the analysis') are never mixed;
+presentation differences are not findings; a removed limitation is Closed only with current-run evidence.
+This supersedes the 2026-11-04 deliverable-comparison definition for runs; the bundle comparison route
+(`run_comparison`) and its "Active CP-8 integration" evidence above stay as they were. Selected source
+revision: this project's cp8.md at the commit that records this note; the Deploy V ledger stays superseded.
+Detail: `docs/rulings/2026-11-11-module-presets-and-changes.md`, amendment 2026-11-12. Fix round 1 of the
+same day (schema `cpos-changes/2`): Python always computes a difference when the units are equal and
+marks each measure `yes`, `no` or `judge`, and for `judge` CP-8 states `Same definition` or `Not
+comparable`; limitations carry refs (`E1`..., `C1`...) that CP-8 pairs by meaning in a ledger with `Earlier
+ref` and `Current ref` columns; the net debt figures are an identity of two balances, not a bridge by
+drivers (not built: valid only when the reporting period equals the gap between the runs); a prior run
+must be the same issuer ID, name, pathway and case kind, a preset (not subset) run, and readable; the
+earlier run is named at approval and bound into the digest; and CP-8 is optional to completion: if it is
+not accepted within its bounds, or the pack cannot be built or its call does not fit the cap, the run
+delivers without it and records why.
+
 **CP-DR source guidance, 2026-11-12 (owner: "focus primarily using reputable and relevant
 sources").** CP-DR's web-search instruction (`WEB_SEARCH_RULES` in `src/deploy_workflow/model/handoff.py`)
 now tells the module to rely primarily on the issuer's and peers' own filings and releases,

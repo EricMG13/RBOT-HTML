@@ -24,6 +24,10 @@ EdgeRule = Literal["block", "restricted"]
 # CP-5 follows every selected analyst except CP-MODEL, a stop in the owner walk (user ruling B1,
 # D12); challenge, exports and OS do not.
 _NOT_CP5_FAN_IN = frozenset({"CP-5", "CP-6", "CP-8", "CP-MEMO", "CP-MODEL", "CP-OS"})
+# CP-8 (what changed since the last run) runs last and is given every other handoff of its run
+# (owner, 2026-11-11). Neither it nor the exports and the OS is a producer for it; CP-MODEL makes no
+# handoff.
+_NOT_CP8_FAN_IN = frozenset({"CP-8", "CP-MEMO", "CP-MODEL", "CP-OS"})
 
 
 class Responsibility(Contract):
@@ -81,6 +85,8 @@ def dependencies(
         # QA follows every selected analyst except CP-MODEL (a stop in the owner walk, D12);
         # challenge and exports follow QA.
         remaining["CP-5"] |= selected - _NOT_CP5_FAN_IN
+    if "CP-8" in selected:
+        remaining["CP-8"] |= selected - _NOT_CP8_FAN_IN
 
     return remaining
 
@@ -89,7 +95,8 @@ def edge_rule(consumer: str, producer: str) -> EdgeRule:
     """Degradation rule of one dependency edge (decision 0007).
 
     An explicit `edge_rules` entry wins. Otherwise a required producer blocks its
-    consumer and an optional one, or CP-5's fan-in over analysts, restricts it.
+    consumer and an optional one, or the fan-in of CP-5 over analysts and of CP-8 over every
+    handoff of its run, restricts it.
     """
     entry = next((module for module in modules() if module.module_id == consumer), None)
     if entry is not None:
@@ -97,10 +104,18 @@ def edge_rule(consumer: str, producer: str) -> EdgeRule:
             return entry.edge_rules[producer]
         if producer in entry.required:
             return "block"
-        if producer in entry.optional or (
-            consumer == "CP-5"
-            and producer not in _NOT_CP5_FAN_IN
-            and any(module.module_id == producer for module in modules())
+        if (
+            producer in entry.optional
+            or (
+                consumer == "CP-5"
+                and producer not in _NOT_CP5_FAN_IN
+                and any(module.module_id == producer for module in modules())
+            )
+            or (
+                consumer == "CP-8"
+                and producer not in _NOT_CP8_FAN_IN
+                and any(module.module_id == producer for module in modules())
+            )
         ):
             return "restricted"
     raise ValueError(f"No dependency edge from {producer} to {consumer}")
