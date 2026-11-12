@@ -1229,7 +1229,7 @@ def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_r
     assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom
 
 
-def _history_dom_over_http(root: Path, route: str) -> str:
+def served_dom(root: Path, route: str, width: int = 1280) -> str:
     """The DOM Chrome builds for a page of the library when a local web server serves it."""
     import functools
     import http.server
@@ -1248,7 +1248,7 @@ def _history_dom_over_http(root: Path, route: str) -> str:
                 chrome(),
                 "--headless=new",
                 "--disable-gpu",
-                "--window-size=1280,900",
+                f"--window-size={width},900",
                 "--virtual-time-budget=10000",
                 "--dump-dom",
                 f"http://127.0.0.1:{server.server_address[1]}/library/index.html{route}",
@@ -1264,22 +1264,614 @@ def _history_dom_over_http(root: Path, route: str) -> str:
     return html.unescape(done.stdout)
 
 
-def test_report_history_links_start_a_run_to_the_latest_run_when_served(tmp_path):
-    make_run(tmp_path, "run-a", as_of="2024-12-31")
-    update_library.update_library(tmp_path)
-    dom = _history_dom_over_http(tmp_path, "#W-Report/history?c=run-a")
-    link = re.search(r'<a class="start-run" href="([^"]*)">([^<]*)</a>', dom)
-    assert link is not None, dom[:1500]
-    assert link[1] == "/?from=run-a" and link[2] == "Start a run"
-    assert dom.index("start-run") < dom.index('<table class="history-table">')
+START_RUN_PROBE = Path(__file__).with_name("browser_probe_start_run.js").read_text(encoding="utf-8")
+RUN_ROUTES = ["#W-Report/history?c=run-a", "#W-Overview?c=run-a", "#CP-1/head?c=run-a"]
 
 
-def test_report_history_has_no_start_link_from_a_file(tmp_path):
+@pytest.mark.parametrize("width", [1440, 600])
+@pytest.mark.parametrize("route", RUN_ROUTES)
+def test_the_run_header_starts_a_run_on_this_issuer_when_served(tmp_path, route, width):
     make_run(tmp_path, "run-a", as_of="2024-12-31")
     update_library.update_library(tmp_path)
-    dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
-    assert console == [] and '<table class="history-table">' in dom
-    assert "start-run" not in dom and ">Start a run</a>" not in dom
+    seen = read_served_probe(tmp_path / "library/index.html", route, width, START_RUN_PROBE)
+    # One link, in the header (not in the page body), the one the history page used to draw.
+    assert (seen["inHeader"], seen["inDocument"], seen["inContent"]) == (1, 1, 0)
+    assert seen["text"] == "Start a run on this issuer" and seen["href"] == "/?from=run-a"
+    assert seen["cls"] == "start-run primary-action" and seen["icons"] == 1
+    # It never overlaps the title and the page does not scroll sideways.
+    assert seen["overlapsTitle"] is False and seen["fits"] is True, seen
+    if width == 600:
+        # On a phone it is a full row under the title.
+        assert seen["belowTitle"] is True and abs(seen["linkWidth"] - seen["rowWidth"]) <= 1, seen
+
+
+@pytest.mark.parametrize("route", RUN_ROUTES)
+def test_the_run_header_has_no_start_link_from_a_file(tmp_path, route):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_probe(tmp_path / "library/index.html", route, 1280, START_RUN_PROBE)
+    assert seen["inAnyFormOfTheClass"] is False and seen["inDocument"] == 0 and seen["fits"] is True
+    if route.startswith("#W-Report/history"):
+        # `#content .history-table`: the table is still drawn without the link.
+        assert seen["historyTable"] == 1, seen
+
+
+SCOPE_PROBE = Path(__file__).with_name("browser_probe_header_scope.js").read_text(encoding="utf-8")
+# The run header's height at commit 1f1691c (no start link, no `.issuer-side`) for this file's
+# fixture (`make_run(..., as_of="2024-12-31")`, route #CP-1/head?c=run-a), measured by running
+# this test's probe on `git archive 1f1691c`: 113.140625px at both widths.
+BASE_HEADER_HEIGHT = {1440: 113.14, 1280: 113.14}
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_run_header_is_unchanged_from_a_file_and_as_of_stays_on_one_line(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_probe(tmp_path / "library/index.html", "#CP-1/head?c=run-a", width, SCOPE_PROBE)
+    assert seen["sideCount"] == 0, seen
+    assert seen["scopeHeight"] <= 24, seen
+    assert abs(seen["headerHeight"] - BASE_HEADER_HEIGHT[width]) <= 0.5, seen
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_run_header_keeps_as_of_on_one_line_beside_the_start_link_when_served(tmp_path, width):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_served_probe(
+        tmp_path / "library/index.html", "#CP-1/head?c=run-a", width, SCOPE_PROBE
+    )
+    assert seen["scopeHeight"] <= 24, seen  # one line
+    assert seen["iconGap"] <= 12, seen  # the calendar icon sits against the text
+    assert seen["scopeOverlapsTitle"] is False and seen["linkOverlapsTitle"] is False, seen
+    assert seen["fits"] is True, seen
+    if width == 1440:
+        assert seen["sameRow"] <= 12, seen  # the block and the link share a row
+
+
+def inject_probe(page: Path, script: str, config=None) -> None:
+    """Add `script` to the built page; it reads `window.PROBE` (the `config`) and writes its JSON
+    to <pre id="probe">."""
+    (page.parent / "probe-config.js").write_text(
+        "window.PROBE=" + json.dumps(config or {}) + ";", encoding="utf-8"
+    )
+    (page.parent / "probe.js").write_text(script, encoding="utf-8")
+    tags = '<script src="probe-config.js"></script><script src="probe.js"></script>'
+    page.write_text(page.read_text().replace("</body>", tags + "</body>"))
+
+
+def probe_json(dom: str) -> dict:
+    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+
+
+def read_probe(page: Path, route: str, width: int, script: str, config=None) -> dict:
+    """Load `route` of the built page at `width` from disk with `script` injected; the console
+    must be clean. Returns the JSON the script wrote."""
+    inject_probe(page, script, config)
+    dom, console = visit(page, route, width)
+    assert console == []
+    return probe_json(dom)
+
+
+def read_served_probe(page: Path, route: str, width: int, script: str) -> dict:
+    """The same over a local web server (the library is then "served over http")."""
+    inject_probe(page, script)
+    return probe_json(served_dom(page.parent.parent, route, width))
+
+
+CHROME_PROBE = Path(__file__).with_name("browser_probe_chrome.js").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_path, width):
+    seen = read_probe(report_library(tmp_path), "#CP-1/head?c=run-a", width, CHROME_PROBE)
+    assert seen["width"] == width
+    # The header: the way back to the library, the title at 24px, no run chip or Change run.
+    assert seen["back"] == {"text": "Issuer library", "href": "#W-Library/cases"}
+    assert "Change run" not in seen["headerText"] and seen["headerCodes"] == 0
+    assert seen["h1Size"] == "24px"
+    # The fixture issuer has a ticker (the catalogue's issuer field), no sector, and one run.
+    assert seen["meta"] == "NBG · 1 run"
+    # The tabs are text only, in the same six names and order as before.
+    assert [t["text"] for t in seen["tabs"]] == [
+        "Report",
+        "Overview",
+        "Changes",
+        "Modules",
+        "Forecast",
+        "Evidence",
+    ]
+    assert [t["art"] for t in seen["tabs"]] == [0] * 6
+    # The navigator: 250px (220px at 1280), uppercase 11px group headings, the open entry in blue.
+    assert abs(seen["navWidth"] - (250 if width == 1440 else 220)) <= 1
+    assert (seen["headingTransform"], seen["headingSize"]) == ("uppercase", "11px")
+    assert (seen["itemBackground"], seen["itemWeight"]) == ("rgb(238, 240, 255)", "600")
+    # The strip: the link to every run of the issuer at the right edge; the run code as stored.
+    assert seen["allText"] == "All runs of this issuer" and 0 <= seen["allGap"] <= 30
+    assert seen["codeTransform"] == "none" and seen["codeText"] == "RUN-A"
+    assert seen["fits"] is True and seen["fitsOpen"] is True
+    # The inspector: 340px at 1440, 300px at 1280.
+    assert abs(seen["inspectorWidth"] - (340 if width == 1440 else 300)) <= 1
+
+
+MODULE_PAGE_PROBE = (
+    Path(__file__).with_name("browser_probe_module_page.js").read_text(encoding="utf-8")
+)
+INK = "rgb(11, 16, 48)"  # --text-primary
+NEW_FORMAT_RUN = "synthetic-nbg-new-format-001"
+
+
+def read_module_page(page: Path, route: str, width: int = 1440) -> dict:
+    return read_probe(page, route, width, MODULE_PAGE_PROBE)
+
+
+def synthetic_workspace(workspace: Path, edit=lambda text: text) -> Path:
+    """The synthetic new-format run, built by the real entry points; `edit` may change the CP-2
+    handoff first."""
+    fixtures = ROOT / "apps/issuer-library/fixtures"
+    handoffs = workspace / "handoffs-in"
+    shutil.copytree(fixtures / "synthetic-new-format", handoffs)
+    cp2 = handoffs / "SYNTHETIC-CP-2.md"
+    cp2.write_text(edit(cp2.read_text(encoding="utf-8")), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(
+        "build_synthetic_run", fixtures / "build_synthetic_run.py"
+    )
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    builder.SOURCE_DIR = handoffs
+    builder.build(workspace, builder.DEFAULT_FOLDER)
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "apps/issuer-library/update_library.py"),
+            "--workspace",
+            str(workspace),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return workspace / "library/index.html"
+
+
+def with_chart_and_event(text: str) -> str:
+    """The synthetic CP-2 handoff with one placed chart and dated events, before its last part."""
+    marker = "\n## Next module"
+    assert marker in text
+    return text.replace(marker, MATURITIES + EVENTS + marker, 1)
+
+
+def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
+    seen = read_module_page(nine_part_library(tmp_path), "#CP-1/head?c=run-a")
+    delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name
+    # Head: the group is the eyebrow with the name, tools kept, the Handoff link quiet.
+    head = seen["head"]
+    assert head["h2"] == "Financial foundation"
+    assert (head["size"], head["transform"]) == ("12px", "uppercase")
+    assert "Financial performance" in head["text"] and "has-bottom-line" in head["cls"]
+    assert head["download"]["href"].endswith("CP-1.md") and head["download"]["icon"] == 1
+    assert head["download"]["border"] == "0px"
+    assert head["toolsRight"] <= head["headRight"]
+    # Bottom line: the quoted text is the headline, no navy band.
+    bottom = seen["bottom"]
+    assert bottom["firstText"] == "Financial foundation bottom line."
+    assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
+    assert bottom["bg"] in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)")
+    for word in ("Confidence", "Main limitation", "Quoted from the handoff", "View source"):
+        assert word in bottom["text"], word
+    for line in bottom["lines"]:
+        assert (line["size"], line["line"], line["color"], line["label"]) == (
+            "13px",
+            "18px",
+            "rgb(58, 64, 86)",
+            "600",
+        )
+    assert bottom["badgeClass"] == "badge badge-gray" and bottom["linkBorder"] == "0px"
+    # Prose, charts, folds.
+    assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
+    assert seen["prose"]["width"] <= 660
+    assert seen["cards"] and all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
+    folds = {f["id"]: f for f in seen["folds"]}
+    assert set(folds) == {"reference", "calculations", "audit"}
+    for fold in folds.values():
+        assert (fold["display"], fold["radius"]) == ("flex", "10px"), fold
+    assert folds["reference"]["children"] == ["Statements and registers", "3 tables · 8 rows"]
+    assert folds["calculations"]["children"] == ["Calculations", "11 words"]
+    assert folds["audit"]["children"][0] == "Evidence & audit"
+    assert folds["audit"]["text"].endswith("14 sections · unchanged from the handoff")
+    # The finding: one item, no pill, the same Basis control.
+    [finding] = seen["findings"]
+    assert finding["pills"] == 0
+    for word in (
+        "Interest was paid in cash.",
+        "Creditor impact",
+        "K, page:123 says “Cash paid during the period”.",
+        "Confidence High",
+    ):
+        assert word in finding["text"], word
+    # The Basis control carries the same data-* attributes as before the redesign (commit 4b88927).
+    assert finding["basis"] == [
+        {
+            "paragraph": (f"run-a/deliveries/{delivery}/CP-1.md:16"),
+            "basis": "[]",
+        }
+    ]
+    lead = seen["finding0"]
+    assert (lead["size"], lead["line"], lead["weight"]) == ("15px", "24px", "600")
+    assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 23, 229)", "0px")
+    assert (lead["impact"]["size"], lead["impact"]["line"]) == ("14px", "21px")
+    # Limits: grey dot, 14px/21px secondary.
+    limit = seen["limit"]
+    assert (limit["size"], limit["line"], limit["color"], limit["dotWidth"]) == (
+        "14px",
+        "21px",
+        "rgb(58, 64, 86)",
+        "6px",
+    )
+    assert seen["fits"] is True
+
+
+def test_a_module_page_with_no_bottom_line_draws_its_name_as_the_headline(tmp_path):
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        modules=("CP-0", "CP-1", "CP-8"),
+        cp8=(
+            "# CP-8 handoff\n\n## Request\nChanges.\n\n"
+            "## Findings\n\nA note.\n\n## Sources\n- fixture\n"
+        ),
+    )
+    assert run.is_dir()
+    update_library.update_library(tmp_path)
+    seen = read_module_page(tmp_path / "library/index.html", "#CP-8/head?c=run-a")
+    head = seen["head"]
+    assert "bottom" not in seen and "has-bottom-line" not in head["cls"]
+    assert (head["size"], head["transform"]) == ("22px", "none")
+    assert "Decision and review" in head["text"] and head["h2"] == "Changes since the last run"
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(tmp_path, width):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    seen = read_module_page(page, f"#CP-2?c={NEW_FORMAT_RUN}", width)
+    head = seen["head"]
+    assert (head["h2"], head["size"], head["transform"]) == (
+        "Fundamental credit",
+        "12px",
+        "uppercase",
+    )
+    bottom = seen["bottom"]
+    [hidden] = [h for h in bottom["headings"] if h["text"] == "Bottom line"]
+    assert "sr-only" in hidden["cls"] and hidden["srOnly"] is True
+    assert bottom["firstText"].startswith("Creditors are exposed to refinancing risk")
+    assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
+    assert seen["keyItem"]["size"] == "15px"
+    assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 23, 229)")
+    assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
+    assert seen["prose"]["width"] <= 660
+    assert seen["cards"], "the new-format module page draws at least one chart card"
+    assert all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
+    assert seen["fits"] is True
+    # Limitations: grey dot list.
+    assert (seen["limit"]["dotWidth"], seen["limit"]["size"]) == ("6px", "14px")
+    # The inspector opened from a figure: the figure leads, large, before the context line.
+    fig = seen["fromFigure"]
+    assert fig["figure"]["size"] == "22px" and fig["figure"]["before"] is True
+    assert fig["figure"]["text"] == "USD 1,390 million" and fig["h2"]["srOnly"] is True
+    assert fig["card"] == "10px" and fig["fits"] is True
+    assert fig["context"]["size"] == "13px" and fig["context"]["color"] == "rgb(58, 64, 86)"
+    for literal in (
+        "Back to analysis",
+        "Esc",
+        "Evidence inspector",
+        "Fundamental credit · Line 17",
+        "Bottom line",
+        "Not classified",
+        "Paragraph",
+        (
+            "Creditors are exposed to refinancing risk rather than to weak earnings: "
+            "net debt of USD 1,390 million is 4.2x earnings, and the next maturities "
+            "fall inside two years."
+        ),
+        "Figure",
+        "USD 1,390 million",
+        "Basis",
+        "NBG_2025-03-31_annual-report.pdf, page 41",
+        "Calculation K1",
+        "Net debt to EBITDA",
+        "Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331",
+        "4.2x",
+        "Other citations",
+        "Citation gap · NBG_2025-03-31_annual-report.pdf p.41 · not in inventory",
+        "the Basis file is not in the Source readiness inventory",
+        "Source location",
+        "Download retained handoff",
+        "Fundamental credit handoff",
+        "Northbridge Synthetic Group · SYNTHETIC-NBG-NEW-FORMAT-001 · saved output",
+        "Reading boundary",
+        "The library does not authenticate the underlying PDFs.",
+    ):
+        assert literal in fig["text"], literal
+    assert len(fig["links"]) == 1 and fig["links"][0].endswith("CP-2.md")
+    # Opened from a Basis control: no figure; the eyebrow is the drawn "Evidence inspector".
+    chip = seen["fromChip"]
+    assert chip["hasFigure"] is False and chip["h2"]["srOnly"] is False
+    assert chip["card"] == "10px" and chip["fits"] is True
+    for literal in (
+        "Back to analysis",
+        "Esc",
+        "Evidence inspector",
+        "Fundamental credit · Line 26",
+        "Key findings",
+        (
+            "Liquidity support rests on an undrawn revolver that steps down, "
+            "which narrows the cushion over time."
+        ),
+        "NBG_2024-12-31_Q4-results.pdf, page 7",
+        "Citation gap · NBG_2024-12-31_Q4-results.pdf p.7 · not in inventory",
+        "Source location",
+        "Download retained handoff",
+        "Reading boundary",
+    ):
+        assert literal in chip["text"], literal
+
+
+def test_a_two_paragraph_bottom_line_draws_both_in_the_headline_style(tmp_path):
+    second = "A second paragraph: the covenant package is untested.\n"
+
+    def edit(text: str) -> str:
+        marker = "\n### Key findings"
+        assert marker in text
+        return text.replace(marker, "\n" + second + marker, 1)
+
+    seen = read_module_page(synthetic_workspace(tmp_path, edit), f"#CP-2?c={NEW_FORMAT_RUN}")
+    paragraphs = seen["bottom"]["ps"]
+    assert len(paragraphs) == 2 and paragraphs[1]["text"] == second.strip()
+    assert [p["size"] for p in paragraphs] == ["22px", "22px"]
+
+
+NARROW_HEADER_PROBE = """(async () => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
+  await sleep(200);
+  const header = document.querySelector('header.issuer');
+  const h1 = header.querySelector('h1'), scope = header.querySelector('.scope');
+  const cs = getComputedStyle(header);
+  const seen = {padL: cs.paddingLeft, padT: cs.paddingTop,
+    scopeBelowTitle: scope.getBoundingClientRect().top >= h1.getBoundingClientRect().bottom - 1};
+  const out = document.createElement('pre'); out.id = 'probe';
+  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
+})();"""
+
+
+def test_the_run_header_keeps_the_phone_layout_at_600px(tmp_path):
+    seen = read_probe(report_library(tmp_path), "#CP-1/head?c=run-a", 600, NARROW_HEADER_PROBE)
+    assert (seen["padL"], seen["padT"], seen["scopeBelowTitle"]) == ("15px", "12px", True)
+
+
+INSPECTOR_PADDING_PROBE = """(async () => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 200 && !document.querySelector('#content .basis-link'); i++) await sleep(50);
+  document.querySelector('#content .basis-link:not([data-figure])').click();
+  await sleep(300);
+  const body = document.querySelector('.inspector-body');
+  const ctx = body.querySelector('.evidence-context');
+  const seen = {padding: getComputedStyle(body).padding,
+    contextBottom: getComputedStyle(ctx).marginBottom};
+  const out = document.createElement('pre'); out.id = 'probe';
+  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
+})();"""
+
+
+@pytest.mark.parametrize(
+    ("width", "padding", "context_bottom"),
+    [(1000, "24px", "14px"), (600, "18px 15px", None)],
+)
+def test_the_inspector_keeps_its_small_screen_padding(tmp_path, width, padding, context_bottom):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    seen = read_probe(page, f"#CP-2?c={NEW_FORMAT_RUN}", width, INSPECTOR_PADDING_PROBE)
+    assert seen["padding"] == padding
+    if context_bottom:
+        assert seen["contextBottom"] == context_bottom
+
+
+FIELD_CARD_PROBE = (
+    Path(__file__).with_name("browser_probe_field_card.js").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize(
+    ("width", "route"),
+    [(1000, "#W-Overview?c={}"), (760, "#W-Overview?c={}"), (1000, "#CP-2?c={}")],
+)
+def test_the_inspector_field_card_keeps_its_small_screen_look(tmp_path, width, route):
+    """At 1050px and below the inspector's fields are rows as before the redesign (padding 12px 0,
+    no card border, a 160px label column); the card is for wider windows."""
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    seen = read_probe(page, route.format(NEW_FORMAT_RUN), width, FIELD_CARD_PROBE)
+    assert (seen["padding"], seen["borderLeft"], seen["columns"]) == ("12px 0px", "0px", "160px")
+    # The value column is what is left of the body after the 160px label column and the 18px gap:
+    # the card adds no padding or border of its own (measured at fe3dd7d: 54px and 474px at 1000px).
+    assert abs(seen["valueWidth"] - (seen["bodyContent"] - 160 - 18)) <= 1, seen
+
+
+OVERVIEW_STYLE_PROBE = (
+    Path(__file__).with_name("browser_probe_overview_style.js").read_text(encoding="utf-8")
+)
+
+
+def test_the_overview_draws_figure_links_and_basis_controls_like_the_module_page(tmp_path):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    where = {
+        "module": ("CP-2", "#key-findings"),
+        "overview": ("W-Overview", "#overview-lead .reading-findings"),
+    }
+    read = {
+        name: read_probe(
+            page,
+            f"#{route}?c={NEW_FORMAT_RUN}",
+            1440,
+            OVERVIEW_STYLE_PROBE,
+            {"figure": f"{scope} .figure", "basis": f"{scope} .basis-link:not(.figure)"},
+        )
+        for name, (route, scope) in where.items()
+    }
+    for name, seen in read.items():
+        assert "Red Hat Mono" in seen["figure"]["family"], (name, seen)
+        assert seen["basis"]["size"] == "13px", (name, seen)
+    assert read["overview"] == read["module"]
+
+
+EDGES_PROBE = Path(__file__).with_name("browser_probe_edges.js").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        "#W-Report/history?c=run-a",
+        "#W-Changes/changes?c=run-a",
+        "#W-Forecast/none?c=run-a",
+        "#W-Evidence/sources?c=run-a",
+    ],
+)
+def test_the_body_of_a_run_tools_page_shares_both_edges_with_the_header(tmp_path, route):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_probe(tmp_path / "library/index.html", route, 1440, EDGES_PROBE)
+    assert seen["fits"] is True
+    for part in ("content", "head", "browse"):
+        if part in seen:
+            assert abs(seen[part]["left"] - seen["h1Left"]) <= 1, (part, seen)
+    for part in ("content", "head"):
+        if part in seen:
+            assert abs(seen[part]["right"] - seen["headerRight"]) <= 1, (part, seen)
+    # The Browse modules button is as wide as its label: its padding is the 28px, both sides.
+    assert (seen["browse"]["paddingLeft"], seen["browse"]["paddingRight"]) == ("28px", "28px"), seen
+    assert "content" in seen, seen
+
+
+PADDING_PROBE = (
+    Path(__file__).with_name("browser_probe_content_padding.js").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize(
+    ("route", "side"), [("#W-Library/cases", "18px"), ("#CP-OS/activity", "18px")]
+)
+def test_the_library_home_and_run_activity_keep_their_content_padding(tmp_path, route, side):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_probe(tmp_path / "library/index.html", route, 1440, PADDING_PROBE)
+    assert (seen["left"], seen["right"]) == (side, side)
+
+
+CHIP_OVERLAP_PROBE = (
+    Path(__file__).with_name("browser_probe_chip_overlap.js").read_text(encoding="utf-8")
+)
+
+
+def test_chart_periods_in_the_overview_aside_do_not_draw_their_labels_over_each_other(tmp_path):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    seen = read_probe(page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1440, CHIP_OVERLAP_PROBE)
+    assert seen["chips"] >= 2, "the fixture chart draws a citation label per period"
+    assert seen["crossing"] == [] and seen["fits"] is True, seen
+    # The three periods no longer fit the 400px aside, so the chart scrolls in its own box.
+    assert seen["chartScrolls"] is True and seen["chartInsideAside"] is True, seen
+
+
+OVERVIEW_LAYOUT_PROBE = (
+    Path(__file__).with_name("browser_probe_overview_layout.js").read_text(encoding="utf-8")
+)
+OVERVIEW_ORDER = [
+    "overview-lead",
+    "overview-bottom-lines",
+    "overview-limitations",
+    "overview-charts",
+    "overview-dates",
+]
+# What the Overview drew for the synthetic new-format run before the two-column layout (BASE
+# 60233d2): the text of each Bottom line by module entry and of each Nearest dates row, in order.
+BASE_NEW_FORMAT_ENTRIES = [
+    (
+        "Source readinessThe two documents read are enough for a credit snapshot, "
+        "but no covenant package was read, so creditor protections cannot be "
+        "confirmed from the file set."
+    ),
+    (
+        "Financial foundationThe canonical data set holds the debt, cash, earnings "
+        "and maturity figures the later modules rely on, each tied to a page of the "
+        "two documents read."
+    ),
+    (
+        "Business & governanceNorthbridge is a single-segment services group whose "
+        "creditors depend on one operating company, so debt service rests on that "
+        "company's cash generation. Basis"
+    ),
+    (
+        "Liquidity Not assessableNot assessable: the documents read give no monthly "
+        "cash forecast and no revolver drawing terms, so cash cover of the "
+        "maturities cannot be tested."
+    ),
+]
+BASE_NEW_FORMAT_DATES = [
+    "2025-03-31Annual report reference dateBusiness & governance",
+    "2025-03-31Synthetic noteFundamental credit",
+    "2025-05-15First quarter resultsBusiness & governance",
+    "2025-06-30Revolver commitment step-downBusiness & governance",
+    "2025-06Synthetic callFundamental credit",
+]
+
+
+def read_overview(page: Path, route: str, width: int) -> dict:
+    return read_probe(page, route, width, OVERVIEW_LAYOUT_PROBE)
+
+
+@pytest.mark.parametrize(("width", "stacked"), [(1440, False), (1280, True), (1200, True)])
+def test_the_new_format_overview_takes_the_two_column_layout(tmp_path, width, stacked):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    seen = read_overview(page, f"#W-Overview?c={NEW_FORMAT_RUN}", width)
+    assert seen["fits"] is True
+    assert seen["ids"] == OVERVIEW_ORDER
+    assert seen["inMain"] == OVERVIEW_ORDER[:3] and seen["inAside"] == OVERVIEW_ORDER[3:]
+    assert seen["asideLabel"] == "Charts and dates"
+    main, aside = seen["mainBox"], seen["asideBox"]
+    if width == 1440:
+        assert abs(aside["width"] - 400) <= 1 and aside["left"] >= main["right"]
+        # The page heading starts where the grid does.
+        assert abs(seen["pageH2Left"] - main["left"]) <= 1, (seen["pageH2Left"], main["left"])
+    if stacked:
+        assert aside["top"] >= main["bottom"], "the aside is under the main column"
+    # The lead: the eyebrow is Credit view with the writing module, the passage the headline.
+    lead = seen["lead"]
+    assert lead["h2"] == {"text": "Credit view", "size": "12px", "transform": "uppercase"}
+    assert lead["h3Class"] == "sr-only" and lead["firstSize"] == "22px"
+    assert lead["firstText"].startswith("Creditors are exposed to refinancing risk")
+    assert "Written by Fundamental credit" in lead["text"]
+    # Bottom line by module: a row (module left, text right), the text as BASE drew it.
+    assert seen["entryColumns"].startswith("210px")
+    assert seen["entries"] == BASE_NEW_FORMAT_ENTRIES
+    # Nearest dates: the same table, header cells kept but hidden, one grid row per date.
+    dates = seen["dates"]
+    assert dates["caption"] is True and dates["cols"] == 3 and dates["theadHeight"] <= 1
+    assert dates["rowDisplay"] == "grid" and dates["rows"] == BASE_NEW_FORMAT_DATES
+    # Key charts: the link to the chart index on this run's Forecast page; cards fit the column.
+    assert seen["charts"]["href"].startswith("#W-Forecast")
+    assert seen["charts"]["cards"]
+    if width == 1440:
+        assert all(w <= 400 for w in seen["charts"]["cards"]), seen["charts"]["cards"]
+
+
+def test_the_earlier_format_overview_has_its_sentence_and_no_chart_index_link(tmp_path):
+    make_run(tmp_path, "run-a", as_of="2025-03-31", cp1_extra=EVENTS)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    seen = read_overview(page, "#W-Overview?c=run-a", 1440)
+    assert seen["fits"] is True and seen["hasMain"] and seen["hasAside"]
+    assert seen["ids"] == [*OVERVIEW_ORDER[:3], "overview-dates"]
+    assert EARLIER_LEAD in seen["lead"]["text"] and seen["lead"]["h2"]["text"] == "Credit view"
+    assert seen["lead"]["h2"]["transform"] == "uppercase"
+    assert seen["chartIndexLinks"] == 0 and "charts" not in seen
+    assert abs(seen["asideBox"]["width"] - 400) <= 1
+    assert seen["dates"]["rowDisplay"] == "grid" and seen["dates"]["theadHeight"] <= 1
 
 
 FORECAST_CASES_PROBE = Path(__file__).with_name("browser_probe_forecast_cases.js")
@@ -1403,3 +1995,146 @@ def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):
         check=True,
     )
     assert screenshot.stat().st_size > 0
+
+
+CHART_INDEX_LINK_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  for (let i = 0; i < 200 && !document.querySelector('.chart-index-link'); i++) await sleep(50);
+  const content = document.getElementById('content');
+  const link = document.querySelector('.chart-index-link');
+  const tabOf = () => [...document.querySelectorAll('.workspace-tabs a')]
+    .find(a => a.textContent.trim() === 'Forecast')?.getAttribute('href');
+  const seen = {href: link.getAttribute('href'), tabBefore: tabOf()};
+  link.click();
+  for (let i = 0; i < 200 && !document.getElementById('run-charts'); i++) await sleep(50);
+  await sleep(400);
+  const index = document.getElementById('run-charts');
+  seen.hash = location.hash;
+  seen.heading = document.getElementById('section-nav').textContent;
+  seen.indexShown = Boolean(index);
+  seen.offset = index
+    ? index.getBoundingClientRect().top - content.getBoundingClientRect().top : null;
+  seen.atEnd = content.scrollTop + content.clientHeight >= content.scrollHeight - 1;
+  seen.scrollTop = content.scrollTop;
+  seen.tabAfter = tabOf();
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_overviews_chart_index_link_lands_on_the_chart_index(tmp_path):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    route = f"#W-Overview?c={NEW_FORMAT_RUN}"
+    seen = read_probe(page, route, 1280, CHART_INDEX_LINK_PROBE)
+    assert seen["href"].startswith("#W-Forecast") and f"c={NEW_FORMAT_RUN}" in seen["href"]
+    assert seen["hash"].startswith("#W-Forecast") and "Forecast" in seen["heading"]
+    assert seen["indexShown"] is True
+    # The index is drawn after the whole Forecast page: it is at the top of the canvas, or the
+    # canvas is scrolled as far as it goes.
+    assert -1 <= seen["offset"] <= 20 or seen["atEnd"], seen
+    assert seen["scrollTop"] > 0, seen
+    # The Forecast tab keeps the link it had.
+    assert seen["tabBefore"] and seen["tabAfter"] == seen["tabBefore"], seen
+
+
+def two_model_workspace(workspace: Path) -> Path:
+    """The synthetic new-format run (with its Chart index link) listing two forecast models."""
+    page = synthetic_workspace(workspace, with_chart_and_event)
+    data_js = page.parent / "data.js"
+    prefix = "window.CREDIT_OS_DATA="
+    data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
+    run = data["workspace"]["runs"][NEW_FORMAT_RUN]
+    data["workspace"]["models"] = [
+        {
+            "id": model_id,
+            "issuerKey": run["issuerKey"],
+            "mode": "accepted",
+            "qualification": "unrun",
+            "runId": None,
+            "runFolder": NEW_FORMAT_RUN,
+            "scope": None,
+            "inputContract": None,
+            "revisionNote": None,
+            "previous": None,
+            "href": f"../models/{model_id}.html?embedded=1",
+            "download": f"../models/{model_id}.html?download=1",
+            "files": [],
+            "sources": [],
+            "register": None,
+            "cashflow": None,
+        }
+        for model_id in ("model-a", "model-b")
+    ]
+    data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
+    return page
+
+
+CHART_INDEX_TWO_MODELS_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const run = %s;
+  const content = document.getElementById('content');
+  const tab = () => [...document.querySelectorAll('.workspace-tabs a')]
+    .find(a => a.textContent.trim() === 'Forecast')?.getAttribute('href');
+  const to = async hash => { location.hash = hash; await sleep(500); };
+  const state = () => {
+    const index = document.getElementById('run-charts');
+    return {
+      hash: location.hash,
+      model: document.getElementById('model-select')?.value ?? null,
+      tab: tab(),
+      scrollTop: content.scrollTop,
+      offset: index
+        ? index.getBoundingClientRect().top - content.getBoundingClientRect().top : null,
+      atEnd: content.scrollTop + content.clientHeight >= content.scrollHeight - 1,
+    };
+  };
+  const seen = {};
+  await to('#W-Forecast?c=' + run);
+  const options = [...document.querySelectorAll('#model-select option')].map(o => o.value);
+  seen.options = options;
+  const second = options[1];
+  await to('#W-Forecast/' + second + '?c=' + run);
+  seen.remembered = second;
+  await to('#W-Overview?c=' + run);
+  seen.tabBefore = tab();
+  document.querySelector('.chart-index-link').click();
+  await sleep(600);
+  seen.afterLink = state();
+  // R-2: back to the top, away to the Forecast tab, then to the index route again.
+  content.scrollTop = 0;
+  await to(tab().slice(0));
+  seen.onTab = state();
+  await to(seen.afterLink.hash);
+  seen.again = state();
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_chart_index_route_keeps_the_chosen_forecast_model_and_scrolls_on_every_visit(tmp_path):
+    page = two_model_workspace(tmp_path)
+    probe = CHART_INDEX_TWO_MODELS_PROBE % json.dumps(NEW_FORMAT_RUN)
+    seen = read_probe(page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1280, probe)
+    assert len(seen["options"]) == 2 and seen["remembered"] != seen["options"][0], seen
+    after = seen["afterLink"]
+    # R-1: the link draws the model the reader chose, lands on the index and leaves the tab alone.
+    assert after["hash"].startswith("#W-Forecast/run-charts"), seen
+    assert after["model"] == seen["remembered"], seen
+    assert after["tab"] == seen["tabBefore"], seen
+    assert seen["tabBefore"].startswith("#W-Forecast/" + seen["remembered"]), seen
+    assert -1 <= after["offset"] <= 20 or after["atEnd"], seen
+    assert after["scrollTop"] > 0, seen
+    # R-2: back to the same route from another Forecast route scrolls to the index again.
+    assert seen["onTab"]["scrollTop"] == 0 and seen["onTab"]["hash"] == seen["tabBefore"], seen
+    again = seen["again"]
+    assert again["hash"] == after["hash"] and again["model"] == seen["remembered"], seen
+    assert -1 <= again["offset"] <= 20 or again["atEnd"], seen
+    assert again["scrollTop"] > 0, seen

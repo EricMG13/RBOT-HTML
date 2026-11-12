@@ -407,7 +407,7 @@ const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','
 const HANDOFF_TEXT=['handoff-text','Full handoff text'];
 // A leading method code (R36) is dropped from a displayed heading or caption.
 const METHOD_CODE=/^([A-Z][A-Z0-9]*\.[A-Z]?\d+|[a-z0-9]+(\.[a-z0-9_]+)+)\s+—\s+/;
-const headingView=(heading,tag)=>`<${tag}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
+const headingView=(heading,tag,cls='')=>`<${tag}${cls?` class="${cls}"`:''}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
 // The sections the store placed here that have something to draw, in handoff order.
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
@@ -484,13 +484,16 @@ function reportHead(id) {
   const acceptance=runAcceptanceText(context);
   const declared=declaredBadge(out.state.declared);
   const notAssessable=isNewFormat(out.sections)&&blocked(out.sections,out.state)?badge('gray','Not assessable'):'';
-  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  const group=groups.find(([,items])=>items.some(item=>item[0]===module))?.[0];
+  // A bottom line: the earlier format's Reader summary or call; the new format's Bottom line passage. With one, the name is the eyebrow and the bottom line the headline.
+  const hasBottom=isNewFormat(out.sections)?Boolean(readerPassages(out.sections).bottom):Boolean(out.summary||out.call);
+  return `<div class="module-head${hasBottom?' has-bottom-line':''}" id="head"><div class="head-title">${group?`<span class="head-group">${esc(group)}</span>`:''}<h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
   if(!quoted)return '';
   const facts=summary?`<dl><span class="row"><dt>Confidence</dt><dd>${esc(summary.confidence)}</dd></span><span class="row"><dt>Main limitation</dt><dd>${rich(summary.limitation)}</dd></span></dl>`:'';
-  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${handoffLabel(source)}, line ${quoted.line}`)}">View source</button></div></div>`;
+  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge badge-gray">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${handoffLabel(source)}, line ${quoted.line}`)}">View source</button></div></div>`;
 }
 // One chip-dot legend per set of charts, under the last card.
 // A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
@@ -506,7 +509,7 @@ function reportNumbers(id) {
 // Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
 const findingRows=id=>data[id].summary?.findings??[];
 function findingArticle(id,row) {
-  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</aside></article>`;
+  return `<article class="finding"><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p><p class="finding-line"><span class="conf">Confidence ${esc(plain(row.confidence))}</span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</p></article>`;
 }
 function reportFindings(id) {
   const articles=findingRows(id).map(row=>findingArticle(id,row));
@@ -528,16 +531,19 @@ function reportAnalysis(id) {
   return sections.length?`<section class="part" id="analysis"><h3>Analysis</h3>${readingSections(id,sections)}</section>`:'';
 }
 // A closed part: nothing is cut, it opens to the whole sections (a hash route or a chip into it opens it, screen.js).
-const fold=(anchor,summary,body)=>`<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}${esc(summary)}</summary>${body}</details>`;
+// The summary is a row: its title, then a detail (it may be empty) drawn at the right.
+function fold(anchor,title,detail,body) {
+  return `<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}<span class="fold-title">${esc(title)}</span>${detail?` <span class="fold-detail">${esc(detail)}</span>`:''}</summary>${body}</details>`;
+}
 function reportReference(id) {
   const sections=drawn(id,'reference');
   if(!sections.length)return '';
   const tables=sections.flatMap(section=>section.blocks).filter(block=>block.type==='table');
-  return fold('reference',`Statements and registers · ${plural(tables.length,'table')} · ${plural(tables.reduce((n,block)=>n+block.rows.length,0),'row')}`,readingSections(id,sections));
+  return fold('reference','Statements and registers',`${plural(tables.length,'table')} · ${plural(tables.reduce((n,block)=>n+block.rows.length,0),'row')}`,readingSections(id,sections));
 }
 function reportCalculations(id) {
   const sections=drawn(id,'calculations');
-  return sections.length?fold('calculations',`Calculations · ${data[id].words.calculations} words`,readingSections(id,sections)):'';
+  return sections.length?fold('calculations','Calculations',`${data[id].words.calculations} words`,readingSections(id,sections)):'';
 }
 function reportLimits(id) {
   const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
@@ -549,7 +555,7 @@ function reportLimits(id) {
 function reportAudit(id) {
   const out=data[id],kept=['audit','consumed'];
   const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])));
-  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
   }).join('')}</ul></details>`;
@@ -561,7 +567,7 @@ function reportParts(id) {
   const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
   const {view,reference:referenceWords,calculations:calculationWords}=out.words;
   const parts=[['head',reportHead(id)],['bottom-line',reportBand(id)]];
-  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
+  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text','Full handoff text',`${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
   else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations],['maps',reportMaps(id)],['timeline',reportTimeline(id)]);
   parts.push(['audit',reportAudit(id)]);
   return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
@@ -569,6 +575,8 @@ function reportParts(id) {
 // ---- The module page of a new-format handoff (ruling H1, H4): the reader passages first, each under its own heading and drawn by the one paragraph
 // renderer (passageHtml); then the module's charts, maps and timeline; then every other section of the handoff, unchanged, in handoff order.
 const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrary-evidence',limits:'limitations'};
+// The reading style each passage is drawn in (screen.css, `.reading-*`): the headline, the findings list, prose, the limitations list.
+const PASSAGE_STYLES={bottom:'headline',key:'findings',contrary:'prose',limits:'limits'};
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
 const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
@@ -589,9 +597,10 @@ function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections);
   const parts=[['head','Module',reportHead(id)]];
   const findings=out.sections.find(section=>section.level===2&&section.heading==='Findings');
-  let heading=findings&&!findings.blocks.length?`<h3>${rich(findings.heading)}</h3>`:'';
+  // The bottom line is the page's headline: its heading, and the Findings heading above it, stay in the page for headings and screen readers (sr-only).
+  let heading=findings&&!findings.blocks.length?`<h3${passages.bottom?' class="sr-only"':''}>${rich(findings.heading)}</h3>`:'';
   for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key]) {
-    parts.push([anchor,passages[key].heading,`<section class="part" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]))}${passageHtml(passages[key],id)}</section>`]);
+    parts.push([anchor,passages[key].heading,`<section class="part reading-${PASSAGE_STYLES[key]}" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]),key==='bottom'?'sr-only':'')}${passageHtml(passages[key],id)}</section>`]);
     heading='';
   }
   const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
@@ -806,6 +815,28 @@ const EARLIER_METHODS_BADGE='<span class="badge badge-gray earlier-methods">Earl
 const earlierMethods=run=>(run.methodChanges||[]).length>0;
 const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
 const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
+// The header's meta line under the issuer title: the ticker and sector the catalogue holds for this run and the number of the issuer's runs it holds (the runs
+// the store joins to the same issuer, this one included). A part the catalogue lacks is left out; with none the line is not drawn.
+function issuerMeta(context) {
+  const ctx=contexts[context],row=catalogueRuns().find(run=>run.id===ctx?.folder);
+  if(!row)return '';
+  return [row.issuer,row.sector,plural(issuerRuns(context).length,'run')].filter(Boolean).join(' · ');
+}
+// The runs of the context's issuer as Report history lists them, latest as-of date first: the count in the meta line, the rows of the history and the run a new run starts from all read this.
+function issuerRuns(context) {
+  const ctx=contexts[context];
+  return ctx?historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey))):[];
+}
+// The start page opened on the issuer's latest run (decision of PR 52); '' when the issuer has no run in the library.
+function startRunHref(context) {
+  const latest=issuerRuns(context)[0];
+  return latest?'/?from='+encodeURIComponent(latest.folder):'';
+}
+// "Start a run on this issuer", for the run header on every run tab. Only a library served over http has the start page.
+function startRunLink(context) {
+  const href=startRunHref(context);
+  return servedOverHttp()&&href?`<a class="start-run primary-action" href="${esc(href)}">${icon('plus')}Start a run on this issuer</a>`:'';
+}
 // "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
 function runLabel(module,context) {
   const ctx=contexts[context];
@@ -817,8 +848,7 @@ function runLabel(module,context) {
 // ---- Report history (decision 4): one row per run of the issuer, latest as-of date first. Each row opens that run's Overview.
 const SOURCE_NOT_RECORDED='Not recorded';
 function historyView(context) {
-  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
-  const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey)));
+  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key])),runs=issuerRuns(context);
   const row=run=>{
     const key=keyOf.get(run),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}, ${run.run}`;
     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
@@ -826,8 +856,7 @@ function historyView(context) {
     const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
     return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
   };
-  const first=runs[0],start=servedOverHttp()&&first?`<p><a class="start-run" href="${esc('/?from='+encodeURIComponent(first.folder))}">Start a run</a></p>`:'';
-  return `${start}<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
 }
 function forecastSections(context) {
   const models=runModels(context);
@@ -1207,9 +1236,9 @@ const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.
 const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
 function overviewLead(entries,earlier) {
   const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
-  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
-  const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}`:'';
-  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}${key}</section>`};
+  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
+  const key=lead.passages.key?`<div class="reading-findings"><h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}</div>`:'';
+  return {lead,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="lead-source kicker">Written by ${moduleLink(lead.module)}</p><div class="reading-headline"><h3 class="sr-only">Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}</div>${key}</section>`};
 }
 function overviewBottomLines(entries,lead) {
   const rows=entries.filter(entry=>entry!==lead).map(entry=>{
@@ -1229,10 +1258,10 @@ function overviewLimitations(entries) {
     const ref=`${entry.id}:${block.line}`,{html}=paragraphView(block.text,ref,{chips:bodyContext(entry.id,false).chips(ref)});
     items.push(`<li class="limit-item">${html}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
   }
-  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<ul class="passage-list">${items.join('')}</ul>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
+  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<div class="reading-limits"><ul class="passage-list">${items.join('')}</ul></div>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
 }
 // The drawn charts and maps of the modules the visuals catalogue places on Overview (PLACEMENT); a blocked module draws none. Lanes are the dates section.
-function overviewCharts(entries) {
+function overviewCharts(entries,context) {
   let noted=false;
   const html=entries.filter(entry=>entry.out).map(({id,out})=>{
     if(!placed('chart','Overview',out))return '';
@@ -1241,7 +1270,9 @@ function overviewCharts(entries) {
     noted=noted||lastPeriodChart(charts)>=0;
     return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
   }).filter(html=>/class="(panel-card|map-card)"/.test(html));
-  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${html.join('')}</section>`:'';
+  // The link goes to the chart index on this run's Forecast page: the index is a section of that page, reached by its route (it has no route of its own).
+  const index=`<a class="chart-index-link" href="${routeHref('W-Forecast','run-charts',null,context)}">Chart index</a>`;
+  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${index}${html.join('')}</section>`:'';
 }
 // Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.
 // A period-dated item (month, quarter or year) is sorted by its period end and shown with that date text as written. The sentence when none is drawn names its cause.
@@ -1264,7 +1295,8 @@ function runReport(context) {
   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
   if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
   const {lead,html}=overviewLead(entries,earlierFormat(contexts[context]));
-  return html+overviewBottomLines(entries,lead)+overviewLimitations(entries)+overviewCharts(entries)+overviewDates(context);
+  // Two columns at wide windows (screen.css): the reading in the main column, the charts and dates in the aside; the document order is the part order.
+  return `<div class="overview-main">${html+overviewBottomLines(entries,lead)+overviewLimitations(entries)}</div><aside class="overview-aside" aria-label="Charts and dates">${overviewCharts(entries,context)+overviewDates(context)}</aside>`;
 }
 // Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
 // library does not show and the build's issues are on the library page.
@@ -1389,13 +1421,16 @@ function updateWorkspaceChrome(module) {
   const ctx=contexts[current.context],isHome=!ctx||appDestinations.has(module);
   const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first),period=current.output?data[current.output].period:ctx?.period;
   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
-  document.querySelector('.issuer').innerHTML=`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${isHome?'':`<div class="issuer-meta"><span class="code">${esc(ctx.run)}</span><a href="#W-Library/cases">Change run</a></div>`}</div>${isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`}`;
+  const header=document.querySelector('.issuer'),meta=isHome?'':issuerMeta(current.context);
+  header.classList.toggle('run-header',!isHome);
+  const startRun=isHome?'':startRunLink(current.context),scope=isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`;
+  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row${startRun?' has-start-link':''}"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}</div>${startRun?`<div class="issuer-side">${scope}${startRun}</div>`:scope}</div>`;
   document.querySelector('.workspace-tabs').hidden=isHome;
   $('context-bar').hidden=isHome||module==='W-Report';
   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
-  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],['W-Changes','Changes','git-compare'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
+  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report'],['W-Overview','Overview'],['W-Changes','Changes'],[moduleId,'Modules'],['W-Forecast','Forecast'],['W-Evidence','Evidence']].map(([id,label])=>{
     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
-    return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${icon(img)}${label}</a>`;
+    return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${label}</a>`;
   }).join('');
   $('workbench').classList.toggle('library-workspace',isHome);
   // The Overview is a page of selected passages: no module navigator beside it and no Browse modules button above it.
