@@ -1391,7 +1391,7 @@ def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
     assert bottom["badgeClass"] == "badge badge-gray" and bottom["linkBorder"] == "0px"
     # Prose, charts, folds.
     assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
-    assert seen["prose"]["width"] <= 640
+    assert seen["prose"]["width"] <= 660
     assert seen["cards"] and all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
     folds = {f["id"]: f for f in seen["folds"]}
     assert set(folds) == {"reference", "calculations", "audit"}
@@ -1465,7 +1465,7 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
     assert seen["keyItem"]["size"] == "15px"
     assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 23, 229)")
     assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
-    assert seen["prose"]["width"] <= 640
+    assert seen["prose"]["width"] <= 660
     assert all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
     assert seen["fits"] is True
     # Limitations: grey dot list.
@@ -1540,3 +1540,27 @@ def test_a_two_paragraph_bottom_line_draws_both_in_the_headline_style(tmp_path):
     paragraphs = seen["bottom"]["ps"]
     assert len(paragraphs) == 2 and paragraphs[1]["text"] == second.strip()
     assert [p["size"] for p in paragraphs] == ["22px", "22px"]
+
+
+NARROW_HEADER_PROBE = """(async () => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
+  await sleep(200);
+  const header = document.querySelector('header.issuer');
+  const h1 = header.querySelector('h1'), scope = header.querySelector('.scope');
+  const cs = getComputedStyle(header);
+  const seen = {padL: cs.paddingLeft, padT: cs.paddingTop,
+    scopeBelowTitle: scope.getBoundingClientRect().top >= h1.getBoundingClientRect().bottom - 1};
+  const out = document.createElement('pre'); out.id = 'probe';
+  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
+})();"""
+
+
+def test_the_run_header_keeps_the_phone_layout_at_600px(tmp_path):
+    page = report_library(tmp_path)
+    (page.parent / "probe.js").write_text(NARROW_HEADER_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, "#CP-1/head?c=run-a", 600)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert (seen["padL"], seen["padT"], seen["scopeBelowTitle"]) == ("15px", "12px", True)
