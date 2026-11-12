@@ -534,7 +534,17 @@ test('tableView: a Source cell is a button on its row chip, text unchanged; no m
   assert.ok(html.includes(`${cell(4)}1">${f}, pages 71, 121</button></td>`), 'first listed page with a chip');
   assert.ok(html.includes(`${cell(5)}2">${f}, page 121</button></td>`));
   assert.ok(html.includes(`<td>${f}, page 99</td>`) && html.includes('<td>context</td>'), 'no chip: plain text');
-  assert.ok(html.includes(`${cell(8)}3">${f}, page 5; Other.pdf, page 3</button></td>`), 'a later item of the cell can match');
+  assert.ok(html.includes(`<td>${f}, page 5; <button type="button" class="source-cell" data-chip="o:8" data-index="3">Other.pdf, page 3</button></td>`), 'each item is its own button; an item with no chip is plain text; separators stay as written');
   assert.ok(html.includes(`<td>${f}, page 71</td>`), 'only a column headed exactly Source');
   assert.equal(tableView('T', block, {id: 'o', chips: () => 0}).includes('source-cell'), false, 'no chip list, no button');
+});
+
+test('tableView: a Source cell with a trailing full stop still gets its button; each item of a list opens its own chip', () => {
+  const f = 'T_10-K.htm.jsonl';
+  const chips = [{kind: 'issuer_page', file: f, page: 71}, {kind: 'issuer_page', file: 'B.pdf', page: 3}, {kind: 'issuer_page', file: 'A.pdf', page: 5}];
+  const block = {headers: ['Item', 'Source'], rows: [{line: 4, cells: ['X', `${f}, page 71.`]}, {line: 5, cells: ['Y', 'A.pdf, page 5; B.pdf, page 3']}]};
+  const html = tableView('T', block, {id: 'o', chips: () => 3, chipList: () => chips});
+  assert.ok(html.includes(`<button type="button" class="source-cell" data-chip="o:4" data-index="0">${f}, page 71.</button>`));
+  const b = html.slice(html.indexOf('o:5'));
+  assert.ok(b.includes('data-index="2">A.pdf, page 5</button>; <button type="button" class="source-cell" data-chip="o:5" data-index="1">B.pdf, page 3</button></td>'), 'A.pdf opens chip 2, B.pdf chip 1');
 });

@@ -136,9 +136,18 @@ class KeyIndex(NamedTuple):
         return Resolved(chosen[0], note, word)
 
 
+# A listed file name ("report.pdf") is whole: no file-name character, nor a word and a space, may
+# precede it, or the citation names a longer unlisted file ("annual-report.pdf", "Draft report.pdf")
+# and must not open the listed one. "Source: report.pdf" still reads; "see report.pdf" stays a gap.
+FILE_KEY = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+FILE_START = r"(?<![\w.\-/])(?<![\w.\-/]\s)"
+
+
 @lru_cache(maxsize=32)
 def key_index(keys: tuple[str, ...], alternates: frozenset[str] = frozenset()) -> KeyIndex:
-    """The page-citation pattern for one run: keys are the inventory's, longest first, exact."""
+    """The page-citation pattern for one run: keys are the inventory's, longest first, exact. A key
+    that is a file name (a ``## Sources`` row) takes the strict start and registers no word-prefix
+    alias; an older inventory alias keeps both."""
     exact: dict[str, str] = {}
     prefixes: dict[str, list[str]] = {}
     for key in keys:
@@ -146,10 +155,16 @@ def key_index(keys: tuple[str, ...], alternates: frozenset[str] = frozenset()) -
         if not words:
             continue
         exact[" ".join(words)] = key
+        if FILE_KEY.search(key):
+            continue
         for n in range(1, len(words)):
             prefixes.setdefault(" ".join(words[:n]), []).append(key)
     phrases = sorted({*exact, *prefixes}, key=len, reverse=True)
-    spaced = [r"\s+".join(re.escape(w) for w in phrase.split()) for phrase in phrases]
+    strict = {p for p in exact if FILE_KEY.search(p)} - set(prefixes)
+    spaced = [
+        (FILE_START if p in strict else "") + r"\s+".join(re.escape(w) for w in p.split())
+        for p in phrases
+    ]
     keyed = rf"(?:(?<!\w)(?P<key>{'|'.join(spaced)})(?:\s*,\s*|\s+))?" if spaced else ""
     pattern = re.compile(keyed + MARKER + NUMBERS)
     return KeyIndex(pattern, exact, {k: tuple(v) for k, v in prefixes.items()}, alternates)

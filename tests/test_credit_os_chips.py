@@ -31,8 +31,10 @@ from deploy_workflow.credit_os_chips import (
     inventory,
     inventory_alternates,
     is_file_name,
+    key_index,
     parse_locators,
     read_pages,
+    scan,
 )
 from deploy_workflow.library_index import build_library
 
@@ -958,3 +960,51 @@ def test_chips_reads_sources_but_not_a_row_with_no_source_text(tmp_path):
     got = chips(tmp_path, store)
     assert got["run/CP-1.md:4"][0]["kind"] == "issuer_page"
     assert got["run/CP-1.md:5"][0]["kind"] == "gap"
+
+
+def sources_index(*files):
+    inv = inventory(sources_section(["Source", "sha256"], *([f, ""] for f in files)))
+    return key_index(tuple(inv))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "annual-report.pdf, page 3",
+        "Draft report.pdf, page 3",
+        "xreport.pdf, page 3",
+        "a/report.pdf, page 3",
+    ],
+)
+def test_a_cited_file_that_is_not_listed_never_opens_a_listed_file_it_ends_with(text):
+    index = sources_index("report.pdf", "Annual report.pdf")
+    assert all(loc["kind"] == "gap" for _, loc in scan(text, index)), text
+
+
+def test_a_leading_word_of_a_listed_file_is_no_alias_for_it():
+    index = sources_index("report.pdf", "Annual report.pdf")
+    assert all(loc["kind"] == "gap" for _, loc in scan("Annual, page 9", index))
+
+
+@pytest.mark.parametrize(
+    "text, page",
+    [
+        ("report.pdf, page 3", 3),
+        ("Source: report.pdf, page 3", 3),
+        ("(report.pdf, page 3)", 3),
+        ("a; report.pdf, page 3", 3),
+        ("Annual report.pdf, page 4", 4),
+    ],
+)
+def test_a_listed_file_is_still_read_where_nothing_extends_its_name(text, page):
+    index = sources_index("report.pdf", "Annual report.pdf")
+    first = scan(text, index)[0][1]
+    assert (first["kind"], first["page"]) == ("issuer_page", page)
+
+
+def test_the_real_run_cell_with_a_comma_page_list_keeps_its_chips():
+    name = "TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl"
+    index = sources_index(name)
+    found = scan(f"{name}, pages 71, 121", index)
+    assert [(l["kind"], l["page"]) for _, l in found] == [("issuer_page", 71), ("issuer_page", 121)]
+    assert {l["source"] for _, l in found} == {name}

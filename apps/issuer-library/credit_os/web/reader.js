@@ -332,29 +332,27 @@ function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
   return {item, html};
 }
 
-// The index (among the row's chips) of the first source-page chip that a Source cell names: an item `<file>, page(s) <list>` whose file and a listed page
-// a chip holds. -1 when none does; the cell is then left as plain text.
-function sourceCellChip(text, chips) {
-  for (const item of plainText(text).split('; ')) {
-    const m = new RegExp(`^(.+?), pages? (${SPAN}(?:, ${SPAN})*)$`).exec(item.trim());
-    if (!m) continue;
-    const spans = spansOf(m[2]);
-    const at = chips.findIndex(c => c.kind === 'issuer_page' && c.file === m[1] && spans.some(s => c.page <= (s.pageEnd ?? s.page) && (c.page_end ?? c.page) >= s.page));
-    if (at >= 0) return at;
-  }
-  return -1;
+// The index (among the row's chips) of the first source-page chip that one Source-cell item names: `<file>, page(s) <list>` (a full stop may end it)
+// whose file and a listed page a chip holds. -1 when none does; the item is then left as plain text.
+function sourceCellChip(item, chips) {
+  const m = new RegExp(`^(.+?), pages? (${SPAN}(?:, ${SPAN})*)\\.?$`).exec(plainText(item).trim());
+  if (!m) return -1;
+  const spans = spansOf(m[2]);
+  return chips.findIndex(c => c.kind === 'issuer_page' && c.file === m[1] && spans.some(s => c.page <= (s.pageEnd ?? s.page) && (c.page_end ?? c.page) >= s.page));
 }
 
 // A cell of a new-format table exactly as written: a missing, dash or "Not supplied" cell is drawn as it stands, never as "n.a." (H4).
-// `open` is {key, index}: the text is then one button on that row chip (a Source cell), unchanged.
+// `open` is {key, chips} (a Source cell): each `; `-separated item that holds a row chip is its own button on that chip, text unchanged, the
+// separators and every other item as written.
 function writtenCell(cell, numeric, after = '', open = null) {
   const text = String(cell ?? '');
-  const shown = open ? `<button type="button" class="source-cell" data-chip="${escapeHtml(open.key)}" data-index="${open.index}">${richText(text)}</button>` : richText(text);
+  const button = item => { const at = sourceCellChip(item, open.chips); return at < 0 ? richText(item) : `<button type="button" class="source-cell" data-chip="${escapeHtml(open.key)}" data-index="${at}">${richText(item)}</button>`; };
+  const shown = open && open.chips.length ? text.split('; ').map(button).join('; ') : richText(text);
   return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${shown}${after}</td>`;
 }
 
 // A table of a new-format handoff exactly as written: its own columns and cells, none of the app's. A row the build holds chips for carries a
-// quiet Basis button in its first cell, so the chips stay reachable; a cell of a column headed exactly `Source` becomes a button on the row chip that
+// quiet Basis button in its first cell, so the chips stay reachable; each item of a cell of a column headed exactly `Source` becomes a button on the row chip that
 // holds its file and page. `ctx` is {id, chips(key), chipList(key)?}; `caption` is the table's accessible name.
 function tableView(caption, block, ctx) {
   const numeric = block.headers.map((_, c) => numericColumn(block, c));
@@ -363,8 +361,7 @@ function tableView(caption, block, ctx) {
     const key = `${ctx.id}:${row.line}`;
     const control = ctx.chips(key) ? ` ${basisButton(key, [], `Basis for row: ${plainText(row.cells[0] ?? '')}`)}` : '';
     const chips = ctx.chipList?.(key) || [];
-    const open = cell => { const index = chips.length ? sourceCellChip(cell, chips) : -1; return index >= 0 ? {key, index} : null; };
-    return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '', block.headers[c] === 'Source' ? open(cell) : null)).join('')}</tr>`;
+    return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '', block.headers[c] === 'Source' ? {key, chips} : null)).join('')}</tr>`;
   }).join('');
   return `<div class="table-card"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
