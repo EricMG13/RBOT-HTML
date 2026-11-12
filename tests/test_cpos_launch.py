@@ -2845,10 +2845,83 @@ def test_a_layer1_operand_must_name_its_cell_exactly_when_it_states_an_amount(op
         cpos_forecast.parse(full, full, "CP-1")
 
 
-def test_a_cp2g_operand_names_no_row_or_period():
+def _named_cp2g(doc: str, **operands):
+    """A CP-2G block that names each operand's cell, parsed against the CP-1 document."""
+    base = {k: _operand(v, k) for k, v in BASE.items()} | operands
+    return cpos_forecast.parse(forecast_block(base=base), doc.replace("__BLOCK__", ""))
+
+
+def test_a_cp2g_block_may_name_the_row_and_period_of_every_base_operand():
+    inputs = _named_cp2g(_cp1_doc(TWO_YEARS))
+    assert (inputs.base["revenue"].row, inputs.base["revenue"].period) == ("revenue", "FY2025")
+    assert inputs.downside_shock is not None  # still CP-2G's block: the shock and cases stay
+
+
+MUST_NAME = "CP-2G: base revenue must name the `row` label and `period` header it was read from"
+
+
+@pytest.mark.parametrize(
+    ("operand", "complaint"),
+    [
+        (
+            _operand("900"),
+            "CP-2G: base revenue 900 is not CP-1's cell at row `revenue`, period `FY2025` (1,000)",
+        ),
+        (
+            _operand("1000", "Revenue"),
+            "CP-2G: base revenue: no table cell of CP-1 is at row `Revenue`, period `FY2025`",
+        ),
+        (
+            _operand("1000", period="FY2023"),
+            "CP-2G: base revenue: no table cell of CP-1 is at row `revenue`, period `FY2023`",
+        ),
+        ({"amount": "1000", "reason": None}, MUST_NAME),
+        ({"amount": "1000", "reason": None, "row": "revenue"}, MUST_NAME),
+        (
+            {"amount": None, "reason": "unknown", "row": "revenue", "period": "FY2025"},
+            "CP-2G: base revenue states no amount, so it names no row or period",
+        ),
+    ],
+)
+def test_a_named_cp2g_operand_that_is_not_its_cell_is_refused(operand, complaint):
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(_cp1_doc(TWO_YEARS), revenue=operand)
+    assert str(caught.value) == complaint
+
+
+def test_a_cp2g_block_naming_some_operands_is_refused_at_the_first_one_missing():
+    unnamed = {key: {"amount": BASE[key], "reason": None} for key in ("taxes", "capex")}
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(_cp1_doc(TWO_YEARS), **unnamed)
+    assert (
+        str(caught.value)
+        == "CP-2G: base taxes must name the `row` label and `period` header it was read from"
+    )
+
+
+def test_a_named_cp2g_amount_printed_only_in_prose_is_refused():
+    doc = _cp1_doc("", head="Basis: revenue 1,234 per annual report\n\n").replace("__BLOCK__", "")
+    unnamed = {k: {"amount": v, "reason": None} for k, v in BASE.items()}
+    unnamed["revenue"] = {"amount": "1234", "reason": None}
+    assert cpos_forecast.parse(forecast_block(base=unnamed), doc)  # printed somewhere: as before
+    with pytest.raises(ValueError, match="CP-2G: base revenue: no table cell of CP-1"):
+        _named_cp2g(doc, revenue=_operand("1234"))
+
+
+def test_a_named_cp2g_operand_that_is_not_its_cell_is_sent_back_for_repair():
+    cp1 = "| Base | FY2025 |\n| --- | --- |\n" + "\n".join(
+        f"| {k} | {printed(k, v)} |" for k, v in BASE.items()
+    )
+    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1.encode()})
     base = {k: _operand(v, k) for k, v in BASE.items()}
-    with pytest.raises(ValueError, match="only CP-1 does"):
-        cpos_forecast.parse(forecast_block(base=base), " ".join(BASE.values()))
+    assert cpos_launch._forecast_issues(task, forecast_block(base=base)) == ()
+    base["capex"] = _operand("40", "Capex")
+    (issue,) = cpos_launch._forecast_issues(task, forecast_block(base=base))
+    assert issue == (
+        "Forecast inputs: CP-2G: base capex: no table cell of CP-1 is at row `Capex`, period "
+        "`FY2025`. Correct the block; if you cannot, set every driver's values to "
+        "[null, null, null] and say why in scope_limits."
+    )
 
 
 def test_the_layer1_instruction_asks_for_the_row_and_period_not_for_extra_rows():

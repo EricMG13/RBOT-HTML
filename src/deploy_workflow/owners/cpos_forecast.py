@@ -43,8 +43,8 @@ Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 
 class Operand(Contract):
-    """A base operand. CP-1's layer-1 block also says where it read an amount: the first cell of
-    the table row (`row`) and the header of the period column (`period`)."""
+    """A base operand. Either source's block may also say where it read an amount: the first cell
+    of the table row (`row`) and the header of the period column (`period`)."""
 
     amount: Signed | None
     reason: str | None
@@ -241,7 +241,8 @@ def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
 
 
 def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
-    """Why the operand is not the cell it names, or None when it is."""
+    """Why the operand is not the cell it names, or None when it is. Both sources use it: CP-1's
+    layer-1 block always, a CP-2G block when it names any cell."""
     if operand.amount is None:
         return (
             None
@@ -312,14 +313,15 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
     if source == "CP-1" and inputs.facilities:
         raise ValueError("CP-1: a layer-1 forecast states no facilities")
+    named = source == "CP-1" or any(
+        operand.row is not None or operand.period is not None for operand in inputs.base.values()
+    )
     for key, operand in inputs.base.items():
-        if source == "CP-2G":
-            if operand.row is not None or operand.period is not None:
-                raise ValueError(f"{source}: base {key} names a row or period; only CP-1 does")
-            if operand.amount is not None and not _printed(cp1_text, operand.amount):
-                raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
-        elif (problem := _layer1_problem(cp1_text, key, operand)) is not None:
-            raise ValueError(f"{source}: {problem}")
+        if named:
+            if (problem := _layer1_problem(cp1_text, key, operand)) is not None:
+                raise ValueError(f"{source}: {problem}")
+        elif operand.amount is not None and not _printed(cp1_text, operand.amount):
+            raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
     if inputs.facilities:
         _check_facilities(inputs, inputs.facilities, cp1_text)
     return inputs
