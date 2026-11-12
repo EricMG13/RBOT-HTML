@@ -2,6 +2,7 @@
 
 import json
 import re
+import types
 from decimal import Decimal
 from fractions import Fraction
 
@@ -11,7 +12,7 @@ from hypothesis import strategies as st
 from test_cpos_launch import PATHS, forecast_block
 from test_cpos_periods import BASE, CP1, NAMED, OPERANDS, cell
 
-from deploy_workflow.owners import cpos_forecast, cpos_periods
+from deploy_workflow.owners import cpos_forecast, cpos_launch, cpos_periods
 from deploy_workflow.owners.cpos_forecast import SCALE_LIMIT, model_files, parse
 
 CP1_K = """| Reported label | Q3 2025 | Q3 2024 revised | 9M 2025 | 9M 2024 | FY2024 | FY2023 \
@@ -219,15 +220,56 @@ def test_a_millions_block_does_not_read_a_thousands_handoff():
         parse(block_k(), CP1)
 
 
-def test_a_block_with_scale_and_unnamed_rows():  # Review Focus 4
+UNNAMED = (
+    "CP-2G: a block at scale 1000 must name the row and period of every base operand that has "
+    "an amount"
+)
+
+
+def test_a_block_at_scale_1000_must_name_its_rows():
     base = {k: {"amount": v, "reason": None} for k, v in K.items()}
-    files = model_files(CP1_K.encode(), block_k(base=base).encode(), history=True)
-    first = json.loads(files["forecast_exact.json"])["outputs"]["REFERENCE"]["years"][0]
-    assert first["revenue"]["amount"] == "1050"
-    record = json.loads(files["calculation.json"])["history"]
-    assert cell(record, "LTM", "revenue") == {"amount": None, "reason": cpos_periods.NOT_NAMED}
-    with pytest.raises(ValueError, match="CP-2G: base revenue 1000000 is not printed in CP-1"):
-        parse(block_k(base=base), CP1)
+    for cp1 in (CP1_K, CP1):
+        with pytest.raises(ValueError) as caught:
+            parse(block_k(base=base), cp1)
+        assert str(caught.value) == UNNAMED
+    with pytest.raises(ValueError, match=re.escape(UNNAMED)):
+        model_files(CP1_K.encode(), block_k(base=base).encode(), history=True)
+
+
+def test_a_block_that_names_one_operand_is_judged_by_the_named_rule_not_the_unnamed_one():
+    base = {k: {"amount": v, "reason": None} for k, v in K.items()}
+    base["revenue"] = named_base(K)["revenue"]
+    with pytest.raises(
+        ValueError, match="CP-2G: base ebitda must name the `row` label and `period`"
+    ):
+        parse(block_k(base=base), CP1_K)
+
+
+def test_an_unnamed_block_at_scale_1_or_without_scale_is_as_it_was():
+    base = {k: {"amount": v, "reason": None} for k, v in BASE.items()}
+    for changes in ({}, {"scale": 1}):
+        files = model_files(CP1.encode(), block_m(base=base, **changes).encode(), history=True)
+        first = json.loads(files["forecast_exact.json"])["outputs"]["REFERENCE"]["years"][0]
+        assert first["revenue"]["amount"] == "1050"
+        record = json.loads(files["calculation.json"])["history"]
+        assert cell(record, "LTM", "revenue") == {"amount": None, "reason": cpos_periods.NOT_NAMED}
+    with pytest.raises(ValueError, match="CP-2G: base revenue 1000 is not printed in CP-1"):
+        parse(block_m(base=base, scale=1), CP1_K)
+
+
+def test_a_block_at_scale_1000_with_no_amount_has_no_row_to_name():
+    inputs = parse(block_k(base={k: {"amount": None, "reason": "not used"} for k in K}), CP1_K)
+    assert {o.amount for o in inputs.base.values()} == {None}
+
+
+def test_the_unnamed_scale_1000_refusal_gets_its_own_repair_line():
+    base = {k: {"amount": v, "reason": None} for k, v in K.items()}
+    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": CP1_K.encode()})
+    (issue,) = cpos_launch._forecast_issues(task, block_k(base=base))
+    assert issue == (
+        f"Forecast inputs: {UNNAMED}. Name the row and period of each base operand; if you "
+        "cannot, set every driver's values to [null, null, null] and say why in scope_limits."
+    )
 
 
 def test_facilities_at_scale_1000_are_divided_and_checked_against_the_divided_debt():  # AK-5
@@ -522,6 +564,10 @@ def test_a_block_without_scale_is_not_checked_for_the_widened_rule():  # widened
         ("$m", {"millions"}),
         ("$M", {"millions"}),
         ("USD mm", {"millions"}),
+        ("US$mn", {"millions"}),
+        ("USD mn", {"millions"}),
+        ("$mn", {"millions"}),
+        ("\u20acmn", {"millions"}),
         ("US$bn", {"millions"}),
         ("stated in millions", {"millions"}),
         ("USD million/billion", {"millions"}),
@@ -583,3 +629,207 @@ def test_a_malformed_block_at_scale_1000_is_the_schemas_refusal_as_without_scale
     with pytest.raises(ValueError) as with_scale:
         parse(forecast_block(scale=1000, **_shapes(True)[shape]), CP1_K2)
     assert str(with_scale.value) == str(without.value)
+
+
+# --- the final fix wave --------------------------------------------------------------------------
+FACILITY_FAULTS = {
+    "a coupon above the cap": lambda: [{**FAC[0], "fixed_rate_pct": "35"}, FAC[1]],
+    "both rate forms stated": lambda: [{**FAC[0], "spread_pct": "2.5"}, FAC[1]],
+    "a maturity that is not a date": lambda: [{**FAC[0], "maturity": "2029-02-30"}, FAC[1]],
+    "duplicate facility names": lambda: [FAC[0], {**FAC[1], "name": "term loan facility"}],
+    "a negative balance": lambda: [{**FAC[0], "balance": "-995000"}, FAC[1]],
+    "a balance that is a number": lambda: [{**FAC[0], "balance": 995000}, FAC[1]],
+    "a forty-first facility": lambda: [
+        _fixed(f"Loan {n}", "1000", "6.00", None) for n in range(41)
+    ],
+}
+
+
+@pytest.mark.parametrize("name", FACILITY_FAULTS)
+def test_a_schema_refusal_inside_facilities_keeps_the_facilities_line_at_scale_1000(name):
+    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": CP1_K2.encode()})
+    (issue,) = cpos_launch._forecast_issues(task, block_k2(facilities=FACILITY_FAULTS[name]()))
+    assert "forecast inputs: " in issue, issue
+    assert issue.endswith(
+        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
+    )
+
+
+@pytest.mark.parametrize("stated", ["-0", "-0.0"])
+@pytest.mark.parametrize("where", ["dividends", "amortisation"])
+def test_a_negative_zero_amount_is_refused_at_scale_1000_as_without_scale(stated, where):
+    if where == "dividends":
+        changes = {"base_drivers": drivers({**K2_PATHS, "dividends": (stated, "0", "0")})}
+        name = "base_drivers dividends year 1"
+    else:
+        changes = {"facilities": [{**FAC[0], "annual_amortisation": stated}, FAC[1]]}
+        name = "facility 1 annual_amortisation"
+    with pytest.raises(ValueError) as caught:
+        parse(block_k2(**changes), CP1_K2)
+    assert str(caught.value) == (
+        f"CP-2G: {name} {stated} is not an amount in thousands as CP-1 prints it (scale 1000): "
+        "at most nine digits and one decimal place, no separators"
+    )
+
+
+def test_a_model_written_base_key_is_cut_in_the_refusal():
+    key = "k" * 5000
+    base = {**K2_BASE, key: {"amount": "1,5", "reason": None}}
+    with pytest.raises(ValueError) as caught:
+        parse(block_k2(base=base), CP1_K2)
+    assert str(caught.value) == (
+        f"CP-2G: base {'k' * 40}... 1,5 is not an amount in thousands as CP-1 prints it "
+        "(scale 1000): at most nine digits and one decimal place, no separators"
+    )
+
+
+def _case_drivers(**paths):
+    return {name: drivers({name: values})[name] for name, values in paths.items()}
+
+
+def _published(files):
+    """Every figure the model files publish, minus the keys that exist only at scale 1000."""
+    exact = json.loads(files["forecast_exact.json"])
+    for key in ("consumed", "scale", "units"):
+        exact.pop(key, None)
+    exact["scope_limits"] = [t for t in exact["scope_limits"] if t != SCALE_LIMIT]
+    return exact, json.loads(files["calculation.json"])["history"]
+
+
+MILLION_FACILITIES = "\n| Facility | FY2024 | Rate |\n| --- | --- | --- |\n"
+PARITY = {
+    "two facilities and cases stating dividends": (
+        {
+            "facilities": [
+                _fixed("Term loan", "400", "6.00", "50"),
+                _fixed("Notes", "150", "5.50", None),
+            ],
+            "upside_drivers": _case_drivers(dividends=("30", "30.5", "0")),
+            "downside_drivers": _case_drivers(dividends=("0", "0", "0")),
+        },
+        {
+            "facilities": [
+                _fixed("Term loan", "400000", "6.00", "50000"),
+                _fixed("Notes", "150000", "5.50", None),
+            ],
+            "upside_drivers": _case_drivers(dividends=("30000", "30500", "0")),
+            "downside_drivers": _case_drivers(dividends=("0", "0", "0")),
+        },
+        MILLION_FACILITIES + "| Term loan | 400 | 6.00% |\n| Notes | 150 | 5.50% |\n",
+        MILLION_FACILITIES + "| Term loan | 400,000 | 6.00% |\n| Notes | 150,000 | 5.50% |\n",
+    ),
+    "cases stating dividends and debt repayment": (
+        {
+            "upside_drivers": _case_drivers(
+                dividends=("30", "30.5", "0"), debt_repayment=("10", "20", "30")
+            ),
+            "downside_drivers": _case_drivers(
+                dividends=("0", "5", "5"), debt_repayment=("1.5", "0", "40")
+            ),
+        },
+        {
+            "upside_drivers": _case_drivers(
+                dividends=("30000", "30500", "0"), debt_repayment=("10000", "20000", "30000")
+            ),
+            "downside_drivers": _case_drivers(
+                dividends=("0", "5000", "5000"), debt_repayment=("1500", "0", "40000")
+            ),
+        },
+        "",
+        "",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", PARITY)
+def test_a_millions_fixture_and_the_same_fixture_in_thousands_publish_identical_figures(name):
+    millions, thousands, extra_m, extra_k = PARITY[name]
+    m = model_files((CP1 + extra_m).encode(), block_m(**millions).encode(), history=True)
+    k = model_files((CP1_K + extra_k).encode(), block_k(**thousands).encode(), history=True)
+    published_m, published_k = _published(m), _published(k)
+    assert published_k == published_m
+    assert set(json.loads(k["forecast_exact.json"])["outputs"]) == {
+        "REFERENCE",
+        "DOWNSIDE",
+        "UPSIDE",
+        "DOWNSIDE_DRIVERS",
+    }
+
+
+CASE_UP = _case_drivers(dividends=("30000", "30000.5", "0"))
+CASE_DOWN = _case_drivers(debt_repayment=("10000", "0", "600000"))
+
+
+def test_the_amount_drivers_of_the_cases_are_divided_at_scale_1000():
+    block = block_k(upside_drivers=CASE_UP, downside_drivers=CASE_DOWN)
+    inputs = parse(block, CP1_K)
+    assert inputs.upside_drivers.dividends.values == ("30", "30.0005", "0")
+    assert inputs.downside_drivers.debt_repayment.values == ("10", "0", "600")
+    exact = json.loads(model_files(CP1_K.encode(), block.encode())["forecast_exact.json"])
+    # year 1, upside: closing cash 100 + 132 (free cash flow) - 30 (dividends) - 50 (repayment)
+    assert exact["outputs"]["UPSIDE"]["years"][0]["closing_cash"]["amount"] == "152"
+    # year 1, downside drivers: closing debt 600 - 10 (repayment)
+    assert exact["outputs"]["DOWNSIDE_DRIVERS"]["years"][0]["closing_debt"]["amount"] == "590"
+    assert exact["upside_drivers"]["dividends"]["values"] == ["30", "30.0005", "0"]
+    with pytest.raises(ValueError) as caught:
+        parse(block_k(upside_drivers=_case_drivers(dividends=("30000.55", "0", "0"))), CP1_K)
+    assert str(caught.value) == (
+        "CP-2G: upside_drivers dividends year 1 30000.55 is not an amount in thousands as CP-1 "
+        "prints it (scale 1000): at most nine digits and one decimal place, no separators"
+    )
+
+
+def test_the_scheduled_repayments_refusal_says_its_figures_are_divided():
+    cp1 = CP1_K2 + "\n| Facility | H1 2025 |\n| --- | --- |\n| Big loan | 1,400,000 |\n"
+    facilities = [
+        _fixed("Big loan", "1400000", "6.25", "1400000"),
+        _fixed("Notes", "500000", "6.00", "500000"),
+    ]
+    with pytest.raises(ValueError) as caught:
+        parse(block_k2(facilities=facilities), cp1)
+    assert str(caught.value) == (
+        "CP-2G: scheduled repayments total 1900, more than base debt 1534.356, in USD millions "
+        "after dividing by scale 1000"
+    )
+
+
+def _layer_one(**changes):
+    block = json.loads(block_k2().split("```json\n")[1].split("\n```")[0])
+    block["downside_shock"] = None
+    block.update(changes)
+    return (
+        CP1_K2
+        + "\n### Forecast inputs (machine-readable)\n\n```json\n"
+        + json.dumps(block)
+        + "\n```\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "changes, message",
+    [
+        (
+            {"base": {**K2_BASE, "undrawn": CHART_ROW}},
+            (
+                "CP-1: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
+                "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
+            ),
+        ),
+        (
+            {"scale": 7},
+            "CP-1: `scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)",
+        ),
+        (
+            {"base": {**K2_BASE, "cash": {**K2_BASE["cash"], "amount": "175,509.5"}}},
+            (
+                "CP-1: base cash 175,509.5 is not an amount in thousands as CP-1 prints it "
+                "(scale 1000): at most nine digits and one decimal place, no separators"
+            ),
+        ),
+    ],
+)
+def test_a_layer_one_block_at_scale_1000_is_refused_in_cp1s_name(changes, message):
+    text = _layer_one(**changes)
+    with pytest.raises(ValueError) as caught:
+        parse(text, text, "CP-1")
+    assert str(caught.value) == message

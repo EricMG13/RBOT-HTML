@@ -1535,7 +1535,7 @@ PEER_READER_BLOCK = (
 )
 # Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
 UNIT_RULE = (
-    "State `scale` as the statements print it (`1000` for thousands, `1` or absent for "
+    "State `scale` in every block, as the statements print it (`1000` for thousands, `1` for "
     "millions), and state every amount in the block in that one unit exactly as printed; an "
     "amount printed in the other unit is stated as missing, with the reason, not converted. "
 )
@@ -2354,9 +2354,16 @@ def _key_figure_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     return key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
 
 
+# The refusals about a facility: the two `parse` raises itself (`_check_facilities`, `_to_millions`)
+# and a schema refusal whose own first path is `facilities` (or the unique-names rule, which the
+# schema reports at the root). A model-written key or quoted text that merely contains `facilit`
+# is not one.
 _FACILITY_REFUSAL = re.compile(
-    r"^[\w-]+: (?:facility |scheduled repayments total |\w+_drivers states debt_repayment)"
+    r"^[\w-]+: (?:facility |scheduled repayments total |\w+_drivers states debt_repayment"
+    r"|forecast inputs: (?:\d+ problems; first: )?"
+    r"(?:facilities[.:]|\(root\): Value error, facility names must be unique))"
 )
+_UNNAMED_AT_SCALE = re.compile(r"^[\w-]+: a block at scale 1000 must name the row and period")
 
 
 def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
@@ -2377,11 +2384,18 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
             return (f"Forecast inputs: {error}. {fix}{missing}",)
         if re.match(r"^[\w-]+: the handoff gives no forecast drivers", message):
             return ()  # declining stays the method's call
-        if _FACILITY_REFUSAL.match(message):
+        if _UNNAMED_AT_SCALE.match(message):
+            fix = "Name the row and period of each base operand; if you cannot, "
+            advice = (
+                f"{fix}set every driver's values to [null, null, null] and say why in scope_limits."
+            )
+        elif _FACILITY_REFUSAL.match(message):
             fallback = "write `facilities` as null and keep the drivers."
-            return (f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",)
-        fix = "Correct the block; if you cannot, set every driver's values to "
-        return (f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",)
+            advice = f"Correct the facilities; if you cannot, {fallback}"
+        else:
+            fix = "Correct the block; if you cannot, set every driver's values to "
+            advice = f"{fix}[null, null, null] and say why in scope_limits."
+        return (f"Forecast inputs: {error}. {advice}",)
     return ()
 
 

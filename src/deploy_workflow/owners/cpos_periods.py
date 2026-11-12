@@ -264,22 +264,20 @@ def lines(
     operands: cp2g.Operands,
     *,
     named: Mapping[str, tuple[str, str]] | None = None,
-    scale: int = 1,
 ) -> dict[str, Line]:
     """One `Line` per operand key: the figure, in each period its table headers name, of the rows
     that print the operand's base amount under the period the forecast inputs name for it, read
     from the rows of the label they name (`named`: `{key: (row label, period header)}`; None is
     none named). An operand with an amount and no name has no history. Never raises on a table
-    shape. `scale`: the unit CP-1's cells are in relative to the operands (1000: the operands are in
-    millions, the cells in thousands); the lines' figures are in the operands' unit."""
-    return _locate(tables, operands, named or {}, scale)[0]
+    shape."""
+    return _locate(tables, operands, named or {}, 1)[0]
 
 
 def _locate(
     tables: list[list[list[str]]],
     operands: cp2g.Operands,
     named: Mapping[str, tuple[str, str]],
-    scale: int = 1,
+    scale: int,
 ) -> tuple[dict[str, Line], Period | None]:
     """The lines and the base period (the latest period named for revenue or EBITDA). At a scale
     other than 1 each cell is compared with the operand times the scale, and the figures found are

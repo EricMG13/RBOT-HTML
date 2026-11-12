@@ -1402,9 +1402,39 @@ def test_a_record_without_units_keeps_the_requests_phrase():
     assert store.read_cashflow(FILES, None)[0]["units"] is None
 
 
-@pytest.mark.parametrize("units", [5, "", "x" * 41, ["USD millions"]])
+@pytest.mark.parametrize(
+    "units",
+    [
+        5,
+        "",
+        "x" * 41,
+        ["USD millions"],
+        "   ",
+        "\t",
+        "USD\nmillions",
+        "USD\x00millions",
+        "USD\u202emillions",
+        "USD\u2066millions\u2069",
+        "USD\u200bmillions",
+        None,
+    ],
+)
 def test_units_that_are_not_a_short_text_are_reported_not_shown(units):
     assert store.read_cashflow(with_units(units), None) == (None, ("file", "forecast_exact.json"))
+
+
+def test_units_of_exactly_forty_printable_characters_are_shown():
+    units = "USD millions " + "x" * 27
+    assert len(units) == 40
+    assert store.read_cashflow(with_units(units), None)[0]["units"] == units
+
+
+def test_scale_and_units_are_recorded_together_or_not_at_all():
+    scale_only = {**REFERENCE, "scale": 1000}
+    units_only = {**REFERENCE, "units": "USD millions"}
+    for record in (scale_only, units_only):
+        files = {**FILES, "forecast_exact.json": json.dumps(record).encode()}
+        assert store.read_cashflow(files, None) == (None, ("file", "forecast_exact.json"))
 
 
 def test_history_columns_precede_the_forecast_in_the_owners_order():

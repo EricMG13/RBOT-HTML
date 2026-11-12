@@ -293,7 +293,7 @@ def _layer1_problem(text: str, key: str, operand: Operand, amount: str | None) -
 _CURRENCY = r"(?:US\$|USD|EUR|GBP|[$\u20ac\u00a3])"
 _NAMES_THOUSANDS = re.compile(rf"\bthousands?\b|[$'\u2019]000s?\b|{_CURRENCY}\s?k\b", re.IGNORECASE)
 _NAMES_MILLIONS = re.compile(
-    rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|bn)\b", re.IGNORECASE
+    rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|mn|bn)\b", re.IGNORECASE
 )
 _UNIT_OF = {1: "USD millions, scale 1", 1000: "USD thousands, scale 1000"}
 
@@ -302,8 +302,8 @@ def _units_named(text: str) -> frozenset[str]:
     """Which of `thousands` and `millions` a cell of CP-1 names as a unit, case-insensitive.
     Thousands: the word `thousand` or `thousands`; `$000`, `'000` (with a trailing s); a currency
     (`US$`, `USD`, `EUR`, `GBP`, `$`, euro or pound sign) then `k`, at a word end. Millions: the
-    words `million`, `millions`, `billion`, `billions`; a currency then `m`, `mm` or `bn`, at a
-    word end (`US$m`, `USD m`, `$m`, `US$ bn`). A bare number, `9M`, or `m` without a currency
+    words `million`, `millions`, `billion`, `billions`; a currency then `m`, `mm`, `mn` or `bn`,
+    at a word end (`US$m`, `USD m`, `$mn`, `US$ bn`). A bare number, `9M`, or `m` without a currency
     names none. Both may be named at once."""
     return frozenset(
         name
@@ -422,10 +422,14 @@ def _to_millions(document: dict[str, Any], source: str) -> dict[str, str]:
         text = holder[key]
         if not isinstance(text, str):
             continue  # null stays null; any other type is the schema's to refuse
-        if _THOUSANDS.fullmatch(text) is None:
+        # An amount driver or facility amount is never negative: `-0` is refused as without scale.
+        if _THOUSANDS.fullmatch(text) is None or (
+            text.startswith("-") and not name.startswith("base ") and Decimal(text) == 0
+        ):
             raise ValueError(
-                f"{source}: {name} {_cut(text, 40)} is not an amount in thousands as CP-1 prints "
-                "it (scale 1000): at most nine digits and one decimal place, no separators"
+                f"{source}: {_cut(name, 45)} {_cut(text, 40)} is not an amount in thousands as "
+                "CP-1 prints it (scale 1000): at most nine digits and one decimal place, "
+                "no separators"
             )
         stated[name] = text
         with localcontext(cp2g._EXACT):
@@ -435,10 +439,19 @@ def _to_millions(document: dict[str, Any], source: str) -> dict[str, str]:
 
 def _check_base(inputs: ForecastInputs, cp1_text: str, source: str, stated: dict[str, str]) -> None:
     """Each base amount, as the block states it, is the cell it names (a named block, or the
-    layer-1 block) or is printed somewhere in CP-1."""
+    layer-1 block) or is printed somewhere in CP-1. A CP-2G block at scale 1000 must name."""
     named = source == "CP-1" or any(
         operand.row is not None or operand.period is not None for operand in inputs.base.values()
     )
+    if (
+        not named
+        and inputs.scale == 1000
+        and any(operand.amount is not None for operand in inputs.base.values())
+    ):
+        raise ValueError(
+            f"{source}: a block at scale 1000 must name the row and period of every base operand "
+            "that has an amount"
+        )
     for key, operand in inputs.base.items():
         amount = stated.get(f"base {key}", operand.amount)
         if named:

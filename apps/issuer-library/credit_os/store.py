@@ -1493,12 +1493,20 @@ UNITS_LIMIT = 40
 
 def recorded_units(exact: Any) -> str | None:
     """The `units` the forecast record states for its published figures, or None when it states
-    none. A value that is not a text of 1 to UNITS_LIMIT characters is not shown: TypeError."""
-    units = exact.get("units") if isinstance(exact, dict) else None
+    none. `scale` and `units` are recorded together. `units` is a printable text of 1 to
+    UNITS_LIMIT characters with something visible in it (no control, bidi-control or newline
+    character); anything else is not shown: TypeError."""
+    if not isinstance(exact, dict):
+        return None
+    units = exact.get("units")
+    if (units is None) != (exact.get("scale") is None):
+        raise TypeError("scale and units are not recorded together")
     if units is None:
         return None
     if not isinstance(units, str) or not 1 <= len(units) <= UNITS_LIMIT:
         raise TypeError("units is not a short text")
+    if not units.isprintable() or not units.strip():
+        raise TypeError("units is not printable text")
     return units
 
 

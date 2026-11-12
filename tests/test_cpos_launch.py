@@ -5028,6 +5028,39 @@ def test_a_facilities_refusal_keeps_the_facilities_line():
     assert issue.endswith(FACILITY_END) and issue.count("Correct the facilities;") == 1
 
 
+def _facility_row(name="Notes", **changes):
+    return {**FACILITY_ROW, "name": name, **changes}
+
+
+SCHEMA_FACILITY_FAULTS = {
+    "a coupon above the cap": [_facility_row(fixed_rate_pct="35")],
+    "both rate forms stated": [_facility_row(spread_pct="2.5")],
+    "a maturity that is not a date": [_facility_row(maturity="2029-02-30")],
+    "duplicate facility names": [_facility_row(), _facility_row("NOTES")],
+    "a negative balance": [_facility_row(balance="-400")],
+    "a forty-first facility": [_facility_row(f"Loan {n}") for n in range(41)],
+    "four faulty rows": [_facility_row(f"Loan {n}", balance="-1") for n in range(4)],
+}
+
+
+@pytest.mark.parametrize("name", SCHEMA_FACILITY_FAULTS)
+def test_a_schema_refusal_inside_facilities_keeps_the_facilities_line(name):
+    block = forecast_block(base=_named_base(), facilities=SCHEMA_FACILITY_FAULTS[name])
+    (issue,) = _repair_issues(block, _cp1_with_rows({}))
+    assert "forecast inputs: " in issue, issue
+    assert issue.endswith(
+        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
+    )
+
+
+def test_a_facility_fault_behind_another_schema_fault_keeps_the_block_line():
+    block = forecast_block(
+        base=_named_base(), years=[1], facilities=[_facility_row(balance="-400")]
+    )
+    (issue,) = _repair_issues(block, _cp1_with_rows({}))
+    assert issue.endswith(BLOCK_END)
+
+
 def test_a_block_refused_for_another_reason_keeps_the_null_every_driver_line():
     (issue,) = _repair_issues(forecast_block(base=_named_base(), years=[1]), _cp1_with_rows({}))
     assert issue.endswith(BLOCK_END)
@@ -5157,11 +5190,12 @@ def test_both_forecast_instructions_ask_for_the_scale():
 def test_both_forecast_instructions_state_what_the_unit_check_enforces():
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert (
-            "State `scale` as the statements print it (`1000` for thousands, `1` or absent for "
-            "millions), and state every amount in the block in that one unit exactly as printed; "
-            "an amount printed in the other unit is stated as missing, with the reason, not "
-            "converted." in block
+            "State `scale` in every block, as the statements print it (`1000` for thousands, `1` "
+            "for millions), and state every amount in the block in that one unit exactly as "
+            "printed; an amount printed in the other unit is stated as missing, with the reason, "
+            "not converted." in block
         )
+        assert "or absent" not in block
 
 
 def test_both_forecast_instructions_say_where_a_period_header_may_be_named():
