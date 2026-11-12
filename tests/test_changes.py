@@ -2983,3 +2983,67 @@ def test_a_bare_count_is_still_no_figure_of_a_held_line():
     # K10 is untouched: an unheld whole number below 100 is still a count.
     said = "Seven covenants are tested.\n\nThere are 77 of them.\n\n"
     assert cp8_issues(with_row(LEVERAGE_ROW, said), PACK) == ()
+
+
+# --- fix round 1: a line-start number is a list marker only on a real list item ---------------
+
+
+@pytest.mark.parametrize(
+    ("passage", "size"),
+    [
+        ("Gross debt changed by a total of\n110. The rest holds.\n\n", "110"),
+        ("Gross debt changed by a total of\n110) in all.\n\n", "110"),
+        ("Cash fell by\n30. The rest holds.\n\n", "30"),
+        ("Liquidity is about\n437. That is new.\n\n", "437"),
+    ],
+)
+def test_a_number_starting_a_continuation_line_is_a_figure(passage, size):
+    found = cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack())
+    assert any(size in i for i in found), found
+
+
+def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
+    row = "| Refinancing | — | — | New source | 80. Net debt is lower. |"
+    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + row), _ndpack())
+    assert any("80" in i and "difference" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "passage",
+    [
+        "80. Net debt is the largest item.\n\n",
+        "Findings follow.\n\n80. Net debt is the largest item.\n\n",
+        "- First point.\n80. Net debt is the largest item.\n\n",
+        "1. First point.\n80. Net debt is the largest item.\n\n",
+    ],
+)
+def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
+    assert cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack()) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The period ends 30 September 2024.",
+        "The period ends 30th Sep 2024.",
+        "The period ends September 30 2024.",
+        "The period ends Sep 30 2024.",
+    ],
+)
+def test_a_day_of_month_equal_to_a_withheld_size_is_no_size(sentence):
+    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
+
+
+def test_a_number_near_but_not_beside_a_month_is_still_a_size():
+    said = "Cash fell by 30 in September.\n\n"
+    found = cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack())
+    assert any("30" in i and "difference" in i for i in found), found
+
+
+def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refused():
+    row = (
+        "| Total debt / EBITDA | Not comparable: 6.57x (FY2023) | 6.01x (FY2023) | Unresolved "
+        "| Not comparable: EBITDA basis differs. |"
+    )
+    found = cp8_issues(with_row(row), PACK2)
+    assert any("Earlier cell" in i and "not comparable" in i for i in found), found

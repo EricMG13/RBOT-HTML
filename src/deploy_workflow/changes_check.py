@@ -394,10 +394,10 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
     text = " ".join(_plain(cell) for cell in row).lower()
     issues = []
     for word in (SAME, NOT_COMPARABLE):
-        if measure["comparable"] == "no" or word not in text or _says(row, word):
+        if measure["comparable"] == "no" or word not in text:
             continue
         elsewhere = f"{where}: `{word}` is a verdict only at the start of the Effect cell."
-        issues += _misplaced(where, row, word) or [elsewhere]
+        issues += _misplaced(where, row, word) or ([] if _says(row, word) else [elsewhere])
     if measure["comparable"] == "judge":
         said = [word for word in (SAME, NOT_COMPARABLE) if word in text]
         if len(said) != 1:
@@ -820,10 +820,34 @@ def _may_print(
     return frozenset()
 
 
-def _bare(line: str) -> str:
-    """The line with module codes and a leading list number blanked: a whole number below 100 of the
-    rest, written without a unit, is read as a size only by the withheld-difference rule (K9)."""
-    return _MODULE.sub(_blanks, re.sub(r"^\s*\d+[.)](?=\s)", _blanks, line))
+_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
+_LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
+_MONTH = (
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
+    r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
+)
+_DAY = r"(?<![\w.,])\d{1,2}(?:st|nd|rd|th)?\b(?![.,]\d)"
+_DAY_BEFORE = re.compile(rf"{_DAY}(?=\s+\b{_MONTH})")
+_DAY_AFTER = re.compile(rf"(\b{_MONTH}\s+)({_DAY})")
+
+
+def _starts_list_item(lines: Sequence[str], i: int) -> bool:
+    """Whether line `i` can begin a list item: the first line of the passage, or one after a blank
+    line, a heading or a list item. A line that continues a paragraph cannot."""
+    if i == 0:
+        return True
+    before = lines[i - 1]
+    return not before.strip() or bool(_HEADING.match(before) or _LIST_ITEM.match(before))
+
+
+def _bare(line: str, *, listed: bool) -> str:
+    """The line as the bare-number reading of the withheld-difference rule (K9) takes it: module
+    codes blanked; a leading list number blanked when `listed` (the line begins a list item, never a
+    table cell); and a one- or two-digit day beside a month name blanked (a date, not a size)."""
+    if listed:
+        line = _LIST_NUMBER.sub(_blanks, line)
+    line = _DAY_AFTER.sub(lambda m: m[1] + " " * len(m[2]), _MODULE.sub(_blanks, line))
+    return _DAY_BEFORE.sub(_blanks, line)
 
 
 def _blanks(match: re.Match[str]) -> str:
@@ -854,7 +878,7 @@ def _passage_issues(
     kept = _withheld_sizes(pack, said_nc)
     in_issuer, h2 = False, ""
     issues: list[str] = []
-    for line in lines:
+    for i, line in enumerate(lines):
         if _HEADING.match(line):
             in_issuer = line.strip() == f"### {ISSUER}"
             if line.startswith("## "):
@@ -872,8 +896,10 @@ def _passage_issues(
         )
         if h2 in NOT_PASSAGES:
             continue
-        figures = {f.size for f in _figures(line, counts=False)}
-        for size in dict.fromkeys(f.size for f in _figures(_bare(line))):
+        figures = [f.size for f in _figures(line, counts=False)]
+        listed = not row and _starts_list_item(lines, i)
+        bare = [f.size for f in _figures(_bare(line, listed=listed))]
+        for size in dict.fromkeys([*figures, *bare]):
             if size in sizes:
                 issues.append(
                     f"A passage: the figure {size} is the difference of {sizes[size]}, which "
@@ -972,7 +998,7 @@ def _page_measure(measure: Mapping[str, Any], found: list[list[str]]) -> dict[st
         return _verdict("not_comparable", "Not comparable", measure.get("reason"))
     for said_not in found:
         if _says(said_not, NOT_COMPARABLE):
-            return _verdict("not_comparable", "Not comparable", said_not[4])
+            return _verdict("not_comparable", "Not comparable", said_not[EFFECT])
     row = found[0] if found else None
     flagged = _flagged(measure)
     where = measure["label"]

@@ -374,8 +374,9 @@ Amendment, 2026-11-12 (owner: asked "Fix the two remaining checker gaps in one s
 answered "Yes, fix both"). (A) K9 also refuses a withheld difference written without a unit: a whole number below 100
 is a count everywhere but here, and for the withheld-difference rule only a bare number equal in magnitude to a
 withheld size is refused, on the same lines and with the same exemptions (the measure's own issuer row under its
-condition; a size equal to one of the measure's own values). Counts under K10 are unchanged; module codes and a leading
-list number are not read as numbers. Limits, recorded: a legitimate bare count equal to a withheld size ("30
+condition; a size equal to one of the measure's own values). Counts under K10 are unchanged; for the bare-number reading only, module codes, the number of a line that really
+begins a list item (the first line, or after a blank line, a heading or a list item; never a table cell or a line that
+continues a paragraph) and a one- or two-digit day beside a month name are not read as numbers. Limits, recorded: a legitimate bare count equal to a withheld size ("30
 limitations" while a difference of 30 is withheld) is refused and must be reworded (the message names the figure, the
 measure and the word "difference"); a size written in words ("thirty") is not read. (B) The verdict words `Same
 definition` and `Not comparable` are read from the start of the Effect cell only, by the checker and by
