@@ -6,6 +6,9 @@ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflo
 
 ## 2026-11-12 — CP-2G facility schedule (branch `claude/cash-flow-model-comparison-498459`)
 
+Owner waiver 2026-11-12: the 800-line PR limit is waived for this branch's pull request (about 1,290
+changed lines: plan document about 340, tests about 520; the whole-branch review found no sensible split).
+
 Scope: CP-2G facility schedule: offline synthetic tests only; no provider called, no model response
 retained; a live CP-2G run that states `facilities` has not been done; the Forecast page was not
 exercised with the new `forecast_exact.json` keys.
@@ -15,7 +18,8 @@ exercised with the new `forecast_exact.json` keys.
 - `uv run python tools/quality_gate.py`: exit 0, 0 findings.
 - Independent checks: the output for a block without facilities is byte-identical to origin/main 36b6d8f
   (sha256 e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089 over the five model files);
-  the arithmetic matched an independent Fraction calculation over 60 seeded random blocks; the
+  the arithmetic matched an independent Fraction calculation over 74 accepted seeded random blocks
+  (11 with debt outside the stated facilities, per-case rates included; reviewer's probe, not in the suite); the
   adversarial review found and fixed two Medium defects (negative total debt from repayments above
   base debt; unbounded floating all-in rate). Three boundary tests each kill their mutant (`0 <= rate`
   to `0 < rate`; `unallocated < 0` to `<= 0`; `due < start` to `<=`).
