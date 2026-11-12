@@ -624,7 +624,8 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
             ):
                 issues.append(
                     f"`{heading}` {period}: cash {row[2]} is not the Cash {shown} stated "
-                    f"for {other} in `{liquidity}`; state one figure."
+                    f"for {other} in `{liquidity}`; correct whichever is wrong, and let this row's Period "
+                    "carry the balance-sheet date so it matches one liquidity row."
                 )
     return tuple(issues)
 

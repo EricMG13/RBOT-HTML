@@ -345,3 +345,7 @@ table on every pathway, with the mechanisms that already exist and no new layout
 - Free cash flow is not part of this change. To be read it needs one row labelled exactly `Free cash flow` (or `FCF`)
   with its unit in brackets or a `Reporting unit` column, in a table with periods across a header, and the same
   basis text in both runs.
+- Recorded, no code: the library tab shows the net debt change's cash movement without its periods beside the
+  liquidity measure.
+- Recorded, no code (predates this branch, owner item): a same-period restatement with the same basis still yields a
+  net debt change with no flag.
