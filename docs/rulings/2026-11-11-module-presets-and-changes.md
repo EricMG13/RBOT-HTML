@@ -359,3 +359,13 @@ given to the same functions as a measure-shaped record, so the same exceptions a
 with a non-zero difference, shows both runs' balances with periods and "Both runs state net debt for the same date;
 the difference is between the two analyses, not a change in the issuer." with no change figure; it also prints the
 periods beside the change's cash movement. `cp8.md` states the rule.
+
+Amendment, 2026-11-12 (owner: asked "Close the gap that lets a withheld difference be written in CP-8's Why cell?",
+the owner answered "fine, PR and merge"). K9's "register rows" exemption (round 3 (c) above, and the 2026-11-12
+net debt amendment's "same exceptions") meant the issuer register row of the same measure; it is narrowed to that.
+The only cell that may print a withheld difference is the Effect cell of a pack measure's own issuer row, when the
+measure is of one period with two values and its row says `Same definition` with the cause `Correction` or
+`Method change`. The analysis register's Why cells, the ledger's cells, fact rows and another measure's row refuse
+it, naming the figure and the word "difference"; the net debt change's cash, which has no issuer row, is printed
+nowhere. A size equal to a value of the measure itself stays accepted. Same functions (`_withheld_sizes`), per-line
+exemption (`_may_print`). `cp8.md` states the rule.

@@ -40,8 +40,10 @@ it refuses, naming the line, a CP-8 handoff in which:
   difference, or its direction word contradicts the pack's sign, or it carries a sign after a
   direction word (K8);
 - the difference of a measure that is `no`, said `Not comparable` or of one period with two values
-  is printed in a checked line (K9; a measure said `Same definition` may print it in register rows,
-  and a difference equal to the measure's own value is no difference);
+  is printed in a checked line (K9). The one exception is the Effect cell of that measure's own
+  issuer row, said `Same definition` with the cause `Correction` or `Method change`; no other
+  register cell (the analysis register's Why, the ledger's) prints it. A difference equal to the
+  measure's own value is no difference;
 - a figure of a checked line is held in no evidence (K10): the pack's values, the figures of its
   definition texts, the handoffs CP-8 was sent (this run's) and the earlier run's. Checked lines
   are all but the `## Request`, `## Sources`, `## Calculations` and `## Next module` sections; of
@@ -766,22 +768,43 @@ def _withheld(pack: Mapping[str, Any], said_nc: frozenset[str]) -> frozenset[str
 
 
 def _withheld_sizes(
-    pack: Mapping[str, Any], said_nc: frozenset[str], *, register: bool
+    pack: Mapping[str, Any], said_nc: frozenset[str], exempt: frozenset[str] = frozenset()
 ) -> dict[Decimal, str]:
-    """The non-zero differences a checked line may not print, with their measure's label. A measure
-    of one period with two values, not said `Not comparable`, may print its difference in register
-    rows; a difference equal to a value of its own measure is no difference."""
+    """The non-zero differences a checked line may not print, with their measure's label. `exempt`
+    is the keys of measures whose difference this line may print (`_may_print`); a difference equal
+    to a value of its own measure is no difference."""
     found: dict[Decimal, str] = {}
     for measure in (*pack["measures"], *_net_debt_cash(pack)):
         difference = _signed(measure["difference"])
         barred = measure["comparable"] == "no" or measure["key"] in said_nc
         if difference is None or difference == 0 or not (barred or _flagged(measure)):
             continue
-        if register and not barred:
+        if measure["key"] in exempt:
             continue
         if abs(difference) not in {abs(v) for v in _measure_values(measure) - {difference}}:
             found[abs(difference)] = measure["label"]
     return found
+
+
+def _may_print(
+    cells: Sequence[str], pack: Mapping[str, Any], said_nc: frozenset[str]
+) -> frozenset[str]:
+    """The one place a withheld difference is printed: the issuer register row of a measure of one
+    period with two values (not `no`, not said `Not comparable`) that says `Same definition` with
+    the cause `Correction` or `Method change`. The key of that measure, else none."""
+    if len(cells) != len(COLUMNS[ISSUER]):
+        return frozenset()
+    for measure in pack["measures"]:
+        if measure["label"] == _plain(cells[0]):
+            ok = (
+                _flagged(measure)
+                and measure["comparable"] != "no"
+                and measure["key"] not in said_nc
+                and _says(cells, SAME)
+                and _plain(cells[3]) in SAME_PERIOD_CAUSES
+            )
+            return frozenset({measure["key"]}) if ok else frozenset()
+    return frozenset()
 
 
 def _passage_issues(
@@ -805,10 +828,7 @@ def _passage_issues(
     )
     passage_differences = _pack_differences(pack, without=withheld)
     register_differences = _pack_differences(pack, without=barred)
-    kept = {
-        False: _withheld_sizes(pack, said_nc, register=False),
-        True: _withheld_sizes(pack, said_nc, register=True),
-    }
+    kept = _withheld_sizes(pack, said_nc)
     in_issuer, h2 = False, ""
     issues: list[str] = []
     for line in lines:
@@ -818,17 +838,21 @@ def _passage_issues(
                 h2 = line[3:].strip()
         text = line.strip()
         row = text.startswith("|") and text.endswith("|")
+        sizes = kept
         if in_issuer and row:
-            line = re.split(r"(?<!\\)\|", text[1:-1])[-1]
+            cells = re.split(r"(?<!\\)\|", text[1:-1])
+            if exempt := _may_print([c.strip() for c in cells], pack, said_nc):
+                sizes = _withheld_sizes(pack, said_nc, exempt)
+            line = cells[-1]
         issues += _direction_issues(
             line, register_differences if row else passage_differences, "A passage"
         )
         if h2 in NOT_PASSAGES:
             continue
         for size in dict.fromkeys(f.size for f in _figures(line, counts=False)):
-            if size in kept[row]:
+            if size in sizes:
                 issues.append(
-                    f"A passage: the figure {size} is the difference of {kept[row][size]}, which "
+                    f"A passage: the figure {size} is the difference of {sizes[size]}, which "
                     "this handoff withholds (not comparable, or one period with two values); a "
                     "difference of it is not printed here."
                 )

@@ -1,0 +1,272 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 0683ab7..2876e77 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,9 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — A withheld difference is refused in the analysis register's Why and the ledger (branch `claude/cp8-why-cell-withheld`, owner "fine, PR and merge")
++Scope: offline, synthetic; no provider. K9's register exemption narrowed to the Effect cell of the measure's own issuer row (`Same definition` with `Correction` or `Method change`); the analysis Why, ledger, fact rows and other measures' rows refuse a withheld size (pack `no`, said `Not comparable`, same-period flagged, same-period net debt change incl. cash), as before in passages. Same functions, per-line exemption. 295 tests in `tests/test_changes.py` pass, none changed or weakened; 9 new cases failed on the old code first. CI fast-tests: exit 0, 3000 passed; node set: exit 0, 298 passed; `tools/quality_gate.py`: exit 0, 0 findings; reviewer probes ndsame_why, ndsame_k9, ndsame_flag, netdebt2_attacks, seam3_verdicts, realfix_check (real accepted-then-corrected handoff), t4r4_same_period: all exit 0.
++Not verified: a real model writing a Why cell; a collision of a withheld size with another measure's stated value is still refused (as in passages).
+ ## 2026-11-12 — Forecast inputs in thousands: `scale` 1000 (branch `claude/forecast-units-scale-b`, PR B, stacked on PR A)
+ Plan: `docs/superpowers/plans/2026-11-12-forecast-named-rows-and-units.md`, Tasks B1-B6. A forecast inputs block may state `scale` 1000: it then states base amounts, amount drivers and facility balances exactly as CP-1 prints them in USD thousands, and Python divides by 1000 exactly before any check or calculation. The cell and printed checks compare the stated text with CP-1; the history record reads the named rows and publishes the same unit; the published record carries `scale` and `units` and the library's caption uses them. A named row whose own cells or headers name the other unit is refused, and a scale-1000 CP-2G block must name its rows. Both instruction texts ask for `scale`. A block without `scale` produces byte-identical files.
+ Scope: offline. Synthetic fixtures with hand-computed answer keys (`tests/test_cpos_scale.py`); a millions fixture and the same fixture times 1000 at scale 1000 publish identical figures in every file, facilities and cases included (also on 800 generated fixtures, reviewer's probe); the store's grid compared with a hand key on 1,768 cells, 0 differences; two retained thousands handoffs (LTH, IHRT) read with hand-written named blocks and synthetic drivers: every base and fiscal-year history value equals the printed cell divided by 1000; the unit rule run over the numeric rows of the six retained CP-1 handoffs refuses 11 rows, all printed in millions inside thousands handoffs. No provider called: no model has stated `scale`.
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index 71b722d..6016987 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -359,3 +359,13 @@ given to the same functions as a measure-shaped record, so the same exceptions a
+ with a non-zero difference, shows both runs' balances with periods and "Both runs state net debt for the same date;
+ the difference is between the two analyses, not a change in the issuer." with no change figure; it also prints the
+ periods beside the change's cash movement. `cp8.md` states the rule.
++
++Amendment, 2026-11-12 (owner: asked "Close the gap that lets a withheld difference be written in CP-8's Why cell?",
++the owner answered "fine, PR and merge"). K9's "register rows" exemption (round 3 (c) above, and the 2026-11-12
++net debt amendment's "same exceptions") meant the issuer register row of the same measure; it is narrowed to that.
++The only cell that may print a withheld difference is the Effect cell of a pack measure's own issuer row, when the
++measure is of one period with two values and its row says `Same definition` with the cause `Correction` or
++`Method change`. The analysis register's Why cells, the ledger's cells, fact rows and another measure's row refuse
++it, naming the figure and the word "difference"; the net debt change's cash, which has no issuer row, is printed
++nowhere. A size equal to a value of the measure itself stays accepted. Same functions (`_withheld_sizes`), per-line
++exemption (`_may_print`). `cp8.md` states the rule.
+diff --git a/src/deploy_vii/methods/cp8.md b/src/deploy_vii/methods/cp8.md
+index d81ab2c..56e507d 100644
+--- a/src/deploy_vii/methods/cp8.md
++++ b/src/deploy_vii/methods/cp8.md
+@@ -95,12 +95,15 @@ accepted, the run is delivered without it.
+      or says `Same definition` with the cause `Correction` or `Method change`, in the first words of the Effect cell; the causes
+      `New period` and `New source` are refused for it. `Same definition` followed by a sentence
+      that contradicts it ("but the EBITDA basis changed") is an error: say `Not comparable`. Such a
+-     difference is written only in the register rows. A passage may give the two values and say the
++     difference is written only in that measure's issuer row (below). A passage may give the two values and say the
+      analysis changed; it never says the issuer's measure moved. The same holds for the pack's
+      `net_debt_change` when its `same_period` is true and a difference is not zero: the gross debt,
+      cash and net debt differences are the analysis's, so give both runs' values and never a
+      movement ("net debt rose", "cash fell by"); the checker refuses those sizes in
+-     passages, `## Gaps` and fact rows; only the register rows may carry them.
++     passages, `## Gaps`, fact rows, the analysis register's Why cells and the ledger's cells. The
++     one place a withheld difference may be printed is the Effect cell of that same measure's issuer
++     row, said `Same definition` with the cause `Correction` or `Method change`; the net debt
++     change's cash has no such row, so its difference is printed nowhere.
+ 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
+    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
+    for a module's. If you think a module's change of view is unexplained, say so and mark the row
+diff --git a/src/deploy_workflow/changes_check.py b/src/deploy_workflow/changes_check.py
+index 6255030..4802a16 100644
+--- a/src/deploy_workflow/changes_check.py
++++ b/src/deploy_workflow/changes_check.py
+@@ -40,8 +40,10 @@ it refuses, naming the line, a CP-8 handoff in which:
+   difference, or its direction word contradicts the pack's sign, or it carries a sign after a
+   direction word (K8);
+ - the difference of a measure that is `no`, said `Not comparable` or of one period with two values
+-  is printed in a checked line (K9; a measure said `Same definition` may print it in register rows,
+-  and a difference equal to the measure's own value is no difference);
++  is printed in a checked line (K9). The one exception is the Effect cell of that measure's own
++  issuer row, said `Same definition` with the cause `Correction` or `Method change`; no other
++  register cell (the analysis register's Why, the ledger's) prints it. A difference equal to the
++  measure's own value is no difference;
+ - a figure of a checked line is held in no evidence (K10): the pack's values, the figures of its
+   definition texts, the handoffs CP-8 was sent (this run's) and the earlier run's. Checked lines
+   are all but the `## Request`, `## Sources`, `## Calculations` and `## Next module` sections; of
+@@ -766,24 +768,45 @@ def _withheld(pack: Mapping[str, Any], said_nc: frozenset[str]) -> frozenset[str
+ 
+ 
+ def _withheld_sizes(
+-    pack: Mapping[str, Any], said_nc: frozenset[str], *, register: bool
++    pack: Mapping[str, Any], said_nc: frozenset[str], exempt: frozenset[str] = frozenset()
+ ) -> dict[Decimal, str]:
+-    """The non-zero differences a checked line may not print, with their measure's label. A measure
+-    of one period with two values, not said `Not comparable`, may print its difference in register
+-    rows; a difference equal to a value of its own measure is no difference."""
++    """The non-zero differences a checked line may not print, with their measure's label. `exempt`
++    is the keys of measures whose difference this line may print (`_may_print`); a difference equal
++    to a value of its own measure is no difference."""
+     found: dict[Decimal, str] = {}
+     for measure in (*pack["measures"], *_net_debt_cash(pack)):
+         difference = _signed(measure["difference"])
+         barred = measure["comparable"] == "no" or measure["key"] in said_nc
+         if difference is None or difference == 0 or not (barred or _flagged(measure)):
+             continue
+-        if register and not barred:
++        if measure["key"] in exempt:
+             continue
+         if abs(difference) not in {abs(v) for v in _measure_values(measure) - {difference}}:
+             found[abs(difference)] = measure["label"]
+     return found
+ 
+ 
++def _may_print(
++    cells: Sequence[str], pack: Mapping[str, Any], said_nc: frozenset[str]
++) -> frozenset[str]:
++    """The one place a withheld difference is printed: the issuer register row of a measure of one
++    period with two values (not `no`, not said `Not comparable`) that says `Same definition` with
++    the cause `Correction` or `Method change`. The key of that measure, else none."""
++    if len(cells) != len(COLUMNS[ISSUER]):
++        return frozenset()
++    for measure in pack["measures"]:
++        if measure["label"] == _plain(cells[0]):
++            ok = (
++                _flagged(measure)
++                and measure["comparable"] != "no"
++                and measure["key"] not in said_nc
++                and _says(cells, SAME)
++                and _plain(cells[3]) in SAME_PERIOD_CAUSES
++            )
++            return frozenset({measure["key"]}) if ok else frozenset()
++    return frozenset()
++
++
+ def _passage_issues(
+     lines: list[str],
+     pack: Mapping[str, Any],
+@@ -805,10 +828,7 @@ def _passage_issues(
+     )
+     passage_differences = _pack_differences(pack, without=withheld)
+     register_differences = _pack_differences(pack, without=barred)
+-    kept = {
+-        False: _withheld_sizes(pack, said_nc, register=False),
+-        True: _withheld_sizes(pack, said_nc, register=True),
+-    }
++    kept = _withheld_sizes(pack, said_nc)
+     in_issuer, h2 = False, ""
+     issues: list[str] = []
+     for line in lines:
+@@ -818,17 +838,21 @@ def _passage_issues(
+                 h2 = line[3:].strip()
+         text = line.strip()
+         row = text.startswith("|") and text.endswith("|")
++        sizes = kept
+         if in_issuer and row:
+-            line = re.split(r"(?<!\\)\|", text[1:-1])[-1]
++            cells = re.split(r"(?<!\\)\|", text[1:-1])
++            if exempt := _may_print([c.strip() for c in cells], pack, said_nc):
++                sizes = _withheld_sizes(pack, said_nc, exempt)
++            line = cells[-1]
+         issues += _direction_issues(
+             line, register_differences if row else passage_differences, "A passage"
+         )
+         if h2 in NOT_PASSAGES:
+             continue
+         for size in dict.fromkeys(f.size for f in _figures(line, counts=False)):
+-            if size in kept[row]:
++            if size in sizes:
+                 issues.append(
+-                    f"A passage: the figure {size} is the difference of {kept[row][size]}, which "
++                    f"A passage: the figure {size} is the difference of {sizes[size]}, which "
+                     "this handoff withholds (not comparable, or one period with two values); a "
+                     "difference of it is not printed here."
+                 )
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index 9b90520..ffb7781 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -2746,3 +2746,108 @@ def test_the_two_values_of_a_same_period_net_debt_may_be_stated():
+ @pytest.mark.parametrize("pack", [_ndpack(same_period=False), _ndpack(with_flag=False)])
+ def test_a_net_debt_change_of_two_periods_or_without_the_flag_may_be_said_to_have_moved(pack):
+     assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()
++
++
++# --- a withheld difference is printed in no register cell but its own issuer row's Effect ------
++# (owner, 2026-11-12: "fine, PR and merge"). Expectations hand-written.
++
++WHY_CELL = "| The module was added. |"
++LEDGER_CELL = "| A hedging data gap. |"
++NC_ROW = same_period_row("Not comparable: EBITDA basis differs.")
++
++
++def _in_cell(handoff: str, cell: str, sentence: str) -> str:
++    assert cell in handoff
++    return handoff.replace(cell, f"| {sentence} |", 1)
++
++
++def _no_pack():
++    measure = {**SAME, "comparable": "no", "same_period": False, "reason": "Definitions differ."}
++    return {**PACK, "measures": [measure, *PACK["measures"][1:]]}
++
++
++WITHHELD_KINDS = {
++    "pack marks no": (_no_pack(), with_row(NC_ROW), "Leverage fell by 0.56x.", "0.56"),
++    "said Not comparable": (PACK2, with_row(NC_ROW), "Leverage fell by 0.56x.", "0.56"),
++    "same period, no Same definition": (
++        PACK2,
++        with_row(same_period_row("Leverage moved.")),
++        "Leverage fell by 0.56x.",
++        "0.56",
++    ),
++    "net debt, cash": (_ndpack(), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m.", "30"),
++    "net debt, net debt": (
++        _ndpack(),
++        with_row(LEVERAGE_ROW),
++        "Net debt is 80 US$m lower.",
++        "80",
++    ),
++    "net debt, gross debt": (
++        _ndpack(),
++        with_row(LEVERAGE_ROW),
++        "Gross debt fell by 110 US$m.",
++        "110",
++    ),
++}
++
++
++@pytest.mark.parametrize("kind", list(WITHHELD_KINDS))
++@pytest.mark.parametrize("cell", [WHY_CELL, LEDGER_CELL], ids=["analysis Why", "ledger"])
++def test_a_withheld_difference_is_refused_in_the_analysis_register_and_the_ledger(kind, cell):
++    pack, handoff, sentence, figure = WITHHELD_KINDS[kind]
++    found = cp8_issues(_in_cell(handoff, cell, sentence), pack)
++    assert any(figure in i and "difference" in i for i in found), found
++
++
++def test_a_same_definition_correction_may_print_its_own_difference_in_its_issuer_row():
++    row = same_period_row("Same definition; leverage is 0.56x lower after the correction.")
++    assert cp8_issues(with_row(row.replace("Unresolved", "Correction")), PACK2) == ()
++
++
++def test_the_exemption_is_that_measures_issuer_row_only():
++    row = same_period_row("Same definition; leverage is 0.56x lower after the correction.")
++    handoff = with_row(row.replace("Unresolved", "Correction"))
++    assert cp8_issues(handoff, PACK2) == ()
++    found = cp8_issues(_in_cell(handoff, WHY_CELL, "Leverage fell by 0.56x."), PACK2)
++    assert any("0.56" in i and "difference" in i for i in found), found
++    fact = "| Refinancing | — | — | New source | Net debt fell by 80 US$m. |"
++    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + fact), _ndpack())
++    assert any("80" in i and "difference" in i for i in found), found
++
++
++def _zero_pack():
++    pack = _ndpack()
++    pack["net_debt_change"] |= {
++        "change_in_cash": "0",
++        "current_cash": "910",
++        "change_in_gross_debt": "0",
++        "current_gross_debt": "7100",
++        "current_net_debt": "6190",
++    }
++    pack["measures"] = [m for m in pack["measures"] if m["key"] not in ("gross_debt", "net_debt")]
++    return pack
++
++
++def _own_value_pack():
++    pack = _ndpack()
++    pack["net_debt_change"] |= {"prior_cash": "60", "current_cash": "30", "change_in_cash": "-30"}
++    return pack
++
++
++@pytest.mark.parametrize(
++    ("pack", "handoff", "sentence"),
++    [
++        (PACK2, with_row(NC_ROW), "Leverage is 6.57x earlier and 6.01x now."),
++        (_ndpack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m earlier and 6,110 US$m now."),
++        (_zero_pack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m in both runs."),
++        (_ndpack(same_period=False), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m."),
++        (_ndpack(), with_row(LEVERAGE_ROW), "Total debt / EBITDA was 4.20x earlier."),
++        (_own_value_pack(), with_row(LEVERAGE_ROW), "Cash is 60 US$m earlier and 30 US$m now."),
++    ],
++    ids=["both values", "net debt values", "zero", "unflagged", "other measure", "own value"],
++)
++@pytest.mark.parametrize("cell", [WHY_CELL, LEDGER_CELL], ids=["analysis Why", "ledger"])
++def test_a_register_cell_stating_values_or_a_quotable_difference_is_still_accepted(
++    pack, handoff, sentence, cell
++):
++    assert cp8_issues(_in_cell(handoff, cell, sentence), pack) == ()
