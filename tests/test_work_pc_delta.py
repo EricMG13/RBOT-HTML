@@ -129,3 +129,46 @@ def test_base_by_date_is_the_last_commit_by_then(tmp_path):
     by_then = _git(repo, "log", "-1", "--format=%cI", head)
     assert work_pc_delta.resolve(repo, by_then, head) == head
     # A date is "--before", never a commit name, so it cannot pick a later commit.
+
+
+def _extract(repo: Path, rev: str, into: Path) -> Path:
+    into.mkdir()
+    archive = subprocess.run(["git", "archive", rev], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["tar", "-x", "-C", str(into)], input=archive.stdout, check=True)
+    return into
+
+
+def test_plan_sorts_each_file_by_who_changed_it(tmp_path):
+    repo, base, head = _repo(tmp_path)
+    record = tmp_path / "base.json"
+    record.write_text(json.dumps({"files": work_pc_delta.manifest(repo, base)}), encoding="utf-8")
+    download = _extract(repo, head, tmp_path / "download")
+    adapted = _extract(repo, base, tmp_path / "adapted")
+    (adapted / "src" / "a b.py").write_text("x = 1  # work PC\ny = 2\nz = 3\n", encoding="utf-8")
+    (adapted / "same.txt").write_text("kept, adapted\n", encoding="utf-8")
+    (adapted / "local.cfg").write_text("proxy\n", encoding="utf-8")
+    assert work_pc_delta.plan(download, adapted, record) == [
+        "merge  src/a b.py",  # upstream and the work PC both changed it
+        "copy   added.md",
+        "copy   moved.txt",
+        "copy   pyproject.toml",
+        "copy   uv.lock",
+        "delete gone.txt",
+        "delete move me.txt",
+        "keep   local.cfg",  # the work PC's own file
+        "keep   same.txt",  # adapted, unchanged upstream
+        "plan: 1 merge, 4 copy, 2 delete, 2 keep",
+    ]
+
+
+def test_plan_action_covers_every_case():
+    assert work_pc_delta.plan_action("b", "b", "b") is None
+    assert work_pc_delta.plan_action("b", "b", "x") == "keep"
+    assert work_pc_delta.plan_action(None, None, "x") == "keep"
+    assert work_pc_delta.plan_action("b", "n", "b") == "copy"
+    assert work_pc_delta.plan_action(None, "n", None) == "copy"
+    assert work_pc_delta.plan_action("b", None, "b") == "delete"
+    assert work_pc_delta.plan_action("b", "n", "n") is None  # already the same
+    assert work_pc_delta.plan_action("b", "n", "x") == "merge"
+    assert work_pc_delta.plan_action("b", None, "x") == "merge"  # deleted upstream, adapted
+    assert work_pc_delta.plan_action("b", "n", None) == "merge"  # removed by the work PC

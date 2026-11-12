@@ -35,6 +35,11 @@ second" in decision 5).
   headings of the standalone HTML file (`src/deploy_vii/assets`) are covered by the new browser test;
   its body content and files already delivered are not. Screen readers and Windows not run.
 
+## 2026-11-12 — Proof runs on Claude and OpenAI, and the Anthropic output limit (branch `claude/anthropic-output-limit`; rulings `2026-11-12-module-changes-proof-runs*.md`)
+Scope: live, dated TDG FY2024 public case, candidates not reviewed. OpenAI sol-medium: three runs stopped at CP-1 with "You have no credits remaining"; USD 1.39 spent; nothing proven. Claude opus-medium: `tdg-proof-short-opus-001` (short_snapshot) CP-0, CP-1, CP-L10 accepted and delivered, USD 1.95, CP-L10 accepted on its first draft with a ten-row Key figures table; `tdg-proof-portfolio-opus-001` (portfolio_decision) CP-0, CP-1, CP-1A, CP-DR, CP-2, CP-2E accepted, stopped on its USD 10 cap in CP-3, USD 7.82, CP-1's layer-1 forecast inputs block accepted by `cpos_forecast.parse(..., "CP-1")`; `tdg-proof-snapshot-opus-001` (credit_snapshot with CP-8 against tdg-reader-format-001) CP-0, CP-1, CP-1A, CP-DR accepted, stopped in CP-4 at the output limit, USD 6.46. Opus cost about USD 1.3-1.6 a module.
+Defect: CP-4 call 19 ended `max_tokens` at 32,000 output tokens (7,431 thinking) inside `write_handoff`, so the call was lost (`StreamCut`, run stopped). Anthropic spends thinking out of the output limit. Fix: `cpos_launch.output_limit` asks Anthropic configs for 64,000 (others 32,000) and the hold follows (+USD 0.64 a call; opus-medium credit_snapshot 2.34 -> 2.98, portfolio_decision 2.11 -> 2.75, short_snapshot 0.99 -> 1.63). `wb_cap_presets.py` exit 0 (USD 20 cap admits every preset, with and without CP-8); `wb_cp8_hold_sizes.py` exit 0 but it imports the 32,000 constant, so it does not size Opus at 64,000. Known limit: a `max_tokens` stop inside a tool call is retried only when no usage was reported (`loop._RETRY_CLASSES`), so a charged cut stops the run; nothing tells the model to write shorter.
+Not proven: CP-8 and the Changes tab on real output; CP-2G with the new presets; CP-DR web search guidance (not offered on Claude); the VMO2 reader check; that 64,000 is enough for CP-4 (not rerun).
+
 ## 2026-11-12 — Forecast page main period columns, PR 2 (branch `claude/forecast-period-columns-2`, stacked on `-1b`)
 Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md`, Tasks 7-10. For a model whose `calculation.json` carries a `history` record the library's Forecast grid shows Quarter, Year to date (YTD, PYTD), Fiscal year, Last twelve months (LTM, Prior LTM), Pro forma, Base case and one Downside case (the stress shock when computed, else CP-2G's own downside drivers, else an unavailable column), and the other cases in a closed second grid. The store validates the record whole (kinds, prior pairs, dates, bounds) and shows nothing from a malformed one. Growth is refused across periods whose lengths differ by more than 7 days and on a fiscal year that is not twelve months; the first forecast year grows on the forecast's base year. A model without `history` keeps its layout except the case names, the second grid, the downside note and the placeholder.
 Scope: offline, synthetic. Hand-written history records and answer keys in `tests/test_credit_os_store.py`; the browser test injects the real `store.read_cashflow` output of a two-key hand-written record into a built library (not a model published by `update_library`). Fidelity was checked at the store through the real producer against the plan's answer key (probe `arch2_answer_key_on_the_grid.py`, 119 cells), not on the page. Retained CP-1 header forms were checked in PR 1. No provider called. No retained run has a forecast inputs block with drivers, so no real run's Forecast page was read and no published model without a history was read in a browser.
@@ -462,6 +467,9 @@ Follow-up: `.github/workflows/work-pc-pack.yml` makes and commits a pack after e
 `main`; a range with only pack-folder changes makes none (tested), and the CI fast-test
 list now includes `tests/test_work_pc_delta.py`. The workflow itself first runs on merge;
 a protected `main` would refuse its push (the run fails visibly; hand generation remains).
+2026-11-12: packs 001–017 chain without gaps; every merged PR #42–#61 appears; `check` on
+`origin/main` identical. `plan` (copy/delete/merge/keep per file, 6 tests pass) on an archive
+of `04e7221` with two edits against `origin/main`: 2 merge, 140 copy, 7 delete, 1 keep.
 
 ## 2026-11-10 — Visuals package 8: complete the whole-branch review
 
@@ -921,72 +929,3 @@ check the code would produce the output if they were there. All checks offline o
   0.4781. Tests first and seen failing (9); 237 passed incl. browser; node 105; gate exit 0.
 - Not verified: a live CP-2G run writing the case blocks (instructions changed, no paid run); the
   predecessor's UPSIDE shown in this library (no such workspace built here).
-
-## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
-
-Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
-a blocked forecast with every driver null. Its stated causes were procedural, not evidential: "What
-forecast horizon should be locked: FY2025–FY2027?" and "required invocation and upstream
-acceptance validation cannot be completed through the supplied tools". The method sent has an
-entry protocol (`forecast_horizon`, `base_period`, `cases`; "block_model_when_material_forecast_
-scope_is_missing") that takes its values from a command qualifier the launcher never gave.
-
-- Change: `FORECAST_BLOCK` (launcher preface, outside the method block) now states the command
-  with those three entry values and says the helper scripts are not run in this transport and are
-  not a reason to block. A driver the evidence cannot support still stays null.
-- Test written first and seen failing (`test_the_forecast_instructions_lock_the_entry_values_…`).
-  `tests/test_cpos_launch.py` 157 passed, 1 paid test skipped; quality gate exit 0. Offline
-  prepare: CP-2G's instructions carry the paragraph; CP-0, CP-1 and CP-2A instructions are
-  byte-identical; `tdg-forecast-001` is still listed as on the current methodology.
-- Live proof (`/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`, sol-medium, 16 minutes,
-  USD 1.3061, same four modules): the procedural block is gone. CP-2G's request now reads "FY2025,
-  FY2026 and FY2027 as the locked annual forecast horizon" and `qa_status` moved from Blocked to
-  Restricted. The forecast model is **still not published**: every driver is still null, now for
-  a stated evidential reason ("essential operating, cash-conversion, exit-interest and financing
-  assumptions cannot be supported by the supplied evidence. This is an evidence constraint, not
-  a request to reconfirm the locked entry values"). It declined even capex, where it quotes
-  management's FY2025 range of 2.5% to 3.5% of sales, because no point value or later year is given.
-- Driver rule (owner, 2026-11-10, "Yes, allow judgment"): the preface now asks for a value for every
-  driver, as labelled `Analyst Interpretation` anchored to a stated figure where guidance is absent,
-  and keeps null only when nothing stated can anchor it. Test changed first and seen failing; 157
-  passed; gate exit 0.
-- Third live run (`/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`, 13 minutes,
-  USD 1.0801): **not a test of the driver rule.** CP-2A itself came back Blocked this time ("missing
-  financing documents and legal-perimeter evidence"; it was Requires More Work in -001 and
-  Restricted in -002 on identical instructions and sources), and CP-2G stopped at the method's
-  required-dependency gate, as the method directs. No forecast was published.
-- Not verified: that CP-2G gives drivers under the new rule, and the Forecast tab with a published
-  model; no run has produced one. CP-2A's run-to-run variation between Blocked and usable on the
-  same inputs is unexamined. "Open primary handoff" was left as it is: no run can reach it.
-- Why CP-2A blocked in -003 (read from the three retained runs, no provider call): the pinned context
-  declares `attachments.legal_documents: executed`, but the pack is public filings only. In -003
-  CP-0 wrote that gap as conditioning "full downside readiness", CP-1's readiness table then marked
-  "CP-2A complete failure, covenant and funding-access sequence | Not ready", and CP-2A read that as
-  a prohibition from both predecessors. In -001 and -002 CP-0 and CP-1 did not write those lines
-  and CP-2A ran. The trigger is the context's declaration; the form's value for this pack is `none`.
-  Not tested: a run with `legal_documents: none`.
-- Fourth live run (`/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`, `legal_documents:
-  none`, USD 1.2605): CP-2A came back Restricted and CP-2G gave a labelled, anchored value for every
-  driver, so the driver rule works. The forecast was still **not published**: `ebitda_margin`,
-  `tax_wc_pct_revenue` and `interest_rate` were written at 38 decimal places (calculator output
-  pasted in) against the inputs schema's four, and delivery dropped the block after payment.
-- Fix: the preface states the four-decimal limit, and the in-loop check now parses CP-2G's block
-  against CP-1 (`_forecast_issues`), so a block delivery would refuse goes back for repair. A
-  declined (all-null) block is still accepted, and the repair text offers declining, so the model
-  can always finish. Delivery's fail-open stays as a backstop. Tests written first and seen failing;
-  the five invalid-block cases now assert a repair request rather than a report without a model.
-  `tests/test_cpos_launch.py` 160 passed, 1 paid test skipped; quality gate exit 0.
-- Fifth live run (`/private/tmp/claude-501/rbot-live6/runs/tdg-forecast-005`, run-004 context,
-  USD 1.4039): **forecast published** (`cp_forecast_published: true`; `forecast.md` and
-  `forecast_exact.json` delivered). CP-2G wrote four-decimal drivers (`ebitda_margin` "0.4802",
-  anchored to CP-1's FY2024 EBITDA 3,813 on sales 7,940) on its first draft, so the new check passed
-  it; its two repairs were reader-summary issues. CP-2A gave no shock, so only the reference case
-  exists. The library built for that workspace shows the Forecast tab: revenue 8,757 / 9,658 /
-  10,652, Adj EBITDA 4,205 / 4,638 / 5,115, total leverage 5.74x / 5.18x / 4.68x. Spot check by
-  hand: 7,940 × 1.1029 = 8,757 and 8,757 × 0.4802 = 4,205.
-- Not verified: the in-loop forecast check repairing a real model's bad block (it was not
-  triggered live); the tab's note mentions an upside case that this run does not have, and the
-  model has no assumption register. Resuming a pre-fix run directory whose retained CP-2G answer
-  this check now rejects would stop with `cpos_feedback_changed`; runs 001–004 are not resumed.
-- Spend across the six live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 +
-  1.4039 = 7.3246.

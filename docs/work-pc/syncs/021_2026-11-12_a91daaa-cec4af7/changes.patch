@@ -1,0 +1,203 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index cdfa61c..7572d9e 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,10 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Proof runs on Claude and OpenAI, and the Anthropic output limit (branch `claude/anthropic-output-limit`; rulings `2026-11-12-module-changes-proof-runs*.md`)
++Scope: live, dated TDG FY2024 public case, candidates not reviewed. OpenAI sol-medium: three runs stopped at CP-1 with "You have no credits remaining"; USD 1.39 spent; nothing proven. Claude opus-medium: `tdg-proof-short-opus-001` (short_snapshot) CP-0, CP-1, CP-L10 accepted and delivered, USD 1.95, CP-L10 accepted on its first draft with a ten-row Key figures table; `tdg-proof-portfolio-opus-001` (portfolio_decision) CP-0, CP-1, CP-1A, CP-DR, CP-2, CP-2E accepted, stopped on its USD 10 cap in CP-3, USD 7.82, CP-1's layer-1 forecast inputs block accepted by `cpos_forecast.parse(..., "CP-1")`; `tdg-proof-snapshot-opus-001` (credit_snapshot with CP-8 against tdg-reader-format-001) CP-0, CP-1, CP-1A, CP-DR accepted, stopped in CP-4 at the output limit, USD 6.46. Opus cost about USD 1.3-1.6 a module.
++Defect: CP-4 call 19 ended `max_tokens` at 32,000 output tokens (7,431 thinking) inside `write_handoff`, so the call was lost (`StreamCut`, run stopped). Anthropic spends thinking out of the output limit. Fix: `cpos_launch.output_limit` asks Anthropic configs for 64,000 (others 32,000) and the hold follows (+USD 0.64 a call; opus-medium credit_snapshot 2.34 -> 2.98, portfolio_decision 2.11 -> 2.75, short_snapshot 0.99 -> 1.63). `wb_cap_presets.py` exit 0 (USD 20 cap admits every preset, with and without CP-8); `wb_cp8_hold_sizes.py` exit 0 but it imports the 32,000 constant, so it does not size Opus at 64,000. Known limit: a `max_tokens` stop inside a tool call is retried only when no usage was reported (`loop._RETRY_CLASSES`), so a charged cut stops the run; nothing tells the model to write shorter.
++Not proven: CP-8 and the Changes tab on real output; CP-2G with the new presets; CP-DR web search guidance (not offered on Claude); the VMO2 reader check; that 64,000 is enough for CP-4 (not rerun).
+ ## 2026-11-12 — Forecast page main period columns, PR 2 (branch `claude/forecast-period-columns-2`, stacked on `-1b`)
+ Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md`, Tasks 7-10. For a model whose `calculation.json` carries a `history` record the library's Forecast grid shows Quarter, Year to date (YTD, PYTD), Fiscal year, Last twelve months (LTM, Prior LTM), Pro forma, Base case and one Downside case (the stress shock when computed, else CP-2G's own downside drivers, else an unavailable column), and the other cases in a closed second grid. The store validates the record whole (kinds, prior pairs, dates, bounds) and shows nothing from a malformed one. Growth is refused across periods whose lengths differ by more than 7 days and on a fiscal year that is not twelve months; the first forecast year grows on the forecast's base year. A model without `history` keeps its layout except the case names, the second grid, the downside note and the placeholder.
+ Scope: offline, synthetic. Hand-written history records and answer keys in `tests/test_credit_os_store.py`; the browser test injects the real `store.read_cashflow` output of a two-key hand-written record into a built library (not a model published by `update_library`). Fidelity was checked at the store through the real producer against the plan's answer key (probe `arch2_answer_key_on_the_grid.py`, 119 cells), not on the page. Retained CP-1 header forms were checked in PR 1. No provider called. No retained run has a forecast inputs block with drivers, so no real run's Forecast page was read and no published model without a history was read in a browser.
+diff --git a/docs/rulings/2026-11-12-module-changes-proof-runs-claude.md b/docs/rulings/2026-11-12-module-changes-proof-runs-claude.md
+new file mode 100644
+index 0000000..437d57b
+--- /dev/null
++++ b/docs/rulings/2026-11-12-module-changes-proof-runs-claude.md
+@@ -0,0 +1,27 @@
++# The three TDG proof runs, on Claude
++
++lifts: live-provider-pause
++by: user
++date: 2026-11-12
++configs: opus-medium
++
++The three proof runs of `2026-11-12-module-changes-proof-runs.md` stopped at CP-1 after USD 1.39
++because the OpenAI account had no credits ("You have no credits remaining"). Told this, the user
++said "Stop here", and then "use claude credits".
++
++Scope: the same three CP-OS launches, on Anthropic claude-opus-5-5 at medium effort, over the
++retained historical TDG FY2024 public files
++(`~/Documents/Final-workflow-PY/data/public-corpus/v1/TDG`, read only), as-of 2024-09-30. The
++user's total of USD 30 stands: USD 1.39 is spent, so these runs are capped at USD 28 together.
++
++1. `credit_snapshot` preset with CP-8 against `tdg-reader-format-001`; cap USD 14; run directory
++   `/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-proof-snapshot-opus-001`.
++2. `short_snapshot` preset; cap USD 4; run directory `/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-proof-short-opus-001`.
++3. `portfolio_decision` preset; cap USD 10; run directory
++   `/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-proof-portfolio-opus-001`.
++
++Web search is offered only on OpenAI configs, so CP-DR reads only the run's files here: CP-DR's
++web source guidance is not exercised by these runs. All run directories are outside this repository
++and every retained run directory. The provider key comes from the launching environment only; no
++credential file is read. The runs prove these dated cases and routes only; automated checks cover
++handoff structure, not analytical accuracy. Outputs are candidates until reviewed.
+diff --git a/docs/rulings/2026-11-12-module-changes-proof-runs.md b/docs/rulings/2026-11-12-module-changes-proof-runs.md
+new file mode 100644
+index 0000000..c345514
+--- /dev/null
++++ b/docs/rulings/2026-11-12-module-changes-proof-runs.md
+@@ -0,0 +1,36 @@
++# Three TDG proof runs of the module-changes stack
++
++lifts: live-provider-pause
++by: user
++date: 2026-11-12
++configs: sol-medium, web-search
++
++Asked "Run one paid proof run on main to read the new stack on real model output?", the user said
++"Yes, propose scope". Shown three runs on TransDigm with per-run caps of USD 15, USD 5 and USD 10
++and asked "Which proof-run scope should I launch?", the user said "All three, USD 30".
++
++Scope: three CP-OS launches on OpenAI gpt-6.1-sol at medium effort over the retained historical TDG
++FY2024 public files (`~/Documents/Final-workflow-PY/data/public-corpus/v1/TDG`, read only), as-of
++2024-09-30, peer source `cp_dr_public`. CP-DR may use OpenAI's hosted web search. Total cap USD 30.
++
++1. `credit_snapshot` preset with CP-8 against the earlier run `tdg-reader-format-001`; context
++   `runs/tdg-context-2024-09-30.json`; cap USD 12; run directory
++   `/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-proof-snapshot-001`.
++2. `short_snapshot` preset (CP-0, CP-1, CP-L10); the same context with the pathway changed; cap
++   USD 7.50; run directory `/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-proof-short-001`.
++3. `portfolio_decision` preset (forecast from layer 1, no CP-2G); the same context with the pathway
++   changed; cap USD 10.50; run directory `/private/tmp/claude-501/-Users-ericguei-Documents-RBOT-HTML--claude-worktrees-pause-63d136/c8719821-dd4f-4042-ad6b-2051ff7e7dda/scratchpad/preview-ws/runs/tdg-proof-portfolio-001`.
++
++The per-run caps differ from the USD 15, USD 5 and USD 10 shown to the user because the launcher
++holds USD 5.73 for each call, so a cap must exceed the expected spend by that hold (a USD 5 cap
++admits no call); the total stays USD 30.
++
++All run directories are outside this repository and every retained run directory.
++
++Purpose: read on real model output what no paid run has exercised: the 2026-11-11 presets together,
++CP-DR's source guidance, CP-8 and the library's Changes section, the rewritten CP-L10 and its Key
++figures check, CP-1's chart tables on pathways that gained them, and the layer-1 forecast. The
++provider key comes from the launching environment only; no credential file is read. Search queries
++leave the environment, so CP-DR is told to put only public names in them. The runs prove these dated
++cases and routes only; automated checks cover handoff structure, not analytical accuracy. Outputs
++are candidates until reviewed.
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 05f7f26..fdca7ff 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -117,6 +117,22 @@ NOT_ANALYTICAL = frozenset({"CP-MODEL", "CP-8"})  # In the presets; each has its
+ FIRST_PAGES = 3  # Pages of each source kept for the offline document guess (page 1 is the cover).
+ Cover = tuple[str, tuple[str, ...]]  # A source's file name and its first pages.
+ MAX_OUTPUT_TOKENS = 32000  # What the retained live campaigns ran with.
++# Anthropic spends thinking tokens out of the same limit: in tdg-proof-snapshot-opus-001 CP-4's
++# 7,431 thinking tokens plus its handoff did not fit in 32,000, the turn stopped on max_tokens
++# inside write_handoff and the module was lost. Documented model maximum 128,000
++# (cases/pilot-fixes/limits.json); handoff.py bounds a request at 64,000.
++ANTHROPIC_MAX_OUTPUT_TOKENS = 64000
++
++
++def output_limit(config: str) -> int:
++    """The output limit a launch asks of `config`; the per-call hold is priced from it too.
++    The Copilot Anthropic config is not covered: its hold already uses the model maximum."""
++    return (
++        ANTHROPIC_MAX_OUTPUT_TOKENS
++        if CONFIGS[config].provider == "anthropic"
++        else MAX_OUTPUT_TOKENS
++    )
++
+ 
+ _SKILLS = "docs/reuse/selected-methods/skills/"
+ _VII = "src/deploy_vii/methods/"
+@@ -1867,7 +1883,7 @@ def _cp8_hold(  # noqa: PLR0913 - the sizes of CP-8's first request
+         hold = request_reservation_usd(
+             price_of(config),
+             -(-size // BYTES_PER_TOKEN_BOUND) + REQUEST_OVERHEAD,
+-            MAX_OUTPUT_TOKENS,
++            output_limit(config),
+         )
+     except ContextTooLong as error:
+         problem = f"{words} is over the model's context ({error})"
+@@ -2167,7 +2183,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
+     )
+     # The loop's own bound for the first call of the largest module; later calls hold more.
+     hold = max(
+-        request_reservation_usd(price_of(config), len(text) + 4096, MAX_OUTPUT_TOKENS)
++        request_reservation_usd(price_of(config), len(text) + 4096, output_limit(config))
+         + (
+             web_search_usd(WEB_SEARCH_CALLS_PER_TURN)
+             if web_search_offered(web_search, module, settings.run.case_kind)
+@@ -2562,7 +2578,7 @@ def main(argv: Sequence[str] | None = None) -> int:
+             ruling=args.ruling,
+             check=checker(prepared.layout),
+             max_turns=args.max_turns,
+-            max_output_tokens=MAX_OUTPUT_TOKENS,
++            max_output_tokens=output_limit(args.config),
+             on_handoff=lambda task, _: print(f"Accepted: {task.module_id}", flush=True),
+             config=args.config,
+             effort_by_module=efforts,
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index d71b691..769afb7 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -4721,3 +4721,54 @@ def test_a_claude_launch_says_search_is_off_and_holds_no_search_fee(tmp_path, ca
+     out = capsys.readouterr().out
+     assert "Web:      off: web search is offered on GPT Sol only" in out
+     assert "CP-DR searches the web" not in out
++
++
++STANDING = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"  # sol and opus configs
++
++
++@pytest.mark.parametrize(
++    ("config", "asked"),
++    [
++        ("opus-medium", 64000),
++        ("opus-high", 64000),
++        ("sol-medium", 32000),
++        ("sol-high", 32000),
++    ],
++)
++def test_the_launch_asks_anthropic_for_room_after_its_thinking(
++    tmp_path, monkeypatch, config, asked
++):
++    # A real run (tdg-proof-snapshot-opus-001, CP-4) lost its write_handoff call: Anthropic spends
++    # thinking tokens out of the output limit, so 7,431 thinking plus the handoff did not fit in
++    # 32,000 and the stream stopped on max_tokens inside the tool call. Anthropic configs ask for
++    # 64,000; every other config keeps 32,000.
++    seen = {}
++    for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
++        monkeypatch.setenv(key, "not-a-real-key")
++
++    def capture(*args, **kwargs):
++        seen.update(kwargs)
++        raise RuntimeError("stop before any provider call")
++
++    monkeypatch.setattr(cpos_launch, "run_live_handoffs", capture)
++    argv = launch(tmp_path, "--live", "--ruling", str(STANDING))
++    argv[argv.index("--config") + 1] = config
++    main(argv)
++    assert seen["max_output_tokens"] == asked
++
++
++def test_the_offline_hold_follows_the_larger_anthropic_output_limit(tmp_path, monkeypatch):
++    # Opus output costs USD 20 per million tokens, so the 32,000 extra output tokens add exactly
++    # 32,000 x 20 / 1,000,000 = USD 0.64 to the hold; the input part does not move.
++    context, folder = context_file(tmp_path), issuer_folder(tmp_path)
++
++    def hold(config: str, out: str) -> Decimal:
++        return prepare(
++            context, folder, tmp_path / out, config=config, cap="50", modules=("CP-4",)
++        ).hold
++
++    now = hold("opus-medium", "now")
++    sol = hold("sol-medium", "sol")
++    monkeypatch.setattr(cpos_launch, "output_limit", lambda config: 32000)
++    assert now - hold("opus-medium", "old") == Decimal("0.64")
++    assert hold("sol-medium", "sol-old") == sol
