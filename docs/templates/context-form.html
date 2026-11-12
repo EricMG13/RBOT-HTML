@@ -83,7 +83,7 @@ svg.i{width:16px;height:16px;flex:none}
 
 /* The run screen (after Submit, or a submission that is gone): the page head stays (the title and Start over; only the stepper goes);
    a status pill, the title, one sentence and the buttons sit below it; the modules in two columns and a card of facts beside them. */
-.workbench:has(.run-progress:not([hidden])) .stagebar{display:none}
+.workbench:has(.run-progress:not([hidden])) .stagebar,.workbench:has(.run-progress:not([hidden])) .readiness-pill{display:none}
 .rp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
 .rp-title{min-width:0}
 .rp-title .lead{margin:6px 0 0;font-size:var(--fs-control);line-height:20px}
@@ -259,7 +259,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 @media(max-width:640px){.chk{grid-template-columns:minmax(0,1fr)}}
 
 /* The documents the service read: a dashed zone, then the files as rows. */
-.dropzone{margin-top:22px;padding:44px 32px;border:1.5px dashed #b9bfd0;border-radius:var(--radius-card);background:#fcfdff;text-align:center}
+.dropzone{margin-top:22px;padding:44px 32px;border:1.5px dashed var(--border-primary);border-radius:var(--radius-card);background:#fcfdff;text-align:center}
 .dropzone .dz-t{font:600 16px/24px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
 .dropzone .dl{justify-content:center;margin-top:14px}
 .dropzone .err{max-width:none;margin:12px auto 0;justify-content:center;text-align:left}
@@ -421,6 +421,8 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   .inspector>summary{padding:12px 15px}
   .rv-row{grid-template-columns:minmax(0,1fr) auto}.rv-row .ln{grid-column:1/-1}.rv-row .ed{grid-column:2;grid-row:1}
   .rp-head{display:block}.rp-actions{margin-top:12px}
+  .rv-facts,.rv-card .rv-facts{grid-template-columns:minmax(0,1fr);gap:0}.rv-facts dd{margin-bottom:8px}
+  .rv-list tr{grid-template-columns:10px minmax(0,1fr);grid-template-areas:"dot nm" "dot st" "dot why";grid-template-rows:auto}
 }
 @media(max-width:700px){.run-mods{columns:1}.pair{grid-template-columns:minmax(0,1fr);gap:0}.pair>*+*{margin-top:24px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -1528,13 +1530,8 @@ function optionalGroup(g, o) {
   if (g === 'valuation') return !['issuer_trading', 'user_multiple'].includes(o.valuation.basis);
   return g === 'assumptions';
 }
-function enteredGroup(g, o) {
-  return {market: o.deal_terms.length + o.quotes.length + o.ratings.length > 0, valuation: o.valuation.peers.length + o.valuation.precedents.length > 0 || !!o.module_options,
-    assumptions: Object.values(o.assumptions).some(Boolean) || o.research_questions.length > 0}[g] || false;
-}
-// A step is optional when every group it shows is; it is entered when any of them holds an answer.
+// A step is optional when every group it shows is.
 const optionalStep = (step, gs, o) => groupsOf(step, gs).every(g => optionalGroup(g, o));
-const enteredStep = (step, gs, o) => groupsOf(step, gs).some(g => enteredGroup(g, o));
 function stepState(st, sq, o, gs) {
   if (st === cur) return {word:'Current', locked:false};
   if (sq.slice(0, sq.indexOf(st)).some(stepBad)) return {word:'Locked', locked:true};
@@ -1594,7 +1591,7 @@ function renderNav(sq, o, gs) {
   $('back-t').textContent = i > 0 ? STEP_NAME[sq[i - 1]] : 'Back';
   nx.hidden = cur === 'start';
   $('nextlive').hidden = cur === 'start';
-  $('next-t').textContent = sq[i + 1] !== 'start' && optionalStep(cur, gs, o) && !enteredStep(cur, gs, o) ? 'Skip' : NEXT_LABEL[sq[i + 1]] || 'Next';
+  $('next-t').textContent = NEXT_LABEL[sq[i + 1]] || 'Next';
   const mine = errs.filter(e => STEPS[cur].includes(e.st));
   const req = mine.filter(e => /^(required|choose|add |say whether|tick)/.test(e.short)).length, oth = mine.length - req;
   const nw = warns.filter(w => STEPS[cur].includes(w.st)).length;
@@ -1607,9 +1604,9 @@ function gotoStep(x) {
   cur = group ? stepOf(group) : x; curGroup = group;
   visited.add(cur);
   update();
-  $('st-' + (group || STEPS[cur].find(g => !$('st-' + g).hidden) || STEPS[cur][0])).querySelector('h2').focus();
   $('canvas').scrollTop = 0;
   window.scrollTo(0, 0);
+  $('st-' + (group || STEPS[cur].find(g => !$('st-' + g).hidden) || STEPS[cur][0])).querySelector('h2').focus();
 }
 function goNext() {
   const o = update(), sq = stepsFor(seqFor(o));
@@ -1764,7 +1761,7 @@ function tally(R) {
 }
 function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
 function renderPanel(o, R) {
-  setHTML($('scope'), visited.has('purpose') ? esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`) : '');
+  setHTML($('scope'), cur !== FIRST_STEP ? esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`) : '');
   setHTML($('pn-run'), `${R.mods.length} modules, in the order they run. Updates as you answer.`);
   setHTML($('pn-tally'), tally(R));
   setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(named(x.reason))}</li>`).join('')}</ul></div>` : '');
@@ -1889,7 +1886,7 @@ function renderState() {
   box._for = want;
   box.textContent = '';
   if (!want) return;
-  if (want === 'errs') box.append(h('p', {className: 'err', textContent: 'Fix the stages marked Needs attention first.'}));
+  if (want === 'errs') box.append(h('p', {className: 'err', textContent: 'Fix the steps marked Needs attention first.'}));
   else if (want === 'nodocs') box.append(h('p', {className: 'err', textContent: 'Upload the documents first.'}));
   else if (want === 'busy') box.append(h('p', {className: 'muted', textContent: 'Making the summary from your documents and answers…'}));
   else {
@@ -2013,10 +2010,10 @@ function renderReview(sq, o) {
   renderCarried();
   const box = $('rv-steps');
   box.innerHTML = '';
-  sq.filter(st => st !== 'review').forEach((st, i) => {
+  sq.filter(st => st !== 'review').forEach(st => {
     const row = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd'), act = document.createElement('dd'), ed = document.createElement('button');
     row.className = 'rv-row'; dt.className = 'nm'; dd.className = 'ln'; act.className = 'ed';
-    dt.textContent = (i + 1) + '. ' + SHORT[st];
+    dt.textContent = SHORT[st];
     ed.type = 'button'; ed.className = 'text-button'; ed.dataset.goto = st; ed.textContent = 'Edit';
     ed.setAttribute('aria-label', 'Edit ' + SHORT[st]);
     act.appendChild(ed);

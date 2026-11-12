@@ -155,8 +155,9 @@ the run uses it, and a later step stays locked while an earlier one has an error
 
 1. **Documents.** Choose the issuer's folder, or add files; the files upload and the launcher's own
    offline reading says what it recognises in each (kind, period end, whether a legal document reads
-   as executed) and which files it will not read. Each kind the pathway uses and the folder lacks is
-   listed as a limitation with the module it affects.
+   as executed) and which files it will not read. Documents shows only what was read. Once a purpose
+   is chosen, each kind the pathway uses and the folder lacks is listed from Purpose on, in the
+   readiness column, as a limitation with the module it affects.
 2. **Purpose.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
    `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or `short_snapshot` (the
    Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each row lists its modules. Pick Basic,
@@ -169,7 +170,8 @@ the run uses it, and a later step stays locked while an earlier one has an error
 4. **More context.** Standard and Advanced (at Basic only for a primary run, a held answer, an error
    or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
    your own peers, the Relative value mode and Deep Debate for the Committee module); research
-   questions at Standard; pinned assumptions at Advanced.
+   questions at Standard; pinned assumptions at Advanced. What shows depends on the pathway: the
+   short snapshot has no More context step at any level.
 5. **Start.** The summary: the forecast for each module in run order (Ready, Check, Gap, Limited or
    Will refuse), with the reason and the step that fixes it, and each defaulted input with its
    default. The table joins the launcher's forecast and the page's own rules; where both speak of a
@@ -189,7 +191,7 @@ a submission starts at most one run however many times Submit is sent.
 | Level | Asked | Defaulted |
 |---|---|---|
 | Basic | Documents, Purpose, Confirm and Start | See below |
-| Standard | Basic, plus More context without valuation detail, and research questions | Pinned assumptions, valuation basis, own multiple |
+| Standard | Basic, plus More context where the pathway has it (market inputs, peers and module settings, research questions); none for the short snapshot | Pinned assumptions, valuation basis, own multiple |
 | Advanced | Everything: also pinned assumptions, valuation basis and own multiple, deal terms, guarantors, aliases, sponsor, the module subset and turns per module | Nothing |
 
 Basic defaults: peer source `cp_dr_public` (the research module finds the peers from public

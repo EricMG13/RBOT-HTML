@@ -50,13 +50,20 @@ and More context, and the "Run started" screen in the same look. Commits 5decc72
 | 2 | A step shows when the level shows any of its groups | A visibility rule |
 | 3 | A step stacks its groups under their own headings; "Go to Pathway" becomes "Go to Purpose" | Labels |
 | 4 | The Advanced module list stays in Purpose | Moving it later |
-| 5 | No readiness panel on Documents (a pill instead); scope line empty until Purpose is visited | A display rule |
+| 5 | No readiness panel on Documents (a pill instead); scope line empty until Purpose is visited (replaced by Ruling 13) | A display rule |
 | 6 | The page title is "Start a run" | One string |
 | 7 | No drag and drop, tiles, source column or folder list | Layout |
-| 8 | Next is named for the next step; Skip where today's rule gives it | Labels |
+| 8 | Next is named for the next step; Skip where today's rule gives it (removed by Ruling 12) | Labels |
 | 9 | The group number is removed; the stepper carries it | Restore |
 | 10 | The run and "submission gone" screens keep the page head (title, Start over) as before | A display rule |
+| T1a | An unvisited step with an error says "To do", as today | Labels |
+| T1b | The Start group's heading keeps "Summary and start" | Labels |
 | 11 | The Start card sticks by its bottom. With a card taller than the page, Submit is out of view only at the top of the scroll and in view from part-way to the end; before this branch Submit was at the page's very end | A layout rule |
+| 12 | "Skip" is removed: More context always precedes Start, so the branch was unreachable | A label |
+| 13 | The scope line is empty only while Documents is on screen (replaces Ruling 5's "until Purpose is visited") | A display rule |
+| 14 | "Your answers" rows carry no number | A label |
+| 15 | The documents zone border uses `--border-primary`; no second new colour | A colour |
+| 16 | The group names in fix sentences ("under Legal", "under Market", "under Issuer and dates") stay as written (Ruling 3) | Labels |
 
 ## Verification summary
 
@@ -78,6 +85,18 @@ Not verified, collected from the reports:
 
 ## Open, for the owner
 
+- Ruling 16: those group names are no longer on screen in the readiness column (the stepper and
+  headings do not carry them); the sentences still lead correctly through the button beside them on
+  Start.
+- Predate the branch, found in the whole-branch review: moving focus from a tick to an Edit button
+  destroys the button (focus falls to the page); the notice's carry and "different issuer" reset to
+  the first step without moving focus; at exactly 960px the readiness panel opens above the form
+  (about 1,000px); `docs/templates/README.md` still says "a check before download" though the page
+  has no download.
+- Size: the branch is about 2,100 changed lines, roughly half tests and a fixture, over the 800-line
+  guide. The reviewer's alternative to a waiver is four stacked parts: A (5decc72, a6eec82; 544),
+  B (765235d; 711, 554 without the fixture), C (47bf7c7, a4408ff; 640), D (the documents and the
+  review fixes; about 340).
 - Pre-existing, found in the Task 2 review: the 960px breakpoint is matched by both the JavaScript
   and the CSS, and the files table keeps a 560px minimum width below 720px.
 - The mock-up's library empty state (R0) is not built.

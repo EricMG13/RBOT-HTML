@@ -324,7 +324,7 @@ def _rule(selector: str) -> str:
 
 def test_the_documents_zone_is_a_one_and_a_half_pixel_dashed_border() -> None:
     """Chrome snaps 1.5px to 1px at 1x, so the browser probe cannot tell the two apart."""
-    assert "border:1.5px dashed #b9bfd0" in _rule(".dropzone")
+    assert "border:1.5px dashed var(--border-primary)" in _rule(".dropzone")
 
 
 def test_the_canvas_leaves_no_bottom_padding_and_the_last_element_keeps_its_own_space() -> None:
@@ -341,3 +341,9 @@ def test_what_submit_does_is_the_one_new_heading_and_holds_the_submit_controls()
     for ident in ("approve", "rv-submit-error", "submit", "submitnote", "rv-facts"):
         assert f'id="{ident}"' in body, ident
     assert FORM.count("What Submit does") == 1
+
+
+def test_the_page_has_no_skip_label_and_says_steps_not_stages_in_the_errors_sentence() -> None:
+    assert "'Skip'" not in FORM and "enteredStep" not in FORM and "enteredGroup" not in FORM
+    assert "Fix the steps marked Needs attention first." in FORM
+    assert "Fix the stages marked" not in FORM

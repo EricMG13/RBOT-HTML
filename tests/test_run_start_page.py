@@ -3193,7 +3193,9 @@ def test_start_is_the_answers_and_a_360px_card_that_holds_approval_and_submit(pa
       back: box($('back')).width > 0,
       rule: getComputedStyle($('approve').closest('.rv-go')).borderTopWidth};
     out.scrolls = canvas.scrollHeight > canvas.clientHeight;
-    canvas.scrollTop = 300;
+    // Far enough down that the card is past the top of its own column (it cannot leave the
+    // column, so nearer the top it sits at its natural place; the scope line moves that point).
+    canvas.scrollTop = 600;
     await settle(100);
     out.stuck = [box(card).bottom, box(canvas).bottom];
     return out;
@@ -3338,7 +3340,7 @@ def test_start_draws_each_module_as_a_dot_row_and_each_group_as_an_answer_row(pa
     assert seen["dot"] == ["8px", "8px", "50%"] and seen["pad"] == "11px 0px"
     assert seen["name"] == "600 14px"
     assert seen["stateBelow"] is True and seen["whyRight"] is True
-    groups = [r.split(". ", 1)[1] for r in seen["rows"]]
+    groups = list(seen["rows"])  # Ruling 14: no number
     assert groups == ["Documents", "Purpose", "Issuer and dates", "Legal"]
     assert [e[0] for e in seen["edits"]] == ["Edit"] * 4
     assert [e[1] for e in seen["edits"]] == [f"Edit {g}" for g in groups]
@@ -3509,3 +3511,147 @@ def test_the_stepper_keeps_a_separator_with_the_step_before_it_when_it_wraps(pag
     assert seen["leaders"] == ["BUTTON", "BUTTON"]  # no line begins with a "›"
     assert seen["seps"] == [1, 1, 1, 1, 0]  # four separators, each after the step before it
     assert seen["sepAfter"] == [True, True, True, True, False] and seen["ariaHidden"] is True
+
+
+# ---- Whole-branch review fixes (2026-11-12) ------------------------------------------------------
+
+IN_VIEW = """
+const inView = el => {
+  const main = $('canvas'), wide = getComputedStyle(main).overflowY !== 'visible';
+  const r = el.getBoundingClientRect();
+  const c = wide ? main.getBoundingClientRect() : {top: 0, bottom: innerHeight};
+  return r.height > 0 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1; };
+const click = async el => { el.click(); await settle(60); };
+"""
+
+
+@pytest.mark.parametrize("size", ["1440,900", "720,900"])
+def test_a_button_that_opens_a_later_group_of_a_step_leaves_its_heading_in_view(page, size):
+    seen = page.run(
+        IN_VIEW
+        + f"""
+    const T = {{}};
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
+      file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
+    await click($('next')); pick('data-k="pathway"', 'credit_snapshot'); level('standard');
+    await click($('next')); T.confirmTop = [$('canvas').scrollTop, scrollY];
+    type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
+    pick('data-k="issue_classification"', 'high_yield');
+    await click($('next')); T.moreTop = [$('canvas').scrollTop, scrollY];
+    await click($('next')); await summarised(); await settle(80);
+    T.edit = {{}};
+    for (const g of ['issuer', 'legal', 'market', 'valuation', 'assumptions']) {{
+      await click(document.querySelector(`#rv-steps [data-goto="${{g}}"]`)); await settle(80);
+      const a = document.activeElement;
+      T.edit[g] = [a.tagName, inView(a), a.closest('section').dataset.st];
+      gotoStep('start'); await summarised(); await settle(60);
+    }}
+    return T;
+    """,
+        size=size,
+    )
+    assert seen["confirmTop"] == [0, 0] and seen["moreTop"] == [0, 0]
+    assert all(v[0] == "H2" and v[1] for v in seen["edit"].values()), seen["edit"]
+    assert {g: v[2] for g, v in seen["edit"].items()} == {g: g for g in seen["edit"]}
+
+
+def test_the_start_module_rows_stack_at_375px_and_leave_the_reason_wide(page):
+    seen = page.run(
+        """
+    const measure = async () => {
+      window.resizeTo(375, 812); await settle(300);
+      await issuer('credit_snapshot', [file('annual.txt', REPORT_JS)]);
+      await review(); await settle(100);
+      const row = document.querySelector('#rv-ready tr[data-module]');
+      return {inner: innerWidth, why: Math.round(row.children[2].getBoundingClientRect().width),
+        docW: document.documentElement.scrollWidth,
+        facts: Math.min(...[...document.querySelectorAll('#rv-facts dd')]
+          .map(d => Math.round(d.getBoundingClientRect().width)))};
+    };
+    if (window.opener) { window.opener.NARROW = await measure(); return {popup: true}; }
+    window.open(location.href, 'narrow', 'popup,width=375,height=812');
+    for (let i = 0; i < 300 && !window.NARROW; i++) await settle(100);
+    return window.NARROW;
+    """.replace("REPORT_JS", json.dumps(REPORT))
+    )
+    assert seen["inner"] == 375 and seen["docW"] == 375
+    assert seen["why"] >= 200, seen
+    assert seen["facts"] >= 200, (
+        seen
+    )  # the card's facts stack too: the value is not squeezed beside its label
+
+
+def test_the_readiness_pill_is_not_shown_on_the_run_screen_or_when_the_submission_is_gone(page):
+    page.run(f"""
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    type('i-issuer_name', 'Acme Corp');
+    const saved = JSON.parse(localStorage.getItem('run-start/1'));
+    saved.id = 'f'.repeat(32); localStorage.setItem('run-start/1', JSON.stringify(saved));
+    return {{}};
+    """)
+    gone = page.run("""
+    const shown = el => el.getClientRects().length > 0;
+    const out = {gone: shown($('submission-gone')), first: shown($('panel-pill'))};
+    type('i-issuer_name', 'Acme Corp II'); out.after = shown($('panel-pill'));
+    return out;
+    """)
+    assert gone["gone"] is True and gone["first"] is False and gone["after"] is False
+    run = page.run(
+        f"""
+    const shown = el => el.getClientRects().length > 0;
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review(); tickAll(); approve(); $('submit').click();
+    for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
+    clearTimeout(pollTimer);
+    return {{progress: shown($('run-progress')), pill: shown($('panel-pill'))}};
+    """
+    )
+    assert run == {"progress": True, "pill": False}
+
+
+def test_next_is_never_labelled_skip(page):
+    seen = page.run(
+        """
+    await uploadFiles([file('annual.txt', REPORT_JS)]);
+    const labels = [];
+    const cases = [['credit_snapshot', 'basic'], ['relative_value', 'standard'],
+      ['distressed_restructuring', 'advanced']];
+    for (const [p, l] of cases) {
+      gotoStep('purpose'); pick('data-k="pathway"', p); level(l);
+      for (const st of ['documents', 'purpose', 'confirm', 'more']) {
+        gotoStep(st); labels.push($('next-t').textContent);
+      }
+    }
+    return {labels};
+    """.replace("REPORT_JS", json.dumps(REPORT))
+    )
+    assert "Skip" not in seen["labels"] and len(seen["labels"]) == 12
+
+
+def test_the_scope_line_shows_after_a_reload_on_any_step_but_documents(page):
+    page.run(f"""
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    pick('data-k="pathway"', 'credit_snapshot');
+    return {{}};
+    """)
+    seen = page.run("""
+    const out = {documents: $('scope').textContent};
+    gotoStep('confirm'); out.confirm = $('scope').textContent;
+    return out;
+    """)
+    assert (
+        seen["documents"] == ""
+        and "Credit Snapshot" in seen["confirm"]
+        and "modules" in seen["confirm"]
+    )
+
+
+def test_your_answers_rows_carry_no_number(page):
+    seen = page.run(
+        f"""
+    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    await review();
+    return {{rows: [...document.querySelectorAll('#rv-steps dt')].map(d => d.textContent)}};
+    """
+    )
+    assert seen["rows"] and not any(re.match(r"\d", r) for r in seen["rows"]), seen
