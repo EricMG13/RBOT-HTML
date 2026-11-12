@@ -178,7 +178,7 @@ def test_the_changes_tab_sits_between_overview_and_modules_and_shows_the_compari
     assert 'change-status">Unchanged</span>' in dom
     over = dom[dom.index('id="changes-over-time"') :]
     assert over.index("30 September 2024") < over.index("31 March 2025")
-    assert "CP-2 bottom line." in over
+    assert "Fundamental credit bottom line." in over
     # Model output is text, never markup.
     assert "window.hit" not in dom.replace("&lt;script&gt;window.hit=1&lt;/script&gt;", "")
     assert "<script>window.hit=1" not in dom
@@ -199,7 +199,10 @@ def test_a_cp8_that_was_not_produced_says_so_with_its_reason(tmp_path):
     dom, console = visit(build(tmp_path), "#W-Changes/changes?c=later")
     assert console == []
     assert "The explanation of what changed was not produced for this run." in dom
-    assert "Recorded reason: cpos_live_not_accepted: CP-8 not accepted within bounds" in dom
+    assert (
+        "Recorded reason: cpos_live_not_accepted: "
+        "Changes since the last run not accepted within bounds" in dom
+    )
     assert 'id="changes-what"' not in dom
     assert 'id="changes-over-time"' in dom
 
@@ -238,3 +241,18 @@ def test_over_time_joins_two_runs_the_pack_names_by_run_folder(tmp_path):
     assert console == []
     over = dom[dom.index('id="changes-over-time"') :]
     assert over.count("<line ") == 1
+
+
+def test_no_module_code_reaches_a_reader_from_the_changes_tab(tmp_path):
+    """Owner ruling 2026-11-12: the Changes tab names modules and never shows a code. The answer
+    key is the library page's codes probe (it scans the Changes route among its routes, text,
+    `title` and `aria-label`, folds opened) over a run that has CP-8's pack and handoff."""
+    from test_library_page_browser import read_codes_probe
+
+    two_runs(tmp_path)
+    page = build(tmp_path)
+    dom, console = visit(page, "#W-Changes/changes?c=later")
+    assert console == []
+    assert 'id="changes-issuer"' in dom and 'id="changes-analysis"' in dom
+    seen = read_codes_probe(page, "later", "#CP-2/head?c=later")
+    assert seen["hits"] == []

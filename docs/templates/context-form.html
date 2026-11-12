@@ -32,7 +32,6 @@ h1,h2,h3{font-family:'Red Hat Display',system-ui,sans-serif}
 [hidden]{display:none!important}
 svg.i{width:16px;height:16px;flex:none}
 .sr-only,.skip{position:fixed;top:-60px;left:70px;z-index:20;background:#fff;padding:10px}.skip:focus{top:4px}
-.code{font:500 var(--fs-label)/1.5 'Red Hat Mono',monospace;color:var(--text-quaternary)}
 .muted{color:var(--text-quaternary)}
 
 /* Frame: the library's rail, one white card (title, stages, workbench) on the ground. */
@@ -255,7 +254,6 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .mods details[open]>summary::after{transform:rotate(45deg)}
 .mods .nm{min-width:0;font:600 var(--fs-compact)/1.35 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
 .mods .nm small{display:block;margin-top:2px;font:400 var(--fs-label)/1.4 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
-.mods .nm .code{font-size:var(--fs-label)}
 .why-list{margin:0 0 12px;padding:0;list-style:none;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
 .why-list li{margin:6px 0;padding-left:10px;border-left:2px solid var(--border-secondary)}
 .note-foot{margin-top:14px;font-size:var(--fs-label);line-height:16px;color:var(--text-quaternary)}
@@ -629,6 +627,8 @@ const MODULES = {
   'CP-DR': ['Research questions', 'Finds the peers and their figures, and answers your research questions.']
 };
 const mname = m => (MODULES[m] || [m])[0];
+// Text from the rules or the service names a module by its code; the analyst reads its name (a code with no name here reads "a module").
+const named = t => String(t ?? '').replace(/\bCP-[A-Z0-9]+\b/g, c => MODULES[c] ? MODULES[c][0] : 'a module');
 const PATHS = {
   credit_snapshot: {label:'Credit Snapshot', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
   earnings_update: {label:'Earnings Update', q:'What changed since the last reporting period?', needs:'Filings for both periods and the management EBITDA bridge.'},
@@ -772,7 +772,7 @@ function seg(name, attr, opts, vertical) {
     `<label><input type="radio" name="${name}" ${attr} value="${v}">${label}</label>`).join('') + '</div>';
 }
 // Reader names lead; the module code is the name's title (screens pass: production detail in a title).
-const usesList = mods => mods.length ? '<b>Used by</b> ' + mods.map(m => `<span title="${esc(m)}">${esc(mname(m))}</span>`).join(', ') : 'No module in this run reads it directly.';
+const usesList = mods => mods.length ? '<b>Used by</b> ' + mods.map(m => `<span>${esc(mname(m))}</span>`).join(', ') : 'No module in this run reads it directly.';
 function F(id, k, label, attrs, help, cls) {
   return `<div class="f${cls ? ' ' + cls : ''}"><label for="${id}">${label}</label><input type="text" id="${id}" data-k="${k}" ${attrs || ''}${help ? ` aria-describedby="${id}-h"` : ''}>` +
     (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
@@ -780,7 +780,7 @@ function F(id, k, label, attrs, help, cls) {
 function D(id, k, label, help, cls) { return F(id, k, label, '', help, cls).replace('type="text"', 'type="date"'); }
 function S(id, k, label, opts, help) {
   return `<div class="f"><label for="${id}">${label}</label><select id="${id}" data-k="${k}"${help ? ` aria-describedby="${id}-h"` : ''}><option value=""></option>` +
-    opts.map(o => `<option>${esc(o)}</option>`).join('') + '</select>' + (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
+    opts.map(o => Array.isArray(o) ? `<option value="${esc(o[0])}">${esc(o[1])}</option>` : `<option>${esc(o)}</option>`).join('') + '</select>' + (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
 }
 function rowShell(title, body) {
   return `<div class="row" data-row><div class="rowhead"><h4 data-title="${title}"></h4><button type="button" class="tertiary-action sm" data-remove>Remove</button></div>${body}</div>`;
@@ -829,7 +829,7 @@ const ROWS = {
   }},
   q: {box:'rows-q', title:'Question', max:10, make() {
     const p = 'z' + (++uid);
-    return rowShell('Question', '<div class="grid">' + F(p+'a','text','Question',P('e.g. How much of 2025 adjusted EBITDA is run-rate cost savings?'),'One question, plain text, no | character.','wide') + S(p+'b','focus_module','Focus module',Object.keys(MODULES),'Peer benchmark (CP-1C) or Fundamental credit (CP-2) receive the answer; any other choice, or none, sends it to both.') + '</div>');
+    return rowShell('Question', '<div class="grid">' + F(p+'a','text','Question',P('e.g. How much of 2025 adjusted EBITDA is run-rate cost savings?'),'One question, plain text, no | character.','wide') + S(p+'b','focus_module','Focus module',Object.entries(MODULES).map(([id, m]) => [id, m[0]]),'Peer benchmark or Fundamental credit receive the answer; any other choice, or none, sends it to both.') + '</div>');
   }}
 };
 function addRow(kind) {
@@ -1216,7 +1216,7 @@ const WORD = {will_refuse:'Will refuse', gap:'Gap', limited:'Limited', check:'Ch
 const worst = list => list.reduce((a, b) => OUTCOMES.indexOf(a) <= OUTCOMES.indexOf(b) ? a : b, 'ready');
 const PEER_GAP = {none:'No peer source: no peer universe and no peer multiple.', user_list:'Named peers only: nothing looks up their figures in this run, so the benchmark has no peer figures.'};
 // The modules of this run among the ones a run-level limit names.
-const affected = (f, modules, otherwise) => modules.filter(f.has).join(', ') || otherwise;
+const affected = (f, modules, otherwise) => modules.filter(f.has).map(mname).join(', ') || otherwise;
 // Live evidence behind the wording: tdg-forecast-003 and -004 (legal declaration, CP-2A), and
 // cpos-tdg-sol-medium-all-001 (as-of 2024-09-30; CP-2G left out the December-quarter results).
 const RULES = [
@@ -1577,9 +1577,9 @@ let openMods = new Set();
 const known = status => OUTCOMES.includes(status) ? status : 'will_refuse';
 const badgeFor = (status, text) => `<span class="badge ${known(status)}"><i></i>${esc(text || WORD[known(status)])}</span>`;
 function readyList(R) {
-  const item = it => `<li>${esc(it.reason)}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(it.fix)}</span>` : ''}</li>`;
+  const item = it => `<li>${esc(named(it.reason))}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(named(it.fix))}</span>` : ''}</li>`;
   return R.mods.map(m => {
-    const head = `<span class="nm">${esc(mname(m.id))}<small><span class="code">${m.id}</span> · ${esc(MODULES[m.id][1])}</small></span>${badgeFor(m.status)}`;
+    const head = `<span class="nm">${esc(mname(m.id))}<small>${esc(MODULES[m.id][1])}</small></span>${badgeFor(m.status)}`;
     if (!m.items.length) return `<li><div class="mrow">${head}<span></span></div></li>`;
     return `<li><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
   }).join('');
@@ -1594,7 +1594,7 @@ function renderPanel(o, R) {
   setHTML($('scope'), esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`));
   setHTML($('pn-run'), `${R.mods.length} modules, in the order they run. Updates as you answer.`);
   setHTML($('pn-tally'), tally(R));
-  setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(x.reason)}</li>`).join('')}</ul></div>` : '');
+  setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(named(x.reason))}</li>`).join('')}</ul></div>` : '');
   setHTML($('pn-mods'), readyList(R));
   const bad = R.mods.filter(m => m.status === 'will_refuse').length, gaps = R.mods.filter(m => ['gap', 'limited'].includes(m.status)).length + (R.run.some(x => ['gap', 'limited'].includes(x.outcome)) ? 1 : 0);
   // Only checks with a fix the analyst can act on: "confirmed when the summary is made" is not counted.
@@ -1720,7 +1720,7 @@ function renderState() {
   else if (want === 'nodocs') box.append(h('p', {className: 'err', textContent: 'Upload the documents first.'}));
   else if (want === 'busy') box.append(h('p', {className: 'muted', textContent: 'Making the summary from your documents and answers…'}));
   else {
-    const p = h('p', {className: 'err'}, h('span', {textContent: SUMMARY.error}));
+    const p = h('p', {className: 'err'}, h('span', {textContent: named(SUMMARY.error)}));
     const stage = errorStage(SUMMARY.error);
     if (stage) p.append(' ', button('Go to ' + SHORT[stage], {goto: stage}));
     p.append(' ', button('Check again', {again: '1'}));
@@ -1747,8 +1747,8 @@ const pageKey = o => summaryOk() ? JSON.stringify(pageItems(o, SUMMARY.modules, 
 const reviewCurrent = o => summaryOk() && RENDERED === SUMMARY && RENDERED_KEY === pageKey(o);
 function itemRow(item, sq) {
   const stage = stageOf(item);
-  const li = h('p', {}, h('span', {textContent: item.reason}));
-  if (item.fix) li.append(h('span', {className: 'fix'}, h('b', {textContent: 'Fix: '}), item.fix));
+  const li = h('p', {}, h('span', {textContent: named(item.reason)}));
+  if (item.fix) li.append(h('span', {className: 'fix'}, h('b', {textContent: 'Fix: '}), named(item.fix)));
   if (stage && stage !== 'review') {
     const hidden = !sq.includes(stage);
     li.append(' ', button(hidden ? 'Answer this now' : 'Go to ' + SHORT[stage], hidden ? {goto: stage, now: stage} : {goto: stage}));
@@ -1765,7 +1765,7 @@ function readyTable(sq, own = []) {
   const body = h('tbody');
   order.forEach(id => {
     const items = all.filter(i => i.scope === id), outcome = worst(items.map(i => known(i.outcome)));
-    const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}), h('span', {className: 'code', textContent: id}));
+    const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}));
     const state = h('td'); state.innerHTML = badgeFor(outcome);
     const why = h('td', {}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
     const tr = h('tr', {}, h('td', {}, name), state, why);
@@ -1803,7 +1803,7 @@ function renderFacts(o) {
     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
     const me = `${MODELS[sent.model] || sent.model}, ${EFFORTS[sent.effort] || sent.effort}`;
     rows.push(['Model and effort', sent.model === 'gpt' && sent.effort === 'balanced' ? me + ' (the default)' : me]);
-    if (left.length) rows.push(['Modules left out', left.map(m => `${mname(m)} (${m})`).join(', ')]);
+    if (left.length) rows.push(['Modules left out', left.map(mname).join(', ')]);
   }
   box.textContent = '';
   rows.forEach(([k, v]) => box.append(h('dt', {textContent: k}), h('dd', {textContent: v})));
@@ -1854,7 +1854,7 @@ function renderReview(sq, o) {
   });
   const err = $('rv-submit-error');
   err.hidden = !SUBMIT_ERROR;
-  err.textContent = SUBMIT_ERROR;
+  err.textContent = named(SUBMIT_ERROR);
 }
 // Submit: one request per click that is allowed, and none while one is in flight.
 async function submitRun() {
@@ -1906,7 +1906,7 @@ function renderRun(r) {
   }
   $('run-again').hidden = !RESTARTABLE.includes(r.status);
   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
-  $('run-reason').textContent = r.reason || 'none given';
+  $('run-reason').textContent = named(r.reason) || 'none given';
   const list = $('run-modules');
   list.textContent = '';
   list.style.setProperty('--n', 4);
@@ -2099,8 +2099,7 @@ function renderModules(order) {
     const label = document.createElement('label'), input = document.createElement('input'), ct = document.createElement('span'), name = document.createElement('span');
     label.className = 'card'; input.type = 'checkbox'; input.dataset.c = 'mod'; input.value = m; input.checked = !SKIPPED.has(m);
     ct.className = 'ct'; name.className = 'ctl'; name.textContent = mname(m);
-    const code = document.createElement('span'); code.className = 'code'; code.textContent = m;
-    name.appendChild(code); ct.appendChild(name); label.append(input, ct); box.appendChild(label);
+    ct.appendChild(name); label.append(input, ct); box.appendChild(label);
   });
 }
 // What the service takes at /summary (run_start/submissions.py Answers).
@@ -2257,7 +2256,7 @@ async function startFrom(runId) {
   const notes = [];
   if (usable && Array.isArray(got.modules) && got.modules.length) {
     const inPathway = runOf(getV($('st-pathway'), 'pathway')), unknown = got.modules.filter(m => !inPathway.includes(m));
-    if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.join(', ')} not in this pathway.`);
+    if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.map(mname).join(', ')} not in this pathway.`);
     else {
       inPathway.filter(m => !got.modules.includes(m)).forEach(m => SKIPPED.add(m));
       CARRIED.fields.add('@modules');
@@ -2410,7 +2409,7 @@ function renderPathCards() {
     const id = 'path-' + p, d = PATHS[p];
     return `<label class="card" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
       `<span class="ct"><span class="ctl"><b>${d.label}</b></span><span class="q">${d.q}</span><span class="imp">Needs: ${d.needs}</span>` +
-      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span title="${m}">${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
+      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span>${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
   }).join('');
 }
 function renderTimeline() {
@@ -2482,7 +2481,7 @@ function vis() {
   peers.hidden = !(ps === 'user_list' || ps === 'user_comps');
   peers.dataset.mode = ps;
   $('peers-intro').textContent = ps === 'user_list' ? 'Name each peer. Nothing looks up their figures in this run, so the benchmark records "No peer figures".' : 'One row per peer, figures at most 12 months old. At least 3 are needed for the automatic basis.';
-  $('vallead').textContent = has('CP-1C') ? 'The peer benchmark (CP-1C) forms the valuation multiple from these peers' + (has('CP-4C') ? ', and Recovery & fulcrum (CP-4C) values the business with it' : '') + '. ' + (has('CP-DR') ? "By default the research module finds the peers and their figures, and it also reads any peers' filings you add to the documents. Your own set is optional: choose \u201cI'll give peer figures\u201d." : 'Nothing is looked up for you.') : 'No module in this pathway forms a valuation multiple from these entries; they stay in the file.';
+  $('vallead').textContent = has('CP-1C') ? 'The peer benchmark forms the valuation multiple from these peers' + (has('CP-4C') ? ', and Recovery & fulcrum values the business with it' : '') + '. ' + (has('CP-DR') ? "By default the research module finds the peers and their figures, and it also reads any peers' filings you add to the documents. Your own set is optional: choose \u201cI'll give peer figures\u201d." : 'Nothing is looked up for you.') : 'No module in this pathway forms a valuation multiple from these entries; they stay in the file.';
   $('rows-peer').querySelectorAll('[data-row]').forEach(r => {
     const ev = getV(r, 'ev_m'), eb = getV(r, 'ebitda_m');
     r.querySelector('[data-mult]').textContent = NUM.test(ev) && NUM.test(eb) && Number(eb) > 0 ? (Number(ev) / Number(eb)).toFixed(1) + 'x' : 'n/a';

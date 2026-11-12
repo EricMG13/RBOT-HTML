@@ -15,6 +15,8 @@
     if (className) result.className = className;
     return result;
   };
+  // A module is shown by its title; a missing, empty or code-only title is "Unnamed module".
+  const moduleTitle = (title, code) => (title && title.trim() && title !== code ? title : "Unnamed module");
   const svgNode = (tag, attrs, kids) => {
     const result = document.createElementNS(SVG_NS, tag);
     Object.entries(attrs || {}).forEach(([key, value]) => result.setAttribute(key, String(value)));
@@ -558,7 +560,7 @@
     button.setAttribute("aria-label", `Inspect ${fact.label}`);
     button.addEventListener("click", () => {
       const kind = fact.status !== "known" ? "gap" : fact.calculation_id ? "calculated" : report.run.case_kind === "synthetic" ? "synthetic" : "cited";
-      const fields = [["Field", `${owner.module_id} / ${fact.table_id} / ${fact.row_id} / ${fact.field}`],
+      const fields = [["Field", `${moduleTitle(owner.title, owner.module_id)} / ${fact.table_id} / ${fact.row_id} / ${fact.field}`],
         ["Label", fact.label], ["Value class", fact.value_class], ["Source value", fact.source_amount], ["Stated comparison", fact.stated_amount],
         ["Calculation status", fact.calculation_status], ["Formula", fact.formula], ["Value", fact.display], ["Status", fact.status],
         ["Period", fact.period], ["Unit", fact.unit], ["Currency", fact.currency], ["Scale", fact.scale], ["Basis", fact.basis],
@@ -656,10 +658,10 @@
     const summary = node("div", null, "summary-grid");
     summary.append(panel("Research scope", node("p", `${report.responsibilities.modules} analytical and delivery responsibilities, including ${report.responsibilities.alternates} alternate commands. Aliases run the complete owning workflow.`)),
       panel("Qualification", node("p", `Analytical: ${report.analytical_qualification}. Native Copilot: ${report.native_host_qualification}.`)));
-    root.append(summary, panel("Module coverage", plainTable(["Module", "Responsibility", "Status"], report.modules.map(module => {
-      const link = node("a", module.module_id); link.href = "#" + module.module_id;
+    root.append(summary, panel("Module coverage", plainTable(["Module", "Status"], report.modules.map(module => {
+      const link = node("a", moduleTitle(module.title, module.module_id)); link.href = "#" + module.module_id;
       const status = node("span", null, "status-cell"); status.append(glyph(module.status_glyph, 13), document.createTextNode(module.status_word));
-      return [link, module.title, status];
+      return [link, status];
     }), "Current report coverage")));
     return root;
   };
@@ -692,7 +694,7 @@
       front.unplaced.forEach(entry => { const item = node("li"); item.textContent = `${entry.title} · ${entry.block_id} (${report.block_states[entry.state].word}): ${entry.note}`; list.append(item); });
       root.append(panel("Bound outside this Pathway", list));
     }
-    report.modules.forEach(item => item.limitations.forEach(text => root.append(panel(item.module_id, node("p", text, "text-content")))));
+    report.modules.forEach(item => item.limitations.forEach(text => root.append(panel(moduleTitle(item.title, item.module_id), node("p", text, "text-content")))));
     return root;
   };
 
@@ -760,8 +762,8 @@
       link.style.borderLeftColor = row.color;
       if (current && current.module_id === row.module_id) link.setAttribute("aria-current", "page");
       const mark = node("span", null, "mark-glyph"); const symbol = glyph(row.glyph, 13); symbol.title = row.word; mark.append(symbol);
-      const title = node("span", row.title, "title"); title.append(node("span", " · " + row.word, "sr-only"));
-      link.append(node("span", row.number, "n num"), mark, title, node("span", row.module_id, "code num"));
+      const title = node("span", moduleTitle(row.title, row.module_id), "title"); title.append(node("span", " · " + row.word, "sr-only"));
+      link.append(node("span", row.number, "n num"), mark, title);
       list.append(link);
     });
     const foot = $("nav-foot"); foot.replaceChildren();
@@ -771,7 +773,7 @@
       const group = outside.filter(row => row.word === word);
       const details = node("details"); details.append(node("summary", `${word} · ${group.length}`));
       group.filter(matches).forEach(row => {
-        const link = node("a"); link.href = "#" + row.module_id; link.append(glyph(row.glyph, 12), node("span", row.module_id, "num"), node("span", row.title));
+        const link = node("a"); link.href = "#" + row.module_id; link.append(glyph(row.glyph, 12), node("span", moduleTitle(row.title, row.module_id)));
         details.append(link);
       });
       foot.append(details);
@@ -822,7 +824,7 @@
     const route = routeOf();
     const module = moduleFor(route);
     const root = $("view-root"); root.replaceChildren(); $("call-root").replaceChildren();
-    const title = module ? `${module.module_id} · ${module.title}` : ({front: report.run.issuer_name, analysis: "Analysis", evidence: "Evidence", limitations: "Limitations", FIT: "Portfolio Fit"}[route] || "Unknown destination");
+    const title = module ? moduleTitle(module.title, module.module_id) : ({front: report.run.issuer_name, analysis: "Analysis", evidence: "Evidence", limitations: "Limitations", FIT: "Portfolio Fit"}[route] || "Unknown destination");
     const head = node("header", null, "page-head");
     head.append(node("h1", title),
       node("p", `As of ${report.run_display.as_of} · ${report.run.case_kind} case · ${report.run.method_version}`, "muted"));
