@@ -459,7 +459,7 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .section-outline ol{list-style:none;margin:0;padding:0}
 @media(max-width:900px){.band{grid-template-columns:minmax(0,1fr)}article.finding{grid-template-columns:minmax(0,1fr)}.limits,.audit-list{grid-template-columns:1fr}}
 /* Overview: the handoffs' own passages, selected and ordered; the page adds no sentence. */
-.overview-part{margin-top:28px;max-width:110ch;min-width:0}.overview-part:first-child{margin-top:8px}.overview-part>h2{font-size:19px;padding-bottom:6px;border-bottom:1px solid var(--rule)}.overview-part h3{font-size:16px;line-height:1.3;margin:14px 0 6px}.overview-part h3 .text-action{font-size:inherit;margin:0}
+.overview-part{margin-top:28px;max-width:110ch;min-width:0}.overview-part:first-child{margin-top:8px}.overview-part>h2{padding-bottom:6px;border-bottom:1px solid var(--rule)}.overview-part h3{font-size:16px;line-height:1.3;margin:14px 0 6px}.overview-part h3 .text-action{font-size:inherit;margin:0}
 .passage-text,.passage-list{margin:6px 0;line-height:1.5;text-wrap:pretty}.passage-list{padding-left:20px}.passage-list li{margin:6px 0}
 .basis{display:block}.limit-module{display:block;font-size:var(--fs-label)}.lead-source{margin:4px 0;color:var(--muted);font-size:var(--fs-compact)}
 .bottom-entry{padding:8px 0;border-bottom:1px solid var(--rule)}.bottom-entry:last-child{border-bottom:0}.bottom-entry h3{margin-top:6px}
@@ -678,8 +678,8 @@ td .basis-link{margin-left:6px}
 .band-link{color:var(--text-quaternary);font:400 13px/18px 'Red Hat Text',sans-serif;text-decoration:none}
 .band-link:hover,.band-link:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
 section.part{margin-top:0}
-section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>:is(h3,h4):first-child{margin:26px 0 10px;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
-.analysis-text,.reading-prose .passage-text{margin:10px 0 0;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>:is(h3,h4):first-child,.overview-part>h2:not(.kicker),#overview-lead .reading-findings>h3{margin:26px 0 10px;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.analysis-text,.reading-prose .passage-text,#overview-lead>.intro{margin:10px 0 0;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 :is(h3,h4,h5,h6)+.analysis-text,.reading-prose>:is(h3,h4)+.passage-text{margin-top:14px}
 .reading-prose .passage-list{max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif}
 section.part .figure{font:500 .92em 'Red Hat Mono',monospace;text-decoration:underline dotted;text-underline-offset:3px}
@@ -747,15 +747,15 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .overview-part{margin-top:30px}
 .overview-part:first-child{margin-top:8px}
 .overview-aside>.overview-part:first-child{margin-top:30px}
-.overview-part>h2{margin:0;padding:0;border:0;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
-#overview-lead>h2,#overview-lead>.lead-source{display:inline;margin:0;padding:0;border:0;font:600 12px/16px 'Red Hat Text',sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--text-quaternary)}
+.overview-part>h2:not(.kicker){margin:0;padding:0;border:0}
+#overview-lead>:is(h2,.lead-source){display:inline;margin:0;padding:0;border:0}
 #overview-lead>.lead-source::before{content:"·";margin:0 8px}
 #overview-lead .lead-source a{color:inherit;text-decoration:none}
 #overview-lead .lead-source a:hover,#overview-lead .lead-source a:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
-#overview-lead>.intro{margin:8px 0 0;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+#overview-lead>.intro{margin:8px 0 0}
 #overview-lead .reading-headline .passage-text,#overview-lead .reading-headline .passage-list li{max-width:46ch}
-#overview-lead .reading-findings>h3{margin:26px 0 0;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
-.overview-part h3{margin:0}
+#overview-lead .reading-findings>h3{margin-bottom:0}
+#overview-bottom-lines .bottom-entry>h3{margin:0}
 #overview-bottom-lines>.bottom-entry:first-of-type{margin-top:10px;border-top:1px solid var(--gray-200)}
 #overview-bottom-lines .bottom-entry{padding:12px 0;border-bottom:1px solid var(--hair)}
 #overview-bottom-lines .bottom-entry>h3{font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
@@ -796,4 +796,5 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .overview-aside{display:grid;gap:22px}
 .overview-aside>.overview-part{margin-top:0}
 .overview-aside>.overview-part:first-child{margin-top:8px}
+.workbench.overview-workspace #module-head{padding-left:28px}
 }

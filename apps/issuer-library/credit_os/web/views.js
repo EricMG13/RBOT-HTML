@@ -1219,9 +1219,9 @@ const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.
 const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
 function overviewLead(entries,earlier) {
   const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
-  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
+  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
   const key=lead.passages.key?`<div class="reading-findings"><h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}</div>`:'';
-  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><div class="reading-headline"><h3 class="sr-only">Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}</div>${key}</section>`};
+  return {lead,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="lead-source kicker">Written by ${moduleLink(lead.module)}</p><div class="reading-headline"><h3 class="sr-only">Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}</div>${key}</section>`};
 }
 function overviewBottomLines(entries,lead) {
   const rows=entries.filter(entry=>entry!==lead).map(entry=>{

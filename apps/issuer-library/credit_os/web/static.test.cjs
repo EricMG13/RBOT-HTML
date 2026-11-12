@@ -964,7 +964,7 @@ const withFixtureLanes = d => {
 };
 const fixturePage = (more = {}) => runPage(d => withFixtureLanes(overviewData(FIXTURE)), [], m => m, { record: steps(Object.keys(FIXTURE)), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES, ...more });
 const part = (html, id) => new RegExp(`<section class="overview-part" id="${id}">.*?</section>`, 's').exec(html)?.[0];
-const headings = html => [...html.matchAll(/<section class="overview-part" id="([^"]+)"><h2>([^<]*)<\/h2>/g)].map(m => [m[1], m[2]]);
+const headings = html => [...html.matchAll(/<section class="overview-part" id="([^"]+)"><h2(?: class="kicker")?>([^<]*)<\/h2>/g)].map(m => [m[1], m[2]]);
 const bottomEntry = (html, code) => new RegExp(`<div class="bottom-entry" data-module="${code}">.*?</div>`, 's').exec(html)?.[0];
 const chartsOf = (html, code) => new RegExp(`<div class="overview-charts" data-module="${code}">.*?(?=<div class="overview-charts"|</section>)`, 's').exec(html)?.[0];
 const CP2_BOTTOM = 'Creditors are exposed to refinancing risk rather than to weak earnings: net debt of USD 1,390 million is 4.2x earnings, and the next maturities fall inside two years.';

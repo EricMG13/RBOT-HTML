@@ -15,6 +15,8 @@
   };
   if (main && aside) {
     const m = box(main), a = box(aside);
+    const pageH2 = $('#module-head h2');
+    seen.pageH2Left = pageH2 && box(pageH2).left;
     seen.mainBox = { left: m.left, right: m.right, top: m.top, bottom: m.bottom };
     seen.asideBox = { left: a.left, right: a.right, top: a.top, bottom: a.bottom, width: a.width };
     seen.inMain = [...main.querySelectorAll('[id^="overview-"]')].map(part => part.id);

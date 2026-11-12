@@ -1679,6 +1679,8 @@ def test_the_new_format_overview_takes_the_two_column_layout(tmp_path, width):
     main, aside = seen["mainBox"], seen["asideBox"]
     if width == 1440:
         assert abs(aside["width"] - 400) <= 1 and aside["left"] >= main["right"]
+        # The page heading starts where the grid does.
+        assert abs(seen["pageH2Left"] - main["left"]) <= 1, (seen["pageH2Left"], main["left"])
     if width == 1200:
         assert aside["top"] >= main["bottom"]
     if width == 1280:
