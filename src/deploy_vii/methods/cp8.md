@@ -106,7 +106,12 @@ accepted, the run is delivered without it.
      change's cash has no such row, so its difference is printed nowhere. A withheld difference
      is refused without its unit too: a bare number (`Cash fell by 30.`) equal to a withheld size
      is refused wherever the sized one is, so write a count that happens to equal it another way
-     (a size written in words, `thirty`, is refused as well; the repair names the figure and the measure). The verdict words
+     (a size written in words, `thirty`, is refused as well, also when a line break splits it; the
+     repair names the figure and the measure). A number directly before a count noun (`30 modules`,
+     `30 months`) or after `page`, `note`, `section`, `table`, `row`, `item`, `step` or `appendix` is a
+     count and allowed, with no word between; `30 new modules` is refused. A year with a unit
+     (`2010 US$m`, `USD 2010`) is a figure, not a year; a bare year or a year after a month or period
+     label (`September 2024`, `FY 2024`) is a year. The verdict words
      `Same definition` and `Not comparable` are read from the start of the Effect cell only; the
      same words starting any other cell of the row are refused, naming the cell (a `Not comparable`
      for a measure the pack marks `comparable: no` is accepted in any cell of its row).
