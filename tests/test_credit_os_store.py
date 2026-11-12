@@ -1382,6 +1382,31 @@ FILES = {
 }
 
 
+REQUEST_IN_THOUSANDS = "## Request\n\nBase: September balances, USD thousands, consolidated.\n"
+
+
+def with_units(units):
+    record = {**REFERENCE, "scale": 1000, "units": units}
+    return {**FILES, "forecast_exact.json": json.dumps(record).encode()}
+
+
+def test_the_units_caption_is_the_records_statement_not_the_requests_phrase():
+    assert store.read_cashflow(with_units("USD millions"), REQUEST_IN_THOUSANDS)[0]["units"] == (
+        "USD millions"
+    )
+    assert store.read_cashflow(with_units("USD millions"), None)[0]["units"] == "USD millions"
+
+
+def test_a_record_without_units_keeps_the_requests_phrase():
+    assert store.read_cashflow(FILES, REQUEST_IN_THOUSANDS)[0]["units"] == "USD thousands"
+    assert store.read_cashflow(FILES, None)[0]["units"] is None
+
+
+@pytest.mark.parametrize("units", [5, "", "x" * 41, ["USD millions"]])
+def test_units_that_are_not_a_short_text_are_reported_not_shown(units):
+    assert store.read_cashflow(with_units(units), None) == (None, ("file", "forecast_exact.json"))
+
+
 def test_history_columns_precede_the_forecast_in_the_owners_order():
     grid, problem = store.read_cashflow(FILES, None)
     assert problem is None

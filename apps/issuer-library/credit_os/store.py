@@ -1488,6 +1488,27 @@ def cashflow_units(handoff: str) -> str | None:
     return re.sub(r"\s+", " ", phrase.group(0)) if phrase else None
 
 
+UNITS_LIMIT = 40
+
+
+def recorded_units(exact: Any) -> str | None:
+    """The `units` the forecast record states for its published figures, or None when it states
+    none. A value that is not a text of 1 to UNITS_LIMIT characters is not shown: TypeError."""
+    units = exact.get("units") if isinstance(exact, dict) else None
+    if units is None:
+        return None
+    if not isinstance(units, str) or not 1 <= len(units) <= UNITS_LIMIT:
+        raise TypeError("units is not a short text")
+    return units
+
+
+def units_caption(units: str | None, handoff: str | None) -> str | None:
+    """The record's own statement of its units; without one, the Request section's phrase."""
+    if units is not None:
+        return units
+    return cashflow_units(handoff) if handoff is not None else None
+
+
 class CashflowBudget(Exception):
     """A grid larger than the cells left in the workspace's budget; raised before any cell."""
 
@@ -2749,10 +2770,12 @@ def cashflow_of(
     forecast: tuple[Forecast, list[str], list[str]],
     recorded: Recorded,
     statements: tuple[list[Table], list[Table]],
-    handoff: str | None,
+    units: str | None,
     budget: int,
 ) -> dict[str, Any]:
     """History from the parsed annual and quarter tables and the forecast record, as a grid.
+
+    `units` is the caption of the grid's amounts (see `units_caption`).
 
     `recorded` ends with the history (CP-1's period columns and their limits) or None; with it
     those columns replace the quarter and fiscal-year columns and read each row's forecast spec.
@@ -2824,7 +2847,7 @@ def cashflow_of(
         for c in columns
     ]
     return {
-        "units": cashflow_units(handoff) if handoff is not None else None,
+        "units": units,
         "columns": shown[:main_count],
         "rows": row_part(rows, slice(0, main_count)),
         "other": None
@@ -2869,7 +2892,9 @@ def read_cashflow(
     """
     stage = CASHFLOW_FILES[0]
     try:
-        forecast = forecast_inputs(json.loads(files[stage].decode("utf-8")))
+        exact = json.loads(files[stage].decode("utf-8"))
+        forecast = forecast_inputs(exact)
+        units = recorded_units(exact)
         stage = CASHFLOW_FILES[1]
         record = json.loads(files[stage].decode("utf-8"))
         fiscal = fiscal_inputs(record)
@@ -2887,7 +2912,9 @@ def read_cashflow(
     try:
         left = CASHFLOW_CELL_BUDGET if budget is None else budget
         recorded = (fiscal, quarter_values, history)
-        return cashflow_of(forecast, recorded, (annual, quarter), handoff, left), None
+        return cashflow_of(
+            forecast, recorded, (annual, quarter), units_caption(units, handoff), left
+        ), None
     except (CashflowLimit, CashflowBudget) as error:
         return None, ("limit", str(error))
     except CASHFLOW_ERRORS as error:
