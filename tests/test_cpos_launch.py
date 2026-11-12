@@ -4203,3 +4203,22 @@ def test_the_service_standing_ruling_lists_web_search_so_runs_from_the_page_sear
 
     assert web_search_ruled(STANDING_RULING)
     assert not web_search_ruled(RULING)  # a ruling that lists only the config does not
+
+
+def test_cp2g_is_told_how_to_state_facilities(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
+    head = texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
+    for word in (
+        "`facilities`",
+        "fixed_rate_pct",
+        "spread_pct",
+        "floor_pct",
+        "reference_rate",
+        "annual_amortisation",
+        "maturity",
+        "exactly as CP-1 prints",
+        "% sign",
+        '"0.04"',
+    ):
+        assert word in head
+    assert "`facilities`" not in texts["CP-1"]

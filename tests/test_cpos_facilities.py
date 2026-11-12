@@ -437,3 +437,29 @@ def test_a_block_without_facilities_is_byte_identical_to_main():
         digest.update(name.encode())
         digest.update(files[name])
     assert digest.hexdigest() == "e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089"
+
+
+# --- boundaries carried from review -------------------------------------------------------------
+def test_a_floating_all_in_rate_of_exactly_zero_and_of_exactly_thirty_percent_is_accepted():
+    zero = Facility(**{**B, "floor_pct": None, "reference_rate": ["-0.03", "-0.03", "-0.03"]})
+    assert [y.rate for y in schedule([zero]).rows[0]] == [D("0")] * 3
+    top = Facility(**{**B, "floor_pct": None, "reference_rate": ["0.27", "0.27", "0.27"]})
+    assert [y.rate for y in schedule([top]).rows[0]] == [D("0.30")] * 3
+
+
+def test_balances_equal_to_base_debt_state_zero_unallocated_and_no_limit_either_way():
+    rows = [{**A, "balance": "450"}, {**B, "balance": "150"}]
+    exact = _exact(_CP1 + " 450", facilities=rows)
+    assert D(exact["unallocated_debt"]["amount"]) == 0
+    assert exact["unallocated_debt"]["reason"] is None
+    assert not any("is not in a stated facility" in s for s in exact["scope_limits"])
+    assert not any("exceed base debt" in s for s in exact["scope_limits"])
+
+
+def test_a_maturity_on_the_first_forecast_years_start_is_inside_the_forecast():
+    limits = _exact(facilities=[{**A, "maturity": "2025-04-01"}])["scope_limits"]
+    assert (
+        "Notes matures in FY2025 and is assumed refinanced; no repayment at maturity is modelled."
+        in limits
+    )
+    assert not any("before the forecast" in s for s in limits)

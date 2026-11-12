@@ -1491,6 +1491,22 @@ FORECAST_BLOCK = (
     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
     "only the drivers that differ from base, in the same driver form (every other driver is "
     "inherited from base), or null when you set no such case. "
+    "`facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate "
+    "terms, otherwise write null. Each row is "
+    '`{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", '
+    '"annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, '
+    "`spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must "
+    'print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states '
+    "`fixed_rate_pct` and null for the other rate fields; a floating-rate facility states "
+    "`spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for "
+    "each forecast year as three decimal fractions "
+    '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
+    "must be between 0% and 30% in every year. Facility names are unique. The facilities' "
+    "scheduled repayments over the three years must not exceed base debt. "
+    "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
+    "YYYY-MM-DD or null. When `facilities` is stated Python computes cash interest and scheduled "
+    "repayment from it and does not use the `interest_rate` and `debt_repayment` drivers, so do "
+    "not vary those two in `upside_drivers` or `downside_drivers`. "
     "`years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
     "`scope_limits` is a list of text limits. Set `schema_version` to "
