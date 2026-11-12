@@ -38,7 +38,7 @@ and the cross-check against earlier decisions: `docs/design/2026-11-12-redesign-
   running start service. Forecast with a published model and the inspector on Changes, Forecast and
   Evidence were not rendered. Safari, Firefox, real browser zoom, print against the previous layout,
   screen readers and Windows not run. The header is 73px taller at 1440×900. This branch is 1,535 changed
-  lines of code and tests against the 800-line convention (owner's call: waive or split).
+  lines of code and tests against the 800-line convention, waived by the owner on 2026-11-12 (PR 67).
 
 ## 2026-11-12 — No module code on screen (branch `claude/redesign-review-adaptation-892369`, owner ruling 2026-11-12)
 

@@ -52,6 +52,9 @@ shadow already matched `screen.css`, so it is applied as layout and type. Branch
 6. A fold summary's accessible name is "<title> <detail>" without the " · ".
 7. The source page stays inline after the file name in the inspector.
 
+Line limit: this branch is over 800 changed lines, most of them tests; the owner waived the limit for
+PR 67 on 2026-11-12.
+
 ## Open, for the owner
 
 - Library home: issuer rows (mock-up L1) against "one item per column, no per-issuer run count"
@@ -63,8 +66,6 @@ shadow already matched `screen.css`, so it is applied as layout and type. Branch
   each module page shows the handoff's summary bottom line (H7).
 - The comparison module is not excluded from Overview in code (M5 says it is not shown there); read
   from code, not reproduced.
-- Line limit: this branch is over 800 changed lines, most of them tests; the natural split is
-  header, navigator, module page and inspector first, Overview and the fixes second.
 
 ## Earlier decisions against the redesign (cross-check, 2026-11-12)
 
