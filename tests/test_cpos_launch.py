@@ -746,7 +746,7 @@ def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
     assert "liquidity-runway" in prepared.omitted
 
 
-@pytest.mark.parametrize("module", ["CP-8", "CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
+@pytest.mark.parametrize("module", ["CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
 def test_modules_without_a_launchable_method_are_refused(tmp_path, capsys, module):
     assert main([*launch(tmp_path), "--modules", module]) == 2
     assert module in capsys.readouterr().err
@@ -1550,8 +1550,9 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
     """Retained run cpos-tdg-sol-medium-all-001 and the 2026-11-10 inbox run: CP-1D, CP-3 and CP-5
     blocked only because no acceptance receipt or helper-script output exists in this transport.
     Only CP-2G was told that is not a reason to block."""
-    _, texts = all_instructions(tmp_path, modules=tuple(METHODS))
-    assert set(texts) == set(METHODS)
+    # CP-8 is planned by CP-OS when an earlier run exists, never selected (tests/test_changes.py).
+    _, texts = all_instructions(tmp_path, modules=tuple(m for m in METHODS if m != "CP-8"))
+    assert set(texts) == set(METHODS) - {"CP-8"}
     for module, text in texts.items():
         head = text.partition(cpos_launch.METHOD_MARK)[0]
         for phrase in (
@@ -1573,7 +1574,7 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 def test_modules_run_after_the_handoffs_their_methods_consume(tmp_path):
     """Retained run cpos-tdg-sol-medium-all-001: CP-2E and CP-2A ran before CP-2, and CP-2A blocked
     with "Required fundamental handoff CP-2 is Not supplied"."""
-    prepared, _ = all_instructions(tmp_path, modules=tuple(METHODS))
+    prepared, _ = all_instructions(tmp_path, modules=tuple(m for m in METHODS if m != "CP-8"))
     order = list(prepared.plan.instructions)
     for consumer, producers in {
         "CP-2A": ("CP-2", "CP-1B"),  # cp-2a SKILL.md: "Upstream: CP-1, CP-1B, CP-2"

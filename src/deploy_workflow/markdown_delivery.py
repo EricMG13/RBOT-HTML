@@ -887,6 +887,11 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
         sources.append(source)
         metadata[module_id] = meta
         files[module_id + ".md"] = raw
+    if request.changes is not None:
+        pack = (base / request.changes.path).read_bytes()
+        if hashlib.sha256(pack).hexdigest() != request.changes.sha256:
+            raise ValueError("Changed comparison pack: changes.json")
+        files["changes.json"] = pack
     if request.model is not None:
         from deploy_workflow.model_handoff_delivery import build_model
 

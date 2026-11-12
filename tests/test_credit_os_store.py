@@ -1083,6 +1083,18 @@ def test_evidence_lists_supplied_files_by_who_read_them(tmp_path):
     assert evidence["unused"][0]["sha256"] == expected
 
 
+def test_evidence_does_not_list_the_earlier_runs_handoffs_pinned_for_cp8(tmp_path):
+    # CP-8's pinned `prior/<module>.md` sources are not files the issuer supplied; even one a
+    # handoff names is neither a source read nor "Supplied, not used".
+    evidence = evidence_of(
+        tmp_path,
+        supplied=("A_report.pdf", "prior/CP-1.md"),
+        cp0_extra="- A_report.pdf\n- prior/CP-1.md\n",
+    )
+    assert [s["name"] for s in evidence["sources"]] == ["A_report.pdf"]
+    assert evidence["unused"] == []
+
+
 def test_evidence_document_date_is_the_cell_a_handoff_table_records_for_the_file(tmp_path):
     names = ("A_report.pdf", "B_2024-01-01_filing.pdf", "C_other.pdf")
     # Hand-written: the date text is copied as stored (not parsed, not taken from a file name);

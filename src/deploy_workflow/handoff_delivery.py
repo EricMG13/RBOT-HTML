@@ -150,6 +150,8 @@ class DeliveryRequest(Contract):
     model: ModelDelivery | None = None
     forecast: bool = Field(default=False, exclude_if=lambda v: not v)
     layout: MarkdownLayout | None = None
+    # CP-8's comparison pack (`deploy_workflow.changes`), published unchanged as `changes.json`.
+    changes: HandoffInput | None = Field(default=None, exclude_if=lambda v: v is None)
     module_execution: (
         dict[str, Literal["host-session", "retained-response-replay", "synthetic", "live-provider"]]
         | None

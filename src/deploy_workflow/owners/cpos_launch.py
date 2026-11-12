@@ -33,6 +33,17 @@ from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import platform_io
+from deploy_workflow.changes import (
+    PACK_NAME,
+    PRIOR_PREFIX,
+    PriorRun,
+    describe,
+    describe_run,
+    find_prior,
+    prior_sources,
+    workspace_of,
+)
+from deploy_workflow.changes_check import cp8_issues
 from deploy_workflow.context import CONTEXT_SOURCE_ID, RunContext, load_context
 from deploy_workflow.docx_text import docx_text
 from deploy_workflow.handoff_delivery import (
@@ -185,6 +196,8 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md",
         _SKILLS + "cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md",
     ),
+    # Owner, 2026-11-11: what has changed since the last run (replaces the deliverable comparison).
+    "CP-8": (_VII + "cp8.md",),
     "CP-DR": (
         _SKILLS + "cp-dr-deep-research/SKILL.md",
         _SKILLS + "cp-dr-deep-research/references/REF_CP-DR_STEPS.md",
@@ -345,6 +358,8 @@ class Prepared:
     hold: Decimal  # What one call of the largest module counts against the cap while in flight.
     documents: tuple[dict[str, Any], ...] = ()  # Each pinned source's guessed kind (offline).
     expectations: tuple[Item, ...] = ()  # What the run is expected to do (offline forecast).
+    prior: PriorRun | None = None  # The earlier run CP-8 compares with, when one is listed.
+    changes: str = ""  # The one line the run records about that comparison.
 
 
 def _sha(raw: bytes) -> str:
@@ -1551,6 +1566,16 @@ LAYER1_FORECAST_BLOCK = (
 )
 
 
+# Goes into CP-8's instructions: which earlier run it compares with and where the pack is.
+CP8_BLOCK = (
+    "This run compares with an earlier run of the same issuer and pathway: {prior}. The "
+    "comparison pack is source `changes.json` and the earlier run's delivered handoffs are the "
+    "sources `prior/<module>.md`; the current run's handoffs are supplied as usual. Write the "
+    "registers exactly as the method says. CP-OS checks every figure of the issuer register "
+    "against the pack, every module and every limitation of the pack for exactly one row, and the "
+    "fixed Status and Cause lists, and sends the handoff back if one fails. The earlier run's "
+    "handoffs and the pack are evidence for this module alone.\n\n"
+)
 BRIDGE_RULES = (
     " Each row is one step: the first row is the opening amount and the last row is the closing "
     "amount; the rows between are the signed changes the method states (a negative number for an "
@@ -1736,6 +1761,40 @@ def pathway_modules(settings: RunContext) -> tuple[str, ...]:
     return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
 
 
+def _earlier_run(
+    directory: Path, workspace: Path | None, *, issuer_id: str, pathway: str, as_of: str
+) -> tuple[PriorRun | None, str | None, dict[str, bytes]]:
+    """The earlier run CP-8 compares with, the line recorded about it, and the pinned copies of its
+    handoffs to write (source name -> bytes).
+
+    A run folder that already holds a manifest keeps what that manifest records, so a newer
+    completed run appearing since cannot change it and get the relaunch refused; the copies are
+    read back from the folder and checked against their pins. A manifest this launcher cannot read
+    is not resumed here: the request built below then differs from it and is refused."""
+    manifest = directory / "workflow.json"
+    if manifest.is_file():
+        try:
+            held = HandoffPlan.model_validate_json(manifest.read_bytes())
+        except ValueError:
+            return None, None, {}
+        copies = {}
+        for name in () if held.prior is None else prior_sources(held.prior):
+            raw = (directory / held.sources[name].path).read_bytes()
+            if _sha(raw) != held.sources[name].sha256:
+                raise LaunchRefused(f"--out {directory}: the pinned earlier handoff {name} changed")
+            copies[name] = raw
+        return held.prior, held.changes_note, copies
+    if workspace is None:
+        return None, "changes: not compared: the run folder is not inside a runs folder", {}
+    found = find_prior(
+        workspace, folder=directory.name, issuer_id=issuer_id, pathway=pathway, as_of=as_of
+    )
+    if found is None:
+        return None, describe(None), {}
+    prior, handoffs = found
+    return prior, describe(prior), {f"{PRIOR_PREFIX}{m}.md": raw for m, raw in handoffs.items()}
+
+
 def prepare(  # noqa: PLR0913 - one keyword per run setting
     context: Path,
     sources: Path,
@@ -1745,8 +1804,15 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     cap: Decimal | str,
     modules: Sequence[str] | None = None,
     web_search: bool = False,
+    workspace: Path | None = None,
 ) -> Prepared:
     """Check everything and write the manifest and instructions; a refusal writes nothing.
+
+    ``workspace`` is where earlier runs are looked for (``<workspace>/runs``): by default the folder
+    holding the ``runs`` folder the run folder is in. When the library lists an earlier run of the
+    same issuer and pathway (`deploy_workflow.changes.find_prior`), CP-8 is planned last and that
+    run's handoffs are pinned for it alone; a run folder that already holds a manifest keeps the
+    pins that manifest records.
 
     ``web_search`` is whether the run's ruling lists ``web-search``: the research module's calls
     then hold the search fee too, as the live loop holds it, so the cap is checked against the
@@ -1759,13 +1825,31 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     # CP-MODEL means "publish the forecast" (owner, 2026-11-11); it makes no model call.
     model_wanted = "CP-MODEL" in chosen
     requested = tuple(m for m in (modules or pathway_modules(settings)) if m != "CP-MODEL")
+    if "CP-8" in requested:
+        raise LaunchRefused(
+            "--modules: CP-8 is planned automatically when an earlier run of this issuer and "
+            "pathway is listed; it cannot be selected"
+        )
+    run_id = f"{settings.identity.issuer_id}-{settings.run.as_of}-{settings.run.pathway}-{config}"
+    directory = (ROOT / "runs" / run_id if out is None else Path(out)).expanduser().resolve()
+    if directory.is_relative_to(folder):
+        raise LaunchRefused(f"--out {directory}: must be outside the issuer folder")
+    prior, note, earlier = _earlier_run(
+        directory,
+        workspace if workspace is not None else workspace_of(directory),
+        issuer_id=settings.identity.issuer_id,
+        pathway=settings.run.pathway,
+        as_of=settings.run.as_of,
+    )
+    # CP-8 follows every other module, so it is the last of the plan.
+    requested = (*requested, *(("CP-8",) if prior is not None else ()))
     planned = plan((*requested, *(("CP-MODEL",) if model_wanted else ())))  # Refuses unknowns.
     ordered = tuple(m for m in planned if m != "CP-MODEL")
     requested = requested or ordered
     if unknown := [m for m in ordered if m not in METHODS]:
         raise LaunchRefused(f"--modules: no launchable method for {', '.join(unknown)}")
     run = Run(
-        run_id=f"{settings.identity.issuer_id}-{settings.run.as_of}-{settings.run.pathway}-{config}",
+        run_id=run_id,
         issuer_id=settings.identity.issuer_id,
         issuer_name=settings.identity.issuer_name,
         as_of=date.fromisoformat(settings.run.as_of),
@@ -1773,10 +1857,11 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         pathway=settings.run.pathway,
         requested_modules=requested,
     )
-    directory = (ROOT / "runs" / run.run_id if out is None else Path(out)).expanduser().resolve()
-    if directory.is_relative_to(folder):
-        raise LaunchRefused(f"--out {directory}: must be outside the issuer folder")
     pinned, converted, ignored, covers = _issuer_files(folder, context_path, directory)
+    if clash := [name for name in pinned if name.startswith(PRIOR_PREFIX)]:
+        raise LaunchRefused(
+            f"--sources: {', '.join(clash)} would be taken for an earlier run's handoff; rename it"
+        )
     aliases = tuple(a for a in settings.identity.aliases if a.strip())
     forecast = "CP-1" in ordered and (model_wanted or "CP-2G" in ordered)
     layout, omitted = _layout(run, ordered, aliases, config, forecast=forecast)
@@ -1808,6 +1893,11 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
             bool(options.cp3_mode),
         ),
         ("CP-6", DEEP_DEBATE_BLOCK, options.cp6_deep_debate),
+        (
+            "CP-8",
+            CP8_BLOCK.format(prior=describe_run(prior)) if prior is not None else "",
+            prior is not None,
+        ),
     ):
         if wanted and module in texts:
             head, mark, method = texts[module].partition(METHOD_MARK.encode())
@@ -1823,6 +1913,10 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
             CONTEXT_SOURCE_ID: HandoffInput(
                 path=os.path.relpath(context_path, directory), sha256=_sha(raw_context)
             ),
+            **{
+                name: HandoffInput(path=path, sha256=_sha(earlier[name]))
+                for name, path in (prior_sources(prior) if prior is not None else {}).items()
+            },
         },
         instructions={
             m: HandoffInput(path=f"instructions/{m}.md", sha256=_sha(text))
@@ -1830,6 +1924,8 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         },
         layout=layout,
         publish_forecast=forecast,
+        prior=prior,
+        changes_note=note,
         execution="live-provider",
         max_attempts=1,
         provider_cap_usd=Decimal(cap),
@@ -1850,7 +1946,7 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     manifest = directory / "workflow.json"
     if manifest.exists() and manifest.read_bytes() != raw:
         raise LaunchRefused(f"--out {directory}: holds a different request; choose a new --out")
-    for relative, content in converted.items():
+    for relative, content in (*converted.items(), *earlier.items()):
         _put(directory / relative, content)
     for module, text in texts.items():
         _put(directory / "instructions" / f"{module}.md", text)
@@ -1866,6 +1962,8 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         hold,
         documents,
         tuple(items),
+        prior,
+        note or "",
     )
 
 
@@ -1907,6 +2005,8 @@ def checker(layout: MarkdownLayout) -> Check:
             issues.append("List each issuer source relied on with its exact name and sha256.")
         issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
         issues += figure_issues(text)
+        if task.module_id == "CP-8":
+            issues += cp8_issues(text, json.loads(task.sources[PACK_NAME]))
         routes = tuple(r for r in layout.routes if r.module_id == task.module_id)
         try:
             if routes:
@@ -1993,6 +2093,7 @@ def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> s
             f"Ignored:  {', '.join(prepared.ignored) or 'none'}",
             f"Report:   {', '.join(prepared.layout.blocks)}",
             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
+            f"Changes:  {prepared.changes.removeprefix('changes: ') or 'not recorded'}",
             f"Manifest: {prepared.manifest}",
             *_web_line(prepared, ruling),
         )

@@ -171,8 +171,8 @@ def _sentence_lines(body: list[tuple[int, str]]) -> list[_Line]:
     return out
 
 
-def _limitation_entries(text: str) -> list[tuple[int, str]]:
-    """(first line number, normalised text) of every item of `### Limitations`."""
+def _limitation_items(text: str) -> list[tuple[int, str]]:
+    """(first line number, text) of every item of `### Limitations`, its Basis line dropped."""
     items: list[tuple[int, list[str]]] = []
     open_item = False
     for line in _sentence_lines(reader_passages(text).get("Limitations", [])):
@@ -183,12 +183,49 @@ def _limitation_entries(text: str) -> list[tuple[int, str]]:
             open_item = True
         else:
             items[-1][1].append(line.text)
-    normalised = ((number, _normalise(" ".join(parts))) for number, parts in items)
+    return [(number, " ".join(parts)) for number, parts in items]
+
+
+def _limitation_entries(text: str) -> list[tuple[int, str]]:
+    """(first line number, normalised text) of every item of `### Limitations`."""
+    normalised = ((number, _normalise(item)) for number, item in _limitation_items(text))
     return [(number, item) for number, item in normalised if item]
 
 
 def _normalise(item: str) -> str:
     return " ".join(re.sub(r"[^\w\s]|_", "", item.lower()).split())
+
+
+def normalise_limitation(item: str) -> str:
+    """The key by which two limitation lines are the same limitation (check 7's normalisation)."""
+    return _normalise(item)
+
+
+def limitation_texts(text: str) -> tuple[str, ...]:
+    """The items of `### Limitations` as written (Basis line dropped, lines joined by a space)."""
+    return tuple(item for _, item in _limitation_items(text))
+
+
+def is_earlier_format(text: str) -> bool:
+    """H7: the handoff's `## Findings` does not open with `### Bottom line`."""
+    sections = _findings_sections(text)
+    return not sections or sections[0].title != "Bottom line"
+
+
+def bottom_line_text(text: str) -> str | None:
+    """The first paragraph of `### Bottom line` as written, its Basis line dropped; None when
+    the handoff has no such passage."""
+    sections = _findings_sections(text)
+    if not sections or sections[0].title != "Bottom line":
+        return None
+    paragraph: list[str] = []
+    for line in _sentence_lines(sections[0].body):
+        if not line.text.strip():
+            if paragraph:
+                break
+            continue
+        paragraph.append(line.text)
+    return " ".join(paragraph) or None
 
 
 def limitation_items(text: str) -> tuple[str, ...]:
