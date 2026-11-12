@@ -37,10 +37,29 @@ LINEAGE_ROWS = (
     "Insufficient Information",
 )
 PRESENT_ROW, TOTAL_ROW, GATE_ROW = "Fields present", "Fields total", "Source gate"
+FIELD_ROWS = (PRESENT_ROW, TOTAL_ROW)
 FINDING_ROWS = ("CRITICAL", "MATERIAL", "MINOR")
 COUNT_ROWS = (*LINEAGE_ROWS, PRESENT_ROW, TOTAL_ROW, *FINDING_ROWS)
 INPUT_ROWS = (*LINEAGE_ROWS, PRESENT_ROW, TOTAL_ROW, GATE_ROW, *FINDING_ROWS)
 HEADER = ("Input", "Value")
+# No real handoff counts 10**20 claims or findings. A claim or finding count with more digits is
+# refused, so the float arithmetic on it cannot overflow (a 309-digit int cannot convert) and
+# `score` itself raises ValueError for it, never OverflowError. Field counts only meet exact int
+# division, which the archived script also does at any size; `from_handoff` bounds their digits
+# under Python's own 4,300-digit limit on reading an int, so that limit never surfaces.
+MAX_DIGITS = 20
+MAX_COUNT = 10**MAX_DIGITS - 1
+MAX_FIELD_DIGITS = 4000
+FENCE = "```"
+
+# What the library page shows when there is no score: one of these plain sentences, never model
+# text, a heading marker or a module code. The detailed `reason` goes only to the retry message.
+SHOWN_MISSING = "the inputs table is missing rows"
+SHOWN_NOT_WHOLE = "the inputs table has a value that is not a whole number"
+SHOWN_TWICE = "the inputs table is written more than once"
+SHOWN_UNREADABLE = "the inputs table could not be read"
+SHOWN_RANGE = "the inputs table has a value outside its allowed range"
+SHOWN = (SHOWN_MISSING, SHOWN_NOT_WHOLE, SHOWN_TWICE, SHOWN_UNREADABLE, SHOWN_RANGE)
 
 
 class Score(NamedTuple):
@@ -51,15 +70,32 @@ class Score(NamedTuple):
 
 @dataclass(frozen=True)
 class Refused:
-    """No score: `reason` says why in words; `absent` is true when the section is not there at
-    all (nothing was asked of the module), false when it is there and wrong."""
+    """No score: `reason` says why in words for the module's retry; `shown` is the one plain
+    sentence of `SHOWN` for the page; `absent` is true when the section is not there at all
+    (nothing was asked of the module), false when it is there and wrong."""
 
     reason: str
     absent: bool = False
+    shown: str = SHOWN_UNREADABLE
 
 
 class Absent(ValueError):
     """The handoff has no confidence inputs section at all."""
+
+
+class Unreadable(ValueError):
+    """The section is wrong; the message is the reason, `shown` the page sentence."""
+
+    def __init__(self, reason: str, shown: str = SHOWN_UNREADABLE):
+        super().__init__(reason)
+        self.shown = shown
+
+
+def _count(value: int, what: str, limit: int = MAX_COUNT) -> None:
+    if value < 0:
+        raise ValueError(f"negative {what}")
+    if value > limit:
+        raise ValueError(f"{what} has more than {len(str(limit))} digits")
 
 
 def _band(value: int) -> str:
@@ -86,8 +122,7 @@ def score(
         key = str(name).strip().casefold()
         if key not in LINEAGE_WEIGHTS:
             raise ValueError(f"unknown lineage class {name!r}")
-        if count < 0:
-            raise ValueError(f"negative claim count for {name!r}")
+        _count(count, f"claim count for {name!r}")
         weighted += LINEAGE_WEIGHTS[key] * count
         total += count
     evidence = (weighted / total) * 100.0 if total else 0.0  # No claims is not perfect evidence.
@@ -97,8 +132,7 @@ def score(
         key = str(severity).strip().casefold()
         if key not in PENALTIES:
             raise ValueError(f"unknown finding severity {severity!r}")
-        if count < 0:
-            raise ValueError(f"negative finding count for {severity!r}")
+        _count(count, f"finding count for {severity!r}")
         penalty += PENALTIES[key] * count
         counts[key] = count
     raw = (0.6 * evidence + 0.4 * coverage) * SOURCE_GATE[gate] - penalty
@@ -119,39 +153,57 @@ def _table_rows(lines: list[str]) -> list[list[str]]:
         for line in lines
         if line.startswith("|")
     ]
-    return [row for row in rows if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in row)]
+    return [row for row in rows if not all(re.fullmatch(r":?-+:?", cell) for cell in row)]
+
+
+def _lines(text: str) -> tuple[list[str], list[bool]]:
+    """The text's lines, and for each whether it is a fence marker or inside a fence: fenced text
+    is an example, not the table (as prose_checks reads it). A marker line is blanked."""
+    lines: list[str] = []
+    fenced: list[bool] = []
+    inside = False
+    for line in text.splitlines():
+        marker = line.lstrip().startswith(FENCE)
+        inside ^= marker
+        lines.append("" if marker else line.rstrip())
+        fenced.append(inside or marker)
+    return lines, fenced
 
 
 def inputs(text: str) -> dict[str, str]:
     """The table's rows by input name. `Absent` when there is no section, `ValueError` (its
     message the reason) when the section is not a well-formed table; `from_handoff` turns both
     into a `Refused`."""
-    lines = [line.rstrip() for line in text.splitlines()]
-    at = [i for i, line in enumerate(lines) if line == f"### {HEADING}"]
+    lines, fenced = _lines(text)
+    at = [i for i, line in enumerate(lines) if line == f"### {HEADING}" and not fenced[i]]
     if not at:
         raise Absent(f"there is no `### {HEADING}` section")
     if len(at) > 1:
-        raise ValueError(f"`### {HEADING}` is written more than once")
+        raise Unreadable(f"`### {HEADING}` is written more than once", SHOWN_TWICE)
     body: list[str] = []
-    for line in lines[at[0] + 1 :]:
-        if line.startswith("#"):
+    for i in range(at[0] + 1, len(lines)):
+        if fenced[i]:
+            continue
+        if lines[i].startswith("#"):
             break
-        body.append(line)
+        body.append(lines[i])
     rows = _table_rows(body)
     if not rows or tuple(rows[0]) != HEADER:
-        raise ValueError(f"`### {HEADING}` needs a table headed `| {' | '.join(HEADER)} |`")
+        raise Unreadable(f"`### {HEADING}` needs a table headed `| {' | '.join(HEADER)} |`")
     found: dict[str, str] = {}
     for row in rows[1:]:
         if len(row) != len(HEADER):
-            raise ValueError(f"a `{HEADING}` row needs 2 cells: {' | '.join(row)}")
+            raise Unreadable(f"a `{HEADING}` row needs 2 cells: {' | '.join(row)}")
         if row[0] not in INPUT_ROWS:
-            raise ValueError(f"`{row[0]}` is not an input; the rows are {', '.join(INPUT_ROWS)}")
+            raise Unreadable(f"`{row[0]}` is not an input; the rows are {', '.join(INPUT_ROWS)}")
         if row[0] in found:
-            raise ValueError(f"`{row[0]}` is stated twice")
+            raise Unreadable(f"`{row[0]}` is stated twice")
         found[row[0]] = row[1]
     missing = [name for name in INPUT_ROWS if name not in found]
     if missing:
-        raise ValueError(f"the `{HEADING}` table has no row for {', '.join(missing)}")
+        raise Unreadable(
+            f"the `{HEADING}` table has no row for {', '.join(missing)}", SHOWN_MISSING
+        )
     return found
 
 
@@ -161,7 +213,14 @@ def from_handoff(text: str) -> Score | Refused:
         found = inputs(text)
         for name in COUNT_ROWS:
             if not re.fullmatch(r"\d+", found[name]):
-                raise ValueError(f"`{name}` is `{found[name]}`, not a whole number of 0 or more")
+                raise Unreadable(
+                    f"`{name}` is `{found[name]}`, not a whole number of 0 or more", SHOWN_NOT_WHOLE
+                )
+            if len(found[name]) > (MAX_FIELD_DIGITS if name in FIELD_ROWS else MAX_DIGITS):
+                raise Unreadable(
+                    f"`{name}` has too many digits; state the real count",
+                    SHOWN_RANGE,
+                )
         n = {name: int(found[name]) for name in COUNT_ROWS}
         return score(
             {name: n[name] for name in LINEAGE_ROWS},
@@ -172,5 +231,7 @@ def from_handoff(text: str) -> Score | Refused:
         )
     except Absent as error:
         return Refused(str(error), absent=True)
-    except ValueError as error:
-        return Refused(str(error))
+    except Unreadable as error:
+        return Refused(str(error), shown=error.shown)
+    except ValueError as error:  # `score` refusing a value that is outside what it allows
+        return Refused(str(error), shown=SHOWN_RANGE)

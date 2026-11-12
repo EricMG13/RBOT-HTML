@@ -70,7 +70,9 @@ CASES = {
         {"CRITICAL": 1, "MATERIAL": 2},
     ),
     "lower clamp": ({"Weak Lineage": 3}, 1, 10, "pass", {"CRITICAL": 3, "MINOR": 4}),
-    "upper clamp": ({"Directly Sourced": 4}, 10, 10, "pass", {}),
+    "all direct, full coverage": ({"Directly Sourced": 4}, 10, 10, "pass", {}),
+    "exactly 80": ({"Directly Sourced": 10}, 5, 10, "pass", {}),
+    "exactly 79": ({"Directly Sourced": 6, "Weak Lineage": 4}, 9, 10, "pass", {}),
     "failed gate": ({"Directly Sourced": 1}, 1, 1, "fail", {}),
     "partial gate": ({"Calculated": 5, "Untraced": 1}, 7, 9, "partial", {"MINOR": 2}),
     "no claims": ({}, 1, 1, "pass", {}),
@@ -108,7 +110,7 @@ def test_the_caps_and_clamps_are_the_ones_the_cases_exercise():
     )
     assert confidence.score(*CASES["material cap"]) == Score(59, "Low", "Restricted")
     assert confidence.score(*CASES["critical beats material"]).status == "Blocked"
-    assert value("lower clamp") == 0 and value("upper clamp") == 100
+    assert value("lower clamp") == 0 and value("all direct, full coverage") == 100
     assert [value(f"half rounds to even ({n})") for n in ("2.5", "7.5", "12.5")] == [2, 8, 12]
 
 
@@ -281,3 +283,112 @@ def test_a_table_with_another_header_or_no_rows_is_refused():
 def test_a_second_section_of_the_name_does_not_hide_a_bad_first_one():
     bad = handoff([r for r in GOOD_ROWS if r[0] != "MINOR"])
     assert isinstance(confidence.from_handoff(bad + "\n" + handoff()), Refused)
+
+
+def test_the_band_threshold_is_80_exactly():
+    exact, below = (confidence.score(*CASES[n]) for n in ("exactly 80", "exactly 79"))
+    assert (exact.value, exact.band) == (80, "High")
+    assert (below.value, below.band) == (79, "Medium")
+
+
+def test_two_well_formed_sections_of_the_name_are_refused():
+    got = confidence.from_handoff(handoff() + "\n" + handoff())
+    assert isinstance(got, Refused) and not got.absent
+    assert "more than once" in got.reason
+
+
+def test_a_three_cell_row_is_refused():
+    text = handoff().replace("| MINOR | 1 |", "| MINOR | 1 | extra |")
+    got = confidence.from_handoff(text)
+    assert isinstance(got, Refused) and "2 cells" in got.reason
+
+
+def test_a_section_only_inside_a_fence_is_not_the_table():
+    fenced = "## Findings\n\n```text\n" + handoff() + "```\n"
+    got = confidence.from_handoff(fenced)
+    assert isinstance(got, Refused) and got.absent
+    both = handoff().replace(
+        "### Confidence inputs",
+        "```text\n### Confidence inputs\n| Input | x |\n```\n\n### Confidence inputs",
+    )
+    assert confidence.from_handoff(both) == Score(89, "High", "Passed")
+
+
+@pytest.mark.parametrize("sep", ["| :-- | --: |", "| - | - |", "|:-:|:-:|", "| --- | :---: |"])
+def test_any_gfm_separator_row_is_accepted(sep):
+    text = handoff().replace("| --- | --- |", sep)
+    assert confidence.from_handoff(text) == Score(89, "High", "Passed")
+
+
+@pytest.mark.parametrize("digits", [20, 21, 309, 400, 5000])
+def test_a_huge_claim_or_finding_count_is_refused_not_an_overflow(digits):
+    rows = [("Calculated", "9" * digits) if r[0] == "Calculated" else r for r in GOOD_ROWS]
+    got = confidence.from_handoff(handoff(rows))
+    if digits <= confidence.MAX_DIGITS:
+        assert isinstance(got, Score)
+    else:
+        assert isinstance(got, Refused) and not got.absent and "digits" in got.reason
+    if digits > confidence.MAX_DIGITS:
+        with pytest.raises(ValueError):
+            confidence.score({"Calculated": 10**digits}, 1, 1, "pass", {})
+        with pytest.raises(ValueError):
+            confidence.score({}, 1, 1, "pass", {"MINOR": 10**digits})
+
+
+@pytest.mark.parametrize("digits", [400, 4000, 4001, 5000])  # digits written, not zeros
+def test_a_huge_field_count_is_exact_or_refused_never_raised(digits):
+    rows = [
+        (r[0], "1" + "0" * (digits - 1)) if r[0] in ("Fields present", "Fields total") else r
+        for r in GOOD_ROWS
+    ]
+    got = confidence.from_handoff(handoff(rows))
+    if digits <= 4000:
+        lineage = dict(zip(CLASSES, (8, 2, 2, 0, 0, 0, 0, 0)))
+        assert got == confidence.score(
+            lineage, 10 ** (digits - 1), 10 ** (digits - 1), "pass", {"MINOR": 1}
+        )
+    else:
+        assert isinstance(got, Refused) and "digits" in got.reason
+
+
+WRONG = {
+    "missing row": [r for r in GOOD_ROWS if r[0] != "Source gate"],
+    "duplicate row": [*GOOD_ROWS, ("MINOR", 2)],
+    "unknown row": [*GOOD_ROWS, ("Mystery", 2)],
+    "word for a count": [("Calculated", "many") if r[0] == "Calculated" else r for r in GOOD_ROWS],
+    "huge count": [("Calculated", "9" * 400) if r[0] == "Calculated" else r for r in GOOD_ROWS],
+    "present above total": [
+        ("Fields present", 101) if r[0] == "Fields present" else r for r in GOOD_ROWS
+    ],
+    "bad gate": [("Source gate", "maybe") if r[0] == "Source gate" else r for r in GOOD_ROWS],
+}
+
+
+@pytest.mark.parametrize("name", WRONG)
+def test_the_shown_reason_is_a_short_plain_sentence_never_model_text(name):
+    text = handoff(WRONG[name]).replace("Mystery", "Mystery # `CP-5` |")
+    got = confidence.from_handoff(text)
+    assert isinstance(got, Refused)
+    assert got.shown in confidence.SHOWN
+    for bad in ("#", "`", "|", "CP-", "Mystery", "many", "maybe", "Source gate"):
+        assert bad not in got.shown
+    assert not got.shown.endswith(".")
+
+
+def test_every_refusal_has_a_shown_sentence_from_the_fixed_set():
+    for header in ("| Name | Amount |", "| Input | Value |"):
+        got = confidence.from_handoff(handoff(header=header, rows=[("Mystery", 1)]))
+        assert isinstance(got, Refused) and got.shown in confidence.SHOWN
+
+
+def test_fenced_lines_inside_the_section_are_not_table_rows_or_headings():
+    after = "```text\n| Mystery | 1 |\n# not a heading\n```\n\n### Next\n\ntext\n"
+    assert confidence.from_handoff(handoff(after=after)) == Score(89, "High", "Passed")
+    inside = handoff(after="```text\n### Confidence inputs\n```\n")
+    assert confidence.from_handoff(inside) == Score(89, "High", "Passed")
+
+
+def test_a_negative_count_is_not_a_whole_number():
+    rows = [("Calculated", "-1") if r[0] == "Calculated" else r for r in GOOD_ROWS]
+    got = confidence.from_handoff(handoff(rows))
+    assert isinstance(got, Refused) and got.shown == confidence.SHOWN_NOT_WHOLE

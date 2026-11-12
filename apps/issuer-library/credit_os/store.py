@@ -19,7 +19,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple, NotRequired, TypedDict
 from urllib.parse import quote
 
-from deploy_workflow import confidence
+from deploy_workflow import confidence as confidence_score
 
 HERE = Path(__file__).resolve().parent
 REPO = next((p for p in (HERE, HERE.parent) if (p / "src").is_dir()), HERE.parents[2])
@@ -1059,9 +1059,9 @@ def confidence_fields(raw: bytes) -> dict[str, Any]:
     """`confidence` for an output whose handoff has a `### Confidence inputs` section: the score
     Python computes from it, or why there is none. A handoff without the section (every earlier
     run) gets no field at all. Lossy decoding only touches bytes that cannot be in the table."""
-    result = confidence.from_handoff(raw.decode("utf-8-sig", "replace"))
-    if isinstance(result, confidence.Refused):
-        return {} if result.absent else {"confidence": {"missing": result.reason.replace("`", "")}}
+    result = confidence_score.from_handoff(raw.decode("utf-8-sig", "replace"))
+    if isinstance(result, confidence_score.Refused):
+        return {} if result.absent else {"confidence": {"missing": result.shown}}
     return {"confidence": {"value": result.value, "band": result.band}}
 
 

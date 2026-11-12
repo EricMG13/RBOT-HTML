@@ -2072,4 +2072,14 @@ def test_an_output_with_a_wrong_inputs_table_says_why_there_is_no_score(tmp_path
     result = read_store(tmp_path, cp0_extra=INPUTS.replace("| Source gate | pass |\n", ""))
     (cp0,) = (o for o in result["outputs"].values() if o["module"] == "CP-0")
     assert list(cp0["confidence"]) == ["missing"]
-    assert "Source gate" in cp0["confidence"]["missing"]
+    assert cp0["confidence"]["missing"] == "the inputs table is missing rows"
+    for bad in ("#", "`", "|", "CP-", "Source gate"):
+        assert bad not in cp0["confidence"]["missing"]
+
+
+def test_a_huge_count_hides_no_other_run_output(tmp_path):
+    huge = INPUTS.replace("| Calculated | 2 |", "| Calculated | " + "9" * 400 + " |")
+    result = read_store(tmp_path, cp0_extra=huge)
+    (cp0,) = (o for o in result["outputs"].values() if o["module"] == "CP-0")
+    assert list(cp0["confidence"]) == ["missing"]
+    assert len(result["outputs"]) > 1
