@@ -1327,7 +1327,7 @@ TABLE_ROW_LIMIT = 2000
 QUARTER_DAYS = 100
 QUARTER_LENGTH_SLACK = 7
 FORECAST_CASES = (
-    ("REFERENCE", "Base case (reference illustration)"),
+    ("REFERENCE", "Base case"),
     ("UPSIDE", "Upside"),
     ("DOWNSIDE_DRIVERS", "Downside (CP-2G drivers)"),
     ("DOWNSIDE", "Downside stress (shock on base drivers)"),
@@ -1857,9 +1857,11 @@ def derive(kind: str, operands: list[Cell], compute: Callable[..., decimal.Decim
         return unavailable_cell("the value cannot be displayed")
 
 
-def forecast_inputs(exact: Any) -> tuple[Forecast, list[str]]:
-    """(source years by case, scope limits) of the forecast record; validated here."""
+def forecast_inputs(exact: Any) -> tuple[Forecast, list[str], list[str]]:
+    """(source years by case, scope limits, the cases' keys in step) of the forecast record;
+    validated here."""
     cases: Forecast = []
+    keys: list[str] = []
     for key, name in FORECAST_CASES:
         if key not in exact["outputs"]:
             continue
@@ -1873,10 +1875,37 @@ def forecast_inputs(exact: Any) -> tuple[Forecast, list[str]]:
                 raise TypeError("year is not a number")
             checked_entries(year, ("year", "planning_start", "planning_end"))
         cases.append((name, years))
+        keys.append(key)
     limits = exact["scope_limits"]
     if not isinstance(limits, list) or not all(isinstance(item, str) for item in limits):
         raise TypeError("scope_limits is not a list of text")
-    return cases, limits
+    return cases, limits, keys
+
+
+DOWNSIDE_CASE = "Downside case"
+DOWNSIDE_NOTES = {
+    "DOWNSIDE": "Downside case is the CP-2A shock applied to the base-case drivers.",
+    "DOWNSIDE_DRIVERS": (
+        "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
+    ),
+    None: "Downside case: no downside case was computed in this run.",
+}
+NO_DOWNSIDE = "no downside case was computed in this run"
+
+
+def main_cases(cases: Forecast, keys: list[str]) -> tuple[Forecast, Forecast, str]:
+    """(main, other, note): the main grid's Base case and one Downside case, the other cases.
+
+    The Downside case is the CP-2A shock (DOWNSIDE) when computed, else CP-2G's own downside
+    drivers; it is shown as "Downside case". `keys` are the cases' keys in step with `cases`.
+    """
+    named = dict(zip(keys, cases, strict=True))
+    chosen = next((key for key in ("DOWNSIDE", "DOWNSIDE_DRIVERS") if key in named), None)
+    main: Forecast = [named["REFERENCE"]] if "REFERENCE" in named else []
+    if chosen is not None:
+        main.append((DOWNSIDE_CASE, named[chosen][1]))
+    other = [case for key, case in named.items() if key not in ("REFERENCE", chosen)]
+    return main, other, DOWNSIDE_NOTES[chosen]
 
 
 def fiscal_inputs(record: Any) -> Fiscal:
@@ -2079,7 +2108,11 @@ def fiscal_columns(columns: list[Column], fiscal: Fiscal) -> dict[str, int]:
 
 
 def forecast_columns(columns: list[Column], cases: Forecast, fiscal_index: dict[str, int]) -> None:
-    """Append one column per forecast year of each case."""
+    """Append one column per forecast year of each case.
+
+    The prior of a year is the same case's year before it; of a case's first year, the fiscal
+    year before it in `fiscal_index`; a prior that is not the adjacent year is None.
+    """
     for name, years in cases:
         case_index: dict[int, int] = {}
         for year in years:
@@ -2100,21 +2133,6 @@ def forecast_columns(columns: list[Column], cases: Forecast, fiscal_index: dict[
                 )
             )
             case_index.setdefault(year["year"], len(columns) - 1)
-
-
-def cashflow_columns(
-    quarters: list[Span], fiscal: Fiscal, cases: Forecast, ends: dict[str, str] | None = None
-) -> list[Column]:
-    """Quarter, fiscal-year and forecast columns, each with its prior-year column's index.
-
-    The prior of Q1 FY<n> is Q1 FY<n-1>; other quarters have none. The prior of FY<n> is FY<n-1>,
-    of the first forecast year the fiscal year before it, of a later forecast year the same case's
-    year before it; a prior that is not the adjacent year is None.
-    """
-    columns = quarter_columns(quarters, ends)
-    fiscal_index = fiscal_columns(columns, fiscal)
-    forecast_columns(columns, cases, fiscal_index)
-    return columns
 
 
 class CashflowInputs(NamedTuple):
@@ -2619,8 +2637,29 @@ def cashflow_notes(year_to_date: bool, with_history: bool) -> list[str]:
     return [note for note in CASHFLOW_NOTES if year_to_date or note != Q1_NOTE]
 
 
+def no_downside_column() -> Column:
+    """The main grid's last column when no downside case was computed: n.a. in every row."""
+    return Column(
+        label="Downside",
+        group=DOWNSIDE_CASE,
+        kind="h",
+        record=None,
+        start=None,
+        end=None,
+        period=None,
+        prior=None,
+        ytd=False,
+        unavailable=NO_DOWNSIDE,
+    )
+
+
+def row_part(rows: list[dict[str, Any]], part: slice) -> list[dict[str, Any]]:
+    """The rows with only the cells of the columns in `part`."""
+    return [{**row, "cells": row["cells"][part]} for row in rows]
+
+
 def cashflow_of(
-    forecast: tuple[Forecast, list[str]],
+    forecast: tuple[Forecast, list[str], list[str]],
     recorded: Recorded,
     statements: tuple[list[Table], list[Table]],
     handoff: str | None,
@@ -2633,7 +2672,8 @@ def cashflow_of(
 
     Raises CashflowBudget, before computing any cell, when rows x columns passes `budget`.
     """
-    cases, limits = forecast
+    cases, limits, keys = forecast
+    main, other, downside_note = main_cases(cases, keys)
     fiscal, quarters, history = recorded
     annual, quarter = statements
     names = CASHFLOW_LABELS
@@ -2652,10 +2692,16 @@ def cashflow_of(
     capped(periods, "quarter columns", QUARTER_COLUMN_LIMIT, CASHFLOW_FILES[3])
     layout = [RowSpec._make(spec) for spec in cashflow_rows(tables)]  # a plain 7-tuple row works
     if history is None:
-        columns = cashflow_columns(periods, fiscal, cases, ends)
+        columns = quarter_columns(periods, ends)
+        fiscal_index = fiscal_columns(columns, fiscal)
     else:
         columns = history_columns(history[0])
-        forecast_columns(columns, cases, {c["id"]: at for at, c in enumerate(history[0])})
+        fiscal_index = {c["id"]: at for at, c in enumerate(history[0])}
+    forecast_columns(columns, main, fiscal_index)
+    if not any(c["group"] == DOWNSIDE_CASE for c in columns):
+        columns.append(no_downside_column())
+    main_count = len(columns)
+    forecast_columns(columns, other, fiscal_index)  # priors read the main grid's history
     if len(layout) * len(columns) > budget:
         raise CashflowBudget(
             "the cash flow model is not shown; the workspace's cash flow models exceed "
@@ -2678,21 +2724,25 @@ def cashflow_of(
                 "cells": grid[spec.key],
             }
         )
-    year_to_date = any(column["ytd"] for column in columns)
+    year_to_date = any(column["ytd"] for column in columns[:main_count])
+    shown = [
+        {
+            "label": c["label"],
+            "group": c["group"],
+            "start": c["start"],
+            "end": c["end"],
+            "ytd": c["ytd"],
+        }
+        for c in columns
+    ]
     return {
         "units": cashflow_units(handoff) if handoff is not None else None,
-        "columns": [
-            {
-                "label": column["label"],
-                "group": column["group"],
-                "start": column["start"],
-                "end": column["end"],
-                "ytd": column["ytd"],
-            }
-            for column in columns
-        ],
-        "rows": rows,
-        "notes": cashflow_notes(year_to_date, history is not None),
+        "columns": shown[:main_count],
+        "rows": row_part(rows, slice(0, main_count)),
+        "other": None
+        if main_count == len(columns)
+        else {"columns": shown[main_count:], "rows": row_part(rows, slice(main_count, None))},
+        "notes": [*cashflow_notes(year_to_date, history is not None), downside_note],
         "limits": limits if history is None else [*limits, *history[1]],
     }
 

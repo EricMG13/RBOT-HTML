@@ -1494,6 +1494,83 @@ def test_a_malformed_history_is_reported_not_shown(damage):
 
 
 def test_more_than_sixty_history_columns_are_over_the_limit():
-    damage = {"columns": [history_column((f"C{i}", "FY", "C", None), ("1", "1")) for i in range(61)]}
+    damage = {
+        "columns": [history_column((f"C{i}", "FY", "C", None), ("1", "1")) for i in range(61)]
+    }
     grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
+    assert grid is None and problem[0] == "limit"
+
+
+# Base case and one Downside case in the main grid; the other cases in a second grid.
+FIRST_YEAR_REVENUE = {
+    "REFERENCE": "1050",
+    "UPSIDE": "1100",
+    "DOWNSIDE_DRIVERS": "1000",
+    "DOWNSIDE": "1040",
+}
+
+
+def cases(*keys, years=3):
+    outputs = {
+        key: {
+            "years": [forecast_year(2025 + n, FIRST_YEAR_REVENUE[key], "300") for n in range(years)]
+        }
+        for key in keys
+    }
+    exact = {"outputs": outputs, "scope_limits": ["Every figure is Python's arithmetic."]}
+    return {**FILES, "forecast_exact.json": json.dumps(exact).encode()}
+
+
+def test_the_shock_is_the_downside_when_both_downsides_exist():
+    grid = store.read_cashflow(cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE"), None)[
+        0
+    ]
+    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
+    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")["cells"]
+    assert [revenue[-6]["exact"], revenue[-3]["exact"]] == ["1050", "1040"]
+    assert [c["group"] for c in grid["other"]["columns"]][::3] == [
+        "Upside",
+        "Downside (CP-2G drivers)",
+    ]
+    other = next(r for r in grid["other"]["rows"] if r["label"] == "Revenue")["cells"]
+    assert [other[0]["exact"], other[3]["exact"]] == ["1100", "1000"]
+    assert "Downside case is the CP-2A shock applied to the base-case drivers." in grid["notes"]
+
+
+def test_cp2gs_downside_is_the_downside_without_a_shock():
+    grid = store.read_cashflow(cases("REFERENCE", "DOWNSIDE_DRIVERS"), None)[0]
+    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")["cells"]
+    assert revenue[-3]["exact"] == "1000"
+    assert grid["other"] is None
+    assert (
+        "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
+        in grid["notes"]
+    )
+
+
+def test_no_downside_is_an_unavailable_column_not_a_missing_one():
+    grid = store.read_cashflow(cases("REFERENCE"), None)[0]
+    assert (grid["columns"][-1]["group"], grid["columns"][-1]["label"]) == (
+        "Downside case",
+        "Downside",
+    )
+    reason = "no downside case was computed in this run"
+    assert all(r["cells"][-1]["reason"] == reason for r in grid["rows"])
+    assert "Downside case: no downside case was computed in this run." in grid["notes"]
+
+
+def test_the_other_grid_holds_only_forecast_columns_and_prior_year_growth_from_the_history():
+    grid = store.read_cashflow(cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS"), None)[0]
+    other = grid["other"]
+    assert {c["group"] for c in other["columns"]} == {"Upside"}
+    assert [c["label"] for c in other["columns"]] == ["FY2025E", "FY2026E", "FY2027E"]
+    assert all(len(r["cells"]) == 3 for r in other["rows"])
+    growth = next(r for r in other["rows"] if r["label"] == "Revenue YoY growth")["cells"]
+    assert Fraction(growth[0]["exact"]) == Fraction(1100, 1000) - 1  # on FY2024, 1000 in history
+    assert Fraction(growth[1]["exact"]) == 0
+
+
+def test_cases_beyond_the_cell_budget_end_in_the_limit_problem():
+    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE", years=20)
+    grid, problem = store.read_cashflow(files, None, budget=1000)
     assert grid is None and problem[0] == "limit"

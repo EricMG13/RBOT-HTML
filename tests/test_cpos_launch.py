@@ -3183,10 +3183,7 @@ def test_the_library_lists_the_published_forecast_as_a_model(tmp_path, provider,
     (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
     grid = model["cashflow"]
     assert [c["label"] for c in grid["columns"]][-6:] == ["FY2025E", "FY2026E", "FY2027E"] * 2
-    assert [c["group"] for c in grid["columns"]][-6::3] == [
-        "Base case (reference illustration)",
-        "Downside stress (shock on base drivers)",
-    ]
+    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
 
 
 def test_the_library_shows_every_computed_case_in_order(tmp_path, provider, capsys):
@@ -3196,16 +3193,16 @@ def test_the_library_shows_every_computed_case_in_order(tmp_path, provider, caps
     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
     (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
     grid = model["cashflow"]
-    assert [c["group"] for c in grid["columns"]][-12::3] == [
-        "Base case (reference illustration)",
+    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
+    assert [c["group"] for c in grid["other"]["columns"]][::3] == [
         "Upside",
         "Downside (CP-2G drivers)",
-        "Downside stress (shock on base drivers)",
     ]
     revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
-    assert [c["exact"] for c in revenue["cells"][-9:-6]] == ["1100", "1210", "1331"]
-    assert [c["exact"] for c in revenue["cells"][-6:-3]] == ["1000", "1000", "1000"]
-    assert [c["exact"] for c in revenue["cells"][-12:-9]] == ["1050", "1092", "1124.76"]
+    other = next(r for r in grid["other"]["rows"] if r["label"] == "Revenue")
+    assert [c["exact"] for c in other["cells"][:3]] == ["1100", "1210", "1331"]
+    assert [c["exact"] for c in other["cells"][3:6]] == ["1000", "1000", "1000"]
+    assert [c["exact"] for c in revenue["cells"][-6:-3]] == ["1050", "1092", "1124.76"]
     assert grid["limits"][0].startswith("Every figure is Python's arithmetic")
 
 
