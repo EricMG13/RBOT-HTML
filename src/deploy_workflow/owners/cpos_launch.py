@@ -1567,6 +1567,18 @@ FORECAST_BLOCK = (
     "an input to a mechanical forecast, not a finding. Leave a driver's values null, as "
     "`Insufficient Information`, only when no stated figure can anchor it.\n\n"
 )
+# Goes into CP-1's instructions whenever a forecast is wanted, with or without CP-2G: the period
+# table lets Python date-check the last twelve months. CP-1 states no new figure in it.
+PERIOD_TABLE_BLOCK = (
+    "Period table: inside `## Findings`, print one table whose header is exactly "
+    "`| Period | Start | End |`, with one row for every period column header you use in your "
+    "financial tables. `Period` is that header's text exactly as you print it (for example "
+    "`9M 2025` or `FY2024`); `Start` and `End` are the period's first and last day as "
+    "YYYY-MM-DD. Head period columns as `FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`, the year "
+    "being the fiscal year the period belongs to. Python uses this table only to check that the "
+    "fiscal year, the year to date and the prior year to date make twelve months; add no figure "
+    "to it and change no other table.\n\n"
+)
 # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
 # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
 # FORECAST_BLOCK, so cpos_forecast has one code path; the model still computes nothing.
@@ -2087,6 +2099,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
     )
     for module, block, wanted in (
         ("CP-2G", FORECAST_BLOCK, forecast),
+        ("CP-1", PERIOD_TABLE_BLOCK, forecast),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
