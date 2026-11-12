@@ -814,7 +814,7 @@ document.querySelector('[data-k="pathway"][value="credit_snapshot"]').checked = 
 document.querySelector('[data-k="run_type"][value="secondary"]').checked = true;
 document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
 const radios = [...document.querySelectorAll('[data-k="pathway"]')];
-const shown = radios.filter(x => !x.closest('.card').hidden).map(x => x.value);
+const shown = radios.filter(x => !x.closest('label').hidden).map(x => x.value);
 const out = document.createElement('pre');
 out.id = 'probe';
 const built = build();

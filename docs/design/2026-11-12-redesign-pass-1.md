@@ -60,8 +60,7 @@ PR 67 on 2026-11-12.
 - Library home: issuer rows (mock-up L1) against "one item per column, no per-issuer run count"
   (owner, 2026-11-10); D9, D14.
 - Run date ("Ran on") against "Dates refer to evidence, not execution" (D12).
-- Run start: the mock-up's Documents → Purpose → Confirm → Start against "Stage 1 is pathway
-  selection"; "From file" issuer name and currency against "no second classifier".
+- Run start: decided and built (2026-11-12); see `docs/design/2026-11-12-run-start-four-steps.md`.
 - Earlier-format runs: the Overview prints "No bottom line in this handoff." for every module although
   each module page shows the handoff's summary bottom line (H7).
 - The comparison module is not excluded from Overview in code (M5 says it is not shown there); read
@@ -83,8 +82,8 @@ Read by a read-only agent at f3ae3a1 from `AGENTS.md`, `docs/rulings`, `docs/des
 | 6 | Paid action is Submit on an approved summary, USD 20 cap | Run-start-submit ruling | "What Submit does" | Not in scope | Keep the text |
 | 7 | Model and effort only at Advanced; Balanced by default | 2026-11-12 amendment | Silent | Not in scope | Keep |
 | 8 | Web search statement for private cases before Submit | 2026-11-12 amendment | Silent | Not in scope | Keep |
-| 9 | Stage 1 is pathway selection; levels Basic / Standard / Advanced | Staged run start spec §3 | Documents first | Not in scope | Owner's call |
-| 10 | No second classifier; only period ends are prefilled | Staged run start spec §4 | "From file" name and currency | Not in scope | Prefill only what the launcher reads |
+| 9 | Stage 1 is pathway selection; levels Basic / Standard / Advanced | Staged run start spec §3 | Documents first | Not in scope | Decided: four steps, documents first (2026-11-12) |
+| 10 | No second classifier; only period ends are prefilled | Staged run start spec §4 | "From file" name and currency | Not in scope | Decided: today's prefill (2026-11-12) |
 | 11 | The summary names the run the comparison uses ("Changes" row) | M5 amendment | Silent | Not in scope | Keep |
 | 12 | Report history: one row per run, as-of first, then start time | Decision 4 | Adds "Ran on" | Kept | Keep the order and "N not assessable" |
 | 13 | Earlier format and Earlier methods badges | H7; PR 48 | On L1 and L2 | Kept in history and strip | Add to library rows when built |

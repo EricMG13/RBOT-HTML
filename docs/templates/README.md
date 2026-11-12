@@ -311,9 +311,9 @@ and re-save unchanged; a file that uses one needs this version or later):
 - `attachments.legal_documents` has no preselected choice in the form (`executed`, `draft` or `none`).
 
 The form (adopted 2026-11-10; design and module review in
-`docs/design/2026-11-10-context-form-proposal.md`) asks in stages: purpose, issuer, dates, source
-files, then market, valuation, assumptions and questions only where a module of the run uses them,
-then a check before download.
+`docs/design/2026-11-10-context-form-proposal.md`) asks in five steps: documents, purpose, confirm (issuer, dates, legal file), more context (market,
+valuation, assumptions and questions, only where a module of the run uses them), then a check
+before download.
 
 **Rules the form adds.** `context.py` does not enforce these, so a hand-written file without them
 still loads; the form will not download without them:

@@ -150,34 +150,39 @@ and proves nothing.
 
 ### What an analyst does
 
-Open the address and work through nine stages. A stage appears only when a module in the run uses
-it, and a later stage stays locked while an earlier one has an error.
+Open the address and work through five steps. A group of questions appears only when a module in
+the run uses it, and a later step stays locked while an earlier one has an error.
 
-1. **Pathway and level.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
+1. **Documents.** Choose the issuer's folder, or add files; the files upload and the launcher's own
+   offline reading says what it recognises in each (kind, period end, whether a legal document reads
+   as executed) and which files it will not read. Documents shows only what was read. Once a purpose
+   is chosen, each kind the pathway uses and the folder lacks is listed from Purpose on, in the
+   readiness column, as a limitation with the module it affects.
+2. **Purpose.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
    `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or `short_snapshot` (the
-   Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each card lists its modules. Pick Basic, Standard or Advanced, and enter your name.
-2. **Documents.** Choose the issuer's folder; the files upload and the launcher's own offline
-   reading says what it recognises in each (kind, period end, whether a legal document reads as
-   executed) and which files it will not read. Each kind the pathway uses and the folder lacks is
-   listed as a limitation with the module it affects.
-3. **Issuer and dates.** Issuer name and ID (at most 40 characters), as-of date, periods and
-   currency. An as-of date before the newest document is a limit for the whole run, and you must tick it on the summary.
-4. **Legal.** Where CP-4, CP-2A or CP-4C runs: choose the uploaded agreement file, or say there is
-   none. `executed` and `draft` can be chosen only by selecting a file.
-5. **Market and ratings.** Standard and Advanced.
-6. **Peers, valuation and module modes.** Standard and Advanced: the peer source, your own peers,
-   the Relative value mode and Deep Debate for the Committee module.
-7. **Assumptions and questions.** Research questions at Standard; pinned assumptions at Advanced.
-8. **Summary.** The forecast for each module in run order (Ready, Check, Gap, Limited or Will
-   refuse), with the reason and the stage that fixes it, and each defaulted input with its
+   Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each row lists its modules. Pick Basic,
+   Standard or Advanced, and enter your name. At Advanced the module list and the turns per module
+   are here too.
+3. **Confirm.** Issuer name and ID (at most 40 characters), as-of date, periods and currency. An
+   as-of date before the newest document is a limit for the whole run, and you must tick it on the
+   summary. Legal, where CP-4, CP-2A or CP-4C runs: choose the uploaded agreement file, or say there
+   is none. `executed` and `draft` can be chosen only by selecting a file.
+4. **More context.** Standard and Advanced (at Basic only for a primary run, a held answer, an error
+   or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
+   your own peers, the Relative value mode and Deep Debate for the Committee module); research
+   questions at Standard; pinned assumptions at Advanced. What shows depends on the pathway: the
+   short snapshot has no More context step at any level, except that a primary run still shows
+   More context with its deal terms (Market) at every level.
+5. **Start.** The summary: the forecast for each module in run order (Ready, Check, Gap, Limited or
+   Will refuse), with the reason and the step that fixes it, and each defaulted input with its
    default. The table joins the launcher's forecast and the page's own rules; where both speak of a
    module it shows the worse outcome and both reasons. Approval needs one tick for every Gap,
-   Limited and Will refuse item, from either source, and for every Check that has a fix (a stage to
+   Limited and Will refuse item, from either source, and for every Check that has a fix (a step to
    go to: "I have checked this"). Ready, Note and a Check with nothing you can do need none. A
    legal answer the launcher's reading disagrees with, and an as-of date before the newest
    document, are Limited for the whole run. On an earnings run, fewer than two recognised reporting
-   periods is a Check that links to Documents. An error blocks approval.
-9. **Submit.** Starts the run; the page moves to its progress in Run activity.
+   periods is a Check that links to Documents. An error blocks approval. Submit starts the run; the
+   page moves to its progress in Run activity.
 
 Submit is refused if a file, an answer, the module list or the turns changed after the summary, and
 a submission starts at most one run however many times Submit is sent.
@@ -186,8 +191,8 @@ a submission starts at most one run however many times Submit is sent.
 
 | Level | Asked | Defaulted |
 |---|---|---|
-| Basic | Stages 1 to 4, 8 and 9 | See below |
-| Standard | Basic, plus stage 5, stage 6 without valuation detail, and research questions | Pinned assumptions, valuation basis, own multiple |
+| Basic | Documents, Purpose, Confirm and Start | See below |
+| Standard | Basic, plus More context where the pathway has it (market inputs, peers and module settings, research questions); none for the short snapshot (a primary run still shows More context with its deal terms) | Pinned assumptions, valuation basis, own multiple |
 | Advanced | Everything: also pinned assumptions, valuation basis and own multiple, deal terms, guarantors, aliases, sponsor, the module subset and turns per module | Nothing |
 
 Basic defaults: peer source `cp_dr_public` (the research module finds the peers from public

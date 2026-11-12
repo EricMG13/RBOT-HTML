@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import get_args
 
@@ -178,14 +179,16 @@ def tokens(css: str) -> dict[str, str]:
 def test_the_design_tokens_are_the_librarys() -> None:
     library, form = tokens((WEB / "screen.css").read_text(encoding="utf-8")), tokens(FORM)
     shared = sorted(form.keys() & library.keys())
-    assert len(shared) >= len(form) - 3  # Only --ring-error, --red-bg and --red-border are its own.
+    # Only --ring-error, --red-bg, --red-border and the redesign's --green-bg are its own.
+    assert len(shared) >= len(form) - 4
+    assert set(form) - set(library) == {"--ring-error", "--red-bg", "--red-border", "--green-bg"}
     assert {k: form[k] for k in shared} == {k: library[k] for k in shared}
 
 
 def test_the_stages_are_the_start_pages() -> None:
     assert re.findall(r"'([^']*)'", constant("STAGES")) == [
-        "pathway",
         "documents",
+        "pathway",
         "issuer",
         "legal",
         "market",
@@ -193,6 +196,30 @@ def test_the_stages_are_the_start_pages() -> None:
         "assumptions",
         "review",
     ]
+
+
+def test_the_steps_lay_over_the_stages_in_their_order() -> None:
+    steps = lists("STEPS")
+    assert steps == {
+        "documents": ["documents"],
+        "purpose": ["pathway"],
+        "confirm": ["issuer", "legal"],
+        "more": ["market", "valuation", "assumptions"],
+        "start": ["review"],
+    }
+    stages = re.findall(r"'([^']*)'", constant("STAGES"))
+    assert [
+        g for step in steps.values() for g in step
+    ] == stages  # every group in one step, in order
+    assert re.findall(r"(\w+):'([^']*)'", constant("STEP_NAME")) == [
+        ("documents", "Documents"),
+        ("purpose", "Purpose"),
+        ("confirm", "Confirm"),
+        ("more", "More context"),
+        ("start", "Start"),
+    ]
+    sections = re.findall(r'<section class="run-step" id="st-(\w+)"', FORM)
+    assert sections[: len(stages)] == stages  # the markup follows the same order
 
 
 def test_the_cp3_modes_are_the_contexts() -> None:
@@ -247,3 +274,76 @@ def test_the_page_states_before_submit_whether_the_run_searches_by_case_kind() -
     assert "This is a synthetic case: the research module does not search the web" in FORM
     assert "const SEARCH_KINDS = ['public', 'private'];" in FORM
     assert "['Web search'," in FORM
+
+
+class _VisibleText(HTMLParser):
+    """The markup's text nodes outside ``<script>`` and ``<style>``, whitespace collapsed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.skipping = 0
+        self.nodes: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.skipping += tag in ("script", "style")
+
+    def handle_endtag(self, tag: str) -> None:
+        self.skipping -= tag in ("script", "style")
+
+    def handle_data(self, data: str) -> None:
+        text = re.sub(r"\s+", " ", data).strip()
+        if text and not self.skipping:
+            self.nodes.add(text)
+
+
+# What Rulings 6-9 of the redesign plan change in the markup after the step logic: nothing.
+# Ruling 6 (the title) and 9 (the group number) landed there; 8 (button labels) is script.
+CHANGED_BY_RULINGS: frozenset[str] = frozenset()
+
+
+def test_the_redesigned_markup_keeps_every_sentence_of_the_step_logic_commit() -> None:
+    """The answer key is the markup text at a6eec82 (tests/fixtures), written down once: the frame,
+    stepper, documents zone and pathway rows restyle the page without dropping a sentence."""
+    before = json.loads(
+        (ROOT / "tests/fixtures/run_start_sentences_a6eec82.json").read_text(encoding="utf-8")
+    )
+    page = _VisibleText()
+    page.feed(FORM)
+    assert len(before) > 100  # a fixture that lost its text would pass anything
+    assert set(before) - CHANGED_BY_RULINGS <= page.nodes, sorted(
+        set(before) - CHANGED_BY_RULINGS - page.nodes
+    )
+
+
+def _rule(selector: str) -> str:
+    """The declarations of the stylesheet's rule for exactly ``selector``."""
+    found = re.search(rf"(?:^|\}}|\n){re.escape(selector)}\{{([^}}]*)\}}", FORM)
+    assert found is not None, f"the stylesheet has no rule for {selector}"
+    return found[1]
+
+
+def test_the_documents_zone_is_a_one_and_a_half_pixel_dashed_border() -> None:
+    """Chrome snaps 1.5px to 1px at 1x, so the browser probe cannot tell the two apart."""
+    assert "border:1.5px dashed var(--border-primary)" in _rule(".dropzone")
+
+
+def test_the_canvas_leaves_no_bottom_padding_and_the_last_element_keeps_its_own_space() -> None:
+    assert "padding:28px 32px 0;" in _rule("#canvas") + ";"
+    assert "padding:28px 32px;" not in _rule("#canvas") + ";"
+    assert "padding-bottom:28px" in _rule(".canvas-in")
+
+
+def test_what_submit_does_is_the_one_new_heading_and_holds_the_submit_controls() -> None:
+    card = re.search(r'<aside class="rv-card" id="rv-card"[^>]*>(.*?)</aside>', FORM, re.DOTALL)
+    assert card is not None
+    body = card[1]
+    assert re.search(r"<h3[^>]*>What Submit does</h3>", body)
+    for ident in ("approve", "rv-submit-error", "submit", "submitnote", "rv-facts"):
+        assert f'id="{ident}"' in body, ident
+    assert FORM.count("What Submit does") == 1
+
+
+def test_the_page_has_no_skip_label_and_says_steps_not_stages_in_the_errors_sentence() -> None:
+    assert "'Skip'" not in FORM and "enteredStep" not in FORM and "enteredGroup" not in FORM
+    assert "Fix the steps marked Needs attention first." in FORM
+    assert "Fix the stages marked" not in FORM
