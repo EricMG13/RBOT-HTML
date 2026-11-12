@@ -23,8 +23,16 @@ tests (calendar, reader, static) 257 passed; quality gate 0 findings, exit 0. Re
 tdg-reader-format-001): five measures, all `judge` (the basis texts differ in words), differences computed (cash 0,
 undrawn 0); `net_debt_change` omitted (gross debt is in neither run); 20 `E` and 11 `C` refs; `find_prior` picks
 cpos-tdg-sol-medium-all-001; CP-8's estimated first request 318,153 bytes, hold 5.73 (sol-medium) under a USD 20 cap.
+Round 2 (same branch): `same_period` and `definition_resolved` in the pack; a same-period measure with different
+values needs `Not comparable` or `Same definition` with `Correction`/`Method change` (never `New period`/`New source`);
+a `Not comparable` difference is printed nowhere and a same-period one only in register rows; every reader figure is a
+pack value of the measure its sentence names or a register figure; instrument years kept in the definition key; a lower-case
+ref refused; CP-8 is never the library summary. Reviewer probes `t4r2_checker` (its three flipped lines, the same-definition
+contradiction, the NC passage and the lower-case ref, now refuse) and `t4r2_prior` re-run; results in the report. Real pair:
+leverage `same_period` true, `comparable` judge, current definition resolved to the FY2023 row, prior text unresolved.
 Not verified: any real model writing the ledger or judging a definition; whether the estimate matches a live first request;
-CP-5's offline hold is still sized on its instructions alone (predates this work); the library's Changes section.
+CP-5's offline hold is still sized on its instructions alone (predates this work); the library's Changes section; that the
+alias list and the `correct*` word test suit a real model's wording.
 
 ## 2026-11-12 — CP-8 in the run: prior run, pins, comparison pack, check (branch `claude/cp8-changes`, decisions M5, M7, M8)
 

@@ -53,11 +53,14 @@ CAUSES = ("New period", "New source", "Method change", "Correction", "Presentati
 ISSUER_CAUSES = ("New period", "New source", "Unresolved")
 LEDGER_STATUSES = ("Closed", "Remaining", "New", "No longer stated")
 NO_CHANGE = "No material change"
+NOT_PASSAGES = ("Request", "Sources", "Calculations", "Next module")  # H2s that are no prose
+SAME_PERIOD_CAUSES = ("Correction", "Method change")
 COUNT_BELOW = 100  # a whole number below this, without a unit, is a count
 SAME = "same definition"
 NOT_COMPARABLE = "not comparable"
 _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
 _REF = re.compile(r"\b[EC]\d+\b")
+_REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
 _HEADING = re.compile(r"#{1,6}\s")
 _FIGURE = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
 # Dates, period labels, years and a month count of 1M to 12M are not figures.
@@ -169,13 +172,22 @@ def _measure_values(measure: Mapping[str, Any]) -> set[Decimal]:
     )
 
 
-def _pack_differences(pack: Mapping[str, Any]) -> set[Decimal]:
-    """Every difference the pack gives (signed)."""
+def _flagged(measure: Mapping[str, Any]) -> bool:
+    """A measure of one period with two values: the issuer did not change, so a difference is a
+    difference of definition or a correction (rule 3 of the method)."""
+    difference = _signed(measure["difference"])
+    return bool(measure["same_period"]) and difference is not None and difference != 0
+
+
+def _pack_differences(
+    pack: Mapping[str, Any], *, without: frozenset[str] = frozenset()
+) -> set[Decimal]:
+    """Every difference the pack gives (signed), but those of the measures named in `without`."""
     change = pack.get("net_debt_change") or {}
     rows = (pack.get("maturity_profile") or {}).get("rows", ())
     return _present(
         [
-            *(_signed(m["difference"]) for m in pack["measures"]),
+            *(_signed(m["difference"]) for m in pack["measures"] if m["key"] not in without),
             *(_signed(change.get(k)) for k in ("change_in_gross_debt", "change_in_cash")),
             *(_signed(row["difference"]) for row in rows),
         ]
@@ -332,6 +344,31 @@ def _measure_row_issues(
     return issues + _definition_issues(where, row, measure)
 
 
+def _same_period_issues(name: str, row: Sequence[str], cause: str) -> list[str]:
+    """A measure the two runs state for one period, with different values: the issuer did not
+    change. The row says `Not comparable`, or `Same definition` with the cause `Correction` or
+    `Method change`; never `New period` or `New source`."""
+    where = f"Issuer register, {name!r}"
+    text = " ".join(row).lower()
+    if cause in ("New period", "New source"):
+        return [
+            (
+                f"{where}: both runs state this measure for the same period, so the issuer did "
+                f"not change and the cause is not `{cause}`; it is a definition "
+                "(`Not comparable`), a `Correction` or a `Method change`."
+            )
+        ]
+    if NOT_COMPARABLE in text or (SAME in text and cause in SAME_PERIOD_CAUSES):
+        return []
+    return [
+        (
+            f"{where}: both runs state this measure for the same period with different values; "
+            "write `Not comparable`, or `Same definition` with the cause `Correction` or "
+            "`Method change`."
+        )
+    ]
+
+
 def _issuer_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str]:
     issues: list[str] = []
     if not rows:
@@ -344,15 +381,19 @@ def _issuer_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str]:
             if cause != "None":
                 issues.append(f"The `{NO_CHANGE}` row's Cause is `None`.")
             continue
-        if cause not in ISSUER_CAUSES:
+        measure = labels.get(_plain(name))
+        flagged = measure is not None and _flagged(measure)
+        causes = (*ISSUER_CAUSES, *(SAME_PERIOD_CAUSES if flagged else ()))
+        if cause not in causes:
             issues.append(
                 f"Issuer register, {name!r}: Cause {cause!r} is not one of "
-                + ", ".join(f"`{c}`" for c in ISSUER_CAUSES)
+                + ", ".join(f"`{c}`" for c in causes)
                 + " (an analysis change belongs in the analysis register)."
             )
-        measure = labels.get(_plain(name))
         if measure is not None:
             issues += _measure_row_issues(name, row, measure, pack)
+            if flagged:
+                issues += _same_period_issues(name, row, cause)
         elif any(_figures(cell, counts=False) for cell in (earlier, current)):
             issues.append(
                 f"Issuer register, {name!r}: a row with a figure in Earlier or Current must name "
@@ -509,7 +550,9 @@ def _outside_ref_issues(lines: list[str], pack: Mapping[str, Any]) -> list[str]:
         stripped = line.strip()
         if in_ledger and stripped.startswith("|") and stripped.endswith("|"):
             text = " ".join(re.split(r"(?<!\\)\|", stripped[1:-1])[2:])
-        found.update(dict.fromkeys(r for r in _REF.findall(text) if r in refs))
+        found.update(
+            dict.fromkeys(r.upper() for r in _REF_ANY_CASE.findall(text) if r.upper() in refs)
+        )
     return [
         f"{ref} appears outside the ledger's ref columns; a ref may be written only in the "
         "Earlier ref and Current ref columns, never in a sentence or another cell."
@@ -517,20 +560,132 @@ def _outside_ref_issues(lines: list[str], pack: Mapping[str, Any]) -> list[str]:
     ]
 
 
-def _passage_issues(lines: list[str], pack: Mapping[str, Any]) -> list[str]:
-    """The differences printed anywhere in the handoff: in the issuer register only the Effect
-    cell is read (the Earlier and Current cells hold values, checked against their measure), in
-    every other line the whole line."""
-    differences = _pack_differences(pack)
-    in_issuer = False
+# Words by which a passage names a measure (beside its label): a sentence about "leverage" is about
+# the leverage measure. Only a passage's sentences are read with these, never a register row.
+ALIASES = {
+    "leverage": ("leverage",),
+    "net_leverage": ("net leverage",),
+    "coverage": ("cover", "coverage"),
+    "cash": ("cash",),
+    "undrawn": ("undrawn", "committed facilities"),
+    "free_cash_flow": ("free cash flow", "fcf"),
+    "gross_debt": ("gross debt", "total debt"),
+    "net_debt": ("net debt",),
+}
+_EXPLAINS = re.compile(r"\b(?:correct\w*|method change\w*|restat\w*)\b", re.IGNORECASE)
+_SENTENCES = re.compile(r"(?<=[.;:!?])\s+")
+
+
+def _named(sentence: str, pack: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The pack measures a sentence names, by their label or their ALIASES."""
+    lowered = sentence.lower()
+    found = []
+    for measure in pack["measures"]:
+        words = (measure["label"].lower(), *ALIASES.get(measure["key"], ()))
+        if any(re.search(rf"\b{re.escape(word)}\b", lowered) for word in words):
+            found.append(measure)
+    return found
+
+
+def _withheld(pack: Mapping[str, Any], said_nc: frozenset[str]) -> frozenset[str]:
+    """Measures whose difference a reader is not given: the pack marks them `no`, CP-8's row says
+    `Not comparable`, or both runs state them for one period with different values."""
+    return frozenset(
+        m["key"]
+        for m in pack["measures"]
+        if m["comparable"] == "no" or m["key"] in said_nc or _flagged(m)
+    )
+
+
+def _sentence_issues(
+    sentence: str,
+    pack: Mapping[str, Any],
+    withheld: frozenset[str],
+    shown: frozenset[Decimal],
+    *,
+    figures: bool,
+) -> list[str]:
+    """A reader sentence: no direction or trend word attached to a withheld measure's name (unless
+    the sentence names the correction or method change), and, in `figures`, every figure is a pack
+    value of a measure it names (or of the pack at large when it names none) or is printed in one
+    of CP-8's own register rows."""
+    named = _named(sentence, pack)
+    issues = []
+    if (
+        any(m["key"] in withheld for m in named)
+        and _TREND.search(sentence)
+        and not _EXPLAINS.search(sentence)
+    ):
+        issues.append(
+            "A passage: a direction or trend is drawn for a measure whose values are not "
+            f"comparable or are of one period ({sentence.strip()[:70]!r}); say what differs, "
+            "not that it moved."
+        )
+    if not figures:
+        return issues
+    if named:
+        held = set().union(*(_measure_values(m) for m in named if m["key"] not in withheld))
+        for measure in (m for m in named if m["key"] in withheld):
+            held |= _measure_values(measure) - {_signed(measure["difference"])}
+        allowed = {abs(v) for v in held}
+    else:
+        allowed = {abs(v) for v in _pack_values(pack) - _withheld_differences(pack, withheld)}
+    issues += [
+        f"A passage: the figure {figure.size} is not a pack value of a measure the sentence "
+        "names, nor printed in a register row; CP-8 never calculates."
+        for figure in dict.fromkeys(_figures(sentence, counts=False))
+        if figure.size not in allowed and figure.size not in shown
+    ]
+    return issues
+
+
+def _withheld_differences(pack: Mapping[str, Any], withheld: frozenset[str]) -> set[Decimal]:
+    return _present([_signed(m["difference"]) for m in pack["measures"] if m["key"] in withheld])
+
+
+def _passage_issues(
+    lines: list[str],
+    pack: Mapping[str, Any],
+    said_nc: frozenset[str] = frozenset(),
+    shown: frozenset[Decimal] = frozenset(),
+) -> list[str]:
+    """What the handoff prints outside the registers' checked cells.
+
+    - Differences, anywhere: a figure after `by` or a direction word is a pack difference in the
+      pack's direction; the difference of a measure CP-8's row calls `Not comparable`, or the pack
+      marks `no`, is printed nowhere; that of a same-period measure with different values only in
+      the register rows, never in a passage.
+    - Reader passages (every prose line but the registers, `### Limitations` for its figures,
+      and the `## Request`, `## Sources`, `## Calculations` and `## Next module` sections): each
+      sentence by `_sentence_issues`.
+    In the issuer register only the Effect cell is read (the Earlier and Current cells hold values,
+    checked against their measure)."""
+    withheld = _withheld(pack, said_nc)
+    barred = frozenset(
+        m["key"] for m in pack["measures"] if m["comparable"] == "no" or m["key"] in said_nc
+    )
+    passage_differences = _pack_differences(pack, without=withheld)
+    register_differences = _pack_differences(pack, without=barred)
+    in_issuer, h2, h3 = False, "", ""
     issues: list[str] = []
     for line in lines:
         if _HEADING.match(line):
             in_issuer = line.strip() == f"### {ISSUER}"
+            if line.startswith("## "):
+                h2, h3 = line[3:].strip(), ""
+            elif line.startswith("### "):
+                h3 = line[4:].strip()
         text = line.strip()
-        if in_issuer and text.startswith("|") and text.endswith("|"):
+        row = text.startswith("|") and text.endswith("|")
+        if in_issuer and row:
             line = re.split(r"(?<!\\)\|", text[1:-1])[-1]
-        issues += _direction_issues(line, differences, "A passage")
+        issues += _direction_issues(
+            line, register_differences if row else passage_differences, "A passage"
+        )
+        if not row and h2 not in NOT_PASSAGES:
+            reading = h3 != "Limitations"
+            for sentence in _SENTENCES.split(line):
+                issues += _sentence_issues(sentence, pack, withheld, shown, figures=reading)
     return issues
 
 
@@ -556,6 +711,20 @@ def cp8_issues(text: str, pack: Mapping[str, Any]) -> tuple[str, ...]:
     for title, check in checks:
         if title in tables:
             issues += check(tables[title][1], pack)
+    labels = {m["label"].lower(): m["key"] for m in pack["measures"]}
+    issuer = tables[ISSUER][1] if ISSUER in tables else []
+    said_nc = frozenset(
+        labels[_plain(row[0])]
+        for row in issuer
+        if _plain(row[0]) in labels and NOT_COMPARABLE in " ".join(row).lower()
+    )
+    shown = frozenset(
+        figure.size
+        for _, rows in tables.values()
+        for row in rows
+        for cell in row
+        for figure in _figures(cell, counts=False)
+    )
     issues += _outside_ref_issues(lines, pack)
-    issues += _passage_issues(lines, pack)
+    issues += _passage_issues(lines, pack, said_nc, shown)
     return tuple(dict.fromkeys(issues))

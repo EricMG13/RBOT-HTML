@@ -24,15 +24,23 @@ The pack (`build_pack`) is computed before CP-8 is called, given to CP-8 as the 
 
 - `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text]}`;
   `current`: `{as_of, pathway, format}`.
-- `measures`: a list of `{key, label, unit, comparable, reason, prior, current, difference}`;
-  `prior` and `current` are `{label, unit, value, period, definition}` or null when the run does
+- `measures`: a list of `{key, label, unit, comparable, reason, prior, current, difference,
+  same_period}`; `prior` and `current` are `{label, unit, value, period, definition,
+  definition_resolved, definition_written}` or null when the run does
   not state the measure. `difference` is current minus prior, computed here with Decimal whenever
   both values are stated and the units are equal. `comparable` is "no" when the units differ or a
   value or a run is missing (no difference), "yes" when the label and the definition texts (the
   table's "Basis and limitation") are equal once digits, page and locator words and punctuation
   are removed, and otherwise "judge": the difference is given, both definition texts are in the
   pack, and CP-8 states for that row `Same definition` or `Not comparable` (the checker enforces
-  it). `reason` says why there is no difference or why a judgement is needed.
+  it). `reason` says why there is no difference or why a judgement is needed. `same_period` is true
+  when both runs state the measure for the same fiscal year or period (`FY2024 / 2024-09-30` and
+  `FY2024` are the same): two values for one period mean a definition or a correction, never the
+  issuer changing. `definition` is the table's basis text, but where it says `identical definition`
+  or `same measure` it is the basis of the table's row for the period before (`definition_resolved`
+  true, the text as written in `definition_written`); a pointer by calculation ID is not followed
+  (`definition_resolved` false). A year after an instrument word (`notes 2027`, `due 2030`) is part
+  of the definition; page and locator numbers are not.
 - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
   current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
   unit, each under the same definition ("yes"), and each run's net debt is its gross debt less its
@@ -288,14 +296,17 @@ class Observation:
     value: str | None
     period: str | None
     definition: str | None
+    written: str | None = None  # the text as the table wrote it, when `definition` is resolved
 
-    def record(self) -> dict[str, str | None]:
+    def record(self) -> dict[str, str | bool | None]:
         return {
             "label": self.label,
             "unit": self.unit,
             "value": self.value,
             "period": self.period,
             "definition": self.definition,
+            "definition_resolved": self.written is not None,
+            "definition_written": self.written,
         }
 
 
@@ -358,6 +369,40 @@ def _plain(label: str) -> str:
 Reading = Observation | str | None
 
 
+POINTER = re.compile(r"\b(?:identical|same)\s+(?:definition|measure|basis)\b", re.IGNORECASE)
+
+
+def _followed(lines: list[str], chart: str, period: str, text: str | None) -> str | None:
+    """The definition a basis cell points to, or None. A basis that says `identical definition` or
+    `same measure` points to the basis of the table's row for the period before; that is followed,
+    and only that. A pointer by calculation ID (`C01-C04`) is not followed: the calculation table
+    is another section of the handoff, and the text is then left as written."""
+    if text is None or POINTER.search(text) is None:
+        return None
+    start = lines.index(f"### Chart data: {chart}")
+    rows: list[tuple[tuple[int, ...], str]] = []
+    header: list[str] = []
+    for line in lines[start + 1 :]:
+        if not line.startswith("|"):
+            if rows or header:
+                break
+            continue
+        row = _cells(line)
+        if not header:
+            header = row
+        elif not set("".join(row)) <= set("-: ") and len(row) == len(header):
+            held = dict(zip(header, row, strict=True))
+            key = period_order(held.get("Period", ""))
+            if key is not None and held.get("Basis and limitation"):
+                rows.append((key, held["Basis and limitation"]))
+    here = period_order(period)
+    before = [item for item in rows if here is not None and item[0] < here]
+    if not before:
+        return None
+    earlier = max(before)[1]
+    return None if POINTER.search(earlier) else earlier
+
+
 def _chart_observation(lines: list[str], chart: str, column: str) -> Reading:
     try:
         found = chart_row(lines, chart)
@@ -366,12 +411,15 @@ def _chart_observation(lines: list[str], chart: str, column: str) -> Reading:
     if found is None or column not in found[0]:
         return None
     row = found[0]
+    written = row.get("Basis and limitation") or None
+    resolved = _followed(lines, chart, row.get("Period", ""), written)
     return Observation(
         column,
         row.get("Reporting unit") or None,
         number(row[column]),
         row.get("Period") or None,
-        row.get("Basis and limitation") or None,
+        resolved or written,
+        written if resolved else None,
     )
 
 
@@ -433,17 +481,35 @@ _LOCATOR = re.compile(
 )
 
 
+# A year after an instrument word names the instrument (`notes 2027`), not a place in a document:
+# it is kept (as letters, so the digit and locator removal leave it) and so tells two debts apart.
+_INSTRUMENT_YEAR = re.compile(
+    r"\b(notes?|bonds?|loans?|facility|facilities|due|maturing|maturity)\s+((?:19|20)\d{2})\b"
+)
+_YEAR_LETTERS = str.maketrans("0123456789", "abcdefghij")
+
+
 def _definition_key(text: str | None) -> str | None:
     """A definition text compared: no page or locator references, no digits, no punctuation, lower
     case, one space between words. None stays None (no text)."""
     if text is None:
         return None
-    bare = _LOCATOR.sub(" ", text.casefold())
+    kept = _INSTRUMENT_YEAR.sub(
+        lambda m: f"{m[1]} {m[2].translate(_YEAR_LETTERS)}", text.casefold()
+    )
+    bare = _LOCATOR.sub(" ", kept)
     return " ".join(re.sub(r"[^\w\s]|_|\d", " ", bare).split())
 
 
 def _clause(who: str, why: str | None) -> str:
     return f"the {who} run {why or 'does not state it'}"
+
+
+def _period_name(period: str) -> str:
+    """A period for comparison: its fiscal year when it names one (`FY2024 / 2024-09-30` is
+    `FY2024`), else the text, in lower case."""
+    year = re.search(r"\bFY(\d{4})\b", period, re.IGNORECASE)
+    return f"fy{year[1]}" if year else " ".join(period.casefold().split())
 
 
 def _compare(
@@ -457,6 +523,13 @@ def _compare(
     if stated is None:
         raise ValueError(f"measure {key} is stated in neither run")
     comparable, reason, difference = "no", None, None
+    same_period = (
+        prior is not None
+        and current is not None
+        and prior.period is not None
+        and current.period is not None
+        and _period_name(prior.period) == _period_name(current.period)
+    )
     if prior is None or current is None:
         reason = _clause(*(("earlier", prior_why) if prior is None else ("current", current_why)))
     elif (
@@ -483,6 +556,7 @@ def _compare(
         "prior": None if prior is None else prior.record(),
         "current": None if current is None else current.record(),
         "difference": difference,
+        "same_period": same_period,
     }
 
 

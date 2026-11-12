@@ -1052,6 +1052,7 @@ PACK = {
             "prior": LEVERAGE_PRIOR,
             "current": {**LEVERAGE_PRIOR, "value": "3.60", "period": "FY2024"},
             "difference": "-0.60",
+            "same_period": False,
         },
         {
             "key": "cash",
@@ -1062,6 +1063,7 @@ PACK = {
             "prior": CASH_PRIOR,
             "current": {**CASH_PRIOR, "value": "250", "period": "FY2024", "definition": "Other."},
             "difference": "-50",
+            "same_period": False,
         },
         {
             "key": "coverage",
@@ -1072,6 +1074,7 @@ PACK = {
             "prior": None,
             "current": COVER_NOW,
             "difference": None,
+            "same_period": False,
         },
     ],
     "modules": [
@@ -1385,6 +1388,194 @@ def test_a_row_for_no_material_change_is_accepted_with_cause_none():
         "| No material change | — | — | None | Nothing material moved. |\n\n",
     )
     assert cp8_issues(text, PACK) == ()
+
+
+# --- round 2: one period with two values, what a reader is told ----------------------------------
+
+SAME = {**PACK["measures"][0]}
+SAME.update(
+    prior={**LEVERAGE_PRIOR, "value": "6.57", "definition": "EBITDA reported 3,813."},
+    current={**LEVERAGE_PRIOR, "value": "6.01", "definition": "Other.", "period": "FY2023"},
+    difference="-0.56",
+    comparable="judge",
+    same_period=True,
+)
+SAME["current"]["period"] = "FY2023"  # the earlier run's period too (LEVERAGE_PRIOR's)
+PACK2 = {**PACK, "measures": [SAME, *PACK["measures"][1:]]}
+LEVERAGE_ROW = (
+    "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period "
+    "| Leverage fell by 0.60x. |"
+)
+
+
+def with_row(row: str, passage: str = "", gaps: str = "") -> str:
+    text = REGISTERS.replace(LEVERAGE_ROW, row)
+    return text.replace("## Findings\n\n", "## Findings\n\n" + passage, 1) + gaps
+
+
+def same_period_row(effect: str, cause: str = "Unresolved") -> str:
+    return f"| Total debt / EBITDA | 6.57x (FY2023) | 6.01x (FY2023) | {cause} | {effect} |"
+
+
+@pytest.mark.parametrize(
+    ("effect", "cause", "fragment"),
+    [
+        ("Not comparable: EBITDA basis differs.", "Unresolved", None),
+        ("Not comparable: EBITDA basis differs.", "Correction", None),
+        ("Same definition; the earlier run misstated EBITDA.", "Correction", None),
+        ("Same definition; the method now adds back leases.", "Method change", None),
+        ("Same definition; the earlier run misstated EBITDA.", "New period", "same period"),
+        ("Same definition.", "Unresolved", "Correction"),  # a same-definition move needs a reason
+        ("Not comparable: basis differs.", "New source", "same period"),
+        ("Leverage moved.", "Correction", "Not comparable"),
+    ],
+)
+def test_a_measure_of_one_period_with_two_values_is_a_definition_or_a_correction(
+    effect, cause, fragment
+):
+    found = cp8_issues(with_row(same_period_row(effect, cause)), PACK2)
+    if fragment is None:
+        assert found == ()
+    else:
+        assert any(fragment.lower() in issue.lower() for issue in found), found
+
+
+@pytest.mark.parametrize(
+    "passage",
+    [
+        "Leverage fell by 0.56x.",  # the difference of a not-comparable row
+        "Leverage fell from 6.57x to 6.01x.",  # no difference printed, but a movement
+        "Leverage improved.",
+    ],
+)
+def test_a_not_comparable_or_same_period_difference_never_reaches_a_reader_passage(passage):
+    row = same_period_row("Not comparable: EBITDA basis differs.")
+    found = cp8_issues(with_row(row, passage + "\n\n"), PACK2)
+    assert found, "accepted"
+    assert cp8_issues(with_row(row, "Leverage is 6.57x earlier and 6.01x now.\n\n"), PACK2) == ()
+
+
+def test_a_correction_may_be_described_by_a_sentence_that_names_it():
+    row = same_period_row("Same definition; the earlier run misstated EBITDA.", "Correction")
+    said = "Leverage fell from 6.57x to 6.01x after the correction of EBITDA.\n\n"
+    assert cp8_issues(with_row(row, said), PACK2) == ()
+    assert cp8_issues(with_row(row, "Leverage fell from 6.57x to 6.01x.\n\n"), PACK2)
+
+
+def test_a_not_comparable_difference_is_printed_nowhere_not_in_the_gaps_either():
+    row = same_period_row("Not comparable: EBITDA basis differs.")
+    gaps = "\n## Gaps\n\nThe measure moved by 0.56x between the runs.\n"
+    assert any("0.56" in i for i in cp8_issues(with_row(row, gaps=gaps), PACK2))
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Leverage fell by 0.70x.",
+        "Leverage fell 8.5%.",
+        "A 0.70x move in leverage.",
+        "Leverage is 0.70 turns lower.",
+        "An 8.5% reduction in leverage.",
+        "Leverage fell from 4.20x to 3.50x.",
+        "Leverage is now 3.50x.",
+        "Leverage is 400 US$m.",
+    ],
+)
+def test_every_figure_of_a_reader_passage_is_a_pack_value_of_a_measure_it_names(sentence):
+    text = REGISTERS.replace(
+        "## Findings\n\n", f"## Findings\n\n### Bottom line\n\n{sentence}\n\n", 1
+    )
+    assert cp8_issues(text, PACK), "accepted"
+
+
+def test_a_reader_figure_may_be_a_pack_value_or_one_a_register_row_prints():
+    ok = "Leverage is 3.60x now and was 4.20x. Cash is 250 US$m, so 300 US$m before."
+    text = REGISTERS.replace("## Findings\n\n", f"## Findings\n\n### Bottom line\n\n{ok}\n\n", 1)
+    assert cp8_issues(text, PACK) == ()
+    # A figure the sentence does not tie to a measure is allowed only if the pack or a row holds it.
+    free = REGISTERS.replace(
+        "## Findings\n\n", "## Findings\n\n### Bottom line\n\nA figure of 3.60 is held.\n\n", 1
+    )
+    assert cp8_issues(free, PACK) == ()
+    wrong = free.replace("3.60 is held", "3.61 is held")
+    assert cp8_issues(wrong, PACK)
+
+
+def test_a_ref_in_lower_case_in_a_sentence_is_caught():
+    text = REGISTERS.replace("Leverage fell.", "Leverage fell, as e1 shows.")
+    assert any("E1" in i and "only in" in i for i in cp8_issues(text, PACK))
+
+
+def test_a_definition_is_the_same_only_with_the_same_instrument_years():
+    notes = "debt incl. notes 2027"
+    assert liq("1", "1", notes, "debt incl. notes 2029 and 2031")["comparable"] == "judge"
+    assert liq("1", "1", notes, notes)["comparable"] == "yes"
+    assert (
+        liq("1", "1", "debt due 2027, pages 12 and 14", "debt due 2027, pages 18 and 20")[
+            "comparable"
+        ]
+        == "yes"
+    )  # page numbers still do not count
+    assert liq("1", "1", "loan maturing 2030", "loan maturing 2031")["comparable"] == "judge"
+
+
+def test_the_pack_says_whether_both_runs_state_a_measure_for_one_period_and_follows_a_pointer():
+    early = leverage(
+        "| FY2024 | 6.57 | 4.93 | x | Gross debt over reported EBITDA 3,813. Pages 63, 71. |"
+    )
+    now = leverage(
+        "| FY2023 | 5.87 | 4.84 | x | C01-C04; gross principal over EBITDA As Defined. |",
+        "| FY2024 | 6.01 | 4.51 | x | C01-C04; identical definition; cash before settlement. |",
+    )
+    found = measures_of(
+        pair_pack(handoff("CP-1", "x", tables=early), handoff("CP-1", "x", tables=now))
+    )
+    lev = found["leverage"]
+    assert (lev["same_period"], lev["comparable"], lev["difference"]) == (True, "judge", "-0.56")
+    assert lev["current"]["definition_resolved"] is True
+    assert lev["current"]["definition"] == "C01-C04; gross principal over EBITDA As Defined."
+    assert lev["current"]["definition_written"] == (
+        "C01-C04; identical definition; cash before settlement."
+    )
+    assert lev["prior"]["definition_resolved"] is False
+    assert lev["prior"]["definition_written"] is None
+    # Another period for each run: not the same period, and a calculation ID alone is not followed.
+    moved = measures_of(
+        pair_pack(
+            handoff("CP-1", "x", tables=leverage("| FY2023 | 5.87 | 4.84 | x | C01-C04; basis. |")),
+            handoff("CP-1", "x", tables=now),
+        )
+    )["leverage"]
+    assert moved["same_period"] is False
+    assert moved["prior"]["definition_resolved"] is False
+    assert moved["prior"]["definition"] == "C01-C04; basis."
+    # A pointer with no earlier row to point to is left as written.
+    lone = measures_of(
+        pair_pack(
+            handoff("CP-1", "x", tables=early),
+            handoff(
+                "CP-1", "x", tables=leverage("| FY2024 | 6.01 | 4.51 | x | Identical definition. |")
+            ),
+        )
+    )["leverage"]
+    assert lone["current"]["definition_resolved"] is False
+    assert lone["current"]["definition"] == "Identical definition."
+
+
+def test_cp8_is_never_the_library_summary_when_cp2_is_absent():
+    from deploy_workflow.credit_os_catalogue import summary_fields
+
+    def module(name: str) -> dict:
+        return {
+            "id": name,
+            "summary": {"bottom_line": f"{name} says", "limitation": f"{name} limit"},
+        }
+
+    run = {"modules": [module("CP-0"), module("CP-1"), module("CP-8")]}
+    assert summary_fields(run) == ("CP-1 says", ["CP-1 limit"])
+    assert summary_fields({"modules": [module("CP-8")]}) == ("", [])
+    with_cp2 = {"modules": [module("CP-2"), module("CP-8")]}
+    assert summary_fields(with_cp2) == ("CP-2 says", ["CP-2 limit"])
 
 
 # --- a run: isolation, the pack in the delivery, CP-8 accepted -------------------------

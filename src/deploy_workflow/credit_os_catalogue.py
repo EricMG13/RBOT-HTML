@@ -151,8 +151,9 @@ def period_fields(context: dict[str, str]) -> tuple[str, str]:
 
 
 def summary_fields(run: dict[str, Any]) -> tuple[str, list[str]]:
-    """CP-2's bottom line, else the latest module's; with that module's main limitation."""
-    modules = [m for m in run["modules"] if m["summary"] is not None]
+    """CP-2's bottom line, else the latest module's, with that module's main limitation. CP-8, the
+    comparison, is never the lead."""
+    modules = [m for m in run["modules"] if m["summary"] is not None and m["id"] != "CP-8"]
     chosen = next((m for m in modules if m["id"] == "CP-2"), modules[-1] if modules else None)
     if chosen is None:
         return "", []

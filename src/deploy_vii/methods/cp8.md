@@ -20,7 +20,12 @@ accepted, the run is delivered without it.
     `free_cash_flow`, `gross_debt`, `net_debt` where a run states them in a row of that exact
     label): the earlier and the current value with unit, period and definition text, the
     `difference` (current minus earlier, computed whenever both values are stated in one unit),
-    and `comparable`: `yes`, `no` or `judge` (see rule 3);
+    and `comparable`: `yes`, `no` or `judge` (see rule 3), and `same_period`: true when both runs state
+    the measure for the same period (computed by Python). A definition text that says `identical
+    definition` or `same measure` is replaced by the earlier period's basis text of the same table
+    (`definition_resolved: true`; the text as written is `definition_written`); a pointer by
+    calculation ID (`C01-C04`) is not followed by Python (`definition_resolved: false`): read the
+    calculation it names in that run's CP-1 handoff yourself;
   - `net_debt_change` when both runs state gross debt, net debt and cash under one definition: the
     earlier net debt, the change in gross debt, the change in cash and the current net debt, with
     its sign convention (an increase in cash reduces net debt). It is two balances compared; it does
@@ -50,7 +55,9 @@ accepted, the run is delivered without it.
    whose only difference is presentation is `Unchanged`, cause `Presentation`.
 3. **Never calculate.** Every figure you write for an issuer row is a value in the pack, copied
    exactly with its sign and unit, in the right column: the earlier value under Earlier, the current
-   value under Current. A difference you write anywhere in the handoff (in a reader passage, a
+   value under Current. In the reader passages every figure is a value of the measure its sentence
+   names (a difference only where rule 3 allows), or one your own register rows print; a percentage
+   change or a move the pack does not hold is not written. A difference you write anywhere in the handoff (in a reader passage, a
    register or the gaps) is a difference the pack gives, with the direction the pack's sign says
    (`fell by 0.60x` for -0.60); do not write a sign after a word of direction. Where the pack gives
    no difference, write none. A value the pack states as null is missing, not zero: write that it is
@@ -66,7 +73,20 @@ accepted, the run is delivered without it.
      write in that row exactly one of `Same definition` or `Not comparable`, with the reason in
      the last cell. With `Same definition` report the values and the difference. With
      `Not comparable` give both values with their periods, never print the difference and draw no
-     trend from the two (no "rose", "fell", "weakened", "improved").
+     trend from the two (no "rose", "fell", "weakened", "improved"). A difference of a measure
+     whose row says `Not comparable` is written nowhere in the handoff, in no passage, register or
+     gap, and no passage says that measure moved.
+   - **The same period with different values is not the issuer changing.** When `same_period` is
+     true and the difference is not zero, the issuer did nothing between the runs: either the
+     definition differs (`Not comparable`), or one run corrected the other (cause `Correction`), or
+     the method changed (cause `Method change`). Decide which before writing the row. When a
+     definition text points to another row (`identical definition`, a calculation ID), read the row
+     or calculation it points to in that run's CP-1 handoff first. The row says `Not comparable`,
+     or says `Same definition` with the cause `Correction` or `Method change`; the causes
+     `New period` and `New source` are refused for it. `Same definition` followed by a sentence
+     that contradicts it ("but the EBITDA basis changed") is an error: say `Not comparable`. Such a
+     difference is written in the register row only. A passage may give the two values, but draws no
+     movement for the measure unless its sentence names the correction or the method change.
 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
    for a module's. If you think a module's change of view is unexplained, say so and mark the row

@@ -152,7 +152,25 @@ anywhere (reader passages and `## Gaps` included) is not a pack difference or is
 direction, a `judge` row says neither or both of `Same definition` and `Not comparable`, a `Not comparable`
 row prints the difference or a trend, a module has no row or two, a limitation ref is in no row or in more
 than one or in a sentence or a wrong column, a ledger status contradicts its refs, or a status or cause is
-unlisted. A refusal is a targeted repair inside the existing attempt cap. The nine prose checks and the
+unlisted. Fix round 2 (2026-11-12): each measure also states `same_period` (computed by Python: both runs
+name the same fiscal year) and each definition `definition_resolved` / `definition_written`: an `identical
+definition` or `same measure` pointer is followed to the earlier period's basis in the same table, a pointer
+by calculation ID is not. For a measure with `same_period` true and a non-zero difference the issuer did
+not change: its issuer row must say `Not comparable`, or `Same definition` with the cause `Correction` or
+`Method change` (issuer rows may then carry those two causes); `New period` and `New source` are refused.
+The difference of a measure whose row says `Not comparable` (or the pack marks `no`) is printed nowhere,
+and that of a same-period non-zero measure only in the register rows; no direction or trend word may be
+attached to such a measure's name in a passage unless the sentence names the correction or method change
+(a deterministic word test: `correct*`, `method change`, `restat*`). Every figure of a reader passage
+(`### Limitations` and the Request, Sources, Calculations and Next module sections aside) must be a pack
+value of a measure its sentence names (by label or a short alias list), or a pack value when it names none,
+or a figure a CP-8 register row prints; a percentage the pack does not hold is refused. A year after an
+instrument word (`notes 2027`, `due 2030`) is kept in the definition key. A ref in any case in a sentence
+is refused. CP-8 is never the library's lead or summary module (`summary_fields`). Known limits, kept:
+a fact row may not carry a figure, even one from the current handoffs; `Closed` evidence is checked for
+presence of a current-run module, not for substance; issuer names must match exactly after case and
+whitespace folding (the approval shows the reason when they do not). A refusal is a targeted repair inside
+the existing attempt cap. The nine prose checks and the
 reader-figure check apply as to every prose module. The module's display name, on the run page and in the
 library, is "Changes since the last run".
 
