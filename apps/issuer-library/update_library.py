@@ -178,6 +178,7 @@ def changes_data(workspace: Path, store: dict[str, Any], library: Library) -> No
             store["issues"].append(f"{record['id']}: {problem}")
         run["changes"] = {
             "lead": LEAD_MODULE.get(record["pathway"], DEFAULT_LEAD),
+            "first_run": record["changes"]["first_run"],
             "pack": pack,
             "note": record["changes"]["note"],
             "problem": problem,
