@@ -2171,11 +2171,15 @@ async function startFrom(runId) {
   }
   const problems = [];
   CARRIED.run = runId; CARRIED.locked = true; CARRIED.files = new Set(); CARRIED.fields = new Set();
+  LOOK_SEQ++; LATEST_RUN = ''; $('issuer-exists').hidden = true; // a lookup in flight must not show its notice over the lock
+  let kept = [];
   if (Array.isArray(got.files) && got.files.length) {
     try {
-      SUB = (await call('POST', '/api/submissions')).id;
+      // The analyst's own uploads stay: the carry goes into the submission they already have, and a name already held is kept.
+      if (!SUB) SUB = (await call('POST', '/api/submissions')).id;
       const moved = await call('POST', `/api/submissions/${SUB}/carry`, JSON.stringify({run: runId}));
       CARRIED.files = new Set(moved.carried);
+      kept = Array.isArray(moved.kept) ? moved.kept.filter(n => typeof n === 'string') : [];
     } catch (err) { problems.push('The documents could not be carried over (' + err.message + ').'); }
   }
   await refreshReading();
@@ -2209,7 +2213,8 @@ async function startFrom(runId) {
   if (Number.isInteger(got.max_turns) && got.max_turns !== DEFAULT_TURNS) { $('turns').value = String(got.max_turns); CARRIED.fields.add('@turns'); }
   const files = CARRIED.files.size;
   loadMsg(!isObj(ctx) && !files && !problems.length ? `No documents or answers were kept for run ${runId}. Only the issuer name and ID are carried over.`
-    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (isObj(ctx) && !bad ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : '') + (notes.length ? ' ' + notes.join(' ') : ''), problems.length > 0);
+    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (isObj(ctx) && !bad ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : '') + (notes.length ? ' ' + notes.join(' ') : '')
+    + (kept.length ? ` ${kept.length} of your files were kept instead of the earlier run's: ${kept.join(', ')}.` : ''), problems.length > 0);
   update();
   return true;
 }
@@ -2233,6 +2238,7 @@ async function lookIssuer() {
   if (id === LOOKED) return;
   LOOKED = id;
   const seq = ++LOOK_SEQ;
+  LATEST_RUN = ''; box.hidden = true; // the notice of the previous ID is not this one's
   let got;
   try { got = await call('GET', `/api/issuers/${id}`); }
   catch (err) {

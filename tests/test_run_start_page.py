@@ -1942,11 +1942,72 @@ def test_an_unknown_issuer_id_shows_no_notice(page_from):
     page, _ = page_from
     got = page.run(
         """
+      const real = window.fetch, asked = [];
+      window.fetch = (url, init) => { asked.push(String(url)); return real(url, init); };
       type('i-issuer_name', 'Nobody Ltd');
-      await settle(1500);
-      return {hidden: $('issuer-exists').hidden, id: $('i-issuer_id').value};"""
+      for (let i = 0; i < 100 && !asked.includes('/api/issuers/nobody-ltd'); i++) await settle(50);
+      await settle(300); // the answer has come once the request is made and answered
+      return {hidden: $('issuer-exists').hidden, id: $('i-issuer_id').value,
+              asked: asked.filter(u => u.startsWith('/api/issuers/'))};"""
     )
-    assert got == {"hidden": True, "id": "nobody-ltd"}
+    assert got == {"hidden": True, "id": "nobody-ltd", "asked": ["/api/issuers/nobody-ltd"]}
+
+
+def test_an_id_filled_from_the_name_shows_the_same_notice(page_from):
+    page, _ = page_from
+    got = page.run(
+        NOTICE
+        + """
+      type('i-issuer_name', 'Acme');
+      return {id: $('i-issuer_id').value, notice: await waitNotice()};"""
+    )
+    assert got["id"] == "acme"
+    assert got["notice"] == {
+        "hidden": False,
+        "text": 'This issuer exists: 1 runs, latest as-of 2026-11-09 (filed as "Acme Corp")',
+    }
+
+
+def test_the_notice_carry_keeps_the_analysts_own_uploads(page_from):
+    page, run_id = page_from
+    got = page.run(
+        NOTICE
+        + f"""
+      pick('data-k="pathway"', 'credit_snapshot');
+      await uploadFiles([file('new.txt', {json.dumps(REPORT)})]);
+      type('i-issuer_name', 'Acme'); await waitNotice();
+      $('issuer-carry').click();
+      for (let i = 0; i < 100 && !rows().some(r => r[0].includes('a.txt')); i++) await settle(50);
+      const out = {{rows: rows(), carried: [...CARRIED.files], msg: $('loadmsg').textContent}};
+      // A different issuer drops the carried files only.
+      $('unlock-issuer').click();
+      for (let i = 0; i < 100 && rows().some(r => r[0].includes('a.txt')); i++) await settle(50);
+      out.after = rows().map(r => r[0]);
+      return out;"""
+    )
+    assert got["carried"] == ["a.txt"]
+    by_name = {r[0].split("\n")[0]: " ".join(r) for r in got["rows"]}
+    assert any("new.txt" in n and "carried over" not in t for n, t in by_name.items())
+    assert any("a.txt" in n and "carried over from run " + run_id in t for n, t in by_name.items())
+    assert len(got["after"]) == 1 and "new.txt" in got["after"][0]
+
+
+def test_a_name_the_analyst_already_uploaded_is_kept_and_not_marked_carried(page_from):
+    page, _ = page_from
+    got = page.run(
+        NOTICE
+        + f"""
+      pick('data-k="pathway"', 'credit_snapshot');
+      await uploadFiles([file('a.txt', {json.dumps(REPORT)})]);
+      type('i-issuer_name', 'Acme'); await waitNotice();
+      $('issuer-carry').click();
+      for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
+      await settle(500);
+      return {{rows: rows(), carried: [...CARRIED.files], msg: $('loadmsg').textContent}};"""
+    )
+    assert got["carried"] == [] and len(got["rows"]) == 1
+    assert "carried over" not in " ".join(got["rows"][0])
+    assert "1 of your files were kept instead of the earlier run's: a.txt." in got["msg"]
 
 
 def test_a_different_typed_name_is_named_against_the_filed_one(page_from):

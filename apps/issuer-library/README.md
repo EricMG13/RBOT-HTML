@@ -121,8 +121,8 @@ is per issuer by evidence date; runs sharing that date are all marked and counte
 
 ## Starting a run from Report history
 
-When the library is served by the run start service, an issuer's Report history has a "Start a run"
-link above its table. It opens the start page from the latest run listed (`/?from=<run id>`): the
+When the library is served over http, an issuer's Report history has a "Start a run" link above its
+table; it works only when that server is the run start service. It opens the start page from the latest run listed (`/?from=<run id>`): the
 issuer ID is locked to that run's, its documents are copied into the new submission, and its answers,
 module subset and turns per module fill the form, each marked "from run <id>". The as-of and cutoff
 dates and the submitter are not carried, nor is an executed-agreement answer that depends on a file;
