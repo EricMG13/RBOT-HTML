@@ -1,0 +1,389 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index aab5696..887b5c9 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,10 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — A same-period net debt difference is the analysis's, not the issuer's (branch `claude/net-debt-same-period`, owner "Yes, fix it")
++Scope: offline, synthetic. Pack: `net_debt_change` gains `same_period` and the two rows' periods, gross debt and cash (schema stays `/3`, additive). Checker: the cash difference is passed through K9's functions as a measure-shaped record, so a same-period change's gross debt, cash and net debt sizes are refused in checked lines while both values may be stated. Tab: flagged and non-zero shows both runs' balances, periods and the sentence, no change figure; zero or two periods unchanged; a pack without the flag as before; periods now beside the cash movement. Hand-written expectations (7,100 to 6,990 gross, 910 to 880 cash, 6,190 to 6,110 net; 2,100 to 2,000, 300 to 250). Changed expectations: the two exact-dict `net_debt_change` assertions in `tests/test_changes.py` gain the new keys (different periods, `same_period` false). `cp8.md` states the rule.
++Not verified: a real model writing a same-period net debt CP-8; the page in a browser against a real pack.
++
+ ## 2026-11-12 — CP-1 states gross debt in `### Net debt data` so the net debt change can be shown (branch `claude/cp1-gross-debt-row`, base a639fb7, owner "Yes, add it")
+ Scope: offline, synthetic. A `Gross debt` row cannot sit in an existing chart table (all four are period-row tables); controller ruling: a fifth period-row owner table on CP-1, all seven pathways (`Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation`, US$m, not a `Chart data:` heading so the library does not draw it). Checker: net debt = gross debt - cash exactly in Decimal when all three are stated, and, where the liquidity table has a row `same_period` calls the same period (`FY2024` and `FY2024 / 2024-09-30` are; `2024-09-30` and `FY2024` are not), a stated cash equal to that row's Cash. Pack: `gross_debt`, `net_debt` and the table's own Cash (not the liquidity table's) are read from the same latest row of that table, so the net debt change makes no cross-table read; the #66 exact-label row rule now reads only free cash flow. Hand-written expectations in `tests/test_cpos_launch.py` and `tests/test_changes.py` (2,100 - 300 = 1,800; 2,000 - 250 = 1,750). Method: `cp8.md` wording only (CP-1's method is unchanged: the instruction is the launcher's owner-table rule, so no CP-1 method revision); older runs show "methods changed" for CP-8 by hash.
+ Compatibility: an older run (no table) is still a CP-8 base and renders; its net debt change is left out, `omitted` naming the run.
+diff --git a/apps/issuer-library/credit_os/web/changes.js b/apps/issuer-library/credit_os/web/changes.js
+index 28badf1..0c3d6d8 100644
+--- a/apps/issuer-library/credit_os/web/changes.js
++++ b/apps/issuer-library/credit_os/web/changes.js
+@@ -89,10 +89,20 @@ function measureTable(measures, verdicts) {
+   return `<div class="table-scroll" role="region" aria-label="Measures, earlier and current" tabindex="0"><table class="history-table"><caption>Measures the pack states, earlier and current</caption><thead><tr><th scope="col">Measure</th><th scope="col">Earlier</th><th scope="col">Current</th><th scope="col">Change</th></tr></thead><tbody>${body}</tbody></table></div>`;
+ }
+ 
++// The net debt change. Rows of one period with two values (`same_period` true) and any non-zero difference are the analysis changing, not the issuer:
++// both runs' balances with their periods and no change figure, no direction. A pack without the flag (cpos-changes/2, /3 before it) renders as before.
++const SAME_DATE_NET_DEBT = 'Both runs state net debt for the same date; the difference is between the two analyses, not a change in the issuer.';
++const nonZero = value => value != null && Number(value) !== 0;
+ function netDebtView(change) {
+   if (!change) return '';
+-  const unit = change.unit, rows = [['Earlier net debt', change.prior_net_debt], ['Change in gross debt', change.change_in_gross_debt], ['Change in cash', change.change_in_cash], ['Current net debt', change.current_net_debt]];
+-  const item = ([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value == null ? NOT_STATED : withUnit(value, unit))}</dd></div>`;
++  const unit = change.unit, item = ([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value == null ? NOT_STATED : withUnit(value, unit))}</dd></div>`;
++  if (change.same_period === true && [change.change_in_gross_debt, change.change_in_cash].some(nonZero)) {
++    const run = (name, period, gross, cash, net) => [[`${name} gross debt (${period || NOT_STATED})`, gross], [`${name} cash (${period || NOT_STATED})`, cash], [`${name} net debt (${period || NOT_STATED})`, net]];
++    const both = [...run('Earlier', change.prior_period, change.prior_gross_debt, change.prior_cash, change.prior_net_debt), ...run('Current', change.current_period, change.current_gross_debt, change.current_cash, change.current_net_debt)];
++    return `<h3>Net debt, earlier and current</h3><dl class="net-debt-change">${both.map(item).join('')}</dl><p class="intro">${esc(SAME_DATE_NET_DEBT)}</p>`;
++  }
++  const span = change.prior_period && change.current_period ? ` (${change.prior_period} to ${change.current_period})` : '';
++  const rows = [['Earlier net debt', change.prior_net_debt], [`Change in gross debt${span}`, change.change_in_gross_debt], [`Change in cash${span}`, change.change_in_cash], ['Current net debt', change.current_net_debt]];
+   return `<h3>Net debt change</h3><dl class="net-debt-change">${rows.map(item).join('')}</dl><p class="intro">${esc(change.convention || '')}</p>`;
+ }
+ 
+diff --git a/apps/issuer-library/credit_os/web/changes.test.cjs b/apps/issuer-library/credit_os/web/changes.test.cjs
+index 8b76585..43c4b29 100644
+--- a/apps/issuer-library/credit_os/web/changes.test.cjs
++++ b/apps/issuer-library/credit_os/web/changes.test.cjs
+@@ -327,3 +327,32 @@ test('what the Changes tab itself writes names things and shows no module code',
+   const notHeld = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: null}, cp8: null}));
+   assert.ok(notHeld.includes('The explanation of the changes is not held for this run.') && !noCode.test(notHeld.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')));
+ });
++
++// ---- The net debt change of one period (owner, 2026-11-12): the analysis changed, not the issuer. Literals are hand-written.
++const {netDebtView} = require('./changes.js');
++const ND = {unit: 'US$m', prior_net_debt: '6190', change_in_gross_debt: '-110', change_in_cash: '-30', current_net_debt: '6110', convention: 'net debt = gross debt - cash',
++  same_period: true, prior_period: 'FY2024', current_period: 'FY2024 / 2024-09-30', prior_gross_debt: '7100', prior_cash: '910', current_gross_debt: '6990', current_cash: '880'};
++
++test('one period with two net debt values: both runs, their periods, the sentence, no change figure and no direction', () => {
++  const html = netDebtView(ND);
++  for (const shown of ['7100 US$m', '910 US$m', '6190 US$m', '6990 US$m', '880 US$m', '6110 US$m', 'Earlier gross debt (FY2024)', 'Current net debt (FY2024 / 2024-09-30)'])
++    assert.ok(html.includes(shown), shown);
++  assert.ok(html.includes('Both runs state net debt for the same date; the difference is between the two analyses, not a change in the issuer.'));
++  for (const hidden of ['-110 US$m', '-30 US$m', 'Change in', 'rose', 'fell']) assert.ok(!html.includes(hidden), hidden);
++});
++
++test('one period with equal net debt values, two periods, and a pack without the flag render as a change', () => {
++  const zero = netDebtView({...ND, change_in_gross_debt: '0', change_in_cash: '0'});
++  assert.ok(zero.includes('Change in gross debt (FY2024 to FY2024 / 2024-09-30)') && !zero.includes('Both runs state'));
++  const two = netDebtView({...ND, same_period: false, prior_period: 'FY2023', current_period: 'FY2024'});
++  assert.ok(two.includes('-110 US$m') && two.includes('Change in cash (FY2023 to FY2024)') && !two.includes('Both runs state'));
++  const {same_period, prior_period, current_period, prior_gross_debt, prior_cash, current_gross_debt, current_cash, ...old} = ND;
++  const older = netDebtView(old);
++  assert.ok(older.includes('<dt>Change in cash</dt><dd>-30 US$m</dd>') && !older.includes('Both runs state'));
++});
++
++test('net debt periods and values are escaped', () => {
++  const evil = '<img src=x onerror=alert(1)>';
++  const html = netDebtView({...ND, prior_period: evil, prior_cash: evil});
++  assert.ok(!html.includes('<img') && html.includes('&lt;img'));
++});
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index f3f862c..71b722d 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -346,6 +346,16 @@ table on every pathway, with the mechanisms that already exist and no new layout
+   with its unit in brackets or a `Reporting unit` column, in a table with periods across a header, and the same
+   basis text in both runs.
+ - Recorded, no code: the library tab shows the net debt change's cash movement without its periods beside the
+-  liquidity measure.
+-- Recorded, no code (predates this branch, owner item): a same-period restatement with the same basis still yields a
+-  net debt change with no flag.
++  liquidity measure. (Done 2026-11-12, see the amendment below.)
++
++Amendment, 2026-11-12 (owner: asked "Flag a same-period net debt restatement as the analysis changing, not the
++issuer?", the owner answered "Yes, fix it"). `net_debt_change` carries `same_period` (true when the gross debt, net
++debt and cash measures are), the two rows' periods and their stated gross debt and cash (`prior_period`,
++`current_period`, `prior_gross_debt`, `prior_cash`, `current_gross_debt`, `current_cash`); read, not computed. The
++schema stays `cpos-changes/3`: the keys are additive and a reader ignores keys it does not know; a pack without them
++renders and checks as before. The checker withholds the change's differences (gross debt, cash, net debt) from
++CP-8's checked lines by K9's own mechanism: gross debt and net debt are measures already; the cash difference is
++given to the same functions as a measure-shaped record, so the same exceptions apply. The tab, for a flagged change
++with a non-zero difference, shows both runs' balances with periods and "Both runs state net debt for the same date;
++the difference is between the two analyses, not a change in the issuer." with no change figure; it also prints the
++periods beside the change's cash movement. `cp8.md` states the rule.
+diff --git a/src/deploy_vii/methods/cp8.md b/src/deploy_vii/methods/cp8.md
+index 8bbaa97..d81ab2c 100644
+--- a/src/deploy_vii/methods/cp8.md
++++ b/src/deploy_vii/methods/cp8.md
+@@ -96,7 +96,11 @@ accepted, the run is delivered without it.
+      `New period` and `New source` are refused for it. `Same definition` followed by a sentence
+      that contradicts it ("but the EBITDA basis changed") is an error: say `Not comparable`. Such a
+      difference is written only in the register rows. A passage may give the two values and say the
+-     analysis changed; it never says the issuer's measure moved.
++     analysis changed; it never says the issuer's measure moved. The same holds for the pack's
++     `net_debt_change` when its `same_period` is true and a difference is not zero: the gross debt,
++     cash and net debt differences are the analysis's, so give both runs' values and never a
++     movement ("net debt rose", "cash fell by"); the checker refuses those sizes in
++     passages, `## Gaps` and fact rows; only the register rows may carry them.
+ 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
+    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
+    for a module's. If you think a module's change of view is unexplained, say so and mark the row
+diff --git a/src/deploy_workflow/changes.py b/src/deploy_workflow/changes.py
+index 6f90777..9f34c9f 100644
+--- a/src/deploy_workflow/changes.py
++++ b/src/deploy_workflow/changes.py
+@@ -46,11 +46,15 @@ a decimal string; missing is null, never zero):
+   (`definition_resolved` false). A year after an instrument word (`notes 2027`, `due 2030`) is part
+   of the definition; page and locator numbers are not.
+ - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
+-  current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
+-  unit (gross and net debt are read only from the Gross debt and Net debt columns of CP-1's
+-  `### Net debt data` table; a run without that table does not state them, and `omitted` says
+-  which run), each under the same definition ("yes"), and each
+-  run's net debt is its gross debt less its cash. A two-point identity of stated balances; it does
++  current_net_debt, convention, same_period, prior_period, current_period, prior_gross_debt,
++  prior_cash, current_gross_debt, current_cash}`, only when both runs state gross debt, net debt
++  and cash in one unit (gross and net debt are read only from the Gross debt and Net debt columns
++  of CP-1's `### Net debt data` table; a run without that table does not state them, and `omitted`
++  says which run), each under the same definition ("yes"), and each run's net debt is its gross
++  debt less its cash. `same_period` is true when all three measures are (the rows of both runs are
++  one period): a difference is then the analysis's, never the issuer's. The added keys are the
++  stated balances and periods of the two rows, read and not computed; the schema is not bumped (a
++  reader of `/3` ignores keys it does not know). A two-point identity of stated balances; it does
+   not say what drove the change. An increase in cash reduces net debt.
+ - `maturity_profile`: `{unit, rows: [{period, prior, current, difference}]}` from the CP-1
+   "Chart data: debt maturities" tables (the table directly under that heading), only when both
+@@ -609,7 +613,7 @@ _READS = {
+ }
+ 
+ 
+-def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, str] | None, str]:
++def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+     """The net debt change, or None and why not. It needs gross debt, net debt and cash stated in
+     both runs in one unit under the same definition, and each run's net debt to be its gross debt
+     less its cash."""
+@@ -637,6 +641,13 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
+         "change_in_cash": format(cc - pc, "f"),
+         "current_net_debt": format(cn, "f"),
+         "convention": NET_DEBT_CONVENTION,
++        "same_period": all(by_key[k]["same_period"] for k in pairs),
++        "prior_period": str(by_key["net_debt"]["prior"]["period"]),
++        "current_period": str(by_key["net_debt"]["current"]["period"]),
++        "prior_gross_debt": format(pg, "f"),
++        "prior_cash": format(pc, "f"),
++        "current_gross_debt": format(cg, "f"),
++        "current_cash": format(cc, "f"),
+     }, ""
+ 
+ 
+diff --git a/src/deploy_workflow/changes_check.py b/src/deploy_workflow/changes_check.py
+index 7e978c3..6255030 100644
+--- a/src/deploy_workflow/changes_check.py
++++ b/src/deploy_workflow/changes_check.py
+@@ -221,6 +221,31 @@ def _flagged(measure: Mapping[str, Any]) -> bool:
+     return bool(measure["same_period"]) and difference is not None and difference != 0
+ 
+ 
++# The net debt change's two differences, each a measure's difference (`change_in_cash` is the
++# difference of the cash the pack reads from the same table; it is no measure of the pack).
++_CHANGE_KEYS = (("change_in_gross_debt", "gross_debt"), ("change_in_cash", "net_debt_cash"))
++
++
++def _net_debt_cash(pack: Mapping[str, Any]) -> list[dict[str, Any]]:
++    """The net debt change's cash as a measure-shaped record (key, label, difference, values,
++    same_period), so that it is withheld by the rules that withhold a measure; none when the pack
++    has no net debt change or it is of two periods."""
++    change = pack.get("net_debt_change")
++    if not change or not change.get("same_period"):
++        return []
++    return [
++        {
++            "key": "net_debt_cash",
++            "label": "Cash",
++            "comparable": "yes",
++            "difference": change.get("change_in_cash"),
++            "prior": {"value": change.get("prior_cash")},
++            "current": {"value": change.get("current_cash")},
++            "same_period": True,
++        }
++    ]
++
++
+ def _pack_differences(
+     pack: Mapping[str, Any], *, without: frozenset[str] = frozenset()
+ ) -> set[Decimal]:
+@@ -230,7 +255,7 @@ def _pack_differences(
+     return _present(
+         [
+             *(_signed(m["difference"]) for m in pack["measures"] if m["key"] not in without),
+-            *(_signed(change.get(k)) for k in ("change_in_gross_debt", "change_in_cash")),
++            *(_signed(change.get(field)) for field, key in _CHANGE_KEYS if key not in without),
+             *(_signed(row["difference"]) for row in rows),
+         ]
+     )
+@@ -241,7 +266,17 @@ def _pack_values(pack: Mapping[str, Any]) -> set[Decimal]:
+     change = pack.get("net_debt_change") or {}
+     rows = (pack.get("maturity_profile") or {}).get("rows", ())
+     found = _pack_differences(pack) | _present(
+-        [_signed(change.get(k)) for k in ("prior_net_debt", "current_net_debt")]
++        [
++            _signed(change.get(k))
++            for k in (
++                "prior_net_debt",
++                "current_net_debt",
++                "prior_gross_debt",
++                "current_gross_debt",
++                "prior_cash",
++                "current_cash",
++            )
++        ]
+         + [_signed(row[k]) for row in rows for k in ("prior", "current")]
+     )
+     for measure in pack["measures"]:
+@@ -725,7 +760,7 @@ def _withheld(pack: Mapping[str, Any], said_nc: frozenset[str]) -> frozenset[str
+     `Not comparable`, or both runs state them for one period with different values."""
+     return frozenset(
+         m["key"]
+-        for m in pack["measures"]
++        for m in (*pack["measures"], *_net_debt_cash(pack))
+         if m["comparable"] == "no" or m["key"] in said_nc or _flagged(m)
+     )
+ 
+@@ -737,7 +772,7 @@ def _withheld_sizes(
+     of one period with two values, not said `Not comparable`, may print its difference in register
+     rows; a difference equal to a value of its own measure is no difference."""
+     found: dict[Decimal, str] = {}
+-    for measure in pack["measures"]:
++    for measure in (*pack["measures"], *_net_debt_cash(pack)):
+         difference = _signed(measure["difference"])
+         barred = measure["comparable"] == "no" or measure["key"] in said_nc
+         if difference is None or difference == 0 or not (barred or _flagged(measure)):
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index 9abb88e..9b90520 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -831,6 +831,13 @@ def test_the_net_debt_change_is_built_when_both_runs_state_it_under_one_definiti
+             "raises it; a two-point identity of the stated balances, not an analysis of what "
+             "drove the change"
+         ),
++        "same_period": False,
++        "prior_period": "FY2023",
++        "current_period": "FY2024",
++        "prior_gross_debt": "2100",
++        "prior_cash": "300",
++        "current_gross_debt": "2000",
++        "current_cash": "250",
+     }
+     assert "net_debt_bridge" not in pack
+     assert pack["omitted"] == {
+@@ -2610,6 +2617,13 @@ def test_the_net_debt_change_takes_all_three_figures_from_the_net_debt_table_row
+         "change_in_gross_debt": "-100",
+         "change_in_cash": "-100",
+         "current_net_debt": "1800",
++        "same_period": False,
++        "prior_period": "FY2023",
++        "current_period": "FY2025",
++        "prior_gross_debt": "2100",
++        "prior_cash": "300",
++        "current_gross_debt": "2000",
++        "current_cash": "200",
+     }
+     assert "net_debt_change" not in pack["omitted"]
+ 
+@@ -2629,3 +2643,106 @@ def test_a_net_debt_row_without_its_cash_is_omitted_naming_the_cash():
+     later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
+     pack = pair_pack(earlier, later)
+     assert pack["omitted"]["net_debt_change"] == "cash cannot be compared (a value is not stated)"
++
++
++# --- one period's net debt change (owner, 2026-11-12): the analysis changed, not the issuer ---
++
++
++def _bridge(prior_period, current_period, current=("2,000", "250", "1,750")):
++    prior = handoff("CP-1", "Earlier.", tables=netdebt("2,100", "300", "1,800", prior_period))
++    now = handoff("CP-1", "Now.", tables=netdebt(*current, current_period))
++    return pair_pack(prior, now)
++
++
++@pytest.mark.parametrize(
++    ("prior_period", "current_period", "flag"),
++    [
++        ("FY2024", "FY2024", True),
++        ("FY2024", "FY2024 / 2024-09-30", True),  # one period, written two ways
++        ("FY2023", "FY2024", False),
++    ],
++)
++def test_the_net_debt_change_says_whether_both_rows_are_one_period(
++    prior_period, current_period, flag
++):
++    change = _bridge(prior_period, current_period)["net_debt_change"]
++    assert change["same_period"] is flag
++    assert (change["prior_period"], change["current_period"]) == (prior_period, current_period)
++    # the stated balances of each row, read and not computed
++    assert (change["prior_gross_debt"], change["prior_cash"]) == ("2100", "300")
++    assert (change["current_gross_debt"], change["current_cash"]) == ("2000", "250")
++
++
++def test_equal_net_debt_rows_of_one_period_are_flagged_with_zero_differences():
++    change = _bridge("FY2024", "FY2024", ("2,100", "300", "1,800"))["net_debt_change"]
++    assert change["same_period"] is True
++    assert (change["change_in_gross_debt"], change["change_in_cash"]) == ("0", "0")
++
++
++def _nd_measure(key, label, values, difference, same_period=True):
++    prior, current = values
++    side = {**CASH_PRIOR, "label": label, "period": "FY2024"}
++    return {
++        "key": key,
++        "label": label,
++        "unit": "US$m",
++        "comparable": "yes",
++        "reason": None,
++        "prior": {**side, "value": prior},
++        "current": {**side, "value": current},
++        "difference": difference,
++        "same_period": same_period,
++    }
++
++
++def _ndpack(same_period=True, with_flag=True):
++    change = {
++        "unit": "US$m",
++        "prior_net_debt": "6190",
++        "change_in_gross_debt": "-110",
++        "change_in_cash": "-30",
++        "current_net_debt": "6110",
++        "convention": "net debt = gross debt - cash",
++    }
++    if with_flag:
++        change |= {
++            "same_period": same_period,
++            "prior_period": "FY2024",
++            "current_period": "FY2024",
++            "prior_gross_debt": "7100",
++            "prior_cash": "910",
++            "current_gross_debt": "6990",
++            "current_cash": "880",
++        }
++    return {
++        **PACK,
++        "measures": [
++            *PACK["measures"],
++            _nd_measure("gross_debt", "Gross debt", ("7100", "6990"), "-110", same_period),
++            _nd_measure("net_debt", "Net debt", ("6190", "6110"), "-80", same_period),
++        ],
++        "net_debt_change": change,
++    }
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "Net debt fell by 80 US$m.",
++        "Gross debt fell by 110 US$m.",
++        "Cash fell by 30 US$m.",
++        "Cash is 30 US$m lower.",
++    ],
++)
++def test_a_same_period_net_debt_difference_is_printed_in_no_passage(sentence):
++    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()), "accepted"
++
++
++def test_the_two_values_of_a_same_period_net_debt_may_be_stated():
++    said = "Net debt is 6,190 US$m earlier and 6,110 US$m now; cash is 910 and 880 US$m.\n\n"
++    assert cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack()) == ()
++
++
++@pytest.mark.parametrize("pack", [_ndpack(same_period=False), _ndpack(with_flag=False)])
++def test_a_net_debt_change_of_two_periods_or_without_the_flag_may_be_said_to_have_moved(pack):
++    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()
