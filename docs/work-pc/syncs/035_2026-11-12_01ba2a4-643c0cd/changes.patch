@@ -1,0 +1,2829 @@
+diff --git a/README.md b/README.md
+index 22ec591..068d4bb 100644
+--- a/README.md
++++ b/README.md
+@@ -150,34 +150,39 @@ and proves nothing.
+ 
+ ### What an analyst does
+ 
+-Open the address and work through nine stages. A stage appears only when a module in the run uses
+-it, and a later stage stays locked while an earlier one has an error.
+-
+-1. **Pathway and level.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
++Open the address and work through five steps. A group of questions appears only when a module in
++the run uses it, and a later step stays locked while an earlier one has an error.
++
++1. **Documents.** Choose the issuer's folder, or add files; the files upload and the launcher's own
++   offline reading says what it recognises in each (kind, period end, whether a legal document reads
++   as executed) and which files it will not read. Documents shows only what was read. Once a purpose
++   is chosen, each kind the pathway uses and the folder lacks is listed from Purpose on, in the
++   readiness column, as a limitation with the module it affects.
++2. **Purpose.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
+    `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or `short_snapshot` (the
+-   Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each card lists its modules. Pick Basic, Standard or Advanced, and enter your name.
+-2. **Documents.** Choose the issuer's folder; the files upload and the launcher's own offline
+-   reading says what it recognises in each (kind, period end, whether a legal document reads as
+-   executed) and which files it will not read. Each kind the pathway uses and the folder lacks is
+-   listed as a limitation with the module it affects.
+-3. **Issuer and dates.** Issuer name and ID (at most 40 characters), as-of date, periods and
+-   currency. An as-of date before the newest document is a limit for the whole run, and you must tick it on the summary.
+-4. **Legal.** Where CP-4, CP-2A or CP-4C runs: choose the uploaded agreement file, or say there is
+-   none. `executed` and `draft` can be chosen only by selecting a file.
+-5. **Market and ratings.** Standard and Advanced.
+-6. **Peers, valuation and module modes.** Standard and Advanced: the peer source, your own peers,
+-   the Relative value mode and Deep Debate for the Committee module.
+-7. **Assumptions and questions.** Research questions at Standard; pinned assumptions at Advanced.
+-8. **Summary.** The forecast for each module in run order (Ready, Check, Gap, Limited or Will
+-   refuse), with the reason and the stage that fixes it, and each defaulted input with its
++   Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each row lists its modules. Pick Basic,
++   Standard or Advanced, and enter your name. At Advanced the module list and the turns per module
++   are here too.
++3. **Confirm.** Issuer name and ID (at most 40 characters), as-of date, periods and currency. An
++   as-of date before the newest document is a limit for the whole run, and you must tick it on the
++   summary. Legal, where CP-4, CP-2A or CP-4C runs: choose the uploaded agreement file, or say there
++   is none. `executed` and `draft` can be chosen only by selecting a file.
++4. **More context.** Standard and Advanced (at Basic only for a primary run, a held answer, an error
++   or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
++   your own peers, the Relative value mode and Deep Debate for the Committee module); research
++   questions at Standard; pinned assumptions at Advanced. What shows depends on the pathway: the
++   short snapshot has no More context step at any level, except that a primary run still shows
++   More context with its deal terms (Market) at every level.
++5. **Start.** The summary: the forecast for each module in run order (Ready, Check, Gap, Limited or
++   Will refuse), with the reason and the step that fixes it, and each defaulted input with its
+    default. The table joins the launcher's forecast and the page's own rules; where both speak of a
+    module it shows the worse outcome and both reasons. Approval needs one tick for every Gap,
+-   Limited and Will refuse item, from either source, and for every Check that has a fix (a stage to
++   Limited and Will refuse item, from either source, and for every Check that has a fix (a step to
+    go to: "I have checked this"). Ready, Note and a Check with nothing you can do need none. A
+    legal answer the launcher's reading disagrees with, and an as-of date before the newest
+    document, are Limited for the whole run. On an earnings run, fewer than two recognised reporting
+-   periods is a Check that links to Documents. An error blocks approval.
+-9. **Submit.** Starts the run; the page moves to its progress in Run activity.
++   periods is a Check that links to Documents. An error blocks approval. Submit starts the run; the
++   page moves to its progress in Run activity.
+ 
+ Submit is refused if a file, an answer, the module list or the turns changed after the summary, and
+ a submission starts at most one run however many times Submit is sent.
+@@ -186,8 +191,8 @@ a submission starts at most one run however many times Submit is sent.
+ 
+ | Level | Asked | Defaulted |
+ |---|---|---|
+-| Basic | Stages 1 to 4, 8 and 9 | See below |
+-| Standard | Basic, plus stage 5, stage 6 without valuation detail, and research questions | Pinned assumptions, valuation basis, own multiple |
++| Basic | Documents, Purpose, Confirm and Start | See below |
++| Standard | Basic, plus More context where the pathway has it (market inputs, peers and module settings, research questions); none for the short snapshot (a primary run still shows More context with its deal terms) | Pinned assumptions, valuation basis, own multiple |
+ | Advanced | Everything: also pinned assumptions, valuation basis and own multiple, deal terms, guarantors, aliases, sponsor, the module subset and turns per module | Nothing |
+ 
+ Basic defaults: peer source `cp_dr_public` (the research module finds the peers from public
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index c1170b4..4cfee62 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,17 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Run start in four steps (branch `claude/redesign-run-start`)
++Plan and reports: `.superpowers/sdd/2026-11-12-redesign-run-start/`; record: `docs/design/2026-11-12-run-start-four-steps.md`.
++Scope: the page `docs/templates/context-form.html` only, tested by synthetic browser tests against a stubbed service. No provider run; no real run started.
++Changed: the eight sections stay as groups under five steps (Documents, Purpose, Confirm, More context, Start); documents first; a numbered stepper, fixed footer, readiness column, the Start card "What Submit does", and the run screen in the redesign's look. `build()`, `context.json`, the requests and the service are unchanged; the answer-key tests were not edited. Controller rulings 1-11 are in the record.
++Checks: `tests/test_context_form.py` and `tests/test_run_start_page.py` 180 passed, exit 0 (Task 1: 147 then 148; Task 2: 159; Task 3: 169 then 172); three library-page browser tests that load the form passed (the `-k context` filter selects none); quality gate 0 findings, exit 0. Reviewer probes: Task 1 re-review 5 passed, Task 2 14 passed, Task 3 re-review 8 passed. On a 12-module summary Submit first comes into view after 12.5-21.1% of the scroll, and after 69.2-77.1% on the short snapshot; a focused Approve or Submit is always visible.
++Reviews (mx-precise): Task 1 changes required (M1 More context dropped off screen when its last held answer was undone; M2 group-level assertions deleted; L1 a legal-error test on an unreachable state), closed in fix a6eec82, re-review approve. Task 2 approve, with three Lows carried to Task 3 and closed there. Task 3 changes required (M1 the sticky card hid Approve and Submit; M2 the run screens lost the title and Start over), closed in fix a4408ff (Rulings 10 and 11), re-review approve; its Lows L1-L3 were fixed in the same round.
++Reader check: not applicable to this form. The VMO2 reference check covers the issuer report; the look here was read against the mock-up notes only, with three desktop screenshots by eye in Task 2.
++Open, for the owner: the 960px JavaScript/CSS breakpoint both match; the files table keeps a 560px minimum width below 720px; the mock-up's library empty state (R0) is not built.
++Whole-branch review: by a separate reviewer; found two Medium defects (a button opening a later group of a step left its heading off screen; the Start module rows collapsed at 375px) and seven Low; fixed in this commit; re-review of the whole-branch fix (4ab364d) by a separate reviewer: approve; every button target lands in view at 1440 and 720px; payload and Submit rules unchanged; reviewer probes `probes/wbr` and `probes/t3r` pass apart from one probe that pinned the README's old short-snapshot sentence, corrected in this commit.
++Not verified: look beyond three desktop screenshots (none of Start or the run screen; no pixel comparison with the mock-up); widths 720-960px, print, forced-colors; 375px by a scroll-width probe only; keyboard traversal and screen readers; the run screen driven with literal run data, not a real run; groups kept on More context after a level change until the step is left; real-service submit beyond the existing browser tests; real Tab traversal, screen readers and forced-colors; browsers other than headless Chrome; a real run or provider call (the service was stubbed throughout); `?from=` beyond one credit-snapshot fixture run.
++
+ ## 2026-11-12 — Forecast inputs name cells of period-row tables; `LTM Qn YYYY` is a balance date (branch `claude/forecast-reader-findings`; findings 1, 2, 6 and the instruction side of 4 of the LTH reader check)
+ Plan: `docs/superpowers/plans/2026-11-12-forecast-reader-findings.md`, Tasks E1-E4, rulings R1-R6. An operand may name its cell in a table with one row per period as `row` (the period) and `column` (the measure's header); `column` with `period` is refused and partial naming stays refused. The history record reads such tables, and reads a label `LTM Qn YYYY` (row label or column header) as the balance at that label's End for debt, cash and undrawn only, and only when CP-1's period table dates the label to the day the year to date (or the fiscal year) ends; it is never read for a flow. A period row whose `Reporting unit` differs from the named row's is n.a. with the reason, never converted. The limit that listed the LTM header as unread now says what is and is not read. Instructions: the `column` form, `interest` defined as cash interest (interest expense may be named if `scope_limits` says so), balances printed as plain numbers under their period, the LTM label dated in the period table; repair lines name `column`. A block that uses no new key publishes byte-identical files, except the one limit line where CP-1 carries an LTM label.
+ Scope: offline. Synthetic fixture with a hand answer key (plan lines 43-87); 459 recorded calls replayed before and after (429 identical, 24 differ only where CP-1 holds an LTM label, 6 only in two refusal texts); the real LTH CP-1 of run `20261112-164724-01` read with a HAND-NAMED block (no model ran): FY2024 cash 10.879 and net debt 1,544.718; YTD and LTM cash 175.509, debt 1,534.356, net debt 1,358.847; LTM leverage equals CP-1's own C3 and C4; with the run's block unchanged only one limit line differs. No provider called: no model has yet used `column`.
+diff --git a/docs/design/2026-11-12-redesign-pass-1.md b/docs/design/2026-11-12-redesign-pass-1.md
+index 94c60e6..b423e7b 100644
+--- a/docs/design/2026-11-12-redesign-pass-1.md
++++ b/docs/design/2026-11-12-redesign-pass-1.md
+@@ -60,8 +60,7 @@ PR 67 on 2026-11-12.
+ - Library home: issuer rows (mock-up L1) against "one item per column, no per-issuer run count"
+   (owner, 2026-11-10); D9, D14.
+ - Run date ("Ran on") against "Dates refer to evidence, not execution" (D12).
+-- Run start: the mock-up's Documents → Purpose → Confirm → Start against "Stage 1 is pathway
+-  selection"; "From file" issuer name and currency against "no second classifier".
++- Run start: decided and built (2026-11-12); see `docs/design/2026-11-12-run-start-four-steps.md`.
+ - Earlier-format runs: the Overview prints "No bottom line in this handoff." for every module although
+   each module page shows the handoff's summary bottom line (H7).
+ - The comparison module is not excluded from Overview in code (M5 says it is not shown there); read
+@@ -83,8 +82,8 @@ Read by a read-only agent at f3ae3a1 from `AGENTS.md`, `docs/rulings`, `docs/des
+ | 6 | Paid action is Submit on an approved summary, USD 20 cap | Run-start-submit ruling | "What Submit does" | Not in scope | Keep the text |
+ | 7 | Model and effort only at Advanced; Balanced by default | 2026-11-12 amendment | Silent | Not in scope | Keep |
+ | 8 | Web search statement for private cases before Submit | 2026-11-12 amendment | Silent | Not in scope | Keep |
+-| 9 | Stage 1 is pathway selection; levels Basic / Standard / Advanced | Staged run start spec §3 | Documents first | Not in scope | Owner's call |
+-| 10 | No second classifier; only period ends are prefilled | Staged run start spec §4 | "From file" name and currency | Not in scope | Prefill only what the launcher reads |
++| 9 | Stage 1 is pathway selection; levels Basic / Standard / Advanced | Staged run start spec §3 | Documents first | Not in scope | Decided: four steps, documents first (2026-11-12) |
++| 10 | No second classifier; only period ends are prefilled | Staged run start spec §4 | "From file" name and currency | Not in scope | Decided: today's prefill (2026-11-12) |
+ | 11 | The summary names the run the comparison uses ("Changes" row) | M5 amendment | Silent | Not in scope | Keep |
+ | 12 | Report history: one row per run, as-of first, then start time | Decision 4 | Adds "Ran on" | Kept | Keep the order and "N not assessable" |
+ | 13 | Earlier format and Earlier methods badges | H7; PR 48 | On L1 and L2 | Kept in history and strip | Add to library rows when built |
+diff --git a/docs/design/2026-11-12-run-start-four-steps.md b/docs/design/2026-11-12-run-start-four-steps.md
+new file mode 100644
+index 0000000..2bb6083
+--- /dev/null
++++ b/docs/design/2026-11-12-run-start-four-steps.md
+@@ -0,0 +1,102 @@
++# Run start in four steps (2026-11-12)
++
++Owner: "step order - use the design style from the Claude design, but adapate for current state of
++code base."
++
++Owner answers to the two questions asked (2026-11-12):
++
++- Step order: "Four steps". Documents → Purpose → Confirm → Start. Today's issuer, agreement,
++  market, valuation and assumptions questions are kept and grouped under Confirm, with a More
++  context step. This replaces "Stage 1 is pathway selection".
++- Prefill: "Today's prefill". Only what the launcher already reads; no new reading of documents.
++
++Source: the Claude Design project's run start screens (R0-R5). Branch `claude/redesign-run-start`,
++cut from main f98ff70. Plan and reports are in `.superpowers/sdd/2026-11-12-redesign-run-start/`.
++
++## Built
++
++The eight sections of the page stay as groups. A step map lays over them; no field moved between
++sections, so `build()`, `context.json`, the requests and the saved-draft keys are unchanged.
++
++| Step | Today's groups | What it shows |
++| --- | --- | --- |
++| Documents | Documents | The drop zone ("Choose the issuer's folder, or add files"), the files as rows with state dots, what the launcher recognised. No readiness panel: a pill says it appears once a purpose is chosen. |
++| Purpose | Pathway | The pathways as rows (name, question, modules, and the "Needs:" text), level and submitter name side by side, the Advanced module list and turns. |
++| Confirm | Issuer and dates; Legal | Issuer name and ID, dates, periods, currency; the agreement file where a module uses it. Stacked under their own headings. |
++| More context | Market; Valuation; Assumptions | The groups the level asks, as today. |
++| Start | Review | "What Submit does" card with Approve and Submit; the module list as rows; "Your answers" with Edit. Two columns. |
++
++Also built: a numbered stepper (collapses to "Step i of n · name" at 960px and below), a fixed
++footer with Back and Next named for the neighbouring step, the readiness column on Purpose, Confirm
++and More context, and the "Run started" screen in the same look. Commits 5decc72, a6eec82, 765235d,
++47bf7c7, a4408ff.
++
++## Not adopted from the mock-up
++
++| Mock-up | Kept instead | Why |
++| --- | --- | --- |
++| Drag and drop | The two buttons | None exists in the page (Ruling 7) |
++| "Found" tiles, a "from file" source column, "what this folder gives it" lists | Nothing | The code has no such data (Ruling 7) |
++| More context only at Standard and Advanced | Shown at Basic for a primary run, a held answer, an error, or "Answer this now" | Today's "never hide an answer" rule wins (Ruling 2) |
++| Readiness panel with a "Hide" control | Panel without it; hidden on Documents and Start | Ruling 5 |
++| "From file" issuer name and currency | Today's prefill | Owner answer |
++| Lightest grey text `#8a90a3` | `--text-quaternary` | Contrast, as in pass 1 |
++
++## Controller rulings
++
++| # | Ruling | Cost if wrong |
++| --- | --- | --- |
++| 1 | The eight sections stay as groups; a step map lays over them | A rename |
++| 2 | A step shows when the level shows any of its groups | A visibility rule |
++| 3 | A step stacks its groups under their own headings; "Go to Pathway" becomes "Go to Purpose" | Labels |
++| 4 | The Advanced module list stays in Purpose | Moving it later |
++| 5 | No readiness panel on Documents (a pill instead); scope line empty until Purpose is visited (replaced by Ruling 13) | A display rule |
++| 6 | The page title is "Start a run" | One string |
++| 7 | No drag and drop, tiles, source column or folder list | Layout |
++| 8 | Next is named for the next step; Skip where today's rule gives it (removed by Ruling 12) | Labels |
++| 9 | The group number is removed; the stepper carries it | Restore |
++| 10 | The run and "submission gone" screens keep the page head (title, Start over) as before | A display rule |
++| T1a | An unvisited step with an error says "To do", as today | Labels |
++| T1b | The Start group's heading keeps "Summary and start" | Labels |
++| 11 | The Start card sticks by its bottom. With a card taller than the page, Submit is out of view only at the top of the scroll and in view from part-way to the end; before this branch Submit was at the page's very end | A layout rule |
++| 12 | "Skip" is removed: More context always precedes Start, so the branch was unreachable | A label |
++| 13 | The scope line is empty only while Documents is on screen (replaces Ruling 5's "until Purpose is visited") | A display rule |
++| 14 | "Your answers" rows carry no number | A label |
++| 15 | The documents zone border uses `--border-primary`; no second new colour | A colour |
++| 16 | The group names in fix sentences ("under Legal", "under Market", "under Issuer and dates") stay as written (Ruling 3) | Labels |
++
++## Verification summary
++
++Synthetic browser tests with a stubbed service. 180 tests passed; quality gate 0 findings. Reviewer
++probes: Task 1 re-review 5 passed, Task 2 14 passed, Task 3 re-review 8 passed. On a 12-module
++summary Submit first comes into view after 12.5-21.1% of the scroll; on the short snapshot, after
++69.2-77.1%. A focused Approve or Submit is always visible.
++
++Not verified, collected from the reports:
++
++- Look: only three desktop screenshots by eye (Task 2); none of Start or the run screen; no pixel
++  comparison with the mock-up.
++- Widths 720-960px, print, forced-colors; 375px checked only by a scroll-width probe.
++- Keyboard traversal and screen readers (attributes, names and focus asserted only).
++- The run screen was driven with literal run data, not a real run reaching each state.
++- A pathway or level change while on More context keeps groups the new level would hide until the
++  step is left.
++- Real-service submit beyond the existing browser tests.
++
++## Open, for the owner
++
++- Ruling 16: those group names are no longer on screen in the readiness column (the stepper and
++  headings do not carry them); the sentences still lead correctly through the button beside them on
++  Start.
++- Predate the branch, found in the whole-branch review: moving focus from a tick to an Edit button
++  destroys the button (focus falls to the page); the notice's carry and "different issuer" reset to
++  the first step without moving focus; at exactly 960px the readiness panel opens above the form
++  (about 1,000px); `docs/templates/README.md` still says "a check before download" though the page
++  has no download.
++- Size: the branch is about 2,100 changed lines, roughly half tests and a fixture, over the 800-line
++  guide. The reviewer's alternative to a waiver is four stacked parts: A (5decc72, a6eec82; 544),
++  B (765235d; 711, 554 without the fixture), C (47bf7c7, a4408ff; 640), D (the documents and the
++  review fixes; about 340).
++- Pre-existing, found in the Task 2 review: the 960px breakpoint is matched by both the JavaScript
++  and the CSS, and the files table keeps a 560px minimum width below 720px.
++- The mock-up's library empty state (R0) is not built.
+diff --git a/docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md b/docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md
+index f09eb46..7ef02e8 100644
+--- a/docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md
++++ b/docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md
+@@ -2,6 +2,11 @@
+ 
+ Adds to `2026-11-11-staged-run-start-design.md`. Status: approved by the owner 2026-11-11; built on branch claude/initiating-runs-existing-issuers-4a8739.
+ 
++Note 2026-11-12: the stage numbers below are the page's groups. They now sit under the steps: stage 1
++(pathway) is Purpose, stage 2 (documents) is Documents, stages 3 and 4 (issuer and dates, legal) are
++Confirm, stages 5 to 7 are More context, stages 8 and 9 are Start. See
++`docs/design/2026-11-12-run-start-four-steps.md`.
++
+ ## 1. Intent
+ 
+ A second run on an issuer starts blank today. The analyst uploads every document again and retypes
+diff --git a/docs/superpowers/specs/2026-11-11-staged-run-start-design.md b/docs/superpowers/specs/2026-11-11-staged-run-start-design.md
+index c672054..3ca5b0a 100644
+--- a/docs/superpowers/specs/2026-11-11-staged-run-start-design.md
++++ b/docs/superpowers/specs/2026-11-11-staged-run-start-design.md
+@@ -2,6 +2,24 @@
+ 
+ Replaces the inbox watcher and folder drop. Status: for owner approval.
+ 
++## Amendment 2026-11-12: four steps, documents first
++
++Owner, 2026-11-12: step order "Four steps"; prefill "Today's prefill". Record:
++`docs/design/2026-11-12-run-start-four-steps.md`.
++
++- The stages of section 4 are now groups shown under five steps: Documents (documents), Purpose
++  (pathway), Confirm (issuer and dates, legal), More context (market, valuation, assumptions) and
++  Start (review). A step is shown when the level shows any of its groups.
++- Decision 4, "Stage 1 is pathway selection", is replaced: the page opens on Documents, and Purpose
++  follows once a file is read.
++- Basic asks Documents, Purpose, Confirm and Start. More context appears at Basic only for a primary
++  run, a held answer, an error or "Answer this now".
++- Standard adds the market, valuation and research-question groups under More context; Advanced asks
++  everything, as section 5 says.
++- The short snapshot shows Documents, Purpose, Confirm and Start at every level.
++- Every other rule of this spec stands: the levels' defaults, locks after an error, the summary and
++  its ticks, Submit, the USD 20 cap. No field moved between groups.
++
+ ## 1. Intent
+ 
+ Paid runs are repeated because of human error. Most of it is context that is missing or wrong, or
+@@ -48,7 +66,7 @@ run. The analyst never handles a context file.
+    replaces the folder drop named in `AGENTS.md` and `docs/rulings/2026-11-09-inbox-automation.md`.
+ 3. The start page offers each module's modes and qualifiers, and three levels: Basic, Standard,
+    Advanced.
+-4. Stage 1 is pathway selection.
++4. Stage 1 is pathway selection. (replaced 2026-11-12, see the amendment)
+ 
+ ## 4. Stages
+ 
+diff --git a/docs/templates/README.md b/docs/templates/README.md
+index cf60294..cc14e20 100644
+--- a/docs/templates/README.md
++++ b/docs/templates/README.md
+@@ -311,9 +311,9 @@ and re-save unchanged; a file that uses one needs this version or later):
+ - `attachments.legal_documents` has no preselected choice in the form (`executed`, `draft` or `none`).
+ 
+ The form (adopted 2026-11-10; design and module review in
+-`docs/design/2026-11-10-context-form-proposal.md`) asks in stages: purpose, issuer, dates, source
+-files, then market, valuation, assumptions and questions only where a module of the run uses them,
+-then a check before download.
++`docs/design/2026-11-10-context-form-proposal.md`) asks in five steps: documents, purpose, confirm (issuer, dates, legal file), more context (market,
++valuation, assumptions and questions, only where a module of the run uses them), then a check
++before download.
+ 
+ **Rules the form adds.** `context.py` does not enforce these, so a hand-written file without them
+ still loads; the form will not download without them:
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index 14862f4..c065b91 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -5,19 +5,19 @@
+ <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="color-scheme" content="light">
+-<title>Run context</title>
++<title>Start a run</title>
+ <style>
+ /* The run context form: writes context.json (schema context/1), read by src/deploy_workflow/context.py;
+    build() is the normative rule set, plus the form-only rules marked in it. Adopted 2026-11-10 (owner:
+    "Approved"); docs/design/2026-11-10-context-form-proposal.md holds the module review and the design.
+    Styled in the Credit OS language of apps/issuer-library/credit_os/web/screen.css: its tokens, its
+-   Untitled UI component foundation (MIT) and the New run patterns it keeps (.run-stages, .run-field,
++   Untitled UI component foundation (MIT) and the New run patterns it keeps (.run-field,
+    .step-actions, .run-strip, .badge). tests/test_context_form.py keeps the copied tables to their sources. */
+ /* @font-face rules are added by the script: see FONT_BASE. */
+ 
+ /* Tokens: copied from screen.css (lines 5 and 81). */
+ :root{--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#0017e5;--ground:#eef0f5;--rule:#dde1ea;--muted:#4a5068;--quiet:#f6f7fa;--selection:#e7ecff;--amber:#8a5300;--amber-bg:#fff1c7;--amber-border:#f2d58a;--red:#b3261e;--green:#0e7a46;--depth:0 8px 28px rgba(0,5,51,.085)}
+-:root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--ring:0 0 0 4px rgba(0,23,229,.16);--ring-error:0 0 0 4px rgba(179,38,30,.14);--red-bg:#fef3f2;--red-border:#f6c9c4;--radius-inline:4px;--radius-control:8px;--radius-card:12px}
++:root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--ring:0 0 0 4px rgba(0,23,229,.16);--ring-error:0 0 0 4px rgba(179,38,30,.14);--green-bg:#e9f5ee;--red-bg:#fef3f2;--red-border:#f6c9c4;--radius-inline:4px;--radius-control:8px;--radius-card:12px}
+ 
+ /* Base, as screen.css. */
+ *{box-sizing:border-box}
+@@ -34,7 +34,8 @@ svg.i{width:16px;height:16px;flex:none}
+ .sr-only,.skip{position:fixed;top:-60px;left:70px;z-index:20;background:#fff;padding:10px}.skip:focus{top:4px}
+ .muted{color:var(--text-quaternary)}
+ 
+-/* Frame: the library's rail, one white card (title, stages, workbench) on the ground. */
++/* Frame: the library's rail, one white card on the ground. From Purpose to More context the card is the
++   left column (title, stepper, form, footer) and the run readiness aside; elsewhere it is one column. */
+ .rail{position:fixed;left:0;top:0;width:56px;height:100dvh;background:var(--navy);display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px 8px;z-index:5}
+ .symbol{width:27px;height:30px;background:center/contain no-repeat url("data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDE1MjEgMTUxNSIgd2lkdGg9IjE1MjEiIGhlaWdodD0iMTUxNSI+Cgk8dGl0bGU+c3RhdGUtc3RyZWV0LWxvZ28tZmluYWwtc3ZnPC90aXRsZT4KCTxzdHlsZT4KCQkuczAgeyBmaWxsOiAjZmZmZmZmIH0gCgk8L3N0eWxlPgoJPHBhdGggaWQ9IlN5bWJvbCIgY2xhc3M9InMwIiBkPSJtNzI0LjggMTczYzIzOC42LTgyLjQgNDg5LjktMTcyLjcgNzk1LjMtMTcyLjd2MjExYy0yNjcuMSAwLTQ4OCA3OC41LTcyNi41IDE2MC45LTIzNS43IDgyLjQtNDg4IDE3Mi43LTc5My4zIDE3Mi43di0yMTFjMjY3IDAgNDg3LjktNzguNSA3MjQuNS0xNjAuOXptLTcyNC41IDQ3Ny44aDE1MTkuOHYyMTNoLTExMS0xNDA4Ljh6bTAgNjUyLjVjMjY3IDAgNDg3LjktNzguNSA3MjQuNS0xNjEgMjM4LjYtODIuNCA0ODkuOS0xNzIuNiA3OTUuMy0xNzIuNnYyMTAuOWMtMjY3LjEgMC00ODggNzguNS03MjYuNSAxNjAuOS0yMzYuNiA4Mi41LTQ4OCAxNzIuNy03OTMuMyAxNzIuN3oiLz4KPC9zdmc+")}
+ .rail-rule{width:25px;height:1px;background:#30365e;margin:10px 0}
+@@ -42,34 +43,73 @@ svg.i{width:16px;height:16px;flex:none}
+ .rail a:hover{background:#ffffff20}
+ .rail a svg{width:18px;height:18px}
+ .app{margin-left:56px;padding:18px;height:100dvh;display:flex;flex-direction:column;min-width:0}
+-.page-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 22px;background:#fff;border-radius:var(--radius-card) var(--radius-card) 0 0}
++.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);border-radius:var(--radius-card);box-shadow:var(--depth);overflow:hidden}
++.workbench:has(#panel[hidden]){grid-template-columns:minmax(0,1fr)}
++.left{display:flex;flex-direction:column;min-width:0;min-height:0}
++.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 32px 0}
++.page-head>div:first-child{min-width:0}
+ .page-head h1{font:600 24px/32px 'Red Hat Display',system-ui,sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
+-.scope{margin-top:2px;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary)}
++.stagebar{margin-top:10px}
++.scope{margin-top:10px;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary)}
++.scope:empty{display:none}
+ .page-actions{display:flex;gap:12px;flex:none;align-items:center}
+-.stagebar{background:#fff;padding:4px 22px 14px;border-bottom:1px solid var(--border-secondary)}
+-.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:minmax(0,1fr) 320px;border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:var(--depth);overflow:hidden}
+-#canvas{min-width:0;min-height:0;overflow:auto}
++#canvas{flex:1;min-width:0;min-height:0;overflow:auto;padding:28px 32px 0}
+ #canvas:focus{outline:none}
+-.canvas-in{max-width:820px;padding:22px 26px 32px}
++.canvas-in{max-width:860px;padding-bottom:28px}
++.canvas-in:has(#st-review:not([hidden])),.canvas-in:has(.run-progress:not([hidden])){max-width:none}
+ 
+-/* Stages: the New run progress-bar stages (screen.css .run-stages). */
+-.run-stages{display:grid;grid-template-columns:repeat(var(--n,8),minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
+-.run-stages button{display:block;width:100%;padding:10px 0 0;border-top:4px solid var(--border-secondary);text-align:left;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+-.run-stages .nm{display:block}
+-.run-stages .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+-.run-stages button:hover{color:var(--text-secondary)}
+-.run-stages .done{border-top-color:var(--blue);color:var(--text-secondary)}
+-.run-stages [aria-current]{border-top-color:var(--blue);color:var(--blue-700)}
+-.run-stages [aria-current] .sstate{color:var(--blue-700)}
+-.run-stages .needs-attention{border-top-color:var(--red);color:var(--red)}
+-.run-stages .needs-attention .sstate{color:var(--red)}
+-.run-stages [aria-disabled=true]{cursor:not-allowed;opacity:.55}
+-.run-stages [aria-disabled=true]:hover{color:var(--text-quaternary)}
+-.run-stages button:focus-visible{outline:none;box-shadow:var(--ring);border-radius:0 0 var(--radius-inline) var(--radius-inline)}
++/* The stepper: numbered circles and names in one row (the mock-up), under the title. */
++.stepper{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0;list-style:none}
++.stepper li{display:flex;align-items:center;gap:6px}
++.stepper .sep{padding:0 4px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--gray-300)}
++.stepper button{position:relative;display:flex;align-items:center;gap:8px;padding:2px 6px 2px 2px;border-radius:999px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary);text-align:left}
++.stepper button:hover{color:var(--text-secondary)}
++.stepper .dot{display:grid;place-items:center;flex:none;width:22px;height:22px;border:1px solid var(--gray-300);border-radius:50%;background:#fff;font:600 var(--fs-compact)/1 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
++.stepper .dot svg{width:12px;height:12px}
++.stepper .sstate{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
++.stepper .done{color:var(--text-secondary)}
++.stepper .done .dot{border-color:var(--gray-200);background:var(--gray-200);color:var(--text-secondary)}
++.stepper [aria-current]{color:var(--blue-700)}
++.stepper [aria-current] .dot{border-color:var(--blue);background:var(--blue);color:#fff}
++.stepper .needs-attention{color:var(--red)}
++.stepper .needs-attention .dot{border-color:var(--red);color:var(--red)}
++.stepper .needs-attention .sstate{position:static;width:auto;height:auto;margin:0;overflow:visible;clip:auto;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--red)}
++.stepper [aria-disabled=true]{cursor:not-allowed;opacity:.55}
++.stepper [aria-disabled=true]:hover{color:var(--text-quaternary)}
++.stepper button:focus-visible{outline:none;box-shadow:var(--ring)}
+ .stepsum{display:none;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
+ .stepsum .prog{height:4px;margin-top:8px;background:var(--border-secondary);border-radius:2px}
+ .stepsum .prog span{display:block;height:100%;background:var(--blue);border-radius:2px}
+ 
++/* The run screen (after Submit, or a submission that is gone): the page head stays (the title and Start over; only the stepper goes);
++   a status pill, the title, one sentence and the buttons sit below it; the modules in two columns and a card of facts beside them. */
++.workbench:has(.run-progress:not([hidden])) .stagebar,.workbench:has(.run-progress:not([hidden])) .readiness-pill{display:none}
++.rp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
++.rp-title{min-width:0}
++.rp-title .lead{margin:6px 0 0;font-size:var(--fs-control);line-height:20px}
++.rp-actions{display:flex;flex-wrap:wrap;gap:12px;flex:none;align-items:center}
++.pill{display:flex;align-items:center;gap:8px;width:fit-content;height:24px;margin-bottom:8px;padding:0 10px;border-radius:999px;background:var(--blue-50);color:var(--blue-700);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
++.pill::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}
++.pill:empty{display:none}
++.pill[data-tone=done]{background:var(--green-bg);color:var(--green)}
++.pill[data-tone=bad]{background:var(--red-bg);color:var(--red)}
++.rp-main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:40px;margin-top:28px}
++.rp-main>*{min-width:0}
++.run-progress h3.sub{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
++.run-mods{display:block;columns:2;column-gap:32px;margin:6px 0 0;padding:0;list-style:none}
++.run-mods li{break-inside:avoid;border-bottom:1px solid #eef0f5}
++.run-mods .mod{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0}
++.run-mods .ring{display:grid;place-items:center;width:18px;height:18px;border:1.5px solid var(--gray-300);border-radius:50%;color:#fff}
++.run-mods .ring svg{width:12px;height:12px}
++.run-mods .done .ring{border-color:var(--blue);background:var(--blue)}
++.run-mods [aria-current] .ring{border-color:var(--blue)}
++.run-mods .nm{min-width:0;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
++.run-mods .sstate{font:500 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
++.rp-card{align-self:start;padding:20px 22px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50)}
++.rp-card .rv-facts{margin-top:0}
++.rp-card #run-from-note{margin-bottom:12px;font-size:var(--fs-body);line-height:19px;color:var(--text-secondary)}
++.rp-card #run-report{margin-top:14px;font-size:var(--fs-body);line-height:19px}
++
+ /* Buttons, as screen.css. */
+ .primary-action,.secondary-action,.tertiary-action{position:relative;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-control);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
+ .primary-action{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:var(--shadow-xs)}
+@@ -87,19 +127,19 @@ svg.i{width:16px;height:16px;flex:none}
+ .text-button:hover{text-decoration:underline;text-underline-offset:3px}
+ 
+ /* Stage content. */
+-.run-step>h2,.run-progress>h2{display:flex;align-items:baseline;gap:10px;font:600 18px/28px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
++.run-step>h2{display:flex;align-items:baseline;gap:10px;font:600 22px/30px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
++.run-progress h2{font:600 24px/32px 'Red Hat Display',system-ui,sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
+ .run-step>h2:focus{outline:0}.run-step>h2:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+-.run-progress>h2:focus{outline:0}
+-.run-stages .mod{display:block;padding:10px 0 0;border-top:4px solid var(--border-secondary);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+-.run-stages .mod .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
+-.run-stages.modules{--n:4;row-gap:16px}
+-.rv-tick{display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+-.rv-tick input{margin:2px 0 0;flex:none;accent-color:var(--blue)}
++.run-progress h2:focus{outline:0}
++.rv-tick{display:flex;align-items:center;gap:6px;width:fit-content;max-width:100%;margin-top:8px;padding:4px 10px 4px 6px;border:1px solid var(--amber-border);border-radius:var(--radius-control);background:var(--amber-bg);font:500 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);cursor:pointer}
++.rv-tick input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--blue)}
+ .rv-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 24px;margin:10px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
+ .rv-facts dt{font-weight:600;color:var(--text-primary)}.rv-facts dd{margin:0;overflow-wrap:anywhere}
+-.run-step>h2 .n{font:500 var(--fs-control)/20px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
++.run-step:not([hidden])~.run-step:not([hidden]){margin-top:28px;padding-top:24px;border-top:1px solid var(--border-secondary)}
++.readiness-pill{align-self:flex-end;display:inline-flex;align-items:center;gap:8px;height:40px;margin:0 32px 12px;padding:0 16px;border:1px solid var(--border-secondary);border-radius:999px;background:#fcfdff;box-shadow:var(--shadow-xs);font:600 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
++.readiness-pill::before{content:'';width:8px;height:8px;border:1.5px dashed var(--text-quaternary);border-radius:50%}
+ .stepline{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
+-.lead{max-width:68ch;margin:12px 0 4px;font-size:var(--fs-control);line-height:22px;color:var(--text-secondary)}
++.lead{max-width:68ch;margin:6px 0 4px;font-size:15px;line-height:23px;color:var(--text-secondary)}
+ .legend-req{margin:8px 0 0;font-size:var(--fs-compact);color:var(--text-quaternary)}
+ .block{margin-top:28px;padding-top:20px;border-top:1px solid var(--border-secondary)}
+ .block>h3{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+@@ -119,7 +159,7 @@ legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Tex
+ .f input[type=text],.f input[type=date],.f select,.f textarea{display:block;width:100%;height:40px;padding:0 12px;background:#fff;border:1px solid var(--border-primary);border-radius:var(--radius-control);box-shadow:var(--shadow-xs);font:400 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+ .f textarea{height:auto;min-height:72px;padding:9px 12px;resize:vertical}
+ .f select{appearance:none;padding-right:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%236b7287' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E") no-repeat right 10px center}
+-.f input::placeholder,.f textarea::placeholder{color:#8a90a3}
++.f input::placeholder,.f textarea::placeholder{color:var(--text-quaternary)}
+ .f :is(input,select,textarea):focus{outline:none;border-color:var(--blue);box-shadow:var(--shadow-xs),var(--ring)}
+ .f :is(input,select,textarea)[aria-invalid=true]{border-color:var(--red)}
+ .f :is(input,select,textarea)[aria-invalid=true]:focus{box-shadow:var(--shadow-xs),var(--ring-error)}
+@@ -131,6 +171,24 @@ legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Tex
+ .err svg,.note svg{width:16px;height:16px;margin-top:2px;flex:none}
+ @media(max-width:640px){.grid{grid-template-columns:minmax(0,1fr)}}
+ 
++/* Pathways as rows: radio, label with its question and modules, what it needs. */
++.prows{margin-top:22px}
++.prow{display:grid;grid-template-columns:20px minmax(0,1fr) 300px;gap:14px;align-items:start;margin:0 -14px;padding:16px 14px;border-bottom:1px solid #eef0f5;cursor:pointer}
++.prow:first-child{border-top:1px solid var(--border-secondary)}
++.prow:hover{background:var(--gray-50);border-radius:var(--radius-control)}
++.prow:has(input:checked){background:var(--blue-50);border-radius:var(--radius-control)}
++.prow:has(input:focus-visible){box-shadow:var(--ring);border-radius:var(--radius-control)}
++.prow input{width:16px;height:16px;margin:3px 0 0;accent-color:var(--blue)}
++.prow .ctl{gap:0 10px;align-items:baseline;font:600 16px/22px 'Red Hat Text',system-ui,sans-serif}
++.prow .ctl b{font-weight:600}
++.prow .q{display:inline;margin:0;font:400 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif}
++.prow .mods-line{margin-top:2px;font-size:var(--fs-body);line-height:19px}
++.prow .imp{margin:0;font-size:var(--fs-body);line-height:19px}
++.pair{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px}
++.pair>*{min-width:0}
++.pair fieldset,.pair .f{margin-top:0}
++.pair legend,.pair .f label{font-weight:600;color:var(--text-primary)}
++
+ /* Option cards (radio) and the yes/no button group. */
+ .cards{display:grid;gap:10px}
+ .cards.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@@ -200,9 +258,27 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ .confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
+ @media(max-width:640px){.chk{grid-template-columns:minmax(0,1fr)}}
+ 
+-/* The documents the service read. */
++/* The documents the service read: a dashed zone, then the files as rows. */
++.dropzone{margin-top:22px;padding:44px 32px;border:1.5px dashed var(--border-primary);border-radius:var(--radius-card);background:#fcfdff;text-align:center}
++.dropzone .dz-t{font:600 16px/24px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
++.dropzone .dl{justify-content:center;margin-top:14px}
++.dropzone .err{max-width:none;margin:12px auto 0;justify-content:center;text-align:left}
++#st-documents:has(#doclist) .dropzone{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;text-align:left}
++#st-documents:has(#doclist) .dropzone .dl{margin-top:0}
++#st-documents:has(#doclist) .dropzone .err{flex-basis:100%}
+ .docres .no{color:var(--red)}.docres .maybe{color:var(--amber)}.docres .ok{color:var(--green)}
+ .docres p{margin-top:14px;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
++.docres .table-scroll{margin-top:14px;border:0;border-top:1px solid var(--border-secondary);border-radius:0;box-shadow:none;background:none}
++.docres .table-scroll thead th{padding:8px 16px 8px 0;background:none;border-bottom:1px solid #eef0f5}
++.docres .table-scroll td{padding:11px 16px 11px 0;border-bottom:1px solid #eef0f5}
++.docres .table-scroll tbody tr:last-child>*{border-bottom:1px solid #eef0f5}
++.docres .table-scroll th:first-child,.docres .table-scroll td:first-child{position:relative;padding-left:20px}
++.docres .table-scroll td:first-child{font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
++.docres .table-scroll td:first-child::before{content:'';position:absolute;left:0;top:17px;width:8px;height:8px;border-radius:50%;background:var(--green)}
++.docres tr[data-state=maybe] td:first-child::before{background:var(--amber)}
++.docres tr[data-state=no] td:first-child::before{background:var(--red)}
++.docres .table-scroll td:last-child{position:relative;padding-right:76px}
++.docres .table-scroll td .text-button{position:absolute;right:0;top:11px;font-size:var(--fs-body);color:var(--text-quaternary)}
+ 
+ /* Tables: the content table (screen.css .table-scroll). */
+ .table-scroll{max-width:100%;overflow:auto;margin-top:10px;background:#fff;border:1px solid var(--border-secondary);border-radius:var(--radius-card);box-shadow:var(--shadow-xs)}
+@@ -228,43 +304,87 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ .tl .arrow{color:var(--text-quaternary)}
+ #rows-peers[data-mode=user_list] .comps{display:none}
+ 
+-/* Step actions: the New run footer (screen.css .step-actions). */
+-.step-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:28px;padding-top:16px;border-top:1px solid var(--border-secondary)}
++/* Step actions: the card's footer, always in view (screen.css .step-actions). */
++.step-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px 32px 22px;border-top:1px solid var(--border-secondary)}
+ .step-actions .live{flex:1 1 160px;font-size:var(--fs-control);line-height:20px;color:var(--text-tertiary)}
+ #loadmsg:empty{display:none}
+ 
+-/* Run readiness: the inspector column. */
++/* Run readiness: the aside, the card's right column from Purpose to More context. */
+ .inspector{min-width:0;min-height:0;overflow:auto;border-left:1px solid var(--border-secondary);background:#fcfdff}
+ .inspector>summary{display:none}
+-.inspector-bar{position:sticky;top:0;z-index:1;padding:16px 18px 12px;background:#fcfdff;border-bottom:1px solid var(--border-secondary)}
++.inspector-bar{position:sticky;top:0;z-index:1;padding:22px 22px 14px;background:#fcfdff;border-bottom:1px solid var(--border-secondary)}
+ .inspector-bar h2{font:600 16px/24px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+-.inspector-bar p{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
+-.tally{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0;list-style:none}
+-.inspector-body{padding:6px 18px 18px}
+-.runrow{margin:10px 0 4px;padding:10px 12px;border:1px solid var(--border-secondary);border-radius:var(--radius-control);background:var(--gray-50);font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
++.inspector-bar p{margin-top:2px;font-size:var(--fs-body);line-height:19px;color:var(--text-tertiary)}
++.tally{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0;padding:0;list-style:none}
++.tally .badge{height:24px;padding:0 9px;border:0;font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
++.tally .badge.ready{background:var(--green-bg);color:var(--green)}
++.tally .badge.limited,.tally .badge.gap{background:var(--amber-bg);color:var(--amber)}
++.tally .badge.check{border:1px dashed var(--border-primary)}
++.tally .badge.will_refuse{background:var(--red-bg);color:var(--red)}
++.inspector-body{padding:8px 22px 22px}
++.runrow{margin:10px 0 4px;padding:10px 12px;border-radius:var(--radius-control);background:var(--amber-bg);font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+ .runrow b{display:block;font-weight:600;color:var(--text-primary)}
+ .runrow ul{margin:4px 0 0;padding-left:16px}
+ .mods{list-style:none;margin:0;padding:0}
+-.mods>li{border-bottom:1px solid var(--border-secondary)}
++.mods>li{border-bottom:1px solid #eef0f5;--sd:var(--text-quaternary)}
+ .mods>li:last-child{border-bottom:0}
+-.mods details>summary,.mods .mrow{display:grid;grid-template-columns:minmax(0,1fr) auto 12px;gap:10px;align-items:center;padding:10px 0;list-style:none}
++.mods>li[data-status=ready]{--sd:var(--green)}
++.mods>li[data-status=limited],.mods>li[data-status=gap]{--sd:var(--amber)}
++.mods>li[data-status=will_refuse]{--sd:var(--red)}
++.mods>li[data-status=information]{--sd:var(--blue)}
++.mods details>summary,.mods .mrow{display:grid;grid-template-columns:10px minmax(0,1fr) auto 12px;gap:12px;align-items:start;padding:9px 0;list-style:none}
++.mods details>summary::before,.mods .mrow::before{content:'';width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--sd)}
++.mods>li[data-status=check] summary::before,.mods>li[data-status=check] .mrow::before{background:transparent;border:1.5px dashed var(--text-quaternary)}
+ .mods details>summary{cursor:pointer}
+ .mods details>summary::-webkit-details-marker{display:none}
+-.mods details>summary::after{content:'';width:5px;height:5px;margin-left:2px;border-right:1px solid var(--text-quaternary);border-bottom:1px solid var(--text-quaternary);transform:rotate(-45deg)}
++.mods details>summary::after{content:'';width:5px;height:5px;margin:8px 0 0 2px;border-right:1px solid var(--text-quaternary);border-bottom:1px solid var(--text-quaternary);transform:rotate(-45deg)}
+ .mods details[open]>summary::after{transform:rotate(45deg)}
+-.mods .nm{min-width:0;font:600 var(--fs-compact)/1.35 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+-.mods .nm small{display:block;margin-top:2px;font:400 var(--fs-label)/1.4 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+-.why-list{margin:0 0 12px;padding:0;list-style:none;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
++.mods .badge{height:auto;padding:0;border:0;background:none;font:500 var(--fs-compact)/20px 'Red Hat Text',system-ui,sans-serif}
++.mods .badge i{display:none}
++.mods .badge.ready{color:var(--green)}
++.mods .nm{min-width:0;font:600 var(--fs-body)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
++.mods .nm small{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
++.why-list{margin:0 0 10px 22px;padding:0;list-style:none;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+ .why-list li{margin:6px 0;padding-left:10px;border-left:2px solid var(--border-secondary)}
+-.note-foot{margin-top:14px;font-size:var(--fs-label);line-height:16px;color:var(--text-quaternary)}
++.note-foot{margin-top:14px;font-size:var(--fs-compact);line-height:17px;color:var(--text-quaternary)}
+ 
+-/* Review. */
+-.review-summary{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:0 24px;margin:10px 0 0}
+-.review-summary dt,.review-summary dd{padding:10px 0;border-top:1px solid var(--border-secondary)}
+-.review-summary dt{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+-.review-summary dt .text-button{display:block;font-size:var(--fs-compact);font-weight:600}
+-.review-summary dd{margin:0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary);overflow-wrap:anywhere}
+-.review-summary dd ul{margin:0;padding-left:16px}
++/* Review (Start): the answers on the left, a card of what Submit does on the right that stays in view. */
++#st-review{display:grid;grid-template-columns:minmax(0,1fr) 360px;column-gap:40px;align-content:start}
++#st-review>*{grid-column:1;min-width:0}
++#st-review>.rv-card{grid-column:2;grid-row:1/span 12;align-self:end;position:sticky;top:auto;bottom:0;padding:20px 22px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50)}
++.rv-card h3{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
++.rv-card .lead{max-width:none;margin:8px 0 0;font-size:var(--fs-body);line-height:19px}
++.rv-card .rv-facts{margin-top:14px;gap:8px 16px;line-height:19px}
++.rv-go{margin-top:16px;padding-top:16px;border-top:1px solid var(--border-secondary)}
++.rv-go .start-confirm{margin-top:0}
++.rv-go .primary-action{width:100%;height:44px;justify-content:center;margin-top:12px;font:600 15px/20px 'Red Hat Text',system-ui,sans-serif}
++#submitnote{display:block;margin-top:8px;font-size:var(--fs-compact);line-height:18px}
++.rv-list{margin-top:10px;border-top:1px solid var(--border-secondary)}
++.rv-list table,.rv-list tbody{display:block}
++.rv-list thead{display:block;position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
++.rv-list tr{display:grid;grid-template-columns:10px 200px minmax(0,1fr);grid-template-areas:"dot nm why" "dot st why";grid-template-rows:auto 1fr;gap:0 12px;padding:11px 0;border-bottom:1px solid #eef0f5;--sd:var(--text-quaternary);font-size:var(--fs-body);line-height:20px}
++.rv-list tr::before{content:'';grid-area:dot;width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--sd)}
++.rv-list tr[data-outcome=ready]{--sd:var(--green)}
++.rv-list tr[data-outcome=limited],.rv-list tr[data-outcome=gap]{--sd:var(--amber)}
++.rv-list tr[data-outcome=will_refuse]{--sd:var(--red)}
++.rv-list tr[data-outcome=information]{--sd:var(--blue)}
++.rv-list tr[data-outcome=check]::before{background:transparent;border:1.5px dashed var(--text-quaternary)}
++.rv-list td{display:block;padding:0;border:0;color:var(--text-secondary);overflow-wrap:anywhere}
++.rv-list td:nth-child(1){grid-area:nm}
++.rv-list td:nth-child(2){grid-area:st}
++.rv-list td:nth-child(3){grid-area:why}
++.rv-list td p{margin:0}.rv-list td p+p{margin-top:10px}
++.rv-list .mod-name{font-size:var(--fs-control)}
++.rv-list .badge{height:auto;padding:0;border:0;background:none;font:500 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
++.rv-list .badge i{display:none}
++.rv-list .badge.ready{color:var(--green)}
++.rv-list .badge.information{color:var(--blue-700)}
++.review-summary{margin:10px 0 0;border-top:1px solid var(--border-secondary)}
++.rv-row{display:grid;grid-template-columns:200px minmax(0,1fr) auto;gap:12px;padding:11px 0;border-bottom:1px solid #eef0f5;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
++.rv-row dt{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
++.rv-row dd{margin:0;min-width:0;overflow-wrap:anywhere}
++.rv-row .ed{align-self:start}
++.rv-row ul{margin:0;padding-left:16px}
+ .review-summary .nil{color:var(--text-quaternary)}
+ .review-summary .note,.review-summary .err{margin-top:4px}
+ .run-step h3.sub{margin-top:28px;font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+@@ -272,33 +392,42 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ .start-confirm{display:flex;align-items:flex-start;gap:10px;margin-top:20px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
+ .start-confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
+ .dl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px}
+-.dl .muted{font-size:var(--fs-control)}
+ 
+ /* Narrow widths: the page scrolls, as the library does below 720px. */
+-@media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 280px}}
++@media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 300px}.prow{grid-template-columns:20px minmax(0,1fr)}.prow .imp{grid-column:2}
++  #st-review{display:block}#st-review>.rv-card{position:static;margin-top:28px}.rp-main{grid-template-columns:minmax(0,1fr)}}
+ @media(max-width:960px){
+   body{overflow:auto}
+   .app{height:auto;min-height:100dvh}
+   .workbench{display:flex;flex-direction:column;overflow:visible}
+-  #canvas{overflow:visible;order:2}
+-  .inspector{order:1;border-left:0;border-bottom:1px solid var(--border-secondary);overflow:visible}
++  .left{display:contents}
++  .page-head{order:1}
++  .inspector{order:2;border-left:0;border-bottom:1px solid var(--border-secondary);overflow:visible}
++  #canvas{order:3;flex:none;overflow:visible}
++  .readiness-pill{order:4}
++  .step-actions{order:5}
+   .inspector>summary{display:flex;gap:8px;align-items:center;padding:12px 22px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);cursor:pointer}
+   .inspector-bar{position:static}
+-  .run-stages{display:none}.stepsum{display:block}
++  .stepper{display:none}.stepsum{display:block}
+ }
+ @media(max-width:720px){
+   .rail{width:46px;padding:15px 4px}.rail .symbol{width:24px}
+   .app{margin-left:46px;padding:9px}
+-  .page-head{display:block;padding:12px 15px}.page-head h1{font-size:22px;line-height:30px}
++  .page-head{display:block;padding:12px 15px 0}.page-head h1{font-size:22px;line-height:30px}
+   .page-actions{margin-top:10px;flex-wrap:wrap}
+-  .stagebar{padding:4px 15px 12px}
+-  .canvas-in{padding:16px 15px 24px}
++  #canvas{padding:16px 15px 24px}
++  .step-actions{padding:12px 15px 16px}
++  .readiness-pill{margin:0 15px 10px}
+   .inspector>summary{padding:12px 15px}
+-  .review-summary{grid-template-columns:minmax(0,1fr)}.review-summary dd{border-top:0;padding-top:0}
++  .rv-row{grid-template-columns:minmax(0,1fr) auto}.rv-row .ln{grid-column:1/-1}.rv-row .ed{grid-column:2;grid-row:1}
++  .rp-head{display:block}.rp-actions{margin-top:12px}
++  .rv-facts,.rv-card .rv-facts{grid-template-columns:minmax(0,1fr);gap:0}.rv-facts dd{margin-bottom:8px}
++  .rv-list tr{grid-template-columns:10px minmax(0,1fr);grid-template-areas:"dot nm" "dot st" "dot why";grid-template-rows:auto}
+ }
++@media(max-width:700px){.run-mods{columns:1}.pair{grid-template-columns:minmax(0,1fr);gap:0}.pair>*+*{margin-top:24px}}
+ @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+-@media(forced-colors:active){.badge,.primary-action,.secondary-action,.tertiary-action,.card,.seg{border:1px solid}.run-stages [aria-current]{outline:2px solid;outline-offset:2px}}
+-@media print{.rail,.page-actions,.step-actions,.inspector>summary,.stagebar{display:none}.app{margin:0;height:auto;padding:0}.workbench{display:block;box-shadow:none}#canvas{overflow:visible}}
++@media(forced-colors:active){.badge,.primary-action,.secondary-action,.tertiary-action,.card,.prow,.seg{border:1px solid}.stepper [aria-current]{outline:2px solid;outline-offset:2px}}
++@media print{.rail,.page-actions,.step-actions,.inspector>summary,.stagebar,.readiness-pill{display:none}.app{margin:0;height:auto;padding:0}.workbench{display:block;box-shadow:none;overflow:visible}.left{display:block}#canvas{overflow:visible}}
+ </style>
+ </head>
+ <body>
+@@ -309,33 +438,51 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+   <a id="rail-activity" href="/library/#CP-OS/activity" title="Run activity"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg><span class="sr-only">Run activity</span></a>
+ </aside>
+ <div class="app">
++  <div class="workbench" id="card">
++  <div class="left">
+   <header class="page-head">
+     <div>
+-      <h1>Run context</h1>
++      <h1>Start a run</h1>
++      <nav class="stagebar" aria-label="Steps"><ol class="stepper" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
+       <p class="scope" id="scope"></p>
+     </div>
+     <div class="page-actions">
+       <button type="button" class="tertiary-action" id="reset">Start over</button>
+     </div>
+   </header>
+-  <nav class="stagebar" aria-label="Stages"><ol class="run-stages" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
+-  <div class="workbench">
+   <main id="canvas" tabindex="-1"><div class="canvas-in">
+ <div id="loadmsg" role="status" aria-live="polite"></div>
+ <div id="steperr" class="run-strip" data-tone="error" role="alert" hidden></div>
+ <form id="f" novalidate autocomplete="off">
+ 
+-<!-- 1 Pathway -->
+-<section class="run-step" id="st-pathway" data-st="pathway">
+-  <h2 tabindex="-1"><span class="n"></span> <span>What do you need from this run?</span></h2>
++<!-- 1 Documents -->
++<section class="run-step" id="st-documents" data-st="documents">
++  <h2 tabindex="-1"><span>Which documents does the issuer have?</span></h2>
++  <p class="stepline"></p>
++  <p class="lead">Pick the issuer's folder, or add files. Each file goes to the start service, which reads it as the run will (offline, no model) and lists what it recognises. The questions that follow are limited by what these documents support.</p>
++  <div class="f dropzone" id="docf">
++    <p class="dz-t">Choose the issuer's folder, or add files</p>
++    <div class="dl">
++      <span class="primary-action file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Choose folder<input type="file" id="pick-folder" webkitdirectory multiple aria-label="Choose the issuer folder"></span>
++      <span class="secondary-action file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Add files<input type="file" id="pick-files" multiple aria-label="Add files to the issuer's documents"></span>
++    </div>
++  </div>
++  <div id="docstatus" class="help" role="status" aria-live="polite"></div>
++  <div id="upload-errors" class="run-strip" data-tone="error" role="alert" hidden></div>
++  <div id="docresult" class="docres"></div>
++</section>
++
++<!-- 2 Pathway (the Purpose step) -->
++<section class="run-step" id="st-pathway" data-st="pathway" hidden>
++  <h2 tabindex="-1"><span>What do you need from this run?</span></h2>
+   <p class="stepline"></p>
+   <p class="lead">Your answer picks the pathway: the modules the run will use, in order. Then choose how much you want to be asked. Every level runs the same modules by the same method; a level only changes which questions you answer and which take their defaults.</p>
+   <p class="legend-req"><span class="req">*</span> Required. Your answers are kept in this browser until you start the run; the documents go to the start service on this machine.</p>
+-  <fieldset id="pathf"><legend>Pathway</legend><div class="cards two" id="pathcards"></div><p class="help" id="pathnote"></p></fieldset>
++  <fieldset id="pathf"><legend>Pathway</legend><div class="prows" id="pathcards"></div><p class="help" id="pathnote"></p></fieldset>
++  <div class="pair">
+   <fieldset id="levelf"><legend>How much do you want to be asked?</legend>
+     <div class="seg"><label><input type="radio" name="level" data-c="level" value="basic" checked>Basic</label><label><input type="radio" name="level" data-c="level" value="standard">Standard</label><label><input type="radio" name="level" data-c="level" value="advanced">Advanced</label></div>
+     <p class="help" id="levelnote"></p></fieldset>
+-  <div class="grid">
+     <div class="f"><label for="submitter">Your name</label><input type="text" id="submitter" data-c="submitter" maxlength="80" placeholder="e.g. Dana Reyes" aria-describedby="submitter-h"><p class="help" id="submitter-h">Saved with the run, so Run activity shows who started it. Optional.</p></div>
+   </div>
+   <div class="block" id="adv-run" hidden>
+@@ -353,25 +500,9 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+   <div class="run-strip" data-tone="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">A run cannot be corrected once it starts</span><p class="strip-text">If the context changes, every module runs again: a resumed run refuses changed context. The cheapest fix is the right pathway now.</p></div></div>
+ </section>
+ 
+-<!-- 2 Documents -->
+-<section class="run-step" id="st-documents" data-st="documents" hidden>
+-  <h2 tabindex="-1"><span class="n"></span> <span>Which documents does the issuer have?</span></h2>
+-  <p class="stepline"></p>
+-  <p class="lead">Pick the issuer's folder, or add files. Each file goes to the start service, which reads it as the run will (offline, no model) and lists what it recognises. The questions that follow are limited by what these documents support.</p>
+-  <div class="f" id="docf">
+-    <div class="dl">
+-      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Choose folder<input type="file" id="pick-folder" webkitdirectory multiple aria-label="Choose the issuer folder"></span>
+-      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Add files<input type="file" id="pick-files" multiple aria-label="Add files to the issuer's documents"></span>
+-    </div>
+-  </div>
+-  <div id="docstatus" class="help" role="status" aria-live="polite"></div>
+-  <div id="upload-errors" class="run-strip" data-tone="error" role="alert" hidden></div>
+-  <div id="docresult" class="docres"></div>
+-</section>
+-
+ <!-- 3 Issuer and dates -->
+ <section class="run-step" id="st-issuer" data-st="issuer" hidden>
+-  <h2 tabindex="-1"><span class="n"></span> <span>Who is the issuer, and as of when?</span></h2>
++  <h2 tabindex="-1"><span>Who is the issuer, and as of when?</span></h2>
+   <p class="stepline"></p>
+   <p class="lead">Each module's answer must name the issuer, one of its other names or its ID. Source readiness stops the run when it cannot tell whose files these are. The as-of date is the day the analysis stands on: evidence published after it counts as not yet available.</p>
+   <div class="grid">
+@@ -412,7 +543,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ 
+ <!-- 4 Legal -->
+ <section class="run-step" id="st-legal" data-st="legal" hidden>
+-  <h2 tabindex="-1"><span class="n"></span> <span>Which file is the governing agreement?</span></h2>
++  <h2 tabindex="-1"><span>Which file is the governing agreement?</span></h2>
+   <p class="stepline"></p>
+   <p class="lead">An agreement is something you point to, not something you declare. Choose the uploaded file that is the credit agreement or indenture, or say there is none. The service's reading of that file is kept: where you and the reading disagree, the run is told so and the disagreement is listed as a limit.</p>
+   <div class="chk" data-chk="legal">
+@@ -424,7 +555,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ 
+ <!-- 5 Market -->
+ <section class="run-step" id="st-market" data-st="market" hidden>
+-  <h2 tabindex="-1"><span class="n"></span> <span>Deal terms, quotes and ratings</span></h2>
++  <h2 tabindex="-1"><span>Deal terms, quotes and ratings</span></h2>
+   <p class="stepline"></p>
+   <p class="lead">Market inputs the filings do not hold. Each part says which module in this run reads it, and what it does without it.</p>
+   <div class="block" id="b-deal">
+@@ -452,7 +583,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ 
+ <!-- 6 Valuation -->
+ <section class="run-step" id="st-valuation" data-st="valuation" hidden>
+-  <h2 tabindex="-1"><span class="n"></span> <span>Peers and valuation</span></h2>
++  <h2 tabindex="-1"><span>Peers and valuation</span></h2>
+   <p class="stepline"></p>
+   <p class="lead" id="vallead"></p>
+   <fieldset id="psf"><legend>Where do peer figures come from?</legend><div data-cards="peer_source" data-class="two"></div></fieldset>
+@@ -498,7 +629,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ 
+ <!-- 7 Assumptions and questions -->
+ <section class="run-step" id="st-assumptions" data-st="assumptions" hidden>
+-  <h2 tabindex="-1"><span class="n"></span> <span>Assumptions and questions</span></h2>
++  <h2 tabindex="-1"><span>Assumptions and questions</span></h2>
+   <p class="stepline"></p>
+   <p class="lead" id="asmlead"></p>
+   <div class="block" id="b-questions">
+@@ -513,11 +644,9 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ 
+ <!-- 8 Review -->
+ <section class="run-step" id="st-review" data-st="review" hidden>
+-  <h2 tabindex="-1"><span class="n"></span> <span>Summary and start</span></h2>
++  <h2 tabindex="-1"><span>Summary and start</span></h2>
+   <p class="stepline"></p>
+-  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+   <div id="rv-state" role="status" aria-live="polite"></div>
+-  <dl class="rv-facts" id="rv-facts"></dl>
+   <h3 class="sub">What each module is expected to do</h3>
+   <div id="rv-ready"></div>
+   <h3 class="sub">Inputs left at their defaults</h3>
+@@ -525,34 +654,59 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+   <div id="rv-carried" hidden><h3 class="sub">Carried over from an earlier run</h3><div id="rv-carried-body"></div></div>
+   <h3 class="sub">Your answers</h3>
+   <dl class="review-summary" id="rv-steps"></dl>
+-  <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
+-  <p class="err" id="rv-submit-error" role="alert" hidden></p>
+-  <div class="dl"><button type="button" class="primary-action" id="submit" disabled>Submit and start the run</button><span id="submitnote" class="muted"></span></div>
++  <aside class="rv-card" id="rv-card" aria-labelledby="rv-card-h">
++    <h3 id="rv-card-h">What Submit does</h3>
++  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
++    <dl class="rv-facts" id="rv-facts"></dl>
++    <div class="rv-go">
++      <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
++      <p class="err" id="rv-submit-error" role="alert" hidden></p>
++      <button type="button" class="primary-action" id="submit" disabled>Submit and start the run</button>
++      <span id="submitnote" class="muted"></span>
++    </div>
++  </aside>
+ </section>
+ </form>
+-<div class="step-actions">
+-  <button type="button" class="secondary-action" id="back"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back</button>
+-  <span id="nextlive" class="live" role="status" aria-live="polite"></span>
+-  <button type="button" class="primary-action" id="next"><span id="next-t">Next</span><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+-</div>
+ <section class="run-progress" id="run-progress" hidden aria-live="polite">
+-  <h2 tabindex="-1">Run started</h2>
+-  <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
+-  <p id="run-from-note" hidden></p>
+-  <dl class="rv-facts"><dt>Run</dt><dd id="run-id"></dd><dt>State</dt><dd id="run-state"></dd><dt>Why</dt><dd id="run-reason"></dd></dl>
+-  <h3 class="sub">Modules</h3>
+-  <ol class="run-stages modules" id="run-modules"></ol>
+-  <p class="err" id="run-error" hidden></p>
+-  <p id="run-report" hidden>Report: <a id="run-report-link" href="/library/"></a></p>
+-  <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="run-again" hidden>Start again from this run</button><button type="button" class="tertiary-action" id="another">Start another run</button></div>
++  <div class="rp-head">
++    <div class="rp-title">
++      <span class="pill" id="run-pill"></span>
++      <h2 tabindex="-1">Run started</h2>
++      <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
++    </div>
++    <div class="rp-actions"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="run-again" hidden>Start again from this run</button><button type="button" class="tertiary-action" id="another">Start another run</button></div>
++  </div>
++  <div class="rp-main">
++    <div>
++      <h3 class="sub">Modules</h3>
++      <ol class="run-mods" id="run-modules"></ol>
++    </div>
++    <div class="rp-card" id="run-card">
++      <p id="run-from-note" hidden></p>
++      <dl class="rv-facts"><dt>Run</dt><dd id="run-id"></dd><dt>State</dt><dd id="run-state"></dd><dt>Why</dt><dd id="run-reason"></dd></dl>
++      <p class="err" id="run-error" hidden></p>
++      <p id="run-report" hidden>Report: <a id="run-report-link" href="/library/"></a></p>
++    </div>
++  </div>
+ </section>
+ <section class="run-progress" id="submission-gone" hidden>
+-  <h2 tabindex="-1">Submission</h2>
+-  <p class="lead">This submission is no longer open. If you submitted it, its run is in Run activity.</p>
+-  <div class="dl"><a class="secondary-action" id="gone-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="new-submission">Start a new submission</button></div>
++  <div class="rp-head">
++    <div class="rp-title">
++      <h2 tabindex="-1">Submission</h2>
++      <p class="lead">This submission is no longer open. If you submitted it, its run is in Run activity.</p>
++    </div>
++    <div class="rp-actions"><a class="secondary-action" id="gone-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="new-submission">Start a new submission</button></div>
++  </div>
+ </section>
+ </div></main>
+ 
++<p class="readiness-pill" id="panel-pill" hidden>Run readiness · appears once a purpose is chosen</p>
++<div class="step-actions">
++  <button type="button" class="secondary-action" id="back"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span id="back-t">Back</span></button>
++  <span id="nextlive" class="live" role="status" aria-live="polite"></span>
++  <button type="button" class="primary-action" id="next"><span id="next-t">Next</span><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
++</div>
++  </div>
+ <details class="inspector" id="panel">
+   <summary><span>Run readiness</span> <span id="pn-sum"></span></summary>
+   <div class="inspector-bar">
+@@ -1323,17 +1477,24 @@ function readiness(o) {
+ }
+ 
+ /* ======================================================================= Stages */
+-const STAGES = ['pathway', 'documents', 'issuer', 'legal', 'market', 'valuation', 'assumptions', 'review'];
+-const SHORT = {pathway:'Pathway', documents:'Documents', issuer:'Issuer and dates', legal:'Legal', market:'Market', valuation:'Valuation', assumptions:'Assumptions', review:'Summary and start'};
++// The groups: the page's eight sections, in the order they are asked. A step shows the groups of the step map that the run needs.
++const STAGES = ['documents', 'pathway', 'issuer', 'legal', 'market', 'valuation', 'assumptions', 'review'];
++const SHORT = {pathway:'Purpose', documents:'Documents', issuer:'Issuer and dates', legal:'Legal', market:'Market', valuation:'Valuation', assumptions:'Assumptions', review:'Start'};
++const STEPS = {documents: ['documents'], purpose: ['pathway'], confirm: ['issuer', 'legal'], more: ['market', 'valuation', 'assumptions'], start: ['review']};
++const STEP_IDS = Object.keys(STEPS);
++const STEP_NAME = {documents:'Documents', purpose:'Purpose', confirm:'Confirm', more:'More context', start:'Start'};
++const NEXT_LABEL = {purpose:'Choose the purpose', confirm:'Confirm the details', more:'More context', start:'Review and start'};
++const FIRST_STEP = STEP_IDS[0];
++const stepOf = group => STEP_IDS.find(s => STEPS[s].includes(group));
+ const BLOCK_USES = {deal:['CP-3'], quote:['CP-3','CP-3D'], rating:['CP-2H'], cp3mode:['CP-3'], cp6:['CP-6']};
+-// How much is asked: Basic the first four stages, Standard adds market, valuation and questions, Advanced everything.
++// How much is asked: Basic the documents, purpose, issuer and legal file; Standard adds market, valuation and questions; Advanced everything.
+ const RANK = {basic:0, standard:1, advanced:2};
+-const LEVEL_NOTE = {basic:'Pathway, documents, issuer and the legal file. Everything else takes its default.',
++const LEVEL_NOTE = {basic:'Documents, the purpose, the issuer and the legal file. Everything else takes its default.',
+   standard:'Adds market inputs, peers and module settings, and your research questions. Pinned assumptions, valuation basis and your own multiple take their defaults.',
+   advanced:'Everything, including pinned assumptions, the valuation basis, deal terms, guarantors, aliases, the sponsor, which modules run and how many turns each may take.'};
+ let LEVEL = 'basic';
+-let cur = 'pathway', tried = {}, loadedNotes = false;
+-const visited = new Set(['pathway']);
++let cur = FIRST_STEP, curGroup = '', tried = {}, loadedNotes = false; // cur is a step; curGroup is the group a button asked for
++const visited = new Set([FIRST_STEP]);
+ function marketBlocks(o) {
+   const has = m => runOf(o.run.pathway).includes(m);
+   return {deal: o.run.run_type === 'primary' || has('CP-3') || o.deal_terms.length > 0,
+@@ -1342,13 +1503,13 @@ function marketBlocks(o) {
+ }
+ const asmShown = o => Object.keys(ASM_MODULE).filter(k => runOf(o.run.pathway).includes(ASM_MODULE[k]) || o.assumptions[k]);
+ const valuationNeeded = o => ['CP-1C', 'CP-4C'].some(m => runOf(o.run.pathway).includes(m));
+-// The stages this run needs at this level. A stage the level does not ask is left out, unless it holds an
+-// answer or a problem (so nothing loaded or chosen is ever hidden) or it is the stage on screen.
++// The groups this run needs at this level. A group the level does not ask is left out, unless it holds an
++// answer or a problem (so nothing loaded or chosen is ever hidden) or it is the group a button asked for or one already on screen in the step being edited.
+ function seqFor(o) {
+   const errIn = st => errs.some(e => e.st === st), mb = marketBlocks(o), v = o.valuation, mo = o.module_options || {};
+   const has = m => runOf(o.run.pathway).includes(m), lvl = RANK[LEVEL];
+   return STAGES.filter(st => {
+-    if (st === cur || errIn(st)) return true;
++    if (st === curGroup || errIn(st) || (STEPS[cur].includes(st) && !$('st-' + st).hidden)) return true;
+     switch (st) {
+       case 'legal': return readiness(o).counted.some(x => x.go === 'legal') || has('CP-4') || has('CP-2A') || has('CP-4C') || o.attachments.legal_documents !== 'none' || !!getC('legalfile');
+       case 'market': return o.run.run_type === 'primary' || o.deal_terms.length + o.quotes.length + o.ratings.length > 0 || (lvl >= 1 && (mb.deal || mb.quote || mb.rating));
+@@ -1359,22 +1520,24 @@ function seqFor(o) {
+     }
+   });
+ }
+-const stepBad = st => errs.some(e => e.st === st);
+-function optionalStage(st, o) {
+-  if (st === 'market') return o.run.run_type !== 'primary';
+-  if (st === 'valuation') return !['issuer_trading', 'user_multiple'].includes(o.valuation.basis);
+-  return st === 'assumptions';
+-}
+-function entered(st, o) {
+-  return {market: o.deal_terms.length + o.quotes.length + o.ratings.length > 0, valuation: o.valuation.peers.length + o.valuation.precedents.length > 0 || !!o.module_options,
+-    assumptions: Object.values(o.assumptions).some(Boolean) || o.research_questions.length > 0}[st] || false;
+-}
+-function stepState(st, sq, o) {
++// The steps the shown groups make, and the groups of a step that are shown.
++const stepsFor = gs => STEP_IDS.filter(s => STEPS[s].some(g => gs.includes(g)));
++const groupsOf = (step, gs) => STEPS[step].filter(g => gs.includes(g));
++const groupBad = g => errs.some(e => e.st === g);
++const stepBad = step => STEPS[step].some(groupBad);
++function optionalGroup(g, o) {
++  if (g === 'market') return o.run.run_type !== 'primary';
++  if (g === 'valuation') return !['issuer_trading', 'user_multiple'].includes(o.valuation.basis);
++  return g === 'assumptions';
++}
++// A step is optional when every group it shows is.
++const optionalStep = (step, gs, o) => groupsOf(step, gs).every(g => optionalGroup(g, o));
++function stepState(st, sq, o, gs) {
+   if (st === cur) return {word:'Current', locked:false};
+   if (sq.slice(0, sq.indexOf(st)).some(stepBad)) return {word:'Locked', locked:true};
+-  if (st === 'review') return {word:'Ready', locked:false};
++  if (st === 'start') return {word:'Ready', locked:false};
+   if (stepBad(st)) return {word: visited.has(st) ? 'Needs attention' : 'To do', locked:false};
+-  if (!visited.has(st)) return {word: optionalStage(st, o) ? 'Optional' : 'To do', locked:false};
++  if (!visited.has(st)) return {word: optionalStep(st, gs, o) ? 'Optional' : 'To do', locked:false};
+   return {word:'Done', locked:false};
+ }
+ function stepLine(st, o) {
+@@ -1390,7 +1553,8 @@ function stepLine(st, o) {
+     default: return 'Nothing to fill in: read, accept each limit, approve, submit once';
+   }
+ }
+-function renderSteps(sq, o) {
++const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
++function renderSteps(sq, o, gs) {
+   const ol = $('stepper');
+   document.querySelectorAll('section.run-step').forEach(x => { x.hidden = true; });
+   if (ol.dataset.seq !== sq.join(',')) {
+@@ -1400,61 +1564,67 @@ function renderSteps(sq, o) {
+     sq.forEach(st => {
+       const li = document.createElement('li'), b = document.createElement('button');
+       b.type = 'button'; b.dataset.step = st;
+-      b.innerHTML = '<span class="nm"></span><span class="sstate"></span>';
+-      li.appendChild(b); ol.appendChild(li);
++      b.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="sstate"></span>';
++      li.appendChild(b);
++      if (st !== sq[sq.length - 1]) li.insertAdjacentHTML('beforeend', '<span class="sep" aria-hidden="true">\u203a</span>');
++      ol.appendChild(li);
+     });
+   }
+   sq.forEach((st, i) => {
+-    const s = stepState(st, sq, o), b = ol.children[i].firstChild;
++    const s = stepState(st, sq, o, gs), b = ol.children[i].querySelector('button');
+     b.className = s.word.toLowerCase().replace(/ /g, '-');
+     if (st === cur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+     if (s.locked) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
+-    b.children[0].textContent = SHORT[st];
+-    b.children[1].textContent = s.word === 'Current' ? 'In progress' : s.word;
+-    const sec = $('st-' + st);
+-    sec.hidden = st !== cur;
+-    sec.querySelector('.n').textContent = i + 1;
+-    sec.querySelector('.stepline').textContent = stepLine(st, o);
++    b.querySelector('.dot').innerHTML = s.word === 'Done' ? CHECK : String(i + 1);
++    b.querySelector('.nm').textContent = STEP_NAME[st];
++    b.querySelector('.sstate').textContent = s.word === 'Current' ? 'In progress' : s.word;
+   });
++  gs.forEach(g => { $('st-' + g).querySelector('.stepline').textContent = stepLine(g, o); });
++  groupsOf(cur, gs).forEach(g => { $('st-' + g).hidden = false; });
+   const pos = sq.indexOf(cur) + 1;
+-  $('stepsum-t').textContent = `Stage ${pos} of ${sq.length} · ${SHORT[cur]}`;
++  $('stepsum-t').textContent = `Step ${pos} of ${sq.length} · ${STEP_NAME[cur]}`;
+   $('prog-b').style.width = (pos / sq.length * 100) + '%';
+ }
+-function renderNav(sq, o) {
++function renderNav(sq, o, gs) {
+   const i = sq.indexOf(cur), nx = $('next');
+   $('back').hidden = i === 0;
+-  nx.hidden = cur === 'review';
+-  $('nextlive').hidden = cur === 'review';
+-  $('next-t').textContent = sq[i + 1] === 'review' ? 'Summary and start' : optionalStage(cur, o) && !entered(cur, o) ? 'Skip' : 'Next';
+-  const mine = errs.filter(e => e.st === cur);
++  $('back-t').textContent = i > 0 ? STEP_NAME[sq[i - 1]] : 'Back';
++  nx.hidden = cur === 'start';
++  $('nextlive').hidden = cur === 'start';
++  $('next-t').textContent = NEXT_LABEL[sq[i + 1]] || 'Next';
++  const mine = errs.filter(e => STEPS[cur].includes(e.st));
+   const req = mine.filter(e => /^(required|choose|add |say whether|tick)/.test(e.short)).length, oth = mine.length - req;
+-  const nw = warns.filter(w => w.st === cur).length;
++  const nw = warns.filter(w => STEPS[cur].includes(w.st)).length;
+   const text = !mine.length ? (nw ? `Ready · ${nw} note${nw > 1 ? 's' : ''} to read` : 'Ready') : [req && `${req} required answer${req > 1 ? 's' : ''} left`, oth && `${oth} to correct`].filter(Boolean).join(', ');
+   if ($('nextlive').textContent !== text) $('nextlive').textContent = text;
+ }
+-function gotoStep(st) {
+-  cur = st; visited.add(st);
++// x is a step or a group. A group opens its step and takes the focus; it stays on screen even where the level does not ask it.
++function gotoStep(x) {
++  const group = STAGES.includes(x) ? x : '';
++  cur = group ? stepOf(group) : x; curGroup = group;
++  visited.add(cur);
+   update();
+-  $('st-' + st).querySelector('h2').focus();
+   $('canvas').scrollTop = 0;
+   window.scrollTo(0, 0);
++  $('st-' + (group || STEPS[cur].find(g => !$('st-' + g).hidden) || STEPS[cur][0])).querySelector('h2').focus();
+ }
+ function goNext() {
+-  const o = update(), sq = seqFor(o);
++  const o = update(), sq = stepsFor(seqFor(o));
+   if (stepBad(cur)) {
+-    tried[cur] = true;
++    STEPS[cur].forEach(g => { tried[g] = true; });
+     update();
+-    const first = errs.find(e => e.st === cur);
++    const first = errs.find(e => STEPS[cur].includes(e.st));
+     if (first) go(first.el.id);
+     return;
+   }
+-  tried[cur] = true;
++  STEPS[cur].forEach(g => { tried[g] = true; });
+   gotoStep(sq[sq.indexOf(cur) + 1]);
+ }
+-function goBack() { const sq = seqFor(update()); gotoStep(sq[sq.indexOf(cur) - 1]); }
++function goBack() { const sq = stepsFor(seqFor(update())); gotoStep(sq[sq.indexOf(cur) - 1]); }
+ function go(id) {
+   const el = $(id);
+   if (!el) return;
++  if (!STEPS[cur].includes(stOf(el))) gotoStep(stOf(el)); // an error in a step not on screen: open it first
+   let d = el.closest('details');
+   while (d) { d.open = true; d = d.parentElement.closest('details'); }
+   el.scrollIntoView({block:'center'});
+@@ -1499,8 +1669,8 @@ function showMessages() {
+     p.lastChild.append(w.short.charAt(0).toUpperCase() === w.short.charAt(0) ? w.short : nameOf(w.el) + ' ' + w.short);
+     attach(w.el, p, false);
+   });
+-  const mine = errs.filter(e => e.st === cur), box = $('steperr');
+-  box.hidden = !(tried[cur] && mine.length);
++  const mine = errs.filter(e => STEPS[cur].includes(e.st)), box = $('steperr');
++  box.hidden = !(STEPS[cur].some(g => tried[g]) && mine.length);
+   const key = box.hidden ? '' : cur + '|' + mine.map(e => e.el.id + e.msg).join('|');
+   if (key !== box._key) {
+     box._key = key;
+@@ -1580,8 +1750,8 @@ function readyList(R) {
+   const item = it => `<li>${esc(named(it.reason))}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(named(it.fix))}</span>` : ''}</li>`;
+   return R.mods.map(m => {
+     const head = `<span class="nm">${esc(mname(m.id))}<small>${esc(MODULES[m.id][1])}</small></span>${badgeFor(m.status)}`;
+-    if (!m.items.length) return `<li><div class="mrow">${head}<span></span></div></li>`;
+-    return `<li><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
++    if (!m.items.length) return `<li data-status="${known(m.status)}"><div class="mrow">${head}<span></span></div></li>`;
++    return `<li data-status="${known(m.status)}"><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
+   }).join('');
+ }
+ function tally(R) {
+@@ -1591,7 +1761,7 @@ function tally(R) {
+ }
+ function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
+ function renderPanel(o, R) {
+-  setHTML($('scope'), esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`));
++  setHTML($('scope'), cur !== FIRST_STEP ? esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`) : '');
+   setHTML($('pn-run'), `${R.mods.length} modules, in the order they run. Updates as you answer.`);
+   setHTML($('pn-tally'), tally(R));
+   setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(named(x.reason))}</li>`).join('')}</ul></div>` : '');
+@@ -1699,7 +1869,7 @@ async function requestSummary(key) {
+ function syncSummary() {
+   const key = summaryKey();
+   if (SUMMARY && SUMMARY.key !== key) { SUMMARY = null; RENDERED = null; $('approve').checked = false; }
+-  if (cur === 'review' && !SUMMARY && !SUMMARY_BUSY && SUB && !errs.length) requestSummary(key);
++  if (cur === 'start' && !SUMMARY && !SUMMARY_BUSY && SUB && !errs.length) requestSummary(key);
+ }
+ const summaryOk = () => !!(SUMMARY && !SUMMARY.error && SUMMARY.digest);
+ const tickBoxes = () => [...document.querySelectorAll('#rv-ready [data-tick]')];
+@@ -1716,7 +1886,7 @@ function renderState() {
+   box._for = want;
+   box.textContent = '';
+   if (!want) return;
+-  if (want === 'errs') box.append(h('p', {className: 'err', textContent: 'Fix the stages marked Needs attention first.'}));
++  if (want === 'errs') box.append(h('p', {className: 'err', textContent: 'Fix the steps marked Needs attention first.'}));
+   else if (want === 'nodocs') box.append(h('p', {className: 'err', textContent: 'Upload the documents first.'}));
+   else if (want === 'busy') box.append(h('p', {className: 'muted', textContent: 'Making the summary from your documents and answers…'}));
+   else {
+@@ -1762,18 +1932,19 @@ function itemRow(item, sq) {
+ function readyTable(sq, own = []) {
+   const all = [...SUMMARY.items, ...own];
+   const scopes = [...new Set(all.map(i => i.scope))], order = [...(scopes.includes('run') ? ['run'] : []), ...SUMMARY.modules, ...scopes.filter(x => x !== 'run' && !SUMMARY.modules.includes(x))];
+-  const body = h('tbody');
++  const body = h('tbody', {role: 'rowgroup'});
+   order.forEach(id => {
+     const items = all.filter(i => i.scope === id), outcome = worst(items.map(i => known(i.outcome)));
+     const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}));
+-    const state = h('td'); state.innerHTML = badgeFor(outcome);
+-    const why = h('td', {}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
+-    const tr = h('tr', {}, h('td', {}, name), state, why);
++    const state = h('td', {role: 'cell'}); state.innerHTML = badgeFor(outcome);
++    const why = h('td', {role: 'cell'}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
++    const tr = h('tr', {role: 'row'}, h('td', {role: 'cell'}, name), state, why);
+     tr.dataset.module = id; tr.dataset.outcome = outcome;
+     body.append(tr);
+   });
+-  const table = h('table', {innerHTML: '<colgroup><col style="width:28%"><col style="width:132px"><col></colgroup><thead><tr><th scope="col">Module</th><th scope="col">Expected</th><th scope="col">Why, and what fixes it</th></tr></thead>'}, body);
+-  return h('div', {className: 'table-scroll'}, table);
++  // Drawn as dot rows, so the table's roles are stated: a grid-displayed table loses them in some browsers.
++  const table = h('table', {role: 'table', innerHTML: '<thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Module</th><th scope="col" role="columnheader">Expected</th><th scope="col" role="columnheader">Why, and what fixes it</th></tr></thead>'}, body);
++  return h('div', {className: 'rv-list'}, table);
+ }
+ // Mirrors WEB_SEARCH_CASE_KINDS in model/handoff.py, the one rule the launcher applies: a public or
+ // a private case searches the web, a synthetic one does not. The research module is TOLD to use
+@@ -1839,18 +2010,20 @@ function renderReview(sq, o) {
+   renderCarried();
+   const box = $('rv-steps');
+   box.innerHTML = '';
+-  sq.filter(st => st !== 'review').forEach((st, i) => {
+-    const dt = document.createElement('dt'), dd = document.createElement('dd'), ed = document.createElement('button');
+-    dt.textContent = (i + 1) + '. ' + SHORT[st];
++  sq.filter(st => st !== 'review').forEach(st => {
++    const row = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd'), act = document.createElement('dd'), ed = document.createElement('button');
++    row.className = 'rv-row'; dt.className = 'nm'; dd.className = 'ln'; act.className = 'ed';
++    dt.textContent = SHORT[st];
+     ed.type = 'button'; ed.className = 'text-button'; ed.dataset.goto = st; ed.textContent = 'Edit';
+     ed.setAttribute('aria-label', 'Edit ' + SHORT[st]);
+-    dt.appendChild(ed);
++    act.appendChild(ed);
+     const lines = summaryLines(st, o).filter(Boolean);
+-    if (stepBad(st)) { const p = document.createElement('p'); p.className = 'err'; p.innerHTML = icon('circle-alert') + '<span>Needs attention</span>'; dd.appendChild(p); }
++    if (groupBad(st)) { const p = document.createElement('p'); p.className = 'err'; p.innerHTML = icon('circle-alert') + '<span>Needs attention</span>'; dd.appendChild(p); }
+     if (!lines.length) { const p = document.createElement('p'); p.className = 'nil'; p.textContent = 'Nothing entered (optional)'; dd.appendChild(p); }
+     else { const ul = document.createElement('ul'); lines.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }); dd.appendChild(ul); }
+     warns.filter(w => w.st === st).forEach(w => { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = icon('triangle-alert') + '<span></span>'; p.lastChild.textContent = w.msg; dd.appendChild(p); });
+-    box.append(dt, dd);
++    row.append(dt, dd, act);
++    box.append(row);
+   });
+   const err = $('rv-submit-error');
+   err.hidden = !SUBMIT_ERROR;
+@@ -1883,7 +2056,7 @@ async function submitRun() {
+ }
+ /* ----- The run's progress (GET /api/runs/<id>), every 10 seconds until the run has ended */
+ let pollTimer = 0;
+-const FORM_PARTS = () => [$('f'), document.querySelector('.stagebar'), document.querySelector('.step-actions'), $('panel'), $('steperr'), $('loadmsg')];
++const FORM_PARTS = () => [$('f'), document.querySelector('.stagebar'), document.querySelector('.step-actions'), $('panel'), $('panel-pill'), $('steperr'), $('loadmsg')];
+ function showProgress() {
+   FORM_PARTS().forEach(el => { el.hidden = true; });
+   $('run-progress').hidden = false;
+@@ -1906,12 +2079,17 @@ function renderRun(r) {
+   }
+   $('run-again').hidden = !RESTARTABLE.includes(r.status);
+   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
++  const pill = $('run-pill');
++  pill.textContent = $('run-state').textContent;
++  pill.dataset.tone = r.status === 'finished' ? 'done' : RESTARTABLE.includes(r.status) ? 'bad' : '';
+   $('run-reason').textContent = named(r.reason) || 'none given';
+   const list = $('run-modules');
+   list.textContent = '';
+-  list.style.setProperty('--n', 4);
+   r.modules.forEach(([module, state]) => {
+-    const box = h('div', {className: 'mod' + (state === 'done' ? ' done' : '')}, h('span', {className: 'nm', textContent: mname(module)}), h('span', {className: 'sstate', textContent: state}));
++    const ring = h('span', {className: 'ring'});
++    ring.setAttribute('aria-hidden', 'true');
++    if (state === 'done') ring.innerHTML = CHECK;
++    const box = h('div', {className: 'mod' + (state === 'done' ? ' done' : '')}, ring, h('span', {className: 'nm', textContent: mname(module)}), h('span', {className: 'sstate', textContent: state}));
+     box.dataset.module = module; box.dataset.state = state;
+     if (state === 'running') box.setAttribute('aria-current', 'step');
+     list.append(h('li', {}, box));
+@@ -2045,6 +2223,7 @@ function renderDocs() {
+   };
+   READING.documents.forEach(d => {
+     const tr = document.createElement('tr'), name = docName(d.source);
++    tr.dataset.state = d.kind === 'unrecognised' ? 'maybe' : 'ok';
+     cell(tr, name);
+     const kind = d.kind === 'unrecognised' ? 'Not recognised' : (KIND_LABEL[d.kind] || d.kind) + (d.period_end ? ' · period ends ' + d.period_end : '') + (d.executed === true ? ' · executed' : d.executed === false ? ' · draft' : '');
+     cell(tr, kind).className = d.kind === 'unrecognised' ? 'maybe' : 'ok';
+@@ -2053,6 +2232,7 @@ function renderDocs() {
+   });
+   READING.ignored.forEach(name => {
+     const tr = document.createElement('tr');
++    tr.dataset.state = 'no';
+     cell(tr, name);
+     cell(tr, 'Will not be read').className = 'no';
+     remove(cell(tr, carriedNote(name) + whyIgnored(name)), name);
+@@ -2407,9 +2587,10 @@ function setRadio(scope, k, v) { const m = [...els(scope, k)].find(x => x.value
+ function renderPathCards() {
+   $('pathcards').innerHTML = Object.keys(PATHS).map(p => {
+     const id = 'path-' + p, d = PATHS[p];
+-    return `<label class="card" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
+-      `<span class="ct"><span class="ctl"><b>${d.label}</b></span><span class="q">${d.q}</span><span class="imp">Needs: ${d.needs}</span>` +
+-      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span>${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
++    return `<label class="prow" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
++      `<span class="ct"><span class="ctl"><b>${d.label}</b><span class="q">${d.q}</span></span>` +
++      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span>${esc(mname(m))}</span>`).join(', ')}</span></span>` +
++      `<span class="imp">Needs: ${d.needs}</span></label>`;
+   }).join('');
+ }
+ function renderTimeline() {
+@@ -2529,17 +2710,19 @@ function update() {
+   const o = build();
+   advise(o);
+   const sq = seqFor(o);
+-  if (!sq.includes(cur)) cur = 'pathway';
++  const steps = stepsFor(sq);
++  if (!steps.includes(cur)) { cur = FIRST_STEP; curGroup = ''; }
+   applyTags(o);
+   showMessages();
+-  renderSteps(sq, o);
+-  renderNav(sq, o);
++  renderSteps(steps, o, sq);
++  renderNav(steps, o, sq);
+   const R = readiness(o);
+   renderPanel(o, R);
+-  $('panel').hidden = cur === 'review';
++  $('panel').hidden = cur === 'start' || cur === FIRST_STEP;
++  $('panel-pill').hidden = cur !== FIRST_STEP;
+   syncSummary();
+   if (RENDERED && RENDERED === SUMMARY && RENDERED_KEY !== pageKey(o)) { RENDERED = null; $('approve').checked = false; } // a page rule changed: rebuild, untick, unapprove
+-  if (cur === 'review') renderReview(sq, o);
++  if (cur === 'start') renderReview(sq, o);
+   syncApproval();
+   renderMarks();
+   save(o);
+@@ -2678,7 +2861,7 @@ function resetAll() {
+   for (const k in ROWS) $(ROWS[k].box).innerHTML = '';
+   document.querySelectorAll('[data-touched]').forEach(e => delete e.dataset.touched);
+   $('moreid').open = false;
+-  visited.clear(); visited.add('pathway'); tried = {}; cur = 'pathway'; loadedNotes = false;
++  visited.clear(); visited.add(FIRST_STEP); tried = {}; cur = FIRST_STEP; curGroup = ''; loadedNotes = false;
+   rtTouched = basisTouched = idTouched = cutTouched = newestTouched = false;
+   SKIPPED.clear();
+   renderModules(runOf(getV($('st-pathway'), 'pathway')));
+@@ -2779,7 +2962,7 @@ function startAgain() {
+   CARRIED.run = ''; CARRIED.files = new Set(); CARRIED.fields = new Set(); CARRIED.locked = false; LOCKED_ID = '';
+   renderFailed(); renderDocs(); renderFileSelects(); say('');
+   forget();
+-  gotoStep('pathway'); loadMsg('Started again.', false);
++  gotoStep(FIRST_STEP); loadMsg('Started again.', false);
+ }
+ $('reset').addEventListener('click', () => {
+   if (!window.confirm(RUN ? 'Leave this run and start a new one?' : 'Clear every answer and start again?')) return;
+diff --git a/tests/fixtures/run_start_sentences_a6eec82.json b/tests/fixtures/run_start_sentences_a6eec82.json
+new file mode 100644
+index 0000000..11cdf1b
+--- /dev/null
++++ b/tests/fixtures/run_start_sentences_a6eec82.json
+@@ -0,0 +1,157 @@
++[
++ "*",
++ "A run cannot be corrected once it starts",
++ "A whole number from 1 to 64. The default is 32.",
++ "Above 0, up to 99.99.",
++ "Add facility",
++ "Add files",
++ "Add it to the other names too if the filings use it.",
++ "Add peer",
++ "Add precedent",
++ "Add question",
++ "Add quote",
++ "Add rating",
++ "Advanced",
++ "Agency ratings",
++ "An agreement is something you point to, not something you declare. Choose the uploaded file that is the credit agreement or indenture, or say there is none. The service's reading of that file is kept: where you and the reading disagree, the run is told so and the disagreement is listed as a limit.",
++ "Approve: I have read this summary and want this run started.",
++ "As the filing cover states it: three uppercase letters.",
++ "As-of",
++ "As-of date",
++ "Assumptions and questions",
++ "Back",
++ "Balanced",
++ "Basic",
++ "Borrower (legal entity)",
++ "By default every module of the pathway runs. A module you leave out does not run, and the modules a chosen module depends on are added.",
++ "By the debt this run analyses; for split-rated or unrated issuers, use your firm's convention.",
++ "Carried over from an earlier run",
++ "Choose folder",
++ "Claude Opus",
++ "Claude Opus is available only where the service has it set up.",
++ "Committee decision",
++ "Country",
++ "Current period",
++ "Date of your newest file",
++ "Deal terms, quotes and ratings",
++ "Deep Debate: a longer, fuller argument (more attacks and cross-examination rounds), never a softer sizing posture. Off by default; the compact form is used.",
++ "EBITDA basis",
++ "EV/EBITDA multiple",
++ "Each module's answer must name the issuer, one of its other names or its ID. Source readiness stops the run when it cannot tell whose files these are. The as-of date is the day the analysis stands on: evidence published after it counts as not yet available.",
++ "Earlier than the current period, and the same kind (quarter, half or year).",
++ "Effort",
++ "Enterprise value (m)",
++ "Example",
++ "Expected from your answers. Source readiness confirms during the run, and a model may still find less. Ready · Check: confirm a file · Gap: records missing evidence · Limited: concludes with a stated limit · Will refuse: stops.",
++ "Facilities",
++ "Fast",
++ "Fast runs every module at medium effort. Balanced uses high effort on the judgement modules (business context, earnings quality, credit synthesis, downside, relative value, refinancing, covenants, restructuring, committee challenge) and medium on the rest. High runs every module at high effort and costs the most.",
++ "Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.",
++ "Filled from the newest period end the documents state; correct it if a document is newer. Only checks the as-of date; not saved.",
++ "GPT Sol",
++ "Give EV, or market cap and net debt.",
++ "Guarantors",
++ "Harbour Leisure Inc · HLI · EV 5400 · EBITDA 600 · 2026-09-30 · Company 10-Q",
++ "High",
++ "How does the issuer report?",
++ "How much do you want to be asked?",
++ "How much of 2025 adjusted EBITDA is run-rate cost savings?",
++ "If the context changes, every module runs again: a resumed run refuses changed context. The cheapest fix is the right pathway now.",
++ "Inputs left at their defaults",
++ "Issue classification",
++ "Issuer (company name)",
++ "Issuer ID",
++ "Issuer library",
++ "Issuer market data",
++ "Items the research module reads that were published after it are refused. Follows the as-of date until you change it; set it earlier to leave out later research.",
++ "Legal entities, sector and sponsor",
++ "Listed equity",
++ "Market cap (m)",
++ "Market inputs the filings do not hold. Each part says which module in this run reads it, and what it does without it.",
++ "Market quotes",
++ "Market situation",
++ "Millions of the reporting currency.",
++ "Model",
++ "Module settings",
++ "Modules",
++ "Modules and turns",
++ "Modules to run",
++ "Negative if net cash.",
++ "Net debt (m)",
++ "Next",
++ "Not after the run's as-of date.",
++ "Of the head office.",
++ "On or after the newest file's date. Quotes, ratings, deal terms and peer figures dated after it are refused.",
++ "One per line, so a name may contain a comma.",
++ "One per line: the legal name if it differs, a short name, the ticker.",
++ "Other names in the filings",
++ "Parent",
++ "Pathway",
++ "Peers and valuation",
++ "Pick the issuer's folder, or add files. Each file goes to the start service, which reads it as the run will (offline, no model) and lists what it recognises. The questions that follow are limited by what these documents support.",
++ "Precedent transactions",
++ "Prior period",
++ "Private equity owner, if any.",
++ "Questions to research",
++ "Rationale",
++ "Relative value mode",
++ "Report:",
++ "Reporting currency",
++ "Required. Your answers are kept in this browser until you start the run; the documents go to the start service on this machine.",
++ "Research cutoff",
++ "Research searches the web for public peers as well as reading the supplied files. Add peers' filings to the documents if you want them used.",
++ "Research source",
++ "Run",
++ "Run activity",
++ "Run readiness",
++ "Run readiness · appears once a purpose is chosen",
++ "Run started",
++ "S&P · issuer · B+ · Stable · 2026-09-15",
++ "Saved with the run, so Run activity shows who started it. Optional.",
++ "Sector",
++ "Shown with the multiple, as user-supplied.",
++ "Skip to the form",
++ "Source",
++ "Sponsor",
++ "Standard",
++ "Start a new submission",
++ "Start a run",
++ "Start again from this run",
++ "Start another run",
++ "Start over",
++ "State",
++ "Submission",
++ "Submit and start the run",
++ "Summary and start",
++ "Target Casinos Ltd · Acquirer Group · 2025-06-30 · EV 1800 · EBITDA 200 · Press release",
++ "The agreement",
++ "The entity that signs the credit agreement. Left blank, the modules look for it and record a gap if they cannot find it.",
++ "The latest reported period, as the filing labels it: q1-2026 to q4-2026, h1-2026, h2-2026 or fy-2025.",
++ "The library filters by it.",
++ "The name the filings use for the group.",
++ "The ultimate parent, if different.",
++ "The uploaded files. A 10-K or 10-Q that lists the agreement in its exhibit index is not the agreement.",
++ "This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.",
++ "This run was submitted once. It is not repeated by reloading this page.",
++ "This submission is no longer open. If you submitted it, its run is in Run activity.",
++ "Ticker",
++ "Turns per module",
++ "Valuation basis",
++ "What do you need from this run?",
++ "What each module is expected to do",
++ "What the file is",
++ "Where do peer figures come from?",
++ "Where the figures come from.",
++ "Which documents does the issuer have?",
++ "Which file is the governing agreement?",
++ "Who is the issuer, and as of when?",
++ "Why",
++ "Your answer picks the pathway: the modules the run will use, in order. Then choose how much you want to be asked. Every level runs the same modules by the same method; a level only changes which questions you answer and which take their defaults.",
++ "Your answers",
++ "Your multiple",
++ "Your name",
++ "carry over from its latest run",
++ "this is a different issuer",
++ "tlb-2031 · Term loan B · USD · size 1250 · 7 years · talk 325–350 bps · OID 99.0–99.5 · floor 0.50% · 2026-10-28 · Lead arranger",
++ "tlb-2031 · observed · bid 98.50 · ask 99.00 · yield 8.25% · spread 340 bps · 2026-10-30 · Dealer run"
++]
+diff --git a/tests/test_context_form.py b/tests/test_context_form.py
+index cb7ac45..014cb81 100644
+--- a/tests/test_context_form.py
++++ b/tests/test_context_form.py
+@@ -6,6 +6,7 @@ from __future__ import annotations
+ 
+ import json
+ import re
++from html.parser import HTMLParser
+ from pathlib import Path
+ from typing import get_args
+ 
+@@ -178,14 +179,16 @@ def tokens(css: str) -> dict[str, str]:
+ def test_the_design_tokens_are_the_librarys() -> None:
+     library, form = tokens((WEB / "screen.css").read_text(encoding="utf-8")), tokens(FORM)
+     shared = sorted(form.keys() & library.keys())
+-    assert len(shared) >= len(form) - 3  # Only --ring-error, --red-bg and --red-border are its own.
++    # Only --ring-error, --red-bg, --red-border and the redesign's --green-bg are its own.
++    assert len(shared) >= len(form) - 4
++    assert set(form) - set(library) == {"--ring-error", "--red-bg", "--red-border", "--green-bg"}
+     assert {k: form[k] for k in shared} == {k: library[k] for k in shared}
+ 
+ 
+ def test_the_stages_are_the_start_pages() -> None:
+     assert re.findall(r"'([^']*)'", constant("STAGES")) == [
+-        "pathway",
+         "documents",
++        "pathway",
+         "issuer",
+         "legal",
+         "market",
+@@ -195,6 +198,30 @@ def test_the_stages_are_the_start_pages() -> None:
+     ]
+ 
+ 
++def test_the_steps_lay_over_the_stages_in_their_order() -> None:
++    steps = lists("STEPS")
++    assert steps == {
++        "documents": ["documents"],
++        "purpose": ["pathway"],
++        "confirm": ["issuer", "legal"],
++        "more": ["market", "valuation", "assumptions"],
++        "start": ["review"],
++    }
++    stages = re.findall(r"'([^']*)'", constant("STAGES"))
++    assert [
++        g for step in steps.values() for g in step
++    ] == stages  # every group in one step, in order
++    assert re.findall(r"(\w+):'([^']*)'", constant("STEP_NAME")) == [
++        ("documents", "Documents"),
++        ("purpose", "Purpose"),
++        ("confirm", "Confirm"),
++        ("more", "More context"),
++        ("start", "Start"),
++    ]
++    sections = re.findall(r'<section class="run-step" id="st-(\w+)"', FORM)
++    assert sections[: len(stages)] == stages  # the markup follows the same order
++
++
+ def test_the_cp3_modes_are_the_contexts() -> None:
+     block = re.search(r"\bcp3_mode: \[(.*?)\n  \],", FORM, re.DOTALL)
+     assert block is not None
+@@ -247,3 +274,76 @@ def test_the_page_states_before_submit_whether_the_run_searches_by_case_kind() -
+     assert "This is a synthetic case: the research module does not search the web" in FORM
+     assert "const SEARCH_KINDS = ['public', 'private'];" in FORM
+     assert "['Web search'," in FORM
++
++
++class _VisibleText(HTMLParser):
++    """The markup's text nodes outside ``<script>`` and ``<style>``, whitespace collapsed."""
++
++    def __init__(self) -> None:
++        super().__init__()
++        self.skipping = 0
++        self.nodes: set[str] = set()
++
++    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
++        self.skipping += tag in ("script", "style")
++
++    def handle_endtag(self, tag: str) -> None:
++        self.skipping -= tag in ("script", "style")
++
++    def handle_data(self, data: str) -> None:
++        text = re.sub(r"\s+", " ", data).strip()
++        if text and not self.skipping:
++            self.nodes.add(text)
++
++
++# What Rulings 6-9 of the redesign plan change in the markup after the step logic: nothing.
++# Ruling 6 (the title) and 9 (the group number) landed there; 8 (button labels) is script.
++CHANGED_BY_RULINGS: frozenset[str] = frozenset()
++
++
++def test_the_redesigned_markup_keeps_every_sentence_of_the_step_logic_commit() -> None:
++    """The answer key is the markup text at a6eec82 (tests/fixtures), written down once: the frame,
++    stepper, documents zone and pathway rows restyle the page without dropping a sentence."""
++    before = json.loads(
++        (ROOT / "tests/fixtures/run_start_sentences_a6eec82.json").read_text(encoding="utf-8")
++    )
++    page = _VisibleText()
++    page.feed(FORM)
++    assert len(before) > 100  # a fixture that lost its text would pass anything
++    assert set(before) - CHANGED_BY_RULINGS <= page.nodes, sorted(
++        set(before) - CHANGED_BY_RULINGS - page.nodes
++    )
++
++
++def _rule(selector: str) -> str:
++    """The declarations of the stylesheet's rule for exactly ``selector``."""
++    found = re.search(rf"(?:^|\}}|\n){re.escape(selector)}\{{([^}}]*)\}}", FORM)
++    assert found is not None, f"the stylesheet has no rule for {selector}"
++    return found[1]
++
++
++def test_the_documents_zone_is_a_one_and_a_half_pixel_dashed_border() -> None:
++    """Chrome snaps 1.5px to 1px at 1x, so the browser probe cannot tell the two apart."""
++    assert "border:1.5px dashed var(--border-primary)" in _rule(".dropzone")
++
++
++def test_the_canvas_leaves_no_bottom_padding_and_the_last_element_keeps_its_own_space() -> None:
++    assert "padding:28px 32px 0;" in _rule("#canvas") + ";"
++    assert "padding:28px 32px;" not in _rule("#canvas") + ";"
++    assert "padding-bottom:28px" in _rule(".canvas-in")
++
++
++def test_what_submit_does_is_the_one_new_heading_and_holds_the_submit_controls() -> None:
++    card = re.search(r'<aside class="rv-card" id="rv-card"[^>]*>(.*?)</aside>', FORM, re.DOTALL)
++    assert card is not None
++    body = card[1]
++    assert re.search(r"<h3[^>]*>What Submit does</h3>", body)
++    for ident in ("approve", "rv-submit-error", "submit", "submitnote", "rv-facts"):
++        assert f'id="{ident}"' in body, ident
++    assert FORM.count("What Submit does") == 1
++
++
++def test_the_page_has_no_skip_label_and_says_steps_not_stages_in_the_errors_sentence() -> None:
++    assert "'Skip'" not in FORM and "enteredStep" not in FORM and "enteredGroup" not in FORM
++    assert "Fix the steps marked Needs attention first." in FORM
++    assert "Fix the stages marked" not in FORM
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index 8cca662..7088ace 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -814,7 +814,7 @@ document.querySelector('[data-k="pathway"][value="credit_snapshot"]').checked =
+ document.querySelector('[data-k="run_type"][value="secondary"]').checked = true;
+ document.getElementById('f').dispatchEvent(new Event('change', {bubbles: true}));
+ const radios = [...document.querySelectorAll('[data-k="pathway"]')];
+-const shown = radios.filter(x => !x.closest('.card').hidden).map(x => x.value);
++const shown = radios.filter(x => !x.closest('label').hidden).map(x => x.value);
+ const out = document.createElement('pre');
+ out.id = 'probe';
+ const built = build();
+diff --git a/tests/test_run_start_page.py b/tests/test_run_start_page.py
+index ca24206..0a6f1cc 100644
+--- a/tests/test_run_start_page.py
++++ b/tests/test_run_start_page.py
+@@ -144,7 +144,7 @@ class Page:
+     console: list[str]
+     root: Path | None = None  # the shared folder, for tests that read the service's records
+ 
+-    def run(self, body: str, path: str = "/") -> dict[str, Any]:
++    def run(self, body: str, path: str = "/", size: str = "1280,900") -> dict[str, Any]:
+         text = FORM.read_text(encoding="utf-8")
+         probe = WRAP.replace("BODY", PRELUDE + body)
+         patched = self.folder / "form.html"
+@@ -155,7 +155,8 @@ class Page:
+                 chrome(),
+                 "--headless=new",
+                 "--disable-gpu",
+-                "--window-size=1280,900",
++                "--disable-popup-blocking",
++                f"--window-size={size}",
+                 "--enable-logging=stderr",
+                 "--v=0",
+                 f"--user-data-dir={self.profile}",
+@@ -228,58 +229,184 @@ def page_with_launcher(
+         yield start
+ 
+ 
+-def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
++def test_the_steps_each_pathway_shows_at_each_level(page):
++    # Expected sequences are written out from the stage map (group table) and the step map
++    # documents / purpose / confirm (issuer, legal) / more (market, valuation, assumptions) / start.
+     seen = page.run("""
+     const out = {};
++    for (const pathway of ['credit_snapshot', 'earnings_update', 'relative_value',
++        'covenant_refinancing', 'distressed_restructuring', 'portfolio_decision',
++        'short_snapshot']) {
++      pick('data-k="pathway"', pathway);
++      out[pathway] = {};
++      for (const l of ['basic', 'standard', 'advanced']) {
++        level(l); out[pathway][l] = stages(); out[pathway][l + 'Groups'] = seqFor(build());
++      }
++    }
+     pick('data-k="pathway"', 'credit_snapshot');
+-    level('basic'); out.basic = stages();
+-    level('standard'); out.standard = stages();
+-    level('advanced'); out.advanced = stages();
+-    out.subset = {advanced: !document.getElementById('adv-run').hidden};
++    level('advanced'); out.subset = {advanced: !document.getElementById('adv-run').hidden};
+     level('basic'); out.subset.basic = !document.getElementById('adv-run').hidden;
+-    pick('data-k="pathway"', 'relative_value');
+-    level('basic'); out.rvBasic = stages();
+-    level('standard'); out.rvStandard = stages();
+-    pick('data-k="pathway"', 'covenant_refinancing');
+-    level('standard'); out.covStandard = stages();
+-    level('advanced'); out.covAdvanced = stages();
+     return out;
+     """)
+-    five = ["pathway", "documents", "issuer", "legal", "review"]
+-    assert seen["basic"] == five
++    four = ["documents", "purpose", "confirm", "start"]
++    five = ["documents", "purpose", "confirm", "more", "start"]
+     # CP-DR is in every pathway (owner, 2026-11-11): its research questions are asked from Standard.
+-    assert seen["standard"] == [
+-        "pathway",
++    expected = {
++        "credit_snapshot": {"basic": four, "standard": five, "advanced": five},
++        "earnings_update": {"basic": four, "standard": five, "advanced": five},
++        "relative_value": {"basic": four, "standard": five, "advanced": five},
++        "covenant_refinancing": {"basic": four, "standard": five, "advanced": five},
++        "distressed_restructuring": {"basic": four, "standard": five, "advanced": five},
++        "portfolio_decision": {"basic": four, "standard": five, "advanced": five},
++        "short_snapshot": {"basic": four, "standard": four, "advanced": four},
++    }
++    for pathway, levels in expected.items():
++        assert {k: v for k, v in seen[pathway].items() if "Groups" not in k} == levels, pathway
++    # The groups behind those steps (documents first); pinned assumptions come from Advanced only.
++    rv_standard = ["documents", "pathway", "issuer", "market", "valuation", "assumptions", "review"]
++    cov = ["documents", "pathway", "issuer", "legal", "assumptions", "review"]
++    assert seen["relative_value"]["basicGroups"] == ["documents", "pathway", "issuer", "review"]
++    assert seen["relative_value"]["standardGroups"] == rv_standard
++    assert seen["relative_value"]["advancedGroups"] == rv_standard
++    assert seen["covenant_refinancing"]["standardGroups"] == cov
++    assert seen["covenant_refinancing"]["advancedGroups"] == cov
++    assert seen["covenant_refinancing"]["basicGroups"] == [
+         "documents",
+-        "issuer",
+-        "legal",
+-        "market",
+-        "valuation",
+-        "assumptions",
+-        "review",
+-    ]
+-    assert seen["advanced"] == seen["standard"]
+-    assert seen["subset"] == {"advanced": True, "basic": False}  # module subset and turns
+-    # Research questions come from Standard; pinned assumptions from Advanced.
+-    assert seen["rvBasic"] == ["pathway", "documents", "issuer", "review"]
+-    assert seen["rvStandard"] == [
+         "pathway",
+-        "documents",
+-        "issuer",
+-        "market",
+-        "valuation",
+-        "assumptions",
+-        "review",
+-    ]
+-    assert seen["covStandard"] == [*five[:-1], "assumptions", "review"]  # CP-DR: research questions
+-    assert seen["covAdvanced"] == [
+-        "pathway",
+-        "documents",
+         "issuer",
+         "legal",
+-        "assumptions",
+         "review",
+     ]
++    assert seen["subset"] == {"advanced": True, "basic": False}  # module subset and turns
++
++
++def test_more_context_shows_at_basic_for_a_primary_run_only(page):
++    seen = page.run("""
++    pick('data-k="pathway"', 'relative_value');
++    level('basic');
++    pick('data-k="run_type"', 'secondary'); const secondary = stages();
++    pick('data-k="run_type"', 'primary'); const primary = stages();
++    gotoStep('more');
++    return {secondary, primary, groups: ['market', 'valuation', 'assumptions']
++      .filter(g => !$('st-' + g).hidden), cur};
++    """)
++    assert seen["secondary"] == ["documents", "purpose", "confirm", "start"]
++    assert seen["primary"] == ["documents", "purpose", "confirm", "more", "start"]
++    assert seen["cur"] == "more" and seen["groups"] == ["market"]  # a primary run needs a facility
++
++
++def test_purpose_and_the_later_steps_are_locked_until_a_file_is_read(page):
++    seen = page.run(f"""
++    const states = () => Object.fromEntries([...document.querySelectorAll('#stepper button')]
++      .map(b => [b.dataset.step, b.getAttribute('aria-disabled') === 'true']));
++    const out = {{before: states(),
++      current: document.querySelector('#stepper [aria-current]').dataset.step}};
++    document.querySelector('#stepper [data-step="purpose"]').click();
++    out.clicked = cur;
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    out.after = states();
++    document.querySelector('#stepper [data-step="purpose"]').click();
++    out.opened = cur;
++    return out;
++    """)
++    assert seen["current"] == "documents" and seen["clicked"] == "documents"
++    assert seen["before"] == {"documents": False, "purpose": True, "confirm": True, "start": True}
++    # Confirm opens; Start stays locked while the issuer's required answers are missing.
++    assert seen["after"] == {"documents": False, "purpose": False, "confirm": False, "start": True}
++    assert seen["opened"] == "purpose"
++
++
++def test_an_error_in_a_confirm_group_marks_confirm_and_its_link_opens_it(page):
++    seen = page.run(f"""
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    gotoStep('confirm'); gotoStep('purpose');
++    const out = {{cur, issuerOnScreen: !$('st-issuer').hidden, errs: errs.map(e => e.st)}};
++    out.states = Object.fromEntries([...document.querySelectorAll('#stepper button')]
++      .map(b => [b.dataset.step,
++        [b.querySelector('.sstate').textContent, b.getAttribute('aria-disabled')]]));
++    document.querySelector('#stepper [data-step="confirm"]').click();
++    $('next').click();
++    const link = document.querySelector('#steperr [data-go]');
++    out.link = link && link.dataset.go;
++    link.click();
++    out.after = {{cur, focus: document.activeElement.id}};
++    return out;
++    """)
++    assert seen["cur"] == "purpose" and seen["issuerOnScreen"] is False
++    assert seen["errs"] and set(seen["errs"]) == {"issuer"}
++    assert seen["states"]["confirm"][0] == "Needs attention"
++    assert seen["states"]["start"] == ["Locked", "true"]
++    assert seen["link"] and seen["after"] == {"cur": "confirm", "focus": seen["link"]}
++
++
++def test_an_error_link_to_a_step_not_on_screen_opens_it_and_focuses_the_field(page):
++    seen = page.run(f"""
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    gotoStep('purpose');
++    const field = $('i-issuer_name');
++    const out = {{errs: errs.some(e => e.el === field), before: cur}};
++    go(field.id);
++    out.after = {{cur, focus: document.activeElement.id, confirm: !$('st-issuer').hidden}};
++    return out;
++    """)
++    assert seen["errs"] is True and seen["before"] == "purpose"
++    assert seen["after"] == {"cur": "confirm", "focus": "i-issuer_name", "confirm": True}
++
++
++def test_the_first_screen_is_documents_with_the_pill_and_purpose_shows_the_panel(page):
++    seen = page.run(f"""
++    const state = () => ({{cur, panel: !$('panel').hidden, pill: !$('panel-pill').hidden,
++      scope: $('scope').textContent, pillText: $('panel-pill').textContent,
++      first: [...document.querySelectorAll('section.run-step')].find(x => !x.hidden).dataset.st}});
++    const out = {{documents: state()}};
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    out.read = state();
++    gotoStep('purpose'); out.purpose = state();
++    gotoStep('start'); out.start = state();
++    return out;
++    """)
++    assert seen["documents"]["first"] == "documents" and seen["documents"]["cur"] == "documents"
++    assert seen["documents"]["panel"] is False and seen["documents"]["pill"] is True
++    assert seen["documents"]["pillText"] == "Run readiness · appears once a purpose is chosen"
++    assert seen["documents"]["scope"] == "" and seen["read"]["scope"] == ""
++    assert seen["purpose"]["panel"] is True and seen["purpose"]["pill"] is False
++    assert "Credit Snapshot" in seen["purpose"]["scope"] and "modules" in seen["purpose"]["scope"]
++    assert seen["start"]["panel"] is False and seen["start"]["pill"] is False
++
++
++def test_a_group_or_its_step_opens_the_same_groups(page):
++    seen = page.run("""
++    pick('data-k="pathway"', 'credit_snapshot');
++    const on = () => [...document.querySelectorAll('section.run-step')].filter(x => !x.hidden)
++      .map(x => x.dataset.st);
++    const focus = () => document.activeElement.closest('section').dataset.st;
++    gotoStep('legal'); const byGroup = {cur, on: on(), focus: focus()};
++    gotoStep('purpose');
++    gotoStep('confirm'); const byStep = {cur, on: on(), focus: focus()};
++    return {byGroup, byStep};
++    """)
++    assert seen["byGroup"] == {"cur": "confirm", "on": ["issuer", "legal"], "focus": "legal"}
++    assert seen["byStep"] == {"cur": "confirm", "on": ["issuer", "legal"], "focus": "issuer"}
++
++
++def test_the_step_names_and_buttons_name_the_next_and_previous_step(page):
++    seen = page.run(f"""
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    const out = {{names: [...document.querySelectorAll('#stepper .nm')].map(x => x.textContent),
++      sum: $('stepsum-t').textContent, back: $('back').hidden, next: $('next-t').textContent}};
++    gotoStep('purpose');
++    out.purpose = [$('stepsum-t').textContent, $('back-t').textContent, $('next-t').textContent];
++    gotoStep('confirm'); out.confirm = [$('back-t').textContent, $('next-t').textContent];
++    gotoStep('start'); out.start = [$('back-t').textContent, $('next').hidden];
++    out.label = document.querySelector('.stagebar').getAttribute('aria-label');
++    return out;
++    """)
++    assert seen["names"] == ["Documents", "Purpose", "Confirm", "Start"]
++    assert seen["sum"] == "Step 1 of 4 · Documents" and seen["back"] is True
++    assert seen["next"] == "Choose the purpose"
++    assert seen["purpose"] == ["Step 2 of 4 · Purpose", "Documents", "Confirm the details"]
++    assert seen["confirm"] == ["Purpose", "Review and start"]
++    assert seen["start"] == ["Confirm", True] and seen["label"] == "Steps"
+ 
+ 
+ def test_executed_cannot_be_chosen_until_an_uploaded_file_is_selected(page):
+@@ -378,7 +505,8 @@ def test_an_empty_file_is_the_launchers_refusal_and_blocks_the_later_stages(page
+     assert "blank.txt" in seen["refusal"] and seen["blocked"]
+     assert seen["rows"] == 0  # No reading while the folder is refused.
+     states = {step: text for step, text in seen["sq"]}
+-    assert "Locked" in states["issuer"]
++    assert "Locked" in states["purpose"] and "Locked" in states["confirm"]
++    assert "Locked" not in states["documents"]
+ 
+ 
+ def test_the_three_levels_build_the_same_context_for_the_same_answers(page):
+@@ -460,14 +588,15 @@ def test_a_reload_keeps_the_answers_and_the_uploaded_files(page):
+     return {rows: rows().map(r => r[0]), level: LEVEL, name: build().identity.issuer_name,
+       asOf: build().run.as_of, legalFile: document.getElementById('legal-file').value,
+       legal: build().attachments.legal_documents, newest: document.getElementById('d-newest').value,
+-      stages: stages()};
++      stages: stages(), cur};
+     """)
+     assert second["rows"] == ["annual.txt", "credit-agreement.txt"]
+     assert second["level"] == "standard" and second["name"] == "Acme Corp"
+     assert second["asOf"] == "2026-10-31"
+     assert (second["legalFile"], second["legal"]) == ("credit-agreement.txt", "executed")
+     assert second["newest"] == "2025-12-31"
+-    assert "market" in second["stages"]
++    assert "more" in second["stages"]  # Standard asks for More context
++    assert second["cur"] == "documents"  # a reload lands on the first step, with the answers back
+ 
+ 
+ def test_removing_a_document_deletes_it_from_the_service_and_keeps_the_answers(page):
+@@ -632,9 +761,11 @@ def test_a_limit_that_points_to_the_legal_stage_offers_the_stage(page):
+     pick('data-k="pathway"', 'relative_value');
+     await uploadFiles([file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
+     const go = readiness(build()).counted.filter(x => x.go === 'legal').length;
+-    return {{stages: stages(), go}};"""
++    gotoStep('confirm');
++    return {{stages: stages(), go, legal: !$('st-legal').hidden}};"""
+     )
+-    assert seen["go"] == 1 and "legal" in seen["stages"]
++    assert seen["go"] == 1 and seen["stages"] == ["documents", "purpose", "confirm", "start"]
++    assert seen["legal"] is True  # the legal group is shown, inside Confirm
+ 
+ 
+ def test_a_stage_holding_an_answer_is_shown_at_every_level(page):
+@@ -657,7 +788,7 @@ def test_a_stage_holding_an_answer_is_shown_at_every_level(page):
+     return {stages: stages(), rows: build().quotes.length, errs: errs.map(e => e.st)};
+     """)
+     assert seen["rows"] == 1 and "market" not in seen["errs"]
+-    assert "market" in seen["stages"]
++    assert "more" in seen["stages"]
+ 
+ 
+ def _records(page):
+@@ -826,7 +957,9 @@ def test_basic_lists_its_defaults_and_offers_answer_this_now(page):
+     const out = {{S, before, defaults: document.getElementById('rv-defaults').textContent,
+       now: button ? [button.dataset.now, button.textContent] : null}};
+     button.click();
+-    out.after = {{cur, level: LEVEL, stages: stages()}};
++    out.after = {{cur, level: LEVEL, stages: stages(),
++      shown: ['market', 'valuation', 'assumptions'].filter(g => !$('st-' + g).hidden),
++      focus: document.activeElement.closest('section').dataset.st}};
+     level('standard');
+     gotoStep('review'); await summarised();
+     out.standard = document.getElementById('rv-defaults').textContent;
+@@ -835,10 +968,19 @@ def test_basic_lists_its_defaults_and_offers_answer_this_now(page):
+     """)
+     quotes = [i for i in seen["S"]["items"] if i["id"].endswith(":cp3-no-quotes-no-talk")]
+     assert quotes and quotes[0]["outcome"] == "gap"  # the fix is in the Market stage
+-    assert "market" not in seen["before"]  # which Basic does not ask
++    assert seen["before"] == [
++        "documents",
++        "purpose",
++        "confirm",
++        "start",
++    ]  # Basic asks no More context
+     assert seen["now"] == ["market", "Answer this now"]
+-    assert seen["after"]["cur"] == "market" and seen["after"]["level"] == "basic"
+-    assert "market" in seen["after"]["stages"]
++    assert seen["after"]["cur"] == "more" and seen["after"]["level"] == "basic"
++    assert seen["after"]["stages"] == ["documents", "purpose", "confirm", "more", "start"]
++    assert seen["after"]["shown"] == [
++        "market"
++    ]  # only the group asked for, though Basic does not ask it
++    assert seen["after"]["focus"] == "market"
+     for text in ("Peer figures", "Valuation basis", "Automatic", "Quotes", "Ratings", "None"):
+         assert text in seen["defaults"], text
+     assert "Deep Debate" in seen["defaults"] and "Off" in seen["defaults"]
+@@ -965,7 +1107,7 @@ def test_a_refused_digest_returns_to_the_review_with_the_services_text(page):
+     """)
+     assert "changed after approval" in seen["refusal"]
+     assert seen["gate"]["approved"] is False and seen["gate"]["submit"] is True
+-    assert seen["hidden"] is True and seen["stage"] == "review"
++    assert seen["hidden"] is True and seen["stage"] == "start"
+     assert "run-start/run" not in seen["storage"]
+     assert _records(page) == []
+ 
+@@ -1441,6 +1583,31 @@ def test_a_reload_with_a_submission_the_service_no_longer_knows_does_not_say_upl
+     assert seen["resaved"] == ""  # only now is the old record replaced
+ 
+ 
++def test_submission_gone_keeps_the_page_head_but_not_the_stepper(page):
++    page.run(f"""
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    type('i-issuer_name', 'Acme Corp');
++    const saved = JSON.parse(localStorage.getItem('run-start/1'));
++    saved.id = 'f'.repeat(32);
++    localStorage.setItem('run-start/1', JSON.stringify(saved));
++    return {{}};
++    """)
++    seen = page.run(
++        BOX
++        + """
++    const h1 = document.querySelector('.page-head h1');
++    const h2 = $('submission-gone').querySelector('h2');
++    return {shown: !$('submission-gone').hidden, h1: [h1.textContent, box(h1).height > 0],
++      reset: [$('reset').textContent, box($('reset')).height > 0],
++      stepper: getComputedStyle(document.querySelector('.stagebar')).display,
++      order: box(h1).bottom <= box(h2).top};
++    """
++    )
++    assert seen["shown"] is True
++    assert seen["h1"] == ["Start a run", True] and seen["reset"] == ["Start over", True]
++    assert seen["stepper"] == "none" and seen["order"] is True
++
++
+ def test_the_review_shows_turns_and_left_out_modules_at_every_level_when_they_differ(page):
+     seen = page.run(f"""
+     level('advanced');
+@@ -1582,7 +1749,7 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
+     )
+     with urllib.request.urlopen(request, timeout=20) as reply:
+         assert reply.status == 200
+-        assert "<h1>Run context</h1>" in reply.read().decode("utf-8")
++        assert "<h1>Start a run</h1>" in reply.read().decode("utf-8")
+     with urllib.request.urlopen(page.base + "/library/icons/plus.svg", timeout=20) as reply:
+         assert reply.status == 200
+ 
+@@ -1590,6 +1757,7 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
+ def test_model_and_effort_are_chosen_at_advanced_only_and_default_everywhere_else(page):
+     seen = page.run("""
+     const sent = () => { const a = answers(); return [a.model, a.effort]; };
++    gotoStep('purpose');  // the Purpose step holds the controls; the first screen is Documents
+     const shown = () => ['modelf', 'effortf'].map(id => $(id).offsetParent !== null);
+     const out = {basicShown: shown(), basicDefault: sent()};
+     level('advanced');
+@@ -1656,7 +1824,7 @@ def test_the_claude_refusal_maps_to_the_pathway_stage_and_the_review_offers_the_
+     return out;
+     """)
+     assert seen["stage"] == "pathway"
+-    assert seen["goto"] == [["pathway", "Go to Pathway"]]
++    assert seen["goto"] == [["pathway", "Go to Purpose"]]
+ 
+ 
+ def test_a_draft_saved_at_advanced_restores_the_model_and_effort_and_a_bad_one_the_defaults(page):
+@@ -1749,9 +1917,12 @@ def test_from_locks_the_issuer_id_and_carries_the_documents(page_from):
+       return {id: $('i-issuer_id').value, locked: $('i-issuer_id').readOnly,
+               name: $('i-issuer_name').value,
+               rows: rows(), asOf: $('d-as_of').value, run: CARRIED.run,
+-              files: [...CARRIED.files], button: !$('unlock-issuer').hidden};""",
++              files: [...CARRIED.files], button: !$('unlock-issuer').hidden,
++              cur, first: [...document.querySelectorAll('section.run-step')]
++                .filter(x => !x.hidden).map(x => x.dataset.st)};""",
+         path=f"/?from={run_id}",
+     )
++    assert got["cur"] == "documents" and got["first"] == ["documents"]  # lands on the first step
+     assert got["id"] == "acme" and got["locked"] is True and got["run"] == run_id
+     assert got["name"] == "Acme Corp" and got["button"] is True
+     assert got["files"] == ["a.txt"]
+@@ -2685,3 +2856,802 @@ def test_the_research_text_for_claude_says_it_does_not_search(page):
+         "reads only the supplied files. "
+         "Add peers' filings to the documents if you want them used."
+     )
++
++
++def test_more_context_stays_on_screen_while_it_is_the_step_being_edited(page):
++    # At Basic, More context shows only because of a held answer. Undoing that answer on the
++    # step itself must not take the step (or its group) out from under the analyst.
++    seen = page.run(f"""
++    await issuer('relative_value', [file('annual.txt', {json.dumps(REPORT)})]); level('basic');
++    const alt = [...document.querySelectorAll('[data-k="peer_source"]')]
++      .find(x => x.value !== 'cp_dr_public');
++    pick('data-k="peer_source"', alt.value);
++    const withAnswer = stages();
++    document.querySelector('#stepper [data-step="more"]').click();
++    const on = cur;
++    pick('data-k="peer_source"', 'cp_dr_public');
++    const held = {{cur, steps: stages(), valuation: !$('st-valuation').hidden}};
++    gotoStep('start');
++    return {{withAnswer, on, held, left: stages()}};
++    """)
++    assert "more" in seen["withAnswer"] and seen["on"] == "more"
++    assert seen["held"]["cur"] == "more" and "more" in seen["held"]["steps"]
++    assert seen["held"]["valuation"] is True
++    assert "more" not in seen["left"]  # once the analyst leaves it with nothing held, it goes
++
++
++# ---- The redesign's look (Task 2): literal sizes from the mock-up, measured in Chrome ----------
++
++REPORT_FILE = f"await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);"
++BOX = """
++const box = el => { const r = el.getBoundingClientRect();
++  return {left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width,
++    height: r.height}; };
++"""
++
++
++def test_purpose_is_a_left_column_and_a_340px_aside_with_the_footer_always_in_view(page):
++    seen = page.run(
++        BOX
++        + REPORT_FILE
++        + """
++    gotoStep('purpose');
++    const card = box($('card')), aside = box($('panel'));
++    const footer = document.querySelector('.step-actions');
++    const before = box(footer), main = $('canvas');
++    main.scrollTop = 150;
++    const after = box(footer);
++    return {inner: [innerWidth, innerHeight], card, aside, before, after,
++      scrolled: main.scrollTop, canScroll: main.scrollHeight > main.clientHeight,
++      main: box(main), display: getComputedStyle($('panel')).display};
++    """,
++        size="1440,900",
++    )
++    assert seen["inner"][0] == 1440
++    assert abs(seen["aside"]["left"] - (seen["card"]["right"] - 340)) <= 1
++    assert seen["aside"]["width"] == 340 and seen["aside"]["top"] == seen["card"]["top"]
++    assert seen["aside"]["bottom"] == seen["card"]["bottom"]
++    assert seen["canScroll"] and seen["scrolled"] > 0
++    assert seen["before"]["top"] == seen["after"]["top"]
++    assert seen["after"]["bottom"] <= seen["inner"][1]
++    assert seen["main"]["right"] <= seen["aside"]["left"] + 1
++
++
++def test_the_aside_is_300px_at_1100_and_below(page):
++    seen = page.run(
++        BOX + REPORT_FILE + "gotoStep('purpose'); return {w: box($('panel')).width};",
++        size="1100,900",
++    )
++    assert seen["w"] == 300
++
++
++def test_documents_and_start_are_one_column_with_main_across_the_card(page):
++    seen = page.run(
++        BOX
++        + REPORT_FILE
++        + """
++    const one = () => ({aside: getComputedStyle($('panel')).display, main: box($('canvas')).width,
++      card: box($('card')).width});
++    const out = {documents: one()};
++    gotoStep('start'); out.start = one();
++    return out;
++    """,
++        size="1440,900",
++    )
++    for name in ("documents", "start"):
++        assert seen[name]["aside"] == "none", name
++        assert abs(seen[name]["main"] - seen[name]["card"]) <= 1, name
++
++
++def test_the_stepper_is_numbered_circles_and_names_with_the_states_in_the_markup(page):
++    seen = page.run(
++        REPORT_FILE
++        + """
++    gotoStep('confirm'); gotoStep('purpose');
++    const shown = el => {
++      const r = el.getBoundingClientRect();
++      return r.width > 2 && r.height > 2;
++    };
++    return [...document.querySelectorAll('#stepper button')].map(b => ({
++      step: b.dataset.step, name: b.getAttribute('aria-label') || b.textContent,
++      bg: getComputedStyle(b.querySelector('.dot')).backgroundColor,
++      check: !!b.querySelector('.dot svg'), dotText: b.querySelector('.dot').textContent,
++      state: b.querySelector('.sstate').textContent, stateShown: shown(b.querySelector('.sstate')),
++      sep: [...b.parentNode.children].filter(x => x !== b && x.textContent === '\u203a').length}));
++    """
++    )
++    by = {b["step"]: b for b in seen}
++    assert by["purpose"]["bg"] == "rgb(0, 23, 229)"  # current: blue circle
++    assert by["documents"]["check"] is True  # done: the check
++    assert by["purpose"]["check"] is False and by["purpose"]["dotText"] == "2"
++    assert by["confirm"]["state"] == "Needs attention" and by["confirm"]["stateShown"] is True
++    assert [b["step"] for b in seen if b["stateShown"]] == ["confirm"]
++    assert all(b["state"] for b in seen)  # the words stay in the DOM for screen readers
++    for step, name in (
++        ("documents", "Documents"),
++        ("purpose", "Purpose"),
++        ("confirm", "Confirm"),
++        ("start", "Start"),
++    ):
++        assert name in by[step]["name"]
++    assert sum(b["sep"] for b in seen) == 3  # a decorative "›" between four steps
++
++
++def test_the_pathways_are_rows_in_three_columns_and_the_chosen_row_is_blue_50(page):
++    seen = page.run(
++        BOX
++        + REPORT_FILE
++        + """
++    gotoStep('purpose');
++    const prows = [...document.querySelectorAll('#pathcards label')];
++    const chosen = prows.find(r => r.querySelector('input').checked);
++    const other = prows.find(r => r !== chosen);
++    const first = prows[0];
++    const bg = el => getComputedStyle(el).backgroundColor;
++    return {n: prows.length, label: box(first.querySelector('b')),
++      needs: box(first.querySelector('.imp')), chosen: bg(chosen), other: bg(other),
++      radius: getComputedStyle(chosen).borderTopLeftRadius,
++      needsText: first.querySelector('.imp').textContent,
++      cards: document.querySelectorAll('#pathcards .card').length};
++    """,
++        size="1440,900",
++    )
++    assert (seen["n"], seen["cards"]) == (7, 0), seen
++    assert seen["needs"]["left"] > seen["label"]["right"]
++    assert seen["chosen"] == "rgb(238, 240, 255)" and seen["other"] != seen["chosen"]
++    assert seen["radius"] == "8px" and seen["needsText"].startswith("Needs: ")
++
++
++def test_the_level_and_the_name_sit_side_by_side(page):
++    seen = page.run(
++        BOX
++        + REPORT_FILE
++        + """
++    gotoStep('purpose');
++    return {level: box($('levelf')), name: box($('submitter').closest('.f'))};
++    """,
++        size="1440,900",
++    )
++    assert (
++        seen["name"]["left"] > seen["level"]["right"]
++        and seen["name"]["top"] == seen["level"]["top"]
++    )
++
++
++def test_the_documents_zone_is_dashed_then_a_compact_row_and_the_files_are_rows(page):
++    seen = page.run(
++        """
++    const zone = () => { const z = getComputedStyle($('docf'));
++      return {pad: z.paddingTop, border: z.borderTopStyle, width: z.borderTopWidth,
++        radius: z.borderTopLeftRadius,
++        bg: z.backgroundColor, text: z.textAlign}; };
++    const buttons = () => [...$('docf').querySelectorAll('.file-action')]
++      .map(b => b.className.includes('primary') ? 'primary' : 'secondary');
++    const title = "Choose the issuer's folder, or add files";
++    const out = {empty: zone(), emptyButtons: buttons(),
++      title: $('docf').textContent.includes(title)};
++    await uploadFiles([file('annual.txt', """
++        + json.dumps(REPORT)
++        + """), file('memo.txt', """
++        + json.dumps(MEMO)
++        + """), file('deck.pptx', 'PK')]);
++    out.listed = zone();
++    const dot = td => {
++      const s = getComputedStyle(td, '::before');
++      return [s.width, s.height, s.backgroundColor];
++    };
++    const trs = [...document.querySelectorAll('#doclist tbody tr')];
++    out.dots = trs.map(r => dot(r.cells[0]));
++    const wrap = document.querySelector('#docresult .table-scroll');
++    out.table = getComputedStyle(wrap).borderLeftWidth;
++    out.remove = trs.map(r => r.querySelector('[data-remove-file]').textContent);
++    out.row = getComputedStyle(trs[0].cells[0]).paddingTop;
++    return out;
++    """
++    )
++    assert seen["empty"] == {
++        "pad": "44px",
++        "border": "dashed",
++        "width": "1px",  # 1.5px in the sheet, snapped down to a whole pixel at 1x
++        "radius": "12px",
++        "bg": "rgb(252, 253, 255)",
++        "text": "center",
++    }
++    assert seen["emptyButtons"] == ["primary", "secondary"] and seen["title"] is True
++    assert seen["listed"]["pad"] == "14px"
++    assert seen["dots"] == [
++        ["8px", "8px", "rgb(14, 122, 70)"],  # read: green
++        ["8px", "8px", "rgb(138, 83, 0)"],  # not recognised: amber
++        ["8px", "8px", "rgb(179, 38, 30)"],  # will not be read: red
++    ]
++    assert seen["remove"] == ["Remove"] * 3 and seen["row"] == "11px" and seen["table"] == "0px"
++
++
++def test_the_readiness_aside_has_dot_rows_and_borderless_tally_pills(page):
++    seen = page.run(
++        REPORT_FILE
++        + """
++    gotoStep('purpose');
++    const tally = $('pn-tally'), made = {};
++    for (const k of ['ready', 'limited', 'gap', 'check', 'will_refuse']) {
++      const li = document.createElement('li');
++      li.innerHTML = `<span class="badge ${k}"><i></i>${k}</span>`;
++      tally.appendChild(li);
++      const s = getComputedStyle(li.firstChild);
++      made[k] = [s.backgroundColor, s.borderTopWidth, s.borderTopStyle, s.height, s.color];
++    }
++    const row = document.querySelector('#pn-mods > li');
++    const dot = getComputedStyle(row.querySelector('summary, .mrow'), '::before');
++    const head = getComputedStyle(document.querySelector('.inspector-bar'));
++    return {made, dot: [dot.width, dot.height], head: head.paddingTop + ' ' + head.paddingLeft,
++      hide: $('panel').textContent.includes('Hide'),
++      name: getComputedStyle(row.querySelector('.nm')).fontWeight,
++      details: !!document.querySelector('#pn-mods details'),
++      legend: document.querySelector('.note-foot').textContent.startsWith('Expected from')};
++    """
++    )
++    assert seen["details"] and seen["legend"] and seen["hide"] is False
++    made = seen["made"]
++    assert (
++        made["ready"][:3] == ["rgb(233, 245, 238)", "0px", "none"]
++        and made["ready"][4] == "rgb(14, 122, 70)"
++    )
++    assert made["limited"][:3] == ["rgb(255, 241, 199)", "0px", "none"] == made["gap"][:3]
++    assert made["will_refuse"][:3] == ["rgb(254, 243, 242)", "0px", "none"]
++    assert made["check"][2] == "dashed" and all(m[3] == "24px" for m in made.values())
++    assert seen["dot"] == ["8px", "8px"] and seen["head"] == "22px 22px" and seen["name"] == "600"
++
++
++def test_no_step_scrolls_sideways_at_375px(page):
++    # Chrome will not open a window under 500px and the service refuses to be framed, so the page
++    # opens itself again in a 375px popup; the popup runs the same probe, measures its own window
++    # and hands the numbers to its opener.
++    seen = page.run(
++        """
++    const measure = async () => {
++      window.resizeTo(375, 812); await settle(300);
++      await issuer('credit_snapshot', [file('annual.txt', REPORT_JS)]);
++      level('standard');
++      const out = {inner: innerWidth, widths: {}};
++      for (const step of ['documents', 'purpose', 'confirm', 'more', 'start']) {
++        gotoStep(step);
++        out.widths[step] = document.documentElement.scrollWidth;
++      }
++      return out;
++    };
++    if (window.opener) { window.opener.NARROW = await measure(); return {popup: true}; }
++    window.open(location.href, 'narrow', 'popup,width=375,height=812');
++    for (let i = 0; i < 300 && !window.NARROW; i++) await settle(100);
++    return window.NARROW;
++    """.replace("REPORT_JS", json.dumps(REPORT))
++    )
++    assert seen["inner"] == 375
++    assert seen["widths"] == dict.fromkeys(
++        ("documents", "purpose", "confirm", "more", "start"), 375
++    )
++
++
++def test_no_text_is_drawn_in_the_failing_grey(page):
++    seen = page.run(
++        """
++    await issuer('credit_snapshot', [file('annual.txt', """
++        + json.dumps(REPORT)
++        + """)]);
++    level('standard');
++    const found = [];
++    for (const step of ['documents', 'purpose', 'confirm', 'more', 'start']) {
++      gotoStep(step);
++      for (const el of document.body.querySelectorAll('*')) {
++        if (['SCRIPT', 'STYLE'].includes(el.tagName)) continue;
++        if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
++        const r = el.getBoundingClientRect();
++        if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') continue;
++        if (getComputedStyle(el).color === 'rgb(138, 144, 163)') {
++          found.push(step + ':' + el.tagName + '.' + el.className);
++        }
++      }
++    }
++    return found;
++    """
++    )
++    assert seen == []
++
++
++# ---- The redesign's look (Task 3): Start and the run screen --------------------------------------
++
++REVIEW = (
++    BOX
++    + f"""
++await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
++const S = await review();
++"""
++)
++
++
++def test_start_is_the_answers_and_a_360px_card_that_holds_approval_and_submit(page):
++    seen = page.run(
++        REVIEW
++        + """
++    const sec = $('st-review'), card = $('rv-card'), cs = getComputedStyle(card);
++    const canvas = $('canvas');
++    const font = el => { const s = getComputedStyle(el);
++      return [s.fontWeight, s.fontSize, s.lineHeight].join(' '); };
++    const limited = ['gap', 'limited', 'will_refuse'];
++    const out = {S, items: S.items.filter(i => limited.includes(i.outcome)).length,
++      cols: getComputedStyle(sec).gridTemplateColumns, gap: getComputedStyle(sec).columnGap,
++      card: box(card), ready: box($('rv-ready')), steps: box($('rv-steps')),
++      inside: ['approve', 'rv-submit-error', 'submit', 'submitnote', 'rv-facts']
++        .map(id => card.contains($(id))),
++      outside: ['rv-state', 'rv-ready', 'rv-defaults', 'rv-steps'].map(id => !card.contains($(id))),
++      pos: cs.position, top: cs.top, align: cs.alignSelf, pad: cs.padding, radius: cs.borderRadius,
++      bg: cs.backgroundColor,
++      border: [cs.borderTopWidth, cs.borderTopStyle, cs.borderTopColor].join(' '),
++      h3: card.querySelector('h3').textContent, lead: font(card.querySelector('.lead')),
++      leadText: card.querySelector('.lead').textContent.slice(0, 29),
++      submit: {h: box($('submit')).height, w: box($('submit')).width, font: font($('submit'))},
++      note: font($('submitnote')), next: getComputedStyle($('next')).display,
++      back: box($('back')).width > 0,
++      rule: getComputedStyle($('approve').closest('.rv-go')).borderTopWidth};
++    out.scrolls = canvas.scrollHeight > canvas.clientHeight;
++    // Far enough down that the card is past the top of its own column (it cannot leave the
++    // column, so nearer the top it sits at its natural place; the scope line moves that point).
++    canvas.scrollTop = 600;
++    await settle(100);
++    out.stuck = [box(card).bottom, box(canvas).bottom];
++    return out;
++    """,
++        size="1440,900",
++    )
++    assert seen["cols"].endswith(" 360px") and seen["gap"] == "40px"
++    card = seen["card"]
++    assert card["width"] == 360 and card["left"] > seen["ready"]["right"]
++    assert card["left"] > seen["steps"]["right"]
++    assert all(seen["inside"]) and all(seen["outside"])
++    # The card sticks by its bottom: it is taller than the scrolling main, so a top stick would
++    # keep Approve and Submit below main's bottom edge (see the M1 test below).
++    assert seen["pos"] == "sticky" and seen["top"] == "auto" and seen["align"] == "end"
++    assert seen["pad"] == "20px 22px" and seen["radius"] == "12px"
++    assert seen["bg"] == "rgb(248, 249, 251)" and seen["border"] == "1px solid rgb(228, 230, 236)"
++    assert seen["h3"] == "What Submit does"
++    assert seen["leadText"] == "This is the run you are about"
++    assert seen["lead"] == "400 13px 19px"
++    assert seen["submit"] == {"h": 44, "w": 314, "font": "600 15px 20px"}
++    assert seen["note"] == "400 12px 18px"
++    assert seen["rule"] == "1px"
++    assert seen["next"] == "none" and seen["back"] is True
++    # Stuck 28px under the scroller's top edge: the offset is measured inside its padding.
++    assert seen["scrolls"] is True
++    # Stuck to main's bottom edge (inside its padding), not cut off below it.
++    assert seen["stuck"][0] <= seen["stuck"][1]
++
++
++@pytest.mark.parametrize("size", ["1440,900", "1280,800"])
++def test_approve_and_submit_stay_in_view_while_the_card_is_taller_than_main(page, size):
++    seen = page.run(
++        REVIEW
++        + """
++    tickAll(); await settle(100);
++    const canvas = $('canvas'), card = $('rv-card');
++    const inMain = el => { const r = box(el), m = box(canvas);
++      return r.top >= m.top - .5 && r.bottom <= m.bottom + .5; };
++    const out = {modules: S.modules.length, taller: box(card).height > canvas.clientHeight,
++      mid: [], focus: []};
++    const end = canvas.scrollHeight - canvas.clientHeight;
++    for (const y of [Math.round(end / 4), Math.round(end / 2), Math.round(end * 3 / 4)]) {
++      canvas.scrollTop = y; await settle(80);
++      out.mid.push([canvas.scrollTop, inMain($('submit'))]);
++    }
++    for (const y of [0, Math.round(end / 2)]) {
++      canvas.scrollTop = y; await settle(50);
++      $('approve').focus(); await settle(100);
++      out.focus.push([document.activeElement.id, inMain($('approve'))]);
++    }
++    // The card is taller than main, so it cannot be whole in view at once; every part of it must
++    // still be reachable by scrolling: its title at the top, Approve and Submit at the end.
++    canvas.scrollTop = 0; await settle(80);
++    out.top = inMain(card.querySelector('h3'));
++    canvas.scrollTop = 1e6; await settle(100);
++    out.end = {submit: inMain($('submit')), approve: inMain($('approve')),
++      bottom: box(card).bottom <= box(canvas).bottom + .5};
++    return out;
++    """,
++        size=size,
++    )
++    assert seen["modules"] == 12 and seen["taller"] is True
++    assert all(visible and top > 0 for top, visible in seen["mid"]), seen["mid"]
++    assert seen["focus"] == [["approve", True]] * 2, seen["focus"]
++    assert seen["top"] is True
++    assert seen["end"] == {"submit": True, "approve": True, "bottom": True}, seen["end"]
++
++
++def test_start_keeps_the_approval_gate_and_each_limit_is_a_labelled_tick(page):
++    seen = page.run(
++        REVIEW
++        + """
++    const boxes = [...document.querySelectorAll('#rv-ready input[type=checkbox]')];
++    const labels = [...document.querySelectorAll('#rv-ready label')];
++    const byText = text => labels.filter(l => l.textContent.trim() === text).map(l => l.control);
++    const first = labels[0], fs = getComputedStyle(first);
++    const cs = getComputedStyle(first.querySelector('input'));
++    const out = {S, boxes: boxes.length, ticks: ticks().length, labels: labels.length,
++      reachable: byText('I accept this limit.').length + byText('I have checked this.').length,
++      linked: labels.every(l => l.control && l.control.type === 'checkbox' &&
++        l.control.dataset.tick),
++      tick: [fs.padding, fs.borderTopWidth, fs.borderTopColor, fs.borderRadius, fs.fontWeight,
++        fs.fontSize,
++        fs.lineHeight, cs.width, cs.height],
++      start: gate()};
++    ticks().slice(1).forEach(t => { t.checked = true; change(t); });
++    out.partial = gate();
++    ticks()[0].checked = true; change(ticks()[0]);
++    out.ticked = gate();
++    approve();
++    out.approved = gate();
++    return out;
++    """,
++        size="1440,900",
++    )
++    need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
++    # The same count as the table-era test: one tick per item that needs one, plus CP-2A and CP-2G.
++    assert seen["boxes"] == seen["ticks"] == seen["labels"] == len(need) + 2
++    assert seen["reachable"] == seen["boxes"] and seen["linked"] is True
++    assert seen["tick"] == [
++        "4px 10px 4px 6px",
++        "1px",
++        "rgb(242, 213, 138)",
++        "8px",
++        "500",
++        "13px",
++        "18px",
++        "14px",
++        "14px",
++    ]
++    assert seen["start"] == {"approve": True, "approved": False, "submit": True}
++    assert seen["partial"]["approve"] is True
++    assert seen["ticked"] == {"approve": False, "approved": False, "submit": True}
++    assert seen["approved"] == {"approve": False, "approved": True, "submit": False}
++
++
++def test_start_draws_each_module_as_a_dot_row_and_each_group_as_an_answer_row(page):
++    seen = page.run(
++        REVIEW
++        + """
++    const tr = document.querySelector('#rv-ready tr[data-module="CP-4"]');
++    const dot = getComputedStyle(tr, '::before');
++    const answers = [...document.querySelectorAll('#rv-steps .rv-row')];
++    const edits = [...document.querySelectorAll('#rv-steps button')];
++    const first = answers[0];
++    return {S, trCols: getComputedStyle(tr).gridTemplateColumns.split(' ').slice(0, 2),
++      dot: [dot.width, dot.height, dot.borderRadius], pad: getComputedStyle(tr).padding,
++      name: getComputedStyle(tr.querySelector('.mod-name')).fontWeight + ' ' +
++        getComputedStyle(tr.querySelector('.mod-name')).fontSize,
++      stateBelow: box(tr.cells[1]).top >= box(tr.cells[0]).bottom - 1 &&
++        Math.abs(box(tr.cells[1]).left - box(tr.cells[0]).left) < 1,
++      whyRight: box(tr.cells[2]).left > box(tr.cells[0]).right,
++      rows: answers.map(r => r.querySelector('.nm').textContent),
++      edits: edits.map(b => [b.textContent, b.getAttribute('aria-label')]),
++      rowCols: getComputedStyle(first).gridTemplateColumns.split(' ').filter((_, i) => i !== 1),
++      editRight: Math.abs(box(edits[0]).right - box(first).right) < 1,
++      lines: first.querySelector('.ln').textContent.length > 0};
++    """,
++        size="1440,900",
++    )
++    assert seen["trCols"] == ["10px", "200px"]
++    assert seen["dot"] == ["8px", "8px", "50%"] and seen["pad"] == "11px 0px"
++    assert seen["name"] == "600 14px"
++    assert seen["stateBelow"] is True and seen["whyRight"] is True
++    groups = list(seen["rows"])  # Ruling 14: no number
++    assert groups == ["Documents", "Purpose", "Issuer and dates", "Legal"]
++    assert [e[0] for e in seen["edits"]] == ["Edit"] * 4
++    assert [e[1] for e in seen["edits"]] == [f"Edit {g}" for g in groups]
++    assert seen["rowCols"][0] == "200px" and seen["rowCols"][1].endswith("px")
++    assert seen["editRight"] is True and seen["lines"] is True
++
++
++def test_start_is_one_column_with_the_card_last_at_1000px(page):
++    seen = page.run(
++        REVIEW
++        + """
++    const sec = $('st-review');
++    return {cols: getComputedStyle(sec).gridTemplateColumns.split(' ').length,
++      display: getComputedStyle(sec).display, card: box($('rv-card')), steps: box($('rv-steps')),
++      main: box($('canvas')), position: getComputedStyle($('rv-card')).position};
++    """,
++        size="1000,900",
++    )
++    assert seen["card"]["top"] >= seen["steps"]["bottom"]
++    assert seen["card"]["left"] < seen["steps"]["right"]
++    assert seen["position"] == "static" and seen["display"] == "block"
++
++
++RUN_SCREEN = (
++    BOX
++    + f"""
++await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
++await review();
++tickAll(); approve();
++$('submit').click();
++for (let i = 0; i < 200 && ($('run-progress').hidden || !$('run-state').textContent); i++)
++  await settle(50);
++clearTimeout(pollTimer);
++const show = (status, modules) => {{
++  renderRun({{status, stalled: false, reason: '', library_report: '', modules}});
++}};
++"""
++)
++
++
++def test_the_run_screen_has_a_status_pill_a_card_and_two_columns_of_modules(page):
++    seen = page.run(
++        RUN_SCREEN
++        + """
++    const pill = $('run-pill'), look = status => {
++      show(status, [['CP-0', 'done'], ['CP-1', 'running']]);
++      const s = getComputedStyle(pill);
++      return [pill.textContent, $('run-state').textContent, s.backgroundColor, s.color, s.height,
++        s.borderRadius];
++    };
++    const out = {running: look('running'), finished: look('finished'), failed: look('failed'),
++      capped: look('capped'), queued: look('queued')};
++    show('running', [['CP-0', 'done'], ['CP-1', 'running'], ['CP-2A', 'waiting'],
++      ['Report', 'waiting']]);
++    const items = [...document.querySelectorAll('#run-modules>li')];
++    const row = items[0].firstElementChild;
++    const rs = getComputedStyle(row), card = $('run-card');
++    const title = document.querySelector('#run-progress h2');
++    Object.assign(out, {
++      checks: items.map(li => li.querySelectorAll('.ring svg').length),
++      states: items.map(li => li.dataset.state || li.firstElementChild.dataset.state),
++      ring: [box(items[0].querySelector('.ring')).width,
++        box(items[1].querySelector('.ring')).width],
++      rowCols: rs.gridTemplateColumns.split(' ').slice(0, 1), rowPad: rs.padding,
++      list: Number(getComputedStyle($('run-modules')).columnCount),
++      first: box(items[0]), second: box(items[1]), third: box(items[2]),
++      card: box(card), mods: box($('run-modules')),
++      inCard: ['run-id', 'run-state', 'run-reason', 'run-from-note', 'run-error', 'run-report']
++        .map(id => card.contains($(id))),
++      title: [title.textContent, getComputedStyle(title).fontWeight,
++        getComputedStyle(title).fontSize,
++        getComputedStyle(title).lineHeight],
++      head: ['run-activity', 'run-again', 'another']
++        .map(id => $('run-progress').querySelector('.rp-head').contains($(id))),
++      head1: [box(document.querySelector('.page-head h1')).height > 0,
++        document.querySelector('.page-head h1').textContent,
++        box($('reset')).height > 0, getComputedStyle(document.querySelector('.stagebar')).display,
++        box(document.querySelector('.page-head h1')).bottom <= box(title).top,
++        box($('reset')).bottom <= box($('run-pill')).top],
++      cols: getComputedStyle($('run-progress').querySelector('.rp-main')).gridTemplateColumns,
++      gap: getComputedStyle($('run-progress').querySelector('.rp-main')).columnGap,
++      lead: $('run-progress').querySelector('.lead').textContent});
++    return out;
++    """,
++        size="1440,900",
++    )
++    assert seen["running"][:2] == ["running", "running"]
++    assert seen["queued"][:2] == ["queued", "queued"]
++    assert seen["running"][2:] == ["rgb(238, 240, 255)", "rgb(0, 18, 179)", "24px", "999px"]
++    assert seen["queued"][2:4] == ["rgb(238, 240, 255)", "rgb(0, 18, 179)"]
++    assert seen["finished"][2:] == ["rgb(233, 245, 238)", "rgb(14, 122, 70)", "24px", "999px"]
++    for status in ("failed", "capped"):
++        assert seen[status][:2] == [status, status]
++        assert seen[status][2:] == ["rgb(254, 243, 242)", "rgb(179, 38, 30)", "24px", "999px"]
++    assert seen["checks"] == [1, 0, 0, 0]
++    assert seen["states"] == ["done", "running", "waiting", "waiting"]
++    assert seen["ring"] == [18, 18] and seen["rowCols"] == ["18px"]
++    assert seen["rowPad"] == "10px 0px"
++    # Two columns that read down: the second module sits under the first, not beside it.
++    assert seen["list"] == 2 and seen["second"]["top"] >= seen["first"]["bottom"] - 1
++    assert abs(seen["second"]["left"] - seen["first"]["left"]) < 1
++    assert seen["third"]["left"] > seen["first"]["right"]
++    assert seen["cols"].endswith(" 360px") and seen["gap"] == "40px"
++    assert seen["card"]["width"] == 360 and seen["card"]["left"] > seen["mods"]["right"]
++    assert all(seen["inCard"]) and all(seen["head"])
++    assert seen["title"] == ["Run started", "600", "24px", "32px"]
++    assert seen["head1"] == [True, "Start a run", True, "none", True, True]
++    assert seen["lead"] == "This run was submitted once. It is not repeated by reloading this page."
++
++
++def test_the_run_screen_and_start_do_not_scroll_sideways_at_375px(page):
++    seen = page.run(
++        """
++    const measure = async () => {
++      window.resizeTo(375, 812); await settle(300);
++      await issuer('credit_snapshot', [file('annual.txt', REPORT_JS)]);
++      await review();
++      const out = {inner: innerWidth, start: document.documentElement.scrollWidth,
++        startCols: getComputedStyle($('st-review')).display};
++      tickAll(); approve();
++      $('submit').click();
++      for (let i = 0; i < 200 && ($('run-progress').hidden || !$('run-state').textContent); i++)
++        await settle(50);
++      clearTimeout(pollTimer);
++      renderRun({status: 'running', stalled: false, reason: '', library_report: '',
++        modules: [['CP-0', 'done'], ['CP-1', 'running'], ['CP-2A', 'waiting'],
++          ['Report', 'waiting']]});
++      out.run = document.documentElement.scrollWidth;
++      out.list = Number(getComputedStyle($('run-modules')).columnCount);
++      out.main = getComputedStyle(document.querySelector('#run-progress .rp-main'))
++        .gridTemplateColumns.split(' ').length;
++      return out;
++    };
++    if (window.opener) { window.opener.NARROW = await measure(); return {popup: true}; }
++    window.open(location.href, 'narrow', 'popup,width=375,height=812');
++    for (let i = 0; i < 400 && !window.NARROW; i++) await settle(100);
++    return window.NARROW;
++    """.replace("REPORT_JS", json.dumps(REPORT))
++    )
++    assert seen["inner"] == 375 and seen["start"] == 375 and seen["run"] == 375
++    assert seen["list"] == 1 and seen["main"] == 1
++
++
++def test_the_stepper_keeps_a_separator_with_the_step_before_it_when_it_wraps(page):
++    seen = page.run(
++        BOX
++        + REPORT_FILE
++        + """
++    pick('data-k="pathway"', 'credit_snapshot'); level('standard');
++    // Visiting Confirm and More context with their answers missing marks them "Needs attention",
++    // which widens them: five steps then need two lines.
++    gotoStep('confirm'); gotoStep('more'); gotoStep('purpose');
++    const lis = [...document.querySelectorAll('#stepper li')];
++    const tops = lis.map(li => Math.round(box(li).top));
++    const leaders = lis.filter((li, i) => i === 0 || tops[i] !== tops[i - 1]);
++    return {n: lis.length, lines: new Set(tops).size, wide: innerWidth, high: innerHeight,
++      leaders: leaders.map(li => li.firstElementChild.tagName),
++      seps: lis.map(li => li.querySelectorAll('.sep').length),
++      sepAfter: lis.map(li => !!li.querySelector('.sep') &&
++        li.querySelector('.sep').previousElementSibling === li.querySelector('button')),
++      ariaHidden: [...document.querySelectorAll('#stepper .sep')]
++        .every(s => s.getAttribute('aria-hidden') === 'true')};
++    """,
++        size="1280,800",
++    )
++    assert seen["n"] == 5 and seen["wide"] == 1280
++    assert seen["lines"] == 2  # the premise: five steps wrap at this size
++    assert seen["leaders"] == ["BUTTON", "BUTTON"]  # no line begins with a "›"
++    assert seen["seps"] == [1, 1, 1, 1, 0]  # four separators, each after the step before it
++    assert seen["sepAfter"] == [True, True, True, True, False] and seen["ariaHidden"] is True
++
++
++# ---- Whole-branch review fixes (2026-11-12) ------------------------------------------------------
++
++IN_VIEW = """
++const inView = el => {
++  const main = $('canvas'), wide = getComputedStyle(main).overflowY !== 'visible';
++  const r = el.getBoundingClientRect();
++  const c = wide ? main.getBoundingClientRect() : {top: 0, bottom: innerHeight};
++  return r.height > 0 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1; };
++const click = async el => { el.click(); await settle(60); };
++"""
++
++
++@pytest.mark.parametrize("size", ["1440,900", "720,900"])
++def test_a_button_that_opens_a_later_group_of_a_step_leaves_its_heading_in_view(page, size):
++    seen = page.run(
++        IN_VIEW
++        + f"""
++    const T = {{}};
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)}),
++      file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
++    await click($('next')); pick('data-k="pathway"', 'credit_snapshot'); level('standard');
++    await click($('next')); T.confirmTop = [$('canvas').scrollTop, scrollY];
++    type('i-issuer_name', 'Acme Corp'); type('d-as_of', '2026-10-31');
++    pick('data-k="issue_classification"', 'high_yield');
++    await click($('next')); T.moreTop = [$('canvas').scrollTop, scrollY];
++    await click($('next')); await summarised(); await settle(80);
++    T.edit = {{}};
++    for (const g of ['issuer', 'legal', 'market', 'valuation', 'assumptions']) {{
++      await click(document.querySelector(`#rv-steps [data-goto="${{g}}"]`)); await settle(80);
++      const a = document.activeElement;
++      T.edit[g] = [a.tagName, inView(a), a.closest('section').dataset.st];
++      gotoStep('start'); await summarised(); await settle(60);
++    }}
++    return T;
++    """,
++        size=size,
++    )
++    assert seen["confirmTop"] == [0, 0] and seen["moreTop"] == [0, 0]
++    assert all(v[0] == "H2" and v[1] for v in seen["edit"].values()), seen["edit"]
++    assert {g: v[2] for g, v in seen["edit"].items()} == {g: g for g in seen["edit"]}
++
++
++def test_the_start_module_rows_stack_at_375px_and_leave_the_reason_wide(page):
++    seen = page.run(
++        """
++    const measure = async () => {
++      window.resizeTo(375, 812); await settle(300);
++      await issuer('credit_snapshot', [file('annual.txt', REPORT_JS)]);
++      await review(); await settle(100);
++      const row = document.querySelector('#rv-ready tr[data-module]');
++      return {inner: innerWidth, why: Math.round(row.children[2].getBoundingClientRect().width),
++        docW: document.documentElement.scrollWidth,
++        facts: Math.min(...[...document.querySelectorAll('#rv-facts dd')]
++          .map(d => Math.round(d.getBoundingClientRect().width)))};
++    };
++    if (window.opener) { window.opener.NARROW = await measure(); return {popup: true}; }
++    window.open(location.href, 'narrow', 'popup,width=375,height=812');
++    for (let i = 0; i < 300 && !window.NARROW; i++) await settle(100);
++    return window.NARROW;
++    """.replace("REPORT_JS", json.dumps(REPORT))
++    )
++    assert seen["inner"] == 375 and seen["docW"] == 375
++    assert seen["why"] >= 200, seen
++    assert seen["facts"] >= 200, (
++        seen
++    )  # the card's facts stack too: the value is not squeezed beside its label
++
++
++def test_the_readiness_pill_is_not_shown_on_the_run_screen_or_when_the_submission_is_gone(page):
++    page.run(f"""
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    type('i-issuer_name', 'Acme Corp');
++    const saved = JSON.parse(localStorage.getItem('run-start/1'));
++    saved.id = 'f'.repeat(32); localStorage.setItem('run-start/1', JSON.stringify(saved));
++    return {{}};
++    """)
++    gone = page.run("""
++    const shown = el => el.getClientRects().length > 0;
++    const out = {gone: shown($('submission-gone')), first: shown($('panel-pill'))};
++    type('i-issuer_name', 'Acme Corp II'); out.after = shown($('panel-pill'));
++    return out;
++    """)
++    assert gone["gone"] is True and gone["first"] is False and gone["after"] is False
++    run = page.run(
++        f"""
++    const shown = el => el.getClientRects().length > 0;
++    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
++    await review(); tickAll(); approve(); $('submit').click();
++    for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
++    clearTimeout(pollTimer);
++    return {{progress: shown($('run-progress')), pill: shown($('panel-pill'))}};
++    """
++    )
++    assert run == {"progress": True, "pill": False}
++
++
++def test_next_is_never_labelled_skip(page):
++    seen = page.run(
++        """
++    await uploadFiles([file('annual.txt', REPORT_JS)]);
++    const labels = [];
++    const cases = [['credit_snapshot', 'basic'], ['relative_value', 'standard'],
++      ['distressed_restructuring', 'advanced']];
++    for (const [p, l] of cases) {
++      gotoStep('purpose'); pick('data-k="pathway"', p); level(l);
++      for (const st of ['documents', 'purpose', 'confirm', 'more']) {
++        gotoStep(st); labels.push($('next-t').textContent);
++      }
++    }
++    return {labels};
++    """.replace("REPORT_JS", json.dumps(REPORT))
++    )
++    assert "Skip" not in seen["labels"] and len(seen["labels"]) == 12
++
++
++def test_the_scope_line_shows_after_a_reload_on_any_step_but_documents(page):
++    page.run(f"""
++    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
++    pick('data-k="pathway"', 'credit_snapshot');
++    return {{}};
++    """)
++    seen = page.run("""
++    const out = {documents: $('scope').textContent};
++    gotoStep('confirm'); out.confirm = $('scope').textContent;
++    return out;
++    """)
++    assert (
++        seen["documents"] == ""
++        and "Credit Snapshot" in seen["confirm"]
++        and "modules" in seen["confirm"]
++    )
++
++
++def test_your_answers_rows_carry_no_number(page):
++    seen = page.run(
++        f"""
++    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
++    await review();
++    return {{rows: [...document.querySelectorAll('#rv-steps dt')].map(d => d.textContent)}};
++    """
++    )
++    assert seen["rows"] and not any(re.match(r"\d", r) for r in seen["rows"]), seen
