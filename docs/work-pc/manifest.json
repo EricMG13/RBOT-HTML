@@ -10,7 +10,7 @@
   "AGENTS.md": "079b50251f9e1cd206308107d7769489acc909a6",
   "METHODOLOGY-REVIEW.md": "e032dbeac2c3339bb67b892681f27eb8799a862a",
   "README.md": "22ec5919f870f792e44a16bdba0b037897551a96",
-  "VERIFICATION.md": "2876e77ecd8e23b5a05079cebf2dbdc140141e19",
+  "VERIFICATION.md": "b3eb3b01b5bd55bc0f4178efd55fa33707eef3f7",
   "apps/issuer-library/README.md": "c9cd875b6235b56f7a36d0f9a94165458fa39bbf",
   "apps/issuer-library/credit_os/SOURCE.md": "416f41db22c1c0a9b4ec88c8887ab43c0ce06edb",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -89,7 +89,7 @@
   "cases/pricing/sol-long-context.json": "1094e044565fd140c14fd78fcd989c1d401da2c8",
   "docs/COPILOT.md": "a3c1dd380b72d48cae0b4be15e2532105b7fc5ea",
   "docs/QUALITY-GATE.md": "dec575c401c907c337b62a9c1fd4b1c89d163a86",
-  "docs/VERIFICATION-ARCHIVE.md": "564fec5e5b3a72ea491241de74d24d760dfd93b9",
+  "docs/VERIFICATION-ARCHIVE.md": "0bdec7cf3d3155a98124b3b4b10f4bf9852261f9",
   "docs/design/2026-11-09-module-report-findings.md": "b87f1d48895cc4e9fb2715b744402e65c000c9bc",
   "docs/design/2026-11-09-module-report-plan.md": "9bcd5ca45855a4c6510644d252ba19406ae4a346",
   "docs/design/2026-11-09-module-report-spec.md": "5b9a9dd1457364f862851b4f9b510f36c56e3c59",
@@ -791,6 +791,6 @@
   "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "754756913ea7cb64800f0998a1fa7f9c71a47f78",
- "head_date": "2026-11-12T16:27:25Z"
+ "head": "8e53c1991e69f0b24756d871e1ec5a5e062bf8a0",
+ "head_date": "2026-11-12T17:09:17Z"
 }
