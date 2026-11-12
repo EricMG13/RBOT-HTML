@@ -547,3 +547,213 @@ def test_the_forecast_inputs_block_holds_no_reader_figure() -> None:
     assert len(figure_issues(text)) == 1
     held = bottom("The EBITDA margin was 31.7% last year.", CALCULATIONS.replace("3.1x", "31.7%"))
     assert figure_issues(held) == ()
+
+
+# ---- Decisions 7 and 8 of 2026-11-12: every section the Modules page shows; pipeline wording; the
+# bottom line's length. Answer keys are literal: the check number, the line and the section.
+
+
+def under(heading: str, body: str, h2: str = "Findings") -> str:
+    """A handoff with a clean Bottom line, then the section `heading` (such as `### Method`)."""
+    return f"# Handoff\n\n## {h2}\n\n### Bottom line\n\nThe view holds.\n\n{heading}\n\n{body}\n"
+
+
+def named(issues: tuple[str, ...]) -> list[tuple[int, int, str]]:
+    """(check, line, section) of each issue; the section is '' when the issue names none."""
+    out = []
+    for issue in issues:
+        match = re.match(
+            r'Prose check (\d+) \(.*\), line (\d+): ".*?"(?: in section "(.*)")? — ', issue
+        )
+        assert match, issue
+        out.append((int(match[1]), int(match[2]), match[3] or ""))
+    return out
+
+
+@pytest.mark.parametrize(
+    ("sentence", "check"),
+    [
+        ("Cover comes from CP-2D here.", 2),
+        ("The covenant is on page 12 of it.", 3),
+        ("Cover is thin [1] here.", 4),
+        ("The hash is 0123456789abcdef0123 here.", 5),
+    ],
+)
+def test_checks_2_to_5_read_a_method_style_section_and_name_it(sentence: str, check: int) -> None:
+    text = under("### Method", sentence)
+    assert {c for c, _, _ in named(prose_issues(text))} == {check}
+    assert {(line, section) for _, line, section in named(prose_issues(text))} == {(11, "Method")}
+
+
+def test_checks_2_to_5_read_calculations_gaps_and_the_findings_lead_in() -> None:
+    calc = under("### Method", "Fine.\n\n## Calculations\n\nSee CP-2D.")
+    assert named(prose_issues(calc)) == [(2, 15, "Calculations")]
+    gaps = under("### Method", "Fine.\n\n## Gaps\n\nSee CP-2D.")
+    assert named(prose_issues(gaps)) == [(2, 15, "Gaps")]
+    lead = "# H\n\n## Findings\n\nSee CP-2D.\n\n### Bottom line\n\nThe view holds.\n"
+    assert named(prose_issues(lead)) == [(2, 5, "Findings")]
+
+
+def test_a_reader_passage_issue_keeps_its_message_and_check_10_names_the_passage() -> None:
+    assert named(prose_issues(bottom("Cover from CP-2D, per the pack."))) == [
+        (2, 7, ""),
+        (10, 7, "Bottom line"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "handoff",
+        "handoffs",
+        "this transport",
+        "the pack",
+        "fact pack",
+        "source pack",
+        "canonical",
+        "re-anchor",
+        "re-anchoring",
+        "helper script",
+        "helper scripts",
+        "upstream module",
+        "downstream module",
+        "downstream owner",
+        "downstream work",
+        "downstream analysis",
+        "downstream use",
+        "Handoff",
+        "THE PACK",
+    ],
+)
+@pytest.mark.parametrize("where", ["passage", "method", "gaps"])
+def test_check_10_refuses_each_banned_phrase_in_a_passage_and_in_another_section(
+    phrase: str, where: str
+) -> None:
+    sentence = f"The note about {phrase} stays."
+    text = {
+        "passage": bottom(sentence),
+        "method": under("### Method", sentence),
+        "gaps": under("### Method", "Fine.\n\n## Gaps\n\n" + sentence),
+    }[where]
+    assert [c for c, _, _ in named(prose_issues(text))] == [10]
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Consumer demand is steady.",
+        "Upstream operations feed the plants.",
+        "The transport sector is cyclical.",
+        "Debt was USD 1,250 million on EBITDA in FY2024.",
+        "Downstream demand for parts is weak.",
+        "The downstream segment is small.",
+        "A package of measures; the packs are small.",
+        "Handsets and canon are not banned.",
+        "The upstream module was not run.".replace("upstream module", "upstream supplier"),
+    ],
+)
+def test_check_10_passes_ordinary_credit_language(sentence: str) -> None:
+    assert prose_issues(under("### Method", sentence)) == ()
+
+
+@pytest.mark.parametrize(
+    ("token", "found"),
+    [
+        ("qa_status", "qa_status"),
+        ("READY_WITH_LIMITATIONS", "READY_WITH_LIMITATIONS"),
+        ("tdg_annual_report.pdf", "tdg_annual_report"),
+    ],
+)
+def test_check_10_refuses_snake_case_and_caps_underscore_tokens(token: str, found: str) -> None:
+    issues = prose_issues(under("### Method", f"The status is {token} today."))
+    assert named(issues) == [(10, 11, "Method")]
+    assert f'"{found}' in issues[0]
+
+
+def test_check_10_leaves_other_underscore_text_alone() -> None:
+    # digits or capitals on a side do not make a snake_case token; no letter makes no caps token
+    assert prose_issues(under("### Method", "Items 12_34 and Ab_1 and a_1 are listed.")) == ()
+
+
+def test_a_file_name_in_a_sentence_is_refused_only_as_a_snake_case_token() -> None:
+    # Decision: a file name in a sentence is a source reference in narrative; the checks refuse it
+    # only through its form (snake_case): `10-K.htm` alone passes, `tdg_10k_report.pdf` does not.
+    assert prose_issues(under("### Method", "See 10-K.htm for it.")) == ()
+    assert named(prose_issues(under("### Method", "See tdg_10k_report.pdf for it."))) == [
+        (10, 11, "Method")
+    ]
+
+
+FILE = "tdg_annual_report.pdf"
+
+
+def test_a_file_name_and_pipeline_text_in_a_table_a_fence_or_a_basis_line_pass() -> None:
+    body = (
+        f"| Source | Use |\n| --- | --- |\n| {FILE} | the pack, CP-2D, qa_status [1] |\n\n"
+        "```\nthe handoff CP-2D page 4 qa_status READY_WITH_LIMITATIONS\n```\n\n"
+        f"Prose here.\nBasis: {FILE}, p. 4; the pack; CP-2D; qa_status\n\n"
+        f"- Item.\n  Basis: {FILE}, page 4\n"
+    )
+    assert prose_issues(under("### Method", body)) == ()
+    assert prose_issues(under("### Method", "Fine.\n\n## Calculations\n\n" + body)) == ()
+
+
+def test_the_same_text_in_a_sentence_is_refused() -> None:
+    body = f"Prose here.\nBasis: {FILE}, p. 4; the pack\nMore prose follows."
+    # A Basis line that does not end its paragraph is sentence text (existing rule)
+    assert {c for c, _, _ in named(prose_issues(under("### Method", body)))} == {3, 10}
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "### Chart data: leverage",
+        "### Map: ownership",
+        "### Events: Legal",
+        "### Forecast inputs (machine-readable)",
+        "### Confidence inputs",
+    ],
+)
+def test_data_sections_are_not_sentence_text(heading: str) -> None:
+    assert prose_issues(under(heading, "See CP-2D, qa_status, page 4 and the pack [1].")) == ()
+
+
+def test_a_section_after_a_data_section_is_read_again() -> None:
+    text = under("### Chart data: leverage", "Fine.\n\n### Method\n\nSee CP-2D.")
+    assert named(prose_issues(text)) == [(2, 15, "Method")]
+
+
+def test_check_6_stays_on_the_reader_passages() -> None:
+    table = "\n## Calculations\n\n| Calculation | Value |\n| --- | --- |\n| C3 | 5 |\n"
+    assert prose_issues(under("### Method", "Measure C3 is high.") + table) == ()
+    assert [c for c, _, _ in named(prose_issues(bottom("Measure C3 is high.", table)))] == [6]
+
+
+def words(count: int) -> str:
+    return " ".join(["word"] * count)
+
+
+def test_a_first_sentence_of_46_words_is_refused_and_45_pass() -> None:
+    assert prose_issues(bottom(f"{words(45)}. More follows.")) == ()
+    issues = prose_issues(bottom(f"{words(46)}. More follows."))
+    assert named(issues) == [(1, 7, "Bottom line")]
+    assert "46 words" in issues[0]
+
+
+def test_a_bottom_line_of_181_words_is_refused_and_180_pass() -> None:
+    assert prose_issues(bottom(f"Short view.\n\n{words(178)}.")) == ()
+    issues = prose_issues(bottom(f"Short view.\n\n{words(179)}."))
+    assert named(issues) == [(1, 5, "Bottom line")]
+    assert "181 words" in issues[0]
+
+
+def test_bottom_line_words_exclude_tables_fences_and_basis_lines() -> None:
+    tail = f"\n| A | B |\n| - | - |\n| {words(100)} | x |\n\n```\n{words(100)}\n```\n"
+    assert prose_issues(bottom(f"Short view.\nBasis: {words(100)}", tail)) == ()
+
+
+def test_a_decimal_or_a_closing_bold_does_not_hide_a_long_first_sentence() -> None:
+    assert [c for c, _, _ in named(prose_issues(bottom(f"Cover is 3.1x {words(45)}. Then.")))] == [
+        1
+    ]
+    assert prose_issues(bottom(f"**Short view.** {words(60)}.")) == ()

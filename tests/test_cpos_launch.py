@@ -1602,6 +1602,19 @@ def test_the_checker_rejects_a_module_code_in_a_key_finding(tmp_path):
     assert any(i.startswith("Prose check 2") and "CP-2D" in i for i in issues), issues
 
 
+def test_the_checker_rejects_pipeline_wording_after_the_reader_passages(tmp_path):
+    issues = prose_issues_of(
+        tmp_path,
+        "CP-4",
+        lambda raw: raw.replace(
+            "## Calculations", "## Calculations\n\nThe helper scripts were not run.", 1
+        ),
+    )
+    assert any(
+        i.startswith("Prose check 10") and 'in section "Calculations"' in i for i in issues
+    ), issues
+
+
 def test_the_checker_rejects_a_bare_figure(tmp_path):
     issues = prose_issues_of(
         tmp_path, "CP-4", lambda raw: raw.replace("cover is thin at 3.1x", "debt is 1,250")
