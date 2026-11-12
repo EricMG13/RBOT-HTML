@@ -1319,3 +1319,224 @@ def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_pat
     assert seen["fits"] is True and seen["fitsOpen"] is True
     # The inspector: 340px at 1440, 300px at 1280.
     assert abs(seen["inspectorWidth"] - (340 if width == 1440 else 300)) <= 1
+
+
+MODULE_PAGE_PROBE = (
+    Path(__file__).with_name("browser_probe_module_page.js").read_text(encoding="utf-8")
+)
+INK = "rgb(11, 16, 48)"  # --text-primary
+NEW_FORMAT_RUN = "synthetic-nbg-new-format-001"
+
+
+def read_module_page(page: Path, route: str, width: int = 1440) -> dict:
+    (page.parent / "probe.js").write_text(MODULE_PAGE_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, route, width)
+    assert console == []
+    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+
+
+def synthetic_workspace(workspace: Path, edit=lambda text: text) -> Path:
+    """The synthetic new-format run, built by the real entry points; `edit` may change the CP-2
+    handoff first."""
+    fixtures = ROOT / "apps/issuer-library/fixtures"
+    handoffs = workspace / "handoffs-in"
+    shutil.copytree(fixtures / "synthetic-new-format", handoffs)
+    cp2 = handoffs / "SYNTHETIC-CP-2.md"
+    cp2.write_text(edit(cp2.read_text(encoding="utf-8")), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(
+        "build_synthetic_run", fixtures / "build_synthetic_run.py"
+    )
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    builder.SOURCE_DIR = handoffs
+    builder.build(workspace, builder.DEFAULT_FOLDER)
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "apps/issuer-library/update_library.py"),
+            "--workspace",
+            str(workspace),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return workspace / "library/index.html"
+
+
+def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
+    seen = read_module_page(nine_part_library(tmp_path), "#CP-1/head?c=run-a")
+    # Head: the group is the eyebrow with the name, tools kept, the Handoff link quiet.
+    head = seen["head"]
+    assert head["h2"] == "Financial foundation"
+    assert (head["size"], head["transform"]) == ("12px", "uppercase")
+    assert "Financial performance" in head["text"] and "has-bottom-line" in head["cls"]
+    assert head["download"]["href"].endswith("CP-1.md") and head["download"]["icon"] == 1
+    assert head["download"]["border"] == "0px"
+    assert head["toolsRight"] <= head["headRight"]
+    # Bottom line: the quoted text is the headline, no navy band.
+    bottom = seen["bottom"]
+    assert bottom["firstText"] == "Financial foundation bottom line."
+    assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
+    assert bottom["bg"] in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)")
+    for word in ("Confidence", "Main limitation", "Quoted from the handoff", "View source"):
+        assert word in bottom["text"], word
+    for line in bottom["lines"]:
+        assert (line["size"], line["line"], line["color"], line["label"]) == (
+            "13px",
+            "18px",
+            "rgb(58, 64, 86)",
+            "600",
+        )
+    assert bottom["badgeClass"] == "badge badge-gray" and bottom["linkBorder"] == "0px"
+    # Prose, charts, folds.
+    assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
+    assert seen["prose"]["width"] <= 640
+    assert seen["cards"] and all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
+    folds = {f["id"]: f for f in seen["folds"]}
+    assert set(folds) == {"reference", "calculations", "audit"}
+    for fold in folds.values():
+        assert (fold["display"], fold["radius"]) == ("flex", "10px"), fold
+    assert folds["reference"]["children"] == ["Statements and registers", "3 tables · 8 rows"]
+    assert folds["calculations"]["children"] == ["Calculations", "11 words"]
+    assert folds["audit"]["children"][0] == "Evidence & audit"
+    assert folds["audit"]["text"].endswith("14 sections · unchanged from the handoff")
+    # The finding: one item, no pill, the same Basis control.
+    [finding] = seen["findings"]
+    assert finding["pills"] == 0
+    for word in (
+        "Interest was paid in cash.",
+        "Creditor impact",
+        "K, page:123 says “Cash paid during the period”.",
+        "Confidence High",
+    ):
+        assert word in finding["text"], word
+    assert len(finding["basis"]) == 1 and finding["basis"][0]["paragraph"].endswith("CP-1.md:16")
+    lead = seen["finding0"]
+    assert (lead["size"], lead["line"], lead["weight"]) == ("15px", "24px", "600")
+    assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 23, 229)", "0px")
+    assert (lead["impact"]["size"], lead["impact"]["line"]) == ("14px", "21px")
+    # Limits: grey dot, 14px/21px secondary.
+    limit = seen["limit"]
+    assert (limit["size"], limit["line"], limit["color"], limit["dotWidth"]) == (
+        "14px",
+        "21px",
+        "rgb(58, 64, 86)",
+        "6px",
+    )
+    assert seen["fits"] is True
+
+
+def test_a_module_page_with_no_bottom_line_draws_its_name_as_the_headline(tmp_path):
+    run = make_run(
+        tmp_path,
+        "run-a",
+        as_of="2024-12-31",
+        modules=("CP-0", "CP-1", "CP-8"),
+        cp8=(
+            "# CP-8 handoff\n\n## Request\nChanges.\n\n"
+            "## Findings\n\nA note.\n\n## Sources\n- fixture\n"
+        ),
+    )
+    assert run.is_dir()
+    update_library.update_library(tmp_path)
+    seen = read_module_page(tmp_path / "library/index.html", "#CP-8/head?c=run-a")
+    head = seen["head"]
+    assert "bottom" not in seen and "has-bottom-line" not in head["cls"]
+    assert (head["size"], head["transform"]) == ("22px", "none")
+    assert "Decision and review" in head["text"] and head["h2"] == "Changes since the last run"
+
+
+@pytest.mark.parametrize("width", [1440, 1280])
+def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(tmp_path, width):
+    page = synthetic_workspace(tmp_path)
+    seen = read_module_page(page, f"#CP-2?c={NEW_FORMAT_RUN}", width)
+    head = seen["head"]
+    assert (head["h2"], head["size"], head["transform"]) == (
+        "Fundamental credit",
+        "12px",
+        "uppercase",
+    )
+    bottom = seen["bottom"]
+    [hidden] = [h for h in bottom["headings"] if h["text"] == "Bottom line"]
+    assert "sr-only" in hidden["cls"] and hidden["srOnly"] is True
+    assert bottom["firstText"].startswith("Creditors are exposed to refinancing risk")
+    assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
+    assert seen["keyItem"]["size"] == "15px"
+    assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 23, 229)")
+    assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
+    assert seen["prose"]["width"] <= 640
+    assert all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
+    assert seen["fits"] is True
+    # Limitations: grey dot list.
+    assert (seen["limit"]["dotWidth"], seen["limit"]["size"]) == ("6px", "14px")
+    # The inspector opened from a figure: the figure leads, large, before the context line.
+    fig = seen["fromFigure"]
+    assert fig["figure"]["size"] == "22px" and fig["figure"]["before"] is True
+    assert fig["figure"]["text"] == "USD 1,390 million" and fig["h2"]["srOnly"] is True
+    assert fig["card"] == "10px" and fig["fits"] is True
+    assert fig["context"]["size"] == "13px" and fig["context"]["color"] == "rgb(58, 64, 86)"
+    for literal in (
+        "Back to analysis",
+        "Esc",
+        "Evidence inspector",
+        "Fundamental credit · Line 17",
+        "Bottom line",
+        "Not classified",
+        "Paragraph",
+        (
+            "Creditors are exposed to refinancing risk rather than to weak earnings: "
+            "net debt of USD 1,390 million is 4.2x earnings, and the next maturities "
+            "fall inside two years."
+        ),
+        "Figure",
+        "USD 1,390 million",
+        "Basis",
+        "NBG_2025-03-31_annual-report.pdf, page 41",
+        "Calculation K1",
+        "Net debt to EBITDA",
+        "Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331",
+        "4.2x",
+        "Other citations",
+        "Citation gap · NBG_2025-03-31_annual-report.pdf p.41 · not in inventory",
+        "the Basis file is not in the Source readiness inventory",
+        "Source location",
+        "Download retained handoff",
+        "Fundamental credit handoff",
+        "Northbridge Synthetic Group · SYNTHETIC-NBG-NEW-FORMAT-001 · saved output",
+        "Reading boundary",
+        "The library does not authenticate the underlying PDFs.",
+    ):
+        assert literal in fig["text"], literal
+    assert len(fig["links"]) == 1 and fig["links"][0].endswith("CP-2.md")
+    # Opened from a Basis control: no figure; the eyebrow is the drawn "Evidence inspector".
+    chip = seen["fromChip"]
+    assert chip["hasFigure"] is False and chip["h2"]["srOnly"] is False
+    assert chip["card"] == "10px" and chip["fits"] is True
+    for literal in (
+        "Back to analysis",
+        "Fundamental credit · Line 26",
+        "Key findings",
+        (
+            "Liquidity support rests on an undrawn revolver that steps down, "
+            "which narrows the cushion over time."
+        ),
+        "NBG_2024-12-31_Q4-results.pdf, page 7",
+        "Citation gap · NBG_2024-12-31_Q4-results.pdf p.7 · not in inventory",
+        "Download retained handoff",
+    ):
+        assert literal in chip["text"], literal
+
+
+def test_a_two_paragraph_bottom_line_draws_both_in_the_headline_style(tmp_path):
+    second = "A second paragraph: the covenant package is untested.\n"
+
+    def edit(text: str) -> str:
+        marker = "\n### Key findings"
+        assert marker in text
+        return text.replace(marker, "\n" + second + marker, 1)
+
+    seen = read_module_page(synthetic_workspace(tmp_path, edit), f"#CP-2?c={NEW_FORMAT_RUN}")
+    paragraphs = seen["bottom"]["ps"]
+    assert len(paragraphs) == 2 and paragraphs[1]["text"] == second.strip()
+    assert [p["size"] for p in paragraphs] == ["22px", "22px"]

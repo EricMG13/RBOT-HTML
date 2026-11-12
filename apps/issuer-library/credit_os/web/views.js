@@ -407,7 +407,7 @@ const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','
 const HANDOFF_TEXT=['handoff-text','Full handoff text'];
 // A leading method code (R36) is dropped from a displayed heading or caption.
 const METHOD_CODE=/^([A-Z][A-Z0-9]*\.[A-Z]?\d+|[a-z0-9]+(\.[a-z0-9_]+)+)\s+—\s+/;
-const headingView=(heading,tag)=>`<${tag}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
+const headingView=(heading,tag,cls='')=>`<${tag}${cls?` class="${cls}"`:''}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
 // The sections the store placed here that have something to draw, in handoff order.
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
@@ -484,13 +484,16 @@ function reportHead(id) {
   const acceptance=runAcceptanceText(context);
   const declared=declaredBadge(out.state.declared);
   const notAssessable=isNewFormat(out.sections)&&blocked(out.sections,out.state)?badge('gray','Not assessable'):'';
-  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  const group=groups.find(([,items])=>items.some(item=>item[0]===module))?.[0];
+  // A bottom line: the earlier format's Reader summary or call; the new format's Bottom line passage. With one, the name is the eyebrow and the bottom line the headline.
+  const hasBottom=isNewFormat(out.sections)?Boolean(readerPassages(out.sections).bottom):Boolean(out.summary||out.call);
+  return `<div class="module-head${hasBottom?' has-bottom-line':''}" id="head"><div class="head-title">${group?`<span class="head-group">${esc(group)}</span>`:''}<h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
   if(!quoted)return '';
   const facts=summary?`<dl><span class="row"><dt>Confidence</dt><dd>${esc(summary.confidence)}</dd></span><span class="row"><dt>Main limitation</dt><dd>${rich(summary.limitation)}</dd></span></dl>`:'';
-  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${handoffLabel(source)}, line ${quoted.line}`)}">View source</button></div></div>`;
+  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge badge-gray">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${handoffLabel(source)}, line ${quoted.line}`)}">View source</button></div></div>`;
 }
 // One chip-dot legend per set of charts, under the last card.
 // A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
@@ -506,7 +509,7 @@ function reportNumbers(id) {
 // Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
 const findingRows=id=>data[id].summary?.findings??[];
 function findingArticle(id,row) {
-  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</aside></article>`;
+  return `<article class="finding"><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p><p class="finding-line"><span class="conf">Confidence ${esc(plain(row.confidence))}</span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</p></article>`;
 }
 function reportFindings(id) {
   const articles=findingRows(id).map(row=>findingArticle(id,row));
@@ -528,7 +531,11 @@ function reportAnalysis(id) {
   return sections.length?`<section class="part" id="analysis"><h3>Analysis</h3>${readingSections(id,sections)}</section>`:'';
 }
 // A closed part: nothing is cut, it opens to the whole sections (a hash route or a chip into it opens it, screen.js).
-const fold=(anchor,summary,body)=>`<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}${esc(summary)}</summary>${body}</details>`;
+// The summary is a row: its title, then (after the first " · ") a detail drawn at the right.
+function fold(anchor,summary,body) {
+  const at=summary.indexOf(' · '),title=at<0?summary:summary.slice(0,at),detail=at<0?'':summary.slice(at+3);
+  return `<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}<span class="fold-title">${esc(title)}</span>${detail?`<span class="fold-detail">${esc(detail)}</span>`:''}</summary>${body}</details>`;
+}
 function reportReference(id) {
   const sections=drawn(id,'reference');
   if(!sections.length)return '';
@@ -549,7 +556,7 @@ function reportLimits(id) {
 function reportAudit(id) {
   const out=data[id],kept=['audit','consumed'];
   const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])));
-  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span><span class="fold-detail">${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
   }).join('')}</ul></details>`;
@@ -569,6 +576,8 @@ function reportParts(id) {
 // ---- The module page of a new-format handoff (ruling H1, H4): the reader passages first, each under its own heading and drawn by the one paragraph
 // renderer (passageHtml); then the module's charts, maps and timeline; then every other section of the handoff, unchanged, in handoff order.
 const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrary-evidence',limits:'limitations'};
+// The reading style each passage is drawn in (screen.css, `.reading-*`): the headline, the findings list, prose, the limitations list.
+const PASSAGE_STYLES={bottom:'headline',key:'findings',contrary:'prose',limits:'limits'};
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
 const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
@@ -589,9 +598,10 @@ function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections);
   const parts=[['head','Module',reportHead(id)]];
   const findings=out.sections.find(section=>section.level===2&&section.heading==='Findings');
-  let heading=findings&&!findings.blocks.length?`<h3>${rich(findings.heading)}</h3>`:'';
+  // The bottom line is the page's headline: its heading, and the Findings heading above it, stay in the page for headings and screen readers (sr-only).
+  let heading=findings&&!findings.blocks.length?`<h3${passages.bottom?' class="sr-only"':''}>${rich(findings.heading)}</h3>`:'';
   for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key]) {
-    parts.push([anchor,passages[key].heading,`<section class="part" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]))}${passageHtml(passages[key],id)}</section>`]);
+    parts.push([anchor,passages[key].heading,`<section class="part reading-${PASSAGE_STYLES[key]}" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]),key==='bottom'?'sr-only':'')}${passageHtml(passages[key],id)}</section>`]);
     heading='';
   }
   const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);

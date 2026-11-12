@@ -652,3 +652,91 @@ td .basis-link{margin-left:6px}
 .section-outline{margin:2px 0 8px 14px;padding-left:10px;border-left:1px solid var(--gray-200)}
 .section-item{padding:3px 8px;border-radius:5px;font:400 12px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .section-item[aria-current]{background:var(--blue-50);color:var(--blue-700);font-weight:600}
+/* Redesign pass 1, module page and evidence inspector (task 2). Reading styles are classes (`.kicker`, `.reading-headline`, `.reading-prose`, `.reading-findings`, `.reading-limits`) so the Overview can use the same ones. */
+:root{--dot-quiet:#8a90a3}
+@media(min-width:1301px){.workbench:not(.library-workspace,.overview-workspace,.tools-workspace) #content{padding:26px 32px}}
+.kicker,.module-head .head-group,.module-head.has-bottom-line h2{font:600 12px/16px 'Red Hat Text',sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--text-quaternary)}
+.module-head{justify-content:space-between;gap:8px 16px}
+.module-head .head-title{display:flex;flex-wrap:wrap;align-items:baseline;flex:1 0 auto;max-width:100%;min-width:0}
+.module-head.has-bottom-line .head-group::after{content:"·";margin:0 8px}
+.module-head.has-bottom-line h2{margin:0;font-weight:600}
+.module-head:not(.has-bottom-line) .head-title{display:block}
+.module-head:not(.has-bottom-line) .head-group{display:block}
+.module-head:not(.has-bottom-line) h2{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary)}
+.module-head .head-tools{margin-left:auto;gap:8px 12px}
+.module-head .btn,.module-head .btn:hover{height:auto;padding:0;border:0;background:none;border-radius:0;color:var(--blue);font:600 13px/18px 'Red Hat Text',sans-serif}
+.module-head .btn:hover{text-decoration:underline;text-underline-offset:3px}
+.band{margin-top:8px;display:block;background:none;color:var(--text-primary);border-radius:0;padding:0}
+.band>p,.reading-headline .passage-text,.reading-headline .passage-list li{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;color:var(--text-primary);text-wrap:pretty}
+.reading-headline .passage-list{list-style:none;margin:0;padding:0}
+.reading-headline .passage-list li{margin-top:8px}
+.band dl{margin:14px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.band dt{display:inline;font-weight:600;color:var(--text-secondary)}
+.band dd{display:inline;margin:0 0 0 6px;color:var(--text-secondary)}
+.band .row{margin-top:2px}
+.band .src{margin-top:14px;font-size:13px;line-height:18px;color:var(--text-quaternary)}
+.band-link{color:var(--text-quaternary);font:400 13px/18px 'Red Hat Text',sans-serif;text-decoration:none}
+.band-link:hover,.band-link:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+section.part{margin-top:0}
+section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>:is(h3,h4):first-child{margin:26px 0 0;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.analysis-text,.reading-prose .passage-text{margin:10px 0 0;max-width:min(66ch,640px);font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+:is(h3,h4,h5,h6)+.analysis-text,.reading-prose>:is(h3,h4)+.passage-text{margin-top:14px}
+.reading-prose .passage-list{max-width:min(66ch,640px);font:400 15px/24px 'Red Hat Text',sans-serif}
+section.part .figure{font:500 .92em 'Red Hat Mono',monospace;text-decoration:underline dotted;text-underline-offset:3px}
+section.part .figure[aria-pressed=true]{background:var(--blue-50);border-radius:3px;padding:0 2px}
+section.part .basis-link{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-decoration:none}
+section.part .basis-link:hover,section.part .basis-link:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+.reading-findings .passage-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:12px}
+.reading-findings .passage-list li{position:relative;margin:0;padding-left:18px;max-width:min(66ch,640px);font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.reading-findings .passage-list li::before,section.part article.finding::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
+section.part article.finding,section.part article.finding:first-of-type{position:relative;display:block;margin:14px 0 0;padding:0 0 0 18px;border:0;max-width:min(66ch,640px)}
+section.part article.finding h4{margin:0;font:600 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+section.part article.finding .impact{margin:2px 0 0;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+section.part article.finding .impact b{margin-right:6px;font:inherit;font-weight:600;text-transform:none;letter-spacing:0;color:inherit}
+section.part article.finding .finding-line{margin:4px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
+section.part article.finding .conf{margin-right:10px;font:inherit;color:inherit}
+.reading-limits .passage-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
+.reading-limits .passage-list li,.reading-limits .passage-text,section.part .limits p{position:relative;margin:0;padding-left:16px;max-width:70ch;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.reading-limits .passage-text{margin-top:8px}
+.reading-limits .passage-list li::before,.reading-limits .passage-text::before,section.part .limits p::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--dot-quiet)}
+section.part .limits{display:block}
+section.part .limits>div{padding:0;border:0;background:none;margin-top:12px}
+section.part .limits p+p{margin-top:8px}
+section.part .limits h4{margin:0;font:600 14px/21px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+:not(details.fold,details.audit)+details.fold,:not(details.fold,details.audit)+details.audit{margin-top:30px}
+details.fold,details.audit{margin-top:8px;padding:0;border:1px solid var(--gray-200);border-radius:10px}
+details.fold details.fold{margin:8px 14px 14px}
+details.fold>summary,details.audit>summary{display:flex;align-items:center;gap:8px;padding:12px 14px;font:600 14px/20px 'Red Hat Text',sans-serif;letter-spacing:0;color:var(--text-primary)}
+details.fold>summary img,details.audit>summary img{flex:none}
+details:is(.fold,.audit)>summary .fold-title{margin:0;font:inherit}
+details:is(.fold,.audit)>summary .fold-detail{margin:0 0 0 auto;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-align:right}
+details.fold[open]>:not(summary),details.audit[open]>:not(summary){margin-left:14px;margin-right:14px}
+details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14px}
+.inspector-body{padding:20px 22px}
+.inspector-body>*+*{margin-top:18px}
+.inspector-body>.sr-only+*{margin-top:0}
+.inspector-body>h2.kicker{margin:0}
+.inspector-body>.inspector-figure{margin:0}
+.inspector-figure .kicker{display:block}
+.inspector-figure strong{display:block;margin-top:4px;font:500 22px/28px 'Red Hat Mono',monospace;color:var(--text-primary);overflow-wrap:anywhere}
+.inspector-body>h3:not(.citations-heading){margin:8px 0 0}
+.inspector-body>.evidence-context{margin:4px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.inspector-body>.classification{margin:10px 0 0}
+.evidence-fields{display:grid;gap:10px;border-top:0}
+.evidence-fields>div{padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff}
+.evidence-fields h4{margin:0 0 4px;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.evidence-fields>div>div{font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.evidence-basis>h3,.basis>h3,.source-location>h3,.inspector-body>.citations-heading{margin:0;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.inspector-body>.citations-heading{margin-top:18px}
+.inspector-card,.basis>.basis-items,.inspector-body>.chip-source{margin:6px 0 0;padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff;font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.inspector-body>.citations-heading+.chip-source{margin-top:6px}
+.inspector-body>.chip-source+.chip-source{margin-top:10px}
+.basis>.basis-items{list-style:none}
+.basis-items>li+li{margin-top:8px}
+.basis-items .chip-source{margin:6px 0 0;padding:8px 0 0;border:0;background:none}
+.chip-source>h3{margin:0;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.chip-source .excerpt{margin-top:8px;padding:0 0 0 10px;border:0;border-left:2px solid var(--gray-300);border-radius:0;background:none;font:italic 400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.source-location .inspector-card p{margin:0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+.source-location .inspector-card p:first-child{font-weight:600;color:var(--text-primary)}
+.source-location .inspector-card a{margin-top:8px;font-size:13px}
+.source-location .inspector-card .small{margin-top:8px;color:var(--text-quaternary)}

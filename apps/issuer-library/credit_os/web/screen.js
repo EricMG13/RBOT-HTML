@@ -336,32 +336,36 @@ function basisItemHtml(item,deps,used) {
   if(item.kind==='source') item.chips.forEach(c=>used.add(c));
   return inspectorItemHtml(item,deps);
 }
-// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
+// The figure an `f<n>` control opened the inspector from, drawn first in the inspector (the large value under its eyebrow); none for a paragraph's or a chip's control.
+function inspectorFigure(item,output,mode) {
+  if(typeof mode!=='string'||!mode.startsWith('f')||item.text===undefined)return '';
+  const span=figureSpans(paragraphBody(item.text,!isNewFormat(output.sections)).body)[Number(mode.slice(1))];
+  return span?`<p class="inspector-figure"><span class="kicker">Figure</span> <strong>${esc(span.text)}</strong></p>`:'';
+}
+// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the Basis items
 // in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
 function paragraphBasisHtml(key,item,output,mode,chips) {
   chips=uniqueChips(chips);
   const earlier=!isNewFormat(output.sections),used=new Set();
-  let figure='',items='';
+  let items='';
   if(item.text!==undefined) {
-    const {body}=paragraphBody(item.text,earlier);
-    const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
-    figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
     // reader.js draws the list (the same code the node tests read): an upstream-handoff item shows its written name; nameCodes names the rest, citations of an earlier-format page included.
     const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
     const ev=contexts[output.run]?.evidence||{},files=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name);
     items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,files,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
   }
   const rest=chips.filter(c=>!used.has(c));
-  return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
+  return `${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
 }
 function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
   const paragraph=typeof chipIndex==='string'&&chipIndex!=='gaps';
   const chipHtml=paragraph?paragraphBasisHtml(key,item,output,chipIndex,keyChips):chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
   // A paragraph shows its wording without its Basis line or citations; they are listed below it.
+  const figure=paragraph?inspectorFigure(item,output,chipIndex):'';
   const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
   $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
   document.querySelectorAll('.chip').forEach(el=>{

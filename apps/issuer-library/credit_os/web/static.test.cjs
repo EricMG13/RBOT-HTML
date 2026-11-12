@@ -283,6 +283,7 @@ test('the navigator names every module in catalog.json', () => {
 const OUT = 'run-a/deliveries/d1/CP-1.md';
 // The workspace's module names, as the fixtures use them.
 const NAMES = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance', 'CP-6': 'Committee decision' };
+const GROUPS = [['Business and evidence', [['CP-0', 'Source readiness'], ['CP-1A', 'Business & governance']]], ['Financial performance', [['CP-1', 'Financial foundation']]]];
 const table = (line, headers, rows) => ({ type: 'table', line, headers, rows: rows.map(([n, ...cells]) => ({ line: n, cells })) });
 const text = (line, body) => ({ type: 'text', line, text: body });
 // `where` is the placement the store would give the section (Task 1); report() turns it into the output's parallel `placement` list.
@@ -351,10 +352,10 @@ function report(overrides = {}, modSections = null) {
   }
   const win = { CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
-  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTable', 'eventTimeline'];
+  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTable', 'eventTimeline'];
   const reader = require('./reader.js');
-  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem, ...['chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => reader[name]), require('./calendar.js').eventTable, realEventTimeline(esc, rich)];
-  return new Function(...names, `${src}; return {moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE, moduleTitle, handoffLabel};`)(...args);
+  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, GROUPS, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem, ...['chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => reader[name]), require('./calendar.js').eventTable, realEventTimeline(esc, rich)];
+  return new Function(...names, `${src}; return {fold, moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE, moduleTitle, handoffLabel};`)(...args);
 }
 const strip = html => html.replace(/<[^>]+>/g, '');
 // screen.js eventTimeline as written, with the page's helpers stood in (the source footer is a plain marker).
@@ -362,7 +363,8 @@ function realEventTimeline(esc, rich) {
   const screen = read('screen.js'), calendar = require('./calendar.js');
   return new Function('esc', 'rich', 'eventOrder', 'orderEvents', 'sourceFooter', `${screen.slice(screen.indexOf('function eventTimeline('), screen.indexOf('function businessVisual('))}; return eventTimeline;`)(esc, rich, calendar.eventOrder, calendar.orderEvents, key => `<small class="footer">${esc(key)}</small>`);
 }
-const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1]);
+// The summary as a reader reads it: the title, then the detail the row draws at its right, joined by the " · " the page now draws in CSS.
+const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1].replace('</span><span class="fold-detail">', ' · '));
 const NINE = ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'reference', 'calculations', 'audit'];
 const NINE_RE = /\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"/g;
 const anchorsOf = (html, re = NINE_RE) => [...html.matchAll(re)].map(m => m[1]);
@@ -553,7 +555,7 @@ test('every chart row holds its exact value and a chip set', () => {
 test('findings are articles with impact, confidence and chips', () => {
   const html = report().moduleReport(OUT);
   assert.equal(html.match(/<article class="finding">/g).length, 2);
-  assert.ok(html.includes('<b>Creditor impact</b>Higher gross leverage.') && html.includes('<span class="pill">High</span>'));
+  assert.ok(html.includes('<b>Creditor impact</b>Higher gross leverage.') && html.includes('<span class="conf">Confidence High</span>') && !html.includes('class="pill"'));
 });
 
 test('limits come from the limits-placed sections with chips and their line ids; audit lists the rest by line', () => {
@@ -758,7 +760,7 @@ test('the audit summary gives the store\'s section count; the head carries no fi
   const html = report({ sections }).moduleReport(OUT);
   assert.equal(sections.length, 12);
   assert.ok(!/class="module-head".*?<\/h2><div class="sub">(?:(?!<\/div>).)*(?:CP-1\.md|sections)/s.test(html));
-  assert.ok(html.includes('<span>12 sections · unchanged from the handoff</span>'));
+  assert.ok(html.includes('<span class="fold-detail">12 sections · unchanged from the handoff</span>'));
   assert.ok(!/\b(?:10|11) sections\b/.test(html));
 });
 
@@ -2600,4 +2602,55 @@ test('the meta line under the issuer title joins ticker, sector and run count wi
   assert.equal(three.issuerMeta(RUN), 'ZED · Telecoms · 2 runs');
   // No catalogue row for the run: nothing is guessed, no line.
   assert.equal(runPage(d => d, [], m => m, { catalogue: [] }).issuerMeta(RUN), '');
+});
+
+// ---- The module page (redesign pass 1, task 2). Expected text is written by hand.
+test('a fold draws its summary as a title and a right-hand detail, split at the first " · "', () => {
+  const r = report();
+  const row = r.fold('reference', 'Statements and registers · 3 tables · 40 rows', '<p>body</p>');
+  assert.ok(row.includes('<span class="fold-title">Statements and registers</span><span class="fold-detail">3 tables · 40 rows</span></summary>'), row);
+  assert.ok(row.startsWith('<details class="fold" id="reference">') && row.endsWith('<p>body</p></details>'));
+  const plainRow = r.fold('handoff-text', 'Full handoff text', '');
+  assert.ok(plainRow.includes('<span class="fold-title">Full handoff text</span></summary>') && !plainRow.includes('fold-detail'), plainRow);
+  // The audit row has the same two parts: its title, then the detail it always had.
+  const audit = r.reportAudit(OUT);
+  assert.ok(audit.includes('<span class="fold-title">Evidence &amp; audit</span><span class="fold-detail">14 sections · unchanged from the handoff</span></summary>') || /<span class="fold-title">Evidence &amp; audit<\/span><span class="fold-detail">\d+ sections · unchanged from the handoff<\/span>/.test(audit), audit);
+});
+
+test('the head names the reading group, and says whether the page has a bottom line', () => {
+  const withLine = report().reportHead(OUT);
+  assert.ok(/<div class="module-head has-bottom-line" id="head">/.test(withLine), withLine);
+  assert.ok(withLine.includes('<span class="head-group">Financial performance</span><h2>Financial foundation</h2>'), withLine);
+  const none = report({ summary: null, call: null }).reportHead(OUT);
+  assert.ok(!none.includes('has-bottom-line') && none.includes('<span class="head-group">Financial performance</span><h2>'), none);
+  const call = report({ summary: null, call: { text: 'A call.', line: 9 } }).reportHead(OUT);
+  assert.ok(call.includes('has-bottom-line'), call);
+  // The tools keep today's controls.
+  assert.ok(withLine.includes('class="head-tools"') && withLine.includes('Candidate · not accepted') && /<a class="btn" href="\.\.\/runs\/run-a\/deliveries\/d1\/CP-1\.md" download>/.test(withLine));
+  // A module no reading group names has no group title.
+  const unnamed = report({ module: 'CP-6' }).reportHead(OUT);
+  assert.ok(!unnamed.includes('head-group'), unnamed);
+});
+
+test('a new-format page has a bottom line when the Bottom line passage exists; a Not assessable module shows its badge in the head tools', () => {
+  const text = (body, line) => ({ type: 'text', line, end: line, text: body });
+  const sec = (heading, level, line, ...blocks) => ({ heading, level, line, blocks, where: 'view' });
+  const sections = bottom => [sec('CP-1 handoff', 1, 1), sec('Request', 2, 2, text('x', 3)), sec('Findings', 2, 5), sec('Bottom line', 3, 6, text(bottom, 7)), sec('Key findings', 3, 9, text('- one', 10))];
+  const blockedHead = report({ sections: sections('Not assessable: no cash forecast.'), summary: null }).reportHead(OUT);
+  assert.ok(/<div class="head-tools"><span class="badge badge-gray">Not assessable<\/span>/.test(blockedHead) && blockedHead.includes('has-bottom-line'), blockedHead);
+  const ordinary = report({ sections: sections('Leverage is moderate.'), summary: null }).reportHead(OUT);
+  assert.ok(!ordinary.includes('Not assessable') && ordinary.includes('has-bottom-line'), ordinary);
+  const noPassage = report({ sections: sections('x').filter(s => s.heading !== 'Bottom line'), summary: null }).reportHead(OUT);
+  assert.ok(!noPassage.includes('has-bottom-line'), noPassage);
+});
+
+test('the earlier-format band keeps its words and is not navy; a finding is one item with its confidence as text and a Basis control', () => {
+  const r = report();
+  const band = r.reportBand(OUT);
+  assert.ok(band.includes('<dt>Confidence</dt><dd>Medium</dd>') && band.includes('<dt>Main limitation</dt>') && band.includes('Quoted from the handoff') && band.includes('View source'));
+  assert.ok(band.includes('<span class="badge badge-gray">Quoted from the handoff</span>') && !band.includes('on-navy'));
+  const article = r.moduleReport(OUT).match(/<article class="finding">.*?<\/article>/s)[0];
+  assert.ok(article.includes('<h4>Leverage rose.</h4>') && article.includes('<span class="conf">Confidence High</span>') && article.includes('class="basis-link"'), article);
+  const css = read('screen.css'), redesign = css.slice(css.indexOf('/* Redesign pass 1'));
+  assert.ok(/\.band\{[^}]*background:none/.test(redesign) && !/\.band\{[^}]*navy/.test(redesign));
 });
