@@ -4,6 +4,42 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Redesign pass 1: run header, Modules, inspector and Overview (branch `claude/redesign-modules-overview`, stacked on PR 62)
+
+Scope: offline, macOS, headless Chrome; no provider called. Presentation only, from the Claude Design
+redesign: the run header (back link, meta line, "Start a run on this issuer" over http), text-only tabs,
+the strip, 250px navigator, the module page (bottom line as headline, findings list, fold rows; charts
+stay open), the inspector as cards, and the Overview in two columns. What was built, what was not adopted
+and the cross-check against earlier decisions: `docs/design/2026-11-12-redesign-pass-1.md`.
+- On 13d258b: `node --test` reader, static, calendar, changes: exit 0, 295 passed. `uv run pytest
+  tests/test_library_page_browser.py tests/test_library_changes_browser.py tests/test_model_shell_browser.py
+  -m browser -q`: exit 0, 95 passed, 1 skipped (a screenshot helper). `uv run pytest tests/test_context_form.py
+  tests/test_run_start_page.py tests/test_library_reader_refs.py tests/test_library_index.py
+  tests/test_update_library.py -q`: exit 0, 252 passed. `uv run python tools/quality_gate.py`: exit 0, 0 findings.
+- Fidelity: a scratch library built from the four listed TDG runs (all earlier format), every in-app route
+  crawled from `file://` before the change (fe3dd7d) and after (13d258b) with folds, audit items and the
+  inspector opened; every word on each of 252 routes (710 page and inspector states) compared by count.
+  Nothing is missing except the header's "Change run" link and its duplicate run-code chip, removed on
+  purpose. The same comparison reported 249 drops before those two were allowed, so it does detect a
+  removed string. No module code on those routes (252 routes, 0 hits).
+- Reader check, scope: one real run (`cpos-tdg-sol-medium-all-001`) read at 1440 on the Liquidity and
+  Financial foundation pages and the Overview, against two of the September VMO2 screenshots. The module
+  page reads judgement first (bottom line, confidence and main limitation, findings with creditor impact,
+  analysis, limits, registers folded), the reference's order; no source reference sits in a narrative
+  sentence. The Overview of this earlier-format run says "No bottom line in this handoff." for every module
+  (unchanged by this pass; owner question). Main's Forecast period-columns grid was read under the new
+  header at 1280 on its synthetic four-case model only.
+- Reviews: three task reviews, a whole-branch review (approve with fixes, Lows only), a review of the fix
+  batch (one High: without the start link the "As of" block broke over four lines; fixed and re-reviewed),
+  and a re-review of the chart index route (one Medium: it opened the first forecast model, not the chosen
+  one; fixed and re-reviewed). Each finding's probe ran before and after.
+- Not verified: no real run is new format, so new-format pages and the Overview's lead, key charts and
+  nearest dates rest on synthetic fixtures. "Start a run on this issuer" was not clicked through to a
+  running start service. Forecast with a published model and the inspector on Changes, Forecast and
+  Evidence were not rendered. Safari, Firefox, real browser zoom, print against the previous layout,
+  screen readers and Windows not run. The header is 73px taller at 1440×900. This branch is 1,535 changed
+  lines of code and tests against the 800-line convention (owner's call: waive or split).
+
 ## 2026-11-12 — No module code on screen (branch `claude/redesign-review-adaptation-892369`, owner ruling 2026-11-12)
 
 Scope: offline, macOS, headless Chrome; no provider called. Display only: the issuer library and the
