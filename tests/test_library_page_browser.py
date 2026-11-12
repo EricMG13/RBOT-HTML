@@ -8,6 +8,7 @@ import hashlib
 import html
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -1279,3 +1280,126 @@ def test_report_history_has_no_start_link_from_a_file(tmp_path):
     dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
     assert console == [] and '<table class="history-table">' in dom
     assert "start-run" not in dom and ">Start a run</a>" not in dom
+
+
+FORECAST_CASES_PROBE = Path(__file__).with_name("browser_probe_forecast_cases.js")
+
+
+def library_with_four_case_model(
+    tmp_path: Path, keys: tuple[str, ...] = ("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE")
+) -> Path:
+    """A library whose run lists one model: the store's real grid over the hand-written files of
+    test_credit_os_store (history plus the four CP-2G cases). The model's envelope is the only
+    synthetic part (accepted by the controller); no published model folder is built."""
+    from credit_os import store
+    from test_credit_os_store import cases
+
+    make_run(tmp_path, "run-a", as_of="2025-09-30")
+    update_library.update_library(tmp_path)
+    data_js = tmp_path / "library/data.js"
+    prefix = "window.CREDIT_OS_DATA="
+    data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
+    grid, problem = store.read_cashflow(cases(*keys), None)
+    assert problem is None
+    run = data["workspace"]["runs"]["run-a"]
+    data["workspace"]["models"] = [
+        {
+            "id": "model-a",
+            "issuerKey": run["issuerKey"],
+            "mode": "accepted",
+            "qualification": "unrun",
+            "runId": None,
+            "runFolder": "run-a",
+            "scope": None,
+            "inputContract": None,
+            "revisionNote": None,
+            "previous": None,
+            "href": "../models/model-a.html?embedded=1",
+            "download": "../models/model-a.html?download=1",
+            "files": [],
+            "sources": [],
+            "register": None,
+            "cashflow": grid,
+        }
+    ]
+    data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
+    return tmp_path / "library/index.html"
+
+
+def test_the_page_shows_the_other_forecast_cases_in_a_closed_details_below_the_main_grid(tmp_path):
+    page = library_with_four_case_model(tmp_path)
+    (page.parent / "probe.js").write_text(
+        FORECAST_CASES_PROBE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    probe = page.with_name("probe.html")
+    probe.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(probe, "#W-Forecast/model-a?c=run-a")
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["groups"] == [
+        "Quarter",
+        "Year to date",
+        "Fiscal year",
+        "Last twelve months",
+        "Pro forma",
+        "Base case",
+        "Downside case",
+    ]
+    # The store's group name is "Downside (CP-2G drivers)"; screen.js moduleNames rewrites the code.
+    assert (
+        seen["summary"] == "Other forecast cases: Upside, Downside (Forward credit model drivers)"
+    )
+    assert seen["otherGroups"] == 2 and seen["otherOpen"] is False
+    assert seen["otherName"] == "Other forecast cases"
+    assert seen["pf"] == {
+        "text": "n.a.",
+        "label": "n.a.: no handoff states pro forma adjustments",
+    }
+    assert seen["fits"] is True and seen["ids"] is True  # the grid scrolls inside its region
+
+
+@pytest.mark.parametrize(
+    "keys, last",
+    [
+        (("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE"), "FY2027E"),
+        (("REFERENCE",), "FY2027E"),
+    ],
+)
+def test_the_caption_range_ends_on_the_last_real_period_never_the_placeholder(tmp_path, keys, last):
+    page = library_with_four_case_model(tmp_path, keys)
+    dom, console = visit(page, "#W-Forecast/model-a?c=run-a")
+    assert console == []
+    caption = re.search(r'<p class="forecast-caption">(.*?)</p>', dom, re.DOTALL)[1]
+    assert f"Q3 2024 to {last} " in caption and " to Downside" not in caption
+
+
+def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):
+    target = os.environ.get("FORECAST_SCREENSHOT")
+    if not target:
+        pytest.skip("set FORECAST_SCREENSHOT to the PNG path to write")
+    screenshot = Path(target)
+    page = library_with_four_case_model(tmp_path)
+    (page.parent / "open.js").write_text(
+        "addEventListener('load',()=>setTimeout(()=>{"
+        "document.querySelector('details.cashflow-other').open=true;"
+        "document.body.style.minHeight='1500px'},1500));",
+        encoding="utf-8",
+    )
+    shot = page.with_name("shot.html")
+    shot.write_text(page.read_text().replace("</body>", '<script src="open.js"></script></body>'))
+    screenshot.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            chrome(),
+            "--headless=new",
+            "--disable-gpu",
+            "--window-size=1280,3200",
+            "--virtual-time-budget=10000",
+            f"--screenshot={screenshot}",
+            shot.as_uri() + "#W-Forecast/model-a?c=run-a",
+        ],
+        capture_output=True,
+        timeout=120,
+        check=True,
+    )
+    assert screenshot.stat().st_size > 0

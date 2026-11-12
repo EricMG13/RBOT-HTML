@@ -3,6 +3,7 @@
 import hashlib
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -1302,3 +1303,638 @@ def test_an_instruction_key_that_is_not_a_module_code_gets_no_link(tmp_path):
     assert rows["../../escaped"]["href"] is None
     assert rows["CP-0"]["href"] == "downloads/run-a/instructions/CP-0.md"
     assert any("'../../escaped'" in i and "no link" in i for i in result["issues"])
+
+
+# The Forecast grid with a history record: columns hand-written from the plan's answer key.
+NO_PF = "no handoff states pro forma adjustments"
+NEEDS_9M_2023 = "needs 9M 2023, which CP-1 does not print"
+
+
+def held(amount, reason=None):
+    return {"amount": amount, "reason": reason}
+
+
+def history_column(identity, amounts, reason=None):
+    column_id, kind, label, prior = identity
+    revenue, ebitda = amounts
+
+    def entry(amount):
+        return held(amount, reason if amount is None else None)
+
+    return {
+        "id": column_id,
+        "kind": kind,
+        "label": label,
+        "prior": prior,
+        "reason": reason,
+        "start": None,
+        "end": None,
+        "values": {"revenue": entry(revenue), "ebitda": entry(ebitda)},
+    }
+
+
+HISTORY = {
+    "schema_version": "cpos-history/1",
+    "columns": [
+        history_column(("Q3_2024", "QUARTER", "Q3 2024", None), ("250", "75")),
+        history_column(("Q3_2025", "QUARTER", "Q3 2025", "Q3_2024"), ("270", "84")),
+        history_column(("YTD", "YTD", "YTD (9M 2025)", "PYTD"), ("780", "240")),
+        history_column(("PYTD", "PYTD", "PYTD (9M 2024)", None), ("720", "216")),
+        history_column(("FY2023", "FY", "FY2023", None), ("940", "276")),
+        history_column(("FY2024", "FY", "FY2024", "FY2023"), ("1000", "300")),
+        history_column(("LTM", "LTM", "LTM Q3 2025", "PRIOR_LTM"), ("1060", "324")),
+        history_column(("PRIOR_LTM", "PRIOR_LTM", "Prior LTM", None), (None, None), NEEDS_9M_2023),
+        history_column(("PF", "PF", "PF LTM", None), (None, None), NO_PF),
+    ],
+    "limits": ["History is CP-1's printed figures."],
+}
+
+
+def forecast_year(year, revenue, ebitda):
+    return {"year": year, "revenue": held(revenue), "ebitda": held(ebitda)}
+
+
+REFERENCE = {
+    "outputs": {
+        "REFERENCE": {
+            "years": [
+                forecast_year(2025, "1050", "315"),
+                forecast_year(2026, "1092", "338.52"),
+                forecast_year(2027, "1124.76", "359.9232"),
+            ]
+        }
+    },
+    "scope_limits": ["Every figure is Python's arithmetic."],
+}
+WITHOUT_HISTORY = json.dumps({"annual_periods": [], "values": {}}).encode()
+
+
+def with_history(damage):
+    record = {"annual_periods": [], "values": {}, "history": {**HISTORY, **damage}}
+    return json.dumps(record).encode()
+
+
+FILES = {
+    "forecast_exact.json": json.dumps(REFERENCE).encode(),
+    "calculation.json": with_history({}),
+    "annual.md": b"No tables here.",
+    "quarter.md": b"No tables here.",
+}
+
+
+def test_history_columns_precede_the_forecast_in_the_owners_order():
+    grid, problem = store.read_cashflow(FILES, None)
+    assert problem is None
+    assert [(c["group"], c["label"]) for c in grid["columns"]][:9] == [
+        ("Quarter", "Q3 2024"),
+        ("Quarter", "Q3 2025"),
+        ("Year to date", "YTD (9M 2025)"),
+        ("Year to date", "PYTD (9M 2024)"),
+        ("Fiscal year", "FY2023"),
+        ("Fiscal year", "FY2024"),
+        ("Last twelve months", "LTM Q3 2025"),
+        ("Last twelve months", "Prior LTM"),
+        ("Pro forma", "PF LTM"),
+    ]
+    assert [c["label"] for c in grid["columns"]][9:12] == ["FY2025E", "FY2026E", "FY2027E"]
+
+
+def test_values_growth_and_margin_read_across_the_new_columns():
+    row = {r["label"]: r["cells"] for r in store.read_cashflow(FILES, None)[0]["rows"]}
+    assert [c["exact"] for c in row["Revenue"][:7]] == [
+        "250",
+        "270",
+        "780",
+        "720",
+        "940",
+        "1000",
+        "1060",
+    ]
+    growth = row["Revenue YoY growth"]
+    assert Fraction(growth[1]["exact"]) == Fraction(8, 100)  # Q3 2025 on Q3 2024
+    assert abs(Fraction(growth[2]["exact"]) - Fraction(1, 12)) < Fraction(1, 10**20)  # YTD on PYTD
+    assert abs(Fraction(growth[5]["exact"]) - Fraction(3, 47)) < Fraction(1, 10**20)  # FY2024
+    assert Fraction(growth[9]["exact"]) == Fraction(5, 100)  # FY2025E on FY2024
+    assert growth[6]["status"] == "na"  # LTM: prior LTM missing
+    margin = Fraction(row["Adj EBITDA margin"][6]["exact"])
+    assert abs(margin - Fraction(324, 1060)) < Fraction(1, 10**20)
+
+
+def test_an_unavailable_column_gives_every_row_its_reason():
+    grid = store.read_cashflow(FILES, None)[0]
+    assert all(row["cells"][8]["status"] == "na" for row in grid["rows"])
+    reason = {r["label"]: r["cells"][8]["reason"] for r in grid["rows"]}
+    assert reason["Revenue"] == reason["Distributions"] == "no handoff states pro forma adjustments"
+    assert set(reason.values()) == {"no handoff states pro forma adjustments"}
+    prior_reason = NEEDS_9M_2023
+    assert all(row["cells"][7]["reason"] == prior_reason for row in grid["rows"])
+    assert not any(note.startswith("Pro forma:") for note in grid["notes"])
+
+
+def test_the_history_notes_and_limits_replace_the_quarter_and_pro_forma_notes():
+    grid = store.read_cashflow(FILES, None)[0]
+    assert store.Q1_NOTE not in grid["notes"]
+    assert (
+        "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise the "
+        "last fiscal year plus the year to date less the prior year to date."
+    ) in grid["notes"]
+    assert grid["limits"] == ["Every figure is Python's arithmetic.", *HISTORY["limits"]]
+
+
+def test_a_model_without_a_history_record_is_laid_out_as_before():
+    files = {**FILES, "calculation.json": WITHOUT_HISTORY}
+    grid = store.read_cashflow(files, None)[0]
+    assert [c["label"] for c in grid["columns"]][:3] == ["FY2025E", "FY2026E", "FY2027E"]
+    assert not any(c["ytd"] for c in grid["columns"])  # the fixture has no quarter column
+    assert store.Q1_NOTE not in grid["notes"]
+    assert "Pro forma: no pro forma period is recorded in the handoffs." in grid["notes"]
+
+
+def damaged_column(**changes):
+    column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
+    return {"columns": [{**column, **changes}]}
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        {"columns": "x"},
+        {
+            "columns": [
+                {
+                    "id": "A",
+                    "kind": "WEEK",
+                    "label": "A",
+                    "prior": None,
+                    "reason": None,
+                    "values": {},
+                }
+            ]
+        },
+        {
+            "columns": [
+                {"id": "A", "kind": "FY", "label": "A", "prior": "B", "reason": None, "values": {}}
+            ]
+        },
+        {"schema_version": "cpos-history/2"},
+        {"limits": "x"},
+        {"columns": [HISTORY["columns"][0]] * 2},
+        damaged_column(prior="A"),
+        damaged_column(kind="WEEK"),
+        damaged_column(prior="B"),
+        damaged_column(prior="FY2024"),
+        damaged_column(reason="   "),
+        damaged_column(id="FY24", label="FY24"),
+        damaged_column(id="FY20245", label="FY20245"),
+        damaged_column(start="2025-13-40"),
+        damaged_column(values={"revenue": {"amount": "NaN", "reason": None}}),
+        damaged_column(values={"revenue": "1"}),
+        damaged_column(label=7),
+        damaged_column(reason=7),
+    ],
+)
+def test_a_malformed_history_is_reported_not_shown(damage):
+    grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+def test_an_undamaged_history_column_is_shown():
+    grid, problem = store.read_cashflow(
+        {**FILES, "calculation.json": with_history(damaged_column())}, None
+    )
+    assert problem is None and grid is not None
+
+
+@pytest.mark.parametrize("kind", ["PYTD", "PRIOR_LTM", "PF", "QUARTER", "YTD", "FY", "LTM"])
+def test_a_prior_naming_no_column_is_a_malformed_history_for_every_kind(kind):
+    name = "FY2024" if kind == "FY" else kind
+    column = history_column((name, kind, name, "GHOST"), ("1", "1"))
+    grid, problem = store.read_cashflow(history_files([column]), None)
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+@pytest.mark.parametrize("kind", ["PYTD", "PRIOR_LTM", "PF"])
+def test_a_column_of_an_unpaired_kind_has_no_prior(kind):
+    other = history_column(("Q", "QUARTER", "Q", None), ("1", "1"))
+    column = history_column((kind, kind, kind, "Q"), ("1", "1"))
+    grid, problem = store.read_cashflow(history_files([other, column]), None)
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+def test_a_quarter_may_not_name_itself_and_a_fiscal_year_names_the_year_before_or_the_placeholder():
+    own = history_column(("Q", "QUARTER", "Q", "Q"), ("1", "1"))
+    assert store.read_cashflow(history_files([own]), None)[1] == ("file", "calculation.json")
+    for prior in ("FY2021", "FY2024"):  # two years before, itself
+        year = history_column(("FY2024", "FY", "FY2024", prior), ("1", "1"))
+        far = history_column(("FY2021", "FY", "FY2021", None), ("1", "1"))
+        got = store.read_cashflow(history_files([far, year]), None)
+        assert got[1] == ("file", "calculation.json"), prior
+    placeholder = history_column(("Fiscal year", "FY", "Fiscal year", None), ("1", "1"))
+    year = history_column(("FY2024", "FY", "FY2024", "Fiscal year"), ("1", "1"))
+    assert store.read_cashflow(history_files([placeholder, year]), None)[1] is None
+
+
+def test_more_than_sixty_history_columns_are_over_the_limit():
+    damage = {
+        "columns": [history_column((f"C{i}", "FY", "C", None), ("1", "1")) for i in range(61)]
+    }
+    grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
+    assert grid is None and problem[0] == "limit"
+
+
+def history_files(columns, limits=None, revenue="1050"):
+    history = {**HISTORY, "columns": columns}
+    if limits is not None:
+        history["limits"] = limits
+    record = {"annual_periods": [], "values": {}, "history": history}
+    exact = {
+        "outputs": {"REFERENCE": {"years": [forecast_year(2025, revenue, "315")]}},
+        "scope_limits": [],
+    }
+    return {
+        **FILES,
+        "forecast_exact.json": json.dumps(exact).encode(),
+        "calculation.json": json.dumps(record).encode(),
+    }
+
+
+def growth_of(grid, label="FY2025E", part="columns"):
+    columns = grid[part]["columns"] if part == "other" else grid["columns"]
+    rows = grid[part]["rows"] if part == "other" else grid["rows"]
+    row = next(r for r in rows if r["label"] == "Revenue YoY growth")
+    return row["cells"][[c["label"] for c in columns].index(label)]
+
+
+def dated(column, start, end):
+    return {**column, "start": start, "end": end}
+
+
+def test_the_first_forecast_year_grows_on_the_history_year_of_its_own_number():
+    columns = [
+        history_column(("FY2024", "FY", "FY2024", None), ("940", "276")),
+        history_column(("FY2025", "FY", "FY2025", "FY2024"), ("1000", "300")),
+    ]
+    cell = growth_of(store.read_cashflow(history_files(columns), None)[0])
+    assert Fraction(cell["exact"]) == Fraction(5, 100)  # 1050 on 1000, not on 940
+
+
+def test_the_first_forecast_year_falls_back_to_the_year_before_it():
+    columns = [history_column(("FY2024", "FY", "FY2024", None), ("1000", "300"))]
+    cell = growth_of(store.read_cashflow(history_files(columns), None)[0])
+    assert Fraction(cell["exact"]) == Fraction(5, 100)
+
+
+def test_every_case_in_the_other_grid_grows_on_the_same_base():
+    columns = [
+        history_column(("FY2024", "FY", "FY2024", None), ("940", "276")),
+        history_column(("FY2025", "FY", "FY2025", "FY2024"), ("1000", "300")),
+    ]
+    files = {**cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS"), "calculation.json": None}
+    files["calculation.json"] = history_files(columns)["calculation.json"]
+    grid = store.read_cashflow(files, None)[0]
+    cell = growth_of(grid, "FY2025E", "other")
+    assert Fraction(cell["exact"]) == Fraction(110, 100) - 1  # Upside 1100 on 1000
+
+
+def test_growth_between_periods_of_unequal_length_is_not_shown():
+    columns = [
+        dated(
+            history_column(("Q3_2024", "QUARTER", "Q3 2024", None), ("250", "75")),
+            "2024-07-01",
+            "2024-09-30",
+        ),
+        dated(
+            history_column(("Q3_2025", "QUARTER", "Q3 2025", "Q3_2024"), ("270", "84")),
+            "2025-06-01",
+            "2025-09-30",
+        ),
+    ]
+    grid = store.read_cashflow(history_files(columns), None)[0]
+    cell = growth_of(grid, "Q3 2025")
+    assert (cell["status"], cell["reason"]) == (
+        "na",
+        "the prior-year period has a different length",
+    )
+
+
+def test_growth_on_periods_within_seven_days_of_each_other_is_shown():
+    columns = [
+        dated(
+            history_column(("Q3_2024", "QUARTER", "Q3 2024", None), ("250", "75")),
+            "2024-07-01",
+            "2024-09-30",
+        ),
+        dated(
+            history_column(("Q3_2025", "QUARTER", "Q3 2025", "Q3_2024"), ("270", "84")),
+            "2025-07-01",
+            "2025-10-06",
+        ),
+    ]
+    cell = growth_of(store.read_cashflow(history_files(columns), None)[0], "Q3 2025")
+    assert Fraction(cell["exact"]) == Fraction(8, 100)
+
+
+def test_the_first_forecast_year_does_not_grow_on_a_short_fiscal_year():
+    columns = [
+        dated(
+            history_column(("FY2024", "FY", "FY2024", None), ("1000", "300")),
+            "2024-04-01",
+            "2024-12-31",
+        )
+    ]
+    cell = growth_of(store.read_cashflow(history_files(columns), None)[0])
+    assert (cell["status"], cell["reason"]) == (
+        "na",
+        "the prior fiscal year is not twelve months",
+    )
+
+
+def test_the_first_forecast_year_grows_on_an_ordinary_dated_year():
+    column = dated(
+        history_column(("FY2024", "FY", "FY2024", None), ("1000", "300")),
+        "2024-01-01",
+        "2024-12-30",  # 365 days inclusive
+    )
+    cell = growth_of(store.read_cashflow(history_files([column]), None)[0])
+    assert Fraction(cell["exact"]) == Fraction(5, 100)  # 1050 on 1000
+
+
+def test_the_first_forecast_year_grows_on_a_fifty_three_week_year_and_an_undated_year():
+    wide = dated(
+        history_column(("FY2024", "FY", "FY2024", None), ("1000", "300")),
+        "2023-12-31",
+        "2025-01-04",  # 371 days inclusive
+    )
+    assert Fraction(
+        growth_of(store.read_cashflow(history_files([wide]), None)[0])["exact"]
+    ) == Fraction(5, 100)
+    too_long = dated(wide, "2023-12-30", "2025-01-04")  # 372 days inclusive
+    cell = growth_of(store.read_cashflow(history_files([too_long]), None)[0])
+    assert cell["status"] == "na"
+
+
+PAIRS = [
+    ("Q", "QUARTER", "FY", "FY2024"),
+    ("F", "FY", "QUARTER", "Q4 2024"),
+    ("Y", "YTD", "PRIOR_LTM", "PRIOR_LTM"),
+    ("L", "LTM", "PYTD", "PYTD"),
+    ("P", "PYTD", "YTD", "YTD"),
+]
+
+
+@pytest.mark.parametrize("kind, prior_kind, prior_id", [(p[1], p[2], p[3]) for p in PAIRS])
+def test_a_prior_of_another_family_is_a_malformed_history(kind, prior_kind, prior_id):
+    other = history_column((prior_id, prior_kind, prior_id, None), ("1", "1"))
+    me = history_column(("ME", kind, "me", prior_id), ("1", "1"))
+    grid, problem = store.read_cashflow(history_files([other, me]), None)
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        ("FY2024", "QUARTER", "Q4 2024", None),
+        ("FY2024", "LTM", "LTM", None),
+        ("2024", "FY", "x", None),
+    ],
+)
+def test_a_fiscal_year_id_and_the_fiscal_year_kind_go_together(identity):
+    column = history_column(identity, ("1", "1"))
+    grid, problem = store.read_cashflow(history_files([column]), None)
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+def test_the_prior_pairs_the_producer_emits_are_accepted():
+    pairs = [
+        ("Q1", "QUARTER", None),
+        ("Q2", "QUARTER", "Q1"),
+        ("YTD", "YTD", "PYTD"),
+        ("PYTD", "PYTD", None),
+        ("FY2023", "FY", None),
+        ("FY2024", "FY", "FY2023"),
+        ("LTM", "LTM", "PRIOR_LTM"),
+        ("PRIOR_LTM", "PRIOR_LTM", None),
+    ]
+    columns = [history_column((i, k, i, p), ("1", "1")) for i, k, p in pairs]
+    assert store.read_cashflow(history_files(columns), None)[1] is None
+
+
+def test_a_row_the_history_does_not_carry_says_so_and_a_column_reason_still_wins():
+    grid = store.read_cashflow(FILES, None)[0]
+    row = next(r for r in grid["rows"] if r["label"] == "Distributions")
+    assert row["cells"][0]["reason"] == "the period history does not carry this line"
+    assert all(r["cells"][8]["reason"] == NO_PF for r in grid["rows"])
+
+
+def test_the_history_notes_say_leverage_is_for_twelve_month_periods():
+    notes = store.read_cashflow(FILES, None)[0]["notes"]
+    assert not any("Ratios are shown for fiscal years only." in note for note in notes)
+    assert any(note.endswith("Leverage is shown for twelve-month periods only.") for note in notes)
+    plain = store.read_cashflow({**FILES, "calculation.json": WITHOUT_HISTORY}, None)[0]["notes"]
+    assert any("Ratios are shown for fiscal years only." in note for note in plain)
+
+
+def test_an_empty_column_reason_is_a_malformed_history_and_null_is_no_reason():
+    column = history_column(("PF", "PF", "PF LTM", None), ("1", "1"), reason="")
+    grid, problem = store.read_cashflow(history_files([column]), None)
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+@pytest.mark.parametrize("limits", [["x"] * 201, ["x" * 2001]])
+def test_history_limits_are_bounded_in_count_and_length(limits):
+    column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
+    grid, problem = store.read_cashflow(history_files([column], limits), None)
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+def test_history_limits_at_the_bounds_are_kept():
+    column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
+    limits = ["x" * 2000] * 200
+    grid = store.read_cashflow(history_files([column], limits), None)[0]
+    assert grid["limits"] == limits
+
+
+# Base case and one Downside case in the main grid; the other cases in a second grid.
+FIRST_YEAR_REVENUE = {
+    "REFERENCE": "1050",
+    "UPSIDE": "1100",
+    "DOWNSIDE_DRIVERS": "1000",
+    "DOWNSIDE": "1040",
+}
+
+
+def cases(*keys, years=3):
+    outputs = {
+        key: {
+            "years": [forecast_year(2025 + n, FIRST_YEAR_REVENUE[key], "300") for n in range(years)]
+        }
+        for key in keys
+    }
+    exact = {"outputs": outputs, "scope_limits": ["Every figure is Python's arithmetic."]}
+    return {**FILES, "forecast_exact.json": json.dumps(exact).encode()}
+
+
+def test_the_shock_is_the_downside_when_both_downsides_exist():
+    grid = store.read_cashflow(cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE"), None)[
+        0
+    ]
+    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
+    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")["cells"]
+    assert [revenue[-6]["exact"], revenue[-3]["exact"]] == ["1050", "1040"]
+    assert [c["group"] for c in grid["other"]["columns"]][::3] == [
+        "Upside",
+        "Downside (CP-2G drivers)",
+    ]
+    other = next(r for r in grid["other"]["rows"] if r["label"] == "Revenue")["cells"]
+    assert [other[0]["exact"], other[3]["exact"]] == ["1100", "1000"]
+    assert (
+        "Downside case is the stress case: a shock applied to the base-case drivers."
+        in grid["notes"]
+    )
+
+
+def test_cp2gs_downside_is_the_downside_without_a_shock():
+    grid = store.read_cashflow(cases("REFERENCE", "DOWNSIDE_DRIVERS"), None)[0]
+    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")["cells"]
+    assert revenue[-3]["exact"] == "1000"
+    assert grid["other"] is None
+    assert (
+        "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
+        in grid["notes"]
+    )
+
+
+def test_no_downside_is_an_unavailable_column_not_a_missing_one():
+    grid = store.read_cashflow(cases("REFERENCE"), None)[0]
+    assert (grid["columns"][-1]["group"], grid["columns"][-1]["label"]) == (
+        "Downside case",
+        "Downside",
+    )
+    reason = "no downside case was computed in this run"
+    assert all(r["cells"][-1]["reason"] == reason for r in grid["rows"])
+    assert "Downside case: no downside case was computed in this run." in grid["notes"]
+
+
+def test_the_other_grid_holds_only_forecast_columns_and_prior_year_growth_from_the_history():
+    grid = store.read_cashflow(cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS"), None)[0]
+    other = grid["other"]
+    assert {c["group"] for c in other["columns"]} == {"Upside"}
+    assert [c["label"] for c in other["columns"]] == ["FY2025E", "FY2026E", "FY2027E"]
+    assert all(len(r["cells"]) == 3 for r in other["rows"])
+    growth = next(r for r in other["rows"] if r["label"] == "Revenue YoY growth")["cells"]
+    assert Fraction(growth[0]["exact"]) == Fraction(1100, 1000) - 1  # on FY2024, 1000 in history
+    assert Fraction(growth[1]["exact"]) == 0
+
+
+def test_cases_beyond_the_cell_budget_end_in_the_limit_problem():
+    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE", years=20)
+    grid, problem = store.read_cashflow(files, None, budget=1000)
+    assert grid is None and problem[0] == "limit"
+
+
+def test_the_cells_charged_to_the_page_budget_are_both_grids_cells():
+    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE", years=3)
+    grid = store.read_cashflow(files, None)[0]
+    assert grid["other"] is not None
+    main = len(grid["rows"]) * len(grid["columns"])
+    other = len(grid["other"]["rows"]) * len(grid["other"]["columns"])
+    assert other > 0
+    assert store.grid_cells(grid) == main + other
+
+
+def test_a_budget_one_short_of_two_models_with_other_grids_refuses_the_second():
+    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE", years=3)
+    first = store.read_cashflow(files, None)[0]
+    cells = len(first["rows"]) * (len(first["columns"]) + len(first["other"]["columns"]))
+    budget = 2 * cells - 1
+    built, _ = store.read_cashflow(files, None, budget)
+    assert built is not None
+    second, problem = store.read_cashflow(files, None, budget - store.grid_cells(built))
+    assert second is None and problem[0] == "limit"
+    exact, _ = store.read_cashflow(files, None, budget + 1 - store.grid_cells(built))
+    assert exact is not None
+
+
+def downside_of(outputs):
+    exact = {"outputs": outputs, "scope_limits": []}
+    files = {
+        **FILES,
+        "forecast_exact.json": json.dumps(exact).encode(),
+        "calculation.json": WITHOUT_HISTORY,
+    }
+    return store.read_cashflow(files, None)[0]
+
+
+def three_years(revenue):
+    return {"years": [forecast_year(2025 + n, revenue, "300") for n in range(3)]}
+
+
+def test_an_empty_shock_leaves_the_cp2g_downside_as_the_downside_case():
+    grid = downside_of(
+        {
+            "REFERENCE": three_years("1000"),
+            "DOWNSIDE_DRIVERS": three_years("900"),
+            "DOWNSIDE": {"years": []},
+        }
+    )
+    assert [c["label"] for c in grid["columns"] if c["group"] == "Downside case"] == [
+        "FY2025E",
+        "FY2026E",
+        "FY2027E",
+    ]
+    assert grid["other"] is None
+    assert grid["notes"][-1] == store.DOWNSIDE_NOTES["DOWNSIDE_DRIVERS"]
+
+
+def test_every_downside_empty_gives_the_placeholder_and_its_note():
+    grid = downside_of(
+        {
+            "REFERENCE": three_years("1000"),
+            "DOWNSIDE_DRIVERS": {"years": []},
+            "DOWNSIDE": {"years": []},
+        }
+    )
+    assert (grid["columns"][-1]["group"], grid["columns"][-1]["label"]) == (
+        "Downside case",
+        "Downside",
+    )
+    assert all(r["cells"][-1]["reason"] == store.NO_DOWNSIDE for r in grid["rows"])
+    assert grid["other"] is None
+    assert grid["notes"][-1] == store.DOWNSIDE_NOTES[None]
+
+
+def test_an_empty_case_opens_no_group_in_the_other_grid():
+    grid = downside_of({"REFERENCE": three_years("1000"), "UPSIDE": {"years": []}})
+    assert grid["other"] is None
+
+
+def test_the_page_budget_charges_both_grids_of_every_model(monkeypatch):
+    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE", years=3)
+    asked: list[int | None] = []
+
+    def read_model(reads, artifact, manifest, issues, budget=None):
+        asked.append(budget)
+        ask = store.GridAsk(None, budget)
+        grid = store.cashflow_or_issues(artifact["folder"], {}, dict(files), ask, issues)
+        return {"id": artifact["folder"], "cashflow": grid}
+
+    monkeypatch.setattr(
+        store, "shown_models", lambda root, catalogue, manifests=None: ({"m1", "m2"}, [])
+    )
+    monkeypatch.setattr(store, "run_shows", lambda *args: True)
+    monkeypatch.setattr(store, "read_model", read_model)
+    artifacts = [
+        {"folder": f, "available": True, "kind": "model", "href": "x"} for f in ("m1", "m2")
+    ]
+    catalogue = {"real": [{"artifacts": artifacts}]}
+    prior = ({}, {}, {}, {"m1": "", "m2": ""})
+    one = store.read_cashflow(files, None)[0]
+    assert one["other"] is not None
+    built = len(one["rows"]) * (len(one["columns"]) + len(one["other"]["columns"]))
+    models, _ = store.catalogue_models(Path("."), catalogue, prior)
+    assert len(models) == 2 and asked[0] - asked[1] == built
+    for budget, second_shown in ((2 * built - 1, False), (2 * built, True)):
+        asked.clear()
+        monkeypatch.setattr(store, "CASHFLOW_CELL_BUDGET", budget)
+        models, _ = store.catalogue_models(Path("."), catalogue, prior)
+        assert [m["cashflow"] is not None for m in models] == [True, second_shown]
