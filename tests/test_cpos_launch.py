@@ -802,6 +802,53 @@ def test_the_offline_cap_check_holds_the_research_modules_search_fee_when_it_wil
         hold(between, "d", web_search=True)
 
 
+def with_case_kind(path: Path, kind: str) -> Path:
+    data = json.loads(path.read_text())
+    data["run"]["case_kind"] = kind
+    path.write_text(json.dumps(data))
+    return path
+
+
+STANDING = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
+
+
+def search_holds(tmp_path: Path, kind: str) -> tuple[Decimal, Decimal, list[str], str]:
+    """The CP-DR hold without and with the ruling's search, the launcher's argv and its Web line."""
+    argv = launch(tmp_path, "--modules", "CP-DR", "--ruling", str(STANDING))
+    context = with_case_kind(tmp_path / "context.json", kind)
+    holds = [
+        prepare(
+            context,
+            tmp_path / "issuer",
+            tmp_path / name,
+            config="sol-medium",
+            cap="50",
+            modules=("CP-DR",),
+            web_search=searching,
+        ).hold
+        for name, searching in (("plain", False), ("search", True))
+    ]
+    return holds[0], holds[1], argv, kind
+
+
+def test_a_synthetic_case_holds_no_search_fee_and_the_launcher_says_why(tmp_path, capsys):
+    # One rule (model/handoff.py web_search_offered): the offline check holds what the loop holds.
+    plain, searching, argv, _ = search_holds(tmp_path, "synthetic")
+    assert searching == plain
+    assert main(argv) == 0
+    assert "Web:      off: synthetic case" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("kind", ["public", "private"])
+def test_a_public_or_private_case_holds_the_search_fee_and_the_launcher_says_it_searches(
+    tmp_path, capsys, kind
+):
+    plain, searching, argv, _ = search_holds(tmp_path, kind)
+    assert searching - plain == Decimal("0.16")
+    assert main(argv) == 0
+    assert "Web:      CP-DR searches the web" in capsys.readouterr().out
+
+
 def test_a_ruling_that_lists_web_search_makes_the_command_line_check_the_search_hold(
     tmp_path, capsys
 ):
@@ -2163,6 +2210,14 @@ BASE = {
     "cash": "100",
     "undrawn": "50",
 }
+
+
+def printed(key: str, amount: str) -> str:
+    """How CP-1 prints a base operand. A working capital investment (the operand, an outflow) is
+    printed negative, as CP-2G reads it (`Operands.from_cp1` reverses the sign): `(10)` for 10."""
+    return f"({amount})" if key == "wc" else amount
+
+
 PATHS = {
     "revenue_growth": ("0.05", "0.04", "0.03"),
     "ebitda_margin": ("0.30", "0.31", "0.32"),
@@ -2210,7 +2265,7 @@ def forecast_answer(
     CP-2G ends its findings with the inputs block."""
     text = answer(context, routes)
     if context["module_id"] == "CP-1":
-        rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items())
+        rows = "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items())
         # Above the owner's chart table, so the base amounts do not read as rows of that table.
         mark = "### Chart data: revenue and EBITDA"
         # Where another chart table sits above (the covenant pathway), or none, the base table
@@ -2376,7 +2431,7 @@ def _operand(amount, row="revenue", period="FY2025"):
 
 def _cp1_doc(revenue_table: str, key: str = "revenue", head: str = "", tail: str = "") -> str:
     """A CP-1 handoff: the other nine operands in a plain table, `key`'s in the given one."""
-    rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items() if k != key)
+    rows = "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items() if k != key)
     return (
         f"# CP-1\n\n## Findings\n\n### Bottom line\n\nText.\n\n### Base operands\n\n{head}"
         f"| Base | FY2025 |\n| --- | --- |\n{rows}\n\n{revenue_table}\n\n__BLOCK__\n"
@@ -2474,6 +2529,36 @@ def test_a_layer1_table_under_a_later_heading_still_counts_after_sources_ends():
     row = "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,234 |"
     doc = _cp1_doc("", tail=f"\n## Sources\n\nx\n\n## Appendix\n\n{row}\n")
     assert _parse_layer1(doc, amount="1234")
+
+
+def _wc_doc(cell: str) -> str:
+    return _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Working capital | {cell} |", "wc")
+
+
+@pytest.mark.parametrize(
+    ("cell", "amount"), [("(45)", "45"), ("-45", "45"), ("45", "-45"), ("+45", "-45")]
+)
+def test_a_layer1_working_capital_is_the_cell_sign_reversed_as_cp2g_reads_it(cell, amount):
+    assert _parse_layer1(_wc_doc(cell), "wc", amount=amount, row="Working capital")
+
+
+@pytest.mark.parametrize(("cell", "amount"), [("45", "45"), ("+45", "45"), ("(45)", "-45")])
+def test_a_layer1_working_capital_release_read_as_an_outflow_is_refused(cell, amount):
+    with pytest.raises(ValueError, match="is not CP-1's cell"):
+        _parse_layer1(_wc_doc(cell), "wc", amount=amount, row="Working capital")
+
+
+def test_a_layer1_table_in_a_tilde_fence_is_code_and_not_a_cell():
+    doc = _cp1_doc("~~~\n" + TWO_YEARS + "\n~~~")
+    with pytest.raises(ValueError, match="no table cell"):
+        _parse_layer1(doc, amount="1000", period="FY2025")
+
+
+def test_a_layer1_escaped_pipe_stays_inside_its_cell():
+    table = "| Metric | Note | FY2025 |\n| --- | --- | --- |\n| revenue | a \\| 900 | 1,000 |"
+    assert _parse_layer1(_cp1_doc(table), amount="1000", period="FY2025")
+    with pytest.raises(ValueError, match="is not CP-1's cell"):
+        _parse_layer1(_cp1_doc(table), amount="900", period="FY2025")
 
 
 @pytest.mark.parametrize("printed", ["85", "-85", "(85)", "\u221285", "**(85)**"])

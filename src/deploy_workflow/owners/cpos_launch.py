@@ -58,9 +58,10 @@ from deploy_workflow.model.adapter import (
 from deploy_workflow.model.budget import Budget
 from deploy_workflow.model.handoff import (
     WEB_SEARCH_CALLS_PER_TURN,
-    WEB_SEARCH_MODULE,
+    WEB_SEARCH_CASE_KINDS,
     Check,
     _pages,
+    web_search_offered,
 )
 from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
 from deploy_workflow.model_testing.configs import CONFIGS
@@ -1526,8 +1527,10 @@ LAYER1_FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
     "your own tables that you read the amount from, and `period` the exact header text of that "
     'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). Copy '
-    "the amount as that cell prints it, in millions; for interest, taxes, working capital and "
-    "capex write the positive magnitude whatever sign the cell shows. Print your tables as "
+    "the amount as that cell prints it, in millions; for interest, taxes and capex write the "
+    "positive magnitude whatever sign the cell shows; for working capital write the cell's value "
+    "with its sign reversed (a cell printing (45), an investment, is 45; a cell printing 45 or "
+    "+45, a release, is -45). Print your tables as "
     "you normally would; add nothing for this block. A figure in prose, a basis line or the "
     "sources is not a cell. `base_drivers` is a run-rate base case and nothing more "
     "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
@@ -1836,7 +1839,7 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         request_reservation_usd(price_of(config), len(text) + 4096, MAX_OUTPUT_TOKENS)
         + (
             web_search_usd(WEB_SEARCH_CALLS_PER_TURN)
-            if web_search and module == WEB_SEARCH_MODULE
+            if web_search_offered(web_search, module, settings.run.case_kind)
             else 0
         )
         for module, text in texts.items()
@@ -1967,6 +1970,9 @@ def _web_line(prepared: Prepared, ruling: Path | None) -> tuple[str, ...]:
     """Whether the research module searches the web, when it runs."""
     if "CP-DR" not in prepared.ordered:
         return ()
+    kind = prepared.plan.run.case_kind
+    if web_search_ruled(ruling) and kind not in WEB_SEARCH_CASE_KINDS:
+        return (f"Web:      off: {kind} case",)
     if web_search_ruled(ruling):
         return (f"Web:      CP-DR searches the web (the ruling lists {WEB_SEARCH_GRANT})",)
     why = "the ruling does not list" if ruling is not None else "no ruling lists"

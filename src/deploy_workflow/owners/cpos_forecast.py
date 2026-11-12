@@ -142,7 +142,7 @@ def _printed(text: str, amount: str) -> bool:
     )
 
 
-_CELL = re.compile(r"(?P<minus>[-\u2212])?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
+_CELL = re.compile(r"(?:\+|(?P<minus>[-\u2212]))?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
 _BRACKET = re.compile(r"\((?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\)")
 
 
@@ -152,8 +152,8 @@ def _plain(cell: str) -> str:
 
 
 def _signed(cell: str) -> Decimal | None:
-    """`1,000`, `-1,000`, `\u22121,000` and `(1,000)` as signed numbers; anything else, such as a
-    unit or scale suffix, a percentage or `n.a.`, is not a number."""
+    """`1,000`, `+1,000`, `-1,000`, `\u22121,000` and `(1,000)` as signed numbers; anything else,
+    such as a unit or scale suffix, a percentage or `n.a.`, is not a number."""
     text = _plain(cell)
     if (bracket := _BRACKET.fullmatch(text)) is not None:
         return -Decimal(bracket["digits"].replace(",", ""))
@@ -170,19 +170,20 @@ def _tables(text: str) -> list[list[list[str]]]:
     tables: list[list[list[str]]] = []
     run: list[list[str]] = []
     seen_delimiter = False
-    fenced = False
+    fence = ""  # the marker (``` or ~~~) of the code fence in force, else empty
     block = sources = False
     for number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
-        if stripped.startswith("```"):
-            fenced = not fenced
+        if marker := next((m for m in ("```", "~~~") if stripped.startswith(m)), ""):
+            fence = "" if fence == marker else (fence or marker)
+        fenced = bool(fence)
         heading = None if fenced else re.match(r"(#{1,6})\s+(.*?)\s*#*\s*$", line)
         if heading is not None:
             block = stripped == HEADING
             if len(heading[1]) <= 2:
                 sources = len(heading[1]) == 2 and heading[2] == "Sources"
         cells = (
-            [c.strip() for c in stripped[1:-1].split("|")]
+            [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", stripped[1:-1])]
             if stripped.startswith("|") and stripped.endswith("|") and len(stripped) > 1
             else None
         )
@@ -217,8 +218,13 @@ def _cells(text: str, label: str, period: str) -> set[str]:
 
 
 def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
-    """The one sign rule: the block takes an outflow as a positive magnitude, so an outflow
-    compares by magnitude however CP-1 prints it; every other operand compares signed."""
+    """The one sign rule. Working capital is read as CP-2G reads it (`Operands.from_cp1`): the
+    operand is the cell with its sign reversed, so a printed (45), an investment, is 45 and a
+    printed +45, a release, is -45; a magnitude match would turn a release into an outflow.
+    Interest, taxes and capex are positive magnitudes however CP-1 prints them; every other
+    operand compares signed."""
+    if key == "wc":
+        return -cell == amount
     return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
 
 
