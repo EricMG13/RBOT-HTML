@@ -4,6 +4,10 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Changes tab in the issuer library (branch `claude/changes-section`, stacked on PR #55, decision M8)
+Scope: `changes.js` renders the pack and CP-8's handoff; the store carries `run.changes`; offline. CI fast list 2,265 passed; node 268; browser gate 147 passed; quality gate 0; answer keys are literals from the pack and handoff.
+Not verified: a real CP-8 run in the tab; a CP-8 refusal's pack (the delivery omits it); dark mode (none); a reader check against the VMO2 reference.
+
 ## 2026-11-12 — CP-8 fixes, rounds 1-3 (branches `claude/cp8-changes-r1`, `-r3`)
 
 Scope: engine, method and run start service, offline, no provider call. Round 1: pack schema `cpos-changes/2` (difference

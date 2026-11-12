@@ -972,7 +972,7 @@ def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_pat
         assert seen["text"].startswith("Showing run: 31 December 2025 · Credit snapshot · ")
         assert long.upper() in seen["text"]
         assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
-        assert seen["tabs"] == ["Report", "Overview", "Modules", "Forecast", "Evidence"]
+        assert seen["tabs"] == ["Report", "Overview", "Changes", "Modules", "Forecast", "Evidence"]
         assert seen["current"] == [route.split("?")[0][3:]]
         # The chart index is the Forecast page's; the Overview selects passages instead.
         assert seen["indexRows"] == (

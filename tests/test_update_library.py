@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from library_fixtures import make_run, method
+from library_fixtures import make_run, method, with_changes, without_report
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/issuer-library"))
@@ -455,3 +455,78 @@ def test_a_download_outside_the_library_folder_is_refused(tmp_path):
     assert not (tmp_path / "escaped.md").exists()
     update_library.write_download(library, library / "downloads/ok.md", b"x")
     assert (library / "downloads/ok.md").read_bytes() == b"x"
+
+
+# ---- The Changes tab's data: each run carries what its delivery says about the comparison.
+PACK = {
+    "schema": "cpos-changes/2",
+    "prior": {"run": "nbg-2024-09-30-credit_snapshot", "as_of": "2024-09-30"},
+    "measures": [{"key": "cash", "comparable": "yes", "difference": "0"}],
+}
+NOTE = "changes: not produced \u2014 cpos_live_not_accepted: CP-8 not accepted within bounds"
+
+
+def changes_of(workspace: Path, folder: str) -> dict:
+    runs = data_of(workspace)["workspace"]["runs"]
+    return next(run["changes"] for run in runs.values() if run["folder"] == folder)
+
+
+def current_run(workspace: Path, folder: str, **spec) -> Path:
+    """A run with a current-kind delivery; returns its run folder."""
+    return without_report(make_run(workspace, folder, **spec)).parent.parent
+
+
+def test_a_first_run_carries_no_pack_and_no_note_and_names_its_lead_module(tmp_path):
+    current_run(tmp_path, "first")
+    update_library.update_library(tmp_path)
+    assert changes_of(tmp_path, "first") == {
+        "lead": "CP-2",
+        "pack": None,
+        "note": None,
+        "problem": None,
+    }
+
+
+@pytest.mark.parametrize(
+    ("pathway", "lead"),
+    [("earnings_update", "CP-1B"), ("short_snapshot", "CP-L10"), ("relative_value", "CP-2")],
+)
+def test_the_lead_module_of_the_pathway_travels_with_the_run(tmp_path, pathway, lead):
+    current_run(tmp_path, "r", pathway=pathway)
+    update_library.update_library(tmp_path)
+    assert changes_of(tmp_path, "r")["lead"] == lead
+
+
+def test_the_published_pack_is_carried_unchanged(tmp_path):
+    with_changes(current_run(tmp_path, "later"), pack=json.dumps(PACK).encode())
+    update_library.update_library(tmp_path)
+    got = changes_of(tmp_path, "later")
+    assert got["pack"] == PACK
+    assert got["note"] is None
+    assert got["problem"] is None
+
+
+def test_a_cp8_that_was_not_produced_carries_its_recorded_reason(tmp_path):
+    with_changes(current_run(tmp_path, "later"), note=NOTE)
+    update_library.update_library(tmp_path)
+    got = changes_of(tmp_path, "later")
+    assert got["note"] == NOTE
+    assert got["pack"] is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "why"),
+    [
+        (b"{not json", "is not valid JSON"),
+        (json.dumps({**PACK, "schema": "cpos-changes/1"}).encode(), "schema 'cpos-changes/1'"),
+        (b"[1]", "is not a JSON object"),
+    ],
+)
+def test_a_pack_that_cannot_be_read_is_said_so_and_is_never_a_first_run(tmp_path, raw, why):
+    with_changes(current_run(tmp_path, "later"), pack=raw)
+    update_library.update_library(tmp_path)
+    got = changes_of(tmp_path, "later")
+    assert got["pack"] is None
+    assert why in got["problem"]
+    issues = data_of(tmp_path)["workspace"]["issues"]
+    assert any(i.startswith("later: ") and "changes.json" in i and why in i for i in issues)
