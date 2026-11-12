@@ -238,7 +238,9 @@ def test_the_steps_each_pathway_shows_at_each_level(page):
         'short_snapshot']) {
       pick('data-k="pathway"', pathway);
       out[pathway] = {};
-      for (const l of ['basic', 'standard', 'advanced']) { level(l); out[pathway][l] = stages(); }
+      for (const l of ['basic', 'standard', 'advanced']) {
+        level(l); out[pathway][l] = stages(); out[pathway][l + 'Groups'] = seqFor(build());
+      }
     }
     pick('data-k="pathway"', 'credit_snapshot');
     level('advanced'); out.subset = {advanced: !document.getElementById('adv-run').hidden};
@@ -258,7 +260,22 @@ def test_the_steps_each_pathway_shows_at_each_level(page):
         "short_snapshot": {"basic": four, "standard": four, "advanced": four},
     }
     for pathway, levels in expected.items():
-        assert seen[pathway] == levels, pathway
+        assert {k: v for k, v in seen[pathway].items() if "Groups" not in k} == levels, pathway
+    # The groups behind those steps (documents first); pinned assumptions come from Advanced only.
+    rv_standard = ["documents", "pathway", "issuer", "market", "valuation", "assumptions", "review"]
+    cov = ["documents", "pathway", "issuer", "legal", "assumptions", "review"]
+    assert seen["relative_value"]["basicGroups"] == ["documents", "pathway", "issuer", "review"]
+    assert seen["relative_value"]["standardGroups"] == rv_standard
+    assert seen["relative_value"]["advancedGroups"] == rv_standard
+    assert seen["covenant_refinancing"]["standardGroups"] == cov
+    assert seen["covenant_refinancing"]["advancedGroups"] == cov
+    assert seen["covenant_refinancing"]["basicGroups"] == [
+        "documents",
+        "pathway",
+        "issuer",
+        "legal",
+        "review",
+    ]
     assert seen["subset"] == {"advanced": True, "basic": False}  # module subset and turns
 
 
@@ -298,35 +315,27 @@ def test_purpose_and_the_later_steps_are_locked_until_a_file_is_read(page):
     assert seen["opened"] == "purpose"
 
 
-def test_an_error_in_the_legal_group_marks_confirm_and_its_link_opens_it(page):
+def test_an_error_in_a_confirm_group_marks_confirm_and_its_link_opens_it(page):
     seen = page.run(f"""
-    await issuer('credit_snapshot', [file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
-    gotoStep('confirm');
-    choose('legal-file', 'credit-agreement.txt'); pick('data-k="legal_documents"', 'executed');
-    gotoStep('purpose');
-    // vis() resets an executed answer whose file was cleared, so no real edit leaves this error
-    // standing; the rule is still the page's, so hold the reset off to see how a step shows it.
-    setRadio = () => {{}};
-    $('legal-file').value = '';
-    update();
-    const out = {{cur, legalOnScreen: !$('st-legal').hidden, errs: errs.map(e => e.st)}};
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    gotoStep('confirm'); gotoStep('purpose');
+    const out = {{cur, issuerOnScreen: !$('st-issuer').hidden, errs: errs.map(e => e.st)}};
     out.states = Object.fromEntries([...document.querySelectorAll('#stepper button')]
       .map(b => [b.dataset.step,
         [b.querySelector('.sstate').textContent, b.getAttribute('aria-disabled')]]));
     document.querySelector('#stepper [data-step="confirm"]').click();
-    out.confirm = {{cur, legal: !$('st-legal').hidden, issuer: !$('st-issuer').hidden}};
     $('next').click();
     const link = document.querySelector('#steperr [data-go]');
-    out.link = link && [link.textContent, link.dataset.go === errs[0].el.id, errs[0].el.dataset.k];
+    out.link = link && link.dataset.go;
+    link.click();
+    out.after = {{cur, focus: document.activeElement.id}};
     return out;
     """)
-    assert seen["cur"] == "purpose" and seen["legalOnScreen"] is False
-    assert seen["errs"] == ["legal"]
+    assert seen["cur"] == "purpose" and seen["issuerOnScreen"] is False
+    assert seen["errs"] and set(seen["errs"]) == {"issuer"}
     assert seen["states"]["confirm"][0] == "Needs attention"
     assert seen["states"]["start"] == ["Locked", "true"]
-    assert seen["confirm"] == {"cur": "confirm", "legal": True, "issuer": True}
-    assert seen["link"][1:] == [True, "legal_documents"]
-    assert "choose the uploaded file" in seen["link"][0]
+    assert seen["link"] and seen["after"] == {"cur": "confirm", "focus": seen["link"]}
 
 
 def test_an_error_link_to_a_step_not_on_screen_opens_it_and_focuses_the_field(page):
@@ -2821,3 +2830,25 @@ def test_the_research_text_for_claude_says_it_does_not_search(page):
         "reads only the supplied files. "
         "Add peers' filings to the documents if you want them used."
     )
+
+
+def test_more_context_stays_on_screen_while_it_is_the_step_being_edited(page):
+    # At Basic, More context shows only because of a held answer. Undoing that answer on the
+    # step itself must not take the step (or its group) out from under the analyst.
+    seen = page.run(f"""
+    await issuer('relative_value', [file('annual.txt', {json.dumps(REPORT)})]); level('basic');
+    const alt = [...document.querySelectorAll('[data-k="peer_source"]')]
+      .find(x => x.value !== 'cp_dr_public');
+    pick('data-k="peer_source"', alt.value);
+    const withAnswer = stages();
+    document.querySelector('#stepper [data-step="more"]').click();
+    const on = cur;
+    pick('data-k="peer_source"', 'cp_dr_public');
+    const held = {{cur, steps: stages(), valuation: !$('st-valuation').hidden}};
+    gotoStep('start');
+    return {{withAnswer, on, held, left: stages()}};
+    """)
+    assert "more" in seen["withAnswer"] and seen["on"] == "more"
+    assert seen["held"]["cur"] == "more" and "more" in seen["held"]["steps"]
+    assert seen["held"]["valuation"] is True
+    assert "more" not in seen["left"]  # once the analyst leaves it with nothing held, it goes

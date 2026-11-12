@@ -1335,7 +1335,7 @@ const NEXT_LABEL = {purpose:'Choose the purpose', confirm:'Confirm the details',
 const FIRST_STEP = STEP_IDS[0];
 const stepOf = group => STEP_IDS.find(s => STEPS[s].includes(group));
 const BLOCK_USES = {deal:['CP-3'], quote:['CP-3','CP-3D'], rating:['CP-2H'], cp3mode:['CP-3'], cp6:['CP-6']};
-// How much is asked: Basic the first four stages, Standard adds market, valuation and questions, Advanced everything.
+// How much is asked: Basic the documents, purpose, issuer and legal file; Standard adds market, valuation and questions; Advanced everything.
 const RANK = {basic:0, standard:1, advanced:2};
 const LEVEL_NOTE = {basic:'Documents, the purpose, the issuer and the legal file. Everything else takes its default.',
   standard:'Adds market inputs, peers and module settings, and your research questions. Pinned assumptions, valuation basis and your own multiple take their defaults.',
@@ -1352,12 +1352,12 @@ function marketBlocks(o) {
 const asmShown = o => Object.keys(ASM_MODULE).filter(k => runOf(o.run.pathway).includes(ASM_MODULE[k]) || o.assumptions[k]);
 const valuationNeeded = o => ['CP-1C', 'CP-4C'].some(m => runOf(o.run.pathway).includes(m));
 // The groups this run needs at this level. A group the level does not ask is left out, unless it holds an
-// answer or a problem (so nothing loaded or chosen is ever hidden) or it is the group a button asked for.
+// answer or a problem (so nothing loaded or chosen is ever hidden) or it is the group a button asked for or one already on screen in the step being edited.
 function seqFor(o) {
   const errIn = st => errs.some(e => e.st === st), mb = marketBlocks(o), v = o.valuation, mo = o.module_options || {};
   const has = m => runOf(o.run.pathway).includes(m), lvl = RANK[LEVEL];
   return STAGES.filter(st => {
-    if (st === curGroup || errIn(st)) return true;
+    if (st === curGroup || errIn(st) || (STEPS[cur].includes(st) && !$('st-' + st).hidden)) return true;
     switch (st) {
       case 'legal': return readiness(o).counted.some(x => x.go === 'legal') || has('CP-4') || has('CP-2A') || has('CP-4C') || o.attachments.legal_documents !== 'none' || !!getC('legalfile');
       case 'market': return o.run.run_type === 'primary' || o.deal_terms.length + o.quotes.length + o.ratings.length > 0 || (lvl >= 1 && (mb.deal || mb.quote || mb.rating));
