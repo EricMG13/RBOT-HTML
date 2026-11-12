@@ -3497,3 +3497,54 @@ def test_a_code_after_a_year_with_no_scale_or_number_is_no_unit():
     found = _hold("Cash was 2010 USD 31.")
     assert any("figure 31 is held in neither" in i for i in found), found
     assert not any("2010" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2010 millions",
+        "2010 USD millions",
+        "2010 USD mn",
+        "2010 EUR billions",
+        "2010 USD thousands",
+        "2010 US$ million",
+        "2010 US$ millions",
+        "2010 US$m",
+        "2010 USDm",
+        "2010 USD m",
+        "2010USD Millions",
+    ],
+)
+def test_a_year_shaped_number_with_a_plural_or_mn_scale_is_a_figure(text):
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures(text)] == ["2010"], text
+
+
+@pytest.mark.parametrize("text", ["In 2024 USD strengthened", "2024 US$4,216 million"])
+def test_a_year_before_a_currency_of_the_next_number_stays_a_year(text):
+    from deploy_workflow.changes_check import _figures
+
+    assert "2024" not in [str(f.size) for f in _figures(text)], text
+
+
+def test_a_hyphenated_number_after_a_month_year_is_not_cut_mid_number():
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures("September 2024-437")] == ["437"]
+    assert _figures("FY 2024-25") == []
+
+
+@pytest.mark.parametrize("row", ["| - | -", "| - | - |", "| -- | --- |"])
+def test_a_row_of_short_dash_cells_is_no_table_separator(row):
+    text = f"| Item | Cash 2010 US$m |\n{row}\n| a | b |"
+    found = _hold(text, _cash_pack("-2010", "-1100"))
+    assert any("figure 2010 is the difference" in i for i in found), (row, found)
+
+
+def test_a_range_of_two_years_reads_no_figure_and_k10_accepts_it():
+    from deploy_workflow.changes_check import _figures
+
+    text = "Finance lease obligations, 2025-2045 maturities"
+    assert _figures(text) == []
+    assert _hold(text) == ()

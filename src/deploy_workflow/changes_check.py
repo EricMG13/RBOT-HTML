@@ -108,18 +108,19 @@ _MONTH = (
 # a whole, also after such a marker (`Q3 2024-09-30`).
 _EXEMPT = re.compile(
     rf"\b(?:(?:FY|CY|LTM|[QH][1-4])\s?|(?i:fiscal\s+|{_MONTH}\s+))(?:19|20)\d{{2}}\b(?![.,]\d|-\d)"
-    r"|\d{4}-\d{2}(?:-\d{2})?|\b(?:FY|CY)\d{2,4}E?\b|\b[QH][1-4]\b|\bLTM\b|\b(?:[1-9]|1[0-2])M\b"
+    r"|\d{4}-\d{2}(?:-\d{2}|(?!\d))|\b(?:FY|CY)\d{2,4}E?\b|\b[QH][1-4]\b|\bLTM\b|\b(?:[1-9]|1[0-2])M\b"
 )
 _YEAR_TOKEN = re.compile(r"(?:19|20)\d{2}")
 # A year is a figure beside a currency only for a currency code (`USD 1913`), never another
 # capitalised word (`AND 2023`); a code with a scale (`USDm`) counts after it too.
 _CODES = "USD|EUR|GBP|CHF|JPY|CAD|AUD|NZD|SEK|NOK|DKK|CNY|HKD|SGD|ZAR|INR|BRL|MXN|PLN|CZK|HUF|TRY"
+_UNITS = r"(?i:millions?|billions?|thousands?)|mn\b|bn\b|[mk]\b"  # a scale after a figure
 _SCALE = (
-    r"%|x\b|bps?\b|pp\b|[mk]\b|bn\b|(?i:million|billion|thousand|percent)"
+    rf"%|x\b|bps?\b|pp\b|{_UNITS}|(?i:percent)"
     r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b"
 )
 _YEAR_AFTER = re.compile(
-    rf"\s*(?:{_SCALE}|(?:{_CODES})\s*(?:(?i:million|billion|thousand)|bn|[mk])\b|[A-Z]{{3}}(?:m|bn|k)\b)"
+    rf"\s*(?:{_SCALE}|(?:{_CODES}|[A-Z]{{2,3}}[$€£¥]|[$€£¥])\s*(?:{_UNITS})|[A-Z]{{3}}(?:m|bn|k)\b)"
 )
 _YEAR_BEFORE = re.compile(rf"(?:[$€£¥]|\b(?:{_CODES})) ?$")
 # A currency directly followed by a number belongs to that number (`2025 USD 30,199`).
@@ -1122,7 +1123,8 @@ def _header_rows(lines: Sequence[str]) -> frozenset[int]:
 
     def separator(text: str) -> bool:
         text = text.strip()
-        return "|" in text and "-" in text and not (set(text) - set("|-: "))
+        cells = [c.strip() for c in text.strip().split("|") if c.strip()]
+        return "|" in text and bool(cells) and all(re.fullmatch(r":?-{3,}:?", c) for c in cells)
 
     return frozenset(
         i

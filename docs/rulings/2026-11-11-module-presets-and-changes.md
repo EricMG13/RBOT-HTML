@@ -446,3 +446,8 @@ again. (L1) A count noun that starts the next line of the same paragraph counts 
 removed. (L2) A table separator row without outer pipes (`--- | ---`) marks the header row above it. (L3) A currency code
 after a year is a unit only with a scale after it (`2010 USDm`, `2010 USD million`) or a number (`2025 USD 30,199`):
 `In 2024 USD strengthened` reads no figure.
+Amendment, 2026-11-12 (fix round 2). (M-A) The scale after a currency code or symbol, with or without a space, is any of
+million(s), billion(s), thousand(s), `mn`, `bn`, `m`, `k` (words case-insensitive), so `2010 USD millions` and `2010 US$ million` are figures. (L-A1) The ISO
+exemption (`YYYY-MM`, `YYYY-MM-DD`) matches only when its last two digits are not followed by another digit: `September 2024-437` reads 437, and `2025-2045` reads
+two years (the 45 once read from `2025-2045` was a fragment, not a figure). Limit: a two-digit number written directly after a year and a hyphen (`FY 2024-30 US$m`) is read as a year range and hides the 30. (L-B) A table separator row
+needs at least three dashes in every cell (colons allowed); no real separator row in the retained runs has fewer.
