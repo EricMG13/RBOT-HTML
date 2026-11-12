@@ -54,6 +54,14 @@ In `cp2g._year`, with a schedule: cash interest is `interest[t] * (1 + k)` (k th
 6. Rebased onto main `36b6d8f` (2026-11-12): CP-1 may now write a layer-1 forecast block (`parse(..., source="CP-1")`). Facilities are CP-2G's only: a CP-1 block that states `facilities` is refused, as it already is for a shock or cases. CP-1's instruction (`LAYER1_FORECAST_BLOCK`) is not changed.
 5. No presentation change: `cp2g.Year` keeps its fields, so `apps/issuer-library/credit_os/store.py` and the Forecast page read the same keys. New detail appears only in `forecast_exact.json` and `scope_limits`.
 
+### Rulings added in review (2026-11-12, adversarial review of Task 3)
+
+7. Scheduled repayments over the three years above a known base debt are refused (`CP-2G: scheduled repayments total {sum}, more than base debt {debt}`), so total debt never closes below zero. Facility balances above base debt (within ruling 4) are named: `Stated facility balances exceed base debt by {amount}; interest is computed on the stated balances.`
+8. A floating facility's all-in rate, `max(reference_rate[t], floor) + spread`, must be from 0 to 0.30 in every forecast year.
+9. Rate terms must be printed in CP-1 as a percent (the value followed by `%`); the refusal reads `CP-2G: facility {name} {field} {value}% is not printed in CP-1`.
+10. Maturity limits read `{name} matures in FY{year} and is assumed refinanced; no repayment at maturity is modelled.` and, before the forecast, `{name} has a stated maturity of {YYYY-MM-DD}, before the forecast; it is assumed refinanced and no repayment at maturity is modelled.` These replace the text in ruling 3 and Task 3.
+11. Facility names carry no leading or trailing whitespace and are unique ignoring case.
+
 ## Global Constraints
 
 - Excel is input only; no workbook output.
@@ -278,7 +286,7 @@ def test_cp2g_is_told_how_to_state_facilities(tmp_path):
     _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
     head = texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
     for word in ("`facilities`", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate",
-                 "annual_amortisation", "maturity", "exactly as CP-1 prints"):
+                 "annual_amortisation", "maturity", "exactly as CP-1 prints", "% sign", '"0.04"'):
         assert word in head
     assert "`facilities`" not in texts["CP-1"]
 ```
@@ -286,7 +294,7 @@ def test_cp2g_is_told_how_to_state_facilities(tmp_path):
 - [ ] **Step 2: Run** `uv run pytest tests/test_cpos_launch.py -q -k told_how_to_state_facilities` — expected: fails.
 - [ ] **Step 3: Add this sentence group to `FORECAST_BLOCK`, after the `upside_drivers` sentence** (exact copy):
 
-> `facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate terms, otherwise write null. Each row is `{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", "annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, `spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it (a 9.500% coupon is "9.500"). A fixed-rate facility states `fixed_rate_pct` and null for the other rate fields; a floating-rate facility states `spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for each forecast year as three decimal fractions. `annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is YYYY-MM-DD or null. When `facilities` is stated Python computes cash interest and scheduled repayment from it and does not use the `interest_rate` and `debt_repayment` drivers, so do not vary those two in `upside_drivers` or `downside_drivers`.
+> `facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate terms, otherwise write null. Each row is `{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", "annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, `spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states `fixed_rate_pct` and null for the other rate fields; a floating-rate facility states `spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for each forecast year as three decimal fractions (4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread must be between 0% and 30% in every year. Facility names are unique. The facilities' scheduled repayments over the three years must not exceed base debt. `annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is YYYY-MM-DD or null. When `facilities` is stated Python computes cash interest and scheduled repayment from it and does not use the `interest_rate` and `debt_repayment` drivers, so do not vary those two in `upside_drivers` or `downside_drivers`.
 
 - [ ] **Step 4: Update `methods/cp2g.md`**: the Method bullet says interest and repayment come from stated facilities when present (analyst rate and repayment otherwise); the maturities row says a maturity inside the forecast is held and named; no other row changes.
 - [ ] **Step 5: Run** `uv run pytest tests/test_cpos_launch.py -q -k "instruction or forecast or told"` and `uv run python tools/quality_gate.py` — expected: pass, exit 0.
