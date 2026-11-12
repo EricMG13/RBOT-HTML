@@ -47,6 +47,8 @@ def answers_for(**change: Any) -> dict[str, Any]:
         "modules": [],
         "max_turns": 32,
         "level": "basic",
+        "model": "gpt",
+        "effort": "balanced",
         "submitted_by": "analyst",
     }
     base.update(change)

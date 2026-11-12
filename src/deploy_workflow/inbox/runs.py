@@ -25,6 +25,19 @@ Status = Literal["queued", "running", "finished", "failed", "capped", "rejected"
 _REGISTRY = "issuers.json"
 DEFAULT_MAX_TURNS = 32
 _TURNS = (1, 64)  # the range submissions.validated accepts
+MODELS = ("gpt", "claude")
+EFFORTS = ("fast", "balanced", "high")
+# The only launches the service makes: (model, effort) -> (launcher --config, --balanced or not).
+# Every config named here must be named by the standing ruling; start-up checks all of them.
+_LAUNCHES: dict[tuple[str, str], tuple[str, bool]] = {
+    ("gpt", "fast"): ("sol-medium", False),
+    ("gpt", "balanced"): ("sol-medium", True),
+    ("gpt", "high"): ("sol-high", False),
+    ("claude", "fast"): ("opus-medium", False),
+    ("claude", "balanced"): ("opus-medium", True),
+    ("claude", "high"): ("opus-high", False),
+}
+LAUNCH_CONFIGS = tuple(dict.fromkeys(config for config, _ in _LAUNCHES.values()))
 
 
 @dataclass
@@ -49,6 +62,9 @@ class Record:
     modules: tuple[str, ...] = ()  # () = the pathway's modules
     max_turns: int = DEFAULT_MAX_TURNS
     level: str = ""
+    # Records written before the model and effort choice ran all-medium on GPT Sol.
+    model: str = "gpt"
+    effort: str = "fast"
     submitted_by: str = ""
     digest: str = ""  # the approved digest of the submitted files; the move is checked against it
 
@@ -141,9 +157,29 @@ def alive(pid: int) -> bool:
     return True
 
 
+def launch_options(model: str, effort: str) -> tuple[str, bool]:
+    """The launcher ``--config`` and whether ``--balanced`` follows it, for a model and effort."""
+    try:
+        return _LAUNCHES[model, effort]
+    except (KeyError, TypeError):
+        raise ValueError(f"no launch for model {model!r} at effort {effort!r}") from None
+
+
+def config_for(model: str, effort: str) -> str:
+    """The configuration a run of this model and effort launches with."""
+    return launch_options(model, effort)[0]
+
+
 def _check_options(record: Record) -> None:
-    """``ValueError`` unless the record's modules are method names and its turns a whole number
-    in range: a hand-edited record must not put an option of its own into the launcher's argv."""
+    """``ValueError`` unless the record's modules are method names, its turns a whole number in
+    range and its model and effort known: a hand-edited record must not put an option of its own
+    into the launcher's argv."""
+    for field, allowed in (("model", MODELS), ("effort", EFFORTS)):
+        value = getattr(record, field)
+        if not isinstance(value, str) or value not in allowed:
+            raise ValueError(
+                f"run {record.id}: {field} {value!r} is not one of {', '.join(allowed)}"
+            )
     for name in record.modules:
         if not isinstance(name, str) or name not in METHODS:
             raise ValueError(f"run {record.id}: {name!r} is not a module")
@@ -158,16 +194,17 @@ def command(  # noqa: PLR0913 - the signature the scheduler calls
     context: Path,
     *,
     launcher: Sequence[str],
-    config: str,
     cap: Decimal,
     ruling: Path | None,
 ) -> list[str]:
     _check_options(record)
+    config, balanced = launch_options(record.model, record.effort)
     argv = [
         *launcher,
         "--context", str(context),
         "--sources", str(layout.drops / record.id),
         "--config", config,
+        *(["--balanced"] if balanced else []),
         "--cap", str(cap),
         "--out", str(layout.runs / record.id),
         "--no-library",
@@ -187,14 +224,11 @@ def start(  # noqa: PLR0913 - the signature the scheduler calls
     context: Path,
     *,
     launcher: Sequence[str],
-    config: str,
     cap: Decimal,
     ruling: Path,
 ) -> subprocess.Popen[bytes]:
     """Start the paid run as a child; stdout and stderr append to logs/<id>.log."""
-    argv = command(
-        layout, record, context, launcher=launcher, config=config, cap=cap, ruling=ruling
-    )
+    argv = command(layout, record, context, launcher=launcher, cap=cap, ruling=ruling)
     env = child_environment()
     env[PID_FILE_VARIABLE] = str(pid_file(layout, record.id))
     child: subprocess.Popen[bytes] | None = None

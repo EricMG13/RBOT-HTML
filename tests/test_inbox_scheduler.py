@@ -42,6 +42,7 @@ from inbox_fixtures import (
 
 from deploy_workflow.inbox import activity
 from deploy_workflow.inbox import scheduler as scheduler_module
+from deploy_workflow.inbox import startup as startup_module
 from deploy_workflow.inbox.layout import Layout, ensure_layout
 from deploy_workflow.inbox.runs import Record, alive, load_all
 from deploy_workflow.inbox.scheduler import Scheduler, Settings, StartupRefused
@@ -50,6 +51,7 @@ from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cpos_launch
 from deploy_workflow.owners.cpos_launch import update_library_at
+from deploy_workflow.run_start import submissions
 
 pytest_plugins = ["inbox_fixtures"]
 
@@ -126,10 +128,12 @@ def test_a_submission_is_run_by_the_real_launcher_and_listed(root, tmp_path, mon
             "modules": [],
             "max_turns": 32,
             "level": "basic",
+            "model": "gpt",
+            "effort": "balanced",
             "submitted_by": "analyst",
         }
     )
-    got = submissions.summary(lay, sid, answers, config=w.settings.config, cap=w.settings.cap)
+    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
     assert got["error"] == "", got["error"]
     w.submit(sid, answers, str(got["digest"]))
     pump(w, lambda: status(root) not in ([], ["queued"], ["running"]), limit=120)
@@ -371,7 +375,7 @@ def test_a_ruling_other_than_the_standing_one_is_refused_at_start_up(root, tmp_p
     monkeypatch.setenv(KEY_VARIABLES[CONFIGS["sol-high"].provider], "test-key-not-real")
     sol_high = REPO / "docs/rulings/2026-11-09-tdg-sol-high-test.md"
     with pytest.raises(StartupRefused, match="2026-11-11-run-start-submit"):
-        Scheduler(settings(root, config="sol-high", ruling=sol_high))
+        Scheduler(settings(root, ruling=sol_high))
     other = tmp_path / "2026-11-09-tdg-sol-high-test.md"
     other.write_text("sol-medium", encoding="utf-8")
     with pytest.raises(StartupRefused, match="2026-11-11-run-start-submit"):
@@ -400,6 +404,138 @@ def test_every_launch_is_under_the_standing_ruling_even_if_a_symlink_is_repointe
     finally:
         w.close()
     assert launched == [STANDING_RULING]
+
+
+def _ruling_without(tmp_path: Path, config: str, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A copy of the standing ruling that does not name ``config``, made the standing one."""
+    rulings = tmp_path / "rulings"
+    rulings.mkdir()
+    lines = STANDING_RULING.read_text(encoding="utf-8").splitlines()
+    kept = [
+        " ".join(t for t in line.split() if t != config) if line.startswith("configs:") else line
+        for line in lines
+    ]
+    copy = rulings / STANDING_RULING.name
+    copy.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    monkeypatch.setattr("deploy_workflow.model.adapter.LIVE_RULINGS_ROOT", rulings)
+    monkeypatch.setattr(startup_module, "STANDING_RULING", copy)
+    return copy
+
+
+@pytest.mark.parametrize("missing", ["sol-medium", "sol-high", "opus-medium", "opus-high"])
+def test_start_up_is_refused_when_the_ruling_lacks_one_of_the_four_configs(
+    root, tmp_path, monkeypatch, missing
+):
+    copy = _ruling_without(tmp_path, missing, monkeypatch)
+    with pytest.raises(StartupRefused, match=f"does not list '{missing}'"):
+        Scheduler(settings(root, ruling=copy))
+
+
+def test_start_up_needs_the_openai_key_but_not_the_anthropic_key(root, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    Scheduler(settings(root)).close()
+    monkeypatch.delenv("OPENAI_API_KEY")
+    with pytest.raises(StartupRefused, match="OPENAI_API_KEY is not set"):
+        Scheduler(settings(root))
+
+
+def _submit_advanced(w: Scheduler, root: Path, model: str, effort: str) -> Record:
+    body = json.loads(json.dumps(CONTEXT))
+    body["run"]["as_of"] = "2026-11-09"
+    answers = submissions.validated(
+        {
+            "context": body,
+            "modules": [],
+            "max_turns": 32,
+            "level": "advanced",
+            "model": model,
+            "effort": effort,
+            "submitted_by": "analyst",
+        }
+    )
+    lay = Layout(root)
+    sid = submissions.new(lay)
+    (submissions.files_folder(lay, sid) / "a.txt").write_bytes(b"Net sales were 100.")
+    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
+    assert got["error"] == "", got["error"]
+    return w.submit(sid, answers, str(got["digest"]))
+
+
+@pytest.mark.parametrize(
+    ("model", "effort", "fragment"),
+    [
+        ("gpt", "fast", ["--config", "sol-medium", "--cap"]),
+        ("gpt", "balanced", ["--config", "sol-medium", "--balanced", "--cap"]),
+        ("gpt", "high", ["--config", "sol-high", "--cap"]),
+        ("claude", "fast", ["--config", "opus-medium", "--cap"]),
+        ("claude", "balanced", ["--config", "opus-medium", "--balanced", "--cap"]),
+        ("claude", "high", ["--config", "opus-high", "--cap"]),
+    ],
+)
+def test_a_submitted_model_and_effort_are_stored_and_launched(
+    root, monkeypatch, model, effort, fragment
+):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    argvs: list[list[str]] = []
+    real_command = scheduler_module.runs.command
+
+    def recording(*args: Any, **kwargs: Any) -> list[str]:
+        argv = real_command(*args, **kwargs)
+        argvs.append(argv)
+        return argv
+
+    monkeypatch.setattr(scheduler_module.runs, "command", recording)
+    monkeypatch.setattr(
+        scheduler_module.runs,
+        "start",
+        lambda *_a, **_k: subprocess.Popen([sys.executable, "-c", "pass"]),
+    )
+    w = Scheduler(settings(root))
+    try:
+        record = _submit_advanced(w, root, model, effort)
+        assert (record.model, record.effort) == (model, effort)
+        assert (load_all(layout(root))[0].model, load_all(layout(root))[0].effort) == (
+            model,
+            effort,
+        )
+        pump(w, lambda: bool(argvs))
+    finally:
+        w.close()
+    at = argvs[0].index("--config")
+    assert argvs[0][at : at + len(fragment)] == fragment
+
+
+def test_a_default_submission_stores_gpt_balanced(root):
+    w = Scheduler(settings(root))
+    try:
+        record = submit_run(w, root)
+    finally:
+        w.close()
+    assert (record.model, record.effort) == ("gpt", "balanced")
+
+
+def test_submit_refuses_claude_without_the_anthropic_key(root, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    w = Scheduler(settings(root))
+    try:
+        body = json.loads(json.dumps(CONTEXT))
+        body["run"]["as_of"] = "2026-11-09"
+        answers = submissions.validated(
+            {
+                "context": body, "modules": [], "max_turns": 32, "level": "advanced",
+                "model": "claude", "effort": "high", "submitted_by": "analyst",
+            }
+        )  # fmt: skip
+        lay = Layout(root)
+        sid = submissions.new(lay)
+        (submissions.files_folder(lay, sid) / "a.txt").write_bytes(b"Net sales were 100.")
+        got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
+        monkeypatch.delenv("ANTHROPIC_API_KEY")
+        with pytest.raises(submissions.Refused, match="Claude Opus is not available"):
+            w.submit(sid, answers, str(got["digest"]))
+        assert load_all(layout(root)) == []
+    finally:
+        w.close()
 
 
 def _log(root: Path) -> str:

@@ -344,6 +344,12 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
     <p class="help">By default every module of the pathway runs. A module you leave out does not run, and the modules a chosen module depends on are added.</p>
     <fieldset><legend>Modules to run</legend><div id="modbox"></div></fieldset>
     <div class="grid"><div class="f"><label for="turns">Turns per module</label><input type="text" id="turns" data-c="turns" value="32" inputmode="numeric" aria-describedby="turns-h"><p class="help" id="turns-h">A whole number from 1 to 64. The default is 32.</p></div></div>
+    <fieldset id="effortf" aria-describedby="effort-h"><legend>Effort</legend>
+      <div class="seg" role="radiogroup" aria-label="Effort"><label><input type="radio" name="effort" data-c="effort" value="fast">Fast</label><label><input type="radio" name="effort" data-c="effort" value="balanced" checked>Balanced</label><label><input type="radio" name="effort" data-c="effort" value="high">High</label></div>
+      <p class="help" id="effort-h">Fast runs every module at medium effort. Balanced uses high effort on the judgement modules (business context, earnings quality, credit synthesis, downside, relative value, refinancing, covenants, restructuring, committee challenge) and medium on the rest. High runs every module at high effort and costs the most.</p></fieldset>
+    <fieldset id="modelf" aria-describedby="model-h"><legend>Model</legend>
+      <div class="seg" role="radiogroup" aria-label="Model"><label><input type="radio" name="model" data-c="model" value="gpt" checked>GPT Sol</label><label><input type="radio" name="model" data-c="model" value="claude">Claude Opus</label></div>
+      <p class="help" id="model-h">Claude Opus is available only where the service has it set up.</p></fieldset>
   </div>
   <div class="run-strip" data-tone="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">A run cannot be corrected once it starts</span><p class="strip-text">If the context changes, every module runs again: a resumed run refuses changed context. The cheapest fix is the right pathway now.</p></div></div>
 </section>
@@ -1106,6 +1112,13 @@ function turnsValue(check) {
   if (check) record(errs, el, `enter a whole number from 1 to ${MAX_TURNS}.`);
   return NaN;
 }
+// The model and effort the service accepts; only the Advanced level may choose, every other level sends the defaults.
+const MODELS = {gpt: 'GPT Sol', claude: 'Claude Opus'}, EFFORTS = {fast: 'Fast', balanced: 'Balanced', high: 'High'};
+function modelEffort() {
+  if (LEVEL !== 'advanced') return {model: 'gpt', effort: 'balanced'};
+  const model = getC('model'), effort = getC('effort');
+  return {model: model in MODELS ? model : 'gpt', effort: effort in EFFORTS ? effort : 'balanced'};
+}
 // One pinned-assumption block: null when the module chooses, otherwise the values plus rationale.
 function asm(key, spec, extra, check) {
   const sc = $('as-' + key);
@@ -1645,7 +1658,7 @@ const STAGE_OF_RULE = {
 function errorStage(text) {
   if (/submitted_by/.test(text)) return 'pathway';
   if (/\b(files?|documents?|sources?|folder)\b/i.test(text)) return 'documents';
-  if (/\b(modules?|turns|level)\b/i.test(text)) return 'pathway';
+  if (/\b(modules?|turns|level|model|effort|Claude Opus)\b/i.test(text)) return 'pathway';
   return '';
 }
 let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted} for the answers and files held
@@ -1763,10 +1776,12 @@ function renderFacts(o) {
     const dates = [['As-of', o.run.as_of], ['Cutoff', o.run.cutoff], ['Current period', o.run.current_period], ['Prior period', o.run.prior_period]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(', ');
     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
-      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'], ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+      ['Cap', 'USD 20 for this run'], ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
     // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
     const sent = SUMMARY.answers || {}, left = runOf(o.run.pathway).filter(m => Array.isArray(sent.modules) && sent.modules.length && !sent.modules.includes(m));
     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
+    const me = `${MODELS[sent.model] || sent.model}, ${EFFORTS[sent.effort] || sent.effort}`;
+    rows.push(['Model and effort', sent.model === 'gpt' && sent.effort === 'balanced' ? me + ' (the default)' : me]);
     if (left.length) rows.push(['Modules left out', left.map(m => `${mname(m)} (${m})`).join(', ')]);
   }
   box.textContent = '';
@@ -2054,7 +2069,7 @@ function renderModules(order) {
 // What the service takes at /summary (run_start/submissions.py Answers).
 function answers() {
   const o = build(), order = runOf(o.run.pathway), kept = order.filter(m => !SKIPPED.has(m));
-  return {context: o, modules: kept.length === order.length ? [] : kept, max_turns: turnsValue(false), level: LEVEL, submitted_by: getC('submitter')};
+  return {context: o, modules: kept.length === order.length ? [] : kept, max_turns: turnsValue(false), ...modelEffort(), level: LEVEL, submitted_by: getC('submitter')};
 }
 
 /* ======================================================================= Keeping the answers (localStorage) */
@@ -2070,7 +2085,7 @@ function storeFailed(err) {
 const fileChoices = () => Object.fromEntries(Object.keys(FILE_SELECTS).map(c => [c, getC(c)]));
 function save(o) {
   if (!SERVED || !kept) return;
-  const extra = {submitter: getC('submitter'), turns: getC('turns'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
+  const extra = {submitter: getC('submitter'), turns: getC('turns'), model: getC('model'), effort: getC('effort'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
   try { localStorage.setItem(STORE, JSON.stringify({v: 1, id: SUB, level: LEVEL, context: o, files: fileChoices(), extra})); }
   catch (err) { storeFailed(err); }
 }
@@ -2110,6 +2125,8 @@ async function restore() {
       const notes = fill(saved.context, isObj(saved.files) ? saved.files : {}, true);
       if (typeof x.submitter === 'string') $('submitter').value = x.submitter;
       if (typeof x.turns === 'string') $('turns').value = x.turns;
+      for (const c of ['model', 'effort']) cEls(c).forEach(r => { r.checked = r.value === x[c]; });
+      for (const c of ['model', 'effort']) if (!getC(c)) cEls(c).forEach(r => { r.checked = r.defaultChecked; });
       if (Array.isArray(x.skipped)) x.skipped.forEach(m => SKIPPED.add(String(m)));
       newestTouched = x.newestTouched === true;
       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();

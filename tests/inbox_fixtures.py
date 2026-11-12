@@ -131,6 +131,8 @@ def submit_run(
             "modules": [],
             "max_turns": 32,
             "level": "basic",
+            "model": "gpt",
+            "effort": "balanced",
             "submitted_by": "analyst",
         }
     )
@@ -138,7 +140,7 @@ def submit_run(
     sid = submissions.new(lay)
     text = payload or f"Net sales were 100 for {issuer}.".encode()
     (submissions.files_folder(lay, sid) / "a.txt").write_bytes(text)
-    got = submissions.summary(lay, sid, answers, config=w.settings.config, cap=w.settings.cap)
+    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
     assert got["error"] == "", got["error"]
     return w.submit(sid, answers, str(got["digest"]))
 

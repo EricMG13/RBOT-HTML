@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import IO
 
+from deploy_workflow.inbox import runs
 from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.model.adapter import (
     COPILOT_RUNTIME_VARIABLE,
@@ -39,6 +40,8 @@ class StartupRefused(ValueError):
 PACKAGE_LOGGER = "deploy_workflow.inbox"
 # USD per run the standing ruling allows (docs/rulings/2026-11-11-run-start-submit.md; AGENTS.md).
 RULED_RUN_CAP = Decimal(20)
+# The one provider whose key start-up does not require: no key only makes its submissions refusable.
+OPTIONAL_KEY_PROVIDER = "anthropic"
 
 
 class _RootHandler(logging.FileHandler):
@@ -78,7 +81,12 @@ def close_log(layout: Layout) -> None:
             handler.close()
 
 
-def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
+def check_launchable(ruling: Path, cap: Decimal) -> None:
+    """Refuse start-up unless every launch the service can make is allowed by the standing ruling.
+
+    All four configs of ``runs.LAUNCH_CONFIGS`` must be known and named by the ruling. The OpenAI
+    key is required; the Anthropic key is optional (without it a Claude submission is refused, see
+    ``submissions.require_provider_key``)."""
     if cap.is_nan() or cap > RULED_RUN_CAP:
         raise StartupRefused(
             f"cap {cap} is above USD {RULED_RUN_CAP} per run, the limit of the standing ruling "
@@ -88,19 +96,20 @@ def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
         raise StartupRefused(
             f"the service runs only under its standing ruling {STANDING_RULING}, not {ruling}"
         )
-    config = CONFIGS.get(config_id)
-    if config is None:
-        raise StartupRefused(f"unknown config {config_id!r}")
-    try:
-        check_ruling(config_id, ruling)
-    except (LivePauseInForce, ValueError, OSError) as error:
-        raise StartupRefused(f"live runs are not allowed: {error}") from error
-    key = KEY_VARIABLES[config.provider]
-    if not os.environ.get(key):
-        raise StartupRefused(f"{key} is not set in the launching environment")
-    runtime = Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, ""))
-    if config.provider == "copilot" and not runtime.is_file():
-        raise StartupRefused(f"{COPILOT_RUNTIME_VARIABLE} must name an existing file")
+    for config_id in runs.LAUNCH_CONFIGS:
+        config = CONFIGS.get(config_id)
+        if config is None:
+            raise StartupRefused(f"unknown config {config_id!r}")
+        try:
+            check_ruling(config_id, ruling)
+        except (LivePauseInForce, ValueError, OSError) as error:
+            raise StartupRefused(f"live runs are not allowed: {error}") from error
+        key = KEY_VARIABLES[config.provider]
+        if config.provider != OPTIONAL_KEY_PROVIDER and not os.environ.get(key):
+            raise StartupRefused(f"{key} is not set in the launching environment")
+        runtime = Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, ""))
+        if config.provider == "copilot" and not runtime.is_file():
+            raise StartupRefused(f"{COPILOT_RUNTIME_VARIABLE} must name an existing file")
 
 
 def take_lock(layout: Layout) -> IO[str]:

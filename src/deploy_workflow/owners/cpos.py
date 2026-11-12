@@ -610,6 +610,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     on_handoff: Callable[[HandoffTask, bytes], None] | None = None,
     config: str = "sol-medium",
     rulings_root: Path | None = None,
+    effort_by_module: Mapping[str, str] | None = None,
 ) -> Path:
     """Explicit paid entry point; callers supply an evidence/instruction checker.
 
@@ -638,6 +639,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             max_output_tokens=max_output_tokens,
             events=directory,
             web_search=web_search_ruled(ruling, rulings_root),
+            effort_by_module=effort_by_module,
         )
         result = run_handoffs(
             manifest,

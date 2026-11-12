@@ -93,6 +93,15 @@ def test_snapshot_marks_a_silent_run_as_stalled(layout):
     assert late["runs"][0]["stalled"] is True and "stalled" not in soon["runs"][0]
 
 
+def test_snapshot_entry_carries_the_model_and_effort(layout):
+    record = Record("m1", "credit_snapshot", "acme", "queued", "t", model="claude", effort="high")
+    plain = Record("m2", "credit_snapshot", "acme", "queued", "t")
+    data = snapshot(layout, [record, plain], cap=Decimal(20), now=datetime(2026, 11, 9, tzinfo=UTC))
+    by_id = {r["id"]: r for r in data["runs"]}
+    assert (by_id["m1"]["model"], by_id["m1"]["effort"]) == ("claude", "high")
+    assert (by_id["m2"]["model"], by_id["m2"]["effort"]) == ("gpt", "fast")
+
+
 def test_snapshot_orders_runs_and_reads_each_run_folder(layout):
     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
     records = [

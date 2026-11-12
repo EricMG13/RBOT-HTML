@@ -274,11 +274,18 @@ def test_unknown_effort_refused() -> None:
 
 @pytest.mark.parametrize(
     ("spec", "effort"),
-    [(SOL, "max"), (OPUS, "high"), (DEEPSEEK, "medium")],
+    [(SOL, "max"), (OPUS, "xhigh"), (DEEPSEEK, "medium")],
 )
 def test_effort_outside_the_section_7_1_uses_refused(spec: ModelSpec, effort: str) -> None:
     with pytest.raises(UnknownEffort):
         build(spec, _request(effort=effort), KEY)
+
+
+def test_opus_high_is_admitted_and_sent_as_output_config_effort() -> None:
+    spec = ModelSpec("opus-high", "anthropic", "claude-opus-5-5", "high")
+    assert json.loads(build(spec, _request(effort="high"), KEY).body)["output_config"] == {
+        "effort": "high"
+    }
 
 
 def test_sol_high_is_admitted() -> None:

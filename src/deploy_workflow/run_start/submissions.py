@@ -25,6 +25,8 @@ from typing import Any, BinaryIO, TypedDict
 from deploy_workflow.context import load_context
 from deploy_workflow.inbox.filing import safe_name
 from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
+from deploy_workflow.inbox.runs import EFFORTS, MODELS, config_for
+from deploy_workflow.model.adapter import KEY_VARIABLES
 from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
 
 MAX_FILE = 50 * 1024 * 1024
@@ -46,7 +48,10 @@ _MODULE_NAME_AT_MOST = 12
 _TURNS = (1, 64)
 _LEVELS = ("basic", "standard", "advanced")
 _SUBMITTER_AT_MOST = 80
-_KEYS = {"context", "modules", "max_turns", "level", "submitted_by"}
+_KEYS = {"context", "modules", "max_turns", "level", "submitted_by", "model", "effort"}
+DEFAULT_MODEL, DEFAULT_EFFORT = "gpt", "balanced"  # the only pair below the Advanced level
+_ADVANCED = "advanced"
+_CLAUDE_UNAVAILABLE = "Claude Opus is not available on this service"
 _CHANGED = "the documents changed while the summary was being made; open the summary again"
 
 log = logging.getLogger(__name__)
@@ -71,6 +76,8 @@ class Answers(TypedDict):
     max_turns: int  # 32 unless Advanced changes it
     level: str  # "basic" | "standard" | "advanced"
     submitted_by: str
+    model: str  # "gpt" | "claude"; anything but "gpt" needs Advanced
+    effort: str  # "fast" | "balanced" | "high"; anything but "balanced" needs Advanced
 
 
 def validated(answers: object) -> Answers:
@@ -89,10 +96,26 @@ def validated(answers: object) -> Answers:
         raise Refused(f"max_turns is a whole number from {_TURNS[0]} to {_TURNS[1]}")
     if answers["level"] not in _LEVELS:
         raise Refused(f"level is one of {', '.join(_LEVELS)}")
+    if answers["model"] not in MODELS:  # a list or None is not hashable-safe: compare as text
+        raise Refused(f"model is one of {', '.join(MODELS)}")
+    if answers["effort"] not in EFFORTS:
+        raise Refused(f"effort is one of {', '.join(EFFORTS)}")
+    chosen = (answers["model"], answers["effort"]) != (DEFAULT_MODEL, DEFAULT_EFFORT)
+    if chosen and answers["level"] != _ADVANCED:
+        raise Refused("the model and effort can be changed only at the Advanced level")
     by = answers["submitted_by"]
     if not isinstance(by, str) or len(by) > _SUBMITTER_AT_MOST:
         raise Refused(f"submitted_by is text of at most {_SUBMITTER_AT_MOST} characters")
     return answers  # type: ignore[return-value]
+
+
+def require_provider_key(answers: Answers) -> None:
+    """``Refused`` when the answers pick Claude and this service's environment has no Anthropic key.
+
+    Only presence is read; the key's value is never returned, logged or shown. Start-up requires
+    the OpenAI key but not this one, so its absence only makes Claude submissions refusable."""
+    if answers["model"] == "claude" and not os.environ.get(KEY_VARIABLES["anthropic"]):
+        raise Refused(_CLAUDE_UNAVAILABLE)
 
 
 def _open_folders(layout: Layout) -> list[Path]:
@@ -401,13 +424,16 @@ def _digest(root: Path, answers: Answers) -> str:
         "files": files,
         "modules": list(answers["modules"]),
         "max_turns": answers["max_turns"],
+        "model": answers["model"],
+        "effort": answers["effort"],
     }
     text = json.dumps(covered, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("ascii")).hexdigest()
 
 
 def digest(layout: Layout, sid: str, answers: Answers) -> str:
-    """SHA-256 over the context, each stored file's name and hash, the modules and the turns.
+    """SHA-256 over the context, each stored file's name and hash, the modules, the turns, the model
+    and the effort.
 
     ``level`` and ``submitted_by`` are not covered: they change what the page shows, not the run."""
     answers = validated(answers)
@@ -476,10 +502,10 @@ def _record_issued(layout: Layout, sid: str, value: str) -> None:
             temp.unlink(missing_ok=True)
 
 
-def summary(
-    layout: Layout, sid: str, answers: Answers, *, config: str, cap: Decimal
-) -> dict[str, Any]:
+def summary(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict[str, Any]:
     """The launcher's own forecast for these files and answers, with the digest to approve.
+
+    The forecast is for the config the answers' model and effort launch with (``runs.config_for``).
 
     The digest it returns is the one approval this service will accept for the submission: it is
     recorded in ``uploads/<id>/issued``, replaced by each later summary and removed when a summary
@@ -487,7 +513,7 @@ def summary(
     one; both are under the state folder, never in the files, and both are removed. A refusal
     comes back as ``error`` with no digest, and so does a change to the documents while the
     forecast was being made."""
-    result = _summarise(layout, sid, answers, config=config, cap=cap)
+    result = _summarise(layout, sid, answers, cap=cap)
     digest_issued = result.get("digest", "")
     try:
         _record_issued(layout, sid, digest_issued)
@@ -499,11 +525,10 @@ def summary(
     return result
 
 
-def _summarise(
-    layout: Layout, sid: str, answers: Answers, *, config: str, cap: Decimal
-) -> dict[str, Any]:
+def _summarise(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict[str, Any]:
     try:
         answers = validated(answers)
+        require_provider_key(answers)
     except Refused as refusal:
         return {"error": str(refusal)}
     files = files_folder(layout, sid)
@@ -532,7 +557,7 @@ def _summarise(
                         context,
                         files,
                         work / "run",
-                        config=config,
+                        config=config_for(answers["model"], answers["effort"]),
                         cap=cap,
                         modules=answers["modules"] or None,
                     )
@@ -552,6 +577,8 @@ def _summarise(
                 "documents": list(prepared.documents),
                 "ignored": list(prepared.ignored),
                 "omitted": list(prepared.omitted),
+                "model": answers["model"],
+                "effort": answers["effort"],
             }
         finally:
             _remove(work)
