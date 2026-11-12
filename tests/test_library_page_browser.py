@@ -1194,7 +1194,9 @@ def test_report_history_has_no_start_link_from_a_file(tmp_path):
 FORECAST_CASES_PROBE = Path(__file__).with_name("browser_probe_forecast_cases.js")
 
 
-def library_with_four_case_model(tmp_path: Path) -> Path:
+def library_with_four_case_model(
+    tmp_path: Path, keys: tuple[str, ...] = ("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE")
+) -> Path:
     """A library whose run lists one model: the store's real grid over the hand-written files of
     test_credit_os_store (history plus the four CP-2G cases). The model's envelope is the only
     synthetic part (accepted by the controller); no published model folder is built."""
@@ -1206,9 +1208,7 @@ def library_with_four_case_model(tmp_path: Path) -> Path:
     data_js = tmp_path / "library/data.js"
     prefix = "window.CREDIT_OS_DATA="
     data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
-    grid, problem = store.read_cashflow(
-        cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE"), None
-    )
+    grid, problem = store.read_cashflow(cases(*keys), None)
     assert problem is None
     run = data["workspace"]["runs"]["run-a"]
     data["workspace"]["models"] = [
@@ -1265,6 +1265,21 @@ def test_the_page_shows_the_other_forecast_cases_in_a_closed_details_below_the_m
         "label": "n.a.: no handoff states pro forma adjustments",
     }
     assert seen["fits"] is True and seen["ids"] is True  # the grid scrolls inside its region
+
+
+@pytest.mark.parametrize(
+    "keys, last",
+    [
+        (("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE"), "FY2027E"),
+        (("REFERENCE",), "FY2027E"),
+    ],
+)
+def test_the_caption_range_ends_on_the_last_real_period_never_the_placeholder(tmp_path, keys, last):
+    page = library_with_four_case_model(tmp_path, keys)
+    dom, console = visit(page, "#W-Forecast/model-a?c=run-a")
+    assert console == []
+    caption = re.search(r'<p class="forecast-caption">(.*?)</p>', dom, re.DOTALL)[1]
+    assert f"Q3 2024 to {last} " in caption and " to Downside" not in caption
 
 
 def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):

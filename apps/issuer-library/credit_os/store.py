@@ -1381,7 +1381,7 @@ LTM_NOTE = (
     "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise the last "
     "fiscal year plus the year to date less the prior year to date."
 )
-HISTORY_LIMIT_COUNT = 50
+HISTORY_LIMIT_COUNT = 200
 HISTORY_LIMIT_CHARS = 2000
 # The prior a history column of a kind may name, as the period history writes them.
 HISTORY_PRIOR_KINDS = {"QUARTER": "QUARTER", "YTD": "PYTD", "FY": "FY", "LTM": "PRIOR_LTM"}
@@ -1896,7 +1896,7 @@ def forecast_inputs(exact: Any) -> tuple[Forecast, list[str], list[str]]:
 
 DOWNSIDE_CASE = "Downside case"
 DOWNSIDE_NOTES = {
-    "DOWNSIDE": "Downside case is the CP-2A shock applied to the base-case drivers.",
+    "DOWNSIDE": "Downside case is the stress case: a shock applied to the base-case drivers.",
     "DOWNSIDE_DRIVERS": (
         "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
     ),
@@ -1979,6 +1979,8 @@ def history_column_input(column: Any) -> None:
         optional_text(column[name], f"the {name} of a history column")
     if column["reason"] == "":
         raise ValueError("the reason of a history column is empty")
+    if column["reason"] is not None and column["reason"].isspace():
+        raise ValueError("the reason of a history column is only whitespace")
     for name in ("start", "end"):
         if column[name] is not None and not (
             isinstance(column[name], str) and valid_date(column[name])
@@ -2037,9 +2039,12 @@ def check_history_priors(columns: list[dict[str, Any]]) -> None:
         if kind == "FY" and not placeholder and FISCAL_HEADER.fullmatch(name) is None:
             raise ValueError("a fiscal-year history column's id is not FY and a year")
         if prior is not None and (
-            prior == name or HISTORY_PRIOR_KINDS.get(kind) != kinds.get(prior)
+            prior == name or prior not in kinds or HISTORY_PRIOR_KINDS.get(kind) != kinds.get(prior)
         ):
             raise ValueError("a history column's prior is not a column of the kind that follows")
+        year_prior = kind == "FY" and prior is not None and prior != FY_PLACEHOLDER
+        if year_prior and prior != f"FY{int(name[2:]) - 1}":
+            raise ValueError("a fiscal year's prior is not the year before it")
 
 
 def history_columns(history: list[dict[str, Any]]) -> list[Column]:
@@ -2167,9 +2172,7 @@ def twelve_months(column: Column) -> bool:
     return span_days(column["start"], column["end"]) + 1 in YEAR_DAYS
 
 
-def first_year_prior(
-    columns: list[Column], fiscal_index: dict[str, int], year: int, on_base: bool
-) -> int | None:
+def first_year_prior(fiscal_index: dict[str, int], year: int, on_base: bool) -> int | None:
     """The fiscal-year column a case's first year grows on, in `fiscal_index`.
 
     With the period history (`on_base`) that is the column of the first year's own number, the
@@ -2193,7 +2196,7 @@ def forecast_columns(
             prior = case_index.get(year["year"] - 1)
             first = prior is None and not case_index
             if first:
-                prior = first_year_prior(columns, fiscal_index, year["year"], on_base)
+                prior = first_year_prior(fiscal_index, year["year"], on_base)
             columns.append(
                 Column(
                     label=f"FY{year['year']}E",

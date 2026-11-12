@@ -933,7 +933,9 @@ function cashflowTable(c) {
 function cashflowSection(model) {
   const c=model.cashflow;
   if(!c)return '<section class="forecast-cashflow"><h2>Cash flow model</h2><p>This model has no readable calculation record.</p></section>';
-  const na=notAvailableLines(c),first=c.columns[0],last=c.columns[c.columns.length-1];
+  // The store's placeholder when no downside was computed is the one Downside-case column that is not a forecast year.
+  const periods=c.columns.filter(col=>!(col.group==='Downside case'&&!/^FY\d+E$/.test(col.label)));
+  const na=notAvailableLines(c),first=periods[0],last=periods[periods.length-1];
   const caption=[c.units==null?'Units not recorded':c.units,...first?[`${first.label} to ${last.label}`]:[],'history as retained in the handoffs; forecasts are conditional illustrations from the calculation record'].join(' · ');
   const other=c.other?`<details class="cashflow-other"><summary>${esc(`Other forecast cases: ${[...new Set(c.other.columns.map(col=>col.group))].join(', ')}`)}</summary><div class="table-scroll" role="region" aria-label="Other forecast cases" tabindex="0">${cashflowTable(c.other)}</div></details>`:'';
   return `<section class="forecast-cashflow"><h2 id="cashflow-heading">Cash flow model</h2><p class="forecast-caption">${esc(caption)}</p><div class="table-scroll" role="region" aria-labelledby="cashflow-heading" tabindex="0">${cashflowTable(c)}</div>${c.notes.length?`<ul class="cashflow-notes">${c.notes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}${other}${na.length?`<details class="cashflow-na"><summary>Why cells show n.a. (${na.length} lines)</summary><ul>${na.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}</section>`;
