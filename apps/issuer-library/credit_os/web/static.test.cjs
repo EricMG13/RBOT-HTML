@@ -908,13 +908,13 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
   const contexts = { [RUN]: { folder: RUN, record: more.record, ...more.runFields, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
-  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
+  const win = { location: more.location, CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, drawnAnchors, defaultOutput, firstSection};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -2638,6 +2638,37 @@ test('the run count in the meta line is the number of rows Report history lists,
   });
   assert.equal(more.issuerMeta(RUN), 'ZED · Telecoms · 3 runs');
   assert.equal(histRows(more.historyView(RUN)).length, 3);
+});
+
+// ---- "Start a run on this issuer" in the run header: the target is the latest run Report history lists, URL-encoded; drawn only over http.
+test('the start-run target is the latest run of the issuer by Report history order, its folder URL-encoded', () => {
+  const held = (folder, asOf, issuerKey = 'zed') => ({ folder, issuerKey, asOf, modules: {} });
+  const page = runPage(d => d, [], m => m, {
+    runFields: { issuerKey: 'zed', asOf: '2025-01-01' },
+    contexts: { 'run b/2': held('run b/2', '2025-06-30'), 'run-c': held('run-c', '2026-01-31', 'other') },
+    catalogue: [zedRun()],
+  });
+  // The latest as-of date of the issuer's runs is 'run b/2' (the other issuer's later run is not the issuer's).
+  assert.equal(page.startRunHref(RUN), '/?from=run%20b%2F2');
+  // The first row Report history draws is that same run.
+  assert.ok(histRows(page.historyView(RUN))[0].cells[0].includes('c=run+b%2F2'), histRows(page.historyView(RUN))[0].cells[0]); // the route's own query encoding
+  // With one run, that run.
+  assert.equal(runPage(d => d, [], m => m, { catalogue: [zedRun()] }).startRunHref(RUN), '/?from=run-a');
+  // No such run in the library: no target.
+  assert.equal(page.startRunHref('missing'), '');
+});
+
+test('the start-run link is a primary action with a plus icon, drawn only when the library is served over http and the issuer has a run', () => {
+  const served = runPage(d => d, [], m => m, { location: { protocol: 'http:' } });
+  assert.equal(served.startRunLink(RUN), '<a class="start-run primary-action" href="/?from=run-a"><img src="icons/plus.svg">Start a run on this issuer</a>');
+  assert.equal(runPage(d => d, [], m => m, { location: { protocol: 'https:' } }).startRunLink(RUN), served.startRunLink(RUN));
+  assert.equal(runPage(d => d, [], m => m, { location: { protocol: 'file:' } }).startRunLink(RUN), '');
+  assert.equal(runPage(d => d, [], m => m).startRunLink(RUN), '', 'no location: not served');
+  assert.equal(served.startRunLink('missing'), '', 'no run, no link');
+  // Report history no longer draws it: the header carries it on every run tab.
+  assert.ok(!served.historyView(RUN).includes('start-run'));
+  const chrome = read('views.js').slice(read('views.js').indexOf('function updateWorkspaceChrome'));
+  assert.ok(chrome.includes('${startRunLink(current.context)}'), 'the run header draws it');
 });
 
 // ---- The module page (redesign pass 1, task 2). Expected text is written by hand.

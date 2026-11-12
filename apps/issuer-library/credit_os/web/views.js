@@ -827,6 +827,16 @@ function issuerRuns(context) {
   const ctx=contexts[context];
   return ctx?historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey))):[];
 }
+// The start page opened on the issuer's latest run (decision of PR 52); '' when the issuer has no run in the library.
+function startRunHref(context) {
+  const latest=issuerRuns(context)[0];
+  return latest?'/?from='+encodeURIComponent(latest.folder):'';
+}
+// "Start a run on this issuer", for the run header on every run tab. Only a library served over http has the start page.
+function startRunLink(context) {
+  const href=startRunHref(context);
+  return servedOverHttp()&&href?`<a class="start-run primary-action" href="${esc(href)}">${icon('plus')}Start a run on this issuer</a>`:'';
+}
 // "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
 function runLabel(module,context) {
   const ctx=contexts[context];
@@ -846,8 +856,7 @@ function historyView(context) {
     const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
     return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
   };
-  const first=runs[0],start=servedOverHttp()&&first?`<p><a class="start-run" href="${esc('/?from='+encodeURIComponent(first.folder))}">Start a run</a></p>`:'';
-  return `${start}<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
 }
 function forecastSections(context) {
   const models=runModels(context);
@@ -1414,7 +1423,7 @@ function updateWorkspaceChrome(module) {
   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
   const header=document.querySelector('.issuer'),meta=isHome?'':issuerMeta(current.context);
   header.classList.toggle('run-header',!isHome);
-  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}</div><div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div></div>`;
+  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}</div><div class="issuer-side"><div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>${startRunLink(current.context)}</div></div>`;
   document.querySelector('.workspace-tabs').hidden=isHome;
   $('context-bar').hidden=isHome||module==='W-Report';
   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);

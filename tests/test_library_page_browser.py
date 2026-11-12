@@ -1229,7 +1229,7 @@ def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_r
     assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom
 
 
-def _history_dom_over_http(root: Path, route: str) -> str:
+def served_dom(root: Path, route: str, width: int = 1280) -> str:
     """The DOM Chrome builds for a page of the library when a local web server serves it."""
     import functools
     import http.server
@@ -1248,7 +1248,7 @@ def _history_dom_over_http(root: Path, route: str) -> str:
                 chrome(),
                 "--headless=new",
                 "--disable-gpu",
-                "--window-size=1280,900",
+                f"--window-size={width},900",
                 "--virtual-time-budget=10000",
                 "--dump-dom",
                 f"http://127.0.0.1:{server.server_address[1]}/library/index.html{route}",
@@ -1264,22 +1264,33 @@ def _history_dom_over_http(root: Path, route: str) -> str:
     return html.unescape(done.stdout)
 
 
-def test_report_history_links_start_a_run_to_the_latest_run_when_served(tmp_path):
-    make_run(tmp_path, "run-a", as_of="2024-12-31")
-    update_library.update_library(tmp_path)
-    dom = _history_dom_over_http(tmp_path, "#W-Report/history?c=run-a")
-    link = re.search(r'<a class="start-run" href="([^"]*)">([^<]*)</a>', dom)
-    assert link is not None, dom[:1500]
-    assert link[1] == "/?from=run-a" and link[2] == "Start a run"
-    assert dom.index("start-run") < dom.index('<table class="history-table">')
+START_RUN_PROBE = Path(__file__).with_name("browser_probe_start_run.js").read_text(encoding="utf-8")
+RUN_ROUTES = ["#W-Report/history?c=run-a", "#W-Overview?c=run-a", "#CP-1/head?c=run-a"]
 
 
-def test_report_history_has_no_start_link_from_a_file(tmp_path):
+@pytest.mark.parametrize("width", [1440, 600])
+@pytest.mark.parametrize("route", RUN_ROUTES)
+def test_the_run_header_starts_a_run_on_this_issuer_when_served(tmp_path, route, width):
     make_run(tmp_path, "run-a", as_of="2024-12-31")
     update_library.update_library(tmp_path)
-    dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
-    assert console == [] and '<table class="history-table">' in dom
-    assert "start-run" not in dom and ">Start a run</a>" not in dom
+    seen = read_served_probe(tmp_path / "library/index.html", route, width, START_RUN_PROBE)
+    # One link, in the header (not in the page body), the one the history page used to draw.
+    assert (seen["inHeader"], seen["inDocument"], seen["inContent"]) == (1, 1, 0)
+    assert seen["text"] == "Start a run on this issuer" and seen["href"] == "/?from=run-a"
+    assert seen["cls"] == "start-run primary-action" and seen["icons"] == 1
+    # It never overlaps the title and the page does not scroll sideways.
+    assert seen["overlapsTitle"] is False and seen["fits"] is True, seen
+    if width == 600:
+        # On a phone it is a full row under the title.
+        assert seen["belowTitle"] is True and abs(seen["linkWidth"] - seen["rowWidth"]) <= 1, seen
+
+
+@pytest.mark.parametrize("route", RUN_ROUTES)
+def test_the_run_header_has_no_start_link_from_a_file(tmp_path, route):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_probe(tmp_path / "library/index.html", route, 1280, START_RUN_PROBE)
+    assert seen["inAnyFormOfTheClass"] is False and seen["inDocument"] == 0 and seen["fits"] is True
 
 
 def inject_probe(page: Path, script: str, config=None) -> None:
@@ -1304,6 +1315,12 @@ def read_probe(page: Path, route: str, width: int, script: str, config=None) -> 
     dom, console = visit(page, route, width)
     assert console == []
     return probe_json(dom)
+
+
+def read_served_probe(page: Path, route: str, width: int, script: str) -> dict:
+    """The same over a local web server (the library is then "served over http")."""
+    inject_probe(page, script)
+    return probe_json(served_dom(page.parent.parent, route, width))
 
 
 CHROME_PROBE = Path(__file__).with_name("browser_probe_chrome.js").read_text(encoding="utf-8")
