@@ -125,10 +125,11 @@ evidence date, pathway, model and effort, exact recorded spend (unknown charges 
 zeroed), its scope statement, and each module's reader summary quoted from the handoff. "Latest"
 is per issuer by evidence date; runs sharing that date are all marked and counted.
 
-## Starting a run from Report history
+## Starting a run on an issuer
 
-When the library is served over http, an issuer's Report history has a "Start a run" link above its
-table; it works only when that server is the run start service. It opens the start page from the latest
+When the library is served over http, the issuer header on every run tab (Report, Overview, Changes,
+Modules, Forecast, Evidence) has a "Start a run on this issuer" link at the right of its title row; it
+works only when that server is the run start service. It opens the start page from the latest
 run listed (`/?from=<run id>`): the issuer ID is locked to that run's, its documents are copied into
 the new submission, and its pathway, answers, module subset and turns per module fill the form. Each
 carried-over answer, the pathway, the module box and the turns input carries a "from run <id>" mark

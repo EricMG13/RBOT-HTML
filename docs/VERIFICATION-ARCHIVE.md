@@ -2,24 +2,6 @@
 
 Entries moved verbatim from VERIFICATION.md when older than two days.
 
-## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
-
-Owner: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
-`Chart data:` table whose first column is Period (`store.py` `_chart_table`), so `readerChart` now
-draws columns over periods: periods along the x axis in table order, one column per series from a
-zero baseline (a raised baseline when a value is negative), the exact value on each column, the
-series named once in a legend, and each period's chips under its label. Values, periods, labels and
-chips are unchanged; a value that is text still prints n.a. with the text in its title.
-
-- Tests written first and seen failing (two in `static.test.cjs`); one older test updated for the
-  new value markup. 109 node tests; `tests/test_library_page_browser.py` 20 passed; quality gate 0.
-- Built TDG library in headless Chrome, CP-1 Key numbers (Leverage, Interest cover, Liquidity, Debt
-  maturities): fits at 1440, 1280, 1024, 768 and 500px and with the inspector open; no value label
-  outside its card; no two value labels overlap; chips stay under their own period. Below about 96px
-  a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
-  charts print whole.
-- Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
-
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
 
 Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
@@ -282,3 +264,90 @@ with the query removed. So "Open report" (row, selected run, deliverables list) 
 - Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
   inbox-built library; a run with a published forecast model or without a report ("Open primary
   handoff"); the Windows package; Safari and Firefox.
+
+## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
+
+Owner: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
+`Chart data:` table whose first column is Period (`store.py` `_chart_table`), so `readerChart` now
+draws columns over periods: periods along the x axis in table order, one column per series from a
+zero baseline (a raised baseline when a value is negative), the exact value on each column, the
+series named once in a legend, and each period's chips under its label. Values, periods, labels and
+chips are unchanged; a value that is text still prints n.a. with the text in its title.
+
+- Tests written first and seen failing (two in `static.test.cjs`); one older test updated for the
+  new value markup. 109 node tests; `tests/test_library_page_browser.py` 20 passed; quality gate 0.
+- Built TDG library in headless Chrome, CP-1 Key numbers (Leverage, Interest cover, Liquidity, Debt
+  maturities): fits at 1440, 1280, 1024, 768 and 500px and with the inspector open; no value label
+  outside its card; no two value labels overlap; chips stay under their own period. Below about 96px
+  a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
+  charts print whole.
+- Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
+
+## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
+
+Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
+a blocked forecast with every driver null. Its stated causes were procedural, not evidential: "What
+forecast horizon should be locked: FY2025–FY2027?" and "required invocation and upstream
+acceptance validation cannot be completed through the supplied tools". The method sent has an
+entry protocol (`forecast_horizon`, `base_period`, `cases`; "block_model_when_material_forecast_
+scope_is_missing") that takes its values from a command qualifier the launcher never gave.
+
+- Change: `FORECAST_BLOCK` (launcher preface, outside the method block) now states the command
+  with those three entry values and says the helper scripts are not run in this transport and are
+  not a reason to block. A driver the evidence cannot support still stays null.
+- Test written first and seen failing (`test_the_forecast_instructions_lock_the_entry_values_…`).
+  `tests/test_cpos_launch.py` 157 passed, 1 paid test skipped; quality gate exit 0. Offline
+  prepare: CP-2G's instructions carry the paragraph; CP-0, CP-1 and CP-2A instructions are
+  byte-identical; `tdg-forecast-001` is still listed as on the current methodology.
+- Live proof (`/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`, sol-medium, 16 minutes,
+  USD 1.3061, same four modules): the procedural block is gone. CP-2G's request now reads "FY2025,
+  FY2026 and FY2027 as the locked annual forecast horizon" and `qa_status` moved from Blocked to
+  Restricted. The forecast model is **still not published**: every driver is still null, now for
+  a stated evidential reason ("essential operating, cash-conversion, exit-interest and financing
+  assumptions cannot be supported by the supplied evidence. This is an evidence constraint, not
+  a request to reconfirm the locked entry values"). It declined even capex, where it quotes
+  management's FY2025 range of 2.5% to 3.5% of sales, because no point value or later year is given.
+- Driver rule (owner, 2026-11-10, "Yes, allow judgment"): the preface now asks for a value for every
+  driver, as labelled `Analyst Interpretation` anchored to a stated figure where guidance is absent,
+  and keeps null only when nothing stated can anchor it. Test changed first and seen failing; 157
+  passed; gate exit 0.
+- Third live run (`/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`, 13 minutes,
+  USD 1.0801): **not a test of the driver rule.** CP-2A itself came back Blocked this time ("missing
+  financing documents and legal-perimeter evidence"; it was Requires More Work in -001 and
+  Restricted in -002 on identical instructions and sources), and CP-2G stopped at the method's
+  required-dependency gate, as the method directs. No forecast was published.
+- Not verified: that CP-2G gives drivers under the new rule, and the Forecast tab with a published
+  model; no run has produced one. CP-2A's run-to-run variation between Blocked and usable on the
+  same inputs is unexamined. "Open primary handoff" was left as it is: no run can reach it.
+- Why CP-2A blocked in -003 (read from the three retained runs, no provider call): the pinned context
+  declares `attachments.legal_documents: executed`, but the pack is public filings only. In -003
+  CP-0 wrote that gap as conditioning "full downside readiness", CP-1's readiness table then marked
+  "CP-2A complete failure, covenant and funding-access sequence | Not ready", and CP-2A read that as
+  a prohibition from both predecessors. In -001 and -002 CP-0 and CP-1 did not write those lines
+  and CP-2A ran. The trigger is the context's declaration; the form's value for this pack is `none`.
+  Not tested: a run with `legal_documents: none`.
+- Fourth live run (`/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`, `legal_documents:
+  none`, USD 1.2605): CP-2A came back Restricted and CP-2G gave a labelled, anchored value for every
+  driver, so the driver rule works. The forecast was still **not published**: `ebitda_margin`,
+  `tax_wc_pct_revenue` and `interest_rate` were written at 38 decimal places (calculator output
+  pasted in) against the inputs schema's four, and delivery dropped the block after payment.
+- Fix: the preface states the four-decimal limit, and the in-loop check now parses CP-2G's block
+  against CP-1 (`_forecast_issues`), so a block delivery would refuse goes back for repair. A
+  declined (all-null) block is still accepted, and the repair text offers declining, so the model
+  can always finish. Delivery's fail-open stays as a backstop. Tests written first and seen failing;
+  the five invalid-block cases now assert a repair request rather than a report without a model.
+  `tests/test_cpos_launch.py` 160 passed, 1 paid test skipped; quality gate exit 0.
+- Fifth live run (`/private/tmp/claude-501/rbot-live6/runs/tdg-forecast-005`, run-004 context,
+  USD 1.4039): **forecast published** (`cp_forecast_published: true`; `forecast.md` and
+  `forecast_exact.json` delivered). CP-2G wrote four-decimal drivers (`ebitda_margin` "0.4802",
+  anchored to CP-1's FY2024 EBITDA 3,813 on sales 7,940) on its first draft, so the new check passed
+  it; its two repairs were reader-summary issues. CP-2A gave no shock, so only the reference case
+  exists. The library built for that workspace shows the Forecast tab: revenue 8,757 / 9,658 /
+  10,652, Adj EBITDA 4,205 / 4,638 / 5,115, total leverage 5.74x / 5.18x / 4.68x. Spot check by
+  hand: 7,940 × 1.1029 = 8,757 and 8,757 × 0.4802 = 4,205.
+- Not verified: the in-loop forecast check repairing a real model's bad block (it was not
+  triggered live); the tab's note mentions an upside case that this run does not have, and the
+  model has no assumption register. Resuming a pre-fix run directory whose retained CP-2G answer
+  this check now rejects would stop with `cpos_feedback_changed`; runs 001–004 are not resumed.
+- Spend across the six live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 +
+  1.4039 = 7.3246.

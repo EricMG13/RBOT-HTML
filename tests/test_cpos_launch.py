@@ -153,6 +153,11 @@ CHART_TABLES = {
 | FY2027 | Not supplied: the schedule stops here | US$m | Synthetic. |
 | FY2028 | 1,250 | US$m | Synthetic. |""",
 }
+NET_DEBT_TABLE = """\
+| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |
+| --- | --- | --- | --- | --- | --- |
+| FY2023 | 1500 | 300 | 1200 | US$m | Synthetic; gross debt includes finance leases. |
+| FY2024 | 1400 | 275 | 1125 | US$m | Synthetic; gross debt includes finance leases. |"""
 NON_USD_TABLES = {
     "Chart data: liquidity": """| Period | Cash | Undrawn committed facilities | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- | --- |
@@ -467,6 +472,8 @@ def answer(context: dict, plan_routes: list) -> str:
         for heading, table in CHART_TABLES.items():
             if heading not in routed:
                 lines += [f"### {heading}", "", table, ""]
+    if context["module_id"] == "CP-1":  # ... and the net debt table (owner, 2026-11-12).
+        lines += ["### Net debt data", "", NET_DEBT_TABLE, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
     for heading in ("Calculations", "Gaps", "Next module"):
@@ -5201,3 +5208,80 @@ def test_both_forecast_instructions_state_what_the_unit_check_enforces():
 def test_both_forecast_instructions_say_where_a_period_header_may_be_named():
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert "name a column headed by a reporting period" in block
+
+
+NET_DEBT_HEADER = (
+    "`| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |`"
+)
+
+
+@pytest.mark.parametrize(
+    "pathway",
+    [
+        *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
+        *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+    ],
+)
+def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the_checker_holds(
+    tmp_path, pathway
+):
+    """Owner, 2026-11-12, "Yes, add it": gross debt in a fixed-label place for CP-8's pack."""
+    prepared, task, context = good_task(tmp_path, "CP-1", pathway)
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
+    assert text.count("`### Net debt data`") == 1
+    assert NET_DEBT_HEADER in text
+    for stated in (
+        "total debt principal as the issuer reports it",
+        "what gross debt includes",
+        "the same figure as the Cash column of the `Chart data: liquidity` table",
+        "Net debt is gross debt less cash, worked with `calculate`",
+        "is refused if net debt differs from gross debt less cash by any amount",
+        "refused if its cash differs from the liquidity table's for the same period",
+        "`## Calculations`",
+        "Not supplied: <reason>",
+    ):
+        assert stated in text, stated
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+    cut = raw.replace("### Net debt data", "### Dropped")
+    issues = _checked_handoff(task, cut.encode(), checker(prepared.layout))
+    assert any("Net debt data" in issue for issue in issues), issues
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "complaint"),
+    [
+        # 1500 - 300 = 1200: a net debt of 1199 is refused, naming the row.
+        ("| FY2023 | 1500 | 300 | 1200 |", "| FY2023 | 1500 | 300 | 1199 |", "FY2023"),
+        # Cash that differs from the liquidity table's 275 for FY2024 is refused.
+        ("| FY2024 | 1400 | 275 | 1125 |", "| FY2024 | 1400 | 270 | 1130 |", "liquidity"),
+        # `same_period` calls FY2024 and FY2024 / 2024-09-30 one period: the 270 is still refused.
+        (
+            "| FY2024 | 1400 | 275 | 1125 |",
+            "| FY2024 / 2024-09-30 | 1400 | 270 | 1130 |",
+            "liquidity",
+        ),
+        ("| Gross debt | Cash |", "| Total debt | Cash |", "Net debt data"),
+        ("| 1500 | 300 | 1200 | US$m |", "| 1500 | 300 | 1200 | EUR m |", "EUR m"),
+        ("| 1400 | 275 | 1125 |", "| 1,400.5 | 275 | 1125 |", "FY2024"),
+    ],
+)
+def test_checker_refuses_each_broken_net_debt_table(tmp_path, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allows(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    gap = "Not supplied: the debt note was not read"
+    for old, new in (
+        ("| FY2023 | 1500 | 300 | 1200 |", f"| FY2023 | {gap} | 300 | {gap} |"),
+        ("| FY2024 | 1400 | 275 | 1125 |", f"| FY2024 | 1400 | {gap} | {gap} |"),
+    ):
+        assert old in raw
+        raw = raw.replace(old, new)
+    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()

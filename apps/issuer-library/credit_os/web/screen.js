@@ -66,8 +66,8 @@ function nameCodes(root,output=current?.output,marks=true) {
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.excerpt,.basis,.module-code'))continue; // a source excerpt is the issuer's own text, quoted as it is; a Basis line is printed as written; a navigator code is the code
-    const named=namedText(node.data,output);
+    if(parent.closest('.ref,.excerpt'))continue; // a source excerpt is the issuer's own text, quoted as it is; a register reference keeps its mark
+    const named=namedText(node.data,output,node.previousSibling?.textContent??'');
     if(named!==node.data)node.data=named;
     // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
     const found=marks?[...node.data.matchAll(REFERENCE)]:[];
@@ -297,7 +297,11 @@ function parseRoute() {
   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
   // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
   const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
-  const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===first)||sections[0];
+  // The Forecast page draws its chart index after the models: that one name scrolls to it. It draws the model the Forecast tab
+  // would open (the remembered section while it is a section of this run, else the first) and leaves what is remembered alone.
+  const part=module==='W-Forecast'&&requestedSection==='run-charts'?requestedSection:null;
+  const remembered=part&&lastSection.get(context+':W-Forecast');
+  const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===remembered)||sections.find(s=>s[0]===first)||sections[0];
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
   const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
@@ -305,7 +309,7 @@ function parseRoute() {
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
   // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
-  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null};
+  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
@@ -336,32 +340,36 @@ function basisItemHtml(item,deps,used) {
   if(item.kind==='source') item.chips.forEach(c=>used.add(c));
   return inspectorItemHtml(item,deps);
 }
-// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
+// The figure an `f<n>` control opened the inspector from, drawn first in the inspector (the large value under its eyebrow); none for a paragraph's or a chip's control.
+function inspectorFigure(item,output,mode) {
+  if(typeof mode!=='string'||!mode.startsWith('f')||item.text===undefined)return '';
+  const span=figureSpans(paragraphBody(item.text,!isNewFormat(output.sections)).body)[Number(mode.slice(1))];
+  return span?`<p class="inspector-figure"><span class="kicker">Figure</span> <strong>${esc(span.text)}</strong></p>`:'';
+}
+// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the Basis items
 // in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
 function paragraphBasisHtml(key,item,output,mode,chips) {
   chips=uniqueChips(chips);
   const earlier=!isNewFormat(output.sections),used=new Set();
-  let figure='',items='';
+  let items='';
   if(item.text!==undefined) {
-    const {body}=paragraphBody(item.text,earlier);
-    const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
-    figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
-    // reader.js draws the list (the same code the node tests read). New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
+    // reader.js draws the list (the same code the node tests read): an upstream-handoff item shows its written name; nameCodes names the rest, citations of an earlier-format page included.
     const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
     const ev=contexts[output.run]?.evidence||{},files=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name);
     items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,files,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
   }
   const rest=chips.filter(c=>!used.has(c));
-  return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
+  return `${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
 }
 function showInspector(key,chipIndex=null) {
   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
   const paragraph=typeof chipIndex==='string'&&chipIndex!=='gaps';
   const chipHtml=paragraph?paragraphBasisHtml(key,item,output,chipIndex,keyChips):chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
   // A paragraph shows its wording without its Basis line or citations; they are listed below it.
+  const figure=paragraph?inspectorFigure(item,output,chipIndex):'';
   const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
   $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
   document.querySelectorAll('.chip').forEach(el=>{
@@ -478,9 +486,9 @@ function contextPrefix({module,context}) {
   const ctx=contexts[context];
   return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
 }
-// New-format handoff text is shown as written (decision 7: codes stay); an earlier-format page keeps names, not codes (the owner's standing rule).
-// The Evidence page lists file names and hashes, which identify files: it is drawn with its names already and is never rewritten.
-const keepsCodes=route=>route.module==='W-Evidence'||route.module==='W-Changes'||(route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections));
+// No page shows a module code (owner ruling 2026-11-12). The Evidence page lists issuer source file names and hashes, which identify files:
+// it is drawn with its module names already (views.js) and is never rewritten; every other page is named here.
+const keepsCodes=route=>route.module==='W-Evidence';
 const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 // The reading position of a page: a module report is one page whatever part is scrolled to.
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
@@ -539,6 +547,7 @@ function renderRoute() {
     if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
+    if(next.part)scrollToPart(next.part);
     showNavigator(false);
     // Search hits drive moves between analytical modules, so the query is kept there and dropped elsewhere.
     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';
@@ -552,7 +561,7 @@ function renderRoute() {
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
-  }
+  } else if(next.part)scrollToPart(next.part);
   if(partMove) {
     scrollToPart(next.section);
     renderNavigator(next.module);

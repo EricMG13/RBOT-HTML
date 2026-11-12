@@ -1,0 +1,1688 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 49e9663..1ba86cc 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,37 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — No module code on screen (branch `claude/redesign-review-adaptation-892369`, owner ruling 2026-11-12)
++
++Scope: offline, macOS, headless Chrome; no provider called. Display only: the issuer library and the
++run start page name a module and never show its code (`CP-…`). Stored handoffs, routes, `href`s,
++download names, saved answers and stored source file names and paths are unchanged. The ruling is the
++2026-11-12 amendment in `docs/rulings/2026-11-11-reader-and-issuer-report.md` (it replaces "the code
++second" in decision 5).
++- `node --test apps/issuer-library/credit_os/web/reader.test.cjs apps/issuer-library/credit_os/web/static.test.cjs apps/issuer-library/credit_os/web/calendar.test.cjs`: exit 0, 266 passed.
++- `uv run pytest tests/test_context_form.py tests/test_run_start_page.py tests/test_library_reader_refs.py tests/test_library_index.py -q`: exit 0, 185 passed.
++- `uv run pytest tests/test_library_page_browser.py -m browser -q`: exit 0, 41 passed.
++- `uv run pytest tests/test_model_shell_browser.py -m browser -q`: exit 0, 7 passed.
++- `uv run python tools/quality_gate.py`: exit 0, 0 findings.
++- Fidelity: a scratch library built from the four listed TDG runs (all earlier format), every in-app
++  route crawled in headless Chrome with folds, audit items and the inspector opened: 248 routes, no
++  `CP-…` in text, `title` or `aria-label`, no "Name (Name)". The first crawl found 25 codes in Evidence's
++  "Methods changed since this run", which no fixture carried; fixed and tested. A stored source file name
++  that holds a `CP-` token is shown as stored (synthetic new-format run, browser test). The Changes tab and the Short Credit Snapshot pathway that
++  main added are covered by the same probes (the Changes route is scanned; the run start probe visits `short_snapshot`).
++- Reader check, scope: one real run (`cpos-tdg-sol-medium-all-001`) read on Report history, the Modules
++  navigator, the Liquidity page with its inspector, and Evidence, for this change only: names stand where
++  codes stood and nothing else moved. Not read against the September VMO2 reference for voice; the
++  change touches no prose.
++- Reviews: task review, whole-branch review, three fix rounds (service refusal text on the run start
++  page; "Methods changed"; stored file names), each re-reviewed.
++- Not verified: no real run is new format, so new-format pages rest on the synthetic fixture. On a
++  new-format page or the Changes tab a dotted token shaped like a step id (`T4.24`) reads "a method step", as
++  earlier-format pages have since 2026-11-10 (open, owner's call). Run start states the six-pathway,
++  three-level probe does not reach (upload, poll and carried-run messages). The shell's own navigation and
++  headings of the standalone HTML file (`src/deploy_vii/assets`) are covered by the new browser test;
++  its body content and files already delivered are not. Screen readers and Windows not run.
++
+ ## 2026-11-12 — First real CP-8 run read, and four defects fixed (branch `claude/changes-real-run-fixes`; ruling `2026-11-12-credit-snapshot-claude-rerun.md` and the amendment in `2026-11-11-module-presets-and-changes.md`)
+ Scope: live, dated TDG FY2024 public case, candidates not reviewed. `tdg-proof-snapshot-opus-002` on opus-medium: 13 of 13 modules accepted, including CP-4 (64,000 output limit) and CP-8 (one rejected draft), delivered, USD 19.45 charged of a USD 25 cap; total proof-run spend USD 37.07. CP-8 found no issuer change (both runs read the same FY2024 filings) and marked undrawn facilities Not comparable (843 vs 1006 US$m: securitization availability added); the library Changes tab rendered it. Reading it found D1 (Basis lines cited `changes.json` and `prior/CP-1.md, page 4`), D2 (unchanged measures carried the cause `Unresolved`), D3 (the tab said gross debt is not stated although both CP-1s state it) and D4 (new modules were `Unresolved`); each fixed with a failing test first (D3 by saying what the comparison reads, not by fuzzy matching; no CP-1 layout change). Offline checks, not live: the real accepted CP-8 handoff through the new checker, with the pack rebuilt from the real handoffs (measures, modules, limitations and maturity profile equal to the real pack's; `omitted`, `schema` and `selection` differ by design) and the selections as recorded (`tdg-reader-format-001`'s manifest has no `selection` key, so null; the current run `preset`): 6 refusals (4 D2, 2 D1) with the first version of D4, 14 (4 D2, 8 D4, 2 D1) once a prior with no recorded selection counts as a preset run (a prior accepted as a base only for its lead module is a whole-pathway run); CI fast tests command exit 0 (2937 passed; node 278 passed); `quality_gate.py` exit 0. Probes `seam3_verdicts.py`, `seam3_page.cjs`, `t4r4_same_period.py` exit 0; `t4r4_sentences.py` exits 1 and `t4r4_fact_row_leak.py` passes only vacuously, both because the probe's Cash and Undrawn rows (zero difference) say `Unresolved`, which D2 now refuses; copies with `None` there exit 0 (62 ok; 7 refused, each for its own reason).
+ Not proven: CP-DR web guidance on Claude; CP-8 on a pair where the issuer changed; the VMO2 reader check; the D1, D2 and D4 fixes on a new live CP-8 draft (the model may still write other forms); gross debt, net debt and free cash flow still unread from the two real CP-1 layouts.
+@@ -12,6 +43,7 @@ Not proven: CP-DR web guidance on Claude; CP-8 on a pair where the issuer change
+ Scope: live, dated TDG FY2024 public case, candidates not reviewed. OpenAI sol-medium: three runs stopped at CP-1 with "You have no credits remaining"; USD 1.39 spent; nothing proven. Claude opus-medium: `tdg-proof-short-opus-001` (short_snapshot) CP-0, CP-1, CP-L10 accepted and delivered, USD 1.95, CP-L10 accepted on its first draft with a ten-row Key figures table; `tdg-proof-portfolio-opus-001` (portfolio_decision) CP-0, CP-1, CP-1A, CP-DR, CP-2, CP-2E accepted, stopped on its USD 10 cap in CP-3, USD 7.82, CP-1's layer-1 forecast inputs block accepted by `cpos_forecast.parse(..., "CP-1")`; `tdg-proof-snapshot-opus-001` (credit_snapshot with CP-8 against tdg-reader-format-001) CP-0, CP-1, CP-1A, CP-DR accepted, stopped in CP-4 at the output limit, USD 6.46. Opus cost about USD 1.3-1.6 a module.
+ Defect: CP-4 call 19 ended `max_tokens` at 32,000 output tokens (7,431 thinking) inside `write_handoff`, so the call was lost (`StreamCut`, run stopped). Anthropic spends thinking out of the output limit. Fix: `cpos_launch.output_limit` asks Anthropic configs for 64,000 (others 32,000) and the hold follows (+USD 0.64 a call; opus-medium credit_snapshot 2.34 -> 2.98, portfolio_decision 2.11 -> 2.75, short_snapshot 0.99 -> 1.63). `wb_cap_presets.py` exit 0 (USD 20 cap admits every preset, with and without CP-8); `wb_cp8_hold_sizes.py` exit 0 but it imports the 32,000 constant, so it does not size Opus at 64,000. Known limit: a `max_tokens` stop inside a tool call is retried only when no usage was reported (`loop._RETRY_CLASSES`), so a charged cut stops the run; nothing tells the model to write shorter.
+ Not proven: CP-8 and the Changes tab on real output; CP-2G with the new presets; CP-DR web search guidance (not offered on Claude); the VMO2 reader check; that 64,000 is enough for CP-4 (not rerun).
++
+ ## 2026-11-12 — Forecast page main period columns, PR 2 (branch `claude/forecast-period-columns-2`, stacked on `-1b`)
+ Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md`, Tasks 7-10. For a model whose `calculation.json` carries a `history` record the library's Forecast grid shows Quarter, Year to date (YTD, PYTD), Fiscal year, Last twelve months (LTM, Prior LTM), Pro forma, Base case and one Downside case (the stress shock when computed, else CP-2G's own downside drivers, else an unavailable column), and the other cases in a closed second grid. The store validates the record whole (kinds, prior pairs, dates, bounds) and shows nothing from a malformed one. Growth is refused across periods whose lengths differ by more than 7 days and on a fiscal year that is not twelve months; the first forecast year grows on the forecast's base year. A model without `history` keeps its layout except the case names, the second grid, the downside note and the placeholder.
+ Scope: offline, synthetic. Hand-written history records and answer keys in `tests/test_credit_os_store.py`; the browser test injects the real `store.read_cashflow` output of a two-key hand-written record into a built library (not a model published by `update_library`). Fidelity was checked at the store through the real producer against the plan's answer key (probe `arch2_answer_key_on_the_grid.py`, 119 cells), not on the page. Retained CP-1 header forms were checked in PR 1. No provider called. No retained run has a forecast inputs block with drivers, so no real run's Forecast page was read and no published model without a history was read in a browser.
+@@ -901,90 +933,3 @@ check the code would produce the output if they were there. All checks offline o
+   0.4781. Tests first and seen failing (9); 237 passed incl. browser; node 105; gate exit 0.
+ - Not verified: a live CP-2G run writing the case blocks (instructions changed, no paid run); the
+   predecessor's UPSIDE shown in this library (no such workspace built here).
+-
+-## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
+-
+-Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
+-a blocked forecast with every driver null. Its stated causes were procedural, not evidential: "What
+-forecast horizon should be locked: FY2025–FY2027?" and "required invocation and upstream
+-acceptance validation cannot be completed through the supplied tools". The method sent has an
+-entry protocol (`forecast_horizon`, `base_period`, `cases`; "block_model_when_material_forecast_
+-scope_is_missing") that takes its values from a command qualifier the launcher never gave.
+-
+-- Change: `FORECAST_BLOCK` (launcher preface, outside the method block) now states the command
+-  with those three entry values and says the helper scripts are not run in this transport and are
+-  not a reason to block. A driver the evidence cannot support still stays null.
+-- Test written first and seen failing (`test_the_forecast_instructions_lock_the_entry_values_…`).
+-  `tests/test_cpos_launch.py` 157 passed, 1 paid test skipped; quality gate exit 0. Offline
+-  prepare: CP-2G's instructions carry the paragraph; CP-0, CP-1 and CP-2A instructions are
+-  byte-identical; `tdg-forecast-001` is still listed as on the current methodology.
+-- Live proof (`/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`, sol-medium, 16 minutes,
+-  USD 1.3061, same four modules): the procedural block is gone. CP-2G's request now reads "FY2025,
+-  FY2026 and FY2027 as the locked annual forecast horizon" and `qa_status` moved from Blocked to
+-  Restricted. The forecast model is **still not published**: every driver is still null, now for
+-  a stated evidential reason ("essential operating, cash-conversion, exit-interest and financing
+-  assumptions cannot be supported by the supplied evidence. This is an evidence constraint, not
+-  a request to reconfirm the locked entry values"). It declined even capex, where it quotes
+-  management's FY2025 range of 2.5% to 3.5% of sales, because no point value or later year is given.
+-- Driver rule (owner, 2026-11-10, "Yes, allow judgment"): the preface now asks for a value for every
+-  driver, as labelled `Analyst Interpretation` anchored to a stated figure where guidance is absent,
+-  and keeps null only when nothing stated can anchor it. Test changed first and seen failing; 157
+-  passed; gate exit 0.
+-- Third live run (`/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`, 13 minutes,
+-  USD 1.0801): **not a test of the driver rule.** CP-2A itself came back Blocked this time ("missing
+-  financing documents and legal-perimeter evidence"; it was Requires More Work in -001 and
+-  Restricted in -002 on identical instructions and sources), and CP-2G stopped at the method's
+-  required-dependency gate, as the method directs. No forecast was published.
+-- Not verified: that CP-2G gives drivers under the new rule, and the Forecast tab with a published
+-  model; no run has produced one. CP-2A's run-to-run variation between Blocked and usable on the
+-  same inputs is unexamined. "Open primary handoff" was left as it is: no run can reach it.
+-- Why CP-2A blocked in -003 (read from the three retained runs, no provider call): the pinned context
+-  declares `attachments.legal_documents: executed`, but the pack is public filings only. In -003
+-  CP-0 wrote that gap as conditioning "full downside readiness", CP-1's readiness table then marked
+-  "CP-2A complete failure, covenant and funding-access sequence | Not ready", and CP-2A read that as
+-  a prohibition from both predecessors. In -001 and -002 CP-0 and CP-1 did not write those lines
+-  and CP-2A ran. The trigger is the context's declaration; the form's value for this pack is `none`.
+-  Not tested: a run with `legal_documents: none`.
+-- Fourth live run (`/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`, `legal_documents:
+-  none`, USD 1.2605): CP-2A came back Restricted and CP-2G gave a labelled, anchored value for every
+-  driver, so the driver rule works. The forecast was still **not published**: `ebitda_margin`,
+-  `tax_wc_pct_revenue` and `interest_rate` were written at 38 decimal places (calculator output
+-  pasted in) against the inputs schema's four, and delivery dropped the block after payment.
+-- Fix: the preface states the four-decimal limit, and the in-loop check now parses CP-2G's block
+-  against CP-1 (`_forecast_issues`), so a block delivery would refuse goes back for repair. A
+-  declined (all-null) block is still accepted, and the repair text offers declining, so the model
+-  can always finish. Delivery's fail-open stays as a backstop. Tests written first and seen failing;
+-  the five invalid-block cases now assert a repair request rather than a report without a model.
+-  `tests/test_cpos_launch.py` 160 passed, 1 paid test skipped; quality gate exit 0.
+-- Fifth live run (`/private/tmp/claude-501/rbot-live6/runs/tdg-forecast-005`, run-004 context,
+-  USD 1.4039): **forecast published** (`cp_forecast_published: true`; `forecast.md` and
+-  `forecast_exact.json` delivered). CP-2G wrote four-decimal drivers (`ebitda_margin` "0.4802",
+-  anchored to CP-1's FY2024 EBITDA 3,813 on sales 7,940) on its first draft, so the new check passed
+-  it; its two repairs were reader-summary issues. CP-2A gave no shock, so only the reference case
+-  exists. The library built for that workspace shows the Forecast tab: revenue 8,757 / 9,658 /
+-  10,652, Adj EBITDA 4,205 / 4,638 / 5,115, total leverage 5.74x / 5.18x / 4.68x. Spot check by
+-  hand: 7,940 × 1.1029 = 8,757 and 8,757 × 0.4802 = 4,205.
+-- Not verified: the in-loop forecast check repairing a real model's bad block (it was not
+-  triggered live); the tab's note mentions an upside case that this run does not have, and the
+-  model has no assumption register. Resuming a pre-fix run directory whose retained CP-2G answer
+-  this check now rejects would stop with `cpos_feedback_changed`; runs 001–004 are not resumed.
+-- Spend across the six live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 +
+-  1.4039 = 7.3246.
+-
+-## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
+-
+-Owner: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
+-`Chart data:` table whose first column is Period (`store.py` `_chart_table`), so `readerChart` now
+-draws columns over periods: periods along the x axis in table order, one column per series from a
+-zero baseline (a raised baseline when a value is negative), the exact value on each column, the
+-series named once in a legend, and each period's chips under its label. Values, periods, labels and
+-chips are unchanged; a value that is text still prints n.a. with the text in its title.
+-
+-- Tests written first and seen failing (two in `static.test.cjs`); one older test updated for the
+-  new value markup. 109 node tests; `tests/test_library_page_browser.py` 20 passed; quality gate 0.
+-- Built TDG library in headless Chrome, CP-1 Key numbers (Leverage, Interest cover, Liquidity, Debt
+-  maturities): fits at 1440, 1280, 1024, 768 and 500px and with the inspector open; no value label
+-  outside its card; no two value labels overlap; chips stay under their own period. Below about 96px
+-  a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
+-  charts print whole.
+-- Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
+diff --git a/apps/issuer-library/credit_os/web/changes.js b/apps/issuer-library/credit_os/web/changes.js
+index 772d91e..28badf1 100644
+--- a/apps/issuer-library/credit_os/web/changes.js
++++ b/apps/issuer-library/credit_os/web/changes.js
+@@ -111,7 +111,7 @@ const omittedNote = omitted => {
+   return lines.length ? `<p class="intro changes-omitted">${lines.map(esc).join(' ')}</p>` : '';
+ };
+ 
+-const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`CP-8's handoff has no ${caption.toLowerCase()} table.`)}</p>`);
++const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`The Changes handoff has no ${caption.toLowerCase()} table.`)}</p>`);
+ 
+ function issuerPart(pack, parts, changes) {
+   const measures = pack.measures || [];
+@@ -122,7 +122,7 @@ function issuerPart(pack, parts, changes) {
+ 
+ // ---- Part 1: CP-8's own words, verbatim; a Basis line is shown as the source line it is, never dropped.
+ function passageView(section) {
+-  if (!section) return `<p class="empty">${NOT_STATED} in CP-8's handoff.</p>`;
++  if (!section) return `<p class="empty">${NOT_STATED} in the Changes handoff.</p>`;
+   let html = '', open = false;
+   const close = () => { if (open) html += '</ul>'; open = false; };
+   for (const block of section.blocks.filter(b => b.type === 'text')) {
+@@ -146,11 +146,11 @@ function analysisPart(pack, parts, changes) {
+   const modules = (changes && changes.verdicts && changes.verdicts.modules) || {};
+   const rows = (pack.modules || []).map(m => {
+     const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
+-    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by CP-8`;
++    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by Changes since the last run`;
+     const side = (ran, text) => (text != null ? text : ran ? NOT_STATED : 'Did not run');
+     const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line);
+     const reason = row ? [row.cause, row.why].filter(Boolean) : [];
+-    return `<details class="change-module"><summary><span class="change-name">${esc(m.title)} <span class="module-code">${esc(m.module)}</span></span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
++    return `<details class="change-module"><summary><span class="change-name">${esc(m.title)}</span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
+   }).join('');
+   return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2><p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
+ }
+@@ -158,7 +158,7 @@ function analysisPart(pack, parts, changes) {
+ // ---- Part 4: counts of each status as one bar (segment sizes are the counts, the build's: `changes.verdicts.ledger`, null when it could not read the ledger), the ledger itself beneath.
+ function limitationsPart(parts, changes) {
+   const table = parts.ledger, counts = changes && changes.verdicts ? changes.verdicts.ledger : null;
+-  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in CP-8's handoff.</p></section>`;
++  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in the Changes handoff.</p></section>`;
+   if (!counts) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2>${verbatim('Limitations ledger', table)}</section>`;
+   const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
+   const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
+@@ -226,7 +226,7 @@ function changesHtml(input) {
+   } else if (state === 'unreadable') {
+     notice = `<div class="caution changes-unreadable" role="note"><strong>The comparison with the earlier run could not be read.</strong><p>${esc(changes.problem)}</p></div>`;
+   } else if (!parts) {
+-    notice = '<div class="caution changes-not-produced" role="note"><strong>CP-8’s explanation is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
++    notice = '<div class="caution changes-not-produced" role="note"><strong>The explanation of the changes is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
+   }
+   const sections = [
+     parts ? whatChangedPart(parts) : '',
+diff --git a/apps/issuer-library/credit_os/web/changes.test.cjs b/apps/issuer-library/credit_os/web/changes.test.cjs
+index e7a1961..8b76585 100644
+--- a/apps/issuer-library/credit_os/web/changes.test.cjs
++++ b/apps/issuer-library/credit_os/web/changes.test.cjs
+@@ -304,8 +304,8 @@ test('a module row is the build\u2019s: its status and reason are shown, and a m
+     const html = analysisPart(pack, {}, changes(c.status));
+     assert.ok(html.includes(`change-status">${c.status}<`) && html.includes('<p class="change-why">New period · Why.</p>'), c.name);
+   }
+-  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by CP-8<'));
+-  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by CP-8<'));
++  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by Changes since the last run<'));
++  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by Changes since the last run<'));
+   assert.ok(analysisPart(pack, null, changes('Unchanged')).includes('change-status">Explanation not produced<'));
+ });
+ test('the ledger bar is the build\u2019s counts; a ledger it could not read keeps the verbatim table and draws no bar', () => {
+@@ -314,3 +314,16 @@ test('the ledger bar is the build\u2019s counts; a ledger it could not read keep
+   const other = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: [['Closed', 0], ['Remaining', 0], ['New', 0], ['No longer stated', 0], ['Other', 3]]}}}));
+   assert.ok(other.includes('aria-label="Limitations: Closed 0, Remaining 0, New 0, No longer stated 0, Other 3"'));
+ });
++
++test('what the Changes tab itself writes names things and shows no module code', () => {
++  // The pack and handoff text are stored data (a code there is named by screen.js, the library browser test reads it); these carry none.
++  const clean = {...PACK, measures: PACK.measures.map(m => ({...m, reason: 'the definition text differs'}))};
++  const noCode = /\bCP-[A-Z0-9]+\b/;
++  const html = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: {measures: {}, modules: {}, ledger: []}}, cp8: []}));
++  assert.ok(html.includes('The Changes handoff has no') && html.includes('Not stated in the Changes handoff.'));
++  assert.ok(html.includes('change-status">Not stated by Changes since the last run<'));
++  assert.ok(html.includes('<span class="change-name">Source readiness</span>') && !html.includes('module-code'));
++  assert.ok(!noCode.test(html.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')), html.match(noCode)?.[0]);
++  const notHeld = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: null}, cp8: null}));
++  assert.ok(notHeld.includes('The explanation of the changes is not held for this run.') && !noCode.test(notHeld.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')));
++});
+diff --git a/apps/issuer-library/credit_os/web/reader.js b/apps/issuer-library/credit_os/web/reader.js
+index 1c749b5..b2295a8 100644
+--- a/apps/issuer-library/credit_os/web/reader.js
++++ b/apps/issuer-library/credit_os/web/reader.js
+@@ -151,8 +151,8 @@ function inspectorItemHtml(item, deps) {
+     return `<li>Calculation ${escapeHtml(item.id)}<dl class="calculation-row">${row.headers.map((header, i) => `<div><dt>${escapeHtml(header)}</dt><dd>${richText(row.cells[i] ?? '')}</dd></div>`).join('')}</dl></li>`;
+   }
+   if (item.kind === 'module') {
+-    return item.ran ? `<li><a class="text-action" href="${deps.moduleHref(item.code)}">${escapeHtml(item.raw)}${deps.icon('arrow-right')}</a></li>`
+-      : `<li>${escapeHtml(item.raw)}<span class="small"> · Not run in this run</span></li>`;
++    return item.ran ? `<li><a class="text-action" href="${deps.moduleHref(item.code)}">${escapeHtml(item.name)}${deps.icon('arrow-right')}</a></li>`
++      : `<li>${escapeHtml(item.name)}<span class="small"> · Not run in this run</span></li>`;
+   }
+   return `<li>${escapeHtml(item.raw)}</li>`;
+ }
+diff --git a/apps/issuer-library/credit_os/web/reader.test.cjs b/apps/issuer-library/credit_os/web/reader.test.cjs
+index 60dd471..4a6ee98 100644
+--- a/apps/issuer-library/credit_os/web/reader.test.cjs
++++ b/apps/issuer-library/credit_os/web/reader.test.cjs
+@@ -277,12 +277,12 @@ test('screen.js passes the run\'s supplied file names, so a "; " file name is no
+   assert.ok(html.includes('Other citations') && html.includes('final.pdf p.4'), 'the final.pdf chip is listed apart, not taken by the item');
+ });
+ 
+-test('an earlier-format citation keeps class basis, so the page\'s name rewriting leaves [CP-1 T3] as written', () => {
++test('an earlier-format citation keeps class basis (styling); the page\'s name rewriting now reads inside it (no module code is shown)', () => {
+   const html = inspectorBasisBlock('Leverage is 5.2x [CP-1 T3].', true, {sections: [], chips: [], ran: () => false}, () => '');
+   assert.match(html, /^<div class="basis">/);
+   assert.ok(html.includes('<li>[CP-1 T3]</li>'));
+   const screen = fs.readFileSync(path.join(__dirname, 'screen.js'), 'utf8');
+-  assert.ok(screen.includes("parent.closest('.ref,.excerpt,.basis,.module-code')"), 'nameCodes skips .basis');
++  assert.ok(screen.includes("parent.closest('.ref,.excerpt')") && !screen.includes("'.ref,.excerpt,.basis"), 'nameCodes reads a Basis block: only register references and source excerpts stay as written');
+ });
+ 
+ 
+@@ -452,6 +452,13 @@ test('the inspector draws every Basis item of the CP-2 bottom line in the handof
+   ]));
+ });
+ 
++test('R5: an upstream-handoff Basis item shows its written name only, linked or not run; its link target is unchanged', () => {
++  const {inspectorItemHtml, inspectorItem} = require('./reader.js'), deps = {moduleHref: code => `#/${code}`, icon: n => `<img src="${n}">`};
++  const item = ran => inspectorItem('Liquidity (CP-2D)', {sections: [], chips: [], ran: () => ran});
++  assert.equal(inspectorItemHtml(item(true), deps), '<li><a class="text-action" href="#/CP-2D">Liquidity<img src="arrow-right"></a></li>');
++  assert.equal(inspectorItemHtml(item(false), deps), '<li>Liquidity<span class="small"> · Not run in this run</span></li>');
++});
++
+ test('the inspector draws two sources, then a page range and an upstream module, for the CP-2 key findings', () => {
+   assert.equal(inspectorDrawnFor(22, 23), basisList([
+     '<li><strong>NBG_2024-12-31_Q4-results.pdf</strong></li>',
+@@ -459,7 +466,7 @@ test('the inspector draws two sources, then a page range and an upstream module,
+   ]));
+   assert.equal(inspectorDrawnFor(24, 25), basisList([
+     '<li><strong>NBG_2025-03-31_annual-report.pdf</strong>, pages 43–45</li>',
+-    '<li><a class="text-action" href="#/CP-1">Financial foundation (CP-1)<img src="arrow-right"></a></li>',
++    '<li><a class="text-action" href="#/CP-1">Financial foundation<img src="arrow-right"></a></li>',
+   ]));
+ });
+ 
+diff --git a/apps/issuer-library/credit_os/web/screen.css b/apps/issuer-library/credit_os/web/screen.css
+index 6d2ad14..5350cbc 100644
+--- a/apps/issuer-library/credit_os/web/screen.css
++++ b/apps/issuer-library/credit_os/web/screen.css
+@@ -4,7 +4,7 @@
+ @font-face{font-family:Red Hat Mono;src:url(fonts/RedHatMono-Medium.woff2) format('woff2');font-weight:500;font-display:swap}
+ :root{--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#0017e5;--ground:#eef0f5;--rule:#dde1ea;--muted:#4a5068;--quiet:#f6f7fa;--selection:#e7ecff;--amber:#8a5300;--amber-bg:#fff1c7;--amber-border:#f2d58a;--red:#b3261e;--green:#0e7a46;--depth:0 8px 28px rgba(0,5,51,.085)}
+ *{box-sizing:border-box}html,body{margin:0;min-height:100%;color:var(--navy);background:var(--ground);font:var(--fs-body)/1.55 'Red Hat Text',sans-serif}body{height:100dvh;overflow:hidden}button,input,select{font:inherit;color:inherit}button,a,input,select,summary{outline-offset:3px}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue)}a{color:var(--blue);text-underline-offset:3px}button{cursor:pointer}button:disabled{cursor:default;opacity:.35}::selection{background:var(--selection);color:var(--navy)}input{caret-color:var(--blue)}*{scrollbar-width:thin;scrollbar-color:#9aa1b5 transparent}h1,h2,h3,h4,p{margin:0}h1,h2,h3{font-family:'Red Hat Display',sans-serif;font-weight:700}h1{font-size:27px;letter-spacing:-.025em;line-height:1.2}h2{font-size:20px;letter-spacing:-.02em;line-height:1.3}h3{font-size:var(--fs-control);line-height:1.45}h4{font:600 var(--fs-label)/1.5 'Red Hat Text',sans-serif;color:var(--muted)}img{display:block}button img,a img{width:16px;height:16px}button{border:0;background:none}a:hover,button:hover{color:var(--blue)}[hidden]{display:none!important}.sr-only,.skip{position:fixed;top:-50px;left:70px;z-index:20;background:#fff;padding:10px}.skip:focus{top:4px}
+-.rail{width:56px;height:100dvh;position:fixed;left:0;top:0;background:var(--navy);display:flex;align-items:center;flex-direction:column;padding:20px 8px;gap:14px;z-index:5}.rail .symbol{width:27px;height:30px;object-fit:contain}.rail-rule{width:25px;height:1px;background:#30365e;margin:10px 0}.rail>a,.rail>span:not(.rail-rule){width:38px;height:38px;display:grid;place-items:center;border-radius:var(--radius-control)}.rail img:not(.symbol){width:18px;height:18px;filter:brightness(0) invert(1)}.rail-active{background:#ffffff20}.rail-bottom{margin-top:auto;opacity:.65}.app{margin-left:56px;padding:18px;display:flex;flex-direction:column;height:100dvh;min-width:0}.code{font-family:'Red Hat Mono',monospace;color:var(--navy);background:var(--quiet);padding:2px 6px;border-radius:var(--radius-inline)}.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:196px minmax(0,1fr);border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:var(--depth);overflow:hidden}.workbench.has-evidence{grid-template-columns:196px minmax(0,1fr) 280px}.navigator{background:#fbfcfe;border-right:1px solid var(--rule);padding:15px 10px 18px;overflow:auto;min-height:0}.search{display:flex;gap:6px;align-items:center;padding:8px;border:1px solid #c8cedc;background:#fff;border-radius:var(--radius-inline)}.search img{width:14px;height:14px;opacity:.65}.search input{border:0;background:none;min-width:0;width:100%;font-size:var(--fs-label)}.search input:focus{outline:none}.search:focus-within{outline:2px solid var(--blue);outline-offset:2px}.nav-filter{margin-top:12px;display:flex;justify-content:space-between;font-size:var(--fs-compact);font-weight:600;padding:0 4px}.nav-filter span{color:var(--muted);font-family:'Red Hat Mono',monospace;font-size:var(--fs-label)}.nav-group{border-top:1px solid var(--rule);padding:10px 0}.module-item{display:flex;flex-direction:column;gap:3px;padding:8px 9px;border-radius:var(--radius-inline);text-decoration:none;color:var(--navy);margin:2px 0}.module-label{font-size:var(--fs-compact);font-weight:600;line-height:1.35}.module-code{display:flex;justify-content:space-between;align-items:center;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}.module-item.selected{background:var(--selection);color:var(--blue)}a.module-item:hover{background:#eef1fc}.pending{color:#5a6075}.empty{padding:16px 5px;color:var(--muted);font-size:var(--fs-compact)}.mobile-modules{display:none}
++.rail{width:56px;height:100dvh;position:fixed;left:0;top:0;background:var(--navy);display:flex;align-items:center;flex-direction:column;padding:20px 8px;gap:14px;z-index:5}.rail .symbol{width:27px;height:30px;object-fit:contain}.rail-rule{width:25px;height:1px;background:#30365e;margin:10px 0}.rail>a,.rail>span:not(.rail-rule){width:38px;height:38px;display:grid;place-items:center;border-radius:var(--radius-control)}.rail img:not(.symbol){width:18px;height:18px;filter:brightness(0) invert(1)}.rail-active{background:#ffffff20}.rail-bottom{margin-top:auto;opacity:.65}.app{margin-left:56px;padding:18px;display:flex;flex-direction:column;height:100dvh;min-width:0}.code{font-family:'Red Hat Mono',monospace;color:var(--navy);background:var(--quiet);padding:2px 6px;border-radius:var(--radius-inline)}.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:196px minmax(0,1fr);border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:var(--depth);overflow:hidden}.workbench.has-evidence{grid-template-columns:196px minmax(0,1fr) 280px}.navigator{background:#fbfcfe;border-right:1px solid var(--rule);padding:15px 10px 18px;overflow:auto;min-height:0}.search{display:flex;gap:6px;align-items:center;padding:8px;border:1px solid #c8cedc;background:#fff;border-radius:var(--radius-inline)}.search img{width:14px;height:14px;opacity:.65}.search input{border:0;background:none;min-width:0;width:100%;font-size:var(--fs-label)}.search input:focus{outline:none}.search:focus-within{outline:2px solid var(--blue);outline-offset:2px}.nav-filter{margin-top:12px;display:flex;justify-content:space-between;font-size:var(--fs-compact);font-weight:600;padding:0 4px}.nav-filter span{color:var(--muted);font-family:'Red Hat Mono',monospace;font-size:var(--fs-label)}.nav-group{border-top:1px solid var(--rule);padding:10px 0}.module-item{display:flex;flex-direction:column;gap:3px;padding:8px 9px;border-radius:var(--radius-inline);text-decoration:none;color:var(--navy);margin:2px 0}.module-label{font-size:var(--fs-compact);font-weight:600;line-height:1.35}.module-item.selected{background:var(--selection);color:var(--blue)}a.module-item:hover{background:#eef1fc}.pending{color:#5a6075}.empty{padding:16px 5px;color:var(--muted);font-size:var(--fs-compact)}.mobile-modules{display:none}
+ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{padding:19px 22px 15px}.module-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.module-title h2{font-size:21px}.module-title h2 span{font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);white-space:nowrap;margin-left:5px}.module-title p{font-size:var(--fs-label);color:var(--muted);margin-top:4px}.output-meta{flex-shrink:0;display:flex;flex-direction:column;gap:4px;font-size:var(--fs-label);text-align:right;color:var(--muted);padding-top:2px}.output-meta strong{font-size:var(--fs-label);color:var(--navy)}#section-nav{display:flex;gap:10px;align-items:center;margin:0 22px;padding:0 0 12px;border-bottom:1px solid var(--rule);font-size:var(--fs-label);color:var(--muted)}
+ #section-nav:not(:has(:not(.sr-only))){padding:0;border:0}#section-nav label{font-weight:600}#section-nav select{min-width:0;width:min(360px,80%);height:32px;background:var(--quiet);border:1px solid #d7dce7;border-radius:var(--radius-inline);padding:4px 25px 4px 9px;color:var(--navy);font-size:var(--fs-compact)}#section-nav>span{white-space:nowrap;margin-left:auto}#section-nav button{padding:4px}#content{overflow:auto;min-height:0;padding:18px 22px 32px;scroll-behavior:auto}#content>h2{margin-top:28px;margin-bottom:15px}.analysis-call{background:var(--navy);color:#fff;border-radius:var(--radius-card);padding:17px 19px;margin-bottom:24px}.analysis-call h2{font-size:18px;line-height:1.4;max-width:65ch}.analysis-call p{font-size:var(--fs-compact);line-height:1.65;color:#e0e4f7;margin-top:7px;max-width:72ch}.analysis-call>span{font-size:var(--fs-label);color:#c6cde9;display:block;margin-top:10px}.analysis-call .source-link{color:#fff;font-size:var(--fs-label);margin-top:10px}.analysis-call .source-link img{filter:brightness(0) invert(1)}.call-meta{display:flex;justify-content:space-between;gap:10px;color:#c7d0f5;font-size:var(--fs-label);margin-bottom:9px}.section-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 14px}.section-heading h2{font-size:18px}.section-heading>span{font-size:var(--fs-label);color:var(--muted)}.section-heading.compact{margin-top:25px;margin-bottom:10px}.chart-head{display:flex;justify-content:space-between;align-items:baseline}.chart-head span{font-size:var(--fs-label);color:var(--muted)}.bars{height:196px;display:flex;justify-content:space-around;align-items:flex-end;border-bottom:1px solid #aeb6c9;background:linear-gradient(to top,transparent calc(50% - 1px),#e7eaf2 calc(50% - 1px),#e7eaf2 50%,transparent 50%);padding:15px 15px 0}.bar-column{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;width:25%;height:100%;padding:0}.bar-column:hover .bar{background:var(--navy)}.bar-value{font:var(--fs-body) 'Red Hat Mono',monospace;padding-bottom:7px}.bar-period{font-size:var(--fs-label);background:white;position:relative;top:22px;margin-top:-18px}.bars+.source-footer{margin-top:32px}.source-footer{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:var(--fs-label);color:var(--muted);margin-top:12px}.source-link{display:inline-flex;align-items:center;gap:5px;padding:0;color:var(--blue);font-size:var(--fs-label);text-align:left;line-height:1.5;text-decoration:underline;text-underline-offset:3px}.source-link img{width:12px;height:12px;flex-shrink:0}.chart-reading,.intro{font-size:var(--fs-compact);line-height:1.7;color:var(--muted);margin:15px 0;max-width:75ch}.source-selected{background:var(--selection)!important;border-radius:var(--radius-inline)}.caution{background:var(--amber-bg);color:var(--amber);padding:13px 15px;font-size:var(--fs-label);border-radius:var(--radius-inline);margin:20px 0}.caution p{margin-top:5px}.source-section+.source-section{margin-top:34px}.source-section>h2{font-size:18px;margin-bottom:16px}.prose{font-size:var(--fs-body);line-height:1.8;max-width:75ch;margin:0 0 17px;overflow-wrap:anywhere}.prose code,.hash{font-size:var(--fs-label);overflow-wrap:anywhere}.records{display:grid;gap:0}.record{padding:20px 0;border-bottom:1px solid var(--rule)}.record:first-child{padding-top:0}.record h3{font-size:16px;margin-bottom:13px}.record-field{margin:11px 0;font-size:var(--fs-compact);line-height:1.75}.record-field h4{margin-bottom:4px;color:var(--muted)}.record-field>div{max-width:75ch;overflow-wrap:anywhere}.record .source-footer{margin-top:14px}.timeline{list-style:none;padding:0;margin:23px 0 32px}.timeline li{display:grid;grid-template-columns:126px minmax(0,1fr);position:relative;gap:22px;padding:0 0 25px}.timeline li:before{content:'';position:absolute;left:135px;top:7px;bottom:-7px;width:1px;background:#ccd3e3}.timeline li:last-child:before{bottom:auto;height:0}.timeline li:after{content:'';position:absolute;left:132px;top:7px;width:7px;height:7px;background:var(--blue);border:2px solid #fff;border-radius:50%;box-sizing:content-box;transform:translateX(-2px)}.event-date{display:flex;flex-direction:column;gap:5px;font-size:var(--fs-label);line-height:1.5}.event-date strong{font-weight:600}.event-date span{font-size:var(--fs-label);color:var(--muted)}.event-body p{font-size:var(--fs-compact);line-height:1.7;font-weight:600}.event-detail{font-size:var(--fs-label);line-height:1.7;color:var(--muted);margin-top:7px}.periods li:after{background:#8e98b0}.mix-bars{display:grid;gap:15px;margin:20px 0}.mix-bars>div{display:grid;grid-template-columns:185px minmax(0,1fr) 45px;gap:10px;align-items:center;font-size:var(--fs-label)}.mix-bars strong{font:var(--fs-label) 'Red Hat Mono',monospace}.factor-matrix{border-top:1px solid var(--rule)}.factor{display:grid;grid-template-columns:minmax(135px,1fr) 112px minmax(150px,1.35fr);gap:15px;align-items:start;padding:14px 0;border-bottom:1px solid var(--rule)}.factor h3{font-size:var(--fs-compact)}.factor .source-link{font-size:var(--fs-label);margin-top:4px}.factor .source-link img{display:none}.factor p{font-size:var(--fs-label);line-height:1.65;color:var(--muted)}.matrix-note{font-size:var(--fs-label);color:var(--muted);margin:12px 0 24px}.downside{margin:22px 0}.downside ol{list-style:none;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px;margin:12px 0}.downside li{background:var(--quiet);padding:10px;font-size:var(--fs-label);line-height:1.6;position:relative}.downside li:not(:last-child):after{content:'';position:absolute;top:50%;right:-11px;width:7px;height:7px;border-right:1px solid #7e8aad;border-top:1px solid #7e8aad;transform:rotate(45deg)}.downside>p{font-size:var(--fs-label);color:var(--muted)}.audit-intro{padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid var(--rule)}.audit-intro p{margin:12px 0}.hash{color:var(--muted)}
+ .inspector{min-width:0;overflow:auto;border-left:1px solid var(--rule);background:#fcfdff}.inspector-bar{position:sticky;top:0;z-index:1;background:#fcfdff;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;gap:6px;padding:16px}.inspector-bar button{display:flex;align-items:center;gap:6px;color:var(--blue);font-size:var(--fs-label);padding:0}.inspector-bar span{font-size:var(--fs-label);color:var(--muted);border:1px solid var(--rule);padding:1px 3px;border-radius:var(--radius-inline)}.inspector-body{padding:18px}.inspector-body>h2{font-size:15px}.evidence-context{font-size:var(--fs-label);color:var(--muted);margin:6px 0 19px}.inspector-body>h3{font-size:18px;line-height:1.4;margin-bottom:8px;overflow-wrap:anywhere}.classification{margin:2px 0 18px}.evidence-fields{border-top:1px solid var(--rule)}.evidence-fields>div{padding:12px 0;border-bottom:1px solid var(--rule)}.evidence-fields h4{font-size:var(--fs-label);margin-bottom:5px}.evidence-fields>div>div{font-size:var(--fs-compact);line-height:1.75;overflow-wrap:anywhere}.source-location{margin-top:23px}.source-location h3{font-size:var(--fs-compact)}.source-location p{font-size:var(--fs-label);color:var(--muted);margin:6px 0 12px;overflow-wrap:anywhere}.source-location a{display:flex;align-items:center;gap:6px;font-size:var(--fs-label)}.source-location .small{font-size:var(--fs-label);margin-top:12px}.inspector-note{border-top:1px solid var(--rule);margin-top:20px;padding-top:15px;font-size:var(--fs-label);color:var(--muted)}.inspector-note p{margin-top:5px;line-height:1.7}
+@@ -26,7 +26,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
+ .bridge-key>span{flex-wrap:wrap}.bridge-key .row-classification{width:100%;margin-top:-5px}
+ .hedge-axis{display:block;position:relative;height:18px}.hedge-axis span{position:absolute;white-space:nowrap;transform:translateX(-50%)}.hedge-axis span:first-child{transform:none}.hedge-axis span:last-child{transform:translateX(-100%)}
+ /* Pinned workspace and persistent analytical outline. */
+-.workbench{grid-template-columns:238px minmax(0,1fr)}.workbench.has-evidence{grid-template-columns:238px minmax(0,1fr) 280px}.navigator{padding:12px 10px}.navigator-head{top:-12px}.module-code{font-size:var(--fs-label)}.module-item{padding:8px}.module-label{font-size:var(--fs-compact)}.module-code{gap:5px;align-items:baseline}.section-outline{margin:2px 0 16px 9px;padding-left:9px;border-left:1px solid var(--rule)}.outline-group{padding:7px 0}.outline-group>summary{font-size:var(--fs-label);line-height:1.4;color:var(--muted);padding:3px 4px 6px;cursor:pointer;font-weight:600;list-style:revert;display:list-item;margin-left:12px}.outline-group>summary:after{display:none}.section-item{display:block;color:var(--muted);text-decoration:none;font-size:var(--fs-compact);line-height:1.4;padding:7px 7px;border-radius:var(--radius-inline);margin:1px 0}.section-item:hover{color:var(--blue);background:var(--quiet)}.section-item[aria-current]{color:var(--blue);background:var(--selection);font-weight:600}
++.workbench{grid-template-columns:238px minmax(0,1fr)}.workbench.has-evidence{grid-template-columns:238px minmax(0,1fr) 280px}.navigator{padding:12px 10px}.navigator-head{top:-12px}.module-item{padding:8px}.module-label{font-size:var(--fs-compact)}.section-outline{margin:2px 0 16px 9px;padding-left:9px;border-left:1px solid var(--rule)}.outline-group{padding:7px 0}.outline-group>summary{font-size:var(--fs-label);line-height:1.4;color:var(--muted);padding:3px 4px 6px;cursor:pointer;font-weight:600;list-style:revert;display:list-item;margin-left:12px}.outline-group>summary:after{display:none}.section-item{display:block;color:var(--muted);text-decoration:none;font-size:var(--fs-compact);line-height:1.4;padding:7px 7px;border-radius:var(--radius-inline);margin:1px 0}.section-item:hover{color:var(--blue);background:var(--quiet)}.section-item[aria-current]{color:var(--blue);background:var(--selection);font-weight:600}
+ #module-head{padding:10px 18px 4px}.module-title{flex-wrap:nowrap;align-items:baseline;gap:10px}.module-title h2{font-size:19px;max-width:none}.output-meta{font-size:var(--fs-label);padding:0;display:block}.module-title h2 span{font-size:var(--fs-label)}#section-nav{margin:0 18px;padding:3px 0 7px;gap:8px}#section-title{font:600 var(--fs-compact)/1.4 'Red Hat Text',sans-serif;color:var(--muted);flex:1;min-width:0}#section-nav>span{font-size:var(--fs-label);margin-left:0}#section-nav button{min-width:32px;min-height:32px;padding:7px}#content{padding:12px 18px 28px}.analysis-call{padding:10px 13px;margin-bottom:14px}.analysis-call h2{font-size:15px;line-height:1.45;max-width:80ch}.analysis-call p{margin-top:5px}.analysis-call>span{font-size:var(--fs-label);margin-top:5px}.section-heading{margin-bottom:8px}.section-heading h2{font-size:17px}.section-heading>span,.chart-head span{font-size:var(--fs-label)}.chart-reading{margin:8px 0;line-height:1.55}.chart-legend{font-size:var(--fs-label);margin:10px 0;gap:14px}.vector-chart{max-width:580px;margin:10px auto}.matrix-note{font-size:var(--fs-label)}.path-readout{gap:10px;padding-bottom:12px}.path-readout .source-footer{margin-top:5px;gap:5px}.path-readout strong{font-size:16px}.source-footer,.row-classification{font-size:var(--fs-label)}.finding{max-width:75ch;margin:0 0 23px;padding-bottom:16px;border-bottom:1px solid var(--rule)}.finding .prose{margin:0;line-height:1.75}.finding .source-footer{margin-top:8px}.source-section>h2{font-size:17px}.available-case{padding:18px 0;border-top:1px solid var(--rule);max-width:75ch}.available-case p{margin:8px 0 14px;color:var(--muted)}.switch-case{margin:12px 20px}
+ /* Comparisons are categorical; amber is a labelled conditional signal. */
+ .series-1{background:var(--navy)}.series-2{background:#7482a1}.outflow{fill:#4a5068}.signal-conditional,.path-key-1{background:var(--amber)}.path-key-0{background:var(--blue)}.path-key-2{background:var(--navy)}.path-1{stroke:var(--amber)}.point-1{fill:var(--amber)}.point-hit{fill:transparent}.plot-point{cursor:pointer}.plot-point:focus-visible{outline:none}.plot-point:hover .point-hit,.plot-point:focus .point-hit{fill:var(--selection);stroke:var(--blue);stroke-width:2}.plot-point:focus rect,.plot-point:hover rect{stroke:var(--blue);stroke-width:3}.hedge-axis,.hedge-dates,.hedge-row small,.duration-only,.chart-label small{font-size:var(--fs-label)}.hedge-row{grid-template-columns:82px minmax(100px,1fr) 190px}.hedge-axis{margin-right:202px}
+@@ -575,7 +575,6 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
+ .module-list{list-style:none;margin:0;padding:0}
+ .module-item{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:8px}
+ .module-item .module-label{flex:1 1 auto}
+-.module-item .module-code{display:inline;flex:0 0 auto}
+ .module-item .badge,.module-item small{flex:1 0 100%}
+ .module-item .badge{flex:0 0 auto}
+ .figure{display:inline;padding:0;border:0;background:none;font:inherit;color:inherit;text-decoration:underline dotted var(--muted);text-underline-offset:3px;cursor:pointer}
+@@ -588,7 +587,6 @@ td .basis-link{margin-left:6px}
+ .calculation-row{margin:6px 0;display:grid;gap:4px}.calculation-row>div{display:grid;grid-template-columns:minmax(70px,auto) 1fr;gap:8px}.calculation-row dt{color:var(--muted);font-size:var(--fs-label)}.calculation-row dd{margin:0}
+ .citations-heading{margin-top:14px}
+ .library-not-shown{margin-top:24px}.library-not-shown summary,#evidence-record summary{cursor:pointer;font-weight:600}.library-not-shown h3,#evidence-record h3{margin:16px 0 6px}
+-.history-table .module-code{display:inline}
+ /* Changes tab (changes.js): chart rows reuse the dumbbell rows; everything else is plain text and tables. */
+ .changes{max-width:980px}.changes-heading{margin-bottom:12px}.changes-first{font-size:var(--fs-control);color:var(--muted);margin:24px 0}
+ .changes h3{margin:22px 0 8px}.changes-basis{display:block;margin-top:4px;color:var(--muted);font-size:var(--fs-label)}
+diff --git a/apps/issuer-library/credit_os/web/screen.js b/apps/issuer-library/credit_os/web/screen.js
+index e87c1db..37f4430 100644
+--- a/apps/issuer-library/credit_os/web/screen.js
++++ b/apps/issuer-library/credit_os/web/screen.js
+@@ -66,8 +66,8 @@ function nameCodes(root,output=current?.output,marks=true) {
+   while(walker.nextNode())nodes.push(walker.currentNode);
+   for(const node of nodes) {
+     const parent=node.parentElement;
+-    if(parent.closest('.ref,.excerpt,.basis,.module-code'))continue; // a source excerpt is the issuer's own text, quoted as it is; a Basis line is printed as written; a navigator code is the code
+-    const named=namedText(node.data,output);
++    if(parent.closest('.ref,.excerpt'))continue; // a source excerpt is the issuer's own text, quoted as it is; a register reference keeps its mark
++    const named=namedText(node.data,output,node.previousSibling?.textContent??'');
+     if(named!==node.data)node.data=named;
+     // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
+     const found=marks?[...node.data.matchAll(REFERENCE)]:[];
+@@ -346,7 +346,7 @@ function paragraphBasisHtml(key,item,output,mode,chips) {
+     const {body}=paragraphBody(item.text,earlier);
+     const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
+     figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
+-    // reader.js draws the list (the same code the node tests read). New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
++    // reader.js draws the list (the same code the node tests read): an upstream-handoff item shows its written name; nameCodes names the rest, citations of an earlier-format page included.
+     const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
+     const ev=contexts[output.run]?.evidence||{},files=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name);
+     items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,files,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
+@@ -478,9 +478,9 @@ function contextPrefix({module,context}) {
+   const ctx=contexts[context];
+   return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
+ }
+-// New-format handoff text is shown as written (decision 7: codes stay); an earlier-format page keeps names, not codes (the owner's standing rule).
+-// The Evidence page lists file names and hashes, which identify files: it is drawn with its names already and is never rewritten.
+-const keepsCodes=route=>route.module==='W-Evidence'||route.module==='W-Changes'||(route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections));
++// No page shows a module code (owner ruling 2026-11-12). The Evidence page lists issuer source file names and hashes, which identify files:
++// it is drawn with its module names already (views.js) and is never rewritten; every other page is named here.
++const keepsCodes=route=>route.module==='W-Evidence';
+ const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
+ // The reading position of a page: a module report is one page whatever part is scrolled to.
+ const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index d7b8cef..a84a0e6 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -116,8 +116,8 @@ const evidenceView = contexts => {
+   const text = read('views.js');
+   const start = text.indexOf('// ---- Evidence (ruling decisions 9, 10)'), end = text.indexOf('function workspaceView(');
+   assert.ok(start >= 0 && end > start, 'evidence view not found');
+-  const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation' };
+-  return new Function('esc', 'icon', 'moduleTitle', 'contexts', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, contexts);
++  const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance' };
++  return new Function('esc', 'icon', 'moduleTitle', 'handoffLabel', 'contexts', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, runPage().handoffLabel, contexts);
+ };
+ const EVIDENCE = {
+   sources: [{ name: 'A <report>.pdf', sha256: 'a'.repeat(64), type: 'pdf', documentDate: null, readBy: ['CP-0', 'CP-1'] }],
+@@ -126,7 +126,7 @@ const EVIDENCE = {
+   handoffs: [{ module: 'CP-0', name: 'CP-0.md', href: '../runs/r/CP-0.md?sha256=1' }, { module: 'CP-1', name: 'CP-1.md', href: '../runs/r/CP-1.md?sha256=2' }],
+   zip: 'downloads/r/handoffs.zip',
+   downloads: [{ label: 'Model m', href: '/files/m.html' }],
+-  record: { hashes: [{ name: 'delivery-x.json', sha256: 'd'.repeat(64) }], instructions: [{ module: 'CP-0', href: '../runs/r/instructions/CP-0.md', sha256: 'e'.repeat(64) }],
++  record: { hashes: [{ name: 'delivery-x.json', sha256: 'd'.repeat(64) }, { name: 'CP-1.md', sha256: '1'.repeat(64) }, { name: 'instructions/CP-0.md', sha256: '2'.repeat(64) }, { name: 'r--deliveries--d--CP-1-a.md', sha256: '3'.repeat(64) }], instructions: [{ module: 'CP-0', href: '../runs/r/instructions/CP-0.md', sha256: 'e'.repeat(64) }],
+     calls: [{ module: 'CP-0', attempt: 0, started: '2026-11-09T15:13:51Z', http_status: 200, error_class: null, settled_usd: '0.00941950' }], cap: '12' },
+ };
+ 
+@@ -135,7 +135,7 @@ test('Evidence: four lists in order; sources are listed only, with Not recorded
+   const at = ['Source files used', 'Handoffs', 'Calculations and Model', 'Run record'].map(t => html.indexOf(`<h2>${t}</h2>`) >= 0 ? html.indexOf(`<h2>${t}</h2>`) : html.indexOf(`<summary>${t}</summary>`));
+   assert.ok(at.every((n, i) => n >= 0 && (!i || n > at[i - 1])), at.join());
+   const row = /<tbody><tr>(.*?)<\/tr>/s.exec(html)[1];
+-  assert.equal(strip(row.replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|Not recorded|Source readiness CP-0, Financial foundation CP-1|');
++  assert.equal(strip(row.replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|Not recorded|Source readiness, Financial foundation|');
+   assert.ok(html.indexOf('Supplied, not used') > html.indexOf('A &lt;report&gt;.pdf') && html.includes('C_unread.htm.jsonl'));
+   assert.ok(!html.includes('A &lt;report&gt;.pdf</a>') && !/<a [^>]*>[^<]*(report|unread)/.test(html), 'no link for a source file');
+ });
+@@ -143,7 +143,7 @@ test('Evidence: four lists in order; sources are listed only, with Not recorded
+ test('Evidence: a document date the run records is shown as stored, in the used and the unused list', () => {
+   const ev = { ...EVIDENCE, sources: [{ ...EVIDENCE.sources[0], documentDate: '31 March 2025 (audited)' }], unused: [{ ...EVIDENCE.unused[0], documentDate: '2024-12-31' }] };
+   const html = evidenceView({ r: { evidence: ev } })('r');
+-  assert.equal(strip(/<tbody><tr>(.*?)<\/tr>/s.exec(html)[1].replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|31 March 2025 (audited)|Source readiness CP-0, Financial foundation CP-1|');
++  assert.equal(strip(/<tbody><tr>(.*?)<\/tr>/s.exec(html)[1].replace(/<\/td>/g, '|')), 'A &lt;report&gt;.pdf|pdf|31 March 2025 (audited)|Source readiness, Financial foundation|');
+   assert.ok(html.includes('document date 2024-12-31'));
+ });
+ 
+@@ -167,15 +167,47 @@ test('Evidence: handoffs and calculations are download links; Download all is th
+   assert.ok(strip(/<table class="history-table"><caption>Model calls.*?<\/table>/s.exec(html)[0]).includes('Not recorded'), 'a missing error class is not a value');
+ });
+ 
++test('Evidence (R3): Read by and the Handoffs rows show names only; the link reads Download, named for its handoff', () => {
++  const html = evidenceView({ r: { evidence: EVIDENCE } })('r');
++  assert.ok(!html.includes('module-code') && !/\bCP-[A-Z0-9]+\b/.test(html.replace(/ href="[^"]*"/g, '')), 'no module code in any text or label');
++  const handoffs = html.slice(html.indexOf('<h2>Handoffs</h2>'), html.indexOf('<h2>Calculations and Model</h2>'));
++  assert.ok(handoffs.includes('<td>Source readiness</td><td><a class="text-action" href="../runs/r/CP-0.md?sha256=1" download aria-label="Download Source readiness handoff">Download<i>download</i></a></td>'), handoffs);
++  assert.ok(handoffs.includes('aria-label="Download Financial foundation handoff"') && !/>CP-[01]\.md</.test(handoffs));
++});
++
++test('Evidence (R6): the Run record labels a module-named file by its module, keeps other names and every hash', () => {
++  const record = evidenceView({ r: { evidence: EVIDENCE } })('r');
++  const hashes = record.slice(record.indexOf('<caption>Hashes the run records'), record.indexOf('<h3>Instructions sent</h3>'));
++  assert.deepEqual([...hashes.matchAll(/<td>([^<]*)<\/td><td><span class="hash">([^<]*)</g)].map(m => [m[1], m[2][0]]),
++    [['delivery-x.json', 'd'], ['Financial foundation handoff', '1'], ['Source readiness instructions', '2'], ['Financial foundation handoff (a)', '3']]);
++  assert.ok(!/\bCP-[A-Z0-9]+\b/.test(record.replace(/ href="[^"]*"/g, '')));
++  assert.equal(runPage().handoffLabel('CP-1.md'), 'Financial foundation handoff');
++});
++
+ test('Evidence: Run record lists the methods changed since the run, escaped; no line for a run on today\'s methods', () => {
+   const changed = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: methods/cp0.md changed', 'CP-1: <b>x</b> no longer selected'] } })('r');
+   const record = changed.slice(changed.indexOf('<summary>Run record</summary>'));
+   assert.ok(record.includes('Methods changed since this run'));
+-  assert.ok(record.includes('<li>CP-0: methods/cp0.md changed</li>') && record.includes('<li>CP-1: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
++  assert.ok(record.includes('<li>Source readiness: methods/cp0.md changed</li>') && record.includes('<li>Financial foundation: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
+   assert.ok(!changed.includes('<b>x</b>'));
+   for (const none of [[], undefined]) assert.ok(!evidenceView({ r: { evidence: EVIDENCE, methodChanges: none } })('r').includes('Methods changed since this run'));
+ });
+ 
++test('Evidence (fix round 2): a method change leads with its module name; any other module code is named; file paths stay verbatim', () => {
++  const html = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: src/deploy_vii/methods/cp0.md changed', 'CP-1A: src/deploy_vii/methods/cp1a.md, docs/x.md changed', 'CP-0: reads CP-1 and src/deploy_vii/methods/CP-1.md'] } })('r');
++  const list = /<h3>Methods changed since this run<\/h3>.*?<\/ul>/s.exec(html)[0];
++  assert.ok(list.includes('<li>Source readiness: src/deploy_vii/methods/cp0.md changed</li>'), list);
++  assert.ok(list.includes('<li>Business &amp; governance: src/deploy_vii/methods/cp1a.md, docs/x.md changed</li>'), list);
++  assert.ok(list.includes('<li>Source readiness: reads Financial foundation and src/deploy_vii/methods/CP-1.md</li>'), 'a code in the detail is named; a path is not');
++  assert.ok(!/\bCP-[A-Z0-9]+\b/.test(list.replace(/src\/deploy_vii\/methods\/CP-1\.md/, '')), list);
++});
++
++test('Evidence: a hash row named like a stored source file keeps its name', () => {
++  const file = { name: 'Board-CP-1.md', sha256: 'b'.repeat(64), type: 'md', documentDate: null, readBy: [] };
++  const html = evidenceView({ r: { evidence: { ...EVIDENCE, sources: [file], record: { ...EVIDENCE.record, hashes: [{ name: 'Board-CP-1.md', sha256: 'b'.repeat(64) }] } } } })('r');
++  assert.equal(countOf(html, />Board-CP-1\.md</g), 2, 'the source row and the hash row');
++});
++
+ test('Evidence: nothing recorded says so and invents nothing', () => {
+   const none = { sources: [], unused: [], unrecorded: [], noSourcesModules: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } };
+   const html = evidenceView({ r: { evidence: none } })('r');
+@@ -1241,7 +1273,8 @@ test('navigator (decision 5): no details or summary anywhere, plain group headin
+ test('navigator (decision 5): only modules that ran are listed, and the count is that number', () => {
+   const { html, count } = navPage();
+   assert.equal(count, 5);
+-  assert.deepEqual([...html.matchAll(/<span class="module-code">([^<]*)<\/span>/g)].map(m => m[1]), ['CP-0', 'CP-1', 'CP-1A', 'CP-2', 'CP-2D']);
++  assert.ok(!html.includes('module-code'), 'no module code is drawn');
++  assert.deepEqual([...html.matchAll(/<span class="module-label">([^<]*)<\/span>/g)].map(m => m[1]), ['Source readiness', 'Financial foundation', 'Business and structure', 'Credit view', 'Liquidity']);
+   assert.ok(!html.includes('CP-1B') && !html.includes('CP-2A') && !html.includes('CP-6'), 'a module the run did not hold is not listed');
+ });
+ 
+@@ -1253,12 +1286,12 @@ test('navigator (decision 5): a module with no saved output is not listed even w
+   assert.ok(!html.includes('CP-1B'));
+ });
+ 
+-test('navigator (decision 5): plain name first, then the code in the code style; a blocked module is marked Not assessable, no other is', () => {
++test('navigator (decision 5, amended 2026-11-12): the plain name only, no code; a blocked module is marked Not assessable, no other is', () => {
+   const { html } = navPage();
+-  assert.ok(html.includes('<span class="module-label">Source readiness</span><span class="module-code">CP-0</span>'));
+-  assert.ok(html.includes('<span class="module-label">Credit view</span><span class="module-code">CP-2</span>'));
++  assert.ok(html.includes('<span class="module-label">Source readiness</span>'));
++  assert.ok(html.includes('<span class="module-label">Credit view</span>'));
+   const liquidity = /<a [^>]*><span class="module-label">Liquidity<\/span>.*?<\/a>/s.exec(html)[0];
+-  assert.ok(liquidity.indexOf('>Liquidity<') < liquidity.indexOf('>CP-2D<') && liquidity.includes('<span class="badge badge-gray">Not assessable</span>'));
++  assert.ok(!liquidity.replace(/ href="[^"]*"/g, '').includes('CP-2D') && liquidity.includes('<span class="badge badge-gray">Not assessable</span>'));
+   assert.equal(countOf(html, /Not assessable<\/span>/g), 1);
+ });
+ 
+@@ -1286,7 +1319,7 @@ test('navigator (decision 5): the Cash flow model entry (code CP-MODEL) is prese
+   const withModel = navPage({ models: [NAV_MODEL] });
+   assert.equal(withModel.count, 6);
+   assert.ok(withModel.html.includes('<h2 class="nav-heading">Delivered model</h2>'));
+-  assert.ok(withModel.html.includes('<span class="module-label">Cash flow model</span><span class="module-code">CP-MODEL</span>'));
++  assert.ok(withModel.html.includes('<span class="module-label">Cash flow model</span>'));
+   assert.ok(/href="#CP-MODEL\/model-1\?c=run-a"/.test(withModel.html), 'it opens the model view in the Modules workbench, not the Forecast tab');
+ });
+ 
+@@ -2096,7 +2129,7 @@ test('names, not codes: a table column of bare step ids is not drawn; a heading
+ // nameCodes over a minimal DOM: text nodes with a parent that knows which zones it sits in, and elements with title and aria-label.
+ function nameCodesIn(texts, elements = [], zone = '') {
+   const src = read('screen.js'), body = src.slice(src.indexOf('const REFERENCE='), src.indexOf('for (const [id, output]'));
+-  const nodes = texts.map(data => ({ data, parentElement: { closest: selector => (selector.includes(zone) && zone ? {} : null) }, replaceWith(fragment) { this.fragment = fragment; } }));
++  const nodes = texts.map((data, i) => ({ data, previousSibling: i ? { textContent: texts[i - 1] } : null, parentElement: { closest: selector => (selector.includes(zone) && zone ? {} : null) }, replaceWith(fragment) { this.fragment = fragment; } }));
+   let at = -1;
+   const document = { createTreeWalker: () => ({ currentNode: null, nextNode() { this.currentNode = nodes[++at]; return Boolean(this.currentNode); } }), createDocumentFragment: () => ({ parts: [], append(...p) { this.parts.push(...p); } }), createElement: () => ({}) };
+   const page = runPage();
+@@ -2116,20 +2149,21 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
+   assert.equal(chip.data, 'Row F12 and Financial foundation', 'a chip takes the name and keeps its reference as text');
+   const screen = read('screen.js');
+   assert.ok(!screen.includes('showsCodes') && !screen.includes('module-ref') && !/closest\('[^']*details\.audit/.test(screen));
++  assert.equal(nameCodesIn(['Source readiness', ' (CP-0)'])[1].data, '', 'a parenthesised code after the module name in the node before is dropped');
+   assert.ok(screen.includes('Retained fields from this historical run, with module codes and method step ids shown as names.') && !screen.includes('exact retained fields'));
+   assert.ok(/function nameCodes[^]*?nameCodes\(\$\('search-results'\),null,false\)/.test(screen), 'search hits borrow no step title');
+   assert.ok(/updateLibrary\([^]*?nameCodes\(\$\(id\)\)/.test(read('views.js')), 'a redrawn library is named');
+   assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;if\(!keepsCodes\(current\)\)nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
+ });
+ 
+-test('names, not codes (L3): the Evidence page keeps its file names and hashes as stored: it is never passed through nameCodes', () => {
++test('names, not codes (R4, R6): only the Evidence page escapes nameCodes (its file names stay as stored); module pages and the Overview of either format are named', () => {
+   const screen = read('screen.js');
+   const keepsCodes = new Function('contexts', 'earlierFormat', 'isAnalytical', 'data', 'isNewFormat', `${screen.slice(screen.indexOf('const keepsCodes='), screen.indexOf('const reportPage='))}; return keepsCodes;`)(
+-    { r: {} }, () => true, () => false, {}, () => false);
++    { r: {} }, () => false, () => true, { o: { sections: [] } }, () => true);
+   assert.equal(keepsCodes({ module: 'W-Evidence', context: 'r' }), true);
+-  // The other run pages are decided as before: Forecast has no output and is not analytical; an earlier-format Overview is named.
+   assert.equal(keepsCodes({ module: 'W-Forecast', context: 'r' }), false);
+-  assert.equal(keepsCodes({ module: 'W-Overview', context: 'r' }), false);
++  assert.equal(keepsCodes({ module: 'W-Overview', context: 'r' }), false, 'a new-format Overview is named');
++  assert.equal(keepsCodes({ module: 'CP-1', output: 'o', context: 'r' }), false, 'a new-format module page is named');
+   // Both callers skip a page that keeps its codes.
+   assert.ok(screen.includes("if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}") && screen.includes('if(!keepsCodes(current))nameCodes(content);'));
+ });
+@@ -2146,7 +2180,21 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
+   assert.equal(name('T2E.2–T2E.4'), 'Beginning register to Cash uses');
+   assert.equal(page.namedText('CP-0-a.md and CP-4_RUNBOOK.md and CP-1.md', null), 'Source readiness handoff (a) and unnamed module runbook and Financial foundation handoff');
+   assert.equal(page.handoffLabel('r--deliveries--h--CP-0-a.md'), 'Source readiness handoff (a)');
+-  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt,.basis,.module-code')"), 'a source excerpt is the issuer\'s text, as quoted; a Basis line is printed as written (T3 review L1); a navigator code is the code (decision 5)');
++  assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt')") && !read('screen.js').includes('.module-code'), 'a source excerpt is the issuer\'s text, as quoted, and a register reference stays; a Basis line and a navigator entry show names (owner ruling 2026-11-12)');
++  // A name already written before its parenthesised code is not said twice; any other parenthesised code becomes its name.
++  assert.equal(page.namedText('Source readiness (CP-0) and Foundation (CP-1) and Ghost (CP-9Z)', null), 'Source readiness and Foundation (Financial foundation) and Ghost (unnamed module)');
++  assert.equal(page.namedText('the source readiness (CP-0) check', null), 'the source readiness check', 'a name written in other case is not said twice');
++});
++
++test('names, not codes: a stored source file name of the run is shown as stored', () => {
++  const stored = { names: { 'CP-2D': 'Liquidity' }, runFields: { evidence: { sources: [{ name: 'CP-2025-Info-Memo.pdf' }], unused: [{ name: 'CP-1 Board resolution.pdf' }], unrecorded: [] } } };
++  const page = runPage(d => d, [], m => m, stored);
++  assert.equal(page.namedText('CP-2025-Info-Memo.pdf, page 3; Liquidity (CP-2D)', null), 'CP-2025-Info-Memo.pdf, page 3; Liquidity');
++  assert.equal(page.namedText('CP-1 Board resolution.pdf, page 2; Financial foundation (CP-1) and CP-1', null), 'CP-1 Board resolution.pdf, page 2; Financial foundation and Financial foundation');
++  assert.equal(page.namedText('Illiquidity (CP-2D) risk', null), 'Illiquidity (Liquidity) risk');
++  assert.equal(page.namedText(' (CP-2D)', null, 'Liquidity'), '');
++  assert.equal(page.namedText(' (CP-2D)', null, 'Illiquidity'), ' (Liquidity)');
++  assert.equal(runPage().namedText('CP-2025-Info-Memo.pdf, page 3', null), 'unnamed module-Info-Memo.pdf, page 3');
+ });
+ 
+ // ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.
+@@ -2448,10 +2496,10 @@ test('Report history: columns are Date, Pathway, Modules run, Status in a captio
+   assert.deepEqual(strip(d.cells[0]), '31 March 2025Run D');
+   assert.deepEqual([strip(c.cells[0]), strip(c.cells[1]), strip(c.cells[2])], ['Not recordedRun C', 'Not recorded', 'Not recorded']);
+   const modulesOf = row => [...row.cells[2].matchAll(/<li>(.*?)<\/li>/g)].map(m => strip(m[1]));
+-  assert.deepEqual(modulesOf(a), ['Financial foundation (CP-1)', 'Downside (CP-2A)', 'Committee decision (CP-6)', 'Unnamed module (CP-X)']);
+-  assert.deepEqual(modulesOf(b), ['Source readiness (CP-0)', 'Downside (CP-2A)'], 'in the run\'s own order');
+-  assert.deepEqual(modulesOf(d), ['Source readiness (CP-0)'], 'a partial re-run is its own row with the modules it ran');
+-  assert.ok(b.cells[2].includes('<small class="ref">CP-0</small>'), 'the code is a quiet reference, which naming leaves as it is');
++  assert.deepEqual(modulesOf(a), ['Financial foundation', 'Downside', 'Committee decision', 'Unnamed module']);
++  assert.deepEqual(modulesOf(b), ['Source readiness', 'Downside'], 'in the run\'s own order');
++  assert.deepEqual(modulesOf(d), ['Source readiness'], 'a partial re-run is its own row with the modules it ran');
++  assert.ok(!/CP-/.test(a.html + b.html + d.html + c.html), 'R2: no module code in the Modules run column');
+ });
+ 
+ test('Report history: Status is Completed, plus the count not assessable; Earlier format only where H7 holds', () => {
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index cc53f11..7998cbb 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -59,8 +59,15 @@ function stepText(text,output) {
+   });
+ }
+ // CP-<x>-GAP-<n> is "Gap <n>" on module x's own page and "<Name of x> gap <n>" elsewhere; a code with no known name is "unnamed module".
+-function namedText(text,output=current?.output) {
+-  return stepText(text.replace(MODULE_REF,(code,...rest)=>{
++// A name already written before its own parenthesised code ("Liquidity (CP-2D)") is not said twice: the parenthetical is dropped.
++const NAME_THEN_CODE=/\s*\((CP-[A-Z0-9]+)\)/g;
++const dropRepeat=(text,lead='')=>text.replace(NAME_THEN_CODE,(whole,code,at)=>{const name=moduleLabel(code)?.toLowerCase(),before=(lead+text.slice(0,at)).toLowerCase();return name&&before.endsWith(name)&&!/[\p{L}\p{N}]$/u.test(before.slice(0,-name.length))?'':whole;});
++function namedText(text,output=current?.output,lead='') {
++  // A stored source file name of the run is shown exactly as stored, even when it holds a code.
++  const ev=contexts[data[output]?.run??current?.context]?.evidence||{};
++  const file=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name).filter(Boolean).sort((a,b)=>b.length-a.length).find(name=>text.includes(name));
++  if(file!==undefined){const at=text.indexOf(file);return namedText(text.slice(0,at),output,lead)+file+namedText(text.slice(at+file.length),output);}
++  return stepText(dropRepeat(text,lead).replace(MODULE_REF,(code,...rest)=>{
+     const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
+     if(book!==undefined)return `${name(`CP-${book}`)} runbook`;
+     if(file!==undefined)return handoffName(file,suffix);
+@@ -815,7 +822,7 @@ function historyView(context) {
+   const row=run=>{
+     const key=keyOf.get(run),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}, ${run.run}`;
+     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
+-    const modulesRun=codes.length?`<ul class="history-modules">${codes.map(code=>`<li>${esc(moduleTitle(code))} (<small class="ref">${esc(code)}</small>)</li>`).join('')}</ul>`:SOURCE_NOT_RECORDED;
++    const modulesRun=codes.length?`<ul class="history-modules">${codes.map(code=>`<li>${esc(moduleTitle(code))}</li>`).join('')}</ul>`:SOURCE_NOT_RECORDED;
+     const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
+     return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
+   };
+@@ -834,7 +841,7 @@ function navigationSections(module,context,output=defaultOutput(module,context))
+   return [['status',moduleEntry(module,context)?.outputs.length?'Choose a saved output':availability(module,context),[]]];
+ }
+ // ---- The Modules navigator (ruling decision 5): flat and always open, only the modules this run holds, under plain group headings. Each entry is the plain
+-// name, then the code in the code style (screen.js nameCodes leaves .module-code alone). The open entry carries its page outline directly under it.
++// name only. The open entry carries its page outline directly under it.
+ const MODEL_ENTRY=['CP-MODEL','Cash flow model'];
+ function navigatorGroups(context) {
+   if(!contexts[context])return []; // the library page has no run, so no module list
+@@ -848,7 +855,7 @@ function navigatorEntry(id,name,module,context,query) {
+   const hit=query&&sections.find(s=>s[1].toLowerCase().includes(query));
+   const open=id===module,notAssessable=output&&blocked(data[output].sections,data[output].state);
+   const outline=open&&current.output&&isAnalytical(id)?outlineMarkup(current.output):'';
+-  return `<li><a href="${routeHref(id,hit?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item${open?' selected':''}"${open?' aria-current="page"':''}><span class="module-label">${esc(name)}</span><span class="module-code">${esc(id)}</span>${notAssessable?badge('gray','Not assessable'):''}${hit?`<small>${esc(hit[1])}</small>`:''}</a>${outline}</li>`;
++  return `<li><a href="${routeHref(id,hit?.[0]||lastSection.get(context+':'+id)||firstSection(id,context))}" class="module-item${open?' selected':''}"${open?' aria-current="page"':''}><span class="module-label">${esc(name)}</span>${notAssessable?badge('gray','Not assessable'):''}${hit?`<small>${esc(hit[1])}</small>`:''}</a>${outline}</li>`;
+ }
+ // The entries that match `query` (name, code, aliases, section titles; lower case), as markup and a count.
+ function navigatorView(module,query) {
+@@ -1309,7 +1316,7 @@ function swapActivityScript(doc,now) {
+ }
+ // ---- Evidence (ruling decisions 9, 10): four lists for the run, every value as the store copied it from the run's own files; a value the run does not record reads "Not recorded". Source files are listed only.
+ const shownOrNot=value=>value===null||value===undefined||value===''?'Not recorded':String(value);
+-const readers=codes=>codes.map(code=>`${esc(moduleTitle(code))} <span class="module-code">${esc(code)}</span>`).join(', ');
++const readers=codes=>codes.map(code=>esc(moduleTitle(code))).join(', ');
+ const downloadLink=(label,href,named=label)=>href?`<a class="text-action" href="${esc(href)}" download aria-label="Download ${esc(named)}">${esc(label)}${icon('download')}</a>`:`<span>${esc(label)}</span> <span class="muted">No link</span>`;
+ // A wide table scrolls inside its own focusable region, never the page (the region pattern of the library and chart index tables).
+ const scrollRegion=(label,table)=>`<div class="table-scroll" role="region" aria-label="${esc(label)}" tabindex="0">${table}</div>`;
+@@ -1327,7 +1334,7 @@ function evidenceSources(ev) {
+   return `${head}${used}${notUsed}${unrecorded}</section>`;
+ }
+ function evidenceHandoffs(ev) {
+-  const rows=ev.handoffs.map(h=>[`${esc(moduleTitle(h.module))} <span class="module-code">${esc(h.module)}</span>`,downloadLink(h.name,h.href,`${moduleTitle(h.module)} handoff`)]);
++  const rows=ev.handoffs.map(h=>[esc(moduleTitle(h.module)),downloadLink('Download',h.href,`${moduleTitle(h.module)} handoff`)]);
+   const all=ev.zip?`<p>${downloadLink('Download all',ev.zip,'all handoffs (zip)')}</p>`:'';
+   return `<section class="run-section" id="evidence-handoffs"><h2>Handoffs</h2>${rows.length?evidenceTable('The delivered Markdown of each module',['Module','Original Markdown'],rows)+all:'<p class="empty">This run holds no handoff.</p>'}</section>`;
+ }
+@@ -1335,10 +1342,17 @@ function evidenceDownloads(ev) {
+   const rows=ev.downloads.map(d=>`<li class="report-row">${downloadLink(d.label,d.href)}</li>`).join('');
+   return `<section class="run-section" id="evidence-downloads"><h2>Calculations and Model</h2>${rows?`<ul class="report-list">${rows}</ul>`:'<p class="empty">No calculation or Model file was published from this run.</p>'}</section>`;
+ }
++// A file named after a module is labelled by its module; any other file keeps its name. The hash beside it is the file's own.
++const hashLabel=name=>{
++  const sent=/^instructions\/(CP-[A-Z0-9]+)(-[a-z0-9]+)?\.md$/.exec(name);
++  return sent?`${moduleTitle(sent[1])} instructions${sent[2]?` (${sent[2].slice(1)})`:''}`:handoffLabel(name);
++};
++// A module code in a method-change line ("CP-0: src/…/cp0.md changed") is named; a code inside a file path (…/CP-1.md) is part of the path and stays.
++const CODE_NOT_IN_PATH=/(?<![\w/.-])CP-[A-Z0-9]+(?![\w-]|\.md)/g;
+ function evidenceRecord(ev,methodChanges) {
+   const r=ev.record;
+-  const changed=(methodChanges||[]).length?`<h3>Methods changed since this run</h3><ul class="report-list">${methodChanges.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>`:'';
+-  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc(h.name),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
++  const changed=(methodChanges||[]).length?`<h3>Methods changed since this run</h3><ul class="report-list">${methodChanges.map(c=>`<li>${esc(c.replace(CODE_NOT_IN_PATH,moduleTitle))}</li>`).join('')}</ul>`:'';
++  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc([...ev.sources,...ev.unused,...(ev.unrecorded||[])].some(f=>f.name===h.name)?h.name:hashLabel(h.name)),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
+   const sent=r.instructions.length?`<ul class="report-list">${r.instructions.map(i=>`<li class="report-row">${downloadLink(`${moduleTitle(i.module)} instructions`,i.href)}</li>`).join('')}</ul>`:'<p class="empty">The run records no instructions.</p>';
+   const calls=r.calls.length?evidenceTable('Model calls, in the order recorded',['Module','Attempt','Started','HTTP status','Error','Settled (USD)'],r.calls.map(c=>[esc(moduleTitle(c.module)),esc(shownOrNot(c.attempt)),esc(shownOrNot(c.started)),esc(shownOrNot(c.http_status)),esc(shownOrNot(c.error_class)),esc(shownOrNot(c.settled_usd))])):'<p class="empty">The run records no model call.</p>';
+   return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary>${changed}<h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;
+diff --git a/docs/VERIFICATION-ARCHIVE.md b/docs/VERIFICATION-ARCHIVE.md
+index a027dba..564fec5 100644
+--- a/docs/VERIFICATION-ARCHIVE.md
++++ b/docs/VERIFICATION-ARCHIVE.md
+@@ -264,3 +264,90 @@ with the query removed. So "Open report" (row, selected run, deliverables list)
+ - Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
+   inbox-built library; a run with a published forecast model or without a report ("Open primary
+   handoff"); the Windows package; Safari and Firefox.
++
++## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
++
++Owner: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
++`Chart data:` table whose first column is Period (`store.py` `_chart_table`), so `readerChart` now
++draws columns over periods: periods along the x axis in table order, one column per series from a
++zero baseline (a raised baseline when a value is negative), the exact value on each column, the
++series named once in a legend, and each period's chips under its label. Values, periods, labels and
++chips are unchanged; a value that is text still prints n.a. with the text in its title.
++
++- Tests written first and seen failing (two in `static.test.cjs`); one older test updated for the
++  new value markup. 109 node tests; `tests/test_library_page_browser.py` 20 passed; quality gate 0.
++- Built TDG library in headless Chrome, CP-1 Key numbers (Leverage, Interest cover, Liquidity, Debt
++  maturities): fits at 1440, 1280, 1024, 768 and 500px and with the inspector open; no value label
++  outside its card; no two value labels overlap; chips stay under their own period. Below about 96px
++  a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
++  charts print whole.
++- Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
++
++## 2026-11-10 — CP-2G entry values in the launcher's instructions (branch `claude/forecast-publication`)
++
++Comparison (module CP-2G, live run `tdg-forecast-001`, sol-medium, TDG FY2024): the handoff declared
++a blocked forecast with every driver null. Its stated causes were procedural, not evidential: "What
++forecast horizon should be locked: FY2025–FY2027?" and "required invocation and upstream
++acceptance validation cannot be completed through the supplied tools". The method sent has an
++entry protocol (`forecast_horizon`, `base_period`, `cases`; "block_model_when_material_forecast_
++scope_is_missing") that takes its values from a command qualifier the launcher never gave.
++
++- Change: `FORECAST_BLOCK` (launcher preface, outside the method block) now states the command
++  with those three entry values and says the helper scripts are not run in this transport and are
++  not a reason to block. A driver the evidence cannot support still stays null.
++- Test written first and seen failing (`test_the_forecast_instructions_lock_the_entry_values_…`).
++  `tests/test_cpos_launch.py` 157 passed, 1 paid test skipped; quality gate exit 0. Offline
++  prepare: CP-2G's instructions carry the paragraph; CP-0, CP-1 and CP-2A instructions are
++  byte-identical; `tdg-forecast-001` is still listed as on the current methodology.
++- Live proof (`/private/tmp/claude-501/rbot-live3/runs/tdg-forecast-002`, sol-medium, 16 minutes,
++  USD 1.3061, same four modules): the procedural block is gone. CP-2G's request now reads "FY2025,
++  FY2026 and FY2027 as the locked annual forecast horizon" and `qa_status` moved from Blocked to
++  Restricted. The forecast model is **still not published**: every driver is still null, now for
++  a stated evidential reason ("essential operating, cash-conversion, exit-interest and financing
++  assumptions cannot be supported by the supplied evidence. This is an evidence constraint, not
++  a request to reconfirm the locked entry values"). It declined even capex, where it quotes
++  management's FY2025 range of 2.5% to 3.5% of sales, because no point value or later year is given.
++- Driver rule (owner, 2026-11-10, "Yes, allow judgment"): the preface now asks for a value for every
++  driver, as labelled `Analyst Interpretation` anchored to a stated figure where guidance is absent,
++  and keeps null only when nothing stated can anchor it. Test changed first and seen failing; 157
++  passed; gate exit 0.
++- Third live run (`/private/tmp/claude-501/rbot-live4/runs/tdg-forecast-003`, 13 minutes,
++  USD 1.0801): **not a test of the driver rule.** CP-2A itself came back Blocked this time ("missing
++  financing documents and legal-perimeter evidence"; it was Requires More Work in -001 and
++  Restricted in -002 on identical instructions and sources), and CP-2G stopped at the method's
++  required-dependency gate, as the method directs. No forecast was published.
++- Not verified: that CP-2G gives drivers under the new rule, and the Forecast tab with a published
++  model; no run has produced one. CP-2A's run-to-run variation between Blocked and usable on the
++  same inputs is unexamined. "Open primary handoff" was left as it is: no run can reach it.
++- Why CP-2A blocked in -003 (read from the three retained runs, no provider call): the pinned context
++  declares `attachments.legal_documents: executed`, but the pack is public filings only. In -003
++  CP-0 wrote that gap as conditioning "full downside readiness", CP-1's readiness table then marked
++  "CP-2A complete failure, covenant and funding-access sequence | Not ready", and CP-2A read that as
++  a prohibition from both predecessors. In -001 and -002 CP-0 and CP-1 did not write those lines
++  and CP-2A ran. The trigger is the context's declaration; the form's value for this pack is `none`.
++  Not tested: a run with `legal_documents: none`.
++- Fourth live run (`/private/tmp/claude-501/rbot-live5/runs/tdg-forecast-004`, `legal_documents:
++  none`, USD 1.2605): CP-2A came back Restricted and CP-2G gave a labelled, anchored value for every
++  driver, so the driver rule works. The forecast was still **not published**: `ebitda_margin`,
++  `tax_wc_pct_revenue` and `interest_rate` were written at 38 decimal places (calculator output
++  pasted in) against the inputs schema's four, and delivery dropped the block after payment.
++- Fix: the preface states the four-decimal limit, and the in-loop check now parses CP-2G's block
++  against CP-1 (`_forecast_issues`), so a block delivery would refuse goes back for repair. A
++  declined (all-null) block is still accepted, and the repair text offers declining, so the model
++  can always finish. Delivery's fail-open stays as a backstop. Tests written first and seen failing;
++  the five invalid-block cases now assert a repair request rather than a report without a model.
++  `tests/test_cpos_launch.py` 160 passed, 1 paid test skipped; quality gate exit 0.
++- Fifth live run (`/private/tmp/claude-501/rbot-live6/runs/tdg-forecast-005`, run-004 context,
++  USD 1.4039): **forecast published** (`cp_forecast_published: true`; `forecast.md` and
++  `forecast_exact.json` delivered). CP-2G wrote four-decimal drivers (`ebitda_margin` "0.4802",
++  anchored to CP-1's FY2024 EBITDA 3,813 on sales 7,940) on its first draft, so the new check passed
++  it; its two repairs were reader-summary issues. CP-2A gave no shock, so only the reference case
++  exists. The library built for that workspace shows the Forecast tab: revenue 8,757 / 9,658 /
++  10,652, Adj EBITDA 4,205 / 4,638 / 5,115, total leverage 5.74x / 5.18x / 4.68x. Spot check by
++  hand: 7,940 × 1.1029 = 8,757 and 8,757 × 0.4802 = 4,205.
++- Not verified: the in-loop forecast check repairing a real model's bad block (it was not
++  triggered live); the tab's note mentions an upside case that this run does not have, and the
++  model has no assumption register. Resuming a pre-fix run directory whose retained CP-2G answer
++  this check now rejects would stop with `cpos_feedback_changed`; runs 001–004 are not resumed.
++- Spend across the six live runs of this test: USD 1.0761 + 1.1979 + 1.3061 + 1.0801 + 1.2605 +
++  1.4039 = 7.3246.
+diff --git a/docs/rulings/2026-11-11-reader-and-issuer-report.md b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+index f11f9d2..3fab024 100644
+--- a/docs/rulings/2026-11-11-reader-and-issuer-report.md
++++ b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+@@ -289,3 +289,5 @@ Where the decisions left a detail open, the simplest option was taken:
+     start time, newest first.
+ 
+ Amendment 2026-11-11: a run whose methods have since changed is listed and marked "Earlier methods"; replayed, synthetic and unverified runs stay unlisted.
++
++Amendment 2026-11-12 (owner): no module code is shown on screen, in the issuer library (the Modules navigator, Report history, Evidence, module pages, Overview, the inspector and its Basis items) and on the run start page. A reader sees a module's plain name, never its code. This replaces "the code second" in decision 5 and the reading of decision 7 under which new-format text kept its codes on screen. The Basis line form in the stored handoff (H3) and check 2 are unchanged: the handoff still names an upstream module as `Name (code)`, and the page shows the written name. It is display only: stored handoffs, routes, `href`s, download names and saved answer keys do not change, and stored source file names and file paths are shown exactly as stored on every page, even when they hold a `CP-` token. In the standalone HTML file rendered from `src/deploy_vii/assets` the navigator, headings, coverage table, limitation titles and inspector field name modules too; files already delivered are not rewritten, and codes inside that file's body content are as the data holds them.
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index 783d5aa..14862f4 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -32,7 +32,6 @@ h1,h2,h3{font-family:'Red Hat Display',system-ui,sans-serif}
+ [hidden]{display:none!important}
+ svg.i{width:16px;height:16px;flex:none}
+ .sr-only,.skip{position:fixed;top:-60px;left:70px;z-index:20;background:#fff;padding:10px}.skip:focus{top:4px}
+-.code{font:500 var(--fs-label)/1.5 'Red Hat Mono',monospace;color:var(--text-quaternary)}
+ .muted{color:var(--text-quaternary)}
+ 
+ /* Frame: the library's rail, one white card (title, stages, workbench) on the ground. */
+@@ -255,7 +254,6 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ .mods details[open]>summary::after{transform:rotate(45deg)}
+ .mods .nm{min-width:0;font:600 var(--fs-compact)/1.35 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+ .mods .nm small{display:block;margin-top:2px;font:400 var(--fs-label)/1.4 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+-.mods .nm .code{font-size:var(--fs-label)}
+ .why-list{margin:0 0 12px;padding:0;list-style:none;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+ .why-list li{margin:6px 0;padding-left:10px;border-left:2px solid var(--border-secondary)}
+ .note-foot{margin-top:14px;font-size:var(--fs-label);line-height:16px;color:var(--text-quaternary)}
+@@ -629,6 +627,8 @@ const MODULES = {
+   'CP-DR': ['Research questions', 'Finds the peers and their figures, and answers your research questions.']
+ };
+ const mname = m => (MODULES[m] || [m])[0];
++// Text from the rules or the service names a module by its code; the analyst reads its name (a code with no name here reads "a module").
++const named = t => String(t ?? '').replace(/\bCP-[A-Z0-9]+\b/g, c => MODULES[c] ? MODULES[c][0] : 'a module');
+ const PATHS = {
+   credit_snapshot: {label:'Credit Snapshot', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
+   earnings_update: {label:'Earnings Update', q:'What changed since the last reporting period?', needs:'Filings for both periods and the management EBITDA bridge.'},
+@@ -772,7 +772,7 @@ function seg(name, attr, opts, vertical) {
+     `<label><input type="radio" name="${name}" ${attr} value="${v}">${label}</label>`).join('') + '</div>';
+ }
+ // Reader names lead; the module code is the name's title (screens pass: production detail in a title).
+-const usesList = mods => mods.length ? '<b>Used by</b> ' + mods.map(m => `<span title="${esc(m)}">${esc(mname(m))}</span>`).join(', ') : 'No module in this run reads it directly.';
++const usesList = mods => mods.length ? '<b>Used by</b> ' + mods.map(m => `<span>${esc(mname(m))}</span>`).join(', ') : 'No module in this run reads it directly.';
+ function F(id, k, label, attrs, help, cls) {
+   return `<div class="f${cls ? ' ' + cls : ''}"><label for="${id}">${label}</label><input type="text" id="${id}" data-k="${k}" ${attrs || ''}${help ? ` aria-describedby="${id}-h"` : ''}>` +
+     (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
+@@ -780,7 +780,7 @@ function F(id, k, label, attrs, help, cls) {
+ function D(id, k, label, help, cls) { return F(id, k, label, '', help, cls).replace('type="text"', 'type="date"'); }
+ function S(id, k, label, opts, help) {
+   return `<div class="f"><label for="${id}">${label}</label><select id="${id}" data-k="${k}"${help ? ` aria-describedby="${id}-h"` : ''}><option value=""></option>` +
+-    opts.map(o => `<option>${esc(o)}</option>`).join('') + '</select>' + (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
++    opts.map(o => Array.isArray(o) ? `<option value="${esc(o[0])}">${esc(o[1])}</option>` : `<option>${esc(o)}</option>`).join('') + '</select>' + (help ? `<p class="help" id="${id}-h">${help}</p>` : '') + '</div>';
+ }
+ function rowShell(title, body) {
+   return `<div class="row" data-row><div class="rowhead"><h4 data-title="${title}"></h4><button type="button" class="tertiary-action sm" data-remove>Remove</button></div>${body}</div>`;
+@@ -829,7 +829,7 @@ const ROWS = {
+   }},
+   q: {box:'rows-q', title:'Question', max:10, make() {
+     const p = 'z' + (++uid);
+-    return rowShell('Question', '<div class="grid">' + F(p+'a','text','Question',P('e.g. How much of 2025 adjusted EBITDA is run-rate cost savings?'),'One question, plain text, no | character.','wide') + S(p+'b','focus_module','Focus module',Object.keys(MODULES),'Peer benchmark (CP-1C) or Fundamental credit (CP-2) receive the answer; any other choice, or none, sends it to both.') + '</div>');
++    return rowShell('Question', '<div class="grid">' + F(p+'a','text','Question',P('e.g. How much of 2025 adjusted EBITDA is run-rate cost savings?'),'One question, plain text, no | character.','wide') + S(p+'b','focus_module','Focus module',Object.entries(MODULES).map(([id, m]) => [id, m[0]]),'Peer benchmark or Fundamental credit receive the answer; any other choice, or none, sends it to both.') + '</div>');
+   }}
+ };
+ function addRow(kind) {
+@@ -1216,7 +1216,7 @@ const WORD = {will_refuse:'Will refuse', gap:'Gap', limited:'Limited', check:'Ch
+ const worst = list => list.reduce((a, b) => OUTCOMES.indexOf(a) <= OUTCOMES.indexOf(b) ? a : b, 'ready');
+ const PEER_GAP = {none:'No peer source: no peer universe and no peer multiple.', user_list:'Named peers only: nothing looks up their figures in this run, so the benchmark has no peer figures.'};
+ // The modules of this run among the ones a run-level limit names.
+-const affected = (f, modules, otherwise) => modules.filter(f.has).join(', ') || otherwise;
++const affected = (f, modules, otherwise) => modules.filter(f.has).map(mname).join(', ') || otherwise;
+ // Live evidence behind the wording: tdg-forecast-003 and -004 (legal declaration, CP-2A), and
+ // cpos-tdg-sol-medium-all-001 (as-of 2024-09-30; CP-2G left out the December-quarter results).
+ const RULES = [
+@@ -1577,9 +1577,9 @@ let openMods = new Set();
+ const known = status => OUTCOMES.includes(status) ? status : 'will_refuse';
+ const badgeFor = (status, text) => `<span class="badge ${known(status)}"><i></i>${esc(text || WORD[known(status)])}</span>`;
+ function readyList(R) {
+-  const item = it => `<li>${esc(it.reason)}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(it.fix)}</span>` : ''}</li>`;
++  const item = it => `<li>${esc(named(it.reason))}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(named(it.fix))}</span>` : ''}</li>`;
+   return R.mods.map(m => {
+-    const head = `<span class="nm">${esc(mname(m.id))}<small><span class="code">${m.id}</span> · ${esc(MODULES[m.id][1])}</small></span>${badgeFor(m.status)}`;
++    const head = `<span class="nm">${esc(mname(m.id))}<small>${esc(MODULES[m.id][1])}</small></span>${badgeFor(m.status)}`;
+     if (!m.items.length) return `<li><div class="mrow">${head}<span></span></div></li>`;
+     return `<li><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
+   }).join('');
+@@ -1594,7 +1594,7 @@ function renderPanel(o, R) {
+   setHTML($('scope'), esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`));
+   setHTML($('pn-run'), `${R.mods.length} modules, in the order they run. Updates as you answer.`);
+   setHTML($('pn-tally'), tally(R));
+-  setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(x.reason)}</li>`).join('')}</ul></div>` : '');
++  setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(named(x.reason))}</li>`).join('')}</ul></div>` : '');
+   setHTML($('pn-mods'), readyList(R));
+   const bad = R.mods.filter(m => m.status === 'will_refuse').length, gaps = R.mods.filter(m => ['gap', 'limited'].includes(m.status)).length + (R.run.some(x => ['gap', 'limited'].includes(x.outcome)) ? 1 : 0);
+   // Only checks with a fix the analyst can act on: "confirmed when the summary is made" is not counted.
+@@ -1720,7 +1720,7 @@ function renderState() {
+   else if (want === 'nodocs') box.append(h('p', {className: 'err', textContent: 'Upload the documents first.'}));
+   else if (want === 'busy') box.append(h('p', {className: 'muted', textContent: 'Making the summary from your documents and answers…'}));
+   else {
+-    const p = h('p', {className: 'err'}, h('span', {textContent: SUMMARY.error}));
++    const p = h('p', {className: 'err'}, h('span', {textContent: named(SUMMARY.error)}));
+     const stage = errorStage(SUMMARY.error);
+     if (stage) p.append(' ', button('Go to ' + SHORT[stage], {goto: stage}));
+     p.append(' ', button('Check again', {again: '1'}));
+@@ -1747,8 +1747,8 @@ const pageKey = o => summaryOk() ? JSON.stringify(pageItems(o, SUMMARY.modules,
+ const reviewCurrent = o => summaryOk() && RENDERED === SUMMARY && RENDERED_KEY === pageKey(o);
+ function itemRow(item, sq) {
+   const stage = stageOf(item);
+-  const li = h('p', {}, h('span', {textContent: item.reason}));
+-  if (item.fix) li.append(h('span', {className: 'fix'}, h('b', {textContent: 'Fix: '}), item.fix));
++  const li = h('p', {}, h('span', {textContent: named(item.reason)}));
++  if (item.fix) li.append(h('span', {className: 'fix'}, h('b', {textContent: 'Fix: '}), named(item.fix)));
+   if (stage && stage !== 'review') {
+     const hidden = !sq.includes(stage);
+     li.append(' ', button(hidden ? 'Answer this now' : 'Go to ' + SHORT[stage], hidden ? {goto: stage, now: stage} : {goto: stage}));
+@@ -1765,7 +1765,7 @@ function readyTable(sq, own = []) {
+   const body = h('tbody');
+   order.forEach(id => {
+     const items = all.filter(i => i.scope === id), outcome = worst(items.map(i => known(i.outcome)));
+-    const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}), h('span', {className: 'code', textContent: id}));
++    const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}));
+     const state = h('td'); state.innerHTML = badgeFor(outcome);
+     const why = h('td', {}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
+     const tr = h('tr', {}, h('td', {}, name), state, why);
+@@ -1803,7 +1803,7 @@ function renderFacts(o) {
+     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
+     const me = `${MODELS[sent.model] || sent.model}, ${EFFORTS[sent.effort] || sent.effort}`;
+     rows.push(['Model and effort', sent.model === 'gpt' && sent.effort === 'balanced' ? me + ' (the default)' : me]);
+-    if (left.length) rows.push(['Modules left out', left.map(m => `${mname(m)} (${m})`).join(', ')]);
++    if (left.length) rows.push(['Modules left out', left.map(mname).join(', ')]);
+   }
+   box.textContent = '';
+   rows.forEach(([k, v]) => box.append(h('dt', {textContent: k}), h('dd', {textContent: v})));
+@@ -1854,7 +1854,7 @@ function renderReview(sq, o) {
+   });
+   const err = $('rv-submit-error');
+   err.hidden = !SUBMIT_ERROR;
+-  err.textContent = SUBMIT_ERROR;
++  err.textContent = named(SUBMIT_ERROR);
+ }
+ // Submit: one request per click that is allowed, and none while one is in flight.
+ async function submitRun() {
+@@ -1906,7 +1906,7 @@ function renderRun(r) {
+   }
+   $('run-again').hidden = !RESTARTABLE.includes(r.status);
+   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
+-  $('run-reason').textContent = r.reason || 'none given';
++  $('run-reason').textContent = named(r.reason) || 'none given';
+   const list = $('run-modules');
+   list.textContent = '';
+   list.style.setProperty('--n', 4);
+@@ -2099,8 +2099,7 @@ function renderModules(order) {
+     const label = document.createElement('label'), input = document.createElement('input'), ct = document.createElement('span'), name = document.createElement('span');
+     label.className = 'card'; input.type = 'checkbox'; input.dataset.c = 'mod'; input.value = m; input.checked = !SKIPPED.has(m);
+     ct.className = 'ct'; name.className = 'ctl'; name.textContent = mname(m);
+-    const code = document.createElement('span'); code.className = 'code'; code.textContent = m;
+-    name.appendChild(code); ct.appendChild(name); label.append(input, ct); box.appendChild(label);
++    ct.appendChild(name); label.append(input, ct); box.appendChild(label);
+   });
+ }
+ // What the service takes at /summary (run_start/submissions.py Answers).
+@@ -2257,7 +2256,7 @@ async function startFrom(runId) {
+   const notes = [];
+   if (usable && Array.isArray(got.modules) && got.modules.length) {
+     const inPathway = runOf(getV($('st-pathway'), 'pathway')), unknown = got.modules.filter(m => !inPathway.includes(m));
+-    if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.join(', ')} not in this pathway.`);
++    if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.map(mname).join(', ')} not in this pathway.`);
+     else {
+       inPathway.filter(m => !got.modules.includes(m)).forEach(m => SKIPPED.add(m));
+       CARRIED.fields.add('@modules');
+@@ -2410,7 +2409,7 @@ function renderPathCards() {
+     const id = 'path-' + p, d = PATHS[p];
+     return `<label class="card" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
+       `<span class="ct"><span class="ctl"><b>${d.label}</b></span><span class="q">${d.q}</span><span class="imp">Needs: ${d.needs}</span>` +
+-      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span title="${m}">${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
++      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span>${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
+   }).join('');
+ }
+ function renderTimeline() {
+@@ -2482,7 +2481,7 @@ function vis() {
+   peers.hidden = !(ps === 'user_list' || ps === 'user_comps');
+   peers.dataset.mode = ps;
+   $('peers-intro').textContent = ps === 'user_list' ? 'Name each peer. Nothing looks up their figures in this run, so the benchmark records "No peer figures".' : 'One row per peer, figures at most 12 months old. At least 3 are needed for the automatic basis.';
+-  $('vallead').textContent = has('CP-1C') ? 'The peer benchmark (CP-1C) forms the valuation multiple from these peers' + (has('CP-4C') ? ', and Recovery & fulcrum (CP-4C) values the business with it' : '') + '. ' + (has('CP-DR') ? "By default the research module finds the peers and their figures, and it also reads any peers' filings you add to the documents. Your own set is optional: choose \u201cI'll give peer figures\u201d." : 'Nothing is looked up for you.') : 'No module in this pathway forms a valuation multiple from these entries; they stay in the file.';
++  $('vallead').textContent = has('CP-1C') ? 'The peer benchmark forms the valuation multiple from these peers' + (has('CP-4C') ? ', and Recovery & fulcrum values the business with it' : '') + '. ' + (has('CP-DR') ? "By default the research module finds the peers and their figures, and it also reads any peers' filings you add to the documents. Your own set is optional: choose \u201cI'll give peer figures\u201d." : 'Nothing is looked up for you.') : 'No module in this pathway forms a valuation multiple from these entries; they stay in the file.';
+   $('rows-peer').querySelectorAll('[data-row]').forEach(r => {
+     const ev = getV(r, 'ev_m'), eb = getV(r, 'ebitda_m');
+     r.querySelector('[data-mult]').textContent = NUM.test(ev) && NUM.test(eb) && Number(eb) > 0 ? (Number(ev) / Number(eb)).toFixed(1) + 'x' : 'n/a';
+diff --git a/src/deploy_vii/assets/app.css b/src/deploy_vii/assets/app.css
+index 590be51..643ca79 100644
+--- a/src/deploy_vii/assets/app.css
++++ b/src/deploy_vii/assets/app.css
+@@ -71,11 +71,10 @@ kbd{font-family:var(--rb-font-mono);font-weight:500}
+ .chips .chip-pass{color:var(--rb-pos)}
+ .chips .chip-blocked{color:var(--rb-neg)}
+ .module-list{display:flex;flex-direction:column;gap:3px;min-height:0;flex-shrink:0}
+-.module-link{display:grid;grid-template-columns:18px 16px minmax(0,1fr) auto;align-items:center;gap:var(--rb-s-2);padding:0 var(--rb-s-2);min-height:var(--rb-target);border-left:3px solid var(--rb-ink-3);border-radius:var(--rb-r-tile);color:var(--rb-ink);text-decoration:none;font-size:12px}
++.module-link{display:grid;grid-template-columns:18px 16px minmax(0,1fr);align-items:center;gap:var(--rb-s-2);padding:0 var(--rb-s-2);min-height:var(--rb-target);border-left:3px solid var(--rb-ink-3);border-radius:var(--rb-r-tile);color:var(--rb-ink);text-decoration:none;font-size:12px}
+ .module-link:hover{background:var(--rb-head)}
+ .module-link .n{font-size:var(--rb-fs-micro);color:var(--rb-ink-2)}
+ .module-link .title{line-height:1.15;overflow-wrap:anywhere}
+-.module-link .code{font-size:var(--rb-fs-micro);color:var(--rb-ink-2)}
+ .module-link[aria-current=page]{background:var(--rb-select);font-weight:600}
+ .module-link.is-unrun .title{font-style:italic}
+ .outline{margin-top:var(--rb-s-3)}
+diff --git a/src/deploy_vii/assets/app.js b/src/deploy_vii/assets/app.js
+index 17f4b81..d2bf3de 100644
+--- a/src/deploy_vii/assets/app.js
++++ b/src/deploy_vii/assets/app.js
+@@ -15,6 +15,8 @@
+     if (className) result.className = className;
+     return result;
+   };
++  // A module is shown by its title; a missing, empty or code-only title is "Unnamed module".
++  const moduleTitle = (title, code) => (title && title.trim() && title !== code ? title : "Unnamed module");
+   const svgNode = (tag, attrs, kids) => {
+     const result = document.createElementNS(SVG_NS, tag);
+     Object.entries(attrs || {}).forEach(([key, value]) => result.setAttribute(key, String(value)));
+@@ -558,7 +560,7 @@
+     button.setAttribute("aria-label", `Inspect ${fact.label}`);
+     button.addEventListener("click", () => {
+       const kind = fact.status !== "known" ? "gap" : fact.calculation_id ? "calculated" : report.run.case_kind === "synthetic" ? "synthetic" : "cited";
+-      const fields = [["Field", `${owner.module_id} / ${fact.table_id} / ${fact.row_id} / ${fact.field}`],
++      const fields = [["Field", `${moduleTitle(owner.title, owner.module_id)} / ${fact.table_id} / ${fact.row_id} / ${fact.field}`],
+         ["Label", fact.label], ["Value class", fact.value_class], ["Source value", fact.source_amount], ["Stated comparison", fact.stated_amount],
+         ["Calculation status", fact.calculation_status], ["Formula", fact.formula], ["Value", fact.display], ["Status", fact.status],
+         ["Period", fact.period], ["Unit", fact.unit], ["Currency", fact.currency], ["Scale", fact.scale], ["Basis", fact.basis],
+@@ -656,10 +658,10 @@
+     const summary = node("div", null, "summary-grid");
+     summary.append(panel("Research scope", node("p", `${report.responsibilities.modules} analytical and delivery responsibilities, including ${report.responsibilities.alternates} alternate commands. Aliases run the complete owning workflow.`)),
+       panel("Qualification", node("p", `Analytical: ${report.analytical_qualification}. Native Copilot: ${report.native_host_qualification}.`)));
+-    root.append(summary, panel("Module coverage", plainTable(["Module", "Responsibility", "Status"], report.modules.map(module => {
+-      const link = node("a", module.module_id); link.href = "#" + module.module_id;
++    root.append(summary, panel("Module coverage", plainTable(["Module", "Status"], report.modules.map(module => {
++      const link = node("a", moduleTitle(module.title, module.module_id)); link.href = "#" + module.module_id;
+       const status = node("span", null, "status-cell"); status.append(glyph(module.status_glyph, 13), document.createTextNode(module.status_word));
+-      return [link, module.title, status];
++      return [link, status];
+     }), "Current report coverage")));
+     return root;
+   };
+@@ -692,7 +694,7 @@
+       front.unplaced.forEach(entry => { const item = node("li"); item.textContent = `${entry.title} · ${entry.block_id} (${report.block_states[entry.state].word}): ${entry.note}`; list.append(item); });
+       root.append(panel("Bound outside this Pathway", list));
+     }
+-    report.modules.forEach(item => item.limitations.forEach(text => root.append(panel(item.module_id, node("p", text, "text-content")))));
++    report.modules.forEach(item => item.limitations.forEach(text => root.append(panel(moduleTitle(item.title, item.module_id), node("p", text, "text-content")))));
+     return root;
+   };
+ 
+@@ -760,8 +762,8 @@
+       link.style.borderLeftColor = row.color;
+       if (current && current.module_id === row.module_id) link.setAttribute("aria-current", "page");
+       const mark = node("span", null, "mark-glyph"); const symbol = glyph(row.glyph, 13); symbol.title = row.word; mark.append(symbol);
+-      const title = node("span", row.title, "title"); title.append(node("span", " · " + row.word, "sr-only"));
+-      link.append(node("span", row.number, "n num"), mark, title, node("span", row.module_id, "code num"));
++      const title = node("span", moduleTitle(row.title, row.module_id), "title"); title.append(node("span", " · " + row.word, "sr-only"));
++      link.append(node("span", row.number, "n num"), mark, title);
+       list.append(link);
+     });
+     const foot = $("nav-foot"); foot.replaceChildren();
+@@ -771,7 +773,7 @@
+       const group = outside.filter(row => row.word === word);
+       const details = node("details"); details.append(node("summary", `${word} · ${group.length}`));
+       group.filter(matches).forEach(row => {
+-        const link = node("a"); link.href = "#" + row.module_id; link.append(glyph(row.glyph, 12), node("span", row.module_id, "num"), node("span", row.title));
++        const link = node("a"); link.href = "#" + row.module_id; link.append(glyph(row.glyph, 12), node("span", moduleTitle(row.title, row.module_id)));
+         details.append(link);
+       });
+       foot.append(details);
+@@ -822,7 +824,7 @@
+     const route = routeOf();
+     const module = moduleFor(route);
+     const root = $("view-root"); root.replaceChildren(); $("call-root").replaceChildren();
+-    const title = module ? `${module.module_id} · ${module.title}` : ({front: report.run.issuer_name, analysis: "Analysis", evidence: "Evidence", limitations: "Limitations", FIT: "Portfolio Fit"}[route] || "Unknown destination");
++    const title = module ? moduleTitle(module.title, module.module_id) : ({front: report.run.issuer_name, analysis: "Analysis", evidence: "Evidence", limitations: "Limitations", FIT: "Portfolio Fit"}[route] || "Unknown destination");
+     const head = node("header", null, "page-head");
+     head.append(node("h1", title),
+       node("p", `As of ${report.run_display.as_of} · ${report.run.case_kind} case · ${report.run.method_version}`, "muted"));
+diff --git a/tests/test_library_changes_browser.py b/tests/test_library_changes_browser.py
+index c4418e1..3187572 100644
+--- a/tests/test_library_changes_browser.py
++++ b/tests/test_library_changes_browser.py
+@@ -178,7 +178,7 @@ def test_the_changes_tab_sits_between_overview_and_modules_and_shows_the_compari
+     assert 'change-status">Unchanged</span>' in dom
+     over = dom[dom.index('id="changes-over-time"') :]
+     assert over.index("30 September 2024") < over.index("31 March 2025")
+-    assert "CP-2 bottom line." in over
++    assert "Fundamental credit bottom line." in over
+     # Model output is text, never markup.
+     assert "window.hit" not in dom.replace("&lt;script&gt;window.hit=1&lt;/script&gt;", "")
+     assert "<script>window.hit=1" not in dom
+@@ -199,7 +199,10 @@ def test_a_cp8_that_was_not_produced_says_so_with_its_reason(tmp_path):
+     dom, console = visit(build(tmp_path), "#W-Changes/changes?c=later")
+     assert console == []
+     assert "The explanation of what changed was not produced for this run." in dom
+-    assert "Recorded reason: cpos_live_not_accepted: CP-8 not accepted within bounds" in dom
++    assert (
++        "Recorded reason: cpos_live_not_accepted: "
++        "Changes since the last run not accepted within bounds" in dom
++    )
+     assert 'id="changes-what"' not in dom
+     assert 'id="changes-over-time"' in dom
+ 
+@@ -238,3 +241,18 @@ def test_over_time_joins_two_runs_the_pack_names_by_run_folder(tmp_path):
+     assert console == []
+     over = dom[dom.index('id="changes-over-time"') :]
+     assert over.count("<line ") == 1
++
++
++def test_no_module_code_reaches_a_reader_from_the_changes_tab(tmp_path):
++    """Owner ruling 2026-11-12: the Changes tab names modules and never shows a code. The answer
++    key is the library page's codes probe (it scans the Changes route among its routes, text,
++    `title` and `aria-label`, folds opened) over a run that has CP-8's pack and handoff."""
++    from test_library_page_browser import read_codes_probe
++
++    two_runs(tmp_path)
++    page = build(tmp_path)
++    dom, console = visit(page, "#W-Changes/changes?c=later")
++    assert console == []
++    assert 'id="changes-issuer"' in dom and 'id="changes-analysis"' in dom
++    seen = read_codes_probe(page, "later", "#CP-2/head?c=later")
++    assert seen["hits"] == []
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index f9f519d..00cc3ca 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -6,6 +6,7 @@ it needs but is not allowed. Needs Google Chrome or Chromium; skipped where ther
+ 
+ import hashlib
+ import html
++import importlib.util
+ import json
+ import os
+ import re
+@@ -562,41 +563,65 @@ def nine_part_library(tmp_path: Path) -> Path:
+     return tmp_path / "library/index.html"
+ 
+ 
+-# Names, not codes: the module page with its audit section and the inspector open, then the Evidence
+-# tab, Run activity and a search, read as a reader sees and hears them (text, title, aria-label).
+-# Register references (C1, K) are not codes of this kind. A navigator entry shows its module code
+-# in the code style (ruling decision 5), so `.module-code` text is the one place a code appears.
++# Names, not codes (owner ruling 2026-11-12: no module code is shown anywhere on screen): the module
++# page with its audit section and the inspector open, the Evidence tab, Report history, Overview,
++# Run activity and a search, read as a reader sees and hears them (text, title, aria-label). The
++# module navigator is on every module page. Register references (C1, K) are not codes of this kind;
++# `.excerpt` is the issuer's own quoted text. RUN is replaced by the run the probe reads.
+ CODES_PROBE = """(async () => {
+-  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [];
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [], kept = [];
++  let inspected = 0;
+   const code = /\\bCP-[A-Z0-9]+\\b|\\bT\\d+[A-Z]?(?:\\.\\d+)?\\b/;
+-  // A file name is the file's identity, shown as stored (Evidence's handoff and
+-  // instruction names), not a module code.
+-  const fileName = /^(?:instructions\\/)?CP-[A-Z0-9]+\\.md$/;
+   const scan = where => {
+     const walker = document.createTreeWalker(
+       document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+     while (walker.nextNode()) {
+       const node = walker.currentNode, text = node.nodeType === 3;
+       const seen = text
+-        ? [node.parentElement.closest('script,style,#probe,.module-code')
+-            || fileName.test(node.data.trim()) ? '' : node.data]
++        ? [node.parentElement.closest('script,style,#probe,.excerpt') ? '' : node.data]
+         : ['title', 'aria-label'].map(a => node.getAttribute(a) || '');
+-      for (const value of seen) if (code.test(value)) hits.push(where + ': ' + value.slice(0, 80));
++      for (const value of seen) {
++        if (!code.test(value)) continue;
++        if (code.test(stripStored(value))) hits.push(where + ': ' + value.slice(0, 80));
++        else kept.push(where + ': ' + value.slice(0, 80));
++      }
+     }
+   };
+   for (let i = 0; i < 200 && !document.querySelector('.module-head'); i++) await sleep(50);
+-  document.querySelector('.audit-open').click();
+-  await sleep(100);
++  // A stored source file name of the shown run is shown as stored: a value whose only
++  // matches sit inside one is kept, not a hit.
++  const evidence = (window.DESIGN_DATA.runs['RUN'] || {}).evidence || {};
++  const stored = [
++    ...(evidence.sources || []), ...(evidence.unused || []), ...(evidence.unrecorded || []),
++  ]
++    .map(f => f.name).filter(Boolean).sort((a, b) => b.length - a.length);
++  const stripStored = value => stored.reduce((v, name) => v.split(name).join(''), value);
++  // An earlier-format page opens its audit section from a button and its inspector from a chip; a
++  // new-format page opens its inspector from a paragraph's figure or Basis control.
++  const audit = document.querySelector('.audit-open');
++  document.querySelectorAll('details:not([open])').forEach(d => {
++    d.open = true;
++    d.dispatchEvent(new Event('toggle'));
++  });
++  document.querySelectorAll('.audit-open').forEach(button => button.click());
++  await sleep(150);
+   scan('module page');
+-  document.querySelector('.chip[data-evidence]').click();
+-  await sleep(300);
+-  scan('inspector');
+-  for (const route of ['#W-Evidence/sources?c=run-a', '#CP-OS/activity']) {
++  const controls = [...document.querySelectorAll('#content [data-paragraph]')];
++  if (!controls.length) controls.push(document.querySelector('.chip[data-evidence]'));
++  for (const control of controls) {
++    control.click();
++    await sleep(150);
++    inspected++;
++    scan('inspector');
++  }
++  for (const route of ['#W-Evidence/sources?c=RUN', '#W-Report/history?c=RUN',
++                       '#W-Overview/overview?c=RUN', '#W-Changes/changes?c=RUN',
++                       '#CP-OS/activity']) {
+     location.hash = route;
+     await sleep(300);
+     scan(route);
+   }
+-  location.hash = '#CP-1/head?c=run-a';
++  location.hash = 'START';
+   await sleep(300);
+   const search = document.getElementById('module-search');
+   search.value = 'cp-1';
+@@ -608,22 +633,87 @@ CODES_PROBE = """(async () => {
+   out.textContent = JSON.stringify({
+     hits,
+     titled: document.querySelectorAll('a.module-item[title]').length,
++    audit: !!audit,
+     inspector: !!document.querySelector('.evidence-context'),
+     searched: document.querySelectorAll('.search-hit').length,
++    moduleCodes: document.querySelectorAll('.module-code').length,
++    kept,
++    inspected,
+   });
+   document.body.append(out);
+ })();"""
+ 
+ 
+-def test_no_module_code_or_step_id_reaches_a_reader_from_a_module_page(tmp_path):
+-    page = nine_part_library(tmp_path)
+-    (page.parent / "probe.js").write_text(CODES_PROBE, encoding="utf-8")
++def read_codes_probe(page: Path, run: str, start: str) -> dict:
++    script = CODES_PROBE.replace("RUN", run).replace("START", start)
++    (page.parent / "probe.js").write_text(script, encoding="utf-8")
+     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+-    dom, console = visit(page, "#CP-1/head?c=run-a")
++    dom, console = visit(page, start)
+     assert console == []
+-    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
++    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
++
++
++def test_no_module_code_or_step_id_reaches_a_reader_from_a_module_page(tmp_path):
++    seen = read_codes_probe(nine_part_library(tmp_path), "run-a", "#CP-1/head?c=run-a")
++    assert seen["audit"] is True
++    assert seen["inspector"] is True and seen["titled"] == 0 and seen["searched"] > 0
++    assert seen["moduleCodes"] == 0
++    assert seen["hits"] == []
++
++
++MEMO = "CP-2025-Info-Memo.pdf"  # an issuer file whose own name holds a CP- token
++
++
++def adversarial_new_format_workspace(workspace: Path) -> None:
++    """The synthetic new-format run with a supplied file named `CP-2025-Info-Memo.pdf`: a Sources
++    row for it and a finding whose Basis is `CP-2025-Info-Memo.pdf, page 3; Liquidity (CP-2D)`."""
++    fixtures = ROOT / "apps/issuer-library/fixtures"
++    handoffs = workspace / "handoffs-in"
++    shutil.copytree(fixtures / "synthetic-new-format", handoffs)
++    cp2 = handoffs / "SYNTHETIC-CP-2.md"
++    text = cp2.read_text(encoding="utf-8")
++    row = "| NBG_2024-12-31_Q4-results.pdf | Earnings and quarterly cash. |\n"
++    assert row in text and "\n### Contrary evidence" in text
++    text = text.replace(row, row + f"| {MEMO} | Commercial paper programme terms. |\n")
++    finding = (
++        "- The commercial paper programme is capped at USD 250 million, which limits short-term"
++        f" funding.\nBasis: {MEMO}, page 3; Liquidity (CP-2D)\n"
++    )
++    text = text.replace("\n### Contrary evidence", finding + "\n### Contrary evidence", 1)
++    cp2.write_text(text, encoding="utf-8")
++    spec = importlib.util.spec_from_file_location(
++        "build_synthetic_run", fixtures / "build_synthetic_run.py"
++    )
++    builder = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(builder)
++    builder.SOURCE_DIR = handoffs
++    builder.SUPPLIED = (*builder.SUPPLIED, MEMO)
++    builder.build(workspace, builder.DEFAULT_FOLDER)
++    subprocess.run(
++        [
++            sys.executable,
++            str(ROOT / "apps/issuer-library/update_library.py"),
++            "--workspace",
++            str(workspace),
++        ],
++        check=True,
++        capture_output=True,
++    )
++
++
++def test_no_module_code_reaches_a_reader_from_a_new_format_run(tmp_path):
++    """The synthetic new-format run (its own handoffs, Basis lines naming `Liquidity (CP-2D)`), with
++    a supplied file whose name holds a code: the file name stays as stored, every module code
++    is named."""
++    adversarial_new_format_workspace(tmp_path)
++    run = "synthetic-nbg-new-format-001"
++    seen = read_codes_probe(tmp_path / "library/index.html", run, f"#CP-2?c={run}")
+     assert seen["inspector"] is True and seen["titled"] == 0 and seen["searched"] > 0
++    assert seen["moduleCodes"] == 0
+     assert seen["hits"] == []
++    assert seen["inspected"] >= 2
++    for where in ("module page", "inspector"):
++        assert any(k.startswith(where) and MEMO in k for k in seen["kept"]), (where, seen["kept"])
+ 
+ 
+ def line_of(tmp_path: Path, heading: str) -> int:
+@@ -1074,7 +1164,8 @@ def test_the_inspector_draws_every_basis_item_of_every_paragraph_as_the_handoff_
+                     x for pair in zip(k1_headers, k1_cells, strict=True) for x in pair
+                 ], drawn
+             elif m := re.fullmatch(r"(.+) \((CP-[A-Z0-9]+)\)", item):
+-                assert item in drawn["text"]
++                # The handoff's `Name (code)` item is drawn as its written name only (R5).
++                assert drawn["text"].startswith(m[1]) and m[2] not in drawn["text"], drawn
+                 assert bool(drawn["links"]) == (m[2] in ran), drawn
+                 assert ("Not run in this run" in drawn["text"]) == (m[2] not in ran)
+             else:
+@@ -1123,14 +1214,14 @@ def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route
+ 
+ 
+ def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_recorded(tmp_path):
+-    """L3, L4: the Hashes table shows `instructions/CP-0.md`, not a module name; a run record
+-    with no supplied-file list does not claim every supplied file was used."""
++    """R6: the Hashes table labels a module-named file by its module's name (the hash stays); a run
++    record with no supplied-file list does not claim every supplied file was used."""
+     make_run(tmp_path, "run-a")
+     update_library.update_library(tmp_path)
+     dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/sources?c=run-a")
+     assert console == []
+-    cells = re.findall(r"<td>(instructions/[^<]*)</td>", dom)
+-    assert cells == ["instructions/CP-0.md", "instructions/CP-1.md"]
++    cells = re.findall(r"<td>([^<]*instructions)</td>", dom)
++    assert cells == ["Source readiness instructions", "Financial foundation instructions"]
+     assert "The run record lists no supplied files." in dom
+     assert "Every supplied file is named" not in dom
+     # Each handoff and instruction link stays inside library/, where the served page can open it.
+diff --git a/tests/test_model_shell_browser.py b/tests/test_model_shell_browser.py
+new file mode 100644
+index 0000000..0275f00
+--- /dev/null
++++ b/tests/test_model_shell_browser.py
+@@ -0,0 +1,200 @@
++"""The standalone HTML file rendered by `deploy_vii.render` names modules, not module codes, in its
++own navigation and headings (owner ruling 2026-11-12), read in real headless Chrome.
++
++The probe is appended to the rendered file as an inline script (the file's policy allows inline
++scripts and nothing else), walks every route the navigator and the rail reach, and writes what it
++read to a `<pre id="probe">`. Body content (claims, tables, limitation text) is not scanned."""
++
++import hashlib
++import html
++import json
++import re
++from datetime import date
++from decimal import Decimal
++from pathlib import Path
++
++import pytest
++from test_library_page_browser import visit
++
++from deploy_vii.contracts import (
++    Citation,
++    Fact,
++    ModuleView,
++    ReportTable,
++    Run,
++    TableColumn,
++    TableRow,
++    View,
++)
++from deploy_vii.render import empty_view, render
++
++pytestmark = pytest.mark.browser
++
++# Hand-written answer key: titles the fixture gives and the words the page owes for them.
++MODEL = "Synthetic data foundation"
++LIQUIDITY = "Synthetic liquidity bridge"
++OUTSIDE = "Synthetic outside module"
++UNNAMED = "Unnamed module"  # CP-3 is given its own code as its title
++LIMIT_TEXT = "Synthetic liquidity limitation."
++
++PROBE = r"""(async () => {
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++  const code = /\bCP-[A-Z0-9]+\b/;
++  const out = {hits: [], routes: {}, filter: null, field: null, nav: [], outside: []};
++  const attrs = el => [el.getAttribute("title") || "", el.getAttribute("aria-label") || ""];
++  const scan = (where, root) => {
++    const values = [];
++    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
++    if (root.nodeType === 1) values.push(...attrs(root));
++    while (walker.nextNode()) {
++      const n = walker.currentNode;
++      values.push(...(n.nodeType === 3 ? [n.data] : attrs(n)));
++    }
++    values.filter(v => code.test(v)).forEach(v => out.hits.push(where + ": " + v.slice(0, 80)));
++  };
++  for (let i = 0; i < 100 && !document.querySelector("#module-list a"); i++) await sleep(50);
++  const links = [...document.querySelectorAll("#module-list a, #nav-foot a, [data-dest]")];
++  const hashes = [...new Set(links.map(a => a.getAttribute("href")))];
++  const rowOf = a => ({href: a.getAttribute("href"), text: a.textContent.trim()});
++  out.nav = [...document.querySelectorAll("#module-list a")].map(rowOf);
++  out.outside = [...document.querySelectorAll("#nav-foot a")].map(rowOf);
++  for (const hash of hashes) {
++    location.hash = hash; await sleep(60);
++    const where = hash;
++    const rec = {h1: document.querySelector("#view-root h1").textContent};
++    scan(where + " navigator", document.getElementById("navigator"));
++    scan(where + " rail", document.getElementById("rail"));
++    scan(where + " h1", document.querySelector("#view-root h1"));
++    const titles = [...document.querySelectorAll("#view-root section.block > header h2")];
++    rec.panels = titles.map(h => h.textContent);
++    titles.forEach(h => scan(where + " panel title", h));
++    const table = [...document.querySelectorAll("#view-root table")]
++      .find(t => t.querySelector("caption").textContent === "Current report coverage");
++    if (table) {
++      scan(where + " coverage", table);
++      rec.coverageHead = [...table.querySelectorAll("th")].map(c => c.textContent);
++      rec.coverage = [...table.querySelectorAll("tbody tr")].map(tr => ({
++        cells: [...tr.children].map(c => c.textContent),
++        href: (tr.querySelector("a") || {getAttribute: () => null}).getAttribute("href")}));
++    }
++    const fact = document.querySelector("#view-root .fact-value");
++    if (fact) {
++      fact.click(); await sleep(60);
++      const dts = [...document.querySelectorAll("#inspector-content dt")];
++      const field = dts.find(dt => dt.textContent === "Field");
++      if (field) {
++        const value = field.nextElementSibling;
++        out.field = value.textContent; scan(where + " field", value);
++      }
++    }
++    out.routes[hash] = rec;
++  }
++  location.hash = "#front"; await sleep(60);
++  const input = document.getElementById("module-filter");
++  input.value = "cp-2d"; input.dispatchEvent(new Event("input")); await sleep(60);
++  out.filter = [...document.querySelectorAll("#module-list a")].map(rowOf);
++  const pre = document.createElement("pre"); pre.id = "probe";
++  pre.textContent = JSON.stringify(out);
++  document.body.append(pre);
++})();"""
++
++
++def fixture_view() -> View:
++    run = Run(
++        run_id="shell-test",
++        issuer_id="SYN",
++        issuer_name="Synthetic Issuer",
++        as_of=date(2024, 9, 30),
++        case_kind="synthetic",
++        pathway="credit_snapshot",
++        requested_modules=("CP-1", "CP-2D", "CP-3"),
++    )
++    base = empty_view(run)
++    sha = hashlib.sha256(b"synthetic").hexdigest()
++    fact = Fact(
++        fact_id="f1",
++        label="Synthetic revenue",
++        table_id="T4.4",
++        row_id="revenue",
++        field="value",
++        amount=Decimal(1200),
++        unit="US$m",
++        period="FY2024",
++        citations=(
++            Citation(source_id="S1", source_sha256=sha, locator="p.1", quote="Synthetic quote."),
++        ),
++    )
++    table = ReportTable(
++        table_id="T4.4",
++        title="Synthetic revenue",
++        columns=(TableColumn(field="value", label="Value"),),
++        rows=(TableRow(row_id="revenue", label="Total", fact_ids=("f1",)),),
++        row_header="Measure",
++    )
++    changes: dict[str, dict[str, object]] = {
++        "CP-1": {
++            "title": MODEL,
++            "status": "candidate",
++            "artifact_sha256": sha,
++            "facts": (fact,),
++            "tables": (table,),
++        },
++        "CP-2D": {"title": LIQUIDITY, "status": "restricted", "limitations": (LIMIT_TEXT,)},
++        "CP-1B": {"title": OUTSIDE},
++        "CP-3": {"title": "CP-3"},
++    }
++    modules = tuple(
++        ModuleView.model_validate(item.model_dump() | changes.get(item.module_id, {}))
++        for item in base.modules
++    )
++    return base.model_copy(update={"modules": modules})
++
++
++@pytest.fixture(scope="module")
++def seen(tmp_path_factory) -> dict:
++    page: Path = tmp_path_factory.mktemp("shell") / "model.html"
++    text = render(fixture_view())
++    assert "</body>" in text
++    page.write_text(text.replace("</body>", f"<script>{PROBE}</script></body>"), encoding="utf-8")
++    dom, console = visit(page)
++    assert console == []  # No script error and no policy violation.
++    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
++
++
++def test_no_module_code_in_the_shells_own_navigation_and_headings(seen):
++    assert seen["hits"] == []
++    assert len(seen["routes"]) > 10  # Every navigator row, the outside list and the rail.
++
++
++def test_navigator_rows_name_the_module_and_keep_the_code_in_the_link(seen):
++    rows = {row["href"]: row["text"] for row in seen["nav"] + seen["outside"]}
++    assert MODEL in rows["#CP-1"] and LIQUIDITY in rows["#CP-2D"]
++    assert UNNAMED in rows["#CP-3"] and OUTSIDE in rows["#CP-1B"]
++    assert all(href.startswith("#CP-") for href in rows if href != "#front")
++
++
++def test_page_heading_is_the_module_title(seen):
++    heads = {route: item["h1"] for route, item in seen["routes"].items()}
++    assert heads["#CP-1"] == MODEL and heads["#CP-2D"] == LIQUIDITY
++    assert heads["#CP-3"] == UNNAMED and heads["#CP-1B"] == OUTSIDE
++
++
++def test_coverage_table_is_module_and_status_with_the_title_as_the_link(seen):
++    analysis = seen["routes"]["#analysis"]
++    assert analysis["coverageHead"] == ["Module", "Status"]
++    by_href = {row["href"]: row["cells"] for row in analysis["coverage"]}
++    assert by_href["#CP-1"][0] == MODEL and by_href["#CP-2D"][0] == LIQUIDITY
++    assert by_href["#CP-3"][0] == UNNAMED and by_href["#CP-1B"][0] == OUTSIDE
++    assert all(len(cells) == 2 for cells in by_href.values())
++
++
++def test_limitation_panel_is_titled_with_the_module(seen):
++    assert LIQUIDITY in seen["routes"]["#limitations"]["panels"]
++
++
++def test_inspector_field_row_names_the_module_title(seen):
++    assert seen["field"] == f"{MODEL} / T4.4 / revenue / value"
++
++
++def test_typing_a_code_into_the_filter_still_finds_the_module(seen):
++    assert [row["href"] for row in seen["filter"]] == ["#CP-2D"]
+diff --git a/tests/test_run_start_page.py b/tests/test_run_start_page.py
+index 98a135e..ca24206 100644
+--- a/tests/test_run_start_page.py
++++ b/tests/test_run_start_page.py
+@@ -38,6 +38,17 @@ pytestmark = pytest.mark.browser
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+ FORM = ROOT / "docs/templates/context-form.html"
++# The page's own module names (its `MODULES` table), read from the file: the answer key for what an
++# analyst sees where a module code stood. The review names every module, never shows its code.
++NAMES = dict(
++    re.findall(r"^\s+'(CP-[A-Z0-9]+)': \['([^']+)'", FORM.read_text("utf-8"), re.MULTILINE)
++)
++
++
++def named(text: str) -> str:
++    return re.sub(r"\bCP-[A-Z0-9]+\b", lambda m: NAMES.get(m[0], "a module"), text)
++
++
+ RESEARCH_MINIMAL = json.loads((ROOT / "cases/context/research-minimal.json").read_text("utf-8"))
+ 
+ # Synthetic documents the launcher's own offline reading classifies by their cover lines.
+@@ -688,7 +699,7 @@ def test_the_review_shows_the_services_forecast_per_module(page):
+         want = min(own, key=ORDER.index) if own else "ready"
+         assert by_module[module]["outcome"] == want, module
+     for item in summary["items"]:  # every reason the service gave is shown
+-        assert item["reason"] in seen["ready"]
++        assert named(item["reason"]) in seen["ready"]
+     assert by_module["CP-4"]["outcome"] == "will_refuse"  # legal documents: none, on CP-4
+     assert ["legal", "Go to Legal"] in seen["goto"]
+     for text in ("GPT Sol, Balanced (the default)", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
+@@ -1211,7 +1222,7 @@ def test_the_review_needs_a_tick_for_an_as_of_date_before_the_newest_document(pa
+     seen = _reviewed(page, _AS_OF_EARLY)
+     row = seen["rows"]["run"]
+     assert row["outcome"] == "limited" and "before your newest file" in row["text"]
+-    assert "CP-1" in row["text"] and len(row["ticks"]) >= 1
++    assert NAMES["CP-1"] in row["text"] and len(row["ticks"]) >= 1
+     assert row["ticks"][0] == "I accept this limit."
+     _blocked_until_ticked(seen)
+ 
+@@ -1223,7 +1234,7 @@ def test_the_review_needs_a_tick_for_an_executed_answer_on_a_file_that_is_no_agr
+     assert "I have checked this." in cp4["ticks"]  # a check with a fix is ticked
+     run = seen["rows"]["run"]  # the page's own limit, run level, naming the file and the modules
+     assert run["outcome"] == "limited" and "memo.txt" in run["text"]
+-    assert "CP-4" in run["text"] and "CP-2A" in run["text"] and len(run["ticks"]) >= 1
++    assert NAMES["CP-4"] in run["text"] and NAMES["CP-2A"] in run["text"] and len(run["ticks"]) >= 1
+     _blocked_until_ticked(seen)
+ 
+ 
+@@ -1455,7 +1466,8 @@ def test_the_review_shows_turns_and_left_out_modules_at_every_level_when_they_di
+     for lvl in ("advanced", "standard", "basic"):
+         text = seen[lvl]
+         assert "Turns per module2 (the default is 32)" in text, (lvl, text)
+-        assert "Modules left out" in text and f"({seen['left']})" in text, (lvl, text)
++        assert "Modules left out" in text and NAMES[seen["left"]] in text, (lvl, text)
++        assert seen["left"] not in text, (lvl, text)
+ 
+ 
+ def _stale(page, setup: str, change: str):
+@@ -2528,6 +2540,139 @@ def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypa
+     assert got["files"] == [] and got["rows"] == []
+ 
+ 
++@pytest.mark.parametrize(
++    "pathway",
++    [
++        "credit_snapshot",
++        "earnings_update",
++        "relative_value",
++        "covenant_refinancing",
++        "distressed_restructuring",
++        "portfolio_decision",
++        "short_snapshot",
++    ],
++)
++def test_no_module_code_is_shown_on_any_stage_at_any_level_of_a_pathway(page, pathway):
++    """R7 (owner ruling 2026-11-12): every string the page renders (text, title, aria-label,
++    placeholder, alt) names a module by its `MODULES` name, never its code. Every stage of every
++    pathway at every level is visited with a row of each kind added and the review summarised; the
++    saved answer keys and option values stay the codes."""
++    seen = page.run(
++        """
++    const found = new Set(), code = /\\bCP-[A-Z0-9]+\\b/;
++    const scan = where => {
++      const walker = document.createTreeWalker(
++        document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
++      while (walker.nextNode()) {
++        const node = walker.currentNode;
++        const values = node.nodeType === 3
++          ? [node.parentElement.closest('script,style,#probe') ? '' : node.data]
++          : ['title', 'aria-label', 'placeholder', 'alt'].map(a => node.getAttribute(a) || '');
++        for (const value of values) if (code.test(value)) found.add(value.slice(0, 90));
++      }
++    };
++    const focusValues = new Set();
++    let tables = 0;
++    for (const pathway of ['PATHWAY']) {
++      for (const lv of ['advanced', 'standard', 'basic']) {
++        pick('data-k="pathway"', pathway);
++        level(lv);
++        if (lv === 'advanced') {
++          await issuer(pathway,
++            [file('annual.txt', REPORT_TEXT), file('prior.txt', PRIOR_TEXT)]);
++          type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
++          // The model and effort controls (Advanced only) and a module left out, so the review
++          // summarises "Model and effort" and "Modules left out".
++          pick('data-c="model"', 'claude'); pick('data-c="effort"', 'high');
++          const left = document.querySelector('[data-c="mod"]:checked');
++          left.checked = false; left.dispatchEvent(new Event('change', {bubbles: true}));
++          await review();
++          const facts = $('rv-facts').textContent;
++          if (!/Claude Opus, High/.test(facts) || !/Modules left out/.test(facts))
++            found.add('probe: model/effort/left-out rows missing');
++          document.querySelectorAll('[data-mod]').forEach(d => { d.open = true; });
++          scan(pathway + '/' + lv + '/review');
++          tables += document.querySelectorAll('#rv-ready tr[data-module]').length;
++        }
++        document.querySelectorAll('[data-add]').forEach(b => b.click());
++        for (const st of stages()) { gotoStep(st); scan(pathway + '/' + lv + '/' + st); }
++        document.querySelectorAll('select[data-k="focus_module"] option')
++          .forEach(o => focusValues.add(o.value));
++      }
++    }
++    return {tables, hits: [...found], keys: Object.keys(MODULES).sort(),
++      focus: [...focusValues].filter(Boolean).sort()};
++    """.replace("REPORT_TEXT", json.dumps(REPORT))
++        .replace("PRIOR_TEXT", json.dumps(REPORT.replace("2025", "2024")))
++        .replace("PATHWAY", pathway)
++    )
++    assert seen["tables"] > 0, "the review's readiness table was drawn and scanned"
++    assert not seen["hits"], "\n".join(seen["hits"])
++    assert seen["focus"] == seen["keys"], "a Focus module option keeps the code as its value"
++
++
++def test_a_service_refusal_naming_a_module_code_is_shown_with_the_modules_name(page):
++    """The summary error and the submit error are the service's own sentences; they name modules
++    by code, and the analyst reads the names. The stage lookup still reads the raw text."""
++    seen = page.run(
++        """
++    await issuer('credit_snapshot', [file('annual.txt', REPORT_TEXT)]);
++    const real = window.fetch;
++    const refuse = text => new Response(JSON.stringify({error: text}),
++      {status: 400, headers: {'Content-Type': 'application/json'}});
++    window.fetch = async (path, init) => {
++      if (String(path).endsWith('/summary'))
++        return refuse('--modules CP-0: fills no Credit Snapshot report section');
++      return real(path, init);
++    };
++    await review();
++    const summary = $('rv-state').textContent;
++    window.fetch = real;
++    SUMMARY = null; RENDERED = null;
++    await review();
++    tickAll(); approve();
++    window.fetch = async (path, init) => String(path).endsWith('/submit')
++      ? refuse('delivery_scope: CP-DR is outside the named scope') : real(path, init);
++    document.getElementById('submit').click();
++    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
++    return {summary, submit: $('rv-submit-error').textContent};
++    """.replace("REPORT_TEXT", json.dumps(REPORT))
++    )
++    assert "--modules Source readiness: fills no" in seen["summary"]
++    assert "delivery_scope: Research questions is outside the named scope" in seen["submit"]
++    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
++
++
++def test_a_short_snapshot_refusal_naming_module_codes_is_shown_with_the_modules_names(page):
++    """The Short Credit Snapshot's service refusals (a missing CP-1, a CP-L10 table) name modules by
++    code; the analyst reads the names, in the summary error and in the submit error."""
++    seen = page.run(
++        """
++    await issuer('short_snapshot', [file('annual.txt', REPORT_TEXT)]);
++    const real = window.fetch;
++    const refuse = text => new Response(JSON.stringify({error: text}),
++      {status: 400, headers: {'Content-Type': 'application/json'}});
++    window.fetch = async (path, init) => String(path).endsWith('/summary')
++      ? refuse('CP-L10 needs CP-1 in the run: missing CP-1') : real(path, init);
++    await review();
++    const summary = $('rv-state').textContent;
++    window.fetch = real;
++    SUMMARY = null; RENDERED = null;
++    await review();
++    tickAll(); approve();
++    window.fetch = async (path, init) => String(path).endsWith('/submit')
++      ? refuse('CP-L10: no Key figures table; CP-1 handoff missing') : real(path, init);
++    document.getElementById('submit').click();
++    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
++    return {summary, submit: $('rv-submit-error').textContent};
++    """.replace("REPORT_TEXT", json.dumps(REPORT))
++    )
++    assert "Short credit snapshot needs Financial foundation in the run" in seen["summary"]
++    assert "missing Financial foundation" in seen["summary"]
++    assert "no Key figures table" in seen["submit"] and "Short credit snapshot" in seen["submit"]
++    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
++
++
+ def test_the_research_text_for_claude_says_it_does_not_search(page):
+     seen = page.run("""
+     pick('data-k="pathway"', 'relative_value');

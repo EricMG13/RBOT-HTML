@@ -304,8 +304,8 @@ test('a module row is the build\u2019s: its status and reason are shown, and a m
     const html = analysisPart(pack, {}, changes(c.status));
     assert.ok(html.includes(`change-status">${c.status}<`) && html.includes('<p class="change-why">New period · Why.</p>'), c.name);
   }
-  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by CP-8<'));
-  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by CP-8<'));
+  assert.ok(analysisPart(pack, {}, changes(null)).includes('change-status">Not stated by Changes since the last run<'));
+  assert.ok(analysisPart(pack, {}, null).includes('change-status">Not stated by Changes since the last run<'));
   assert.ok(analysisPart(pack, null, changes('Unchanged')).includes('change-status">Explanation not produced<'));
 });
 test('the ledger bar is the build\u2019s counts; a ledger it could not read keeps the verbatim table and draws no bar', () => {
@@ -313,4 +313,46 @@ test('the ledger bar is the build\u2019s counts; a ledger it could not read keep
   assert.ok(!unread.includes('class="ledger-bar"') && unread.includes('<td>An earlier limitation in words.</td>'));
   const other = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null, verdicts: {...VERDICTS, ledger: [['Closed', 0], ['Remaining', 0], ['New', 0], ['No longer stated', 0], ['Other', 3]]}}}));
   assert.ok(other.includes('aria-label="Limitations: Closed 0, Remaining 0, New 0, No longer stated 0, Other 3"'));
+});
+
+test('what the Changes tab itself writes names things and shows no module code', () => {
+  // The pack and handoff text are stored data (a code there is named by screen.js, the library browser test reads it); these carry none.
+  const clean = {...PACK, measures: PACK.measures.map(m => ({...m, reason: 'the definition text differs'}))};
+  const noCode = /\bCP-[A-Z0-9]+\b/;
+  const html = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: {measures: {}, modules: {}, ledger: []}}, cp8: []}));
+  assert.ok(html.includes('The Changes handoff has no') && html.includes('Not stated in the Changes handoff.'));
+  assert.ok(html.includes('change-status">Not stated by Changes since the last run<'));
+  assert.ok(html.includes('<span class="change-name">Source readiness</span>') && !html.includes('module-code'));
+  assert.ok(!noCode.test(html.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')), html.match(noCode)?.[0]);
+  const notHeld = changesHtml(base({changes: {lead: 'CP-2', pack: clean, note: null, problem: null, verdicts: null}, cp8: null}));
+  assert.ok(notHeld.includes('The explanation of the changes is not held for this run.') && !noCode.test(notHeld.replace(/ (?:href|data-[a-z-]+)="[^"]*"/g, '')));
+});
+
+// ---- The net debt change of one period (owner, 2026-11-12): the analysis changed, not the issuer. Literals are hand-written.
+const {netDebtView} = require('./changes.js');
+const ND = {unit: 'US$m', prior_net_debt: '6190', change_in_gross_debt: '-110', change_in_cash: '-30', current_net_debt: '6110', convention: 'net debt = gross debt - cash',
+  same_period: true, prior_period: 'FY2024', current_period: 'FY2024 / 2024-09-30', prior_gross_debt: '7100', prior_cash: '910', current_gross_debt: '6990', current_cash: '880'};
+
+test('one period with two net debt values: both runs, their periods, the sentence, no change figure and no direction', () => {
+  const html = netDebtView(ND);
+  for (const shown of ['7100 US$m', '910 US$m', '6190 US$m', '6990 US$m', '880 US$m', '6110 US$m', 'Earlier gross debt (FY2024)', 'Current net debt (FY2024 / 2024-09-30)'])
+    assert.ok(html.includes(shown), shown);
+  assert.ok(html.includes('Both runs state net debt for the same date; the difference is between the two analyses, not a change in the issuer.'));
+  for (const hidden of ['-110 US$m', '-30 US$m', 'Change in', 'rose', 'fell']) assert.ok(!html.includes(hidden), hidden);
+});
+
+test('one period with equal net debt values, two periods, and a pack without the flag render as a change', () => {
+  const zero = netDebtView({...ND, change_in_gross_debt: '0', change_in_cash: '0'});
+  assert.ok(zero.includes('Change in gross debt (FY2024 to FY2024 / 2024-09-30)') && !zero.includes('Both runs state'));
+  const two = netDebtView({...ND, same_period: false, prior_period: 'FY2023', current_period: 'FY2024'});
+  assert.ok(two.includes('-110 US$m') && two.includes('Change in cash (FY2023 to FY2024)') && !two.includes('Both runs state'));
+  const {same_period, prior_period, current_period, prior_gross_debt, prior_cash, current_gross_debt, current_cash, ...old} = ND;
+  const older = netDebtView(old);
+  assert.ok(older.includes('<dt>Change in cash</dt><dd>-30 US$m</dd>') && !older.includes('Both runs state'));
+});
+
+test('net debt periods and values are escaped', () => {
+  const evil = '<img src=x onerror=alert(1)>';
+  const html = netDebtView({...ND, prior_period: evil, prior_cash: evil});
+  assert.ok(!html.includes('<img') && html.includes('&lt;img'));
 });

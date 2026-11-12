@@ -151,8 +151,8 @@ function inspectorItemHtml(item, deps) {
     return `<li>Calculation ${escapeHtml(item.id)}<dl class="calculation-row">${row.headers.map((header, i) => `<div><dt>${escapeHtml(header)}</dt><dd>${richText(row.cells[i] ?? '')}</dd></div>`).join('')}</dl></li>`;
   }
   if (item.kind === 'module') {
-    return item.ran ? `<li><a class="text-action" href="${deps.moduleHref(item.code)}">${escapeHtml(item.raw)}${deps.icon('arrow-right')}</a></li>`
-      : `<li>${escapeHtml(item.raw)}<span class="small"> · Not run in this run</span></li>`;
+    return item.ran ? `<li><a class="text-action" href="${deps.moduleHref(item.code)}">${escapeHtml(item.name)}${deps.icon('arrow-right')}</a></li>`
+      : `<li>${escapeHtml(item.name)}<span class="small"> · Not run in this run</span></li>`;
   }
   return `<li>${escapeHtml(item.raw)}</li>`;
 }
