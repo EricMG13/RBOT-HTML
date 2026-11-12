@@ -155,7 +155,7 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
 .issuer-title{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-width:0;flex:1 1 auto}
 .issuer h1{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 24px/32px 'Red Hat Display',sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
 .issuer-meta{display:flex;align-items:center;gap:12px;font-size:var(--fs-control);line-height:20px}
-.issuer-meta .code,.forecast-built .code{font:500 var(--fs-compact)/18px 'Red Hat Mono',monospace;color:var(--text-secondary);background:var(--gray-50);border:1px solid var(--border-secondary);border-radius:999px;padding:1px 8px}
+.forecast-built .code{font:500 var(--fs-compact)/18px 'Red Hat Mono',monospace;color:var(--text-secondary);background:var(--gray-50);border:1px solid var(--border-secondary);border-radius:999px;padding:1px 8px}
 
 .scope{display:flex;align-items:center;gap:6px;max-width:45%;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary);text-align:right}
 .scope img{width:16px;height:16px;flex:none;opacity:.6}.scope strong{font-weight:600}
@@ -339,8 +339,6 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff;font-size:var(--fs-compact);font-weight:600;color:var(--navy);text-decoration:none}
 .btn img{width:14px;height:14px;opacity:.7}
 .btn:hover{background:var(--quiet)}
-.badge.on-navy{background:transparent;border-color:rgba(255,255,255,.4);color:#fff}
-.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:var(--fs-label);font-weight:600;border:1px solid var(--rule);background:var(--quiet);color:var(--muted)}
 .band{margin-top:20px;background:var(--navy);color:#fff;border-radius:var(--radius-card);padding:18px 22px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,300px);gap:10px 28px}
 .band p{margin:0;font-size:15px;line-height:1.55;font-weight:500;text-wrap:pretty}
 .band dl{margin:0;font-size:var(--fs-compact);line-height:1.5}
@@ -424,9 +422,7 @@ article.finding:first-of-type{border-top:0;padding-top:4px}
 article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;color:var(--navy);text-wrap:pretty}
 article.finding .impact{margin:6px 0 0;color:#3a4056;text-wrap:pretty}
 article.finding .impact b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
-article.finding aside{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding-top:2px}
 article.finding .conf{font-size:var(--fs-label);color:var(--muted)}
-article.finding .conf .pill{margin-left:6px}
 .limits{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .limits>div{padding:14px 16px;border:1px solid var(--rule);border-radius:var(--radius-card);background:var(--quiet);min-width:0}
 .limits h4{margin:0 0 6px;font:600 var(--fs-compact)/1.3 'Red Hat Text',sans-serif;color:#3a4056}
@@ -603,7 +599,7 @@ td .basis-link{margin-left:6px}
 .trend-list{list-style:none;padding:0;margin:8px 0 16px;display:grid;gap:6px}.trend-list li{display:grid;grid-template-columns:minmax(150px,1fr) 160px minmax(0,2fr);gap:12px;align-items:center;font-size:var(--fs-compact)}.trend-list li>.muted:nth-child(2){grid-column:2/-1}.trend line{stroke:var(--muted);stroke-width:1.5}.trend circle{fill:var(--blue)}
 @media(max-width:720px){.change-module>summary{grid-template-columns:1fr auto}.change-then,.change-now{grid-column:1/-1}.change-pair{grid-template-columns:1fr}.trend-list li{grid-template-columns:1fr}.trend-list li>.muted:nth-child(2){grid-column:auto}}
 /* Redesign pass 1 (2026-11-12): run chrome, workbench columns and the Modules navigator, after the Claude Design screens L3 and L4. Layout and type only; widths hold from 1301px, 1300px and below use 220px and 300px, 1050px and 720px keep the rules above. */
-:root{--strip:#f6f7fb}
+:root{--dot-quiet:#8a90a3}
 @media(min-width:721px){.issuer.run-header{display:block;padding:18px 28px 0}}
 .issuer-back{display:inline-flex;align-items:center;gap:4px;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--blue);text-decoration:none}
 .issuer-back:hover{text-decoration:underline;text-underline-offset:3px}
@@ -619,7 +615,7 @@ td .basis-link{margin-left:6px}
 .workspace-tabs>a{height:auto;padding:10px 12px 12px;font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-tertiary)}
 .workspace-tabs>a:hover{color:var(--text-primary)}
 .workspace-tabs>a[aria-current]{color:var(--blue-700);border-color:var(--blue)}
-.context-bar{padding:10px 28px;background:var(--strip);border-bottom-color:var(--gray-200);font-size:13px;line-height:18px}
+.context-bar{padding:10px 28px;background:var(--quiet);border-bottom-color:var(--gray-200);font-size:13px;line-height:18px}
 }
 .context-bar .context-run strong{font-weight:600;color:var(--text-primary)}
 .context-bar .code{font:500 13px/18px 'Red Hat Mono',monospace;text-transform:none;color:var(--text-secondary);background:none;border:0;padding:0}
@@ -653,14 +649,14 @@ td .basis-link{margin-left:6px}
 .section-outline{margin:2px 0 8px 14px;padding-left:10px;border-left:1px solid var(--gray-200)}
 .section-item{padding:3px 8px;border-radius:5px;font:400 12px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .section-item[aria-current]{background:var(--blue-50);color:var(--blue-700);font-weight:600}
+@media(min-width:1051px){.workbench.tools-workspace :is(#content,#module-head,.mobile-modules){padding-left:28px;padding-right:28px}}
 /* Redesign pass 1, module page and evidence inspector (task 2). Reading styles are classes (`.kicker`, `.reading-headline`, `.reading-prose`, `.reading-findings`, `.reading-limits`) so the Overview can use the same ones. */
-:root{--dot-quiet:#8a90a3}
 @media(min-width:1301px){.workbench:not(.library-workspace,.overview-workspace,.tools-workspace) #content{padding:26px 32px}}
 .kicker,.module-head .head-group,.module-head.has-bottom-line h2{font:600 12px/16px 'Red Hat Text',sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--text-quaternary)}
 .module-head{justify-content:space-between;gap:8px 16px}
 .module-head .head-title{display:flex;flex-wrap:wrap;align-items:baseline;flex:1 0 auto;max-width:100%;min-width:0}
 .module-head.has-bottom-line .head-group::after{content:"·";margin:0 8px}
-.module-head.has-bottom-line h2{margin:0;font-weight:600}
+.module-head.has-bottom-line h2{margin:0}
 .module-head:not(.has-bottom-line) .head-title{display:block}
 .module-head:not(.has-bottom-line) .head-group{display:block}
 .module-head:not(.has-bottom-line) h2{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary)}
@@ -670,7 +666,6 @@ td .basis-link{margin-left:6px}
 .band{margin-top:8px;display:block;background:none;color:var(--text-primary);border-radius:0;padding:0}
 .band>p,.reading-headline .passage-text,.reading-headline .passage-list li{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;color:var(--text-primary);text-wrap:pretty}
 .reading-headline .passage-list{list-style:none;margin:0;padding:0}
-.reading-headline .passage-list li{margin-top:8px}
 .band dl{margin:14px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .band dt{display:inline;font-weight:600;color:var(--text-secondary)}
 .band dd{display:inline;margin:0 0 0 6px;color:var(--text-secondary)}
@@ -683,10 +678,10 @@ section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>
 .analysis-text,.reading-prose .passage-text,#overview-lead>.intro{margin:10px 0 0;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 :is(h3,h4,h5,h6)+.analysis-text,.reading-prose>:is(h3,h4)+.passage-text{margin-top:14px}
 .reading-prose .passage-list{max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif}
-section.part .figure{font:500 .92em 'Red Hat Mono',monospace;text-decoration:underline dotted;text-underline-offset:3px}
-section.part .figure[aria-pressed=true]{background:var(--blue-50);border-radius:3px;padding:0 2px}
-section.part .basis-link{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-decoration:none}
-section.part .basis-link:hover,section.part .basis-link:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+:is(section.part,.overview-part) .figure{font:500 .92em 'Red Hat Mono',monospace;text-decoration:underline dotted;text-underline-offset:3px}
+:is(section.part,.overview-part) .figure[aria-pressed=true]{background:var(--blue-50);border-radius:3px;padding:0 2px}
+:is(section.part,.overview-part) .basis-link{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-decoration:none}
+:is(section.part,.overview-part) .basis-link:is(:hover,:focus-visible){color:var(--blue);text-decoration:underline;text-underline-offset:3px}
 .reading-findings .passage-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:12px}
 .reading-findings .passage-list li{position:relative;margin:0;padding-left:18px;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 .reading-findings .passage-list li::before,section.part article.finding::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
@@ -713,7 +708,13 @@ details:is(.fold,.audit)>summary .fold-title{margin:0;font:inherit;color:var(--t
 details:is(.fold,.audit)>summary .fold-detail{margin:0 0 0 auto;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-align:right}
 details.fold[open]>:not(summary),details.audit[open]>:not(summary){margin-left:14px;margin-right:14px}
 details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14px}
-@media(min-width:1051px){.inspector-body{padding:20px 22px}}
+@media(min-width:1051px){
+.inspector-body{padding:20px 22px}
+.evidence-fields{display:grid;gap:10px;border-top:0}
+.evidence-fields>div{padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff}
+.evidence-fields h4{margin:0 0 4px;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
+.evidence-fields>div>div{font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+}
 .inspector-body>*+*{margin-top:18px}
 .inspector-body>.sr-only+*{margin-top:0}
 .inspector-body>h2.kicker{margin:0}
@@ -724,10 +725,6 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 @media(min-width:1051px){.inspector-body>.evidence-context{margin:4px 0 0}}
 .inspector-body>.evidence-context{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .inspector-body>.classification{margin:10px 0 0}
-.evidence-fields{display:grid;gap:10px;border-top:0}
-.evidence-fields>div{padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff}
-.evidence-fields h4{margin:0 0 4px;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
-.evidence-fields>div>div{font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .evidence-basis>h3,.basis>h3,.source-location>h3,.inspector-body>.citations-heading{margin:0;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 .inspector-body>.citations-heading{margin-top:18px}
 .inspector-card,.basis>.basis-items,.inspector-body>.chip-source{margin:6px 0 0;padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff;font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
@@ -743,7 +740,6 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .source-location .inspector-card a{margin-top:8px;font-size:13px}
 .source-location .inspector-card .small{margin-top:8px;color:var(--text-quaternary)}
 /* Redesign pass 1, Overview (task 3). Two columns from 1301px, one column below; the row grids hold from 721px, so 720px and below keep today's block layout. Reading styles are the module page's classes. */
-:root{--hair:#eef0f5}
 .overview-main,.overview-aside{min-width:0}
 .overview-part{margin-top:30px}
 .overview-part:first-child{margin-top:8px}
@@ -758,7 +754,7 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 #overview-lead .reading-findings>h3{margin-bottom:0}
 #overview-bottom-lines .bottom-entry>h3{margin:0}
 #overview-bottom-lines>.bottom-entry:first-of-type{margin-top:10px;border-top:1px solid var(--gray-200)}
-#overview-bottom-lines .bottom-entry{padding:12px 0;border-bottom:1px solid var(--hair)}
+#overview-bottom-lines .bottom-entry{padding:12px 0;border-bottom:1px solid var(--ground)}
 #overview-bottom-lines .bottom-entry>h3{font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
 #overview-bottom-lines .bottom-entry>h3 a{color:inherit;text-decoration:none}
 #overview-bottom-lines .bottom-entry>h3 a:hover,#overview-bottom-lines .bottom-entry>h3 a:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
@@ -784,7 +780,7 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 @media(min-width:721px){
 #overview-dates .dates-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 #overview-dates .dates-table thead th{position:static}
-#overview-dates .dates-table tbody tr{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:12px;padding:9px 0;border-bottom:1px solid var(--hair)}
+#overview-dates .dates-table tbody tr{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:12px;padding:9px 0;border-bottom:1px solid var(--ground)}
 #overview-dates .dates-table tbody tr:hover>*{background:none}
 #overview-dates .dates-table tbody :is(th,td){padding:0;border:0;font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 #overview-dates .dates-table tbody th{grid-column:1;grid-row:1/span 2;font:500 13px/19px 'Red Hat Mono',monospace;color:var(--text-primary)}
@@ -799,3 +795,4 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .overview-aside>.overview-part:first-child{margin-top:8px}
 .workbench.overview-workspace #module-head{padding-left:28px}
 }
+@media screen{.overview-aside .column-chart .periods{grid-template-columns:repeat(var(--periods),minmax(140px,1fr))}}

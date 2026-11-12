@@ -531,20 +531,19 @@ function reportAnalysis(id) {
   return sections.length?`<section class="part" id="analysis"><h3>Analysis</h3>${readingSections(id,sections)}</section>`:'';
 }
 // A closed part: nothing is cut, it opens to the whole sections (a hash route or a chip into it opens it, screen.js).
-// The summary is a row: its title, then (after the first " · ") a detail drawn at the right.
-function fold(anchor,summary,body) {
-  const at=summary.indexOf(' · '),title=at<0?summary:summary.slice(0,at),detail=at<0?'':summary.slice(at+3);
+// The summary is a row: its title, then a detail (it may be empty) drawn at the right.
+function fold(anchor,title,detail,body) {
   return `<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}<span class="fold-title">${esc(title)}</span>${detail?` <span class="fold-detail">${esc(detail)}</span>`:''}</summary>${body}</details>`;
 }
 function reportReference(id) {
   const sections=drawn(id,'reference');
   if(!sections.length)return '';
   const tables=sections.flatMap(section=>section.blocks).filter(block=>block.type==='table');
-  return fold('reference',`Statements and registers · ${plural(tables.length,'table')} · ${plural(tables.reduce((n,block)=>n+block.rows.length,0),'row')}`,readingSections(id,sections));
+  return fold('reference','Statements and registers',`${plural(tables.length,'table')} · ${plural(tables.reduce((n,block)=>n+block.rows.length,0),'row')}`,readingSections(id,sections));
 }
 function reportCalculations(id) {
   const sections=drawn(id,'calculations');
-  return sections.length?fold('calculations',`Calculations · ${data[id].words.calculations} words`,readingSections(id,sections)):'';
+  return sections.length?fold('calculations','Calculations',`${data[id].words.calculations} words`,readingSections(id,sections)):'';
 }
 function reportLimits(id) {
   const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
@@ -568,7 +567,7 @@ function reportParts(id) {
   const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
   const {view,reference:referenceWords,calculations:calculationWords}=out.words;
   const parts=[['head',reportHead(id)],['bottom-line',reportBand(id)]];
-  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
+  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text','Full handoff text',`${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
   else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations],['maps',reportMaps(id)],['timeline',reportTimeline(id)]);
   parts.push(['audit',reportAudit(id)]);
   return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
@@ -821,8 +820,12 @@ const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
 function issuerMeta(context) {
   const ctx=contexts[context],row=catalogueRuns().find(run=>run.id===ctx?.folder);
   if(!row)return '';
-  const runs=catalogueRuns().filter(run=>run===row||sameIssuer(contexts[libraryRunKey(run)]?.issuerKey,ctx.issuerKey)).length;
-  return [row.issuer,row.sector,plural(runs,'run')].filter(Boolean).join(' · ');
+  return [row.issuer,row.sector,plural(issuerRuns(context).length,'run')].filter(Boolean).join(' · ');
+}
+// The runs of the context's issuer as Report history lists them, latest as-of date first: the count in the meta line, the rows of the history and the run a new run starts from all read this.
+function issuerRuns(context) {
+  const ctx=contexts[context];
+  return ctx?historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey))):[];
 }
 // "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
 function runLabel(module,context) {
@@ -835,8 +838,7 @@ function runLabel(module,context) {
 // ---- Report history (decision 4): one row per run of the issuer, latest as-of date first. Each row opens that run's Overview.
 const SOURCE_NOT_RECORDED='Not recorded';
 function historyView(context) {
-  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
-  const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey)));
+  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key])),runs=issuerRuns(context);
   const row=run=>{
     const key=keyOf.get(run),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}, ${run.run}`;
     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;

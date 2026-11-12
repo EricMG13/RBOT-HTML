@@ -363,7 +363,7 @@ function realEventTimeline(esc, rich) {
   const screen = read('screen.js'), calendar = require('./calendar.js');
   return new Function('esc', 'rich', 'eventOrder', 'orderEvents', 'sourceFooter', `${screen.slice(screen.indexOf('function eventTimeline('), screen.indexOf('function businessVisual('))}; return eventTimeline;`)(esc, rich, calendar.eventOrder, calendar.orderEvents, key => `<small class="footer">${esc(key)}</small>`);
 }
-// The summary as a reader reads it: the title, then the detail the row draws at its right, joined by the " · " the page now draws in CSS.
+// The summary as a reader reads it: the title, then the detail the row draws at its right. The row holds the two as two spans with one space between; this joins them with " · ", the form the callers' expected texts use.
 const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1].replace('</span> <span class="fold-detail">', ' · '));
 const NINE = ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'reference', 'calculations', 'audit'];
 const NINE_RE = /\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"/g;
@@ -2622,20 +2622,39 @@ test('the meta line under the issuer title joins ticker, sector and run count wi
   assert.equal(runPage(d => d, [], m => m, { catalogue: [] }).issuerMeta(RUN), '');
 });
 
+test('the run count in the meta line is the number of rows Report history lists, whatever the catalogue holds', () => {
+  const held = (folder, issuerKey) => ({ folder, issuerKey, asOf: '2025-01-01', modules: {} });
+  // The catalogue holds three runs of the issuer, the library's contexts hold two: Report history lists two.
+  const fewer = runPage(d => d, [], m => m, {
+    runFields: { issuerKey: 'zed' }, contexts: { 'run-b': held('run-b', 'zed') },
+    catalogue: [zedRun(), zedRun({ id: 'run-b' }), zedRun({ id: 'run-c' })],
+  });
+  assert.equal(fewer.issuerMeta(RUN), 'ZED · Telecoms · 2 runs');
+  assert.equal(histRows(fewer.historyView(RUN)).length, 2);
+  // The catalogue holds one run, the contexts three: three.
+  const more = runPage(d => d, [], m => m, {
+    runFields: { issuerKey: 'zed' }, contexts: { 'run-b': held('run-b', 'zed'), 'run-c': held('run-c', 'zed') },
+    catalogue: [zedRun()],
+  });
+  assert.equal(more.issuerMeta(RUN), 'ZED · Telecoms · 3 runs');
+  assert.equal(histRows(more.historyView(RUN)).length, 3);
+});
+
 // ---- The module page (redesign pass 1, task 2). Expected text is written by hand.
-test('a fold draws its summary as a title and a right-hand detail, split at the first " · "', () => {
+test('a fold draws its title and its detail as two spans, the detail at the right', () => {
   const r = report();
-  const row = r.fold('reference', 'Statements and registers · 3 tables · 40 rows', '<p>body</p>');
+  const row = r.fold('reference', 'Statements and registers', '3 tables · 40 rows', '<p>body</p>');
+  // The caller's title and detail are the two halves of the old summary text "Statements and registers · 3 tables · 40 rows".
   assert.ok(row.includes('<span class="fold-title">Statements and registers</span> <span class="fold-detail">3 tables · 40 rows</span></summary>'), row);
   // The summary's accessible name reads title, one space, detail.
   assert.equal(strip(row.match(/<summary>(.*?)<\/summary>/)[1]), 'Statements and registers 3 tables · 40 rows');
   assert.match(strip(r.reportAudit(OUT).match(/<summary>(.*?)<\/summary>/)[1]), /^Evidence &amp; audit \d+ sections · unchanged from the handoff$/);
   assert.ok(row.startsWith('<details class="fold" id="reference">') && row.endsWith('<p>body</p></details>'));
-  const plainRow = r.fold('handoff-text', 'Full handoff text', '');
+  const plainRow = r.fold('handoff-text', 'Full handoff text', '', '');
   assert.ok(plainRow.includes('<span class="fold-title">Full handoff text</span></summary>') && !plainRow.includes('fold-detail'), plainRow);
   // The audit row has the same two parts: its title, then the detail it always had.
   const audit = r.reportAudit(OUT);
-  assert.ok(audit.includes('<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">14 sections · unchanged from the handoff</span></summary>') || /<span class="fold-title">Evidence &amp; audit<\/span> <span class="fold-detail">\d+ sections · unchanged from the handoff<\/span>/.test(audit), audit);
+  assert.ok(audit.includes('<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">10 sections · unchanged from the handoff</span></summary>'), audit); // the fixture's ten sections, counted by hand
 });
 
 test('the head names the reading group, and says whether the page has a bottom line', () => {
