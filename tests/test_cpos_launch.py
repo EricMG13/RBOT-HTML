@@ -158,6 +158,22 @@ NET_DEBT_TABLE = """\
 | --- | --- | --- | --- | --- | --- |
 | FY2023 | 1500 | 300 | 1200 | US$m | Synthetic; gross debt includes finance leases. |
 | FY2024 | 1400 | 275 | 1125 | US$m | Synthetic; gross debt includes finance leases. |"""
+POST_BS_HEADER = (
+    "| Event | Date | Amount | Pro forma net debt | Pro forma net leverage | Reporting unit "
+    "| Basis and limitation |"
+)
+POST_BS_NONE = (
+    POST_BS_HEADER
+    + "\n| --- | --- | --- | --- | --- | --- | --- |\n"
+    + "| None found in the sources read | \u2014 | \u2014 | \u2014 | \u2014 | US$m "
+    "| Synthetic; the annual report and its notes were read. |"
+)
+POST_BS_EVENT = (
+    POST_BS_HEADER
+    + "\n| --- | --- | --- | --- | --- | --- | --- |\n"
+    + "| Notes issued after year end | 2024-11-05 | 500 | 1625 | 3.4 | US$m "
+    "| Synthetic; proceeds not yet applied. |"
+)
 NON_USD_TABLES = {
     "Chart data: liquidity": """| Period | Cash | Undrawn committed facilities | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- | --- |
@@ -474,6 +490,7 @@ def answer(context: dict, plan_routes: list) -> str:
                 lines += [f"### {heading}", "", table, ""]
     if context["module_id"] == "CP-1":  # ... and the net debt table (owner, 2026-11-12).
         lines += ["### Net debt data", "", NET_DEBT_TABLE, ""]
+        lines += ["### Post-balance-sheet adjustments", "", POST_BS_NONE, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
     for heading in ("Calculations", "Gaps", "Next module"):
@@ -5401,3 +5418,87 @@ def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allow
         assert old in raw
         raw = raw.replace(old, new)
     assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+POST_BS_HEADING = "### Post-balance-sheet adjustments"
+POST_BS_SENTENCE = "state the pro forma figure beside it"
+
+
+@pytest.mark.parametrize(
+    "pathway",
+    [
+        *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
+        *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+    ],
+)
+def test_cp1_is_asked_for_the_post_balance_sheet_table_and_others_for_the_pro_forma_sentence(
+    tmp_path, pathway
+):
+    """Decision 10 of 2026-11-12: the table is CP-1's; a module quoting year-end figures states
+    the pro forma figure beside them; the chart and net debt table rules are unchanged."""
+    prepared, _task, _context = good_task(tmp_path, "CP-1", pathway)
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
+    assert text.count(f"`{POST_BS_HEADING}`") == 1
+    assert f"`{POST_BS_HEADER}`" in text
+    assert "None found in the sources read" in text
+    assert text.index(POST_BS_HEADING) < text.index(cpos_launch.METHOD_MARK)
+    assert NET_DEBT_HEADER in text  # the net debt table rule is unchanged
+    assert "Pro forma" not in text.split("`### Net debt data`")[1].split("`### ")[0]
+    for heading, columns, _unit in cpos_launch.CHART_TABLES.values():
+        assert "Pro forma" not in " ".join(columns), heading
+    assert not POST_BS_HEADING.startswith("### Chart data:")
+    others = [m for m in prepared.plan.instructions if m != "CP-1"]
+    assert others
+    for module in others:  # every other module carries the sentence and is not asked for the table
+        sent = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+        assert POST_BS_SENTENCE in sent, module
+        assert POST_BS_HEADING not in sent, module
+    assert POST_BS_SENTENCE in text
+
+
+def test_cp1_handoff_without_the_post_balance_sheet_section_is_refused_naming_it(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    cut = raw.replace(POST_BS_HEADING, "### Dropped")
+    issues = _checked_handoff(task, cut.encode(), checker(prepared.layout))
+    assert any("Post-balance-sheet adjustments" in issue for issue in issues), issues
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "complaint"),
+    [
+        ("| Event | Date |", "| Item | Date |", "Post-balance-sheet adjustments"),
+        ("| Pro forma net debt |", "| Net debt |", "Post-balance-sheet adjustments"),
+        ("| Amount | Pro forma", "| Pro forma", "Post-balance-sheet adjustments"),
+    ],
+)
+def test_checker_refuses_post_balance_sheet_table_with_wrong_columns(tmp_path, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def test_post_balance_sheet_table_accepts_one_event_row_and_refuses_a_malformed_one(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    event = raw.replace(POST_BS_NONE, POST_BS_EVENT)
+    assert event != raw
+    assert _checked_handoff(task, event.encode(), checker(prepared.layout)) == ()
+    bad_date = event.replace("2024-11-05", "5 November 2024")
+    issues = _checked_handoff(task, bad_date.encode(), checker(prepared.layout))
+    assert any("Date" in i and "YYYY-MM-DD" in i for i in issues), issues
+    bad_number = event.replace("| 1625 |", "| about 1,600m |")
+    issues = _checked_handoff(task, bad_number.encode(), checker(prepared.layout))
+    assert any("Pro forma net debt" in i for i in issues), issues
+
+
+def test_post_balance_sheet_none_row_needs_its_unit_and_basis(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    blank = raw.replace(
+        "| US$m | Synthetic; the annual report and its notes were read. |", "|  |  |"
+    )
+    issues = _checked_handoff(task, blank.encode(), checker(prepared.layout))
+    assert any("Post-balance-sheet adjustments" in i for i in issues), issues

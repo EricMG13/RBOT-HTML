@@ -403,6 +403,10 @@ VOICE_RULES = (
     "follows the sentence rules (no bracket tag, no page locator, no ID).\n"
     "- Keep `## Request` to the issuer, as-of date, pathway and scope, in at most three "
     "sentences.\n"
+    "- When you quote year-end net debt, net leverage or cash from Financial foundation and its "
+    "`Post-balance-sheet adjustments` table has a row for an event, state the pro forma figure "
+    "beside it, with its unit and the event's date. When the table says none was found, add "
+    "nothing.\n"
     "- In every sentence under `## Findings`, `## Calculations` and `## Gaps`, write for the "
     "reader, not for the pipeline. Write no module code, page locator, bracket or hash, and "
     'none of these words: "handoff", "this transport", "the pack", "fact pack", "source pack", '
@@ -616,6 +620,9 @@ class OwnerTable:
     optional: bool = False  # The module writes the table only if the handoff supplies its case.
     events: bool = False  # A dated-event table: no unit or basis columns; dates by precision.
     edges: bool = False  # A node/edge map table: no unit or basis columns; an edge type's words.
+    none_text: str = (
+        ""  # The words of an Event cell that states none: the one row `_states_none` takes.
+    )
 
     @property
     def bare(self) -> bool:
@@ -683,6 +690,30 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
     return tuple(issues)
 
 
+POST_BS_NONE = "None found in the sources read"
+POST_BS = OwnerTable(
+    "Post-balance-sheet adjustments",
+    (),
+    "",
+    columns=("Event", "Date", "Amount", "Pro forma net debt", "Pro forma net leverage"),
+    numbers=("Amount", "Pro forma net debt", "Pro forma net leverage"),
+    in_unit=("Amount", "Pro forma net debt"),
+    dates=("Date",),
+    noun="event",
+    none_text=POST_BS_NONE,
+    rules=(
+        "One row per event after the balance-sheet date that changes net debt, such as an issue, "
+        "repayment, acquisition, disposal or dividend that the sources state. Date is the event "
+        "date. Amount is the event's cash effect and Pro forma net debt is year-end net debt "
+        "after the event, both in the Reporting unit; Pro forma net leverage is the same net "
+        "debt over the same EBITDA as the year-end net leverage, as times without an `x`. "
+        "Work each figure with `calculate`; a figure you cannot state is `Not supplied: "
+        "<reason>`; Basis and limitation names the event's source and what is not yet reflected. "
+        "Do not add a pro forma row to any chart or net debt table."
+    ),
+)
+
+
 def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTable, ...]:
     """The tables a module is asked for beside its report routes. CP-1 is on every pathway asked
     for all four chart tables CP-8's pack reads (owner, 2026-11-12, "Yes, all pathways"): those
@@ -695,7 +726,7 @@ def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTa
     chart = tuple(
         OwnerTable(h, cols, unit) for h, cols, unit in CHART_TABLES.values() if h not in routed
     )
-    return (*chart, NET_DEBT, *tables)
+    return (*chart, NET_DEBT, POST_BS, *tables)
 
 
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
@@ -1398,6 +1429,12 @@ def _states_none(spec: OwnerTable, header: list[str], rows: list[list[str]]) -> 
     """The one escape for every owner table: each row's cells before the Reporting unit (every cell
     of a bare table) are stated gaps, so the module states none; the unit and basis stay stated."""
     tail = 0 if spec.bare else 2
+    if spec.none_text and len(rows) == 1 and rows[0][:1] == [spec.none_text]:
+        return (
+            len(rows[0]) == len(header)
+            and all((c in DASHES or _stated_gap(c)) for c in rows[0][1 : len(header) - tail])
+            and all(rows[0][len(header) - tail :])
+        )
     return bool(rows) and all(
         len(row) == len(header)
         and all(_stated_gap(c) for c in row[: len(row) - tail])
@@ -1849,6 +1886,12 @@ def _none_rule(spec: OwnerTable) -> str:
     that its module has nothing to report; `_states_none` accepts exactly that row."""
     if not spec.columns:
         return ""
+    if spec.none_text:
+        return (
+            f" If no such event is stated, write one row whose Event is `{spec.none_text}`, whose "
+            "Date, Amount, Pro forma net debt and Pro forma net leverage are each `\u2014`, with "
+            "Reporting unit and Basis and limitation stated (say which sources were read)."
+        )
     cells = "every cell" if spec.bare else "every cell before Reporting unit"
     return (
         f" If the handoff supplies none, write one row whose {cells} is `Not supplied: <reason>`"
