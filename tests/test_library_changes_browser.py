@@ -185,7 +185,7 @@ def test_the_changes_tab_sits_between_overview_and_modules_and_shows_the_compari
 
 
 def test_a_first_run_says_so_and_shows_nothing_else(tmp_path):
-    run_of(tmp_path, "only", as_of="2025-03-31")
+    with_changes(run_of(tmp_path, "only", as_of="2025-03-31"), first=True)
     dom, console = visit(build(tmp_path), "#W-Changes/changes?c=only")
     assert console == []
     assert tab_names(dom)[2] == "Changes"
@@ -202,3 +202,11 @@ def test_a_cp8_that_was_not_produced_says_so_with_its_reason(tmp_path):
     assert "Recorded reason: cpos_live_not_accepted: CP-8 not accepted within bounds" in dom
     assert 'id="changes-what"' not in dom
     assert 'id="changes-over-time"' in dom
+
+
+def test_a_run_with_no_recorded_comparison_is_not_called_a_first_run(tmp_path):
+    run_of(tmp_path, "old", as_of="2025-03-31")
+    dom, console = visit(build(tmp_path), "#W-Changes/changes?c=old")
+    assert console == []
+    assert "No comparison was recorded for this run" in dom
+    assert "First run of this pathway" not in dom

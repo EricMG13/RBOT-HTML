@@ -9,6 +9,7 @@ const ChangesView = (() => {
 const ChangesReader = typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, paragraphBody, readerPassages, tableView};
 
 const FIRST_RUN = 'First run of this pathway';
+const NO_RECORD = 'No comparison was recorded for this run';
 const NOT_COMPARABLE = 'Not comparable';
 const NOT_STATED = 'Not stated';
 const LEDGER_STATUSES = ['Closed', 'Remaining', 'New', 'No longer stated'];
@@ -17,12 +18,14 @@ const REASON_PREFIX = /^changes: not produced\s*[—-]\s*/;
 const esc = value => ChangesReader.escapeHtml(value);
 const rich = value => ChangesReader.richText(value);
 
-// What the run says about its comparison: no pack and no note is a first run of the pathway; a pack that could not be read is neither.
+// What the run says about its comparison. A first run is only a run whose own record says it had no prior (`first_run`); a run that records nothing
+// (delivered before CP-8 existed, or an earlier format) is 'unrecorded': absence of data is never read as a first run. A pack that could not be read is neither.
 function changesState(changes) {
-  if (!changes) return 'first';
+  if (!changes) return 'unrecorded';
   if (changes.problem) return 'unreadable';
   if (changes.note) return 'not_produced';
-  return changes.pack ? 'produced' : 'first';
+  if (changes.pack) return 'produced';
+  return changes.first_run === true ? 'first' : 'unrecorded';
 }
 
 // CP-8's handoff (the store's sections) as its reader passages and its three registers; each is null when the handoff has none.
@@ -61,6 +64,13 @@ function measureVerdict(measure, issuerTable) {
   const note = row ? cell(row, row.cells.length - 1) : null;
   if (measure.comparable === 'no') return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: measure.reason || null};
   if (says(/^Not comparable/i)) return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: note};
+  // One period with two values and a difference is the analysis changing (a definition, a correction), never the issuer moving: the difference
+  // is shown only under CP-8's own word Same definition, beside its cause, and no line or trend joins the two.
+  if (measure.same_period === true && measure.difference != null && !/^-?0+(\.0+)?$/.test(String(measure.difference))) {
+    if (!says(/^Same definition/i)) return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null, analysisChange: null};
+    const cause = cell(row, column(issuerTable, 'Cause'));
+    return {kind: 'comparable', label: 'Same definition', reason: null, analysisChange: cause || `${NOT_STATED} by CP-8`};
+  }
   if (measure.comparable === 'yes') return {kind: 'comparable', label: 'Comparable', reason: null};
   if (says(/^Same definition/i)) return {kind: 'comparable', label: 'Same definition', reason: null};
   return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null};
@@ -77,7 +87,7 @@ function thenAndNowChart(measures, verdicts) {
     const held = values.filter(v => v !== null);
     if (!held.length) return '';
     const lo = Math.min(...held), hi = Math.max(...held);
-    const joined = verdict.kind === 'comparable' && values[0] !== null && values[1] !== null;
+    const joined = verdict.kind === 'comparable' && !verdict.analysisChange && values[0] !== null && values[1] !== null;
     const link = joined ? `<i class="dumbbell-link" style="left:${position(Math.min(...values), lo, hi)}%;width:${position(Math.max(...values), lo, hi) - position(Math.min(...values), lo, hi)}%"></i>` : '';
     const dot = (v, series) => (v === null ? '' : `<i class="dumbbell-dot series-${series}" style="left:${position(v, lo, hi)}%"></i>`);
     const text = `Earlier ${sideText(measure.prior)} · Current ${sideText(measure.current)}${verdict.kind === 'comparable' ? '' : ` · ${verdict.label}`}`;
@@ -90,7 +100,7 @@ function thenAndNowChart(measures, verdicts) {
 function measureTable(measures, verdicts) {
   const body = measures.map((measure, i) => {
     const verdict = verdicts[i], difference = differenceText(measure, verdict);
-    const change = difference !== null ? esc(difference) : `<strong>${esc(verdict.label)}</strong>${verdict.reason ? `<small>${esc(verdict.reason)}</small>` : ''}`;
+    const change = difference !== null ? `${esc(difference)}${verdict.analysisChange ? `<small>The analysis changed, not the issuer: ${esc(verdict.analysisChange)}</small>` : ''}` : `<strong>${esc(verdict.label)}</strong>${verdict.reason ? `<small>${esc(verdict.reason)}</small>` : ''}`;
     return `<tr><th scope="row">${esc(measure.label)}</th><td>${esc(sideText(measure.prior))}</td><td>${esc(sideText(measure.current))}</td><td>${change}</td></tr>`;
   }).join('');
   return `<div class="table-scroll" role="region" aria-label="Measures, earlier and current" tabindex="0"><table class="history-table"><caption>Measures the pack states, earlier and current</caption><thead><tr><th scope="col">Measure</th><th scope="col">Earlier</th><th scope="col">Current</th><th scope="col">Change</th></tr></thead><tbody>${body}</tbody></table></div>`;
@@ -186,7 +196,9 @@ function joined(runs, i, key, measureOf) {
   if (!a || !b || !pack || a.unit !== b.unit || !pack.prior || pack.prior.run !== before.runId) return false;
   const measure = (pack.measures || []).find(m => m.key === key);
   if (!measure || !measure.prior || !measure.current || measure.prior.value !== a.value || measure.current.value !== b.value) return false;
-  return measureVerdict(measure, cp8Parts(after.cp8).issuer).kind === 'comparable';
+  if (measure.prior.period !== a.period || measure.current.period !== b.period) return false;
+  const verdict = measureVerdict(measure, cp8Parts(after.cp8).issuer);
+  return verdict.kind === 'comparable' && !verdict.analysisChange;
 }
 function trendLine(runs, key, label) {
   const points = runs.map(r => (r.metrics && r.metrics[key] ? r.metrics[key] : null));
@@ -223,6 +235,7 @@ function changesHtml(input) {
   const {changes, cp8, pathway, fmtDate, runs} = input;
   const state = changesState(changes);
   if (state === 'first') return `<div class="changes"><p class="changes-first">${FIRST_RUN}</p></div>`;
+  if (state === 'unrecorded') return `<div class="changes"><p class="changes-first">${NO_RECORD}</p>${runs.length > 1 ? overTimePart(runs, fmtDate) : ''}</div>`;
   const pack = changes.pack || null;
   const parts = state === 'produced' && cp8 ? cp8Parts(cp8) : null;
   const since = pack && pack.prior && pack.prior.as_of ? `Since ${fmtDate(pack.prior.as_of)}` : 'Since the earlier run';
@@ -245,7 +258,7 @@ function changesHtml(input) {
   return `<div class="changes">${heading}${notice}${sections}</div>`;
 }
 
-return {changesState, cp8Parts, measureVerdict, differenceText, withUnit, thenAndNowChart, measureTable, netDebtView, maturityView, passageView, analysisPart, limitationsPart, overTimePart, leadBottom, changesHtml, FIRST_RUN, NOT_COMPARABLE};
+return {changesState, cp8Parts, measureVerdict, differenceText, withUnit, thenAndNowChart, measureTable, netDebtView, maturityView, passageView, analysisPart, limitationsPart, overTimePart, leadBottom, changesHtml, FIRST_RUN, NO_RECORD, NOT_COMPARABLE};
 })();
 
 if (typeof module !== 'undefined') module.exports = ChangesView;

@@ -58,8 +58,7 @@ const count = (html, needle) => html.split(needle).length - 1;
 test('a run with no comparison is a first run: the one line and nothing else', () => {
   const expected = `<div class="changes"><p class="changes-first">${FIRST_RUN}</p></div>`;
   assert.equal(FIRST_RUN, 'First run of this pathway');
-  assert.equal(changesHtml(base({changes: null})), expected);
-  assert.equal(changesHtml(base({changes: {lead: 'CP-2', pack: null, note: null, problem: null}})), expected);
+  assert.equal(changesHtml(base({changes: {lead: 'CP-2', first_run: true, pack: null, note: null, problem: null}})), expected);
   assert.equal(changesState({pack: null, note: null, problem: 'is not valid JSON'}), 'unreadable');
   assert.equal(changesState({pack: PACK, note: 'changes: not produced — why', problem: null}), 'not_produced');
 });
@@ -98,8 +97,8 @@ test('a measure that is not comparable shows both values, no difference, no join
   assert.ok(!html.includes('-0.56'), 'its difference is printed nowhere');
   assert.ok(html.includes('<strong>Not comparable</strong><small>Not comparable: reported EBITDA against EBITDA As Defined.</small>'));
   assert.ok(html.includes('Earlier 6.57x (FY2024 / 2024-09-30) · Current 6.01x (FY2024) · Not comparable'));
-  // Cash and coverage are Same definition: a line joins them; leverage has none (3 rows, 2 lines).
-  assert.equal(count(html, 'class="dumbbell-link"'), 2);
+  // Cash (same period, difference 0) is joined; coverage is one period with two values (0.31) and leverage is Not comparable: no line for either.
+  assert.equal(count(html, 'class="dumbbell-link"'), 1);
   assert.ok(!/[←-⇿▲△▼▽⬆⬇]/.test(html), 'no direction arrow anywhere');
   // comparable "no" from the pack itself: unit differs.
   const pack = {...PACK, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'no', side('6.57', 'FY2024'), side('62', 'FY2024', '%'), null, {reason: 'the units differ'})]};
@@ -173,11 +172,11 @@ test('handoff and pack text is escaped before it reaches the page', () => {
 
 test('Over time lists every run earliest first; a line joins two points only where the later run compares them under one definition', () => {
   const metric = (value, period) => ({leverage: {value, unit: 'x', period, basis: 'b'}});
-  const packOf = (priorRun, comparable, prior, current) => ({...PACK, prior: {...PACK.prior, run: priorRun}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', comparable, side(prior, 'FY2023'), side(current, 'FY2024'), '0.50')]});
+  const packOf = (priorRun, comparable, prior, current, pp = 'FY2022', pc = 'FY2023') => ({...PACK, prior: {...PACK.prior, run: priorRun}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', comparable, side(prior, pp), side(current, pc), '0.50', {same_period: false})]});
   const runs = [
     {key: 'a', href: '#a', asOf: '2023-09-30', runId: 'r-a', current: false, bottom: 'Earlier view.', metrics: metric('5.00', 'FY2022'), changes: null, cp8: null},
     {key: 'b', href: '#b', asOf: '2024-09-30', runId: 'r-b', current: false, bottom: null, metrics: metric('5.50', 'FY2023'), changes: {pack: packOf('r-a', 'yes', '5.00', '5.50')}, cp8: null},
-    {key: 'c', href: '#c', asOf: '2025-03-31', runId: 'r-c', current: true, bottom: 'Latest view.', metrics: metric('6.00', 'FY2024'), changes: {pack: packOf('r-b', 'yes', '5.50', '6.00')}, cp8: null},
+    {key: 'c', href: '#c', asOf: '2025-03-31', runId: 'r-c', current: true, bottom: 'Latest view.', metrics: metric('6.00', 'FY2024'), changes: {pack: packOf('r-b', 'yes', '5.50', '6.00', 'FY2023', 'FY2024')}, cp8: null},
   ];
   const lines = html => (/<li><strong>Total debt \/ EBITDA<\/strong>(.*?)<\/li>/.exec(html)[1].match(/<line /g) || []).length;
   const html = changesHtml(base({runs}));
@@ -190,7 +189,7 @@ test('Over time lists every run earliest first; a line joins two points only whe
   const apart = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-a', 'no', '5.00', '5.50')}}, runs[2]]}));
   assert.equal(lines(apart), 1);
   // A pack that compares other values than the two points, or another prior run, joins nothing.
-  const other = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-x', 'yes', '5.00', '5.50')}}, {...runs[2], changes: {pack: packOf('r-b', 'yes', '5.51', '6.00')}}]}));
+  const other = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-x', 'yes', '5.00', '5.50')}}, {...runs[2], changes: {pack: packOf('r-b', 'yes', '5.51', '6.00', 'FY2023', 'FY2024')}}]}));
   assert.equal(lines(other), 0);
   // Units that differ between runs are not put on one scale.
   const mixed = changesHtml(base({runs: [runs[0], {...runs[1], metrics: {leverage: {value: '50', unit: '%', period: 'FY2023'}}}]}));
@@ -209,4 +208,44 @@ test('the chart has a text alternative, is keyboard reachable and every row name
   assert.ok(html.includes('class="dumbbell-chart changes-chart" role="group" aria-label="Then and now: each measure on its own scale. The table below gives the same values." tabindex="0"'));
   assert.ok(html.includes('<table class="history-table"><caption>Measures the pack states, earlier and current</caption>'));
   assert.equal(count(html, 'aria-hidden="true"') >= 3, true, 'tracks are decoration; the text beside them carries the values');
+});
+
+test('one period with two values is the analysis changing: no line, and the difference only under Same definition beside its cause', () => {
+  const lev = (extra = {}) => measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2024'), side('6.01', 'FY2024'), '-0.56', extra);
+  const withRow = effect => [h3('What changed: the issuer', table(ISSUER_HEAD, ['Total debt / EBITDA', '6.57x', '6.01x', 'Correction', effect]))];
+  const draw = (cp8, measures) => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures}, note: null, problem: null}, cp8}));
+  const issuer = html => html.slice(html.indexOf('id="changes-issuer"'), html.indexOf('id="changes-analysis"'));
+  const same = issuer(draw(withRow('Same definition; corrected.'), [lev()]));
+  assert.ok(same.includes('<td>-0.56x<small>The analysis changed, not the issuer: Correction</small></td>'));
+  assert.ok(!same.includes('dumbbell-link'));
+  for (const html of [issuer(draw(withRow('Not comparable: basis.'), [lev()])), issuer(draw(null, [lev()]))]) {
+    assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link'));
+    assert.ok(html.includes('Earlier 6.57x (FY2024) · Current 6.01x (FY2024)'));
+  }
+  // The same period with a zero difference is unaffected.
+  const zero = issuer(draw(null, [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]));
+  assert.ok(zero.includes('<td>0 US$m</td>') && zero.includes('dumbbell-link'));
+  // Over time draws no segment between two values of one period.
+  const runs = [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2024'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev()]}}}];
+  assert.ok(!/<line /.test(changesHtml(base({runs}))));
+});
+
+test('a run that records no comparison is not a first run: it says so, and still shows Over time when other runs are listed', () => {
+  const other = {...here, key: 'a', runId: 'r-a', asOf: '2023-09-30', current: false, bottom: 'Earlier view.'};
+  for (const changes of [null, {lead: 'CP-2', first_run: false, pack: null, note: null, problem: null}]) {
+    const alone = changesHtml(base({changes}));
+    assert.ok(alone.includes('No comparison was recorded for this run') && !alone.includes('First run of this pathway') && !alone.includes('changes-over-time'));
+    const html = changesHtml(base({changes, runs: [other, here]}));
+    assert.ok(html.includes('No comparison was recorded for this run') && !html.includes('First run of this pathway') && html.includes('id="changes-over-time"'));
+  }
+  assert.equal(changesState({pack: null, note: null, problem: null, first_run: true}), 'first');
+});
+
+test('Over time joins only points whose periods are the periods the later pack compares', () => {
+  const metric = (value, period) => ({leverage: {value, unit: 'x', period}});
+  const packWith = (pp, pc) => ({...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('5', pp), side('6', pc), '1', {same_period: false})]});
+  const runs = pack => [{...here, key: 'a', runId: 'r-a', current: false, metrics: metric('5', 'FY2022')}, {...here, key: 'b', runId: 'r-b', metrics: metric('6', 'FY2023'), changes: {pack}}];
+  const lines = html => (html.match(/<line /g) || []).length;
+  assert.equal(lines(changesHtml(base({runs: runs(packWith('FY2022', 'FY2023'))}))), 1);
+  assert.equal(lines(changesHtml(base({runs: runs(packWith('H1 FY2022', 'H1 FY2023'))}))), 0);
 });

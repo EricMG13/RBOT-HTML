@@ -358,7 +358,12 @@ ALIAS_CITED = """
 """
 
 
-def with_changes(run_dir: Path, pack: bytes | None = None, note: str | None = None) -> None:
+FIRST_RUN_RECORD = "changes: first run of this pathway"
+
+
+def with_changes(
+    run_dir: Path, pack: bytes | None = None, note: str | None = None, first: bool = False
+) -> None:
     """Make a current-kind delivery (see without_report) carry CP-8's comparison pack as
     `changes.json` (the bytes given, listed in the receipt and hashed in the completion record)
     and/or the manifest's `changes_note` (why CP-8 was planned and not produced)."""
@@ -369,5 +374,7 @@ def with_changes(run_dir: Path, pack: bytes | None = None, note: str | None = No
         raw = json.dumps(receipt).encode()
         (delivered / "delivery.json").write_bytes(raw)
         rewrite_completion(run_dir, lambda record: record.update(delivery_sha256=sha(raw)))
+    if first:
+        rewrite_completion(run_dir, lambda record: record.update(changes=FIRST_RUN_RECORD))
     if note is not None:
         rewrite_manifest(run_dir, lambda manifest: manifest.update(changes_note=note))

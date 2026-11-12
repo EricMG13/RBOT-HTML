@@ -476,11 +476,24 @@ def current_run(workspace: Path, folder: str, **spec) -> Path:
     return without_report(make_run(workspace, folder, **spec)).parent.parent
 
 
-def test_a_first_run_carries_no_pack_and_no_note_and_names_its_lead_module(tmp_path):
-    current_run(tmp_path, "first")
+def test_a_run_that_records_no_comparison_is_not_a_first_run(tmp_path):
+    current_run(tmp_path, "old")
+    update_library.update_library(tmp_path)
+    assert changes_of(tmp_path, "old") == {
+        "lead": "CP-2",
+        "first_run": False,
+        "pack": None,
+        "note": None,
+        "problem": None,
+    }
+
+
+def test_a_first_run_is_the_run_that_records_it(tmp_path):
+    with_changes(current_run(tmp_path, "first"), first=True)
     update_library.update_library(tmp_path)
     assert changes_of(tmp_path, "first") == {
         "lead": "CP-2",
+        "first_run": True,
         "pack": None,
         "note": None,
         "problem": None,
