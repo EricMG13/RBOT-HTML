@@ -29,7 +29,7 @@ second" in decision 5).
 - Reviews: task review, whole-branch review, three fix rounds (service refusal text on the run start
   page; "Methods changed"; stored file names), each re-reviewed.
 - Not verified: no real run is new format, so new-format pages rest on the synthetic fixture. On a
-  new-format page a dotted token shaped like a step id (`T4.24`) reads "a method step", as
+  new-format page or the Changes tab a dotted token shaped like a step id (`T4.24`) reads "a method step", as
   earlier-format pages have since 2026-11-10 (open, owner's call). Run start states the six-pathway,
   three-level probe does not reach (upload, poll and carried-run messages). The shell's own navigation and
   headings of the standalone HTML file (`src/deploy_vii/assets`) are covered by the new browser test;

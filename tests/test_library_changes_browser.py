@@ -199,8 +199,10 @@ def test_a_cp8_that_was_not_produced_says_so_with_its_reason(tmp_path):
     dom, console = visit(build(tmp_path), "#W-Changes/changes?c=later")
     assert console == []
     assert "The explanation of what changed was not produced for this run." in dom
-    assert "Recorded reason: cpos_live_not_accepted: " in dom
-    assert "Changes since the last run not accepted within bounds" in dom
+    assert (
+        "Recorded reason: cpos_live_not_accepted: "
+        "Changes since the last run not accepted within bounds" in dom
+    )
     assert 'id="changes-what"' not in dom
     assert 'id="changes-over-time"' in dom
 
