@@ -434,11 +434,11 @@ function chipView(chip,rowModule) {
 const chipSet=chips=>chips.length?`<span class="chips">${chips.join('')}</span>`:'';
 // A gap chip that is not a plain "Not supplied" is a citation with no page: it is counted, not drawn.
 const unresolvedGap=chip=>chip.kind==='gap'&&chip.label!=='Not supplied';
-const gapCount=n=>`${n} citation${n===1?'':'s'} without a page`;
-// The "handoff row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
+const gapCount=n=>`${n} unresolved citation${n===1?'':'s'}`;
+// The "Row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
 function chipsMarkup(key,counted=true) {
   const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
-  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" title="Handoff row, line ${item.line}" aria-label="Handoff row, line ${item.line}">Handoff<span class="dot row"></span></button>`:'';
+  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" title="Table row, line ${item.line}" aria-label="Table row, line ${item.line}">Row<span class="dot row"></span></button>`:'';
   const gaps=found.filter(unresolvedGap).length;
   const count=counted&&gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
   return chipSet([row,...found.map((chip,index)=>{
@@ -475,7 +475,7 @@ function keyNumbers(id) {
 }
 // The front matter's committee_status, verbatim; none declared draws nothing. The title says whose word it is.
 const declaredBadge=declared=>declared==null?'':`<span class="badge badge-gray" title="Status the module declares in its handoff">${esc(declared)}</span>`;
-const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div>';
+const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> this table row · <i class="dot up"></i> another module · <i class="dot gap"></i> gap</span></div>';
 // No catalogue field says "accepted"; a run shows a checklist only when one is recorded (none is today), and that is not acceptance.
 function runAcceptanceText(context) {
   const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===contexts[context].folder);
@@ -626,7 +626,7 @@ function reportTimeline(id) {
 // The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
 const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
 // What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
-const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,caption:heading=>plain(heading).replace(METHOD_CODE,'')});
+const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
 const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
 // Front matter is drawn as its stated lines. Its `filename` line names the handoff with a module code, and the download carries the file, so it is not drawn.
 const frontMatter=(section,sections)=>section===sections[0]&&section.level===2&&section.heading==='Front matter';

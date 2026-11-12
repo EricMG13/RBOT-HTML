@@ -76,14 +76,18 @@ function splitBasis(text, known = []) {
   return {body: lines.slice(0, -1).join('\n'), items: items.filter(item => item !== '')};
 }
 
-const PAGES = /^(?:, page (\d+)|, pages (\d+)[–-](\d+))?$/;
+// One page or range, and a list of them (decision 3 of the 2026-11-12 ruling extends H3: `pages 71, 121`, `pages 55, 63, 120–123`).
+const SPAN = '\\d+(?:\\s*[–-]\\s*\\d+)?', PAGES = new RegExp(`^(?:, (pages?) (${SPAN}(?:, ${SPAN})*))?$`);
+const spansOf = text => [...text.matchAll(/(\d+)(?:\s*[–-]\s*(\d+))?/g)].map(m => (m[2] === undefined ? {page: Number(m[1])} : {page: Number(m[1]), pageEnd: Number(m[2])}));
+// A source item: `page`/`pageEnd` for one page or range, `spans` for a list (a singular marker lists one page only); null when the tail is no page list.
 function sourceItem(file, tail) {
   const pages = PAGES.exec(tail);
   if (!pages) return null;
   const out = {kind: 'source', file};
-  if (pages[1] !== undefined) out.page = Number(pages[1]);
-  if (pages[2] !== undefined) { out.page = Number(pages[2]); out.pageEnd = Number(pages[3]); }
-  return out;
+  if (pages[1] === undefined) return out;
+  const spans = spansOf(pages[2]);
+  if (spans.length === 1) return Object.assign(out, spans[0]);
+  return pages[1] === 'pages' ? Object.assign(out, {spans}) : null;
 }
 
 // H3 item forms. Anything else is kept as text, never dropped. `known` (optional) lists source file names: an item that is exactly a known name
@@ -100,7 +104,7 @@ function basisItem(item, known = []) {
       if (found) return found;
     }
   }
-  const source = /^(.+?\.[A-Za-z][A-Za-z0-9]{0,4})((?:, page \d+|, pages \d+[–-]\d+)?)$/.exec(item);
+  const source = /^(.+?\.[A-Za-z][A-Za-z0-9]{0,4})((?:, pages? .+)?)$/.exec(item);
   return (source && sourceItem(source[1], source[2])) || {kind: 'text', text: item};
 }
 
@@ -113,10 +117,12 @@ function knownFiles(ctx) {
 // (for `calculation <id>`), the chips the build holds for the paragraph's key, and whether a module code ran in this run. A source item takes the
 // issuer_page chips of its file (and page when it names one); a calculation item takes its `## Calculations` row (or null); a module item says
 // whether it ran; any other item is `text`, verbatim.
+// A source item names the chip's page when it names no page, the same page, or a page of its list.
+const pageHit = (item, chip) => (item.spans ? item.spans.some(s => s.page === chip.page) : item.page === undefined || chip.page === item.page);
 function inspectorItem(raw, ctx) {
   const item = basisItem(raw, knownFiles(ctx));
   const out = {...item, raw};
-  if (item.kind === 'source') out.chips = ctx.chips.filter(c => c.kind === 'issuer_page' && c.file === item.file && (item.page === undefined || c.page === item.page));
+  if (item.kind === 'source') out.chips = ctx.chips.filter(c => c.kind === 'issuer_page' && c.file === item.file && pageHit(item, c));
   else if (item.kind === 'calculation') out.row = calculationRow(ctx.sections, item.id);
   else if (item.kind === 'module') out.ran = Boolean(ctx.ran(item.code));
   return out;
@@ -133,8 +139,9 @@ function inspectorItems(text, ctx) {
   return splitBasis(text, knownFiles(ctx)).items.map(raw => inspectorItem(raw, ctx));
 }
 
-// The pages of a source item as words: "page 41", "pages 43–45", or nothing.
+// The pages of a source item as words: "page 41", "pages 43–45", "pages 71, 121", or nothing.
 function itemPages(item) {
+  if (item.spans) return `pages ${item.spans.map(s => (s.pageEnd === undefined ? s.page : `${s.page}–${s.pageEnd}`)).join(', ')}`;
   return item.pageEnd !== undefined ? `pages ${item.page}–${item.pageEnd}` : item.page !== undefined ? `page ${item.page}` : '';
 }
 
@@ -325,21 +332,39 @@ function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
   return {item, html};
 }
 
+// The index (among the row's chips) of the first source-page chip that a Source cell names: an item `<file>, page(s) <list>` whose file and a listed page
+// a chip holds. -1 when none does; the cell is then left as plain text.
+function sourceCellChip(text, chips) {
+  for (const item of plainText(text).split('; ')) {
+    const m = new RegExp(`^(.+?), pages? (${SPAN}(?:, ${SPAN})*)$`).exec(item.trim());
+    if (!m) continue;
+    const spans = spansOf(m[2]);
+    const at = chips.findIndex(c => c.kind === 'issuer_page' && c.file === m[1] && spans.some(s => c.page <= (s.pageEnd ?? s.page) && (c.page_end ?? c.page) >= s.page));
+    if (at >= 0) return at;
+  }
+  return -1;
+}
+
 // A cell of a new-format table exactly as written: a missing, dash or "Not supplied" cell is drawn as it stands, never as "n.a." (H4).
-function writtenCell(cell, numeric, after = '') {
+// `open` is {key, index}: the text is then one button on that row chip (a Source cell), unchanged.
+function writtenCell(cell, numeric, after = '', open = null) {
   const text = String(cell ?? '');
-  return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${richText(text)}${after}</td>`;
+  const shown = open ? `<button type="button" class="source-cell" data-chip="${escapeHtml(open.key)}" data-index="${open.index}">${richText(text)}</button>` : richText(text);
+  return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${shown}${after}</td>`;
 }
 
 // A table of a new-format handoff exactly as written: its own columns and cells, none of the app's. A row the build holds chips for carries a
-// quiet Basis button in its first cell, so the chips stay reachable. `ctx` is {id, chips(key)}; `caption` is the table's accessible name.
+// quiet Basis button in its first cell, so the chips stay reachable; a cell of a column headed exactly `Source` becomes a button on the row chip that
+// holds its file and page. `ctx` is {id, chips(key), chipList(key)?}; `caption` is the table's accessible name.
 function tableView(caption, block, ctx) {
   const numeric = block.headers.map((_, c) => numericColumn(block, c));
   const head = block.headers.map((header, c) => `<th scope="col"${numeric[c] ? ' class="num"' : ''}>${escapeHtml(header)}</th>`).join('');
   const rows = block.rows.map(row => {
     const key = `${ctx.id}:${row.line}`;
     const control = ctx.chips(key) ? ` ${basisButton(key, [], `Basis for row: ${plainText(row.cells[0] ?? '')}`)}` : '';
-    return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '')).join('')}</tr>`;
+    const chips = ctx.chipList?.(key) || [];
+    const open = cell => { const index = chips.length ? sourceCellChip(cell, chips) : -1; return index >= 0 ? {key, index} : null; };
+    return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '', block.headers[c] === 'Source' ? open(cell) : null)).join('')}</tr>`;
   }).join('');
   return `<div class="table-card"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }

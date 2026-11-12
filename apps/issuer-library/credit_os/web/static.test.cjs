@@ -497,7 +497,7 @@ test('chip labels and avatars follow the data, one chip per dict', () => {
   const { chipsMarkup } = report();
   const html = chipsMarkup(`${OUT}:16`);
   const chips = [...html.matchAll(/<button[^>]*class="chip[^"]*"[^>]*>.*?<\/button>/g)].map(m => m[0].replace(/<[^>]+>/g, '|').replace(/\|+/g, '|'));
-  assert.deepEqual(chips, ['|Handoff|', '|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|Financial foundation · D1 · D3|']);
+  assert.deepEqual(chips, ['|Row|', '|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|Financial foundation · D1 · D3|']);
   assert.ok(html.includes('data-chip="run-a/deliveries/d1/CP-1.md:16" data-index="3"') && html.includes('data-evidence="run-a/deliveries/d1/CP-1.md:16"'));
 });
 
@@ -507,7 +507,7 @@ test('Not supplied renders as a gap chip; other gaps fold into one count', () =>
   assert.equal(html.match(/class="chip gap"/g).length, 1);
   assert.equal(html.includes('no page<span') || html.includes('no key<span'), false);
   assert.equal(html.match(/class="chip-count"/g).length, 1);
-  assert.ok(html.includes(`data-gaps="${OUT}:52"`) && html.includes('>2 citations without a page</button>'));
+  assert.ok(html.includes(`data-gaps="${OUT}:52"`) && html.includes('>2 unresolved citations</button>'));
 });
 
 test('a key of only unresolved chips has no gap chip and one count; one reads in the singular', () => {
@@ -515,8 +515,8 @@ test('a key of only unresolved chips has no gap chip and one count; one reads in
   const two = chipsMarkup(`${OUT}:53`);
   assert.equal(two.includes('class="chip gap"'), false);
   assert.equal(two.match(/class="chip-count"/g).length, 1);
-  assert.ok(two.includes('>2 citations without a page</button>'));
-  assert.ok(chipsMarkup(`${OUT}:54`).includes('>1 citation without a page</button>'));
+  assert.ok(two.includes('>2 unresolved citations</button>'));
+  assert.ok(chipsMarkup(`${OUT}:54`).includes('>1 unresolved citation</button>'));
 });
 
 test('a quote found on the page marks the chip verified', () => {
@@ -782,7 +782,7 @@ test('a reference section renders whole inside Statements and registers, in orde
   assert.ok(at('Debt is <strong>mostly secured</strong>. Second line.') > at('Debt structure') && at('Term loan') > at('mostly secured') && at('Closing remark.') > at('Revolver'));
   assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
-  for (const line of [75, 77]) assert.ok(html.includes(`aria-label="Handoff row, line ${line}"`), line); // earlier-format table rows keep their chip column
+  for (const line of [75, 77]) assert.ok(html.includes(`aria-label="Table row, line ${line}"`), line); // earlier-format table rows keep their chip column
   assert.ok(!html.includes('data-paragraph='), 'no earlier-format paragraph here has a citation or a chip, so none has a Basis button');
   assert.ok(html.includes('class="table-card"') && !html.includes('K.'));
 });
@@ -1615,7 +1615,7 @@ test('charts: one chip-dot legend per set of charts, under the last card', () =>
   assert.equal(runPage().chartCards(['<h2>own</h2>']).includes('<h2>own</h2>'), true);
   assert.ok(runPage().chartCards(['<div class="section-heading"><h2>Cost $1 &amp; $&</h2></div>']).includes('<h4>Cost $1 &amp; $&</h4>'));
   // A card's chart title is an h4 (it sits under a module's h3); the rest of the chart is untouched.
-  assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div></div>');
+  assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> this table row · <i class="dot up"></i> another module · <i class="dot gap"></i> gap</span></div></div>');
 });
 
 test('screen.css: the run page tables (chart index, status map) run whole', () => {
@@ -2077,10 +2077,10 @@ test('names, not codes: module heads and the report head carry no module code in
   assert.equal(page.handoffLabel('K.pdf'), 'K.pdf');
 });
 
-test('names, not codes: chips name their module, the handoff chip reads Handoff, titles from handoff text are named', () => {
+test('names, not codes: chips name their module, the row chip reads Row, titles from handoff text are named', () => {
   const r = report(), html = r.chipsMarkup(`${OUT}:16`) + r.chipsMarkup(`${OUT}:777`);
   noCode(html);
-  assert.ok(html.includes('title="Handoff row, line 16" aria-label="Handoff row, line 16">Handoff<span class="dot row">'));
+  assert.ok(html.includes('title="Table row, line 16" aria-label="Table row, line 16">Row<span class="dot row">'));
   assert.ok(!html.includes('class="av cp"') && !html.includes('class="av q"'), 'no code avatar');
   assert.ok(html.includes('<span class="av ">K</span>p.123'), 'an issuer-page chip keeps its source avatar');
   assert.ok(html.includes('title="Annual PDF marked alternate in Source readiness"'));
@@ -2841,4 +2841,13 @@ test('Overview (A1 fix): two modules\' maps at the same table line draw no dupli
   const page = runPage(() => { const d = overviewData(two); for (const code of ['CP-1', 'CP-2']) Object.assign(d[outId(code)], a1Set); return d; }, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Overview' }, { module: 'CP-2', placement: 'Overview' }], record: steps(['CP-1', 'CP-2']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
   const ids = [...part(page.runReport(RUN), 'overview-charts').matchAll(/ id="([^"]+)"/g)].map(m => m[1]);
   assert.ok(ids.some(i => i.startsWith('map-arrow-')) && new Set(ids).size === ids.length, ids.join(' '));
+});
+
+test('module page (decision 3): a Source cell is a button on the row chip that holds its file and page, with the written text', () => {
+  const FILE = 'NBG_2025-03-31_annual-report.pdf', key = line => `${outId('CP-1')}:${line}`;
+  const chips = { [key(23)]: [{ kind: 'upstream', module: 'CP-0', codes: ['D1'] }, { kind: 'issuer_page', source: FILE, file: FILE, page: 41, page_end: null }] };
+  const html = fixturePage({ chips }).moduleReport(outId('CP-1'));
+  assert.ok(html.includes(`<button type="button" class="source-cell" data-chip="${key(23)}" data-index="1">${FILE}, page 41</button>`));
+  assert.ok(html.includes(`${FILE}, page 41</td>`), 'a row with no chip keeps its Source text plain (line 24)');
+  assert.equal(countOf(html, /class="source-cell"/g), 1);
 });

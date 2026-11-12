@@ -827,3 +827,134 @@ def test_an_indented_basis_line_under_a_list_item_resolves(tmp_path):
     ):
         (got,) = paragraph_chips(run, inv, text)
         assert (got["kind"], got["source"], got["page"]) == ("issuer_page", "K", 41), text
+
+
+# --- decision 3 (2026-11-12): a source listed under ## Sources is known to the page ------------
+
+SRC_FILE = "TDG_2024-09-30_10-K.htm.jsonl"
+SRC_PAGES = b'{"page": 71, "text": "page seventy one"}\n{"page": 121, "text": "page one two one"}\n'
+
+
+def sources_section(headers, *rows, heading="Sources"):
+    return [
+        {
+            "heading": heading,
+            "level": 2,
+            "line": 1,
+            "blocks": [
+                {
+                    "type": "table",
+                    "line": 3,
+                    "headers": headers,
+                    "rows": [{"line": 5 + i, "cells": list(r)} for i, r in enumerate(rows)],
+                }
+            ],
+        }
+    ]
+
+
+def test_inventory_reads_the_sources_table_with_the_file_as_key():
+    got = inventory(
+        sources_section(
+            ["Source", "sha256", "Role"],
+            [SRC_FILE, "ab" * 32, "Primary"],
+            ["context", "cd" * 32, "User run settings only"],
+        )
+    )
+    assert got == {SRC_FILE: (SRC_FILE, "ab" * 32), "context": ("context", "cd" * 32)}
+
+
+def test_a_sources_row_that_is_not_a_file_of_the_run_stays_unresolved():
+    sections = sources_section(
+        ["Source", "sha256", "Role"], [SRC_FILE, "ab" * 32, "x"], ["context", "cd" * 32, "y"]
+    )
+    assert inventory(sections, available={SRC_FILE}) == {SRC_FILE: (SRC_FILE, "ab" * 32)}
+
+
+def test_a_sources_table_without_a_sha256_column_still_resolves():
+    got = inventory(sources_section(["Source", "Role"], [SRC_FILE, "Primary"]))
+    assert got == {SRC_FILE: (SRC_FILE, "")}
+
+
+def test_an_older_inventory_section_wins_for_the_same_file():
+    old = inventory_section("Complete supplied inventory", ["Alias", "Source name", "sha256"])
+    old[0]["blocks"][0]["rows"][0]["cells"] = ["K", SRC_FILE, "cd" * 32]
+    both = old + sources_section(["Source", "sha256", "Role"], [SRC_FILE, "ab" * 32, "x"])
+    assert inventory(both) == {"K": (SRC_FILE, "cd" * 32)}
+
+
+def sources_run(tmp_path, digest=None):
+    run = tmp_path / "run"
+    (run / "source-text").mkdir(parents=True)
+    (run / "source-text" / SRC_FILE).write_bytes(SRC_PAGES)
+    inv = inventory(
+        sources_section(
+            ["Source", "sha256", "Role"],
+            [SRC_FILE, digest or hashlib.sha256(SRC_PAGES).hexdigest(), "Primary"],
+        )
+    )
+    return run, inv
+
+
+def test_a_new_format_row_citing_file_and_comma_pages_gets_a_chip_per_page(tmp_path):
+    run, inv = sources_run(tmp_path)
+    got = run_chips(run, inv, ("a", "-", f"{SRC_FILE}, pages 71, 121"))["x/CP-1.md:4"]
+    assert [(c["kind"], c["file"], c["page"]) for c in got] == [
+        ("issuer_page", SRC_FILE, 71),
+        ("issuer_page", SRC_FILE, 121),
+    ]
+    assert got[0]["excerpt"] == "page seventy one" and got[0]["hash_matches_inventory"] is True
+
+
+def test_a_sources_table_without_sha256_gives_chips_with_no_hash_verdict(tmp_path):
+    run, _ = sources_run(tmp_path)
+    inv = inventory(sources_section(["Source", "Role"], [SRC_FILE, "Primary"]))
+    (got,) = run_chips(run, inv, ("a", "-", f"{SRC_FILE}, page 71"))["x/CP-1.md:4"]
+    assert got["kind"] == "issuer_page" and got["file"] == SRC_FILE
+    assert got["sha256"] is None and got["hash_matches_inventory"] is None
+
+
+@pytest.mark.parametrize(
+    ("tail", "pages"),
+    [
+        ("page 71", [(71, None)]),
+        ("pages 71, 121", [(71, None), (121, None)]),
+        ("pages 71–121", [(71, 121)]),
+        ("pages 55, 63, 71, 120–123", [(55, None), (63, None), (71, None), (120, 123)]),
+    ],
+)
+def test_a_basis_item_lists_one_locator_per_page(tmp_path, tail, pages):
+    run, inv = sources_run(tmp_path)
+    got = paragraph_chips(run, inv, f"Claim.\nBasis: {SRC_FILE}, {tail}.")
+    assert [(c["kind"], c["page"], c["page_end"]) for c in got] == [
+        ("issuer_page", a, b) for a, b in pages
+    ]
+
+
+def test_a_basis_item_with_a_stray_comma_list_is_still_not_recognised(tmp_path):
+    run, inv = sources_run(tmp_path)
+    (got,) = paragraph_chips(run, inv, f"Claim.\nBasis: {SRC_FILE}, pages 71, and 121")
+    assert got["label"] == "Basis item not recognised"
+
+
+def test_chips_reads_sources_but_not_a_row_with_no_source_text(tmp_path):
+    run, _ = sources_run(tmp_path)
+    store = {
+        "outputs": {"run/CP-0.md": {"module": "CP-0", "sha256": "h"}},
+        "handoffs": {
+            "h": sources_section(
+                ["Source", "sha256", "Role"],
+                [SRC_FILE, "ab" * 32, "Primary"],
+                ["context", "cd" * 32, "settings"],
+            )
+        },
+    }
+    (tmp_path / "runs").mkdir()
+    run.rename(tmp_path / "runs" / "run")
+    store["outputs"]["run/CP-1.md"] = {"module": "CP-1", "sha256": "p"}
+    store["handoffs"]["p"] = table(
+        ("a", "-", f"{SRC_FILE}, page 71"), ("b", "-", "context, page 3")
+    )
+    got = chips(tmp_path, store)
+    assert got["run/CP-1.md:4"][0]["kind"] == "issuer_page"
+    assert got["run/CP-1.md:5"][0]["kind"] == "gap"

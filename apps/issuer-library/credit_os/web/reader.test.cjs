@@ -499,3 +499,42 @@ test('uniqueChips: a chip the build holds twice is listed once, in first-seen or
   assert.deepEqual(uniqueChips([a, b, {...a}, {kind: 'gap', label: 'Citation gap'}, {kind: 'gap', label: 'Citation gap'}, {...b}]), [a, b, {kind: 'gap', label: 'Citation gap'}]);
   assert.deepEqual(uniqueChips([]), []);
 });
+
+// ---- Decision 3 (2026-11-12): source references resolve.
+test('basisItem: one locator per listed page; a range and a mixed list read; a singular marker lists one page only', () => {
+  const f = 'T_10-K.htm.jsonl';
+  assert.deepEqual(basisItem(`${f}, pages 71, 121`), {kind: 'source', file: f, spans: [{page: 71}, {page: 121}]});
+  assert.deepEqual(basisItem(`${f}, pages 55, 63, 71, 120–123`), {kind: 'source', file: f, spans: [{page: 55}, {page: 63}, {page: 71}, {page: 120, pageEnd: 123}]});
+  assert.deepEqual(basisItem(`${f}, pages 58–59`), {kind: 'source', file: f, page: 58, pageEnd: 59});
+  assert.deepEqual(basisItem(`${f}, page 71, 121`), {kind: 'text', text: `${f}, page 71, 121`});
+  assert.deepEqual(basisItem(`${f}, pages 71, and 121`), {kind: 'text', text: `${f}, pages 71, and 121`});
+});
+
+test('inspectorItems: a comma page list opens the chip of each listed page, and is drawn as the written pages', () => {
+  const f = 'T_10-K.htm.jsonl';
+  const chips = [71, 121, 5].map(page => ({kind: 'issuer_page', file: f, page}));
+  const [item] = inspectorItems(`Claim.\nBasis: ${f}, pages 71, 121`, {sections: [], chips, ran: () => false});
+  assert.deepEqual(item.chips.map(c => c.page), [71, 121]);
+  const html = require('./reader.js').inspectorItemHtml(item, {chipSection: c => `<i>${c.page}</i>`, moduleHref: () => '', icon: () => ''});
+  assert.equal(html, `<li><strong>${f}</strong>, pages 71, 121<i>71</i><i>121</i></li>`);
+});
+
+test('tableView: a Source cell is a button on its row chip, text unchanged; no matching chip leaves plain text', () => {
+  const f = 'T_10-K.htm.jsonl';
+  const chips = [{kind: 'upstream', module: 'CP-1'}, {kind: 'issuer_page', file: f, page: 71}, {kind: 'issuer_page', file: f, page: 121}, {kind: 'issuer_page', file: 'Other.pdf', page: 3}];
+  const block = {headers: ['Item', 'Source', 'Note'], rows: [
+    {line: 4, cells: ['A', `${f}, pages 71, 121`, `${f}, page 71`]},
+    {line: 5, cells: ['B', `${f}, page 121`, 'x']},
+    {line: 6, cells: ['C', `${f}, page 99`, 'x']},
+    {line: 7, cells: ['D', 'context', 'x']},
+    {line: 8, cells: ['E', `${f}, page 5; Other.pdf, page 3`, 'x']},
+  ]};
+  const html = tableView('T', block, {id: 'o', chips: () => 4, chipList: () => chips});
+  const cell = (line, text) => `<td><button type="button" class="source-cell" data-chip="o:${line}" data-index="`;
+  assert.ok(html.includes(`${cell(4)}1">${f}, pages 71, 121</button></td>`), 'first listed page with a chip');
+  assert.ok(html.includes(`${cell(5)}2">${f}, page 121</button></td>`));
+  assert.ok(html.includes(`<td>${f}, page 99</td>`) && html.includes('<td>context</td>'), 'no chip: plain text');
+  assert.ok(html.includes(`${cell(8)}3">${f}, page 5; Other.pdf, page 3</button></td>`), 'a later item of the cell can match');
+  assert.ok(html.includes(`<td>${f}, page 71</td>`), 'only a column headed exactly Source');
+  assert.equal(tableView('T', block, {id: 'o', chips: () => 0}).includes('source-cell'), false, 'no chip list, no button');
+});

@@ -578,6 +578,8 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .basis-link{display:inline;padding:0;border:0;background:none;font:var(--fs-label) 'Red Hat Text',sans-serif;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
 .basis-link:hover{color:var(--blue)}
 td .basis-link{margin-left:6px}
+.source-cell{display:inline;padding:0;border:0;background:none;font:inherit;color:inherit;text-align:inherit;text-decoration:underline;text-decoration-color:var(--muted);text-underline-offset:3px;cursor:pointer}
+.source-cell:hover,.source-cell:focus-visible{color:var(--blue)}
 .inspector-figure{margin:10px 0 0}
 .basis-items{margin:6px 0;padding-left:18px}.basis-items>li{margin:6px 0}
 .calculation-row{margin:6px 0;display:grid;gap:4px}.calculation-row>div{display:grid;grid-template-columns:minmax(70px,auto) 1fr;gap:8px}.calculation-row dt{color:var(--muted);font-size:var(--fs-label)}.calculation-row dd{margin:0}

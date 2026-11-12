@@ -2,7 +2,7 @@
 
 Python resolves; the page draws. A citation the patterns below do not match is a gap, never a
 guess. Page text comes from the run's ``source-text/<file>`` JSONL (one ``{"page", "text"}``
-object per line); the file name and sha256 come from CP-0's "Complete supplied inventory" table.
+object per line); the file name and sha256 come from CP-0's inventory or ``## Sources`` table.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, TypedDict, cast
@@ -41,7 +41,8 @@ PERIOD_HEADER = re.compile(r"\b(?:period|year|date)s?\b", re.IGNORECASE)
 SENTENCE_END = re.compile(r"[.;]\s")
 CLAIM_HEADERS = ("finding", "bottom line")
 BASIS = "Basis: "
-BASIS_FILE = re.compile(r"(?P<file>.+), pages? (?P<a>\d+)(?:\s*[-–]\s*(?P<b>\d+))?")
+_SPAN = r"\d+(?:\s*[-–]\s*\d+)?"
+BASIS_FILE = re.compile(rf"(?P<file>.+?), (?P<marker>pages?) (?P<pages>{_SPAN}(?:, {_SPAN})*)")
 BASIS_MODULE = re.compile(r".+ \((?P<module>CP-[0-9A-Z]+)\)")
 BASIS_CALCULATION = re.compile(r"calculation \S+")
 # CP-8's two extra items, read only in a CP-8 handoff: the comparison pack (exactly the words) and
@@ -192,6 +193,38 @@ def _cp8_item(item: str) -> bool:
     )
 
 
+def basis_pages(marker: str, text: str) -> list[tuple[str, str | None]] | None:
+    """The (first, last) page texts of a Basis page list; None when a number is no page or a
+    singular marker lists more than one page."""
+    spans = ITEM.findall(text)
+    if marker == "page" and len(spans) > 1:
+        return None
+    if any(max(len(a), len(b)) > MAX_PAGE_DIGITS for a, b in spans):
+        return None
+    return [(a, b or None) for a, b in spans]
+
+
+def basis_file_locators(
+    file: str, spans: list[tuple[str, str | None]], files: dict[str, str | None]
+) -> list[Locator]:
+    """One locator per listed page or range of one Basis file."""
+    result: list[Locator] = []
+    for a, b in spans:
+        first, last = int(a), int(b) if b else None
+        span = span_text(first, last)
+        if file not in files:
+            label = f"{file} p.{span} · not in inventory"
+            note = "the Basis file is not in the CP-0 inventory"
+            result.append(locator("gap", page=first, page_end=last, label=label, note=note))
+        elif (key := files[file]) is None:
+            label = f"{file} p.{span} · ambiguous"
+            note = "two inventory keys hold this file with different hashes"
+            result.append(locator("gap", page=first, page_end=last, label=label, note=note))
+        else:
+            result.append(locator("issuer_page", source=key, page=first, page_end=last))
+    return result
+
+
 def basis_locators(
     line: str, files: dict[str, str | None], writer: str | None = None
 ) -> list[Locator]:
@@ -209,21 +242,8 @@ def basis_locators(
             result.append(locator("upstream", module=module["module"]))
         elif item in files:
             continue  # a file with no page: nothing to quote
-        elif (m := BASIS_FILE.fullmatch(item)) and max(len(m["a"]), len(m["b"] or "")) <= (
-            MAX_PAGE_DIGITS
-        ):
-            first, last = int(m["a"]), int(m["b"]) if m["b"] else None
-            span = span_text(first, last)
-            if m["file"] not in files:
-                label = f"{m['file']} p.{span} · not in inventory"
-                note = "the Basis file is not in the CP-0 inventory"
-                result.append(locator("gap", page=first, page_end=last, label=label, note=note))
-            elif (key := files[m["file"]]) is None:
-                label = f"{m['file']} p.{span} · ambiguous"
-                note = "two inventory keys hold this file with different hashes"
-                result.append(locator("gap", page=first, page_end=last, label=label, note=note))
-            else:
-                result.append(locator("issuer_page", source=key, page=first, page_end=last))
+        elif (m := BASIS_FILE.fullmatch(item)) and (spans := basis_pages(m["marker"], m["pages"])):
+            result.extend(basis_file_locators(m["file"], spans, files))
         else:
             result.append(locator("gap", label="Basis item not recognised", note=item))
     return result
@@ -300,14 +320,39 @@ class Inventory(dict[str, tuple[str, str]]):
     alternates: frozenset[str] = frozenset()
 
 
-def inventory(cp0_sections: list[dict[str, Any]]) -> Inventory:
-    """key -> (file, sha256) from the CP-0 inventory table: the key is column 0 and the file
-    name column 1; ``alternates`` are the keys whose role marks them alternate."""
+def sources_rows(cp0_sections: list[dict[str, Any]]) -> Iterator[tuple[str, str]]:
+    """(file, sha256 or "") of every row of a ``## Sources`` table: the file is the first cell and
+    the hash the column headed sha256, when the table has one."""
+    for section in cp0_sections:
+        if section["heading"].strip().lower() != "sources":
+            continue
+        for block in section["blocks"]:
+            if block["type"] != "table":
+                continue
+            hashes = [i for i, h in enumerate(block["headers"]) if h.strip().lower() == "sha256"]
+            for row in block["rows"]:
+                cells = row["cells"]
+                if cells and cells[0].strip():
+                    yield cells[0].strip(), cells[hashes[0]].strip() if hashes else ""
+
+
+def inventory(
+    cp0_sections: list[dict[str, Any]], available: Collection[str] | None = None
+) -> Inventory:
+    """key -> (file, sha256). An inventory table gives its key in column 0 and its file name in
+    column 1; ``alternates`` are the keys whose role marks them alternate. A ``## Sources`` row
+    adds its file as its own key (no hash when the table has no sha256 column) unless an
+    inventory key already names the file; with ``available`` (the run's source-text files) a row
+    naming any other file, such as the run settings, is left out rather than guessed."""
     result = Inventory()
     result.alternates = inventory_alternates(cp0_sections)
     for _, rows, sha_column in inventory_tables(cp0_sections):
         for cells in rows:
             result[cells[0]] = (cells[1], cells[sha_column])
+    named = {file for file, _ in result.values()}
+    for file, sha in sources_rows(cp0_sections):
+        if file not in named and file not in result and (available is None or file in available):
+            result[file] = (file, sha)
     return result
 
 
@@ -483,8 +528,8 @@ def issuer_chip(loc: Locator, line: int, quote: str | None, pages: Pages) -> dic
     texts, actual, problem = pages.get(file)
     fields: dict[str, Any] = {
         "file": file,
-        "sha256": expected,
-        "hash_matches_inventory": None if actual is None else actual == expected,
+        "sha256": expected or None,
+        "hash_matches_inventory": None if actual is None or not expected else actual == expected,
         "quote": quote,
         "reason": problem,
         "avatar": avatar(loc["source"] or ""),
@@ -597,7 +642,9 @@ def chips(workspace: Path, store: dict[str, Any]) -> dict[str, list[dict[str, An
         record = outputs[output_id]
         folder = output_id.split("/", 1)[0]
         if record["module"] == "CP-0" and not by_run.get(folder):
-            by_run[folder] = inventory(parsed.get(record["sha256"]) or [])
+            texts = workspace / "runs" / folder / "source-text"
+            available = {p.name for p in texts.iterdir()} if texts.is_dir() else set()
+            by_run[folder] = inventory(parsed.get(record["sha256"]) or [], available)
     result: dict[str, list[dict[str, Any]]] = {}
     for output_id, record in outputs.items():
         folder = output_id.split("/", 1)[0]
