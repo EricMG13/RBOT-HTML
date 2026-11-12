@@ -6,6 +6,8 @@ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflo
 
 ## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
 
+Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
+
 Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
 called, no paid run). The whole branch after its whole-branch review: carry from an earlier run (locked
 ID, documents, answers, pathway, module subset, turns), the existing-issuer notice, "Start again from
