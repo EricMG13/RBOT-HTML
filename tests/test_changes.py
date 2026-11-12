@@ -3387,3 +3387,113 @@ def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
 )
 def test_a_spelled_number_is_not_joined_over_a_blank_line_row_heading_or_item(text):
     assert _hold(text) == ()
+
+
+# --- fix round 1 of the counts branch: a year before a comma, ISO dates whole, two nouns dropped,
+# a count noun on the next line, a table delimiter without outer pipes, a code after a year.
+# Expectations hand-written from the controller's rulings.
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "In 2024, the issuer refinanced its notes.",
+        "Revenue grew in 2023, 2024 and 2025.",
+        "The notes due 2029, 2031 and 2032 were extended.",
+        "By December 2025, Q3 2024, and 2026, cash held.",
+    ],
+)
+def test_a_year_before_a_comma_is_a_year_and_no_figure(sentence):
+    assert _hold(sentence) == ()
+
+
+def test_a_year_before_a_comma_leaves_the_figure_after_it_read():
+    found = _hold("In 2024, US$437m was drawn.")
+    assert any("figure 437 is held in neither" in i for i in found), found
+    assert not any("2024" in i for i in found), found
+    assert _hold("In 2024, US$437m was drawn.", held=("437",)) == ()
+
+
+def test_a_year_before_a_comma_in_a_table_row_and_a_header_row_is_a_year():
+    table = "| Item | {} |\n| --- | --- |\n| Cash | {} |"
+    assert _hold(table.format("2024, 2025 US$m", "not stated")) == ()
+    found = _hold(table.format("Value", "In 2024, 2025 and 2026"))
+    assert not any("held in neither" in i for i in found), found
+
+
+def test_a_year_before_a_comma_in_held_evidence_holds_no_figure():
+    held = ("On September 19, 2024, the Company completed the issuance of $3,000 million.",)
+    found = _hold("Cash was US$2024m in both runs.", held=held)
+    assert any("figure 2024 is held in neither" in i for i in found), found
+    assert _hold("Cash was US$3,000m in both runs.", held=held) == ()
+
+
+def test_a_comma_is_part_of_a_number_only_as_a_thousands_separator():
+    held = ("The facility is 2,024 and 1,913 US$m.",)
+    assert _hold("Cash was US$2,024m and US$1,913m.", held=held) == ()
+    found = _hold("Cash was US$2,024m.", held=("In 2024, nothing.",))
+    assert any("figure 2024 is held in neither" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The LTM 2023-10-01 through 2024-09-30 base.",
+        "Cash was stated at Q3 2024-09-30 in both runs.",
+        "As of September 2024-09-30 data.",
+        "H1 2024-06 was flat.",
+    ],
+)
+def test_an_iso_date_is_exempt_as_a_whole_after_a_period_marker_or_month(sentence):
+    assert _hold(sentence) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash shows a 30 difference between the runs.",
+        "Cash shows a thirty difference.",
+        "Cash records a 30 change.",
+        "Cash records a thirty change.",
+        "Cash shows 30 differences.",
+    ],
+)
+def test_change_and_difference_are_not_count_nouns(sentence):
+    found = _hold(sentence)
+    assert any("figure 30 is the difference" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence", ["Both runs used thirty\nmodules.", "Both runs used 30\nmodules."]
+)
+def test_a_count_noun_on_the_next_line_of_the_paragraph_makes_a_count(sentence):
+    assert _hold(sentence) == ()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cash fell by 30\n\nmodules.",
+        "Cash fell by 30\n- modules",
+        "Cash fell by 30\n### modules",
+        "Cash fell by thirty\n| modules |",
+        "Cash fell by thirty\n\nmodules.",
+    ],
+)
+def test_a_count_noun_over_a_blank_line_heading_row_or_item_makes_no_count(text):
+    found = _hold(text)
+    assert any("figure 30 is the difference" in i for i in found), found
+
+
+def test_a_table_delimiter_without_outer_pipes_still_marks_the_header():
+    assert _hold("| Item | 2024 US$m |\n--- | ---\n| Cash | 5 |") == ()
+
+
+def test_a_code_after_a_year_with_no_scale_or_number_is_no_unit():
+    assert _hold("In 2024 USD strengthened against the euro.") == ()
+    for sentence in ("Cash was 2010 USDm.", "Cash was 2010 US$m.", "Cash was 2010 USD million."):
+        found = _hold(sentence)
+        assert any("figure 2010 is held in neither" in i for i in found), (sentence, found)
+    found = _hold("Cash was 2010 USD 31.")
+    assert any("figure 31 is held in neither" in i for i in found), found
+    assert not any("2010" in i for i in found), found

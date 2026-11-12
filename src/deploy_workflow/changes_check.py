@@ -95,16 +95,19 @@ _MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in 
 _REF = re.compile(r"\b[EC]\d+\b")
 _REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
 _HEADING = re.compile(r"#{1,6}\s")
-_FIGURE = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
+# A comma is part of a number only as a thousands separator (`1,234`): a 19xx/20xx number before any
+# other comma is a bare year (`In 2024, the issuer`), read alone.
+_FIGURE = re.compile(r"(?<![\w.])(?:(?:19|20)\d{2}(?=,(?!\d{3}(?!\d)))|\d[\d,]*(?:\.\d+)?)")
 _MONTH = (
     r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
     r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
 )
 # Dates, period labels and a month count of 1M to 12M are not figures. A year is none either when a
 # month name or a period marker stands before it (`September 2024`, `FY 2024`, `Q3 2024`, `fiscal
-# 2024`); any other 19xx/20xx number is read by `_is_year`.
+# 2024`); any other 19xx/20xx number is read by `_is_year`. An ISO date (`2024-09-30`) is exempt as
+# a whole, also after such a marker (`Q3 2024-09-30`).
 _EXEMPT = re.compile(
-    rf"\b(?:(?:FY|CY|LTM|[QH][1-4])\s?|(?i:fiscal\s+|{_MONTH}\s+))(?:19|20)\d{{2}}\b(?![.,]\d)"
+    rf"\b(?:(?:FY|CY|LTM|[QH][1-4])\s?|(?i:fiscal\s+|{_MONTH}\s+))(?:19|20)\d{{2}}\b(?![.,]\d|-\d)"
     r"|\d{4}-\d{2}(?:-\d{2})?|\b(?:FY|CY)\d{2,4}E?\b|\b[QH][1-4]\b|\bLTM\b|\b(?:[1-9]|1[0-2])M\b"
 )
 _YEAR_TOKEN = re.compile(r"(?:19|20)\d{2}")
@@ -115,7 +118,9 @@ _SCALE = (
     r"%|x\b|bps?\b|pp\b|[mk]\b|bn\b|(?i:million|billion|thousand|percent)"
     r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b"
 )
-_YEAR_AFTER = re.compile(rf"\s*(?:{_SCALE}|(?:{_CODES})\b|[A-Z]{{3}}(?:m|bn|k)\b)")
+_YEAR_AFTER = re.compile(
+    rf"\s*(?:{_SCALE}|(?:{_CODES})\s*(?:(?i:million|billion|thousand)|bn|[mk])\b|[A-Z]{{3}}(?:m|bn|k)\b)"
+)
 _YEAR_BEFORE = re.compile(rf"(?:[$€£¥]|\b(?:{_CODES})) ?$")
 # A currency directly followed by a number belongs to that number (`2025 USD 30,199`).
 _CURRENCY_AFTER = re.compile(r"\s*(?:[A-Z]{2,3}[$€£¥]|[$€£¥]|[A-Z]{3})\s?\(?[-−]?\d")
@@ -1001,7 +1006,7 @@ def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
 
 _COUNT_NOUN = (
     r"(?:facilit(?:y|ies)|subsidiar(?:y|ies)|(?:module|run|measure|source|period|row|item|document"
-    r"|filing|page|section|table|finding|limitation|assumption|conclusion|change|difference"
+    r"|filing|page|section|table|finding|limitation|assumption|conclusion"
     r"|handoff|issuer|lender|tranche|covenant|quarter|month|year|week|day)s?)"
 )
 _REFERENCES = frozenset(("page", "note", "section", "table", "row", "item", "step", "appendix"))
@@ -1117,12 +1122,7 @@ def _header_rows(lines: Sequence[str]) -> frozenset[int]:
 
     def separator(text: str) -> bool:
         text = text.strip()
-        return (
-            text.startswith("|")
-            and text.endswith("|")
-            and "-" in text
-            and not (set(text) - set("|-: "))
-        )
+        return "|" in text and "-" in text and not (set(text) - set("|-: "))
 
     return frozenset(
         i
@@ -1131,11 +1131,20 @@ def _header_rows(lines: Sequence[str]) -> frozenset[int]:
     )
 
 
+def _next_noun(lines: Sequence[str], i: int) -> str:
+    """The count noun that starts line `i + 1` of the paragraph line `i` is in, else nothing."""
+    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
+        return ""
+    noun = _COUNT_AFTER.match(f" {lines[i + 1].lstrip()}")
+    return noun[0].strip() if noun else ""
+
+
 def _bare_sizes(lines: Sequence[str], i: int, bare_line: str, *, header: bool) -> list[Decimal]:
     """The sizes the bare-number reading takes from line `i`: its digits and its numbers in words
     (also those continued on the next line), but a count (`_counted`, `_counted_words`)."""
-    digits = [f.size for f in _figures(bare_line, header=header) if not _counted(bare_line, f)]
-    return [*digits, *_spelled(bare_line), *_across_lines(lines, i)]
+    counted = f"{bare_line} {_next_noun(lines, i)}"
+    digits = [f.size for f in _figures(bare_line, header=header) if not _counted(counted, f)]
+    return [*digits, *_spelled(counted), *_across_lines(lines, i)]
 
 
 def _passage_issues(
