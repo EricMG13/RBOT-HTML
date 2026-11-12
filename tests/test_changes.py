@@ -798,14 +798,14 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
 
 
 def bridge_pack(
-    prior_net: str = "1,800", current_net: str = "1,750", cash_basis: str = "Cash."
+    prior_net: str = "1,800", current_net: str = "1,750", prior_basis: str = "Gross debt: loans."
 ) -> dict:
     prior = handoff(
         "CP-1",
         "Earlier.",
-        tables=liquidity(f"| FY2023 | 300 | 450 | US$m | {cash_basis} |")
+        tables=liquidity("| FY2023 | 300 | 450 | US$m | Cash. |")
         + balance("60", "FY2023")
-        + netdebt("2,100", "300", prior_net, "FY2023"),
+        + netdebt("2,100", "300", prior_net, "FY2023", prior_basis),
     )
     current = handoff(
         "CP-1",
@@ -843,8 +843,8 @@ def test_the_net_debt_change_is_built_when_both_runs_state_it_under_one_definiti
     [
         ({"current_net": "1,700"}, "a run's net debt is not its gross debt less its cash"),
         (
-            {"cash_basis": "Cash excluding restricted cash."},
-            "cash is not comparable under one definition (judge)",
+            {"prior_basis": "Gross debt: loans and leases."},
+            "gross debt is not comparable under one definition (judge)",
         ),
     ],
 )
@@ -2582,3 +2582,50 @@ def test_a_run_without_the_net_debt_table_leaves_the_change_out_and_names_that_r
     assert pack["omitted"]["net_debt_change"] == (
         f"gross debt cannot be compared (the {run} run does not state it)"
     )
+
+
+def test_the_net_debt_change_takes_all_three_figures_from_the_net_debt_table_row_alone():
+    """Each run's liquidity table also states a later period; the change must not read it.
+    Hand-computed: 2,100 - 300 = 1,800 and 2,000 - 200 = 1,800; gross fell 100, cash fell 100."""
+    earlier = handoff(
+        "CP-1",
+        "Earlier.",
+        tables=liquidity(
+            "| FY2023 | 300 | 450 | US$m | Cash. |\n| FY2024 | 250 | 400 | US$m | Cash. |"
+        )
+        + netdebt("2,100", "300", "1,800", "FY2023"),
+    )
+    later = handoff(
+        "CP-1",
+        "Now.",
+        tables=liquidity("| FY2025 | 999 | 400 | US$m | Cash. |")
+        + netdebt("2,000", "200", "1,800", "FY2025"),
+    )
+    pack = pair_pack(earlier, later)
+    # Shown: both rows are internally consistent and the periods differ between the runs, which
+    # the pack states in each measure's period; the liquidity table's cash plays no part.
+    assert {k: v for k, v in pack["net_debt_change"].items() if k != "convention"} == {
+        "unit": "US$m",
+        "prior_net_debt": "1800",
+        "change_in_gross_debt": "-100",
+        "change_in_cash": "-100",
+        "current_net_debt": "1800",
+    }
+    assert "net_debt_change" not in pack["omitted"]
+
+
+def test_a_net_debt_row_that_does_not_add_up_is_omitted_with_a_true_reason():
+    earlier = handoff("CP-1", "x", tables=netdebt("2,100", "300", "1,700", "FY2023"))
+    later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
+    pack = pair_pack(earlier, later)
+    assert (
+        pack["omitted"]["net_debt_change"] == "a run's net debt is not its gross debt less its cash"
+    )
+
+
+def test_a_net_debt_row_without_its_cash_is_omitted_naming_the_cash():
+    gap = "Not supplied: not read"
+    earlier = handoff("CP-1", "x", tables=netdebt("2,100", gap, "1,800", "FY2023"))
+    later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
+    pack = pair_pack(earlier, later)
+    assert pack["omitted"]["net_debt_change"] == "cash cannot be compared (a value is not stated)"

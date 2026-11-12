@@ -42,6 +42,7 @@ from deploy_workflow.changes import (
     describe_run,
     find_prior,
     prior_sources,
+    same_period,
     workspace_of,
 )
 from deploy_workflow.changes_check import cp8_issues
@@ -602,7 +603,7 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
     if not rows or rows[0] != _chart_header(NET_DEBT):
         return ()
     liquid = _stated_rows(text, liquidity) if liquidity in lines else []
-    cash_of = {row[0]: row[1] for row in liquid[2:] if len(row) == 5 and liquid[0][1] == "Cash"}
+    cash_of = [(row[0], row[1]) for row in liquid[2:] if len(row) == 5 and liquid[0][1] == "Cash"]
     issues = []
     for row in rows[2:]:
         if len(row) != len(rows[0]):
@@ -613,12 +614,14 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
                 f"`{heading}` {period}: net debt {row[3]} is not gross debt {row[1]} less cash "
                 f"{row[2]}; correct the row, nothing is filled in for you."
             )
-        stated = _decimal(cash_of.get(period, ""))
-        if cash is not None and stated is not None and cash != stated:
-            issues.append(
-                f"`{heading}` {period}: cash {row[2]} is not the Cash {cash_of[period]} stated "
-                f"for {period} in `{liquidity}`; state one figure."
-            )
+        for other, shown in cash_of:
+            stated = _decimal(shown)
+            if cash is not None and stated is not None and same_period(period, other):
+                if cash != stated:
+                    issues.append(
+                        f"`{heading}` {period}: cash {row[2]} is not the Cash {shown} stated "
+                        f"for {other} in `{liquidity}`; state one figure."
+                    )
     return tuple(issues)
 
 

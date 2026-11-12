@@ -4826,6 +4826,12 @@ def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the
         ("| FY2023 | 1500 | 300 | 1200 |", "| FY2023 | 1500 | 300 | 1199 |", "FY2023"),
         # Cash that differs from the liquidity table's 275 for FY2024 is refused.
         ("| FY2024 | 1400 | 275 | 1125 |", "| FY2024 | 1400 | 270 | 1130 |", "liquidity"),
+        # `same_period` calls FY2024 and FY2024 / 2024-09-30 one period: the 270 is still refused.
+        (
+            "| FY2024 | 1400 | 275 | 1125 |",
+            "| FY2024 / 2024-09-30 | 1400 | 270 | 1130 |",
+            "liquidity",
+        ),
         ("| Gross debt | Cash |", "| Total debt | Cash |", "Net debt data"),
         ("| 1500 | 300 | 1200 | US$m |", "| 1500 | 300 | 1200 | EUR m |", "EUR m"),
         ("| 1400 | 275 | 1125 |", "| 1,400.5 | 275 | 1125 |", "FY2024"),

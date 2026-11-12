@@ -127,6 +127,9 @@ CHART_MEASURES = (
 )
 # (key, row labels): read from the one CP-1 table row of that label, only when it states its unit.
 ROW_MEASURES = (("free_cash_flow", ("free cash flow", "fcf")),)
+# The net debt table's own Cash column: the cash of the net debt change, read from the same row as
+# gross and net debt. It is not a measure of the pack (the liquidity table's `cash` is).
+NET_DEBT_CASH = ("net_debt_cash", NET_DEBT_TABLE, "Cash")
 MATURITIES = "debt maturities"
 NET_DEBT_CONVENTION = (
     "net debt = gross debt - cash: an increase in cash reduces net debt, a decrease raises it; "
@@ -487,6 +490,7 @@ def _read(text: str) -> tuple[dict[str, Observation], dict[str, str]]:
         key: _chart_observation(lines, chart, column) for key, chart, column in CHART_MEASURES
     }
     found.update({key: _row_observation(text, labels) for key, labels in ROW_MEASURES})
+    found[NET_DEBT_CASH[0]] = _chart_observation(lines, NET_DEBT_CASH[1], NET_DEBT_CASH[2])
     seen = {key: item for key, item in found.items() if isinstance(item, Observation)}
     return seen, {key: item for key, item in found.items() if isinstance(item, str)}
 
@@ -601,7 +605,7 @@ _READS = {
     "gross_debt": f'the comparison reads the Gross debt column of the CP-1 "{NET_DEBT_TABLE}" '
     "table",
     "net_debt": f'the comparison reads the Net debt column of the CP-1 "{NET_DEBT_TABLE}" table',
-    "cash": "the comparison reads the Cash column of the CP-1 liquidity chart table",
+    "net_debt_cash": f'the comparison reads the Cash column of the CP-1 "{NET_DEBT_TABLE}" table',
 }
 
 
@@ -610,8 +614,8 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
     both runs in one unit under the same definition, and each run's net debt to be its gross debt
     less its cash."""
     pairs = {}
-    for key in ("gross_debt", "net_debt", "cash"):
-        name = key.replace("_", " ")
+    for key in ("gross_debt", "net_debt", "net_debt_cash"):
+        name = "cash" if key == "net_debt_cash" else key.replace("_", " ")
         measure = by_key.get(key)
         if measure is None:
             return None, f"{name} is not read from either run's CP-1 ({_READS[key]})"
@@ -620,14 +624,14 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
         if measure["comparable"] != "yes":
             return None, f"{name} is not comparable under one definition ({measure['comparable']})"
         pairs[key] = (decimal(measure["prior"]["value"]), decimal(measure["current"]["value"]))
-    (pg, cg), (pn, cn), (pc, cc) = pairs["gross_debt"], pairs["net_debt"], pairs["cash"]
+    (pg, cg), (pn, cn), (pc, cc) = pairs["gross_debt"], pairs["net_debt"], pairs["net_debt_cash"]
     if pn != pg - pc or cn != cg - cc:
         return None, "a run's net debt is not its gross debt less its cash"
     units = {" ".join(by_key[k]["unit"].split()) for k in pairs}
     if len(units) != 1:
         return None, "debt and cash are in different units"
     return {
-        "unit": str(by_key["cash"]["unit"]),
+        "unit": str(by_key["net_debt_cash"]["unit"]),
         "prior_net_debt": format(pn, "f"),
         "change_in_gross_debt": format(cg - pg, "f"),
         "change_in_cash": format(cc - pc, "f"),
@@ -769,7 +773,21 @@ def build_pack(  # noqa: PLR0913 - the two runs' texts and the current run's ide
         },
         "measures": measures,
     }
-    change, why = _net_debt_change({m["key"]: m for m in measures})
+    cash_key = NET_DEBT_CASH[0]
+    cash = (
+        [
+            _compare(
+                cash_key,
+                seen_before.get(cash_key),
+                seen_now.get(cash_key),
+                unread_before.get(cash_key),
+                unread_now.get(cash_key),
+            )
+        ]
+        if cash_key in seen_before or cash_key in seen_now
+        else []
+    )
+    change, why = _net_debt_change({m["key"]: m for m in (*measures, *cash)})
     if change is None:
         omitted["net_debt_change"] = why
     else:
