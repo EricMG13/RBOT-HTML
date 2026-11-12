@@ -90,8 +90,9 @@ def chart_row(
     lines: list[str], chart: str, prefix: str = CHART_PREFIX
 ) -> tuple[dict[str, str], int] | None:
     """The latest-period row of ``### <prefix><chart>`` (``Chart data: <chart>``) as {column:
-    cell}, with its 1-based line. The latest is chosen by the Period value, whatever the row order. None when the table
-    is absent; ValueError when its periods cannot be ordered (never a guess)."""
+    cell}, with its 1-based line. The latest is chosen by the Period value, whatever the row
+    order. None when the table is absent; ValueError when its periods cannot be ordered (never a
+    guess)."""
     try:
         start = lines.index(f"### {prefix}{chart}")
     except ValueError:
