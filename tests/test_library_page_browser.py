@@ -6,6 +6,7 @@ it needs but is not allowed. Needs Google Chrome or Chromium; skipped where ther
 
 import hashlib
 import html
+import importlib.util
 import json
 import re
 import shutil
@@ -567,7 +568,8 @@ def nine_part_library(tmp_path: Path) -> Path:
 # module navigator is on every module page. Register references (C1, K) are not codes of this kind;
 # `.excerpt` is the issuer's own quoted text. RUN is replaced by the run the probe reads.
 CODES_PROBE = """(async () => {
-  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [];
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [], kept = [];
+  let inspected = 0;
   const code = /\\bCP-[A-Z0-9]+\\b|\\bT\\d+[A-Z]?(?:\\.\\d+)?\\b/;
   const scan = where => {
     const walker = document.createTreeWalker(
@@ -577,19 +579,40 @@ CODES_PROBE = """(async () => {
       const seen = text
         ? [node.parentElement.closest('script,style,#probe,.excerpt') ? '' : node.data]
         : ['title', 'aria-label'].map(a => node.getAttribute(a) || '');
-      for (const value of seen) if (code.test(value)) hits.push(where + ': ' + value.slice(0, 80));
+      for (const value of seen) {
+        if (!code.test(value)) continue;
+        if (code.test(stripStored(value))) hits.push(where + ': ' + value.slice(0, 80));
+        else kept.push(where + ': ' + value.slice(0, 80));
+      }
     }
   };
   for (let i = 0; i < 200 && !document.querySelector('.module-head'); i++) await sleep(50);
+  // A stored source file name of the shown run is shown as stored: a value whose only
+  // matches sit inside one is kept, not a hit.
+  const evidence = (window.DESIGN_DATA.runs['RUN'] || {}).evidence || {};
+  const stored = [
+    ...(evidence.sources || []), ...(evidence.unused || []), ...(evidence.unrecorded || []),
+  ]
+    .map(f => f.name).filter(Boolean).sort((a, b) => b.length - a.length);
+  const stripStored = value => stored.reduce((v, name) => v.split(name).join(''), value);
   // An earlier-format page opens its audit section from a button and its inspector from a chip; a
   // new-format page opens its inspector from a paragraph's figure or Basis control.
   const audit = document.querySelector('.audit-open');
-  if (audit) audit.click();
-  await sleep(100);
+  document.querySelectorAll('details:not([open])').forEach(d => {
+    d.open = true;
+    d.dispatchEvent(new Event('toggle'));
+  });
+  document.querySelectorAll('.audit-open').forEach(button => button.click());
+  await sleep(150);
   scan('module page');
-  document.querySelector('.chip[data-evidence], #content [data-paragraph]').click();
-  await sleep(300);
-  scan('inspector');
+  const controls = [...document.querySelectorAll('#content [data-paragraph]')];
+  if (!controls.length) controls.push(document.querySelector('.chip[data-evidence]'));
+  for (const control of controls) {
+    control.click();
+    await sleep(150);
+    inspected++;
+    scan('inspector');
+  }
   for (const route of ['#W-Evidence/sources?c=RUN', '#W-Report/history?c=RUN',
                        '#W-Overview/overview?c=RUN', '#CP-OS/activity']) {
     location.hash = route;
@@ -612,6 +635,8 @@ CODES_PROBE = """(async () => {
     inspector: !!document.querySelector('.evidence-context'),
     searched: document.querySelectorAll('.search-hit').length,
     moduleCodes: document.querySelectorAll('.module-code').length,
+    kept,
+    inspected,
   });
   document.body.append(out);
 })();"""
@@ -634,29 +659,60 @@ def test_no_module_code_or_step_id_reaches_a_reader_from_a_module_page(tmp_path)
     assert seen["hits"] == []
 
 
-def test_no_module_code_reaches_a_reader_from_a_new_format_run(tmp_path):
-    """The synthetic new-format run (its own handoffs, Basis lines naming `Liquidity (CP-2D)`)."""
+MEMO = "CP-2025-Info-Memo.pdf"  # an issuer file whose own name holds a CP- token
+
+
+def adversarial_new_format_workspace(workspace: Path) -> None:
+    """The synthetic new-format run with a supplied file named `CP-2025-Info-Memo.pdf`: a Sources
+    row for it and a finding whose Basis is `CP-2025-Info-Memo.pdf, page 3; Liquidity (CP-2D)`."""
     fixtures = ROOT / "apps/issuer-library/fixtures"
-    subprocess.run(
-        [sys.executable, str(fixtures / "build_synthetic_run.py"), "--workspace", str(tmp_path)],
-        check=True,
-        capture_output=True,
+    handoffs = workspace / "handoffs-in"
+    shutil.copytree(fixtures / "synthetic-new-format", handoffs)
+    cp2 = handoffs / "SYNTHETIC-CP-2.md"
+    text = cp2.read_text(encoding="utf-8")
+    row = "| NBG_2024-12-31_Q4-results.pdf | Earnings and quarterly cash. |\n"
+    assert row in text and "\n### Contrary evidence" in text
+    text = text.replace(row, row + f"| {MEMO} | Commercial paper programme terms. |\n")
+    finding = (
+        "- The commercial paper programme is capped at USD 250 million, which limits short-term"
+        f" funding.\nBasis: {MEMO}, page 3; Liquidity (CP-2D)\n"
     )
+    text = text.replace("\n### Contrary evidence", finding + "\n### Contrary evidence", 1)
+    cp2.write_text(text, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(
+        "build_synthetic_run", fixtures / "build_synthetic_run.py"
+    )
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    builder.SOURCE_DIR = handoffs
+    builder.SUPPLIED = (*builder.SUPPLIED, MEMO)
+    builder.build(workspace, builder.DEFAULT_FOLDER)
     subprocess.run(
         [
             sys.executable,
             str(ROOT / "apps/issuer-library/update_library.py"),
             "--workspace",
-            str(tmp_path),
+            str(workspace),
         ],
         check=True,
         capture_output=True,
     )
+
+
+def test_no_module_code_reaches_a_reader_from_a_new_format_run(tmp_path):
+    """The synthetic new-format run (its own handoffs, Basis lines naming `Liquidity (CP-2D)`), with
+    a supplied file whose name holds a code: the file name stays as stored, every module code
+    is named."""
+    adversarial_new_format_workspace(tmp_path)
     run = "synthetic-nbg-new-format-001"
     seen = read_codes_probe(tmp_path / "library/index.html", run, f"#CP-2?c={run}")
     assert seen["inspector"] is True and seen["titled"] == 0 and seen["searched"] > 0
     assert seen["moduleCodes"] == 0
     assert seen["hits"] == []
+    assert seen["inspected"] >= 2
+    for where in ("module page", "inspector"):
+        assert any(k.startswith(where) and MEMO in k for k in seen["kept"]), (where, seen["kept"])
+
 
 
 def line_of(tmp_path: Path, heading: str) -> int:

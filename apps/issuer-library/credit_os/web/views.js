@@ -61,9 +61,13 @@ function stepText(text,output) {
 // CP-<x>-GAP-<n> is "Gap <n>" on module x's own page and "<Name of x> gap <n>" elsewhere; a code with no known name is "unnamed module".
 // A name already written before its own parenthesised code ("Liquidity (CP-2D)") is not said twice: the parenthetical is dropped.
 const NAME_THEN_CODE=/\s*\((CP-[A-Z0-9]+)\)/g;
-const dropRepeat=text=>text.replace(NAME_THEN_CODE,(whole,code,at)=>{const name=moduleLabel(code);return name&&text.slice(0,at).toLowerCase().endsWith(name.toLowerCase())?'':whole;});
-function namedText(text,output=current?.output) {
-  return stepText(dropRepeat(text).replace(MODULE_REF,(code,...rest)=>{
+const dropRepeat=(text,lead='')=>text.replace(NAME_THEN_CODE,(whole,code,at)=>{const name=moduleLabel(code)?.toLowerCase(),before=(lead+text.slice(0,at)).toLowerCase();return name&&before.endsWith(name)&&!/[\p{L}\p{N}]$/u.test(before.slice(0,-name.length))?'':whole;});
+function namedText(text,output=current?.output,lead='') {
+  // A stored source file name of the run is shown exactly as stored, even when it holds a code.
+  const ev=contexts[data[output]?.run??current?.context]?.evidence||{};
+  const file=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name).filter(Boolean).sort((a,b)=>b.length-a.length).find(name=>text.includes(name));
+  if(file!==undefined){const at=text.indexOf(file);return namedText(text.slice(0,at),output,lead)+file+namedText(text.slice(at+file.length),output);}
+  return stepText(dropRepeat(text,lead).replace(MODULE_REF,(code,...rest)=>{
     const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
     if(book!==undefined)return `${name(`CP-${book}`)} runbook`;
     if(file!==undefined)return handoffName(file,suffix);
@@ -1340,7 +1344,7 @@ const CODE_NOT_IN_PATH=/(?<![\w/.-])CP-[A-Z0-9]+(?![\w-]|\.md)/g;
 function evidenceRecord(ev,methodChanges) {
   const r=ev.record;
   const changed=(methodChanges||[]).length?`<h3>Methods changed since this run</h3><ul class="report-list">${methodChanges.map(c=>`<li>${esc(c.replace(CODE_NOT_IN_PATH,moduleTitle))}</li>`).join('')}</ul>`:'';
-  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc(hashLabel(h.name)),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
+  const hashes=r.hashes.length?evidenceTable('Hashes the run records',['File','SHA-256'],r.hashes.map(h=>[esc([...ev.sources,...ev.unused,...(ev.unrecorded||[])].some(f=>f.name===h.name)?h.name:hashLabel(h.name)),`<span class="hash">${esc(shownOrNot(h.sha256))}</span>`])):'<p class="empty">The run records no hash.</p>';
   const sent=r.instructions.length?`<ul class="report-list">${r.instructions.map(i=>`<li class="report-row">${downloadLink(`${moduleTitle(i.module)} instructions`,i.href)}</li>`).join('')}</ul>`:'<p class="empty">The run records no instructions.</p>';
   const calls=r.calls.length?evidenceTable('Model calls, in the order recorded',['Module','Attempt','Started','HTTP status','Error','Settled (USD)'],r.calls.map(c=>[esc(moduleTitle(c.module)),esc(shownOrNot(c.attempt)),esc(shownOrNot(c.started)),esc(shownOrNot(c.http_status)),esc(shownOrNot(c.error_class)),esc(shownOrNot(c.settled_usd))])):'<p class="empty">The run records no model call.</p>';
   return `<section class="run-section" id="evidence-record"><details><summary>Run record</summary>${changed}<h3>Hashes</h3>${hashes}<h3>Instructions sent</h3>${sent}<h3>Retries and cost</h3><p>Provider cap: USD ${esc(shownOrNot(r.cap))}</p>${calls}</details></section>`;

@@ -67,7 +67,7 @@ function nameCodes(root,output=current?.output,marks=true) {
   for(const node of nodes) {
     const parent=node.parentElement;
     if(parent.closest('.ref,.excerpt'))continue; // a source excerpt is the issuer's own text, quoted as it is; a register reference keeps its mark
-    const named=namedText(node.data,output);
+    const named=namedText(node.data,output,node.previousSibling?.textContent??'');
     if(named!==node.data)node.data=named;
     // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
     const found=marks?[...node.data.matchAll(REFERENCE)]:[];
