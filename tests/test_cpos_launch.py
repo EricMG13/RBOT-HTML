@@ -746,7 +746,7 @@ def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
     assert "liquidity-runway" in prepared.omitted
 
 
-@pytest.mark.parametrize("module", ["CP-MODEL", "CP-8", "CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
+@pytest.mark.parametrize("module", ["CP-8", "CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
 def test_modules_without_a_launchable_method_are_refused(tmp_path, capsys, module):
     assert main([*launch(tmp_path), "--modules", module]) == 2
     assert module in capsys.readouterr().err
@@ -1686,11 +1686,22 @@ def test_yield_against_maturity_stays_omitted(tmp_path):
 
 
 def test_the_report_scope_no_longer_says_charts_are_unpublished(tmp_path):
-    # credit_snapshot runs CP-2G since 2026-11-11, so the scope without a forecast is read on
-    # earnings_update, and the one with it on credit_snapshot.
+    # Every preset now publishes a forecast (CP-MODEL, or CP-2G): earnings_update from CP-1's
+    # run-rate figures (owner, 2026-11-11), credit_snapshot from CP-2G. The scope with no forecast
+    # is read on an explicit module list.
     prepared, *_ = good_task(tmp_path, "CP-1", "earnings_update")
-    assert "The HTML Model and calculation JSON are not published" in prepared.layout.scope
+    assert "run-rate figures" in prepared.layout.scope
     assert "charts" not in prepared.layout.scope.lower()
+    (tmp_path / "b").mkdir()
+    bare = prepare(
+        context_file(tmp_path / "b", "earnings_update"),
+        issuer_folder(tmp_path / "b"),
+        tmp_path / "b" / "out",
+        config="sol-medium",
+        cap="50",
+        modules=("CP-1",),
+    )
+    assert "The HTML Model and calculation JSON are not published" in bare.plan.layout.scope
     (tmp_path / "f").mkdir()
     forecast, *_ = good_task(tmp_path / "f", "CP-1", "credit_snapshot")
     assert "A forecast table is published with the issuer report" in forecast.layout.scope
@@ -2148,15 +2159,25 @@ def forecast_block(**changes) -> str:
     return f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(inputs)}\n```\n"
 
 
-def forecast_answer(context: dict, routes: list, block: str | None = None) -> str:
-    """CP-1 prints the base amounts; CP-2G ends its findings with the inputs block."""
+def forecast_answer(
+    context: dict, routes: list, block: str | None = None, cp1_block: str | None = None
+) -> str:
+    """CP-1 prints the base amounts (and ends with the layer-1 block when `cp1_block` is given);
+    CP-2G ends its findings with the inputs block."""
     text = answer(context, routes)
     if context["module_id"] == "CP-1":
         rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items())
         # Above the owner's chart table, so the base amounts do not read as rows of that table.
         mark = "### Chart data: revenue and EBITDA"
+        # Where another chart table sits above (the covenant pathway), or none, the base table
+        # gets a heading of its own.
+        alone = mark in text and "### Chart data: debt maturities" not in text
+        lead = "" if alone else "### Base operands\n\n"
         mark = mark if mark in text else "## Calculations"
-        return text.replace(mark, f"| Base | USD m |\n| --- | --- |\n{rows}\n\n{mark}", 1)
+        text = text.replace(mark, f"{lead}| Base | USD m |\n| --- | --- |\n{rows}\n\n{mark}", 1)
+        if cp1_block is not None:
+            text = text.replace("## Calculations", f"{cp1_block}\n## Calculations", 1)
+        return text
     if context["module_id"] == "CP-2G" and block is not None:
         return text.replace("## Calculations", f"{block}\n## Calculations", 1)
     return text
@@ -2209,8 +2230,16 @@ def key_case(shock: dict | None, paths: dict = PATHS) -> list[dict[str, Fraction
     return years
 
 
-def forecast_run(tmp_path, provider, capsys, block, modules=("CP-2G",)):
-    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="distressed_restructuring")
+def forecast_run(  # noqa: PLR0913 - one keyword per scenario setting
+    tmp_path,
+    provider,
+    capsys,
+    block,
+    modules=("CP-2G",),
+    cp1_block=None,
+    pathway="distressed_restructuring",
+):
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway=pathway)
     argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
     argv += ["--modules", *modules]
     routes = list(
@@ -2223,7 +2252,7 @@ def forecast_run(tmp_path, provider, capsys, block, modules=("CP-2G",)):
             modules=modules,
         ).plan.layout.routes
     )
-    provider.answer = lambda context: forecast_answer(context, routes, block)
+    provider.answer = lambda context: forecast_answer(context, routes, block, cp1_block)
     code = main(argv)
     return code, tmp_path / "runs" / RUN_ID, capsys.readouterr()
 
@@ -2289,6 +2318,140 @@ def test_cp2g_run_publishes_model_delivery(tmp_path, provider, capsys):
     assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
 
 
+def layer1_block(**changes) -> str:
+    return forecast_block(downside_shock=None, **changes)
+
+
+def test_cp_model_without_cp2g_publishes_a_model_from_cp1s_block(tmp_path, provider, capsys):
+    modules = ("CP-1", "CP-MODEL")
+    code, out, seen = forecast_run(
+        tmp_path,
+        provider,
+        capsys,
+        None,
+        modules=modules,
+        cp1_block=layer1_block(),
+        pathway="covenant_refinancing",
+    )
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    cp1 = hashlib.sha256((folder / "CP-1.md").read_bytes()).hexdigest()
+    assert (folder / "forecast.md").read_bytes() == (folder / "CP-1.md").read_bytes()
+    exact = json.loads((folder / "forecast_exact.json").read_text())
+    assert exact["consumed"] == {"CP-1.md": cp1}  # no CP-2G handoff was consumed
+    assert list(exact["outputs"]) == ["REFERENCE"]  # no case and no shock
+    assert "run-rate inputs the CP-1 handoff stated" in exact["scope_limits"][0]
+    first = exact["outputs"]["REFERENCE"]["years"][0]  # the hand-written year 1 of the base case
+    assert [first[n]["amount"] for n in ("revenue", "ebitda", "fcf", "closing_debt")] == [
+        "1050",
+        "315",
+        "132",
+        "550",
+    ]
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
+
+
+def test_cp2gs_block_wins_when_both_modules_state_one(tmp_path, provider, capsys):
+    cp1_paths = {**PATHS, "revenue_growth": ("0.50", "0.50", "0.50")}  # would give 1500 in year 1
+    cp1_block = layer1_block(
+        base_drivers={
+            n: {
+                "values": list(v),
+                "category": "Analyst Interpretation",
+                "rationale": "x",
+                "limitation": None,
+            }
+            for n, v in cp1_paths.items()
+        }
+    )
+    code, out, seen = forecast_run(
+        tmp_path,
+        provider,
+        capsys,
+        forecast_block(),
+        modules=("CP-2G", "CP-MODEL"),
+        cp1_block=cp1_block,
+    )
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    assert (folder / "forecast.md").read_bytes() == (folder / "CP-2G.md").read_bytes()
+    exact = json.loads((folder / "forecast_exact.json").read_text())
+    assert set(exact["consumed"]) == {"CP-1.md", "CP-2G.md"}
+    assert exact["outputs"]["REFERENCE"]["years"][0]["revenue"]["amount"] == "1050"
+    assert "DOWNSIDE" in exact["outputs"]
+    assert "run-rate" not in exact["scope_limits"][0]
+
+
+@pytest.mark.parametrize(
+    ("cp1_block", "reason"),
+    [
+        (layer1_block(years=[]), "CP-1: forecast inputs: years"),
+        (None, "CP-1: needs exactly one `### Forecast inputs (machine-readable)` heading"),
+        (forecast_block(), "CP-1: a layer-1 forecast states no shock and no cases"),
+        (
+            layer1_block(
+                base={
+                    k: {"amount": "1234" if k == "revenue" else v, "reason": None}
+                    for k, v in BASE.items()
+                }
+            ),
+            "CP-1: base revenue 1234 is not printed in CP-1",
+        ),
+    ],
+)
+def test_a_bad_layer1_block_withholds_the_model_and_never_rejects_cp1(
+    tmp_path, provider, capsys, cp1_block, reason
+):
+    code, out, seen = forecast_run(
+        tmp_path,
+        provider,
+        capsys,
+        None,
+        modules=("CP-1", "CP-MODEL"),
+        cp1_block=cp1_block,
+        pathway="covenant_refinancing",
+    )
+    assert code == 0, seen.err  # CP-1 was accepted; the run delivered
+    (folder,) = (out / "deliveries").iterdir()
+    assert (folder / "delivery.json").is_file() and not (folder / "forecast_exact.json").exists()
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is False
+    assert reason in completed["forecast_failure"]
+    assert f"Model not published: {completed['forecast_failure']}" in seen.err
+
+
+def test_cp1_gets_the_layer_1_block_only_when_the_forecast_lacks_cp2g(tmp_path):
+    def instructions(name, pathway, modules=None):
+        folder = tmp_path / name
+        folder.mkdir()
+        prepared = prepare(
+            context_file(folder, pathway),
+            issuer_folder(folder),
+            folder / "out",
+            config="sol-medium",
+            cap="50",
+            modules=modules,
+        )
+        return prepared, (folder / "out/instructions/CP-1.md").read_text()
+
+    marker = "### Forecast inputs (machine-readable)"
+    for name, pathway, modules in (
+        ("preset", "earnings_update", None),  # CP-MODEL in the preset, no CP-2G
+        ("explicit", "covenant_refinancing", ("CP-1", "CP-MODEL")),
+    ):
+        prepared, text = instructions(name, pathway, modules)
+        before, _, method = text.partition(cpos_launch.METHOD_MARK)
+        assert marker in before and marker not in method, name
+        assert prepared.plan.publish_forecast is True, name
+        assert "CP-MODEL" not in prepared.ordered, name
+    prepared, text = instructions("with-2g", "distressed_restructuring")  # CP-2G in the run
+    assert marker not in text and prepared.plan.publish_forecast is True
+    assert marker in (tmp_path / "with-2g/out/instructions/CP-2G.md").read_text()
+    prepared, text = instructions("bare", "earnings_update", ("CP-1",))  # no CP-MODEL, no CP-2G
+    assert marker not in text and prepared.plan.publish_forecast is False
+
+
 def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
     code, out, seen = forecast_run(tmp_path, provider, capsys, None, modules=("CP-2A",))
     assert code == 0, seen.err
@@ -2306,7 +2469,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
 
 
 def test_model_publish_failure_keeps_the_delivery(tmp_path, provider, capsys, monkeypatch):
-    def refuse(cp1, handoff):
+    def refuse(cp1, handoff, source="CP-2G"):
         raise ValueError("synthetic failure")
 
     monkeypatch.setattr(cpos_forecast, "model_files", refuse)

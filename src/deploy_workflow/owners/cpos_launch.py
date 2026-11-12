@@ -1336,6 +1336,13 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
 
 
 HTML_MODEL_SCOPE = "The HTML Model and calculation JSON are not published by this launcher."
+LAYER1_FORECAST_SCOPE = (
+    "The HTML Model is not published by this launcher. A forecast table is published with the "
+    "issuer report in the library when the CP-1 handoff's run-rate inputs block validates; it "
+    "comes from the financial foundation's run-rate figures, with no cases and no stress, and "
+    "is better with CP-2G. Python computes its figures from the inputs the handoff states, and "
+    "the inputs are not independently reviewed."
+)
 FORECAST_SCOPE = (
     "The HTML Model is not published by this launcher. A forecast table is published with the "
     "issuer report in the library when the CP-2G handoff's inputs block validates; Python "
@@ -1345,7 +1352,7 @@ FORECAST_SCOPE = (
 
 
 def _layout(
-    run: Run, ordered: tuple[str, ...], aliases: tuple[str, ...], config: str
+    run: Run, ordered: tuple[str, ...], aliases: tuple[str, ...], config: str, *, forecast: bool
 ) -> tuple[MarkdownLayout, tuple[str, ...]]:
     preset = next(p for p in pathways() if p.id == run.pathway)
     routes: list[MarkdownRoute] = []
@@ -1377,7 +1384,13 @@ def _layout(
         "on the selected issuer folder. Automated checks cover handoff structure, issuer and date "
         "anchors, source and upstream references and issuer-report section selectors; analytical "
         "accuracy has not been independently reviewed. "
-        + (FORECAST_SCOPE if {"CP-1", "CP-2G"} <= set(ordered) else HTML_MODEL_SCOPE)
+        + (
+            HTML_MODEL_SCOPE
+            if not forecast
+            else FORECAST_SCOPE
+            if "CP-2G" in ordered
+            else LAYER1_FORECAST_SCOPE
+        )
         + f" Sections not produced: {', '.join(omitted) or 'none'}."
     )
     layout = MarkdownLayout(
@@ -1494,6 +1507,33 @@ FORECAST_BLOCK = (
     "the anchor in `rationale` and what the judgment leaves out in `limitation`. A judgment is "
     "an input to a mechanical forecast, not a finding. Leave a driver's values null, as "
     "`Insufficient Information`, only when no stated figure can anchor it.\n\n"
+)
+# Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
+# "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
+# FORECAST_BLOCK, so cpos_forecast has one code path; the model still computes nothing.
+LAYER1_FORECAST_BLOCK = (
+    f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
+    "one fenced json block and no other fence, after your tables. You state inputs only; Python "
+    "computes every forecast figure, so put no forecast figure in the block. `base` holds exactly "
+    'these ten operands in USD millions, each `{"amount": "<decimal>", "reason": null}` copied '
+    "exactly as your own tables print it (outflows as positive magnitudes), or "
+    '`{"amount": null, "reason": "<why you do not state it>"}`: '
+    f"{', '.join(cp2g.OPERAND_METRIC)}. `base_drivers` is a run-rate base case and nothing more "
+    "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
+    "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
+    "`rationale` and `limitation`). Anchor every driver to a figure you state: carry the latest "
+    "year's ratio forward, or use a scheduled maturity or a declared payment, and name the anchor "
+    "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
+    'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
+    "rounded to at most four decimal places; `category` is exactly one of "
+    f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
+    "`Insufficient Information`, when no stated figure can anchor it; when none can, set every "
+    "driver's `values` to `[null, null, null]`. Set `downside_shock`, `upside_drivers` and "
+    "`downside_drivers` to null: there are no cases and no shock in this forecast. `years` is "
+    'three consecutive fiscal years after the base period, each `{"year": <int>, "start": '
+    '"YYYY-MM-DD", "end": "YYYY-MM-DD"}`. `scope_limits` is a list of text limits. Set '
+    f"`schema_version` to `{cpos_forecast.SCHEMA_VERSION}`. This block does not change your "
+    "findings or any other table.\n\n"
 )
 
 
@@ -1696,8 +1736,13 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     folder = Path(sources).expanduser().resolve()
     raw_context = context_path.read_bytes()
     settings = load_context(raw_context)
-    requested = tuple(modules) if modules else pathway_modules(settings)
-    ordered = plan(requested)  # Refuses an unknown module, naming it.
+    chosen = tuple(modules) if modules else tuple(PATHWAY_MODULES[settings.run.pathway])
+    # CP-MODEL means "publish the forecast" (owner, 2026-11-11); it makes no model call.
+    model_wanted = "CP-MODEL" in chosen
+    requested = tuple(m for m in (modules or pathway_modules(settings)) if m != "CP-MODEL")
+    planned = plan((*requested, *(("CP-MODEL",) if model_wanted else ())))  # Refuses unknowns.
+    ordered = tuple(m for m in planned if m != "CP-MODEL")
+    requested = requested or ordered
     if unknown := [m for m in ordered if m not in METHODS]:
         raise LaunchRefused(f"--modules: no launchable method for {', '.join(unknown)}")
     run = Run(
@@ -1714,7 +1759,8 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         raise LaunchRefused(f"--out {directory}: must be outside the issuer folder")
     pinned, converted, ignored, covers = _issuer_files(folder, context_path, directory)
     aliases = tuple(a for a in settings.identity.aliases if a.strip())
-    layout, omitted = _layout(run, ordered, aliases, config)
+    forecast = "CP-1" in ordered and (model_wanted or "CP-2G" in ordered)
+    layout, omitted = _layout(run, ordered, aliases, config, forecast=forecast)
     texts = {
         m: _instructions(
             run,
@@ -1726,12 +1772,12 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         for m in ordered
     }
     options = settings.module_options
-    forecast = {"CP-1", "CP-2G"} <= set(ordered)
     peer_pack = settings.valuation.peer_source == "cp_dr_public" and {"CP-DR", "CP-1C"} <= set(
         ordered
     )
     for module, block, wanted in (
         ("CP-2G", FORECAST_BLOCK, forecast),
+        ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),

@@ -1,9 +1,10 @@
 """The CP-2G forecast files a launcher run publishes beside its report. Pure: bytes in, bytes out.
 
-The CP-2G handoff states inputs only, in one fenced JSON block under ``HEADING``: the CP-1 base
-amounts, the seven driver paths, an optional downside shock and the three forecast years. Python
-(``cp2g.forecast``, 38-digit exact) computes every figure; no figure is read from the handoff's
-prose. A block that is missing, malformed or states a base amount CP-1 does not print raises
+The forecast source's handoff (CP-2G's, else CP-1's run-rate block) states inputs only, in one
+fenced JSON block under ``HEADING``: the CP-1 base amounts, the seven driver
+paths, an optional downside shock and the three forecast years. Python (``cp2g.forecast``,
+38-digit exact) computes every figure; no figure is read from the handoff's prose. A block that
+is missing, malformed or states a base amount CP-1 does not print raises
 ValueError; the caller decides what that means (the run fails open, see cpos.run_handoffs).
 """
 
@@ -28,6 +29,14 @@ LIMIT = (
     "Every figure is Python's arithmetic over inputs the CP-2G handoff stated; the inputs, not "
     "the arithmetic, are unreviewed. Not analytical review."
 )
+# Owner, 2026-11-11: a forecast works from layer 1 and is better with CP-2G. Without CP-2G the
+# source is CP-1's run-rate block, and the published limit says so.
+LAYER1_LIMIT = (
+    "Every figure is Python's arithmetic over run-rate inputs the CP-1 handoff stated, from the "
+    "financial foundation's own figures; no CP-2G model, case or shock was run. The inputs, not "
+    "the arithmetic, are unreviewed. Not analytical review."
+)
+SOURCES = ("CP-2G", "CP-1")
 Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 
@@ -102,11 +111,11 @@ class ForecastInputs(Contract):
         return self
 
 
-def _block(text: str) -> str:
+def _block(text: str, source: str = "CP-2G") -> str:
     lines = text.replace("\r\n", "\n").split("\n")
     starts = [i for i, line in enumerate(lines) if line.strip() == HEADING]
     if len(starts) != 1:
-        raise ValueError(f"CP-2G: needs exactly one `{HEADING}` heading, found {len(starts)}")
+        raise ValueError(f"{source}: needs exactly one `{HEADING}` heading, found {len(starts)}")
     body: list[str] = []
     for line in lines[starts[0] + 1 :]:
         if re.match(r"#{1,6}\s", line):
@@ -114,8 +123,23 @@ def _block(text: str) -> str:
         body.append(line)
     found = re.findall(r"^```json\n(.*?)\n```[ \t]*$", "\n".join(body), re.DOTALL | re.MULTILINE)
     if len(found) != 1 or "\n".join(body).count("```") != 2:
-        raise ValueError(f"CP-2G: `{HEADING}` needs exactly one fenced json block")
+        raise ValueError(f"{source}: `{HEADING}` needs exactly one fenced json block")
     return str(found[0])
+
+
+def _without_block(text: str) -> str:
+    """The handoff less its inputs block, so a CP-1 operand is checked against CP-1's own tables
+    and not against the block that states it."""
+    kept: list[str] = []
+    inside = False
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if line.strip() == HEADING:
+            inside = True
+        elif inside and re.match(r"#{1,6}\s", line):
+            inside = False
+        if not inside:
+            kept.append(line)
+    return "\n".join(kept)
 
 
 def _printed(text: str, amount: str) -> bool:
@@ -127,7 +151,7 @@ def _printed(text: str, amount: str) -> bool:
     )
 
 
-def _declined(document: dict[str, object]) -> None:
+def _declined(document: dict[str, object], source: str) -> None:
     """A block whose every driver has all-null values is the method declining to forecast."""
     drivers = document.get("base_drivers")
     if not isinstance(drivers, dict) or not drivers:
@@ -144,29 +168,38 @@ def _declined(document: dict[str, object]) -> None:
     why = limits[0] if isinstance(limits, list) and limits and isinstance(limits[0], str) else ""
     why = why if len(why) <= 200 else why[:197] + "..."
     raise ValueError(
-        "CP-2G: the handoff gives no forecast drivers, so no forecast was computed"
+        f"{source}: the handoff gives no forecast drivers, so no forecast was computed"
         + (f" ({why})" if why else "")
     )
 
 
-def parse(cp2g_text: str, cp1_text: str) -> ForecastInputs:
-    """The validated inputs block; ValueError names the first thing wrong with it."""
-    document = json_object(_block(cp2g_text))
+def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInputs:
+    """The validated inputs block; ValueError names the first thing wrong with it. `source` is
+    the module that wrote the block: CP-2G, or CP-1 for a layer-1 forecast (base operands and
+    run-rate drivers only: no shock and no cases)."""
+    if source not in SOURCES:
+        raise ValueError(f"{source}: is not a forecast source")
+    document = json_object(_block(source_text, source))
     if document is None:
-        raise ValueError("CP-2G: the forecast inputs block is not a bounded JSON object")
-    _declined(document)
+        raise ValueError(f"{source}: the forecast inputs block is not a bounded JSON object")
+    _declined(document, source)
     try:
         inputs = ForecastInputs.model_validate_json(exact_json(document))
     except ValidationError as error:
         issues = shape_issues(error)
         if len(issues) <= 3:
-            raise ValueError(f"CP-2G: forecast inputs: {'; '.join(issues)}") from error
+            raise ValueError(f"{source}: forecast inputs: {'; '.join(issues)}") from error
         raise ValueError(
-            f"CP-2G: forecast inputs: {len(issues)} problems; first: {'; '.join(issues[:3])}"
+            f"{source}: forecast inputs: {len(issues)} problems; first: {'; '.join(issues[:3])}"
         ) from error
+    if source == "CP-1" and (
+        inputs.downside_shock or inputs.upside_drivers or inputs.downside_drivers
+    ):
+        raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
+    printed = _without_block(cp1_text) if source == "CP-1" else cp1_text
     for key, operand in inputs.base.items():
-        if operand.amount is not None and not _printed(cp1_text, operand.amount):
-            raise ValueError(f"CP-2G: base {key} {operand.amount} is not printed in CP-1")
+        if operand.amount is not None and not _printed(printed, operand.amount):
+            raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
     return inputs
 
 
@@ -187,9 +220,10 @@ def _json(document: object) -> bytes:
     return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
 
 
-def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
-    """The five files `credit_os/store.py` reads for a model, from the CP-1 and CP-2G handoffs."""
-    inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"))
+def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
+    """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
+    forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
+    inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"), source)
     operands = cp2g.Operands(
         **{
             key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
@@ -227,7 +261,10 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
     exact = _json(
         {
             "schema_version": "cpos-forecast-exact/1",
-            "consumed": {"CP-1.md": _sha(cp1), "CP-2G.md": _sha(handoff)},
+            "consumed": {
+                "CP-1.md": _sha(cp1),
+                **({"CP-2G.md": _sha(handoff)} if source == "CP-2G" else {}),
+            },
             "base": {key: _cell(value) for key, value in operands.items()},
             "reference_drivers": inputs.base_drivers.model_dump(mode="json"),
             "downside_shock": None
@@ -238,7 +275,7 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
             **_stated("upside_drivers", inputs.upside_drivers),
             **_stated("downside_drivers", inputs.downside_drivers),
             "outputs": outputs,
-            "scope_limits": [LIMIT, *inputs.scope_limits],
+            "scope_limits": [LIMIT if source == "CP-2G" else LAYER1_LIMIT, *inputs.scope_limits],
         }
     )
     calculation = _json(

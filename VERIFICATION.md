@@ -4,6 +4,22 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Forecast from layer 1 (branch `claude/forecast-layer1`, decision M3)
+
+CP-MODEL (preset or `--modules`) means "publish the forecast"; it makes no model call. Without CP-2G,
+CP-1 gets a layer-1 variant of the forecast block (base operands as CP-1 prints them, run-rate drivers,
+no cases, no shock) and the forecast comes from it; with CP-2G the block, checks and files are unchanged.
+A bad or absent CP-1 block is not a CP-1 check: the model is withheld through the existing fail-open
+(stderr, `model_not_published` event, `forecast_failure` in the completion record). Published limits
+say "run-rate inputs the CP-1 handoff stated"; the library shows them under Model limitations, unchanged.
+Offline, synthetic handoffs only (no provider call, no run folder touched): new tests fail on the base
+and pass now. `uv run pytest tests/test_cpos_launch.py tests/test_handoff_loop.py tests/test_update_library.py
+tests/test_credit_os_store.py -q -m "not live and not browser"` 666 passed, exit 0; `uv run python
+tools/quality_gate.py` 0 findings, exit 0. Changed expectations: `--modules CP-MODEL` is no longer refused;
+earnings_update's report scope now names the run-rate forecast; the publish-failure stub takes a source
+argument. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
+store tests; `tests/test_financial_workflow.py`.
+
 ## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
 
 Decisions M1-M7 are recorded in `docs/rulings/2026-11-11-module-presets-and-changes.md` (a decision
@@ -974,26 +990,3 @@ Sources were read from Final-workflow-PY `data/public-corpus/v1/TDG` (not modifi
 - Comparison with the retained medium runs is in `runs/tdg-effort-comparison.md`; only automated
   checks plus a spot check of the tabled figures against the 10-K were applied, not an analytical review.
 
-## 2026-11-09 — Lean copy of final-workflow `ffb75ba` (branch `claude/busy-bell-obfret`)
-
-Scope: what this repository holds and runs; Linux, offline. No provider was called.
-- Import commit `5c6e61b`: files the two Python steps need, byte-identical to final-workflow
-  `ffb75ba` (checked file by file), with their tests and synthetic fixtures. Not copied: `runs/`,
-  `deliverables/`, `data/`, most of `cases/`, `examples/`, the Go application and its web
-  front end, design work and archives.
-- Adaptations, in the next commit: Python-only `packaging/build.py` and `Smoke-test.ps1` (no Go,
-  no bridge); the package ships an empty `engine/docs/rulings` and none of this repository's
-  rulings; the CI workflows `checks.yml` and `weekly-tests.yml`; `tests/known-failures.txt`
-  (3 failures carried over from final-workflow's list: a missing `2026-10-31-context-plan.md`).
-- Tests left in final-workflow because they read retained runs: `test_run_expectations.py`,
-  `test_handoff_delivery.py`, the retained-run check in `test_library_index.py` and the live
-  evidence check in `test_cpos_launch.py`.
-- Passed: the CI fast set as written in `checks.yml`, 1011 tests with the 3 known failures
-  deselected (library 37+7, packaging 8, reader summary 51, launcher 116, provider/model tests);
-  `logic.test.cjs` 5; the browser check 2 (Chromium over `file://`, no request, no script error);
-  the quality gate against `5c6e61b`, 0 findings. The offline run review and a library update
-  were run as `Smoke-test.ps1` does them, with the checkout's Python on Linux.
-- Also passed: `test_handoff_loop.py` 30. `test_financial_workflow.py` passed its first 11 tests
-  and was stopped at the 15-minute limit with no failure; the weekly job runs it whole.
-- Not verified: anything on Windows (wrappers, package, Edge over `file://`); a live model run (the
-  owner runs the Copilot test locally).
