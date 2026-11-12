@@ -186,10 +186,10 @@ function limitationsPart(parts) {
   return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><div class="ledger-bar" role="img" aria-label="${esc(`Limitations: ${label}`)}">${segments}</div><div class="chart-legend ledger-legend">${legend}</div>${verbatim('Limitations ledger', table)}</section>`;
 }
 
-// ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes, cp8}]:
+// ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes, cp8}], `runId` being the run's folder name (the pack names its prior run by folder):
 // `metrics` are the library's own quotes ({value, unit, period} per measure), `changes` the run's pack record, `cp8` its CP-8 sections or null.
 // A segment joins two neighbouring points only where the later run's own pack compares exactly those two values under one definition.
-function joined(runs, i, key, measureOf) {
+function joined(runs, i, key) {
   const [before, after] = [runs[i - 1], runs[i]];
   const [a, b] = [before.metrics && before.metrics[key], after.metrics && after.metrics[key]];
   const pack = after.changes && after.changes.pack;

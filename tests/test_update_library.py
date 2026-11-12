@@ -501,6 +501,26 @@ def test_a_first_run_is_the_run_that_records_it(tmp_path):
 
 
 @pytest.mark.parametrize(
+    "line",
+    [
+        "changes: first run of this pathway (not used: prior-1: its issuer name is another's)",
+        "changes: not compared: the earlier run named at approval is no longer available",
+        "changes: not compared: CP-8's first request would be over the cap",
+    ],
+)
+def test_a_reason_the_run_records_for_no_comparison_reaches_the_library_verbatim(tmp_path, line):
+    with_changes(current_run(tmp_path, "reasoned"), line=line)
+    update_library.update_library(tmp_path)
+    assert changes_of(tmp_path, "reasoned") == {
+        "lead": "CP-2",
+        "first_run": False,
+        "pack": None,
+        "note": line,
+        "problem": None,
+    }
+
+
+@pytest.mark.parametrize(
     ("pathway", "lead"),
     [("earnings_update", "CP-1B"), ("short_snapshot", "CP-L10"), ("relative_value", "CP-2")],
 )

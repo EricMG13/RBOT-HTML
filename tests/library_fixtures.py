@@ -362,11 +362,16 @@ FIRST_RUN_RECORD = "changes: first run of this pathway"
 
 
 def with_changes(
-    run_dir: Path, pack: bytes | None = None, note: str | None = None, first: bool = False
+    run_dir: Path,
+    pack: bytes | None = None,
+    note: str | None = None,
+    first: bool = False,
+    line: str | None = None,
 ) -> None:
     """Make a current-kind delivery (see without_report) carry CP-8's comparison pack as
     `changes.json` (the bytes given, listed in the receipt and hashed in the completion record)
-    and/or the manifest's `changes_note` (why CP-8 was planned and not produced)."""
+    and/or the manifest's `changes_note` (why CP-8 was planned and not produced); `line` is the
+    completion record's own `changes` line, as the launcher writes it."""
     if pack is not None:
         (delivered,) = (run_dir / "deliveries").iterdir()
         receipt = json.loads((delivered / "delivery.json").read_text())
@@ -376,5 +381,7 @@ def with_changes(
         rewrite_completion(run_dir, lambda record: record.update(delivery_sha256=sha(raw)))
     if first:
         rewrite_completion(run_dir, lambda record: record.update(changes=FIRST_RUN_RECORD))
+    if line is not None:
+        rewrite_completion(run_dir, lambda record: record.update(changes=line))
     if note is not None:
         rewrite_manifest(run_dir, lambda manifest: manifest.update(changes_note=note))

@@ -70,6 +70,7 @@ COUNT_BELOW = 100  # a whole number below this, without a unit, is a count
 SAME = "same definition"
 NOT_COMPARABLE = "not comparable"
 _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
+_MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # as changes.js moduleCode reads the cell
 _REF = re.compile(r"\b[EC]\d+\b")
 _REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
 _HEADING = re.compile(r"#{1,6}\s")
@@ -160,10 +161,15 @@ def _section(lines: list[str], title: str) -> tuple[list[str], list[list[str]]] 
     return rows[0], rows[1:]
 
 
-def _plain(name: str) -> str:
-    """A row's first cell compared with a measure's label: no emphasis, no trailing brackets."""
-    bare = re.sub(r"\s*\([^)]*\)\s*$", "", name.replace("*", "").replace("`", ""))
-    return " ".join(bare.lower().split())
+def _plain(text: str) -> str:
+    """A cell as the Changes tab reads it (changes.js `bare`): without bold or code marks."""
+    return text.replace("**", "").replace("`", "").strip()
+
+
+def _says(row: Sequence[str], word: str) -> bool:
+    """Whether a cell of the row starts with the verdict word, as the Changes tab reads a verdict
+    (changes.js `says`); the word anywhere else in a cell is no verdict."""
+    return any(_plain(cell).lower().startswith(word) for cell in row)
 
 
 def _signed(value: Any) -> Decimal | None:
@@ -311,6 +317,12 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
     `Not comparable` draws no trend."""
     text = " ".join(row).lower()
     issues = []
+    for word in (SAME, NOT_COMPARABLE):
+        if measure["comparable"] != "no" and word in text and not _says(row, word):
+            issues.append(
+                f"{where}: `{word}` is a verdict only at the start of a cell; write it first in "
+                "the Effect cell."
+            )
     if measure["comparable"] == "judge":
         said = [word for word in (SAME, NOT_COMPARABLE) if word in text]
         if len(said) != 1:
@@ -340,7 +352,6 @@ def _same_period_issues(name: str, row: Sequence[str], cause: str) -> list[str]:
     change. The row says `Not comparable`, or `Same definition` with the cause `Correction` or
     `Method change`; never `New period` or `New source`."""
     where = f"Issuer register, {name!r}"
-    text = " ".join(row).lower()
     if cause in ("New period", "New source"):
         return [
             (
@@ -349,7 +360,7 @@ def _same_period_issues(name: str, row: Sequence[str], cause: str) -> list[str]:
                 "(`Not comparable`), a `Correction` or a `Method change`."
             )
         ]
-    if NOT_COMPARABLE in text or (SAME in text and cause in SAME_PERIOD_CAUSES):
+    if _says(row, NOT_COMPARABLE) or (_says(row, SAME) and cause in SAME_PERIOD_CAUSES):
         return []
     return [
         (
@@ -403,7 +414,7 @@ def _issuer_issues(
     issues: list[str] = []
     if not rows:
         return [f"`### {ISSUER}` needs a row; if nothing changed, one `{NO_CHANGE}` row."]
-    labels = {m["label"].lower(): m for m in pack["measures"]}
+    labels = {m["label"]: m for m in pack["measures"]}
     for row in rows:
         name, cause = row[0], row[3]
         if name.strip().strip("*") == NO_CHANGE:
@@ -433,11 +444,14 @@ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str
     seen: dict[str, int] = {}
     ran = {m["module"]: (m["ran_prior"], m["ran_current"]) for m in pack["modules"]}
     for module, status, cause, _ in rows:
-        codes = _MODULE.findall(module)
-        if len(codes) != 1 or codes[0] not in ran:
-            issues.append(f"Analysis register: {module!r} does not name one module of the pack.")
+        named = _MODULE_CELL.search(_plain(module))
+        if named is None or named[1] not in ran:
+            issues.append(
+                f"Analysis register: {module!r} does not name one module of the pack; the cell "
+                "ends with its code in brackets, as `Credit view (CP-2)`."
+            )
             continue
-        code = codes[0]
+        code = named[1]
         seen[code] = seen.get(code, 0) + 1
         before, now = ran[code]
         if status not in STATUSES:
@@ -701,12 +715,12 @@ def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> 
         issues += _analysis_issues(tables[ANALYSIS][1], pack)
     if LEDGER in tables:
         issues += _ledger_issues(tables[LEDGER][1], pack)
-    labels = {m["label"].lower(): m["key"] for m in pack["measures"]}
+    labels = {m["label"]: m["key"] for m in pack["measures"]}
     issuer = tables[ISSUER][1] if ISSUER in tables else []
     said_nc = frozenset(
         labels[_plain(row[0])]
         for row in issuer
-        if _plain(row[0]) in labels and NOT_COMPARABLE in " ".join(row).lower()
+        if _plain(row[0]) in labels and _says(row, NOT_COMPARABLE)
     )
     issues += _outside_ref_issues(lines, pack)
     issues += _passage_issues(lines, pack, said_nc, sizes)

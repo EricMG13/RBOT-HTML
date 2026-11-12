@@ -45,7 +45,14 @@ from deploy_vii.registry import dependencies, idle_statuses, plan
 from deploy_vii.render import render
 from deploy_vii.report_view import navigator
 from deploy_workflow import platform_io
-from deploy_workflow.changes import PACK_NAME, PRIOR_PREFIX, PriorRun, pack_builder, prior_sources
+from deploy_workflow.changes import (
+    DELIVERED_WHOLE,
+    PACK_NAME,
+    PRIOR_PREFIX,
+    PriorRun,
+    pack_builder,
+    prior_sources,
+)
 from deploy_workflow.handoff_delivery import (
     HEADINGS,
     DeliveryRequest,
@@ -538,7 +545,8 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
         if not_produced is not None:
             changes_note = f"{NOT_PRODUCED}{not_produced}"
             if layout is not None:
-                scope = f"{layout.scope} Changes since the last run (CP-8): {changes_note}."
+                scope = layout.scope.replace(DELIVERED_WHOLE, "")
+                scope += f" Changes since the last run (CP-8): {changes_note}."
                 layout = layout.model_copy(update={"scope": scope})
         forecast, failure = request.publish_forecast, None
         if forecast:

@@ -4,7 +4,7 @@
 // nothing is derived by calling the code under test.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {changesState, measureVerdict, withUnit, leadBottom, changesHtml, FIRST_RUN} = require('./changes.js');
+const {changesState, measureVerdict, differenceText, analysisPart, withUnit, leadBottom, changesHtml, FIRST_RUN} = require('./changes.js');
 
 const fmtDate = iso => ({'2024-09-30': '30 September 2024', '2025-03-31': '31 March 2025', '2023-09-30': '30 September 2023'}[iso] || iso);
 const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
@@ -248,4 +248,22 @@ test('Over time joins only points whose periods are the periods the later pack c
   const lines = html => (html.match(/<line /g) || []).length;
   assert.equal(lines(changesHtml(base({runs: runs(packWith('FY2022', 'FY2023'))}))), 1);
   assert.equal(lines(changesHtml(base({runs: runs(packWith('H1 FY2022', 'H1 FY2023'))}))), 0);
+});
+
+// The rows tests/test_changes.py shows the CP-8 checker accepting or refusing (one shared fixture): every row the checker accepts is read here to the verdict written beside it.
+const SEAM = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../../tests/fixtures/changes-seam/rows.json'), 'utf8'));
+test('a row the checker accepts is read by the tab to the verdict the shared fixture states', () => {
+  for (const c of SEAM.measure_rows.filter(r => r.accepted)) {
+    const m = SEAM.measures[c.measure];
+    const verdict = measureVerdict(m, table(ISSUER_HEAD, c.cells));
+    assert.equal(verdict.kind, c.verdict, c.name);
+    assert.equal(differenceText(m, verdict), c.difference, c.name);
+  }
+});
+test('a module cell the checker accepts is found by the tab and shows the status written in it', () => {
+  const pack = {...PACK, modules: [{module: 'CP-2', title: 'Credit view', ran_prior: true, ran_current: true, prior_bottom_line: null, current_bottom_line: null}]};
+  for (const c of SEAM.module_cells.filter(r => r.accepted)) {
+    const parts = {analysis: table(['Module', 'Status', 'Cause', 'Why'], [c.cell, c.status, 'New period', 'Why.'])};
+    assert.ok(analysisPart(pack, parts).includes(`change-status">${c.status}<`), c.name);
+  }
 });

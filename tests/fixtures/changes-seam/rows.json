@@ -1,0 +1,23 @@
+{
+  "note": "Rows of CP-8's registers, read by the checker (tests/test_changes.py) and by the Changes tab (apps/issuer-library/credit_os/web/changes.test.cjs): what the checker accepts, the tab must read to the verdict written here. Expected values are written by hand. The pack measures equal test_changes.PACK's.",
+  "measures": {
+    "leverage": {"key": "leverage", "label": "Total debt / EBITDA", "unit": "x", "comparable": "yes", "reason": null, "prior": {"label": "Total debt / EBITDA", "unit": "x", "value": "4.20", "period": "FY2023", "definition": null}, "current": {"label": "Total debt / EBITDA", "unit": "x", "value": "3.60", "period": "FY2024", "definition": null}, "difference": "-0.60", "same_period": false},
+    "cash": {"key": "cash", "label": "Cash", "unit": "US$m", "comparable": "judge", "reason": "the definition text differs after normalisation", "prior": {"label": "Cash", "unit": "US$m", "value": "300", "period": "FY2023", "definition": "Cash."}, "current": {"label": "Cash", "unit": "US$m", "value": "250", "period": "FY2024", "definition": "Other."}, "difference": "-50", "same_period": false}
+  },
+  "measure_rows": [
+    {"name": "comparable, plain effect", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "New period", "Leverage fell by 0.60x."], "accepted": true, "verdict": "comparable", "difference": "-0.60x"},
+    {"name": "not comparable at the start of the cell", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "Not comparable: the EBITDA basis changed."], "accepted": true, "verdict": "not_comparable", "difference": null},
+    {"name": "not comparable in the middle of a sentence", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "The two figures are not comparable: the EBITDA basis changed."], "accepted": false},
+    {"name": "judged, exact label", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m"},
+    {"name": "judged, label in emphasis", "measure": "cash", "cells": ["**Cash**", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m"},
+    {"name": "judged, label in lower case", "measure": "cash", "cells": ["cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": false},
+    {"name": "judged, label with a unit in brackets", "measure": "cash", "cells": ["Cash (US$m)", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": false}
+  ],
+  "module_cells": [
+    {"name": "name and code in brackets", "cell": "Credit view (CP-2)", "accepted": true, "status": "Strengthened"},
+    {"name": "code alone", "cell": "CP-2", "accepted": false},
+    {"name": "code after the name", "cell": "CP-2 credit view", "accepted": false},
+    {"name": "code after a dash", "cell": "Credit view - CP-2", "accepted": false},
+    {"name": "text after the bracketed code", "cell": "Credit view (CP-2) handoff", "accepted": false}
+  ]
+}

@@ -1796,7 +1796,9 @@ def test_a_cp8_that_is_not_accepted_loses_only_itself_and_the_run_says_why(tmp_p
         {k: v for k, v in e.items() if k != "at"} for e in events
     ]
     assert events[-1]["event"] == "delivered"
-    assert "Changes since the last run (CP-8): " + reason in manifest["layout"]["scope"]
+    scope = manifest["layout"]["scope"]
+    assert "Changes since the last run (CP-8): " + reason in scope
+    assert "delivered whole" not in scope  # one true thing: CP-8's handoff was not produced
 
 
 @pytest.mark.usefixtures("provider")
@@ -2177,3 +2179,33 @@ def test_a_difference_of_the_pack_is_never_printed_in_a_fact_row(row):
     found = cp8_issues(real_text(fact=row + "\n"), REAL, REAL_HELD)
     assert any("difference" in i for i in found), found
     assert cp8_issues(real_text(fact=FACT_LOAN), REAL, REAL_HELD) == ()
+
+
+SEAM_FILE = Path(__file__).parent / "fixtures" / "changes-seam" / "rows.json"
+SEAM = json.loads(SEAM_FILE.read_text())
+
+
+def _seam_row(cells):
+    return "| " + " | ".join(cells) + " |"
+
+
+def test_the_seam_fixture_states_the_packs_measures():
+    for key, measure in SEAM["measures"].items():
+        assert measure == next(m for m in PACK["measures"] if m["key"] == key)
+
+
+@pytest.mark.parametrize("case", SEAM["measure_rows"], ids=lambda c: c["name"])
+def test_the_checker_accepts_a_measure_row_only_in_the_form_the_tab_reads(case):
+    leverage = next(r for r in REGISTERS.splitlines() if r.startswith("| Total debt / EBITDA"))
+    old = {"leverage": leverage, "cash": CASH_ROW}[case["measure"]]
+    quiet = "| Credit view (CP-2) | Unchanged | None | No change. |"
+    text = REGISTERS.replace(old, _seam_row(case["cells"]), 1).replace(
+        "| Credit view (CP-2) | Strengthened | New period | Leverage fell. |", quiet, 1
+    )
+    assert (cp8_issues(text, PACK) == ()) is case["accepted"]
+
+
+@pytest.mark.parametrize("case", SEAM["module_cells"], ids=lambda c: c["name"])
+def test_the_checker_accepts_a_module_cell_only_in_the_form_the_tab_reads(case):
+    text = REGISTERS.replace("| Credit view (CP-2) |", f"| {case['cell']} |", 1)
+    assert (cp8_issues(text, PACK) == ()) is case["accepted"]

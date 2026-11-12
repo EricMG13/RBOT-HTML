@@ -34,6 +34,7 @@ from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
 from deploy_workflow import platform_io
 from deploy_workflow.changes import (
+    DELIVERED_WHOLE,
     PACK_NAME,
     PRIOR_PREFIX,
     PriorRun,
@@ -1429,11 +1430,7 @@ def _layout(
             else LAYER1_FORECAST_SCOPE
         )
         + f" Sections not produced: {', '.join(omitted) or 'none'}."
-        + (
-            " The changes since the last run are CP-8's handoff, delivered whole."
-            if "CP-8" in ordered
-            else ""
-        )
+        + (DELIVERED_WHOLE if "CP-8" in ordered else "")
     )
     layout = MarkdownLayout(
         blocks=tuple(dict.fromkeys(r.block_id for r in routes)),

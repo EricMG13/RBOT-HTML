@@ -417,18 +417,23 @@ def module_entries(
 
 
 CHANGES_PACK = "changes.json"  # `deploy_workflow.changes.PACK_NAME`, which imports this module
+FIRST_RUN_LINE = "changes: first run of this pathway"  # `changes.describe(None)`
 
 
 def changes_record(delivered: Mapping[str, Any], completion: Mapping[str, Any]) -> dict[str, Any]:
     """What the verified delivery says about CP-8's comparison: the pack it publishes (path inside
-    the run folder and hash; None when it holds none) and the reason CP-8 was planned and not
-    produced (`changes_note`; None otherwise). Neither: a first run of the pathway."""
+    the run folder and hash; None when it holds none) and the reason there is no explanation
+    (`note`: the manifest's `changes_note` when CP-8 was planned and not produced, else the run's
+    own recorded line when it says why no comparison was made; None otherwise). A first run of the
+    pathway is the run whose record is the bare first-run line; one that records nothing is not."""
     digest = delivered["files"].get(CHANGES_PACK)
     note = delivered["manifest"].get("changes_note")
-    # The run's own record that the approval named no earlier run (`changes: first run of this
-    # pathway`, deploy_workflow.changes.describe); a run that records nothing is not a first run.
+    line = completion.get("changes")  # `deploy_workflow.changes.describe` and the launcher's lines
+    if not isinstance(note, str) and isinstance(line, str):
+        compares = line.startswith("changes: CP-8 compares with ")
+        note = None if line == FIRST_RUN_LINE or compares else line
     return {
-        "first_run": completion.get("changes") == "changes: first run of this pathway",
+        "first_run": line == FIRST_RUN_LINE,
         "pack": {"path": f"{delivered['folder']}/{CHANGES_PACK}", "sha256": digest}
         if isinstance(digest, str)
         else None,
