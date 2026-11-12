@@ -1625,6 +1625,58 @@ def test_a_model_without_a_history_record_keeps_its_labels_and_notes_exactly():
     ]
 
 
+# Hand-read from HISTORY and REFERENCE: only revenue and EBITDA are recorded, so only these lines
+# (and the growth and margin built from them) have a figure in any column.
+LINES_WITH_A_FIGURE = [
+    "Revenue",
+    "Revenue YoY growth",
+    "Adj EBITDA (as named in Financial foundation)",
+    "Adj EBITDA margin",
+    "Adj EBITDA YoY growth",
+]
+FOLDED_LINES = [
+    "COGS (cost of sales)",
+    "Gross profit",
+    "Gross profit margin",
+    "Opex (selling and administrative, amortization of intangibles)",
+    "EBIT (income from operations)",
+    "D&A (depreciation and amortization)",
+    "EBITDA (EBIT + D&A)",
+    "Issuer EBITDA (reported)",
+    "LTM Adj EBITDA",
+    "Interest",
+    *AFTER_INTEREST,
+    "Closing debt",
+    *CREDIT_LABELS,
+    "Interest coverage (Adj EBITDA / interest)",
+    "Cash proxy / closing debt",
+]
+
+
+def test_a_line_with_no_figure_in_any_column_is_marked_empty():
+    grid = store.read_cashflow(FILES, None)[0]
+    assert [r["label"] for r in grid["rows"] if not r["empty"]] == LINES_WITH_A_FIGURE
+    assert [r["label"] for r in grid["rows"] if r["empty"]] == FOLDED_LINES
+
+
+def test_a_line_with_a_figure_only_in_an_other_case_is_not_empty():
+    upside = {
+        "years": [{**forecast_year(2025 + n, "1100", "300"), "capex": held("40")} for n in range(3)]
+    }
+    base = {"years": [forecast_year(2025 + n, "1050", "300") for n in range(3)]}
+    exact = {"outputs": {"REFERENCE": base, "UPSIDE": upside}, "scope_limits": ["x"]}
+    files = {**FILES, "forecast_exact.json": json.dumps(exact).encode()}
+    grid = store.read_cashflow(files, None)[0]
+    capex = next(r for r in grid["rows"] if r["label"] == "Capital expenditure (outflow)")
+    assert all(cell["status"] != "value" for cell in capex["cells"])  # none in the main table
+    assert capex["empty"] is False
+    other = next(r for r in grid["other"]["rows"] if r["label"] == "Capital expenditure (outflow)")
+    assert other["empty"] is False
+    assert [r["label"] for r in grid["rows"] if r["empty"]] == [
+        label for label in FOLDED_LINES if label != "Capital expenditure (outflow)"
+    ]
+
+
 def damaged_column(**changes):
     column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
     return {"columns": [{**column, **changes}]}

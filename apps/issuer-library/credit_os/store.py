@@ -1394,14 +1394,6 @@ HISTORY_NOTES = (
     ),
     CASHFLOW_NOTES[3],
 )
-# Row labels on the history path, by row key.
-HISTORY_LABELS = {
-    "adj": "Adj EBITDA (as named in Financial foundation)",
-    "ltm-adj": "LTM Adj EBITDA",
-    "interest": "Interest",
-    "closing-debt": "Closing debt",
-    "coverage": "Interest coverage (Adj EBITDA / interest)",
-}
 LTM_NOTE = (
     "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise the last "
     "fiscal year plus the year to date less the prior year to date."
@@ -2728,6 +2720,16 @@ def listed_add_backs(tables: dict[str, Table | None]) -> list[str]:
     return list(labels)
 
 
+# Row labels on the history path, by row key.
+HISTORY_LABELS: dict[RowKey, str] = {
+    "adj": "Adj EBITDA (as named in Financial foundation)",
+    "ltm-adj": "LTM Adj EBITDA",
+    "interest": "Interest",
+    "closing-debt": "Closing debt",
+    "coverage": "Interest coverage (Adj EBITDA / interest)",
+}
+
+
 def cashflow_rows(tables: dict[str, Table | None], with_history: bool = False) -> list[RowSpec]:
     """The grid's rows in presentation order: units, the fixed head, add-backs, the fixed tail."""
     rows: list[RowSpec] = []
@@ -2868,6 +2870,8 @@ def cashflow_of(
                 "label": spec.label,
                 "kind": spec.kind,
                 "total": spec.key in TOTAL_ROWS,
+                # no figure in any column of the main grid or of the other cases
+                "empty": all(cell["status"] != "value" for cell in grid[spec.key]),
                 "cells": grid[spec.key],
             }
         )

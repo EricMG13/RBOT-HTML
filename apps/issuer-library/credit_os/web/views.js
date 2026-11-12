@@ -948,7 +948,7 @@ function notAvailableLines(c) {
   return lines;
 }
 // The calculation record as a line-item by period grid. The store formatted every cell; this only places it.
-function cashflowTable(c) {
+function cashflowTable(c,rows=c.rows) {
   const groups=[];
   for(const col of c.columns){const last=groups[groups.length-1];if(last&&last.name===col.group)last.span++;else groups.push({name:col.group,span:1});}
   // The first column of each group carries a rule; the Base case and Downside columns sit on a quiet ground.
@@ -960,7 +960,7 @@ function cashflowTable(c) {
     return `<td${attr(colClass(i))}${title==null?'':` title="${esc(title)}"`}${label==null?'':` aria-label="${esc(label)}"`}>${esc(cell.display)}</td>`;
   };
   let band=null,body='';
-  for(const row of c.rows){
+  for(const row of rows){
     if(row.band!==band){band=row.band;body+=`<tr class="band-row"><th scope="colgroup" colspan="${c.columns.length+1}">${esc(band)}</th></tr>`;}
     body+=`<tr${row.total?' class="total-row"':''}><th scope="row">${esc(row.label)}</th>${row.cells.map((cell,i)=>td(cell,row.kind,i)).join('')}</tr>`;
   }
@@ -973,8 +973,11 @@ function cashflowSection(model) {
   const periods=c.columns.filter(col=>!(col.group==='Downside case'&&!/^FY\d+E$/.test(col.label)));
   const na=notAvailableLines(c),first=periods[0],last=periods[periods.length-1];
   const caption=[c.units==null?'Units not recorded':c.units,...first?[`${first.label} to ${last.label}`]:[],'history as retained in the handoffs; forecasts are conditional illustrations from the calculation record'].join(' · ');
+  // A line with no figure in any column (the store's `empty`) is folded; its cells stay reachable, and a heading goes with the lines under it.
+  const shown=c.rows.filter(row=>!row.empty),folded=c.rows.filter(row=>row.empty);
+  const empty=folded.length?`<details class="cashflow-empty"><summary>Lines with no figure in this run (${folded.length})</summary><div class="table-scroll" role="region" aria-label="Lines with no figure in this run" tabindex="0">${cashflowTable(c,folded)}</div></details>`:'';
   const other=c.other?`<details class="cashflow-other"><summary>${esc(`Other forecast cases: ${[...new Set(c.other.columns.map(col=>col.group))].join(', ')}`)}</summary><div class="table-scroll" role="region" aria-label="Other forecast cases" tabindex="0">${cashflowTable(c.other)}</div></details>`:'';
-  return `<section class="forecast-cashflow"><h2 id="cashflow-heading">Cash flow model</h2><p class="forecast-caption">${esc(caption)}</p><div class="table-scroll" role="region" aria-labelledby="cashflow-heading" tabindex="0">${cashflowTable(c)}</div>${c.notes.length?`<ul class="cashflow-notes">${c.notes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}${other}${na.length?`<details class="cashflow-na"><summary>Why cells show n.a. (${na.length} lines)</summary><ul>${na.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}</section>`;
+  return `<section class="forecast-cashflow"><h2 id="cashflow-heading">Cash flow model</h2><p class="forecast-caption">${esc(caption)}</p><div class="table-scroll" role="region" aria-labelledby="cashflow-heading" tabindex="0">${cashflowTable(c,shown)}</div>${empty}${c.notes.length?`<ul class="cashflow-notes">${c.notes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}${other}${na.length?`<details class="cashflow-na"><summary>Why cells show n.a. (${na.length} lines)</summary><ul>${na.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}</section>`;
 }
 // The roles a delivery's sources are declared under; an unknown role shows its own token.
 const SOURCE_ROLES={annual:'Annual handoff',quarter:'Quarterly handoff',forecast:'Forecast handoff',forecast_exact:'Forecast calculations',current_synthesis:'Current synthesis'};
