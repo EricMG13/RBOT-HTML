@@ -1,0 +1,1689 @@
+diff --git a/.github/workflows/checks.yml b/.github/workflows/checks.yml
+index 2db825e..10fe480 100644
+--- a/.github/workflows/checks.yml
++++ b/.github/workflows/checks.yml
+@@ -39,7 +39,8 @@ jobs:
+             tests/test_library_index.py tests/test_update_library.py \
+             tests/test_issuer_library_packaging.py tests/test_reader_summary.py \
+             tests/test_credit_os_catalogue.py tests/test_credit_os_store.py \
+-            tests/test_cpos_launch.py tests/test_cpos_facilities.py tests/test_cpos_periods.py tests/model \
++            tests/test_cpos_launch.py tests/test_cpos_facilities.py tests/test_cpos_periods.py \
++            tests/test_cpos_scale.py tests/model \
+             tests/test_credit_os_chips.py tests/test_quality_gate.py tests/test_work_pc_delta.py \
+             tests/test_inbox_activity.py tests/test_inbox_filing.py \
+             tests/test_inbox_layout.py tests/test_inbox_runs.py tests/test_inbox_scheduler.py \
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index c74ddf3..0683ab7 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,14 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Forecast inputs in thousands: `scale` 1000 (branch `claude/forecast-units-scale-b`, PR B, stacked on PR A)
++Plan: `docs/superpowers/plans/2026-11-12-forecast-named-rows-and-units.md`, Tasks B1-B6. A forecast inputs block may state `scale` 1000: it then states base amounts, amount drivers and facility balances exactly as CP-1 prints them in USD thousands, and Python divides by 1000 exactly before any check or calculation. The cell and printed checks compare the stated text with CP-1; the history record reads the named rows and publishes the same unit; the published record carries `scale` and `units` and the library's caption uses them. A named row whose own cells or headers name the other unit is refused, and a scale-1000 CP-2G block must name its rows. Both instruction texts ask for `scale`. A block without `scale` produces byte-identical files.
++Scope: offline. Synthetic fixtures with hand-computed answer keys (`tests/test_cpos_scale.py`); a millions fixture and the same fixture times 1000 at scale 1000 publish identical figures in every file, facilities and cases included (also on 800 generated fixtures, reviewer's probe); the store's grid compared with a hand key on 1,768 cells, 0 differences; two retained thousands handoffs (LTH, IHRT) read with hand-written named blocks and synthetic drivers: every base and fiscal-year history value equals the printed cell divided by 1000; the unit rule run over the numeric rows of the six retained CP-1 handoffs refuses 11 rows, all printed in millions inside thousands handoffs. No provider called: no model has stated `scale`.
++Reader check: NOT done on a real run; pending the owner's paid run on a thousands issuer. On synthetic data the grid of a thousands block equals the millions grid cell for cell and the caption reads USD millions.
++Commands: PR-check pytest list 3097 passed, 113 deselected, 1 warning, exit 0; quality gate against PR A 0 findings, exit 0; node 278 pass, exit 0. Reviews: task reviews (mx-precise), adversarial review (mx-adversary: no arithmetic defect), whole-branch review with confidence review and rewrite tournament (mx-architect), one fix wave. Hand-picked mutants 85/100 killed; survivors left: T07, C02, C03, F03, U03, U08, U09, U10, U11, U12, U15, K08, R01, R04, G03.
++Known, for the owner: nothing detects a missing or wrong `scale` (six-digit thousands without it read as millions; a millions handoff at scale 1000 publishes figures a thousand times too small); the unit check reads only named operands and only unit words in the row, the named column's header and the table's first header cell, so a millions cell with no unit words nearby, a facility balance or an amount driver in the other unit is not caught; revolver availability is printed in millions on all four retained thousands issuers, so Liquidity is n.a. there until an operand-level scale is decided; a delivery without the history record reads CP-1 as printed under the record's caption (new runs always ask for the record); the PR is about 1345 changed lines against the 800-line limit, waived by the owner on 2026-11-12 (split B-i/B-ii exists).
++Not verified: any model response to the instructions; the Forecast page in a browser; a paid thousands run; non-USD issuers; the weekly and live suites; mutation testing beyond the hand-picked mutants.
++
+ ## 2026-11-12 — CP-2G names its rows; history from named rows only (branch `claude/forecast-units-scale`, PR A)
+ Plan: `docs/superpowers/plans/2026-11-12-forecast-named-rows-and-units.md`, Tasks A1-A4. A CP-2G forecast inputs block may name, for each base operand with an amount, the CP-1 table row and period column it was read from; a named amount must be that one cell under the sign rule, and the instruction asks for the names. The history record is built from named rows only: the code that located a line by its amount is deleted, which removes the wrong-row residual recorded for PR 1. A block that names nothing still forecasts as before and gets no history (every line: the inputs do not name the row and period). A refused base operand may be restated as missing instead of nulling every driver.
+ Scope: offline. Synthetic fixtures with hand-computed answer keys; the reviewer's residual probe before the change (exit 1) and after (n.a. with the header named); 1,500 and 4,500 generated CP-1 handoffs compared with the code before the change (unnamed CP-2G blocks byte-identical with the history flag off; layer-1 blocks identical); retained CP-1 handoffs (the live TDG forecast run, web TDG, NATL) read with hand-named blocks and synthetic drivers, which prove the cell check and the history on real tables, not a model's ability to name rows. No retained delivery holds model files, so byte-identical re-derivation rests on the synthetic pin and the generated comparison. No provider called: no CP-2G has yet named a row.
+diff --git a/apps/issuer-library/credit_os/store.py b/apps/issuer-library/credit_os/store.py
+index d3f9a31..5a994b0 100644
+--- a/apps/issuer-library/credit_os/store.py
++++ b/apps/issuer-library/credit_os/store.py
+@@ -1488,6 +1488,35 @@ def cashflow_units(handoff: str) -> str | None:
+     return re.sub(r"\s+", " ", phrase.group(0)) if phrase else None
+ 
+ 
++UNITS_LIMIT = 40
++
++
++def recorded_units(exact: Any) -> str | None:
++    """The `units` the forecast record states for its published figures, or None when it states
++    none. `scale` and `units` are recorded together. `units` is a printable text of 1 to
++    UNITS_LIMIT characters with something visible in it (no control, bidi-control or newline
++    character); anything else is not shown: TypeError."""
++    if not isinstance(exact, dict):
++        return None
++    units = exact.get("units")
++    if (units is None) != (exact.get("scale") is None):
++        raise TypeError("scale and units are not recorded together")
++    if units is None:
++        return None
++    if not isinstance(units, str) or not 1 <= len(units) <= UNITS_LIMIT:
++        raise TypeError("units is not a short text")
++    if not units.isprintable() or not units.strip():
++        raise TypeError("units is not printable text")
++    return units
++
++
++def units_caption(units: str | None, handoff: str | None) -> str | None:
++    """The record's own statement of its units; without one, the Request section's phrase."""
++    if units is not None:
++        return units
++    return cashflow_units(handoff) if handoff is not None else None
++
++
+ class CashflowBudget(Exception):
+     """A grid larger than the cells left in the workspace's budget; raised before any cell."""
+ 
+@@ -2749,11 +2778,13 @@ def cashflow_of(
+     forecast: tuple[Forecast, list[str], list[str]],
+     recorded: Recorded,
+     statements: tuple[list[Table], list[Table]],
+-    handoff: str | None,
++    units: str | None,
+     budget: int,
+ ) -> dict[str, Any]:
+     """History from the parsed annual and quarter tables and the forecast record, as a grid.
+ 
++    `units` is the caption of the grid's amounts (see `units_caption`).
++
+     `recorded` ends with the history (CP-1's period columns and their limits) or None; with it
+     those columns replace the quarter and fiscal-year columns and read each row's forecast spec.
+ 
+@@ -2824,7 +2855,7 @@ def cashflow_of(
+         for c in columns
+     ]
+     return {
+-        "units": cashflow_units(handoff) if handoff is not None else None,
++        "units": units,
+         "columns": shown[:main_count],
+         "rows": row_part(rows, slice(0, main_count)),
+         "other": None
+@@ -2869,7 +2900,9 @@ def read_cashflow(
+     """
+     stage = CASHFLOW_FILES[0]
+     try:
+-        forecast = forecast_inputs(json.loads(files[stage].decode("utf-8")))
++        exact = json.loads(files[stage].decode("utf-8"))
++        forecast = forecast_inputs(exact)
++        units = recorded_units(exact)
+         stage = CASHFLOW_FILES[1]
+         record = json.loads(files[stage].decode("utf-8"))
+         fiscal = fiscal_inputs(record)
+@@ -2887,7 +2920,9 @@ def read_cashflow(
+     try:
+         left = CASHFLOW_CELL_BUDGET if budget is None else budget
+         recorded = (fiscal, quarter_values, history)
+-        return cashflow_of(forecast, recorded, (annual, quarter), handoff, left), None
++        return cashflow_of(
++            forecast, recorded, (annual, quarter), units_caption(units, handoff), left
++        ), None
+     except (CashflowLimit, CashflowBudget) as error:
+         return None, ("limit", str(error))
+     except CASHFLOW_ERRORS as error:
+diff --git a/src/deploy_workflow/owners/cpos_forecast.py b/src/deploy_workflow/owners/cpos_forecast.py
+index e5355b1..d5b8f9f 100644
+--- a/src/deploy_workflow/owners/cpos_forecast.py
++++ b/src/deploy_workflow/owners/cpos_forecast.py
+@@ -11,10 +11,11 @@ ValueError; the caller decides what that means (the run fails open, see cpos.run
+ import hashlib
+ import json
+ import re
++from collections.abc import Iterator
+ from dataclasses import fields
+ from datetime import date, timedelta
+ from decimal import Decimal, Inexact, localcontext
+-from typing import Annotated
++from typing import Annotated, Any, Literal
+ 
+ from pydantic import Field, ValidationError, model_validator
+ 
+@@ -39,6 +40,12 @@ LAYER1_LIMIT = (
+     "the arithmetic, are unreviewed. Not analytical review."
+ )
+ SOURCES = ("CP-2G", "CP-1")
++UNITS = "USD millions"
++SCALE_LIMIT = (
++    "The forecast inputs state base amounts, amount drivers and facility amounts in USD thousands, "
++    "as CP-1 prints them (scale 1000); Python divided each by 1,000 before any calculation. "
++    "Every figure here is USD millions."
++)
+ Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
+ 
+ 
+@@ -100,6 +107,7 @@ class ForecastInputs(Contract):
+     downside_drivers: CaseDrivers | None = None
+     years: tuple[Span, Span, Span]
+     facilities: Annotated[tuple[Facility, ...], Field(min_length=1, max_length=40)] | None = None
++    scale: Literal[1, 1000] | None = None
+     scope_limits: tuple[str, ...]
+ 
+     @model_validator(mode="after")
+@@ -247,10 +255,11 @@ def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
+         return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
+ 
+ 
+-def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
++def _layer1_problem(text: str, key: str, operand: Operand, amount: str | None) -> str | None:
+     """Why the operand is not the cell it names, or None when it is. Both sources use it: CP-1's
+-    layer-1 block always, a CP-2G block when it names any cell."""
+-    if operand.amount is None:
++    layer-1 block always, a CP-2G block when it names any cell. `amount` is the amount as the
++    block states it (at scale 1000, in thousands, as CP-1 prints it)."""
++    if amount is None:
+         return (
+             None
+             if operand.row is None and operand.period is None
+@@ -263,9 +272,7 @@ def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
+     found = _cells(text, row, period)
+     if not found:
+         return f"base {key}: no table cell of CP-1 is at {where}"
+-    not_the_cell = (
+-        f"base {key} {operand.amount} is not CP-1's cell at {where} ({_cut(min(found), 77)})"
+-    )
++    not_the_cell = f"base {key} {amount} is not CP-1's cell at {where} ({_cut(min(found), 77)})"
+     try:
+         values = {_signed(cell) for cell in found}
+     except Inexact:
+@@ -277,12 +284,74 @@ def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
+         return f"base {key}: {where} is not one number in CP-1 ({count})"
+     (value,) = values
+     try:
+-        agrees = value is not None and _agrees(key, value, Decimal(operand.amount))
++        agrees = value is not None and _agrees(key, value, Decimal(amount))
+     except Inexact:
+         agrees = False
+     return None if agrees else not_the_cell
+ 
+ 
++_CURRENCY = r"(?:US\$|USD|EUR|GBP|[$\u20ac\u00a3])"
++_NAMES_THOUSANDS = re.compile(rf"\bthousands?\b|[$'\u2019]000s?\b|{_CURRENCY}\s?k\b", re.IGNORECASE)
++_NAMES_MILLIONS = re.compile(
++    rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|mn|bn)\b", re.IGNORECASE
++)
++_UNIT_OF = {1: "USD millions, scale 1", 1000: "USD thousands, scale 1000"}
++
++
++def _units_named(text: str) -> frozenset[str]:
++    """Which of `thousands` and `millions` a cell of CP-1 names as a unit, case-insensitive.
++    Thousands: the word `thousand` or `thousands`; `$000`, `'000` (with a trailing s); a currency
++    (`US$`, `USD`, `EUR`, `GBP`, `$`, euro or pound sign) then `k`, at a word end. Millions: the
++    words `million`, `millions`, `billion`, `billions`; a currency then `m`, `mm`, `mn` or `bn`,
++    at a word end (`US$m`, `USD m`, `$mn`, `US$ bn`). A bare number, `9M`, or `m` without a currency
++    names none. Both may be named at once."""
++    return frozenset(
++        name
++        for name, pattern in (("thousands", _NAMES_THOUSANDS), ("millions", _NAMES_MILLIONS))
++        if pattern.search(text)
++    )
++
++
++def _unit_cells(text: str, label: str, period: str) -> list[list[tuple[str, str]]]:
++    """For each row labelled `label` under a column headed `period`, in any table of the
++    handoff: the `(what, text)` of every cell that may state the row's unit: the row's other
++    cells (never the amount cell), the named column's header and the table's first header cell."""
++    groups: list[list[tuple[str, str]]] = []
++    for table in _tables(text):
++        header, *rows = table
++        for column in (i for i, h in enumerate(header) if i > 0 and _plain(h) == _plain(period)):
++            for row in (r for r in rows if len(r) > column and _plain(r[0]) == _plain(label)):
++                groups.append(
++                    [("period header", header[column]), ("first header cell", header[0])]
++                    + [
++                        (_plain(header[i]) if i < len(header) else "unit", cell)
++                        for i, cell in enumerate(row)
++                        if i != column
++                    ]
++                )
++    return groups
++
++
++def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | None:
++    """Why the named operand's row is in the other unit than the block's, or None. A row is
++    refused when a cell that may state its unit (`_unit_cells`) names the other unit and none of
++    them names the block's."""
++    block, other = ("thousands", "millions") if scale == 1000 else ("millions", "thousands")
++    issues = []
++    for group in _unit_cells(text, operand.row or "", operand.period or ""):
++        named = [(what, cell, _units_named(cell)) for what, cell in group]
++        if not any(block in units for *_, units in named):
++            issues += [(what, cell) for what, cell, units in named if other in units]
++    if not issues:
++        return None
++    what, cell = min(issues)
++    return (
++        f"base {key}: row `{_cut(_plain(operand.row or ''), 60)}` states its {_cut(what, 40)} as "
++        f"`{_cut(_plain(cell), 40)}`, not the block's unit ({_UNIT_OF[scale]}); state a reason "
++        "instead of an amount"
++    )
++
++
+ def _declined(document: dict[str, object], source: str) -> None:
+     """A block whose every driver has all-null values is the method declining to forecast."""
+     drivers = document.get("base_drivers")
+@@ -305,6 +374,96 @@ def _declined(document: dict[str, object], source: str) -> None:
+     )
+ 
+ 
++_AMOUNT_DRIVERS = ("dividends", "debt_repayment")
++_THOUSANDS = re.compile(r"-?[0-9]{1,9}(\.[0-9])?")
++_SCALE_REFUSAL = "`scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)"
++
++
++def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
++    """`(name, holder, key)` of every amount slot the document's shape allows: the base operands,
++    the dividends and debt repayment drivers of the base and the two cases, and each facility's
++    balance and annual amortisation. A slot the model left out is no slot: the schema refuses the
++    missing key with its usual message. Ratios, shares, rates and dates are never slots."""
++    base = document.get("base")
++    if isinstance(base, dict):
++        for key, operand in base.items():
++            if isinstance(operand, dict) and "amount" in operand:
++                yield f"base {key}", operand, "amount"
++    for case in ("base_drivers", "upside_drivers", "downside_drivers"):
++        group = document.get(case)
++        if not isinstance(group, dict):
++            continue
++        for name in _AMOUNT_DRIVERS:
++            driver = group.get(name)
++            values = driver.get("values") if isinstance(driver, dict) else None
++            for i in range(len(values) if isinstance(values, list) else 0):
++                yield f"{case} {name} year {i + 1}", values, i
++    facilities = document.get("facilities")
++    for number, facility in enumerate(facilities if isinstance(facilities, list) else (), 1):
++        for field in ("balance", "annual_amortisation") if isinstance(facility, dict) else ():
++            if field in facility:
++                yield f"facility {number} {field}", facility, field
++
++
++def _to_millions(document: dict[str, Any], source: str) -> dict[str, str]:
++    """At `scale` 1000 the block states USD thousands as CP-1 prints them: each amount text is
++    replaced, in place, by its exact USD millions value, and the stated texts are returned by
++    slot name. Anything else changes nothing. A scale that is not 1 or 1000, and an amount that is
++    not at most nine digits and one decimal place, are refused, never rounded."""
++    scale = document.get("scale")
++    if scale is None:
++        return {}
++    if scale not in (1, 1000):
++        raise ValueError(f"{source}: {_SCALE_REFUSAL}")
++    stated: dict[str, str] = {}
++    if scale == 1:
++        return stated
++    for name, holder, key in _slots(document):
++        text = holder[key]
++        if not isinstance(text, str):
++            continue  # null stays null; any other type is the schema's to refuse
++        # An amount driver or facility amount is never negative: `-0` is refused as without scale.
++        if _THOUSANDS.fullmatch(text) is None or (
++            text.startswith("-") and not name.startswith("base ") and Decimal(text) == 0
++        ):
++            raise ValueError(
++                f"{source}: {_cut(name, 45)} {_cut(text, 40)} is not an amount in thousands as "
++                "CP-1 prints it (scale 1000): at most nine digits and one decimal place, "
++                "no separators"
++            )
++        stated[name] = text
++        with localcontext(cp2g._EXACT):
++            holder[key] = format(cp2g._exact(Decimal(text).scaleb(-3)), "f")
++    return stated
++
++
++def _check_base(inputs: ForecastInputs, cp1_text: str, source: str, stated: dict[str, str]) -> None:
++    """Each base amount, as the block states it, is the cell it names (a named block, or the
++    layer-1 block) or is printed somewhere in CP-1. A CP-2G block at scale 1000 must name."""
++    named = source == "CP-1" or any(
++        operand.row is not None or operand.period is not None for operand in inputs.base.values()
++    )
++    if (
++        not named
++        and inputs.scale == 1000
++        and any(operand.amount is not None for operand in inputs.base.values())
++    ):
++        raise ValueError(
++            f"{source}: a block at scale 1000 must name the row and period of every base operand "
++            "that has an amount"
++        )
++    for key, operand in inputs.base.items():
++        amount = stated.get(f"base {key}", operand.amount)
++        if named:
++            problem = _layer1_problem(cp1_text, key, operand, amount)
++            if problem is None and amount is not None and inputs.scale is not None:
++                problem = _unit_problem(cp1_text, key, operand, inputs.scale)
++            if problem is not None:
++                raise ValueError(f"{source}: {problem}")
++        elif amount is not None and not _printed(cp1_text, amount):
++            raise ValueError(f"{source}: base {key} {amount} is not printed in CP-1")
++
++
+ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInputs:
+     """The validated inputs block; ValueError names the first thing wrong with it. `source` is
+     the module that wrote the block: CP-2G, or CP-1 for a layer-1 forecast (base operands and
+@@ -315,6 +474,7 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
+     if document is None:
+         raise ValueError(f"{source}: the forecast inputs block is not a bounded JSON object")
+     _declined(document, source)
++    stated = _to_millions(document, source)
+     try:
+         inputs = ForecastInputs.model_validate_json(exact_json(document))
+     except ValidationError as error:
+@@ -330,29 +490,22 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
+         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
+     if source == "CP-1" and inputs.facilities:
+         raise ValueError("CP-1: a layer-1 forecast states no facilities")
+-    named = source == "CP-1" or any(
+-        operand.row is not None or operand.period is not None for operand in inputs.base.values()
+-    )
+-    for key, operand in inputs.base.items():
+-        if named:
+-            if (problem := _layer1_problem(cp1_text, key, operand)) is not None:
+-                raise ValueError(f"{source}: {problem}")
+-        elif operand.amount is not None and not _printed(cp1_text, operand.amount):
+-            raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
++    _check_base(inputs, cp1_text, source, stated)
+     if inputs.facilities:
+-        _check_facilities(inputs, inputs.facilities, cp1_text)
++        _check_facilities(inputs, inputs.facilities, cp1_text, stated)
+     return inputs
+ 
+ 
+ def _check_facilities(
+-    inputs: ForecastInputs, facilities: tuple[Facility, ...], cp1_text: str
++    inputs: ForecastInputs, facilities: tuple[Facility, ...], cp1_text: str, stated: dict[str, str]
+ ) -> None:
+     """Each stated term is printed in CP-1, the balances fit the base debt, and no case names a
+     driver the schedule replaces."""
+-    for facility in facilities:
+-        if not _printed(cp1_text, facility.balance):
++    for number, facility in enumerate(facilities, 1):
++        balance = stated.get(f"facility {number} balance", facility.balance)
++        if not _printed(cp1_text, balance):
+             raise ValueError(
+-                f"CP-2G: facility {facility.name} balance {facility.balance} is not printed in CP-1"
++                f"CP-2G: facility {facility.name} balance {balance} is not printed in CP-1"
+             )
+         for field in ("fixed_rate_pct", "spread_pct", "floor_pct"):
+             value = getattr(facility, field)
+@@ -361,6 +514,7 @@ def _check_facilities(
+                     f"CP-2G: facility {facility.name} {field} {value}% is not printed in CP-1"
+                 )
+     debt = inputs.base["debt"].amount
++    divided = ", in USD millions after dividing by scale 1000" if inputs.scale == 1000 else ""
+     if debt is not None:
+         with localcontext(cp2g._EXACT):
+             total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
+@@ -370,12 +524,12 @@ def _check_facilities(
+         if too_much:
+             raise ValueError(
+                 f"CP-2G: facility balances total {format(total, 'f')}, more than 1.25 times base "
+-                f"debt {debt}; check the unit"
++                f"debt {debt}{divided}; check the unit"
+             )
+         if over_debt:
+             raise ValueError(
+                 f"CP-2G: scheduled repayments total {_plain_amount(repaid)}, more than base debt "
+-                f"{_plain_amount(Decimal(debt))}"
++                f"{_plain_amount(Decimal(debt))}{divided}"
+             )
+     for name in ("upside_drivers", "downside_drivers"):
+         case: CaseDrivers | None = getattr(inputs, name)
+@@ -569,8 +723,12 @@ def model_files(
+             **_stated("downside_drivers", inputs.downside_drivers),
+             "outputs": outputs,
+             **detail,
++            # Written only when the block states `scale`, so a block without it is byte for byte
++            # what it was.
++            **({} if inputs.scale is None else {"scale": inputs.scale, "units": UNITS}),
+             "scope_limits": [
+                 LIMIT if source == "CP-2G" else LAYER1_LIMIT,
++                *([SCALE_LIMIT] if inputs.scale == 1000 else []),
+                 *inputs.scope_limits,
+                 *limits,
+             ],
+@@ -597,6 +755,7 @@ def model_files(
+                         operands,
+                         named=named,
+                         forecast_year=inputs.years[0].year,
++                        scale=inputs.scale or 1,
+                     )
+                 }
+                 if history
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 5804f8c..52f39e2 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -1595,31 +1595,48 @@ PEER_READER_BLOCK = (
+     "want of peers only when those tables hold no usable peer, and say so.\n\n"
+ )
+ # Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
++UNIT_RULE = (
++    "State `scale` in every block, as the statements print it (`1000` for thousands, `1` for "
++    "millions), and state every amount in the block in that one unit exactly as printed; an "
++    "amount printed in the other unit is stated as missing, with the reason, not converted. "
++)
+ FORECAST_BLOCK = (
+     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
+     "one fenced json block and no other fence. You state "
+     "inputs only; Python computes every forecast figure, so put no forecast figure in the block. "
+-    '`base` holds exactly these ten operands in USD millions, each `{"amount": "<decimal>", '
++    "`scale` is `1` when CP-1's statement tables print USD millions and `1000` when they print "
++    "USD thousands; every amount in this block is stated in that one unit, exactly as CP-1 "
++    "prints it, and Python divides by `scale`, so every published figure is USD millions. Do not "
++    "convert an amount yourself. "
++    + UNIT_RULE
++    + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", '
+     '"reason": null, "row": "<label>", "period": "<header>"}` or '
+     '`{"amount": null, "reason": "<why CP-1 does not state it>"}`: '
+     f"{', '.join(cp2g.OPERAND_METRIC)}. "
+     "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
+     "read the amount from, and `period` the exact header text of that table's column (for "
+     'example `"row": "Net sales", "period": "FY2024"`). Name both for every operand that has an '
+-    "amount. Copy the amount as that cell prints it, in millions; for interest, taxes and capex "
++    'amount. Copy the amount as that cell prints it (with `"scale": 1000` a cell printing '
++    '2,620,995 is `"2620995"`; at most nine digits and one decimal place); for interest, taxes '
++    "and capex "
+     "write the positive magnitude whatever sign the cell shows; for working capital write the "
+     "cell's value with its sign reversed (a cell printing (45), an investment, is 45; a cell "
+     "printing 45 or +45, a release, is -45). A figure in CP-1's prose, a basis line or its "
+     "sources is not a cell: an amount CP-1 prints in no table cell is stated as missing, with "
+-    "the reason. Where CP-1 prints the amount under more than one column, name a column headed "
+-    "by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the Forecast page "
+-    "shows history only for a line named under such a header. `base_drivers` is the method's "
+-    "base-case driver "
++    "the reason. An amount CP-1 prints only in the other unit (for example revolver availability "
++    "in USD millions where the statements are in thousands) is stated as missing, with the "
++    "reason; do not rescale it. Where CP-1 prints the amount under more than one column, name "
++    "a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the "
++    "Forecast page shows history only for a line named under such a header. `base_drivers` is "
++    "the method's base-case driver "
+     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
+     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
+     "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
+     'one per forecast year (for example ["0.05", "0.04", "0.03"]), each rounded to at most four '
+-    'decimal places (a ratio of 0.48022670 is written "0.4802"); `category` is exactly one of '
++    'decimal places (a ratio of 0.48022670 is written "0.4802"); the `dividends` and '
++    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, USD 20 '
++    'million is `"20000"`, at most one decimal place) and every other driver is a ratio and is '
++    "never scaled; `category` is exactly one of "
+     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
+     "(for example a blocked dependency), still write the block, with every driver's `values` as "
+     "`[null, null, null]`. `downside_shock` is "
+@@ -1631,7 +1648,7 @@ FORECAST_BLOCK = (
+     "`facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate "
+     "terms, otherwise write null. Each row is "
+     '`{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", '
+-    '"annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, '
++    '"annual_amortisation", "maturity"}`. `balance` is in the block\'s unit and `fixed_rate_pct`, '
+     "`spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must "
+     'print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states '
+     "`fixed_rate_pct` and null for the other rate fields; a floating-rate facility states "
+@@ -1640,8 +1657,9 @@ FORECAST_BLOCK = (
+     '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
+     "must be between 0% and 30% in every year. The facilities' "
+     "scheduled repayments over the three years must not exceed base debt. "
+-    "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
+-    "YYYY-MM-DD or null. A row's `balance` is its drawn principal. At most 40 rows; names are "
++    "`annual_amortisation` is in the block's unit, a year, or null when CP-1 states none; "
++    "`maturity` is YYYY-MM-DD or null. A row's `balance` is its drawn principal. Leave out a "
++    "facility whose balance CP-1 prints only in the other unit. At most 40 rows; names are "
+     "unique ignoring case; balances may total at most 1.25 times base debt; `fixed_rate_pct` is "
+     "at most 30, `spread_pct` at most 20 and `floor_pct` at most 10; `reference_rate` values have "
+     "at most four decimal places. When `facilities` is stated Python computes cash interest on "
+@@ -1689,26 +1707,39 @@ PERIOD_TABLE_BLOCK = (
+ LAYER1_FORECAST_BLOCK = (
+     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
+     "one fenced json block and no other fence, after your tables. You state inputs only; Python "
+-    "computes every forecast figure, so put no forecast figure in the block. `base` holds exactly "
+-    'these ten operands in USD millions, each `{"amount": "<decimal>", "reason": null, "row": '
+-    '"<label>", "period": "<header>"}` or '
++    "computes every forecast figure, so put no forecast figure in the block. `scale` is `1` when "
++    "your statement tables print USD millions and `1000` when they print USD thousands; every "
++    "amount in this block is stated in that one unit, exactly as your tables print it, and "
++    "Python divides by `scale`, so every published figure is USD millions. Do not convert an "
++    "amount yourself. "
++    + UNIT_RULE
++    + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", "reason": null, '
++    '"row": "<label>", "period": "<header>"}` or '
+     '`{"amount": null, "reason": "<why you do not state it>"}`: '
+     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
+     "your own tables that you read the amount from, and `period` the exact header text of that "
+     'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). Copy '
+-    "the amount as that cell prints it, in millions; for interest, taxes and capex write the "
+-    "positive magnitude whatever sign the cell shows; for working capital write the cell's value "
+-    "with its sign reversed (a cell printing (45), an investment, is 45; a cell printing 45 or "
+-    "+45, a release, is -45). Print your tables as "
++    'the amount as that cell prints it (with `"scale": 1000` a cell printing 2,620,995 is '
++    '`"2620995"`; at most nine digits and one decimal place); for interest, taxes and capex '
++    "write the positive magnitude whatever sign the cell shows; for working capital write the "
++    "cell's value with its sign reversed (a cell printing (45), an investment, is 45; a cell "
++    "printing 45 or +45, a release, is -45). Print your tables as "
+     "you normally would; add nothing for this block. A figure in prose, a basis line or the "
+-    "sources is not a cell. `base_drivers` is a run-rate base case and nothing more "
++    "sources is not a cell. An amount your tables print only in the other unit is stated as "
++    "missing, with the reason. Where your tables print the amount under more than one column, "
++    "name a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): "
++    "the Forecast page shows history only for a line named under such a header. "
++    "`base_drivers` is a run-rate base case and nothing more "
+     "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
+     "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
+     "`rationale` and `limitation`). Anchor every driver to a figure you state: carry the latest "
+     "year's ratio forward, or use a scheduled maturity or a declared payment, and name the anchor "
+     "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
+     'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
+-    "rounded to at most four decimal places; `category` is exactly one of "
++    "rounded to at most four decimal places; the `dividends` and `debt_repayment` values are "
++    'amounts in the block\'s unit (with `"scale": 1000`, USD 20 million is `"20000"`, at '
++    "most one decimal place) and every other driver is a ratio and is never scaled; `category` "
++    "is exactly one of "
+     f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
+     "`Insufficient Information`, when no stated figure can anchor it; when none can, set every "
+     "driver's `values` to `[null, null, null]`. Set `downside_shock`, `upside_drivers` and "
+@@ -2395,6 +2426,18 @@ def _key_figure_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+     return key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
+ 
+ 
++# The refusals about a facility: the two `parse` raises itself (`_check_facilities`, `_to_millions`)
++# and a schema refusal whose own first path is `facilities` (or the unique-names rule, which the
++# schema reports at the root). A model-written key or quoted text that merely contains `facilit`
++# is not one.
++_FACILITY_REFUSAL = re.compile(
++    r"^[\w-]+: (?:facility |scheduled repayments total |\w+_drivers states debt_repayment"
++    r"|forecast inputs: (?:\d+ problems; first: )?"
++    r"(?:facilities[.:]|\(root\): Value error, facility names must be unique))"
++)
++_UNNAMED_AT_SCALE = re.compile(r"^[\w-]+: a block at scale 1000 must name the row and period")
++
++
+ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+     """Live run tdg-forecast-004 (2026-11-10): a forecast block delivery cannot parse is sent
+     back for repair here, not dropped after payment. Declining (all null) stays the method's call
+@@ -2413,11 +2456,18 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+             return (f"Forecast inputs: {error}. {fix}{missing}",)
+         if re.match(r"^[\w-]+: the handoff gives no forecast drivers", message):
+             return ()  # declining stays the method's call
+-        if "facilit" in message or "scheduled repayments" in message:
++        if _UNNAMED_AT_SCALE.match(message):
++            fix = "Name the row and period of each base operand; if you cannot, "
++            advice = (
++                f"{fix}set every driver's values to [null, null, null] and say why in scope_limits."
++            )
++        elif _FACILITY_REFUSAL.match(message):
+             fallback = "write `facilities` as null and keep the drivers."
+-            return (f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",)
+-        fix = "Correct the block; if you cannot, set every driver's values to "
+-        return (f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",)
++            advice = f"Correct the facilities; if you cannot, {fallback}"
++        else:
++            fix = "Correct the block; if you cannot, set every driver's values to "
++            advice = f"{fix}[null, null, null] and say why in scope_limits."
++        return (f"Forecast inputs: {error}. {advice}",)
+     return ()
+ 
+ 
+diff --git a/src/deploy_workflow/owners/cpos_periods.py b/src/deploy_workflow/owners/cpos_periods.py
+index e91c248..868b084 100644
+--- a/src/deploy_workflow/owners/cpos_periods.py
++++ b/src/deploy_workflow/owners/cpos_periods.py
+@@ -270,22 +270,28 @@ def lines(
+     from the rows of the label they name (`named`: `{key: (row label, period header)}`; None is
+     none named). An operand with an amount and no name has no history. Never raises on a table
+     shape."""
+-    return _locate(tables, operands, named or {})[0]
++    return _locate(tables, operands, named or {}, 1)[0]
+ 
+ 
+ def _locate(
+     tables: list[list[list[str]]],
+     operands: cp2g.Operands,
+     named: Mapping[str, tuple[str, str]],
++    scale: int,
+ ) -> tuple[dict[str, Line], Period | None]:
+-    """The lines and the base period (the latest period named for revenue or EBITDA)."""
++    """The lines and the base period (the latest period named for revenue or EBITDA). At a scale
++    other than 1 each cell is compared with the operand times the scale, and the figures found are
++    divided by it, so the lines are in the operands' unit; at scale 1 no cell is touched."""
+     found: dict[str, Line] = {}
+     with localcontext(cp2g._EXACT):
+         for key, operand in operands.items():
+             if operand.amount is None:
+                 found[key] = Line(reason=_cut(operand.reason or NO_REASON, _MAX_REASON))
+-            else:
++            elif scale == 1:
+                 found[key] = _named_line(tables, key, operand.amount, named.get(key))
++            else:
++                line = _named_line(tables, key, operand.amount * scale, named.get(key))
++                found[key] = replace(line, values={p: v / scale for p, v in line.values.items()})
+     return found, _named_base(named)
+ 
+ 
+@@ -805,12 +811,14 @@ def history(
+     *,
+     named: Mapping[str, tuple[str, str]] | None = None,
+     forecast_year: int | None = None,
++    scale: int = 1,
+ ) -> dict[str, object]:
+     """The Forecast page's historical columns, read from CP-1's period-labelled tables (`named`:
+     the forecast inputs' row and period for each operand; `forecast_year`: the first forecast
+-    year, from which no fiscal year is history). Never raises: a value that cannot be built is
+-    missing with its reason."""
+-    located_lines, base = _locate(tables, operands, named or {})
++    year, from which no fiscal year is history; `scale`: 1000 when CP-1's cells are in thousands
++    and the operands in millions, then every figure is published in millions). Never raises: a
++    value that cannot be built is missing with its reason."""
++    located_lines, base = _locate(tables, operands, named or {}, scale)
+     found, forecast = _before_forecast(located_lines, forecast_year, base)
+     located = [line for line in found.values() if line.reason is None]
+     printed = frozenset(p for line in located for p in (*line.values, *line.gaps))
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 518163d..6a38688 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -3657,6 +3657,19 @@ def test_a_scheduled_repayment_refusal_is_told_the_same():
+     )
+ 
+ 
++def test_a_schema_refusal_naming_a_facility_key_is_told_to_null_the_drivers():
++    """The facilities line is for the refusals `_check_facilities` raises, not for any refusal whose
++    path holds a model-written key containing `facilit`."""
++    cp1 = " ".join(BASE.values()).encode()
++    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1})
++    (issue,) = cpos_launch._forecast_issues(task, forecast_block(facility_note="x"))
++    assert issue.startswith("Forecast inputs: CP-2G: forecast inputs: facility_note")
++    assert issue.endswith(
++        "Correct the block; if you cannot, set every driver's values to "
++        "[null, null, null] and say why in scope_limits."
++    )
++
++
+ def test_checker_accepts_a_valid_or_declined_forecast_block(tmp_path):
+     assert cp2g_check(tmp_path, forecast_block()) == ()
+     (tmp_path / "declined").mkdir()
+@@ -5022,6 +5035,39 @@ def test_a_facilities_refusal_keeps_the_facilities_line():
+     assert issue.endswith(FACILITY_END) and issue.count("Correct the facilities;") == 1
+ 
+ 
++def _facility_row(name="Notes", **changes):
++    return {**FACILITY_ROW, "name": name, **changes}
++
++
++SCHEMA_FACILITY_FAULTS = {
++    "a coupon above the cap": [_facility_row(fixed_rate_pct="35")],
++    "both rate forms stated": [_facility_row(spread_pct="2.5")],
++    "a maturity that is not a date": [_facility_row(maturity="2029-02-30")],
++    "duplicate facility names": [_facility_row(), _facility_row("NOTES")],
++    "a negative balance": [_facility_row(balance="-400")],
++    "a forty-first facility": [_facility_row(f"Loan {n}") for n in range(41)],
++    "four faulty rows": [_facility_row(f"Loan {n}", balance="-1") for n in range(4)],
++}
++
++
++@pytest.mark.parametrize("name", SCHEMA_FACILITY_FAULTS)
++def test_a_schema_refusal_inside_facilities_keeps_the_facilities_line(name):
++    block = forecast_block(base=_named_base(), facilities=SCHEMA_FACILITY_FAULTS[name])
++    (issue,) = _repair_issues(block, _cp1_with_rows({}))
++    assert "forecast inputs: " in issue, issue
++    assert issue.endswith(
++        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
++    )
++
++
++def test_a_facility_fault_behind_another_schema_fault_keeps_the_block_line():
++    block = forecast_block(
++        base=_named_base(), years=[1], facilities=[_facility_row(balance="-400")]
++    )
++    (issue,) = _repair_issues(block, _cp1_with_rows({}))
++    assert issue.endswith(BLOCK_END)
++
++
+ def test_a_block_refused_for_another_reason_keeps_the_null_every_driver_line():
+     (issue,) = _repair_issues(forecast_block(base=_named_base(), years=[1]), _cp1_with_rows({}))
+     assert issue.endswith(BLOCK_END)
+@@ -5124,6 +5170,46 @@ def test_a_refusal_that_mentions_base_later_in_its_text_is_not_an_operand_refusa
+     assert issue.endswith(BLOCK_END)
+ 
+ 
++def test_both_forecast_instructions_ask_for_the_scale():
++    for block, tables in (
++        (cpos_launch.FORECAST_BLOCK, "CP-1's"),
++        (cpos_launch.LAYER1_FORECAST_BLOCK, "your"),
++    ):
++        for words in (
++            (
++                f"`scale` is `1` when {tables} statement tables print USD millions and `1000` "
++                "when they print USD thousands"
++            ),
++            "Python divides by `scale`",
++            "Do not convert an amount yourself",
++            'a cell printing 2,620,995 is `"2620995"`',
++            "at most nine digits and one decimal place",
++            "only in the other unit",
++            "every other driver is a ratio and is never scaled",
++        ):
++            assert words in block, words
++        assert "ten operands in USD millions" not in block and "in millions;" not in block
++    assert "`balance` is in the block's unit" in cpos_launch.FORECAST_BLOCK
++    assert "`annual_amortisation` is in the block's unit, a year" in cpos_launch.FORECAST_BLOCK
++    assert "USD millions a year" not in cpos_launch.FORECAST_BLOCK
++
++
++def test_both_forecast_instructions_state_what_the_unit_check_enforces():
++    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
++        assert (
++            "State `scale` in every block, as the statements print it (`1000` for thousands, `1` "
++            "for millions), and state every amount in the block in that one unit exactly as "
++            "printed; an amount printed in the other unit is stated as missing, with the reason, "
++            "not converted." in block
++        )
++        assert "or absent" not in block
++
++
++def test_both_forecast_instructions_say_where_a_period_header_may_be_named():
++    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
++        assert "name a column headed by a reporting period" in block
++
++
+ NET_DEBT_HEADER = (
+     "`| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |`"
+ )
+diff --git a/tests/test_cpos_scale.py b/tests/test_cpos_scale.py
+new file mode 100644
+index 0000000..ecfbc0f
+--- /dev/null
++++ b/tests/test_cpos_scale.py
+@@ -0,0 +1,835 @@
++"""`scale` at the door of `parse`: a block may state amounts in USD thousands."""
++
++import json
++import re
++import types
++from decimal import Decimal
++from fractions import Fraction
++
++import pytest
++from hypothesis import given
++from hypothesis import strategies as st
++from test_cpos_launch import PATHS, forecast_block
++from test_cpos_periods import BASE, CP1, NAMED, OPERANDS, cell
++
++from deploy_workflow.owners import cpos_forecast, cpos_launch, cpos_periods
++from deploy_workflow.owners.cpos_forecast import SCALE_LIMIT, model_files, parse
++
++CP1_K = """| Reported label | Q3 2025 | Q3 2024 revised | 9M 2025 | 9M 2024 | FY2024 | FY2023 \
++| Locator |
++| --- | --- | --- | --- | --- | --- | --- | --- |
++| Net sales | 270,000 | 250,000 | 780,000 | 720,000 | 1,000,000 | 940,000 | p.2 |
++| Adjusted EBITDA | 84,000 | 75,000 | 240,000 | 216,000 | 300,000 | 276,000 | p.9 |
++
++| Reported label | 9M 2025 | 9M 2024 | FY2024 | Locator |
++| --- | --- | --- | --- | --- |
++| Cash paid for interest | (27,000) | (28,000) | (36,000) | p.4 |
++| Income taxes paid | (15,000) | (14,000) | (20,000) | p.4 |
++| Change in working capital | (12,000) | (9,000) | (10,000) | p.4 |
++| Capital expenditures | (33,000) | (29,000) | (40,000) | p.4 |
++| Free cash flow | 153,000 | 136,000 | 194,000 | p.4 |
++
++| Metric | FY2024 | 9M 2025 | 9M 2024 |
++| --- | --- | --- | --- |
++| Total debt | 600000 | 590000 | 620000 |
++| Cash and cash equivalents | 100000 | 120000 | 90000 |
++| Undrawn revolver | 50000 | 50000 | 50000 |
++"""
++
++CP1_K2 = """| Reported label | H1 2025 | H1 2024 | FY2024 | Locator |
++| --- | --- | --- | --- | --- |
++| Total revenue | 1,421,519 | 1,264,478 | 2,620,995 | p.2 |
++| Adjusted EBITDA | 370,100 | 310,479 | 667,621 | p.9 |
++| Cash paid for interest | (52,000) | (49,750) | (100,250) | p.4 |
++| Capital expenditures | (71,500) | (60,250) | (139,750) | p.4 |
++
++| Reported facility / accounting row | H1 2025 | FY2024 | Unit and terms / evidence |
++| --- | --- | --- | --- |
++| Term Loan Facility | 995,000 | 1,000,000 | US$ thousands; 6.25% |
++| 6.000% Senior Secured Notes | 500,000 | 500,000 | US$ thousands; 6.00% |
++| Total debt | 1,534,356 | 1,555,597 | US$ thousands |
++| Cash and cash equivalents | 175,509.5 | 10,879 | US$ thousands |
++| Revolver availability | 618.5 | Not supplied | US$ million |
++
++### Chart data: liquidity
++
++| Period | Cash | Undrawn committed facilities | Reporting unit | Basis and limitation |
++| --- | --- | --- | --- | --- |
++| H1 2025 | 175.5095 | 618.5 | US$m | Availability after letters of credit. |
++"""
++
++
++def _at(amount, row, period):
++    return {"amount": amount, "reason": None, "row": row, "period": period}
++
++
++K2_BASE = {
++    "revenue": _at("2620995", "Total revenue", "FY2024"),
++    "ebitda": _at("667621", "Adjusted EBITDA", "FY2024"),
++    "interest": _at("100250", "Cash paid for interest", "FY2024"),
++    "taxes": {"amount": None, "reason": "CP-1 states no cash taxes."},
++    "wc": {"amount": None, "reason": "CP-1 states no working capital change."},
++    "capex": _at("139750", "Capital expenditures", "FY2024"),
++    "fcf": {"amount": None, "reason": "CP-1 states no free cash flow."},
++    "debt": _at("1534356", "Total debt", "H1 2025"),
++    "cash": _at("175509.5", "Cash and cash equivalents", "H1 2025"),
++    "undrawn": {
++        "amount": None,
++        "reason": "CP-1 prints revolver availability in USD millions, not in this block's unit.",
++    },
++}
++K2_PATHS = {
++    "revenue_growth": ("0.10",) * 3,
++    "ebitda_margin": ("0.25",) * 3,
++    "capex_pct_revenue": ("0.05",) * 3,
++    "tax_wc_pct_revenue": ("0.02",) * 3,
++    "interest_rate": ("0.065",) * 3,
++    "dividends": ("0",) * 3,
++    "debt_repayment": ("22873",) * 3,
++}
++
++
++def _fixed(name, balance, rate, amortisation):
++    return {
++        "name": name,
++        "balance": balance,
++        "fixed_rate_pct": rate,
++        "spread_pct": None,
++        "floor_pct": None,
++        "reference_rate": None,
++        "annual_amortisation": amortisation,
++        "maturity": None,
++    }
++
++
++FAC = [
++    _fixed("Term Loan Facility", "995000", "6.25", "10000"),
++    _fixed("Notes", "500000", "6.00", None),
++]
++
++K = {k: str(int(v) * 1000) for k, v in BASE.items()}
++K_PATHS = {**PATHS, "dividends": ("20000",) * 3, "debt_repayment": ("50000",) * 3}
++
++
++def drivers(paths):
++    return {
++        n: {
++            "values": list(v),
++            "category": "Analyst Interpretation",
++            "rationale": "Synthetic.",
++            "limitation": None,
++        }
++        for n, v in paths.items()
++    }
++
++
++def named_base(amounts):
++    return {
++        k: {"amount": v, "reason": None, "row": NAMED[k][0], "period": NAMED[k][1]}
++        for k, v in amounts.items()
++    }
++
++
++def block_k(**changes):
++    return forecast_block(
++        **{"scale": 1000, "base": named_base(K), "base_drivers": drivers(K_PATHS), **changes}
++    )
++
++
++def block_m(**changes):
++    return forecast_block(**{"base": named_base(BASE), **changes})
++
++
++def block_k2(**changes):
++    return forecast_block(
++        **{"scale": 1000, "base": K2_BASE, "base_drivers": drivers(K2_PATHS), **changes}
++    )
++
++
++def test_scale_1000_states_thousands_and_parses_to_millions():  # AK-3
++    inputs = parse(block_k(), CP1_K)
++    assert {k: o.amount for k, o in inputs.base.items()} == BASE
++    assert inputs.base_drivers.dividends.values == ("20", "20", "20")
++    assert inputs.base_drivers.debt_repayment.values == ("50", "50", "50")
++    assert inputs.scale == 1000
++
++
++def test_a_decimal_and_a_bracketed_thousands_cell_parse_exactly():  # Review Focus 1, 2; AK-4
++    base = parse(block_k2(), CP1_K2).base
++    assert {k: o.amount for k, o in base.items() if o.amount} == {
++        "revenue": "2620.995",
++        "ebitda": "667.621",
++        "interest": "100.25",
++        "capex": "139.75",
++        "debt": "1534.356",
++        "cash": "175.5095",
++    }
++
++
++@pytest.mark.parametrize(
++    "operand, message",
++    [  # AK-6
++        (
++            {"cash": {**K2_BASE["cash"], "amount": "175.5095"}},
++            (
++                "CP-2G: base cash 175.5095 is not an amount in thousands as CP-1 "
++                "prints it (scale 1000): at most nine digits and one decimal place, no separators"
++            ),
++        ),
++        (
++            {"cash": {**K2_BASE["cash"], "amount": "175509.55"}},
++            "CP-2G: base cash 175509.55 is not an amount in thousands",
++        ),
++        (
++            {"revenue": {**K2_BASE["revenue"], "amount": "2,620,995"}},
++            "CP-2G: base revenue 2,620,995 is not an amount in thousands",
++        ),
++        (
++            {"revenue": {**K2_BASE["revenue"], "amount": "1234567890"}},
++            "CP-2G: base revenue 1234567890 is not an amount in thousands",
++        ),
++        (
++            {"revenue": {**K2_BASE["revenue"], "amount": "2621"}},
++            (
++                "CP-2G: base revenue 2621 is not CP-1's cell at row `Total revenue`, "
++                "period `FY2024` (2,620,995)"
++            ),
++        ),
++    ],
++)
++def test_refusals_at_scale_1000(operand, message):
++    with pytest.raises(ValueError) as caught:
++        parse(block_k2(base={**K2_BASE, **operand}), CP1_K2)
++    assert message in str(caught.value)
++
++
++@pytest.mark.parametrize("scale", ["1000", 100, 0, -1000, [1000], {"x": 1}])
++def test_a_scale_that_is_not_1_or_1000_is_refused(scale):
++    with pytest.raises(ValueError) as caught:
++        parse(block_k(scale=scale), CP1_K)
++    assert (
++        str(caught.value)
++        == "CP-2G: `scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)"
++    )
++
++
++def test_a_millions_block_does_not_read_a_thousands_handoff():
++    with pytest.raises(ValueError, match="CP-2G: base revenue 1000 is not CP-1's cell"):
++        parse(block_m(), CP1_K)
++    with pytest.raises(ValueError, match="CP-2G: base revenue 1000000 is not CP-1's cell"):
++        parse(block_k(), CP1)
++
++
++UNNAMED = (
++    "CP-2G: a block at scale 1000 must name the row and period of every base operand that has "
++    "an amount"
++)
++
++
++def test_a_block_at_scale_1000_must_name_its_rows():
++    base = {k: {"amount": v, "reason": None} for k, v in K.items()}
++    for cp1 in (CP1_K, CP1):
++        with pytest.raises(ValueError) as caught:
++            parse(block_k(base=base), cp1)
++        assert str(caught.value) == UNNAMED
++    with pytest.raises(ValueError, match=re.escape(UNNAMED)):
++        model_files(CP1_K.encode(), block_k(base=base).encode(), history=True)
++
++
++def test_a_block_that_names_one_operand_is_judged_by_the_named_rule_not_the_unnamed_one():
++    base = {k: {"amount": v, "reason": None} for k, v in K.items()}
++    base["revenue"] = named_base(K)["revenue"]
++    with pytest.raises(
++        ValueError, match="CP-2G: base ebitda must name the `row` label and `period`"
++    ):
++        parse(block_k(base=base), CP1_K)
++
++
++def test_an_unnamed_block_at_scale_1_or_without_scale_is_as_it_was():
++    base = {k: {"amount": v, "reason": None} for k, v in BASE.items()}
++    for changes in ({}, {"scale": 1}):
++        files = model_files(CP1.encode(), block_m(base=base, **changes).encode(), history=True)
++        first = json.loads(files["forecast_exact.json"])["outputs"]["REFERENCE"]["years"][0]
++        assert first["revenue"]["amount"] == "1050"
++        record = json.loads(files["calculation.json"])["history"]
++        assert cell(record, "LTM", "revenue") == {"amount": None, "reason": cpos_periods.NOT_NAMED}
++    with pytest.raises(ValueError, match="CP-2G: base revenue 1000 is not printed in CP-1"):
++        parse(block_m(base=base, scale=1), CP1_K)
++
++
++def test_a_block_at_scale_1000_with_no_amount_has_no_row_to_name():
++    inputs = parse(block_k(base={k: {"amount": None, "reason": "not used"} for k in K}), CP1_K)
++    assert {o.amount for o in inputs.base.values()} == {None}
++
++
++def test_the_unnamed_scale_1000_refusal_gets_its_own_repair_line():
++    base = {k: {"amount": v, "reason": None} for k, v in K.items()}
++    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": CP1_K.encode()})
++    (issue,) = cpos_launch._forecast_issues(task, block_k(base=base))
++    assert issue == (
++        f"Forecast inputs: {UNNAMED}. Name the row and period of each base operand; if you "
++        "cannot, set every driver's values to [null, null, null] and say why in scope_limits."
++    )
++
++
++def test_facilities_at_scale_1000_are_divided_and_checked_against_the_divided_debt():  # AK-5
++    exact = json.loads(
++        model_files(CP1_K2.encode(), block_k2(facilities=FAC).encode())["forecast_exact.json"]
++    )
++    assert [f["balance"] for f in exact["facilities"]] == ["995", "500"]
++    assert exact["facilities"][0]["annual_amortisation"] == "10"
++    assert exact["unallocated_debt"]["amount"] == "39.356"
++    first = exact["outputs"]["REFERENCE"]["years"][0]
++    assert first["interest"]["amount"] == "94.74564" and first["repayment"]["amount"] == "10"
++    with pytest.raises(ValueError) as caught:
++        parse(block_k2(facilities=[{**FAC[0], "balance": "1534356"}, FAC[1]]), CP1_K2)
++    assert str(caught.value) == (
++        "CP-2G: facility balances total 2034.356, more than 1.25 times base debt 1534.356, "
++        "in USD millions after dividing by scale 1000; check the unit"
++    )
++    with pytest.raises(
++        ValueError, match="CP-2G: facility Notes balance 500 is not printed in CP-1"
++    ):
++        parse(block_k2(facilities=[FAC[0], {**FAC[1], "balance": "500"}]), CP1_K2)
++
++
++@given(st.from_regex(r"-?[0-9]{1,9}(\.[0-9])?", fullmatch=True))
++def test_the_division_is_exact_and_fits_the_millions_pattern(text):
++    document = {"scale": 1000, "base": {"revenue": {"amount": text, "reason": None}}}
++    assert cpos_forecast._to_millions(document, "CP-2G") == {"base revenue": text}
++    millions = document["base"]["revenue"]["amount"]
++    assert Fraction(millions) * 1000 == Fraction(text)
++    assert re.fullmatch(r"-?[0-9]{1,6}(\.[0-9]{1,4})?", millions)
++
++
++def test_the_thousands_handoff_publishes_the_millions_figures():  # AK-1, AK-3
++    k = model_files(CP1_K.encode(), block_k().encode(), history=True)
++    m = model_files(CP1.encode(), block_m().encode(), history=True)
++    exact_k, exact_m = (json.loads(f["forecast_exact.json"]) for f in (k, m))
++    first = exact_k["outputs"]["REFERENCE"]["years"][0]
++    key = {
++        "revenue": "1050",
++        "ebitda": "315",
++        "interest": "36",
++        "tax_wc": "105",
++        "capex": "42",
++        "cfo": "174",
++        "fcf": "132",
++        "closing_debt": "550",
++        "closing_cash": "162",
++        "net_debt": "388",
++        "liquidity": "212",
++        "dividends": "20",
++        "repayment": "50",
++    }
++    assert {n: first[n]["amount"] for n in key} == key
++    assert first["coverage"]["amount"] == "8.75" and first["fcf_to_debt"]["amount"] == "0.24"
++    down = exact_k["outputs"]["DOWNSIDE"]["years"][0]
++    assert [down[n]["amount"] for n in ("ebitda", "interest", "fcf", "closing_cash")] == [
++        "252",
++        "39.6",
++        "65.4",
++        "95.4",
++    ]
++    for name in ("base", "reference_drivers", "outputs"):
++        assert exact_k[name] == exact_m[name], name
++    assert (exact_k["scale"], exact_k["units"]) == (1000, "USD millions")
++    assert "scale" not in exact_m and "units" not in exact_m
++    assert SCALE_LIMIT not in exact_m["scope_limits"]
++    assert exact_k["scope_limits"][:3] == [
++        cpos_forecast.LIMIT,
++        SCALE_LIMIT,
++        "Synthetic; not analytical review.",
++    ]
++    assert (
++        json.loads(k["calculation.json"])["history"] == json.loads(m["calculation.json"])["history"]
++    )
++
++
++@pytest.mark.parametrize(
++    "key, ytd, pytd, fy, ltm",
++    [
++        ("revenue", "780", "720", "1000", "1060"),
++        ("interest", "27", "28", "36", "35"),
++        ("tax_wc", "27", "23", "30", "34"),
++        ("fcf", "153", "136", "194", "211"),
++        ("closing_debt", "590", "620", "600", "590"),
++        ("liquidity", "170", "140", "150", "170"),
++    ],
++)
++def test_history_at_scale_1000_is_the_answer_key_in_millions(key, ytd, pytd, fy, ltm):
++    record = cpos_periods.history(cpos_forecast._tables(CP1_K), OPERANDS, named=NAMED, scale=1000)
++    assert [cell(record, c, key)["amount"] for c in ("YTD", "PYTD", "FY2024", "LTM")] == [
++        ytd,
++        pytd,
++        fy,
++        ltm,
++    ]
++
++
++def test_ratios_are_scale_free():
++    record = cpos_periods.history(cpos_forecast._tables(CP1_K), OPERANDS, named=NAMED, scale=1000)
++    leverage = cell(record, "LTM", "total_leverage")["amount"]
++    coverage = cell(record, "LTM", "coverage")["amount"]
++    assert abs(Fraction(leverage) - Fraction(590, 324)) < Fraction(1, 10**12)
++    assert abs(Fraction(coverage) - Fraction(324, 35)) < Fraction(1, 10**12)
++
++
++def test_the_realistic_thousands_handoff():  # AK-4
++    files = model_files(CP1_K2.encode(), block_k2().encode(), history=True)
++    exact = json.loads(files["forecast_exact.json"])
++    first = exact["outputs"]["REFERENCE"]["years"][0]
++    key = {
++        "revenue": "2883.0945",
++        "ebitda": "720.773625",
++        "interest": "99.73314",
++        "tax_wc": "57.66189",
++        "capex": "144.154725",
++        "cfo": "563.378595",
++        "fcf": "419.22387",
++        "closing_debt": "1511.483",
++        "closing_cash": "571.86037",
++        "net_debt": "939.62263",
++        "repayment": "22.873",
++    }
++    assert {n: first[n]["amount"] for n in key} == key
++    assert first["liquidity"] == {"amount": None, "reason": K2_BASE["undrawn"]["reason"]}
++    leverage = Fraction(first["total_leverage"]["amount"])
++    assert abs(leverage - Fraction(12091864, 5766189)) < Fraction(1, 10**30)
++    down = exact["outputs"]["DOWNSIDE"]["years"][0]
++    assert [down[n]["amount"] for n in ("ebitda", "interest", "fcf", "closing_cash")] == [
++        "576.6189",
++        "109.706454",
++        "265.095831",
++        "417.732331",
++    ]
++    record = json.loads(files["calculation.json"])["history"]
++    for name, *want in [
++        ("revenue", "1421.519", "1264.478", "2620.995", "2778.036"),
++        ("ebitda", "370.1", "310.479", "667.621", "727.242"),
++        ("interest", "52", "49.75", "100.25", "102.5"),
++        ("capex", "71.5", "60.25", "139.75", "151"),
++    ]:
++        assert [cell(record, c, name)["amount"] for c in ("YTD", "PYTD", "FY2024", "LTM")] == want
++    assert cell(record, "YTD", "closing_cash")["amount"] == "175.5095"
++    assert cell(record, "FY2024", "closing_debt")["amount"] == "1555.597"
++    ltm = Fraction(cell(record, "LTM", "total_leverage")["amount"])
++    assert abs(ltm - Fraction(1534356, 727242)) < Fraction(1, 10**12)
++
++
++def test_a_block_with_scale_one_is_the_block_without_it_plus_the_units():
++    stated = json.loads(model_files(CP1.encode(), block_m(scale=1).encode())["forecast_exact.json"])
++    absent = json.loads(model_files(CP1.encode(), block_m().encode())["forecast_exact.json"])
++    assert (stated.pop("scale"), stated.pop("units")) == (1, "USD millions")
++    stated["consumed"] = absent["consumed"]  # the handoff's hash differs by the one key
++    assert stated == absent
++
++
++def test_layer_one_at_scale_1000():
++    block = json.loads(block_k().split("```json\n")[1].split("\n```")[0])
++    block["downside_shock"] = None
++    text = CP1_K + "\n### Forecast inputs (machine-readable)\n\n```json\n"
++    text += json.dumps(block) + "\n```\n"
++    files = model_files(text.encode(), text.encode(), "CP-1", history=True)
++    exact = json.loads(files["forecast_exact.json"])
++    assert exact["outputs"]["REFERENCE"]["years"][0]["closing_cash"]["amount"] == "162"
++    assert exact["scope_limits"][:2] == [cpos_forecast.LAYER1_LIMIT, SCALE_LIMIT]
++    assert (
++        cell(json.loads(files["calculation.json"])["history"], "LTM", "revenue")["amount"] == "1060"
++    )
++
++
++CHART_ROW = {
++    "amount": "618.5",
++    "reason": None,
++    "row": "H1 2025",
++    "period": "Undrawn committed facilities",
++}
++NO_BASE = {k: {"amount": None, "reason": "not used"} for k in K2_BASE}
++
++
++def test_a_millions_chart_row_in_a_thousands_block_is_refused():  # AK-6
++    with pytest.raises(ValueError) as caught:
++        parse(block_k2(base={**K2_BASE, "undrawn": CHART_ROW}), CP1_K2)
++    assert str(caught.value) == (
++        "CP-2G: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
++        "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
++    )
++
++
++def test_the_same_row_is_read_by_a_millions_block():
++    base = NO_BASE | {"undrawn": CHART_ROW}
++    assert parse(forecast_block(scale=1, base=base), CP1_K2).base["undrawn"].amount == "618.5"
++
++
++def test_a_thousands_unit_cell_refuses_a_millions_block():
++    cp1 = CP1_K2.replace("| US$m |", "| US$ thousands |")
++    base = NO_BASE | {"undrawn": CHART_ROW}
++    with pytest.raises(ValueError, match="not the block's unit \\(USD millions, scale 1\\)"):
++        parse(forecast_block(scale=1, base=base), cp1)
++
++
++def test_a_block_without_scale_is_not_checked_for_units():
++    base = NO_BASE | {"undrawn": CHART_ROW}
++    assert parse(forecast_block(base=base), CP1_K2.replace("| US$m |", "| US$ thousands |"))
++
++
++def _extra(table):
++    return CP1_K2 + "\n" + table
++
++
++def _revolver(row, period, **changes):
++    return block_k2(base={**K2_BASE, "undrawn": _at("618.5", row, period)} | changes)
++
++
++def test_another_cell_of_the_row_naming_the_other_unit_is_refused():  # widened B7 (b)
++    with pytest.raises(ValueError) as caught:
++        parse(_revolver("Revolver availability", "H1 2025"), CP1_K2)
++    assert str(caught.value) == (
++        "CP-2G: base undrawn: row `Revolver availability` states its Unit and terms / evidence "
++        "as `US$ million`, not the block's unit (USD thousands, scale 1000); "
++        "state a reason instead of an amount"
++    )
++
++
++def test_the_named_columns_header_naming_the_other_unit_is_refused():  # widened B7 (c)
++    cp1 = _extra(
++        "| Item | H1 2025 (US$m) | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n"
++    )
++    with pytest.raises(ValueError, match="states its period header as `H1 2025 \\(US\\$m\\)`"):
++        parse(_revolver("Revolver", "H1 2025 (US$m)"), cp1)
++
++
++def test_the_first_header_cell_naming_the_other_unit_is_refused():  # widened B7 (d)
++    cp1 = _extra(
++        "| Item (US$ million) | H1 2025 | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n"
++    )
++    with pytest.raises(
++        ValueError, match="states its first header cell as `Item \\(US\\$ million\\)`"
++    ):
++        parse(_revolver("Revolver", "H1 2025"), cp1)
++
++
++def test_a_row_naming_both_units_is_accepted():  # widened B7 (e)
++    cp1 = _extra(
++        "| Item | H1 2025 | Basis | Unit |\n| --- | --- | --- | --- |\n"
++        "| Revolver | 618.5 | US$ million facility | US$ thousands |\n"
++    )
++    assert parse(_revolver("Revolver", "H1 2025"), cp1).base["undrawn"].amount == "0.6185"
++
++
++def test_a_row_naming_no_unit_is_accepted():  # widened B7 (f)
++    cp1 = _extra("| Item | H1 2025 | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n")
++    assert parse(_revolver("Revolver", "H1 2025"), cp1).base["undrawn"].amount == "0.6185"
++
++
++def test_the_amount_cell_itself_is_never_read_for_unit_words():
++    cp1 = _extra("| Item | H1 2025 | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n")
++    assert parse(_revolver("Revolver", "H1 2025"), cp1)
++    assert (
++        cpos_forecast._unit_problem(
++            cp1.replace("| 618.5 |", "| 618.5 million |"),
++            "undrawn",
++            cpos_forecast.Operand(amount="0.6185", reason=None, row="Revolver", period="H1 2025"),
++            1000,
++        )
++        is None
++    )
++
++
++def test_a_block_without_scale_is_not_checked_for_the_widened_rule():  # widened B7 (g)
++    cp1 = (
++        CP1 + "\n| Item | FY2024 | Unit |\n| --- | --- | --- |\n| Revolver | 50 | US$ thousands |\n"
++    )
++    base = named_base(BASE) | {"undrawn": _at("50", "Revolver", "FY2024")}
++    assert parse(block_m(base=base), cp1).base["undrawn"].amount == "50"
++    with pytest.raises(ValueError, match="states its Unit as `US\\$ thousands`"):
++        parse(block_m(base=base, scale=1), cp1)
++
++
++@pytest.mark.parametrize(
++    "text, named",
++    [
++        ("US$ thousands", {"thousands"}),
++        ("USD thousands;  6.25%", {"thousands"}),
++        ("In thousands", {"thousands"}),
++        ("USD 858,064 thousand", {"thousands"}),
++        ("$000", {"thousands"}),
++        ("US$k", {"thousands"}),
++        ("USD K", {"thousands"}),
++        ("US$ million", {"millions"}),
++        ("USD millions", {"millions"}),
++        ("US$m", {"millions"}),
++        ("USD m", {"millions"}),
++        ("$m", {"millions"}),
++        ("$M", {"millions"}),
++        ("USD mm", {"millions"}),
++        ("US$mn", {"millions"}),
++        ("USD mn", {"millions"}),
++        ("$mn", {"millions"}),
++        ("\u20acmn", {"millions"}),
++        ("US$bn", {"millions"}),
++        ("stated in millions", {"millions"}),
++        ("USD million/billion", {"millions"}),
++        ("US$ thousands; USD 37.6 million", {"thousands", "millions"}),
++        ("", set()),
++        ("p.4", set()),
++        ("9M 2025", set()),
++        ("1,000", set()),
++        ("US$ and a mid-year note", set()),
++        ("Mmm", set()),
++    ],
++)
++def test_the_words_that_name_a_unit(text, named):
++    assert cpos_forecast._units_named(text) == named
++
++
++def _in_millions(text):
++    return None if text is None else format(Decimal(text).scaleb(-3), "f")
++
++
++def _shapes(thousands):
++    """Malformed forms of one block, stated in USD thousands or in the same USD millions."""
++    unit = (lambda text: text) if thousands else _in_millions
++    base = {k: {**v, "amount": unit(v["amount"])} for k, v in K2_BASE.items()}
++    paths = {**K2_PATHS, "debt_repayment": (unit("22873"),) * 3}
++    plain = [{**f, "balance": unit(f["balance"])} for f in FAC]
++    plain[0]["annual_amortisation"] = unit("10000")
++
++    def fac(**missing):
++        return [{k: v for k, v in plain[0].items() if k not in missing}, plain[1]]
++
++    def drivers_with(values):
++        group = drivers(paths)
++        group["dividends"] = {**group["dividends"], "values": values}
++        return group
++
++    shapes = {
++        "operand without amount key": {
++            "base": {**base, "cash": {"reason": None, "row": "Cash", "period": "H1 2025"}}
++        },
++        "facility without balance key": {"facilities": fac(balance=1)},
++        "facility without annual_amortisation key": {"facilities": fac(annual_amortisation=1)},
++        "base that is not an object": {"base": ["175509.5"]},
++        "operand that is a string": {"base": {**base, "cash": "175509.5"}},
++        "facilities that is not a list": {"facilities": "Term Loan"},
++        "facility that is a string": {"facilities": ["Term Loan", plain[1]]},
++        "driver values that is not a list": {"base_drivers": drivers_with("0")},
++        "driver values holding numbers": {"base_drivers": drivers_with([0, 0, 0])},
++        "driver values holding objects": {"base_drivers": drivers_with([{}, "0", "0"])},
++    }
++    whole = {"base": base, "base_drivers": drivers(paths), "facilities": plain}
++    return {name: {**whole, **changes} for name, changes in shapes.items()}
++
++
++@pytest.mark.parametrize("shape", list(_shapes(True)))
++def test_a_malformed_block_at_scale_1000_is_the_schemas_refusal_as_without_scale(shape):
++    with pytest.raises(ValueError) as without:
++        parse(forecast_block(**_shapes(False)[shape]), CP1_K2)
++    with pytest.raises(ValueError) as with_scale:
++        parse(forecast_block(scale=1000, **_shapes(True)[shape]), CP1_K2)
++    assert str(with_scale.value) == str(without.value)
++
++
++# --- the final fix wave --------------------------------------------------------------------------
++FACILITY_FAULTS = {
++    "a coupon above the cap": lambda: [{**FAC[0], "fixed_rate_pct": "35"}, FAC[1]],
++    "both rate forms stated": lambda: [{**FAC[0], "spread_pct": "2.5"}, FAC[1]],
++    "a maturity that is not a date": lambda: [{**FAC[0], "maturity": "2029-02-30"}, FAC[1]],
++    "duplicate facility names": lambda: [FAC[0], {**FAC[1], "name": "term loan facility"}],
++    "a negative balance": lambda: [{**FAC[0], "balance": "-995000"}, FAC[1]],
++    "a balance that is a number": lambda: [{**FAC[0], "balance": 995000}, FAC[1]],
++    "a forty-first facility": lambda: [
++        _fixed(f"Loan {n}", "1000", "6.00", None) for n in range(41)
++    ],
++}
++
++
++@pytest.mark.parametrize("name", FACILITY_FAULTS)
++def test_a_schema_refusal_inside_facilities_keeps_the_facilities_line_at_scale_1000(name):
++    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": CP1_K2.encode()})
++    (issue,) = cpos_launch._forecast_issues(task, block_k2(facilities=FACILITY_FAULTS[name]()))
++    assert "forecast inputs: " in issue, issue
++    assert issue.endswith(
++        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
++    )
++
++
++@pytest.mark.parametrize("stated", ["-0", "-0.0"])
++@pytest.mark.parametrize("where", ["dividends", "amortisation"])
++def test_a_negative_zero_amount_is_refused_at_scale_1000_as_without_scale(stated, where):
++    if where == "dividends":
++        changes = {"base_drivers": drivers({**K2_PATHS, "dividends": (stated, "0", "0")})}
++        name = "base_drivers dividends year 1"
++    else:
++        changes = {"facilities": [{**FAC[0], "annual_amortisation": stated}, FAC[1]]}
++        name = "facility 1 annual_amortisation"
++    with pytest.raises(ValueError) as caught:
++        parse(block_k2(**changes), CP1_K2)
++    assert str(caught.value) == (
++        f"CP-2G: {name} {stated} is not an amount in thousands as CP-1 prints it (scale 1000): "
++        "at most nine digits and one decimal place, no separators"
++    )
++
++
++def test_a_model_written_base_key_is_cut_in_the_refusal():
++    key = "k" * 5000
++    base = {**K2_BASE, key: {"amount": "1,5", "reason": None}}
++    with pytest.raises(ValueError) as caught:
++        parse(block_k2(base=base), CP1_K2)
++    assert str(caught.value) == (
++        f"CP-2G: base {'k' * 40}... 1,5 is not an amount in thousands as CP-1 prints it "
++        "(scale 1000): at most nine digits and one decimal place, no separators"
++    )
++
++
++def _case_drivers(**paths):
++    return {name: drivers({name: values})[name] for name, values in paths.items()}
++
++
++def _published(files):
++    """Every figure the model files publish, minus the keys that exist only at scale 1000."""
++    exact = json.loads(files["forecast_exact.json"])
++    for key in ("consumed", "scale", "units"):
++        exact.pop(key, None)
++    exact["scope_limits"] = [t for t in exact["scope_limits"] if t != SCALE_LIMIT]
++    return exact, json.loads(files["calculation.json"])["history"]
++
++
++MILLION_FACILITIES = "\n| Facility | FY2024 | Rate |\n| --- | --- | --- |\n"
++PARITY = {
++    "two facilities and cases stating dividends": (
++        {
++            "facilities": [
++                _fixed("Term loan", "400", "6.00", "50"),
++                _fixed("Notes", "150", "5.50", None),
++            ],
++            "upside_drivers": _case_drivers(dividends=("30", "30.5", "0")),
++            "downside_drivers": _case_drivers(dividends=("0", "0", "0")),
++        },
++        {
++            "facilities": [
++                _fixed("Term loan", "400000", "6.00", "50000"),
++                _fixed("Notes", "150000", "5.50", None),
++            ],
++            "upside_drivers": _case_drivers(dividends=("30000", "30500", "0")),
++            "downside_drivers": _case_drivers(dividends=("0", "0", "0")),
++        },
++        MILLION_FACILITIES + "| Term loan | 400 | 6.00% |\n| Notes | 150 | 5.50% |\n",
++        MILLION_FACILITIES + "| Term loan | 400,000 | 6.00% |\n| Notes | 150,000 | 5.50% |\n",
++    ),
++    "cases stating dividends and debt repayment": (
++        {
++            "upside_drivers": _case_drivers(
++                dividends=("30", "30.5", "0"), debt_repayment=("10", "20", "30")
++            ),
++            "downside_drivers": _case_drivers(
++                dividends=("0", "5", "5"), debt_repayment=("1.5", "0", "40")
++            ),
++        },
++        {
++            "upside_drivers": _case_drivers(
++                dividends=("30000", "30500", "0"), debt_repayment=("10000", "20000", "30000")
++            ),
++            "downside_drivers": _case_drivers(
++                dividends=("0", "5000", "5000"), debt_repayment=("1500", "0", "40000")
++            ),
++        },
++        "",
++        "",
++    ),
++}
++
++
++@pytest.mark.parametrize("name", PARITY)
++def test_a_millions_fixture_and_the_same_fixture_in_thousands_publish_identical_figures(name):
++    millions, thousands, extra_m, extra_k = PARITY[name]
++    m = model_files((CP1 + extra_m).encode(), block_m(**millions).encode(), history=True)
++    k = model_files((CP1_K + extra_k).encode(), block_k(**thousands).encode(), history=True)
++    published_m, published_k = _published(m), _published(k)
++    assert published_k == published_m
++    assert set(json.loads(k["forecast_exact.json"])["outputs"]) == {
++        "REFERENCE",
++        "DOWNSIDE",
++        "UPSIDE",
++        "DOWNSIDE_DRIVERS",
++    }
++
++
++CASE_UP = _case_drivers(dividends=("30000", "30000.5", "0"))
++CASE_DOWN = _case_drivers(debt_repayment=("10000", "0", "600000"))
++
++
++def test_the_amount_drivers_of_the_cases_are_divided_at_scale_1000():
++    block = block_k(upside_drivers=CASE_UP, downside_drivers=CASE_DOWN)
++    inputs = parse(block, CP1_K)
++    assert inputs.upside_drivers.dividends.values == ("30", "30.0005", "0")
++    assert inputs.downside_drivers.debt_repayment.values == ("10", "0", "600")
++    exact = json.loads(model_files(CP1_K.encode(), block.encode())["forecast_exact.json"])
++    # year 1, upside: closing cash 100 + 132 (free cash flow) - 30 (dividends) - 50 (repayment)
++    assert exact["outputs"]["UPSIDE"]["years"][0]["closing_cash"]["amount"] == "152"
++    # year 1, downside drivers: closing debt 600 - 10 (repayment)
++    assert exact["outputs"]["DOWNSIDE_DRIVERS"]["years"][0]["closing_debt"]["amount"] == "590"
++    assert exact["upside_drivers"]["dividends"]["values"] == ["30", "30.0005", "0"]
++    with pytest.raises(ValueError) as caught:
++        parse(block_k(upside_drivers=_case_drivers(dividends=("30000.55", "0", "0"))), CP1_K)
++    assert str(caught.value) == (
++        "CP-2G: upside_drivers dividends year 1 30000.55 is not an amount in thousands as CP-1 "
++        "prints it (scale 1000): at most nine digits and one decimal place, no separators"
++    )
++
++
++def test_the_scheduled_repayments_refusal_says_its_figures_are_divided():
++    cp1 = CP1_K2 + "\n| Facility | H1 2025 |\n| --- | --- |\n| Big loan | 1,400,000 |\n"
++    facilities = [
++        _fixed("Big loan", "1400000", "6.25", "1400000"),
++        _fixed("Notes", "500000", "6.00", "500000"),
++    ]
++    with pytest.raises(ValueError) as caught:
++        parse(block_k2(facilities=facilities), cp1)
++    assert str(caught.value) == (
++        "CP-2G: scheduled repayments total 1900, more than base debt 1534.356, in USD millions "
++        "after dividing by scale 1000"
++    )
++
++
++def _layer_one(**changes):
++    block = json.loads(block_k2().split("```json\n")[1].split("\n```")[0])
++    block["downside_shock"] = None
++    block.update(changes)
++    return (
++        CP1_K2
++        + "\n### Forecast inputs (machine-readable)\n\n```json\n"
++        + json.dumps(block)
++        + "\n```\n"
++    )
++
++
++@pytest.mark.parametrize(
++    "changes, message",
++    [
++        (
++            {"base": {**K2_BASE, "undrawn": CHART_ROW}},
++            (
++                "CP-1: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
++                "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
++            ),
++        ),
++        (
++            {"scale": 7},
++            "CP-1: `scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)",
++        ),
++        (
++            {"base": {**K2_BASE, "cash": {**K2_BASE["cash"], "amount": "175,509.5"}}},
++            (
++                "CP-1: base cash 175,509.5 is not an amount in thousands as CP-1 prints it "
++                "(scale 1000): at most nine digits and one decimal place, no separators"
++            ),
++        ),
++    ],
++)
++def test_a_layer_one_block_at_scale_1000_is_refused_in_cp1s_name(changes, message):
++    text = _layer_one(**changes)
++    with pytest.raises(ValueError) as caught:
++        parse(text, text, "CP-1")
++    assert str(caught.value) == message
+diff --git a/tests/test_credit_os_store.py b/tests/test_credit_os_store.py
+index c60d530..b39b4f6 100644
+--- a/tests/test_credit_os_store.py
++++ b/tests/test_credit_os_store.py
+@@ -1382,6 +1382,61 @@ FILES = {
+ }
+ 
+ 
++REQUEST_IN_THOUSANDS = "## Request\n\nBase: September balances, USD thousands, consolidated.\n"
++
++
++def with_units(units):
++    record = {**REFERENCE, "scale": 1000, "units": units}
++    return {**FILES, "forecast_exact.json": json.dumps(record).encode()}
++
++
++def test_the_units_caption_is_the_records_statement_not_the_requests_phrase():
++    assert store.read_cashflow(with_units("USD millions"), REQUEST_IN_THOUSANDS)[0]["units"] == (
++        "USD millions"
++    )
++    assert store.read_cashflow(with_units("USD millions"), None)[0]["units"] == "USD millions"
++
++
++def test_a_record_without_units_keeps_the_requests_phrase():
++    assert store.read_cashflow(FILES, REQUEST_IN_THOUSANDS)[0]["units"] == "USD thousands"
++    assert store.read_cashflow(FILES, None)[0]["units"] is None
++
++
++@pytest.mark.parametrize(
++    "units",
++    [
++        5,
++        "",
++        "x" * 41,
++        ["USD millions"],
++        "   ",
++        "\t",
++        "USD\nmillions",
++        "USD\x00millions",
++        "USD\u202emillions",
++        "USD\u2066millions\u2069",
++        "USD\u200bmillions",
++        None,
++    ],
++)
++def test_units_that_are_not_a_short_text_are_reported_not_shown(units):
++    assert store.read_cashflow(with_units(units), None) == (None, ("file", "forecast_exact.json"))
++
++
++def test_units_of_exactly_forty_printable_characters_are_shown():
++    units = "USD millions " + "x" * 27
++    assert len(units) == 40
++    assert store.read_cashflow(with_units(units), None)[0]["units"] == units
++
++
++def test_scale_and_units_are_recorded_together_or_not_at_all():
++    scale_only = {**REFERENCE, "scale": 1000}
++    units_only = {**REFERENCE, "units": "USD millions"}
++    for record in (scale_only, units_only):
++        files = {**FILES, "forecast_exact.json": json.dumps(record).encode()}
++        assert store.read_cashflow(files, None) == (None, ("file", "forecast_exact.json"))
++
++
+ def test_history_columns_precede_the_forecast_in_the_owners_order():
+     grid, problem = store.read_cashflow(FILES, None)
+     assert problem is None
