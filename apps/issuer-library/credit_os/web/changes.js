@@ -89,10 +89,20 @@ function measureTable(measures, verdicts) {
   return `<div class="table-scroll" role="region" aria-label="Measures, earlier and current" tabindex="0"><table class="history-table"><caption>Measures the pack states, earlier and current</caption><thead><tr><th scope="col">Measure</th><th scope="col">Earlier</th><th scope="col">Current</th><th scope="col">Change</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+// The net debt change. Rows of one period with two values (`same_period` true) and any non-zero difference are the analysis changing, not the issuer:
+// both runs' balances with their periods and no change figure, no direction. A pack without the flag (cpos-changes/2, /3 before it) renders as before.
+const SAME_DATE_NET_DEBT = 'Both runs state net debt for the same date; the difference is between the two analyses, not a change in the issuer.';
+const nonZero = value => value != null && Number(value) !== 0;
 function netDebtView(change) {
   if (!change) return '';
-  const unit = change.unit, rows = [['Earlier net debt', change.prior_net_debt], ['Change in gross debt', change.change_in_gross_debt], ['Change in cash', change.change_in_cash], ['Current net debt', change.current_net_debt]];
-  const item = ([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value == null ? NOT_STATED : withUnit(value, unit))}</dd></div>`;
+  const unit = change.unit, item = ([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value == null ? NOT_STATED : withUnit(value, unit))}</dd></div>`;
+  if (change.same_period === true && [change.change_in_gross_debt, change.change_in_cash].some(nonZero)) {
+    const run = (name, period, gross, cash, net) => [[`${name} gross debt (${period || NOT_STATED})`, gross], [`${name} cash (${period || NOT_STATED})`, cash], [`${name} net debt (${period || NOT_STATED})`, net]];
+    const both = [...run('Earlier', change.prior_period, change.prior_gross_debt, change.prior_cash, change.prior_net_debt), ...run('Current', change.current_period, change.current_gross_debt, change.current_cash, change.current_net_debt)];
+    return `<h3>Net debt, earlier and current</h3><dl class="net-debt-change">${both.map(item).join('')}</dl><p class="intro">${esc(SAME_DATE_NET_DEBT)}</p>`;
+  }
+  const span = change.prior_period && change.current_period ? ` (${change.prior_period} to ${change.current_period})` : '';
+  const rows = [['Earlier net debt', change.prior_net_debt], [`Change in gross debt${span}`, change.change_in_gross_debt], [`Change in cash${span}`, change.change_in_cash], ['Current net debt', change.current_net_debt]];
   return `<h3>Net debt change</h3><dl class="net-debt-change">${rows.map(item).join('')}</dl><p class="intro">${esc(change.convention || '')}</p>`;
 }
 

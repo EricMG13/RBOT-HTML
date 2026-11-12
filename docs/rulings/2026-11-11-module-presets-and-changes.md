@@ -346,6 +346,16 @@ table on every pathway, with the mechanisms that already exist and no new layout
   with its unit in brackets or a `Reporting unit` column, in a table with periods across a header, and the same
   basis text in both runs.
 - Recorded, no code: the library tab shows the net debt change's cash movement without its periods beside the
-  liquidity measure.
-- Recorded, no code (predates this branch, owner item): a same-period restatement with the same basis still yields a
-  net debt change with no flag.
+  liquidity measure. (Done 2026-11-12, see the amendment below.)
+
+Amendment, 2026-11-12 (owner: asked "Flag a same-period net debt restatement as the analysis changing, not the
+issuer?", the owner answered "Yes, fix it"). `net_debt_change` carries `same_period` (true when the gross debt, net
+debt and cash measures are), the two rows' periods and their stated gross debt and cash (`prior_period`,
+`current_period`, `prior_gross_debt`, `prior_cash`, `current_gross_debt`, `current_cash`); read, not computed. The
+schema stays `cpos-changes/3`: the keys are additive and a reader ignores keys it does not know; a pack without them
+renders and checks as before. The checker withholds the change's differences (gross debt, cash, net debt) from
+CP-8's checked lines by K9's own mechanism: gross debt and net debt are measures already; the cash difference is
+given to the same functions as a measure-shaped record, so the same exceptions apply. The tab, for a flagged change
+with a non-zero difference, shows both runs' balances with periods and "Both runs state net debt for the same date;
+the difference is between the two analyses, not a change in the issuer." with no change figure; it also prints the
+periods beside the change's cash movement. `cp8.md` states the rule.
