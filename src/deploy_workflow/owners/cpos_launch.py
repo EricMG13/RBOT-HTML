@@ -1539,9 +1539,21 @@ FORECAST_BLOCK = (
     "one fenced json block and no other fence. You state "
     "inputs only; Python computes every forecast figure, so put no forecast figure in the block. "
     '`base` holds exactly these ten operands in USD millions, each `{"amount": "<decimal>", '
-    '"reason": null}` copied exactly as CP-1 prints it (outflows as positive magnitudes), or '
+    '"reason": null, "row": "<label>", "period": "<header>"}` or '
     '`{"amount": null, "reason": "<why CP-1 does not state it>"}`: '
-    f"{', '.join(cp2g.OPERAND_METRIC)}. `base_drivers` is the method's base-case driver "
+    f"{', '.join(cp2g.OPERAND_METRIC)}. "
+    "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
+    "read the amount from, and `period` the exact header text of that table's column (for "
+    'example `"row": "Net sales", "period": "FY2024"`). Name both for every operand that has an '
+    "amount. Copy the amount as that cell prints it, in millions; for interest, taxes and capex "
+    "write the positive magnitude whatever sign the cell shows; for working capital write the "
+    "cell's value with its sign reversed (a cell printing (45), an investment, is 45; a cell "
+    "printing 45 or +45, a release, is -45). A figure in CP-1's prose, a basis line or its "
+    "sources is not a cell: an amount CP-1 prints in no table cell is stated as missing, with "
+    "the reason. Where CP-1 prints the amount under more than one column, name a column headed "
+    "by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the Forecast page "
+    "shows history only for a line named under such a header. `base_drivers` is the method's "
+    "base-case driver "
     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
     "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "

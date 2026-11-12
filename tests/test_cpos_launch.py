@@ -3281,6 +3281,23 @@ def test_a_case_override_must_name_a_driver_with_valid_values(changes, complaint
     assert complaint in str(caught.value)
 
 
+def test_the_cp2g_instruction_asks_for_the_row_and_period_of_every_base_operand():
+    block = cpos_launch.FORECAST_BLOCK
+    for words in (
+        '"row": "<label>", "period": "<header>"',
+        "exact first-cell text",
+        "exact header text",
+        "of one of the CP-1 handoff's tables",
+        "Name both for every operand that has an amount",
+        "positive magnitude",
+        "with its sign reversed",
+        "is not a cell",
+        "`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`",
+    ):
+        assert words in block, words
+    assert "copied exactly as CP-1 prints it (outflows as positive magnitudes)" not in block
+
+
 def test_the_forecast_instructions_ask_for_the_cases_as_driver_overrides():
     block = cpos_launch.FORECAST_BLOCK
     assert "`upside_drivers`" in block and "`downside_drivers`" in block
