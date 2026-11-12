@@ -1425,6 +1425,9 @@ def test_an_unavailable_column_gives_every_row_its_reason():
     assert all(row["cells"][8]["status"] == "na" for row in grid["rows"])
     reason = {r["label"]: r["cells"][8]["reason"] for r in grid["rows"]}
     assert reason["Revenue"] == reason["Distributions"] == "no handoff states pro forma adjustments"
+    assert set(reason.values()) == {"no handoff states pro forma adjustments"}
+    prior_reason = NEEDS_9M_2023
+    assert all(row["cells"][7]["reason"] == prior_reason for row in grid["rows"])
     assert not any(note.startswith("Pro forma:") for note in grid["notes"])
 
 
@@ -1483,10 +1486,14 @@ def damaged_column(**changes):
         damaged_column(values={"revenue": "1"}),
         damaged_column(label=7),
         damaged_column(reason=7),
-        {"columns": [history_column((f"C{i}", "FY", "C", None), ("1", "1")) for i in range(61)]},
     ],
 )
 def test_a_malformed_history_is_reported_not_shown(damage):
     grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
-    assert grid is None and problem is not None
-    assert problem[1] == "calculation.json" or problem[0] == "limit"
+    assert grid is None and problem == ("file", "calculation.json")
+
+
+def test_more_than_sixty_history_columns_are_over_the_limit():
+    damage = {"columns": [history_column((f"C{i}", "FY", "C", None), ("1", "1")) for i in range(61)]}
+    grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
+    assert grid is None and problem[0] == "limit"

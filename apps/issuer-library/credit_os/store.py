@@ -2241,11 +2241,14 @@ CELL_OPS: dict[str, Callable[..., Cell]] = {
 
 
 def spec_cell(spec: Spec | None, cell: CellContext) -> Cell:
-    """One cell from its row's spec for the column's kind (None: n.a., or n.m. in forecast)."""
+    """One cell from its row's spec for the column's kind (None: n.a., or n.m. in forecast).
+
+    A history column with a reason gives every row n.a. with that reason, derived rows included.
+    """
+    column = cell.column
+    if column["kind"] == "h" and "unavailable" in column:
+        return unavailable_cell(column["unavailable"])
     if spec is None:
-        column = cell.column
-        if column["kind"] == "h" and "unavailable" in column:
-            return unavailable_cell(column["unavailable"])
         return not_modelled_cell() if column["kind"] == "fc" else absent_cell()
     return CELL_OPS[spec[0]](cell, *spec[1:])
 
