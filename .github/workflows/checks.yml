@@ -39,7 +39,7 @@ jobs:
             tests/test_library_index.py tests/test_update_library.py \
             tests/test_issuer_library_packaging.py tests/test_reader_summary.py \
             tests/test_credit_os_catalogue.py tests/test_credit_os_store.py \
-            tests/test_cpos_launch.py tests/test_cpos_facilities.py tests/model \
+            tests/test_cpos_launch.py tests/test_cpos_facilities.py tests/test_cpos_periods.py tests/model \
             tests/test_credit_os_chips.py tests/test_quality_gate.py tests/test_work_pc_delta.py \
             tests/test_inbox_activity.py tests/test_inbox_filing.py \
             tests/test_inbox_layout.py tests/test_inbox_runs.py tests/test_inbox_scheduler.py \
