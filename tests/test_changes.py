@@ -2746,3 +2746,108 @@ def test_the_two_values_of_a_same_period_net_debt_may_be_stated():
 @pytest.mark.parametrize("pack", [_ndpack(same_period=False), _ndpack(with_flag=False)])
 def test_a_net_debt_change_of_two_periods_or_without_the_flag_may_be_said_to_have_moved(pack):
     assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()
+
+
+# --- a withheld difference is printed in no register cell but its own issuer row's Effect ------
+# (owner, 2026-11-12: "fine, PR and merge"). Expectations hand-written.
+
+WHY_CELL = "| The module was added. |"
+LEDGER_CELL = "| A hedging data gap. |"
+NC_ROW = same_period_row("Not comparable: EBITDA basis differs.")
+
+
+def _in_cell(handoff: str, cell: str, sentence: str) -> str:
+    assert cell in handoff
+    return handoff.replace(cell, f"| {sentence} |", 1)
+
+
+def _no_pack():
+    measure = {**SAME, "comparable": "no", "same_period": False, "reason": "Definitions differ."}
+    return {**PACK, "measures": [measure, *PACK["measures"][1:]]}
+
+
+WITHHELD_KINDS = {
+    "pack marks no": (_no_pack(), with_row(NC_ROW), "Leverage fell by 0.56x.", "0.56"),
+    "said Not comparable": (PACK2, with_row(NC_ROW), "Leverage fell by 0.56x.", "0.56"),
+    "same period, no Same definition": (
+        PACK2,
+        with_row(same_period_row("Leverage moved.")),
+        "Leverage fell by 0.56x.",
+        "0.56",
+    ),
+    "net debt, cash": (_ndpack(), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m.", "30"),
+    "net debt, net debt": (
+        _ndpack(),
+        with_row(LEVERAGE_ROW),
+        "Net debt is 80 US$m lower.",
+        "80",
+    ),
+    "net debt, gross debt": (
+        _ndpack(),
+        with_row(LEVERAGE_ROW),
+        "Gross debt fell by 110 US$m.",
+        "110",
+    ),
+}
+
+
+@pytest.mark.parametrize("kind", list(WITHHELD_KINDS))
+@pytest.mark.parametrize("cell", [WHY_CELL, LEDGER_CELL], ids=["analysis Why", "ledger"])
+def test_a_withheld_difference_is_refused_in_the_analysis_register_and_the_ledger(kind, cell):
+    pack, handoff, sentence, figure = WITHHELD_KINDS[kind]
+    found = cp8_issues(_in_cell(handoff, cell, sentence), pack)
+    assert any(figure in i and "difference" in i for i in found), found
+
+
+def test_a_same_definition_correction_may_print_its_own_difference_in_its_issuer_row():
+    row = same_period_row("Same definition; leverage is 0.56x lower after the correction.")
+    assert cp8_issues(with_row(row.replace("Unresolved", "Correction")), PACK2) == ()
+
+
+def test_the_exemption_is_that_measures_issuer_row_only():
+    row = same_period_row("Same definition; leverage is 0.56x lower after the correction.")
+    handoff = with_row(row.replace("Unresolved", "Correction"))
+    assert cp8_issues(handoff, PACK2) == ()
+    found = cp8_issues(_in_cell(handoff, WHY_CELL, "Leverage fell by 0.56x."), PACK2)
+    assert any("0.56" in i and "difference" in i for i in found), found
+    fact = "| Refinancing | — | — | New source | Net debt fell by 80 US$m. |"
+    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + fact), _ndpack())
+    assert any("80" in i and "difference" in i for i in found), found
+
+
+def _zero_pack():
+    pack = _ndpack()
+    pack["net_debt_change"] |= {
+        "change_in_cash": "0",
+        "current_cash": "910",
+        "change_in_gross_debt": "0",
+        "current_gross_debt": "7100",
+        "current_net_debt": "6190",
+    }
+    pack["measures"] = [m for m in pack["measures"] if m["key"] not in ("gross_debt", "net_debt")]
+    return pack
+
+
+def _own_value_pack():
+    pack = _ndpack()
+    pack["net_debt_change"] |= {"prior_cash": "60", "current_cash": "30", "change_in_cash": "-30"}
+    return pack
+
+
+@pytest.mark.parametrize(
+    ("pack", "handoff", "sentence"),
+    [
+        (PACK2, with_row(NC_ROW), "Leverage is 6.57x earlier and 6.01x now."),
+        (_ndpack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m earlier and 6,110 US$m now."),
+        (_zero_pack(), with_row(LEVERAGE_ROW), "Net debt is 6,190 US$m in both runs."),
+        (_ndpack(same_period=False), with_row(LEVERAGE_ROW), "Cash fell by 30 US$m."),
+        (_ndpack(), with_row(LEVERAGE_ROW), "Total debt / EBITDA was 4.20x earlier."),
+        (_own_value_pack(), with_row(LEVERAGE_ROW), "Cash is 60 US$m earlier and 30 US$m now."),
+    ],
+    ids=["both values", "net debt values", "zero", "unflagged", "other measure", "own value"],
+)
+@pytest.mark.parametrize("cell", [WHY_CELL, LEDGER_CELL], ids=["analysis Why", "ledger"])
+def test_a_register_cell_stating_values_or_a_quotable_difference_is_still_accepted(
+    pack, handoff, sentence, cell
+):
+    assert cp8_issues(_in_cell(handoff, cell, sentence), pack) == ()
