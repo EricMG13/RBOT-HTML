@@ -779,3 +779,12 @@ def test_check_4_two_pairs_on_a_line_are_two_issues() -> None:
 def test_check_4_an_unpaired_bracket_is_one_issue_with_context() -> None:
     issues = [i for i in prose_issues(bottom("The view holds [ here.")) if "check 4" in i]
     assert len(issues) == 1
+    assert '"The view holds [ here."' in issues[0]
+
+
+def test_check_4_a_pair_over_80_characters_quotes_each_bracket_with_20_characters_around_it() -> (
+    None
+):
+    long = "a" * 90
+    issues = [i for i in prose_issues(bottom(f"The view [{long}] holds.")) if "check 4" in i]
+    assert [i.split('"')[1] for i in issues] == [f"The view [{'a' * 20}", f"{'a' * 20}] holds."]

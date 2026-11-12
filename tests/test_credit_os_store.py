@@ -2015,6 +2015,26 @@ def test_an_unclosed_fence_does_not_run_past_the_next_heading():
     assert sections[1]["blocks"][1]["text"] == "```json\n{}\n```"
 
 
+def test_a_closed_fence_keeps_a_heading_looking_line_inside_the_block():
+    fence = "```yaml\na: 1\n## comment\nb: 2\n```"
+    sections = store.parse_source(f"## S\n{fence}\n\nProse one.\n\n```json\n{{}}\n```\nTail.\n")
+    assert [s["heading"] for s in sections] == ["S"]
+    assert [b["text"] for b in sections[0]["blocks"]] == [
+        fence,
+        "Prose one.",
+        "```json\n{}\n```",
+        "Tail.",
+    ]
+
+
+def test_an_unclosed_fence_before_a_heading_and_a_later_bare_pair_stays_unclosed():
+    text = "## S\n```\nx\n## T\n```\ncode\n```\n"
+    sections = store.parse_source(text)
+    assert [s["heading"] for s in sections] == ["S", "T"]
+    assert [b["text"] for b in sections[0]["blocks"]] == ["```\nx"]
+    assert [b["text"] for b in sections[1]["blocks"]] == ["```\ncode\n```"]
+
+
 def test_a_fence_right_after_a_paragraph_line_is_its_own_block():
     fence = '```json\n{"a": 1,\n\n"b": 2}\n```'
     blocks = store.parse_source(f"## S\nIntro line.\n{fence}\nAfter.\n")[0]["blocks"]

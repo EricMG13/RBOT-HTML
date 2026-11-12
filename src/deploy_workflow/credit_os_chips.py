@@ -140,7 +140,8 @@ class KeyIndex(NamedTuple):
 # precede it, or the citation names a longer unlisted file ("annual-report.pdf", "Draft report.pdf")
 # and must not open the listed one. "Source: report.pdf" still reads; "see report.pdf" stays a gap.
 FILE_KEY = re.compile(r"\.[A-Za-z0-9]{1,5}$")
-FILE_START = r"(?<![\w.\-/])(?<![\w.\-/]\s)"
+# Python lookbehinds are fixed width, so one lookbehind per whitespace run of 1 to 8 characters.
+FILE_START = r"(?<![\w.\-/])" + "".join(rf"(?<![\w.\-/]\s{{{n}}})" for n in range(1, 9))
 
 
 @lru_cache(maxsize=32)

@@ -517,7 +517,7 @@ function runAcceptanceText(context) {
   return record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
 }
 // The score Python computed from the module's confidence inputs table (the store's `confidence`), or why there is none; an output with no such table draws nothing.
-const confidenceText=c=>!c?'':`<span class="output-meta">${c.missing!=null?`Confidence not computed: ${esc(c.missing)}`:`Confidence ${esc(c.value)} · ${esc(c.band)}`}</span>`;
+const confidenceText=c=>!c?'':`<span class="output-meta" title="Computed from the inputs the module states">${c.missing!=null?`Confidence not computed: ${esc(c.missing)}`:`Confidence ${esc(c.value)} · ${esc(c.band)}`}</span>`;
 function reportHead(id) {
   const out=data[id],{module,run:context}=out;
   const {meta,flag}=headTools(module,context,id);

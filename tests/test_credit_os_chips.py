@@ -972,6 +972,8 @@ def sources_index(*files):
     [
         "annual-report.pdf, page 3",
         "Draft report.pdf, page 3",
+        "Draft  report.pdf, page 3",
+        "Draft \t report.pdf, page 3",
         "xreport.pdf, page 3",
         "a/report.pdf, page 3",
     ],

@@ -307,7 +307,8 @@ PROSE_PASSAGES = (
     "refuses a limitation that any handoff accepted earlier in "
     "this run already states, so word each limitation for this module's own conclusion.\n"
     "Everything else in `## Findings` (method sections, registers, tables, report selectors) "
-    "follows `### Limitations`, unchanged and exact. If this module is blocked, write only "
+    "follows `### Limitations`; registers are written as tables, and all of its content is "
+    "exact. If this module is blocked, write only "
     "`### Bottom line` of these four sections; a blocked module's `### Bottom line` begins "
     "exactly `Not assessable: ` followed by why (the exact words that mark it blocked), and a "
     'module that is not blocked must not use the words "not assessable" in its Bottom line. '
@@ -712,8 +713,8 @@ POST_BS = OwnerTable(
     rules=(
         "One row per event after the balance-sheet date that changes net debt, such as an issue, "
         "repayment, acquisition, disposal or dividend that the sources state. Date is the event "
-        "date: YYYY-MM-DD only when the source states the day; when it gives only a month or "
-        "quarter, write `Not supplied: the source states <month or quarter> only` and never "
+        "date: YYYY-MM-DD only when the source states the day; when it gives only a month, "
+        "quarter or year, write `Not supplied: the source states <what it gives> only` and never "
         "invent a day. Amount is the event's cash effect and Pro forma net debt is year-end net "
         "debt after the event, both in the Reporting unit; Pro forma net leverage is the same net "
         "debt over the same EBITDA as the year-end net leverage, as times without an `x`. "
@@ -1428,7 +1429,7 @@ def _cell_issue(spec: OwnerTable, name: str, cell: str, unit: str) -> str | None
             None
             if _stated_gap(cell) or _iso_date(cell)
             else f"{name} `{cell}` must be YYYY-MM-DD; when the source states no day, write "
-            "`Not supplied: the source states <month or quarter> only`."
+            "`Not supplied: the source states <what it gives> only`."
         )
     elif allowed is not None:
         issue = None if cell in allowed else f"{name} `{cell}` must be one of {', '.join(allowed)}."
@@ -1665,7 +1666,7 @@ TRANSPORT_RULES = (
     "confidence band or a QA status: this overrides the method's `qa_status`, confidence score "
     "and band fields, its Audit Summary score and its helper-script steps, so leave those fields "
     "and steps out. A companion file the method names that "
-    "is not in the method block below is unavailable, and do not block the module for it. CP-OS "
+    "is not in the method block below is unavailable; do not block the module for it. CP-OS "
     "supplies only the handoffs of the modules the registry "
     "names as this module's producers (CP-5: every analyst before it); an upstream module the "
     "method names that is not supplied is unavailable in the same way. Where the method relies on "

@@ -303,13 +303,20 @@ def text_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
     """The paragraph starting at `lines[i]`, up to a blank line or the next structure.
     A line opening with three backticks starts a fenced block: one block up to its closing
     fence, blank lines and structure markers inside it kept. A fence closes only before the next
-    `## ` or `### ` heading line; otherwise it is unclosed and is a paragraph. A fence line ends
-    the paragraph before it."""
+    `## ` or `### ` heading line, unless a closing fence follows the heading and the later fence
+    lines pair up and none has an info string (a heading-looking line inside code); otherwise it
+    is unclosed and is a paragraph. A fence line ends the paragraph before it."""
     start = i + 1
     if lines[i].startswith("```"):
         heads = (n for n in range(i + 1, len(lines)) if lines[n].startswith(("## ", "### ")))
         stop = next(heads, len(lines))
-        close = next((n for n in range(i + 1, stop) if lines[n].rstrip() == "```"), None)
+        close = next((n for n in range(i + 1, len(lines)) if lines[n].rstrip() == "```"), None)
+        if close is not None and close > stop:
+            fences = [n for n in range(i + 1, len(lines)) if lines[n].startswith("```")]
+            inside = [n for n in fences if n < close]
+            after = [n for n in fences if n > close]
+            if inside or len(after) % 2:
+                close = None
         if close is not None:
             return {
                 "type": "text",

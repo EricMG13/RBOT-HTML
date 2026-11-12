@@ -5517,8 +5517,18 @@ def test_post_balance_sheet_instructions_state_the_date_form_and_the_pro_forma_g
     prepared, _task, _context = good_task(tmp_path, "CP-1", "credit_snapshot")
     text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
     assert "YYYY-MM-DD only when the source states the day" in text
-    assert "Not supplied: the source states <month or quarter> only" in text
+    assert "Not supplied: the source states <what it gives> only" in text
+    assert "month, quarter or year" in text
+    assert "<month or quarter>" not in text
+    assert "is unavailable; do not block the module for it" in text
+    assert "is unavailable, and do not block the module for it" not in text
     assert "When Financial foundation does not state the pro forma figure" in text
+
+
+def test_the_reader_layer_says_registers_are_tables_and_their_content_exact():
+    passages = cpos_launch.PROSE_PASSAGES
+    assert "registers are written as tables, and all of its content is exact" in passages
+    assert "unchanged and exact" not in passages
 
 
 def test_post_balance_sheet_partial_date_refusal_names_the_not_supplied_form(tmp_path):
@@ -5527,7 +5537,9 @@ def test_post_balance_sheet_partial_date_refusal_names_the_not_supplied_form(tmp
     event = raw.replace(POST_BS_NONE, POST_BS_EVENT)
     partial = event.replace("2024-11-05", "February 2025")
     issues = _checked_handoff(task, partial.encode(), checker(prepared.layout))
-    assert any("Date" in i and "Not supplied: the source states" in i for i in issues), issues
+    assert any(
+        "Date" in i and "Not supplied: the source states <what it gives> only" in i for i in issues
+    ), issues
     stated = event.replace("2024-11-05", PARTIAL_DATE_GAP)
     assert _checked_handoff(task, stated.encode(), checker(prepared.layout)) == ()
 

@@ -479,10 +479,10 @@ test('(i) the declared status is a badge beside the acceptance badge; none decla
 
 test('(i2) the head shows the confidence Python computed, or why there is none; no field draws nothing', () => {
   const head = c => report({ confidence: c }).reportHead(OUT);
-  assert.ok(head({ value: 58, band: 'Low' }).includes('<span class="output-meta">Confidence 58 · Low</span>'));
+  assert.ok(head({ value: 58, band: 'Low' }).includes('<span class="output-meta" title="Computed from the inputs the module states">Confidence 58 · Low</span>'));
   assert.ok(head({ value: 0, band: 'Insufficient Information' }).includes('Confidence 0 · Insufficient Information'));
   const missing = head({ missing: 'the table has no row for Source gate' });
-  assert.ok(missing.includes('<span class="output-meta">Confidence not computed: the table has no row for Source gate</span>'));
+  assert.ok(missing.includes('<span class="output-meta" title="Computed from the inputs the module states">Confidence not computed: the table has no row for Source gate</span>'));
   assert.ok(head({ missing: '<b>x</b>' }).includes('Confidence not computed: &lt;b&gt;x&lt;/b&gt;'));
   assert.ok(!report().reportHead(OUT).includes('Confidence'));
   assert.equal(report({ confidence: { value: 58, band: 'Low' } }).reportHead(OUT).match(/class="badge badge-gray"/g).length, 1);
@@ -2295,6 +2295,13 @@ test('names, not codes: a step heading with no dash, a prefixed register id and 
   assert.equal(name('CP-6-MON-001 and CP-6A-DP-005'), 'Committee decision MON-001 and Committee decision DP-005');
   assert.equal(name('Gap CP-6-GAP-005'), 'Committee decision gap 5');
   assert.equal(name('CP-2R-MON-001'), 'unnamed module MON-001');
+  // The real register ids at the start of a heading: METHOD_CODE leaves them (they are not step ids), and the naming shows them without the module code.
+  assert.equal('CP-3B-MON-001 Monitoring trigger'.replace(report().METHOD_CODE, ''), 'CP-3B-MON-001 Monitoring trigger');
+  page.current.module = 'CP-3B';
+  assert.equal(name('CP-3B-MON-001 Monitoring trigger'), 'MON-001 Monitoring trigger');
+  page.current.module = 'CP-2A';
+  assert.equal(name('CP-2A-DP-005 Decision point'), 'DP-005 Decision point');
+  assert.equal(name('CP-3B-MON-001 Monitoring trigger'), 'unnamed module MON-001 Monitoring trigger');
 });
 
 test('names, not codes: a table column of bare step ids is not drawn; a heading or caption loses its leading id and keeps no title', () => {

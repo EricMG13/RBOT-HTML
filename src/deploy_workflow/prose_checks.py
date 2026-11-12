@@ -429,13 +429,22 @@ def _check_pipeline_wording(lines: list[_Line]) -> list[str]:
     ]
 
 
+def _quoted(number: int, text: str, found: re.Match[str]) -> str:
+    """What an issue quotes: the match, and for a bare bracket (check 4) 20 characters each side."""
+    if number == 4 and len(found[0]) == 1:
+        return text[max(0, found.start() - 20) : found.end() + 20].strip()
+    return found[0].strip()
+
+
 def _check_simple(lines: list[_Line]) -> list[str]:
     """Checks 2-5. An issue in a reader passage keeps its short form (the passage is known from
     the line); an issue in any other section names the section."""
     return [
-        _issue(number, name, line.number, found[0].strip(), advice)
+        _issue(number, name, line.number, _quoted(number, line.text, found), advice)
         if line.section in READER_HEADINGS
-        else _issue_in(number, name, (line.number, line.section), found[0].strip(), advice)
+        else _issue_in(
+            number, name, (line.number, line.section), _quoted(number, line.text, found), advice
+        )
         for number, name, pattern, advice in SIMPLE_CHECKS
         for line in lines
         for found in pattern.finditer(line.text)
