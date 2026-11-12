@@ -1375,6 +1375,22 @@ CASHFLOW_NOTES = (
         "years only."
     ),
 )
+LTM_NOTE = (
+    "LTM is the last fiscal year plus the year to date less the prior year to date, from the "
+    "periods CP-1 labels."
+)
+HISTORY_SCHEMA = "cpos-history/1"
+HISTORY_COLUMN_LIMIT = 60
+HISTORY_GROUPS = {
+    "QUARTER": "Quarter",
+    "YTD": "Year to date",
+    "PYTD": "Year to date",
+    "FY": "Fiscal year",
+    "LTM": "Last twelve months",
+    "PRIOR_LTM": "Last twelve months",
+    "PF": "Pro forma",
+}
+HISTORY_KEYS = frozenset(("id", "kind", "label", "prior", "reason", "start", "end", "values"))
 QUARTER_HEADER = re.compile(r"(\d{4}-\d{2}-\d{2})[–-](\d{4}-\d{2}-\d{2})", re.ASCII)
 FISCAL_HEADER = re.compile(r"FY\d{4}", re.ASCII)
 TABLE_NUMBER = re.compile(r"(\()?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(\))?", re.ASCII)
@@ -1399,6 +1415,8 @@ Spec = tuple[Any, ...]  # (operation name, *its arguments); see CELL_OPS
 RowKey = str | tuple[str, str]
 Forecast = list[tuple[str, list[dict[str, Any]]]]  # (case name, that case's years)
 Fiscal = list[tuple[str, dict[str, Any]]]  # (fiscal year label, its values)
+History = tuple[list[dict[str, Any]], list[str]]  # (validated history columns, their limits)
+Recorded = tuple[Fiscal, dict[str, dict[str, Any]], History | None]
 
 
 class Table(TypedDict):
@@ -1424,6 +1442,7 @@ class Column(TypedDict):
     prior: int | None
     ytd: bool
     length_differs: NotRequired[bool]
+    unavailable: NotRequired[str]
 
 
 def display_amount(exact: str, kind: str) -> str:
@@ -1887,6 +1906,92 @@ def quarter_inputs(record: Any) -> dict[str, dict[str, Any]]:
     return quarters
 
 
+def optional_text(value: Any, what: str) -> None:
+    if not (value is None or (isinstance(value, str) and len(value) <= LABEL_LIMIT)):
+        raise TypeError(f"{what} is not short text")
+
+
+def history_column_input(column: Any) -> None:
+    """One history column's own fields are the right types and bounds; validated here."""
+    if not isinstance(column, dict) or column.keys() != HISTORY_KEYS:
+        raise TypeError("a history column does not have the recorded fields")
+    for name in ("id", "label"):
+        if not isinstance(column[name], str) or not 0 < len(column[name]) <= LABEL_LIMIT:
+            raise TypeError(f"the {name} of a history column is not short text")
+    if column["kind"] not in HISTORY_GROUPS:
+        raise ValueError("a history column has an unknown kind")
+    for name in ("prior", "reason"):
+        optional_text(column[name], f"the {name} of a history column")
+    for name in ("start", "end"):
+        if column[name] is not None and not (
+            isinstance(column[name], str) and valid_date(column[name])
+        ):
+            raise ValueError(f"the {name} of a history column is not a date")
+    if not isinstance(column["values"], dict):
+        raise TypeError("the values of a history column are not a mapping")
+    checked_entries(column["values"])
+
+
+def history_limits(record: Any) -> list[str]:
+    """The history record's scope limits ([] without a record); validated here."""
+    if "history" not in record:
+        return []
+    limits = record["history"].get("limits") if isinstance(record["history"], dict) else None
+    if not isinstance(limits, list) or not all(isinstance(item, str) for item in limits):
+        raise TypeError("history limits is not a list of text")
+    return limits
+
+
+def history_inputs(record: Any) -> list[dict[str, Any]] | None:
+    """The validated history columns of calculation.json, or None when it has no `history`.
+
+    The record is written by another process: its version, column count, ids, kinds, priors, dates
+    and values are checked before any is used; a record that fails is malformed as a whole.
+    """
+    if "history" not in record:
+        return None
+    history = record["history"]
+    if not isinstance(history, dict) or history.get("schema_version") != HISTORY_SCHEMA:
+        raise ValueError("the history record has an unknown version")
+    columns = history["columns"]
+    if not isinstance(columns, list):
+        raise TypeError("history columns is not a list")
+    capped(columns, "history columns", HISTORY_COLUMN_LIMIT, CASHFLOW_FILES[1])
+    for column in columns:
+        history_column_input(column)
+    ids = [column["id"] for column in columns]
+    if len(set(ids)) != len(ids):
+        raise ValueError("history column ids repeat")
+    for column in columns:
+        if column["prior"] is not None and (
+            column["prior"] == column["id"] or column["prior"] not in ids
+        ):
+            raise ValueError("a history column's prior is not another column of the record")
+    return columns
+
+
+def history_columns(history: list[dict[str, Any]]) -> list[Column]:
+    """One column per history entry, in the record's order; its prior is that entry's index."""
+    index = {column["id"]: at for at, column in enumerate(history)}
+    columns: list[Column] = []
+    for entry in history:
+        column = Column(
+            label=entry["label"],
+            group=HISTORY_GROUPS[entry["kind"]],
+            kind="h",
+            record=entry["values"],
+            start=entry["start"],
+            end=entry["end"],
+            period=None,
+            prior=None if entry["prior"] is None else index[entry["prior"]],
+            ytd=False,
+        )
+        if entry["reason"] is not None:
+            column["unavailable"] = entry["reason"]
+        columns.append(column)
+    return columns
+
+
 def span_days(start: str, end: str) -> int:
     return (datetime.date.fromisoformat(end) - datetime.date.fromisoformat(start)).days
 
@@ -2046,11 +2151,10 @@ def op_table_sum(c: CellContext, name: str, first: str, second: str) -> Cell:
 
 
 def op_key(c: CellContext, key: str, negate: bool = False) -> Cell:
-    missing = not_modelled_cell if c.column["kind"] == "fc" else absent_cell
     record = c.column["record"]
     if record is None:
         raise ValueError(f"the {c.column['label']} column holds no record to read {key} from")
-    return held_cell(record[key], c.kind, negate) if key in record else missing()
+    return held_cell(record[key], c.kind, negate) if key in record else spec_cell(None, c)
 
 
 def op_sum(c: CellContext, *rows: RowKey) -> Cell:
@@ -2139,7 +2243,10 @@ CELL_OPS: dict[str, Callable[..., Cell]] = {
 def spec_cell(spec: Spec | None, cell: CellContext) -> Cell:
     """One cell from its row's spec for the column's kind (None: n.a., or n.m. in forecast)."""
     if spec is None:
-        return not_modelled_cell() if cell.column["kind"] == "fc" else absent_cell()
+        column = cell.column
+        if column["kind"] == "h" and "unavailable" in column:
+            return unavailable_cell(column["unavailable"])
+        return not_modelled_cell() if column["kind"] == "fc" else absent_cell()
     return CELL_OPS[spec[0]](cell, *spec[1:])
 
 
@@ -2503,19 +2610,28 @@ def cashflow_rows(tables: dict[str, Table | None]) -> list[RowSpec]:
     return rows + list(TAIL_ROWS)
 
 
+def cashflow_notes(year_to_date: bool, with_history: bool) -> list[str]:
+    if with_history:  # CP-1's labelled periods replace the Q1 and pro forma notes
+        return [LTM_NOTE, *CASHFLOW_NOTES[2:]]
+    return [note for note in CASHFLOW_NOTES if year_to_date or note != Q1_NOTE]
+
+
 def cashflow_of(
     forecast: tuple[Forecast, list[str]],
-    recorded: tuple[Fiscal, dict[str, dict[str, Any]]],
+    recorded: Recorded,
     statements: tuple[list[Table], list[Table]],
     handoff: str | None,
     budget: int,
 ) -> dict[str, Any]:
     """History from the parsed annual and quarter tables and the forecast record, as a grid.
 
+    `recorded` ends with the history (CP-1's period columns and their limits) or None; with it
+    those columns replace the quarter and fiscal-year columns and read each row's forecast spec.
+
     Raises CashflowBudget, before computing any cell, when rows x columns passes `budget`.
     """
     cases, limits = forecast
-    fiscal, quarters = recorded
+    fiscal, quarters, history = recorded
     annual, quarter = statements
     names = CASHFLOW_LABELS
     tables: dict[str, Table | None] = {
@@ -2532,7 +2648,11 @@ def cashflow_of(
     periods = sorted({key[1:] for key in income["periods"] if key[0] == "q"}) if income else []
     capped(periods, "quarter columns", QUARTER_COLUMN_LIMIT, CASHFLOW_FILES[3])
     layout = [RowSpec._make(spec) for spec in cashflow_rows(tables)]  # a plain 7-tuple row works
-    columns = cashflow_columns(periods, fiscal, cases, ends)
+    if history is None:
+        columns = cashflow_columns(periods, fiscal, cases, ends)
+    else:
+        columns = history_columns(history[0])
+        forecast_columns(columns, cases, {c["id"]: at for at, c in enumerate(history[0])})
     if len(layout) * len(columns) > budget:
         raise CashflowBudget(
             "the cash flow model is not shown; the workspace's cash flow models exceed "
@@ -2541,7 +2661,7 @@ def cashflow_of(
     grid: dict[RowKey, list[Cell]] = {}
     rows = []
     for spec in layout:
-        pick = {"q": spec.quarter, "fy": spec.fiscal, "fc": spec.forecast}
+        pick = {"q": spec.quarter, "fy": spec.fiscal, "fc": spec.forecast, "h": spec.forecast}
         grid[spec.key] = [
             spec_cell(pick[column["kind"]], CellContext(inputs, column, index, grid, spec.kind))
             for index, column in enumerate(columns)
@@ -2569,8 +2689,8 @@ def cashflow_of(
             for column in columns
         ],
         "rows": rows,
-        "notes": [note for note in CASHFLOW_NOTES if year_to_date or note != Q1_NOTE],
-        "limits": limits,
+        "notes": cashflow_notes(year_to_date, history is not None),
+        "limits": limits if history is None else [*limits, *history[1]],
     }
 
 
@@ -2613,6 +2733,8 @@ def read_cashflow(
         record = json.loads(files[stage].decode("utf-8"))
         fiscal = fiscal_inputs(record)
         quarter_values = quarter_inputs(record)
+        columns = history_inputs(record)
+        history = None if columns is None else (columns, history_limits(record))
         stage = CASHFLOW_FILES[2]
         annual = markdown_tables(files[stage].decode("utf-8"), stage)
         stage = CASHFLOW_FILES[3]
@@ -2623,7 +2745,7 @@ def read_cashflow(
         return None, ("file", stage)
     try:
         left = CASHFLOW_CELL_BUDGET if budget is None else budget
-        recorded = (fiscal, quarter_values)
+        recorded = (fiscal, quarter_values, history)
         return cashflow_of(forecast, recorded, (annual, quarter), handoff, left), None
     except (CashflowLimit, CashflowBudget) as error:
         return None, ("limit", str(error))

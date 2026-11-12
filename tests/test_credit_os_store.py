@@ -3,6 +3,7 @@
 import hashlib
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -1302,3 +1303,190 @@ def test_an_instruction_key_that_is_not_a_module_code_gets_no_link(tmp_path):
     assert rows["../../escaped"]["href"] is None
     assert rows["CP-0"]["href"] == "downloads/run-a/instructions/CP-0.md"
     assert any("'../../escaped'" in i and "no link" in i for i in result["issues"])
+
+
+# The Forecast grid with a history record: columns hand-written from the plan's answer key.
+NO_PF = "no handoff states pro forma adjustments"
+NEEDS_9M_2023 = "needs 9M 2023, which CP-1 does not print"
+
+
+def held(amount, reason=None):
+    return {"amount": amount, "reason": reason}
+
+
+def history_column(identity, amounts, reason=None):
+    column_id, kind, label, prior = identity
+    revenue, ebitda = amounts
+
+    def entry(amount):
+        return held(amount, reason if amount is None else None)
+
+    return {
+        "id": column_id,
+        "kind": kind,
+        "label": label,
+        "prior": prior,
+        "reason": reason,
+        "start": None,
+        "end": None,
+        "values": {"revenue": entry(revenue), "ebitda": entry(ebitda)},
+    }
+
+
+HISTORY = {
+    "schema_version": "cpos-history/1",
+    "columns": [
+        history_column(("Q3_2024", "QUARTER", "Q3 2024", None), ("250", "75")),
+        history_column(("Q3_2025", "QUARTER", "Q3 2025", "Q3_2024"), ("270", "84")),
+        history_column(("YTD", "YTD", "YTD (9M 2025)", "PYTD"), ("780", "240")),
+        history_column(("PYTD", "PYTD", "PYTD (9M 2024)", None), ("720", "216")),
+        history_column(("FY2023", "FY", "FY2023", None), ("940", "276")),
+        history_column(("FY2024", "FY", "FY2024", "FY2023"), ("1000", "300")),
+        history_column(("LTM", "LTM", "LTM Q3 2025", "PRIOR_LTM"), ("1060", "324")),
+        history_column(("PRIOR_LTM", "PRIOR_LTM", "Prior LTM", None), (None, None), NEEDS_9M_2023),
+        history_column(("PF", "PF", "PF LTM", None), (None, None), NO_PF),
+    ],
+    "limits": ["History is CP-1's printed figures."],
+}
+
+
+def forecast_year(year, revenue, ebitda):
+    return {"year": year, "revenue": held(revenue), "ebitda": held(ebitda)}
+
+
+REFERENCE = {
+    "outputs": {
+        "REFERENCE": {
+            "years": [
+                forecast_year(2025, "1050", "315"),
+                forecast_year(2026, "1092", "338.52"),
+                forecast_year(2027, "1124.76", "359.9232"),
+            ]
+        }
+    },
+    "scope_limits": ["Every figure is Python's arithmetic."],
+}
+WITHOUT_HISTORY = json.dumps({"annual_periods": [], "values": {}}).encode()
+
+
+def with_history(damage):
+    record = {"annual_periods": [], "values": {}, "history": {**HISTORY, **damage}}
+    return json.dumps(record).encode()
+
+
+FILES = {
+    "forecast_exact.json": json.dumps(REFERENCE).encode(),
+    "calculation.json": with_history({}),
+    "annual.md": b"No tables here.",
+    "quarter.md": b"No tables here.",
+}
+
+
+def test_history_columns_precede_the_forecast_in_the_owners_order():
+    grid, problem = store.read_cashflow(FILES, None)
+    assert problem is None
+    assert [(c["group"], c["label"]) for c in grid["columns"]][:9] == [
+        ("Quarter", "Q3 2024"),
+        ("Quarter", "Q3 2025"),
+        ("Year to date", "YTD (9M 2025)"),
+        ("Year to date", "PYTD (9M 2024)"),
+        ("Fiscal year", "FY2023"),
+        ("Fiscal year", "FY2024"),
+        ("Last twelve months", "LTM Q3 2025"),
+        ("Last twelve months", "Prior LTM"),
+        ("Pro forma", "PF LTM"),
+    ]
+    assert [c["label"] for c in grid["columns"]][9:12] == ["FY2025E", "FY2026E", "FY2027E"]
+
+
+def test_values_growth_and_margin_read_across_the_new_columns():
+    row = {r["label"]: r["cells"] for r in store.read_cashflow(FILES, None)[0]["rows"]}
+    assert [c["exact"] for c in row["Revenue"][:7]] == [
+        "250",
+        "270",
+        "780",
+        "720",
+        "940",
+        "1000",
+        "1060",
+    ]
+    growth = row["Revenue YoY growth"]
+    assert Fraction(growth[1]["exact"]) == Fraction(8, 100)  # Q3 2025 on Q3 2024
+    assert abs(Fraction(growth[2]["exact"]) - Fraction(1, 12)) < Fraction(1, 10**20)  # YTD on PYTD
+    assert abs(Fraction(growth[5]["exact"]) - Fraction(3, 47)) < Fraction(1, 10**20)  # FY2024
+    assert Fraction(growth[9]["exact"]) == Fraction(5, 100)  # FY2025E on FY2024
+    assert growth[6]["status"] == "na"  # LTM: prior LTM missing
+    margin = Fraction(row["Adj EBITDA margin"][6]["exact"])
+    assert abs(margin - Fraction(324, 1060)) < Fraction(1, 10**20)
+
+
+def test_an_unavailable_column_gives_every_row_its_reason():
+    grid = store.read_cashflow(FILES, None)[0]
+    assert all(row["cells"][8]["status"] == "na" for row in grid["rows"])
+    reason = {r["label"]: r["cells"][8]["reason"] for r in grid["rows"]}
+    assert reason["Revenue"] == reason["Distributions"] == "no handoff states pro forma adjustments"
+    assert not any(note.startswith("Pro forma:") for note in grid["notes"])
+
+
+def test_the_history_notes_and_limits_replace_the_quarter_and_pro_forma_notes():
+    grid = store.read_cashflow(FILES, None)[0]
+    assert store.Q1_NOTE not in grid["notes"]
+    assert (
+        "LTM is the last fiscal year plus the year to date less the prior year to date, "
+        "from the periods CP-1 labels."
+    ) in grid["notes"]
+    assert grid["limits"] == ["Every figure is Python's arithmetic.", *HISTORY["limits"]]
+
+
+def test_a_model_without_a_history_record_is_laid_out_as_before():
+    files = {**FILES, "calculation.json": WITHOUT_HISTORY}
+    grid = store.read_cashflow(files, None)[0]
+    assert [c["label"] for c in grid["columns"]][:3] == ["FY2025E", "FY2026E", "FY2027E"]
+    assert store.Q1_NOTE in grid["notes"] or not any(c["ytd"] for c in grid["columns"])
+    assert "Pro forma: no pro forma period is recorded in the handoffs." in grid["notes"]
+
+
+def damaged_column(**changes):
+    column = history_column(("A", "FY", "A", None), ("1", "1"))
+    return {"columns": [{**column, **changes}]}
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        {"columns": "x"},
+        {
+            "columns": [
+                {
+                    "id": "A",
+                    "kind": "WEEK",
+                    "label": "A",
+                    "prior": None,
+                    "reason": None,
+                    "values": {},
+                }
+            ]
+        },
+        {
+            "columns": [
+                {"id": "A", "kind": "FY", "label": "A", "prior": "B", "reason": None, "values": {}}
+            ]
+        },
+        {"schema_version": "cpos-history/2"},
+        {"limits": "x"},
+        {"columns": [HISTORY["columns"][0]] * 2},
+        damaged_column(prior="A"),
+        damaged_column(kind="WEEK"),
+        damaged_column(prior="B"),
+        damaged_column(start="2025-13-40"),
+        damaged_column(values={"revenue": {"amount": "NaN", "reason": None}}),
+        damaged_column(values={"revenue": "1"}),
+        damaged_column(label=7),
+        damaged_column(reason=7),
+        {"columns": [history_column((f"C{i}", "FY", "C", None), ("1", "1")) for i in range(61)]},
+    ],
+)
+def test_a_malformed_history_is_reported_not_shown(damage):
+    grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
+    assert grid is None and problem is not None
+    assert problem[1] == "calculation.json" or problem[0] == "limit"
