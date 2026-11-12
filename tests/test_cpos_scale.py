@@ -8,10 +8,10 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from test_cpos_launch import PATHS, forecast_block
-from test_cpos_periods import BASE, CP1, NAMED, cell
+from test_cpos_periods import BASE, CP1, NAMED, OPERANDS, cell
 
 from deploy_workflow.owners import cpos_forecast, cpos_periods
-from deploy_workflow.owners.cpos_forecast import model_files, parse
+from deploy_workflow.owners.cpos_forecast import SCALE_LIMIT, model_files, parse
 
 CP1_K = """| Reported label | Q3 2025 | Q3 2024 revised | 9M 2025 | 9M 2024 | FY2024 | FY2023 \
 | Locator |
@@ -257,3 +257,140 @@ def test_the_division_is_exact_and_fits_the_millions_pattern(text):
     millions = document["base"]["revenue"]["amount"]
     assert Fraction(millions) * 1000 == Fraction(text)
     assert re.fullmatch(r"-?[0-9]{1,6}(\.[0-9]{1,4})?", millions)
+
+
+def test_the_thousands_handoff_publishes_the_millions_figures():  # AK-1, AK-3
+    k = model_files(CP1_K.encode(), block_k().encode(), history=True)
+    m = model_files(CP1.encode(), block_m().encode(), history=True)
+    exact_k, exact_m = (json.loads(f["forecast_exact.json"]) for f in (k, m))
+    first = exact_k["outputs"]["REFERENCE"]["years"][0]
+    key = {
+        "revenue": "1050",
+        "ebitda": "315",
+        "interest": "36",
+        "tax_wc": "105",
+        "capex": "42",
+        "cfo": "174",
+        "fcf": "132",
+        "closing_debt": "550",
+        "closing_cash": "162",
+        "net_debt": "388",
+        "liquidity": "212",
+        "dividends": "20",
+        "repayment": "50",
+    }
+    assert {n: first[n]["amount"] for n in key} == key
+    assert first["coverage"]["amount"] == "8.75" and first["fcf_to_debt"]["amount"] == "0.24"
+    down = exact_k["outputs"]["DOWNSIDE"]["years"][0]
+    assert [down[n]["amount"] for n in ("ebitda", "interest", "fcf", "closing_cash")] == [
+        "252",
+        "39.6",
+        "65.4",
+        "95.4",
+    ]
+    for name in ("base", "reference_drivers", "outputs"):
+        assert exact_k[name] == exact_m[name], name
+    assert (exact_k["scale"], exact_k["units"]) == (1000, "USD millions")
+    assert "scale" not in exact_m and "units" not in exact_m
+    assert SCALE_LIMIT not in exact_m["scope_limits"]
+    assert exact_k["scope_limits"][:3] == [
+        cpos_forecast.LIMIT,
+        SCALE_LIMIT,
+        "Synthetic; not analytical review.",
+    ]
+    assert (
+        json.loads(k["calculation.json"])["history"] == json.loads(m["calculation.json"])["history"]
+    )
+
+
+@pytest.mark.parametrize(
+    "key, ytd, pytd, fy, ltm",
+    [
+        ("revenue", "780", "720", "1000", "1060"),
+        ("interest", "27", "28", "36", "35"),
+        ("tax_wc", "27", "23", "30", "34"),
+        ("fcf", "153", "136", "194", "211"),
+        ("closing_debt", "590", "620", "600", "590"),
+        ("liquidity", "170", "140", "150", "170"),
+    ],
+)
+def test_history_at_scale_1000_is_the_answer_key_in_millions(key, ytd, pytd, fy, ltm):
+    record = cpos_periods.history(cpos_forecast._tables(CP1_K), OPERANDS, named=NAMED, scale=1000)
+    assert [cell(record, c, key)["amount"] for c in ("YTD", "PYTD", "FY2024", "LTM")] == [
+        ytd,
+        pytd,
+        fy,
+        ltm,
+    ]
+
+
+def test_ratios_are_scale_free():
+    record = cpos_periods.history(cpos_forecast._tables(CP1_K), OPERANDS, named=NAMED, scale=1000)
+    leverage = cell(record, "LTM", "total_leverage")["amount"]
+    coverage = cell(record, "LTM", "coverage")["amount"]
+    assert abs(Fraction(leverage) - Fraction(590, 324)) < Fraction(1, 10**12)
+    assert abs(Fraction(coverage) - Fraction(324, 35)) < Fraction(1, 10**12)
+
+
+def test_the_realistic_thousands_handoff():  # AK-4
+    files = model_files(CP1_K2.encode(), block_k2().encode(), history=True)
+    exact = json.loads(files["forecast_exact.json"])
+    first = exact["outputs"]["REFERENCE"]["years"][0]
+    key = {
+        "revenue": "2883.0945",
+        "ebitda": "720.773625",
+        "interest": "99.73314",
+        "tax_wc": "57.66189",
+        "capex": "144.154725",
+        "cfo": "563.378595",
+        "fcf": "419.22387",
+        "closing_debt": "1511.483",
+        "closing_cash": "571.86037",
+        "net_debt": "939.62263",
+        "repayment": "22.873",
+    }
+    assert {n: first[n]["amount"] for n in key} == key
+    assert first["liquidity"] == {"amount": None, "reason": K2_BASE["undrawn"]["reason"]}
+    leverage = Fraction(first["total_leverage"]["amount"])
+    assert abs(leverage - Fraction(12091864, 5766189)) < Fraction(1, 10**30)
+    down = exact["outputs"]["DOWNSIDE"]["years"][0]
+    assert [down[n]["amount"] for n in ("ebitda", "interest", "fcf", "closing_cash")] == [
+        "576.6189",
+        "109.706454",
+        "265.095831",
+        "417.732331",
+    ]
+    record = json.loads(files["calculation.json"])["history"]
+    for name, *want in [
+        ("revenue", "1421.519", "1264.478", "2620.995", "2778.036"),
+        ("ebitda", "370.1", "310.479", "667.621", "727.242"),
+        ("interest", "52", "49.75", "100.25", "102.5"),
+        ("capex", "71.5", "60.25", "139.75", "151"),
+    ]:
+        assert [cell(record, c, name)["amount"] for c in ("YTD", "PYTD", "FY2024", "LTM")] == want
+    assert cell(record, "YTD", "closing_cash")["amount"] == "175.5095"
+    assert cell(record, "FY2024", "closing_debt")["amount"] == "1555.597"
+    ltm = Fraction(cell(record, "LTM", "total_leverage")["amount"])
+    assert abs(ltm - Fraction(1534356, 727242)) < Fraction(1, 10**12)
+
+
+def test_a_block_with_scale_one_is_the_block_without_it_plus_the_units():
+    stated = json.loads(model_files(CP1.encode(), block_m(scale=1).encode())["forecast_exact.json"])
+    absent = json.loads(model_files(CP1.encode(), block_m().encode())["forecast_exact.json"])
+    assert (stated.pop("scale"), stated.pop("units")) == (1, "USD millions")
+    stated["consumed"] = absent["consumed"]  # the handoff's hash differs by the one key
+    assert stated == absent
+
+
+def test_layer_one_at_scale_1000():
+    block = json.loads(block_k().split("```json\n")[1].split("\n```")[0])
+    block["downside_shock"] = None
+    text = CP1_K + "\n### Forecast inputs (machine-readable)\n\n```json\n"
+    text += json.dumps(block) + "\n```\n"
+    files = model_files(text.encode(), text.encode(), "CP-1", history=True)
+    exact = json.loads(files["forecast_exact.json"])
+    assert exact["outputs"]["REFERENCE"]["years"][0]["closing_cash"]["amount"] == "162"
+    assert exact["scope_limits"][:2] == [cpos_forecast.LAYER1_LIMIT, SCALE_LIMIT]
+    assert (
+        cell(json.loads(files["calculation.json"])["history"], "LTM", "revenue")["amount"] == "1060"
+    )

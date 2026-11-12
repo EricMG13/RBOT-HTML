@@ -40,6 +40,12 @@ LAYER1_LIMIT = (
     "the arithmetic, are unreviewed. Not analytical review."
 )
 SOURCES = ("CP-2G", "CP-1")
+UNITS = "USD millions"
+SCALE_LIMIT = (
+    "The forecast inputs state base amounts, amount drivers and facility amounts in USD thousands, "
+    "as CP-1 prints them (scale 1000); Python divided each by 1,000 before any calculation. "
+    "Every figure here is USD millions."
+)
 Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 
@@ -637,8 +643,12 @@ def model_files(
             **_stated("downside_drivers", inputs.downside_drivers),
             "outputs": outputs,
             **detail,
+            # Written only when the block states `scale`, so a block without it is byte for byte
+            # what it was.
+            **({} if inputs.scale is None else {"scale": inputs.scale, "units": UNITS}),
             "scope_limits": [
                 LIMIT if source == "CP-2G" else LAYER1_LIMIT,
+                *([SCALE_LIMIT] if inputs.scale == 1000 else []),
                 *inputs.scope_limits,
                 *limits,
             ],
@@ -665,6 +675,7 @@ def model_files(
                         operands,
                         named=named,
                         forecast_year=inputs.years[0].year,
+                        scale=inputs.scale or 1,
                     )
                 }
                 if history
