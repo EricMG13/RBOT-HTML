@@ -1,0 +1,3301 @@
+diff --git a/.github/workflows/checks.yml b/.github/workflows/checks.yml
+index 19d65f7..0b97401 100644
+--- a/.github/workflows/checks.yml
++++ b/.github/workflows/checks.yml
+@@ -43,7 +43,8 @@ jobs:
+             tests/test_credit_os_chips.py tests/test_quality_gate.py tests/test_work_pc_delta.py \
+             tests/test_inbox_activity.py tests/test_inbox_filing.py \
+             tests/test_inbox_layout.py tests/test_inbox_runs.py tests/test_inbox_scheduler.py \
+-            tests/test_run_start_submissions.py tests/test_run_start_scheduler.py \
++            tests/test_run_start_submissions.py tests/test_run_start_prior.py \
++            tests/test_run_start_scheduler.py \
+             tests/test_run_start_service.py tests/test_run_start_page.py \
+             tests/test_context_module_options.py \
+             tests/test_handoff_loop.py tests/test_context_form.py \
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 4c21f3d..5a698fc 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,27 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
++
++Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
++
++Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
++called, no paid run). The whole branch after its whole-branch review: carry from an earlier run (locked
++ID, documents, answers, pathway, module subset, turns), the existing-issuer notice, "Start again from
++this run", and "Start a run" on the library's Report history. This wave fixed the review's seam findings
++(`?from=` with a submitted run still held, carried-file marks against uploads, the carried pathway and
++subset/turns marks, `open_regular` through `platform_io.regular_open`, hidden names, refused listings).
++- `uv run pytest tests/test_run_start_prior.py tests/test_run_start_submissions.py tests/test_run_start_service.py -q`: exit 0, 170 passed.
++- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 131 passed (91 page, 40 library), none skipped (Chrome ran).
++  `test_upload_to_filed_report_with_the_real_launcher` fails on the base already and is not part of this change.
++- Review probes (`wb_seams.py`: 10 passed; the earlier probes exit as before, `probe_carry_races.py`'s
++  seal-between-copies case still fails: ruled out of this wave).
++- `uv run python tools/quality_gate.py`: exit 0.
++- Fidelity: the notice text, marks, load messages and the progress note are asserted in the DOM Chrome builds.
++- Reader check: not done; pending. No real run was read against the September VMO2 reference.
++- CP-8 summary lines (the "changes section" and the two-prior-runs lines) are not built: the CP-8 redesign has not merged.
++- Windows not run: the `O_BINARY` open of a carried file is from reading `platform_io.regular_open` only.
++
+ ## 2026-11-12 — Run start page browser tests after the preset change (branch `claude/web-search-run-page`)
+ 
+ The browser tests (`-m browser`) were not run for the commits from 73b499b (presets) to d185d83. Run then:
+@@ -963,34 +984,3 @@ provider was called and nothing ran on Windows. Report with all measurements and
+   four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
+   inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
+   sub-agents), only the author's adversarial pass.
+-
+-## 2026-11-10 — Run report Phase A (library Overview and module pages)
+-
+-Scope: the library page Overview is now a run report (what the run establishes, credit story by
+-question, findings register, open items, module matrix); module pages split View from Statements
+-and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
+-`docs/superpowers/plans/2026-11-09-run-report-phase-a.md`. Commits fdb21ee..a887ba4, then merge
+-4dad3d9 of `origin/main` 51203a9.
+-- Real-data check: deterministic rebuild of one retained run, `cpos-tdg-sol-medium-all-001`, into a
+-  temporary folder; no model call, nothing written under `runs/` or `library/`. Result: `7 of 20
+-  modules reach a conclusion · 13 not assessable`; established CP-1, CP-1A, CP-2, CP-2D, CP-2E,
+-  CP-3C, CP-DR; findings register 33 rows shown, 84 with not-assessable modules included; 58 checks
+-  pass; key-numbers differences against the previous page 0.
+-- Gates on 4dad3d9, all exit 0: `node --test apps/issuer-library/credit_os/web/static.test.cjs` (82
+-  pass); pytest on the seven affected files (300 passed, 1 skipped: the paid live test); `uv run
+-  python tools/quality_gate.py --base origin/main`.
+-- Reviews: per-task and whole-branch; one Medium fixed test-first in a887ba4 (an empty
+-  `committee_status:` took the next front-matter line as the status); the merge resolution was
+-  reviewed separately and found sound.
+-- Merge ruling: front matter follows `main` (dc2320c): a level-2 `Front matter` section whose
+-  locator covers only the lines between the `---` markers. Placements of the 20 real handoffs are
+-  identical before and after.
+-- Second merge 85d47f6 of `origin/main` 2ecfc8f (inbox automation), then fix 4abfb18: the review of
+-  that merge found the live Run activity chips had lost their running, done and waiting colours to
+-  the run report's `.chip` rule; fixed test-first. On 4abfb18, exit 0: node (93 pass), pytest on the
+-  affected files with the inbox tests (409 passed, 1 skipped, run on 85d47f6; the two page files
+-  re-run on 4abfb18, 34 passed), the quality gate, and the same real-run rebuild.
+-- Not verified: runs other than `cpos-tdg-sol-medium-all-001` were only built without error; widths
+-  below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
+-  Confidence cell reads as established (neither occurs in retained data); the Overview opened with
+-  no run context; the branch diff is 2,245 lines against the 800-line cap.
+diff --git a/apps/issuer-library/README.md b/apps/issuer-library/README.md
+index 6a81f88..3ec5b57 100644
+--- a/apps/issuer-library/README.md
++++ b/apps/issuer-library/README.md
+@@ -123,6 +123,29 @@ evidence date, pathway, model and effort, exact recorded spend (unknown charges
+ zeroed), its scope statement, and each module's reader summary quoted from the handoff. "Latest"
+ is per issuer by evidence date; runs sharing that date are all marked and counted.
+ 
++## Starting a run from Report history
++
++When the library is served over http, an issuer's Report history has a "Start a run" link above its
++table; it works only when that server is the run start service. It opens the start page from the latest
++run listed (`/?from=<run id>`): the issuer ID is locked to that run's, its documents are copied into
++the new submission, and its pathway, answers, module subset and turns per module fill the form. Each
++carried-over answer, the pathway, the module box and the turns input carries a "from run <id>" mark
++beside it, and the review lists them in one block; editing one removes its mark. Each carried
++document is marked "carried over from run <id>" and removable; a file the analyst uploads over a
++carried name is theirs and is not marked. Not carried, and not marked: the as-of and cutoff dates
++and periods, the submitter (the analyst's own name is kept), and the answers that depend on a chosen
++file (the agreement, bridge, portfolio and prior-case files). A subset naming a module the pathway
++lacks is not carried at all. When the earlier run has no usable stored answers, the only answers carried
++are the issuer name and ID (its documents are still carried when its folder exists) and nothing the
++analyst typed is cleared. "This is a different issuer" drops the
++carry (the level and the analyst's own uploads stay). If the browser still holds a submitted run,
++the link shows that run's progress with "Run <from> has not been started from yet: this page is
++showing run <stored id>." and "Start another run" then starts from `<from>`; when the stored run has
++already ended, the page starts from `<from>` at once. The link is absent when the library is opened
++from disk. The start page also says when a typed issuer ID already has runs (and, if the typed name
++differs from the filed one, shows the filed name), and a failed, capped, rejected or interrupted
++run's progress view offers "Start again from this run".
++
+ ## Windows package
+ 
+ `python apps/issuer-library/packaging/build.py` makes `artifacts/issuer-library/Issuer-Library-<arch>.zip`
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 773701e..5ad5ff0 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -818,7 +818,8 @@ function historyView(context) {
+     const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
+     return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
+   };
+-  return `<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
++  const first=runs[0],start=servedOverHttp()&&first?`<p><a class="start-run" href="${esc('/?from='+encodeURIComponent(first.folder))}">Start a run</a></p>`:'';
++  return `${start}<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
+ }
+ function forecastSections(context) {
+   const models=runModels(context);
+@@ -1271,7 +1272,7 @@ function liveRunSpend(run,cap) {
+   if(typeof run.spent!=='string')return '';
+   return `<span class="run-spend">USD ${liveText(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${liveText(cap)}`}</span>`;
+ }
+-const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location.protocol);
++const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location?.protocol); // a page with no location (the node tests) is not served
+ function liveRunRow(run,cap) {
+   const files=Array.isArray(run.files)?run.files:[];
+   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
+diff --git a/docs/superpowers/plans/2026-11-11-existing-issuer-run-start.md b/docs/superpowers/plans/2026-11-11-existing-issuer-run-start.md
+new file mode 100644
+index 0000000..76ccb1c
+--- /dev/null
++++ b/docs/superpowers/plans/2026-11-11-existing-issuer-run-start.md
+@@ -0,0 +1,412 @@
++# Run Start on an Existing Issuer Implementation Plan
++
++> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
++
++**Goal:** An analyst starts a run from an earlier run of the same issuer: the issuer ID is locked, the earlier documents and answers are carried over, and only what changed is asked.
++
++**Architecture:** The service gains three routes: read an earlier run's inputs, copy its source files into a new submission, and look an issuer ID up in the run records. The start page reads `?from=<run id>`, calls them, and fills the form with its existing `fill()`. Summary, digest, seal, Submit and the launcher are untouched.
++
++**Tech Stack:** Python standard library only (`http.server`, `shutil`, `json`); plain JavaScript in `docs/templates/context-form.html` and `apps/issuer-library/credit_os/web/views.js`; pytest; headless Chrome for the page tests.
++
++**Spec:** `docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md` (adds to `2026-11-11-staged-run-start-design.md`).
++
++## Global Constraints
++
++- No new dependency. No provider call in any test; use the canned launcher fixtures in `tests/inbox_fixtures.py`.
++- No change to `context/1`, `context.py`, the launcher, the digest, the seal, the scheduler or the limits (50 MiB a file, 500 files, 512 MiB in total; 3 running, 30 a day, USD 20 per run).
++- No stub or fake value standing in for real behaviour. No catch-all that hides a failure.
++- Every state-changing request needs the matching `Origin` (the existing `_check_origin`).
++- A run ID is matched against `[0-9A-Za-z._-]{1,80}` and looked up in the run records before any path is built from it.
++- Page copy, exact: "carried over from run <id>", "from run <id>", "This issuer exists: N runs, latest as-of <date>", "this is a different issuer", "Start again from this run", "Start a run".
++- Each task ends with `uv run python tools/quality_gate.py` exiting 0 and a report whose last line is `Not verified:`.
++- Tests run targeted only, each within 300 seconds.
++- **Pre-flight (controller, before Task 1):** the CP-8 redesign from the Pause session changes `run_start/submissions.py` and `context-form.html`. If it has merged, rebase onto it and re-check every line number below against the tip. If it has not, build on `main` and omit Task 4 step 7 (the CP-8 summary lines).
++
++## Review Focus
++
++1. A carry from a run whose source folder holds a symlink: refused, nothing copied (Task 1).
++2. A carry into a submission that already holds a file of the same name: the stored file is kept and reported, not replaced (Task 1).
++3. `?from=` naming a run started before the service (a record, no source folder): the page locks ID and name and says nothing else was carried (Task 3).
++4. A reload after `?from=`: the lock and the "from run" marks survive; the files are not copied a second time (Task 3).
++5. `?from=` with an ID the service does not hold: the page starts blank and says so; it does not fail silently (Task 3).
++
++---
++
++## File Structure
++
++| File | Responsibility |
++|---|---|
++| `src/deploy_workflow/run_start/prior.py` (new) | Read an earlier run's inputs and an issuer's runs from the run records |
++| `src/deploy_workflow/run_start/submissions.py` | `listing()` and `carry()`: copy a source folder into a submission within the limits |
++| `src/deploy_workflow/run_start/service.py` | The three routes |
++| `docs/templates/context-form.html` | `?from=`, locked ID, marks, carried files, existing-issuer notice, "Start again from this run" |
++| `apps/issuer-library/credit_os/web/views.js` | "Start a run" on Report history |
++
++---
++
++### Task 1: Read an earlier run's inputs and carry its files
++
++**Files:**
++- Create: `src/deploy_workflow/run_start/prior.py`
++- Modify: `src/deploy_workflow/run_start/submissions.py` (after `remove_file`, line 357)
++- Test: `tests/test_run_start_prior.py` (new), `tests/test_run_start_submissions.py`
++- Modify: `.github/workflows/checks.yml:46-47` (add `tests/test_run_start_prior.py` to the run-start test list)
++
++**Interfaces:**
++- Consumes: `runs.load_all(layout) -> list[Record]`; `Layout.drops`; `submissions._stored`, `add_file`, `_folder`, `_usable_root`, `_LOCK`, `_PENDING`, `Refused`.
++- Produces:
++  - `submissions.listing(source: Path) -> dict[str, int]`: relative posix name to size of every regular file under `source` except a top-level `context.json`; `Refused` on any link.
++  - `submissions.carry(layout: Layout, sid: str, source: Path) -> dict[str, list[str]]`: returns `{"carried": [...], "kept": [...]}`, names sorted.
++  - `prior.source(layout: Layout, run_id: str) -> tuple[Record, Path | None]`: `Refused("unknown run")` when no record has that ID; the path is `layout.drops / record.id` when it is a real folder holding a regular `context.json`, else `None`.
++  - `prior.inputs(layout: Layout, run_id: str) -> dict[str, Any]` with exactly the keys `run`, `issuer_id`, `issuer_name`, `pathway`, `context`, `files`, `level`, `modules`, `max_turns`. `context` is `None` and `files` is `[]` when there is no source folder. `files` is a list of `{"name": str, "size": int}` sorted by name.
++  - `prior.issuer(layout: Layout, issuer_id: str) -> dict[str, Any]` with keys `runs` (count of records with that `issuer_id` and status `finished`), `latest_as_of`, `latest_run`, `issuer_name` (of the record with the greatest `as_of`, any status; `""` when there is none).
++
++- [ ] **Step 1: Write the failing tests for `prior`**
++
++In `tests/test_run_start_prior.py`, using `root`, `fake_env`, `settings`, `submit_run`, `layout` from `inbox_fixtures` (see `tests/test_run_start_scheduler.py` for the fixture pattern that makes a `Scheduler`):
++
++```python
++def test_inputs_blank_the_dates_and_list_the_files_without_the_context(scheduler, root):
++    record = submit_run(scheduler, root, "acme")
++    pump(scheduler, lambda: (layout(root).drops / record.id / "context.json").is_file())
++    got = prior.inputs(layout(root), record.id)
++    assert set(got) == {"run", "issuer_id", "issuer_name", "pathway", "context",
++                        "files", "level", "modules", "max_turns"}
++    assert got["issuer_id"] == "acme" and got["run"] == record.id
++    run = got["context"]["run"]
++    assert [run[k] for k in ("as_of", "cutoff", "current_period", "prior_period")] == [""] * 4
++    assert got["context"]["identity"]["issuer_id"] == "acme"
++    assert got["files"] == [{"name": "a.txt", "size": len(b"Net sales were 100 for acme.")}]
++
++def test_a_record_without_a_source_folder_gives_identity_only(scheduler, root):
++    record = submit_run(scheduler, root, "acme")
++    pump(scheduler, lambda: (layout(root).drops / record.id).is_dir())
++    shutil.rmtree(layout(root).drops / record.id)
++    got = prior.inputs(layout(root), record.id)
++    assert got["context"] is None and got["files"] == [] and got["issuer_id"] == "acme"
++
++def test_an_unknown_run_is_refused(root):
++    with pytest.raises(submissions.Refused, match="^unknown run$"):
++        prior.inputs(layout(root), "20261111-000000-01")
++
++def test_a_linked_source_folder_or_context_is_not_read(scheduler, root): ...
++    # replace drops/<id>/context.json with a symlink to a file outside: context is None
++
++def test_issuer_counts_finished_runs_and_names_the_latest(scheduler, root):
++    # two runs for "acme" taken to finished with as_of 2026-11-09, one for "other"
++    got = prior.issuer(layout(root), "acme")
++    assert got == {"runs": 2, "latest_as_of": "2026-11-09",
++                   "latest_run": <id of the later record>, "issuer_name": "Acme Corp"}
++    assert prior.issuer(layout(root), "nobody") == {
++        "runs": 0, "latest_as_of": "", "latest_run": "", "issuer_name": ""}
++```
++
++Ties on `as_of` go to the greater run ID (IDs are timestamps).
++
++- [ ] **Step 2: Run to verify they fail**
++
++Run: `uv run pytest tests/test_run_start_prior.py -q`
++Expected: FAIL, `ModuleNotFoundError: deploy_workflow.run_start.prior`
++
++- [ ] **Step 3: Write the failing tests for `listing` and `carry`**
++
++In `tests/test_run_start_submissions.py`:
++
++```python
++def _source(tmp_path, **files):  # name -> bytes; also writes context.json
++    ...
++
++def test_carry_copies_every_file_but_the_context(lay, tmp_path):
++    src = _source(tmp_path, **{"a.txt": b"one", "sub/b.txt": b"two"})
++    sid = submissions.new(lay)
++    assert submissions.carry(lay, sid, src) == {"carried": ["a.txt", "sub/b.txt"], "kept": []}
++    assert submissions.listing(submissions.files_folder(lay, sid)) == {"a.txt": 3, "sub/b.txt": 3}
++
++def test_carry_keeps_a_name_already_stored(lay, tmp_path):
++    # upload a.txt = b"mine" first; carry a source with a.txt = b"theirs" and c.txt
++    # result {"carried": ["c.txt"], "kept": ["a.txt"]}; a.txt still reads b"mine"
++
++def test_a_carry_over_a_limit_copies_nothing(lay, tmp_path, monkeypatch):
++    monkeypatch.setattr(submissions, "MAX_FILES", 2)
++    # source of three files -> Refused matching "more than 2 files"; files folder stays empty
++    # repeat with MAX_TOTAL = 4 and two 3-byte files -> Refused matching "in total"; empty
++
++def test_a_carry_from_a_folder_holding_a_link_copies_nothing(lay, tmp_path): ...
++    # Refused matching "is a link"; files folder stays empty
++
++def test_a_carry_into_a_sealed_submission_is_refused(lay, tmp_path): ...
++    # Refused("this submission has been submitted")
++
++def test_the_digest_of_carried_files_equals_the_digest_of_the_same_files_uploaded(lay, tmp_path):
++    # sid_a: carry(src); sid_b: add_file each of the same names and bytes
++    # submissions.digest(lay, sid_a, answers) == submissions.digest(lay, sid_b, answers)
++```
++
++- [ ] **Step 4: Run to verify they fail**
++
++Run: `uv run pytest tests/test_run_start_submissions.py -q -k "carry or carried"`
++Expected: FAIL, `AttributeError: module ... has no attribute 'carry'`
++
++- [ ] **Step 5: Implement `listing` and `carry` in `submissions.py`**
++
++- `listing`: `_stored(source, strict=True)` without the top-level `context.json` key (compare with `casefold()`).
++- `carry`: take `listing(source)`. Under `_LOCK`, with `_usable_root(folder)`: split names into kept (already in `_stored(root)`) and to-copy; refuse with the existing texts (`f"more than {MAX_FILES} files"`, `f"more than {MAX_TOTAL // (1024 * 1024)} MB in total"`) when stored plus pending plus to-copy exceeds a limit; refuse a single file over `MAX_FILE` with the existing text. Release the lock, then copy each file by calling `add_file(layout, sid, name, handle, size)` with the file opened `"rb"`. If any `add_file` raises, remove the files this call added (`remove_file`) and re-raise. `# ponytail:` comment: the pre-check and the copies are not one atomic step; `add_file` re-checks each file, and the rollback restores the folder.
++
++- [ ] **Step 6: Implement `prior.py`**
++
++`inputs` reads `context.json` with `json.loads`; anything that is not an object with object-valued `run` and `identity` gives `context: None`. Blank `run.as_of`, `run.cutoff`, `run.current_period`, `run.prior_period` to `""`. `level`, `modules` (as a list) and `max_turns` come from the record.
++
++- [ ] **Step 7: Run all of this task's tests**
++
++Run: `uv run pytest tests/test_run_start_prior.py tests/test_run_start_submissions.py -q`
++Expected: PASS
++
++- [ ] **Step 8: Gate and commit**
++
++```bash
++uv run python tools/quality_gate.py
++git add src/deploy_workflow/run_start/prior.py src/deploy_workflow/run_start/submissions.py tests/test_run_start_prior.py tests/test_run_start_submissions.py .github/workflows/checks.yml
++git commit -m "feat(run-start): read an earlier run's inputs and carry its files into a submission"
++```
++
++---
++
++### Task 2: The three routes
++
++**Files:**
++- Modify: `src/deploy_workflow/run_start/service.py:118-120` (patterns), `:334-357` (`_get`), `:358-371` (`_post`), `:380-385` (`_guarded`)
++- Test: `tests/test_run_start_service.py`
++
++**Interfaces:**
++- Consumes: Task 1's `prior.inputs`, `prior.issuer`, `prior.source`, `submissions.carry`.
++- Produces:
++  - `GET /api/runs/<id>/inputs` -> 200 with `prior.inputs`; 404 `unknown run`.
++  - `GET /api/issuers/<issuer id>` -> 200 with `prior.issuer`. The ID pattern is `[a-z0-9-]{1,40}`; anything else is the existing 404 for a wrong route.
++  - `POST /api/submissions/<sid>/carry` with JSON `{"run": "<id>"}` -> 200 with `submissions.carry`'s result; 404 `unknown run` or `unknown submission`; 400 with the text `that run has no stored documents` when `prior.source` gives no folder; 400 for any other `Refused`.
++
++- [ ] **Step 1: Write the failing tests**
++
++Using the file's `svc` fixture and its request helper (see `test_upload_read_summarise_submit_and_see_the_run` for how a run is made and read back):
++
++```python
++def test_an_earlier_runs_inputs_are_read_and_its_files_carried(svc):
++    # make a run as test_upload_read_summarise_submit_and_see_the_run does; wait for drops/<id>
++    got = svc.get(f"/api/runs/{run}/inputs")
++    assert got.status == 200 and got.json["context"]["run"]["as_of"] == ""
++    sid = svc.post("/api/submissions").json["id"]
++    carried = svc.post(f"/api/submissions/{sid}/carry", {"run": run})
++    assert carried.status == 200 and carried.json["kept"] == []
++    names = [d["name"] for d in svc.get(f"/api/submissions/{sid}/reading").json["documents"]]
++    assert names == [f["name"] for f in got.json["files"]]
++
++def test_inputs_and_carry_for_an_unknown_run_are_404(svc): ...
++def test_a_carry_without_or_with_a_foreign_origin_copies_nothing(svc): ...   # 403, as uploads
++def test_a_carry_body_that_is_not_a_run_id_is_400(svc): ...   # {"run": "../x"}, {"run": 3}, []
++def test_a_carry_from_a_run_without_stored_documents_is_400(svc): ...
++def test_an_issuer_id_is_looked_up_and_an_unsafe_one_is_404(svc):
++    assert svc.get("/api/issuers/acme").json["runs"] == 1          # after the run finishes
++    assert svc.get("/api/issuers/nobody").json["runs"] == 0
++    assert svc.get("/api/issuers/..%2Fx").status == 404
++def test_the_inputs_route_does_not_serve_file_content(svc):
++    # the reply's text does not contain the uploaded file's bytes
++```
++
++Extend `test_no_response_carries_the_provider_key` to request the three new routes.
++
++- [ ] **Step 2: Run to verify they fail**
++
++Run: `uv run pytest tests/test_run_start_service.py -q -k "inputs or carry or issuer"`
++Expected: FAIL with 404 where 200 is expected
++
++- [ ] **Step 3: Implement the routes**
++
++Add `carry` to the `_SUBMISSION` action group; add `_RUN_INPUTS = re.compile(r"/api/runs/([0-9A-Za-z._-]{1,80})/inputs")` and `_ISSUER = re.compile(r"/api/issuers/([a-z0-9-]{1,40})")`. `_guarded` maps both `unknown submission` and `unknown run` to 404. The carry body must be an object whose `run` is a string matching the `_RUN` ID pattern.
++
++- [ ] **Step 4: Run to verify they pass**
++
++Run: `uv run pytest tests/test_run_start_service.py -q`
++Expected: PASS
++
++- [ ] **Step 5: Gate and commit**
++
++```bash
++uv run python tools/quality_gate.py
++git add src/deploy_workflow/run_start/service.py tests/test_run_start_service.py
++git commit -m "feat(run-start): routes for an earlier run's inputs, the carry and the issuer lookup"
++```
++
++---
++
++### Task 3: The page starts from an earlier run
++
++**Files:**
++- Modify: `docs/templates/context-form.html` (`restore()` at :2081, `save()` at :2071, `resetAll()` at :2401, the issuer ID field at :374, `renderDocs()` at :1981, `renderReview()` near :1800)
++- Modify: `tests/test_run_start_page.py:134` (`Page.run` gains `path: str = "/"`, appended to `self.base`)
++- Test: `tests/test_run_start_page.py`
++
++**Interfaces:**
++- Consumes: Task 2's routes; the page's `call()`, `fill(o, files, quiet)`, `uploadFiles`, `refreshReading`, `renderDocs`, `syncNewest`, `loadMsg`, `save`.
++- Produces (page globals later tasks use):
++  - `CARRIED = {run: '', files: new Set(), fields: new Set(), locked: false}`.
++  - `async function startFrom(runId)`: returns `true` when the run was found.
++  - `function unlockIssuer()`.
++  - The carried state is saved in `extra.carried` as `{run, files: [...], fields: [...], locked}` and restored by `restore()`.
++
++- [ ] **Step 1: Write the failing tests**
++
++Add a fixture that finishes a run for issuer `acme` with the fake launcher before the page loads (the scheduler from `_serving`, `submit_run`, `pump`), and yields `(page, run_id)`. Tests load `page.run(body, path=f"/?from={run_id}")`. Probe bodies return plain objects:
++
++```python
++def test_from_locks_the_issuer_id_and_carries_the_documents(page_from):
++    got = page.run("""
++      return {id: $('i-issuer_id').value, locked: $('i-issuer_id').readOnly,
++              rows: rows(), asOf: $('d-as_of').value, run: CARRIED.run};""", path=...)
++    assert got["id"] == "acme" and got["locked"] is True and got["run"] == run_id
++    assert any("a.txt" in r[0] and "carried over from run " + run_id in " ".join(r) for r in got["rows"])
++    assert got["asOf"] != "2026-11-09"   # the earlier run's as-of date is not carried
++
++def test_a_run_started_from_another_cannot_build_a_different_issuer_id(page_from):
++    # type('i-issuer_id', 'other') -> build().identity.issuer_id is still 'acme'
++    # click the "this is a different issuer" control -> readOnly false, rows() empty,
++    # CARRIED.run === '', and the service's reading for SUB lists no document
++
++def test_carried_answers_are_marked_and_an_edit_removes_the_mark(page_from):
++    # an input filled from the earlier context has a sibling/attribute text "from run <id>";
++    # after type() on it, the mark is gone and CARRIED.fields no longer has its key
++
++def test_an_executed_agreement_is_not_carried_as_a_file_choice(page_from_executed):
++    # earlier context has legal_documents 'executed'; after ?from=, build() gives 'none'
++    # and radio('executed').disabled is true until a file is chosen
++
++def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
++    # first run(path=?from=) then run(path="/") with the same profile:
++    # locked still true, rows() has each file once, CARRIED.run unchanged
++
++def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):
++    # drops/<id> removed before load: id and name filled, locked, rows() empty,
++    # the load message contains "No documents or answers were kept for run"
++
++def test_from_an_unknown_run_starts_blank_and_says_so(page):
++    # path="/?from=20990101-000000-01": i-issuer_id empty and not readOnly,
++    # the load message contains "Run 20990101-000000-01 was not found"
++
++def test_the_review_lists_what_was_carried_over(page_from):
++    # after review(): the element #rv-carried is shown, names run_id, the file count
++    # and each label still in CARRIED.fields
++```
++
++- [ ] **Step 2: Run to verify they fail**
++
++Run: `uv run pytest tests/test_run_start_page.py -q -k "from or carried or reload_keeps_the_lock"`
++Expected: FAIL (`CARRIED is not defined`)
++
++- [ ] **Step 3: Implement**
++
++- `restore()`: read `new URLSearchParams(location.search).get('from')`. When it matches `/^[0-9A-Za-z._-]{1,80}$/` and no saved submission and no saved run exist, call `startFrom`. When a saved submission exists, restore it as today (this is the reload case) and ignore `from`.
++- `startFrom`: `GET /api/runs/<id>/inputs`; on 404 show "Run <id> was not found. This is a blank start." and return `false`. Otherwise create the submission, `POST .../carry` when `files` is non-empty, `refreshReading()`, then `fill(context, {}, true)` when `context` is an object, else set only the issuer name and ID. Set `LEVEL` from `level` when it is in `RANK`. Do not set the submitter. Set `CARRIED`; `fields` is every `data-k` that `fill` gave a non-empty value, except `pathway`.
++- Lock: `$('i-issuer_id').readOnly = CARRIED.locked`. Add a button with the text "this is a different issuer" beside it, shown only while locked; `unlockIssuer()` deletes each carried file from the service (`removeFile`), clears `CARRIED`, calls `resetAll()` and `update()`.
++- Marks: one `<small class="from-run">from run <id></small>` after each input whose key is in `CARRIED.fields`; the page's existing delegated `input`/`change` handler removes the key and the mark.
++- `renderDocs`: a file in `CARRIED.files` shows "carried over from run <id>" in its row.
++- `renderReview`: a block `#rv-carried` after `#rv-defaults`: the run ID, the count of carried files, and the labels of the fields still carried. Hidden when `CARRIED.run` is empty.
++- `save`/`restore`: `extra.carried` as in Interfaces. `resetAll()` does not clear `CARRIED` (only `unlockIssuer` and `startAgain` do).
++
++- [ ] **Step 4: Run to verify they pass, and that nothing else moved**
++
++Run: `uv run pytest tests/test_run_start_page.py tests/test_context_form.py -q`
++Expected: PASS
++
++- [ ] **Step 5: Gate and commit**
++
++```bash
++uv run python tools/quality_gate.py
++git add docs/templates/context-form.html tests/test_run_start_page.py
++git commit -m "feat(run-start): start a run from an earlier run: locked issuer ID, carried documents and answers"
++```
++
++---
++
++### Task 4: Existing-issuer notice, start again, and the library link
++
++**Files:**
++- Modify: `docs/templates/context-form.html` (stage 3 issuer fields near :374; the progress view `renderRun` at :1858 and `startAgain` at :2494)
++- Modify: `apps/issuer-library/credit_os/web/views.js:808-822` (`historyView`)
++- Modify: `apps/issuer-library/README.md`, `VERIFICATION.md`
++- Test: `tests/test_run_start_page.py`, `tests/test_library_page_browser.py`
++
++**Interfaces:**
++- Consumes: Task 2's `GET /api/issuers/<id>`; Task 3's `startFrom`, `CARRIED`; `views.js` `servedOverHttp()`, `historyRows`, `contexts[key].folder` (the run's folder name, which is the service's run ID).
++
++- [ ] **Step 1: Write the failing page tests**
++
++```python
++def test_typing_an_existing_issuer_id_shows_the_notice_and_offers_the_carry(page_with_run):
++    # blank start; type('i-issuer_name','Acme Corp') (the ID fills to 'acme'); settle
++    # #issuer-exists text == "This issuer exists: 1 runs, latest as-of 2026-11-09"
++    # clicking its button gives the same state as ?from=: locked, rows() lists a.txt
++
++def test_an_unknown_issuer_id_shows_no_notice(page): ...          # #issuer-exists hidden
++
++def test_a_different_typed_name_is_named_against_the_filed_one(page_with_run):
++    # type name 'Acme Holdings', id 'acme' -> notice also contains 'filed as "Acme Corp"'
++
++def test_a_failed_run_offers_start_again_from_this_run(page):
++    # submit with fake_env making the launcher fail; wait for the progress view to show failed
++    # #run-again is shown with text "Start again from this run"; clicking it leaves the
++    # progress view and gives locked === true and CARRIED.run === the failed run's ID
++
++def test_a_finished_or_running_run_does_not_offer_start_again(page): ...   # #run-again hidden
++```
++
++The notice says "1 runs" as written: the spec fixes the wording as "N runs".
++
++- [ ] **Step 2: Write the failing library test**
++
++In `tests/test_library_page_browser.py`, following its existing history-view tests:
++
++```python
++def test_report_history_links_start_a_run_to_the_latest_run_when_served(...):
++    # served over http: the history view has a link with text "Start a run" and
++    # href "/?from=<folder of the first row>" (rows are latest as-of first)
++def test_report_history_has_no_start_link_from_a_file(...):       # file:// : no such link
++```
++
++- [ ] **Step 3: Run to verify they fail**
++
++Run: `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q -k "notice or start_again or start_a_run or filed_one or start_link"`
++Expected: FAIL
++
++- [ ] **Step 4: Implement**
++
++- Notice: on a change of the issuer ID while not locked, and when the ID matches `/^[a-z0-9-]{1,40}$/`, `GET /api/issuers/<id>`; when `runs > 0` or `latest_run` is set, show `#issuer-exists` with the exact sentence, the filed name when it differs from the typed one, and a button "carry over from its latest run" that calls `startFrom(latest_run)`. A failed lookup shows nothing and logs to the console; the run is not blocked by it.
++- Start again: `renderRun` shows `#run-again` when `r.status` is one of `failed`, `capped`, `rejected`, `interrupted`. Its click calls the existing `startAgain()` and then `startFrom(RUN's ID)`.
++- Library: in `historyView`, when `servedOverHttp()` and there is at least one row, add `<a class="start-run" href="/?from=${encodeURIComponent(first.folder)}">Start a run</a>` above the table, passed through `esc`.
++
++- [ ] **Step 5: Run to verify they pass**
++
++Run: `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q`
++Expected: PASS
++
++- [ ] **Step 6: Docs and the reader check**
++
++- `apps/issuer-library/README.md`: one paragraph on starting a run from Report history and what is and is not carried over.
++- `VERIFICATION.md`: one entry with the scope (fake launcher, no provider, macOS Chrome), the test commands and their exit codes, and the reader check `AGENTS.md` requires for a presentation change: one real run's Report history read against the September VMO2 reference with the new link present. Keep the file under 1,000 lines.
++
++- [ ] **Step 7: CP-8 summary lines (only when the CP-8 redesign has merged)**
++
++The summary reply then names the run CP-8 compares against. Show in the review, from that reply and nothing computed on the page: "Changes since run <id> (as-of <date>)" or "First run of this pathway", and, when `CARRIED.run` differs from that run, both IDs. Test: one page test per sentence. Take the reply's field names from the merged CP-8 code; do not invent them.
++
++- [ ] **Step 8: Gate and commit**
++
++```bash
++uv run python tools/quality_gate.py
++git add docs/templates/context-form.html apps/issuer-library/credit_os/web/views.js apps/issuer-library/README.md VERIFICATION.md tests/test_run_start_page.py tests/test_library_page_browser.py
++git commit -m "feat(run-start): existing-issuer notice, start again from a failed run, Start a run on Report history"
++```
++
++---
++
++## After the last task
++
++- Run once on the branch: `confidence-review`, `rewrite-tournament` (post-edit, on `carry`, `prior.inputs` and `startFrom`), `ponytail-review`, and the whole-branch review.
++- Sensitive code: Tasks 1 and 2 (a network-reachable service copying files). Their review includes `mx-adversary`.
++- Not proven by this plan: Windows behaviour of the copy; more than two analysts carrying from one run at once; that old source folders are never removed; a library run the service did not start is invisible to the existing-issuer notice.
+diff --git a/docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md b/docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md
+new file mode 100644
+index 0000000..f09eb46
+--- /dev/null
++++ b/docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md
+@@ -0,0 +1,183 @@
++# Run start on an existing issuer: design (2026-11-11)
++
++Adds to `2026-11-11-staged-run-start-design.md`. Status: approved by the owner 2026-11-11; built on branch claude/initiating-runs-existing-issuers-4a8739.
++
++## 1. Intent
++
++A second run on an issuer starts blank today. The analyst uploads every document again and retypes
++the issuer ID. The only guard on the ID is help text ("Use the same ID for every run on this
++issuer"), so a typo files the run under a new issuer folder and the issuer's history splits.
++
++The new flow: the analyst starts from a run already in the library or in Run activity. The page
++keeps that run's issuer identity, carries over its documents and answers, and asks only for what
++has changed. Summary and Submit are unchanged.
++
++## 2. Goals, non-goals, anti-goals
++
++**Goals**
++- A run started from an existing issuer cannot file under a different issuer ID.
++- The analyst adds the new filings without uploading the old ones again.
++- A failed run can be started again from its own inputs.
++
++**Non-goals**
++- No change to the launcher, the approval digest, the seal, the limits (3 running, 30 a day,
++  USD 20 per run) or the library's listing rules.
++- No change to `context/1`.
++- No CP-8 design. That belongs to the Pause session's plan (section 5).
++- No login (staged-run-start spec, section 8).
++
++**Anti-goals** (failure even if it works)
++- A carried-over as-of date or period: the stale as-of error of `cpos-tdg-sol-medium-all-001`
++  repeated by the page itself.
++- A carried-over answer the analyst cannot tell from one they gave in this submission.
++- A prior run's files offered for download from the start page.
++
++## 3. Owner decisions (2026-11-11)
++
++1. Gaps other than CP-8 follow the builder's recommendation ("all others your recommendation").
++2. CP-8 follows the Pause session, where the owner approved: the comparison with the previous
++   same-pathway run, the view over time, and the limitations ledger ("1,2 and 3"); then "approved
++   but make cp-8 a section just like forecast, overview and the others", described as "what has
++   changed since the last time i looked at this".
++
++## 4. The flow
++
++### Entry
++
++- One link form: `/?from=<run id>`.
++- The library's Report history for an issuer has "Start a run"; it passes that issuer's latest run.
++- The start page's own progress view offers "Start again from this run" once the run has ended
++  as failed, capped, rejected or interrupted. Run activity draws only running and waiting runs
++  (library decision 10), so the control is not placed there.
++- The existing rail link to `/` stays as the blank start.
++
++### What the service returns
++
++`GET /api/runs/<id>/inputs` returns, for a run whose record and `_engine/drops/<id>/` exist:
++
++- the run's `context.json`;
++- the names and sizes of its source files (no content);
++- the record's level, module subset and turns per module.
++
++A run with a record but no source folder (started before the service) returns the issuer ID and
++name only. An unknown run ID is refused.
++
++### What the page does with it
++
++| Stage | Carried over | Not carried over |
++|---|---|---|
++| 1 Pathway and level | Pathway, level, module subset and turns per module (each marked beside its input; a subset naming a module the pathway lacks is not applied) | Submitter's name |
++| 2 Documents | Every prior file, listed as "carried over from run <id>", each removable | - |
++| 3 Issuer and dates | Issuer name and ID (ID locked), currency, identity fields | As-of date, cutoff, current and prior period |
++| 4 Legal | - | Which file is the agreement: asked again, so the answer is `none` until a file is chosen |
++| 5 to 7 | Every answer | Which file is the bridge, the portfolio workbook or the prior case |
++| 8, 9 | Nothing: a new summary, a new approval, a new digest | - |
++
++- The page fills the form with its existing `fill()`; no second loader is added.
++- Dates default from the newest document, as on a blank start.
++- The locked ID has an "this is a different issuer" control that unlocks it and clears the
++  carried-over files and answers. The level stays; a file the analyst uploaded stays.
++- When the earlier run's answers cannot be used (no source folder, or unreadable), the only answers
++  carried are the issuer name and ID: the level, module subset, turns and anything the analyst typed
++  stay. Its documents are still carried when the source folder exists.
++- Each carried-over answer is marked "from run <id>" beside its input. The summary lists them in
++  one block, the way it lists defaulted inputs, so approval covers them.
++- The file questions are not carried over because `context/1` records no per-file choice (staged
++  run start spec, stage 4); the prior run's choice exists only in that analyst's browser.
++- The service blanks the as-of date, cutoff and both periods in the context it returns, so no
++  page can carry them over.
++
++### Carrying the files
++
++- `POST /api/submissions/<sid>/carry` with the prior run ID copies that run's source files into
++  the new submission, except `context.json`. The browser never receives them.
++- They are copies, not links: the seal, the digest and the launcher reading work unchanged, and a
++  later change to one folder cannot reach the other.
++- They count toward the upload limits (50 MiB a file, 500 files, 512 MiB in total). A carry that
++  would exceed a limit is refused whole, with the limit named.
++- A name already stored in the submission is kept, not replaced, and reported as kept.
++- The launcher's offline reading runs on carried and new files together. A carried file is
++  re-read, not trusted from the prior run.
++
++### Same ID typed on a blank start
++
++- Stage 3 checks the typed ID against the service's run records by exact match
++  (`GET /api/issuers/<id>`). A library run the service did not start is not seen.
++- On a match it shows "This issuer exists: N runs, latest as-of <date>" and offers "carry over
++  from its latest run", which behaves as `/?from=` does.
++- When the typed name differs from the filed name, it says so and shows the filed name. The run
++  still files under the existing folder (existing rule, `filing.issuer_folder`).
++- No near-match search.
++
++## 5. CP-8
++
++The start page asks no CP-8 question. Under the Pause session's plan (its D4, with the owner's
++later amendment):
++
++- CP-8 runs last in a run when the issuer has an earlier run of the same pathway dated on or
++  before this one. The library shows "First run of this pathway" otherwise.
++- Its output is its own library section, beside Overview, Modules, Forecast and Evidence: what
++  has changed in the issuer's business and credit profile, and in the modules' findings, since
++  the previous run.
++
++What this design owes to it:
++
++- The summary lists the changes section among the sections this run fills, with the run it will
++  be compared against (ID and as-of date), or "First run of this pathway".
++- Two prior runs can differ and the summary names both: the run the inputs were carried from
++  (any pathway) and the run CP-8 compares against (same pathway).
++- Both pieces of work change `run_start/submissions.py` and `docs/templates/context-form.html`.
++  CP-8 lands first; this build starts from its merged result.
++
++The CP-8 redesign had not merged when this was built, so the two summary lines are not built.
++Nothing here depends on it to start a run.
++
++## 6. Trust boundary
++
++- Same audience as the library and no login, as the staged-run-start spec decided.
++- `GET /api/runs/<id>/inputs` exposes a prior context to anyone who can reach the service. It
++  holds pinned assumptions and deal terms. The owner accepted this with decision 1.
++- The run ID is matched against the existing `_RUN` pattern and looked up in the run records;
++  it is never joined into a path before that.
++- The carry request is state-changing and needs the matching `Origin`, as uploads do.
++- Carried files are copied as regular files only; a link in the prior folder is refused.
++
++## 7. Kept, changed
++
++**Kept**
++- Stages 8 and 9, the digest, the seal, the scheduler, filing, the launcher and `context.py`.
++
++**Changed**
++- `run_start/service.py`: the three routes above.
++- `run_start/submissions.py`: the carry (copy within the limits).
++- `run_start/prior.py` (new): an earlier run's inputs and an issuer's runs, from the run records.
++- `docs/templates/context-form.html`: reading `?from=`, the locked ID, the carried-over marks,
++  the carried files in stage 2, the stage 3 existing-issuer notice.
++- `apps/issuer-library/credit_os/web/`: "Start a run" on Report history, shown only when the
++  service serves the library.
++- `apps/issuer-library/README.md`.
++
++## 8. Verification the plan must include
++
++- A run started with `?from=` cannot be submitted under another issuer ID unless the analyst
++  chose "this is a different issuer".
++- The as-of date and periods of the prior context are absent from the built context unless the
++  analyst typed them.
++- A carry that exceeds a limit copies nothing. A link in the prior folder is refused.
++- The digest of a submission with carried files equals the digest of the same files uploaded.
++- A run started with `?from=` a run whose agreement was executed builds `none` until a file is
++  chosen.
++- An unknown run ID, and a carry without the matching `Origin`, are refused.
++- A record with no source folder yields the issuer ID and name only.
++- Tests use the existing canned launcher fixtures. No test calls a provider.
++- A presentation change needs the reader check `AGENTS.md` names, recorded in VERIFICATION.md.
++- A test shows two submissions carrying from one run both end with the run's files. Not proven by
++  this build: Windows behaviour of the copy; two analysts carrying from the same run at the same
++  moment; that source folders of old runs are never removed
++  (no code that deletes them was found; it was not tested).
++
++## 9. Left to the builder
++
++- The wire format of the two routes and the page's internal structure.
++- Whether the library's link reads the latest run from the catalogue or asks the service.
++- The order of the work, provided the locked ID lands with the first carried-over field.
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index ca0b516..ef8e98c 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -107,6 +107,7 @@ svg.i{width:16px;height:16px;flex:none}
+ details.block>summary{cursor:pointer;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);min-height:28px}
+ .uses{margin:2px 0 0;font-size:var(--fs-compact);line-height:18px;color:var(--text-quaternary)}
+ .uses b{font-weight:600;color:var(--text-tertiary)}
++.from-run{display:block;margin-top:2px;font-size:var(--fs-compact);color:var(--text-tertiary)}
+ .help{max-width:62ch;margin:6px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-tertiary)}
+ fieldset{border:0;margin:24px 0 0;padding:0;min-width:0}
+ legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
+@@ -371,7 +372,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+   <p class="lead">Each module's answer must name the issuer, one of its other names or its ID. Source readiness stops the run when it cannot tell whose files these are. The as-of date is the day the analysis stands on: evidence published after it counts as not yet available.</p>
+   <div class="grid">
+     <div class="f"><label for="i-issuer_name">Issuer (company name)</label><input type="text" id="i-issuer_name" placeholder="e.g. Northbridge Group" data-k="issuer_name" aria-describedby="i-issuer_name-h"><p class="help" id="i-issuer_name-h">The name the filings use for the group.</p></div>
+-    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><p class="help" id="i-issuer_id-h">Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.</p></div>
++    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><button type="button" class="text-button" id="unlock-issuer" hidden>this is a different issuer</button><div id="issuer-exists" class="help" hidden><span id="issuer-exists-text"></span> <button type="button" class="text-button" id="issuer-carry">carry over from its latest run</button></div><p class="help" id="i-issuer_id-h">Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.</p></div>
+     <div class="f wide" data-min="advanced"><label for="i-aliases">Other names in the filings</label><textarea id="i-aliases" rows="2" placeholder="e.g. Northbridge&#10;NBG" data-k="aliases" aria-describedby="i-aliases-h"></textarea><p class="help" id="i-aliases-h">One per line: the legal name if it differs, a short name, the ticker.</p></div>
+   </div>
+   <fieldset id="classf"><legend>Issue classification</legend><div data-cards="issue_classification" data-class="two"></div><p class="help">By the debt this run analyses; for split-rated or unrated issuers, use your firm's convention.</p></fieldset>
+@@ -517,6 +518,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+   <div id="rv-ready"></div>
+   <h3 class="sub">Inputs left at their defaults</h3>
+   <div id="rv-defaults"></div>
++  <div id="rv-carried" hidden><h3 class="sub">Carried over from an earlier run</h3><div id="rv-carried-body"></div></div>
+   <h3 class="sub">Your answers</h3>
+   <dl class="review-summary" id="rv-steps"></dl>
+   <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
+@@ -532,12 +534,13 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ <section class="run-progress" id="run-progress" hidden aria-live="polite">
+   <h2 tabindex="-1">Run started</h2>
+   <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
++  <p id="run-from-note" hidden></p>
+   <dl class="rv-facts"><dt>Run</dt><dd id="run-id"></dd><dt>State</dt><dd id="run-state"></dd><dt>Why</dt><dd id="run-reason"></dd></dl>
+   <h3 class="sub">Modules</h3>
+   <ol class="run-stages modules" id="run-modules"></ol>
+   <p class="err" id="run-error" hidden></p>
+   <p id="run-report" hidden>Report: <a id="run-report-link" href="/library/"></a></p>
+-  <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="another">Start another run</button></div>
++  <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="run-again" hidden>Start again from this run</button><button type="button" class="tertiary-action" id="another">Start another run</button></div>
+ </section>
+ <section class="run-progress" id="submission-gone" hidden>
+   <h2 tabindex="-1">Submission</h2>
+@@ -1809,6 +1812,7 @@ function renderReview(sq, o) {
+   const list = defaultedInputs(o);
+   if (list.length) defaults.append(h('ul', {}, ...list.map(([label, value, isDefault]) => h('li', {textContent: `${label}: ${value}` + (isDefault ? ' (default)' : ' (your answer)')}))));
+   else defaults.append(h('p', {className: 'muted', textContent: 'None: this level asks for every input.'}));
++  renderCarried();
+   const box = $('rv-steps');
+   box.innerHTML = '';
+   sq.filter(st => st !== 'review').forEach((st, i) => {
+@@ -1862,8 +1866,9 @@ function showProgress() {
+   $('run-id').textContent = RUN;
+   $('scope').textContent = '';
+   $('run-progress').querySelector('h2').focus();
+-  pollRun();
++  return pollRun();
+ }
++const RESTARTABLE = ['failed', 'capped', 'rejected', 'interrupted'];
+ function renderRun(r) {
+   // The library's own copy of a finished run's report (the filed copy under issuers/ is not served).
+   const copy = typeof r.library_report === 'string' ? r.library_report : '';
+@@ -1875,6 +1880,7 @@ function renderRun(r) {
+     $('run-report-link').href = '/library/' + path.split('/').map(encodeURIComponent).join('/') + (cut < 0 ? '' : copy.slice(cut));
+     $('run-report-link').textContent = r.issuer_name ? r.issuer_name + ': report' : 'Open the report';
+   }
++  $('run-again').hidden = !RESTARTABLE.includes(r.status);
+   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
+   $('run-reason').textContent = r.reason || 'none given';
+   const list = $('run-modules');
+@@ -1890,18 +1896,20 @@ function renderRun(r) {
+ async function pollRun() {
+   clearTimeout(pollTimer);
+   const err = $('run-error');
+-  let again = true;
++  let again = true, ended = false;
+   try {
+     const r = await call('GET', `/api/runs/${encodeURIComponent(RUN)}`);
+     renderRun(r);
+     err.hidden = true;
+-    again = !ENDED.includes(r.status);
++    ended = ENDED.includes(r.status);
++    again = !ended;
+   } catch (e) {
+     err.hidden = false;
+     err.textContent = 'Could not read the run: ' + e.message;
+     if (e.status === 404) again = false;
+   }
+   if (again) pollTimer = setTimeout(pollRun, POLL_MS);
++  return ended;
+ }
+ 
+ /* ======================================================================= Documents (the start service) */
+@@ -1915,6 +1923,10 @@ const FAILED = [];         // [{name, text}] files the service refused, or answe
+ const SKIPPED = new Set(); // modules left out at Advanced
+ const FILE_SELECTS = {legalfile:'legal-file', bridgefile:'f-bridge', portfoliofile:'f-portfolio', priorfile:'f-prior'};
+ let newestTouched = false;
++// Starting from an earlier run of the issuer (?from=<run id>): which files and answers came from it, and
++// whether the issuer ID is locked to that run's. LOCKED_ID is the locked value; it is not saved (the saved answers hold it).
++const CARRIED = {run: '', files: new Set(), fields: new Set(), locked: false};
++let LOCKED_ID = '';
+ const say = text => { $('docstatus').textContent = text; };
+ // An HTML filing's text is pinned by the launcher as <name>.jsonl: the analyst knows the file as <name>.
+ const docName = source => /\.html?\.jsonl$/i.test(source) ? source.slice(0, -'.jsonl'.length) : source;
+@@ -1959,7 +1971,13 @@ async function uploadFiles(files) {
+     let n = 0;
+     for (const [name, f] of send) {
+       say(`Uploading ${++n} of ${send.length}: ${name}`);
+-      try { await call('POST', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`, f); failed(name, ''); sent++; }
++      try {
++        const put = await call('POST', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`, f);
++        failed(name, ''); sent++;
++        // The file is now the analyst's own, whatever the earlier run's file of that name was.
++        CARRIED.files.delete(name);
++        if (isObj(put) && typeof put.name === 'string') CARRIED.files.delete(put.name);
++      }
+       catch (err) { failed(name, err.message); }
+     }
+   } catch (err) { failed('', err.message); }
+@@ -1976,7 +1994,7 @@ async function refreshReading() {
+   update();
+ }
+ async function removeFile(name) {
+-  try { await call('DELETE', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`); failed(name, ''); say(`Removed ${name}.`); }
++  try { await call('DELETE', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`); failed(name, ''); CARRIED.files.delete(name); say(`Removed ${name}.`); }
+   catch (err) { failed(name, err.message); say(`Could not remove ${name}.`); }
+   renderFailed();
+   await refreshReading();
+@@ -1987,6 +2005,7 @@ function whyIgnored(name) {
+   if (parts.some(p => p.startsWith('_') || p.startsWith('~$'))) return 'The name starts with _ or ~$.';
+   return ext ? `${ext} files are not read: save it as PDF (or XLSX for a table).` : 'A file with no type is not read.';
+ }
++const carriedNote = name => CARRIED.files.has(name) ? 'carried over from run ' + CARRIED.run + '. ' : '';
+ function renderDocs() {
+   const box = $('docresult');
+   box.textContent = '';
+@@ -2005,14 +2024,14 @@ function renderDocs() {
+     cell(tr, name);
+     const kind = d.kind === 'unrecognised' ? 'Not recognised' : (KIND_LABEL[d.kind] || d.kind) + (d.period_end ? ' · period ends ' + d.period_end : '') + (d.executed === true ? ' · executed' : d.executed === false ? ' · draft' : '');
+     cell(tr, kind).className = d.kind === 'unrecognised' ? 'maybe' : 'ok';
+-    remove(cell(tr, d.signal || ''), name);
++    remove(cell(tr, carriedNote(name) + (d.signal || '')), name);
+     body.appendChild(tr);
+   });
+   READING.ignored.forEach(name => {
+     const tr = document.createElement('tr');
+     cell(tr, name);
+     cell(tr, 'Will not be read').className = 'no';
+-    remove(cell(tr, whyIgnored(name)), name);
++    remove(cell(tr, carriedNote(name) + whyIgnored(name)), name);
+     body.appendChild(tr);
+   });
+   table.appendChild(body);
+@@ -2080,6 +2099,7 @@ const fileChoices = () => Object.fromEntries(Object.keys(FILE_SELECTS).map(c =>
+ function save(o) {
+   if (!SERVED || !kept) return;
+   const extra = {submitter: getC('submitter'), turns: getC('turns'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
++  if (CARRIED.run) extra.carried = {run: CARRIED.run, files: [...CARRIED.files], fields: [...CARRIED.fields], locked: CARRIED.locked};
+   try { localStorage.setItem(STORE, JSON.stringify({v: 1, id: SUB, level: LEVEL, context: o, files: fileChoices(), extra})); }
+   catch (err) { storeFailed(err); }
+ }
+@@ -2087,16 +2107,216 @@ function forget() {
+   if (!SERVED) return;
+   try { localStorage.removeItem(STORE); } catch (err) { storeFailed(err); }
+ }
++const fromParam = new URLSearchParams(location.search).get('from');
++const RUN_ID_RE = /^[0-9A-Za-z._-]{1,80}$/; // the shape of a run ID, as the service matches it
++const FROM = fromParam !== null && RUN_ID_RE.test(fromParam) ? fromParam : '';
++let PENDING_FROM = ''; // the ?from= run not yet started from because this browser still showed a submitted run
++function restoreCarried(c) {
++  if (!isObj(c) || typeof c.run !== 'string' || !RUN_ID_RE.test(c.run)) return;
++  const strings = a => Array.isArray(a) ? a.filter(v => typeof v === 'string') : [];
++  CARRIED.run = c.run; CARRIED.files = new Set(strings(c.files)); CARRIED.fields = new Set(strings(c.fields)); CARRIED.locked = c.locked === true;
++}
++// Which answer is it: a field's key is its scope (a row list, the market or multiple block, an assumption) and its data-k.
++// A list row's key holds its position, so a row the analyst adds is never one of the carried ones; the carried
++// fields of a row sit on the row itself (data-carried) and CARRIED.fields follows them (syncRowFields).
++const carryKey = el => {
++  const row = el.closest('[data-row]');
++  if (row) return row.parentNode.id + '#' + [...row.parentNode.children].indexOf(row) + '|' + el.dataset.k;
++  const scope = el.closest('#im,#um,[id^="as-"]');
++  return (scope && scope.id ? scope.id : '') + '|' + el.dataset.k;
++};
++const ROW_KEY = /^([^#|]+)#(\d+)\|(.+)$/;
++function applyRowKeys() {
++  for (const key of CARRIED.fields) {
++    const m = ROW_KEY.exec(key), box = m && $(m[1]), row = box && box.children[Number(m[2])];
++    if (!row) continue;
++    const have = (row.dataset.carried || '').split(' ').filter(Boolean);
++    if (!have.includes(m[3])) row.dataset.carried = have.concat(m[3]).join(' ');
++  }
++}
++function syncRowFields() {
++  for (const key of [...CARRIED.fields]) if (ROW_KEY.test(key)) CARRIED.fields.delete(key);
++  document.querySelectorAll('#f [data-row][data-carried]').forEach(row => {
++    const at = [...row.parentNode.children].indexOf(row);
++    row.dataset.carried.split(' ').filter(Boolean).forEach(k => CARRIED.fields.add(row.parentNode.id + '#' + at + '|' + k));
++  });
++}
++const SPECIAL_LABEL = {'@modules': 'Module subset', '@turns': 'Turns per module'};
++function fieldValues() {
++  const m = new Map();
++  document.querySelectorAll('#f [data-k]').forEach(e => {
++    const v = e.type === 'radio' || e.type === 'checkbox' ? (e.checked ? e.value : '') : e.value.trim();
++    if (v) m.set(carryKey(e), (m.get(carryKey(e)) || '') + '\u0001' + v);
++  });
++  return m;
++}
++function carriedLabel(key) {
++  if (key in SPECIAL_LABEL) return SPECIAL_LABEL[key];
++  const el = [...document.querySelectorAll('#f [data-k]')].find(e => carryKey(e) === key);
++  return el ? nameOf(el) : key;
++}
++// A mark after each carried answer; a radio or tick group gets one, after its fieldset.
++function renderMarks() {
++  syncRowFields();
++  document.querySelectorAll('.from-run').forEach(m => m.remove());
++  if (!CARRIED.run || !CARRIED.fields.size) return;
++  const seen = new Set();
++  document.querySelectorAll('#f [data-k]').forEach(e => {
++    if (!CARRIED.fields.has(carryKey(e))) return;
++    const group = e.type === 'radio' || e.type === 'checkbox';
++    const anchor = group ? (e.closest('fieldset') || e.closest('.chk') || e) : e;
++    if (group && seen.has(anchor)) return;
++    seen.add(anchor);
++    anchor.after(h('small', {className: 'from-run', textContent: 'from run ' + CARRIED.run}));
++  });
++  const mark = () => h('small', {className: 'from-run', textContent: 'from run ' + CARRIED.run});
++  if (CARRIED.fields.has('@modules')) $('modbox').after(mark());
++  if (CARRIED.fields.has('@turns')) $('turns').after(mark());
++}
++function renderCarried() {
++  const box = $('rv-carried'), body = $('rv-carried-body');
++  box.hidden = !CARRIED.run;
++  body.textContent = '';
++  if (!CARRIED.run) return;
++  const labels = [...new Set([...CARRIED.fields].map(carriedLabel))];
++  const n = CARRIED.files.size;
++  body.append(h('p', {textContent: `Run ${CARRIED.run}: ${n} document${n === 1 ? '' : 's'} carried over` + (labels.length ? ', and these answers:' : '.')}));
++  if (labels.length) body.append(h('ul', {}, ...labels.map(l => h('li', {textContent: l}))));
++}
++// Starts the form from an earlier run of the issuer: its documents are copied into a new submission by the
++// service and its answers fill the form, except the dates and the submitter. Returns whether the run was found.
++async function startFrom(runId) {
++  LOOK_SEQ++; LATEST_RUN = ''; NOTICE = null; $('issuer-exists').hidden = true; // a lookup in flight must not show its notice over the lock
++  let got;
++  try { got = await call('GET', `/api/runs/${runId}/inputs`); }
++  catch (err) {
++    LOOKED = ''; // the ID was not locked: it may be looked up again
++    loadMsg(err.status === 404 ? `Run ${runId} was not found. This is a blank start.` : `Run ${runId} could not be read (${err.message}). This is a blank start.`, true);
++    return false;
++  }
++  const problems = [];
++  const ctx = got.context;
++  const bad = isObj(ctx) ? shapeProblem(ctx) : 'none';
++  const usable = isObj(ctx) && !bad; // only then are the earlier run's answers, level, subset and turns applied
++  // The lock and its value are one state: any update while the requests below are in flight keeps the ID.
++  CARRIED.run = runId; CARRIED.locked = true; LOCKED_ID = txt(got.issuer_id); CARRIED.files = new Set(); CARRIED.fields = new Set();
++  let heldMine = [];
++  if (typeof got.error === 'string' && got.error) problems.push('The earlier run\'s documents could not be listed (' + got.error + '); none were carried over.');
++  else if (Array.isArray(got.files) && got.files.length) {
++    try {
++      // The analyst's own uploads stay: the carry goes into the submission they already have, and a name already held is kept.
++      if (!SUB) SUB = (await call('POST', '/api/submissions')).id;
++      const moved = await call('POST', `/api/submissions/${SUB}/carry`, JSON.stringify({run: runId}));
++      CARRIED.files = new Set(moved.carried);
++      heldMine = Array.isArray(moved.kept) ? moved.kept.filter(n => typeof n === 'string') : [];
++    } catch (err) { problems.push('The documents could not be carried over (' + err.message + ').'); }
++  }
++  await refreshReading();
++  const submitter = $('submitter').value; // the submitter is the analyst's own, never the earlier run's (fill resets the form)
++  if (usable) {
++    if (typeof got.level === 'string' && got.level in RANK) LEVEL = got.level;
++    resetAll();
++  } else if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
++  const base = fieldValues(); // when the answers are unusable nothing the analyst typed is cleared: only the name and ID are set
++  if (usable) {
++    fill(ctx, {}, true);
++    $('submitter').value = submitter;
++  } else $('i-issuer_name').value = txt(got.issuer_name);
++  $('i-issuer_id').value = txt(got.issuer_id);
++  if (usable) $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
++  const now = fieldValues();
++  CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|legal_documents'));
++  if (usable) CARRIED.fields.add('|pathway'); // the pathway is an answer carried from the run even when it is the default one
++  applyRowKeys();
++  // The earlier run's module subset and turns: a subset run started again stays a subset.
++  // A subset naming a module this pathway lacks is not applied at all (a partial subset would run other modules than the earlier run's).
++  const notes = [];
++  if (usable && Array.isArray(got.modules) && got.modules.length) {
++    const inPathway = runOf(getV($('st-pathway'), 'pathway')), unknown = got.modules.filter(m => !inPathway.includes(m));
++    if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.join(', ')} not in this pathway.`);
++    else {
++      inPathway.filter(m => !got.modules.includes(m)).forEach(m => SKIPPED.add(m));
++      CARRIED.fields.add('@modules');
++    }
++  }
++  if (usable && Number.isInteger(got.max_turns) && got.max_turns !== DEFAULT_TURNS) { $('turns').value = String(got.max_turns); CARRIED.fields.add('@turns'); }
++  const files = CARRIED.files.size;
++  loadMsg(!isObj(ctx) && !files && !problems.length ? `No documents or answers were kept for run ${runId}. Only the issuer name and ID are carried over.`
++    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (usable ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : '') + (notes.length ? ' ' + notes.join(' ') : '')
++    + (heldMine.length ? ` ${heldMine.length} of your files were kept instead of the earlier run's: ${heldMine.join(', ')}.` : ''), problems.length > 0);
++  update();
++  return true;
++}
++// The ID is the earlier run's until the analyst says this is a different issuer: the carried documents and answers go.
++async function unlockIssuer() {
++  for (const name of [...CARRIED.files]) await removeFile(name);
++  if (CARRIED.files.size) { // a file the service would not delete is still in the submission: the ID stays locked
++    loadMsg(`Could not remove ${[...CARRIED.files].join(', ')} from this submission, so the issuer ID stays locked to run ${CARRIED.run}. Try again.`, true);
++    return;
++  }
++  CARRIED.run = ''; CARRIED.files = new Set(); CARRIED.fields = new Set(); CARRIED.locked = false; LOCKED_ID = '';
++  resetAll();
++  update();
++}
++$('unlock-issuer').addEventListener('click', unlockIssuer);
++// An issuer ID the service already holds a run for: say so and offer the carry. The lookup never blocks the form.
++let LOOKED = '', LOOK_SEQ = 0, LATEST_RUN = '', NOTICE = null; // NOTICE: the cached reply, so a name edited later is compared with the filed one
++async function lookIssuer() {
++  const id = $('i-issuer_id').value, box = $('issuer-exists');
++  if (CARRIED.locked || !SERVED || !/^[a-z0-9-]{1,40}$/.test(id)) { LOOKED = ''; LOOK_SEQ++; NOTICE = null; box.hidden = true; return; }
++  if (id === LOOKED) { drawNotice(); return; }
++  LOOKED = id;
++  const seq = ++LOOK_SEQ;
++  LATEST_RUN = ''; NOTICE = null; box.hidden = true; // the notice of the previous ID is not this one's
++  let got;
++  try { got = await call('GET', `/api/issuers/${id}`); }
++  catch (err) {
++    if (seq === LOOK_SEQ) box.hidden = true;
++    console.warn('issuer lookup failed: ' + err.message);
++    return;
++  }
++  if (seq !== LOOK_SEQ) return; // the ID changed while the answer was on its way
++  LATEST_RUN = isObj(got) && typeof got.latest_run === 'string' && RUN_ID_RE.test(got.latest_run) ? got.latest_run : '';
++  box.hidden = !LATEST_RUN;
++  if (!LATEST_RUN) return;
++  NOTICE = {n: Number.isInteger(got.runs) ? got.runs : 0, asOf: txt(got.latest_as_of), filed: txt(got.issuer_name)};
++  drawNotice();
++}
++function drawNotice() {
++  if (!NOTICE || !LATEST_RUN) return;
++  const typed = $('i-issuer_name').value.trim();
++  $('issuer-exists-text').textContent = `This issuer exists: ${NOTICE.n} runs` + (NOTICE.asOf ? `, latest as-of ${NOTICE.asOf}` : '') + (NOTICE.filed && NOTICE.filed !== typed ? ` (filed as "${NOTICE.filed}")` : '');
++}
++$('issuer-carry').addEventListener('click', () => { if (LATEST_RUN) startFrom(LATEST_RUN); });
++$('run-again').addEventListener('click', async () => {
++  const id = RUN; // startAgain clears the stored run
++  startAgain();
++  await startFrom(id);
++});
++// "Start another run": a blank start, or the ?from= run this browser's submitted run kept the page from starting from.
++async function startAnother() {
++  const from = PENDING_FROM; // startAgain clears it
++  startAgain();
++  if (from) await startFrom(from);
++}
+ async function restore() {
+   let saved = null, run = null;
+   if (SERVED) {
+     try { saved = JSON.parse(localStorage.getItem(STORE) || 'null'); run = JSON.parse(localStorage.getItem(RUN_STORE) || 'null'); }
+     catch (err) { storeFailed(err); }
+   }
+-  if (isObj(run) && run.v === 1 && typeof run.id === 'string' && /^[0-9A-Za-z._-]{1,80}$/.test(run.id)) {
++  if (isObj(run) && run.v === 1 && typeof run.id === 'string' && RUN_ID_RE.test(run.id)) {
+     RUN = run.id; // a submitted run: its progress, not the form
+     kept = true;
+-    showProgress();
++    const ended = await showProgress();
++    if (FROM) {
++      PENDING_FROM = FROM;
++      if (ended) { await startAnother(); return; } // nothing is running to look at: go straight to starting from it
++      if (FROM !== RUN) {
++        $('run-from-note').hidden = false;
++        $('run-from-note').textContent = `Run ${FROM} has not been started from yet: this page is showing run ${RUN}.`;
++      }
++    }
+     return;
+   }
+   try {
+@@ -2114,16 +2334,22 @@ async function restore() {
+           else lost = ' The documents you uploaded are no longer held (' + err.message + '): choose them again.';
+         }
+       }
+-      renderDocs(); renderFileSelects();
+       const x = isObj(saved.extra) ? saved.extra : {};
++      restoreCarried(x.carried);
++      if (!SUB) CARRIED.files = new Set(); // a submission the service no longer holds carried nothing into the next one
++      LOCKED_ID = CARRIED.locked ? txt(saved.context.identity.issuer_id) : '';
++      renderDocs(); renderFileSelects();
+       const notes = fill(saved.context, isObj(saved.files) ? saved.files : {}, true);
++      applyRowKeys();
+       if (typeof x.submitter === 'string') $('submitter').value = x.submitter;
+       if (typeof x.turns === 'string') $('turns').value = x.turns;
+       if (Array.isArray(x.skipped)) x.skipped.forEach(m => SKIPPED.add(String(m)));
+       newestTouched = x.newestTouched === true;
+       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();
+-      loadMsg('Your earlier answers are back.' + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
++      loadMsg((FROM && FROM !== CARRIED.run ? `Run ${FROM} was not used: your earlier answers are back.` : 'Your earlier answers are back.') + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
+       if (gone) showGone();
++    } else if (FROM && !(isObj(saved) && saved.v === 1)) {
++      await startFrom(FROM);
+     }
+   } finally {
+     kept = $('submission-gone').hidden; // nothing is saved over the old record until a new submission is chosen
+@@ -2181,6 +2407,7 @@ function vis() {
+   $('levelnote').textContent = LEVEL_NOTE[LEVEL];
+   $('adv-run').hidden = lvl < 2;
+   renderModules(runOf(path));
++  document.querySelectorAll('[data-c="mod"]').forEach(x => { x.checked = !SKIPPED.has(x.value); });
+   // A field the level does not ask is hidden only while it is empty: an answer is never hidden.
+   document.querySelectorAll('[data-min]').forEach(e => {
+     e.hidden = lvl < RANK[e.dataset.min] && ![...e.querySelectorAll('input,textarea,select')].some(x => x.value.trim() !== '');
+@@ -2192,7 +2419,11 @@ function vis() {
+   $('rtnote').textContent = path === 'earnings_update' ? 'An Earnings Update always compares two reported periods, so the market situation is fixed.' : 'Earnings update is available with the Earnings Update pathway only.';
+   const rt = getV(si, 'run_type');
+ 
+-  if (!idTouched) $('i-issuer_id').value = slug($('i-issuer_name').value);
++  if (CARRIED.locked) $('i-issuer_id').value = LOCKED_ID;
++  else if (!idTouched) $('i-issuer_id').value = slug($('i-issuer_name').value);
++  $('i-issuer_id').readOnly = CARRIED.locked;
++  $('unlock-issuer').hidden = !CARRIED.locked;
++  lookIssuer();
+   // The cutoff is written, never left blank: the code reads blank as the as-of date, but the modules read
+   // the raw file and reported "information cutoff not supplied" as an ambiguity (TDG all-modules run).
+   if (!cutTouched) $('d-cutoff').value = getV(si, 'as_of');
+@@ -2285,6 +2516,7 @@ function update() {
+   if (RENDERED && RENDERED === SUMMARY && RENDERED_KEY !== pageKey(o)) { RENDERED = null; $('approve').checked = false; } // a page rule changed: rebuild, untick, unapprove
+   if (cur === 'review') renderReview(sq, o);
+   syncApproval();
++  renderMarks();
+   save(o);
+   return o;
+ }
+@@ -2298,8 +2530,16 @@ function onField(e) {
+   if (t.id === 'd-newest') newestTouched = true;
+   if (t.dataset.k === 'run_type') rtTouched = true;
+   if (t.dataset.k === 'basis' && t.type === 'radio') basisTouched = true;
+-  if (t.id === 'i-issuer_id') { idTouched = t.value !== ''; if (!idTouched) t.value = slug($('i-issuer_name').value); }
+-  if (t.id === 'i-issuer_name' && !idTouched) $('i-issuer_id').value = slug(t.value);
++  if (t.dataset.k && CARRIED.run) {
++    CARRIED.fields.delete(carryKey(t));
++    const row = t.closest('[data-row]');
++    if (row && row.dataset.carried) row.dataset.carried = row.dataset.carried.split(' ').filter(k => k !== t.dataset.k).join(' ');
++  }
++  if (CARRIED.run && t.dataset.c === 'mod') CARRIED.fields.delete('@modules');
++  if (CARRIED.run && t.id === 'turns') CARRIED.fields.delete('@turns');
++  if (t.id === 'i-issuer_id' && CARRIED.locked) t.value = LOCKED_ID;
++  else if (t.id === 'i-issuer_id') { idTouched = t.value !== ''; if (!idTouched) t.value = slug($('i-issuer_name').value); }
++  if (t.id === 'i-issuer_name' && !idTouched && !CARRIED.locked) $('i-issuer_id').value = slug(t.value);
+   if (t.id === 'd-cutoff') cutTouched = t.value !== '' && t.value !== getV($('st-issuer'), 'as_of');
+   update();
+ }
+@@ -2503,13 +2743,15 @@ function fillAssumptions(a, warn) {
+ }
+ function startAgain() {
+   clearTimeout(pollTimer);
+-  RUN = ''; SUMMARY = null; RENDERED = null; SUBMIT_ERROR = ''; SUBMITTING = false; $('approve').checked = false;
++  RUN = ''; PENDING_FROM = ''; SUMMARY = null; RENDERED = null; SUBMIT_ERROR = ''; SUBMITTING = false; $('approve').checked = false;
++  $('run-from-note').hidden = true;
+   try { localStorage.removeItem(RUN_STORE); } catch (err) { storeFailed(err); }
+   FORM_PARTS().forEach(el => { el.hidden = false; });
+   $('steperr').hidden = true;
+   $('run-progress').hidden = true;
+   resetAll();
+   SUB = ''; READING = null; FAILED.length = 0; LEVEL = 'basic';
++  CARRIED.run = ''; CARRIED.files = new Set(); CARRIED.fields = new Set(); CARRIED.locked = false; LOCKED_ID = '';
+   renderFailed(); renderDocs(); renderFileSelects(); say('');
+   forget();
+   gotoStep('pathway'); loadMsg('Started again.', false);
+@@ -2518,7 +2760,7 @@ $('reset').addEventListener('click', () => {
+   if (!window.confirm(RUN ? 'Leave this run and start a new one?' : 'Clear every answer and start again?')) return;
+   startAgain();
+ });
+-$('another').addEventListener('click', startAgain);
++$('another').addEventListener('click', startAnother);
+ 
+ /* ======================================================================= Init */
+ const wide = window.matchMedia('(min-width:960px)');
+diff --git a/src/deploy_workflow/run_start/prior.py b/src/deploy_workflow/run_start/prior.py
+new file mode 100644
+index 0000000..dbb8d75
+--- /dev/null
++++ b/src/deploy_workflow/run_start/prior.py
+@@ -0,0 +1,106 @@
++"""An earlier run's inputs, read from the run records and the run's own source folder.
++
++The service is reachable from other machines: a run ID is looked up in the run records before any
++path is built from it, and a linked source folder or ``context.json`` is never read.
++"""
++
++from __future__ import annotations
++
++import json
++import logging
++from pathlib import Path
++from typing import Any
++
++from deploy_workflow.inbox import runs
++from deploy_workflow.inbox.layout import Layout
++from deploy_workflow.inbox.runs import Record
++from deploy_workflow.run_start import submissions
++from deploy_workflow.run_start.submissions import Refused
++
++log = logging.getLogger(__name__)
++
++_DATES = ("as_of", "cutoff", "current_period", "prior_period")
++
++
++def source(layout: Layout, run_id: str) -> tuple[Record, Path | None]:
++    """The run's record and its source folder, or ``None`` for the folder when it is not a real
++    folder holding a regular ``context.json``. ``Refused("unknown run")`` when no record matches."""
++    for record in runs.load_all(layout):
++        if record.id == run_id:
++            break
++    else:
++        raise Refused("unknown run")
++    folder = layout.drops / record.id
++    context = folder / "context.json"
++    if folder.is_symlink() or not folder.is_dir():
++        return record, None
++    if context.is_symlink() or not context.is_file():
++        return record, None
++    return record, folder
++
++
++def _read_context(folder: Path) -> dict[str, Any] | None:
++    try:
++        with submissions.open_regular(folder / "context.json") as handle:
++            data = json.loads(handle.read().decode("utf-8"))
++    except (OSError, ValueError) as error:  # Refused is a ValueError
++        # Not fail-open: the answer says there is no context, and the page then asks for one.
++        log.warning("earlier run context unreadable at %s (%s)", folder, error)
++        return None
++    if not isinstance(data, dict):
++        log.warning("earlier run context at %s is not an object", folder)
++        return None
++    if not isinstance(data.get("run"), dict) or not isinstance(data.get("identity"), dict):
++        log.warning("earlier run context at %s lacks a run or identity object", folder)
++        return None
++    for key in _DATES:
++        data["run"][key] = ""
++    return data
++
++
++def _files(folder: Path) -> tuple[list[dict[str, Any]], str]:
++    """The file list and, when the listing was refused, the refusal (relative names only)."""
++    try:
++        found = submissions.listing(folder)
++    except Refused as error:
++        log.warning("earlier run files not listed at %s (%s)", folder, error)
++        return [], str(error)
++    return [{"name": name, "size": found[name]} for name in sorted(found)], ""
++
++
++def inputs(layout: Layout, run_id: str) -> dict[str, Any]:
++    """What a new run can start from: the earlier run's context (dates blank) and file list.
++
++    ``error`` is present only when the folder's listing was refused (a link or an unreadable
++    folder); the page then shows it and carries nothing."""
++    record, folder = source(layout, run_id)
++    context = _read_context(folder) if folder else None
++    files, error = _files(folder) if folder else ([], "")
++    reply: dict[str, Any] = {
++        "run": record.id,
++        "issuer_id": record.issuer_id,
++        "issuer_name": record.issuer_name,
++        "pathway": record.pathway,
++        "context": context,
++        "files": files,
++        "level": record.level,
++        "modules": list(record.modules),
++        "max_turns": record.max_turns,
++    }
++    if error:
++        reply["error"] = error
++    return reply
++
++
++def issuer(layout: Layout, issuer_id: str) -> dict[str, Any]:
++    """Finished runs the issuer has, and the latest run by as-of date (ties: the greater ID)."""
++    mine = [r for r in runs.load_all(layout) if r.issuer_id == issuer_id]
++    if not mine:
++        return {"runs": 0, "latest_as_of": "", "latest_run": "", "issuer_name": ""}
++    latest = max(mine, key=lambda r: (r.as_of, r.id))
++    return {
++        "runs": sum(1 for r in mine if r.status == "finished"),
++        "latest_as_of": latest.as_of,
++        "latest_run": latest.id,
++        "issuer_name": latest.issuer_name,
++    }
+diff --git a/src/deploy_workflow/run_start/service.py b/src/deploy_workflow/run_start/service.py
+index bf12e2a..486933d 100644
+--- a/src/deploy_workflow/run_start/service.py
++++ b/src/deploy_workflow/run_start/service.py
+@@ -54,6 +54,16 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes
+     "report", "modules"}``. ``modules`` is ``[[module, "done"|"running"|"waiting"], ...]`` in
+     plan order, then ``["Report", ...]``; ``stalled`` is added (true) when no event for an hour.
+     ``report`` is a path under the library folder, relative to the root, once filed.
++``GET /api/runs/<run id>/inputs``
++    200 ``prior.inputs``: the earlier run's context (dates blank), file names and sizes (never file
++    content), level, modules and turns; ``error`` (relative names only) when the folder's listing
++    was refused. 404 for an unknown run.
++``GET /api/issuers/<issuer id>`` (``[a-z0-9-]{1,40}``)
++    200 ``prior.issuer``: ``{"runs", "latest_as_of", "latest_run", "issuer_name"}``.
++``POST /api/submissions/<id>/carry``
++    Body ``{"run": "<run id>"}``. 200 ``{"carried": [...], "kept": [...]}``: the run's stored
++    files copied into the submission, a name already held kept. 404 for an unknown run or
++    submission; 400 for a bad body, a run with no stored documents or any other refusal.
+ ``GET /library/<path>``
+     A read-only file under ``_engine/library``. The final path (``index.html`` appended for a
+     folder) is resolved with links followed and must be a regular file inside the library: 404 for
+@@ -95,7 +105,7 @@ from deploy_workflow.inbox.layout import Layout
+ from deploy_workflow.inbox.scheduler import Scheduler, Settings
+ from deploy_workflow.platform_io import flags as flag_bits
+ from deploy_workflow.platform_io import regular_open
+-from deploy_workflow.run_start import submissions
++from deploy_workflow.run_start import prior, submissions
+ from deploy_workflow.run_start.submissions import Answers
+ 
+ __all__ = ["Handler", "main", "make_server"]
+@@ -116,8 +126,13 @@ _LIBRARY_POLICY = "connect-src 'none'; form-action 'none'; frame-ancestors 'self
+ _JSON = "application/json; charset=utf-8"
+ _FAILED = "the service failed; see its log"
+ _UNKNOWN = "unknown submission"  # the text submissions raises for an id it does not hold
+-_SUBMISSION = re.compile(r"/api/submissions/([^/]+)/(files|reading|summary|submit)")
+-_RUN = re.compile(r"/api/runs/([0-9A-Za-z._-]{1,80})")
++_UNKNOWN_RUN = "unknown run"  # the text prior raises for a run id with no record
++_SUBMISSION = re.compile(r"/api/submissions/([^/]+)/(files|reading|summary|submit|carry)")
++_RUN_ID = r"[0-9A-Za-z._-]{1,80}"
++_RUN = re.compile(rf"/api/runs/({_RUN_ID})")
++_RUN_INPUTS = re.compile(rf"/api/runs/({_RUN_ID})/inputs")
++_ISSUER = re.compile(r"/api/issuers/([a-z0-9-]{1,40})")
++_NO_FILES = "that run has no stored documents"
+ _RUN_FIELDS = (
+     "id",
+     "status",
+@@ -351,6 +366,12 @@ class Handler(BaseHTTPRequestHandler):
+         found = _SUBMISSION.fullmatch(path)
+         if found and found[2] == "reading":
+             raise _Reply(200, self._guarded(lambda: submissions.reading(self._layout, found[1])))
++        inputs = _RUN_INPUTS.fullmatch(path)
++        if inputs:
++            raise _Reply(200, self._guarded(lambda: prior.inputs(self._layout, inputs[1])))
++        issuer = _ISSUER.fullmatch(path)
++        if issuer:
++            raise _Reply(200, prior.issuer(self._layout, issuer[1]))
+         run = _RUN.fullmatch(path)
+         if run:
+             raise _Reply(200, self._run(run[1]))
+@@ -369,6 +390,8 @@ class Handler(BaseHTTPRequestHandler):
+             raise _Reply(200, self._guarded(lambda: self._summary(sid, answers)))
+         if action == "submit":
+             self._submit(sid, self._json_body())
++        if action == "carry":
++            self._carry(sid, self._json_body())
+ 
+     def _delete(self, url: urllib.parse.SplitResult) -> None:
+         found = _SUBMISSION.fullmatch(url.path)
+@@ -382,7 +405,8 @@ class Handler(BaseHTTPRequestHandler):
+         try:
+             return action()
+         except submissions.Refused as refusal:
+-            raise _refuse(404 if str(refusal) == _UNKNOWN else 400, str(refusal)) from None
++            missing = str(refusal) in (_UNKNOWN, _UNKNOWN_RUN)
++            raise _refuse(404 if missing else 400, str(refusal)) from None
+ 
+     def _upload(self, sid: str, name: str) -> None:
+         length = self._length()
+@@ -393,6 +417,19 @@ class Handler(BaseHTTPRequestHandler):
+         )
+         raise _Reply(200, {"name": stored})
+ 
++    def _carry(self, sid: str, body: Any) -> None:
++        run = body.get("run") if isinstance(body, dict) else None
++        if not isinstance(run, str) or not re.fullmatch(_RUN_ID, run):
++            raise _refuse(400, "the request needs the id of an earlier run")
++
++        def copy() -> dict[str, list[str]]:
++            _, folder = prior.source(self._layout, run)
++            if folder is None:
++                raise submissions.Refused(_NO_FILES)
++            return submissions.carry(self._layout, sid, folder)
++
++        raise _Reply(200, self._guarded(copy))
++
+     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
+         settings = self._service.scheduler.settings
+         return submissions.summary(
+diff --git a/src/deploy_workflow/run_start/submissions.py b/src/deploy_workflow/run_start/submissions.py
+index a935f96..bf63951 100644
+--- a/src/deploy_workflow/run_start/submissions.py
++++ b/src/deploy_workflow/run_start/submissions.py
+@@ -8,6 +8,7 @@ a path outside the submission's own ``files`` folder. A refusal leaves no file b
+ from __future__ import annotations
+ 
+ import hashlib
++import io
+ import json
+ import logging
+ import os
+@@ -16,6 +17,7 @@ import secrets
+ import shutil
+ import tempfile
+ import threading
++import unicodedata
+ import uuid
+ from collections.abc import Collection
+ from decimal import Decimal
+@@ -28,6 +30,7 @@ from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
+ from deploy_workflow.inbox.startup import STANDING_RULING
+ from deploy_workflow.owners.cpos import web_search_ruled
+ from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
++from deploy_workflow.platform_io import regular_open
+ 
+ MAX_FILE = 50 * 1024 * 1024
+ MAX_FILES = 500
+@@ -198,13 +201,29 @@ def _parts(name: str) -> list[str]:
+     return parts
+ 
+ 
+-def _stored(root: Path, *, strict: bool = False) -> dict[str, int]:
++def _stored(root: Path, *, strict: bool = False, any_error: bool = False) -> dict[str, int]:
+     """Relative posix name -> size of each regular file under ``root``; links are not followed.
+ 
+     With ``strict`` a link anywhere under ``root`` is a ``Refused``: the launcher follows links and
+-    the digest does not, so a link would let bytes change without the digest changing."""
++    the digest does not, so a link would let bytes change without the digest changing. With
++    ``any_error`` (and ``strict``) every walk error is a ``Refused``, not only an unreadable folder:
++    a folder that is never renamed under the walk (a source folder) has no vanishing to forgive."""
+     found: dict[str, int] = {}
+-    for here, dirs, names in os.walk(root, followlinks=False):
++
++    def unreadable(error: OSError) -> None:
++        # Only a folder that exists but cannot be read is refused; one that vanished (a seal
++        # renamed it) is left to the callers' own retry, as before.
++        if not any_error and not isinstance(error, PermissionError):
++            return
++        try:
++            shown = Path(error.filename).relative_to(root).as_posix() if error.filename else ""
++        except ValueError:
++            shown = ""
++        shown = shown or "a folder"
++        raise Refused(f"{shown!r} cannot be read")
++
++    walk = os.walk(root, followlinks=False, onerror=unreadable if strict else None)
++    for here, dirs, names in walk:
+         linked = [d for d in dirs if (Path(here) / d).is_symlink()]
+         if strict and linked:
+             raise Refused(f"{linked[0]!r} is a link, not an uploaded file")
+@@ -283,7 +302,7 @@ def _write(body: BinaryIO, target: Path, length: int) -> None:
+             left -= len(chunk)
+ 
+ 
+-def _place(folder: Path, parts: list[str], temp_path: Path) -> None:
++def _place(folder: Path, parts: list[str], temp_path: Path, *, replace: bool = True) -> None:
+     """Move a finished upload into ``files``; the folder creation and the rename are one step."""
+     with _LOCK:
+         root = _usable_root(folder)
+@@ -294,6 +313,8 @@ def _place(folder: Path, parts: list[str], temp_path: Path) -> None:
+             target.parent.mkdir(parents=True, exist_ok=True)
+             if target.is_dir():
+                 raise Refused(f"{stored!r} is already a folder")
++            if not replace and os.path.lexists(target):
++                raise _Taken(f"{stored!r} is already stored")
+             os.replace(temp_path, target)
+         except (NotADirectoryError, FileExistsError) as error:
+             raise Refused(f"{stored!r} clashes with a file or folder already stored") from error
+@@ -314,7 +335,7 @@ def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -
+ 
+     The bytes go to a temporary name in the submission folder and are renamed into place on
+     success, so a refusal or a cut-off upload leaves nothing behind. A name already stored is
+-    replaced."""
++    replaced, except for a file opened by ``open_regular`` (a carry), which is refused as taken."""
+     folder = _folder(layout, sid)
+     if _is_sealed(folder):
+         raise Refused("this submission has been submitted")
+@@ -328,7 +349,7 @@ def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -
+     temp_path = folder / tmp
+     try:
+         _write(body, temp_path, length)
+-        _place(folder, parts, temp_path)
++        _place(folder, parts, temp_path, replace=not isinstance(body, _Carried))
+     finally:
+         # The reservation is released first: a failed unlink must not hold it for the life of the
+         # process (it blocks ``seal`` and the sweep).
+@@ -359,6 +380,137 @@ def remove_file(layout: Layout, sid: str, name: str) -> None:
+     _touch(folder)
+ 
+ 
++def listing(source: Path) -> dict[str, int]:
++    """Relative posix name -> size of each regular file under ``source``, but its own context.json.
++
++    ``Refused`` when anything under ``source`` is a link or cannot be walked: a copy must never
++    follow a link. A name with a part starting ``.`` (``.DS_Store``) is left out: the launcher
++    does not read it, so it is neither carried nor counted."""
++    return {
++        name: size
++        for name, size in _stored(source, strict=True, any_error=True).items()
++        if name.casefold() != _CONTEXT_NAME and not any(p.startswith(".") for p in name.split("/"))
++    }
++
++
++class _Taken(Refused):
++    """A carried file's name is already stored; the carry keeps the stored file."""
++
++
++class _Carried(io.BufferedReader):
++    """A source file opened by ``open_regular``; ``add_file`` never replaces a file for one.
++
++    Kept as a handle type, not a ``replace`` keyword: the tests' and probes' wrappers around
++    ``add_file`` take its five positional arguments only."""
++
++
++def open_regular(path: Path, size: int | None = None) -> _Carried:
++    """Open ``path`` for reading; ``Refused`` unless it is a regular file with one link (and
++    ``size`` bytes when given). The last part is not followed if it is a link."""
++    # O_NONBLOCK: opening a FIFO must not wait for a writer (regular_open then refuses it).
++    # regular_open adds O_BINARY where the platform has it and refuses a reparse point.
++    options = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
++    try:
++        fd = regular_open(path, options)
++    except OSError as error:
++        raise Refused(f"{path.name!r} cannot be read as a regular file") from error
++    try:
++        info = os.fstat(fd)
++        if info.st_nlink != 1:
++            raise Refused(f"{path.name!r} is a link, not an uploaded file")
++        if size is not None and info.st_size != size:
++            raise Refused(f"{path.name!r} changed while it was being copied")
++        return _Carried(io.FileIO(fd, "rb"))
++    except BaseException:
++        os.close(fd)
++        raise
++
++
++def _fold(name: str) -> str:
++    """A stored name as a case- and normalisation-insensitive disk sees it."""
++    return unicodedata.normalize("NFC", "/".join(_parts(name))).casefold()
++
++
++def _check_carry(root: Path, sid: str, wanted: dict[str, int]) -> tuple[list[str], list[str]]:
++    """The names to copy and the names kept (in stored form), the limits checked against what is
++    stored and in flight. A name is compared in its stored form, as the disk compares it."""
++    existing = _stored(root)
++    taken = {_fold(name) for name in existing}
++    names: list[str] = []
++    kept: list[str] = []
++    for name in sorted(wanted):
++        key = _fold(name)
++        if key in taken:
++            kept.append("/".join(_parts(name)))
++        else:
++            taken.add(key)
++            names.append(name)
++    for name in names:
++        if wanted[name] > MAX_FILE:
++            raise Refused(f"a file is at most {MAX_FILE // (1024 * 1024)} MB")
++    own = _PENDING.get(sid, {})
++    if len(existing) + len(own) + len(names) > MAX_FILES:
++        raise Refused(f"more than {MAX_FILES} files")
++    total = sum(existing.values()) + sum(size for _, size in own.values())
++    if total + sum(wanted[name] for name in names) > MAX_TOTAL:
++        raise Refused(f"more than {MAX_TOTAL // (1024 * 1024)} MB in total")
++    return names, kept
++
++
++def _roll_back(layout: Layout, sid: str, made: list[tuple[str, int]]) -> None:
++    """Remove the files this carry created, each only while it still has the size it wrote."""
++    try:
++        root = files_folder(layout, sid)
++    except Refused as error:
++        log.warning("carry %s: the files could not be rolled back (%s)", sid, error)
++        return
++    for stored, size in made:
++        path = root.joinpath(*stored.split("/"))
++        try:
++            if path.is_symlink() or not path.is_file() or path.lstat().st_size != size:
++                continue  # replaced since: no longer this call's file
++            remove_file(layout, sid, stored)
++        except (Refused, OSError) as error:  # logged; the caller sees the original failure
++            log.warning("carry %s: could not remove %s (%s)", sid, stored, error)
++
++
++def carry(layout: Layout, sid: str, source: Path) -> dict[str, list[str]]:
++    """Copy each file under ``source`` (but its context.json) into the submission.
++
++    A name already stored is kept, never replaced, and is reported as kept. Nothing is copied when
++    a link is found or a limit would be passed; a copy that fails part-way removes the files this
++    call created. Returns the names carried and the names kept, each sorted."""
++    folder = _folder(layout, sid)
++    if source.is_symlink() or not source.is_dir():
++        raise Refused("the earlier run's files are not a plain folder")
++    wanted = listing(source)
++    with _LOCK:
++        root = _usable_root(folder)
++        names, kept = _check_carry(root, sid, wanted)
++    # ponytail: the pre-check and the copies are not one atomic step. Each copy is created without
++    # replacing (``_place`` refuses a name taken since, and the file is then kept), ``add_file``
++    # re-checks the limits, and a failure removes only what this call created. A seal landing
++    # between two copies leaves the earlier ones in the sealed folder (a wider lock is needed).
++    made: list[tuple[str, int]] = []
++    try:
++        for name in names:
++            _refuse_links(source, name.split("/"))
++            with open_regular(source / name, wanted[name]) as handle:
++                try:
++                    made.append(
++                        (
++                            add_file(layout, sid, name, handle, wanted[name]),
++                            wanted[name],
++                        )
++                    )
++                except _Taken:
++                    kept.append("/".join(_parts(name)))
++    except BaseException:
++        _roll_back(layout, sid, made)
++        raise
++    return {"carried": sorted(stored for stored, _ in made), "kept": sorted(set(kept))}
++
++
+ def reading(layout: Layout, sid: str) -> dict[str, Any]:
+     """What the launcher makes of each uploaded file; its refusal comes back as ``error``."""
+     root = files_folder(layout, sid)
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index e1b4d28..e0f5c28 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -1135,3 +1135,56 @@ def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_r
+     # Each handoff and instruction link stays inside library/, where the served page can open it.
+     assert 'href="downloads/run-a/CP-0.md" download' in dom
+     assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom
++
++
++def _history_dom_over_http(root: Path, route: str) -> str:
++    """The DOM Chrome builds for a page of the library when a local web server serves it."""
++    import functools
++    import http.server
++    import threading
++
++    class Quiet(http.server.SimpleHTTPRequestHandler):
++        def log_message(self, format, *args):  # the request log is noise here
++            return
++
++    handler = functools.partial(Quiet, directory=str(root))
++    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
++    threading.Thread(target=server.serve_forever, daemon=True).start()
++    try:
++        done = subprocess.run(
++            [
++                chrome(),
++                "--headless=new",
++                "--disable-gpu",
++                "--window-size=1280,900",
++                "--virtual-time-budget=10000",
++                "--dump-dom",
++                f"http://127.0.0.1:{server.server_address[1]}/library/index.html{route}",
++            ],
++            capture_output=True,
++            text=True,
++            timeout=120,
++            check=True,
++        )
++    finally:
++        server.shutdown()
++        server.server_close()
++    return html.unescape(done.stdout)
++
++
++def test_report_history_links_start_a_run_to_the_latest_run_when_served(tmp_path):
++    make_run(tmp_path, "run-a", as_of="2024-12-31")
++    update_library.update_library(tmp_path)
++    dom = _history_dom_over_http(tmp_path, "#W-Report/history?c=run-a")
++    link = re.search(r'<a class="start-run" href="([^"]*)">([^<]*)</a>', dom)
++    assert link is not None, dom[:1500]
++    assert link[1] == "/?from=run-a" and link[2] == "Start a run"
++    assert dom.index("start-run") < dom.index('<table class="history-table">')
++
++
++def test_report_history_has_no_start_link_from_a_file(tmp_path):
++    make_run(tmp_path, "run-a", as_of="2024-12-31")
++    update_library.update_library(tmp_path)
++    dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
++    assert console == [] and '<table class="history-table">' in dom
++    assert "start-run" not in dom and ">Start a run</a>" not in dom
+diff --git a/tests/test_run_start_page.py b/tests/test_run_start_page.py
+index 639609b..a5471cb 100644
+--- a/tests/test_run_start_page.py
++++ b/tests/test_run_start_page.py
+@@ -22,11 +22,11 @@ from types import SimpleNamespace
+ from typing import Any
+ 
+ import pytest
+-from inbox_fixtures import settings
++from inbox_fixtures import DELIVERED, layout, pump, settings, submit_run
+ from test_library_page_browser import chrome
+ 
+ from deploy_workflow import run_expectations as RE
+-from deploy_workflow.inbox import startup
++from deploy_workflow.inbox import runs, startup
+ from deploy_workflow.inbox.scheduler import Scheduler
+ from deploy_workflow.owners.cpos_launch import (
+     update_library_at,
+@@ -133,7 +133,7 @@ class Page:
+     console: list[str]
+     root: Path | None = None  # the shared folder, for tests that read the service's records
+ 
+-    def run(self, body: str) -> dict[str, Any]:
++    def run(self, body: str, path: str = "/") -> dict[str, Any]:
+         text = FORM.read_text(encoding="utf-8")
+         probe = WRAP.replace("BODY", PRELUDE + body)
+         patched = self.folder / "form.html"
+@@ -150,7 +150,7 @@ class Page:
+                 f"--user-data-dir={self.profile}",
+                 "--virtual-time-budget=20000",
+                 "--dump-dom",
+-                self.base + "/",
++                self.base + path,
+             ],
+             capture_output=True,
+             text=True,
+@@ -1537,3 +1537,863 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
+         assert "<h1>Run context</h1>" in reply.read().decode("utf-8")
+     with urllib.request.urlopen(page.base + "/library/icons/plus.svg", timeout=20) as reply:
+         assert reply.status == 200
++
++
++# ---- starting from an earlier run of the same issuer (/?from=<run id>) --------------------------
++
++
++@contextmanager
++def _earlier_run(
++    root: Path,
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    fake_env: Callable[[dict[str, Any]], None],
++    edit: Callable[[Path], None] | None = None,
++) -> Iterator[tuple[Page, str]]:
++    """The page served over a scheduler whose one earlier run, for issuer ``acme``, has finished
++    (fake launcher, no provider). ``edit`` may change the run's stored folder before the load."""
++    chrome()
++    monkeypatch.setattr(startup, "FORM", FORM)
++    fake_env({"events": DELIVERED})
++    with _serving(root, tmp_path) as (served, watcher):
++        record = submit_run(watcher, root, "acme")
++        lay = layout(root)
++        pump(
++            watcher,
++            lambda: all(r.status == "finished" for r in runs.load_all(lay)),
++            limit=30,
++        )
++        if edit is not None:
++            edit(lay.drops / record.id)
++        yield served, record.id
++
++
++@pytest.fixture
++def page_from(root, tmp_path, monkeypatch, fake_env):
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env) as got:
++        yield got
++
++
++@pytest.fixture
++def page_from_executed(root, tmp_path, monkeypatch, fake_env):
++    def edit(folder: Path) -> None:
++        stored = json.loads((folder / "context.json").read_text("utf-8"))
++        stored["attachments"]["legal_documents"] = "executed"
++        (folder / "context.json").write_text(json.dumps(stored), encoding="utf-8")
++
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
++        yield got
++
++
++@pytest.fixture
++def page_from_bare(root, tmp_path, monkeypatch, fake_env):
++    import shutil
++    from dataclasses import replace
++
++    def edit(folder: Path) -> None:
++        # The record keeps a level, a module subset and turns; with no folder none of them applies.
++        lay = layout(root)
++        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
++        runs.save(lay, replace(record, modules=("CP-0", "CP-1"), max_turns=16, level="advanced"))
++        shutil.rmtree(folder)
++
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
++        yield got
++
++
++def test_from_locks_the_issuer_id_and_carries_the_documents(page_from):
++    page, run_id = page_from
++    got = page.run(
++        """
++      return {id: $('i-issuer_id').value, locked: $('i-issuer_id').readOnly,
++              name: $('i-issuer_name').value,
++              rows: rows(), asOf: $('d-as_of').value, run: CARRIED.run,
++              files: [...CARRIED.files], button: !$('unlock-issuer').hidden};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["id"] == "acme" and got["locked"] is True and got["run"] == run_id
++    assert got["name"] == "Acme Corp" and got["button"] is True
++    assert got["files"] == ["a.txt"]
++    assert any(
++        "a.txt" in r[0] and "carried over from run " + run_id in " ".join(r) for r in got["rows"]
++    )
++    assert got["asOf"] != "2026-11-09"  # the earlier run's as-of date is not carried
++
++
++def test_a_run_started_from_another_cannot_build_a_different_issuer_id(page_from):
++    page, run_id = page_from
++    got = page.run(
++        """
++      type('i-issuer_id', 'other');
++      const typed = build().identity.issuer_id;
++      type('i-issuer_name', 'Another Name');
++      const renamed = build().identity.issuer_id;
++      const sub = SUB;
++      $('unlock-issuer').click();
++      for (let i = 0; i < 100 && rows().length; i++) await settle(50);
++      const reading = await (await fetch(`/api/submissions/${sub}/reading`)).json();
++      return {typed, renamed, locked: $('i-issuer_id').readOnly, rows: rows(), run: CARRIED.run,
++              fields: CARRIED.fields.size, documents: reading.documents.length,
++              ignored: reading.ignored.length, hidden: $('unlock-issuer').hidden};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["typed"] == "acme" and got["renamed"] == "acme"
++    assert got["locked"] is False and got["rows"] == [] and got["run"] == ""
++    assert got["fields"] == 0 and got["hidden"] is True
++    assert got["documents"] == 0 and got["ignored"] == 0
++
++
++def test_carried_answers_are_marked_and_an_edit_removes_the_mark(page_from):
++    page, run_id = page_from
++    got = page.run(
++        """
++      const mark = id => { const n = $(id).nextElementSibling;
++        return n && n.classList.contains('from-run') ? n.textContent : ''; };
++      const before = mark('i-issuer_name');
++      const had = [...CARRIED.fields].some(k => k.endsWith('|issuer_name'));
++      const other = mark('d-as_of');
++      const marksBefore = document.querySelectorAll('.from-run').length;
++      type('i-issuer_name', 'Acme Corporation');
++      return {before, after: mark('i-issuer_name'), had, other,
++              still: [...CARRIED.fields].some(k => k.endsWith('|issuer_name')),
++              marksBefore, marks: document.querySelectorAll('.from-run').length};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["before"] == "from run " + run_id and got["had"] is True
++    assert got["marks"] == got["marksBefore"] - 1  # only the edited answer lost its mark
++    assert got["after"] == "" and got["still"] is False
++    assert got["other"] == ""  # the as-of date is never marked: it is not carried
++
++
++def test_an_executed_agreement_is_not_carried_as_a_file_choice(page_from_executed):
++    page, run_id = page_from_executed
++    got = page.run(
++        """
++      const out = {answer: build().attachments.legal_documents,
++                   disabled: radio('executed').disabled,
++                   marked: [...CARRIED.fields].some(k => k.endsWith('|legal_documents'))};
++      choose('legal-file', 'a.txt');
++      out.after = {answer: build().attachments.legal_documents,
++                   disabled: radio('executed').disabled};
++      return out;""",
++        path=f"/?from={run_id}",
++    )
++    assert got["answer"] == "none" and got["disabled"] is True and got["marked"] is False
++    assert got["after"] == {"answer": "executed", "disabled": False}
++
++
++def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
++    page, run_id = page_from
++    first = page.run("return {rows: rows().length, run: CARRIED.run};", path=f"/?from={run_id}")
++    assert first == {"rows": 1, "run": run_id}
++    second = page.run(
++        """
++      const sub = SUB;
++      const reading = await (await fetch(`/api/submissions/${sub}/reading`)).json();
++      return {locked: $('i-issuer_id').readOnly, id: $('i-issuer_id').value,
++              rows: rows(), run: CARRIED.run, files: [...CARRIED.files],
++              documents: reading.documents.length,
++              marks: document.querySelectorAll('.from-run').length,
++              asOf: $('d-as_of').value};""",
++    )
++    assert second["locked"] is True and second["id"] == "acme" and second["run"] == run_id
++    assert len(second["rows"]) == 1 and second["files"] == ["a.txt"]
++    assert "carried over from run " + run_id in " ".join(second["rows"][0])
++    assert second["documents"] == 1 and second["marks"] >= 1
++    # A reload with the same ?from= also restores the saved submission and carries nothing more.
++    third = page.run(
++        "return {rows: rows().length, run: CARRIED.run, msg: $('loadmsg').textContent};",
++        path=f"/?from={run_id}",
++    )
++    assert (third["rows"], third["run"]) == (1, run_id)
++    assert "was not used" not in third["msg"] and "Your earlier answers are back." in third["msg"]
++
++
++def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):
++    page, run_id = page_from_bare
++    got = page.run(
++        """
++      return {id: $('i-issuer_id').value, name: $('i-issuer_name').value,
++              locked: $('i-issuer_id').readOnly, rows: rows(), run: CARRIED.run,
++              msg: $('loadmsg').textContent, level: LEVEL, skipped: [...SKIPPED],
++              turns: $('turns').value, fields: [...CARRIED.fields]};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["id"] == "acme" and got["name"] == "Acme Corp" and got["locked"] is True
++    assert got["rows"] == [] and got["run"] == run_id
++    # No folder: the record's level, subset and turns are not applied either.
++    assert got["level"] == "basic" and got["skipped"] == [] and got["turns"] == "32"
++    assert "@modules" not in got["fields"] and "@turns" not in got["fields"]
++    assert "No documents or answers were kept for run" in got["msg"]
++
++
++def test_from_an_unknown_run_starts_blank_and_says_so(page):
++    got = page.run(
++        """
++      return {id: $('i-issuer_id').value, locked: $('i-issuer_id').readOnly, run: CARRIED.run,
++              msg: $('loadmsg').textContent, hidden: $('unlock-issuer').hidden};""",
++        path="/?from=20990101-000000-01",
++    )
++    assert got["id"] == "" and got["locked"] is False and got["run"] == ""
++    assert got["hidden"] is True
++    assert "Run 20990101-000000-01 was not found" in got["msg"]
++
++
++def test_the_review_lists_what_was_carried_over(page_from):
++    page, run_id = page_from
++    got = page.run(
++        """
++      await review();
++      const box = $('rv-carried');
++      return {hidden: box.hidden, text: box.textContent,
++              labels: [...CARRIED.fields].map(k => carriedLabel(k))};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["hidden"] is False and run_id in got["text"]
++    assert "1 document" in got["text"]
++    assert "Issuer (company name)" in got["labels"]
++    for label in got["labels"]:
++        assert label in got["text"]
++
++
++def test_the_review_hides_the_block_when_nothing_was_carried(page):
++    got = page.run(
++        "await issuer('credit_snapshot', [file('a.txt', 'x')]); await review();"
++        " return {hidden: $('rv-carried').hidden};"
++    )
++    assert got["hidden"] is True
++
++
++def _edit_stored(root: Path, fn: Callable[[dict[str, Any]], None]) -> Callable[[Path], None]:
++    def edit(folder: Path) -> None:
++        stored = json.loads((folder / "context.json").read_text("utf-8"))
++        fn(stored)
++        (folder / "context.json").write_text(json.dumps(stored), encoding="utf-8")
++
++    return edit
++
++
++def _answers(stored: dict[str, Any]) -> None:
++    stored["research_questions"] = [{"text": "Is leverage falling?"}]
++    stored["assumptions"]["cp2d"] = {
++        "horizon_months": "18",
++        "minimum_cash_m": "50",
++        "rationale": "Covenant minimum liquidity.",
++    }
++
++
++@pytest.fixture
++def page_from_lists(root, tmp_path, monkeypatch, fake_env):
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, _edit_stored(root, _answers)) as got:
++        yield got
++
++
++@pytest.fixture
++def page_from_subset(root, tmp_path, monkeypatch, fake_env):
++    from dataclasses import replace
++
++    def edit(folder: Path) -> None:
++        lay = layout(root)
++        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
++        runs.save(lay, replace(record, modules=("CP-0", "CP-1"), max_turns=16))
++
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
++        yield got
++
++
++MARKED = """
++  const marked = el => {
++    const n = el.nextElementSibling;
++    return !!(n && n.classList.contains('from-run'));
++  };
++  const texts = () => [...$('rows-q').querySelectorAll('[data-k="text"]')];
++"""
++
++
++def test_a_list_row_is_marked_on_its_own_and_an_added_row_never_is(page_from_lists):
++    page, run_id = page_from_lists
++    got = page.run(
++        MARKED
++        + """
++      const first = texts()[0];
++      const out = {before: {count: texts().length, value: first.value, marked: marked(first)}};
++      addRow('q'); update();
++      out.addedMarked = marked(texts()[1]);
++      type_ = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', {bubbles: true})); };
++      type_(texts()[1], 'A new question');
++      out.carriedAfter = marked(texts()[0]);
++      out.labelKept = $('rv-carried').textContent;
++      await review();
++      out.review = $('rv-carried').textContent;
++      out.value = texts()[0].value;
++      // An assumption block field is marked, and an edit takes only its own mark.
++      const h = document.querySelector('#as-cp2d [data-k="horizon_months"]');
++      out.asm = marked(h);
++      type_(h, '24');
++      out.asmAfter = marked(h);
++      out.rationale = marked(document.querySelector('#as-cp2d [data-k="rationale"]'));
++      return out;""",
++        path=f"/?from={run_id}",
++    )
++    assert got["before"] == {"count": 1, "value": "Is leverage falling?", "marked": True}
++    assert got["addedMarked"] is False and got["carriedAfter"] is True
++    assert got["value"] == "Is leverage falling?"
++    assert "Is leverage falling?" not in got["review"]  # labels, not values
++    assert got["asm"] is True and got["asmAfter"] is False and got["rationale"] is True
++
++
++def test_list_row_marks_follow_their_row_after_a_removal_and_a_reload(page_from_lists):
++    page, run_id = page_from_lists
++    first = page.run(
++        MARKED
++        + """
++      addRow('q'); update();
++      texts()[1].value = 'mine'; texts()[1].dispatchEvent(new Event('input', {bubbles: true}));
++      return {marked: texts().map(marked)};""",
++        path=f"/?from={run_id}",
++    )
++    assert first["marked"] == [True, False]
++    second = page.run(
++        MARKED
++        + """
++      const out = {marked: texts().map(marked), values: texts().map(t => t.value)};
++      $('rows-q').querySelector('[data-remove]').click();
++      out.afterRemoval = texts().map(marked);
++      out.fields = [...CARRIED.fields].filter(k => k.startsWith('rows-q'));
++      return out;""",
++    )
++    assert second["marked"] == [True, False] and second["values"] == [
++        "Is leverage falling?",
++        "mine",
++    ]
++    assert second["afterRemoval"] == [False] and second["fields"] == []
++
++
++def test_the_earlier_runs_module_subset_and_turns_are_applied(page_from_subset):
++    page, run_id = page_from_subset
++    got = page.run(
++        """
++      const sent = answers();
++      await review();
++      return {modules: sent.modules, turns: sent.max_turns, text: $('rv-carried').textContent,
++              ticked: [...document.querySelectorAll('[data-c="mod"]')]
++                .filter(x => x.checked).map(x => x.value)};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["modules"] == ["CP-0", "CP-1"] and got["turns"] == 16
++    assert got["ticked"] == ["CP-0", "CP-1"]
++    assert "Module subset" in got["text"] and "Turns per module" in got["text"]
++    after = page.run(
++        """
++      const kept = answers();
++      $('unlock-issuer').click();
++      for (let i = 0; i < 100 && rows().length; i++) await settle(50);
++      const sent = answers();
++      return {kept: [kept.modules, kept.max_turns], modules: sent.modules,
++              turns: sent.max_turns};"""
++    )
++    assert after["kept"] == [["CP-0", "CP-1"], 16]  # the reload keeps them
++    assert after["modules"] == [] and after["turns"] == 32  # a different issuer starts clean
++
++
++def test_an_unlock_that_cannot_delete_a_file_keeps_the_lock(page_from):
++    page, run_id = page_from
++    got = page.run(
++        """
++      const real = window.fetch;
++      window.fetch = (url, init) => init && init.method === 'DELETE'
++        ? Promise.resolve(new Response(JSON.stringify({error: 'busy'}), {status: 500}))
++        : real(url, init);
++      $('unlock-issuer').click();
++      await settle(800);
++      window.fetch = real;
++      return {locked: $('i-issuer_id').readOnly, run: CARRIED.run, files: [...CARRIED.files],
++              rows: rows().length, msg: $('loadmsg').textContent};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["locked"] is True and got["run"] == run_id and got["files"] == ["a.txt"]
++    assert got["rows"] == 1 and "a.txt" in got["msg"] and "stays locked" in got["msg"]
++
++
++def test_from_is_not_used_and_says_so_when_a_saved_record_is_restored(page):
++    page.run("type('i-issuer_name', 'Acme Corp'); return {};")
++    got = page.run(
++        "return {msg: $('loadmsg').textContent, run: CARRIED.run};",
++        path="/?from=20990101-000000-01",
++    )
++    assert got["run"] == ""
++    assert "Run 20990101-000000-01 was not used: your earlier answers are back." in got["msg"]
++
++
++# ---- the existing-issuer notice, start again, and a subset naming a module the pathway lacks ----
++
++
++NOTICE = """
++  const waitNotice = async () => {
++    for (let i = 0; i < 100 && $('issuer-exists').hidden; i++) await settle(50);
++    return {hidden: $('issuer-exists').hidden, text: $('issuer-exists-text').textContent};
++  };
++"""
++
++
++def test_typing_an_existing_issuer_id_shows_the_notice_and_offers_the_carry(page_from):
++    page, run_id = page_from
++    got = page.run(
++        NOTICE
++        + """
++      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
++      const id = $('i-issuer_id').value;
++      const notice = await waitNotice();
++      const button = $('issuer-exists').querySelector('button');
++      const label = button.textContent;
++      button.click();
++      for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
++      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
++      return {id, notice, label, locked: $('i-issuer_id').readOnly, run: CARRIED.run,
++              rows: rows(), shown: !$('issuer-exists').hidden};""",
++    )
++    assert got["id"] == "acme"
++    assert got["notice"] == {
++        "hidden": False,
++        "text": "This issuer exists: 1 runs, latest as-of 2026-11-09",
++    }
++    assert got["label"] == "carry over from its latest run"
++    assert got["locked"] is True and got["run"] == run_id and got["shown"] is False
++    assert any("a.txt" in r[0] for r in got["rows"])
++
++
++def test_an_unknown_issuer_id_shows_no_notice(page_from):
++    page, _ = page_from
++    got = page.run(
++        """
++      const real = window.fetch, asked = [];
++      window.fetch = (url, init) => { asked.push(String(url)); return real(url, init); };
++      type('i-issuer_name', 'Nobody Ltd');
++      for (let i = 0; i < 100 && !asked.includes('/api/issuers/nobody-ltd'); i++) await settle(50);
++      await settle(300); // the answer has come once the request is made and answered
++      return {hidden: $('issuer-exists').hidden, id: $('i-issuer_id').value,
++              asked: asked.filter(u => u.startsWith('/api/issuers/'))};"""
++    )
++    assert got == {"hidden": True, "id": "nobody-ltd", "asked": ["/api/issuers/nobody-ltd"]}
++
++
++def test_an_id_filled_from_the_name_shows_the_same_notice(page_from):
++    page, _ = page_from
++    got = page.run(
++        NOTICE
++        + """
++      type('i-issuer_name', 'Acme');
++      return {id: $('i-issuer_id').value, notice: await waitNotice()};"""
++    )
++    assert got["id"] == "acme"
++    assert got["notice"] == {
++        "hidden": False,
++        "text": 'This issuer exists: 1 runs, latest as-of 2026-11-09 (filed as "Acme Corp")',
++    }
++
++
++def test_the_notice_carry_keeps_the_analysts_own_uploads(page_from):
++    page, run_id = page_from
++    got = page.run(
++        NOTICE
++        + f"""
++      pick('data-k="pathway"', 'credit_snapshot');
++      await uploadFiles([file('new.txt', {json.dumps(REPORT)})]);
++      type('i-issuer_name', 'Acme'); await waitNotice();
++      $('issuer-carry').click();
++      for (let i = 0; i < 100 && !rows().some(r => r[0].includes('a.txt')); i++) await settle(50);
++      const out = {{rows: rows(), carried: [...CARRIED.files], msg: $('loadmsg').textContent}};
++      // A different issuer drops the carried files only.
++      $('unlock-issuer').click();
++      for (let i = 0; i < 100 && rows().some(r => r[0].includes('a.txt')); i++) await settle(50);
++      out.after = rows().map(r => r[0]);
++      return out;"""
++    )
++    assert got["carried"] == ["a.txt"]
++    by_name = {r[0].split("\n")[0]: " ".join(r) for r in got["rows"]}
++    assert any("new.txt" in n and "carried over" not in t for n, t in by_name.items())
++    assert any("a.txt" in n and "carried over from run " + run_id in t for n, t in by_name.items())
++    assert len(got["after"]) == 1 and "new.txt" in got["after"][0]
++
++
++def test_a_name_the_analyst_already_uploaded_is_kept_and_not_marked_carried(page_from):
++    page, _ = page_from
++    got = page.run(
++        NOTICE
++        + f"""
++      pick('data-k="pathway"', 'credit_snapshot');
++      await uploadFiles([file('a.txt', {json.dumps(REPORT)})]);
++      type('i-issuer_name', 'Acme'); await waitNotice();
++      $('issuer-carry').click();
++      for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
++      await settle(500);
++      return {{rows: rows(), carried: [...CARRIED.files], msg: $('loadmsg').textContent}};"""
++    )
++    assert got["carried"] == [] and len(got["rows"]) == 1
++    assert "carried over" not in " ".join(got["rows"][0])
++    assert "1 of your files were kept instead of the earlier run's: a.txt." in got["msg"]
++
++
++def test_a_different_typed_name_is_named_against_the_filed_one(page_from):
++    page, _ = page_from
++    got = page.run(
++        NOTICE
++        + """
++      type('i-issuer_name', 'Acme Holdings');
++      type('i-issuer_id', 'acme');
++      return await waitNotice();"""
++    )
++    assert got["hidden"] is False
++    assert got["text"].startswith("This issuer exists: 1 runs, latest as-of 2026-11-09")
++    assert 'filed as "Acme Corp"' in got["text"]
++
++
++def test_a_failed_lookup_shows_nothing_and_does_not_block(page_from):
++    page, _ = page_from
++    got = page.run(
++        """
++      const real = window.fetch;
++      window.fetch = url => String(url).startsWith('/api/issuers/')
++        ? Promise.resolve(new Response('{"error":"busy"}', {status: 500})) : real(url);
++      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
++      await settle(1500);
++      window.fetch = real;
++      return {hidden: $('issuer-exists').hidden, id: build().identity.issuer_id};"""
++    )
++    assert got == {"hidden": True, "id": "acme"}
++    assert any("issuer lookup" in line for line in page.console)
++
++
++@contextmanager
++def _submitted(root, tmp_path, monkeypatch, fake_env, plan_until):
++    """The page served over a scheduler; one run is submitted through the page and pumped to the
++    state in ``plan_until`` (the fake launcher's plan, a test of the run records or None)."""
++    plan, until = plan_until
++    chrome()
++    monkeypatch.setattr(startup, "FORM", FORM)
++    fake_env(plan)
++    with _serving(root, tmp_path) as (served, watcher):
++        served.run(f"""
++        await issuer('credit_snapshot', [file('a.txt', {json.dumps(REPORT)})]);
++        await review();
++        tickAll(); approve();
++        document.getElementById('submit').click();
++        for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
++        return {{}};""")
++        if until is not None:
++            pump(watcher, lambda: until(runs.load_all(layout(root))), limit=30)
++        yield served
++
++
++AGAIN = """
++  const over = /^(failed|capped|rejected|interrupted|finished)/;
++  for (let i = 0; i < 100 && !over.test($('run-state').textContent); i++) await settle(50);
++  const again = $('run-again');
++"""
++
++
++def test_a_failed_run_offers_start_again_from_this_run(root, tmp_path, monkeypatch, fake_env):
++    ended = lambda rs: all(r.status not in ("queued", "running") for r in rs) and rs
++    with _submitted(root, tmp_path, monkeypatch, fake_env, ({"exit": 1}, ended)) as page:
++        [record] = runs.load_all(layout(root))
++        assert record.status == "failed"
++        got = page.run(
++            AGAIN
++            + """
++          const out = {state: $('run-state').textContent, shown: !again.hidden,
++                       text: again.textContent, id: $('run-id').textContent};
++          again.click();
++          for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
++          out.progress = $('run-progress').hidden;
++          out.locked = $('i-issuer_id').readOnly;
++          out.run = CARRIED.run;
++          out.issuer = $('i-issuer_id').value;
++          return out;"""
++        )
++        assert got["shown"] is True and got["text"] == "Start again from this run"
++        assert got["progress"] is True and got["locked"] is True
++        assert got["run"] == record.id == got["id"]
++
++
++def test_a_finished_run_does_not_offer_start_again(root, tmp_path, monkeypatch, fake_env):
++    done = lambda rs: all(r.status == "finished" for r in rs) and rs
++    with _submitted(root, tmp_path, monkeypatch, fake_env, ({"events": DELIVERED}, done)) as page:
++        got = page.run(AGAIN + "return {state: $('run-state').textContent, hidden: again.hidden};")
++        assert got == {"state": "finished", "hidden": True}
++
++
++def test_a_queued_run_does_not_offer_start_again(root, tmp_path, monkeypatch, fake_env):
++    with _submitted(root, tmp_path, monkeypatch, fake_env, ({"sleep": 30}, None)) as page:
++        got = page.run("await settle(500); return {hidden: $('run-again').hidden};")
++        assert got == {"hidden": True}
++
++
++@pytest.fixture
++def page_from_unknown_module(root, tmp_path, monkeypatch, fake_env):
++    from dataclasses import replace
++
++    def edit(folder: Path) -> None:
++        lay = layout(root)
++        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
++        runs.save(lay, replace(record, modules=("CP-0", "CP-ZZ"), max_turns=16))
++
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
++        yield got
++
++
++def test_a_carried_subset_naming_a_module_the_pathway_lacks_is_not_applied(
++    page_from_unknown_module,
++):
++    page, run_id = page_from_unknown_module
++    got = page.run(
++        """
++      const sent = answers();
++      await review();
++      return {modules: sent.modules, turns: sent.max_turns, text: $('rv-carried').textContent,
++              msg: $('loadmsg').textContent,
++              ticked: [...document.querySelectorAll('[data-c="mod"]')]
++                .filter(x => x.checked).length,
++              all: document.querySelectorAll('[data-c="mod"]').length};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["modules"] == [] and got["ticked"] == got["all"] > 0
++    assert "Module subset" not in got["text"] and "Turns per module" in got["text"]
++    assert (
++        "The earlier run's module subset was not carried: CP-ZZ not in this pathway." in got["msg"]
++    )
++
++
++# ---- the whole-branch fixes: the seams between the page, the routes and the core ----
++
++MINE = "Annual Report 2026\nFor the fiscal year ended December 31, 2026\nNet sales were 250.\n"
++_STORED = "localStorage.setItem('run-start/run', JSON.stringify({{v: 1, id: '{}'}}));"
++
++
++def test_from_with_a_run_still_shown_says_so_and_another_run_starts_from_it(page_from):
++    page, run_id = page_from
++    unknown = "20990101-000000-01"  # a stored run the service has no record of: it never ends
++    page.run(_STORED.format(unknown) + " return {};")
++    got = page.run(
++        """
++      await settle(300);
++      const note = $('run-from-note');
++      const out = {progress: !$('run-progress').hidden, note: note.hidden ? '' : note.textContent,
++                   run: CARRIED.run};
++      $('another').click();
++      for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
++      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
++      out.after = {run: CARRIED.run, locked: CARRIED.locked, id: $('i-issuer_id').value,
++                   progress: !$('run-progress').hidden, files: [...CARRIED.files],
++                   note: $('run-from-note').hidden};
++      return out;""",
++        path=f"/?from={run_id}",
++    )
++    assert got["progress"] is True and got["run"] == ""
++    assert (
++        got["note"]
++        == f"Run {run_id} has not been started from yet: this page is showing run {unknown}."
++    )
++    assert got["after"] == {
++        "run": run_id, "locked": True, "id": "acme", "progress": False,
++        "files": ["a.txt"], "note": True,
++    }  # fmt: skip
++
++
++def test_from_with_an_ended_stored_run_starts_from_it_at_once(page_from):
++    page, run_id = page_from
++    page.run(_STORED.format(run_id) + " return {};")
++    got = page.run(
++        """
++      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
++      return {run: CARRIED.run, progress: !$('run-progress').hidden, files: [...CARRIED.files],
++              stored: localStorage.getItem('run-start/run')};""",
++        path=f"/?from={run_id}",
++    )
++    assert got == {"run": run_id, "progress": False, "files": ["a.txt"], "stored": None}
++
++
++def test_an_upload_over_a_carried_name_is_the_analysts_file(page_from):
++    page, run_id = page_from
++    first = page.run(
++        f"""
++      await uploadFiles([file('a.txt', {json.dumps(MINE)})]);
++      await review();
++      return {{rows: rows(), files: [...CARRIED.files], sub: SUB,
++               review: $('rv-carried').textContent}};""",
++        path=f"/?from={run_id}",
++    )
++    held = layout(page.root).uploads / first["sub"] / "files" / "a.txt"
++    assert held.read_text("utf-8") == MINE
++    assert first["files"] == [] and "carried over from run" not in " ".join(
++        " ".join(r) for r in first["rows"]
++    )
++    assert "0 documents carried over" in first["review"]
++    page.run(
++        """
++      $('unlock-issuer').click();
++      for (let i = 0; i < 60 && CARRIED.locked; i++) await settle(50);
++      return {};"""
++    )
++    assert held.exists()  # "this is a different issuer" leaves the analyst's own upload
++
++
++def test_a_lost_submission_does_not_leave_carried_file_marks(page_from):
++    import shutil
++
++    page, run_id = page_from
++    first = page.run("return {sub: SUB};", path=f"/?from={run_id}")
++    shutil.rmtree(layout(page.root).uploads / first["sub"])
++    got = page.run(
++        f"""
++      const gone = !$('submission-gone').hidden;
++      $('new-submission').click();
++      await uploadFiles([file('a.txt', {json.dumps(MINE)})]);
++      await review();
++      return {{gone, rows: rows(), files: [...CARRIED.files], sub: SUB,
++               review: $('rv-carried').textContent}};"""
++    )
++    assert got["gone"] is True and got["sub"] != first["sub"], got
++    assert got["files"] == [] and "carried over from run" not in str(got["rows"]), got
++    assert "1 document carried over" not in got["review"], got
++
++
++@pytest.fixture
++def page_from_other_pathway(root, tmp_path, monkeypatch, fake_env):
++    def other(stored):
++        stored["run"]["pathway"] = "covenant_refinancing"
++
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, _edit_stored(root, other)) as got:
++        yield got
++
++
++def test_a_carried_pathway_is_marked_and_listed(page_from_other_pathway):
++    page, run_id = page_from_other_pathway
++    got = page.run(
++        """
++      const pathway = getV($('st-pathway'), 'pathway');
++      const marks = [...$('st-pathway').querySelectorAll('.from-run')].length;
++      await review();
++      return {pathway, marks, review: $('rv-carried').textContent};""",
++        path=f"/?from={run_id}",
++    )
++    assert got["pathway"] == "covenant_refinancing" and got["marks"] >= 1, got
++    assert "athway" in got["review"], got
++
++
++def test_the_module_subset_and_turns_are_marked_beside_their_inputs(page_from_subset):
++    page, run_id = page_from_subset
++    got = page.run(
++        """
++      const mark = el => {
++        const n = el.nextElementSibling;
++        return !!(n && n.classList.contains('from-run'));
++      };
++      const out = {mods: mark($('modbox')), turns: mark($('turns')),
++                   text: $('modbox').nextElementSibling.textContent};
++      type('turns', '20');
++      out.turnsAfter = mark($('turns')); out.modsAfter = mark($('modbox'));
++      const box = document.querySelector('[data-c="mod"]'); box.checked = !box.checked; change(box);
++      out.modsEdited = mark($('modbox'));
++      return out;""",
++        path=f"/?from={run_id}",
++    )
++    assert got["mods"] is True and got["turns"] is True and got["text"] == f"from run {run_id}"
++    assert got["turnsAfter"] is False and got["modsAfter"] is True and got["modsEdited"] is False
++
++
++def test_the_locked_id_is_never_blank_while_the_carry_runs(page_from):
++    page, _run_id = page_from
++    got = page.run(
++        NOTICE
++        + """
++      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
++      await waitNotice();
++      const real = window.fetch; let mid = null;
++      window.fetch = async (path, init) => {
++        if (String(path).endsWith('/carry')) {
++          update();
++          const saved = JSON.parse(localStorage.getItem('run-start/1'));
++          mid = {id: $('i-issuer_id').value, saved: saved.context.identity.issuer_id,
++                 locked: !!(saved.extra.carried && saved.extra.carried.locked)};
++        }
++        return real(path, init);
++      };
++      $('issuer-carry').click();
++      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
++      await settle(200);
++      return {mid, end: $('i-issuer_id').value};"""
++    )
++    assert got["mid"] is not None and got["end"] == "acme", got
++    assert got["mid"]["id"] == "acme" and got["mid"]["saved"] == "acme", got
++
++
++def test_a_name_changed_after_the_lookup_is_named_against_the_filed_one(page_from):
++    page, _run_id = page_from
++    got = page.run(
++        NOTICE
++        + """
++      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
++      const first = await waitNotice();
++      type('i-issuer_name', 'Another Name');
++      await settle(400);
++      const second = $('issuer-exists-text').textContent;
++      type('i-issuer_name', 'Acme Corp');
++      await settle(200);
++      return {first: first.text, second, third: $('issuer-exists-text').textContent,
++              id: $('i-issuer_id').value, hidden: $('issuer-exists').hidden};"""
++    )
++    assert got["id"] == "acme" and got["hidden"] is False, got
++    assert 'filed as "Acme Corp"' not in got["first"] and 'filed as "Acme Corp"' in got["second"]
++    assert 'filed as "Acme Corp"' not in got["third"], got
++
++
++def test_the_notice_carry_keeps_the_analysts_own_name(page_from):
++    page, _run_id = page_from
++    got = page.run(
++        NOTICE
++        + """
++      type('submitter', 'Dana Reyes');
++      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
++      await waitNotice();
++      $('issuer-carry').click();
++      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
++      await settle(200);
++      return {submitter: $('submitter').value, sent: answers().submitted_by};"""
++    )
++    assert got["submitter"] == "Dana Reyes" and got["sent"] == "Dana Reyes", got
++
++
++def test_unreadable_answers_set_only_the_name_and_id_and_keep_what_was_typed(
++    root, tmp_path, monkeypatch, fake_env
++):
++    def broken(folder: Path) -> None:
++        (folder / "context.json").write_text('{"schema": "context/9"}', encoding="utf-8")
++
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, broken) as (page, run_id):
++        got = page.run(
++            """
++          pick('data-k="pathway"', 'earnings_update'); type('d-as_of', '2026-09-30');
++          type('submitter', 'Dana Reyes');
++          await startFrom(RUN_ID);
++          return {pathway: getV($('st-pathway'), 'pathway'), asOf: $('d-as_of').value,
++                  who: $('submitter').value, id: $('i-issuer_id').value,
++                  name: $('i-issuer_name').value, msg: $('loadmsg').textContent,
++                  level: LEVEL};""".replace("RUN_ID", json.dumps(run_id))
++        )
++    assert got["pathway"] == "earnings_update" and got["asOf"] == "2026-09-30"
++    assert got["who"] == "Dana Reyes" and got["id"] == "acme" and got["name"] == "Acme Corp"
++    assert "and its answers" not in got["msg"] and "1 document carried over" in got["msg"]
++
++
++def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypatch, fake_env):
++    def linked(folder: Path) -> None:
++        (folder / "link.txt").symlink_to(folder / "a.txt")
++
++    with _earlier_run(root, tmp_path, monkeypatch, fake_env, linked) as (page, run_id):
++        got = page.run(
++            "return {msg: $('loadmsg').textContent, files: [...CARRIED.files], rows: rows()};",
++            path=f"/?from={run_id}",
++        )
++    assert "could not be listed" in got["msg"] and "link.txt" in got["msg"]
++    assert str(root) not in got["msg"]
++    assert got["files"] == [] and got["rows"] == []
+diff --git a/tests/test_run_start_prior.py b/tests/test_run_start_prior.py
+new file mode 100644
+index 0000000..61b41ef
+--- /dev/null
++++ b/tests/test_run_start_prior.py
+@@ -0,0 +1,142 @@
++"""Reading an earlier run's inputs from the run records (no provider: the fake launcher)."""
++
++from __future__ import annotations
++
++import shutil
++from collections.abc import Iterator
++from dataclasses import replace
++
++import pytest
++from inbox_fixtures import layout, pump, settings, submit_run
++
++from deploy_workflow.inbox import runs
++from deploy_workflow.inbox.layout import ensure_layout
++from deploy_workflow.inbox.scheduler import Scheduler
++from deploy_workflow.run_start import prior, submissions
++
++pytest_plugins = ["inbox_fixtures"]
++
++
++@pytest.fixture
++def scheduler(root, fake_env) -> Iterator[Scheduler]:
++    fake_env({"events": [["delivered", {}]]})
++    w = Scheduler(settings(root))
++    try:
++        yield w
++    finally:
++        w.close()
++
++
++def test_inputs_blank_the_dates_and_list_the_files_without_the_context(scheduler, root):
++    record = submit_run(scheduler, root, "acme")
++    pump(scheduler, lambda: (layout(root).drops / record.id / "context.json").is_file())
++    got = prior.inputs(layout(root), record.id)
++    assert set(got) == {
++        "run", "issuer_id", "issuer_name", "pathway", "context",
++        "files", "level", "modules", "max_turns",
++    }  # fmt: skip
++    assert got["issuer_id"] == "acme" and got["run"] == record.id
++    run = got["context"]["run"]
++    assert [run[k] for k in ("as_of", "cutoff", "current_period", "prior_period")] == [""] * 4
++    assert got["context"]["identity"]["issuer_id"] == "acme"
++    assert got["files"] == [{"name": "a.txt", "size": len(b"Net sales were 100 for acme.")}]
++
++
++def test_a_record_without_a_source_folder_gives_identity_only(scheduler, root):
++    record = submit_run(scheduler, root, "acme")
++    pump(scheduler, lambda: (layout(root).drops / record.id).is_dir())
++    shutil.rmtree(layout(root).drops / record.id)
++    got = prior.inputs(layout(root), record.id)
++    assert got["context"] is None and got["files"] == [] and got["issuer_id"] == "acme"
++
++
++def test_an_unknown_run_is_refused(root):
++    with pytest.raises(submissions.Refused, match="^unknown run$"):
++        prior.inputs(layout(root), "20261111-000000-01")
++
++
++def test_a_linked_source_folder_or_context_is_not_read(scheduler, root, tmp_path):
++    record = submit_run(scheduler, root, "acme")
++    context = layout(root).drops / record.id / "context.json"
++    pump(scheduler, context.is_file)
++    outside = tmp_path / "outside.json"
++    outside.write_text(context.read_text())
++    context.unlink()
++    context.symlink_to(outside)
++    got = prior.inputs(layout(root), record.id)
++    assert got["context"] is None
++    assert prior.source(layout(root), record.id)[1] is None
++    # The whole folder linked elsewhere is not read either.
++    folder = layout(root).drops / record.id
++    real = tmp_path / "elsewhere"
++    shutil.move(str(folder), str(real))
++    (real / "context.json").unlink()
++    (real / "context.json").write_text(outside.read_text())
++    folder.symlink_to(real, target_is_directory=True)
++    got = prior.inputs(layout(root), record.id)
++    assert got["context"] is None and got["files"] == []
++
++
++def test_issuer_counts_finished_runs_and_names_the_latest(scheduler, root):
++    first = submit_run(scheduler, root, "acme")
++    second = submit_run(scheduler, root, "acme", payload=b"Net sales were 200.")
++    submit_run(scheduler, root, "other")
++    lay = layout(root)
++
++    def done() -> bool:
++        return all(r.status == "finished" for r in runs.load_all(lay))
++
++    pump(scheduler, done, limit=60)
++    later = max(first.id, second.id)
++    got = prior.issuer(lay, "acme")
++    assert got == {
++        "runs": 2, "latest_as_of": "2026-11-09",
++        "latest_run": later, "issuer_name": "Acme Corp",
++    }  # fmt: skip
++    assert prior.issuer(lay, "nobody") == {
++        "runs": 0, "latest_as_of": "", "latest_run": "", "issuer_name": "",
++    }  # fmt: skip
++
++
++def test_the_latest_run_is_the_greatest_as_of_then_the_greatest_id(root):
++    lay = ensure_layout(root)
++    base = runs.Record(id="x", pathway="p", folder="f", status="failed", claimed_at="")
++    for rid, as_of, status in (
++        ("20261101-000000-01", "2026-11-05", "finished"),
++        ("20261102-000000-01", "2026-11-09", "failed"),
++        ("20261103-000000-01", "2026-11-09", "finished"),
++        ("20261104-000000-01", "2026-11-01", "finished"),
++    ):
++        runs.save(
++            lay,
++            replace(base, id=rid, as_of=as_of, status=status, issuer_id="acme", issuer_name=rid),
++        )
++    got = prior.issuer(lay, "acme")
++    assert got["runs"] == 3 and got["latest_as_of"] == "2026-11-09"
++    assert got["latest_run"] == "20261103-000000-01"
++    assert got["issuer_name"] == "20261103-000000-01"
++
++
++def test_files_are_listed_when_the_context_is_not_usable(scheduler, root, caplog):
++    record = submit_run(scheduler, root, "acme")
++    context = layout(root).drops / record.id / "context.json"
++    pump(scheduler, context.is_file)
++    context.write_text("[]")
++    got = prior.inputs(layout(root), record.id)
++    assert got["context"] is None
++    assert got["files"] == [{"name": "a.txt", "size": len(b"Net sales were 100 for acme.")}]
++    assert "not an object" in caplog.text
++    context.write_text('{"run": 1, "identity": {}}')
++    assert prior.inputs(layout(root), record.id)["context"] is None
++    assert "lacks a run or identity object" in caplog.text
++
++
++def test_a_refused_listing_is_named_in_the_reply_and_a_good_one_has_no_error(scheduler, root):
++    record = submit_run(scheduler, root, "acme")
++    folder = layout(root).drops / record.id
++    pump(scheduler, (folder / "context.json").is_file)
++    assert "error" not in prior.inputs(layout(root), record.id)
++    (folder / "linked.txt").symlink_to(folder / "a.txt")
++    got = prior.inputs(layout(root), record.id)
++    assert got["files"] == [] and "linked.txt" in got["error"]
++    assert str(folder) not in got["error"]
+diff --git a/tests/test_run_start_service.py b/tests/test_run_start_service.py
+index c933919..a704e58 100644
+--- a/tests/test_run_start_service.py
++++ b/tests/test_run_start_service.py
+@@ -10,6 +10,7 @@ import errno
+ import json
+ import logging
+ import os
++import shutil
+ import socket
+ import struct
+ import threading
+@@ -355,6 +356,9 @@ def test_no_response_carries_the_provider_key(svc, monkeypatch):
+         svc.call("POST", f"/api/submissions/{sid}/summary", answers),
+         svc.call("POST", "/api/submissions", origin="http://evil.example"),
+         svc.call("GET", "/api/runs/none"),
++        svc.call("GET", "/api/runs/none/inputs"),
++        svc.call("GET", "/api/issuers/acme"),
++        svc.call("POST", f"/api/submissions/{sid}/carry", {"run": "none"}),
+         svc.call("GET", "/library/../x"),
+         svc.call("POST", f"/api/submissions/{sid}/submit", {"answers": answers, "digest": "x"}),
+     ]
+@@ -824,3 +828,98 @@ def test_main_stops_on_interrupt_and_releases_the_folder_lock(root, fake_env, mo
+     monkeypatch.setattr(service, "_loop", interrupt)
+     assert service.main(["--root", str(root), "--port", "0", "--host", "127.0.0.1"]) == 0
+     scheduler_module.Scheduler(settings(root)).close()  # the lock was released
++
++
++def _finished_run(svc: Service, fake_env: Callable[[dict[str, Any]], None], payload: bytes) -> str:
++    fake_env({"events": [["delivered", {}]]})
++    sid = svc.new()
++    assert svc.upload(sid, "notes/a.txt", payload).status == 200
++    answers = answers_for()
++    summary = svc.call("POST", f"/api/submissions/{sid}/summary", answers).json()
++    body = {"answers": answers, "digest": summary["digest"]}
++    run_id = str(svc.call("POST", f"/api/submissions/{sid}/submit", body).json()["run"])
++    lay = layout(svc.root)
++    pump(
++        svc.watcher,
++        lambda: (
++            [r.status for r in load_all(lay) if r.id == run_id] == ["finished"]
++            and (lay.drops / run_id / "context.json").is_file()
++        ),
++        limit=60,
++    )
++    return run_id
++
++
++def test_an_earlier_runs_inputs_are_read_and_its_files_carried(svc, fake_env):
++    run = _finished_run(svc, fake_env, b"Net sales were 100.")
++    got = svc.call("GET", f"/api/runs/{run}/inputs")
++    assert got.status == 200 and got.json()["context"]["run"]["as_of"] == ""
++    sid = svc.new()
++    carried = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": run})
++    assert carried.status == 200 and carried.json()["kept"] == []
++    reading = svc.call("GET", f"/api/submissions/{sid}/reading").json()
++    assert reading["error"] == "" and reading["documents"], reading
++    assert [f["name"] for f in got.json()["files"]] == ["notes/a.txt"]
++    assert carried.json()["carried"] == ["notes/a.txt"]
++    assert [d["source"] for d in reading["documents"]] == [f["name"] for f in got.json()["files"]]
++
++
++def test_inputs_and_carry_for_an_unknown_run_are_404(svc):
++    unknown = "20200101-000000-01"
++    assert svc.call("GET", f"/api/runs/{unknown}/inputs").status == 404
++    sid = svc.new()
++    reply = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": unknown})
++    assert reply.status == 404 and reply.json() == {"error": "unknown run"}
++    assert not any(submissions.files_folder(layout(svc.root), sid).iterdir())
++    known = svc.call("POST", "/api/submissions/" + "0" * 32 + "/carry", {"run": unknown})
++    assert known.status == 404
++
++
++def test_a_carry_for_an_unknown_submission_is_404(svc, fake_env):
++    run = _finished_run(svc, fake_env, b"Net sales were 100.")
++    reply = svc.call("POST", "/api/submissions/" + "0" * 32 + "/carry", {"run": run})
++    assert reply.status == 404 and reply.json() == {"error": "unknown submission"}
++
++
++def test_a_carry_without_or_with_a_foreign_origin_copies_nothing(svc, fake_env):
++    run = _finished_run(svc, fake_env, b"Net sales were 100.")
++    sid = svc.new()
++    for origin in (None, "http://evil.example", f"https://{svc.host}", "null"):
++        reply = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": run}, origin=origin)
++        assert reply.status == 403, origin
++    assert not any(submissions.files_folder(layout(svc.root), sid).iterdir())
++
++
++@pytest.mark.parametrize("body", [{"run": "../x"}, {"run": 3}, [], {}, {"run": ""}, {"run": "a/b"}])
++def test_a_carry_body_that_is_not_a_run_id_is_400(svc, body):
++    sid = svc.new()
++    reply = svc.call("POST", f"/api/submissions/{sid}/carry", json.dumps(body).encode())
++    assert reply.status == 400, reply.body
++    assert not any(submissions.files_folder(layout(svc.root), sid).iterdir())
++
++
++def test_a_carry_from_a_run_without_stored_documents_is_400(svc, fake_env):
++    run = _finished_run(svc, fake_env, b"Net sales were 100.")
++    shutil.rmtree(layout(svc.root).drops / run)
++    sid = svc.new()
++    reply = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": run})
++    assert reply.status == 400
++    assert reply.json() == {"error": "that run has no stored documents"}
++
++
++def test_an_issuer_id_is_looked_up_and_an_unsafe_one_is_404(svc, fake_env):
++    _finished_run(svc, fake_env, b"Net sales were 100.")
++    assert svc.call("GET", "/api/issuers/acme").json()["runs"] == 1
++    assert svc.call("GET", "/api/issuers/nobody").json()["runs"] == 0
++    assert svc.call("GET", "/api/issuers/..%2Fx").status == 404
++    assert svc.call("GET", "/api/issuers/Acme").status == 404
++    assert svc.call("GET", "/api/issuers/" + "a" * 41).status == 404
++
++
++def test_the_inputs_route_does_not_serve_file_content(svc, fake_env):
++    secret = b"Net sales were 424242 and the secret phrase is plover."
++    run = _finished_run(svc, fake_env, secret)
++    reply = svc.call("GET", f"/api/runs/{run}/inputs")
++    assert reply.status == 200
++    assert b"plover" not in reply.body and b"424242" not in reply.body
++    assert reply.json()["files"] == [{"name": "notes/a.txt", "size": len(secret)}]
+diff --git a/tests/test_run_start_submissions.py b/tests/test_run_start_submissions.py
+index c36b321..195a997 100644
+--- a/tests/test_run_start_submissions.py
++++ b/tests/test_run_start_submissions.py
+@@ -8,6 +8,7 @@ import logging
+ import os
+ import shutil
+ import tempfile
++import unicodedata
+ import threading
+ import time
+ from collections.abc import Iterator
+@@ -932,3 +933,388 @@ def test_an_issuer_id_over_the_limit_is_refused_by_the_summary(layout, tmp_path)
+     assert "digest" not in got
+     answers["context"]["identity"]["issuer_id"] = "a" * 40
+     assert summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))["error"] == ""
++
++
++def _source(tmp_path: Path, **files: bytes) -> Path:
++    """A finished run's source folder: the named files and a context.json."""
++    src = tmp_path / "source"
++    src.mkdir(exist_ok=True)
++    (src / "context.json").write_text("{}")
++    for name, data in files.items():
++        target = src / name
++        target.parent.mkdir(parents=True, exist_ok=True)
++        target.write_bytes(data)
++    return src
++
++
++def _held(layout: Layout, sid: str) -> dict[str, int]:
++    return submissions.listing(files_folder(layout, sid))
++
++
++def test_carry_copies_every_file_but_the_context(layout, tmp_path):
++    src = _source(tmp_path, **{"a.txt": b"one", "sub/b.txt": b"two"})
++    sid = new(layout)
++    assert submissions.carry(layout, sid, src) == {"carried": ["a.txt", "sub/b.txt"], "kept": []}
++    assert submissions.listing(files_folder(layout, sid)) == {"a.txt": 3, "sub/b.txt": 3}
++    assert submissions.listing(src) == {"a.txt": 3, "sub/b.txt": 3}
++
++
++def test_carry_keeps_a_name_already_stored(layout, tmp_path):
++    src = _source(tmp_path, **{"a.txt": b"theirs", "c.txt": b"new"})
++    sid = new(layout)
++    put(layout, sid, "a.txt", b"mine")
++    assert submissions.carry(layout, sid, src) == {"carried": ["c.txt"], "kept": ["a.txt"]}
++    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
++    assert (files_folder(layout, sid) / "c.txt").read_bytes() == b"new"
++
++
++def test_a_carry_over_a_limit_copies_nothing(layout, tmp_path, monkeypatch):
++    monkeypatch.setattr(submissions, "MAX_FILES", 2)
++    src = _source(tmp_path, **{"a.txt": b"1", "b.txt": b"2", "c.txt": b"3"})
++    sid = new(layout)
++    with pytest.raises(Refused, match="more than 2 files"):
++        submissions.carry(layout, sid, src)
++    assert _held(layout, sid) == {}
++    monkeypatch.undo()
++    monkeypatch.setattr(submissions, "MAX_TOTAL", 4)
++    src = _source(tmp_path, **{"a.txt": b"123", "b.txt": b"456"})
++    (src / "c.txt").unlink()
++    with pytest.raises(Refused, match="in total"):
++        submissions.carry(layout, sid, src)
++    assert _held(layout, sid) == {}
++
++
++def test_a_carry_of_one_file_over_the_file_limit_copies_nothing(layout, tmp_path, monkeypatch):
++    monkeypatch.setattr(submissions, "MAX_FILE", 2)
++    src = _source(tmp_path, **{"a.txt": b"1", "b.txt": b"123"})
++    sid = new(layout)
++    with pytest.raises(Refused, match="a file is at most"):
++        submissions.carry(layout, sid, src)
++    assert _held(layout, sid) == {}
++
++
++def test_a_carry_from_a_folder_holding_a_link_copies_nothing(layout, tmp_path):
++    src = _source(tmp_path, **{"a.txt": b"one"})
++    outside = tmp_path / "outside.txt"
++    outside.write_bytes(b"secret")
++    (src / "z.txt").symlink_to(outside)
++    sid = new(layout)
++    with pytest.raises(Refused, match="is a link"):
++        submissions.carry(layout, sid, src)
++    assert _held(layout, sid) == {}
++
++
++def test_a_carry_into_a_sealed_submission_is_refused(layout, tmp_path):
++    src = _source(tmp_path, **{"a.txt": b"one"})
++    sid = new(layout)
++    submissions.seal(layout, sid)
++    with pytest.raises(Refused, match="^this submission has been submitted$"):
++        submissions.carry(layout, sid, src)
++
++
++def test_a_failed_copy_removes_what_the_carry_added(layout, tmp_path, monkeypatch):
++    src = _source(tmp_path, **{"a.txt": b"one", "b.txt": b"two"})
++    sid = new(layout)
++    put(layout, sid, "keep.txt", b"mine")
++    real = submissions.add_file
++
++    def failing(lay, s, name, body, length):
++        if name == "b.txt":
++            raise Refused("boom")
++        return real(lay, s, name, body, length)
++
++    monkeypatch.setattr(submissions, "add_file", failing)
++    with pytest.raises(Refused, match="boom"):
++        submissions.carry(layout, sid, src)
++    assert _held(layout, sid) == {"keep.txt": 4}
++
++
++def test_the_digest_of_carried_files_equals_the_digest_of_the_same_files_uploaded(layout, tmp_path):
++    files = {"a.txt": b"one", "sub/b.txt": b"two"}
++    src = _source(tmp_path, **files)
++    sid_a, sid_b = new(layout), new(layout)
++    submissions.carry(layout, sid_a, src)
++    for name, data in files.items():
++        put(layout, sid_b, name, data)
++    answers = answers_for(tmp_path)
++    assert digest(layout, sid_a, answers) == digest(layout, sid_b, answers)
++
++
++def _case_insensitive(folder: Path) -> bool:
++    probe = folder / "CaSeProbe"
++    probe.write_text("x")
++    try:
++        return (folder / "caseprobe").exists()
++    finally:
++        probe.unlink()
++
++
++def test_a_name_that_sanitises_to_a_stored_name_is_kept_not_replaced(layout, tmp_path):
++    sid = new(layout)
++    put(layout, sid, "a b.txt", b"mine")
++    src = _source(tmp_path, **{"a  b.txt": b"theirs", "a:b.txt": b"also"})
++    got = submissions.carry(layout, sid, src)
++    assert got == {"carried": [], "kept": ["a b.txt"]}  # one name, however many sources map to it
++    assert (files_folder(layout, sid) / "a b.txt").read_bytes() == b"mine"
++
++
++def test_two_source_names_that_sanitise_to_one_copy_only_the_first(layout, tmp_path):
++    src = _source(tmp_path, **{"a  b.txt": b"1", "a:b.txt": b"2"})
++    sid = new(layout)
++    got = submissions.carry(layout, sid, src)
++    assert len(got["carried"]) == 1 and len(got["kept"]) == 1
++    assert list(_held(layout, sid)) == ["a b.txt"]
++
++
++def test_a_name_differing_in_case_or_form_is_kept_not_replaced(layout, tmp_path):
++    if not _case_insensitive(tmp_path):
++        pytest.skip("case-sensitive disk")
++    sid = new(layout)
++    put(layout, sid, "Report.txt", b"mine")
++    put(layout, sid, unicodedata.normalize("NFC", "é.txt"), b"mine")
++    src = _source(
++        tmp_path, **{"report.txt": b"theirs", unicodedata.normalize("NFD", "é.txt"): b"theirs"}
++    )
++    submissions.carry(layout, sid, src)
++    held = files_folder(layout, sid)
++    assert sorted(p.read_bytes() for p in held.iterdir()) == [b"mine", b"mine"]
++
++
++def test_a_failed_carry_does_not_delete_the_analysts_file(layout, tmp_path, monkeypatch):
++    sid = new(layout)
++    put(layout, sid, "a b.txt", b"mine")
++    src = _source(tmp_path, **{"a  b.txt": b"theirs", "z.txt": b"later"})
++    real = submissions.add_file
++
++    def failing(lay, s, name, body, length):
++        if name == "z.txt":
++            raise Refused("boom")
++        return real(lay, s, name, body, length)
++
++    monkeypatch.setattr(submissions, "add_file", failing)
++    with pytest.raises(Refused, match="boom"):
++        submissions.carry(layout, sid, src)
++    assert (files_folder(layout, sid) / "a b.txt").read_bytes() == b"mine"
++
++
++def test_an_upload_landing_during_the_carry_is_not_replaced(layout, tmp_path, monkeypatch):
++    src = _source(tmp_path, **{"a.txt": b"theirs"})
++    sid = new(layout)
++    real = submissions.add_file
++
++    def racing(lay, s, name, body, length):
++        if not isinstance(body, io.BytesIO):
++            real(lay, s, "a.txt", io.BytesIO(b"mine"), 4)  # the analyst's upload lands first
++        return real(lay, s, name, body, length)
++
++    monkeypatch.setattr(submissions, "add_file", racing)
++    assert submissions.carry(layout, sid, src) == {"carried": [], "kept": ["a.txt"]}
++    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
++
++
++def test_a_rollback_does_not_delete_an_upload_that_replaced_a_carried_file(
++    layout, tmp_path, monkeypatch
++):
++    src = _source(tmp_path, **{"a.txt": b"theirs", "b.txt": b"later"})
++    sid = new(layout)
++    real = submissions.add_file
++
++    def racing(lay, s, name, body, length):
++        if name == "b.txt":
++            real(lay, s, "a.txt", io.BytesIO(b"mine"), 4)  # the analyst re-uploads a.txt
++            raise Refused("boom")
++        return real(lay, s, name, body, length)
++
++    monkeypatch.setattr(submissions, "add_file", racing)
++    with pytest.raises(Refused, match="boom"):
++        submissions.carry(layout, sid, src)
++    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
++
++
++def _after_listing(monkeypatch, change):
++    real = submissions.listing
++
++    def wrapped(source):
++        got = real(source)
++        if source.name == "source":
++            change(source)
++        return got
++
++    monkeypatch.setattr(submissions, "listing", wrapped)
++
++
++def _nothing_secret_copied(layout, sid):
++    held = files_folder(layout, sid)
++    assert b"SECRET" not in [p.read_bytes() for p in held.rglob("*") if p.is_file()]
++
++
++def test_a_file_link_swapped_in_after_the_listing_is_not_followed(layout, tmp_path, monkeypatch):
++    secret = tmp_path / "secret.txt"
++    secret.write_bytes(b"SECRET")
++    src = _source(tmp_path, **{"a.txt": b"public"})
++
++    def swap(source):
++        (source / "a.txt").unlink()
++        (source / "a.txt").symlink_to(secret)
++
++    _after_listing(monkeypatch, swap)
++    sid = new(layout)
++    with pytest.raises(Refused):
++        submissions.carry(layout, sid, src)
++    _nothing_secret_copied(layout, sid)
++
++
++def test_a_folder_link_swapped_in_after_the_listing_is_not_followed(layout, tmp_path, monkeypatch):
++    outside = tmp_path / "outside"
++    outside.mkdir()
++    (outside / "b.txt").write_bytes(b"SECRET")
++    src = _source(tmp_path, **{"sub/b.txt": b"public"})
++
++    def swap(source):
++        (source / "sub" / "b.txt").unlink()
++        (source / "sub").rmdir()
++        (source / "sub").symlink_to(outside, target_is_directory=True)
++
++    _after_listing(monkeypatch, swap)
++    sid = new(layout)
++    with pytest.raises(Refused):
++        submissions.carry(layout, sid, src)
++    _nothing_secret_copied(layout, sid)
++
++
++def test_a_file_that_grew_after_the_listing_is_refused(layout, tmp_path, monkeypatch):
++    src = _source(tmp_path, **{"a.txt": b"Net sales were 100"})
++
++    def grow(source):
++        with (source / "a.txt").open("ab") as out:
++            out.write(b"0 million")
++
++    _after_listing(monkeypatch, grow)
++    sid = new(layout)
++    with pytest.raises(Refused, match="changed"):
++        submissions.carry(layout, sid, src)
++    assert _held(layout, sid) == {}
++
++
++def test_a_hard_link_to_a_file_outside_is_refused(layout, tmp_path):
++    secret = tmp_path / "secret.txt"
++    secret.write_bytes(b"SECRET")
++    src = _source(tmp_path)
++    os.link(secret, src / "a.txt")
++    sid = new(layout)
++    with pytest.raises(Refused):
++        submissions.carry(layout, sid, src)
++    _nothing_secret_copied(layout, sid)
++
++
++def test_a_source_folder_that_is_itself_a_link_is_refused(layout, tmp_path):
++    real = _source(tmp_path, **{"a.txt": b"SECRET"})
++    linked = tmp_path / "linked"
++    linked.symlink_to(real, target_is_directory=True)
++    sid = new(layout)
++    with pytest.raises(Refused):
++        submissions.carry(layout, sid, linked)
++    _nothing_secret_copied(layout, sid)
++
++
++def test_open_regular_does_not_wait_on_a_fifo(tmp_path):
++    fifo = tmp_path / "z.txt"
++    os.mkfifo(fifo)
++    outcome: list[str] = []
++
++    def attempt() -> None:
++        try:
++            submissions.open_regular(fifo)
++        except Refused:
++            outcome.append("refused")
++
++    worker = threading.Thread(target=attempt, daemon=True)
++    worker.start()
++    worker.join(5)
++    held = worker.is_alive()
++    if held:  # release the blocked open so the thread ends
++        os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))
++        worker.join(5)
++    assert not held and outcome == ["refused"]
++
++
++@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any folder")
++def test_a_carry_from_a_folder_with_an_unreadable_subfolder_is_refused(layout, tmp_path):
++    src = tmp_path / "run"
++    (src / "q3").mkdir(parents=True)
++    (src / "a.txt").write_bytes(b"a")
++    (src / "q3" / "b.txt").write_bytes(b"b")
++    (src / "q3").chmod(0)
++    sid = new(layout)
++    try:
++        with pytest.raises(Refused, match="q3") as refused:
++            submissions.carry(layout, sid, src)
++        with pytest.raises(Refused, match="q3"):
++            submissions.listing(src)
++    finally:
++        (src / "q3").chmod(0o700)
++    assert str(tmp_path) not in str(refused.value)
++    assert not any(files_folder(layout, sid).iterdir())
++
++
++def test_a_carry_leaves_out_hidden_names_and_does_not_count_them(layout, tmp_path):
++    src = _source(tmp_path, **{"a.txt": b"one", ".DS_Store": b"\x00", "q/.hidden/b.txt": b"two"})
++    assert submissions.listing(src) == {"a.txt": 3}
++    sid = new(layout)
++    assert submissions.carry(layout, sid, src) == {"carried": ["a.txt"], "kept": []}
++    assert submissions.listing(files_folder(layout, sid)) == {"a.txt": 3}
++
++
++def test_listing_refuses_on_any_walk_error_but_the_stored_walk_forgives_a_vanished_folder(
++    tmp_path, monkeypatch
++):
++    src = _source(tmp_path, **{"a.txt": b"one"})
++    real = os.walk
++
++    def walk(top, followlinks=False, onerror=None):
++        if onerror:
++            onerror(FileNotFoundError(2, "gone", str(Path(top) / "q3")))
++        return real(top, followlinks=followlinks, onerror=onerror)
++
++    monkeypatch.setattr(submissions.os, "walk", walk)
++    with pytest.raises(Refused, match="q3") as refused:
++        submissions.listing(src)
++    assert str(tmp_path) not in str(refused.value)
++    assert submissions._stored(src, strict=True) == {"a.txt": 3, "context.json": 2}
++
++
++def test_open_regular_opens_through_platform_io_and_a_carried_handle_never_replaces(
++    layout, tmp_path, monkeypatch
++):
++    seen: list[int] = []
++    real = submissions.regular_open
++
++    def spy(path, options, *rest):
++        seen.append(options)
++        return real(path, options, *rest)
++
++    monkeypatch.setattr(submissions, "regular_open", spy)
++    src = _source(tmp_path, **{"a.txt": b"one"})
++    with submissions.open_regular(src / "a.txt", 3) as handle:
++        assert handle.read() == b"one"
++    assert seen and seen[0] & os.O_NONBLOCK
++    sid = new(layout)
++    put(layout, sid, "a.txt", b"mine")
++    with (
++        submissions.open_regular(src / "a.txt", 3) as handle,
++        pytest.raises(Refused, match="already stored"),
++    ):
++        submissions.add_file(layout, sid, "a.txt", handle, 3)
++    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
++
++
++def test_two_submissions_carrying_from_one_run_both_end_with_the_runs_files(layout, tmp_path):
++    src = _source(tmp_path, **{"a.txt": b"one", "sub/b.txt": b"two"})
++    first, second = new(layout), new(layout)
++    for sid in (first, second):
++        assert submissions.carry(layout, sid, src)["carried"] == ["a.txt", "sub/b.txt"]
++    assert _held(layout, first) == _held(layout, second) == {"a.txt": 3, "sub/b.txt": 3}
++    assert submissions.listing(src) == {
++        "a.txt": 3,
++        "sub/b.txt": 3,
++    }  # the earlier run's own files stay

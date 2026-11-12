@@ -361,7 +361,7 @@ OPERAND_METRIC = {
     "cash": "cash_closing",
     "undrawn": "undrawn_rcf",
 }
-_OUTFLOWS = frozenset({"interest", "taxes", "wc", "capex"})  # CP-1 stores them negative
+OUTFLOWS = frozenset({"interest", "taxes", "wc", "capex"})  # CP-1 stores them negative
 # The name of each base operand in the missing-operand frames (cash pinned by
 # fixture_cash_missing, the rest LEAD ruling G-1).
 _OPERAND_WORDS = {
@@ -433,7 +433,7 @@ class Operands:
                 vals[key] = Val(None, _operand_reason(key, basis))
             else:
                 _book_millions(f"CP-1 {metric}", fact, basis)
-                vals[key] = _known(-fact.amount if key in _OUTFLOWS else fact.amount)
+                vals[key] = _known(-fact.amount if key in OUTFLOWS else fact.amount)
         return cls(**vals)
 
     def items(self) -> tuple[tuple[str, Val], ...]:
@@ -495,21 +495,28 @@ class CaseForecast:
 
 
 def _year(
-    opening: tuple[Val, Val, Val],
+    opening: tuple[Val, Val, Val, Val],
     drivers: Drivers,
     t: int,
     shock: tuple[Decimal, Decimal] | None,
-    undrawn: Val,
+    scheduled: tuple[Decimal, Decimal] | None = None,
 ) -> Year:
-    """One forecast year from the prior revenue, closing debt and closing cash."""
-    revenue, debt, cash = opening
+    """One forecast year from the prior revenue, closing debt, closing cash and the (held) undrawn
+    facilities. `scheduled` is the
+    facility schedule's (interest, repayment): it replaces the interest-rate and repayment drivers
+    (interest still scales by the shock's rate increase and is missing with the debt)."""
+    revenue, debt, cash, undrawn = opening
     g, m = drivers.revenue_growth[t], drivers.ebitda_margin[t]
     c, w = drivers.capex_pct_revenue[t], drivers.tax_wc_pct_revenue[t]
     rate, div, rep = drivers.interest_rate[t], drivers.dividends[t], drivers.debt_repayment[t]
     s, k = (Decimal(0), Decimal(0)) if shock is None else shock  # the base case: no shock (exact)
     rev = _apply(lambda r: r * (1 + g), revenue)
     ebitda = _apply(lambda r: r * m * (1 - s), rev)
-    interest = _apply(lambda d: d * (rate * (1 + k)), debt)
+    if scheduled is None:
+        interest = _apply(lambda d: d * (rate * (1 + k)), debt)
+    else:
+        interest = _apply(lambda d: scheduled[0] * (1 + k), debt)
+        rep = scheduled[1]
     tax_wc = _apply(lambda r: r * w, rev)
     capex = _apply(lambda r: r * c, rev)
     cfo = _apply(lambda e, i, x: e - i - x, ebitda, interest, tax_wc)
@@ -542,17 +549,25 @@ def _year(
 
 
 def forecast(
-    *, operands: Operands, drivers: Drivers, shock: tuple[Decimal, Decimal] | None
+    *,
+    operands: Operands,
+    drivers: Drivers,
+    shock: tuple[Decimal, Decimal] | None,
+    schedule: tuple[tuple[Decimal, Decimal], ...] | None = None,
 ) -> CaseForecast:
     """One case's three years. `shock` is None (base) or CP-2A's (decline, increase), applied
-    to every year: EBITDA x (1 - decline), rate x (1 + increase), everything else held."""
-    opening = (operands.revenue, operands.debt, operands.cash)
+    to every year: EBITDA x (1 - decline), rate x (1 + increase), everything else held.
+    `schedule` (three (interest, repayment) pairs) replaces the interest-rate and repayment
+    drivers."""
+    if schedule is not None and len(schedule) != 3:
+        raise ValueError("a schedule states exactly three (interest, repayment) pairs")
+    opening = (operands.revenue, operands.debt, operands.cash, operands.undrawn)
     years: list[Year] = []
     with _exact_digits("the base case forecast" if shock is None else "the downside case forecast"):
         for t in range(3):
-            y = _year(opening, drivers, t, shock, operands.undrawn)
+            y = _year(opening, drivers, t, shock, None if schedule is None else schedule[t])
             years.append(y)
-            opening = (y.revenue, y.closing_debt, y.closing_cash)
+            opening = (y.revenue, y.closing_debt, y.closing_cash, y.undrawn)
     return CaseForecast(years=(years[0], years[1], years[2]))
 
 
@@ -1478,7 +1493,7 @@ def _t2h2(b: _Book, run: _Run) -> None:
 
     def copy(key: str, label: str) -> None:
         metric = OPERAND_METRIC[key]
-        formula = f"CP-1 {metric}" + (", sign reversed" if key in _OUTFLOWS else "")
+        formula = f"CP-1 {metric}" + (", sign reversed" if key in OUTFLOWS else "")
         _t2h2_row(
             b,
             key,

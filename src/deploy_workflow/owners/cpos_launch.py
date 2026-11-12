@@ -56,8 +56,14 @@ from deploy_workflow.model.adapter import (
     check_ruling,
 )
 from deploy_workflow.model.budget import Budget
-from deploy_workflow.model.handoff import Check, _pages
-from deploy_workflow.model.pricing import price_of, request_reservation_usd
+from deploy_workflow.model.handoff import (
+    WEB_SEARCH_CALLS_PER_TURN,
+    WEB_SEARCH_CASE_KINDS,
+    Check,
+    _pages,
+    web_search_offered,
+)
+from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
 from deploy_workflow.model.turn import MODEL_EFFORTS
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cp2g, cpos_forecast
@@ -67,6 +73,7 @@ from deploy_workflow.owners.cpos import (
     HandoffTask,
     run_live_handoffs,
     web_search_ruled,
+    web_search_run,
     with_notes,
 )
 from deploy_workflow.prose_checks import (
@@ -1337,6 +1344,13 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
 
 
 HTML_MODEL_SCOPE = "The HTML Model and calculation JSON are not published by this launcher."
+LAYER1_FORECAST_SCOPE = (
+    "The HTML Model is not published by this launcher. A forecast table is published with the "
+    "issuer report in the library when the CP-1 handoff's run-rate inputs block validates; it "
+    "comes from the financial foundation's run-rate figures, with no cases and no stress, and "
+    "is better with CP-2G. Python computes its figures from the inputs the handoff states, and "
+    "the inputs are not independently reviewed."
+)
 FORECAST_SCOPE = (
     "The HTML Model is not published by this launcher. A forecast table is published with the "
     "issuer report in the library when the CP-2G handoff's inputs block validates; Python "
@@ -1346,7 +1360,7 @@ FORECAST_SCOPE = (
 
 
 def _layout(
-    run: Run, ordered: tuple[str, ...], aliases: tuple[str, ...], config: str
+    run: Run, ordered: tuple[str, ...], aliases: tuple[str, ...], config: str, *, forecast: bool
 ) -> tuple[MarkdownLayout, tuple[str, ...]]:
     preset = next(p for p in pathways() if p.id == run.pathway)
     routes: list[MarkdownRoute] = []
@@ -1378,7 +1392,13 @@ def _layout(
         "on the selected issuer folder. Automated checks cover handoff structure, issuer and date "
         "anchors, source and upstream references and issuer-report section selectors; analytical "
         "accuracy has not been independently reviewed. "
-        + (FORECAST_SCOPE if {"CP-1", "CP-2G"} <= set(ordered) else HTML_MODEL_SCOPE)
+        + (
+            HTML_MODEL_SCOPE
+            if not forecast
+            else FORECAST_SCOPE
+            if "CP-2G" in ordered
+            else LAYER1_FORECAST_SCOPE
+        )
         + f" Sections not produced: {', '.join(omitted) or 'none'}."
     )
     layout = MarkdownLayout(
@@ -1473,6 +1493,26 @@ FORECAST_BLOCK = (
     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
     "only the drivers that differ from base, in the same driver form (every other driver is "
     "inherited from base), or null when you set no such case. "
+    "`facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate "
+    "terms, otherwise write null. Each row is "
+    '`{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", '
+    '"annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, '
+    "`spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must "
+    'print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states '
+    "`fixed_rate_pct` and null for the other rate fields; a floating-rate facility states "
+    "`spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for "
+    "each forecast year as three decimal fractions "
+    '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
+    "must be between 0% and 30% in every year. The facilities' "
+    "scheduled repayments over the three years must not exceed base debt. "
+    "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
+    "YYYY-MM-DD or null. A row's `balance` is its drawn principal. At most 40 rows; names are "
+    "unique ignoring case; balances may total at most 1.25 times base debt; `fixed_rate_pct` is "
+    "at most 30, `spread_pct` at most 20 and `floor_pct` at most 10; `reference_rate` values have "
+    "at most four decimal places. When `facilities` is stated Python computes cash interest on "
+    "those facilities and scheduled repayment from it; debt not in a row bears interest at your "
+    "`interest_rate` driver and is not repaid; the `debt_repayment` driver is not used, so do "
+    "not vary it in `upside_drivers` or `downside_drivers`. "
     "`years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
     "`scope_limits` is a list of text limits. Set `schema_version` to "
@@ -1495,6 +1535,41 @@ FORECAST_BLOCK = (
     "the anchor in `rationale` and what the judgment leaves out in `limitation`. A judgment is "
     "an input to a mechanical forecast, not a finding. Leave a driver's values null, as "
     "`Insufficient Information`, only when no stated figure can anchor it.\n\n"
+)
+# Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
+# "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
+# FORECAST_BLOCK, so cpos_forecast has one code path; the model still computes nothing.
+LAYER1_FORECAST_BLOCK = (
+    f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
+    "one fenced json block and no other fence, after your tables. You state inputs only; Python "
+    "computes every forecast figure, so put no forecast figure in the block. `base` holds exactly "
+    'these ten operands in USD millions, each `{"amount": "<decimal>", "reason": null, "row": '
+    '"<label>", "period": "<header>"}` or '
+    '`{"amount": null, "reason": "<why you do not state it>"}`: '
+    f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
+    "your own tables that you read the amount from, and `period` the exact header text of that "
+    'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). Copy '
+    "the amount as that cell prints it, in millions; for interest, taxes and capex write the "
+    "positive magnitude whatever sign the cell shows; for working capital write the cell's value "
+    "with its sign reversed (a cell printing (45), an investment, is 45; a cell printing 45 or "
+    "+45, a release, is -45). Print your tables as "
+    "you normally would; add nothing for this block. A figure in prose, a basis line or the "
+    "sources is not a cell. `base_drivers` is a run-rate base case and nothing more "
+    "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
+    "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
+    "`rationale` and `limitation`). Anchor every driver to a figure you state: carry the latest "
+    "year's ratio forward, or use a scheduled maturity or a declared payment, and name the anchor "
+    "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
+    'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
+    "rounded to at most four decimal places; `category` is exactly one of "
+    f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
+    "`Insufficient Information`, when no stated figure can anchor it; when none can, set every "
+    "driver's `values` to `[null, null, null]`. Set `downside_shock`, `upside_drivers` and "
+    "`downside_drivers` to null: there are no cases and no shock in this forecast. `years` is "
+    'three consecutive fiscal years after the base period, each `{"year": <int>, "start": '
+    '"YYYY-MM-DD", "end": "YYYY-MM-DD"}`. `scope_limits` is a list of text limits. Set '
+    f"`schema_version` to `{cpos_forecast.SCHEMA_VERSION}`. This block does not change your "
+    "findings or any table.\n\n"
 )
 
 
@@ -1677,14 +1752,10 @@ def _instructions(
 
 
 def pathway_modules(settings: RunContext) -> tuple[str, ...]:
-    """A pathway's analytical modules. Owner, 2026-11-10: CP-1C takes its peers from CP-DR by
-    default, and no pathway lists CP-DR, so CP-DR joins a pathway that has CP-1C whenever the
-    context names it as the peer source. Explicit --modules are run as given."""
-    chosen = tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
-    peers_from_research = settings.valuation.peer_source == "cp_dr_public"
-    if "CP-1C" in chosen and "CP-DR" not in chosen and peers_from_research:
-        return (*chosen, "CP-DR")
-    return chosen
+    """A pathway's analytical modules: its preset less the modules that have their own route.
+    Owner, 2026-11-11: CP-DR and CP-2E are in every preset (CP-1C needs CP-DR's peers), so the
+    context's peer source no longer adds a module. Explicit --modules are run as given."""
+    return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
 
 
 def prepare(  # noqa: PLR0913 - one keyword per run setting
@@ -1695,14 +1766,24 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     config: str,
     cap: Decimal | str,
     modules: Sequence[str] | None = None,
+    web_search: bool = False,
 ) -> Prepared:
-    """Check everything and write the manifest and instructions; a refusal writes nothing."""
+    """Check everything and write the manifest and instructions; a refusal writes nothing.
+
+    ``web_search`` is whether the run's ruling lists ``web-search``: the research module's calls
+    then hold the search fee too, as the live loop holds it, so the cap is checked against the
+    same hold."""
     context_path = Path(context).expanduser().resolve()
     folder = Path(sources).expanduser().resolve()
     raw_context = context_path.read_bytes()
     settings = load_context(raw_context)
-    requested = tuple(modules) if modules else pathway_modules(settings)
-    ordered = plan(requested)  # Refuses an unknown module, naming it.
+    chosen = tuple(modules) if modules else tuple(PATHWAY_MODULES[settings.run.pathway])
+    # CP-MODEL means "publish the forecast" (owner, 2026-11-11); it makes no model call.
+    model_wanted = "CP-MODEL" in chosen
+    requested = tuple(m for m in (modules or pathway_modules(settings)) if m != "CP-MODEL")
+    planned = plan((*requested, *(("CP-MODEL",) if model_wanted else ())))  # Refuses unknowns.
+    ordered = tuple(m for m in planned if m != "CP-MODEL")
+    requested = requested or ordered
     if unknown := [m for m in ordered if m not in METHODS]:
         raise LaunchRefused(f"--modules: no launchable method for {', '.join(unknown)}")
     run = Run(
@@ -1719,7 +1800,8 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         raise LaunchRefused(f"--out {directory}: must be outside the issuer folder")
     pinned, converted, ignored, covers = _issuer_files(folder, context_path, directory)
     aliases = tuple(a for a in settings.identity.aliases if a.strip())
-    layout, omitted = _layout(run, ordered, aliases, config)
+    forecast = "CP-1" in ordered and (model_wanted or "CP-2G" in ordered)
+    layout, omitted = _layout(run, ordered, aliases, config, forecast=forecast)
     texts = {
         m: _instructions(
             run,
@@ -1731,12 +1813,12 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         for m in ordered
     }
     options = settings.module_options
-    forecast = {"CP-1", "CP-2G"} <= set(ordered)
     peer_pack = settings.valuation.peer_source == "cp_dr_public" and {"CP-DR", "CP-1C"} <= set(
         ordered
     )
     for module, block, wanted in (
         ("CP-2G", FORECAST_BLOCK, forecast),
+        ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),
@@ -1775,8 +1857,14 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         provider_cap_usd=Decimal(cap),
     )
     # The loop's own bound for the first call of the largest module; later calls hold more.
-    hold = request_reservation_usd(
-        price_of(config), max(map(len, texts.values())) + 4096, MAX_OUTPUT_TOKENS
+    hold = max(
+        request_reservation_usd(price_of(config), len(text) + 4096, MAX_OUTPUT_TOKENS)
+        + (
+            web_search_usd(WEB_SEARCH_CALLS_PER_TURN)
+            if web_search_offered(web_search, module, settings.run.case_kind)
+            else 0
+        )
+        for module, text in texts.items()
     )
     if request.provider_cap_usd < hold:
         raise LaunchRefused(f"--cap {cap}: one {config} call holds up to USD {hold:.2f}")
@@ -1883,6 +1971,11 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
         if "gives no forecast drivers" not in str(error):
+            if "facilit" in str(error) or "scheduled repayments" in str(error):
+                fallback = "write `facilities` as null and keep the drivers."
+                return (
+                    f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",
+                )
             fix = "Correct the block; if you cannot, set every driver's values to "
             return (
                 f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
@@ -1900,10 +1993,15 @@ def _cap(text: str) -> Decimal:
     return value
 
 
-def _web_line(prepared: Prepared, ruling: Path | None) -> tuple[str, ...]:
+def _web_line(prepared: Prepared, config: str, ruling: Path | None) -> tuple[str, ...]:
     """Whether the research module searches the web, when it runs."""
     if "CP-DR" not in prepared.ordered:
         return ()
+    kind = prepared.plan.run.case_kind
+    if web_search_ruled(ruling) and CONFIGS[config].provider != "openai":
+        return ("Web:      off: web search is offered on GPT Sol only, not on this config",)
+    if web_search_ruled(ruling) and kind not in WEB_SEARCH_CASE_KINDS:
+        return (f"Web:      off: {kind} case",)
     if web_search_ruled(ruling):
         return (f"Web:      CP-DR searches the web (the ruling lists {WEB_SEARCH_GRANT})",)
     why = "the ruling does not list" if ruling is not None else "no ruling lists"
@@ -1925,7 +2023,7 @@ def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> s
             f"Report:   {', '.join(prepared.layout.blocks)}",
             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
             f"Manifest: {prepared.manifest}",
-            *_web_line(prepared, ruling),
+            *_web_line(prepared, config, ruling),
         )
     )
 
@@ -2091,6 +2189,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config=args.config,
             cap=args.cap,
             modules=args.modules,
+            web_search=web_search_run(args.config, args.ruling),
         )
         efforts = (
             _high_efforts(

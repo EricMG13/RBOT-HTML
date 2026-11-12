@@ -914,9 +914,10 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
     if request.forecast:
         from deploy_workflow.owners.cpos_forecast import model_files
 
-        if not {"CP-1", "CP-2G"} <= set(request.handoffs):
-            raise ValueError("markdown_forecast: CP-1 and CP-2G handoffs required")
-        files.update(model_files(files["CP-1.md"], files["CP-2G.md"]))
+        if "CP-1" not in request.handoffs:
+            raise ValueError("markdown_forecast: a CP-1 handoff is required")
+        origin = "CP-2G" if "CP-2G" in request.handoffs else "CP-1"
+        files.update(model_files(files["CP-1.md"], files[f"{origin}.md"], origin))
     entries: dict[str, list[Binding]] = {m.module_id: [] for m in module_views}
     used: set[tuple[str, str]] = set()
     source_of: dict[tuple[str, str], str] = {}  # typed chart copy -> its source table

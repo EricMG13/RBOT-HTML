@@ -372,10 +372,8 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 "cpos_layout: route selected modules to unique blocks of the requested pathway"
             )
     ordered = tuple(m for m in planned if m != "CP-MODEL")
-    if request.publish_forecast and (
-        request.layout is None or not {"CP-1", "CP-2G"} <= set(ordered)
-    ):
-        raise ValueError("cpos_forecast: a forecast needs a layout and the CP-1 and CP-2G modules")
+    if request.publish_forecast and (request.layout is None or "CP-1" not in ordered):
+        raise ValueError("cpos_forecast: a forecast needs a layout and the CP-1 module")
     if set(request.instructions) != set(ordered):
         raise ValueError("cpos_instructions: exactly one pinned instruction per analytical module")
     if set(request.retained_handoffs) - set(ordered):
@@ -455,11 +453,14 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
         forecast, failure = request.publish_forecast, None
         if forecast:
             try:
-                cpos_forecast.model_files(handoffs["CP-1"], handoffs["CP-2G"])
+                source = "CP-2G" if "CP-2G" in handoffs else "CP-1"
+                cpos_forecast.model_files(handoffs["CP-1"], handoffs[source], source)
             except ValueError as error:
                 # Fail-open, by design and only for ValueError (the inputs block is missing or
                 # invalid): the report is complete without the forecast, so the run still
                 # delivers, and the reason is logged here, in the completion record and on stderr.
+                # With CP-2G absent the block is CP-1's layer-1 block, which is never a blocking
+                # check on CP-1 (owner, 2026-11-11): its fault only withholds the model.
                 forecast, failure = False, str(error)
                 print(f"Model not published: {failure}", file=sys.stderr)
                 if events is not None:
@@ -598,6 +599,16 @@ def web_search_ruled(ruling: Path | None, rulings_root: Path | None = None) -> b
     return True
 
 
+def web_search_run(config: str, ruling: Path | None, rulings_root: Path | None = None) -> bool:
+    """Whether a run of ``config`` searches the web: the ruling lists it and the provider is OpenAI.
+
+    Search is OpenAI's hosted tool (``HandoffExecutor`` refuses it elsewhere), so a Claude run under
+    the same ruling runs with search off rather than stopping."""
+    from deploy_workflow.model_testing.configs import CONFIGS
+
+    return CONFIGS[config].provider == "openai" and web_search_ruled(ruling, rulings_root)
+
+
 def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes every run option
     manifest: Path,
     directory: Path,
@@ -638,7 +649,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             max_turns=max_turns,
             max_output_tokens=max_output_tokens,
             events=directory,
-            web_search=web_search_ruled(ruling, rulings_root),
+            web_search=web_search_run(config, ruling, rulings_root),
             effort_by_module=effort_by_module,
         )
         result = run_handoffs(

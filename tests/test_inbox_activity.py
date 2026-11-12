@@ -40,15 +40,23 @@ def test_module_states_follow_the_events():
     )
 
 
-def test_a_module_the_launcher_added_to_the_pathway_is_shown_once_it_starts():
-    """CP-DR joins a pathway with CP-1C when it is the peer source (owner, 2026-11-10); the
-    pathway preset does not list it, so the events are how this view learns of it."""
-    events = [{"event": "module_started", "module": "CP-DR"}]
-    states = module_states("relative_value", events)
-    names = [name for name, _ in states]
-    assert dict(states)["CP-DR"] == "running"
+def test_cpdr_is_listed_from_the_start_in_every_pathway():
+    """Owner, 2026-11-11: CP-DR and CP-2E are in every preset, so the view lists them before
+    any event and before CP-1C."""
+    for pathway in ("relative_value", "earnings_update", "credit_snapshot"):
+        names = [name for name, _ in module_states(pathway, [])]
+        assert "CP-DR" in names and "CP-2E" in names
+    names = [name for name, _ in module_states("relative_value", [])]
     assert names.index("CP-DR") < names.index("CP-1C") and names[-1] == "Report"
-    assert "CP-DR" not in dict(module_states("relative_value", []))
+
+
+def test_a_module_outside_the_preset_is_shown_once_it_starts():
+    """An explicit --modules run can start a module the preset does not list (CP-2H in Relative
+    Value); the events are how this view learns of it."""
+    events = [{"event": "module_started", "module": "CP-2H"}]
+    assert "CP-2H" not in dict(module_states("relative_value", []))
+    states = module_states("relative_value", events)
+    assert dict(states)["CP-2H"] == "running" and states[-1][0] == "Report"
     # A module name the plan does not know (a hand-edited event) is not shown and does not raise.
     assert "CP-XX" not in dict(
         module_states("relative_value", [{"event": "module_started", "module": "CP-XX"}])

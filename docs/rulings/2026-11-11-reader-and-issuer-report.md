@@ -232,6 +232,16 @@ Reader-summary figure check. It is a fidelity check that blocks like H6, with a 
 labelled `Fidelity check:` inside the same retry and cost cap, and it is not one of the eight prose
 checks.
 
+Amendment 2026-11-12 (check 9, found by the paid web-search test `tdg-cpdr-web-001`): a ninth prose
+check, **no provider citation marker**: the handoff, anywhere in it, contains none of the
+provider's delimiters (U+E200, U+E201, U+E202; any other private-use character is left alone) and
+nothing that matches `cite\s*turn\d+[a-z]+\d+` (citeturn0view0, citeturn0image0, cite turn0fetch1). The run's CP-DR
+handoff carried 54 markers of the form U+E200 `cite` U+E202 `turn123066view0` ... U+E201 that the
+eight checks did not catch. A searching module's answer text now has such markers removed
+mechanically before it is checked (the count is recorded in the run record; the provider's
+retained response is unchanged), and check 9 refuses any other shape within the same retry and cost
+cap. The fidelity check stays outside the numbered list, so "ninth" is correct.
+
 Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
 judgement-first wording, and whether a limitation truly changes a conclusion. These are judged
 by reading one real run per change against the VMO2 reference, recorded in `VERIFICATION.md`.
@@ -271,3 +281,5 @@ Where the decisions left a detail open, the simplest option was taken:
 12. "Earlier format" is recognised from the handoffs themselves (H7), with no new manifest field.
 13. Report history "date" is the run's as-of date; runs with the same as-of date are ordered by
     start time, newest first.
+
+Amendment 2026-11-11: a run whose methods have since changed is listed and marked "Earlier methods"; replayed, synthetic and unverified runs stay unlisted.

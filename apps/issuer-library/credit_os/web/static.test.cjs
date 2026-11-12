@@ -167,6 +167,15 @@ test('Evidence: handoffs and calculations are download links; Download all is th
   assert.ok(strip(/<table class="history-table"><caption>Model calls.*?<\/table>/s.exec(html)[0]).includes('Not recorded'), 'a missing error class is not a value');
 });
 
+test('Evidence: Run record lists the methods changed since the run, escaped; no line for a run on today\'s methods', () => {
+  const changed = evidenceView({ r: { evidence: EVIDENCE, methodChanges: ['CP-0: methods/cp0.md changed', 'CP-1: <b>x</b> no longer selected'] } })('r');
+  const record = changed.slice(changed.indexOf('<summary>Run record</summary>'));
+  assert.ok(record.includes('Methods changed since this run'));
+  assert.ok(record.includes('<li>CP-0: methods/cp0.md changed</li>') && record.includes('<li>CP-1: &lt;b&gt;x&lt;/b&gt; no longer selected</li>'));
+  assert.ok(!changed.includes('<b>x</b>'));
+  for (const none of [[], undefined]) assert.ok(!evidenceView({ r: { evidence: EVIDENCE, methodChanges: none } })('r').includes('Methods changed since this run'));
+});
+
 test('Evidence: nothing recorded says so and invents nothing', () => {
   const none = { sources: [], unused: [], unrecorded: [], noSourcesModules: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } };
   const html = evidenceView({ r: { evidence: none } })('r');
@@ -215,6 +224,8 @@ test('the library page lists the folders not shown and the build issues closed, 
 test('Forecast for a run with no CP-2G output says no model was published', () => {
   const views = read('views.js');
   assert.ok(views.includes('if(!models.length)return forecastEmpty(context);'));
+  assert.ok(views.includes("data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`"), 'the link names the module it opens');
+  assert.ok(views.includes('>Open ${fullName}${icon'), 'the label is not fixed text');
   assert.ok(views.includes('No forecast model was published from this run’s files'));
 });
 
@@ -2427,6 +2438,25 @@ test('Report history: Status is Completed, plus the count not assessable; Earlie
   assert.equal(strip(b.cells[3]), 'Completed · 1 not assessable', 'new format: the Bottom line says not assessable');
   assert.equal(strip(d.cells[3]), 'Completed');
   assert.equal(strip(c.cells[3]), 'Completed', 'a run with no handoff is not called earlier format');
+});
+
+test('Earlier methods: the badge sits beside Earlier format in the Report history status and the run label, only where methods changed', () => {
+  HIST.contexts['run-b'].methodChanges = ['CP-0: methods/cp0.md changed'];
+  HIST.runFields.methodChanges = ['CP-0: methods/cp0.md changed'];
+  try {
+    const page = histPage();
+    const [a, b, d] = histRows(page.historyView(RUN));
+    assert.equal(strip(a.cells[3]), 'Completed · 2 not assessable Earlier format Earlier methods');
+    assert.equal(strip(b.cells[3]), 'Completed · 1 not assessable Earlier methods');
+    assert.equal(strip(d.cells[3]), 'Completed', 'no list, no badge');
+    assert.ok(b.cells[3].includes('<span class="badge badge-gray earlier-methods">Earlier methods</span>'));
+    assert.equal(strip(page.runLabel('W-Evidence', RUN).replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format Earlier methods');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run B Earlier methods');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run D');
+  } finally {
+    delete HIST.contexts['run-b'].methodChanges;
+    delete HIST.runFields.methodChanges;
+  }
 });
 
 test('Report history: the selected run\'s row is marked aria-current and every row opens a run with a real link', () => {

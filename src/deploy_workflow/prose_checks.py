@@ -654,6 +654,27 @@ def _check_figures(lines: list[_Line]) -> list[str]:
     return issues
 
 
+# Check 9: the provider's citation delimiters (U+E200 to U+E202; a genuine private-use character
+# elsewhere is not refused) or the plain-text form a copy step leaves, citeturn0view0,
+# citeturn0image0, cite turn0fetch1. Unlike checks 2-6 it reads the whole handoff, not only the
+# reader passages: a marker left in Gaps or a Sources cell is as much a defect.
+PROVIDER_MARKER = re.compile(r"[\ue200-\ue202]|cite\s*turn\d+[a-z]+\d+")
+
+
+def _check_provider_markers(text: str) -> list[str]:
+    return [
+        _issue(
+            9,
+            "no provider citation marker",
+            number,
+            f"U+{ord(found[0]):04X}" if len(found[0]) == 1 else found[0],
+            "remove the marker; put the source in the paragraph's Basis line.",
+        )
+        for number, line in enumerate(text.split("\n"), start=1)
+        for found in PROVIDER_MARKER.finditer(line)
+    ]
+
+
 def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]:
     """Every H6 failure in this handoff; `accepted` (module -> Markdown) feeds check 7 only."""
     sections = _findings_sections(text)
@@ -670,6 +691,7 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
         + _check_register_ids(text, lines)
         + _check_limitation_repeats(text, accepted)
         + _check_figures(lines)
+        + _check_provider_markers(text)
     )
 
 
@@ -771,11 +793,30 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
     )
 
 
+FORECAST_HEADING = "### Forecast inputs (machine-readable)"
+
+
+def _forecast_block_lines(text: str) -> set[int]:
+    """Line numbers of the forecast inputs block (its heading to the next heading). Its rationale
+    and limit text is the module's input to a calculation, not a table, so it holds no figure."""
+    lines: set[int] = set()
+    inside = False
+    for number, line in enumerate(text.splitlines(), 1):
+        if line.strip() == FORECAST_HEADING:
+            inside = True
+        elif inside and re.match(r"#{1,6}\s", line):
+            inside = False
+        if inside:
+            lines.add(number)
+    return lines
+
+
 def figure_issues(text: str) -> tuple[str, ...]:
     """Every figure of a reader passage not held, with its sign, unit and scale, in the handoff
     outside the reader passages. Sentence text only, as in the prose checks."""
     passages = _pooled(_findings_sections(text) or [])
     inside = {number for body in passages.values() for number, _ in body}
+    inside |= _forecast_block_lines(text)
     held = _figures(
         "\n".join(line for number, line in enumerate(text.splitlines(), 1) if number not in inside)
     )

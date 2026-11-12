@@ -37,7 +37,7 @@ from deploy_workflow.run_expectations import (
 ROOT = Path(__file__).resolve().parents[1]
 FORM = (ROOT / "docs/templates/context-form.html").read_text(encoding="utf-8")
 WEB = ROOT / "apps/issuer-library/credit_os/web"
-# With cp_dr_public the research module joins a pathway that has CP-1C; with any other source not.
+# CP-DR and CP-2E are in every preset since 2026-11-11: the peer source no longer changes the run.
 PEER_SOURCES = ("cp_dr_public", "user_comps")
 
 
@@ -74,9 +74,10 @@ def test_the_pathways_are_the_contracts() -> None:
 
 @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
 def test_the_run_order_is_the_launchers_for_each_peer_source(pathway: str) -> None:
-    base, with_research = lists("RUN_ORDER"), lists("WITH_RESEARCH")
-    assert base[pathway] == launched(pathway, "user_comps")
-    assert with_research.get(pathway, base[pathway]) == launched(pathway, "cp_dr_public")
+    order = lists("RUN_ORDER")[pathway]
+    for peer_source in PEER_SOURCES:
+        assert order == launched(pathway, peer_source)
+    assert "WITH_RESEARCH" not in FORM
 
 
 def test_the_dependency_edges_are_the_registrys() -> None:
@@ -225,3 +226,24 @@ def test_the_rail_links_to_the_library_the_service_serves() -> None:
     assert 'href="/library/#W-Library/cases"' in FORM
     assert 'href="/library/#CP-OS/activity"' in FORM
     assert "data-pathway" not in FORM and "dataset.pathway" not in FORM  # No fixed-pathway copy.
+
+
+def test_the_summary_tells_the_analyst_what_goes_to_openai_before_submit() -> None:
+    lead = re.search(r'<p class="lead">(This is the run you are about to start.*?)</p>', FORM)
+    assert lead is not None
+    text = lead[1]
+    assert "Pages of the documents you uploaded that modules read are sent to OpenAI" in text
+    assert "web searches go to OpenAI's search" in text
+    assert "told to search with public names only" in text
+    assert "queries it actually sent are kept in the run record" in text
+    assert "private case the issuer's name and the questions it researches" in text
+    assert "use public names only and go to" not in FORM  # the old claim: nothing enforced it
+    assert text.index("OpenAI") < FORM.index('id="approve"')
+    assert "supplied files only" not in FORM
+
+
+def test_the_page_states_before_submit_whether_the_run_searches_by_case_kind() -> None:
+    assert "This is a private case: the research module will search the web" in FORM
+    assert "This is a synthetic case: the research module does not search the web" in FORM
+    assert "const SEARCH_KINDS = ['public', 'private'];" in FORM
+    assert "['Web search'," in FORM

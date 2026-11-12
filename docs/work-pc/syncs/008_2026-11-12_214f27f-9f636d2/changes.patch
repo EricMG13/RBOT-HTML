@@ -1,0 +1,2566 @@
+diff --git a/METHODOLOGY-REVIEW.md b/METHODOLOGY-REVIEW.md
+index 0b6cc5e..88a2f6a 100644
+--- a/METHODOLOGY-REVIEW.md
++++ b/METHODOLOGY-REVIEW.md
+@@ -708,3 +708,13 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
+ `docs/rulings/2026-11-11-module-presets-and-changes.md`).** CP-DR and CP-2E are now selected for every
+ pathway; CP-1C needs CP-DR's peers and CP-2E follows CP-2. CP-8 leaves the portfolio_decision preset
+ pending its redesign as a same-pathway comparison.
++
++**CP-DR source guidance, 2026-11-12 (owner: "focus primarily using reputable and relevant
++sources").** CP-DR's web-search instruction (`WEB_SEARCH_RULES` in `src/deploy_workflow/model/handoff.py`)
++now tells the module to rely primarily on the issuer's and peers' own filings and releases,
++regulators, exchanges and courts, rating agencies, central banks and official statistics, recognised
++industry bodies and established financial and trade press; not to rest a finding on forums, social
++media, anonymous blogs, content farms or aggregators (it goes to the original); and to state a
++weaker source as a limitation under `## Gaps`. Each web row of `## Sources` carries a `Source type`
++cell from a fixed list, and a web row without one is refused (no domain list). This is a project
++addition to the Deploy V research method, which supplied no web search; no paid run has used it.
+diff --git a/README.md b/README.md
+index 8600e2d..15f460c 100644
+--- a/README.md
++++ b/README.md
+@@ -75,7 +75,9 @@ ruling's `configs:` line also lists `web-search` (for example `configs: sol-medi
+ and only on the OpenAI configs (`sol-medium`, `sol-high`). Each search costs USD 0.01, and each
+ CP-DR call holds USD 0.16 more for up to 16 searches (`cases/pricing/openai-web-search.json`).
+ Queries leave the environment, so CP-DR is told to put only public names in them. Without
+-`web-search` it reads only the run's files. The launcher's `Web:` line says which applies.
++`web-search` it reads only the run's files. The launcher's `Web:` line says which applies. Runs started
++from the run start page search the web for CP-DR: the standing ruling lists `web-search` (2026-11-12). The
++offline cap check holds the same USD 0.16 for each CP-DR call as the live loop.
+ 
+ ## 2. Update the library
+ 
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 13c02c5..4c21f3d 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,82 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Run start page browser tests after the preset change (branch `claude/web-search-run-page`)
++
++The browser tests (`-m browser`) were not run for the commits from 73b499b (presets) to d185d83. Run then:
++`tests/test_run_start_page.py` 14 failed, 42 passed (at 0e2c564: 1 failed, 55 passed). Causes: (a) real page
++defect, `build()` required "Current period" whenever CP-2G was in the run; CP-2G joined credit_snapshot and
++covenant_refinancing, so a Basic submission that the launcher accepts (`cpos_launch.prepare` takes a blank period)
++was blocked. The page now requires it for an earnings update only, labels it recommended, and adds a "Note" row
++for CP-2G when it is blank (10 tests). (b) stale expectations: Standard now shows the research-questions stage
++for credit_snapshot and covenant_refinancing (CP-DR is in every pathway); the services-forecast and limit-tick
++tests now count the page's own CP-DR note, CP-2A no-legal-documents limit and CP-2G reading it. (c) pre-existing
++since PR #46: a delivery files no report page, so `record.report` is `""`; the assertion now says so (the run
++page's link to the library's Report history for the run is checked by the next test). The research-text
++assertion already matched the final copy. After: that file 56 passed; `-m browser -k "run_start or context_form
++or library or inbox"` 100 passed, exit 0; the fast set 756 passed, exit 0; quality gate 0 findings, exit 0.
++Not verified: a forecast run with a blank current period through a live provider.
++
++## 2026-11-12 — Web search from the run page; leaked citation markers (branch `claude/web-search-run-page`, decisions M1, M4)
++
++(a) Paid test, this dated case only (TDG FY2024, ruling `2026-11-11-cpdr-web-search-live-test.md`, run `tdg-cpdr-web-001`): CP-0, CP-1, CP-DR and CP-1C accepted, charged USD 3.39131650. CP-DR located HEICO and
++Howmet figures and CP-1C read them. Defect: the delivered CP-DR handoff held 54 provider citation markers
++(U+E200 `cite` U+E202 `turn..view..` U+E201) in reader prose, which the eight prose checks did not catch.
++Fix: markers are removed from a searching module's answer before the check (count in `<n>.markers.json` and a
++`citation_markers_removed` event; provider response unchanged), plus prose check 9 for any other shape
++(reader-ruling amendment). On that handoff the removal leaves 0 markers and adds no double space or
++space before a comma or full stop. Not verified: `store:false` behaviour was not separately inspected, peer
++figures were not checked against the cited pages, analytical accuracy.
++(b) This change, offline (no provider call): the standing run-start ruling lists `web-search`; `prepare`'s
++cap check holds the CP-DR search fee (USD 0.16) as the live loop does; the summary passes it; the page's
++approval summary says what goes to OpenAI; READMEs updated. Tests: `test_citation_markers.py`, the
++`prepare` and ruling tests in `test_cpos_launch.py`, `test_context_form.py`, `test_run_start_submissions.py`.
++`test_inbox_scheduler.py::test_a_submission_is_run_by_the_real_launcher_and_listed` failed identically on the base
++`claude/forecast-layer1` (canned answers; stopped at the checker); commit ebd4c13 fixed it (the canned launcher
++answers CP-2G with a forecast block).
++(c) Fix round 1 (security review, offline, no provider call): the page and ruling no longer say queries "use
++public names only" as a fact: the module is told to, the queries it sent are kept in `<n>.response.json`, and
++`flag_search_queries` flags afterwards any query with a supplied file name or a source figure of 4+ digits (years
++1900-2100 excepted) as a `search_query_flagged` event and `<n>.queries.json` (detection, not prevention; the
++library's Run record does not show the count: its store has no field). Owner ruling 2026-11-12: web search for
++`public` and `private` cases, off for `synthetic` (one rule, `web_search_offered`; offline hold, live hold and
++the `Web:` line agree; the page says before Submit whether the run searches). Source guidance and a `Source type`
++cell on web rows (METHODOLOGY-REVIEW.md): no paid run has exercised the new source guidance. Markers: a marker
++never spans lines, stripping is linear, the tool result tells the model how many were removed and an edit may quote
++marked text, check 9 covers `cite\s*turn\d+[a-z]+\d+` anywhere in the handoff and only U+E200-U+E202.
++Forecast riders: `~~~` fences are code, `\|` stays in its cell, working capital is the cell sign-reversed as CP-2G
++reads it (the base's test fixtures now print wc as `(10)`).
++
++## 2026-11-11 — Forecast from layer 1 (branch `claude/forecast-layer1`, decision M3)
++
++CP-MODEL (preset or `--modules`) means "publish the forecast"; it makes no model call. Without CP-2G,
++CP-1 gets a layer-1 variant of the forecast block (base operands as CP-1 prints them, run-rate drivers,
++no cases, no shock) and the forecast comes from it; with CP-2G the block, checks and files are unchanged.
++A bad or absent CP-1 block is not a CP-1 check: the model is withheld through the existing fail-open
++(stderr, `model_not_published` event, `forecast_failure` in the completion record). Published limits
++say "run-rate inputs the CP-1 handoff stated"; the library shows them under Model limitations, unchanged.
++Offline, synthetic handoffs only (no provider call, no run folder touched): new tests fail on the base
++and pass now. `uv run pytest tests/test_cpos_launch.py tests/test_handoff_loop.py tests/test_update_library.py
++tests/test_credit_os_store.py -q -m "not live and not browser"` 666 passed, exit 0; `uv run python
++tools/quality_gate.py` 0 findings, exit 0. Changed expectations: `--modules CP-MODEL` is no longer refused;
++earnings_update's report scope now names the run-rate forecast; the publish-failure stub takes a source
++argument.
++Fix round 1 (the operand-key row rule) was replaced in round 2 after re-review: CP-1 keeps its natural
++tables; each layer-1 base operand states `{"amount","reason":null,"row","period"}`, the exact first-cell
++label and period header it was read from, and Python reads that one cell (tables outside fences, `## Sources`,
++the block and the reader passages; trimmed and emphasis-stripped, case-sensitive; `1,000`, `-1,000`, `(1,000)`,
++U+2212 parse as signed; `1,000k`, `12%`, `n.a.` do not). Outflows (cp2g.OUTFLOWS) compare by magnitude, all
++others signed; zero, or several differing, cells refuse the operand by name (fail-open unchanged). CP-2G
++refuses a `row`/`period` and keeps its check byte for byte. The block still does not vouch for a reader
++figure in `figure_issues`. Probes `r2_m1_row_defeats.py`, `m3_layer1_operand.py`, `m3_block_vouches_reader.py`,
++`r2_m2_block_edges.py` exit 0 (the first two pass partly because the old-shape blocks they build carry no
++row/period and are refused; the accept/refuse cases are in the new tests). `uv run pytest tests/test_cpos_launch.py
++tests/test_prose_checks.py tests/test_handoff_loop.py tests/test_update_library.py -q -m "not live and not browser"`
++690 passed, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
++Known limits: driver values are not checked against their anchors (the rationale is free text); runs
++interrupted before this change refuse to resume. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
++store tests; `tests/test_financial_workflow.py`.
++
+ ## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
+ 
+ Decisions M1-M7 are recorded in `docs/rulings/2026-11-11-module-presets-and-changes.md` (a decision
+@@ -918,82 +994,3 @@ and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
+   below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
+   Confidence cell reads as established (neither occurs in retained data); the Overview opened with
+   no run context; the branch diff is 2,245 lines against the 800-line cap.
+-
+-## 2026-11-10 — Inbox: a run started just before a hard kill is adopted (tip `6ea3a9b`)
+-
+-Scope: macOS, fake and real-shaped launchers, plus the real launcher started without `--live` and
+-without a key. No provider was called. Nothing ran on Windows.
+-- Change: the launcher writes its own process ID to a per-run file (`DEPLOY_WORKFLOW_PID_FILE`) as
+-  its first step and refuses to start if it cannot; the watcher adopts a `running` record with no
+-  process ID from that file, and marks it `interrupted` only after 60 s without one. This closes
+-  the first item under "Known and left open" in the entry below.
+-- Passed on the tip, exit 0: the eight affected pytest files (381 passed, 1 skipped: the paid
+-  test); the quality gate, 0 findings in 7 changed files.
+-- Review (adversarial): approved, 0 High, 0 Medium, 1 Low fixed test-first (a corrupt process-ID
+-  file stopped the watcher). The reviewer killed a real watcher with SIGKILL before the start,
+-  after the start and after the file was written: each time one process at most, the live run
+-  adopted and one report filed, or `interrupted` after the grace with nothing started.
+-- Not verified: Windows (on a virtual environment the process ID in the file may differ from the
+-  one the watcher started; the file replace; liveness checks); a launcher that needs more than
+-  60 s to reach its first line; process-ID reuse after a reboot; a paid run.
+-
+-## 2026-11-10 — Inbox automation (branch `claude/user-journey-2939fb`, tip `f13ce44`)
+-
+-Scope: synthetic runs through a fake launcher on macOS. No provider was called, the real launcher
+-was never started with `--live`, and nothing ran on Windows or over a network share. This is not
+-proof of any pathway or issuer.
+-- Built: `deploy_workflow.inbox` (drops, filing, runs, activity, watcher, startup), the live Run
+-  activity view, the per-pathway context form, `Start watcher.cmd`, the standing ruling
+-  `docs/rulings/2026-11-09-inbox-automation.md`. Design:
+-  `docs/superpowers/specs/2026-11-09-inbox-automation-design.md`.
+-- Passed on the tip, with `origin/main` `51203a9` merged in: `tests/test_inbox_*.py`,
+-  `test_cpos_launch.py`, `test_update_library.py`, `test_issuer_library_packaging.py` — 365 passed,
+-  1 skipped (the paid test); `static.test.cjs` and `calendar.test.cjs` 28; the browser tests 5
+-  (local Chrome over `file://`); the quality gate, 0 findings in 19 changed files.
+-- One test runs the watcher with the real library rebuild and a real-shaped completed run; the
+-  others replace the library's listing. The real launcher's offline step was exercised by a
+-  reviewer's probe only, not by the suite.
+-- Reviews: each task; the whole branch (approved with fixes, 0 High, 4 Medium, all fixed and
+-  re-reviewed). Killing the watcher mid-run and starting another adopted the live run with one
+-  launch, one record and one filed report; that probe is timing-sensitive on a loaded machine.
+-- Known and left open: a hard kill between a run's process start and the save of its process ID
+-  leaves that run untracked (it is shown `interrupted` and is not restarted, while its launcher
+-  may still spend up to the cap); deleting `watcher.lock` while a watcher runs lets a second one
+-  start; queued runs never expire; setting the clock back allows 30 more starts that day.
+-- Not verified: anything on Windows (the file lock, sharing-violation readiness, the retry on a
+-  refused replace, folder permissions after the move, `Start watcher.cmd`, Edge over `file://`);
+-  one measured live run (whether USD 20 covers a pathway on `sol-medium` is unmeasured); the full
+-  test suite (weekly job).
+-
+-## 2026-11-09 — TDG live runs on sol-high, compared with medium
+-
+-Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
+-Sources were read from Final-workflow-PY `data/public-corpus/v1/TDG` (not modified).
+-- `runs/cpos-tdg-sol-high-001` (CP-0, CP-1, CP-1A): accepted, USD 1.38, 41 calls, no repairs.
+-- `runs/cpos-tdg-sol-high-cp2-001` (CP-0 to CP-2): accepted, USD 1.63, no repairs; report published.
+-- Comparison with the retained medium runs is in `runs/tdg-effort-comparison.md`; only automated
+-  checks plus a spot check of the tabled figures against the 10-K were applied, not an analytical review.
+-
+-## 2026-11-09 — Lean copy of final-workflow `ffb75ba` (branch `claude/busy-bell-obfret`)
+-
+-Scope: what this repository holds and runs; Linux, offline. No provider was called.
+-- Import commit `5c6e61b`: files the two Python steps need, byte-identical to final-workflow
+-  `ffb75ba` (checked file by file), with their tests and synthetic fixtures. Not copied: `runs/`,
+-  `deliverables/`, `data/`, most of `cases/`, `examples/`, the Go application and its web
+-  front end, design work and archives.
+-- Adaptations, in the next commit: Python-only `packaging/build.py` and `Smoke-test.ps1` (no Go,
+-  no bridge); the package ships an empty `engine/docs/rulings` and none of this repository's
+-  rulings; the CI workflows `checks.yml` and `weekly-tests.yml`; `tests/known-failures.txt`
+-  (3 failures carried over from final-workflow's list: a missing `2026-10-31-context-plan.md`).
+-- Tests left in final-workflow because they read retained runs: `test_run_expectations.py`,
+-  `test_handoff_delivery.py`, the retained-run check in `test_library_index.py` and the live
+-  evidence check in `test_cpos_launch.py`.
+-- Passed: the CI fast set as written in `checks.yml`, 1011 tests with the 3 known failures
+-  deselected (library 37+7, packaging 8, reader summary 51, launcher 116, provider/model tests);
+-  `logic.test.cjs` 5; the browser check 2 (Chromium over `file://`, no request, no script error);
+-  the quality gate against `5c6e61b`, 0 findings. The offline run review and a library update
+-  were run as `Smoke-test.ps1` does them, with the checkout's Python on Linux.
+-- Also passed: `test_handoff_loop.py` 30. `test_financial_workflow.py` passed its first 11 tests
+-  and was stopped at the 15-minute limit with no failure; the weekly job runs it whole.
+-- Not verified: anything on Windows (wrappers, package, Edge over `file://`); a live model run (the
+-  owner runs the Copilot test locally).
+diff --git a/apps/issuer-library/README.md b/apps/issuer-library/README.md
+index 72a8842..6a81f88 100644
+--- a/apps/issuer-library/README.md
++++ b/apps/issuer-library/README.md
+@@ -66,7 +66,8 @@ the launcher's reading disagrees with are Limited for the whole run.
+   submissions, and uploads of at most 50 MiB a file, 500 files and 512 MiB in total.
+ - **Key and ruling:** the provider key comes only from the environment of the account that runs
+   the service. Every live launch passes the standing ruling `2026-11-11-run-start-submit.md`: in
+-  the package at `engine\docs\rulings`, from a checkout at `docs\rulings`.
++  the package at `engine\docs\rulings`, from a checkout at `docs\rulings`. The ruling lists `web-search`, so runs from the page search the web for CP-DR (queries use
++  public names only and go to OpenAI's search; the USD 20 cap counts the fees).
+ - **One service, one machine:** it holds an operating-system file lock on `_engine\watcher.lock`
+   (the name is kept so an old folder watcher and the service exclude each other) while it runs. A
+   second one on the same root is refused with exit code 2 ("another run page service (or an old
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index e25447d..5f9ba93 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -224,6 +224,8 @@ test('the library page lists the folders not shown and the build issues closed,
+ test('Forecast for a run with no CP-2G output says no model was published', () => {
+   const views = read('views.js');
+   assert.ok(views.includes('if(!models.length)return forecastEmpty(context);'));
++  assert.ok(views.includes("data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`"), 'the link names the module it opens');
++  assert.ok(views.includes('>Open ${fullName}${icon'), 'the label is not fixed text');
+   assert.ok(views.includes('No forecast model was published from this run’s files'));
+ });
+ 
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 55619df..773701e 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -950,7 +950,9 @@ function forecastView(context,id) {
+   const select=`<label for="model-select">Model</label><select id="model-select">${models.map(m=>`<option value="${esc(m.id)}" ${m.id===model.id?'selected':''}>${esc(`${m.id} · ${modelRelationship(m,models)}`)}</option>`).join('')}</select>`;
+   const why=`<section class="forecast-why"><h2>Why this model was built</h2>${model.scope==null?'':`<p class="forecast-scope">${esc(model.scope)}</p>`}${model.inputContract==null?'':`<p class="forecast-input">${esc(`Input contract: ${model.inputContract}`)}</p>`}${model.revisionNote==null?'':`<p class="forecast-revision">${esc(`Revision note: ${model.revisionNote}`)}</p>`}</section>`;
+   const forecast=model.sources.find(s=>s.role==='forecast'),register=model.register;
+-  const full=forecast?.output?`<a class="text-action" href="${routeHref(data[forecast.output].module,modules[forecast.output].first,null,forecast.run,data[forecast.output].source)}">Open the full forward credit model output${icon('arrow-right')}</a>`:'';
++  // The link opens the module that wrote the forecast handoff: CP-2G's forward model, or CP-1 for a layer-1 forecast.
++  const fullName=forecast?.output&&(data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`);
++  const full=forecast?.output?`<a class="text-action" href="${routeHref(data[forecast.output].module,modules[forecast.output].first,null,forecast.run,data[forecast.output].source)}">Open ${fullName}${icon('arrow-right')}</a>`:'';
+   const assumptions=`<section class="forecast-assumptions"><h2>Assumptions and their rationale</h2>${register?`<h3>${esc(register.heading)}</h3>${register.intro==null?'':`<p class="register-intro">${esc(register.intro)}</p>`}${register.headers.length?`<div class="table-scroll"><table><thead><tr>${register.headers.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${register.rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:''}${full}`:'<p>This model’s forecast handoff has no assumption register.</p>'}</section>`;
+   const source=s=>s.output?`<a href="${routeHref(data[s.output].module,modules[s.output].first,null,s.run,data[s.output].source)}">${esc(s.output.split('/').at(-1))}</a>`:`<span title="${esc(s.path)}">${esc(sourceFile(s))}</span>`;
+   // The run is the folder the delivery declares the file under, so every source names one the same way.
+diff --git a/docs/VERIFICATION-ARCHIVE.md b/docs/VERIFICATION-ARCHIVE.md
+new file mode 100644
+index 0000000..7a8c541
+--- /dev/null
++++ b/docs/VERIFICATION-ARCHIVE.md
+@@ -0,0 +1,91 @@
++# Verification archive
++
++Entries moved verbatim from VERIFICATION.md when older than two days.
++
++## 2026-11-09 — TDG live runs on sol-high, compared with medium
++
++Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
++Sources were read from Final-workflow-PY `data/public-corpus/v1/TDG` (not modified).
++- `runs/cpos-tdg-sol-high-001` (CP-0, CP-1, CP-1A): accepted, USD 1.38, 41 calls, no repairs.
++- `runs/cpos-tdg-sol-high-cp2-001` (CP-0 to CP-2): accepted, USD 1.63, no repairs; report published.
++- Comparison with the retained medium runs is in `runs/tdg-effort-comparison.md`; only automated
++  checks plus a spot check of the tabled figures against the 10-K were applied, not an analytical review.
++
++## 2026-11-09 — Lean copy of final-workflow `ffb75ba` (branch `claude/busy-bell-obfret`)
++
++Scope: what this repository holds and runs; Linux, offline. No provider was called.
++- Import commit `5c6e61b`: files the two Python steps need, byte-identical to final-workflow
++  `ffb75ba` (checked file by file), with their tests and synthetic fixtures. Not copied: `runs/`,
++  `deliverables/`, `data/`, most of `cases/`, `examples/`, the Go application and its web
++  front end, design work and archives.
++- Adaptations, in the next commit: Python-only `packaging/build.py` and `Smoke-test.ps1` (no Go,
++  no bridge); the package ships an empty `engine/docs/rulings` and none of this repository's
++  rulings; the CI workflows `checks.yml` and `weekly-tests.yml`; `tests/known-failures.txt`
++  (3 failures carried over from final-workflow's list: a missing `2026-10-31-context-plan.md`).
++- Tests left in final-workflow because they read retained runs: `test_run_expectations.py`,
++  `test_handoff_delivery.py`, the retained-run check in `test_library_index.py` and the live
++  evidence check in `test_cpos_launch.py`.
++- Passed: the CI fast set as written in `checks.yml`, 1011 tests with the 3 known failures
++  deselected (library 37+7, packaging 8, reader summary 51, launcher 116, provider/model tests);
++  `logic.test.cjs` 5; the browser check 2 (Chromium over `file://`, no request, no script error);
++  the quality gate against `5c6e61b`, 0 findings. The offline run review and a library update
++  were run as `Smoke-test.ps1` does them, with the checkout's Python on Linux.
++- Also passed: `test_handoff_loop.py` 30. `test_financial_workflow.py` passed its first 11 tests
++  and was stopped at the 15-minute limit with no failure; the weekly job runs it whole.
++- Not verified: anything on Windows (wrappers, package, Edge over `file://`); a live model run (the
++  owner runs the Copilot test locally).
++
++## 2026-11-09 — TDG live runs on sol-high, compared with medium
++
++Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
++Sources were read from Final-workflow-PY `data/public-corpus/v1/TDG` (not modified).
++- `runs/cpos-tdg-sol-high-001` (CP-0, CP-1, CP-1A): accepted, USD 1.38, 41 calls, no repairs.
++- `runs/cpos-tdg-sol-high-cp2-001` (CP-0 to CP-2): accepted, USD 1.63, no repairs; report published.
++- Comparison with the retained medium runs is in `runs/tdg-effort-comparison.md`; only automated
++  checks plus a spot check of the tabled figures against the 10-K were applied, not an analytical review.
++
++## 2026-11-10 — Inbox: a run started just before a hard kill is adopted (tip `6ea3a9b`)
++
++Scope: macOS, fake and real-shaped launchers, plus the real launcher started without `--live` and
++without a key. No provider was called. Nothing ran on Windows.
++- Change: the launcher writes its own process ID to a per-run file (`DEPLOY_WORKFLOW_PID_FILE`) as
++  its first step and refuses to start if it cannot; the watcher adopts a `running` record with no
++  process ID from that file, and marks it `interrupted` only after 60 s without one. This closes
++  the first item under "Known and left open" in the entry below.
++- Passed on the tip, exit 0: the eight affected pytest files (381 passed, 1 skipped: the paid
++  test); the quality gate, 0 findings in 7 changed files.
++- Review (adversarial): approved, 0 High, 0 Medium, 1 Low fixed test-first (a corrupt process-ID
++  file stopped the watcher). The reviewer killed a real watcher with SIGKILL before the start,
++  after the start and after the file was written: each time one process at most, the live run
++  adopted and one report filed, or `interrupted` after the grace with nothing started.
++- Not verified: Windows (on a virtual environment the process ID in the file may differ from the
++  one the watcher started; the file replace; liveness checks); a launcher that needs more than
++  60 s to reach its first line; process-ID reuse after a reboot; a paid run.
++
++## 2026-11-10 — Inbox automation (branch `claude/user-journey-2939fb`, tip `f13ce44`)
++
++Scope: synthetic runs through a fake launcher on macOS. No provider was called, the real launcher
++was never started with `--live`, and nothing ran on Windows or over a network share. This is not
++proof of any pathway or issuer.
++- Built: `deploy_workflow.inbox` (drops, filing, runs, activity, watcher, startup), the live Run
++  activity view, the per-pathway context form, `Start watcher.cmd`, the standing ruling
++  `docs/rulings/2026-11-09-inbox-automation.md`. Design:
++  `docs/superpowers/specs/2026-11-09-inbox-automation-design.md`.
++- Passed on the tip, with `origin/main` `51203a9` merged in: `tests/test_inbox_*.py`,
++  `test_cpos_launch.py`, `test_update_library.py`, `test_issuer_library_packaging.py` — 365 passed,
++  1 skipped (the paid test); `static.test.cjs` and `calendar.test.cjs` 28; the browser tests 5
++  (local Chrome over `file://`); the quality gate, 0 findings in 19 changed files.
++- One test runs the watcher with the real library rebuild and a real-shaped completed run; the
++  others replace the library's listing. The real launcher's offline step was exercised by a
++  reviewer's probe only, not by the suite.
++- Reviews: each task; the whole branch (approved with fixes, 0 High, 4 Medium, all fixed and
++  re-reviewed). Killing the watcher mid-run and starting another adopted the live run with one
++  launch, one record and one filed report; that probe is timing-sensitive on a loaded machine.
++- Known and left open: a hard kill between a run's process start and the save of its process ID
++  leaves that run untracked (it is shown `interrupted` and is not restarted, while its launcher
++  may still spend up to the cap); deleting `watcher.lock` while a watcher runs lets a second one
++  start; queued runs never expire; setting the clock back allows 30 more starts that day.
++- Not verified: anything on Windows (the file lock, sharing-violation readiness, the retry on a
++  refused replace, folder permissions after the move, `Start watcher.cmd`, Edge over `file://`);
++  one measured live run (whether USD 20 covers a pathway on `sol-medium` is unmeasured); the full
++  test suite (weekly job).
+diff --git a/docs/rulings/2026-11-11-reader-and-issuer-report.md b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+index 1d0beb9..a5f0275 100644
+--- a/docs/rulings/2026-11-11-reader-and-issuer-report.md
++++ b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+@@ -232,6 +232,16 @@ Reader-summary figure check. It is a fidelity check that blocks like H6, with a
+ labelled `Fidelity check:` inside the same retry and cost cap, and it is not one of the eight prose
+ checks.
+ 
++Amendment 2026-11-12 (check 9, found by the paid web-search test `tdg-cpdr-web-001`): a ninth prose
++check, **no provider citation marker**: the handoff, anywhere in it, contains none of the
++provider's delimiters (U+E200, U+E201, U+E202; any other private-use character is left alone) and
++nothing that matches `cite\s*turn\d+[a-z]+\d+` (citeturn0view0, citeturn0image0, cite turn0fetch1). The run's CP-DR
++handoff carried 54 markers of the form U+E200 `cite` U+E202 `turn123066view0` ... U+E201 that the
++eight checks did not catch. A searching module's answer text now has such markers removed
++mechanically before it is checked (the count is recorded in the run record; the provider's
++retained response is unchanged), and check 9 refuses any other shape within the same retry and cost
++cap. The fidelity check stays outside the numbered list, so "ninth" is correct.
++
+ Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
+ judgement-first wording, and whether a limitation truly changes a conclusion. These are judged
+ by reading one real run per change against the VMO2 reference, recorded in `VERIFICATION.md`.
+diff --git a/docs/rulings/2026-11-11-run-start-submit.md b/docs/rulings/2026-11-11-run-start-submit.md
+index e31c697..0fde708 100644
+--- a/docs/rulings/2026-11-11-run-start-submit.md
++++ b/docs/rulings/2026-11-11-run-start-submit.md
+@@ -3,7 +3,7 @@
+ lifts: live-provider-pause
+ by: user
+ date: 2026-11-11
+-configs: sol-medium
++configs: sol-medium, web-search
+ 
+ The user was asked: "The explicit paid action would become 'Submit after an approved summary',
+ at the same USD 20 cap", and said: "2. Approved". On the service: "one users CLI will provide for
+@@ -12,3 +12,21 @@ all other users".
+ Scope: live launches started by `deploy_workflow.run_start` from a submission whose summary the
+ analyst approved, USD 20 per run folder, on sol-medium only. The provider key comes from the
+ service's environment only; no credential file is read. Replaces 2026-11-09-inbox-automation.md.
++
++Amendment 2026-11-12 (web search for CP-DR on the run page): asked "Web search for CP-DR on the run
++page ... Recommended: amend the ruling to add web search (USD 0.01 a search, up to USD 0.16 held per
++call; only public names leave the machine)", the user said "1. approved". The `configs:` line now
++also lists `web-search`; the "sol-medium only" in the scope above means the model, and search is
++the one added grant. The research module is told to search with public names only; that is an
++instruction to the model, not a control, so the queries it actually sent are kept in the run record
++and any that carry a supplied file name or a source figure are flagged afterwards
++(`search_query_flagged`; detection only). Case-kind rule (owner, 2026-11-12; replaces the controller's interim public-only default, which
++was pending this confirmation). Asked about private cases, the owner said: "1. focus primarily
++using reputable and relevant sources 2. there are privates cases. work environment permits the use
++of these files". Web search is therefore offered when the run's case kind is `public` or
++`private`, and is off only for `synthetic` (no real issuer to search for; no search fee held;
++the launcher prints "Web:      off: synthetic case"). For a private case the run start page states,
++before Submit, that the research module will search the web and that the issuer's name and the
++questions it researches go to OpenAI's search. The same answer set the source guidance: CP-DR's
++search instruction tells it to rely primarily on reputable, relevant sources and to state a weaker
++source as a limitation (`model/handoff.py` `WEB_SEARCH_RULES`).
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index 1efb451..ca0b516 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -461,7 +461,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+     <h3>Module settings</h3>
+     <fieldset id="cp3f"><legend>Relative value mode</legend><p class="uses" data-uses="cp3mode"></p><div data-cards="cp3_mode" data-class="two"></div></fieldset>
+     <fieldset id="cp6f"><legend>Committee decision</legend><p class="uses" data-uses="cp6"></p><label class="confirm" for="cp6_deep_debate"><input type="checkbox" id="cp6_deep_debate" data-k="cp6_deep_debate"><span>Deep Debate: a longer, fuller argument (more attacks and cross-examination rounds), never a softer sizing posture. Off by default; the compact form is used.</span></label></fieldset>
+-    <div class="run-strip" data-tone="brand" id="research-src" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">Research source</span><p class="strip-text">Research works from the supplied files only. Add peers' filings to the documents if you want them used.</p></div></div>
++    <div class="run-strip" data-tone="brand" id="research-src" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">Research source</span><p class="strip-text" id="research-src-text">Research searches the web for public peers as well as reading the supplied files. Add peers' filings to the documents if you want them used.</p></div></div>
+   </div>
+   <fieldset id="basisf"><legend>Valuation basis</legend><div data-cards="basis" data-class="two"></div></fieldset>
+   <div id="prec" class="block" hidden>
+@@ -510,7 +510,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ <section class="run-step" id="st-review" data-st="review" hidden>
+   <h2 tabindex="-1"><span class="n"></span> <span>Summary and start</span></h2>
+   <p class="stepline"></p>
+-  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap): read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
++  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, unless the case is synthetic, the research module's web searches go to OpenAI's search: it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+   <div id="rv-state" role="status" aria-live="polite"></div>
+   <dl class="rv-facts" id="rv-facts"></dl>
+   <h3 class="sub">What each module is expected to do</h3>
+@@ -998,8 +998,10 @@ function build() {
+   runAsOf = as_of;
+   const earn = run_type === 'earnings';
+   const cutoff = fld(sd, 'cutoff', {t:'date', after:true});
+-  // Form-only rule: the forecast (CP-2G) starts from the current period, so it is required there.
+-  const current_period = fld(sd, 'current_period', {t:'period', req: earn || has('CP-2G')});
++  // Only an earnings update needs the period: cpos_launch.prepare accepts a blank one for the forecast
++  // (CP-2G, now in credit_snapshot and covenant_refinancing too), so the page must not be stricter; the
++  // readiness list notes the unnamed base instead.
++  const current_period = fld(sd, 'current_period', {t:'period', req: earn});
+   const prior_period = fld(sd, 'prior_period', {t:'period', req: earn});
+   const a = pkey(current_period), b = pkey(prior_period);
+   if (earn) {
+@@ -1208,8 +1210,8 @@ const RULES = [
+   // Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they specifically
+   // want to in the context file." The research module searches the web only when the run's ruling lists
+   // web-search (owners/cpos.py WEB_SEARCH_GRANT); without it, in live run tdg-all-001, it came back
+-  // Blocked and the peer benchmark had no peers.
+-  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web only when the run\'s ruling allows it (web-search). Without that it cannot reach public sources: in a TDG run it came back Blocked and the peer benchmark had no peers. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
++  // Blocked and the peer benchmark had no peers. The standing ruling lists it from 2026-11-12.
++  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web for public peers unless the case is synthetic: the standing ruling for runs from this page lists web-search (2026-11-12). It is told to use public names only, its searches go to OpenAI\'s search, and the queries it sent are kept in the run record. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
+   {s:'CP-1C', k:'cp1c-no-peer-source', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
+   {s:'CP-1C', o:'gap', c:f => f.o.valuation.basis === 'auto' && f.o.valuation.peer_source === 'user_comps' && f.peersIn < MIN_ADMITTED && f.precIn < MIN_ADMITTED,
+     r:f => `Automatic basis: ${f.peersIn} peer${f.peersIn === 1 ? '' : 's'} admitted (needs ${MIN_ADMITTED}, at most ${PEER_MONTHS} months old) and ${f.precIn} precedent${f.precIn === 1 ? '' : 's'} (needs ${MIN_ADMITTED}, at most ${PRECEDENT_MONTHS} months old): no multiple is selected.`, fix:'Add peers or precedents, or choose another basis.', go:'valuation'},
+@@ -1218,6 +1220,7 @@ const RULES = [
+   {s:'CP-2A', o:'limited', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the downside path has no covenant or financing-document evidence (a TDG run came back Restricted this way).', fix:'Add the executed agreement if you have it, and choose it under Legal.', go:'legal'},
+   {s:'CP-2D', o:'limited', c:f => f.o.deal_terms.some(d => d.currency && d.currency !== f.o.run.reporting_currency), r:'A facility is in another currency than the reporting currency: it is not calculable (no FX conversion).', fix:'Nothing to add; read that facility as excluded.', go:'market'},
+   {s:'CP-2G', o:'check', nc:true, c:f => f.chk.guidance === '', r:'Whether the documents state company guidance is confirmed when the summary is made.', rv:'Whether the documents state company guidance is not checked before the run: Source readiness checks it during the run.'},
++  {s:'CP-2G', o:'information', c:f => !f.o.run.current_period, r:'No current period: the forecast base is not named, so the forecast module takes the latest period in the filings.', fix:'Name the latest reported period (fy-YYYY or q4-YYYY) as the current period.', go:'issuer'},
+   {s:'CP-2G', o:'check', c:f => { const b = pkey(f.o.run.current_period); return b && !(b.kind === 'fy' || b.kind === 'q' && b.n === 4); }, r:'The forecast base is not a fiscal year: the model forecasts the three fiscal years after it.', fix:'Use fy-YYYY or q4-YYYY as the current period.', go:'issuer'},
+   {s:'CP-2H', k:'cp2h-no-ratings', o:'gap', c:f => !f.o.ratings.length && f.chk.ratingsfile !== 'yes', r:'No ratings entered and no rating report in the folder: Insufficient Information.', fix:'Enter the ratings under Market, or add the agency report to the documents.', go:'market'},
+   {s:'CP-2H', o:'gap', c:f => ratingProblems(f.o.ratings).length > 0, r:'A rating row it cannot place (another agency, two rows for one agency, or a rating off the scale): the ratings are set aside.', fix:'One row per agency (S&P, Moody\'s, Fitch), each rating as the agency writes it.', go:'market'},
+@@ -1504,7 +1507,7 @@ function tagFor(el, o) {
+     case 'issuer':
+       if (['issuer_name', 'issuer_id', 'issue_classification', 'case_kind', 'listed_equity', 'run_type', 'as_of', 'reporting_currency'].includes(k)) return REQ;
+       if (['aliases', 'borrower_name', 'sector', 'ticker'].includes(k) || el.dataset.c === 'newest') return REC;
+-      if (k === 'current_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : has('CP-2G') ? ['req', 'Required: the forecast base'] : REC;
++      if (k === 'current_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : REC;
+       if (k === 'prior_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : OPT;
+       return OPT;
+     case 'market':
+@@ -1752,13 +1755,24 @@ function readyTable(sq, own = []) {
+   const table = h('table', {innerHTML: '<colgroup><col style="width:28%"><col style="width:132px"><col></colgroup><thead><tr><th scope="col">Module</th><th scope="col">Expected</th><th scope="col">Why, and what fixes it</th></tr></thead>'}, body);
+   return h('div', {className: 'table-scroll'}, table);
+ }
++// Mirrors WEB_SEARCH_CASE_KINDS in model/handoff.py, the one rule the launcher applies: a public or
++// a private case searches the web, a synthetic one does not. The research module is TOLD to use
++// public names only; the queries it sent are kept in the run record and checked afterwards.
++const SEARCH_KINDS = ['public', 'private'];
++function webSearchNote(kind) {
++  const told = ' It is told to search with public names only, and the queries it actually sent are kept in the run record.';
++  if (kind === 'synthetic') return 'This is a synthetic case: the research module does not search the web and reads only the supplied files.';
++  if (kind === 'private') return "This is a private case: the research module will search the web, and the issuer's name and the questions it researches go to OpenAI's search." + told;
++  return "The research module searches the web for public peers as well as reading the supplied files; its searches go to OpenAI's search." + told;
++}
+ function renderFacts(o) {
+   const box = $('rv-facts'), rows = [];
+   if (summaryOk()) {
+     const dates = [['As-of', o.run.as_of], ['Cutoff', o.run.cutoff], ['Current period', o.run.current_period], ['Prior period', o.run.prior_period]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(', ');
+     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
+       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
+-      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'], ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
++      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'],
++      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', SEARCH_KINDS.includes(o.run.case_kind) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : 'No: a synthetic case reads only its files']] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+     // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
+     const sent = SUMMARY.answers || {}, left = runOf(o.run.pathway).filter(m => Array.isArray(sent.modules) && sent.modules.length && !sent.modules.includes(m));
+     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
+@@ -2220,6 +2234,7 @@ function vis() {
+   $('cp3f').hidden = !(has('CP-3') || getV(sv, 'cp3_mode'));
+   $('cp6f').hidden = !(has('CP-6') || getV(sv, 'cp6_deep_debate'));
+   $('research-src').hidden = !has('CP-DR');
++  $('research-src-text').textContent = webSearchNote(getV(si, 'case_kind')) + " Add peers' filings to the documents if you want them used.";
+   $('b-modes').hidden = $('cp3f').hidden && $('cp6f').hidden && !has('CP-DR');
+   document.querySelectorAll('[data-uses="cp3mode"],[data-uses="cp6"]').forEach(u => setHTML(u, usesList(BLOCK_USES[u.dataset.uses].filter(has))));
+ 
+diff --git a/src/deploy_workflow/markdown_delivery.py b/src/deploy_workflow/markdown_delivery.py
+index 9f8cea0..8bb8362 100644
+--- a/src/deploy_workflow/markdown_delivery.py
++++ b/src/deploy_workflow/markdown_delivery.py
+@@ -914,9 +914,10 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
+     if request.forecast:
+         from deploy_workflow.owners.cpos_forecast import model_files
+ 
+-        if not {"CP-1", "CP-2G"} <= set(request.handoffs):
+-            raise ValueError("markdown_forecast: CP-1 and CP-2G handoffs required")
+-        files.update(model_files(files["CP-1.md"], files["CP-2G.md"]))
++        if "CP-1" not in request.handoffs:
++            raise ValueError("markdown_forecast: a CP-1 handoff is required")
++        origin = "CP-2G" if "CP-2G" in request.handoffs else "CP-1"
++        files.update(model_files(files["CP-1.md"], files[f"{origin}.md"], origin))
+     entries: dict[str, list[Binding]] = {m.module_id: [] for m in module_views}
+     used: set[tuple[str, str]] = set()
+     source_of: dict[tuple[str, str], str] = {}  # typed chart copy -> its source table
+diff --git a/src/deploy_workflow/model/handoff.py b/src/deploy_workflow/model/handoff.py
+index e495467..6a7f2ef 100644
+--- a/src/deploy_workflow/model/handoff.py
++++ b/src/deploy_workflow/model/handoff.py
+@@ -14,12 +14,12 @@ import io
+ import json
+ import re
+ import time
+-from collections.abc import Callable
++from collections.abc import Callable, Mapping, Sequence
+ from dataclasses import asdict
+ from datetime import UTC, datetime
+ from decimal import Decimal, DecimalException, localcontext
+ from functools import partial
+-from pathlib import Path
++from pathlib import Path, PurePath
+ from typing import TYPE_CHECKING, Any
+ from urllib.parse import unquote
+ from uuid import uuid4
+@@ -49,7 +49,7 @@ from deploy_workflow.model.pricing import (
+     request_reservation_usd,
+     web_search_usd,
+ )
+-from deploy_workflow.model.providers import web_searches
++from deploy_workflow.model.providers import WEB_SEARCH_BLOCK, web_searches
+ from deploy_workflow.model.record import CallLog, CallRecord, arguments_sha256
+ from deploy_workflow.model.redact import Redactor
+ from deploy_workflow.model.reply_classes import ADAPTER_ERROR
+@@ -93,6 +93,54 @@ MAX_CONTEXT_FOR_READS = 1_100_000
+ # 16 built-in calls (``max_tool_calls``), so a call holds 16 searches' fees beyond its tokens.
+ WEB_SEARCH_MODULE = "CP-DR"
+ WEB_SEARCH_CALLS_PER_TURN = 16
++# THE case-kind rule (owner, 2026-11-12: "there are privates cases. work environment permits the use
++# of these files"; it replaces the controller's interim public-only default): web search is offered
++# to a public or a private case and stays off for a synthetic one, which has no real issuer to
++# search for. A synthetic case's CP-DR reads only the run's files and holds no search fee; the
++# launcher and the run start page say so.
++WEB_SEARCH_CASE_KINDS = ("public", "private")
++
++
++def web_search_offered(ruled: bool, module_id: str, case_kind: str) -> bool:
++    """Whether ``module_id`` of a ``case_kind`` run gets the search tool: the ruling lists it, the
++    module is the research module and the case kind is searchable. Every place that offers or holds
++    for search (the loop, the offline cap check, the launcher's Web line) asks this."""
++    return ruled and module_id == WEB_SEARCH_MODULE and case_kind in WEB_SEARCH_CASE_KINDS
++
++
++# Source type values of a web row in ``## Sources`` (owner, 2026-11-12: rely primarily on reputable
++# and relevant sources). A fixed short list, not a domain allow-list; the module judges the type.
++SOURCE_TYPES = (
++    "Issuer filing",
++    "Peer filing",
++    "Regulator or official",
++    "Rating agency",
++    "Industry body",
++    "Financial press",
++    "Other",
++)
++_SOURCES_HEADING = re.compile(r"^## Sources[ \t]*$", re.MULTILINE)
++
++
++def web_source_issues(markdown: str) -> list[str]:
++    """The ``## Sources`` table rows that name a web address but no Source type cell. Mechanical
++    and deterministic: it does not judge the source, only that its type is stated."""
++    found = _SOURCES_HEADING.search(markdown)
++    if found is None:
++        return []
++    body = re.split(r"^## ", markdown[found.end() :], maxsplit=1, flags=re.MULTILINE)[0]
++    issues = []
++    for row in body.splitlines():
++        if row.lstrip().startswith("|") and "http" in row:
++            cells = [c.strip() for c in row.strip().strip("|").split("|")]
++            if not any(c in SOURCE_TYPES for c in cells):
++                issues.append(
++                    f'Sources row "{row.strip()[:80]}": a web source needs a Source type cell, '
++                    f"exactly one of {', '.join(SOURCE_TYPES)}."
++                )
++    return issues
++
++
+ SOURCE_RULE = "Use only these source tools and the supplied current handoffs. "
+ SOURCE_AND_WEB_RULE = "Use these source tools, web_search and the supplied current handoffs. "
+ WEB_SEARCH_RULES = (
+@@ -101,7 +149,16 @@ WEB_SEARCH_RULES = (
+     "name or text from this run's sources. Use a page only for what was published on or before the "
+     "run's research cutoff, and a figure only for a period that ended on or before it. Cite each "
+     "web item by its URL, publisher and publication date, and quote every figure verbatim from "
+-    "the page. Record what you searched for and could not find under ## Gaps."
++    "the page. Record what you searched for and could not find under ## Gaps. Rely primarily on "
++    "reputable sources relevant to the question: the issuer's and peers' own filings, results "
++    "releases and investor materials; regulators, exchanges and courts; rating agencies; central "
++    "banks and official statistics; recognised industry bodies; and established financial and "
++    "trade press. Do not rest a finding on forums, social media, anonymous blogs, content farms "
++    "or aggregator pages that only repeat another source: go to the original. Where only a "
++    "weaker source exists, use it only with that stated as a limitation under ## Gaps. Each web "
++    'row of ## Sources must carry a cell "Source type" with exactly one of: '
++    + ", ".join(SOURCE_TYPES)
++    + '; "Other" must be accompanied by a limitation line under ## Gaps.'
+ )
+ READS_FULL = (
+     "ERROR: this module has read as much as its context allows. Use what you have read, record "
+@@ -260,11 +317,63 @@ def _pages(name: str, raw: bytes) -> list[str]:
+     return [text[i : i + 12000] for i in range(0, len(text), 12000)] or [""]
+ 
+ 
++# A hosted-search answer carries provider citation markers: U+E200 "cite" U+E202 "turn<N>view<M>"
++# (U+E202 again per further source) U+E201. The sources they point at are already in the handoff's
++# Sources table and Basis lines, so the markers add nothing and reach the reader as run-together
++# text. They are removed mechanically before the draft is checked; the provider's retained
++# response is not touched. A marker never spans a line and never holds another opener, so a stray
++# U+E200 removes nothing after it and every scan below is linear in the text.
++CITATION_MARKER = "\ue200[^\ue200\ue201\n]*\ue201"
++_MARKER_RUN = re.compile(rf"(?:{CITATION_MARKER}[ \t]*)+")
++_MARKER = re.compile(CITATION_MARKER)
++_CLOSERS = ".,;:!?)]}"
++
++
++def _marker_replacement(text: str, start: int, pre: str, run: str, end: int) -> str:
++    """What a run of markers leaves behind: nothing at a line end or before punctuation, else one
++    space when there was any whitespace around it (none when the marker touched both words).
++    ``start`` is where the whitespace before the run begins."""
++    after = text[end : end + 1]
++    if start == 0 or text[start - 1] == "\n":
++        return pre  # indentation of a line that began with the marker
++    if after in {"", "\n", "\r"} or after in _CLOSERS:
++        return ""
++    return " " if pre or run.endswith((" ", "\t")) else ""
++
++
++def strip_citation_markers(text: str) -> tuple[str, int]:
++    """The text without provider citation markers, whitespace left by them tidied, and how many
++    markers were removed. Text with no marker is returned as it is. One pass: the whitespace
++    before a run is read backwards from the run, never searched for."""
++    count = len(_MARKER.findall(text))
++    if not count:
++        return text, 0
++    parts: list[str] = []
++    last = 0
++    for found in _MARKER_RUN.finditer(text):
++        start = found.start()
++        while start > last and text[start - 1] in " \t":
++            start -= 1
++        pre = text[start : found.start()]
++        parts.append(text[last:start])
++        parts.append(_marker_replacement(text, start, pre, found[0], found.end()))
++        last = found.end()
++    parts.append(text[last:])
++    return "".join(parts), count
++
++
+ class ModuleTools:
+     def __init__(
+-        self, task: HandoffTask, directory: Path, check: Check, events: Path | None = None
++        self,
++        task: HandoffTask,
++        directory: Path,
++        check: Check,
++        events: Path | None = None,
++        *,
++        strip_markers: bool = False,
+     ) -> None:
+         self.task, self.directory, self.check = task, directory, check
++        self.strip_markers = strip_markers
+         self.events = events
+         self.sources = {
+             name: {"sha256": hashlib.sha256(raw).hexdigest(), "pages": _pages(name, raw)}
+@@ -340,6 +449,8 @@ class ModuleTools:
+             )
+             if not isinstance(old, str) or not old or not isinstance(new, str):
+                 return f"ERROR: edit {i}: old must be nonempty text and new must be text"
++            if self.strip_markers:  # the stored draft has none; the model may quote its own answer
++                old, new = strip_citation_markers(old)[0], strip_citation_markers(new)[0]
+             if text.count(old) != 1:
+                 return f"ERROR: edit {i}: old text must occur exactly once"
+             text = text.replace(old, new, 1)
+@@ -397,19 +508,43 @@ class ModuleTools:
+         if not isinstance(markdown, str):
+             return "ERROR: markdown must be text"
+         self.writes += 1
++        removed = 0
++        if self.strip_markers:
++            markdown, removed = strip_citation_markers(markdown)
++            if removed:
++                _put(
++                    self.directory / f"{self.writes}.markers.json",
++                    dump_json({"citation_markers_removed": removed}).encode(),
++                )
++                if self.events is not None:
++                    append_event(
++                        self.events,
++                        "citation_markers_removed",
++                        module=self.task.module_id,
++                        count=removed,
++                    )
+         self.draft = markdown.encode("utf-8")
+         _put(self.directory / f"{self.writes}.draft.md", self.draft)
+-        issues = _checked_handoff(self.task, self.draft, self.check)
++        issues = [
++            *_checked_handoff(self.task, self.draft, self.check),
++            *(web_source_issues(markdown) if self.strip_markers else ()),
++        ]
+         _put(self.directory / f"{self.writes}.review.json", dump_json({"issues": issues}).encode())
+         self.accepted = not issues
++        note = (
++            ""
++            if not removed
++            else f"\nNote: {removed} citation marker{'s were' if removed > 1 else ' was'} removed "
++            "from your draft; the stored draft has none, so quote it without markers."
++        )
+         if self.accepted:
+-            return "ACCEPTED"
++            return "ACCEPTED" + note
+         writes_left = MAX_WRITES - self.writes
+         if self.events is not None:
+             append_event(
+                 self.events, "draft_rejected", module=self.task.module_id, writes_left=writes_left
+             )
+-        return f"REJECTED ({writes_left} writes left)\n" + "\n".join(issues)
++        return f"REJECTED ({writes_left} writes left){note}\n" + "\n".join(issues)
+ 
+ 
+ def _charge(
+@@ -427,6 +562,68 @@ def _charge(
+     return priced.usd + (search_hold if turn is None else web_search_usd(web_searches(turn)))
+ 
+ 
++_QUERY_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
++_MIN_STEM = 3
++
++
++def _figures(text: str) -> set[str]:
++    """Numbers of four or more digits before any decimal point, commas removed; a bare year
++    (1900 to 2100) is public and left out."""
++    found = set()
++    for token in _QUERY_NUMBER.findall(text):
++        number = token.replace(",", "")
++        whole = number.partition(".")[0]
++        if len(whole) >= 4 and not (number == whole and 1900 <= int(whole) <= 2100):
++            found.add(number)
++    return found
++
++
++def flag_search_queries(
++    queries: Sequence[str], files: Mapping[str, str], other_text: str = ""
++) -> list[tuple[str, str]]:
++    """The (query, reason) pairs among ``queries`` that carry what the run's own material holds: a
++    supplied file name (or its stem, three or more characters, as a whole word) or a figure of
++    four or more digits (years 1900 to 2100 excepted) found in the files' text or ``other_text``.
++
++    This is detection, not prevention. The only control on what a search query says is the
++    instruction to the model (WEB_SEARCH_RULES); the provider writes and sends the query, so this
++    runs on the retained answer after the query has left. The rule is deliberately narrow: a
++    flag means a query very probably quoted the run, and silence does not mean it did not."""
++    known = _figures(other_text).union(*(_figures(text) for text in files.values()))
++    flagged = []
++    for query in dict.fromkeys(queries):
++        lowered = query.lower()
++        reason = None
++        for name in files:
++            stem = PurePath(name).stem
++            if name.lower() in lowered or (
++                len(stem) >= _MIN_STEM
++                and re.search(rf"(?<!\w){re.escape(stem.lower())}(?!\w)", lowered)
++            ):
++                reason = f"source file name {name}"
++                break
++        else:
++            shared = sorted(_figures(query) & known)
++            if shared:
++                reason = f"figure {shared[0]} occurs in this run's source text"
++        if reason is not None:
++            flagged.append((query, f"possible leak: {reason}"))
++    return flagged
++
++
++def _searched_queries(turn: Turn) -> list[str]:
++    """The search queries a turn's retained web search items carry."""
++    queries: list[str] = []
++    for block in turn.provider_blocks:
++        action = block.data.get("action") if block.provider == WEB_SEARCH_BLOCK else None
++        if isinstance(action, dict) and action.get("type") == "search":
++            listed = action.get("queries")
++            for query in [action.get("query"), *(listed if isinstance(listed, list) else [])]:
++                if isinstance(query, str) and query:
++                    queries.append(query)
++    return queries
++
++
+ class HandoffExecutor:
+     """One bounded module at a time; no routing, delivery, or automatic provider retry."""
+ 
+@@ -453,6 +650,7 @@ class HandoffExecutor:
+         if web_search and self.config.provider != "openai":
+             raise ValueError(f"web search is offered on OpenAI only, not {adapter.config_id}")
+         self.web_search = web_search
++        self._query_check: tuple[Mapping[str, str], str] | None = None
+         self.directory, self.adapter, self.check = directory, adapter, check
+         self.events = events
+         self.redactor = redactor or Redactor()
+@@ -486,7 +684,7 @@ class HandoffExecutor:
+     def _run(self, task: HandoffTask) -> bytes:
+         if task.draft is not None and self.redactor.bytes_(task.draft) != task.draft:
+             raise ValueError("cpos_repair_draft: credential-like content is not permitted")
+-        searching = self.web_search and task.module_id == WEB_SEARCH_MODULE
++        searching = web_search_offered(self.web_search, task.module_id, task.run.case_kind)
+         tools = (*TOOLS, hosted_web_search(WEB_SEARCH_CALLS_PER_TURN)) if searching else TOOLS
+         system = task.instructions.decode("utf-8") + (
+             "\n\n" + (SOURCE_AND_WEB_RULE if searching else SOURCE_RULE) + "Source contents "
+@@ -549,7 +747,15 @@ class HandoffExecutor:
+             )
+         folder.mkdir(parents=True)
+         _put(folder / "invocation.json", encoded)
+-        module = ModuleTools(task, folder, self.check, self.events)
++        module = ModuleTools(task, folder, self.check, self.events, strip_markers=searching)
++        self._query_check = (
++            (
++                {name: "\n".join(s["pages"]) for name, s in module.sources.items()},
++                "\n".join(raw.decode("utf-8") for raw in task.handoffs.values()),
++            )
++            if searching
++            else None
++        )
+         nudges = 0
+         for index in range(self.max_turns):
+             request = redacted_request(
+@@ -626,6 +832,33 @@ class HandoffExecutor:
+         )
+         return turn, usage, priced
+ 
++    def _record_flagged_queries(
++        self, task: HandoffTask, folder: Path, index: int, turn: Turn
++    ) -> None:
++        """Flag the searches this turn made that quote the run's material (detection only: the
++        queries are already sent, so the run goes on). Each is a ``search_query_flagged`` event and
++        is kept in ``<turn>.queries.json`` beside the turn's response, which holds every query.
++        The library's Run record does not show the count: its store has no field for it."""
++        assert self._query_check is not None
++        flagged = flag_search_queries(_searched_queries(turn), *self._query_check)
++        if not flagged:
++            return
++        _put(
++            folder / f"{index}.queries.json",
++            dump_json(
++                {"search_query_flagged": [{"query": q, "reason": r} for q, r in flagged]}
++            ).encode(),
++        )
++        if self.events is not None:
++            for query, reason in flagged:
++                append_event(
++                    self.events,
++                    "search_query_flagged",
++                    module=task.module_id,
++                    query=query[:300],
++                    reason=reason,
++                )
++
+     def _turn(
+         self, task: HandoffTask, folder: Path, digest: str, index: int, request: TurnRequest
+     ) -> Turn:
+@@ -771,6 +1004,8 @@ class HandoffExecutor:
+                 }
+             ).encode(),
+         )
++        if turn is not None and self._query_check is not None:
++            self._record_flagged_queries(task, folder, index, turn)
+         if reply.kind != "ok" or turn is None or actual is None or overrun:
+             raise RuntimeError(
+                 f"cpos_live_stopped: {reply.kind}; charge={actual}; overrun={overrun}"
+diff --git a/src/deploy_workflow/owners/cp2g.py b/src/deploy_workflow/owners/cp2g.py
+index 1e13064..00b42dc 100644
+--- a/src/deploy_workflow/owners/cp2g.py
++++ b/src/deploy_workflow/owners/cp2g.py
+@@ -361,7 +361,7 @@ OPERAND_METRIC = {
+     "cash": "cash_closing",
+     "undrawn": "undrawn_rcf",
+ }
+-_OUTFLOWS = frozenset({"interest", "taxes", "wc", "capex"})  # CP-1 stores them negative
++OUTFLOWS = frozenset({"interest", "taxes", "wc", "capex"})  # CP-1 stores them negative
+ # The name of each base operand in the missing-operand frames (cash pinned by
+ # fixture_cash_missing, the rest LEAD ruling G-1).
+ _OPERAND_WORDS = {
+@@ -433,7 +433,7 @@ class Operands:
+                 vals[key] = Val(None, _operand_reason(key, basis))
+             else:
+                 _book_millions(f"CP-1 {metric}", fact, basis)
+-                vals[key] = _known(-fact.amount if key in _OUTFLOWS else fact.amount)
++                vals[key] = _known(-fact.amount if key in OUTFLOWS else fact.amount)
+         return cls(**vals)
+ 
+     def items(self) -> tuple[tuple[str, Val], ...]:
+@@ -1478,7 +1478,7 @@ def _t2h2(b: _Book, run: _Run) -> None:
+ 
+     def copy(key: str, label: str) -> None:
+         metric = OPERAND_METRIC[key]
+-        formula = f"CP-1 {metric}" + (", sign reversed" if key in _OUTFLOWS else "")
++        formula = f"CP-1 {metric}" + (", sign reversed" if key in OUTFLOWS else "")
+         _t2h2_row(
+             b,
+             key,
+diff --git a/src/deploy_workflow/owners/cpos.py b/src/deploy_workflow/owners/cpos.py
+index fca7412..68b8cd3 100644
+--- a/src/deploy_workflow/owners/cpos.py
++++ b/src/deploy_workflow/owners/cpos.py
+@@ -372,10 +372,8 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
+                 "cpos_layout: route selected modules to unique blocks of the requested pathway"
+             )
+     ordered = tuple(m for m in planned if m != "CP-MODEL")
+-    if request.publish_forecast and (
+-        request.layout is None or not {"CP-1", "CP-2G"} <= set(ordered)
+-    ):
+-        raise ValueError("cpos_forecast: a forecast needs a layout and the CP-1 and CP-2G modules")
++    if request.publish_forecast and (request.layout is None or "CP-1" not in ordered):
++        raise ValueError("cpos_forecast: a forecast needs a layout and the CP-1 module")
+     if set(request.instructions) != set(ordered):
+         raise ValueError("cpos_instructions: exactly one pinned instruction per analytical module")
+     if set(request.retained_handoffs) - set(ordered):
+@@ -455,11 +453,14 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
+         forecast, failure = request.publish_forecast, None
+         if forecast:
+             try:
+-                cpos_forecast.model_files(handoffs["CP-1"], handoffs["CP-2G"])
++                source = "CP-2G" if "CP-2G" in handoffs else "CP-1"
++                cpos_forecast.model_files(handoffs["CP-1"], handoffs[source], source)
+             except ValueError as error:
+                 # Fail-open, by design and only for ValueError (the inputs block is missing or
+                 # invalid): the report is complete without the forecast, so the run still
+                 # delivers, and the reason is logged here, in the completion record and on stderr.
++                # With CP-2G absent the block is CP-1's layer-1 block, which is never a blocking
++                # check on CP-1 (owner, 2026-11-11): its fault only withholds the model.
+                 forecast, failure = False, str(error)
+                 print(f"Model not published: {failure}", file=sys.stderr)
+                 if events is not None:
+diff --git a/src/deploy_workflow/owners/cpos_forecast.py b/src/deploy_workflow/owners/cpos_forecast.py
+index 0af19ee..107f476 100644
+--- a/src/deploy_workflow/owners/cpos_forecast.py
++++ b/src/deploy_workflow/owners/cpos_forecast.py
+@@ -1,9 +1,10 @@
+ """The CP-2G forecast files a launcher run publishes beside its report. Pure: bytes in, bytes out.
+ 
+-The CP-2G handoff states inputs only, in one fenced JSON block under ``HEADING``: the CP-1 base
+-amounts, the seven driver paths, an optional downside shock and the three forecast years. Python
+-(``cp2g.forecast``, 38-digit exact) computes every figure; no figure is read from the handoff's
+-prose. A block that is missing, malformed or states a base amount CP-1 does not print raises
++The forecast source's handoff (CP-2G's, else CP-1's run-rate block) states inputs only, in one
++fenced JSON block under ``HEADING``: the CP-1 base amounts, the seven driver
++paths, an optional downside shock and the three forecast years. Python (``cp2g.forecast``,
++38-digit exact) computes every figure; no figure is read from the handoff's prose. A block that
++is missing, malformed or states a base amount CP-1 does not print raises
+ ValueError; the caller decides what that means (the run fails open, see cpos.run_handoffs).
+ """
+ 
+@@ -21,19 +22,33 @@ from deploy_vii.contracts import Contract
+ from deploy_vii.live.schema import exact_json, json_object
+ from deploy_vii.readiness import shape_issues
+ from deploy_workflow.owners import cp2g
++from deploy_workflow.prose_checks import FORECAST_HEADING, reader_passages
+ 
+-HEADING = "### Forecast inputs (machine-readable)"
++HEADING = FORECAST_HEADING
+ SCHEMA_VERSION = "cpos-forecast-inputs/1"
+ LIMIT = (
+     "Every figure is Python's arithmetic over inputs the CP-2G handoff stated; the inputs, not "
+     "the arithmetic, are unreviewed. Not analytical review."
+ )
++# Owner, 2026-11-11: a forecast works from layer 1 and is better with CP-2G. Without CP-2G the
++# source is CP-1's run-rate block, and the published limit says so.
++LAYER1_LIMIT = (
++    "Every figure is Python's arithmetic over run-rate inputs the CP-1 handoff stated, from the "
++    "financial foundation's own figures; no CP-2G model, case or shock was run. The inputs, not "
++    "the arithmetic, are unreviewed. Not analytical review."
++)
++SOURCES = ("CP-2G", "CP-1")
+ Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
+ 
+ 
+ class Operand(Contract):
++    """A base operand. CP-1's layer-1 block also says where it read an amount: the first cell of
++    the table row (`row`) and the header of the period column (`period`)."""
++
+     amount: Signed | None
+     reason: str | None
++    row: str | None = None
++    period: str | None = None
+ 
+     @model_validator(mode="after")
+     def one_of(self) -> "Operand":
+@@ -102,11 +117,11 @@ class ForecastInputs(Contract):
+         return self
+ 
+ 
+-def _block(text: str) -> str:
++def _block(text: str, source: str = "CP-2G") -> str:
+     lines = text.replace("\r\n", "\n").split("\n")
+     starts = [i for i, line in enumerate(lines) if line.strip() == HEADING]
+     if len(starts) != 1:
+-        raise ValueError(f"CP-2G: needs exactly one `{HEADING}` heading, found {len(starts)}")
++        raise ValueError(f"{source}: needs exactly one `{HEADING}` heading, found {len(starts)}")
+     body: list[str] = []
+     for line in lines[starts[0] + 1 :]:
+         if re.match(r"#{1,6}\s", line):
+@@ -114,7 +129,7 @@ def _block(text: str) -> str:
+         body.append(line)
+     found = re.findall(r"^```json\n(.*?)\n```[ \t]*$", "\n".join(body), re.DOTALL | re.MULTILINE)
+     if len(found) != 1 or "\n".join(body).count("```") != 2:
+-        raise ValueError(f"CP-2G: `{HEADING}` needs exactly one fenced json block")
++        raise ValueError(f"{source}: `{HEADING}` needs exactly one fenced json block")
+     return str(found[0])
+ 
+ 
+@@ -127,7 +142,118 @@ def _printed(text: str, amount: str) -> bool:
+     )
+ 
+ 
+-def _declined(document: dict[str, object]) -> None:
++_CELL = re.compile(r"(?:\+|(?P<minus>[-\u2212]))?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
++_BRACKET = re.compile(r"\((?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\)")
++
++
++def _plain(cell: str) -> str:
++    """A label or header as compared: trimmed, without Markdown emphasis; case kept."""
++    return cell.strip().strip("*_`").strip()
++
++
++def _signed(cell: str) -> Decimal | None:
++    """`1,000`, `+1,000`, `-1,000`, `\u22121,000` and `(1,000)` as signed numbers; anything else,
++    such as a unit or scale suffix, a percentage or `n.a.`, is not a number."""
++    text = _plain(cell)
++    if (bracket := _BRACKET.fullmatch(text)) is not None:
++        return -Decimal(bracket["digits"].replace(",", ""))
++    if (plain := _CELL.fullmatch(text)) is None:
++        return None
++    value = Decimal(plain["digits"].replace(",", ""))
++    return -value if plain["minus"] else value
++
++
++def _tables(text: str) -> list[list[list[str]]]:
++    """The Markdown tables of CP-1 outside fenced code, `## Sources`, the forecast block and the
++    reader passages: each a list of rows of cells, header first, delimiter row dropped."""
++    skipped = {number for body in reader_passages(text).values() for number, _ in body}
++    tables: list[list[list[str]]] = []
++    run: list[list[str]] = []
++    seen_delimiter = False
++    fence = ""  # the marker (``` or ~~~) of the code fence in force, else empty
++    block = sources = False
++    for number, line in enumerate(text.splitlines(), 1):
++        stripped = line.strip()
++        if marker := next((m for m in ("```", "~~~") if stripped.startswith(m)), ""):
++            fence = "" if fence == marker else (fence or marker)
++        fenced = bool(fence)
++        heading = None if fenced else re.match(r"(#{1,6})\s+(.*?)\s*#*\s*$", line)
++        if heading is not None:
++            block = stripped == HEADING
++            if len(heading[1]) <= 2:
++                sources = len(heading[1]) == 2 and heading[2] == "Sources"
++        cells = (
++            [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", stripped[1:-1])]
++            if stripped.startswith("|") and stripped.endswith("|") and len(stripped) > 1
++            else None
++        )
++        if cells is None or fenced or block or sources or number in skipped:
++            if len(run) > 1:
++                tables.append(run)
++            run, seen_delimiter = [], False
++            continue
++        if run and not seen_delimiter:
++            if all(re.fullmatch(r":?-+:?", c) for c in cells):
++                seen_delimiter = True
++            else:
++                run = [cells]  # no delimiter row under the first row: not a table
++        else:
++            run.append(cells)
++    if len(run) > 1:
++        tables.append(run)
++    return tables
++
++
++def _cells(text: str, label: str, period: str) -> set[str]:
++    """The distinct texts of the cells at `label` (a row's first cell) and `period` (a header
++    cell) over every table of the handoff."""
++    found: set[str] = set()
++    for table in _tables(text):
++        header, *rows = table
++        for column in (i for i, h in enumerate(header) if i > 0 and _plain(h) == _plain(period)):
++            found.update(
++                row[column] for row in rows if len(row) > column and _plain(row[0]) == _plain(label)
++            )
++    return found
++
++
++def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
++    """The one sign rule. Working capital is read as CP-2G reads it (`Operands.from_cp1`): the
++    operand is the cell with its sign reversed, so a printed (45), an investment, is 45 and a
++    printed +45, a release, is -45; a magnitude match would turn a release into an outflow.
++    Interest, taxes and capex are positive magnitudes however CP-1 prints them; every other
++    operand compares signed."""
++    if key == "wc":
++        return -cell == amount
++    return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
++
++
++def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
++    """Why the operand is not the cell it names, or None when it is."""
++    if operand.amount is None:
++        return (
++            None
++            if operand.row is None and operand.period is None
++            else (f"base {key} states no amount, so it names no row or period")
++        )
++    if not operand.row or not operand.period:
++        return f"base {key} must name the `row` label and `period` header it was read from"
++    where = f"row `{operand.row}`, period `{operand.period}`"
++    found = _cells(text, operand.row, operand.period)
++    if not found:
++        return f"base {key}: no table cell of CP-1 is at {where}"
++    values = {_signed(cell) for cell in found}
++    if len(found) > 1 and len(values) > 1 or None in values:
++        return (
++            f"base {key}: {where} is not one number in CP-1 ({len(found)} cells: {sorted(found)})"
++        )
++    (value,) = values
++    if value is None or not _agrees(key, value, Decimal(operand.amount)):
++        return f"base {key} {operand.amount} is not CP-1's cell at {where} ({min(found)})"
++    return None
++
++
++def _declined(document: dict[str, object], source: str) -> None:
+     """A block whose every driver has all-null values is the method declining to forecast."""
+     drivers = document.get("base_drivers")
+     if not isinstance(drivers, dict) or not drivers:
+@@ -144,29 +270,42 @@ def _declined(document: dict[str, object]) -> None:
+     why = limits[0] if isinstance(limits, list) and limits and isinstance(limits[0], str) else ""
+     why = why if len(why) <= 200 else why[:197] + "..."
+     raise ValueError(
+-        "CP-2G: the handoff gives no forecast drivers, so no forecast was computed"
++        f"{source}: the handoff gives no forecast drivers, so no forecast was computed"
+         + (f" ({why})" if why else "")
+     )
+ 
+ 
+-def parse(cp2g_text: str, cp1_text: str) -> ForecastInputs:
+-    """The validated inputs block; ValueError names the first thing wrong with it."""
+-    document = json_object(_block(cp2g_text))
++def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInputs:
++    """The validated inputs block; ValueError names the first thing wrong with it. `source` is
++    the module that wrote the block: CP-2G, or CP-1 for a layer-1 forecast (base operands and
++    run-rate drivers only: no shock and no cases)."""
++    if source not in SOURCES:
++        raise ValueError(f"{source}: is not a forecast source")
++    document = json_object(_block(source_text, source))
+     if document is None:
+-        raise ValueError("CP-2G: the forecast inputs block is not a bounded JSON object")
+-    _declined(document)
++        raise ValueError(f"{source}: the forecast inputs block is not a bounded JSON object")
++    _declined(document, source)
+     try:
+         inputs = ForecastInputs.model_validate_json(exact_json(document))
+     except ValidationError as error:
+         issues = shape_issues(error)
+         if len(issues) <= 3:
+-            raise ValueError(f"CP-2G: forecast inputs: {'; '.join(issues)}") from error
++            raise ValueError(f"{source}: forecast inputs: {'; '.join(issues)}") from error
+         raise ValueError(
+-            f"CP-2G: forecast inputs: {len(issues)} problems; first: {'; '.join(issues[:3])}"
++            f"{source}: forecast inputs: {len(issues)} problems; first: {'; '.join(issues[:3])}"
+         ) from error
++    if source == "CP-1" and (
++        inputs.downside_shock or inputs.upside_drivers or inputs.downside_drivers
++    ):
++        raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
+     for key, operand in inputs.base.items():
+-        if operand.amount is not None and not _printed(cp1_text, operand.amount):
+-            raise ValueError(f"CP-2G: base {key} {operand.amount} is not printed in CP-1")
++        if source == "CP-2G":
++            if operand.row is not None or operand.period is not None:
++                raise ValueError(f"{source}: base {key} names a row or period; only CP-1 does")
++            if operand.amount is not None and not _printed(cp1_text, operand.amount):
++                raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
++        elif (problem := _layer1_problem(cp1_text, key, operand)) is not None:
++            raise ValueError(f"{source}: {problem}")
+     return inputs
+ 
+ 
+@@ -187,9 +326,10 @@ def _json(document: object) -> bytes:
+     return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+ 
+ 
+-def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
+-    """The five files `credit_os/store.py` reads for a model, from the CP-1 and CP-2G handoffs."""
+-    inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"))
++def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
++    """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
++    forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
++    inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"), source)
+     operands = cp2g.Operands(
+         **{
+             key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
+@@ -227,7 +367,10 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
+     exact = _json(
+         {
+             "schema_version": "cpos-forecast-exact/1",
+-            "consumed": {"CP-1.md": _sha(cp1), "CP-2G.md": _sha(handoff)},
++            "consumed": {
++                "CP-1.md": _sha(cp1),
++                **({"CP-2G.md": _sha(handoff)} if source == "CP-2G" else {}),
++            },
+             "base": {key: _cell(value) for key, value in operands.items()},
+             "reference_drivers": inputs.base_drivers.model_dump(mode="json"),
+             "downside_shock": None
+@@ -238,7 +381,7 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
+             **_stated("upside_drivers", inputs.upside_drivers),
+             **_stated("downside_drivers", inputs.downside_drivers),
+             "outputs": outputs,
+-            "scope_limits": [LIMIT, *inputs.scope_limits],
++            "scope_limits": [LIMIT if source == "CP-2G" else LAYER1_LIMIT, *inputs.scope_limits],
+         }
+     )
+     calculation = _json(
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 7222a78..a29498f 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -56,8 +56,14 @@ from deploy_workflow.model.adapter import (
+     check_ruling,
+ )
+ from deploy_workflow.model.budget import Budget
+-from deploy_workflow.model.handoff import Check, _pages
+-from deploy_workflow.model.pricing import price_of, request_reservation_usd
++from deploy_workflow.model.handoff import (
++    WEB_SEARCH_CALLS_PER_TURN,
++    WEB_SEARCH_CASE_KINDS,
++    Check,
++    _pages,
++    web_search_offered,
++)
++from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
+ from deploy_workflow.model_testing.configs import CONFIGS
+ from deploy_workflow.owners import cp2g, cpos_forecast
+ from deploy_workflow.owners.cpos import (
+@@ -1336,6 +1342,13 @@ def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...
+ 
+ 
+ HTML_MODEL_SCOPE = "The HTML Model and calculation JSON are not published by this launcher."
++LAYER1_FORECAST_SCOPE = (
++    "The HTML Model is not published by this launcher. A forecast table is published with the "
++    "issuer report in the library when the CP-1 handoff's run-rate inputs block validates; it "
++    "comes from the financial foundation's run-rate figures, with no cases and no stress, and "
++    "is better with CP-2G. Python computes its figures from the inputs the handoff states, and "
++    "the inputs are not independently reviewed."
++)
+ FORECAST_SCOPE = (
+     "The HTML Model is not published by this launcher. A forecast table is published with the "
+     "issuer report in the library when the CP-2G handoff's inputs block validates; Python "
+@@ -1345,7 +1358,7 @@ FORECAST_SCOPE = (
+ 
+ 
+ def _layout(
+-    run: Run, ordered: tuple[str, ...], aliases: tuple[str, ...], config: str
++    run: Run, ordered: tuple[str, ...], aliases: tuple[str, ...], config: str, *, forecast: bool
+ ) -> tuple[MarkdownLayout, tuple[str, ...]]:
+     preset = next(p for p in pathways() if p.id == run.pathway)
+     routes: list[MarkdownRoute] = []
+@@ -1377,7 +1390,13 @@ def _layout(
+         "on the selected issuer folder. Automated checks cover handoff structure, issuer and date "
+         "anchors, source and upstream references and issuer-report section selectors; analytical "
+         "accuracy has not been independently reviewed. "
+-        + (FORECAST_SCOPE if {"CP-1", "CP-2G"} <= set(ordered) else HTML_MODEL_SCOPE)
++        + (
++            HTML_MODEL_SCOPE
++            if not forecast
++            else FORECAST_SCOPE
++            if "CP-2G" in ordered
++            else LAYER1_FORECAST_SCOPE
++        )
+         + f" Sections not produced: {', '.join(omitted) or 'none'}."
+     )
+     layout = MarkdownLayout(
+@@ -1495,6 +1514,41 @@ FORECAST_BLOCK = (
+     "an input to a mechanical forecast, not a finding. Leave a driver's values null, as "
+     "`Insufficient Information`, only when no stated figure can anchor it.\n\n"
+ )
++# Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
++# "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
++# FORECAST_BLOCK, so cpos_forecast has one code path; the model still computes nothing.
++LAYER1_FORECAST_BLOCK = (
++    f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
++    "one fenced json block and no other fence, after your tables. You state inputs only; Python "
++    "computes every forecast figure, so put no forecast figure in the block. `base` holds exactly "
++    'these ten operands in USD millions, each `{"amount": "<decimal>", "reason": null, "row": '
++    '"<label>", "period": "<header>"}` or '
++    '`{"amount": null, "reason": "<why you do not state it>"}`: '
++    f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
++    "your own tables that you read the amount from, and `period` the exact header text of that "
++    'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). Copy '
++    "the amount as that cell prints it, in millions; for interest, taxes and capex write the "
++    "positive magnitude whatever sign the cell shows; for working capital write the cell's value "
++    "with its sign reversed (a cell printing (45), an investment, is 45; a cell printing 45 or "
++    "+45, a release, is -45). Print your tables as "
++    "you normally would; add nothing for this block. A figure in prose, a basis line or the "
++    "sources is not a cell. `base_drivers` is a run-rate base case and nothing more "
++    "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
++    "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
++    "`rationale` and `limitation`). Anchor every driver to a figure you state: carry the latest "
++    "year's ratio forward, or use a scheduled maturity or a declared payment, and name the anchor "
++    "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
++    'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
++    "rounded to at most four decimal places; `category` is exactly one of "
++    f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
++    "`Insufficient Information`, when no stated figure can anchor it; when none can, set every "
++    "driver's `values` to `[null, null, null]`. Set `downside_shock`, `upside_drivers` and "
++    "`downside_drivers` to null: there are no cases and no shock in this forecast. `years` is "
++    'three consecutive fiscal years after the base period, each `{"year": <int>, "start": '
++    '"YYYY-MM-DD", "end": "YYYY-MM-DD"}`. `scope_limits` is a list of text limits. Set '
++    f"`schema_version` to `{cpos_forecast.SCHEMA_VERSION}`. This block does not change your "
++    "findings or any table.\n\n"
++)
+ 
+ 
+ BRIDGE_RULES = (
+@@ -1690,14 +1744,24 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
+     config: str,
+     cap: Decimal | str,
+     modules: Sequence[str] | None = None,
++    web_search: bool = False,
+ ) -> Prepared:
+-    """Check everything and write the manifest and instructions; a refusal writes nothing."""
++    """Check everything and write the manifest and instructions; a refusal writes nothing.
++
++    ``web_search`` is whether the run's ruling lists ``web-search``: the research module's calls
++    then hold the search fee too, as the live loop holds it, so the cap is checked against the
++    same hold."""
+     context_path = Path(context).expanduser().resolve()
+     folder = Path(sources).expanduser().resolve()
+     raw_context = context_path.read_bytes()
+     settings = load_context(raw_context)
+-    requested = tuple(modules) if modules else pathway_modules(settings)
+-    ordered = plan(requested)  # Refuses an unknown module, naming it.
++    chosen = tuple(modules) if modules else tuple(PATHWAY_MODULES[settings.run.pathway])
++    # CP-MODEL means "publish the forecast" (owner, 2026-11-11); it makes no model call.
++    model_wanted = "CP-MODEL" in chosen
++    requested = tuple(m for m in (modules or pathway_modules(settings)) if m != "CP-MODEL")
++    planned = plan((*requested, *(("CP-MODEL",) if model_wanted else ())))  # Refuses unknowns.
++    ordered = tuple(m for m in planned if m != "CP-MODEL")
++    requested = requested or ordered
+     if unknown := [m for m in ordered if m not in METHODS]:
+         raise LaunchRefused(f"--modules: no launchable method for {', '.join(unknown)}")
+     run = Run(
+@@ -1714,7 +1778,8 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
+         raise LaunchRefused(f"--out {directory}: must be outside the issuer folder")
+     pinned, converted, ignored, covers = _issuer_files(folder, context_path, directory)
+     aliases = tuple(a for a in settings.identity.aliases if a.strip())
+-    layout, omitted = _layout(run, ordered, aliases, config)
++    forecast = "CP-1" in ordered and (model_wanted or "CP-2G" in ordered)
++    layout, omitted = _layout(run, ordered, aliases, config, forecast=forecast)
+     texts = {
+         m: _instructions(
+             run,
+@@ -1726,12 +1791,12 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
+         for m in ordered
+     }
+     options = settings.module_options
+-    forecast = {"CP-1", "CP-2G"} <= set(ordered)
+     peer_pack = settings.valuation.peer_source == "cp_dr_public" and {"CP-DR", "CP-1C"} <= set(
+         ordered
+     )
+     for module, block, wanted in (
+         ("CP-2G", FORECAST_BLOCK, forecast),
++        ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
+         ("CP-2A", STRESS_BLOCK, True),
+         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
+         ("CP-1C", PEER_READER_BLOCK, peer_pack),
+@@ -1770,8 +1835,14 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
+         provider_cap_usd=Decimal(cap),
+     )
+     # The loop's own bound for the first call of the largest module; later calls hold more.
+-    hold = request_reservation_usd(
+-        price_of(config), max(map(len, texts.values())) + 4096, MAX_OUTPUT_TOKENS
++    hold = max(
++        request_reservation_usd(price_of(config), len(text) + 4096, MAX_OUTPUT_TOKENS)
++        + (
++            web_search_usd(WEB_SEARCH_CALLS_PER_TURN)
++            if web_search_offered(web_search, module, settings.run.case_kind)
++            else 0
++        )
++        for module, text in texts.items()
+     )
+     if request.provider_cap_usd < hold:
+         raise LaunchRefused(f"--cap {cap}: one {config} call holds up to USD {hold:.2f}")
+@@ -1899,6 +1970,9 @@ def _web_line(prepared: Prepared, ruling: Path | None) -> tuple[str, ...]:
+     """Whether the research module searches the web, when it runs."""
+     if "CP-DR" not in prepared.ordered:
+         return ()
++    kind = prepared.plan.run.case_kind
++    if web_search_ruled(ruling) and kind not in WEB_SEARCH_CASE_KINDS:
++        return (f"Web:      off: {kind} case",)
+     if web_search_ruled(ruling):
+         return (f"Web:      CP-DR searches the web (the ruling lists {WEB_SEARCH_GRANT})",)
+     why = "the ruling does not list" if ruling is not None else "no ruling lists"
+@@ -2032,6 +2106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
+             config=args.config,
+             cap=args.cap,
+             modules=args.modules,
++            web_search=web_search_ruled(args.ruling),
+         )
+     except (ValueError, OSError, LivePauseInForce) as error:
+         print(error, file=sys.stderr)
+diff --git a/src/deploy_workflow/prose_checks.py b/src/deploy_workflow/prose_checks.py
+index 266ad23..ff8e197 100644
+--- a/src/deploy_workflow/prose_checks.py
++++ b/src/deploy_workflow/prose_checks.py
+@@ -654,6 +654,27 @@ def _check_figures(lines: list[_Line]) -> list[str]:
+     return issues
+ 
+ 
++# Check 9: the provider's citation delimiters (U+E200 to U+E202; a genuine private-use character
++# elsewhere is not refused) or the plain-text form a copy step leaves, citeturn0view0,
++# citeturn0image0, cite turn0fetch1. Unlike checks 2-6 it reads the whole handoff, not only the
++# reader passages: a marker left in Gaps or a Sources cell is as much a defect.
++PROVIDER_MARKER = re.compile(r"[\ue200-\ue202]|cite\s*turn\d+[a-z]+\d+")
++
++
++def _check_provider_markers(text: str) -> list[str]:
++    return [
++        _issue(
++            9,
++            "no provider citation marker",
++            number,
++            f"U+{ord(found[0]):04X}" if len(found[0]) == 1 else found[0],
++            "remove the marker; put the source in the paragraph's Basis line.",
++        )
++        for number, line in enumerate(text.split("\n"), start=1)
++        for found in PROVIDER_MARKER.finditer(line)
++    ]
++
++
+ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]:
+     """Every H6 failure in this handoff; `accepted` (module -> Markdown) feeds check 7 only."""
+     sections = _findings_sections(text)
+@@ -670,6 +691,7 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
+         + _check_register_ids(text, lines)
+         + _check_limitation_repeats(text, accepted)
+         + _check_figures(lines)
++        + _check_provider_markers(text)
+     )
+ 
+ 
+@@ -771,11 +793,30 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
+     )
+ 
+ 
++FORECAST_HEADING = "### Forecast inputs (machine-readable)"
++
++
++def _forecast_block_lines(text: str) -> set[int]:
++    """Line numbers of the forecast inputs block (its heading to the next heading). Its rationale
++    and limit text is the module's input to a calculation, not a table, so it holds no figure."""
++    lines: set[int] = set()
++    inside = False
++    for number, line in enumerate(text.splitlines(), 1):
++        if line.strip() == FORECAST_HEADING:
++            inside = True
++        elif inside and re.match(r"#{1,6}\s", line):
++            inside = False
++        if inside:
++            lines.add(number)
++    return lines
++
++
+ def figure_issues(text: str) -> tuple[str, ...]:
+     """Every figure of a reader passage not held, with its sign, unit and scale, in the handoff
+     outside the reader passages. Sentence text only, as in the prose checks."""
+     passages = _pooled(_findings_sections(text) or [])
+     inside = {number for body in passages.values() for number, _ in body}
++    inside |= _forecast_block_lines(text)
+     held = _figures(
+         "\n".join(line for number, line in enumerate(text.splitlines(), 1) if number not in inside)
+     )
+diff --git a/src/deploy_workflow/run_start/submissions.py b/src/deploy_workflow/run_start/submissions.py
+index 15204a7..a935f96 100644
+--- a/src/deploy_workflow/run_start/submissions.py
++++ b/src/deploy_workflow/run_start/submissions.py
+@@ -25,6 +25,8 @@ from typing import Any, BinaryIO, TypedDict
+ from deploy_workflow.context import load_context
+ from deploy_workflow.inbox.filing import safe_name
+ from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
++from deploy_workflow.inbox.startup import STANDING_RULING
++from deploy_workflow.owners.cpos import web_search_ruled
+ from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
+ 
+ MAX_FILE = 50 * 1024 * 1024
+@@ -535,6 +537,7 @@ def _summarise(
+                         config=config,
+                         cap=cap,
+                         modules=answers["modules"] or None,
++                        web_search=web_search_ruled(STANDING_RULING),
+                     )
+                     after = _digest(files, answers)
+                 except OSError as error:  # a file went away while it was being read: it changed
+diff --git a/tests/fixtures/run-expectations/outcome-key.json b/tests/fixtures/run-expectations/outcome-key.json
+index b423a37..505334a 100644
+--- a/tests/fixtures/run-expectations/outcome-key.json
++++ b/tests/fixtures/run-expectations/outcome-key.json
+@@ -1,6 +1,6 @@
+ {
+  "schema": "outcome-key/1",
+- "note": "synthetic scenarios; hand-written. Outcomes are per scope; every requested module not listed under expected.modules is Ready. Counted = counted for acceptance (Will refuse, Gap, Limited, Check); Information and inherited rows are not counted. Row fields: rule (short id), outcome, counted, optional detail, section, inherited (true) and inherited_from (the direct producers whose effective outcome is non-Ready, in module order; compare as a set). Assumptions the plan leaves open, applied consistently: (1) only Will refuse and Limited propagate; Gap and Check never do; (2) propagation is transitive through effective outcomes (a consumer inherits from each direct producer's effective outcome), one inherited row per consumer; (3) the CP-1 chart-strip row (id CP-1:chart-strip-usd, propagates false) does not propagate; (4) one section-omitted row per omitted report section, from _layout observed offline at write time (omitted: credit_snapshot what-changed; earnings_update company-profile, portfolio-fit, what-changed; relative_value yield-against-maturity, what-changed; covenant_refinancing none; distressed_restructuring liquidity-runway, portfolio-fit, what-changed; portfolio_decision what-changed). Module lists are the launcher's ordered lists: PATHWAY_MODULES minus CP-MODEL and CP-8, ordered by deploy_vii.registry.plan. Clean scenarios declare legal documents executed (with an executed agreement) only where CP-4 is in the pathway, give peers (user_list) where CP-1C is, ratings where CP-2H is, an observed quote where CP-3 or CP-3D is, and a portfolio workbook with a portfolio file for portfolio_decision. Wording of Will refuse and Run-without is open (A-live). Portfolio workbook declared false: Gap on CP-6 (scenario rule-portfolio-workbook-false; justification in its note).",
++ "note": "synthetic scenarios; hand-written. Outcomes are per scope; every requested module not listed under expected.modules is Ready. Counted = counted for acceptance (Will refuse, Gap, Limited, Check); Information and inherited rows are not counted. Row fields: rule (short id), outcome, counted, optional detail, section, inherited (true) and inherited_from (the direct producers whose effective outcome is non-Ready, in module order; compare as a set). Assumptions the plan leaves open, applied consistently: (1) only Will refuse and Limited propagate; Gap and Check never do; (2) propagation is transitive through effective outcomes (a consumer inherits from each direct producer's effective outcome), one inherited row per consumer; (3) the CP-1 chart-strip row (id CP-1:chart-strip-usd, propagates false) does not propagate; (4) one section-omitted row per omitted report section, from _layout observed offline at write time (omitted: credit_snapshot what-changed; earnings_update company-profile, portfolio-fit, what-changed; relative_value yield-against-maturity, what-changed; covenant_refinancing none; distressed_restructuring liquidity-runway, portfolio-fit, what-changed; portfolio_decision what-changed). Module lists were the launcher's ordered lists when written: PATHWAY_MODULES minus CP-MODEL and CP-8, ordered by deploy_vii.registry.plan. Only scenario a-live-legal-none-will-refuse is read by a test (tests/test_cpos_launch.py) and is kept current; the other scenarios still hold the lists from before the 2026-11-11 preset changes (CP-DR and CP-2E in every pathway, CP-2G in credit_snapshot and covenant_refinancing, CP-8 out of portfolio_decision) and no test reads them. Clean scenarios declare legal documents executed (with an executed agreement) only where CP-4 is in the pathway, give peers (user_list) where CP-1C is, ratings where CP-2H is, an observed quote where CP-3 or CP-3D is, and a portfolio workbook with a portfolio file for portfolio_decision. Wording of Will refuse and Run-without is open (A-live). Portfolio workbook declared false: Gap on CP-6 (scenario rule-portfolio-workbook-false; justification in its note).",
+  "scenarios": [
+   {
+    "id": "rf1-draft-declared",
+diff --git a/tests/test_citation_markers.py b/tests/test_citation_markers.py
+new file mode 100644
+index 0000000..f98b3ee
+--- /dev/null
++++ b/tests/test_citation_markers.py
+@@ -0,0 +1,108 @@
++"""Provider citation markers in a searching module's answer (paid test tdg-cpdr-web-001).
++
++Answer keys are written by hand. The marker text is copied from the CP-DR handoff that run
++delivered (U+E200 "cite" U+E202 "turn..." U+E201, written here as escapes); nothing is produced
++by the code under test.
++"""
++
++import json
++from dataclasses import replace
++from decimal import Decimal
++from pathlib import Path
++
++from test_handoff_loop import Adapter, searched, task
++
++from deploy_workflow.model.handoff import HandoffExecutor, ModuleTools, strip_citation_markers
++from deploy_workflow.model.turn import ToolCall
++from deploy_workflow.owners.cpos import HandoffTask
++from deploy_workflow.prose_checks import prose_issues
++from deploy_workflow.run_events import EVENTS, read_events
++
++MARKER_THREE = "citeturn123066view0turn812501view4turn812501view5"
++MARKER_TWO = "citeturn123066view1turn765907view4"
++HEAD = "## Request\nTDG\n## Sources\nS1\n## Findings\n"
++TAIL = "## Calculations\nNone\n## Gaps\nNone\n## Next module\ndelivery\n"
++LEAKED = (
++    HEAD
++    + f"Primary corporate release. {MARKER_THREE} | Howmet; unaudited\n"
++    + f"Peers report it {MARKER_TWO}.\n"
++    + f"Both agree {MARKER_TWO} {MARKER_THREE} and so on\n"
++    + f"Ends here {MARKER_TWO}\n"
++    + f"Touching.{MARKER_TWO}Next word\n"
++    + "Two  spaces stay, and the word cite and turn stay: cite the turn.\n"
++    + TAIL
++)
++CLEANED = (
++    HEAD
++    + "Primary corporate release. | Howmet; unaudited\n"
++    + "Peers report it.\n"
++    + "Both agree and so on\n"
++    + "Ends here\n"
++    + "Touching.Next word\n"
++    + "Two  spaces stay, and the word cite and turn stay: cite the turn.\n"
++    + TAIL
++)
++
++
++def only_cleaned(_task: HandoffTask, raw: bytes) -> tuple[str, ...]:
++    return () if raw == CLEANED.encode() else ("marker or whitespace left behind",)
++
++
++def test_a_searching_module_loses_citation_markers_and_the_count_is_recorded(
++    tmp_path: Path,
++) -> None:
++    research = replace(task(), module_id="CP-DR")
++    call = ToolCall("w", "write_handoff", {"markdown": LEAKED})
++    loop = HandoffExecutor(
++        tmp_path / "run",
++        adapter=Adapter(searched(call, searches=1)),
++        cap_usd=Decimal(10),
++        check=only_cleaned,
++        events=tmp_path / "events",
++        web_search=True,
++    )
++    assert loop(research) == CLEANED.encode()
++    assert call.arguments["markdown"] == LEAKED  # the provider's answer is not edited
++    (counts,) = (tmp_path / "run").glob("modules/*/1.markers.json")
++    assert json.loads(counts.read_text()) == {"citation_markers_removed": 6}
++    (event,) = [
++        e
++        for e in read_events(tmp_path / "events" / EVENTS)
++        if e["event"] == "citation_markers_removed"
++    ]
++    assert (event["module"], event["count"]) == ("CP-DR", 6)
++
++
++def test_a_module_that_is_not_searching_is_not_edited(tmp_path: Path) -> None:
++    tools = ModuleTools(task(), tmp_path, only_cleaned)
++    tools.write_handoff(LEAKED)
++    assert tools.draft == LEAKED.encode()
++    assert not list(tmp_path.glob("*.markers.json"))
++
++
++def test_ordinary_text_with_cite_or_turn_is_untouched() -> None:
++    plain = "Analysts cite the turn of the year; a turn123view0 token is not a marker.\n"
++    assert strip_citation_markers(plain) == (plain, 0)
++
++
++READER = "# H\n\n## Findings\n\n### Bottom line\n\n{}\n"
++
++
++def test_a_private_use_character_in_a_reader_passage_is_refused() -> None:
++    (issue,) = prose_issues(READER.format("Leverage is lower. It is stable."))
++    assert issue == (
++        'Prose check 9 (no provider citation marker), line 7: "U+E200" — remove the marker; '
++        "put the source in the paragraph's Basis line."
++    )
++
++
++def test_a_plain_citeturn_pattern_in_a_reader_passage_is_refused() -> None:
++    (issue,) = prose_issues(READER.format("Leverage is lower citeturn0search3 and stable."))
++    assert issue == (
++        'Prose check 9 (no provider citation marker), line 7: "citeturn0search3" — remove the '
++        "marker; put the source in the paragraph's Basis line."
++    )
++
++
++def test_ordinary_cite_and_turn_words_pass_the_prose_check() -> None:
++    assert prose_issues(READER.format("Analysts cite the turn of the year as the low.")) == ()
+diff --git a/tests/test_context_form.py b/tests/test_context_form.py
+index 23e6763..cb7ac45 100644
+--- a/tests/test_context_form.py
++++ b/tests/test_context_form.py
+@@ -226,3 +226,24 @@ def test_the_rail_links_to_the_library_the_service_serves() -> None:
+     assert 'href="/library/#W-Library/cases"' in FORM
+     assert 'href="/library/#CP-OS/activity"' in FORM
+     assert "data-pathway" not in FORM and "dataset.pathway" not in FORM  # No fixed-pathway copy.
++
++
++def test_the_summary_tells_the_analyst_what_goes_to_openai_before_submit() -> None:
++    lead = re.search(r'<p class="lead">(This is the run you are about to start.*?)</p>', FORM)
++    assert lead is not None
++    text = lead[1]
++    assert "Pages of the documents you uploaded that modules read are sent to OpenAI" in text
++    assert "web searches go to OpenAI's search" in text
++    assert "told to search with public names only" in text
++    assert "queries it actually sent are kept in the run record" in text
++    assert "private case the issuer's name and the questions it researches" in text
++    assert "use public names only and go to" not in FORM  # the old claim: nothing enforced it
++    assert text.index("OpenAI") < FORM.index('id="approve"')
++    assert "supplied files only" not in FORM
++
++
++def test_the_page_states_before_submit_whether_the_run_searches_by_case_kind() -> None:
++    assert "This is a private case: the research module will search the web" in FORM
++    assert "This is a synthetic case: the research module does not search the web" in FORM
++    assert "const SEARCH_KINDS = ['public', 'private'];" in FORM
++    assert "['Web search'," in FORM
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 2af86cc..e60f1af 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -746,7 +746,7 @@ def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
+     assert "liquidity-runway" in prepared.omitted
+ 
+ 
+-@pytest.mark.parametrize("module", ["CP-MODEL", "CP-8", "CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
++@pytest.mark.parametrize("module", ["CP-8", "CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
+ def test_modules_without_a_launchable_method_are_refused(tmp_path, capsys, module):
+     assert main([*launch(tmp_path), "--modules", module]) == 2
+     assert module in capsys.readouterr().err
+@@ -778,6 +778,97 @@ def test_cap_too_small_for_one_call_is_refused_offline(tmp_path, capsys):
+     assert not (tmp_path / "out").exists()
+ 
+ 
++def test_the_offline_cap_check_holds_the_research_modules_search_fee_when_it_will_search(tmp_path):
++    # The live loop holds USD 0.16 more for each CP-DR call when the ruling lists web-search
++    # (16 calls at USD 0.01; tests/test_handoff_loop.py). The offline check holds the same.
++    context, folder = context_file(tmp_path), issuer_folder(tmp_path)
++
++    def hold(cap: str, out: str, **extra: bool) -> Decimal:
++        return prepare(
++            context,
++            folder,
++            tmp_path / out,
++            config="sol-medium",
++            cap=cap,
++            modules=("CP-DR",),
++            **extra,
++        ).hold
++
++    plain = hold("50", "a")
++    assert hold("50", "b", web_search=True) - plain == Decimal("0.16")
++    between = str(plain + Decimal("0.05"))  # fits one call without search, not with it
++    hold(between, "c")
++    with pytest.raises(LaunchRefused, match="--cap"):
++        hold(between, "d", web_search=True)
++
++
++def with_case_kind(path: Path, kind: str) -> Path:
++    data = json.loads(path.read_text())
++    data["run"]["case_kind"] = kind
++    path.write_text(json.dumps(data))
++    return path
++
++
++STANDING = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
++
++
++def search_holds(tmp_path: Path, kind: str) -> tuple[Decimal, Decimal, list[str], str]:
++    """The CP-DR hold without and with the ruling's search, the launcher's argv and its Web line."""
++    argv = launch(tmp_path, "--modules", "CP-DR", "--ruling", str(STANDING))
++    context = with_case_kind(tmp_path / "context.json", kind)
++    holds = [
++        prepare(
++            context,
++            tmp_path / "issuer",
++            tmp_path / name,
++            config="sol-medium",
++            cap="50",
++            modules=("CP-DR",),
++            web_search=searching,
++        ).hold
++        for name, searching in (("plain", False), ("search", True))
++    ]
++    return holds[0], holds[1], argv, kind
++
++
++def test_a_synthetic_case_holds_no_search_fee_and_the_launcher_says_why(tmp_path, capsys):
++    # One rule (model/handoff.py web_search_offered): the offline check holds what the loop holds.
++    plain, searching, argv, _ = search_holds(tmp_path, "synthetic")
++    assert searching == plain
++    assert main(argv) == 0
++    assert "Web:      off: synthetic case" in capsys.readouterr().out
++
++
++@pytest.mark.parametrize("kind", ["public", "private"])
++def test_a_public_or_private_case_holds_the_search_fee_and_the_launcher_says_it_searches(
++    tmp_path, capsys, kind
++):
++    plain, searching, argv, _ = search_holds(tmp_path, kind)
++    assert searching - plain == Decimal("0.16")
++    assert main(argv) == 0
++    assert "Web:      CP-DR searches the web" in capsys.readouterr().out
++
++
++def test_a_ruling_that_lists_web_search_makes_the_command_line_check_the_search_hold(
++    tmp_path, capsys
++):
++    base = launch(tmp_path, "--modules", "CP-DR")
++    plain = prepare(
++        tmp_path / "context.json",
++        tmp_path / "issuer",
++        tmp_path / "probe",
++        config="sol-medium",
++        cap="50",
++        modules=("CP-DR",),
++    )
++    base[base.index("--cap") + 1] = str(plain.hold + Decimal("0.05"))
++    standing = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
++    assert main([*base, "--ruling", str(RULING)]) == 0  # no web-search in this ruling
++    base[base.index("--out") + 1] = str(tmp_path / "out2")
++    assert main([*base, "--ruling", str(standing)]) == 2
++    assert "--cap" in capsys.readouterr().err
++
++
+ def test_cap_is_sized_for_the_largest_module_not_the_smallest(tmp_path, capsys):
+     # claude-opus-5-5 holds about USD 1.5 for CP-3's 105 KB instructions, USD 0.7 for CP-2's 6 KB.
+     argv = launch(tmp_path, pathway="credit_snapshot")
+@@ -1686,11 +1777,22 @@ def test_yield_against_maturity_stays_omitted(tmp_path):
+ 
+ 
+ def test_the_report_scope_no_longer_says_charts_are_unpublished(tmp_path):
+-    # credit_snapshot runs CP-2G since 2026-11-11, so the scope without a forecast is read on
+-    # earnings_update, and the one with it on credit_snapshot.
++    # Every preset now publishes a forecast (CP-MODEL, or CP-2G): earnings_update from CP-1's
++    # run-rate figures (owner, 2026-11-11), credit_snapshot from CP-2G. The scope with no forecast
++    # is read on an explicit module list.
+     prepared, *_ = good_task(tmp_path, "CP-1", "earnings_update")
+-    assert "The HTML Model and calculation JSON are not published" in prepared.layout.scope
++    assert "run-rate figures" in prepared.layout.scope
+     assert "charts" not in prepared.layout.scope.lower()
++    (tmp_path / "b").mkdir()
++    bare = prepare(
++        context_file(tmp_path / "b", "earnings_update"),
++        issuer_folder(tmp_path / "b"),
++        tmp_path / "b" / "out",
++        config="sol-medium",
++        cap="50",
++        modules=("CP-1",),
++    )
++    assert "The HTML Model and calculation JSON are not published" in bare.plan.layout.scope
+     (tmp_path / "f").mkdir()
+     forecast, *_ = good_task(tmp_path / "f", "CP-1", "credit_snapshot")
+     assert "A forecast table is published with the issuer report" in forecast.layout.scope
+@@ -2108,6 +2210,14 @@ BASE = {
+     "cash": "100",
+     "undrawn": "50",
+ }
++
++
++def printed(key: str, amount: str) -> str:
++    """How CP-1 prints a base operand. A working capital investment (the operand, an outflow) is
++    printed negative, as CP-2G reads it (`Operands.from_cp1` reverses the sign): `(10)` for 10."""
++    return f"({amount})" if key == "wc" else amount
++
++
+ PATHS = {
+     "revenue_growth": ("0.05", "0.04", "0.03"),
+     "ebitda_margin": ("0.30", "0.31", "0.32"),
+@@ -2148,15 +2258,25 @@ def forecast_block(**changes) -> str:
+     return f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(inputs)}\n```\n"
+ 
+ 
+-def forecast_answer(context: dict, routes: list, block: str | None = None) -> str:
+-    """CP-1 prints the base amounts; CP-2G ends its findings with the inputs block."""
++def forecast_answer(
++    context: dict, routes: list, block: str | None = None, cp1_block: str | None = None
++) -> str:
++    """CP-1 prints the base amounts (and ends with the layer-1 block when `cp1_block` is given);
++    CP-2G ends its findings with the inputs block."""
+     text = answer(context, routes)
+     if context["module_id"] == "CP-1":
+-        rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items())
++        rows = "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items())
+         # Above the owner's chart table, so the base amounts do not read as rows of that table.
+         mark = "### Chart data: revenue and EBITDA"
++        # Where another chart table sits above (the covenant pathway), or none, the base table
++        # gets a heading of its own.
++        alone = mark in text and "### Chart data: debt maturities" not in text
++        lead = "" if alone else "### Base operands\n\n"
+         mark = mark if mark in text else "## Calculations"
+-        return text.replace(mark, f"| Base | USD m |\n| --- | --- |\n{rows}\n\n{mark}", 1)
++        text = text.replace(mark, f"{lead}| Base | FY2025 |\n| --- | --- |\n{rows}\n\n{mark}", 1)
++        if cp1_block is not None:
++            text = text.replace("## Calculations", f"{cp1_block}\n## Calculations", 1)
++        return text
+     if context["module_id"] == "CP-2G" and block is not None:
+         return text.replace("## Calculations", f"{block}\n## Calculations", 1)
+     return text
+@@ -2209,8 +2329,16 @@ def key_case(shock: dict | None, paths: dict = PATHS) -> list[dict[str, Fraction
+     return years
+ 
+ 
+-def forecast_run(tmp_path, provider, capsys, block, modules=("CP-2G",)):
+-    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="distressed_restructuring")
++def forecast_run(  # noqa: PLR0913 - one keyword per scenario setting
++    tmp_path,
++    provider,
++    capsys,
++    block,
++    modules=("CP-2G",),
++    cp1_block=None,
++    pathway="distressed_restructuring",
++):
++    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway=pathway)
+     argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+     argv += ["--modules", *modules]
+     routes = list(
+@@ -2223,7 +2351,7 @@ def forecast_run(tmp_path, provider, capsys, block, modules=("CP-2G",)):
+             modules=modules,
+         ).plan.layout.routes
+     )
+-    provider.answer = lambda context: forecast_answer(context, routes, block)
++    provider.answer = lambda context: forecast_answer(context, routes, block, cp1_block)
+     code = main(argv)
+     return code, tmp_path / "runs" / RUN_ID, capsys.readouterr()
+ 
+@@ -2289,6 +2417,335 @@ def test_cp2g_run_publishes_model_delivery(tmp_path, provider, capsys):
+     assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
+ 
+ 
++def layer1_block(**changes) -> str:
++    """CP-1's block: each stated operand names the label and period header of the cell it read."""
++    base = changes.pop("base", None) or {
++        k: {"amount": v, "reason": None, "row": k, "period": "FY2025"} for k, v in BASE.items()
++    }
++    return forecast_block(downside_shock=None, base=base, **changes)
++
++
++def _operand(amount, row="revenue", period="FY2025"):
++    return {"amount": amount, "reason": None, "row": row, "period": period}
++
++
++def _cp1_doc(revenue_table: str, key: str = "revenue", head: str = "", tail: str = "") -> str:
++    """A CP-1 handoff: the other nine operands in a plain table, `key`'s in the given one."""
++    rows = "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items() if k != key)
++    return (
++        f"# CP-1\n\n## Findings\n\n### Bottom line\n\nText.\n\n### Base operands\n\n{head}"
++        f"| Base | FY2025 |\n| --- | --- |\n{rows}\n\n{revenue_table}\n\n__BLOCK__\n"
++        f"## Calculations\n\nNone.\n{tail}"
++    )
++
++
++def _parse_layer1(doc: str, key: str = "revenue", **operand):
++    base = {k: _operand(v, k) for k, v in BASE.items()}
++    base[key] = _operand(**{"row": key, **operand})
++    full = doc.replace("__BLOCK__", layer1_block(base=base))
++    return cpos_forecast.parse(full, full, "CP-1")
++
++
++TWO_YEARS = "| Metric | FY2024 | FY2025 |\n| --- | --- | --- |\n| revenue | 900 | 1,000 |"
++
++
++def test_a_layer1_operand_is_the_cell_at_its_row_and_period():
++    inputs = _parse_layer1(_cp1_doc(TWO_YEARS), amount="1000", period="FY2025")
++    assert inputs.base["revenue"].amount == "1000"
++    assert _parse_layer1(_cp1_doc(TWO_YEARS), amount="900", period="FY2024")
++
++
++@pytest.mark.parametrize(
++    ("table", "operand", "complaint"),
++    [
++        (TWO_YEARS, {"amount": "900", "period": "FY2025"}, "is not CP-1's cell"),
++        (TWO_YEARS, {"amount": "1000", "period": "FY2024"}, "is not CP-1's cell"),
++        (TWO_YEARS, {"amount": "1000", "period": "FY2023"}, "no table cell"),
++        (
++            "| Metric | FY2025 | Growth % |\n| --- | --- | --- |\n| revenue | 1,000 | 12 |",
++            {"amount": "12", "period": "FY2025"},
++            "is not CP-1's cell",
++        ),
++        (
++            "| Metric | FY2025 | Growth % |\n| --- | --- | --- |\n| revenue | 1,000 | 12% |",
++            {"amount": "12", "period": "Growth %"},
++            "is not one number",
++        ),
++        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | (1,000) |", {"amount": "1000"}, "is not"),
++        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000k |", {"amount": "1000"}, "number"),
++        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000m |", {"amount": "1000"}, "number"),
++        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | n.a. |", {"amount": "1000"}, "number"),
++        (
++            "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |",
++            {"amount": "1000", "row": "Revenue"},
++            "no table cell",
++        ),
++        (
++            "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |\n| revenue | 1,100 |",
++            {"amount": "1000"},
++            "is not one number",
++        ),
++    ],
++    ids=[
++        "prior-period-cell",
++        "neighbour-period",
++        "unknown-period",
++        "growth-column",
++        "percent-cell",
++        "bracket-negative",
++        "k-suffix",
++        "m-suffix",
++        "not-a-number",
++        "label-case",
++        "ambiguous-label",
++    ],
++)
++def test_a_layer1_operand_that_is_not_its_named_cell_is_refused(table, operand, complaint):
++    with pytest.raises(ValueError, match=complaint) as caught:
++        _parse_layer1(_cp1_doc(table), **operand)
++    assert "CP-1: base revenue" in str(caught.value)
++
++
++_ROW = "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1234 |"
++
++
++@pytest.mark.parametrize(
++    "doc",
++    [
++        _cp1_doc("", head=f"```text\n{_ROW}\n```\n\n"),
++        _cp1_doc("", tail=f"\n## Sources\n\n{_ROW}\n"),
++        _cp1_doc("").replace("Text.", f"Text.\n\n{_ROW}"),
++        _cp1_doc("| Metric | FY2025 |\n| revenue | 1234 |"),
++        _cp1_doc("", head="Basis: revenue 1,234 per annual report\n\n"),
++    ],
++    ids=["fenced", "sources", "reader-passage", "no-delimiter", "prose"],
++)
++def test_a_layer1_operand_outside_cp1s_tables_is_refused(doc):
++    with pytest.raises(ValueError, match="no table cell"):
++        _parse_layer1(doc, amount="1234")
++
++
++def test_a_layer1_table_under_a_later_heading_still_counts_after_sources_ends():
++    row = "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,234 |"
++    doc = _cp1_doc("", tail=f"\n## Sources\n\nx\n\n## Appendix\n\n{row}\n")
++    assert _parse_layer1(doc, amount="1234")
++
++
++def _wc_doc(cell: str) -> str:
++    return _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Working capital | {cell} |", "wc")
++
++
++@pytest.mark.parametrize(
++    ("cell", "amount"), [("(45)", "45"), ("-45", "45"), ("45", "-45"), ("+45", "-45")]
++)
++def test_a_layer1_working_capital_is_the_cell_sign_reversed_as_cp2g_reads_it(cell, amount):
++    assert _parse_layer1(_wc_doc(cell), "wc", amount=amount, row="Working capital")
++
++
++@pytest.mark.parametrize(("cell", "amount"), [("45", "45"), ("+45", "45"), ("(45)", "-45")])
++def test_a_layer1_working_capital_release_read_as_an_outflow_is_refused(cell, amount):
++    with pytest.raises(ValueError, match="is not CP-1's cell"):
++        _parse_layer1(_wc_doc(cell), "wc", amount=amount, row="Working capital")
++
++
++def test_a_layer1_table_in_a_tilde_fence_is_code_and_not_a_cell():
++    doc = _cp1_doc("~~~\n" + TWO_YEARS + "\n~~~")
++    with pytest.raises(ValueError, match="no table cell"):
++        _parse_layer1(doc, amount="1000", period="FY2025")
++
++
++def test_a_layer1_escaped_pipe_stays_inside_its_cell():
++    table = "| Metric | Note | FY2025 |\n| --- | --- | --- |\n| revenue | a \\| 900 | 1,000 |"
++    assert _parse_layer1(_cp1_doc(table), amount="1000", period="FY2025")
++    with pytest.raises(ValueError, match="is not CP-1's cell"):
++        _parse_layer1(_cp1_doc(table), amount="900", period="FY2025")
++
++
++@pytest.mark.parametrize("printed", ["85", "-85", "(85)", "\u221285", "**(85)**"])
++def test_a_layer1_outflow_is_stated_as_a_magnitude_however_cp1_prints_it(printed):
++    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Interest paid | {printed} |", "interest")
++    assert _parse_layer1(doc, "interest", amount="85", row="Interest paid").base["interest"]
++
++
++def test_a_layer1_outflow_stated_negative_is_refused():
++    doc = _cp1_doc("| Metric | FY2025 |\n| --- | --- |\n| Interest paid | -85 |", "interest")
++    with pytest.raises(ValueError, match="is not CP-1's cell"):
++        _parse_layer1(doc, "interest", amount="-85", row="Interest paid")
++
++
++@pytest.mark.parametrize(
++    ("printed", "amount", "accepted"),
++    [("(50)", "50", False), ("(50)", "-50", True), ("50", "-50", False), ("\u221250", "-50", True)],
++)
++def test_a_layer1_non_outflow_compares_with_its_sign(printed, amount, accepted):
++    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Free cash flow | {printed} |", "fcf")
++    if accepted:
++        assert _parse_layer1(doc, "fcf", amount=amount, row="Free cash flow")
++    else:
++        with pytest.raises(ValueError, match="is not CP-1's cell"):
++            _parse_layer1(doc, "fcf", amount=amount, row="Free cash flow")
++
++
++def test_a_layer1_label_is_compared_without_emphasis_and_a_repeated_row_that_agrees_is_one_cell():
++    table = "| Metric | FY2025 |\n| --- | --- |\n|  **Net sales**  | 1,000 |\n| Net sales | 1000 |"
++    assert _parse_layer1(_cp1_doc(table), amount="1000", row="Net sales")
++
++
++@pytest.mark.parametrize(
++    "operand",
++    [
++        {"amount": "1000", "reason": None},
++        {"amount": "1000", "reason": None, "row": "revenue"},
++        {"amount": None, "reason": "unknown", "row": "revenue", "period": "FY2025"},
++    ],
++)
++def test_a_layer1_operand_must_name_its_cell_exactly_when_it_states_an_amount(operand):
++    doc = _cp1_doc("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |")
++    base = {k: _operand(v, k) for k, v in BASE.items()} | {"revenue": operand}
++    full = doc.replace("__BLOCK__", layer1_block(base=base))
++    with pytest.raises(ValueError, match="CP-1: base revenue"):
++        cpos_forecast.parse(full, full, "CP-1")
++
++
++def test_a_cp2g_operand_names_no_row_or_period():
++    base = {k: _operand(v, k) for k, v in BASE.items()}
++    with pytest.raises(ValueError, match="only CP-1 does"):
++        cpos_forecast.parse(forecast_block(base=base), " ".join(BASE.values()))
++
++
++def test_the_layer1_instruction_asks_for_the_row_and_period_not_for_extra_rows():
++    block = cpos_launch.LAYER1_FORECAST_BLOCK
++    assert '"row"' in block and '"period"' in block and "exact first-cell text" in block
++    assert "Base operands" not in block and "positive magnitude" in block
++
++
++def test_cp_model_without_cp2g_publishes_a_model_from_cp1s_block(tmp_path, provider, capsys):
++    modules = ("CP-1", "CP-MODEL")
++    code, out, seen = forecast_run(
++        tmp_path,
++        provider,
++        capsys,
++        None,
++        modules=modules,
++        cp1_block=layer1_block(),
++        pathway="covenant_refinancing",
++    )
++    assert code == 0, seen.err
++    (folder,) = (out / "deliveries").iterdir()
++    cp1 = hashlib.sha256((folder / "CP-1.md").read_bytes()).hexdigest()
++    assert (folder / "forecast.md").read_bytes() == (folder / "CP-1.md").read_bytes()
++    exact = json.loads((folder / "forecast_exact.json").read_text())
++    assert exact["consumed"] == {"CP-1.md": cp1}  # no CP-2G handoff was consumed
++    assert list(exact["outputs"]) == ["REFERENCE"]  # no case and no shock
++    assert "run-rate inputs the CP-1 handoff stated" in exact["scope_limits"][0]
++    first = exact["outputs"]["REFERENCE"]["years"][0]  # the hand-written year 1 of the base case
++    assert [first[n]["amount"] for n in ("revenue", "ebitda", "fcf", "closing_debt")] == [
++        "1050",
++        "315",
++        "132",
++        "550",
++    ]
++    completed = json.loads(next(out.glob("completed-*.json")).read_text())
++    assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
++
++
++def test_cp2gs_block_wins_when_both_modules_state_one(tmp_path, provider, capsys):
++    cp1_paths = {**PATHS, "revenue_growth": ("0.50", "0.50", "0.50")}  # would give 1500 in year 1
++    cp1_block = layer1_block(
++        base_drivers={
++            n: {
++                "values": list(v),
++                "category": "Analyst Interpretation",
++                "rationale": "x",
++                "limitation": None,
++            }
++            for n, v in cp1_paths.items()
++        }
++    )
++    code, out, seen = forecast_run(
++        tmp_path,
++        provider,
++        capsys,
++        forecast_block(),
++        modules=("CP-2G", "CP-MODEL"),
++        cp1_block=cp1_block,
++    )
++    assert code == 0, seen.err
++    (folder,) = (out / "deliveries").iterdir()
++    assert (folder / "forecast.md").read_bytes() == (folder / "CP-2G.md").read_bytes()
++    exact = json.loads((folder / "forecast_exact.json").read_text())
++    assert set(exact["consumed"]) == {"CP-1.md", "CP-2G.md"}
++    assert exact["outputs"]["REFERENCE"]["years"][0]["revenue"]["amount"] == "1050"
++    assert "DOWNSIDE" in exact["outputs"]
++    assert "run-rate" not in exact["scope_limits"][0]
++
++
++@pytest.mark.parametrize(
++    ("cp1_block", "reason"),
++    [
++        (layer1_block(years=[]), "CP-1: forecast inputs: years"),
++        (None, "CP-1: needs exactly one `### Forecast inputs (machine-readable)` heading"),
++        (forecast_block(), "CP-1: a layer-1 forecast states no shock and no cases"),
++        (
++            layer1_block(
++                base={k: _operand("1234" if k == "revenue" else v, k) for k, v in BASE.items()}
++            ),
++            "CP-1: base revenue 1234 is not CP-1's cell at row `revenue`, period `FY2025`",
++        ),
++    ],
++)
++def test_a_bad_layer1_block_withholds_the_model_and_never_rejects_cp1(
++    tmp_path, provider, capsys, cp1_block, reason
++):
++    code, out, seen = forecast_run(
++        tmp_path,
++        provider,
++        capsys,
++        None,
++        modules=("CP-1", "CP-MODEL"),
++        cp1_block=cp1_block,
++        pathway="covenant_refinancing",
++    )
++    assert code == 0, seen.err  # CP-1 was accepted; the run delivered
++    (folder,) = (out / "deliveries").iterdir()
++    assert (folder / "delivery.json").is_file() and not (folder / "forecast_exact.json").exists()
++    completed = json.loads(next(out.glob("completed-*.json")).read_text())
++    assert completed["cp_forecast_published"] is False
++    assert reason in completed["forecast_failure"]
++    assert f"Model not published: {completed['forecast_failure']}" in seen.err
++
++
++def test_cp1_gets_the_layer_1_block_only_when_the_forecast_lacks_cp2g(tmp_path):
++    def instructions(name, pathway, modules=None):
++        folder = tmp_path / name
++        folder.mkdir()
++        prepared = prepare(
++            context_file(folder, pathway),
++            issuer_folder(folder),
++            folder / "out",
++            config="sol-medium",
++            cap="50",
++            modules=modules,
++        )
++        return prepared, (folder / "out/instructions/CP-1.md").read_text()
++
++    marker = "### Forecast inputs (machine-readable)"
++    for name, pathway, modules in (
++        ("preset", "earnings_update", None),  # CP-MODEL in the preset, no CP-2G
++        ("explicit", "covenant_refinancing", ("CP-1", "CP-MODEL")),
++    ):
++        prepared, text = instructions(name, pathway, modules)
++        before, _, method = text.partition(cpos_launch.METHOD_MARK)
++        assert marker in before and marker not in method, name
++        assert prepared.plan.publish_forecast is True, name
++        assert "CP-MODEL" not in prepared.ordered, name
++    prepared, text = instructions("with-2g", "distressed_restructuring")  # CP-2G in the run
++    assert marker not in text and prepared.plan.publish_forecast is True
++    assert marker in (tmp_path / "with-2g/out/instructions/CP-2G.md").read_text()
++    prepared, text = instructions("bare", "earnings_update", ("CP-1",))  # no CP-MODEL, no CP-2G
++    assert marker not in text and prepared.plan.publish_forecast is False
++
++
+ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
+     code, out, seen = forecast_run(tmp_path, provider, capsys, None, modules=("CP-2A",))
+     assert code == 0, seen.err
+@@ -2306,7 +2763,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
+ 
+ 
+ def test_model_publish_failure_keeps_the_delivery(tmp_path, provider, capsys, monkeypatch):
+-    def refuse(cp1, handoff):
++    def refuse(cp1, handoff, source="CP-2G"):
+         raise ValueError("synthetic failure")
+ 
+     monkeypatch.setattr(cpos_forecast, "model_files", refuse)
+@@ -3738,3 +4195,11 @@ def test_checker_rejects_a_reader_number_the_handoff_does_not_hold(tmp_path):
+     issues = _checked_handoff(task, wrong.encode(), checker(prepared.layout))
+     assert any(i.startswith("Fidelity check, line ") and '"9.87x"' in i for i in issues)
+     assert not any("Prose check 9" in i for i in issues)
++
++
++def test_the_service_standing_ruling_lists_web_search_so_runs_from_the_page_search():
++    from deploy_workflow.inbox.startup import STANDING_RULING
++    from deploy_workflow.owners.cpos import web_search_ruled
++
++    assert web_search_ruled(STANDING_RULING)
++    assert not web_search_ruled(RULING)  # a ruling that lists only the config does not
+diff --git a/tests/test_prose_checks.py b/tests/test_prose_checks.py
+index 99b74be..6897e35 100644
+--- a/tests/test_prose_checks.py
++++ b/tests/test_prose_checks.py
+@@ -532,3 +532,18 @@ def test_a_minus_held_figure_may_be_narrated_as_its_magnitude() -> None:
+ def test_a_padded_decimal_matches_its_trimmed_form() -> None:
+     assert fidelity("Leverage is 4.1x.", "| Leverage | 4.10x |") == ()
+     assert len(fidelity("Leverage is 4.1x.", "| Leverage | 4.15x |")) == 1
++
++
++FORECAST_BLOCK_DOC = (
++    "### Forecast inputs (machine-readable)\n\n```json\n"
++    '{"base_drivers": {"ebitda_margin": {"rationale": "FY2025 margin was 31.7%, carried forward"}}}'
++    "\n```\n"
++)
++
++
++def test_the_forecast_inputs_block_holds_no_reader_figure() -> None:
++    """The block's own rationale text is not a table: it cannot hold what a passage states."""
++    text = bottom("The EBITDA margin was 31.7% last year.", FORECAST_BLOCK_DOC + CALCULATIONS)
++    assert len(figure_issues(text)) == 1
++    held = bottom("The EBITDA margin was 31.7% last year.", CALCULATIONS.replace("3.1x", "31.7%"))
++    assert figure_issues(held) == ()
+diff --git a/tests/test_run_start_page.py b/tests/test_run_start_page.py
+index 5929857..639609b 100644
+--- a/tests/test_run_start_page.py
++++ b/tests/test_run_start_page.py
+@@ -236,6 +236,7 @@ def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
+     """)
+     five = ["pathway", "documents", "issuer", "legal", "review"]
+     assert seen["basic"] == five
++    # CP-DR is in every pathway (owner, 2026-11-11): its research questions are asked from Standard.
+     assert seen["standard"] == [
+         "pathway",
+         "documents",
+@@ -243,6 +244,7 @@ def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
+         "legal",
+         "market",
+         "valuation",
++        "assumptions",
+         "review",
+     ]
+     assert seen["advanced"] == seen["standard"]
+@@ -258,7 +260,7 @@ def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
+         "assumptions",
+         "review",
+     ]
+-    assert seen["covStandard"] == five
++    assert seen["covStandard"] == [*five[:-1], "assumptions", "review"]  # CP-DR: research questions
+     assert seen["covAdvanced"] == [
+         "pathway",
+         "documents",
+@@ -671,6 +673,10 @@ def test_the_review_shows_the_services_forecast_per_module(page):
+     by_module = {r["id"]: r for r in seen["rows"]}
+     for module in summary["modules"]:
+         own = [i["outcome"] for i in summary["items"] if i["scope"] == module]
++        # The page's own rules join the service's items: CP-DR's web-search note, and CP-2A's
++        # no-legal-documents limit with CP-2G reading it (both joined this pathway on 2026-11-11).
++        page_own = {"CP-DR": ["information"], "CP-2A": ["limited"], "CP-2G": ["limited"]}
++        own = [*own, *page_own.get(module, [])]
+         want = min(own, key=ORDER.index) if own else "ready"
+         assert by_module[module]["outcome"] == want, module
+     for item in summary["items"]:  # every reason the service gave is shown
+@@ -721,6 +727,7 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
+     const S = await review();
+     const itemPs = [...document.querySelectorAll('#rv-ready [data-module] p')];
+     const out = {{S, start: gate(), n: ticks().length,
++      tickModules: ticks().map(t => t.closest('[data-module]').dataset.module),
+       maxPerItem: Math.max(...itemPs.map(p => p.querySelectorAll('[data-tick]').length)),
+       rowOutcomes: ticks().map(t => t.closest('[data-module]').dataset.outcome)}};
+     const all = ticks();
+@@ -744,7 +751,11 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
+     """)
+     need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
+     # One tick per item that needs one, counted from the service's items, not from the page.
+-    assert need and seen["n"] == len(need)
++    # Two ticks come from the page's own rule, not the service: CP-2A with no legal documents (in
++    # this pathway, owner 2026-11-11) and CP-2G, which reads CP-2A's downside.
++    page_only = ["CP-2A", "CP-2G"]
++    assert need and seen["n"] == len(need) + len(page_only)
++    assert sorted(m for m in seen["tickModules"] if m in page_only) == page_only
+     assert seen["maxPerItem"] == 1
+     assert set(seen["rowOutcomes"]) <= set(LIMITS)
+     assert seen["start"] == {"approve": True, "approved": False, "submit": True}
+@@ -940,7 +951,9 @@ def test_the_research_text_is_fixed(page):
+     return {text: document.querySelector('#research-src .strip-text').textContent};
+     """)
+     assert seen["text"] == (
+-        "Research works from the supplied files only. "
++        "The research module searches the web for public peers as well as reading the supplied "
++        "files; its searches go to OpenAI's search. It is told to search with public names only, "
++        "and the queries it actually sent are kept in the run record. "
+         "Add peers' filings to the documents if you want them used."
+     )
+ 
+@@ -982,8 +995,9 @@ def test_upload_to_filed_report_with_the_real_launcher(
+     [record] = load_all(layout(root))
+     assert record.id == first["id"]
+     assert record.status == "finished", record.reason
+-    assert record.report.startswith("issuers/") or "/issuers/" in record.report
+-    assert (root / record.report).is_file()
++    # A delivery has no report page (PR #46): nothing is filed, so the record names none. The
++    # library lists the run itself, and the page links to it (the next test follows that link).
++    assert record.report == ""
+     assert f'"{record.id}"' in (root / "_engine/library/data.js").read_text(encoding="utf-8")
+     after = page.run("""
+     const text = () => $('run-progress').textContent;
+diff --git a/tests/test_run_start_submissions.py b/tests/test_run_start_submissions.py
+index 967005e..c36b321 100644
+--- a/tests/test_run_start_submissions.py
++++ b/tests/test_run_start_submissions.py
+@@ -244,6 +244,24 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
+     assert s["digest"] == digest(layout, sid, answers)
+ 
+ 
++def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
++    layout, tmp_path, monkeypatch
++):
++    sid, _ = upload_issuer(layout, tmp_path)
++    seen = []
++
++    def watching(*args, **kwargs):
++        seen.append(kwargs["web_search"])
++        return prepare(*args, **kwargs)
++
++    monkeypatch.setattr(submissions, "prepare", watching)
++    assert (
++        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
++        == ""
++    )
++    assert seen == [True]  # the standing ruling lists web-search
++
++
+ def test_the_summary_is_for_the_module_list_the_digest_covers(layout, tmp_path):
+     sid, _ = upload_issuer(layout, tmp_path)
+     s = summary(
+diff --git a/tests/test_web_search_scope.py b/tests/test_web_search_scope.py
+new file mode 100644
+index 0000000..4b5df5e
+--- /dev/null
++++ b/tests/test_web_search_scope.py
+@@ -0,0 +1,192 @@
++"""Web search scope: which cases search, the after-the-fact check of what was searched for, and
++the citation-marker stripping edges (fix round 1 of the run-page web search)."""
++
++from __future__ import annotations
++
++import json
++import time
++from dataclasses import replace
++from decimal import Decimal
++from pathlib import Path
++
++import pytest
++from test_handoff_loop import GOOD, Adapter, searched, task, turn
++
++from deploy_workflow.model.handoff import HandoffExecutor, ModuleTools, strip_citation_markers
++from deploy_workflow.model.providers import WEB_SEARCH_BLOCK
++from deploy_workflow.model.turn import ProviderBlock, ToolCall, hosted_kind
++from deploy_workflow.run_events import EVENTS, read_events
++
++OPEN, SEP, CLOSE = "", "", ""
++MARK = f"{OPEN}cite{SEP}turn0view0{CLOSE}"
++
++
++def research(case_kind: str):
++    base = task()
++    return replace(
++        base, module_id="CP-DR", run=base.run.model_copy(update={"case_kind": case_kind})
++    )
++
++
++def run_research(tmp_path: Path, case_kind: str) -> tuple[Adapter, list[dict]]:
++    adapter = Adapter(searched(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()}), 1))
++    HandoffExecutor(
++        tmp_path / "run",
++        adapter=adapter,
++        cap_usd=Decimal(10),
++        check=lambda _t, _r: (),
++        events=tmp_path / "ev",
++        web_search=True,
++    )(research(case_kind))
++    return adapter, read_events(tmp_path / "ev" / EVENTS)
++
++
++def held(events: list[dict]) -> Decimal:
++    return Decimal(next(e for e in events if e["event"] == "turn")["held_usd"])
++
++
++def test_a_synthetic_case_is_not_offered_web_search_and_holds_no_fee(tmp_path: Path) -> None:
++    held_for = {}
++    for kind in ("public", "private", "synthetic"):
++        adapter, events = run_research(tmp_path / kind, kind)
++        offered = any(hosted_kind(t) for t in adapter.requests[0].tools)
++        assert offered is (kind != "synthetic"), kind
++        held_for[kind] = held(events)
++    assert held_for["public"] == held_for["private"]
++    assert held_for["public"] - held_for["synthetic"] == Decimal("0.16")
++
++
++def test_a_flagged_query_is_recorded_and_does_not_fail_the_run(tmp_path: Path) -> None:
++    leak = {
++        "type": "web_search_call",
++        "id": "ws_0",
++        "status": "completed",
++        "action": {
++            "type": "search",
++            "queries": ["TransDigm peers Revenue 1,234,567 S1.txt", "TransDigm aerospace peers"],
++        },
++    }
++    reply = turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()}))
++    assert reply.turn is not None
++    reply = replace(
++        reply,
++        turn=replace(reply.turn, provider_blocks=(ProviderBlock(WEB_SEARCH_BLOCK, leak),)),
++    )
++    leaking = research("public")
++    leaking = replace(leaking, sources={"S1.txt": b"Revenue 1,234,567\nMissing cash"})
++    out = HandoffExecutor(
++        tmp_path / "run",
++        adapter=Adapter(reply),
++        cap_usd=Decimal(10),
++        check=lambda _t, _r: (),
++        events=tmp_path / "ev",
++        web_search=True,
++    )(leaking)
++    assert out == GOOD  # detection, not prevention: the run goes on
++    flagged = [
++        e for e in read_events(tmp_path / "ev" / EVENTS) if e["event"] == "search_query_flagged"
++    ]
++    assert [e["query"] for e in flagged] == ["TransDigm peers Revenue 1,234,567 S1.txt"]
++    assert {"S1.txt" in e["reason"] or "1234567" in e["reason"] for e in flagged} == {True}
++    (record,) = (tmp_path / "run").glob("modules/*/0.queries.json")
++    assert len(json.loads(record.read_text())["search_query_flagged"]) == 1
++
++
++def test_year_and_public_names_are_not_flagged(tmp_path: Path) -> None:
++    from deploy_workflow.model.handoff import flag_search_queries
++
++    sources = {"annual.txt": "Sales 2024 were 2,500 and 12,345.6 in 2019."}
++    assert flag_search_queries(["TransDigm 2024 peers", "Howmet 2500"], sources) == [
++        ("Howmet 2500", "possible leak: figure 2500 occurs in this run's source text")
++    ]
++    assert flag_search_queries(["peers of annual"], sources) == [
++        ("peers of annual", "possible leak: source file name annual.txt")
++    ]
++    assert flag_search_queries(["TransDigm 2024 2019 peers", "12 345", "7,777"], sources) == []
++
++
++def test_a_marker_never_spans_lines() -> None:
++    text = f"Revenue {OPEN} was 1,234.\n| EBITDA | 567 |\nok {CLOSE} tail"
++    assert strip_citation_markers(text) == (text, 0)
++
++
++def test_stripping_is_linear_on_long_whitespace() -> None:
++    start = time.perf_counter()
++    out, n = strip_citation_markers(" " * 80_000 + "x " + MARK)
++    assert n == 1 and out == " " * 80_000 + "x"
++    assert time.perf_counter() - start < 2
++
++
++def test_many_unclosed_openers_are_linear() -> None:
++    start = time.perf_counter()
++    text = (OPEN + "a" * 20) * 3000 + "z" * 60_000 + " x" + MARK
++    strip_citation_markers(text)
++    assert time.perf_counter() - start < 2
++
++
++def test_the_model_is_told_how_many_markers_were_removed_and_may_quote_its_own_text(
++    tmp_path: Path,
++) -> None:
++    marked = GOOD.decode().replace("100\n", f"100 is the figure{MARK} here\n", 1)
++    tools = ModuleTools(
++        replace(task(), module_id="CP-DR"), tmp_path, lambda _t, _r: ("no",), strip_markers=True
++    )
++    first = tools.write_handoff(marked)
++    assert "1 citation marker was removed" in first
++    result = tools.edit_handoff([{"old": f"figure{MARK} here", "new": "figure here."}])
++    assert not result.startswith("ERROR")
++
++
++@pytest.mark.parametrize("who", ["citeturn0image0", "citeturn0fetch1", "cite turn0view0"])
++def test_check_9_catches_other_marker_shapes(who: str) -> None:
++    from deploy_workflow.prose_checks import prose_issues
++
++    doc = f"# H\n\n## Findings\n\n### Bottom line\n\nLeverage is lower {who} here.\n"
++    assert any("Prose check 9" in i for i in prose_issues(doc))
++
++
++def test_check_9_refuses_only_the_providers_delimiters_and_anywhere_in_the_handoff() -> None:
++    from deploy_workflow.prose_checks import prose_issues
++
++    head = "# H\n\n## Findings\n\n### Bottom line\n\nLeverage is lower.\n\n"
++    other = prose_issues(head + "Icon  and  glyphs.\n")
++    assert not any("Prose check 9" in i for i in other)
++    for ch in (OPEN, CLOSE, SEP):
++        assert any("Prose check 9" in i for i in prose_issues(head + f"## Gaps\n\nPeer {ch} x\n"))
++        assert any("Prose check 9" in i for i in prose_issues(head + f"| a {ch} | b |\n"))
++
++
++def instructions(tmp_path: Path, **kwargs: bool) -> str:
++    adapter = Adapter(searched(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()}), 1))
++    HandoffExecutor(
++        tmp_path,
++        adapter=adapter,
++        cap_usd=Decimal(10),
++        check=lambda _t, _r: (),
++        **kwargs,
++    )(research("public"))
++    return adapter.requests[0].messages[0].text
++
++
++def test_the_source_guidance_is_in_a_searching_cp_dr_and_absent_without_search(
++    tmp_path: Path,
++) -> None:
++    on = instructions(tmp_path / "on", web_search=True)
++    off = instructions(tmp_path / "off")
++    for phrase in ("Rely primarily on reputable sources", "go to the original", "Source type"):
++        assert phrase in on
++        assert phrase not in off
++
++
++def test_a_web_source_row_without_a_source_type_is_refused() -> None:
++    from deploy_workflow.model.handoff import web_source_issues
++
++    good = (
++        "## Sources\n| Source | URL | Source type |\n|---|---|---|\n"
++        "| S2 | https://x.org | Rating agency |\n## Findings\n"
++    )
++    bare = good.replace("Rating agency", "unknown")
++    assert web_source_issues(good) == []
++    assert len(web_source_issues(bare)) == 1
++    assert web_source_issues("## Sources\n| S1 | file.txt |\n## Findings\n") == []
++    assert web_source_issues("## Findings\n| a | https://x |\n") == []

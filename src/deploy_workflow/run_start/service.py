@@ -57,6 +57,16 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
     "report", "modules"}``. ``modules`` is ``[[module, "done"|"running"|"waiting"], ...]`` in
     plan order, then ``["Report", ...]``; ``stalled`` is added (true) when no event for an hour.
     ``report`` is a path under the library folder, relative to the root, once filed.
+``GET /api/runs/<run id>/inputs``
+    200 ``prior.inputs``: the earlier run's context (dates blank), file names and sizes (never file
+    content), level, modules and turns; ``error`` (relative names only) when the folder's listing
+    was refused. 404 for an unknown run.
+``GET /api/issuers/<issuer id>`` (``[a-z0-9-]{1,40}``)
+    200 ``prior.issuer``: ``{"runs", "latest_as_of", "latest_run", "issuer_name"}``.
+``POST /api/submissions/<id>/carry``
+    Body ``{"run": "<run id>"}``. 200 ``{"carried": [...], "kept": [...]}``: the run's stored
+    files copied into the submission, a name already held kept. 404 for an unknown run or
+    submission; 400 for a bad body, a run with no stored documents or any other refusal.
 ``GET /library/<path>``
     A read-only file under ``_engine/library``. The final path (``index.html`` appended for a
     folder) is resolved with links followed and must be a regular file inside the library: 404 for
@@ -98,7 +108,7 @@ from deploy_workflow.inbox.layout import Layout
 from deploy_workflow.inbox.scheduler import Scheduler, Settings
 from deploy_workflow.platform_io import flags as flag_bits
 from deploy_workflow.platform_io import regular_open
-from deploy_workflow.run_start import submissions
+from deploy_workflow.run_start import prior, submissions
 from deploy_workflow.run_start.submissions import Answers
 
 __all__ = ["Handler", "main", "make_server"]
@@ -119,8 +129,13 @@ _LIBRARY_POLICY = "connect-src 'none'; form-action 'none'; frame-ancestors 'self
 _JSON = "application/json; charset=utf-8"
 _FAILED = "the service failed; see its log"
 _UNKNOWN = "unknown submission"  # the text submissions raises for an id it does not hold
-_SUBMISSION = re.compile(r"/api/submissions/([^/]+)/(files|reading|summary|submit)")
-_RUN = re.compile(r"/api/runs/([0-9A-Za-z._-]{1,80})")
+_UNKNOWN_RUN = "unknown run"  # the text prior raises for a run id with no record
+_SUBMISSION = re.compile(r"/api/submissions/([^/]+)/(files|reading|summary|submit|carry)")
+_RUN_ID = r"[0-9A-Za-z._-]{1,80}"
+_RUN = re.compile(rf"/api/runs/({_RUN_ID})")
+_RUN_INPUTS = re.compile(rf"/api/runs/({_RUN_ID})/inputs")
+_ISSUER = re.compile(r"/api/issuers/([a-z0-9-]{1,40})")
+_NO_FILES = "that run has no stored documents"
 _RUN_FIELDS = (
     "id",
     "status",
@@ -354,6 +369,12 @@ class Handler(BaseHTTPRequestHandler):
         found = _SUBMISSION.fullmatch(path)
         if found and found[2] == "reading":
             raise _Reply(200, self._guarded(lambda: submissions.reading(self._layout, found[1])))
+        inputs = _RUN_INPUTS.fullmatch(path)
+        if inputs:
+            raise _Reply(200, self._guarded(lambda: prior.inputs(self._layout, inputs[1])))
+        issuer = _ISSUER.fullmatch(path)
+        if issuer:
+            raise _Reply(200, prior.issuer(self._layout, issuer[1]))
         run = _RUN.fullmatch(path)
         if run:
             raise _Reply(200, self._run(run[1]))
@@ -372,6 +393,8 @@ class Handler(BaseHTTPRequestHandler):
             raise _Reply(200, self._guarded(lambda: self._summary(sid, answers)))
         if action == "submit":
             self._submit(sid, self._json_body())
+        if action == "carry":
+            self._carry(sid, self._json_body())
 
     def _delete(self, url: urllib.parse.SplitResult) -> None:
         found = _SUBMISSION.fullmatch(url.path)
@@ -385,7 +408,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             return action()
         except submissions.Refused as refusal:
-            raise _refuse(404 if str(refusal) == _UNKNOWN else 400, str(refusal)) from None
+            missing = str(refusal) in (_UNKNOWN, _UNKNOWN_RUN)
+            raise _refuse(404 if missing else 400, str(refusal)) from None
 
     def _upload(self, sid: str, name: str) -> None:
         length = self._length()
@@ -395,6 +419,19 @@ class Handler(BaseHTTPRequestHandler):
             )
         )
         raise _Reply(200, {"name": stored})
+
+    def _carry(self, sid: str, body: Any) -> None:
+        run = body.get("run") if isinstance(body, dict) else None
+        if not isinstance(run, str) or not re.fullmatch(_RUN_ID, run):
+            raise _refuse(400, "the request needs the id of an earlier run")
+
+        def copy() -> dict[str, list[str]]:
+            _, folder = prior.source(self._layout, run)
+            if folder is None:
+                raise submissions.Refused(_NO_FILES)
+            return submissions.carry(self._layout, sid, folder)
+
+        raise _Reply(200, self._guarded(copy))
 
     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
         settings = self._service.scheduler.settings

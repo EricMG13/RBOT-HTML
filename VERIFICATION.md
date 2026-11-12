@@ -53,6 +53,157 @@ one paid run on gpt-6.1-sol. Not a current credit view; one run per setting.
   (unaccepted draft), none on CP-0, inconclusive on CP-1A; the medium modules needed no more.
 - Not verified: CP-2 onward under mixed effort; a same-code all-medium control (instructions
   changed after both baselines); the full test suite.
+## 2026-11-12 — CP-2G facility schedule (branch `claude/cash-flow-model-comparison-498459`)
+
+Owner waiver 2026-11-12: the 800-line PR limit is waived for this branch's pull request (about 1,290
+changed lines: plan document about 340, tests about 520; the whole-branch review found no sensible split).
+
+Scope: CP-2G facility schedule: offline synthetic tests only; no provider called, no model response
+retained; a live CP-2G run that states `facilities` has not been done; the Forecast page was not
+exercised with the new `forecast_exact.json` keys.
+- `uv run pytest tests/test_cpos_facilities.py -q`: exit 0, 55 passed (the answer key puts the debt outside the stated facilities at the analyst's rate: 37.5, 34.8, 30.6).
+- `uv run pytest tests/test_cpos_launch.py -q -k "forecast or told_how"`: exit 0, 24 passed; the whole
+  file: 507 passed, 1 skipped (the paid live test).
+- `uv run python tools/quality_gate.py`: exit 0, 0 findings.
+- Independent checks: the output for a block without facilities is byte-identical to origin/main 36b6d8f
+  (sha256 e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089 over the five model files);
+  the arithmetic matched an independent Fraction calculation over 74 accepted seeded random blocks
+  (11 with debt outside the stated facilities, per-case rates included; reviewer's probe, not in the suite); the
+  adversarial review found and fixed two Medium defects (negative total debt from repayments above
+  base debt; unbounded floating all-in rate). Three boundary tests each kill their mutant (`0 <= rate`
+  to `0 < rate`; `unallocated < 0` to `<= 0`; `due < start` to `<=`).
+- Known limits: debt outside the stated facilities bears interest at the analyst's assumed rate, not a sourced one; with base debt
+  missing no unit check runs on facility balances; the printed-in-CP-1 check for rate terms accepts
+  any matching percent anywhere in CP-1.
+
+## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
+
+Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
+
+Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
+called, no paid run). The whole branch after its whole-branch review: carry from an earlier run (locked
+ID, documents, answers, pathway, module subset, turns), the existing-issuer notice, "Start again from
+this run", and "Start a run" on the library's Report history. This wave fixed the review's seam findings
+(`?from=` with a submitted run still held, carried-file marks against uploads, the carried pathway and
+subset/turns marks, `open_regular` through `platform_io.regular_open`, hidden names, refused listings).
+- `uv run pytest tests/test_run_start_prior.py tests/test_run_start_submissions.py tests/test_run_start_service.py -q`: exit 0, 170 passed.
+- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 131 passed (91 page, 40 library), none skipped (Chrome ran).
+  `test_upload_to_filed_report_with_the_real_launcher` fails on the base already and is not part of this change.
+- Review probes (`wb_seams.py`: 10 passed; the earlier probes exit as before, `probe_carry_races.py`'s
+  seal-between-copies case still fails: ruled out of this wave).
+- `uv run python tools/quality_gate.py`: exit 0.
+- Fidelity: the notice text, marks, load messages and the progress note are asserted in the DOM Chrome builds.
+- Reader check: not done; pending. No real run was read against the September VMO2 reference.
+- CP-8 summary lines (the "changes section" and the two-prior-runs lines) are not built: the CP-8 redesign has not merged.
+- Windows not run: the `O_BINARY` open of a carried file is from reading `platform_io.regular_open` only.
+
+## 2026-11-12 — Run start page browser tests after the preset change (branch `claude/web-search-run-page`)
+
+The browser tests (`-m browser`) were not run for the commits from 73b499b (presets) to d185d83. Run then:
+`tests/test_run_start_page.py` 14 failed, 42 passed (at 0e2c564: 1 failed, 55 passed). Causes: (a) real page
+defect, `build()` required "Current period" whenever CP-2G was in the run; CP-2G joined credit_snapshot and
+covenant_refinancing, so a Basic submission that the launcher accepts (`cpos_launch.prepare` takes a blank period)
+was blocked. The page now requires it for an earnings update only, labels it recommended, and adds a "Note" row
+for CP-2G when it is blank (10 tests). (b) stale expectations: Standard now shows the research-questions stage
+for credit_snapshot and covenant_refinancing (CP-DR is in every pathway); the services-forecast and limit-tick
+tests now count the page's own CP-DR note, CP-2A no-legal-documents limit and CP-2G reading it. (c) pre-existing
+since PR #46: a delivery files no report page, so `record.report` is `""`; the assertion now says so (the run
+page's link to the library's Report history for the run is checked by the next test). The research-text
+assertion already matched the final copy. After: that file 56 passed; `-m browser -k "run_start or context_form
+or library or inbox"` 100 passed, exit 0; the fast set 756 passed, exit 0; quality gate 0 findings, exit 0.
+Not verified: a forecast run with a blank current period through a live provider.
+
+## 2026-11-12 — Web search from the run page; leaked citation markers (branch `claude/web-search-run-page`, decisions M1, M4)
+
+(a) Paid test, this dated case only (TDG FY2024, ruling `2026-11-11-cpdr-web-search-live-test.md`, run `tdg-cpdr-web-001`): CP-0, CP-1, CP-DR and CP-1C accepted, charged USD 3.39131650. CP-DR located HEICO and
+Howmet figures and CP-1C read them. Defect: the delivered CP-DR handoff held 54 provider citation markers
+(U+E200 `cite` U+E202 `turn..view..` U+E201) in reader prose, which the eight prose checks did not catch.
+Fix: markers are removed from a searching module's answer before the check (count in `<n>.markers.json` and a
+`citation_markers_removed` event; provider response unchanged), plus prose check 9 for any other shape
+(reader-ruling amendment). On that handoff the removal leaves 0 markers and adds no double space or
+space before a comma or full stop. Not verified: `store:false` behaviour was not separately inspected, peer
+figures were not checked against the cited pages, analytical accuracy.
+(b) This change, offline (no provider call): the standing run-start ruling lists `web-search`; `prepare`'s
+cap check holds the CP-DR search fee (USD 0.16) as the live loop does; the summary passes it; the page's
+approval summary says what goes to OpenAI; READMEs updated. Tests: `test_citation_markers.py`, the
+`prepare` and ruling tests in `test_cpos_launch.py`, `test_context_form.py`, `test_run_start_submissions.py`.
+`test_inbox_scheduler.py::test_a_submission_is_run_by_the_real_launcher_and_listed` failed identically on the base
+`claude/forecast-layer1` (canned answers; stopped at the checker); commit ebd4c13 fixed it (the canned launcher
+answers CP-2G with a forecast block).
+(c) Fix round 1 (security review, offline, no provider call): the page and ruling no longer say queries "use
+public names only" as a fact: the module is told to, the queries it sent are kept in `<n>.response.json`, and
+`flag_search_queries` flags afterwards any query with a supplied file name or a source figure of 4+ digits (years
+1900-2100 excepted) as a `search_query_flagged` event and `<n>.queries.json` (detection, not prevention; the
+library's Run record does not show the count: its store has no field). Owner ruling 2026-11-12: web search for
+`public` and `private` cases, off for `synthetic` (one rule, `web_search_offered`; offline hold, live hold and
+the `Web:` line agree; the page says before Submit whether the run searches). Source guidance and a `Source type`
+cell on web rows (METHODOLOGY-REVIEW.md): no paid run has exercised the new source guidance. Markers: a marker
+never spans lines, stripping is linear, the tool result tells the model how many were removed and an edit may quote
+marked text, check 9 covers `cite\s*turn\d+[a-z]+\d+` anywhere in the handoff and only U+E200-U+E202.
+Forecast riders: `~~~` fences are code, `\|` stays in its cell, working capital is the cell sign-reversed as CP-2G
+reads it (the base's test fixtures now print wc as `(10)`).
+
+## 2026-11-11 — Forecast from layer 1 (branch `claude/forecast-layer1`, decision M3)
+
+CP-MODEL (preset or `--modules`) means "publish the forecast"; it makes no model call. Without CP-2G,
+CP-1 gets a layer-1 variant of the forecast block (base operands as CP-1 prints them, run-rate drivers,
+no cases, no shock) and the forecast comes from it; with CP-2G the block, checks and files are unchanged.
+A bad or absent CP-1 block is not a CP-1 check: the model is withheld through the existing fail-open
+(stderr, `model_not_published` event, `forecast_failure` in the completion record). Published limits
+say "run-rate inputs the CP-1 handoff stated"; the library shows them under Model limitations, unchanged.
+Offline, synthetic handoffs only (no provider call, no run folder touched): new tests fail on the base
+and pass now. `uv run pytest tests/test_cpos_launch.py tests/test_handoff_loop.py tests/test_update_library.py
+tests/test_credit_os_store.py -q -m "not live and not browser"` 666 passed, exit 0; `uv run python
+tools/quality_gate.py` 0 findings, exit 0. Changed expectations: `--modules CP-MODEL` is no longer refused;
+earnings_update's report scope now names the run-rate forecast; the publish-failure stub takes a source
+argument.
+Fix round 1 (the operand-key row rule) was replaced in round 2 after re-review: CP-1 keeps its natural
+tables; each layer-1 base operand states `{"amount","reason":null,"row","period"}`, the exact first-cell
+label and period header it was read from, and Python reads that one cell (tables outside fences, `## Sources`,
+the block and the reader passages; trimmed and emphasis-stripped, case-sensitive; `1,000`, `-1,000`, `(1,000)`,
+U+2212 parse as signed; `1,000k`, `12%`, `n.a.` do not). Outflows (cp2g.OUTFLOWS) compare by magnitude, all
+others signed; zero, or several differing, cells refuse the operand by name (fail-open unchanged). CP-2G
+refuses a `row`/`period` and keeps its check byte for byte. The block still does not vouch for a reader
+figure in `figure_issues`. Probes `r2_m1_row_defeats.py`, `m3_layer1_operand.py`, `m3_block_vouches_reader.py`,
+`r2_m2_block_edges.py` exit 0 (the first two pass partly because the old-shape blocks they build carry no
+row/period and are refused; the accept/refuse cases are in the new tests). `uv run pytest tests/test_cpos_launch.py
+tests/test_prose_checks.py tests/test_handoff_loop.py tests/test_update_library.py -q -m "not live and not browser"`
+690 passed, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
+Known limits: driver values are not checked against their anchors (the rationale is free text); runs
+interrupted before this change refuse to resume. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
+store tests; `tests/test_financial_workflow.py`.
+
+## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
+
+Decisions M1-M7 are recorded in `docs/rulings/2026-11-11-module-presets-and-changes.md` (a decision
+record; it does not lift the pause).
+
+(a) Live run facts, this dated case only (ruling `docs/rulings/2026-11-11-reader-format-live-test.md`): TDG
+FY2024 public files, context `runs/tdg-context-2024-09-30.json`, `credit_snapshot`, sol-medium, cap USD 15;
+run folder outside the repository. CP-0, CP-1, CP-1A, CP-2, CP-4, CP-3, CP-5 and CP-6 were all accepted and
+delivered; charged USD 3.20906590; two drafts were rejected and repaired within the retry limit (CP-1, CP-3).
+Reader check so far: only CP-6's reader passages were read by the controller: judgement first, sources on
+Basis lines, no codes in sentences. Remaining weakness: pipeline wording in reader text ("producer-owned
+corrections remain open", "canonical financial amount", "open producer QA findings") and dense prose.
+Not verified: the other seven modules' prose; a side-by-side against the VMO2 reference; analytical accuracy.
+
+(b) This change, offline only (no provider call, no run folder read or written): M1 and M2 presets, CP-2G
+added to credit_snapshot and covenant_refinancing, CP-8 removed from portfolio_decision, context-form
+copy. Gate results: `uv run pytest tests/test_cpos_launch.py
+tests/test_context_form.py tests/test_inbox_activity.py -q -m "not live and not browser"` 509 passed, exit 0;
+`tests/test_cp8_comparison.py tests/test_handoff_loop.py` 44 passed, exit 0; `uv run python
+tools/quality_gate.py` 0 findings, exit 0. Plans per pathway were prepared offline by the parametrised
+test (every pathway, four peer sources); `tests/test_financial_workflow.py` was not run (over the
+fast-test limit). M3-M7 are decided and not built here.
+
+## 2026-11-11 — Runs on earlier methods are listed and marked (branch `claude/list-earlier-method-runs`)
+
+Scope: offline, macOS; synthetic fixtures only (`tests/library_fixtures.py`, the fake launcher run). No
+model call, no run folder under `runs/` read or changed. Owner decision 2026-11-11: a run whose module
+methods changed since it ran is listed with `method_changes` and shown as "Earlier methods" (Report history
+status, run label; Run record lists the changes). Other refusals are unchanged. Real TDG runs were not
+rebuilt here.
+- Gates: `uv run pytest tests/test_library_index.py tests/test_update_library.py tests/test_credit_os_catalogue.py -q` 90 passed, exit 0; `node --test` static, reader, calendar 257 pass, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
 
 ## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
 
@@ -814,181 +965,4 @@ with the query removed. So "Open report" (row, selected run, deliverables list) 
 - Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
   inbox-built library; a run with a published forecast model or without a report ("Open primary
   handoff"); the Windows package; Safari and Firefox.
-
-## 2026-11-10 — Design pass on the run report and library (branch `claude/impeccable-report-library-595877`)
-
-Scope: `/impeccable` critique, harden, layout and polish on `apps/issuer-library/credit_os/web/`
-(page parts only; no Python under `src/` or `apps/issuer-library/*.py` changed). What changed and
-the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `origin/main` c145b16.
-- Real-data check: the four retained TDG runs built into a scratch folder through a link to `runs/`
-  (nothing written under `runs/` or the checkout's `library/`; no model call). Word-level diff of the
-  drawn page text against the `origin/main` page parts on `cpos-tdg-sol-medium-all-001` (Overview,
-  CP-1, CP-6), `cpos-tdg-sol-high-001` (Overview) and the library table: the only differences are
-  coverage labels (module names to codes), three repeated chart legends and three repeated
-  "Missing values have no bar" notes removed, and four run ids added to library rows. CP-6: none.
-- Measured in headless Chrome from disk at 1440 and 1280: no horizontal overflow on the four
-  routes; library table 922px in a 922px box at 1280 (was 964px); run-report tables are not scroll
-  boxes and their headers stick at 0px; heading levels have no skip on Overview, CP-1, CP-6; long
-  unbroken, RTL, CJK and emoji text injected into every bottom line, finding and limitation does not
-  widen the page at 1280 or 500px; the Overview prints as 15 pages and CP-1 as 8.
-- Driven in the app's browser pane at 1440: library row to run, outline click and Tab+Enter to a
-  part (route, scroll, current entry, focus ring), count of citations without a page to the
-  inspector and Esc back to the count, a chart chip to the inspector, the Reference route.
-- Gates, all exit 0: `node --test` on `static.test.cjs` and `calendar.test.cjs` (104 pass);
-  `uv run pytest tests/test_library_page_browser.py tests/test_update_library.py
-  tests/test_library_index.py tests/test_credit_os_store.py` (94 passed, browser tests included);
-  `uv run python tools/quality_gate.py --base origin/main`.
-- Reviews: critique by two independent agents; confidence review fixed three findings (a
-  half-retagged chart heading, the catalogue opening on a no-output module, print without
-  background fills); rewrite tournament run inline (one hoist applied, the rest held).
-- Detector after the pass (1280): no skipped-heading or line-length finding on the four routes;
-  the remaining tiny-text findings are the committed 11px label size and nested-cards is the app frame.
-- Basis clamp (owner, 2026-11-10, after the PR opened): the library's ratio basis shows three lines
-  per row. Probe at 1440 and 1280: 12 of 12 basis cells clamped, each cell's title equals its full
-  text, rows 145–161px, table 922px in 922px at 1280. Node 105 pass; the three library pytest files
-  70 passed.
-- Second hardening pass (CSS only, `/impeccable harden`): headless Chrome probes on the built TDG
-  library. Six routes × seven widths (1440–500px), inspector open and closed: no page or canvas
-  overflow. Hostile text (240-character unbroken words, long URLs, Arabic/Japanese/emoji) in handoff
-  fields and library rows at 1280 and 500px: none after the fix (before: band +1,194px, library
-  table 7,802px in 922px). Edge states (malformed and unknown run-part routes, nothing established,
-  no reader summaries, 400 findings, no outputs, 404 library rows in 50ms): no script errors.
-  Library and run report printed to PDF and read. 106 node tests, 94 pytest (library set, browser
-  included), quality gate exit 0. Known: on portrait A4 the printed library table runs 8px past
-  its card edge (nine columns of whole words); nothing is cut. Module tables with hostile cell text
-  scroll sideways in their own box, as before.
-- Library simplification (owner: one item per column; `/impeccable` distill): ten single-value
-  columns, issuer rail replaced by an Issuer select, filters as a toolbar. Headless Chrome on the
-  built TDG library: rows 41px at 1440 and 1280 (one 31-character run id wraps at 1280); six routes
-  × six widths without overflow; hostile text contained at 1280 and 500px; a flow probe with a
-  synthetic second issuer covered `?issuer=zzz` in the address, the select, Reset, Any run, sort,
-  row selection and the panel heading, with no script error. Printed to PDF and read (the run id
-  column wraps to several lines on portrait A4). 106 node tests; 103 pytest (library set, browser
-  included). Superseded by this: the basis clamp and its focus rule above.
-- Not verified: a real print dialog and printers; Safari and Firefox; a screen reader; Windows
-  forced colours (rule written, not rendered); touch input; the inbox-built library with Run
-  activity; runs without charts or with a committee band; whether a keyboard-only reader finds
-  the full basis (it is in the selected-run panel, not on focus).
-
-## 2026-11-10 — Refactoring and optimisation sweep (branch `claude/refactor-optimisation-sweep-01c49e`, tip `dc90974`)
-
-Scope: synthetic tests, scratch harnesses and a scratch copy of four retained runs on macOS. No
-provider was called and nothing ran on Windows. Report with all measurements and the open rows:
-`docs/sweeps/2026-11-10/REPORT.md`.
-- Fixed test-first: `state.declared` was `None` for every real handoff (now Blocked 11, Requires
-  More Work 2 on `cpos-tdg-sol-medium-all-001`); the watcher accepted a cap above the ruling's
-  USD 20; an overflowing source-text page number stopped the build; a drive-relative source name
-  was accepted.
-- Measured: watcher step at 200 ended runs 801.6 ms to 2.4 ms (16,200 file opens to 0); library
-  rebuild of four runs 0.777 s to 0.576 s, bytes read 185.4 MB to 65.7 MB, built library identical
-  (build time masked).
-- Gates on `dc90974`, exit 0: the quality gate (0 findings in 19 files); the `checks.yml` pytest
-  command plus the chips and inbox tests (1,392 passed, 7 deselected); node page logic (97 pass).
-- Reviews: per task and whole branch; one Medium (a "failed" run with a live launcher kept its
-  empty activity entry) fixed in `f28523a` and re-reviewed.
-- Not verified: Windows; a live watcher or provider path; the browser tests and the page's
-  rendering of the declared statuses; the full suite; ten open or decision rows listed in the report.
-- Follow-up (branch `claude/sweep-followup-ruling-rebuild`, tip `e74f2b4`; owner, 2026-11-10): the
-  two decision rows are ruled and fixed test-first. The watcher starts and launches only under its
-  standing ruling; a library-rebuild error of any `Exception` type is logged, shown on the page and
-  retried instead of stopping the watcher. Exit 0 on `e74f2b4`: the quality gate; the same pytest
-  command (1,412 passed, 7 deselected). Review found the first ruling test passed without the
-  guard; it is now a cause test (fails with the check removed). The packaged layout was checked by
-  building the package into a temporary folder on macOS, not on Windows.
-- Outstanding items and a review of `main` (branch `claude/sweep-outstanding-items`, base
-  `b2ae395`; owner, 2026-11-10; written without sub-agents): the seven open rows are fixed
-  test-first (F2, F4, F5, F6, F7, D4, B1) and B3 is accepted and pinned. The review added four
-  fixes: a page range in handoff text hung the library build; one malformed line in a run folder
-  ended the watcher; `--poll-seconds 0` and like settings were accepted; the PR check ran no inbox
-  or chips test. Exit 0 on the branch: the quality gate; the PR check's pytest command with those
-  tests added (1,437 passed, 7 deselected); node page logic (107 pass). The library built from the
-  four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
-  inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
-  sub-agents), only the author's adversarial pass.
-
-## 2026-11-10 — Run report Phase A (library Overview and module pages)
-
-Scope: the library page Overview is now a run report (what the run establishes, credit story by
-question, findings register, open items, module matrix); module pages split View from Statements
-and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
-`docs/superpowers/plans/2026-11-09-run-report-phase-a.md`. Commits fdb21ee..a887ba4, then merge
-4dad3d9 of `origin/main` 51203a9.
-- Real-data check: deterministic rebuild of one retained run, `cpos-tdg-sol-medium-all-001`, into a
-  temporary folder; no model call, nothing written under `runs/` or `library/`. Result: `7 of 20
-  modules reach a conclusion · 13 not assessable`; established CP-1, CP-1A, CP-2, CP-2D, CP-2E,
-  CP-3C, CP-DR; findings register 33 rows shown, 84 with not-assessable modules included; 58 checks
-  pass; key-numbers differences against the previous page 0.
-- Gates on 4dad3d9, all exit 0: `node --test apps/issuer-library/credit_os/web/static.test.cjs` (82
-  pass); pytest on the seven affected files (300 passed, 1 skipped: the paid live test); `uv run
-  python tools/quality_gate.py --base origin/main`.
-- Reviews: per-task and whole-branch; one Medium fixed test-first in a887ba4 (an empty
-  `committee_status:` took the next front-matter line as the status); the merge resolution was
-  reviewed separately and found sound.
-- Merge ruling: front matter follows `main` (dc2320c): a level-2 `Front matter` section whose
-  locator covers only the lines between the `---` markers. Placements of the 20 real handoffs are
-  identical before and after.
-- Second merge 85d47f6 of `origin/main` 2ecfc8f (inbox automation), then fix 4abfb18: the review of
-  that merge found the live Run activity chips had lost their running, done and waiting colours to
-  the run report's `.chip` rule; fixed test-first. On 4abfb18, exit 0: node (93 pass), pytest on the
-  affected files with the inbox tests (409 passed, 1 skipped, run on 85d47f6; the two page files
-  re-run on 4abfb18, 34 passed), the quality gate, and the same real-run rebuild.
-- Not verified: runs other than `cpos-tdg-sol-medium-all-001` were only built without error; widths
-  below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
-  Confidence cell reads as established (neither occurs in retained data); the Overview opened with
-  no run context; the branch diff is 2,245 lines against the 800-line cap.
-
-## 2026-11-10 — Inbox: a run started just before a hard kill is adopted (tip `6ea3a9b`)
-
-Scope: macOS, fake and real-shaped launchers, plus the real launcher started without `--live` and
-without a key. No provider was called. Nothing ran on Windows.
-- Change: the launcher writes its own process ID to a per-run file (`DEPLOY_WORKFLOW_PID_FILE`) as
-  its first step and refuses to start if it cannot; the watcher adopts a `running` record with no
-  process ID from that file, and marks it `interrupted` only after 60 s without one. This closes
-  the first item under "Known and left open" in the entry below.
-- Passed on the tip, exit 0: the eight affected pytest files (381 passed, 1 skipped: the paid
-  test); the quality gate, 0 findings in 7 changed files.
-- Review (adversarial): approved, 0 High, 0 Medium, 1 Low fixed test-first (a corrupt process-ID
-  file stopped the watcher). The reviewer killed a real watcher with SIGKILL before the start,
-  after the start and after the file was written: each time one process at most, the live run
-  adopted and one report filed, or `interrupted` after the grace with nothing started.
-- Not verified: Windows (on a virtual environment the process ID in the file may differ from the
-  one the watcher started; the file replace; liveness checks); a launcher that needs more than
-  60 s to reach its first line; process-ID reuse after a reboot; a paid run.
-
-## 2026-11-10 — Inbox automation (branch `claude/user-journey-2939fb`, tip `f13ce44`)
-
-Scope: synthetic runs through a fake launcher on macOS. No provider was called, the real launcher
-was never started with `--live`, and nothing ran on Windows or over a network share. This is not
-proof of any pathway or issuer.
-- Built: `deploy_workflow.inbox` (drops, filing, runs, activity, watcher, startup), the live Run
-  activity view, the per-pathway context form, `Start watcher.cmd`, the standing ruling
-  `docs/rulings/2026-11-09-inbox-automation.md`. Design:
-  `docs/superpowers/specs/2026-11-09-inbox-automation-design.md`.
-- Passed on the tip, with `origin/main` `51203a9` merged in: `tests/test_inbox_*.py`,
-  `test_cpos_launch.py`, `test_update_library.py`, `test_issuer_library_packaging.py` — 365 passed,
-  1 skipped (the paid test); `static.test.cjs` and `calendar.test.cjs` 28; the browser tests 5
-  (local Chrome over `file://`); the quality gate, 0 findings in 19 changed files.
-- One test runs the watcher with the real library rebuild and a real-shaped completed run; the
-  others replace the library's listing. The real launcher's offline step was exercised by a
-  reviewer's probe only, not by the suite.
-- Reviews: each task; the whole branch (approved with fixes, 0 High, 4 Medium, all fixed and
-  re-reviewed). Killing the watcher mid-run and starting another adopted the live run with one
-  launch, one record and one filed report; that probe is timing-sensitive on a loaded machine.
-- Known and left open: a hard kill between a run's process start and the save of its process ID
-  leaves that run untracked (it is shown `interrupted` and is not restarted, while its launcher
-  may still spend up to the cap); deleting `watcher.lock` while a watcher runs lets a second one
-  start; queued runs never expire; setting the clock back allows 30 more starts that day.
-- Not verified: anything on Windows (the file lock, sharing-violation readiness, the retry on a
-  refused replace, folder permissions after the move, `Start watcher.cmd`, Edge over `file://`);
-  one measured live run (whether USD 20 covers a pathway on `sol-medium` is unmeasured); the full
-  test suite (weekly job).
-
-## 2026-11-09 — TDG live runs on sol-high, compared with medium
-
-Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
-Sources were read from Final-workflow-PY `data/public-corpus/v1/TDG` (not modified).
-- `runs/cpos-tdg-sol-high-001` (CP-0, CP-1, CP-1A): accepted, USD 1.38, 41 calls, no repairs.
-- `runs/cpos-tdg-sol-high-cp2-001` (CP-0 to CP-2): accepted, USD 1.63, no repairs; report published.
-- Comparison with the retained medium runs is in `runs/tdg-effort-comparison.md`; only automated
-  checks plus a spot check of the tabled figures against the 10-K were applied, not an analytical review.
 

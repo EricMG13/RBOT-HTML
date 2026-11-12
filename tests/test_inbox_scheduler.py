@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gc
 import json
+import re
 import logging
 import os
 import shutil
@@ -412,7 +413,9 @@ def _ruling_without(tmp_path: Path, config: str, monkeypatch: pytest.MonkeyPatch
     rulings.mkdir()
     lines = STANDING_RULING.read_text(encoding="utf-8").splitlines()
     kept = [
-        " ".join(t for t in line.split() if t != config) if line.startswith("configs:") else line
+        "configs: " + ", ".join(t for t in re.split(r"[\s,]+", line[8:].strip()) if t != config)
+        if line.startswith("configs:")
+        else line
         for line in lines
     ]
     copy = rulings / STANDING_RULING.name
