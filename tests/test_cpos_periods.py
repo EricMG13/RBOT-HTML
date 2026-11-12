@@ -1324,3 +1324,17 @@ def test_model_files_reads_a_named_cp2g_block_through_its_rows():  # AK-1
     assert all(
         v["amount"] is None and v["reason"] for c in record["columns"] for v in c["values"].values()
     )
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "**", " ` ` "])
+@pytest.mark.parametrize("which", [0, 1])
+def test_a_blank_row_or_period_name_names_no_line_even_beside_an_unlabeled_row(blank, which):
+    cp1 = _md(["Metric", "FY2024"], [["Net sales", "1,000"], [" ", "1,000"], ["", "1,000"]])
+    name = list(NAMED["revenue"])
+    name[which] = blank
+    ops = replace(OPERANDS, revenue=cp2g.Val(D(1000), None))
+    line = lines(cpos_forecast._tables(cp1), ops, named={**NAMED, "revenue": tuple(name)})[
+        "revenue"
+    ]
+    assert line.reason == cpos_periods.NOT_NAMED
+    assert line.values == {}

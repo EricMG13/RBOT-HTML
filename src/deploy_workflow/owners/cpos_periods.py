@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal, Inexact, localcontext
 
 from deploy_workflow.owners import cp2g
-from deploy_workflow.owners.cpos_forecast import _agrees, _plain, _signed
+from deploy_workflow.owners.cpos_forecast import _agrees, _cut, _plain, _signed
 
 Period = tuple[str, int, int]
 """`(kind, fiscal year, quarters to date)`; kind is `QUARTER`, `YTD` or `FY`."""
@@ -104,14 +104,8 @@ NOT_UNDER_A_PERIOD = (
 )
 _YEAR = re.compile(r"(?<!\d)(?:19|20)\d\d(?!\d)")
 _MAX_DIGITS = 38  # a numeral of more digits than the exact context holds is not a figure
-_MAX_HEADER = 80
 _MAX_REASON = 200
 _BASE_SIGNED = frozenset({"interest", "taxes", "capex"})  # signed by their base cell
-
-
-def _cut(text: str, size: int = _MAX_HEADER) -> str:
-    """Handoff text quoted in a reason or limit: at most `size` characters, then `...`."""
-    return text if len(text) <= size else text[:size] + "..."
 
 
 @dataclass(frozen=True)
@@ -128,7 +122,6 @@ class Line:
 @dataclass(frozen=True)
 class _Row:
     table: int
-    label: str
     figures: dict[Period, set[Decimal]]
     columns: set[Period]
     signless: bool = False  # an unsigned zero base cell and no common sign in the row
@@ -217,7 +210,7 @@ def _row(hit: _Hit, key: str, base_column: int) -> _Row:
         number = _number(hit.row[column]) if column < len(hit.row) else None
         if number is not None:
             figures.setdefault(period, set()).add(_published(key, number, bool(sign)))
-    return _Row(hit.table, _plain(hit.row[0]), figures, columns, sign is None)
+    return _Row(hit.table, figures, columns, sign is None)
 
 
 def _rows_under(hits: list[_Hit], key: str, target: Period) -> list[_Row]:
@@ -308,7 +301,7 @@ def _named_line(
     tables: list[list[list[str]]], key: str, amount: Decimal, name: tuple[str, str] | None
 ) -> Line:
     """An operand's line: the rows labelled as it names, under the period it names."""
-    if name is None:
+    if name is None or not _plain(name[0]) or not _plain(name[1]):
         return Line(reason=NOT_NAMED)
     target = period_of(name[1])
     if target is None:

@@ -4893,3 +4893,60 @@ def test_the_offline_hold_follows_the_larger_anthropic_output_limit(tmp_path, mo
     monkeypatch.setattr(cpos_launch, "output_limit", lambda config: 32000)
     assert now - hold("opus-medium", "old") == Decimal("0.64")
     assert hold("sol-medium", "sol-old") == sol
+
+
+# --- a refusal quotes at most 80 characters of the block's text; the cell check is exact ---------
+def test_a_refusal_quotes_a_long_row_and_period_cut_to_80_characters():
+    doc = _cp1_doc(TWO_YEARS)
+    long_row, long_period = "revenue" + "x" * 200_000, "FY" + "y" * 200_000
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(doc, revenue=_operand("1000", long_row, "FY2025"))
+    message = str(caught.value)
+    assert len(message) < 400
+    assert message == (
+        f"CP-2G: base revenue: no table cell of CP-1 is at row `{long_row[:77]}...`, "
+        "period `FY2025`"
+    )
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(doc, revenue=_operand("1000", "revenue", long_period))
+    assert str(caught.value) == (
+        f"CP-2G: base revenue: no table cell of CP-1 is at row `revenue`, "
+        f"period `{long_period[:77]}...`"
+    )
+
+
+def test_a_refusal_quotes_a_long_cell_text_cut_to_80_characters():
+    cell = "(" + "9" * 200 + ")"
+    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| revenue | {cell} |")
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(doc, revenue=_operand("1000"))
+    assert str(caught.value) == (
+        "CP-2G: base revenue 1000 is not CP-1's cell at row `revenue`, period `FY2025` "
+        f"({cell[:77]}...)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("key", "printed_cell", "amount"),
+    [
+        ("interest", "(45.00000000000000000000000000001)", "45"),  # 31 digits: abs() would round
+        ("capex", "45.00000000000000000000000000001", "45"),
+        ("wc", "45.00000000000000000000000000001", "-45"),  # the reversed sign rounds too
+        ("ebitda", "45.00000000000000000000000000001", "45"),
+    ],
+)
+def test_a_cell_of_more_than_28_digits_is_not_rounded_into_agreement(key, printed_cell, amount):
+    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| {key} | {printed_cell} |", key=key)
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(doc, **{key: _operand(amount, key)})
+    assert str(caught.value).startswith(
+        f"CP-2G: base {key} {amount} is not CP-1's cell at row `{key}`, period `FY2025`"
+    )
+
+
+@pytest.mark.parametrize("name", ["", "   ", "**", " ` ` ", "_*_"])
+@pytest.mark.parametrize("which", ["row", "period"])
+def test_a_row_or_period_that_is_blank_once_plain_is_refused_as_unnamed(name, which):
+    operand = _operand("1000") | {which: name}
+    with pytest.raises(ValueError, match=re.escape(MUST_NAME)):
+        _named_cp2g(_cp1_doc(TWO_YEARS), revenue=operand)
