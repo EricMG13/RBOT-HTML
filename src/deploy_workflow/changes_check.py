@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
@@ -95,15 +96,30 @@ _REF = re.compile(r"\b[EC]\d+\b")
 _REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
 _HEADING = re.compile(r"#{1,6}\s")
 _FIGURE = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
-# Dates, period labels, years and a month count of 1M to 12M are not figures.
+_MONTH = (
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
+    r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
+)
+# Dates, period labels and a month count of 1M to 12M are not figures. A year is none either when a
+# month name or a period marker stands before it (`September 2024`, `FY 2024`, `Q3 2024`, `fiscal
+# 2024`); any other 19xx/20xx number is read by `_is_year`.
 _EXEMPT = re.compile(
-    r"\d{4}-\d{2}(?:-\d{2})?|\b(?:FY|CY)\d{2,4}E?\b|\b[QH][1-4]\b|\bLTM\b|\b(?:[1-9]|1[0-2])M\b"
-    r"|\b(?:19|20)\d{2}\b"
+    rf"\b(?:(?:FY|CY|LTM|[QH][1-4])\s?|(?i:fiscal\s+|{_MONTH}\s+))(?:19|20)\d{{2}}\b(?![.,]\d)"
+    r"|\d{4}-\d{2}(?:-\d{2})?|\b(?:FY|CY)\d{2,4}E?\b|\b[QH][1-4]\b|\bLTM\b|\b(?:[1-9]|1[0-2])M\b"
 )
-_UNITED = re.compile(
-    r"\s*(?:%|x\b|bps?\b|pp\b|[mk]\b|bn\b|(?i:million|billion|thousand|percent)"
-    r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b|[A-Z]{3}\b)"
+_YEAR_TOKEN = re.compile(r"(?:19|20)\d{2}")
+# A year is a figure beside a currency only for a currency code (`USD 1913`), never another
+# capitalised word (`AND 2023`); a code with a scale (`USDm`) counts after it too.
+_CODES = "USD|EUR|GBP|CHF|JPY|CAD|AUD|NZD|SEK|NOK|DKK|CNY|HKD|SGD|ZAR|INR|BRL|MXN|PLN|CZK|HUF|TRY"
+_SCALE = (
+    r"%|x\b|bps?\b|pp\b|[mk]\b|bn\b|(?i:million|billion|thousand|percent)"
+    r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b"
 )
+_YEAR_AFTER = re.compile(rf"\s*(?:{_SCALE}|(?:{_CODES})\b|[A-Z]{{3}}(?:m|bn|k)\b)")
+_YEAR_BEFORE = re.compile(rf"(?:[$€£¥]|\b(?:{_CODES})) ?$")
+# A currency directly followed by a number belongs to that number (`2025 USD 30,199`).
+_CURRENCY_AFTER = re.compile(r"\s*(?:[A-Z]{2,3}[$€£¥]|[$€£¥]|[A-Z]{3})\s?\(?[-−]?\d")
+_UNITED = re.compile(rf"\s*(?:{_SCALE}|[A-Z]{{3}}\b)")
 _CURRENCY = re.compile(r"(?:[$€£¥]|\b[A-Z]{3}) ?$")
 _NOT_EVIDENCE = frozenset({"", "-", "—", "–", "n/a", "none", "not stated"})
 _DASHES = frozenset({"", "-", "—", "–"})
@@ -138,11 +154,29 @@ class Figure:
         return abs(self.signed)
 
 
-def _figures(cell: str, *, counts: bool = True) -> list[Figure]:
+def _is_year(masked: str, match: re.Match[str], *, header: bool) -> bool:
+    """Whether the number `match` of `masked` is a year and no figure. A 19xx/20xx number with no
+    decimal part or thousands separator is a year, except when a currency stands before it (`USD
+    1913`), or a unit or scale after it (`2010m`, `1913 million`, `2010 US$m`, `2010 USDm`), unless
+    that currency belongs to the number that follows (`2025 USD 30,199`). In a table header row
+    (`header`) it is always a year. A bare year is always one."""
+    if not _YEAR_TOKEN.fullmatch(match[0]):
+        return False
+    if header:
+        return True
+    if _YEAR_BEFORE.search(masked[max(0, match.start() - 4) : match.start()]):
+        return False
+    return bool(_CURRENCY_AFTER.match(masked, match.end())) or not _YEAR_AFTER.match(
+        masked, match.end()
+    )
+
+
+def _figures(cell: str, *, counts: bool = True, header: bool = False) -> list[Figure]:
     """The figures of a cell. A number is not one if it is part of a date, a period label or a year
-    (`_EXEMPT`); with `counts` False a whole number below 100 is a count and not a figure unless it
-    carries a unit or a currency. A minus (`-` or U+2212, not inside a word or number) or enclosing
-    brackets make the figure negative."""
+    (`_EXEMPT`, `_is_year`); with `counts` False a whole number below 100 is a count and not a
+    figure unless it carries a unit or a currency. A minus (`-` or U+2212, not inside a word or
+    number) or enclosing brackets make the figure negative. `header`: the cell is of a table header
+    row."""
     masked = _EXEMPT.sub(lambda m: " " * len(m[0]), cell)
     found = []
     for match in _FIGURE.finditer(masked):
@@ -150,7 +184,9 @@ def _figures(cell: str, *, counts: bool = True) -> list[Figure]:
         small = "." not in token and "," not in token and int(token) < COUNT_BELOW
         united = _UNITED.match(masked, match.end())
         currency = _CURRENCY.search(masked[max(0, match.start() - 4) : match.start()])
-        if not counts and small and not united and not currency:
+        if _is_year(masked, match, header=header) or (
+            not counts and small and not united and not currency
+        ):
             continue
         before = masked[max(0, match.start() - 2) : match.start()]
         minus = re.search(r"(?:^|[^\w.])[-−]$", before) is not None
@@ -824,10 +860,6 @@ _LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
 _BULLET_ITEM = re.compile(r"\s*[-*+]\s")
 _LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
 _FIRST_NUMBER = re.compile(r"\s*1[.)]\s")
-_MONTH = (
-    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
-    r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
-)
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
 _YEAR = r"(?:19|20)\d{2}\b(?![.,]\d)"
 # A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
@@ -967,6 +999,32 @@ def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
     return (value, j) if j > i else (0, i)
 
 
+_COUNT_NOUN = (
+    r"(?:facilit(?:y|ies)|subsidiar(?:y|ies)|(?:module|run|measure|source|period|row|item|document"
+    r"|filing|page|section|table|finding|limitation|assumption|conclusion|change|difference"
+    r"|handoff|issuer|lender|tranche|covenant|quarter|month|year|week|day)s?)"
+)
+_REFERENCES = frozenset(("page", "note", "section", "table", "row", "item", "step", "appendix"))
+_COUNT_AFTER = re.compile(rf"\s+{_COUNT_NOUN}(?![{_HYPHENS}\w])", re.IGNORECASE)
+_REFERENCE_BEFORE = re.compile(rf"\b(?:{'|'.join(_REFERENCES)})\s+$", re.IGNORECASE)
+
+
+def _counted_words(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
+    """Whether the number in `words[i:j]` is a count: directly followed by a count noun (not joined
+    to it, or the noun to a further word by a hyphen), or directly after a reference word."""
+    noun = j < len(words) and not joined[j - 1] and not joined[j]
+    after = noun and re.fullmatch(_COUNT_NOUN, words[j]) is not None
+    return after or (i > 0 and not joined[i - 1] and words[i - 1] in _REFERENCES)
+
+
+def _counted(text: str, figure: Figure) -> bool:
+    """Whether the digits of `figure` in `text` are a count: directly followed by a count noun, or
+    directly after a reference word (`page 30`)."""
+    return bool(
+        _COUNT_AFTER.match(text, figure.end) or _REFERENCE_BEFORE.search(text[: figure.start])
+    )
+
+
 def _spelled(line: str) -> list[Decimal]:
     """The whole numbers from two up that the line writes in English words, any case, hyphenated or
     spaced (any Unicode hyphen). Not read: `one` alone, `a hundred`, `a dozen`, and a part of a
@@ -984,7 +1042,11 @@ def _spelled(line: str) -> list[Decimal]:
             if j == i:
                 i += 1
                 continue
-            if value >= 2 and not _part_of_fraction(words, joined, i, j):
+            if (
+                value >= 2
+                and not _part_of_fraction(words, joined, i, j)
+                and not _counted_words(words, joined, i, j)
+            ):
                 found.append(Decimal(value))
             i = j
     return found
@@ -1001,6 +1063,79 @@ def _bare(line: str, *, listed: bool) -> str:
 
 def _blanks(match: re.Match[str]) -> str:
     return " " * len(match[0])
+
+
+_TAIL_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*\s*$")
+_HEAD_RUN = re.compile(rf"\s*[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
+
+
+def _words_of(run: str) -> list[str]:
+    return re.findall(r"[a-z]+", run.lower())
+
+
+def _number_edge(words: Sequence[str], *, end: bool) -> bool:
+    """Whether `words` end (or begin) inside a spelled number: a number word, or `and` by one."""
+    if not words:
+        return False
+    word, near = (words[-1], words[-2:-1]) if end else (words[0], words[1:2])
+    return _number_word(word) or (word == "and" and bool(near) and _number_word(near[0]))
+
+
+def _paragraph_continues(lines: Sequence[str], i: int) -> bool:
+    """Whether line `i + 1` continues the paragraph line `i` is in: neither is blank, a heading or a
+    table row, and the next does not start a list item."""
+    here, after = lines[i].strip(), lines[i + 1].strip()
+    if not here or not after or after.startswith("|") or here.startswith("|"):
+        return False
+    if _HEADING.match(lines[i]) or _HEADING.match(lines[i + 1]):
+        return False
+    item = _BULLET_ITEM.match(lines[i + 1]) or (
+        _LIST_ITEM.match(lines[i + 1]) and _starts_list_item(lines, i + 1)
+    )
+    return not item
+
+
+def _across_lines(lines: Sequence[str], i: int) -> list[Decimal]:
+    """The numbers in words that line `i` shares with line `i + 1` of the same paragraph (`one
+    hundred` / `and ten`): read from the two runs of words joined, those not already read in either
+    line alone."""
+    if i + 1 >= len(lines) or not _paragraph_continues(lines, i):
+        return []
+    tail, head = _TAIL_RUN.search(lines[i]), _HEAD_RUN.match(lines[i + 1])
+    if not tail or not head:
+        return []
+    if not (
+        _number_edge(_words_of(tail[0]), end=True) and _number_edge(_words_of(head[0]), end=False)
+    ):
+        return []
+    whole = Counter(_spelled(f"{tail[0].rstrip()} {head[0].strip()}"))
+    return list((whole - Counter(_spelled(tail[0])) - Counter(_spelled(head[0]))).elements())
+
+
+def _header_rows(lines: Sequence[str]) -> frozenset[int]:
+    """The indices of the table header rows: a row directly above a `| --- |` separator row."""
+
+    def separator(text: str) -> bool:
+        text = text.strip()
+        return (
+            text.startswith("|")
+            and text.endswith("|")
+            and "-" in text
+            and not (set(text) - set("|-: "))
+        )
+
+    return frozenset(
+        i
+        for i in range(len(lines) - 1)
+        if lines[i].strip().startswith("|") and separator(lines[i + 1])
+    )
+
+
+def _bare_sizes(lines: Sequence[str], i: int, bare_line: str, *, header: bool) -> list[Decimal]:
+    """The sizes the bare-number reading takes from line `i`: its digits and its numbers in words
+    (also those continued on the next line), but a count (`_counted`, `_counted_words`)."""
+    digits = [f.size for f in _figures(bare_line, header=header) if not _counted(bare_line, f)]
+    return [*digits, *_spelled(bare_line), *_across_lines(lines, i)]
 
 
 def _passage_issues(
@@ -1026,6 +1161,7 @@ def _passage_issues(
     register_differences = _pack_differences(pack, without=barred)
     kept = _withheld_sizes(pack, said_nc)
     in_issuer, h2 = False, ""
+    headers = _header_rows(lines)
     issues: list[str] = []
     for i, line in enumerate(lines):
         if _HEADING.match(line):
@@ -1046,10 +1182,9 @@ def _passage_issues(
         if h2 in NOT_PASSAGES:
             continue
         line = _DATE.sub(_blanks, line)
-        figures = [f.size for f in _figures(line, counts=False)]
+        figures = [f.size for f in _figures(line, counts=False, header=i in headers)]
         listed = not row and _starts_list_item(lines, i)
-        bare_line = _bare(line, listed=listed)
-        bare = [f.size for f in _figures(bare_line)] + _spelled(bare_line)
+        bare = _bare_sizes(lines, i, _bare(line, listed=listed), header=i in headers)
         for size in dict.fromkeys([*figures, *bare]):
             if size in sizes:
                 issues.append(
@@ -1091,6 +1226,18 @@ def _basis_issues(lines: Sequence[str]) -> list[str]:
     return issues
 
 
+def _held_sizes(texts: Sequence[str]) -> frozenset[Decimal]:
+    """The sizes of the figures of the handoffs CP-8 was sent, read line by line (a table header
+    row holds no year as a figure)."""
+    found: set[Decimal] = set()
+    for text in texts:
+        lines = text.replace("\r\n", "\n").split("\n")
+        headers = _header_rows(lines)
+        for i, line in enumerate(lines):
+            found |= {f.size for f in _figures(line, header=i in headers)}
+    return frozenset(found)
+
+
 def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> tuple[str, ...]:
     """Every failure of the CP-8 handoff `text` against its comparison pack (none: accepted).
     `held` is the texts CP-8 was sent beside the pack: this run's handoffs and the earlier run's."""
@@ -1106,7 +1253,7 @@ def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> 
         issues += problems
         if not problems:
             tables[title] = found
-    sizes = frozenset(f.size for evidence in held for f in _figures(evidence))
+    sizes = _held_sizes(held)
     if ISSUER in tables:
         issues += _issuer_issues(tables[ISSUER][1], pack, sizes)
     if ANALYSIS in tables:

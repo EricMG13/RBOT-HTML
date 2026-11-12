@@ -412,3 +412,27 @@ an ordinal or fraction word hyphen-joined to a following word (`second-lien`, `q
 `point` exempts a number only inside number-word `point` number-word (`zero point five`), so `At that point thirty`,
 `a thirty-point swing` and a bare `point five` are read (accepted false refusal); `and a half` / `and a quarter` exempt
 only when not followed by `of`; `two halves` is not read. When in doubt the number is read.
+
+Amendment, 2026-11-12 (owner: "fix 1 and 2"; controller rulings R1 to R3). (R1) A 19xx/20xx number is a year, not a
+figure, in K9 and K10 unless it is a figure by the rules for any number: a currency directly before it (`US$2010m`,
+`USD 1913`), a decimal part or thousands separator, a scale or unit directly after it (`2010m`, `2010%`, `1913 million`,
+`2010 US$m`, `2010 USDm`). It stays a year when the currency after it is directly followed by a number (that currency is
+the next number's: `September 2024 US$4,216 million`), in a table header row (the row above a `| --- |` separator:
+`| 2024 / 2023 US$m |` reads nothing; a body row or Effect cell holding `2010 US$m` is a figure), after a month name or a
+period marker (`September 2024`, `FY 2024`, `Q3 2024`, `H1 2025`, `fiscal 2024`, `LTM 2024`), and when bare. A currency
+code before or after a year is only one of a fixed list (USD, EUR, GBP and similar), so `AND 2023` is no currency.
+Held evidence is read the same way, line by line. (R2) In the bare-number K9 reading only (digits and words) a number is
+a count when directly followed by a count noun (module, run, measure, source, period, row, item, document, filing, page,
+section, table, finding, limitation, assumption, conclusion, change, difference, handoff, issuer, lender, facility,
+tranche, covenant, subsidiary, quarter, month, year, week, day; singular or plural, not hyphen-joined to a further word)
+or directly after page, note, section, table, row, item, step or appendix. No pack measure's unit is one of the nouns.
+`Cash fell by 30 days` is accepted: `days` is a count noun and no pack measure is measured in days; a unit of the pack
+(`30 US$m`) is refused as before. (R3) In the words reading, a spelled number that a paragraph line leaves unfinished and
+the next line of the same paragraph continues (`one hundred` / `and ten`) is read joined and reported once; a blank line,
+heading, table row or list item between is no join. Remaining limits, recorded: a bare 19xx/20xx number is always a
+year (period labels are mandatory, so a bare year is never refused); in prose a list of years sharing one unit
+(`2024 / 2023 US$m` outside a header row) is refused, so reword it or put it in a table header; a count with an
+adjective before its noun (`30 new modules`), a count noun outside the list, and `times`, `points`, `percent` are
+refused; a whole count of 100 or more beside a count noun is still refused by the raw reading (it takes a number of 100 or
+more without a unit); a count noun on the line after a spelled number is not read as its noun. The one existing case that
+pinned the count limit (`The handoff states 30 limitations.`) now asserts acceptance; no `rows.json` case changed.

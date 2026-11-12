@@ -2939,11 +2939,6 @@ def test_a_bare_count_that_equals_no_withheld_size_is_accepted(sentence):
     assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
 
 
-def test_a_bare_count_equal_to_a_withheld_size_is_refused():  # recorded limit
-    found = cp8_issues(with_row(LEVERAGE_ROW, "The handoff states 30 limitations.\n\n"), _ndpack())
-    assert any("30" in i and "reword" in i for i in found), found
-
-
 def test_a_module_code_or_list_number_is_no_bare_count():
     pack = _ndpack()
     pack["net_debt_change"] |= {"change_in_cash": "-2", "current_cash": "908"}
@@ -3258,3 +3253,137 @@ def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack)
 def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
     found = _says(f"Cash fell by thirty{hyphen}five.", _cash_pack("-35", "875"))
     assert any("figure 35" in i for i in found), found
+
+
+# --- the year problem, the counts and a spelled size across lines (owner, 2026-11-12: "fix 1 and
+# 2"; controller rulings R1 to R3). Expectations hand-written from the rulings.
+
+
+def _hold(text, pack=None, held=()):
+    return cp8_issues(with_row(LEVERAGE_ROW, text + "\n\n"), pack or _ndpack(), held)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash fell by 2010 US$m.",
+        "Cash fell by US$2010m.",
+        "Cash fell by USD 2010.",
+        "Cash fell by 2010m.",
+        "Cash fell by 2010 million.",
+        "Cash fell by 2010 USDm.",
+    ],
+)
+def test_a_year_shaped_withheld_size_with_a_unit_is_refused(sentence):
+    found = _hold(sentence, _cash_pack("-2010", "-1100"))
+    assert any("figure 2010 is the difference" in i and "reword" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    ("sentence", "size"),
+    [
+        ("Cash fell by 2010 US$m.", "2010"),
+        ("Cash fell by US$2010m.", "2010"),
+        ("Cash was 2010.5 US$m.", "2010.5"),
+        ("Cash was USD 1913.", "1913"),
+        ("Cash was 1913 million.", "1913"),
+    ],
+)
+def test_a_year_shaped_figure_with_a_unit_held_nowhere_is_refused(sentence, size):
+    found = _hold(sentence)
+    assert any(f"figure {size} is held in neither" in i for i in found), found
+
+
+def test_a_year_shaped_figure_in_a_table_body_row_is_a_figure_and_in_a_header_row_is_not():
+    table = "| Item | {} |\n| --- | --- |\n| Cash | {} |"
+    body = table.format("Value", "2010 US$m")
+    found = _hold(body, _cash_pack("-2010", "-1100"))
+    assert any("figure 2010 is the difference" in i for i in found), found
+    header = table.format("2024 / 2023 US$m", "not stated")
+    assert _hold(header) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The September 2024 US$4,216 million balance is a declared distribution.",
+        "H1 2025 USD 30,199 thousand of dividends were paid.",
+        "Debt due July 2025\u2013June 2026 USD 22,873 thousand is spread out.",
+        "At 30 September 2024 US$m 437 was drawn.",
+        "In 2024 cash was flat.",
+        "FY2024 US$m is the unit.",
+        "FY 2024 is the year.",
+        "Fiscal 2024 was flat.",
+        "Both 2023 and 2024 were flat.",
+        "Q3 2024 US$m is the unit.",
+    ],
+)
+def test_a_year_is_no_figure_with_a_marker_a_bare_or_a_currency_for_the_next_number(sentence):
+    assert _hold(sentence, held=("4,216 30,199 22,873 437",)) == ()
+
+
+def test_the_year_beside_a_figure_is_not_read_only_the_figure_is():
+    found = _hold("Leverage was flat (2023: 6.57x).")
+    assert any("figure 6.57 is held in neither" in i for i in found), found
+    assert not any("2023" in i for i in found), found
+    assert _hold("Leverage was flat (2023: 6.57x).", held=("6.57",)) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "All 30 modules ran in both runs.",
+        "thirty sources were read.",
+        "See page 30.",
+        "Note 30 describes the facility.",
+        "The loan matures in 30 months.",
+        "The handoff states 30 limitations.",
+        "Cash fell by 30 days.",
+    ],
+)
+def test_a_count_beside_a_count_noun_or_a_reference_word_is_no_withheld_size(sentence):
+    assert _hold(sentence) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash fell by 30.",
+        "Cash fell by thirty.",
+        "A change of 30 in cash.",
+        "30 new modules ran.",
+        "Cash fell by 30 quarter-on-quarter.",
+        "Cash fell by 30 US$m.",
+        "Cash fell by 30 times.",
+    ],
+)
+def test_a_bare_number_beside_no_count_noun_is_still_a_withheld_size(sentence):
+    found = _hold(sentence)
+    assert any("figure 30 is the difference" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Gross debt changed by one hundred\nand ten.",
+        "Gross debt changed by one hundred and\nten.",
+        "Gross debt changed by one\nhundred ten.",
+    ],
+)
+def test_a_spelled_size_broken_across_lines_is_read_and_reported_once(sentence):
+    found = [i for i in _hold(sentence) if "figure 110" in i]
+    assert len(found) == 1, found
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Debt is one hundred\n\nten.",
+        "Debt is one hundred\n| Cash | ten |",
+        "Debt is one hundred\n- ten",
+        "Debt is one hundred\n### ten",
+        "Debt is one hundred\nand then nothing.",
+    ],
+)
+def test_a_spelled_number_is_not_joined_over_a_blank_line_row_heading_or_item(text):
+    assert _hold(text) == ()
