@@ -1092,6 +1092,30 @@ def test_the_good_short_snapshot_passes_the_key_figures_check(tmp_path):
     assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
 
 
+def test_a_key_figure_that_drops_cp1s_sign_is_refused(tmp_path):
+    cp1 = b"# upstream\nChange -3.1x; refinancing USD 1,250 million."
+    issues = short_snapshot_issues(tmp_path, lambda raw: raw, cp1=cp1)
+    assert any("Key figures" in i and "3.1x" in i for i in issues), issues
+
+
+def test_a_second_key_figures_table_is_refused(tmp_path):
+    extra = "\n\n" + KEY_FIGURES.replace("3.1x", "9.9x")
+    issues = short_snapshot_issues(
+        tmp_path, lambda raw: raw.replace(KEY_FIGURES, KEY_FIGURES + extra)
+    )
+    assert any("Key figures" in i and "9.9x" in i for i in issues), issues
+    assert any("exactly one table" in i for i in issues), issues
+
+
+def test_no_cp1_handoff_means_the_key_figures_are_refused_not_skipped(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
+    task = dataclasses.replace(task, handoffs={})
+    context["handoffs"] = {}
+    raw = short_snapshot_answer(context, list(prepared.plan.layout.routes))
+    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
+    assert any("cannot be checked" in i for i in issues), issues
+
+
 def test_a_key_figures_table_with_other_columns_is_refused(tmp_path):
     bad = "| Thing | Number |\n| --- | --- |\n| Interest cover | 3.1x |"
     issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace(KEY_FIGURES, bad))
@@ -3207,7 +3231,7 @@ UNFILLED = re.compile(r"\b(undefined|NaN|null|\[object Object\])\b")
 
 
 @pytest.mark.browser
-def test_a_short_snapshot_run_is_listed_with_its_label_and_cp_l10_leads_the_overview(
+def test_a_short_snapshot_run_in_the_library_is_listed_with_its_label_and_cp_l10_leads_the_overview(
     tmp_path, provider, capsys
 ):
     """Owner, 2026-11-11: CP-2 and CP-6 do not run in a short snapshot, so CP-L10 leads (H5)."""

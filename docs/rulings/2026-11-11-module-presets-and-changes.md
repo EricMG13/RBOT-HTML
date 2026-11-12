@@ -208,7 +208,8 @@ and six to ten rows. CP-L10 owns one report block, `key-figures`. The launcher a
 for any prose module (the nine prose checks and the fidelity check: a figure in a reader passage must be in
 a table of the handoff with the same sign, unit and scale). Fix round 1: the launcher also refuses a Key figures table whose header is not exactly
 `Measure | Value | Period | Source` or whose Value cell holds a figure the CP-1 handoff it was sent does not state
-(same sign, unit and scale; `prose_checks.key_figures_issues`). Known limit: a figure is proven to exist in
-CP-1, not that it is the right measure or period; that rests on the reader's check of a real run.
+(same sign, unit and scale; `prose_checks.key_figures_issues`). Fix round 2: the sign must match exactly, exactly one table is allowed under the heading, and a missing CP-1 handoff is a refusal, not a skip.
+Known limits: a figure is proven to exist in
+CP-1, not that it is the right measure or period; a unit CP-1 carries only in a column header (`Reporting unit`) is not matched, so a bare CP-1 `3.1` accepts `3.1x`, because CP-1's own tables write plain numbers with a separate unit column; that rests on the reader's check of a real run.
 CP-L10 leads the Overview of a short snapshot (amendment to H5 in
 `2026-11-11-reader-and-issuer-report.md`). The library names the pathway "Short credit snapshot".

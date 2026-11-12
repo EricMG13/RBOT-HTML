@@ -2221,8 +2221,8 @@ def checker(layout: MarkdownLayout) -> Check:
             issues.append("List each issuer source relied on with its exact name and sha256.")
         issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
         issues += figure_issues(text)
-        if task.module_id == "CP-L10" and "CP-1" in task.handoffs:
-            issues += key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
+        if task.module_id == "CP-L10":
+            issues += _key_figure_issues(task, text)
         if task.module_id == "CP-8":
             sent = [*task.handoffs.values()] + [
                 raw for name, raw in task.sources.items() if name.startswith(PRIOR_PREFIX)
@@ -2260,6 +2260,16 @@ def checker(layout: MarkdownLayout) -> Check:
         return (*issues, *_forecast_issues(task, text))
 
     return check
+
+
+def _key_figure_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+    """CP-L10's Key figures against the CP-1 handoff it was sent; none sent is a refusal."""
+    if "CP-1" not in task.handoffs:
+        return (
+            "Key figures cannot be checked against the financial foundation: "
+            "no CP-1 handoff was supplied.",
+        )
+    return key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
 
 
 def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
