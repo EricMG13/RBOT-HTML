@@ -43,8 +43,10 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
 ``POST /api/submissions/<id>/summary``
     Body: the answers object ``{"context", "modules", "max_turns", "level", "submitted_by"}``.
     200 ``{"error": "", "digest", "modules", "items", "documents", "ignored", "omitted",
-    "changes"}``, the launcher's own forecast and the digest to approve (``changes`` says whether
-    CP-8 will run, and against which earlier run: its pathway and as-of date; the modules list
+    "changes", "prior"}``, the launcher's own forecast and the digest to approve (``changes`` says
+    whether CP-8 will run, and against which earlier run: its pathway and as-of date; ``prior`` is
+    ``{"id", "as_of", "pathway"}`` of that run or null for a first run, and is part of the digest:
+    the launcher is started with that run, ``--prior <id>`` or ``--prior none``; the modules list
     holds CP-8 when it will); or 200 ``{"error": "<sentence>"}`` with no
     digest when the answers or files are refused. Only the latest digest issued is accepted.
 ``POST /api/submissions/<id>/submit``

@@ -200,6 +200,68 @@ def test_modules_and_turns_reach_the_launcher_command(root):
     assert "--max-turns" not in plain
 
 
+def test_the_run_the_approval_named_is_kept_and_reaches_the_launcher(root, fake_env):
+    """What CP-8 compares with is approved with the files: the record keeps it and the launcher is
+    told exactly that run (`--prior`); with none listed the approval names a first run."""
+    from library_fixtures import make_run
+
+    fake_env({"sleep": 30})
+    answers = answers_for()
+    sid = upload(root)
+    w = Scheduler(settings(root))
+    first = w.submit(sid, answers, approved(root, sid, answers))
+    assert first.prior == "none"
+    other = upload(root, b"Net sales were 2.")
+    make_run(
+        layout(root).engine,
+        "prior-1",
+        as_of="2024-12-31",
+        pathway=PATHWAY,
+        issuer_id="acme",
+        issuer_name="Acme Corp",
+    )
+    second = w.submit(other, answers, approved(root, other, answers))
+    assert second.prior == "prior-1"
+    for record, named in ((first, "none"), (second, "prior-1")):
+        argv = runs.command(
+            layout(root),
+            record,
+            Path("c.json"),
+            launcher=("L",),
+            config="sol-medium",
+            cap=Decimal(20),
+            ruling=None,
+        )
+        assert argv[argv.index("--prior") : argv.index("--prior") + 2] == ["--prior", named]
+    w.close()
+
+
+def test_a_digest_for_another_earlier_run_than_the_one_named_is_refused(root, fake_env):
+    """The digest binds the named run: the one a client computes without it is not accepted."""
+    from library_fixtures import make_run
+
+    fake_env({"sleep": 30})
+    answers = answers_for()
+    sid = upload(root)
+    make_run(
+        layout(root).engine,
+        "prior-1",
+        as_of="2024-12-31",
+        pathway=PATHWAY,
+        issuer_id="acme",
+        issuer_name="Acme Corp",
+    )
+    issued = approved(root, sid, answers)
+    plain = submissions.digest(layout(root), sid, answers)
+    assert issued == submissions.bound(plain, "prior-1")
+    assert issued != submissions.bound(plain, "none")
+    assert issued != plain
+    w = Scheduler(settings(root))
+    with pytest.raises(Refused):
+        w.submit(sid, answers, submissions.digest(layout(root), sid, answers))
+    w.close()
+
+
 def test_a_restart_starts_a_queued_submission_once_and_keeps_unsubmitted_uploads(root, fake_env):
     fake_env({"sleep": 30})
     answers = answers_for()

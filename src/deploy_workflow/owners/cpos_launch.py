@@ -20,7 +20,7 @@ import sys
 import tempfile
 import textwrap
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -68,13 +68,21 @@ from deploy_workflow.model.adapter import (
 )
 from deploy_workflow.model.budget import Budget
 from deploy_workflow.model.handoff import (
+    BYTES_PER_TOKEN_BOUND,
+    REQUEST_OVERHEAD,
     WEB_SEARCH_CALLS_PER_TURN,
     WEB_SEARCH_CASE_KINDS,
     Check,
     _pages,
     web_search_offered,
 )
-from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
+from deploy_workflow.model.pricing import (
+    ContextTooLong,
+    price_of,
+    request_reservation_usd,
+    web_search_usd,
+)
+from deploy_workflow.model.turn import dump_json
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cp2g, cpos_forecast
 from deploy_workflow.owners.cpos import (
@@ -1385,7 +1393,11 @@ def _layout(
         if owner == "CP-1" and block_id in CHART_BLOCKS:
             routes += [_chart_route(block_id, figure) for figure in STRIP_FIGURES[block_id]]
             continue
-        if owner is None or spec.kind == "chart" or block_id == SECOND_RUN_ONLY:
+        if block_id == SECOND_RUN_ONLY:  # CP-8's handoff is delivered whole, not routed here
+            if "CP-8" not in ordered:
+                omitted.append(block_id)
+            continue
+        if owner is None or spec.kind == "chart":
             omitted.append(block_id)
             continue
         routes.append(
@@ -1413,6 +1425,11 @@ def _layout(
             else LAYER1_FORECAST_SCOPE
         )
         + f" Sections not produced: {', '.join(omitted) or 'none'}."
+        + (
+            " The changes since the last run are CP-8's handoff, delivered whole."
+            if "CP-8" in ordered
+            else ""
+        )
     )
     layout = MarkdownLayout(
         blocks=tuple(dict.fromkeys(r.block_id for r in routes)),
@@ -1571,10 +1588,11 @@ CP8_BLOCK = (
     "This run compares with an earlier run of the same issuer and pathway: {prior}. The "
     "comparison pack is source `changes.json` and the earlier run's delivered handoffs are the "
     "sources `prior/<module>.md`; the current run's handoffs are supplied as usual. Write the "
-    "registers exactly as the method says. CP-OS checks every figure of the issuer register "
-    "against the pack, every module and every limitation of the pack for exactly one row, and the "
-    "fixed Status and Cause lists, and sends the handoff back if one fails. The earlier run's "
-    "handoffs and the pack are evidence for this module alone.\n\n"
+    "registers exactly as the method says. CP-OS checks every issuer row that holds a figure "
+    "against the pack measure it names, every difference you print against the pack's, every "
+    "module and every limitation ref of the pack for exactly one row, and the fixed Status and "
+    "Cause lists, and sends the handoff back if one fails. The earlier run's handoffs and the "
+    "pack are evidence for this module alone.\n\n"
 )
 BRIDGE_RULES = (
     " Each row is one step: the first row is the opening amount and the last row is the closing "
@@ -1761,22 +1779,84 @@ def pathway_modules(settings: RunContext) -> tuple[str, ...]:
     return tuple(m for m in PATHWAY_MODULES[settings.run.pathway] if m not in NOT_ANALYTICAL)
 
 
-def _earlier_run(
-    directory: Path, workspace: Path | None, *, issuer_id: str, pathway: str, as_of: str
+UNAVAILABLE = "the earlier run named at approval is no longer available"
+_RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+NO_PRIOR = "none"  # `--prior none`: the approval named no earlier run ("first run")
+# Request bytes CP-8's first request holds beside the instructions and the inlined handoffs: the
+# run record, the module roles, the tool list and the framing (an allowance, measured on no run).
+REQUEST_ALLOWANCE = 16_384
+
+
+def _held_manifest(directory: Path) -> HandoffPlan | None:
+    """The manifest a run folder already holds, or None when there is none or it cannot be read
+    (the request built from the new inputs then differs from it and is refused)."""
+    manifest = directory / "workflow.json"
+    if not manifest.is_file():
+        return None
+    try:
+        return HandoffPlan.model_validate_json(manifest.read_bytes())
+    except ValueError:
+        return None
+
+
+def _cp8_hold(  # noqa: PLR0913 - the sizes of CP-8's first request
+    config: str,
+    cap: Decimal,
+    instructions: int,
+    ordered: Sequence[str],
+    earlier: Mapping[str, bytes],
+    held: HandoffPlan | None,
+) -> Decimal:
+    """What CP-8's first call counts against the cap, on its estimated first request (the loop's
+    own bound: the request's bytes over `BYTES_PER_TOKEN_BOUND`, plus its overhead). A call that
+    does not fit leaves CP-8 out of a new run (`_Cp8DoesNotFit`) and refuses a resumed one."""
+    size = _cp8_request_bytes(instructions, ordered, earlier)
+    words = (
+        f"CP-8's first request (about {size:,} request bytes, estimated from the earlier run's "
+        "handoff sizes because this run's are not written yet)"
+    )
+    try:
+        hold = request_reservation_usd(
+            price_of(config),
+            -(-size // BYTES_PER_TOKEN_BOUND) + REQUEST_OVERHEAD,
+            MAX_OUTPUT_TOKENS,
+        )
+    except ContextTooLong as error:
+        problem = f"{words} is over the model's context ({error})"
+    else:
+        if hold <= cap:
+            return hold
+        problem = f"{words} would hold up to USD {hold:.2f}, over the cap USD {cap}"
+    if held is not None:
+        raise LaunchRefused(f"--cap: {problem}")
+    raise _Cp8DoesNotFit(f"changes: not compared: {problem}; the run is planned without CP-8")
+
+
+def _earlier_run(  # noqa: PLR0913 - the identity of the run and the approved choice
+    directory: Path,
+    workspace: Path | None,
+    held: HandoffPlan | None,
+    *,
+    issuer_id: str,
+    issuer_name: str,
+    case_kind: str,
+    pathway: str,
+    as_of: str,
+    choice: str | None = None,
 ) -> tuple[PriorRun | None, str | None, dict[str, bytes]]:
     """The earlier run CP-8 compares with, the line recorded about it, and the pinned copies of its
     handoffs to write (source name -> bytes).
 
-    A run folder that already holds a manifest keeps what that manifest records, so a newer
-    completed run appearing since cannot change it and get the relaunch refused; the copies are
-    read back from the folder and checked against their pins. A manifest this launcher cannot read
-    is not resumed here: the request built below then differs from it and is refused."""
-    manifest = directory / "workflow.json"
-    if manifest.is_file():
-        try:
-            held = HandoffPlan.model_validate_json(manifest.read_bytes())
-        except ValueError:
-            return None, None, {}
+    ``choice`` is the approval's: ``NO_PRIOR`` ("first run"), the folder name of the run it named,
+    or None (a launch from the command line, which searches). A named run is used exactly, if it is
+    still listed and passes the same tests as a searched one; otherwise the run proceeds without
+    CP-8 and says so.
+
+    ``held`` is the manifest the run folder already holds: it keeps what that manifest records, so
+    a newer completed run appearing since cannot change it and get the relaunch refused; the copies
+    are read back from the folder and checked against their pins. A manifest this launcher cannot
+    read is not resumed here: the request built below then differs from it and is refused."""
+    if held is not None:
         copies = {}
         for name in () if held.prior is None else prior_sources(held.prior):
             raw = (directory / held.sources[name].path).read_bytes()
@@ -1784,15 +1864,60 @@ def _earlier_run(
                 raise LaunchRefused(f"--out {directory}: the pinned earlier handoff {name} changed")
             copies[name] = raw
         return held.prior, held.changes_note, copies
+    if (directory / "workflow.json").is_file():
+        return None, None, {}
     if workspace is None:
         return None, "changes: not compared: the run folder is not inside a runs folder", {}
-    found = find_prior(
-        workspace, folder=directory.name, issuer_id=issuer_id, pathway=pathway, as_of=as_of
-    )
-    if found is None:
+    if choice == NO_PRIOR:
         return None, describe(None), {}
+    skipped: list[str] = []
+    found = find_prior(
+        workspace,
+        folder=directory.name,
+        issuer_id=issuer_id,
+        issuer_name=issuer_name,
+        case_kind=case_kind,
+        pathway=pathway,
+        as_of=as_of,
+        only=choice,
+        skipped=skipped,
+    )
+    why = f" (not used: {'; '.join(skipped)})" if skipped else ""
+    if found is None:
+        head = f"changes: not compared: {UNAVAILABLE}" if choice is not None else describe(None)
+        return None, head + why, {}
     prior, handoffs = found
-    return prior, describe(prior), {f"{PRIOR_PREFIX}{m}.md": raw for m, raw in handoffs.items()}
+    return (
+        prior,
+        describe(prior) + why,
+        {f"{PRIOR_PREFIX}{m}.md": raw for m, raw in handoffs.items()},
+    )
+
+
+class _Cp8DoesNotFit(Exception):
+    """CP-8's first request would hold more than the cap; ``prepare`` plans the run without it."""
+
+    def __init__(self, note: str) -> None:
+        super().__init__(note)
+        self.note = note
+
+
+def _cp8_request_bytes(
+    instructions: int, ordered: Sequence[str], earlier: Mapping[str, bytes]
+) -> int:
+    """An estimate of the bytes of CP-8's first request.
+
+    The loop inlines every handoff CP-8 is sent (this run's accepted ones, as JSON text) in its
+    first request, and they are not written yet when the cap is checked. The earlier run's handoff
+    of the same module stands in for each (the mean of the earlier handoffs for a module that run
+    did not have); the instructions, the module roles and the tool list are `REQUEST_ALLOWANCE`."""
+    sizes = {
+        name: len(dump_json({"markdown": raw.decode("utf-8", "replace")}))
+        for name, raw in earlier.items()
+    }
+    mean = sum(sizes.values()) // len(sizes) if sizes else 0
+    inlined = sum(sizes.get(f"{PRIOR_PREFIX}{m}.md", mean) for m in ordered if m != "CP-8")
+    return instructions + inlined + REQUEST_ALLOWANCE
 
 
 def prepare(  # noqa: PLR0913 - one keyword per run setting
@@ -1805,8 +1930,13 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     modules: Sequence[str] | None = None,
     web_search: bool = False,
     workspace: Path | None = None,
+    prior: str | None = None,
 ) -> Prepared:
     """Check everything and write the manifest and instructions; a refusal writes nothing.
+
+    ``prior`` is the approval's choice of earlier run (`_earlier_run`): ``NO_PRIOR``, the folder
+    name of the run the approval named, or None to search. When CP-8's own first request would not
+    fit the cap (`_cp8_request_bytes`), the run is planned without CP-8 and the note says so.
 
     ``workspace`` is where earlier runs are looked for (``<workspace>/runs``): by default the folder
     holding the ``runs`` folder the run folder is in. When the library lists an earlier run of the
@@ -1817,6 +1947,44 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     ``web_search`` is whether the run's ruling lists ``web-search``: the research module's calls
     then hold the search fee too, as the live loop holds it, so the cap is checked against the
     same hold."""
+    if prior is not None and prior != NO_PRIOR and not _RUN_NAME.fullmatch(prior):
+        raise LaunchRefused(f"--prior: {prior!r} is neither `none` nor the name of a run folder")
+
+    def attempt(left_out: str | None) -> Prepared:
+        return _prepare(
+            context,
+            sources,
+            out,
+            config=config,
+            cap=cap,
+            modules=modules,
+            web_search=web_search,
+            workspace=workspace,
+            choice=prior,
+            left_out=left_out,
+        )
+
+    try:
+        return attempt(None)
+    except _Cp8DoesNotFit as unfit:
+        return attempt(unfit.note)
+
+
+def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per setting
+    context: Path,
+    sources: Path,
+    out: Path | None,
+    *,
+    config: str,
+    cap: Decimal | str,
+    modules: Sequence[str] | None,
+    web_search: bool,
+    workspace: Path | None,
+    choice: str | None,
+    left_out: str | None,
+) -> Prepared:
+    """`prepare`; ``left_out`` is the note of a run planned without CP-8 because its call did not
+    fit the cap."""
     context_path = Path(context).expanduser().resolve()
     folder = Path(sources).expanduser().resolve()
     raw_context = context_path.read_bytes()
@@ -1834,12 +2002,29 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     directory = (ROOT / "runs" / run_id if out is None else Path(out)).expanduser().resolve()
     if directory.is_relative_to(folder):
         raise LaunchRefused(f"--out {directory}: must be outside the issuer folder")
+    held = _held_manifest(directory)
     prior, note, earlier = _earlier_run(
         directory,
         workspace if workspace is not None else workspace_of(directory),
+        held,
         issuer_id=settings.identity.issuer_id,
+        issuer_name=settings.identity.issuer_name,
+        case_kind=settings.run.case_kind,
         pathway=settings.run.pathway,
         as_of=settings.run.as_of,
+        choice=choice,
+    )
+    if left_out is not None:
+        prior, note, earlier = None, left_out, {}
+    # How the modules were chosen decides whether a later run may compare with this one; a run
+    # folder that holds a manifest keeps what it records (an older one records nothing).
+    preset = set(PATHWAY_MODULES[settings.run.pathway]) - {"CP-8"}
+    selection = (
+        held.selection
+        if held is not None
+        else "explicit"
+        if modules and set(modules) != preset
+        else "preset"
     )
     # CP-8 follows every other module, so it is the last of the plan.
     requested = (*requested, *(("CP-8",) if prior is not None else ()))
@@ -1926,6 +2111,7 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         publish_forecast=forecast,
         prior=prior,
         changes_note=note,
+        selection=selection,
         execution="live-provider",
         max_attempts=1,
         provider_cap_usd=Decimal(cap),
@@ -1939,9 +2125,15 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
             else 0
         )
         for module, text in texts.items()
+        if module != "CP-8"
     )
     if request.provider_cap_usd < hold:
         raise LaunchRefused(f"--cap {cap}: one {config} call holds up to USD {hold:.2f}")
+    if prior is not None:
+        hold = max(
+            hold,
+            _cp8_hold(config, request.provider_cap_usd, len(texts["CP-8"]), ordered, earlier, held),
+        )
     raw = request.model_dump_json(indent=2).encode()
     manifest = directory / "workflow.json"
     if manifest.exists() and manifest.read_bytes() != raw:
@@ -2115,6 +2307,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--live", action="store_true", help="make paid provider calls")
     parser.add_argument("--ruling", type=Path, help="docs/rulings/<file>.md naming this config")
     parser.add_argument(
+        "--prior",
+        help="the earlier run to compare with: its run folder name, or `none` for a first run "
+        "(the run start service passes what the approval named; default: search)",
+    )
+    parser.add_argument(
         "--no-library",
         action="store_true",
         help="do not rebuild the library; the run start service does",
@@ -2208,6 +2405,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             cap=args.cap,
             modules=args.modules,
             web_search=web_search_ruled(args.ruling),
+            prior=args.prior,
         )
     except (ValueError, OSError, LivePauseInForce) as error:
         print(error, file=sys.stderr)

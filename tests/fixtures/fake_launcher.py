@@ -20,7 +20,7 @@ from deploy_workflow.run_events import append_event
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    for flag in ("--context", "--sources", "--cap", "--out", "--ruling", "--max-turns"):
+    for flag in ("--context", "--sources", "--cap", "--out", "--ruling", "--max-turns", "--prior"):
         parser.add_argument(flag)
     parser.add_argument("--config", choices=tuple(CONFIGS), required=True)
     parser.add_argument("--modules", nargs="+")

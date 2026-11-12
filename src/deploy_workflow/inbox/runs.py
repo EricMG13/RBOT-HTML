@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -25,6 +26,7 @@ Status = Literal["queued", "running", "finished", "failed", "capped", "rejected"
 _REGISTRY = "issuers.json"
 DEFAULT_MAX_TURNS = 32
 _TURNS = (1, 64)  # the range submissions.validated accepts
+_PRIOR = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")  # a run folder name, or `none`
 
 
 @dataclass
@@ -51,6 +53,7 @@ class Record:
     level: str = ""
     submitted_by: str = ""
     digest: str = ""  # the approved digest of the submitted files; the move is checked against it
+    prior: str = ""  # the earlier run the approval named (a run folder name or `none`); "": search
 
 
 PID_FILE_VARIABLE = "DEPLOY_WORKFLOW_PID_FILE"  # the launcher reads the same name
@@ -147,6 +150,8 @@ def _check_options(record: Record) -> None:
     for name in record.modules:
         if not isinstance(name, str) or name not in METHODS:
             raise ValueError(f"run {record.id}: {name!r} is not a module")
+    if not isinstance(record.prior, str) or (record.prior and not _PRIOR.fullmatch(record.prior)):
+        raise ValueError(f"run {record.id}: prior {record.prior!r} is not a run folder name")
     turns = record.max_turns
     if not isinstance(turns, int) or isinstance(turns, bool) or not _TURNS[0] <= turns <= _TURNS[1]:
         raise ValueError(f"run {record.id}: max_turns {turns!r} is not a whole number 1 to 64")
@@ -174,6 +179,8 @@ def command(  # noqa: PLR0913 - the signature the scheduler calls
     ]  # fmt: skip
     if record.modules:
         argv += ["--modules", *record.modules]
+    if record.prior:  # what the approval named: the launcher uses exactly that run
+        argv += ["--prior", record.prior]
     if record.max_turns != DEFAULT_MAX_TURNS:
         argv += ["--max-turns", str(record.max_turns)]
     if ruling is not None:

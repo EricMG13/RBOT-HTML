@@ -29,7 +29,7 @@ from deploy_workflow.inbox.filing import safe_name
 from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
 from deploy_workflow.inbox.startup import STANDING_RULING
 from deploy_workflow.owners.cpos import web_search_ruled
-from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
+from deploy_workflow.owners.cpos_launch import NO_PRIOR, LaunchRefused, prepare, read_documents
 from deploy_workflow.platform_io import regular_open
 
 MAX_FILE = 50 * 1024 * 1024
@@ -560,10 +560,20 @@ def _digest(root: Path, answers: Answers) -> str:
     return hashlib.sha256(text.encode("ascii")).hexdigest()
 
 
+def bound(value: str, prior: str) -> str:
+    """``value`` (a digest) with the approved choice of earlier run (``prior``: a run folder name or
+    ``none``; owner, 2026-11-12: what CP-8 compares with is part of what is approved) folded in.
+    Empty when none was recorded, which leaves the digest as it was."""
+    if not prior:
+        return value
+    return hashlib.sha256(f"{value}\nprior={prior}".encode()).hexdigest()
+
+
 def digest(layout: Layout, sid: str, answers: Answers) -> str:
     """SHA-256 over the context, each stored file's name and hash, the modules and the turns.
 
-    ``level`` and ``submitted_by`` are not covered: they change what the page shows, not the run."""
+    ``level`` and ``submitted_by`` are not covered: they change what the page shows, not the run.
+    The approval's digest is this one with the earlier run named at approval folded in (`bound`)."""
     answers = validated(answers)
     root = files_folder(layout, sid)
     value = _digest(root, answers)
@@ -601,19 +611,32 @@ def release(layout: Layout, sid: str) -> None:
 _ISSUED = "issued"
 
 
-def issued(layout: Layout, sid: str) -> str:
-    """The digest the latest summary of this submission returned; empty when there is none."""
+def _issued_lines(layout: Layout, sid: str) -> list[str]:
     path = _folder(layout, sid) / _ISSUED
     if path.is_symlink():
-        return ""
+        return []
     try:
-        return path.read_text(encoding="ascii", errors="replace").strip()
+        return path.read_text(encoding="ascii", errors="replace").split()
     except FileNotFoundError:
-        return ""
+        return []
 
 
-def _record_issued(layout: Layout, sid: str, value: str) -> None:
-    """Replace the submission's issued digest with ``value`` (none when empty), under the lock."""
+def issued(layout: Layout, sid: str) -> str:
+    """The digest the latest summary of this submission returned; empty when there is none."""
+    lines = _issued_lines(layout, sid)
+    return lines[0] if lines else ""
+
+
+def issued_prior(layout: Layout, sid: str) -> str:
+    """The earlier run the latest summary named (a run folder name, or ``none`` for a first run);
+    empty when there is none. It is part of the issued digest."""
+    lines = _issued_lines(layout, sid)
+    return lines[1] if len(lines) > 1 else ""
+
+
+def _record_issued(layout: Layout, sid: str, value: str, prior: str = "") -> None:
+    """Replace the submission's issued digest (and the earlier run it names) with ``value`` (none
+    when empty), under the lock."""
     folder = _folder(layout, sid)
     with _LOCK:
         if not folder.is_dir():  # the scheduler's release removed it after the check above
@@ -624,7 +647,7 @@ def _record_issued(layout: Layout, sid: str, value: str) -> None:
             return
         temp = folder / f".issued-{uuid.uuid4().hex}"
         try:
-            temp.write_text(value + "\n", encoding="ascii")
+            temp.write_text(value + "\n" + (prior + "\n" if prior else ""), encoding="ascii")
             os.replace(temp, path)
         finally:
             temp.unlink(missing_ok=True)
@@ -644,7 +667,7 @@ def summary(
     result = _summarise(layout, sid, answers, config=config, cap=cap)
     digest_issued = result.get("digest", "")
     try:
-        _record_issued(layout, sid, digest_issued)
+        _record_issued(layout, sid, digest_issued, result.get("prior_choice", ""))
     except Refused:
         if digest_issued:  # a digest was made for a submission that is not there: not possible
             raise
@@ -702,8 +725,19 @@ def _summarise(
                 return {"error": _without_path(str(refusal), files)}
             if before != after:
                 return {"error": _CHANGED}
+            # What CP-8 compares with is part of the approval: the run named here is the one the
+            # launcher is told to use (`--prior`), and it is folded into the digest.
+            chosen = prepared.prior.folder if prepared.prior is not None else NO_PRIOR
             return {
-                "digest": after,
+                "digest": bound(after, chosen),
+                "prior_choice": chosen,
+                "prior": None
+                if prepared.prior is None
+                else {
+                    "id": prepared.prior.folder,
+                    "as_of": prepared.prior.as_of,
+                    "pathway": prepared.prior.pathway,
+                },
                 "error": "",
                 "modules": list(prepared.ordered),
                 "items": list(prepared.expectations),

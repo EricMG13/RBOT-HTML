@@ -152,6 +152,8 @@ class DeliveryRequest(Contract):
     layout: MarkdownLayout | None = None
     # CP-8's comparison pack (`deploy_workflow.changes`), published unchanged as `changes.json`.
     changes: HandoffInput | None = Field(default=None, exclude_if=lambda v: v is None)
+    # Why CP-8 was planned and not produced (`changes: not produced — <reason>`); absent otherwise.
+    changes_note: str | None = Field(default=None, exclude_if=lambda v: v is None)
     module_execution: (
         dict[str, Literal["host-session", "retained-response-replay", "synthetic", "live-provider"]]
         | None

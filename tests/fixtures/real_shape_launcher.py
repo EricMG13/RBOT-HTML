@@ -31,7 +31,7 @@ def main() -> int:
     if pid_file:
         Path(pid_file).write_text(str(os.getpid()), encoding="utf-8")
     parser = argparse.ArgumentParser()
-    for flag in ("--context", "--sources", "--config", "--cap", "--out", "--ruling"):
+    for flag in ("--context", "--sources", "--config", "--cap", "--out", "--ruling", "--prior"):
         parser.add_argument(flag)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--no-library", action="store_true")
