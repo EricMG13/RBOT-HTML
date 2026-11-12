@@ -171,7 +171,8 @@ the run uses it, and a later step stays locked while an earlier one has an error
    or "Answer this now"): market and ratings; peers, valuation and module modes (the peer source,
    your own peers, the Relative value mode and Deep Debate for the Committee module); research
    questions at Standard; pinned assumptions at Advanced. What shows depends on the pathway: the
-   short snapshot has no More context step at any level.
+   short snapshot has no More context step at any level, except that a primary run still shows
+   More context with its deal terms (Market) at every level.
 5. **Start.** The summary: the forecast for each module in run order (Ready, Check, Gap, Limited or
    Will refuse), with the reason and the step that fixes it, and each defaulted input with its
    default. The table joins the launcher's forecast and the page's own rules; where both speak of a
@@ -191,7 +192,7 @@ a submission starts at most one run however many times Submit is sent.
 | Level | Asked | Defaulted |
 |---|---|---|
 | Basic | Documents, Purpose, Confirm and Start | See below |
-| Standard | Basic, plus More context where the pathway has it (market inputs, peers and module settings, research questions); none for the short snapshot | Pinned assumptions, valuation basis, own multiple |
+| Standard | Basic, plus More context where the pathway has it (market inputs, peers and module settings, research questions); none for the short snapshot (a primary run still shows More context with its deal terms) | Pinned assumptions, valuation basis, own multiple |
 | Advanced | Everything: also pinned assumptions, valuation basis and own multiple, deal terms, guarantors, aliases, sponsor, the module subset and turns per module | Nothing |
 
 Basic defaults: peer source `cp_dr_public` (the research module finds the peers from public

@@ -67,10 +67,10 @@ and More context, and the "Run started" screen in the same look. Commits 5decc72
 
 ## Verification summary
 
-Synthetic browser tests with a stubbed service. 172 tests passed; quality gate 0 findings. Reviewer
+Synthetic browser tests with a stubbed service. 180 tests passed; quality gate 0 findings. Reviewer
 probes: Task 1 re-review 5 passed, Task 2 14 passed, Task 3 re-review 8 passed. On a 12-module
-summary Submit first comes into view after 11-20% of the scroll; on the short snapshot, after
-66-75%. A focused Approve or Submit is always visible.
+summary Submit first comes into view after 12.5-21.1% of the scroll; on the short snapshot, after
+69.2-77.1%. A focused Approve or Submit is always visible.
 
 Not verified, collected from the reports:
 
