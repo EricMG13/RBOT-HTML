@@ -914,7 +914,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -2729,4 +2729,100 @@ test('the earlier-format band keeps its words and is not navy; a finding is one 
   assert.ok(article.includes('<h4>Leverage rose.</h4>') && article.includes('<span class="conf">Confidence High</span>') && article.includes('class="basis-link"'), article);
   const css = read('screen.css'), redesign = css.slice(css.indexOf('/* Redesign pass 1'));
   assert.ok(/\.band\{[^}]*background:none/.test(redesign) && !/\.band\{[^}]*navy/.test(redesign));
+});
+
+// ---- The Forecast page (reader check of 2026-11-12): lines with no figure fold away; the model picker names the run, not a hash.
+const cell = (status, display, reason = null) => ({ exact: status === 'value' ? display : null, display, reason, status });
+const gridColumns = [{ label: 'FY2024', group: 'Fiscal year', start: null, end: null, ytd: false }, { label: 'FY2025E', group: 'Base case', start: null, end: null, ytd: false }];
+const gridRow = (band, label, empty, cells) => ({ band, label, kind: 'money', total: false, empty, cells });
+// Hand-written grid: Revenue has figures; Capex has none in the main table but one in the Upside table; Closing cash and Gross profit have none anywhere.
+const FOLD_GRID = {
+  units: 'USD millions', columns: gridColumns, notes: [], limits: [],
+  rows: [
+    gridRow('Revenue', 'Revenue', false, [cell('value', '1,000'), cell('value', '1,050')]),
+    gridRow('Profitability', 'Gross profit', true, [cell('na', 'n.a.', 'not reported'), cell('nm', 'n.m.')]),
+    gridRow('Cash and liquidity', 'Capex', false, [cell('na', 'n.a.', 'not reported'), cell('na', 'n.a.', 'not reported')]),
+    gridRow('Cash and liquidity', 'Closing cash', true, [cell('na', 'n.a.', 'not reported'), cell('na', 'n.a.', 'not reported')]),
+  ],
+  other: {
+    columns: [{ label: 'FY2025E', group: 'Upside', start: null, end: null, ytd: false }],
+    rows: [
+      gridRow('Revenue', 'Revenue', false, [cell('value', '1,100')]),
+      gridRow('Profitability', 'Gross profit', true, [cell('nm', 'n.m.')]),
+      gridRow('Cash and liquidity', 'Capex', false, [cell('value', '40')]),
+      gridRow('Cash and liquidity', 'Closing cash', true, [cell('na', 'n.a.', 'not reported')]),
+    ],
+  },
+};
+const foldPart = (html, cls) => html.match(new RegExp(`<details class="${cls}">.*?</details>`, 's'))?.[0] ?? null;
+const rowLabels = html => [...html.matchAll(/<th scope="row">([^<]*)<\/th>/g)].map(m => m[1]);
+
+test('Forecast: a line with no figure in any column is folded after the main table and before the other cases; its cells stay', () => {
+  const html = runPage().cashflowSection({ cashflow: FOLD_GRID });
+  const main = html.slice(0, html.indexOf('<details class="cashflow-empty">'));
+  const fold = foldPart(html, 'cashflow-empty');
+  assert.deepEqual(rowLabels(main), ['Revenue', 'Capex'], 'Capex has a figure only in the Upside table, so it stays in the main table');
+  assert.deepEqual(rowLabels(fold), ['Gross profit', 'Closing cash']);
+  assert.ok(fold.includes('<summary>Lines with no figure in this run (2)</summary>'));
+  assert.ok(!main.includes('Profitability'), 'a heading whose lines are all folded is folded with them');
+  assert.ok(fold.includes('<th scope="colgroup" colspan="3">Profitability</th>') && fold.includes('Cash and liquidity'));
+  assert.ok(fold.includes('Fiscal year') && fold.includes('Base case') && fold.includes('aria-label="n.a.: not reported"') && fold.includes('aria-label="n.m.: not modelled in the calculation record"'), 'same columns and cells, reasons reachable');
+  assert.ok(html.indexOf('class="cashflow-empty"') < html.indexOf('class="cashflow-other"') && html.indexOf('</table>') < html.indexOf('class="cashflow-empty"'));
+  assert.ok(html.includes('Why cells show n.a. (3 lines)'), 'the n.a. list still counts every line');
+});
+
+test('Forecast: when every line has a figure there is no fold', () => {
+  const rows = FOLD_GRID.rows.map(r => ({ ...r, empty: false }));
+  assert.ok(!runPage().cashflowSection({ cashflow: { ...FOLD_GRID, rows, other: null } }).includes('cashflow-empty'));
+});
+
+test('Forecast: the fold has the other cases\' keyboard and focus styling', () => {
+  const css = read('screen.css');
+  assert.ok(css.includes('.cashflow-other summary,.cashflow-empty summary{cursor:pointer;font-weight:600;'));
+  assert.ok(read('views.js').includes('<details class="cashflow-empty"><summary>'));
+});
+
+const PICK_RUNS = { asOf: '2025-03-31', issuerKey: 'k1', pathway: 'credit_snapshot', run: 'Run A' };
+const pickPage = models => runPage(d => d, [], m => m, { runFields: PICK_RUNS, models });
+const pickModel = (id, extra = {}) => ({ id, issuerKey: 'k1', runId: RUN, runFolder: RUN, sources: [], ...extra });
+const HASH_1 = 'a1b2c3d4'.repeat(8), HASH_2 = 'e5f6a7b8'.repeat(8);
+
+test('model picker: one delivery reads run date, pathway and run id, with no hash', () => {
+  const models = [pickModel(HASH_1)];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A']);
+});
+
+test('model picker: two deliveries of one run differ by the first eight characters of the delivery id', () => {
+  const models = [pickModel(HASH_1), pickModel(HASH_2)];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · a1b2c3d4', '31 March 2025 · Credit snapshot · Run A · e5f6a7b8']);
+});
+
+test('model picker: the relationship is appended only when recorded', () => {
+  const models = [pickModel(HASH_1, { previous: HASH_2 }), pickModel(HASH_2)];
+  const [first, second] = pickPage(models).modelOptionLabels(models);
+  assert.equal(first, `31 March 2025 · Credit snapshot · Run A · a1b2c3d4 · supersedes 31 March 2025 · Credit snapshot · Run A · e5f6a7b8`);
+  assert.equal(second, `31 March 2025 · Credit snapshot · Run A · e5f6a7b8 · superseded by 31 March 2025 · Credit snapshot · Run A · a1b2c3d4`);
+  assert.ok(!pickPage([pickModel(HASH_1)]).modelOptionLabels([pickModel(HASH_1)])[0].includes('relationship'));
+});
+
+test('model picker: with no run context the run folder is named, then the delivery id', () => {
+  const orphan = pickModel(HASH_1, { issuerKey: 'other', runFolder: 'folder-x', runId: 'folder-x' });
+  assert.deepEqual(pickPage([orphan]).modelOptionLabels([orphan]), ['folder-x']);
+  const bare = pickModel(HASH_2, { issuerKey: 'other', runFolder: null, runId: null });
+  assert.deepEqual(pickPage([bare]).modelOptionLabels([bare]), [HASH_2]);
+});
+
+test('model picker: a relationship names a listed delivery by its label and an unlisted one by its id', () => {
+  const models = [pickModel(HASH_1, { previous: HASH_2 })];
+  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Credit snapshot · Run A · supersedes ${HASH_2}`);
+});
+
+test('model picker: ids that share their first eight characters read with the whole id', () => {
+  const models = [pickModel('tdg-forecast-005'), pickModel('tdg-forecast-006')];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · tdg-forecast-005', '31 March 2025 · Credit snapshot · Run A · tdg-forecast-006']);
+});
+
+test('model picker: a delivery for a run the library does not list is named by its own run folder, not the page run', () => {
+  const models = [pickModel(HASH_1, { runId: 'run-not-listed', runFolder: 'run-not-listed', sources: [{ run: RUN }] })];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['run-not-listed']);
 });

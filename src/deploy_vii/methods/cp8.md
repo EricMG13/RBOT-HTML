@@ -95,12 +95,26 @@ accepted, the run is delivered without it.
      or says `Same definition` with the cause `Correction` or `Method change`, in the first words of the Effect cell; the causes
      `New period` and `New source` are refused for it. `Same definition` followed by a sentence
      that contradicts it ("but the EBITDA basis changed") is an error: say `Not comparable`. Such a
-     difference is written only in the register rows. A passage may give the two values and say the
+     difference is written only in that measure's issuer row (below). A passage may give the two values and say the
      analysis changed; it never says the issuer's measure moved. The same holds for the pack's
      `net_debt_change` when its `same_period` is true and a difference is not zero: the gross debt,
      cash and net debt differences are the analysis's, so give both runs' values and never a
      movement ("net debt rose", "cash fell by"); the checker refuses those sizes in
-     passages, `## Gaps` and fact rows; only the register rows may carry them.
+     passages, `## Gaps`, fact rows, the analysis register's Why cells and the ledger's cells. The
+     one place a withheld difference may be printed is the Effect cell of that same measure's issuer
+     row, said `Same definition` with the cause `Correction` or `Method change`; the net debt
+     change's cash has no such row, so its difference is printed nowhere. A withheld difference
+     is refused without its unit too: a bare number (`Cash fell by 30.`) equal to a withheld size
+     is refused wherever the sized one is, so write a count that happens to equal it another way
+     (a size written in words, `thirty`, is refused as well, also when a line break splits it; the
+     repair names the figure and the measure). A number directly before a count noun (`30 modules`,
+     `30 months`) or after `page`, `note`, `section`, `table`, `row`, `item`, `step` or `appendix` is a
+     count and allowed, with no word between; `30 new modules` is refused. A year with a unit
+     (`2010 US$m`, `USD 2010`) is a figure, not a year; a bare year or a year after a month or period
+     label (`September 2024`, `FY 2024`) is a year. The verdict words
+     `Same definition` and `Not comparable` are read from the start of the Effect cell only; the
+     same words starting any other cell of the row are refused, naming the cell (a `Not comparable`
+     for a measure the pack marks `comparable: no` is accepted in any cell of its row).
 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
    for a module's. If you think a module's change of view is unexplained, say so and mark the row

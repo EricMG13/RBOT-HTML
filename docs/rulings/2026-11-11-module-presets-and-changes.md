@@ -359,3 +359,104 @@ given to the same functions as a measure-shaped record, so the same exceptions a
 with a non-zero difference, shows both runs' balances with periods and "Both runs state net debt for the same date;
 the difference is between the two analyses, not a change in the issuer." with no change figure; it also prints the
 periods beside the change's cash movement. `cp8.md` states the rule.
+
+Amendment, 2026-11-12 (owner: asked "Close the gap that lets a withheld difference be written in CP-8's Why cell?",
+the owner answered "fine, PR and merge"). K9's "register rows" exemption (round 3 (c) above, and the 2026-11-12
+net debt amendment's "same exceptions") meant the issuer register row of the same measure; it is narrowed to that.
+The only cell that may print a withheld difference is the Effect cell of a pack measure's own issuer row, when the
+measure is of one period with two values and its row says `Same definition` with the cause `Correction` or
+`Method change`. The analysis register's Why cells, the ledger's cells, fact rows and another measure's row refuse
+it, naming the figure and the word "difference"; the net debt change's cash, which has no issuer row, is printed
+nowhere. A size equal to a value of the measure itself stays accepted. Same functions (`_withheld_sizes`), per-line
+exemption (`_may_print`). `cp8.md` states the rule.
+
+Amendment, 2026-11-12 (owner: asked "Fix the two remaining checker gaps in one small follow-up?", the owner
+answered "Yes, fix both"). (A) K9 also refuses a withheld difference written without a unit: a whole number below 100
+is a count everywhere but here, and for the withheld-difference rule only a bare number equal in magnitude to a
+withheld size is refused, on the same lines and with the same exemptions (the measure's own issuer row under its
+condition; a size equal to one of the measure's own values). Counts under K10 are unchanged; for the bare-number reading only, module codes, the number of a line that really
+begins a list item (the first line, or after a blank line, a heading or a list item; never a table cell or a line that
+continues a paragraph) and a one- or two-digit day beside a month name are not read as numbers. Limits, recorded: a legitimate bare count equal to a withheld size ("30
+limitations" while a difference of 30 is withheld) is refused and must be reworded (the message names the figure, the
+measure and the word "difference"); a size written in words ("thirty") was not read (closed by the amendment
+below). (B) The verdict words `Same
+definition` and `Not comparable` are read from the start of the Effect cell only, by the checker and by
+`page_verdicts` alike (`_says`); the same words starting another cell of the measure's row are refused, naming the
+cell, not ignored. Unchanged: for a measure the pack marks `no`, `Not comparable` is accepted anywhere in its row.
+The shared fixture `tests/fixtures/changes-seam/rows.json` gains five cases; no existing case changed.
+
+Amendment, 2026-11-12 (owner: "Fix the limits first"; controller rulings L1 to L4). (L1) After a bulleted item line a
+leading number is a list marker only if it is `1` (CommonMark: a list not starting at 1 cannot interrupt a
+paragraph), so a hard-wrapped `- Cash fell by` / `30. The rest holds.` is read as a figure; after a blank line, a
+heading, the first line or a numbered item the earlier rule stands. (L2) A day beside a month name is a date only when
+a four-digit year completes it (`30 September 2024`, `30th Sep 2024`, `September 30 2024`, `Sep 30, 2024`); a day and
+month with no year is a number, so "The period ends 30 September." with 30 withheld is refused (accepted cost: reword).
+(L3) A complete date is blanked from the line before both readings (the raw K9/K10 reading and the bare reading);
+`_FIGURE` is unchanged, so `September 30, 2024` no longer reads `30,`, and an unheld figure on a line that also holds a
+date is still refused by K10. (L4) In the bare-number K9 reading only, whole numbers from two to 999,999 in English
+words (`thirty`, `one hundred and sixty-three`, `two thousand five`; hyphenated or spaced, any case) are read as the
+number they spell, with the same exemptions and message; `one` alone is never read. Remaining limits, recorded: a
+legitimate bare count (or a spelled one) equal to a withheld size is refused, since the checker cannot tell a count
+from a size; decimals, fractions, ordinals (`thirtieth`), `a hundred` and `a dozen` in words are not read. The two
+tests that pinned the old limits (a size in words accepted; `- First point.` then `80. ...` accepted) now assert the
+new rulings; no other expectation and no `rows.json` case changed.
+
+Amendment, 2026-11-12 (reviewer findings M1, Low A, Low B). A date's year is `(?:19|20)\d{2}` only, as `_EXEMPT` has it, so
+a figure such as `4370` or `1006` straight after a yearless `30 June` is read again. A spelled number is not read when it
+directly follows or precedes `point`, or is directly followed (space or hyphen) by an ordinal or fraction word (`first`,
+`thirty-first`, `thirds`, `quarters`, `-th`/`-ieth` forms, also after `and`: `one hundred and first`) or by `and a half` /
+`and a quarter`. U+2010 to U+2015 count as a hyphen inside a spelled number. Remaining limits: a spelled size broken across
+lines (`one hundred` / `and ten`) is not read; a legitimate count equal to a withheld size is refused.
+Narrowed (controller rulings, same day): `and` plus an ordinal exempts only a number containing `hundred` or `thousand`;
+an ordinal or fraction word hyphen-joined to a following word (`second-lien`, `quarter-on-quarter`) is not an ordinal;
+`point` exempts a number only inside number-word `point` number-word (`zero point five`), so `At that point thirty`,
+`a thirty-point swing` and a bare `point five` are read (accepted false refusal); `and a half` / `and a quarter` exempt
+only when not followed by `of`; `two halves` is not read. When in doubt the number is read.
+
+Amendment, 2026-11-12 (owner: "fix 1 and 2"; controller rulings R1 to R3). (R1) A 19xx/20xx number is a year, not a
+figure, in K9 and K10 unless it is a figure by the rules for any number: a currency directly before it (`US$2010m`,
+`USD 1913`), a decimal part or thousands separator, a scale or unit directly after it (`2010m`, `2010%`, `1913 million`,
+`2010 US$m`, `2010 USDm`). It stays a year when the currency after it is directly followed by a number (that currency is
+the next number's: `September 2024 US$4,216 million`), in a table header row (the row above a `| --- |` separator:
+`| 2024 / 2023 US$m |` reads nothing; a body row or Effect cell holding `2010 US$m` is a figure), after a month name or a
+period marker (`September 2024`, `FY 2024`, `Q3 2024`, `H1 2025`, `fiscal 2024`, `LTM 2024`), and when bare. A currency
+code before or after a year is only one of a fixed list (USD, EUR, GBP and similar), so `AND 2023` is no currency.
+Held evidence is read the same way, line by line. (R2) In the bare-number K9 reading only (digits and words) a number is
+a count when directly followed by a count noun (module, run, measure, source, period, row, item, document, filing, page,
+section, table, finding, limitation, assumption, conclusion, handoff, issuer, lender, facility,
+tranche, covenant, subsidiary, quarter, month, year, week, day; singular or plural, not hyphen-joined to a further word)
+or directly after page, note, section, table, row, item, step or appendix. No pack measure's unit is one of the nouns.
+`Cash fell by 30 days` is accepted: `days` is a count noun and no pack measure is measured in days; a unit of the pack
+(`30 US$m`) is refused as before. (R3) In the words reading, a spelled number that a paragraph line leaves unfinished and
+the next line of the same paragraph continues (`one hundred` / `and ten`) is read joined and reported once; a blank line,
+heading, table row or list item between is no join. Remaining limits, recorded: a bare 19xx/20xx number is always a
+year (period labels are mandatory, so a bare year is never refused); in prose a list of years sharing one unit
+(`2024 / 2023 US$m` outside a header row) is refused, so reword it or put it in a table header; a count with an
+adjective before its noun (`30 new modules`), a count noun outside the list, and `times`, `points`, `percent` are
+refused; a whole count of 100 or more beside a count noun is still refused by the raw reading (it takes a number of 100 or
+more without a unit). The one existing case that
+pinned the count limit (`The handoff states 30 limitations.`) now asserts acceptance; no `rows.json` case changed.
+
+Amendment, 2026-11-12 (reviewer findings H1, M1, M2, L1 to L3; controller rulings). (H1) A comma is part of a number only
+as a thousands separator (followed by exactly three digits); a 19xx/20xx number before any other comma (`In 2024, the
+issuer`, `2023, 2024 and 2025`) is a bare year, in prose, rows, header rows and held evidence (`September 19, 2024,` holds
+no 2024). (M1) An ISO date (`YYYY-MM`, `YYYY-MM-DD`) is exempt as a whole, also after a period marker or month name (`Q3
+2024-09-30`). (M2) `change` and `difference` are not count nouns: `a 30 difference` and `a thirty change` are refused
+again. (L1) A count noun that starts the next line of the same paragraph counts (`thirty` / `modules`); the old limit is
+removed. (L2) A table separator row without outer pipes (`--- | ---`) marks the header row above it. (L3) A currency code
+after a year is a unit only with a scale after it (`2010 USDm`, `2010 USD million`) or a number (`2025 USD 30,199`):
+`In 2024 USD strengthened` reads no figure.
+Amendment, 2026-11-12 (fix round 2). (M-A) The scale after a currency code or symbol, with or without a space, is any of
+million(s), billion(s), thousand(s), `mn`, `bn`, `m`, `k` (words case-insensitive), so `2010 USD millions` and `2010 US$ million` are figures. (L-A1) The ISO
+exemption (`YYYY-MM`, `YYYY-MM-DD`) matches only when its last two digits are not followed by another digit: `September 2024-437` reads 437, and `2025-2045` reads
+two years (the 45 once read from `2025-2045` was a fragment, not a figure). Limit: a two-digit number written directly after a year and a hyphen (`FY 2024-30 US$m`) is read as a year range and hides the 30. (L-B) A table separator row
+needs at least three dashes in every cell (colons allowed); no real separator row in the retained runs has fewer.
+
+Amendment, 2026-11-12 (fix round 3). One unit test decides whether a 19xx/20xx number is a year or a figure (`_YEAR_UNIT`),
+separate from the small-number test (`_UNITED`), so a boundary fixed for one no longer moves the other. A unit must end before a
+letter, a digit or `&`, and before a hyphen or slash followed by a letter (`2024 m&a`, `2024 k-shaped`, `2024 m/m` stay years). A
+plural scale word (`millions`) counts only after a currency (`2010 USD millions`); alone it is a year (`In 2024 millions of
+customers`, and `2010 millions`, which the round-2 test had listed as a figure and is moved). The duplicate `_UNITS` name is gone,
+so `mypy --strict` reports no error in the file. Recorded limit: a unit directly followed by a hyphenated word or a
+superscript footnote mark (`2010 US$m-equivalent`, `2010 USD million-plus`, `2010 US$m¹`) is not read as a unit, so that
+year-shaped number stays a year.
