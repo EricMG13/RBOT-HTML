@@ -51,6 +51,7 @@ In `cp2g._year`, with a schedule: cash interest is `interest[t] * (1 + k)` (k th
 2. Base debt not in a facility row (`base debt - sum of balances`) bears no interest and is not repaid; its amount is published as `unallocated_debt` and named in a scope limit. Missing base debt: `unallocated_debt` is missing with the base debt's reason.
 3. A facility whose `maturity` falls on or before the third forecast year's end keeps its balance (assumed refinanced), named with its year in a scope limit.
 4. Sum of balances above 1.25 times a known base debt is refused: a unit or currency slip (CP-1 in thousands), not a carrying-value difference.
+6. Rebased onto main `36b6d8f` (2026-11-12): CP-1 may now write a layer-1 forecast block (`parse(..., source="CP-1")`). Facilities are CP-2G's only: a CP-1 block that states `facilities` is refused, as it already is for a shock or cases. CP-1's instruction (`LAYER1_FORECAST_BLOCK`) is not changed.
 5. No presentation change: `cp2g.Year` keeps its fields, so `apps/issuer-library/credit_os/store.py` and the Forecast page read the same keys. New detail appears only in `forecast_exact.json` and `scope_limits`.
 
 ## Global Constraints
@@ -186,7 +187,7 @@ def test_missing_base_debt_stays_missing_with_its_reason():      # Review Focus 
     assert y.closing_debt.amount is None
 ```
 
-Also assert year 1 free cash flow against a `Fraction` computed in the test from `BASE`, `PATHS` and interest 34.5 (the pattern of `key_case` in `tests/test_cpos_launch.py:2119`).
+Also assert year 1 free cash flow against a `Fraction` computed in the test from `BASE`, `PATHS` and interest 34.5 (the pattern of `key_case` in `tests/test_cpos_launch.py`).
 
 - [ ] **Step 2: Run** `uv run pytest tests/test_cpos_facilities.py -q` — expected: the four new tests fail (`unexpected keyword argument 'schedule'`).
 - [ ] **Step 3: Implement.** In `_year`, when `scheduled` is given: `interest = _apply(lambda d: scheduled[0] * (1 + k), debt)` and `rep = scheduled[1]`. `forecast` passes `schedule[t]`.
@@ -214,9 +215,10 @@ Refusals (`ValueError`, exact text):
 - `CP-2G: facility {name} {field} {value} is not printed in CP-1` (`field` one of `balance`, `fixed_rate_pct`, `spread_pct`, `floor_pct`)
 - `CP-2G: facility balances total {sum}, more than 1.25 times base debt {debt}; check the unit`
 - `CP-2G: {case} states {driver}, which is not used when facilities are stated` (`case` is `upside_drivers` or `downside_drivers`)
+- `CP-1: a layer-1 forecast states no facilities` (a block parsed with `source="CP-1"`; extend the existing shock-and-cases refusal's condition, keeping its own text for those)
 - duplicate names: a pydantic issue through the existing `shape_issues` path.
 
-- [ ] **Step 1: Write the failing tests** with `forecast_block` and `BASE` imported from `tests/test_cpos_launch.py`, CP-1 text `" ".join(BASE.values()) + " 400 150 6.00 3.00 1.00"`:
+- [ ] **Step 1: Write the failing tests** with `forecast_block` and `BASE` imported from `tests/test_cpos_launch.py`, CP-1 text `" ".join(BASE.values()) + " 400 150 6.00 3.00 1.00"` (call `model_files(cp1, handoff)` with the default `source="CP-2G"`):
 
 ```python
 def test_a_block_with_facilities_publishes_the_answer_key():
@@ -242,6 +244,10 @@ def test_a_case_override_of_an_unused_driver_is_refused():        # Review Focus
     # downside_drivers names interest_rate, facilities stated
     ... match="downside_drivers states interest_rate, which is not used when facilities are stated"
 
+def test_cp1s_layer1_block_states_no_facilities():
+    # layer1_block(facilities=[A]) from tests/test_cpos_launch.py, parsed with source="CP-1"
+    ... match="CP-1: a layer-1 forecast states no facilities"
+
 def test_a_maturity_inside_the_forecast_is_named():
     # A with maturity inside the second forecast year (years run 2025-04-01 to 2028-03-31)
     ... "Notes matures in FY2026 and is assumed refinanced; its balance is held." in scope_limits
@@ -257,10 +263,10 @@ Published amounts are compared as `Decimal` (the existing `_cell` writes `format
 ### Task 4: Instruction text, method note, verification record, gates
 
 **Files:**
-- Modify: `src/deploy_workflow/owners/cpos_launch.py:1454-1478` (`FORECAST_BLOCK`)
+- Modify: `src/deploy_workflow/owners/cpos_launch.py:1473` (`FORECAST_BLOCK` only; `LAYER1_FORECAST_BLOCK` is not touched)
 - Modify: `src/deploy_vii/methods/cp2g.md` (Method bullet on interest and debt; the "New borrowing, refinancing, maturities" and "Interest on average balance" rows)
 - Modify: `VERIFICATION.md`
-- Test: `tests/test_cpos_launch.py` (next to the instruction assertions at line 1466)
+- Test: `tests/test_cpos_launch.py` (next to the other `all_instructions` assertions)
 
 **Interfaces:**
 - Consumes: the field names and forms of Task 1 and the rulings above.
@@ -284,7 +290,7 @@ def test_cp2g_is_told_how_to_state_facilities(tmp_path):
 
 - [ ] **Step 4: Update `methods/cp2g.md`**: the Method bullet says interest and repayment come from stated facilities when present (analyst rate and repayment otherwise); the maturities row says a maturity inside the forecast is held and named; no other row changes.
 - [ ] **Step 5: Run** `uv run pytest tests/test_cpos_launch.py -q -k "instruction or forecast or told"` and `uv run python tools/quality_gate.py` — expected: pass, exit 0.
-- [ ] **Step 6: Record in `VERIFICATION.md`** one entry: scope "offline synthetic tests of the facility schedule; no provider called, no model response; a live CP-2G run with `facilities` is not yet done", the commands run and their exit codes.
+- [ ] **Step 6: Record in `VERIFICATION.md`** (986 lines now; trim its oldest entries so the file ends under 1,000) one entry: scope "offline synthetic tests of the facility schedule; no provider called, no model response; a live CP-2G run with `facilities` is not yet done", the commands run and their exit codes.
 - [ ] **Step 7: Commit** `docs(cp2g): facility schedule instructions and record`
 
 ## After the tasks
