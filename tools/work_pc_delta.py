@@ -9,11 +9,14 @@ changed between the commit it last adapted (base) and the commit being downloade
     python tools/work_pc_delta.py generate --base "2026-11-10 18:00"  # base by date
     python tools/work_pc_delta.py generate                            # next pack
     python tools/work_pc_delta.py check <folder>                      # on the work PC
+    python tools/work_pc_delta.py plan --new <download> --adapted <copy>  # on the work PC
 
 Each pack goes to docs/work-pc/syncs/<NNN>_<date>_<base>-<head>/ (CHANGES.md, changes.patch,
 SYNC.json); packs chain, each starting where the previous one ended. manifest.json holds
 the git blob hash of every file at the latest head, so `check` (no git needed) shows
-whether a downloaded copy matches it, i.e. whether the packs cover everything.
+whether a downloaded copy matches it, i.e. whether the packs cover everything. `plan`
+sorts every file into copy, delete, merge or keep by comparing the download and the
+adapted copy with the manifest of the version the adapted copy was made from.
 """
 
 from __future__ import annotations
@@ -317,6 +320,32 @@ def check(folder: Path, record_path: Path) -> list[str]:
     return report
 
 
+def hashes(folder: Path) -> dict[str, str]:
+    return {name: blob_hash(path.read_bytes()) for name, path in local_files(folder).items()}
+
+
+def plan_action(base: str | None, new: str | None, adapted: str | None) -> str | None:
+    """What to do with one path, from its hash in the base version, download and copy."""
+    if new == base:
+        return "keep" if adapted != base else None  # an adaptation, or untouched
+    if adapted == base:
+        return "copy" if new else "delete"  # changed upstream only: take the download
+    return None if adapted == new else "merge"  # changed on both sides
+
+
+def plan(new: Path, adapted: Path, base_record: Path) -> list[str]:
+    """Each path the update touches or the work PC adapted, with its action, merges first."""
+    base: dict[str, str] = json.loads(base_record.read_text(encoding="utf-8"))["files"]
+    downloaded, local = hashes(new), hashes(adapted)
+    rows: dict[str, list[str]] = {"merge": [], "copy": [], "delete": [], "keep": []}
+    for name in sorted(base.keys() | downloaded.keys() | local.keys()):
+        action = plan_action(base.get(name), downloaded.get(name), local.get(name))
+        if action:
+            rows[action].append(f"{action:<7}{name}")
+    counts = ", ".join(f"{len(found)} {action}" for action, found in rows.items())
+    return [line for found in rows.values() for line in found] + [f"plan: {counts}"]
+
+
 def generate(root: Path, base_ref: str | None, head_ref: str) -> str:
     head = resolve(root, head_ref, head_ref)
     record = root / PACK_DIR / "manifest.json"
@@ -343,10 +372,25 @@ def main(argv: list[str] | None = None) -> int:
     verify.add_argument(
         "--manifest", type=Path, help="default: <folder>/docs/work-pc/manifest.json"
     )
+    sort = commands.add_parser("plan", help="copy/delete/merge/keep for each file")
+    sort.add_argument("--new", type=Path, required=True, help="the unchanged download")
+    sort.add_argument("--adapted", type=Path, required=True, help="the work PC's copy")
+    sort.add_argument(
+        "--base-manifest",
+        type=Path,
+        help="manifest of the version the copy was adapted from; "
+        "default: <adapted>/docs/work-pc/manifest.json",
+    )
     root = Path(__file__).resolve().parents[1]
     args = parser.parse_args(argv)
     if args.command == "generate":
         print(generate(root, args.base, args.head))
+        return 0
+    if args.command == "plan":
+        record = args.base_manifest or args.adapted / PACK_DIR / "manifest.json"
+        if not record.is_file():
+            parser.error(f"{record} not found: pass --base-manifest (see docs/work-pc/README.md)")
+        print("\n".join(plan(args.new, args.adapted, record)))
         return 0
     report = check(args.folder, args.manifest or args.folder / PACK_DIR / "manifest.json")
     print("\n".join(report) or "identical to the manifest: the packs cover every change")
