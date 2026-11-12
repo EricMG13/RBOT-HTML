@@ -2161,3 +2161,19 @@ def test_the_launch_checker_gives_cp8_both_runs_handoffs_to_hold_figures(tmp_pat
     assert refused({"CP-1": b"# upstream"}, {}) == {"3000", "7.0"}
     assert refused({"CP-1": b"# up", "CP-2": b"Term loan USD 3,000 million."}, {}) == {"7.0"}
     assert refused({"CP-1": b"# up"}, {"prior/CP-2.md": b"Covenant below 7.0x."}) == {"3000"}
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| Leverage change | — | 0.56x | New source | Lower debt. |",
+        "| Leverage change | — | fell by 0.56x | New source | Lower debt. |",
+        "| Leverage change | — | −0.56x | Unresolved | Lower debt. |",
+        "| Coverage move | — | 0.31x | New source | Better cover. |",
+        "| Leverage fell by 0.56x | — | — | Unresolved | Lower debt. |",
+    ],
+)
+def test_a_difference_of_the_pack_is_never_printed_in_a_fact_row(row):
+    found = cp8_issues(real_text(fact=row + "\n"), REAL, REAL_HELD)
+    assert any("difference" in i for i in found), found
+    assert cp8_issues(real_text(fact=FACT_LOAN), REAL, REAL_HELD) == ()

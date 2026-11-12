@@ -178,7 +178,7 @@ be held in the evidence: the pack's values, the figures of its definition texts,
 run's; a rounded or worked-out figure and an unstated threshold are refused. (c) The difference of a measure
 that is `no`, said `Not comparable`, or of one period with two values is printed in no checked line (a same-period
 measure said `Same definition` may print it in register rows). (d) A fact row may carry figures a handoff states,
-never a pack measure's value (`name a pack measure by its exact label`). Known limits, kept: a movement in words
+never a pack measure's value (`name a pack measure by its exact label`) nor any difference of the pack, in any cell including the label (a difference belongs to its measure's own row). Known limits, kept: a movement in words
 for a withheld measure ("Leverage improved.") is not checked mechanically (the method text, the enforced register
 row beside it and a human reader carry it); a held figure proves a number exists in the evidence, not what it
 means (on the real pair "about 0.6x lower" passes because 0.6 is a weight in a current handoff); fact-row figures

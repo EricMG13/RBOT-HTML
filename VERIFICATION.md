@@ -29,7 +29,7 @@ check is mechanical (K1-K12): `changes.same_period` (same date, else same fiscal
 line, every figure of a checked line held in the pack, its definition texts or a handoff of either run (the launch caller
 passes this run's handoffs and `prior/*.md`), fact rows may carry held amounts, never a pack measure's value. Changed
 expectations (by the plan): 500 US$m not held; "debt was 333"; two movement-in-words cases and one trend assertion dropped; a
-test renamed. Results: `tests/test_changes.py` 173 passed; fast set 1,439 passed; quality gate 0; browser set 138 passed, exit 0; probes
+test renamed. Q-1: a fact row prints no pack difference in any cell (5 tests). Results: `tests/test_changes.py` 173 passed; fast set 1,439 passed; quality gate 0; browser set 138 passed, exit 0; probes
 `t4r3_same_period_rows` as expected, `t4r2_prior` 5 passed, `r1_t4_real_pair` 0, `t4r2_checker` 1 (its three round-2 lines).
 Not verified: a real model writing the ledger or judging a definition; whether the estimate matches a live first request; the
 library's Changes section; a real CP-8 handoff against the new figure rule (hand-written mini pack and probes only).

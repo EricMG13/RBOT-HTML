@@ -67,7 +67,7 @@ accepted, the run is delivered without it.
    - A row that names a pack measure uses the measure's label exactly as the pack gives it. A fact
      row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
      earlier run's under Earlier and the current run's under Current, but never a pack measure's
-     value; that is the measure's own row.
+     value or a difference; a difference belongs to its measure's own row.
    - `comparable: yes`: the definitions match; report the values and the difference.
    - `comparable: no` (a unit differs, or a run does not state the value): the pack gives no
      difference. Say the row is `Not comparable` or the value is not stated, give the values the pack

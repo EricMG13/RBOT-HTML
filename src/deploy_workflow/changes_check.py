@@ -363,24 +363,37 @@ def _same_period_issues(name: str, row: Sequence[str], cause: str) -> list[str]:
 def _fact_row_issues(
     name: str, row: Sequence[str], pack: Mapping[str, Any], held: frozenset[Decimal]
 ) -> list[str]:
-    """A row naming no pack measure: its Earlier and Current cells print no value of a pack measure
-    (that is the measure's own row) and only figures held in the evidence."""
+    """A row naming no pack measure: no cell prints a difference of the pack, its label, Earlier and
+    Current cells print no value of a pack measure (that is the measure's own row) and only figures
+    held in the evidence."""
     own = {
         abs(value)
         for measure in pack["measures"]
         for side in ("prior", "current")
         if (value := _signed((measure[side] or {}).get("value"))) is not None
     }
+    differences = _pack_differences(pack)
+    sizes = {abs(d) for d in differences if d != 0}
     issues = []
-    for cell in row[1:3]:
+    for index in (0, 1, 2, 4):
+        cell = row[index]
         for figure in dict.fromkeys(f.size for f in _figures(cell, counts=False)):
-            if figure in own:
+            if figure in sizes and figure not in own:
+                issues.append(
+                    f"Issuer register, {name!r}: the figure {figure} is a difference of the pack; "
+                    "a difference belongs to its measure's own row, not to a fact row."
+                )
+            elif index == 4:
+                continue
+            elif figure in own:
                 issues.append(
                     f"Issuer register, {name!r}: the figure {figure} is a value of a pack measure; "
                     "name a pack measure by its exact label in that measure's own row."
                 )
             elif figure not in held | _evidence(pack):
                 issues.append(_not_held(f"Issuer register, {name!r}", figure))
+        if index != 4:
+            issues += _direction_issues(cell, differences, f"Issuer register, {name!r}")
     return issues
 
 
