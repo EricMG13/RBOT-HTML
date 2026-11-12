@@ -3650,6 +3650,19 @@ def test_a_scheduled_repayment_refusal_is_told_the_same():
     )
 
 
+def test_a_schema_refusal_naming_a_facility_key_is_told_to_null_the_drivers():
+    """The facilities line is for the refusals `_check_facilities` raises, not for any refusal whose
+    path holds a model-written key containing `facilit`."""
+    cp1 = " ".join(BASE.values()).encode()
+    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1})
+    (issue,) = cpos_launch._forecast_issues(task, forecast_block(facility_note="x"))
+    assert issue.startswith("Forecast inputs: CP-2G: forecast inputs: facility_note")
+    assert issue.endswith(
+        "Correct the block; if you cannot, set every driver's values to "
+        "[null, null, null] and say why in scope_limits."
+    )
+
+
 def test_checker_accepts_a_valid_or_declined_forecast_block(tmp_path):
     assert cp2g_check(tmp_path, forecast_block()) == ()
     (tmp_path / "declined").mkdir()
@@ -5115,3 +5128,42 @@ def test_a_refusal_that_mentions_base_later_in_its_text_is_not_an_operand_refusa
     base = {k: v for k, v in _named_base().items() if k != "fcf"}
     (issue,) = _repair_issues(forecast_block(base=base), _cp1_with_rows({}))
     assert issue.endswith(BLOCK_END)
+
+
+def test_both_forecast_instructions_ask_for_the_scale():
+    for block, tables in (
+        (cpos_launch.FORECAST_BLOCK, "CP-1's"),
+        (cpos_launch.LAYER1_FORECAST_BLOCK, "your"),
+    ):
+        for words in (
+            (
+                f"`scale` is `1` when {tables} statement tables print USD millions and `1000` "
+                "when they print USD thousands"
+            ),
+            "Python divides by `scale`",
+            "Do not convert an amount yourself",
+            'a cell printing 2,620,995 is `"2620995"`',
+            "at most nine digits and one decimal place",
+            "only in the other unit",
+            "every other driver is a ratio and is never scaled",
+        ):
+            assert words in block, words
+        assert "ten operands in USD millions" not in block and "in millions;" not in block
+    assert "`balance` is in the block's unit" in cpos_launch.FORECAST_BLOCK
+    assert "`annual_amortisation` is in the block's unit, a year" in cpos_launch.FORECAST_BLOCK
+    assert "USD millions a year" not in cpos_launch.FORECAST_BLOCK
+
+
+def test_both_forecast_instructions_state_what_the_unit_check_enforces():
+    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
+        assert (
+            "State `scale` as the statements print it (`1000` for thousands, `1` or absent for "
+            "millions), and state every amount in the block in that one unit exactly as printed; "
+            "an amount printed in the other unit is stated as missing, with the reason, not "
+            "converted." in block
+        )
+
+
+def test_both_forecast_instructions_say_where_a_period_header_may_be_named():
+    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
+        assert "name a column headed by a reporting period" in block
