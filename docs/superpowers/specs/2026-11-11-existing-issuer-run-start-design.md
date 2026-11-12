@@ -2,6 +2,11 @@
 
 Adds to `2026-11-11-staged-run-start-design.md`. Status: approved by the owner 2026-11-11; built on branch claude/initiating-runs-existing-issuers-4a8739.
 
+Note 2026-11-12: the stage numbers below are the page's groups. They now sit under the steps: stage 1
+(pathway) is Purpose, stage 2 (documents) is Documents, stages 3 and 4 (issuer and dates, legal) are
+Confirm, stages 5 to 7 are More context, stages 8 and 9 are Start. See
+`docs/design/2026-11-12-run-start-four-steps.md`.
+
 ## 1. Intent
 
 A second run on an issuer starts blank today. The analyst uploads every document again and retypes
