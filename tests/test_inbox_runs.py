@@ -443,7 +443,6 @@ def test_command_passes_the_approved_earlier_run_and_refuses_a_name_that_is_an_o
             record,
             Path("c.json"),
             launcher=["py"],
-            config="sol-medium",
             cap=Decimal(20),
             ruling=None,
         )

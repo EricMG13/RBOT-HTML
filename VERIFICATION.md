@@ -18,7 +18,7 @@ pack value or difference (Q-1). Answer keys are hand-written in `tests/test_chan
 held; "debt was 333"; two movement-in-words cases and one trend assertion dropped; a test renamed. Real pair (cpos-tdg-sol-medium-all-001
 then tdg-reader-format-001): five measures, all `judge`; 20 `E`, 11 `C` refs; CP-8's first request 318,153 bytes, hold 5.73.
 Results before the merge with main: fast set 1,439 passed, browser 138 passed, quality gate 0; reviewer probes `t4r3_same_period_rows`,
-`t4r4_fact_row_leak`, `t4r4_sentences`, `t4r4_same_period`, `t4r2_prior` pass. After the merge: MERGERESULT
+`t4r4_fact_row_leak`, `t4r4_sentences`, `t4r4_same_period`, `t4r2_prior` pass. After merging main (99afe9e; tests adapted to its model-choice API): CI fast list plus test_changes 2,433 passed; whole fast suite without tests/model 1,787 passed; browser 144 passed; node 257 passed; quality gate 0.
 Not verified: a real model writing the ledger or judging a definition; whether the estimate matches a live first request; the
 library's Changes section; a real CP-8 handoff against the new figure rule (hand-written mini pack and probes only).
 ## 2026-11-12 — CP-8 in the run: prior run, pins, comparison pack, check (branch `claude/cp8-changes`, decisions M5, M7, M8)
