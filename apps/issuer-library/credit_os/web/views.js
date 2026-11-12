@@ -61,7 +61,7 @@ function stepText(text,output) {
 // CP-<x>-GAP-<n> is "Gap <n>" on module x's own page and "<Name of x> gap <n>" elsewhere; a code with no known name is "unnamed module".
 // A name already written before its own parenthesised code ("Liquidity (CP-2D)") is not said twice: the parenthetical is dropped.
 const NAME_THEN_CODE=/\s*\((CP-[A-Z0-9]+)\)/g;
-const dropRepeat=text=>text.replace(NAME_THEN_CODE,(whole,code,at)=>{const name=moduleLabel(code);return name&&text.slice(0,at).endsWith(name)?'':whole;});
+const dropRepeat=text=>text.replace(NAME_THEN_CODE,(whole,code,at)=>{const name=moduleLabel(code);return name&&text.slice(0,at).toLowerCase().endsWith(name.toLowerCase())?'':whole;});
 function namedText(text,output=current?.output) {
   return stepText(dropRepeat(text).replace(MODULE_REF,(code,...rest)=>{
     const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';

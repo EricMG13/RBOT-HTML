@@ -1704,7 +1704,7 @@ function renderState() {
   else if (want === 'nodocs') box.append(h('p', {className: 'err', textContent: 'Upload the documents first.'}));
   else if (want === 'busy') box.append(h('p', {className: 'muted', textContent: 'Making the summary from your documents and answers…'}));
   else {
-    const p = h('p', {className: 'err'}, h('span', {textContent: SUMMARY.error}));
+    const p = h('p', {className: 'err'}, h('span', {textContent: named(SUMMARY.error)}));
     const stage = errorStage(SUMMARY.error);
     if (stage) p.append(' ', button('Go to ' + SHORT[stage], {goto: stage}));
     p.append(' ', button('Check again', {again: '1'}));
@@ -1831,7 +1831,7 @@ function renderReview(sq, o) {
   });
   const err = $('rv-submit-error');
   err.hidden = !SUBMIT_ERROR;
-  err.textContent = SUBMIT_ERROR;
+  err.textContent = named(SUBMIT_ERROR);
 }
 // Submit: one request per click that is allowed, and none while one is in flight.
 async function submitRun() {

@@ -1237,7 +1237,7 @@ test('navigator (decision 5): only modules that ran are listed, and the count is
   const { html, count } = navPage();
   assert.equal(count, 5);
   assert.ok(!html.includes('module-code'), 'no module code is drawn');
-  assert.equal(countOf(html, /<span class="module-label">/g), 5);
+  assert.deepEqual([...html.matchAll(/<span class="module-label">([^<]*)<\/span>/g)].map(m => m[1]), ['Source readiness', 'Financial foundation', 'Business and structure', 'Credit view', 'Liquidity']);
   assert.ok(!html.includes('CP-1B') && !html.includes('CP-2A') && !html.includes('CP-6'), 'a module the run did not hold is not listed');
 });
 
@@ -2145,6 +2145,7 @@ test('names, not codes: a bare T<n> is ordinary text; the dot makes a step id; s
   assert.ok(read('screen.js').includes("parent.closest('.ref,.excerpt')") && !read('screen.js').includes('.module-code'), 'a source excerpt is the issuer\'s text, as quoted, and a register reference stays; a Basis line and a navigator entry show names (owner ruling 2026-11-12)');
   // A name already written before its parenthesised code is not said twice; any other parenthesised code becomes its name.
   assert.equal(page.namedText('Source readiness (CP-0) and Foundation (CP-1) and Ghost (CP-9Z)', null), 'Source readiness and Foundation (Financial foundation) and Ghost (unnamed module)');
+  assert.equal(page.namedText('the source readiness (CP-0) check', null), 'the source readiness check', 'a name written in other case is not said twice');
 });
 
 // ---- Package 5 views (2026-11-10): calendar lanes and the accessible event table. Every value is synthetic.

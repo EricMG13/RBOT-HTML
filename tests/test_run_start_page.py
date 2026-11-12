@@ -2471,3 +2471,35 @@ def test_no_module_code_is_shown_on_any_stage_at_any_level_of_a_pathway(page, pa
     assert seen["tables"] > 0, "the review's readiness table was drawn and scanned"
     assert not seen["hits"], "\n".join(seen["hits"])
     assert seen["focus"] == seen["keys"], "a Focus module option keeps the code as its value"
+
+
+def test_a_service_refusal_naming_a_module_code_is_shown_with_the_modules_name(page):
+    """The summary error and the submit error are the service's own sentences; they name modules
+    by code, and the analyst reads the names. The stage lookup still reads the raw text."""
+    seen = page.run(
+        """
+    await issuer('credit_snapshot', [file('annual.txt', REPORT_TEXT)]);
+    const real = window.fetch;
+    const refuse = text => new Response(JSON.stringify({error: text}),
+      {status: 400, headers: {'Content-Type': 'application/json'}});
+    window.fetch = async (path, init) => {
+      if (String(path).endsWith('/summary'))
+        return refuse('--modules CP-0: fills no Credit Snapshot report section');
+      return real(path, init);
+    };
+    await review();
+    const summary = $('rv-state').textContent;
+    window.fetch = real;
+    SUMMARY = null; RENDERED = null;
+    await review();
+    tickAll(); approve();
+    window.fetch = async (path, init) => String(path).endsWith('/submit')
+      ? refuse('delivery_scope: CP-DR is outside the named scope') : real(path, init);
+    document.getElementById('submit').click();
+    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
+    return {summary, submit: $('rv-submit-error').textContent};
+    """.replace("REPORT_TEXT", json.dumps(REPORT))
+    )
+    assert "--modules Source readiness: fills no" in seen["summary"]
+    assert "delivery_scope: Research questions is outside the named scope" in seen["submit"]
+    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
