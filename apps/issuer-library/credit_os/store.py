@@ -1375,10 +1375,21 @@ CASHFLOW_NOTES = (
         "years only."
     ),
 )
+FISCAL_ONLY_RATIOS = "Ratios are shown for fiscal years only."
+TWELVE_MONTH_RATIOS = "Leverage is shown for twelve-month periods only."
 LTM_NOTE = (
-    "LTM is the last fiscal year plus the year to date less the prior year to date, from the "
-    "periods CP-1 labels."
+    "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise the last "
+    "fiscal year plus the year to date less the prior year to date."
 )
+HISTORY_LIMIT_COUNT = 50
+HISTORY_LIMIT_CHARS = 2000
+# The prior a history column of a kind may name, as the period history writes them.
+HISTORY_PRIOR_KINDS = {"QUARTER": "QUARTER", "YTD": "PYTD", "FY": "FY", "LTM": "PRIOR_LTM"}
+FY_PLACEHOLDER = "Fiscal year"  # the id of the fiscal-year column when CP-1 prints no year
+NO_LINE = "the period history does not carry this line"
+LENGTH_DIFFERS = "the prior-year period has a different length"
+PRIOR_NOT_YEAR = "the prior fiscal year is not twelve months"
+YEAR_DAYS = range(364, 372)  # a 52- or 53-week year, both ends counted
 HISTORY_SCHEMA = "cpos-history/1"
 HISTORY_COLUMN_LIMIT = 60
 HISTORY_GROUPS = {
@@ -1442,6 +1453,7 @@ class Column(TypedDict):
     prior: int | None
     ytd: bool
     length_differs: NotRequired[bool]
+    prior_not_year: NotRequired[bool]
     unavailable: NotRequired[str]
 
 
@@ -1965,6 +1977,8 @@ def history_column_input(column: Any) -> None:
         raise ValueError("a history column has an unknown kind")
     for name in ("prior", "reason"):
         optional_text(column[name], f"the {name} of a history column")
+    if column["reason"] == "":
+        raise ValueError("the reason of a history column is empty")
     for name in ("start", "end"):
         if column[name] is not None and not (
             isinstance(column[name], str) and valid_date(column[name])
@@ -1982,6 +1996,8 @@ def history_limits(record: Any) -> list[str]:
     limits = record["history"].get("limits") if isinstance(record["history"], dict) else None
     if not isinstance(limits, list) or not all(isinstance(item, str) for item in limits):
         raise TypeError("history limits is not a list of text")
+    if len(limits) > HISTORY_LIMIT_COUNT or any(len(i) > HISTORY_LIMIT_CHARS for i in limits):
+        raise ValueError("history limits are more or longer than the record allows")
     return limits
 
 
@@ -2005,12 +2021,25 @@ def history_inputs(record: Any) -> list[dict[str, Any]] | None:
     ids = [column["id"] for column in columns]
     if len(set(ids)) != len(ids):
         raise ValueError("history column ids repeat")
-    for column in columns:
-        if column["prior"] is not None and (
-            column["prior"] == column["id"] or column["prior"] not in ids
-        ):
-            raise ValueError("a history column's prior is not another column of the record")
+    check_history_priors(columns)
     return columns
+
+
+def check_history_priors(columns: list[dict[str, Any]]) -> None:
+    """Ids and kinds agree on fiscal years; a prior is a column of the kind the history pairs."""
+    kinds = {column["id"]: column["kind"] for column in columns}
+    for column in columns:
+        name, kind, prior = column["id"], column["kind"], column["prior"]
+        is_year_id = re.fullmatch(r"FY\d+", name, re.ASCII) is not None
+        placeholder = kind == "FY" and name == FY_PLACEHOLDER and prior is None
+        if is_year_id != (kind == "FY") and not placeholder:
+            raise ValueError("a history column's id and kind disagree on a fiscal year")
+        if kind == "FY" and not placeholder and FISCAL_HEADER.fullmatch(name) is None:
+            raise ValueError("a fiscal-year history column's id is not FY and a year")
+        if prior is not None and (
+            prior == name or HISTORY_PRIOR_KINDS.get(kind) != kinds.get(prior)
+        ):
+            raise ValueError("a history column's prior is not a column of the kind that follows")
 
 
 def history_columns(history: list[dict[str, Any]]) -> list[Column]:
@@ -2031,8 +2060,18 @@ def history_columns(history: list[dict[str, Any]]) -> list[Column]:
         )
         if entry["reason"] is not None:
             column["unavailable"] = entry["reason"]
+        if column["prior"] is not None and lengths_differ(entry, history[column["prior"]]):
+            column["length_differs"] = True
         columns.append(column)
     return columns
+
+
+def lengths_differ(entry: dict[str, Any], prior: dict[str, Any]) -> bool:
+    """Both periods are dated and their lengths differ by more than the quarter slack."""
+    if None in (entry["start"], entry["end"], prior["start"], prior["end"]):
+        return False
+    gap = span_days(entry["start"], entry["end"]) - span_days(prior["start"], prior["end"])
+    return abs(gap) > QUARTER_LENGTH_SLACK
 
 
 def span_days(start: str, end: str) -> int:
@@ -2121,18 +2160,40 @@ def fiscal_columns(columns: list[Column], fiscal: Fiscal) -> dict[str, int]:
     return fiscal_index
 
 
-def forecast_columns(columns: list[Column], cases: Forecast, fiscal_index: dict[str, int]) -> None:
+def twelve_months(column: Column) -> bool:
+    """A column CP-1 does not date, or dates as a 52- or 53-week year, is a full year."""
+    if column["start"] is None or column["end"] is None:
+        return True
+    return span_days(column["start"], column["end"]) + 1 in YEAR_DAYS
+
+
+def first_year_prior(
+    columns: list[Column], fiscal_index: dict[str, int], year: int, on_base: bool
+) -> int | None:
+    """The fiscal-year column a case's first year grows on, in `fiscal_index`.
+
+    With the period history (`on_base`) that is the column of the first year's own number, the
+    forecast's base year, when the history has one; otherwise the year before it.
+    """
+    prior = fiscal_index.get(f"FY{year}") if on_base else None
+    return fiscal_index.get(f"FY{year - 1}") if prior is None else prior
+
+
+def forecast_columns(
+    columns: list[Column], cases: Forecast, fiscal_index: dict[str, int], on_base: bool = False
+) -> None:
     """Append one column per forecast year of each case.
 
-    The prior of a year is the same case's year before it; of a case's first year, the fiscal
-    year before it in `fiscal_index`; a prior that is not the adjacent year is None.
+    The prior of a year is the same case's year before it; of a case's first year, a fiscal year
+    of `fiscal_index` (see first_year_prior); a prior that is not that year is None.
     """
     for name, years in cases:
         case_index: dict[int, int] = {}
         for year in years:
             prior = case_index.get(year["year"] - 1)
-            if prior is None and not case_index:
-                prior = fiscal_index.get(f"FY{year['year'] - 1}")
+            first = prior is None and not case_index
+            if first:
+                prior = first_year_prior(columns, fiscal_index, year["year"], on_base)
             columns.append(
                 Column(
                     label=f"FY{year['year']}E",
@@ -2146,6 +2207,8 @@ def forecast_columns(columns: list[Column], cases: Forecast, fiscal_index: dict[
                     ytd=False,
                 )
             )
+            if first and on_base and prior is not None and not twelve_months(columns[prior]):
+                columns[-1]["prior_not_year"] = True
             case_index.setdefault(year["year"], len(columns) - 1)
 
 
@@ -2201,7 +2264,9 @@ def op_growth(c: CellContext, source: RowKey) -> Cell:
     if c.column["prior"] is None:
         return unavailable_cell(PRIOR_MISSING)
     if c.column.get("length_differs"):
-        return unavailable_cell("the prior-year period has a different length")
+        return unavailable_cell(LENGTH_DIFFERS)
+    if c.column.get("prior_not_year"):
+        return unavailable_cell(PRIOR_NOT_YEAR)
     prior = c.grid[source][c.column["prior"]]
     return derive("percent", [current, prior], lambda a, b: a / b - 1)
 
@@ -2281,6 +2346,8 @@ def spec_cell(spec: Spec | None, cell: CellContext) -> Cell:
     if column["kind"] == "h" and "unavailable" in column:
         return unavailable_cell(column["unavailable"])
     if spec is None:
+        if column["kind"] == "h":
+            return unavailable_cell(NO_LINE)
         return not_modelled_cell() if column["kind"] == "fc" else absent_cell()
     return CELL_OPS[spec[0]](cell, *spec[1:])
 
@@ -2647,7 +2714,10 @@ def cashflow_rows(tables: dict[str, Table | None]) -> list[RowSpec]:
 
 def cashflow_notes(year_to_date: bool, with_history: bool) -> list[str]:
     if with_history:  # CP-1's labelled periods replace the Q1 and pro forma notes
-        return [LTM_NOTE, *CASHFLOW_NOTES[2:]]
+        rest = [
+            note.replace(FISCAL_ONLY_RATIOS, TWELVE_MONTH_RATIOS) for note in CASHFLOW_NOTES[2:]
+        ]
+        return [LTM_NOTE, *rest]
     return [note for note in CASHFLOW_NOTES if year_to_date or note != Q1_NOTE]
 
 
@@ -2710,12 +2780,13 @@ def cashflow_of(
         fiscal_index = fiscal_columns(columns, fiscal)
     else:
         columns = history_columns(history[0])
-        fiscal_index = {c["id"]: at for at, c in enumerate(history[0])}
-    forecast_columns(columns, main, fiscal_index)
+        fiscal_index = {c["id"]: at for at, c in enumerate(history[0]) if c["kind"] == "FY"}
+    on_base = history is not None
+    forecast_columns(columns, main, fiscal_index, on_base)
     if not any(c["group"] == DOWNSIDE_CASE for c in columns):
         columns.append(no_downside_column())
     main_count = len(columns)
-    forecast_columns(columns, other, fiscal_index)  # priors read the main grid's history
+    forecast_columns(columns, other, fiscal_index, on_base)  # priors read the main grid's history
     if cell_count(len(layout), len(columns)) > budget:
         raise CashflowBudget(
             "the cash flow model is not shown; the workspace's cash flow models exceed "

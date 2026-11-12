@@ -7,6 +7,7 @@ it needs but is not allowed. Needs Google Chrome or Chromium; skipped where ther
 import hashlib
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -1191,9 +1192,6 @@ def test_report_history_has_no_start_link_from_a_file(tmp_path):
 
 
 FORECAST_CASES_PROBE = Path(__file__).with_name("browser_probe_forecast_cases.js")
-SCREENSHOT = Path(__file__).resolve().parents[1] / (
-    ".superpowers/sdd/2026-11-12-forecast-period-columns/task-9-forecast.png"
-)
 
 
 def library_with_four_case_model(tmp_path: Path) -> Path:
@@ -1270,6 +1268,10 @@ def test_the_page_shows_the_other_forecast_cases_in_a_closed_details_below_the_m
 
 
 def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):
+    target = os.environ.get("FORECAST_SCREENSHOT")
+    if not target:
+        pytest.skip("set FORECAST_SCREENSHOT to the PNG path to write")
+    screenshot = Path(target)
     page = library_with_four_case_model(tmp_path)
     (page.parent / "open.js").write_text(
         "addEventListener('load',()=>setTimeout(()=>{"
@@ -1279,19 +1281,19 @@ def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):
     )
     shot = page.with_name("shot.html")
     shot.write_text(page.read_text().replace("</body>", '<script src="open.js"></script></body>'))
-    SCREENSHOT.parent.mkdir(parents=True, exist_ok=True)
+    screenshot.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
             chrome(),
             "--headless=new",
             "--disable-gpu",
-            "--window-size=1280,2200",
+            "--window-size=1280,3200",
             "--virtual-time-budget=10000",
-            f"--screenshot={SCREENSHOT}",
+            f"--screenshot={screenshot}",
             shot.as_uri() + "#W-Forecast/model-a?c=run-a",
         ],
         capture_output=True,
         timeout=120,
         check=True,
     )
-    assert SCREENSHOT.stat().st_size > 0
+    assert screenshot.stat().st_size > 0
