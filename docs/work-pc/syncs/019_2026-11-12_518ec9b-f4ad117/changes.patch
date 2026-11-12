@@ -1,0 +1,1536 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 901f6e8..917323c 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,12 +4,21 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Forecast page main period columns, PR 2 (branch `claude/forecast-period-columns-2`, stacked on `-1b`)
++Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md`, Tasks 7-10. For a model whose `calculation.json` carries a `history` record the library's Forecast grid shows Quarter, Year to date (YTD, PYTD), Fiscal year, Last twelve months (LTM, Prior LTM), Pro forma, Base case and one Downside case (the stress shock when computed, else CP-2G's own downside drivers, else an unavailable column), and the other cases in a closed second grid. The store validates the record whole (kinds, prior pairs, dates, bounds) and shows nothing from a malformed one. Growth is refused across periods whose lengths differ by more than 7 days and on a fiscal year that is not twelve months; the first forecast year grows on the forecast's base year. A model without `history` keeps its layout except the case names, the second grid, the downside note and the placeholder.
++Scope: offline, synthetic. Hand-written history records and answer keys in `tests/test_credit_os_store.py`; the browser test injects the real `store.read_cashflow` output of a two-key hand-written record into a built library (not a model published by `update_library`). Fidelity was checked at the store through the real producer against the plan's answer key (probe `arch2_answer_key_on_the_grid.py`, 119 cells), not on the page. Retained CP-1 header forms were checked in PR 1. No provider called. No retained run has a forecast inputs block with drivers, so no real run's Forecast page was read and no published model without a history was read in a browser.
++Reader check: NOT done on a real run; it is pending the owner's paid run and the reading against the September VMO2 reference. The synthetic page was read at 1280 px by the controller only: seven groups in the owner's order; an unavailable column reads n.a. with its reason in the cell's label, distinguishable from a zero; at 1280 px the Downside case is off screen to the right (the grid scrolls inside its region); n.a. reasons sit in tooltips and a closed list; order inside groups is old-to-new for quarters and fiscal years, current-then-prior for YTD and LTM (ruling 2).
++Commands: store, launch, periods, facilities and library pytest 1060 passed, 1 skipped, exit 0; browser pytest 43 passed, 1 skipped, exit 0; node 278 pass, exit 0; quality gate against 1b 0 findings, exit 0. Reviews: task reviews (mx-precise), adversarial review of the store changes with one re-review (mx-adversary; 6,000 generated records raise nothing; 144 no-history grids match the base), whole-branch review with confidence review and rewrite tournament (mx-architect; hand-picked mutants 19/19 killed). Probes stale by ruling: `adv4_notes_and_reasons.py`, `adv4_budget_and_work.py`, `adv4_producer_roundtrip.py`, `task7_no_history_unchanged.py`, `task8_hostile_and_placeholder.py` (superseded by `adv5_*` and `task9_*`).
++Known, for the owner: the PR is about 1186 changed lines against the 800-line limit, waived by the owner on 2026-11-12 (a split on commits exists but no part ships alone); `scope_limits` and odd numeral forms in `checked_entries` predate the branch; growth on a negative prior shows a percentage (before this branch); "Why cells show n.a." lists the main grid only.
++Not verified: a real run's Forecast page and the reader check on it; the page rendered from a published model; a no-history model in a browser; widths other than 1280 px, print, screen reader, touch; the weekly and live suites; mutation testing beyond the hand-picked mutants, none in `views.js`.
++
+ ## 2026-11-12 — Forecast history record, PR 1 of the period columns (branches `claude/forecast-period-columns-1a` and `-1b`)
+ Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md` (rulings 1-16). `cpos_periods` reads the period columns CP-1 prints, ties each of the forecast's base lines to one base period, and builds quarters, YTD, PYTD, fiscal years, LTM, prior LTM and PF with exact Decimal arithmetic and a date check against CP-1's `Period | Start | End` table; `model_files` publishes it as `history` in `calculation.json` only when the delivery request asks (new CP-OS runs do; an earlier delivery re-derives byte for byte). CP-1 is asked for the period table whenever a forecast is wanted. Nothing on the page changes: the library does not read `history` until PR 2.
+ Scope: offline. Synthetic fixtures with hand-computed answer keys (`tests/test_cpos_periods.py`); six retained CP-1 handoffs read only for header forms (every statement-table period header is read; date-headed balance columns, `FY2024, annual definition`, `Rolling reported periods to 2024-12-28` and metric-specific headers are not, by rule); one retained live forecast run's CP-1 and CP-2G (`tdg-forecast-002`, read only) on which revenue, EBITDA, interest, taxes, capex and cash are located from the FY2024 base and fcf, debt and undrawn are not (their rows sit under a header that is not a period). No provider called and no model response: no CP-1 has yet printed the period table.
+ Commands: on 1b after the rebase onto 92d0a17, PR-check pytest list 2828 passed, 113 deselected, exit 0; quality gate 0 findings, exit 0 (against 1a and against main); node 278 pass, exit 0. On 1a, `tests/test_cpos_periods.py`, `test_cpos_facilities.py` and `test_cpos_launch.py` 726 passed, 1 skipped, exit 0; quality gate 0 findings, exit 0. Reviews: task reviews (mx-precise), adversarial review of `cpos_periods` with two re-reviews (mx-adversary; an 8,000-case generated-input run raises nothing and leaves no value without an amount or a reason), whole-branch review with confidence review and rewrite tournament (mx-architect), one fix wave and its re-review.
+ Known and accepted, for the owner: a line is located by its base amount, so if the right row sits under a header that is not a period and one other row prints the identical amount in the base period, that row's figures are published (probe `adv2_right_row_unheaded.py`); naming each operand's row and period in the CP-2G block removes this. A forecast whose base is not under one period header gets no history. Split at the owner's choice: 1a is the module and its tests (about 2,190 code lines, over the 800-line limit, waived by the owner on 2026-11-12), 1b the wiring (about 170). `cpos_forecast._tables` has a slow heading pattern on hostile input (before this branch).
+ Not verified: any real model response to the period-table instruction; the layer-1 path on a real handoff; a real earlier forecast delivery re-deriving from its manifest; the Forecast page (PR 2) and its reader check against the September VMO2 reference; browser, live and weekly suites; mutation testing.
++
+ ## 2026-11-12 — Every pathway asks CP-1 for the chart tables (branch `claude/cp1-tables-all-pathways`, base 0e80345, owner "Yes, all pathways")
+ Scope: `cpos_launch._owner_tables` adds, for CP-1, the four `### Chart data:` tables its report routes do not already ask (instructions and checker); no report section. Offline, canned provider. Tests written by hand: all seven pathways' CP-1 instructions carry each heading once with its exact header, the checker accepts the complete canned answer and refuses each dropped table; a pack built from the canned CP-1 answer of relative_value, distressed_restructuring, portfolio_decision and short_snapshot states the five measures and a maturity profile. Probes `wb_pack_measures_by_pathway.py` 1 -> 0; `wb_cap_presets.py`, `wb_cp8_hold_sizes.py`, `wb_presets_order.py` exit 0 (short_snapshot hold 0.97 -> 0.99 on Opus configs). Gates: CI fast-tests command 2693 passed exit 0 (node changes/reader/static/calendar tests exit 0); browser subset 151 passed exit 0; quality gate 0 findings exit 0.
+ Not verified: a real model writing the four tables on those pathways; the Changes tab of a real run of those pathways; CP-1 output cost beyond the offline hold.
+@@ -968,32 +977,3 @@ chips are unchanged; a value that is text still prints n.a. with the text in its
+   a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
+   charts print whole.
+ - Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
+-
+-## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
+-
+-Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
+-the repository (`/private/tmp/claude-501/rbot-live`, `…/rbot-live2`); `main` at `9aec393`. Each
+-proves its dated case and route only; outputs are unreviewed candidates.
+-
+-- Inbox (`deploy_workflow.inbox.watcher`, `--cap 10 --settle-seconds 10 --poll-seconds 5`): a
+-  copied folder dropped into `inbox/earnings_update/` at 08:56:09Z was claimed at 08:56:21Z, ran
+-  CP-0, CP-1, CP-1B, CP-1D and CP-5 live (39 calls, 3 drafts rejected and repaired), delivered at
+-  09:10:39Z and was filed as `issuers/TransDigm Group Incorporated (tdg)/2024-09-30
+-  earnings_update.html`. Recorded spend USD 1.0761. Watcher-built library in headless Chrome: one
+-  row; the run id opens Overview; 5 of 5 module pages render; "Open report" opens the report in
+-  the app; Run activity shows the run finished, its spend and a link to the filed report that
+-  exists on disk; no script error.
+-- Forecast (`cpos_launch --modules CP-0 CP-1 CP-2A CP-2G --cap 10`): four modules accepted,
+-  delivered in 17 minutes, USD 1.1979. The forecast model was **not published**: CP-2G's inputs
+-  block now validates (the 2026-11-09 failure is gone) but the handoff declares a blocked
+-  forecast with every driver null ("the forecast horizon is not locked and required invocation
+-  and upstream acceptance validation cannot be completed through the supplied tools"). The library
+-  lists the run, 4 of 4 module pages and the report render, and Forecast reads "No forecast model
+-  was published from this run's files".
+-- A run without a report cannot be produced by a run: `library_index` lists only runs with a
+-  verified delivered report, and `credit_os_catalogue.run_record` always writes `handoff_href`
+-  empty, so "Open primary handoff" never draws in this build. "Handoffs only" appears only if a
+-  listed delivery fails cataloguing.
+-- Not verified: the Forecast tab with a published model (no retained or new run has one); a
+-  refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
+-  Windows; analytical accuracy of either run.
+diff --git a/apps/issuer-library/credit_os/store.py b/apps/issuer-library/credit_os/store.py
+index e06a3db..d3f9a31 100644
+--- a/apps/issuer-library/credit_os/store.py
++++ b/apps/issuer-library/credit_os/store.py
+@@ -1327,7 +1327,7 @@ TABLE_ROW_LIMIT = 2000
+ QUARTER_DAYS = 100
+ QUARTER_LENGTH_SLACK = 7
+ FORECAST_CASES = (
+-    ("REFERENCE", "Base case (reference illustration)"),
++    ("REFERENCE", "Base case"),
+     ("UPSIDE", "Upside"),
+     ("DOWNSIDE_DRIVERS", "Downside (CP-2G drivers)"),
+     ("DOWNSIDE", "Downside stress (shock on base drivers)"),
+@@ -1375,6 +1375,33 @@ CASHFLOW_NOTES = (
+         "years only."
+     ),
+ )
++FISCAL_ONLY_RATIOS = "Ratios are shown for fiscal years only."
++TWELVE_MONTH_RATIOS = "Leverage is shown for twelve-month periods only."
++LTM_NOTE = (
++    "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise the last "
++    "fiscal year plus the year to date less the prior year to date."
++)
++HISTORY_LIMIT_COUNT = 200
++HISTORY_LIMIT_CHARS = 2000
++# The prior a history column of a kind may name, as the period history writes them.
++HISTORY_PRIOR_KINDS = {"QUARTER": "QUARTER", "YTD": "PYTD", "FY": "FY", "LTM": "PRIOR_LTM"}
++FY_PLACEHOLDER = "Fiscal year"  # the id of the fiscal-year column when CP-1 prints no year
++NO_LINE = "the period history does not carry this line"
++LENGTH_DIFFERS = "the prior-year period has a different length"
++PRIOR_NOT_YEAR = "the prior fiscal year is not twelve months"
++YEAR_DAYS = range(364, 372)  # a 52- or 53-week year, both ends counted
++HISTORY_SCHEMA = "cpos-history/1"
++HISTORY_COLUMN_LIMIT = 60
++HISTORY_GROUPS = {
++    "QUARTER": "Quarter",
++    "YTD": "Year to date",
++    "PYTD": "Year to date",
++    "FY": "Fiscal year",
++    "LTM": "Last twelve months",
++    "PRIOR_LTM": "Last twelve months",
++    "PF": "Pro forma",
++}
++HISTORY_KEYS = frozenset(("id", "kind", "label", "prior", "reason", "start", "end", "values"))
+ QUARTER_HEADER = re.compile(r"(\d{4}-\d{2}-\d{2})[–-](\d{4}-\d{2}-\d{2})", re.ASCII)
+ FISCAL_HEADER = re.compile(r"FY\d{4}", re.ASCII)
+ TABLE_NUMBER = re.compile(r"(\()?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(\))?", re.ASCII)
+@@ -1399,6 +1426,8 @@ Spec = tuple[Any, ...]  # (operation name, *its arguments); see CELL_OPS
+ RowKey = str | tuple[str, str]
+ Forecast = list[tuple[str, list[dict[str, Any]]]]  # (case name, that case's years)
+ Fiscal = list[tuple[str, dict[str, Any]]]  # (fiscal year label, its values)
++History = tuple[list[dict[str, Any]], list[str]]  # (validated history columns, their limits)
++Recorded = tuple[Fiscal, dict[str, dict[str, Any]], History | None]
+ 
+ 
+ class Table(TypedDict):
+@@ -1424,6 +1453,8 @@ class Column(TypedDict):
+     prior: int | None
+     ytd: bool
+     length_differs: NotRequired[bool]
++    prior_not_year: NotRequired[bool]
++    unavailable: NotRequired[str]
+ 
+ 
+ def display_amount(exact: str, kind: str) -> str:
+@@ -1838,9 +1869,11 @@ def derive(kind: str, operands: list[Cell], compute: Callable[..., decimal.Decim
+         return unavailable_cell("the value cannot be displayed")
+ 
+ 
+-def forecast_inputs(exact: Any) -> tuple[Forecast, list[str]]:
+-    """(source years by case, scope limits) of the forecast record; validated here."""
++def forecast_inputs(exact: Any) -> tuple[Forecast, list[str], list[str]]:
++    """(source years by case, scope limits, the cases' keys in step) of the forecast record;
++    validated here."""
+     cases: Forecast = []
++    keys: list[str] = []
+     for key, name in FORECAST_CASES:
+         if key not in exact["outputs"]:
+             continue
+@@ -1854,10 +1887,51 @@ def forecast_inputs(exact: Any) -> tuple[Forecast, list[str]]:
+                 raise TypeError("year is not a number")
+             checked_entries(year, ("year", "planning_start", "planning_end"))
+         cases.append((name, years))
++        keys.append(key)
+     limits = exact["scope_limits"]
+     if not isinstance(limits, list) or not all(isinstance(item, str) for item in limits):
+         raise TypeError("scope_limits is not a list of text")
+-    return cases, limits
++    return cases, limits, keys
++
++
++DOWNSIDE_CASE = "Downside case"
++DOWNSIDE_NOTES = {
++    "DOWNSIDE": "Downside case is the stress case: a shock applied to the base-case drivers.",
++    "DOWNSIDE_DRIVERS": (
++        "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
++    ),
++    None: "Downside case: no downside case was computed in this run.",
++}
++NO_DOWNSIDE = "no downside case was computed in this run"
++
++
++def main_cases(cases: Forecast, keys: list[str]) -> tuple[Forecast, Forecast, str]:
++    """(main, other, note): the main grid's Base case and one Downside case, the other cases.
++
++    A case with no years is not computed: it is never the Downside and opens no group.
++    The Downside case is the CP-2A shock (DOWNSIDE) when computed, else CP-2G's own downside
++    drivers; it is shown as "Downside case". `keys` are the cases' keys in step with `cases`.
++    """
++    named = {key: case for key, case in zip(keys, cases, strict=True) if case[1]}  # computed only
++    chosen = next((key for key in ("DOWNSIDE", "DOWNSIDE_DRIVERS") if key in named), None)
++    main: Forecast = [named["REFERENCE"]] if "REFERENCE" in named else []
++    if chosen is not None:
++        main.append((DOWNSIDE_CASE, named[chosen][1]))
++    other = [case for key, case in named.items() if key not in ("REFERENCE", chosen)]
++    return main, other, DOWNSIDE_NOTES[chosen]
++
++
++def cell_count(rows: int, columns: int) -> int:
++    """The cells of a grid of `rows` x `columns`: the one count the budget is charged by."""
++    return rows * columns
++
++
++def grid_cells(grid: dict[str, Any]) -> int:
++    """The cells a model's Forecast grid holds, main and other cases together."""
++    held = cell_count(len(grid["rows"]), len(grid["columns"]))
++    if grid["other"] is not None:
++        held += cell_count(len(grid["other"]["rows"]), len(grid["other"]["columns"]))
++    return held
+ 
+ 
+ def fiscal_inputs(record: Any) -> Fiscal:
+@@ -1887,6 +1961,124 @@ def quarter_inputs(record: Any) -> dict[str, dict[str, Any]]:
+     return quarters
+ 
+ 
++def optional_text(value: Any, what: str) -> None:
++    if not (value is None or (isinstance(value, str) and len(value) <= LABEL_LIMIT)):
++        raise TypeError(f"{what} is not short text")
++
++
++def history_column_input(column: Any) -> None:
++    """One history column's own fields are the right types and bounds; validated here."""
++    if not isinstance(column, dict) or column.keys() != HISTORY_KEYS:
++        raise TypeError("a history column does not have the recorded fields")
++    for name in ("id", "label"):
++        if not isinstance(column[name], str) or not 0 < len(column[name]) <= LABEL_LIMIT:
++            raise TypeError(f"the {name} of a history column is not short text")
++    if column["kind"] not in HISTORY_GROUPS:
++        raise ValueError("a history column has an unknown kind")
++    for name in ("prior", "reason"):
++        optional_text(column[name], f"the {name} of a history column")
++    if column["reason"] == "":
++        raise ValueError("the reason of a history column is empty")
++    if column["reason"] is not None and column["reason"].isspace():
++        raise ValueError("the reason of a history column is only whitespace")
++    for name in ("start", "end"):
++        if column[name] is not None and not (
++            isinstance(column[name], str) and valid_date(column[name])
++        ):
++            raise ValueError(f"the {name} of a history column is not a date")
++    if not isinstance(column["values"], dict):
++        raise TypeError("the values of a history column are not a mapping")
++    checked_entries(column["values"])
++
++
++def history_limits(record: Any) -> list[str]:
++    """The history record's scope limits ([] without a record); validated here."""
++    if "history" not in record:
++        return []
++    limits = record["history"].get("limits") if isinstance(record["history"], dict) else None
++    if not isinstance(limits, list) or not all(isinstance(item, str) for item in limits):
++        raise TypeError("history limits is not a list of text")
++    if len(limits) > HISTORY_LIMIT_COUNT or any(len(i) > HISTORY_LIMIT_CHARS for i in limits):
++        raise ValueError("history limits are more or longer than the record allows")
++    return limits
++
++
++def history_inputs(record: Any) -> list[dict[str, Any]] | None:
++    """The validated history columns of calculation.json, or None when it has no `history`.
++
++    The record is written by another process: its version, column count, ids, kinds, priors, dates
++    and values are checked before any is used; a record that fails is malformed as a whole.
++    """
++    if "history" not in record:
++        return None
++    history = record["history"]
++    if not isinstance(history, dict) or history.get("schema_version") != HISTORY_SCHEMA:
++        raise ValueError("the history record has an unknown version")
++    columns = history["columns"]
++    if not isinstance(columns, list):
++        raise TypeError("history columns is not a list")
++    capped(columns, "history columns", HISTORY_COLUMN_LIMIT, CASHFLOW_FILES[1])
++    for column in columns:
++        history_column_input(column)
++    ids = [column["id"] for column in columns]
++    if len(set(ids)) != len(ids):
++        raise ValueError("history column ids repeat")
++    check_history_priors(columns)
++    return columns
++
++
++def check_history_priors(columns: list[dict[str, Any]]) -> None:
++    """Ids and kinds agree on fiscal years; a prior is a column of the kind the history pairs."""
++    kinds = {column["id"]: column["kind"] for column in columns}
++    for column in columns:
++        name, kind, prior = column["id"], column["kind"], column["prior"]
++        is_year_id = re.fullmatch(r"FY\d+", name, re.ASCII) is not None
++        placeholder = kind == "FY" and name == FY_PLACEHOLDER and prior is None
++        if is_year_id != (kind == "FY") and not placeholder:
++            raise ValueError("a history column's id and kind disagree on a fiscal year")
++        if kind == "FY" and not placeholder and FISCAL_HEADER.fullmatch(name) is None:
++            raise ValueError("a fiscal-year history column's id is not FY and a year")
++        if prior is not None and (
++            prior == name or prior not in kinds or HISTORY_PRIOR_KINDS.get(kind) != kinds.get(prior)
++        ):
++            raise ValueError("a history column's prior is not a column of the kind that follows")
++        year_prior = kind == "FY" and prior is not None and prior != FY_PLACEHOLDER
++        if year_prior and prior != f"FY{int(name[2:]) - 1}":
++            raise ValueError("a fiscal year's prior is not the year before it")
++
++
++def history_columns(history: list[dict[str, Any]]) -> list[Column]:
++    """One column per history entry, in the record's order; its prior is that entry's index."""
++    index = {column["id"]: at for at, column in enumerate(history)}
++    columns: list[Column] = []
++    for entry in history:
++        column = Column(
++            label=entry["label"],
++            group=HISTORY_GROUPS[entry["kind"]],
++            kind="h",
++            record=entry["values"],
++            start=entry["start"],
++            end=entry["end"],
++            period=None,
++            prior=None if entry["prior"] is None else index[entry["prior"]],
++            ytd=False,
++        )
++        if entry["reason"] is not None:
++            column["unavailable"] = entry["reason"]
++        if column["prior"] is not None and lengths_differ(entry, history[column["prior"]]):
++            column["length_differs"] = True
++        columns.append(column)
++    return columns
++
++
++def lengths_differ(entry: dict[str, Any], prior: dict[str, Any]) -> bool:
++    """Both periods are dated and their lengths differ by more than the quarter slack."""
++    if None in (entry["start"], entry["end"], prior["start"], prior["end"]):
++        return False
++    gap = span_days(entry["start"], entry["end"]) - span_days(prior["start"], prior["end"])
++    return abs(gap) > QUARTER_LENGTH_SLACK
++
++
+ def span_days(start: str, end: str) -> int:
+     return (datetime.date.fromisoformat(end) - datetime.date.fromisoformat(start)).days
+ 
+@@ -1973,14 +2165,38 @@ def fiscal_columns(columns: list[Column], fiscal: Fiscal) -> dict[str, int]:
+     return fiscal_index
+ 
+ 
+-def forecast_columns(columns: list[Column], cases: Forecast, fiscal_index: dict[str, int]) -> None:
+-    """Append one column per forecast year of each case."""
++def twelve_months(column: Column) -> bool:
++    """A column CP-1 does not date, or dates as a 52- or 53-week year, is a full year."""
++    if column["start"] is None or column["end"] is None:
++        return True
++    return span_days(column["start"], column["end"]) + 1 in YEAR_DAYS
++
++
++def first_year_prior(fiscal_index: dict[str, int], year: int, on_base: bool) -> int | None:
++    """The fiscal-year column a case's first year grows on, in `fiscal_index`.
++
++    With the period history (`on_base`) that is the column of the first year's own number, the
++    forecast's base year, when the history has one; otherwise the year before it.
++    """
++    prior = fiscal_index.get(f"FY{year}") if on_base else None
++    return fiscal_index.get(f"FY{year - 1}") if prior is None else prior
++
++
++def forecast_columns(
++    columns: list[Column], cases: Forecast, fiscal_index: dict[str, int], on_base: bool = False
++) -> None:
++    """Append one column per forecast year of each case.
++
++    The prior of a year is the same case's year before it; of a case's first year, a fiscal year
++    of `fiscal_index` (see first_year_prior); a prior that is not that year is None.
++    """
+     for name, years in cases:
+         case_index: dict[int, int] = {}
+         for year in years:
+             prior = case_index.get(year["year"] - 1)
+-            if prior is None and not case_index:
+-                prior = fiscal_index.get(f"FY{year['year'] - 1}")
++            first = prior is None and not case_index
++            if first:
++                prior = first_year_prior(fiscal_index, year["year"], on_base)
+             columns.append(
+                 Column(
+                     label=f"FY{year['year']}E",
+@@ -1994,24 +2210,11 @@ def forecast_columns(columns: list[Column], cases: Forecast, fiscal_index: dict[
+                     ytd=False,
+                 )
+             )
++            if first and on_base and prior is not None and not twelve_months(columns[prior]):
++                columns[-1]["prior_not_year"] = True
+             case_index.setdefault(year["year"], len(columns) - 1)
+ 
+ 
+-def cashflow_columns(
+-    quarters: list[Span], fiscal: Fiscal, cases: Forecast, ends: dict[str, str] | None = None
+-) -> list[Column]:
+-    """Quarter, fiscal-year and forecast columns, each with its prior-year column's index.
+-
+-    The prior of Q1 FY<n> is Q1 FY<n-1>; other quarters have none. The prior of FY<n> is FY<n-1>,
+-    of the first forecast year the fiscal year before it, of a later forecast year the same case's
+-    year before it; a prior that is not the adjacent year is None.
+-    """
+-    columns = quarter_columns(quarters, ends)
+-    fiscal_index = fiscal_columns(columns, fiscal)
+-    forecast_columns(columns, cases, fiscal_index)
+-    return columns
+-
+-
+ class CashflowInputs(NamedTuple):
+     """What every cell of one model's grid reads: tables, the debt register, fiscal-year ends."""
+ 
+@@ -2046,11 +2249,10 @@ def op_table_sum(c: CellContext, name: str, first: str, second: str) -> Cell:
+ 
+ 
+ def op_key(c: CellContext, key: str, negate: bool = False) -> Cell:
+-    missing = not_modelled_cell if c.column["kind"] == "fc" else absent_cell
+     record = c.column["record"]
+     if record is None:
+         raise ValueError(f"the {c.column['label']} column holds no record to read {key} from")
+-    return held_cell(record[key], c.kind, negate) if key in record else missing()
++    return held_cell(record[key], c.kind, negate) if key in record else spec_cell(None, c)
+ 
+ 
+ def op_sum(c: CellContext, *rows: RowKey) -> Cell:
+@@ -2065,7 +2267,9 @@ def op_growth(c: CellContext, source: RowKey) -> Cell:
+     if c.column["prior"] is None:
+         return unavailable_cell(PRIOR_MISSING)
+     if c.column.get("length_differs"):
+-        return unavailable_cell("the prior-year period has a different length")
++        return unavailable_cell(LENGTH_DIFFERS)
++    if c.column.get("prior_not_year"):
++        return unavailable_cell(PRIOR_NOT_YEAR)
+     prior = c.grid[source][c.column["prior"]]
+     return derive("percent", [current, prior], lambda a, b: a / b - 1)
+ 
+@@ -2137,9 +2341,17 @@ CELL_OPS: dict[str, Callable[..., Cell]] = {
+ 
+ 
+ def spec_cell(spec: Spec | None, cell: CellContext) -> Cell:
+-    """One cell from its row's spec for the column's kind (None: n.a., or n.m. in forecast)."""
++    """One cell from its row's spec for the column's kind (None: n.a., or n.m. in forecast).
++
++    A history column with a reason gives every row n.a. with that reason, derived rows included.
++    """
++    column = cell.column
++    if column["kind"] == "h" and "unavailable" in column:
++        return unavailable_cell(column["unavailable"])
+     if spec is None:
+-        return not_modelled_cell() if cell.column["kind"] == "fc" else absent_cell()
++        if column["kind"] == "h":
++            return unavailable_cell(NO_LINE)
++        return not_modelled_cell() if column["kind"] == "fc" else absent_cell()
+     return CELL_OPS[spec[0]](cell, *spec[1:])
+ 
+ 
+@@ -2503,19 +2715,53 @@ def cashflow_rows(tables: dict[str, Table | None]) -> list[RowSpec]:
+     return rows + list(TAIL_ROWS)
+ 
+ 
++def cashflow_notes(year_to_date: bool, with_history: bool) -> list[str]:
++    if with_history:  # CP-1's labelled periods replace the Q1 and pro forma notes
++        rest = [
++            note.replace(FISCAL_ONLY_RATIOS, TWELVE_MONTH_RATIOS) for note in CASHFLOW_NOTES[2:]
++        ]
++        return [LTM_NOTE, *rest]
++    return [note for note in CASHFLOW_NOTES if year_to_date or note != Q1_NOTE]
++
++
++def no_downside_column() -> Column:
++    """The main grid's last column when no downside case was computed: n.a. in every row."""
++    return Column(
++        label="Downside",
++        group=DOWNSIDE_CASE,
++        kind="h",
++        record=None,
++        start=None,
++        end=None,
++        period=None,
++        prior=None,
++        ytd=False,
++        unavailable=NO_DOWNSIDE,
++    )
++
++
++def row_part(rows: list[dict[str, Any]], part: slice) -> list[dict[str, Any]]:
++    """The rows with only the cells of the columns in `part`."""
++    return [{**row, "cells": row["cells"][part]} for row in rows]
++
++
+ def cashflow_of(
+-    forecast: tuple[Forecast, list[str]],
+-    recorded: tuple[Fiscal, dict[str, dict[str, Any]]],
++    forecast: tuple[Forecast, list[str], list[str]],
++    recorded: Recorded,
+     statements: tuple[list[Table], list[Table]],
+     handoff: str | None,
+     budget: int,
+ ) -> dict[str, Any]:
+     """History from the parsed annual and quarter tables and the forecast record, as a grid.
+ 
++    `recorded` ends with the history (CP-1's period columns and their limits) or None; with it
++    those columns replace the quarter and fiscal-year columns and read each row's forecast spec.
++
+     Raises CashflowBudget, before computing any cell, when rows x columns passes `budget`.
+     """
+-    cases, limits = forecast
+-    fiscal, quarters = recorded
++    cases, limits, keys = forecast
++    main, other, downside_note = main_cases(cases, keys)
++    fiscal, quarters, history = recorded
+     annual, quarter = statements
+     names = CASHFLOW_LABELS
+     tables: dict[str, Table | None] = {
+@@ -2532,8 +2778,19 @@ def cashflow_of(
+     periods = sorted({key[1:] for key in income["periods"] if key[0] == "q"}) if income else []
+     capped(periods, "quarter columns", QUARTER_COLUMN_LIMIT, CASHFLOW_FILES[3])
+     layout = [RowSpec._make(spec) for spec in cashflow_rows(tables)]  # a plain 7-tuple row works
+-    columns = cashflow_columns(periods, fiscal, cases, ends)
+-    if len(layout) * len(columns) > budget:
++    if history is None:
++        columns = quarter_columns(periods, ends)
++        fiscal_index = fiscal_columns(columns, fiscal)
++    else:
++        columns = history_columns(history[0])
++        fiscal_index = {c["id"]: at for at, c in enumerate(history[0]) if c["kind"] == "FY"}
++    on_base = history is not None
++    forecast_columns(columns, main, fiscal_index, on_base)
++    if not any(c["group"] == DOWNSIDE_CASE for c in columns):
++        columns.append(no_downside_column())
++    main_count = len(columns)
++    forecast_columns(columns, other, fiscal_index, on_base)  # priors read the main grid's history
++    if cell_count(len(layout), len(columns)) > budget:
+         raise CashflowBudget(
+             "the cash flow model is not shown; the workspace's cash flow models exceed "
+             f"{CASHFLOW_CELL_BUDGET:,} cells"
+@@ -2541,7 +2798,7 @@ def cashflow_of(
+     grid: dict[RowKey, list[Cell]] = {}
+     rows = []
+     for spec in layout:
+-        pick = {"q": spec.quarter, "fy": spec.fiscal, "fc": spec.forecast}
++        pick = {"q": spec.quarter, "fy": spec.fiscal, "fc": spec.forecast, "h": spec.forecast}
+         grid[spec.key] = [
+             spec_cell(pick[column["kind"]], CellContext(inputs, column, index, grid, spec.kind))
+             for index, column in enumerate(columns)
+@@ -2555,22 +2812,26 @@ def cashflow_of(
+                 "cells": grid[spec.key],
+             }
+         )
+-    year_to_date = any(column["ytd"] for column in columns)
++    year_to_date = any(column["ytd"] for column in columns[:main_count])
++    shown = [
++        {
++            "label": c["label"],
++            "group": c["group"],
++            "start": c["start"],
++            "end": c["end"],
++            "ytd": c["ytd"],
++        }
++        for c in columns
++    ]
+     return {
+         "units": cashflow_units(handoff) if handoff is not None else None,
+-        "columns": [
+-            {
+-                "label": column["label"],
+-                "group": column["group"],
+-                "start": column["start"],
+-                "end": column["end"],
+-                "ytd": column["ytd"],
+-            }
+-            for column in columns
+-        ],
+-        "rows": rows,
+-        "notes": [note for note in CASHFLOW_NOTES if year_to_date or note != Q1_NOTE],
+-        "limits": limits,
++        "columns": shown[:main_count],
++        "rows": row_part(rows, slice(0, main_count)),
++        "other": None
++        if main_count == len(columns)
++        else {"columns": shown[main_count:], "rows": row_part(rows, slice(main_count, None))},
++        "notes": [*cashflow_notes(year_to_date, history is not None), downside_note],
++        "limits": limits if history is None else [*limits, *history[1]],
+     }
+ 
+ 
+@@ -2613,6 +2874,8 @@ def read_cashflow(
+         record = json.loads(files[stage].decode("utf-8"))
+         fiscal = fiscal_inputs(record)
+         quarter_values = quarter_inputs(record)
++        columns = history_inputs(record)
++        history = None if columns is None else (columns, history_limits(record))
+         stage = CASHFLOW_FILES[2]
+         annual = markdown_tables(files[stage].decode("utf-8"), stage)
+         stage = CASHFLOW_FILES[3]
+@@ -2623,7 +2886,7 @@ def read_cashflow(
+         return None, ("file", stage)
+     try:
+         left = CASHFLOW_CELL_BUDGET if budget is None else budget
+-        recorded = (fiscal, quarter_values)
++        recorded = (fiscal, quarter_values, history)
+         return cashflow_of(forecast, recorded, (annual, quarter), handoff, left), None
+     except (CashflowLimit, CashflowBudget) as error:
+         return None, ("limit", str(error))
+@@ -2938,7 +3201,7 @@ def catalogue_models(
+             continue
+         grid = model["cashflow"]
+         if grid is not None:
+-            cells += len(grid["rows"]) * len(grid["columns"])
++            cells += grid_cells(grid)
+         built[position] = model
+     return [built[position] for position in sorted(built)], issues
+ 
+diff --git a/apps/issuer-library/credit_os/web/screen.css b/apps/issuer-library/credit_os/web/screen.css
+index bb548cc..6d2ad14 100644
+--- a/apps/issuer-library/credit_os/web/screen.css
++++ b/apps/issuer-library/credit_os/web/screen.css
+@@ -297,6 +297,7 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
+ .cashflow .col-sub{display:block}
+ .cashflow-notes,.cashflow-na ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:var(--fs-label)}
+ .cashflow-na{margin-top:10px;font-size:var(--fs-label);color:var(--muted)}.cashflow-na summary{cursor:pointer;font-weight:600;color:var(--text-secondary)}.cashflow-na ul{margin-top:6px}
++.cashflow-other{margin-top:10px}.cashflow-other summary{cursor:pointer;font-weight:600;font-size:var(--fs-label);color:var(--text-secondary)}.cashflow-other .table-scroll{margin-top:8px}
+ .cashflow tr.total-row>th,.cashflow tr.total-row>td{font-weight:600;border-top:1px solid var(--rule)}
+ .forecast-attempts{margin:8px 0 0;color:var(--muted);font-size:var(--fs-label)}
+ /* The acceptance badge and its qualification wrap as one unit; the report-tools span rules (block, full width at 720px) must not stretch them. */
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 62c6d6f..cc53f11 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -912,9 +912,7 @@ function notAvailableLines(c) {
+   return lines;
+ }
+ // The calculation record as a line-item by period grid. The store formatted every cell; this only places it.
+-function cashflowSection(model) {
+-  const c=model.cashflow;
+-  if(!c)return '<section class="forecast-cashflow"><h2>Cash flow model</h2><p>This model has no readable calculation record.</p></section>';
++function cashflowTable(c) {
+   const groups=[];
+   for(const col of c.columns){const last=groups[groups.length-1];if(last&&last.name===col.group)last.span++;else groups.push({name:col.group,span:1});}
+   // The first column of each group carries a rule; the Base case and Downside columns sit on a quiet ground.
+@@ -930,9 +928,17 @@ function cashflowSection(model) {
+     if(row.band!==band){band=row.band;body+=`<tr class="band-row"><th scope="colgroup" colspan="${c.columns.length+1}">${esc(band)}</th></tr>`;}
+     body+=`<tr${row.total?' class="total-row"':''}><th scope="row">${esc(row.label)}</th>${row.cells.map((cell,i)=>td(cell,row.kind,i)).join('')}</tr>`;
+   }
+-  const na=notAvailableLines(c),first=c.columns[0],last=c.columns[c.columns.length-1];
++  return `<table class="cashflow"><thead>${head}</thead><tbody>${body}</tbody></table>`;
++}
++function cashflowSection(model) {
++  const c=model.cashflow;
++  if(!c)return '<section class="forecast-cashflow"><h2>Cash flow model</h2><p>This model has no readable calculation record.</p></section>';
++  // The store's placeholder when no downside was computed is the one Downside-case column that is not a forecast year.
++  const periods=c.columns.filter(col=>!(col.group==='Downside case'&&!/^FY\d+E$/.test(col.label)));
++  const na=notAvailableLines(c),first=periods[0],last=periods[periods.length-1];
+   const caption=[c.units==null?'Units not recorded':c.units,...first?[`${first.label} to ${last.label}`]:[],'history as retained in the handoffs; forecasts are conditional illustrations from the calculation record'].join(' · ');
+-  return `<section class="forecast-cashflow"><h2 id="cashflow-heading">Cash flow model</h2><p class="forecast-caption">${esc(caption)}</p><div class="table-scroll" role="region" aria-labelledby="cashflow-heading" tabindex="0"><table class="cashflow"><thead>${head}</thead><tbody>${body}</tbody></table></div>${c.notes.length?`<ul class="cashflow-notes">${c.notes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}${na.length?`<details class="cashflow-na"><summary>Why cells show n.a. (${na.length} lines)</summary><ul>${na.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}</section>`;
++  const other=c.other?`<details class="cashflow-other"><summary>${esc(`Other forecast cases: ${[...new Set(c.other.columns.map(col=>col.group))].join(', ')}`)}</summary><div class="table-scroll" role="region" aria-label="Other forecast cases" tabindex="0">${cashflowTable(c.other)}</div></details>`:'';
++  return `<section class="forecast-cashflow"><h2 id="cashflow-heading">Cash flow model</h2><p class="forecast-caption">${esc(caption)}</p><div class="table-scroll" role="region" aria-labelledby="cashflow-heading" tabindex="0">${cashflowTable(c)}</div>${c.notes.length?`<ul class="cashflow-notes">${c.notes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}${other}${na.length?`<details class="cashflow-na"><summary>Why cells show n.a. (${na.length} lines)</summary><ul>${na.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}</section>`;
+ }
+ // The roles a delivery's sources are declared under; an unknown role shows its own token.
+ const SOURCE_ROLES={annual:'Annual handoff',quarter:'Quarterly handoff',forecast:'Forecast handoff',forecast_exact:'Forecast calculations',current_synthesis:'Current synthesis'};
+diff --git a/docs/VERIFICATION-ARCHIVE.md b/docs/VERIFICATION-ARCHIVE.md
+index a6c5d82..a027dba 100644
+--- a/docs/VERIFICATION-ARCHIVE.md
++++ b/docs/VERIFICATION-ARCHIVE.md
+@@ -2,6 +2,35 @@
+ 
+ Entries moved verbatim from VERIFICATION.md when older than two days.
+ 
++## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
++
++Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
++the repository (`/private/tmp/claude-501/rbot-live`, `…/rbot-live2`); `main` at `9aec393`. Each
++proves its dated case and route only; outputs are unreviewed candidates.
++
++- Inbox (`deploy_workflow.inbox.watcher`, `--cap 10 --settle-seconds 10 --poll-seconds 5`): a
++  copied folder dropped into `inbox/earnings_update/` at 08:56:09Z was claimed at 08:56:21Z, ran
++  CP-0, CP-1, CP-1B, CP-1D and CP-5 live (39 calls, 3 drafts rejected and repaired), delivered at
++  09:10:39Z and was filed as `issuers/TransDigm Group Incorporated (tdg)/2024-09-30
++  earnings_update.html`. Recorded spend USD 1.0761. Watcher-built library in headless Chrome: one
++  row; the run id opens Overview; 5 of 5 module pages render; "Open report" opens the report in
++  the app; Run activity shows the run finished, its spend and a link to the filed report that
++  exists on disk; no script error.
++- Forecast (`cpos_launch --modules CP-0 CP-1 CP-2A CP-2G --cap 10`): four modules accepted,
++  delivered in 17 minutes, USD 1.1979. The forecast model was **not published**: CP-2G's inputs
++  block now validates (the 2026-11-09 failure is gone) but the handoff declares a blocked
++  forecast with every driver null ("the forecast horizon is not locked and required invocation
++  and upstream acceptance validation cannot be completed through the supplied tools"). The library
++  lists the run, 4 of 4 module pages and the report render, and Forecast reads "No forecast model
++  was published from this run's files".
++- A run without a report cannot be produced by a run: `library_index` lists only runs with a
++  verified delivered report, and `credit_os_catalogue.run_record` always writes `handoff_href`
++  empty, so "Open primary handoff" never draws in this build. "Handoffs only" appears only if a
++  listed delivery fails cataloguing.
++- Not verified: the Forecast tab with a published model (no retained or new run has one); a
++  refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
++  Windows; analytical accuracy of either run.
++
+ ## 2026-11-09 — TDG live runs on sol-high, compared with medium
+ 
+ Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
+diff --git a/tests/browser_probe_forecast_cases.js b/tests/browser_probe_forecast_cases.js
+new file mode 100644
+index 0000000..3eff65e
+--- /dev/null
++++ b/tests/browser_probe_forecast_cases.js
+@@ -0,0 +1,24 @@
++(async () => {
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++  for (let i = 0; i < 200 && !document.querySelector('.forecast-cashflow table.cashflow'); i++) await sleep(50);
++  const main = '.forecast-cashflow > .table-scroll';
++  const text = els => [...els].map(x => x.textContent);
++  const details = document.querySelector('details.cashflow-other');
++  const pf = document.querySelector(`${main} tbody tr:not(.band-row)`)?.querySelectorAll('td')[8];
++  const seen = {
++    groups: text(document.querySelectorAll(`${main} thead tr:first-child th[scope=colgroup]`)),
++    summary: document.querySelector('details.cashflow-other summary')?.textContent ?? null,
++    otherGroups: details ? details.querySelectorAll('table.cashflow thead tr:first-child th[scope=colgroup]').length : 0,
++    otherOpen: details ? details.open : null,
++    otherName: details?.querySelector('[role=region]')?.getAttribute('aria-label') ?? null,
++    pf: pf ? { text: pf.textContent, label: pf.getAttribute('aria-label') } : null,
++    ids: document.querySelectorAll('[id]').length === new Set([...document.querySelectorAll('[id]')].map(x => x.id)).size,
++  };
++  if (details) details.open = true;
++  await sleep(200);
++  seen.fits = document.documentElement.scrollWidth <= window.innerWidth;
++  const out = document.createElement('pre');
++  out.id = 'probe';
++  out.textContent = JSON.stringify(seen);
++  document.body.append(out);
++})();
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 2376685..d71b691 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -3223,11 +3223,8 @@ def test_the_library_lists_the_published_forecast_as_a_model(tmp_path, provider,
+     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+     (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
+     grid = model["cashflow"]
+-    assert [c["label"] for c in grid["columns"]] == ["FY2025E", "FY2026E", "FY2027E"] * 2
+-    assert [c["group"] for c in grid["columns"]][::3] == [
+-        "Base case (reference illustration)",
+-        "Downside stress (shock on base drivers)",
+-    ]
++    assert [c["label"] for c in grid["columns"]][-6:] == ["FY2025E", "FY2026E", "FY2027E"] * 2
++    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
+ 
+ 
+ def test_the_library_shows_every_computed_case_in_order(tmp_path, provider, capsys):
+@@ -3237,17 +3234,16 @@ def test_the_library_shows_every_computed_case_in_order(tmp_path, provider, caps
+     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+     (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
+     grid = model["cashflow"]
+-    assert [c["group"] for c in grid["columns"]][::3] == [
+-        "Base case (reference illustration)",
++    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
++    assert [c["group"] for c in grid["other"]["columns"]][::3] == [
+         "Upside",
+         "Downside (CP-2G drivers)",
+-        "Downside stress (shock on base drivers)",
+     ]
+     revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
+-    assert [c["exact"] for c in revenue["cells"][3:6]] == ["1100", "1210", "1331"]
+-    assert [c["exact"] for c in revenue["cells"][6:9]] == ["1000", "1000", "1000"]
+-    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
+-    assert [c["exact"] for c in revenue["cells"][:3]] == ["1050", "1092", "1124.76"]
++    other = next(r for r in grid["other"]["rows"] if r["label"] == "Revenue")
++    assert [c["exact"] for c in other["cells"][:3]] == ["1100", "1210", "1331"]
++    assert [c["exact"] for c in other["cells"][3:6]] == ["1000", "1000", "1000"]
++    assert [c["exact"] for c in revenue["cells"][-6:-3]] == ["1050", "1092", "1124.76"]
+     assert grid["limits"][0].startswith("Every figure is Python's arithmetic")
+ 
+ 
+diff --git a/tests/test_credit_os_store.py b/tests/test_credit_os_store.py
+index af44164..c60d530 100644
+--- a/tests/test_credit_os_store.py
++++ b/tests/test_credit_os_store.py
+@@ -3,6 +3,7 @@
+ import hashlib
+ import json
+ import sys
++from fractions import Fraction
+ from pathlib import Path
+ 
+ import pytest
+@@ -1302,3 +1303,638 @@ def test_an_instruction_key_that_is_not_a_module_code_gets_no_link(tmp_path):
+     assert rows["../../escaped"]["href"] is None
+     assert rows["CP-0"]["href"] == "downloads/run-a/instructions/CP-0.md"
+     assert any("'../../escaped'" in i and "no link" in i for i in result["issues"])
++
++
++# The Forecast grid with a history record: columns hand-written from the plan's answer key.
++NO_PF = "no handoff states pro forma adjustments"
++NEEDS_9M_2023 = "needs 9M 2023, which CP-1 does not print"
++
++
++def held(amount, reason=None):
++    return {"amount": amount, "reason": reason}
++
++
++def history_column(identity, amounts, reason=None):
++    column_id, kind, label, prior = identity
++    revenue, ebitda = amounts
++
++    def entry(amount):
++        return held(amount, reason if amount is None else None)
++
++    return {
++        "id": column_id,
++        "kind": kind,
++        "label": label,
++        "prior": prior,
++        "reason": reason,
++        "start": None,
++        "end": None,
++        "values": {"revenue": entry(revenue), "ebitda": entry(ebitda)},
++    }
++
++
++HISTORY = {
++    "schema_version": "cpos-history/1",
++    "columns": [
++        history_column(("Q3_2024", "QUARTER", "Q3 2024", None), ("250", "75")),
++        history_column(("Q3_2025", "QUARTER", "Q3 2025", "Q3_2024"), ("270", "84")),
++        history_column(("YTD", "YTD", "YTD (9M 2025)", "PYTD"), ("780", "240")),
++        history_column(("PYTD", "PYTD", "PYTD (9M 2024)", None), ("720", "216")),
++        history_column(("FY2023", "FY", "FY2023", None), ("940", "276")),
++        history_column(("FY2024", "FY", "FY2024", "FY2023"), ("1000", "300")),
++        history_column(("LTM", "LTM", "LTM Q3 2025", "PRIOR_LTM"), ("1060", "324")),
++        history_column(("PRIOR_LTM", "PRIOR_LTM", "Prior LTM", None), (None, None), NEEDS_9M_2023),
++        history_column(("PF", "PF", "PF LTM", None), (None, None), NO_PF),
++    ],
++    "limits": ["History is CP-1's printed figures."],
++}
++
++
++def forecast_year(year, revenue, ebitda):
++    return {"year": year, "revenue": held(revenue), "ebitda": held(ebitda)}
++
++
++REFERENCE = {
++    "outputs": {
++        "REFERENCE": {
++            "years": [
++                forecast_year(2025, "1050", "315"),
++                forecast_year(2026, "1092", "338.52"),
++                forecast_year(2027, "1124.76", "359.9232"),
++            ]
++        }
++    },
++    "scope_limits": ["Every figure is Python's arithmetic."],
++}
++WITHOUT_HISTORY = json.dumps({"annual_periods": [], "values": {}}).encode()
++
++
++def with_history(damage):
++    record = {"annual_periods": [], "values": {}, "history": {**HISTORY, **damage}}
++    return json.dumps(record).encode()
++
++
++FILES = {
++    "forecast_exact.json": json.dumps(REFERENCE).encode(),
++    "calculation.json": with_history({}),
++    "annual.md": b"No tables here.",
++    "quarter.md": b"No tables here.",
++}
++
++
++def test_history_columns_precede_the_forecast_in_the_owners_order():
++    grid, problem = store.read_cashflow(FILES, None)
++    assert problem is None
++    assert [(c["group"], c["label"]) for c in grid["columns"]][:9] == [
++        ("Quarter", "Q3 2024"),
++        ("Quarter", "Q3 2025"),
++        ("Year to date", "YTD (9M 2025)"),
++        ("Year to date", "PYTD (9M 2024)"),
++        ("Fiscal year", "FY2023"),
++        ("Fiscal year", "FY2024"),
++        ("Last twelve months", "LTM Q3 2025"),
++        ("Last twelve months", "Prior LTM"),
++        ("Pro forma", "PF LTM"),
++    ]
++    assert [c["label"] for c in grid["columns"]][9:12] == ["FY2025E", "FY2026E", "FY2027E"]
++
++
++def test_values_growth_and_margin_read_across_the_new_columns():
++    row = {r["label"]: r["cells"] for r in store.read_cashflow(FILES, None)[0]["rows"]}
++    assert [c["exact"] for c in row["Revenue"][:7]] == [
++        "250",
++        "270",
++        "780",
++        "720",
++        "940",
++        "1000",
++        "1060",
++    ]
++    growth = row["Revenue YoY growth"]
++    assert Fraction(growth[1]["exact"]) == Fraction(8, 100)  # Q3 2025 on Q3 2024
++    assert abs(Fraction(growth[2]["exact"]) - Fraction(1, 12)) < Fraction(1, 10**20)  # YTD on PYTD
++    assert abs(Fraction(growth[5]["exact"]) - Fraction(3, 47)) < Fraction(1, 10**20)  # FY2024
++    assert Fraction(growth[9]["exact"]) == Fraction(5, 100)  # FY2025E on FY2024
++    assert growth[6]["status"] == "na"  # LTM: prior LTM missing
++    margin = Fraction(row["Adj EBITDA margin"][6]["exact"])
++    assert abs(margin - Fraction(324, 1060)) < Fraction(1, 10**20)
++
++
++def test_an_unavailable_column_gives_every_row_its_reason():
++    grid = store.read_cashflow(FILES, None)[0]
++    assert all(row["cells"][8]["status"] == "na" for row in grid["rows"])
++    reason = {r["label"]: r["cells"][8]["reason"] for r in grid["rows"]}
++    assert reason["Revenue"] == reason["Distributions"] == "no handoff states pro forma adjustments"
++    assert set(reason.values()) == {"no handoff states pro forma adjustments"}
++    prior_reason = NEEDS_9M_2023
++    assert all(row["cells"][7]["reason"] == prior_reason for row in grid["rows"])
++    assert not any(note.startswith("Pro forma:") for note in grid["notes"])
++
++
++def test_the_history_notes_and_limits_replace_the_quarter_and_pro_forma_notes():
++    grid = store.read_cashflow(FILES, None)[0]
++    assert store.Q1_NOTE not in grid["notes"]
++    assert (
++        "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise the "
++        "last fiscal year plus the year to date less the prior year to date."
++    ) in grid["notes"]
++    assert grid["limits"] == ["Every figure is Python's arithmetic.", *HISTORY["limits"]]
++
++
++def test_a_model_without_a_history_record_is_laid_out_as_before():
++    files = {**FILES, "calculation.json": WITHOUT_HISTORY}
++    grid = store.read_cashflow(files, None)[0]
++    assert [c["label"] for c in grid["columns"]][:3] == ["FY2025E", "FY2026E", "FY2027E"]
++    assert not any(c["ytd"] for c in grid["columns"])  # the fixture has no quarter column
++    assert store.Q1_NOTE not in grid["notes"]
++    assert "Pro forma: no pro forma period is recorded in the handoffs." in grid["notes"]
++
++
++def damaged_column(**changes):
++    column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
++    return {"columns": [{**column, **changes}]}
++
++
++@pytest.mark.parametrize(
++    "damage",
++    [
++        {"columns": "x"},
++        {
++            "columns": [
++                {
++                    "id": "A",
++                    "kind": "WEEK",
++                    "label": "A",
++                    "prior": None,
++                    "reason": None,
++                    "values": {},
++                }
++            ]
++        },
++        {
++            "columns": [
++                {"id": "A", "kind": "FY", "label": "A", "prior": "B", "reason": None, "values": {}}
++            ]
++        },
++        {"schema_version": "cpos-history/2"},
++        {"limits": "x"},
++        {"columns": [HISTORY["columns"][0]] * 2},
++        damaged_column(prior="A"),
++        damaged_column(kind="WEEK"),
++        damaged_column(prior="B"),
++        damaged_column(prior="FY2024"),
++        damaged_column(reason="   "),
++        damaged_column(id="FY24", label="FY24"),
++        damaged_column(id="FY20245", label="FY20245"),
++        damaged_column(start="2025-13-40"),
++        damaged_column(values={"revenue": {"amount": "NaN", "reason": None}}),
++        damaged_column(values={"revenue": "1"}),
++        damaged_column(label=7),
++        damaged_column(reason=7),
++    ],
++)
++def test_a_malformed_history_is_reported_not_shown(damage):
++    grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
++    assert grid is None and problem == ("file", "calculation.json")
++
++
++def test_an_undamaged_history_column_is_shown():
++    grid, problem = store.read_cashflow(
++        {**FILES, "calculation.json": with_history(damaged_column())}, None
++    )
++    assert problem is None and grid is not None
++
++
++@pytest.mark.parametrize("kind", ["PYTD", "PRIOR_LTM", "PF", "QUARTER", "YTD", "FY", "LTM"])
++def test_a_prior_naming_no_column_is_a_malformed_history_for_every_kind(kind):
++    name = "FY2024" if kind == "FY" else kind
++    column = history_column((name, kind, name, "GHOST"), ("1", "1"))
++    grid, problem = store.read_cashflow(history_files([column]), None)
++    assert grid is None and problem == ("file", "calculation.json")
++
++
++@pytest.mark.parametrize("kind", ["PYTD", "PRIOR_LTM", "PF"])
++def test_a_column_of_an_unpaired_kind_has_no_prior(kind):
++    other = history_column(("Q", "QUARTER", "Q", None), ("1", "1"))
++    column = history_column((kind, kind, kind, "Q"), ("1", "1"))
++    grid, problem = store.read_cashflow(history_files([other, column]), None)
++    assert grid is None and problem == ("file", "calculation.json")
++
++
++def test_a_quarter_may_not_name_itself_and_a_fiscal_year_names_the_year_before_or_the_placeholder():
++    own = history_column(("Q", "QUARTER", "Q", "Q"), ("1", "1"))
++    assert store.read_cashflow(history_files([own]), None)[1] == ("file", "calculation.json")
++    for prior in ("FY2021", "FY2024"):  # two years before, itself
++        year = history_column(("FY2024", "FY", "FY2024", prior), ("1", "1"))
++        far = history_column(("FY2021", "FY", "FY2021", None), ("1", "1"))
++        got = store.read_cashflow(history_files([far, year]), None)
++        assert got[1] == ("file", "calculation.json"), prior
++    placeholder = history_column(("Fiscal year", "FY", "Fiscal year", None), ("1", "1"))
++    year = history_column(("FY2024", "FY", "FY2024", "Fiscal year"), ("1", "1"))
++    assert store.read_cashflow(history_files([placeholder, year]), None)[1] is None
++
++
++def test_more_than_sixty_history_columns_are_over_the_limit():
++    damage = {
++        "columns": [history_column((f"C{i}", "FY", "C", None), ("1", "1")) for i in range(61)]
++    }
++    grid, problem = store.read_cashflow({**FILES, "calculation.json": with_history(damage)}, None)
++    assert grid is None and problem[0] == "limit"
++
++
++def history_files(columns, limits=None, revenue="1050"):
++    history = {**HISTORY, "columns": columns}
++    if limits is not None:
++        history["limits"] = limits
++    record = {"annual_periods": [], "values": {}, "history": history}
++    exact = {
++        "outputs": {"REFERENCE": {"years": [forecast_year(2025, revenue, "315")]}},
++        "scope_limits": [],
++    }
++    return {
++        **FILES,
++        "forecast_exact.json": json.dumps(exact).encode(),
++        "calculation.json": json.dumps(record).encode(),
++    }
++
++
++def growth_of(grid, label="FY2025E", part="columns"):
++    columns = grid[part]["columns"] if part == "other" else grid["columns"]
++    rows = grid[part]["rows"] if part == "other" else grid["rows"]
++    row = next(r for r in rows if r["label"] == "Revenue YoY growth")
++    return row["cells"][[c["label"] for c in columns].index(label)]
++
++
++def dated(column, start, end):
++    return {**column, "start": start, "end": end}
++
++
++def test_the_first_forecast_year_grows_on_the_history_year_of_its_own_number():
++    columns = [
++        history_column(("FY2024", "FY", "FY2024", None), ("940", "276")),
++        history_column(("FY2025", "FY", "FY2025", "FY2024"), ("1000", "300")),
++    ]
++    cell = growth_of(store.read_cashflow(history_files(columns), None)[0])
++    assert Fraction(cell["exact"]) == Fraction(5, 100)  # 1050 on 1000, not on 940
++
++
++def test_the_first_forecast_year_falls_back_to_the_year_before_it():
++    columns = [history_column(("FY2024", "FY", "FY2024", None), ("1000", "300"))]
++    cell = growth_of(store.read_cashflow(history_files(columns), None)[0])
++    assert Fraction(cell["exact"]) == Fraction(5, 100)
++
++
++def test_every_case_in_the_other_grid_grows_on_the_same_base():
++    columns = [
++        history_column(("FY2024", "FY", "FY2024", None), ("940", "276")),
++        history_column(("FY2025", "FY", "FY2025", "FY2024"), ("1000", "300")),
++    ]
++    files = {**cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS"), "calculation.json": None}
++    files["calculation.json"] = history_files(columns)["calculation.json"]
++    grid = store.read_cashflow(files, None)[0]
++    cell = growth_of(grid, "FY2025E", "other")
++    assert Fraction(cell["exact"]) == Fraction(110, 100) - 1  # Upside 1100 on 1000
++
++
++def test_growth_between_periods_of_unequal_length_is_not_shown():
++    columns = [
++        dated(
++            history_column(("Q3_2024", "QUARTER", "Q3 2024", None), ("250", "75")),
++            "2024-07-01",
++            "2024-09-30",
++        ),
++        dated(
++            history_column(("Q3_2025", "QUARTER", "Q3 2025", "Q3_2024"), ("270", "84")),
++            "2025-06-01",
++            "2025-09-30",
++        ),
++    ]
++    grid = store.read_cashflow(history_files(columns), None)[0]
++    cell = growth_of(grid, "Q3 2025")
++    assert (cell["status"], cell["reason"]) == (
++        "na",
++        "the prior-year period has a different length",
++    )
++
++
++def test_growth_on_periods_within_seven_days_of_each_other_is_shown():
++    columns = [
++        dated(
++            history_column(("Q3_2024", "QUARTER", "Q3 2024", None), ("250", "75")),
++            "2024-07-01",
++            "2024-09-30",
++        ),
++        dated(
++            history_column(("Q3_2025", "QUARTER", "Q3 2025", "Q3_2024"), ("270", "84")),
++            "2025-07-01",
++            "2025-10-06",
++        ),
++    ]
++    cell = growth_of(store.read_cashflow(history_files(columns), None)[0], "Q3 2025")
++    assert Fraction(cell["exact"]) == Fraction(8, 100)
++
++
++def test_the_first_forecast_year_does_not_grow_on_a_short_fiscal_year():
++    columns = [
++        dated(
++            history_column(("FY2024", "FY", "FY2024", None), ("1000", "300")),
++            "2024-04-01",
++            "2024-12-31",
++        )
++    ]
++    cell = growth_of(store.read_cashflow(history_files(columns), None)[0])
++    assert (cell["status"], cell["reason"]) == (
++        "na",
++        "the prior fiscal year is not twelve months",
++    )
++
++
++def test_the_first_forecast_year_grows_on_an_ordinary_dated_year():
++    column = dated(
++        history_column(("FY2024", "FY", "FY2024", None), ("1000", "300")),
++        "2024-01-01",
++        "2024-12-30",  # 365 days inclusive
++    )
++    cell = growth_of(store.read_cashflow(history_files([column]), None)[0])
++    assert Fraction(cell["exact"]) == Fraction(5, 100)  # 1050 on 1000
++
++
++def test_the_first_forecast_year_grows_on_a_fifty_three_week_year_and_an_undated_year():
++    wide = dated(
++        history_column(("FY2024", "FY", "FY2024", None), ("1000", "300")),
++        "2023-12-31",
++        "2025-01-04",  # 371 days inclusive
++    )
++    assert Fraction(
++        growth_of(store.read_cashflow(history_files([wide]), None)[0])["exact"]
++    ) == Fraction(5, 100)
++    too_long = dated(wide, "2023-12-30", "2025-01-04")  # 372 days inclusive
++    cell = growth_of(store.read_cashflow(history_files([too_long]), None)[0])
++    assert cell["status"] == "na"
++
++
++PAIRS = [
++    ("Q", "QUARTER", "FY", "FY2024"),
++    ("F", "FY", "QUARTER", "Q4 2024"),
++    ("Y", "YTD", "PRIOR_LTM", "PRIOR_LTM"),
++    ("L", "LTM", "PYTD", "PYTD"),
++    ("P", "PYTD", "YTD", "YTD"),
++]
++
++
++@pytest.mark.parametrize("kind, prior_kind, prior_id", [(p[1], p[2], p[3]) for p in PAIRS])
++def test_a_prior_of_another_family_is_a_malformed_history(kind, prior_kind, prior_id):
++    other = history_column((prior_id, prior_kind, prior_id, None), ("1", "1"))
++    me = history_column(("ME", kind, "me", prior_id), ("1", "1"))
++    grid, problem = store.read_cashflow(history_files([other, me]), None)
++    assert grid is None and problem == ("file", "calculation.json")
++
++
++@pytest.mark.parametrize(
++    "identity",
++    [
++        ("FY2024", "QUARTER", "Q4 2024", None),
++        ("FY2024", "LTM", "LTM", None),
++        ("2024", "FY", "x", None),
++    ],
++)
++def test_a_fiscal_year_id_and_the_fiscal_year_kind_go_together(identity):
++    column = history_column(identity, ("1", "1"))
++    grid, problem = store.read_cashflow(history_files([column]), None)
++    assert grid is None and problem == ("file", "calculation.json")
++
++
++def test_the_prior_pairs_the_producer_emits_are_accepted():
++    pairs = [
++        ("Q1", "QUARTER", None),
++        ("Q2", "QUARTER", "Q1"),
++        ("YTD", "YTD", "PYTD"),
++        ("PYTD", "PYTD", None),
++        ("FY2023", "FY", None),
++        ("FY2024", "FY", "FY2023"),
++        ("LTM", "LTM", "PRIOR_LTM"),
++        ("PRIOR_LTM", "PRIOR_LTM", None),
++    ]
++    columns = [history_column((i, k, i, p), ("1", "1")) for i, k, p in pairs]
++    assert store.read_cashflow(history_files(columns), None)[1] is None
++
++
++def test_a_row_the_history_does_not_carry_says_so_and_a_column_reason_still_wins():
++    grid = store.read_cashflow(FILES, None)[0]
++    row = next(r for r in grid["rows"] if r["label"] == "Distributions")
++    assert row["cells"][0]["reason"] == "the period history does not carry this line"
++    assert all(r["cells"][8]["reason"] == NO_PF for r in grid["rows"])
++
++
++def test_the_history_notes_say_leverage_is_for_twelve_month_periods():
++    notes = store.read_cashflow(FILES, None)[0]["notes"]
++    assert not any("Ratios are shown for fiscal years only." in note for note in notes)
++    assert any(note.endswith("Leverage is shown for twelve-month periods only.") for note in notes)
++    plain = store.read_cashflow({**FILES, "calculation.json": WITHOUT_HISTORY}, None)[0]["notes"]
++    assert any("Ratios are shown for fiscal years only." in note for note in plain)
++
++
++def test_an_empty_column_reason_is_a_malformed_history_and_null_is_no_reason():
++    column = history_column(("PF", "PF", "PF LTM", None), ("1", "1"), reason="")
++    grid, problem = store.read_cashflow(history_files([column]), None)
++    assert grid is None and problem == ("file", "calculation.json")
++
++
++@pytest.mark.parametrize("limits", [["x"] * 201, ["x" * 2001]])
++def test_history_limits_are_bounded_in_count_and_length(limits):
++    column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
++    grid, problem = store.read_cashflow(history_files([column], limits), None)
++    assert grid is None and problem == ("file", "calculation.json")
++
++
++def test_history_limits_at_the_bounds_are_kept():
++    column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
++    limits = ["x" * 2000] * 200
++    grid = store.read_cashflow(history_files([column], limits), None)[0]
++    assert grid["limits"] == limits
++
++
++# Base case and one Downside case in the main grid; the other cases in a second grid.
++FIRST_YEAR_REVENUE = {
++    "REFERENCE": "1050",
++    "UPSIDE": "1100",
++    "DOWNSIDE_DRIVERS": "1000",
++    "DOWNSIDE": "1040",
++}
++
++
++def cases(*keys, years=3):
++    outputs = {
++        key: {
++            "years": [forecast_year(2025 + n, FIRST_YEAR_REVENUE[key], "300") for n in range(years)]
++        }
++        for key in keys
++    }
++    exact = {"outputs": outputs, "scope_limits": ["Every figure is Python's arithmetic."]}
++    return {**FILES, "forecast_exact.json": json.dumps(exact).encode()}
++
++
++def test_the_shock_is_the_downside_when_both_downsides_exist():
++    grid = store.read_cashflow(cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE"), None)[
++        0
++    ]
++    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
++    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")["cells"]
++    assert [revenue[-6]["exact"], revenue[-3]["exact"]] == ["1050", "1040"]
++    assert [c["group"] for c in grid["other"]["columns"]][::3] == [
++        "Upside",
++        "Downside (CP-2G drivers)",
++    ]
++    other = next(r for r in grid["other"]["rows"] if r["label"] == "Revenue")["cells"]
++    assert [other[0]["exact"], other[3]["exact"]] == ["1100", "1000"]
++    assert (
++        "Downside case is the stress case: a shock applied to the base-case drivers."
++        in grid["notes"]
++    )
++
++
++def test_cp2gs_downside_is_the_downside_without_a_shock():
++    grid = store.read_cashflow(cases("REFERENCE", "DOWNSIDE_DRIVERS"), None)[0]
++    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")["cells"]
++    assert revenue[-3]["exact"] == "1000"
++    assert grid["other"] is None
++    assert (
++        "Downside case is CP-2G's own downside drivers; no CP-2A shock was supplied."
++        in grid["notes"]
++    )
++
++
++def test_no_downside_is_an_unavailable_column_not_a_missing_one():
++    grid = store.read_cashflow(cases("REFERENCE"), None)[0]
++    assert (grid["columns"][-1]["group"], grid["columns"][-1]["label"]) == (
++        "Downside case",
++        "Downside",
++    )
++    reason = "no downside case was computed in this run"
++    assert all(r["cells"][-1]["reason"] == reason for r in grid["rows"])
++    assert "Downside case: no downside case was computed in this run." in grid["notes"]
++
++
++def test_the_other_grid_holds_only_forecast_columns_and_prior_year_growth_from_the_history():
++    grid = store.read_cashflow(cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS"), None)[0]
++    other = grid["other"]
++    assert {c["group"] for c in other["columns"]} == {"Upside"}
++    assert [c["label"] for c in other["columns"]] == ["FY2025E", "FY2026E", "FY2027E"]
++    assert all(len(r["cells"]) == 3 for r in other["rows"])
++    growth = next(r for r in other["rows"] if r["label"] == "Revenue YoY growth")["cells"]
++    assert Fraction(growth[0]["exact"]) == Fraction(1100, 1000) - 1  # on FY2024, 1000 in history
++    assert Fraction(growth[1]["exact"]) == 0
++
++
++def test_cases_beyond_the_cell_budget_end_in_the_limit_problem():
++    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE", years=20)
++    grid, problem = store.read_cashflow(files, None, budget=1000)
++    assert grid is None and problem[0] == "limit"
++
++
++def test_the_cells_charged_to_the_page_budget_are_both_grids_cells():
++    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE", years=3)
++    grid = store.read_cashflow(files, None)[0]
++    assert grid["other"] is not None
++    main = len(grid["rows"]) * len(grid["columns"])
++    other = len(grid["other"]["rows"]) * len(grid["other"]["columns"])
++    assert other > 0
++    assert store.grid_cells(grid) == main + other
++
++
++def test_a_budget_one_short_of_two_models_with_other_grids_refuses_the_second():
++    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE", years=3)
++    first = store.read_cashflow(files, None)[0]
++    cells = len(first["rows"]) * (len(first["columns"]) + len(first["other"]["columns"]))
++    budget = 2 * cells - 1
++    built, _ = store.read_cashflow(files, None, budget)
++    assert built is not None
++    second, problem = store.read_cashflow(files, None, budget - store.grid_cells(built))
++    assert second is None and problem[0] == "limit"
++    exact, _ = store.read_cashflow(files, None, budget + 1 - store.grid_cells(built))
++    assert exact is not None
++
++
++def downside_of(outputs):
++    exact = {"outputs": outputs, "scope_limits": []}
++    files = {
++        **FILES,
++        "forecast_exact.json": json.dumps(exact).encode(),
++        "calculation.json": WITHOUT_HISTORY,
++    }
++    return store.read_cashflow(files, None)[0]
++
++
++def three_years(revenue):
++    return {"years": [forecast_year(2025 + n, revenue, "300") for n in range(3)]}
++
++
++def test_an_empty_shock_leaves_the_cp2g_downside_as_the_downside_case():
++    grid = downside_of(
++        {
++            "REFERENCE": three_years("1000"),
++            "DOWNSIDE_DRIVERS": three_years("900"),
++            "DOWNSIDE": {"years": []},
++        }
++    )
++    assert [c["label"] for c in grid["columns"] if c["group"] == "Downside case"] == [
++        "FY2025E",
++        "FY2026E",
++        "FY2027E",
++    ]
++    assert grid["other"] is None
++    assert grid["notes"][-1] == store.DOWNSIDE_NOTES["DOWNSIDE_DRIVERS"]
++
++
++def test_every_downside_empty_gives_the_placeholder_and_its_note():
++    grid = downside_of(
++        {
++            "REFERENCE": three_years("1000"),
++            "DOWNSIDE_DRIVERS": {"years": []},
++            "DOWNSIDE": {"years": []},
++        }
++    )
++    assert (grid["columns"][-1]["group"], grid["columns"][-1]["label"]) == (
++        "Downside case",
++        "Downside",
++    )
++    assert all(r["cells"][-1]["reason"] == store.NO_DOWNSIDE for r in grid["rows"])
++    assert grid["other"] is None
++    assert grid["notes"][-1] == store.DOWNSIDE_NOTES[None]
++
++
++def test_an_empty_case_opens_no_group_in_the_other_grid():
++    grid = downside_of({"REFERENCE": three_years("1000"), "UPSIDE": {"years": []}})
++    assert grid["other"] is None
++
++
++def test_the_page_budget_charges_both_grids_of_every_model(monkeypatch):
++    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE", years=3)
++    asked: list[int | None] = []
++
++    def read_model(reads, artifact, manifest, issues, budget=None):
++        asked.append(budget)
++        ask = store.GridAsk(None, budget)
++        grid = store.cashflow_or_issues(artifact["folder"], {}, dict(files), ask, issues)
++        return {"id": artifact["folder"], "cashflow": grid}
++
++    monkeypatch.setattr(
++        store, "shown_models", lambda root, catalogue, manifests=None: ({"m1", "m2"}, [])
++    )
++    monkeypatch.setattr(store, "run_shows", lambda *args: True)
++    monkeypatch.setattr(store, "read_model", read_model)
++    artifacts = [
++        {"folder": f, "available": True, "kind": "model", "href": "x"} for f in ("m1", "m2")
++    ]
++    catalogue = {"real": [{"artifacts": artifacts}]}
++    prior = ({}, {}, {}, {"m1": "", "m2": ""})
++    one = store.read_cashflow(files, None)[0]
++    assert one["other"] is not None
++    built = len(one["rows"]) * (len(one["columns"]) + len(one["other"]["columns"]))
++    models, _ = store.catalogue_models(Path("."), catalogue, prior)
++    assert len(models) == 2 and asked[0] - asked[1] == built
++    for budget, second_shown in ((2 * built - 1, False), (2 * built, True)):
++        asked.clear()
++        monkeypatch.setattr(store, "CASHFLOW_CELL_BUDGET", budget)
++        models, _ = store.catalogue_models(Path("."), catalogue, prior)
++        assert [m["cashflow"] is not None for m in models] == [True, second_shown]
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index 6242ce6..f9f519d 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -7,6 +7,7 @@ it needs but is not allowed. Needs Google Chrome or Chromium; skipped where ther
+ import hashlib
+ import html
+ import json
++import os
+ import re
+ import shutil
+ import subprocess
+@@ -1188,3 +1189,126 @@ def test_report_history_has_no_start_link_from_a_file(tmp_path):
+     dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
+     assert console == [] and '<table class="history-table">' in dom
+     assert "start-run" not in dom and ">Start a run</a>" not in dom
++
++
++FORECAST_CASES_PROBE = Path(__file__).with_name("browser_probe_forecast_cases.js")
++
++
++def library_with_four_case_model(
++    tmp_path: Path, keys: tuple[str, ...] = ("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE")
++) -> Path:
++    """A library whose run lists one model: the store's real grid over the hand-written files of
++    test_credit_os_store (history plus the four CP-2G cases). The model's envelope is the only
++    synthetic part (accepted by the controller); no published model folder is built."""
++    from credit_os import store
++    from test_credit_os_store import cases
++
++    make_run(tmp_path, "run-a", as_of="2025-09-30")
++    update_library.update_library(tmp_path)
++    data_js = tmp_path / "library/data.js"
++    prefix = "window.CREDIT_OS_DATA="
++    data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
++    grid, problem = store.read_cashflow(cases(*keys), None)
++    assert problem is None
++    run = data["workspace"]["runs"]["run-a"]
++    data["workspace"]["models"] = [
++        {
++            "id": "model-a",
++            "issuerKey": run["issuerKey"],
++            "mode": "accepted",
++            "qualification": "unrun",
++            "runId": None,
++            "runFolder": "run-a",
++            "scope": None,
++            "inputContract": None,
++            "revisionNote": None,
++            "previous": None,
++            "href": "../models/model-a.html?embedded=1",
++            "download": "../models/model-a.html?download=1",
++            "files": [],
++            "sources": [],
++            "register": None,
++            "cashflow": grid,
++        }
++    ]
++    data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
++    return tmp_path / "library/index.html"
++
++
++def test_the_page_shows_the_other_forecast_cases_in_a_closed_details_below_the_main_grid(tmp_path):
++    page = library_with_four_case_model(tmp_path)
++    (page.parent / "probe.js").write_text(
++        FORECAST_CASES_PROBE.read_text(encoding="utf-8"), encoding="utf-8"
++    )
++    probe = page.with_name("probe.html")
++    probe.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
++    dom, console = visit(probe, "#W-Forecast/model-a?c=run-a")
++    assert console == []
++    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
++    assert seen["groups"] == [
++        "Quarter",
++        "Year to date",
++        "Fiscal year",
++        "Last twelve months",
++        "Pro forma",
++        "Base case",
++        "Downside case",
++    ]
++    # The store's group name is "Downside (CP-2G drivers)"; screen.js moduleNames rewrites the code.
++    assert (
++        seen["summary"] == "Other forecast cases: Upside, Downside (Forward credit model drivers)"
++    )
++    assert seen["otherGroups"] == 2 and seen["otherOpen"] is False
++    assert seen["otherName"] == "Other forecast cases"
++    assert seen["pf"] == {
++        "text": "n.a.",
++        "label": "n.a.: no handoff states pro forma adjustments",
++    }
++    assert seen["fits"] is True and seen["ids"] is True  # the grid scrolls inside its region
++
++
++@pytest.mark.parametrize(
++    "keys, last",
++    [
++        (("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE"), "FY2027E"),
++        (("REFERENCE",), "FY2027E"),
++    ],
++)
++def test_the_caption_range_ends_on_the_last_real_period_never_the_placeholder(tmp_path, keys, last):
++    page = library_with_four_case_model(tmp_path, keys)
++    dom, console = visit(page, "#W-Forecast/model-a?c=run-a")
++    assert console == []
++    caption = re.search(r'<p class="forecast-caption">(.*?)</p>', dom, re.DOTALL)[1]
++    assert f"Q3 2024 to {last} " in caption and " to Downside" not in caption
++
++
++def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):
++    target = os.environ.get("FORECAST_SCREENSHOT")
++    if not target:
++        pytest.skip("set FORECAST_SCREENSHOT to the PNG path to write")
++    screenshot = Path(target)
++    page = library_with_four_case_model(tmp_path)
++    (page.parent / "open.js").write_text(
++        "addEventListener('load',()=>setTimeout(()=>{"
++        "document.querySelector('details.cashflow-other').open=true;"
++        "document.body.style.minHeight='1500px'},1500));",
++        encoding="utf-8",
++    )
++    shot = page.with_name("shot.html")
++    shot.write_text(page.read_text().replace("</body>", '<script src="open.js"></script></body>'))
++    screenshot.parent.mkdir(parents=True, exist_ok=True)
++    subprocess.run(
++        [
++            chrome(),
++            "--headless=new",
++            "--disable-gpu",
++            "--window-size=1280,3200",
++            "--virtual-time-budget=10000",
++            f"--screenshot={screenshot}",
++            shot.as_uri() + "#W-Forecast/model-a?c=run-a",
++        ],
++        capture_output=True,
++        timeout=120,
++        check=True,
++    )
++    assert screenshot.stat().st_size > 0
