@@ -98,6 +98,7 @@ from deploy_workflow.prose_checks import (
     DATA_MODULES,
     READER_HEADINGS,
     figure_issues,
+    key_figures_issues,
     prose_issues,
 )
 from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
@@ -2220,6 +2221,8 @@ def checker(layout: MarkdownLayout) -> Check:
             issues.append("List each issuer source relied on with its exact name and sha256.")
         issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
         issues += figure_issues(text)
+        if task.module_id == "CP-L10" and "CP-1" in task.handoffs:
+            issues += key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
         if task.module_id == "CP-8":
             sent = [*task.handoffs.values()] + [
                 raw for name, raw in task.sources.items() if name.startswith(PRIOR_PREFIX)

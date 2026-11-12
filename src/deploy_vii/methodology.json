@@ -562,7 +562,7 @@
   },
   {
     "module_id": "CP-L10",
-    "title": "Financial change screen",
+    "title": "Short credit snapshot",
     "aliases": [
       "CP-L20",
       "CP-L23",
@@ -574,7 +574,7 @@
       "CP-1"
     ],
     "optional": [],
-    "purpose": "Runs a bounded LITE screening synthesis for CP-1, CP-1B.",
+    "purpose": "Writes the one-page short credit snapshot from CP-1's figures: the view, key figures, contrary evidence and limitations.",
     "table_ids": [
       "TL40.1",
       "TL40.2",

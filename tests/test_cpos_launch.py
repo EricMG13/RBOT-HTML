@@ -986,6 +986,13 @@ KEY_FIGURES = (
 def short_snapshot_answer(context: dict, routes: list) -> str:
     """CP-L10's answer in the new format, hand-written: the four reader passages, a Key figures
     table whose Source column names CP-1, and no calculation. CP-0 and CP-1 answer as usual."""
+    if context["module_id"] == "CP-1":  # the figures CP-L10 copies
+        held = (
+            "| Item | Value |\n| --- | --- |\n| Cover | 3.1x |\n| Refinancing | USD 1,250 million |"
+        )
+        return answer(context, routes).replace(
+            "## Calculations\n\nNone.", f"## Calculations\n\n{held}", 1
+        )
     if context["module_id"] != "CP-L10":
         return answer(context, routes)
     lines = ["# CP-L10", "", "## Request", f"{ISSUER} as of {AS_OF}.", "", "## Sources", ""]
@@ -1060,14 +1067,35 @@ def test_a_short_snapshot_runs_end_to_end_to_a_verified_delivery(tmp_path, provi
     assert "Short Credit Snapshot" in json.loads(receipt.read_text())["scope"]
 
 
-def short_snapshot_issues(tmp_path, change):
+def short_snapshot_issues(
+    tmp_path, change, cp1=b"# upstream\nCover 3.1x; refinancing USD 1,250 million."
+):
     prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
+    task = dataclasses.replace(task, handoffs={"CP-1": cp1})
+    context["handoffs"] = {"CP-1": {"sha256": hashlib.sha256(cp1).hexdigest()}}
     raw = change(short_snapshot_answer(context, list(prepared.plan.layout.routes)))
     return _checked_handoff(task, raw.encode(), checker(prepared.layout))
 
 
 def test_the_checker_accepts_a_good_short_snapshot(tmp_path):
     assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
+
+
+def test_a_key_figure_that_cp1_never_states_is_refused_naming_it(tmp_path):
+    """The figure is in the Key figures table and the Bottom line, so the fidelity check alone
+    accepts it; the Key figures check holds it to the CP-1 handoff the module was sent."""
+    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace("3.1x", "9.9x"))
+    assert any("Key figures" in i and "9.9" in i for i in issues), issues
+
+
+def test_the_good_short_snapshot_passes_the_key_figures_check(tmp_path):
+    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
+
+
+def test_a_key_figures_table_with_other_columns_is_refused(tmp_path):
+    bad = "| Thing | Number |\n| --- | --- |\n| Interest cover | 3.1x |"
+    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace(KEY_FIGURES, bad))
+    assert any("Key figures" in i and "Measure | Value | Period | Source" in i for i in issues)
 
 
 @pytest.mark.parametrize(
@@ -3209,7 +3237,7 @@ def test_a_short_snapshot_run_is_listed_with_its_label_and_cp_l10_leads_the_over
     assert "Short credit snapshot" in shown  # the run label names the pathway as words
     lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
     assert lead is not None
-    lead_text = re.sub(r"<[^>]+>|\s+", " ", lead[0])
+    lead_text = re.sub(r"\s+([,.;:])", r"\1", " ".join(re.sub(r"<[^>]+>", " ", lead[0]).split()))
     assert "Creditors are covered today but only just" in lead_text
     assert "Cover is thin at 3.1x" in lead_text
     assert 'href="#CP-L10/' in lead[0]  # written by CP-L10

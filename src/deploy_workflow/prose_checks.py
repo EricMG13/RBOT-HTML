@@ -830,6 +830,40 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
     )
 
 
+KEY_FIGURES_HEADING = "### Key figures"
+KEY_FIGURES_HEADER = ["Measure", "Value", "Period", "Source"]
+
+
+def key_figures_issues(text: str, cp1: str) -> tuple[str, ...]:
+    """CP-L10's Key figures table: exactly the columns `Measure | Value | Period | Source`, and
+    every figure of a Value cell held in the CP-1 handoff with the same sign, unit and scale. It
+    proves the figure exists in CP-1, not that it is the right measure or period."""
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == KEY_FIGURES_HEADING), None)
+    if start is None:
+        return ()  # the report selector check names a missing section
+    rows: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.lstrip().startswith("|"):
+            rows.append(line)
+        elif rows or line.startswith("#"):
+            break
+    cells = [_cells(row) for row in rows]
+    if not cells or cells[0] != KEY_FIGURES_HEADER:
+        header = "`| Measure | Value | Period | Source |`"
+        return (f"Key figures: the table header must be exactly {header}.",)
+    held = _figures(cp1)
+    issues = []
+    for row in cells[2:]:
+        for figure in dict.fromkeys(_figures(row[1] if len(row) > 1 else "")):
+            if _fidelity_problem(figure, held) is not None:
+                issues.append(
+                    f'Key figures: "{figure.shown}" is not stated in the CP-1 handoff with the '
+                    "same sign, unit and scale: copy it exactly from CP-1 or remove the row."
+                )
+    return tuple(issues)
+
+
 FORECAST_HEADING = "### Forecast inputs (machine-readable)"
 
 

@@ -52,6 +52,7 @@ A figure you would have to work out is not in the table; say in Limitations that
 - Period: the period CP-1 labels the figure with. Do not put a figure of one period against another.
 - Source: `Canonical data foundation (CP-1)`. Where CP-1's own row names a source file and page, add it
   in the Basis item form after a semicolon: `Canonical data foundation (CP-1); annual.txt, page 12`.
+- CP-OS refuses a Key figures table whose header is not exactly those four columns or whose Value cell holds a figure the CP-1 handoff does not state with the same sign, unit and scale.
 - Every figure in a reader passage is also a row of this table, with the same sign, unit and scale.
 - Leave out any measure whose definition differs between the CP-1 rows that state it, and say so in
   Limitations.

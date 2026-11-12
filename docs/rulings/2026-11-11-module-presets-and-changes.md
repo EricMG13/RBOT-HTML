@@ -206,7 +206,9 @@ is copied exactly from CP-1's handoff (CP-L10 calculates nothing new; a figure C
 `Not supplied: <reason>`, never zero), then the usual `## Sources`. It is one page: about 350 words of prose
 and six to ten rows. CP-L10 owns one report block, `key-figures`. The launcher applies the same checks as
 for any prose module (the nine prose checks and the fidelity check: a figure in a reader passage must be in
-a table of the handoff with the same sign, unit and scale). No check ties a Key figures cell to CP-1's
-handoff: that rests on the method, the reader's check of a real run and the fidelity check's own scope.
+a table of the handoff with the same sign, unit and scale). Fix round 1: the launcher also refuses a Key figures table whose header is not exactly
+`Measure | Value | Period | Source` or whose Value cell holds a figure the CP-1 handoff it was sent does not state
+(same sign, unit and scale; `prose_checks.key_figures_issues`). Known limit: a figure is proven to exist in
+CP-1, not that it is the right measure or period; that rests on the reader's check of a real run.
 CP-L10 leads the Overview of a short snapshot (amendment to H5 in
 `2026-11-11-reader-and-issuer-report.md`). The library names the pathway "Short credit snapshot".
