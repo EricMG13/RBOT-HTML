@@ -89,3 +89,70 @@ proof of any pathway or issuer.
   refused replace, folder permissions after the move, `Start watcher.cmd`, Edge over `file://`);
   one measured live run (whether USD 20 covers a pathway on `sol-medium` is unmeasured); the full
   test suite (weekly job).
+
+## 2026-11-10 — Refactoring and optimisation sweep (branch `claude/refactor-optimisation-sweep-01c49e`, tip `dc90974`)
+
+Scope: synthetic tests, scratch harnesses and a scratch copy of four retained runs on macOS. No
+provider was called and nothing ran on Windows. Report with all measurements and the open rows:
+`docs/sweeps/2026-11-10/REPORT.md`.
+- Fixed test-first: `state.declared` was `None` for every real handoff (now Blocked 11, Requires
+  More Work 2 on `cpos-tdg-sol-medium-all-001`); the watcher accepted a cap above the ruling's
+  USD 20; an overflowing source-text page number stopped the build; a drive-relative source name
+  was accepted.
+- Measured: watcher step at 200 ended runs 801.6 ms to 2.4 ms (16,200 file opens to 0); library
+  rebuild of four runs 0.777 s to 0.576 s, bytes read 185.4 MB to 65.7 MB, built library identical
+  (build time masked).
+- Gates on `dc90974`, exit 0: the quality gate (0 findings in 19 files); the `checks.yml` pytest
+  command plus the chips and inbox tests (1,392 passed, 7 deselected); node page logic (97 pass).
+- Reviews: per task and whole branch; one Medium (a "failed" run with a live launcher kept its
+  empty activity entry) fixed in `f28523a` and re-reviewed.
+- Not verified: Windows; a live watcher or provider path; the browser tests and the page's
+  rendering of the declared statuses; the full suite; ten open or decision rows listed in the report.
+- Follow-up (branch `claude/sweep-followup-ruling-rebuild`, tip `e74f2b4`; owner, 2026-11-10): the
+  two decision rows are ruled and fixed test-first. The watcher starts and launches only under its
+  standing ruling; a library-rebuild error of any `Exception` type is logged, shown on the page and
+  retried instead of stopping the watcher. Exit 0 on `e74f2b4`: the quality gate; the same pytest
+  command (1,412 passed, 7 deselected). Review found the first ruling test passed without the
+  guard; it is now a cause test (fails with the check removed). The packaged layout was checked by
+  building the package into a temporary folder on macOS, not on Windows.
+- Outstanding items and a review of `main` (branch `claude/sweep-outstanding-items`, base
+  `b2ae395`; owner, 2026-11-10; written without sub-agents): the seven open rows are fixed
+  test-first (F2, F4, F5, F6, F7, D4, B1) and B3 is accepted and pinned. The review added four
+  fixes: a page range in handoff text hung the library build; one malformed line in a run folder
+  ended the watcher; `--poll-seconds 0` and like settings were accepted; the PR check ran no inbox
+  or chips test. Exit 0 on the branch: the quality gate; the PR check's pytest command with those
+  tests added (1,437 passed, 7 deselected); node page logic (107 pass). The library built from the
+  four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
+  inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
+  sub-agents), only the author's adversarial pass.
+
+## 2026-11-10 — Run report Phase A (library Overview and module pages)
+
+Scope: the library page Overview is now a run report (what the run establishes, credit story by
+question, findings register, open items, module matrix); module pages split View from Statements
+and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
+`docs/superpowers/plans/2026-11-09-run-report-phase-a.md`. Commits fdb21ee..a887ba4, then merge
+4dad3d9 of `origin/main` 51203a9.
+- Real-data check: deterministic rebuild of one retained run, `cpos-tdg-sol-medium-all-001`, into a
+  temporary folder; no model call, nothing written under `runs/` or `library/`. Result: `7 of 20
+  modules reach a conclusion · 13 not assessable`; established CP-1, CP-1A, CP-2, CP-2D, CP-2E,
+  CP-3C, CP-DR; findings register 33 rows shown, 84 with not-assessable modules included; 58 checks
+  pass; key-numbers differences against the previous page 0.
+- Gates on 4dad3d9, all exit 0: `node --test apps/issuer-library/credit_os/web/static.test.cjs` (82
+  pass); pytest on the seven affected files (300 passed, 1 skipped: the paid live test); `uv run
+  python tools/quality_gate.py --base origin/main`.
+- Reviews: per-task and whole-branch; one Medium fixed test-first in a887ba4 (an empty
+  `committee_status:` took the next front-matter line as the status); the merge resolution was
+  reviewed separately and found sound.
+- Merge ruling: front matter follows `main` (dc2320c): a level-2 `Front matter` section whose
+  locator covers only the lines between the `---` markers. Placements of the 20 real handoffs are
+  identical before and after.
+- Second merge 85d47f6 of `origin/main` 2ecfc8f (inbox automation), then fix 4abfb18: the review of
+  that merge found the live Run activity chips had lost their running, done and waiting colours to
+  the run report's `.chip` rule; fixed test-first. On 4abfb18, exit 0: node (93 pass), pytest on the
+  affected files with the inbox tests (409 passed, 1 skipped, run on 85d47f6; the two page files
+  re-run on 4abfb18, 34 passed), the quality gate, and the same real-run rebuild.
+- Not verified: runs other than `cpos-tdg-sol-medium-all-001` were only built without error; widths
+  below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
+  Confidence cell reads as established (neither occurs in retained data); the Overview opened with
+  no run context; the branch diff is 2,245 lines against the 800-line cap.

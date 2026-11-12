@@ -538,6 +538,9 @@ def _summarise(
                         cap=cap,
                         modules=answers["modules"] or None,
                         web_search=web_search_ruled(STANDING_RULING),
+                        # The summary prepares in a temporary folder, so it names where the
+                        # earlier runs are: the launcher's own `_engine` folder.
+                        workspace=layout.engine,
                     )
                     after = _digest(files, answers)
                 except OSError as error:  # a file went away while it was being read: it changed
@@ -555,6 +558,7 @@ def _summarise(
                 "documents": list(prepared.documents),
                 "ignored": list(prepared.ignored),
                 "omitted": list(prepared.omitted),
+                "changes": prepared.changes.removeprefix("changes: "),
             }
         finally:
             _remove(work)

@@ -685,6 +685,10 @@ def test_the_review_shows_the_services_forecast_per_module(page):
     assert ["legal", "Go to Legal"] in seen["goto"]
     for text in ("sol-medium", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
         assert text in seen["facts"], text
+    # No earlier run in the service's folder: the summary says CP-8 has nothing to compare with.
+    assert summary["changes"] == "first run of this pathway"
+    assert "Changesfirst run of this pathway" in seen["facts"]
+    assert "CP-8" not in summary["modules"]
     for section in summary["omitted"]:
         assert section in seen["facts"]
     assert "confirmed when the summary is made" not in seen["ready"]

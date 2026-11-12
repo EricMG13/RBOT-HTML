@@ -15,6 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from library_fixtures import make_run
 from test_cpos_launch import context_file, issuer_folder
 
 from deploy_workflow.inbox.layout import Layout, ensure_layout
@@ -242,6 +243,27 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     assert s["omitted"] == list(expected.omitted)
     assert s["ignored"] == list(expected.ignored)
     assert s["digest"] == digest(layout, sid, answers)
+
+
+def test_the_summary_says_whether_cp8_will_run_and_against_which_earlier_run(layout, tmp_path):
+    sid, _ = upload_issuer(layout, tmp_path)
+    first = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    assert first["error"] == ""
+    assert first["changes"] == "first run of this pathway"
+    assert "CP-8" not in first["modules"]
+    # An earlier listed run of the same issuer and pathway, in the launcher's own runs folder.
+    make_run(layout.engine, "prior-1", as_of="2024-12-31", pathway="covenant_refinancing")
+    second = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
+    assert second["error"] == ""
+    assert second["modules"][-1] == "CP-8"
+    assert second["modules"][:-1] == first["modules"]
+    assert second["changes"] == (
+        "CP-8 compares with the covenant_refinancing run as of 2024-12-31 "
+        "(prior-1; earlier format, earlier methods)"
+    )
+    # The approval binds the answers and files, and the earlier run is only read.
+    assert second["digest"] == digest(layout, sid, answers_for(tmp_path))
+    assert sorted(p.name for p in (layout.engine / "runs").iterdir()) == ["prior-1"]
 
 
 def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
