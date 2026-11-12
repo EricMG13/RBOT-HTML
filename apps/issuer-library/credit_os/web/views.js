@@ -770,13 +770,15 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
   // Each lane's drawn events get a number in date order, continuing across lanes (the key names them), and a level: a marker that would overlap one already drawn goes up, never sideways.
   let count=0;
   const drawn=lanes.map(lane=>{
-    const items=lane.events.filter(e=>e.span).map(e=>({...e,...eventPlace(e.span,axis)})),levels=eventStack(items),start=count+1;
-    [...items.keys()].sort((a,b)=>items[a].span.from-items[b].span.from||items[b].span.to-items[a].span.to||a-b).forEach(i=>{items[i].no=++count;items[i].level=levels[i];});
+    const items=lane.events.filter(e=>e.span).map(e=>({...e,...eventPlace(e.span,axis)})),start=count+1;
+    [...items.keys()].sort((a,b)=>items[a].span.from-items[b].span.from||items[b].span.to-items[a].span.to||a-b).forEach(i=>{items[i].no=++count;items[i].chip=Math.max(16,7*String(count).length+4);}); // the chip grows with its digits (11 px mono, 7 px a digit and 4 px padding)
+    const levels=eventStack(items);
+    items.forEach((item,i)=>{item.level=levels[i];item.anchored=eventRoom(item)[2];}); // a thin span at the right end keeps its number inside the track: it is drawn from its right edge
     return {lane,items,start,height:Math.max(28,2*LANE_BASE+(Math.max(-1,...levels)+1)*LANE_ROW)};
   });
-  const marker=(lane,{row,span,left,width,no,level})=>{
+  const marker=(lane,{row,span,left,width,no,level,anchored})=>{
     const [date,precision,,event]=row.cells;
-    return `<a class="lane-event ${span.point?'point':'span'}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`Event ${no}: ${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="left:${left}%${span.point?'':`;width:${width}%`};bottom:${LANE_BASE+level*LANE_ROW}px"><span class="lane-no">${no}</span></a>`;
+    return `<a class="lane-event ${span.point?'point':'span'}${anchored?' anchored':''}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`Event ${no}: ${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="${anchored?`right:${Math.round((100-left-width)*100)/100}%`:`left:${left}%`}${span.point?'':`;width:${width}%`};bottom:${LANE_BASE+level*LANE_ROW}px"><span class="lane-no">${no}</span></a>`;
   };
   const own=Boolean(only)&&isNewFormat(data[only].sections); // a new-format module page: each lane is its section's route and caption, its events a Table form
   const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"${own?drawingAnchor(lane.id,lane.table):''}><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>${own?drawingCaption(lane.id,lane.table):''}`).join('');
@@ -792,7 +794,7 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
   const eventTableHtml=`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
-  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}<div class="lane-plot">${axis?`<div class="lane-axis"><span></span>${scale}</div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${overlay}</div>${key?`<div class="lane-keys" role="group" aria-label="Key to the numbered events"><p class="lane-range">Axis from ${day(axis.start)} to ${day(axis.end)}</p>${key}</div>`:''}${body?(compact?own?`<details class="chart-table"><summary>Table form</summary>${eventTableHtml}</details>`:'':eventTableHtml):''}</div>`;
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}<div class="lane-scroll" role="region" tabindex="0" aria-label="Event lanes; scroll horizontally on a narrow screen"><div class="lane-plot">${axis?`<div class="lane-axis"><span></span>${scale}</div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${overlay}</div></div>${key?`<div class="lane-keys" role="group" aria-label="Key to the numbered events"><p class="lane-range">Axis from ${day(axis.start)} to ${day(axis.end)}</p>${key}</div>`:''}${body?(compact?own?`<details class="chart-table"><summary>Table form</summary>${eventTableHtml}</details>`:'':eventTableHtml):''}</div>`;
 }
 // ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.

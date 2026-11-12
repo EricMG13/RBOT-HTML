@@ -536,10 +536,13 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .lane-no{font:600 11px/1 'Red Hat Mono',monospace;white-space:nowrap}
 .lane-event.span .lane-no{padding:2px 3px;background:var(--selection);border-radius:var(--radius-inline)}
 .lane-plot .lane-gap,.lane-plot .drawing-caption{position:relative;z-index:2;background:white}
-.lane-event.point{display:flex;align-items:center;justify-content:center;width:16px;margin-left:-8px;border-radius:50%;background:var(--blue);color:white}
+.lane-event.point{display:flex;align-items:center;justify-content:center;min-width:16px;padding:0 2px;box-sizing:border-box;transform:translateX(-50%);border-radius:8px;background:var(--blue);color:white}
+.lane-event.span.anchored{justify-content:flex-end}
 .lane-event.span{display:flex;align-items:center;min-width:4px;background:var(--selection);box-shadow:inset 0 0 0 1px var(--navy);color:var(--navy)}
 .lane-event:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 .lane-gap{color:var(--muted)}.lane-gap small{display:block}
+.lane-scroll{overflow-x:auto}
+.lane-scroll .lane-plot{min-width:600px}/* 170 name + 12 gap + 16 margins + 402 = EVENT_TRACK_MIN in calendar.js: eventStack levels hold at this track width, so the lanes scroll rather than shrink */
 .lane-plot{position:relative}
 .lane-scale{position:relative;display:block;height:38px;margin:0 8px;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
 .lane-tick-label{position:absolute;top:0;transform:translateX(-50%);line-height:14px;white-space:nowrap}

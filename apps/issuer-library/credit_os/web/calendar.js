@@ -69,13 +69,13 @@ function eventPlace(span, axis) {
 // Where a UTC day sits on the axis, in the same percent as eventPlace.
 const eventLeft = (day, axis) => eventPlace({from: day, to: day}, axis).left;
 
-// Axis ticks as {day, left, label}. An axis shorter than a year has a tick at each 1st of a month ("Jan 2025" carries its year; the first tick does too);
+// Axis ticks as {day, left, label}. An axis of fewer than 365 days (inclusive, so a lone whole year of any length is not one) has a tick at each 1st of a month ("Jan 2025" carries its year; the first tick does too);
 // a longer one a tick at each 1 January. Past 12 years only every Nth year (a round N) is labelled; past 40 years only a labelled year has a tick.
 function eventTicks(axis) {
   if (!axis) return [];
   const first = new Date(axis.start * DAY_MS), last = new Date(axis.end * DAY_MS);
   const ticks = [];
-  if (axis.end - axis.start < 365) {
+  if (axis.end - axis.start + 1 < 365) {
     for (let at = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1)); at <= last; at = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1))) {
       const day = at.getTime() / DAY_MS;
       if (day < axis.start) continue;
@@ -102,16 +102,24 @@ function eventAsOf(axis, iso) {
   return span && span.from >= axis.start && span.from <= axis.end ? eventLeft(span.from, axis) : null;
 }
 
-// Rows for the drawn items ({span, left, width} as eventPlace gives them), parallel to the input. Nothing is moved sideways: an item whose marker would overlap one already
-// drawn goes up a row instead. Spans are placed first (longest first), so a lone span keeps the baseline and a point over a span sits above it; points follow in date order.
-// A marker is `markPx` wide at least; `trackPx` is the lane width the percentages are read against.
-function eventStack(items, trackPx = 1032, markPx = 16) {
-  const px = percent => percent * trackPx / 100;
-  const room = item => item.span.point ? [px(item.left) - markPx / 2, px(item.left) + markPx / 2] : [px(item.left), px(item.left) + Math.max(px(item.width), markPx)];
+// Rows for the drawn items ({span, left, width, chip?} as eventPlace gives them, chip the marker's own width in px), parallel to the input. Nothing is moved sideways: an item whose
+// marker would overlap one already drawn goes up a row instead. Spans are placed before points, each group by start date (a longer span first on an equal start), so a lone span keeps the
+// baseline and a point over a span sits above it. A marker is `chip` (default `markPx`) wide at least. `trackPx` is the lane width the percentages are read against: EVENT_TRACK_MIN,
+// the narrowest the lane is ever drawn (screen.css `.lane-scroll .lane-plot` is 600 px = 170 name + 12 gap + 16 margins + 402; below that the lanes scroll sideways, so no marker is hidden).
+const EVENT_TRACK_MIN = 402;
+// The px interval [from, to] an item occupies on a track `trackPx` wide: a point its chip centred on its day, a span its drawn length (its chip at least). A span whose chip
+// would run past the right end of the track is anchored to its right end instead (`from` is then left of the span's own start, and a third element is true), so no number leaves the track.
+function eventRoom(item, trackPx = EVENT_TRACK_MIN, markPx = 16) {
+  const px = percent => percent * trackPx / 100, chip = item.chip ?? markPx;
+  if (item.span.point) return [px(item.left) - chip / 2, px(item.left) + chip / 2];
+  const from = px(item.left), long = Math.max(px(item.width), chip);
+  return from + long > trackPx ? [px(item.left + item.width) - long, px(item.left + item.width), true] : [from, from + long, false];
+}
+function eventStack(items, trackPx = EVENT_TRACK_MIN, markPx = 16) {
   const order = items.map((item, index) => index).sort((a, b) => (items[a].span.point - items[b].span.point) || (items[a].span.from - items[b].span.from) || (items[b].span.to - items[a].span.to) || a - b);
   const rows = [], taken = [];
   for (const index of order) {
-    const [from, to] = room(items[index]);
+    const [from, to] = eventRoom(items[index], trackPx, markPx);
     let row = 0;
     while ((taken[row] || []).some(([start, end]) => from < end && start < to)) row++;
     (taken[row] ||= []).push([from, to]);
@@ -120,4 +128,4 @@ function eventStack(items, trackPx = 1032, markPx = 16) {
   return rows;
 }
 
-if (typeof module !== 'undefined') module.exports = {eventTable, eventOrder, orderEvents, eventSpan, eventAxis, eventPlace, eventTicks, eventAsOf, eventStack};
+if (typeof module !== 'undefined') module.exports = {eventTable, eventOrder, orderEvents, eventSpan, eventAxis, eventPlace, eventTicks, eventAsOf, eventStack, eventRoom, EVENT_TRACK_MIN};
