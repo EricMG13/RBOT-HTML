@@ -394,3 +394,144 @@ def test_layer_one_at_scale_1000():
     assert (
         cell(json.loads(files["calculation.json"])["history"], "LTM", "revenue")["amount"] == "1060"
     )
+
+
+CHART_ROW = {
+    "amount": "618.5",
+    "reason": None,
+    "row": "H1 2025",
+    "period": "Undrawn committed facilities",
+}
+NO_BASE = {k: {"amount": None, "reason": "not used"} for k in K2_BASE}
+
+
+def test_a_millions_chart_row_in_a_thousands_block_is_refused():  # AK-6
+    with pytest.raises(ValueError) as caught:
+        parse(block_k2(base={**K2_BASE, "undrawn": CHART_ROW}), CP1_K2)
+    assert str(caught.value) == (
+        "CP-2G: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
+        "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
+    )
+
+
+def test_the_same_row_is_read_by_a_millions_block():
+    base = NO_BASE | {"undrawn": CHART_ROW}
+    assert parse(forecast_block(scale=1, base=base), CP1_K2).base["undrawn"].amount == "618.5"
+
+
+def test_a_thousands_unit_cell_refuses_a_millions_block():
+    cp1 = CP1_K2.replace("| US$m |", "| US$ thousands |")
+    base = NO_BASE | {"undrawn": CHART_ROW}
+    with pytest.raises(ValueError, match="not the block's unit \\(USD millions, scale 1\\)"):
+        parse(forecast_block(scale=1, base=base), cp1)
+
+
+def test_a_block_without_scale_is_not_checked_for_units():
+    base = NO_BASE | {"undrawn": CHART_ROW}
+    assert parse(forecast_block(base=base), CP1_K2.replace("| US$m |", "| US$ thousands |"))
+
+
+def _extra(table):
+    return CP1_K2 + "\n" + table
+
+
+def _revolver(row, period, **changes):
+    return block_k2(base={**K2_BASE, "undrawn": _at("618.5", row, period)} | changes)
+
+
+def test_another_cell_of_the_row_naming_the_other_unit_is_refused():  # widened B7 (b)
+    with pytest.raises(ValueError) as caught:
+        parse(_revolver("Revolver availability", "H1 2025"), CP1_K2)
+    assert str(caught.value) == (
+        "CP-2G: base undrawn: row `Revolver availability` states its Unit and terms / evidence "
+        "as `US$ million`, not the block's unit (USD thousands, scale 1000); "
+        "state a reason instead of an amount"
+    )
+
+
+def test_the_named_columns_header_naming_the_other_unit_is_refused():  # widened B7 (c)
+    cp1 = _extra(
+        "| Item | H1 2025 (US$m) | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n"
+    )
+    with pytest.raises(ValueError, match="states its period header as `H1 2025 \\(US\\$m\\)`"):
+        parse(_revolver("Revolver", "H1 2025 (US$m)"), cp1)
+
+
+def test_the_first_header_cell_naming_the_other_unit_is_refused():  # widened B7 (d)
+    cp1 = _extra(
+        "| Item (US$ million) | H1 2025 | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n"
+    )
+    with pytest.raises(
+        ValueError, match="states its first header cell as `Item \\(US\\$ million\\)`"
+    ):
+        parse(_revolver("Revolver", "H1 2025"), cp1)
+
+
+def test_a_row_naming_both_units_is_accepted():  # widened B7 (e)
+    cp1 = _extra(
+        "| Item | H1 2025 | Basis | Unit |\n| --- | --- | --- | --- |\n"
+        "| Revolver | 618.5 | US$ million facility | US$ thousands |\n"
+    )
+    assert parse(_revolver("Revolver", "H1 2025"), cp1).base["undrawn"].amount == "0.6185"
+
+
+def test_a_row_naming_no_unit_is_accepted():  # widened B7 (f)
+    cp1 = _extra("| Item | H1 2025 | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n")
+    assert parse(_revolver("Revolver", "H1 2025"), cp1).base["undrawn"].amount == "0.6185"
+
+
+def test_the_amount_cell_itself_is_never_read_for_unit_words():
+    cp1 = _extra("| Item | H1 2025 | Notes |\n| --- | --- | --- |\n| Revolver | 618.5 | x |\n")
+    assert parse(_revolver("Revolver", "H1 2025"), cp1)
+    assert (
+        cpos_forecast._unit_problem(
+            cp1.replace("| 618.5 |", "| 618.5 million |"),
+            "undrawn",
+            cpos_forecast.Operand(amount="0.6185", reason=None, row="Revolver", period="H1 2025"),
+            1000,
+        )
+        is None
+    )
+
+
+def test_a_block_without_scale_is_not_checked_for_the_widened_rule():  # widened B7 (g)
+    cp1 = (
+        CP1 + "\n| Item | FY2024 | Unit |\n| --- | --- | --- |\n| Revolver | 50 | US$ thousands |\n"
+    )
+    base = named_base(BASE) | {"undrawn": _at("50", "Revolver", "FY2024")}
+    assert parse(block_m(base=base), cp1).base["undrawn"].amount == "50"
+    with pytest.raises(ValueError, match="states its Unit as `US\\$ thousands`"):
+        parse(block_m(base=base, scale=1), cp1)
+
+
+@pytest.mark.parametrize(
+    "text, named",
+    [
+        ("US$ thousands", {"thousands"}),
+        ("USD thousands;  6.25%", {"thousands"}),
+        ("In thousands", {"thousands"}),
+        ("USD 858,064 thousand", {"thousands"}),
+        ("$000", {"thousands"}),
+        ("US$k", {"thousands"}),
+        ("USD K", {"thousands"}),
+        ("US$ million", {"millions"}),
+        ("USD millions", {"millions"}),
+        ("US$m", {"millions"}),
+        ("USD m", {"millions"}),
+        ("$m", {"millions"}),
+        ("$M", {"millions"}),
+        ("USD mm", {"millions"}),
+        ("US$bn", {"millions"}),
+        ("stated in millions", {"millions"}),
+        ("USD million/billion", {"millions"}),
+        ("US$ thousands; USD 37.6 million", {"thousands", "millions"}),
+        ("", set()),
+        ("p.4", set()),
+        ("9M 2025", set()),
+        ("1,000", set()),
+        ("US$ and a mid-year note", set()),
+        ("Mmm", set()),
+    ],
+)
+def test_the_words_that_name_a_unit(text, named):
+    assert cpos_forecast._units_named(text) == named

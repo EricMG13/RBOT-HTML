@@ -817,9 +817,9 @@ def history(
 ) -> dict[str, object]:
     """The Forecast page's historical columns, read from CP-1's period-labelled tables (`named`:
     the forecast inputs' row and period for each operand; `forecast_year`: the first forecast
-    year, from which no fiscal year is history; `scale`: 1000 when CP-1's cells are in thousands and
-    the operands in millions, then every figure is published in millions). Never raises: a value that cannot be built is
-    missing with its reason."""
+    year, from which no fiscal year is history; `scale`: 1000 when CP-1's cells are in thousands
+    and the operands in millions, then every figure is published in millions). Never raises: a
+    value that cannot be built is missing with its reason."""
     located_lines, base = _locate(tables, operands, named or {}, scale)
     found, forecast = _before_forecast(located_lines, forecast_year, base)
     located = [line for line in found.values() if line.reason is None]

@@ -290,6 +290,68 @@ def _layer1_problem(text: str, key: str, operand: Operand, amount: str | None) -
     return None if agrees else not_the_cell
 
 
+_CURRENCY = r"(?:US\$|USD|EUR|GBP|[$\u20ac\u00a3])"
+_NAMES_THOUSANDS = re.compile(rf"\bthousands?\b|[$'\u2019]000s?\b|{_CURRENCY}\s?k\b", re.IGNORECASE)
+_NAMES_MILLIONS = re.compile(
+    rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|bn)\b", re.IGNORECASE
+)
+_UNIT_OF = {1: "USD millions, scale 1", 1000: "USD thousands, scale 1000"}
+
+
+def _units_named(text: str) -> frozenset[str]:
+    """Which of `thousands` and `millions` a cell of CP-1 names as a unit, case-insensitive.
+    Thousands: the word `thousand` or `thousands`; `$000`, `'000` (with a trailing s); a currency
+    (`US$`, `USD`, `EUR`, `GBP`, `$`, euro or pound sign) then `k`, at a word end. Millions: the
+    words `million`, `millions`, `billion`, `billions`; a currency then `m`, `mm` or `bn`, at a
+    word end (`US$m`, `USD m`, `$m`, `US$ bn`). A bare number, `9M`, or `m` without a currency
+    names none. Both may be named at once."""
+    return frozenset(
+        name
+        for name, pattern in (("thousands", _NAMES_THOUSANDS), ("millions", _NAMES_MILLIONS))
+        if pattern.search(text)
+    )
+
+
+def _unit_cells(text: str, label: str, period: str) -> list[list[tuple[str, str]]]:
+    """For each row labelled `label` under a column headed `period`, in any table of the
+    handoff: the `(what, text)` of every cell that may state the row's unit: the row's other
+    cells (never the amount cell), the named column's header and the table's first header cell."""
+    groups: list[list[tuple[str, str]]] = []
+    for table in _tables(text):
+        header, *rows = table
+        for column in (i for i, h in enumerate(header) if i > 0 and _plain(h) == _plain(period)):
+            for row in (r for r in rows if len(r) > column and _plain(r[0]) == _plain(label)):
+                groups.append(
+                    [("period header", header[column]), ("first header cell", header[0])]
+                    + [
+                        (_plain(header[i]) if i < len(header) else "unit", cell)
+                        for i, cell in enumerate(row)
+                        if i != column
+                    ]
+                )
+    return groups
+
+
+def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | None:
+    """Why the named operand's row is in the other unit than the block's, or None. A row is
+    refused when a cell that may state its unit (`_unit_cells`) names the other unit and none of
+    them names the block's."""
+    block, other = ("thousands", "millions") if scale == 1000 else ("millions", "thousands")
+    issues = []
+    for group in _unit_cells(text, operand.row or "", operand.period or ""):
+        named = [(what, cell, _units_named(cell)) for what, cell in group]
+        if not any(block in units for *_, units in named):
+            issues += [(what, cell) for what, cell, units in named if other in units]
+    if not issues:
+        return None
+    what, cell = min(issues)
+    return (
+        f"base {key}: row `{_cut(_plain(operand.row or ''), 60)}` states its {_cut(what, 40)} as "
+        f"`{_cut(_plain(cell), 40)}`, not the block's unit ({_UNIT_OF[scale]}); state a reason "
+        "instead of an amount"
+    )
+
+
 def _declined(document: dict[str, object], source: str) -> None:
     """A block whose every driver has all-null values is the method declining to forecast."""
     drivers = document.get("base_drivers")
@@ -378,7 +440,10 @@ def _check_base(inputs: ForecastInputs, cp1_text: str, source: str, stated: dict
     for key, operand in inputs.base.items():
         amount = stated.get(f"base {key}", operand.amount)
         if named:
-            if (problem := _layer1_problem(cp1_text, key, operand, amount)) is not None:
+            problem = _layer1_problem(cp1_text, key, operand, amount)
+            if problem is None and amount is not None and inputs.scale is not None:
+                problem = _unit_problem(cp1_text, key, operand, inputs.scale)
+            if problem is not None:
                 raise ValueError(f"{source}: {problem}")
         elif amount is not None and not _printed(cp1_text, amount):
             raise ValueError(f"{source}: base {key} {amount} is not printed in CP-1")
