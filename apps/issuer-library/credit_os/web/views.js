@@ -95,6 +95,7 @@ function installDestinations() {
     'W-Library':['Issuer library',[['cases','Issuer cases',[]]]],
     'W-Report':['Report history',[['history','Report history',[]]]],
     'W-Overview':['Overview',[['overview','Overview',[]]]],
+    'W-Changes':['Changes',[['changes','Changes',[]]]],
     'W-Evidence':['Evidence',[['sources','Evidence',[]]]],
     'W-Forecast':['Forecast',[['forecast','Forecast',[]]]],
     'CP-OS':['Run activity',[['activity','Run activity',[]]]]
@@ -809,7 +810,7 @@ const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
 function runLabel(module,context) {
   const ctx=contexts[context];
   if(!ctx)return '';
-  const here=['W-Forecast','W-Evidence'].includes(module)?module:'W-Overview';
+  const here=['W-Forecast','W-Evidence','W-Changes'].includes(module)?module:'W-Overview';
   const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${contexts[r.run].run}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
   return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))} · <span class="code">${esc(ctx.run)}</span>${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(ctx)?` ${EARLIER_METHODS_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
 }
@@ -1177,7 +1178,8 @@ function runGroups(context) {
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
 // ---- The Overview (ruling H5): selection and ordering of the handoffs' own passages, text unchanged. Nothing is written, counted or
 // judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
-const LEAD_MODULES=['CP-6','CP-2'];
+// CP-L10 leads only a short snapshot (amendment 2026-11-11 to H5): CP-2 and CP-6 do not run in it.
+const LEAD_MODULES=['CP-6','CP-2','CP-L10'];
 const NO_LEAD='No credit view module completed in this run.';
 const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
 // The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
@@ -1354,10 +1356,23 @@ function evidenceView(context) {
   if(!ev)return '<div class="missing-state"><h2>No evidence record was read for this run</h2><p>Rebuild the library and open this page again.</p></div>';
   return evidenceSources(ev)+evidenceHandoffs(ev)+evidenceDownloads(ev)+evidenceRecord(ev,contexts[context].methodChanges);
 }
+// ---- Changes (decision M8 of the 2026-11-11 module-presets ruling): changes.js draws the run's comparison pack and CP-8's handoff. Nothing is worked out here:
+// this gathers what the library holds, the runs of this issuer and pathway (earliest first) with their quoted figures, packs and lead-module bottom lines.
+function changesView(context) {
+  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
+  const sections=run=>{const id=run.modules['CP-8']?.default;return id&&data[id]?data[id].sections:null;};
+  const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||(sameIssuer(run.issuerKey,ctx.issuerKey)&&run.pathway===ctx.pathway))).reverse().map(run=>{
+    const key=keyOf.get(run),lead=run.changes?.lead&&run.modules[run.changes.lead]?.default,out=lead&&data[lead];
+    return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.folder,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
+      metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null};
+  });
+  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),pathway:runPathway(ctx),fmtDate:displayDate,runs});
+}
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
   if(module==='W-Library')return libraryView();
   if(module==='W-Overview')return runReport(context);
+  if(module==='W-Changes')return changesView(context);
   if(module==='W-Report')return historyView(context);
   if(module==='W-Evidence')return evidenceView(context);
   if(module==='W-Forecast')return forecastView(context,section)+chartIndex(context);
@@ -1372,7 +1387,7 @@ function updateWorkspaceChrome(module) {
   document.querySelector('.workspace-tabs').hidden=isHome;
   $('context-bar').hidden=isHome||module==='W-Report';
   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
-  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
+  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],['W-Changes','Changes','git-compare'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
     return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${icon(img)}${label}</a>`;
   }).join('');

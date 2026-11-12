@@ -236,7 +236,9 @@ class Scheduler:
         except (OSError, ValueError):  # no or unreadable context.json: it changed
             return ""
         try:
-            return submissions.digest(self.layout, record.submission, answers)
+            return submissions.bound(
+                submissions.digest(self.layout, record.submission, answers), record.prior
+            )
         except submissions.Refused:
             return ""
 
@@ -277,7 +279,8 @@ class Scheduler:
         # context.json is made here from the answers; a left-over one (an earlier cut-short
         # attempt) is ours, since an upload may not carry that name.
         (sealed / "context.json").unlink(missing_ok=True)
-        current = submissions.digest(self.layout, sid, answers)
+        prior = submissions.issued_prior(self.layout, sid)
+        current = submissions.bound(submissions.digest(self.layout, sid, answers), prior)
         if not approved_digest or not (
             approved_digest == submissions.issued(self.layout, sid) == current
         ):
@@ -304,6 +307,7 @@ class Scheduler:
             effort=answers["effort"],
             submitted_by=answers["submitted_by"],
             digest=current,
+            prior=prior,
         )
         self._put(record)
         return record

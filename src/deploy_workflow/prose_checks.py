@@ -171,8 +171,8 @@ def _sentence_lines(body: list[tuple[int, str]]) -> list[_Line]:
     return out
 
 
-def _limitation_entries(text: str) -> list[tuple[int, str]]:
-    """(first line number, normalised text) of every item of `### Limitations`."""
+def _limitation_items(text: str) -> list[tuple[int, str]]:
+    """(first line number, text) of every item of `### Limitations`, its Basis line dropped."""
     items: list[tuple[int, list[str]]] = []
     open_item = False
     for line in _sentence_lines(reader_passages(text).get("Limitations", [])):
@@ -183,12 +183,49 @@ def _limitation_entries(text: str) -> list[tuple[int, str]]:
             open_item = True
         else:
             items[-1][1].append(line.text)
-    normalised = ((number, _normalise(" ".join(parts))) for number, parts in items)
+    return [(number, " ".join(parts)) for number, parts in items]
+
+
+def _limitation_entries(text: str) -> list[tuple[int, str]]:
+    """(first line number, normalised text) of every item of `### Limitations`."""
+    normalised = ((number, _normalise(item)) for number, item in _limitation_items(text))
     return [(number, item) for number, item in normalised if item]
 
 
 def _normalise(item: str) -> str:
     return " ".join(re.sub(r"[^\w\s]|_", "", item.lower()).split())
+
+
+def normalise_limitation(item: str) -> str:
+    """The key by which two limitation lines are the same limitation (check 7's normalisation)."""
+    return _normalise(item)
+
+
+def limitation_texts(text: str) -> tuple[str, ...]:
+    """The items of `### Limitations` as written (Basis line dropped, lines joined by a space)."""
+    return tuple(item for _, item in _limitation_items(text))
+
+
+def is_earlier_format(text: str) -> bool:
+    """H7: the handoff's `## Findings` does not open with `### Bottom line`."""
+    sections = _findings_sections(text)
+    return not sections or sections[0].title != "Bottom line"
+
+
+def bottom_line_text(text: str) -> str | None:
+    """The first paragraph of `### Bottom line` as written, its Basis line dropped; None when
+    the handoff has no such passage."""
+    sections = _findings_sections(text)
+    if not sections or sections[0].title != "Bottom line":
+        return None
+    paragraph: list[str] = []
+    for line in _sentence_lines(sections[0].body):
+        if not line.text.strip():
+            if paragraph:
+                break
+            continue
+        paragraph.append(line.text)
+    return " ".join(paragraph) or None
 
 
 def limitation_items(text: str) -> tuple[str, ...]:
@@ -791,6 +828,45 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
         f'"{figure.shown}" does not match the handoff, which writes it as {written}: keep the '
         "sign and unit as written."
     )
+
+
+KEY_FIGURES_HEADING = "### Key figures"
+KEY_FIGURES_HEADER = ["Measure", "Value", "Period", "Source"]
+
+
+def key_figures_issues(text: str, cp1: str) -> tuple[str, ...]:
+    """CP-L10's Key figures: exactly one table with the columns `Measure | Value | Period |
+    Source`, and every figure of a Value cell held in the CP-1 handoff with the same sign, unit
+    and scale (the sign must match exactly; a unit CP-1 carries only in a column header is not
+    matched). It proves the figure exists in CP-1, not that it is the right measure or period."""
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == KEY_FIGURES_HEADING), None)
+    if start is None:
+        return ()  # the report selector check names a missing section
+    section: list[str] = []
+    for line in lines[start + 1 :]:
+        if re.match(r"#{1,6}\s", line):
+            break
+        section.append(line)
+    tables = _tables("\n".join(section))
+    if not tables or any(t[0] != KEY_FIGURES_HEADER for t in tables):
+        header = "`| Measure | Value | Period | Source |`"
+        return (f"Key figures: the table header must be exactly {header}.",)
+    issues = []
+    if len(tables) > 1:
+        issues.append("Key figures: write exactly one table under the heading.")
+    held = _figures(cp1)
+    for table in tables:
+        for row in table[2:]:
+            for figure in dict.fromkeys(_figures(row[1] if len(row) > 1 else "")):
+                same = [h for h in held if h.negative == figure.negative]
+                if _fidelity_problem(figure, same) is not None:
+                    issues.append(
+                        f'Key figures: "{figure.shown}" is not stated in the CP-1 handoff with '
+                        "the same sign, unit and scale: copy it exactly from CP-1 or remove "
+                        "the row."
+                    )
+    return tuple(issues)
 
 
 FORECAST_HEADING = "### Forecast inputs (machine-readable)"

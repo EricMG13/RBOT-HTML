@@ -35,9 +35,9 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
   narrative sentences.
 - Analytical modules own analysis and inter-module Markdown communication.
   Markdown handoffs are intermediate artifacts, not completion of the user task.
-- CP-8 compares deliverables from prior runs with the latest current run:
-  values, periods, assumptions, conclusions, sources, limitations, output scope and
-  presentation.
+- CP-8 runs last in a run with an earlier listed run of the same issuer and pathway and compares
+  the two: values, periods, assumptions, conclusions, sources and limitations. Its handoff is
+  shown in the issuer library's Changes page.
   It explains material changes and unresolved differences. The imported investment
   decision post-mortem/calibration task is superseded; it is not an input gate.
 - CP-MEMO is replaced by the actual deliverables. Do not schedule a separate
@@ -50,7 +50,7 @@ plans, staff roles, pauses and approval records are evidence, not inherited auth
   conclusions across that boundary. Delivery adds no analysis: it only selects and
   orders module-written passages, every number and qualification exact. Missing
   handoff content remains an explicit gap or a targeted repair request.
-- Completion requires the issuer library's Overview, Modules, Forecast and Evidence
+- Completion requires the issuer library's Overview, Changes, Modules, Forecast and Evidence
   pages for the run populated from its actual module handoffs and checked against
   them, not just successful handoff generation. The HTML Model, charts and calculation
   JSON are parts of that issuer report; the separately delivered HTML report is retired.

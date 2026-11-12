@@ -435,6 +435,27 @@ def test_command_refuses_a_record_whose_modules_or_turns_could_inject_an_option(
         )
 
 
+def test_command_passes_the_approved_earlier_run_and_refuses_a_name_that_is_an_option(layout):
+    def argv(prior: str) -> list[str]:
+        record = Record("id1", "credit_snapshot", "acme", "queued", "t", prior=prior)
+        return command(
+            layout,
+            record,
+            Path("c.json"),
+            launcher=["py"],
+            cap=Decimal(20),
+            ruling=None,
+        )
+
+    assert "--prior" not in argv("")  # no approval recorded: the launcher searches
+    for named in ("none", "tdg-reader-format-001"):
+        found = argv(named)
+        assert found[found.index("--prior") : found.index("--prior") + 2] == ["--prior", named]
+    for bad in ("--live", "../x", "a b", "-x"):
+        with pytest.raises(ValueError, match="prior"):
+            argv(bad)
+
+
 def test_command_takes_every_method_name_and_the_turn_limits(layout):
     from deploy_workflow.owners.cpos_launch import METHODS
 

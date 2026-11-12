@@ -11,15 +11,16 @@ run start page name a module and never show its code (`CP-…`). Stored handoffs
 download names, saved answers and stored source file names and paths are unchanged. The ruling is the
 2026-11-12 amendment in `docs/rulings/2026-11-11-reader-and-issuer-report.md` (it replaces "the code
 second" in decision 5).
-- `node --test apps/issuer-library/credit_os/web/reader.test.cjs apps/issuer-library/credit_os/web/static.test.cjs apps/issuer-library/credit_os/web/calendar.test.cjs`: exit 0.
-- `uv run pytest tests/test_context_form.py tests/test_run_start_page.py tests/test_library_reader_refs.py tests/test_library_index.py -q`: exit 0, 181 passed.
+- `node --test apps/issuer-library/credit_os/web/reader.test.cjs apps/issuer-library/credit_os/web/static.test.cjs apps/issuer-library/credit_os/web/calendar.test.cjs`: exit 0, 266 passed.
+- `uv run pytest tests/test_context_form.py tests/test_run_start_page.py tests/test_library_reader_refs.py tests/test_library_index.py -q`: exit 0, 185 passed.
 - `uv run pytest tests/test_library_page_browser.py -m browser -q`: exit 0, 41 passed.
-- `uv run python tools/quality_gate.py`: exit 0.
+- `uv run python tools/quality_gate.py`: exit 0, 0 findings.
 - Fidelity: a scratch library built from the four listed TDG runs (all earlier format), every in-app
   route crawled in headless Chrome with folds, audit items and the inspector opened: 248 routes, no
   `CP-…` in text, `title` or `aria-label`, no "Name (Name)". The first crawl found 25 codes in Evidence's
   "Methods changed since this run", which no fixture carried; fixed and tested. A stored source file name
-  that holds a `CP-` token is shown as stored (synthetic new-format run, browser test).
+  that holds a `CP-` token is shown as stored (synthetic new-format run, browser test). The Changes tab and the Short Credit Snapshot pathway that
+  main added are covered by the same probes (the Changes route is scanned; the run start probe visits `short_snapshot`).
 - Reader check, scope: one real run (`cpos-tdg-sol-medium-all-001`) read on Report history, the Modules
   navigator, the Liquidity page with its inspector, and Evidence, for this change only: names stand where
   codes stood and nothing else moved. Not read against the September VMO2 reference for voice; the
@@ -32,6 +33,52 @@ second" in decision 5).
   three-level probe does not reach (upload, poll and carried-run messages). The standalone HTML Model
   file's own navigator (`src/deploy_vii/assets`) still shows codes and is not in this change. Screen
   readers and Windows not run.
+
+## 2026-11-12 — Changes seam round 3: one reader of CP-8's registers (branch `claude/changes-seams-r3`, base c9f84e1)
+Scope: `changes_check.page_verdicts` derives the measure verdicts, module rows and ledger counts; `update_library.changes_data` carries them as `run.changes.verdicts` (null without a pack, or with a note or problem; an unreadable CP-8 output is a stated problem); `changes.js` only displays them (no register parsed for a verdict); a fact row that looks like a pack label (NFKC, alphanumerics, casefold) is refused. Offline. Expected verdicts are hand-written in `tests/fixtures/changes-seam/rows.json` (`page` per case; new cases: hidden-character label, `\x85`, `\x1f`, two Same definition rows, no closing pipe), read by `test_changes.py`, `test_update_library.py` (checker and library agree) and `changes.test.cjs`. Gates: CI fast tests exit 0 (node 18 changes tests; pytest 2683 passed), browser subset 151 passed exit 0, quality gate exit 0. Reviewer probes that call the deleted page functions (`wbr1_seam`, `wbr2_seam`, `rc_store_path`, `wb_*`, `t5_*` expecting the page to read a pack's `yes` or a table) break or pass vacuously by design.
+Not verified: any real model output; the Changes tab against the September VMO2 reference; old handoffs against K9/K10 (known limit in the ruling).
+
+## 2026-11-12 — Whole-branch review fixes (branch `claude/changes-seams`, stacked on `claude/short-snapshot`)
+Scope: M1 one reading of CP-8's registers (shape: the checker requires exactly the forms the tab reads, plus one shared fixture `tests/fixtures/changes-seam/rows.json` read by a Python and a node test; a Python-side verdict hand-off was larger); M2 Over time compares run folders; L1 recorded no-comparison reasons reach the library verbatim; L2 scope no longer says "delivered whole" with "not produced"; L3 four test files added to CI fast-tests (about 7 s). M3, L4, L5 recorded only (ruling amendment). Offline, no model call.
+Gates: CI fast-tests command from `checks.yml` 2631 passed, exit 0; browser `-k "run_start or context_form or library or inbox"` 151 passed, exit 0; library node set 276 passed, exit 0; `tools/quality_gate.py` 0 findings, exit 0 (also `--base origin/claude/short-snapshot`).
+Probes (`wb_*`, then `t5_*`, `t4r4_*`): not_comparable_position, measure_label, module_cell(.py, .cjs), test_seams f1 and f4, changes_tab.cjs flipped to exit 0 or to the defect gone (f1, f4 now fail their reproduce assertions); wb_join_ids.cjs still exit 1 because it models the old `views.js` argument (the real call is covered by the browser test `test_over_time_joins_two_runs_the_pack_names_by_run_folder`); M3 and L4 probes still exit 1 (recorded limits). t5_*, t4r4_* exit 0.
+Fix round 2: one row per pack measure (a second is refused); white space (non-breaking, doubled) normalised before a verdict is read, in the checker and in `changes.js`; `cp8.md` now states the Effect-cell rule and the one-row rule (git blob `ba25e4d`, new method revision; the library fixtures stand in for it); the ruling sentence on unreadable verdicts is stated per `yes` / `judge` / `no`. Rows added to the shared fixture. `wbr1_seam.py` exit 0; test_changes 195, CI fast 2635, browser 151, node 276 passed; quality gate 0 findings.
+Not verified: any real model output; the Changes tab against the September VMO2 reference. A real model following the revised `cp8.md`.
+
+## 2026-11-12 — Short Credit Snapshot pathway (branch `claude/short-snapshot`, stacked on `claude/changes-section`, decision M6)
+Scope: `short_snapshot` = CP-0, CP-1, CP-L10 (hand-written preset key); CP-L10 method rewritten as a one-page prose module with a Key figures table; CP-L10 leads the Overview; offline, canned provider, no paid call. Tests written by hand: the preset, the order, the other presets without CP-L10, an end-to-end canned run to a verified delivery, four refused variants (a passage figure in no table, no Bottom line, a module code in a sentence, no Key figures table), node tests (lead, label), browser tests (run start page card and the service's three-module review; the library lists the run as "Short credit snapshot" with CP-L10 as lead). Fix round 2: Key figures sign exact, one table, missing CP-1 refused, browser test renamed to be selected by the browser gate. Fix round 1: methodology.json title and purpose; Key figures header and Value figures checked against the CP-1 handoff (`prose_checks.key_figures_issues`; proves a figure exists in CP-1, not that it is the right measure or period). Gates, exit 0 each: CI fast list 2,277 passed; node 271; browser gate 148; test_cpos_launch.py 532 passed; quality gate 0 findings.
+Not verified: that a Key figures figure is the right measure or period in CP-1 (only that it exists there); a real CP-L10 answer from a model; a reader check against the VMO2 reference; an earlier-format or CP-8-compared short snapshot in the library; Chrome only. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 library-links entry.
+
+## 2026-11-12 — Changes tab in the issuer library (branch `claude/changes-section`, stacked on PR #55, decision M8)
+Scope: `changes.js` renders the pack and CP-8's handoff; the store carries `run.changes`; offline. CI fast list 2,265 passed; node 268; browser gate 147 passed; quality gate 0; answer keys are literals; fix round 1: same-period differences are not issuer moves, no inferred first run, periods must match to join (probes exit 0).
+Not verified: a real CP-8 run in the tab; a CP-8 refusal's pack (the delivery omits it); dark mode (none); a reader check against the VMO2 reference.
+
+## 2026-11-12 — CP-8 fixes, rounds 1-3 (branches `claude/cp8-changes-r1`, `-r3`)
+
+Scope: engine, method and run start service, offline, no provider call. Round 1: pack schema `cpos-changes/2` (difference
+for equal units; `comparable` yes/no/judge; refs `E1`/`C1`); the checker reads each row and every printed difference; a CP-8
+not accepted, an unbuildable pack or a hold over the cap delivers without CP-8; the approval names the earlier run and the
+digest binds it (`--prior`); display name "Changes since the last run". Round 2: `same_period`, `definition_resolved`. Round 3:
+the sentence word lists are deleted; the check is mechanical (K1-K12): `changes.same_period` (same date, else same fiscal
+year), a withheld difference in no checked line, every figure of a checked line held in the pack, its definition texts or a
+handoff of either run (the launch caller passes this run's handoffs and `prior/*.md`), fact rows carry held amounts but no
+pack value or difference (Q-1). Answer keys are hand-written in `tests/test_changes.py`. Changed expectations (by the rulings):
+`test_a_cp8_that_is_not_accepted_loses_only_itself...` (exit 0); the summary digest is `bound(digest, prior)`; 500 US$m not
+held; "debt was 333"; two movement-in-words cases and one trend assertion dropped; a test renamed. Real pair (cpos-tdg-sol-medium-all-001
+then tdg-reader-format-001): five measures, all `judge`; 20 `E`, 11 `C` refs; CP-8's first request 318,153 bytes, hold 5.73.
+Results before the merge with main: fast set 1,439 passed, browser 138 passed, quality gate 0; reviewer probes `t4r3_same_period_rows`,
+`t4r4_fact_row_leak`, `t4r4_sentences`, `t4r4_same_period`, `t4r2_prior` pass. After merging main (99afe9e; tests adapted to its model-choice API): CI fast list plus test_changes 2,433 passed; whole fast suite without tests/model 1,787 passed; browser 144 passed; node 257 passed; quality gate 0.
+Not verified: a real model writing the ledger or judging a definition; whether the estimate matches a live first request; the
+library's Changes section; a real CP-8 handoff against the new figure rule (hand-written mini pack and probes only).
+## 2026-11-12 — CP-8 in the run: prior run, pins, comparison pack, check (branch `claude/cp8-changes`, decisions M5, M7, M8)
+
+Scope: engine and method, offline, no provider call. Built: `changes.py` (prior-run rule, `prior/*` pins, `changes.json`),
+`changes_check.py`, registry fan-in, `cp8.md`, `changes.json` in the delivery, the summary's `changes` line. Answer keys are
+hand-written in `tests/test_changes.py`; isolation is checked on the requests sent. Changed: `test_cpos_launch.py` no longer
+passes every method to `--modules`; `test_run_start_page.py` asserts `changes`. Results then: fast set plus `test_changes.py`
+1,063 passed; all non-live, non-browser, non-slow less `tests/model` and `tests/test_financial_workflow.py` 1,477 passed;
+browser 100 passed; quality gate 0. Not verified: any real model writing CP-8's registers; whether CP-8's request fits a long
+run's context; real earlier runs on the lean-copy deliveries; the library's Changes section.
 
 ## 2026-11-12 — Run start page: effort (Fast / Balanced / High) and model (GPT Sol / Claude Opus)
 
@@ -941,57 +988,3 @@ chips are unchanged; a value that is text still prints n.a. with the text in its
   a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
   charts print whole.
 - Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
-
-## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
-
-Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
-the repository (`/private/tmp/claude-501/rbot-live`, `…/rbot-live2`); `main` at `9aec393`. Each
-proves its dated case and route only; outputs are unreviewed candidates.
-
-- Inbox (`deploy_workflow.inbox.watcher`, `--cap 10 --settle-seconds 10 --poll-seconds 5`): a
-  copied folder dropped into `inbox/earnings_update/` at 08:56:09Z was claimed at 08:56:21Z, ran
-  CP-0, CP-1, CP-1B, CP-1D and CP-5 live (39 calls, 3 drafts rejected and repaired), delivered at
-  09:10:39Z and was filed as `issuers/TransDigm Group Incorporated (tdg)/2024-09-30
-  earnings_update.html`. Recorded spend USD 1.0761. Watcher-built library in headless Chrome: one
-  row; the run id opens Overview; 5 of 5 module pages render; "Open report" opens the report in
-  the app; Run activity shows the run finished, its spend and a link to the filed report that
-  exists on disk; no script error.
-- Forecast (`cpos_launch --modules CP-0 CP-1 CP-2A CP-2G --cap 10`): four modules accepted,
-  delivered in 17 minutes, USD 1.1979. The forecast model was **not published**: CP-2G's inputs
-  block now validates (the 2026-11-09 failure is gone) but the handoff declares a blocked
-  forecast with every driver null ("the forecast horizon is not locked and required invocation
-  and upstream acceptance validation cannot be completed through the supplied tools"). The library
-  lists the run, 4 of 4 module pages and the report render, and Forecast reads "No forecast model
-  was published from this run's files".
-- A run without a report cannot be produced by a run: `library_index` lists only runs with a
-  verified delivered report, and `credit_os_catalogue.run_record` always writes `handoff_href`
-  empty, so "Open primary handoff" never draws in this build. "Handoffs only" appears only if a
-  listed delivery fails cataloguing.
-- Not verified: the Forecast tab with a published model (no retained or new run has one); a
-  refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
-  Windows; analytical accuracy of either run.
-
-## 2026-11-10 — Library links to the report and to retained sources (branch `claude/library-open-report-link`)
-
-Cause: the page matched a catalogue deliverable to the store's report by a server address ending
-`&embedded=1` and linked only root-absolute paths; the static build writes `reports/…` and `../…`
-with the query removed. So "Open report" (row, selected run, deliverables list) was plain text and
-"Open retained source" never appeared. Present since the web assets were copied (`5249e4e`).
-
-- Fix in `views.js`: match by the one address the build writes; `libraryPath` accepts only those two
-  relative forms and refuses a scheme, a root, a backslash, a query, an empty or dot segment and
-  percent-encoded dots or slashes.
-- Tests written first and seen failing: the browser test on a fixture library (row and selected-run
-  links to `#W-Reports/<delivery>?c=run-a`, source link to the retained `CP-1.md`) and a node test
-  of the path guard (4 accepted, 31 refused forms). 107 node tests; 107 pytest (library set,
-  browser included); quality gate exit 0.
-- Real library rebuilt from this branch over the four TDG runs, headless Chrome: each row's
-  deliverable opens its own report in the app; the two file links in the selected-run panel exist
-  on disk; no script error. The row link is regular weight so rows stay 41px at 1440 and 1280.
-- End-to-end walk on merged `main` before the fix (same build): library → run id → Overview → 20 of
-  20 module pages → chip → evidence inspector; Reports, Evidence, Calendar, Run activity render;
-  75 of 76 file links exist (`../activity.js` is written only by the inbox watcher).
-- Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
-  inbox-built library; a run with a published forecast model or without a report ("Open primary
-  handoff"); the Windows package; Safari and Firefox.
-

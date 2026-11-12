@@ -1,0 +1,1221 @@
+diff --git a/.github/workflows/checks.yml b/.github/workflows/checks.yml
+index 74a3936..ce5a8f3 100644
+--- a/.github/workflows/checks.yml
++++ b/.github/workflows/checks.yml
+@@ -31,7 +31,7 @@ jobs:
+       - uses: actions/setup-node@v4
+         with:
+           node-version: 24
+-      - run: node --test apps/issuer-library/credit_os/web/reader.test.cjs apps/issuer-library/credit_os/web/static.test.cjs apps/issuer-library/credit_os/web/calendar.test.cjs
++      - run: node --test apps/issuer-library/credit_os/web/reader.test.cjs apps/issuer-library/credit_os/web/static.test.cjs apps/issuer-library/credit_os/web/calendar.test.cjs apps/issuer-library/credit_os/web/changes.test.cjs
+       - name: pytest (known failures deselected)
+         run: |
+           deselect=$(sed -e 's/#.*//' -e '/^\s*$/d' tests/known-failures.txt | awk '{print "--deselect=" $1}')
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index e588848..af09bf5 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,10 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Changes tab in the issuer library (branch `claude/changes-section`, stacked on PR #55, decision M8)
++Scope: `changes.js` renders the pack and CP-8's handoff; the store carries `run.changes`; offline. CI fast list 2,265 passed; node 268; browser gate 147 passed; quality gate 0; answer keys are literals; fix round 1: same-period differences are not issuer moves, no inferred first run, periods must match to join (probes exit 0).
++Not verified: a real CP-8 run in the tab; a CP-8 refusal's pack (the delivery omits it); dark mode (none); a reader check against the VMO2 reference.
++
+ ## 2026-11-12 — CP-8 fixes, rounds 1-3 (branches `claude/cp8-changes-r1`, `-r3`)
+ 
+ Scope: engine, method and run start service, offline, no provider call. Round 1: pack schema `cpos-changes/2` (difference
+diff --git a/apps/issuer-library/README.md b/apps/issuer-library/README.md
+index 3ec5b57..c8f14ff 100644
+--- a/apps/issuer-library/README.md
++++ b/apps/issuer-library/README.md
+@@ -19,8 +19,10 @@ The run start page's service (below) runs both steps for a shared folder, so ana
+ by hand.
+ 
+ `library/` is the Credit OS library (one row per listed run) and, for each run, its issuer report
+-with tabs for Report history, Overview, Modules, Forecast and Evidence, in that order. Overview
+-selects each module's own bottom line, key findings and limitations and the nearest dates; Modules
++with tabs for Report history, Overview, Changes, Modules, Forecast and Evidence, in that order.
++Overview selects each module's own bottom line, key findings and limitations and the nearest dates;
++Changes is what moved since the issuer's previous run of the same pathway, drawn from the run's
++`changes.json` and CP-8's handoff (a first run says so and shows nothing else); Modules
+ is the flat navigator and each module's page (its charts, maps and timeline included); Forecast is
+ the cash flow model and the chart index; Evidence lists the source files used, the handoffs (each
+ downloadable), the calculation and Model files and the run record. The Report history tab is
+diff --git a/apps/issuer-library/credit_os/web/changes.js b/apps/issuer-library/credit_os/web/changes.js
+new file mode 100644
+index 0000000..9ffae89
+--- /dev/null
++++ b/apps/issuer-library/credit_os/web/changes.js
+@@ -0,0 +1,264 @@
++'use strict';
++// Pure rendering of the Changes tab (docs/rulings/2026-11-11-module-presets-and-changes.md, decision M8): no DOM, no store, no globals written.
++// Browser: one global, ChangesView (reader.js is loaded first; nothing else leaks into the page's scope). Node: module.exports.
++// Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2) or CP-8's
++// handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. A measure that is not comparable
++// shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is
++// escaped before it reaches the page.
++const ChangesView = (() => {
++const ChangesReader = typeof module !== 'undefined' ? require('./reader.js') : {escapeHtml, richText, paragraphBody, readerPassages, tableView};
++
++const FIRST_RUN = 'First run of this pathway';
++const NO_RECORD = 'No comparison was recorded for this run';
++const NOT_COMPARABLE = 'Not comparable';
++const NOT_STATED = 'Not stated';
++const LEDGER_STATUSES = ['Closed', 'Remaining', 'New', 'No longer stated'];
++const TREND_MEASURES = [['leverage', 'Total debt / EBITDA'], ['net_leverage', 'Net debt / EBITDA'], ['coverage', 'EBITDA / cash interest'], ['cash', 'Cash'], ['undrawn', 'Undrawn committed facilities']];
++const REASON_PREFIX = /^changes: not produced\s*[—-]\s*/;
++const esc = value => ChangesReader.escapeHtml(value);
++const rich = value => ChangesReader.richText(value);
++
++// What the run says about its comparison. A first run is only a run whose own record says it had no prior (`first_run`); a run that records nothing
++// (delivered before CP-8 existed, or an earlier format) is 'unrecorded': absence of data is never read as a first run. A pack that could not be read is neither.
++function changesState(changes) {
++  if (!changes) return 'unrecorded';
++  if (changes.problem) return 'unreadable';
++  if (changes.note) return 'not_produced';
++  if (changes.pack) return 'produced';
++  return changes.first_run === true ? 'first' : 'unrecorded';
++}
++
++// CP-8's handoff (the store's sections) as its reader passages and its three registers; each is null when the handoff has none.
++function cp8Parts(sections) {
++  const list = sections || [];
++  const passages = ChangesReader.readerPassages(list);
++  const register = heading => {
++    const section = list.find(s => s.level === 3 && s.heading === heading);
++    const table = section && section.blocks.find(b => b.type === 'table');
++    return table || null;
++  };
++  return {
++    bottom: passages.bottom,
++    key: passages.key,
++    issuer: register('What changed: the issuer'),
++    analysis: register('What changed: the analysis'),
++    ledger: register('Limitations ledger'),
++  };
++}
++
++const column = (table, name) => (table ? table.headers.findIndex(header => header.trim() === name) : -1);
++const cell = (row, index) => (index >= 0 && row ? String(row.cells[index] ?? '') : '');
++const bare = text => String(text).replace(/\*\*|`/g, '').trim();
++
++// A value with its unit as the pack states them: `x` and `%` follow the figure, any other unit follows after a space.
++const withUnit = (value, unit) => (unit == null || unit === '' ? String(value) : /^[x%]$/.test(unit) ? `${value}${unit}` : `${value} ${unit}`);
++const sideText = side => (side && side.value != null ? `${withUnit(side.value, side.unit)}${side.period ? ` (${side.period})` : ''}` : NOT_STATED);
++
++// Whether the two values of a measure may be set against each other, and so whether its difference may be shown.
++// `comparable` is the pack's: no, yes, or judge (CP-8's row for the measure says Same definition or Not comparable). A row CP-8 marks Not comparable
++// is never compared, whatever the pack says. A judge row with no verdict from CP-8 is left unjudged: no difference.
++function measureVerdict(measure, issuerTable) {
++  const first = column(issuerTable, 'Measure or fact');
++  const row = issuerTable ? issuerTable.rows.find(r => bare(cell(r, first < 0 ? 0 : first)) === measure.label) : null;
++  const says = pattern => Boolean(row) && row.cells.some(text => pattern.test(bare(text)));
++  const note = row ? cell(row, row.cells.length - 1) : null;
++  if (measure.comparable === 'no') return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: measure.reason || null};
++  if (says(/^Not comparable/i)) return {kind: 'not_comparable', label: NOT_COMPARABLE, reason: note};
++  // One period with two values and a difference is the analysis changing (a definition, a correction), never the issuer moving: the difference
++  // is shown only under CP-8's own word Same definition, beside its cause, and no line or trend joins the two.
++  if (measure.same_period === true && measure.difference != null && !/^-?0+(\.0+)?$/.test(String(measure.difference))) {
++    if (!says(/^Same definition/i)) return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null, analysisChange: null};
++    const cause = cell(row, column(issuerTable, 'Cause'));
++    return {kind: 'comparable', label: 'Same definition', reason: null, analysisChange: cause || `${NOT_STATED} by CP-8`};
++  }
++  if (measure.comparable === 'yes') return {kind: 'comparable', label: 'Comparable', reason: null};
++  if (says(/^Same definition/i)) return {kind: 'comparable', label: 'Same definition', reason: null};
++  return {kind: 'unjudged', label: 'Comparability not judged', reason: measure.reason || null};
++}
++
++const differenceText = (measure, verdict) => (verdict.kind === 'comparable' && measure.difference != null ? withUnit(measure.difference, measure.unit) : null);
++
++// ---- Part 2: the issuer.
++const position = (value, lo, hi) => (hi === lo ? 50 : 8 + ((value - lo) / (hi - lo)) * 84);
++function thenAndNowChart(measures, verdicts) {
++  const rows = measures.map((measure, i) => {
++    const verdict = verdicts[i];
++    const values = [measure.prior, measure.current].map(side => (side && side.value != null && Number.isFinite(Number(side.value)) ? Number(side.value) : null));
++    const held = values.filter(v => v !== null);
++    if (!held.length) return '';
++    const lo = Math.min(...held), hi = Math.max(...held);
++    const joined = verdict.kind === 'comparable' && !verdict.analysisChange && values[0] !== null && values[1] !== null;
++    const link = joined ? `<i class="dumbbell-link" style="left:${position(Math.min(...values), lo, hi)}%;width:${position(Math.max(...values), lo, hi) - position(Math.min(...values), lo, hi)}%"></i>` : '';
++    const dot = (v, series) => (v === null ? '' : `<i class="dumbbell-dot series-${series}" style="left:${position(v, lo, hi)}%"></i>`);
++    const text = `Earlier ${sideText(measure.prior)} · Current ${sideText(measure.current)}${verdict.kind === 'comparable' ? '' : ` · ${verdict.label}`}`;
++    return `<div class="dumbbell-row changes-row" role="group" aria-label="${esc(measure.label)}"><div class="chart-open"><span class="chart-label">${esc(measure.label)}</span><span class="dumbbell-track" aria-hidden="true">${link}${dot(values[0], 0)}${dot(values[1], 1)}</span><span class="structure-text">${esc(text)}</span></div></div>`;
++  }).join('');
++  if (!rows) return '';
++  return `<div class="chart-legend"><span><i class="series-0"></i>Earlier run</span><span><i class="series-1"></i>Current run</span></div><div class="dumbbell-chart changes-chart" role="group" aria-label="Then and now: each measure on its own scale. The table below gives the same values." tabindex="0">${rows}</div><p class="intro">Each row has its own scale. A measure that is not comparable is shown as two points with no line.</p>`;
++}
++
++function measureTable(measures, verdicts) {
++  const body = measures.map((measure, i) => {
++    const verdict = verdicts[i], difference = differenceText(measure, verdict);
++    const change = difference !== null ? `${esc(difference)}${verdict.analysisChange ? `<small>The analysis changed, not the issuer: ${esc(verdict.analysisChange)}</small>` : ''}` : `<strong>${esc(verdict.label)}</strong>${verdict.reason ? `<small>${esc(verdict.reason)}</small>` : ''}`;
++    return `<tr><th scope="row">${esc(measure.label)}</th><td>${esc(sideText(measure.prior))}</td><td>${esc(sideText(measure.current))}</td><td>${change}</td></tr>`;
++  }).join('');
++  return `<div class="table-scroll" role="region" aria-label="Measures, earlier and current" tabindex="0"><table class="history-table"><caption>Measures the pack states, earlier and current</caption><thead><tr><th scope="col">Measure</th><th scope="col">Earlier</th><th scope="col">Current</th><th scope="col">Change</th></tr></thead><tbody>${body}</tbody></table></div>`;
++}
++
++function netDebtView(change) {
++  if (!change) return '';
++  const unit = change.unit, rows = [['Earlier net debt', change.prior_net_debt], ['Change in gross debt', change.change_in_gross_debt], ['Change in cash', change.change_in_cash], ['Current net debt', change.current_net_debt]];
++  const item = ([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value == null ? NOT_STATED : withUnit(value, unit))}</dd></div>`;
++  return `<h3>Net debt change</h3><dl class="net-debt-change">${rows.map(item).join('')}</dl><p class="intro">${esc(change.convention || '')}</p>`;
++}
++
++function maturityView(profile) {
++  if (!profile) return '';
++  const rows = profile.rows;
++  const top = Math.max(0, ...rows.flatMap(r => [r.prior, r.current]).map(Number).filter(Number.isFinite));
++  const width = value => (value == null || !Number.isFinite(Number(value)) || top === 0 ? 0 : (Number(value) / top) * 100);
++  const bars = rows.map(r => `<div class="maturity-pair" aria-hidden="true"><span>${esc(r.period)}</span><i class="series-0" style="width:${width(r.prior)}%"></i><i class="series-1" style="width:${width(r.current)}%"></i></div>`).join('');
++  const body = rows.map(r => `<tr><th scope="row">${esc(r.period)}</th><td>${esc(r.prior == null ? NOT_STATED : r.prior)}</td><td>${esc(r.current == null ? NOT_STATED : r.current)}</td><td>${esc(r.difference == null ? '—' : r.difference)}</td></tr>`).join('');
++  return `<h3>Maturity profile, earlier and current</h3><div class="chart-legend"><span><i class="series-0"></i>Earlier run</span><span><i class="series-1"></i>Current run</span></div><div class="maturity-chart">${bars}</div><div class="table-scroll" role="region" aria-label="Maturity profile" tabindex="0"><table class="history-table"><caption>${esc(`Debt maturities, ${profile.unit}`)}</caption><thead><tr><th scope="col">Period</th><th scope="col">Earlier</th><th scope="col">Current</th><th scope="col">Change</th></tr></thead><tbody>${body}</tbody></table></div>`;
++}
++
++const omittedNote = omitted => {
++  const lines = Object.entries(omitted || {}).map(([name, reason]) => `${name === 'net_debt_change' ? 'Net debt change' : name === 'maturity_profile' ? 'Maturity profile' : name} is not shown: ${reason}.`);
++  return lines.length ? `<p class="intro changes-omitted">${lines.map(esc).join(' ')}</p>` : '';
++};
++
++const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`CP-8's handoff has no ${caption.toLowerCase()} table.`)}</p>`);
++
++function issuerPart(pack, parts) {
++  const measures = pack.measures || [];
++  const verdicts = measures.map(m => measureVerdict(m, parts && parts.issuer));
++  const register = parts ? `<h3>Each change and its cause</h3>${verbatim('What changed: the issuer', parts.issuer)}` : '';
++  return `<section class="run-section" id="changes-issuer"><h2>The issuer</h2>${thenAndNowChart(measures, verdicts)}${measures.length ? measureTable(measures, verdicts) : '<p class="empty">The comparison pack states no measure.</p>'}${netDebtView(pack.net_debt_change)}${maturityView(pack.maturity_profile)}${omittedNote(pack.omitted)}${register}</section>`;
++}
++
++// ---- Part 1: CP-8's own words, verbatim; a Basis line is shown as the source line it is, never dropped.
++function passageView(section) {
++  if (!section) return `<p class="empty">${NOT_STATED} in CP-8's handoff.</p>`;
++  let html = '', open = false;
++  const close = () => { if (open) html += '</ul>'; open = false; };
++  for (const block of section.blocks.filter(b => b.type === 'text')) {
++    const {item, body, items} = ChangesReader.paragraphBody(block.text);
++    const basis = items.length ? `<small class="changes-basis">Basis: ${esc(items.join('; '))}</small>` : '';
++    if (item && !open) html += '<ul class="passage-list">';
++    if (!item) close();
++    open = item;
++    html += item ? `<li>${rich(body)}${basis}</li>` : `<p class="passage-text">${rich(body)}${basis}</p>`;
++  }
++  close();
++  return html;
++}
++
++function whatChangedPart(parts) {
++  return `<section class="run-section" id="changes-what"><h2>What changed</h2><h3>Bottom line</h3>${passageView(parts.bottom)}<h3>Key findings</h3>${passageView(parts.key)}</section>`;
++}
++
++// ---- Part 3: one row per module of the pack; CP-8's status and reason read from its register by the module code in the first cell.
++const moduleCode = text => { const found = /\(([A-Z0-9][A-Z0-9-]*)\)\s*$/.exec(bare(text)); return found ? found[1] : null; };
++function analysisPart(pack, parts) {
++  const table = parts && parts.analysis, status = column(table, 'Status'), cause = column(table, 'Cause'), why = column(table, 'Why');
++  const rows = (pack.modules || []).map(m => {
++    const row = table ? table.rows.find(r => moduleCode(r.cells[0]) === m.module) : null;
++    const state = !parts ? 'Explanation not produced' : row ? cell(row, status) || NOT_STATED : `${NOT_STATED} by CP-8`;
++    const side = (ran, text) => (text != null ? text : ran ? NOT_STATED : 'Did not run');
++    const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line);
++    const reason = row ? [cell(row, cause), cell(row, why)].filter(Boolean) : [];
++    return `<details class="change-module"><summary><span class="change-name">${esc(m.title)} <span class="module-code">${esc(m.module)}</span></span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
++  }).join('');
++  return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2><p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
++}
++
++// ---- Part 4: counts of each status as one bar (segment sizes are the counts), the ledger itself beneath.
++function limitationsPart(parts) {
++  const table = parts.ledger, status = column(table, 'Status');
++  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in CP-8's handoff.</p></section>`;
++  const counts = LEDGER_STATUSES.map(name => [name, table.rows.filter(r => bare(cell(r, status)) === name).length]);
++  const other = table.rows.length - counts.reduce((sum, [, n]) => sum + n, 0);
++  if (other) counts.push(['Other', other]);
++  const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
++  const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
++  const legend = counts.map(([name, n]) => `<span><i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}"></i>${esc(name)} <strong>${n}</strong></span>`).join('');
++  return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><div class="ledger-bar" role="img" aria-label="${esc(`Limitations: ${label}`)}">${segments}</div><div class="chart-legend ledger-legend">${legend}</div>${verbatim('Limitations ledger', table)}</section>`;
++}
++
++// ---- Part 5: every listed run of the issuer and pathway, earliest first. `runs` is [{key, href, asOf, runId, current, bottom, metrics, changes, cp8}]:
++// `metrics` are the library's own quotes ({value, unit, period} per measure), `changes` the run's pack record, `cp8` its CP-8 sections or null.
++// A segment joins two neighbouring points only where the later run's own pack compares exactly those two values under one definition.
++function joined(runs, i, key, measureOf) {
++  const [before, after] = [runs[i - 1], runs[i]];
++  const [a, b] = [before.metrics && before.metrics[key], after.metrics && after.metrics[key]];
++  const pack = after.changes && after.changes.pack;
++  if (!a || !b || !pack || a.unit !== b.unit || !pack.prior || pack.prior.run !== before.runId) return false;
++  const measure = (pack.measures || []).find(m => m.key === key);
++  if (!measure || !measure.prior || !measure.current || measure.prior.value !== a.value || measure.current.value !== b.value) return false;
++  if (measure.prior.period !== a.period || measure.current.period !== b.period) return false;
++  const verdict = measureVerdict(measure, cp8Parts(after.cp8).issuer);
++  return verdict.kind === 'comparable' && !verdict.analysisChange;
++}
++function trendLine(runs, key, label) {
++  const points = runs.map(r => (r.metrics && r.metrics[key] ? r.metrics[key] : null));
++  const held = points.filter(Boolean);
++  if (!held.length) return `<li><strong>${esc(label)}</strong> <span class="muted">${NOT_STATED} in any listed run.</span></li>`;
++  if (new Set(held.map(p => p.unit)).size > 1 || held.some(p => !Number.isFinite(Number(p.value)))) return `<li><strong>${esc(label)}</strong> <span class="muted">Not drawn: the runs state it in different units or without a number.</span></li>`;
++  const values = held.map(p => Number(p.value)), lo = Math.min(...values), hi = Math.max(...values);
++  const x = i => (runs.length === 1 ? 50 : 8 + (i / (runs.length - 1)) * 84), y = v => (hi === lo ? 20 : 34 - ((v - lo) / (hi - lo)) * 28);
++  const lines = runs.map((_, i) => (i > 0 && joined(runs, i, key) ? `<line x1="${x(i - 1)}" y1="${y(Number(points[i - 1].value))}" x2="${x(i)}" y2="${y(Number(points[i].value))}"/>` : '')).join('');
++  const dots = points.map((p, i) => (p ? `<circle cx="${x(i)}" cy="${y(Number(p.value))}" r="2.6"/>` : '')).join('');
++  return `<li><strong>${esc(label)}</strong><svg class="trend" viewBox="0 0 100 40" width="160" height="40" aria-hidden="true" focusable="false">${lines}${dots}</svg><span class="muted">${esc(withUnit(held[0].value, held[0].unit))} first listed · ${esc(withUnit(held[held.length - 1].value, held[held.length - 1].unit))} latest</span></li>`;
++}
++function overTimePart(runs, fmtDate) {
++  const head = ['Run', ...TREND_MEASURES.map(([, label]) => label), 'Lead module: bottom line'];
++  const body = runs.map(r => {
++    const metric = key => { const p = r.metrics && r.metrics[key]; return p ? `${esc(withUnit(p.value, p.unit))}${p.period ? `<small>${esc(p.period)}</small>` : ''}` : NOT_STATED; };
++    const date = `${esc(fmtDate(r.asOf))}${r.current ? ' <span class="badge badge-gray">Showing</span>' : ''}`;
++    return `<tr><th scope="row">${r.href ? `<a href="${esc(r.href)}">${date}</a>` : date}</th>${TREND_MEASURES.map(([key]) => `<td>${metric(key)}</td>`).join('')}<td>${esc(r.bottom == null ? NOT_STATED : r.bottom)}</td></tr>`;
++  }).join('');
++  const lines = TREND_MEASURES.map(([key, label]) => trendLine(runs, key, label)).join('');
++  return `<section class="run-section" id="changes-over-time"><h2>Over time</h2><p class="intro">Every listed run of this issuer and pathway, earliest first, with the figures the library quotes for each. A line joins two runs only where the later run's comparison states that the definitions match; otherwise the points stand alone.</p><ul class="trend-list">${lines}</ul><div class="table-scroll" role="region" aria-label="Over time" tabindex="0"><table class="history-table"><caption>Figures and the lead module's bottom line at each date</caption><thead><tr>${head.map(h => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></section>`;
++}
++
++// The lead module's bottom line as its handoff states it: the first paragraph under Bottom line (Basis line dropped), or an earlier-format Reader summary's.
++function leadBottom(sections, summary) {
++  const bottom = ChangesReader.readerPassages(sections || []).bottom;
++  const first = bottom && bottom.blocks.find(b => b.type === 'text');
++  if (first) return ChangesReader.paragraphBody(first.text).body;
++  return summary && summary.bottomLine != null ? summary.bottomLine : null;
++}
++
++// The whole tab. `input`: {changes, cp8 (sections|null), pathway (words), fmtDate(iso), runs}.
++function changesHtml(input) {
++  const {changes, cp8, pathway, fmtDate, runs} = input;
++  const state = changesState(changes);
++  if (state === 'first') return `<div class="changes"><p class="changes-first">${FIRST_RUN}</p></div>`;
++  if (state === 'unrecorded') return `<div class="changes"><p class="changes-first">${NO_RECORD}</p>${runs.length > 1 ? overTimePart(runs, fmtDate) : ''}</div>`;
++  const pack = changes.pack || null;
++  const parts = state === 'produced' && cp8 ? cp8Parts(cp8) : null;
++  const since = pack && pack.prior && pack.prior.as_of ? `Since ${fmtDate(pack.prior.as_of)}` : 'Since the earlier run';
++  const heading = `<h2 class="changes-heading">${esc(`${since} · ${pathway}`)}</h2>`;
++  let notice = '';
++  if (state === 'not_produced') {
++    notice = `<div class="caution changes-not-produced" role="note"><strong>The explanation of what changed was not produced for this run.</strong><p>${esc(`Recorded reason: ${changes.note.replace(REASON_PREFIX, '')}`)}</p></div>`;
++  } else if (state === 'unreadable') {
++    notice = `<div class="caution changes-unreadable" role="note"><strong>The comparison with the earlier run could not be read.</strong><p>${esc(changes.problem)}</p></div>`;
++  } else if (!parts) {
++    notice = '<div class="caution changes-not-produced" role="note"><strong>CP-8’s explanation is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
++  }
++  const sections = [
++    parts ? whatChangedPart(parts) : '',
++    pack ? issuerPart(pack, parts) : '',
++    pack ? analysisPart(pack, parts) : '',
++    parts ? limitationsPart(parts) : '',
++    overTimePart(runs, fmtDate),
++  ].join('');
++  return `<div class="changes">${heading}${notice}${sections}</div>`;
++}
++
++return {changesState, cp8Parts, measureVerdict, differenceText, withUnit, thenAndNowChart, measureTable, netDebtView, maturityView, passageView, analysisPart, limitationsPart, overTimePart, leadBottom, changesHtml, FIRST_RUN, NO_RECORD, NOT_COMPARABLE};
++})();
++
++if (typeof module !== 'undefined') module.exports = ChangesView;
+diff --git a/apps/issuer-library/credit_os/web/changes.test.cjs b/apps/issuer-library/credit_os/web/changes.test.cjs
+new file mode 100644
+index 0000000..46d6059
+--- /dev/null
++++ b/apps/issuer-library/credit_os/web/changes.test.cjs
+@@ -0,0 +1,251 @@
++'use strict';
++// The Changes tab's rendering. Shapes are store.py's (section {heading, level, line, blocks[]}; table block {type, headers, rows[{line, cells}]}) and
++// the pack's (schema cpos-changes/2). Expected values are literals hand-copied from the pack of the TransDigm comparison and from CP-8's handoff for it;
++// nothing is derived by calling the code under test.
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const {changesState, measureVerdict, withUnit, leadBottom, changesHtml, FIRST_RUN} = require('./changes.js');
++
++const fmtDate = iso => ({'2024-09-30': '30 September 2024', '2025-03-31': '31 March 2025', '2023-09-30': '30 September 2023'}[iso] || iso);
++const text = (body, line = 1) => ({type: 'text', line, end: line, text: body});
++const table = (headers, ...rows) => ({type: 'table', headers, rows: rows.map((cells, i) => ({line: i + 1, cells}))});
++const h3 = (heading, ...blocks) => ({heading, level: 3, line: 1, blocks});
++const side = (value, period, unit = 'x') => ({label: 'm', unit, value, period, definition: 'd', definition_resolved: false, definition_written: null});
++const measure = (key, label, unit, comparable, prior, current, difference, extra = {}) => ({key, label, unit, comparable, reason: 'the label or definition text differs; CP-8 judges', prior, current, difference, same_period: true, ...extra});
++
++const PACK = {
++  schema: 'cpos-changes/2',
++  prior: {run: 'cpos-tdg-sol-medium-all-001', as_of: '2024-09-30', pathway: 'credit_snapshot', format: 'earlier', methods_changed: []},
++  current: {as_of: '2024-09-30', pathway: 'credit_snapshot', format: 'current'},
++  measures: [
++    measure('leverage', 'Total debt / EBITDA', 'x', 'judge', side('6.57', 'FY2024 / 2024-09-30'), side('6.01', 'FY2024'), '-0.56'),
++    measure('coverage', 'EBITDA / cash interest', 'x', 'judge', side('3.29', 'FY2024'), side('3.60', 'FY2024'), '0.31'),
++    measure('cash', 'Cash', 'US$m', 'judge', side('6261', '2024-09-30', 'US$m'), side('6261', '2024-09-30', 'US$m'), '0'),
++  ],
++  maturity_profile: {unit: 'US$m', rows: [{period: 'FY2025', prior: '93', current: '93', difference: '0'}, {period: 'FY2028', prior: '6637', current: '6637', difference: '0'}]},
++  omitted: {net_debt_change: 'gross debt is not stated in either run'},
++  modules: [
++    {module: 'CP-0', title: 'Source readiness', ran_prior: true, ran_current: true, prior_bottom_line: 'Begin bounded historical financial work.', current_bottom_line: 'The supplied sources support a bounded snapshot.'},
++    {module: 'CP-2E', title: 'Rates, FX and hedging', ran_prior: true, ran_current: false, prior_bottom_line: 'Hedging is partial.', current_bottom_line: null},
++  ],
++  limitations: {earlier: [{ref: 'E1', module: 'CP-0', text: 'x'}], current: [{ref: 'C1', module: 'CP-1A', text: 'y'}]},
++};
++
++const ISSUER_HEAD = ['Measure or fact', 'Earlier', 'Current', 'Cause', 'Effect on the credit view'];
++const CP8 = [
++  {heading: 'Findings', level: 2, line: 1, blocks: []},
++  h3('Bottom line', text('The credit picture is about the same since the earlier run, and the change is the analysis\'s, not the issuer\'s.\nBasis: CP-1 handoff; calculation C01.')),
++  h3('Key findings', text('- Cash is unchanged at USD 6,261 million.'), text('- Leverage is 6.01x on EBITDA as defined against 6.57x on reported EBITDA, not comparable.')),
++  h3('Contrary evidence and what would change the view', text('A covenant test below 7.0x would change the view.')),
++  h3('Limitations', text('The earlier run was in the earlier format.')),
++  h3('What changed: the issuer', table(ISSUER_HEAD,
++    ['Total debt / EBITDA', '6.57x (FY2024 / 2024-09-30)', '6.01x (FY2024)', 'Unresolved', 'Not comparable: reported EBITDA against EBITDA As Defined.'],
++    ['EBITDA / cash interest', '3.29x (FY2024)', '3.60x (FY2024)', 'Unresolved', 'Same definition; coverage rose.'],
++    ['Cash', '6,261 US$m (2024-09-30)', '6,261 US$m (2024-09-30)', 'Unresolved', 'Same definition; unchanged at USD 6,261 million.'])),
++  h3('What changed: the analysis', table(['Module', 'Status', 'Cause', 'Why'],
++    ['Source readiness (CP-0)', 'Unchanged', 'Presentation', 'The headings differ only.'],
++    ['Rates, FX and hedging (CP-2E)', 'Not run this time', 'Unresolved', 'Not in the current run.'])),
++  h3('Limitations ledger', table(['Earlier ref', 'Current ref', 'Limitation', 'Status', 'What closed it'],
++    ['E1', '—', 'An earlier limitation in words.', 'No longer stated', '—'],
++    ['E2', '—', 'Another earlier limitation.', 'No longer stated', '—'],
++    ['E3', 'C1', 'Carried over.', 'Remaining', '—'],
++    ['—', 'C2', 'A current limitation in words.', 'New', '—'])),
++];
++const here = {key: 'k3', href: '#W-Changes/changes/k3', asOf: '2024-09-30', runId: 'r-now', current: true, bottom: 'Now.', metrics: {}, changes: null, cp8: null};
++const base = (over = {}) => ({changes: {lead: 'CP-2', pack: PACK, note: null, problem: null}, cp8: CP8, pathway: 'Credit snapshot', fmtDate, runs: [here], ...over});
++const count = (html, needle) => html.split(needle).length - 1;
++
++test('a run with no comparison is a first run: the one line and nothing else', () => {
++  const expected = `<div class="changes"><p class="changes-first">${FIRST_RUN}</p></div>`;
++  assert.equal(FIRST_RUN, 'First run of this pathway');
++  assert.equal(changesHtml(base({changes: {lead: 'CP-2', first_run: true, pack: null, note: null, problem: null}})), expected);
++  assert.equal(changesState({pack: null, note: null, problem: 'is not valid JSON'}), 'unreadable');
++  assert.equal(changesState({pack: PACK, note: 'changes: not produced — why', problem: null}), 'not_produced');
++});
++
++test('a full Changes tab: heading, CP-8 passages verbatim, the issuer, the analysis, the ledger counts, over time', () => {
++  const html = changesHtml(base());
++  assert.ok(html.includes('<h2 class="changes-heading">Since 30 September 2024 · Credit snapshot</h2>'));
++  // Part 1: the passage text as written; the Basis line is a source line, not part of the sentence.
++  assert.ok(html.includes('The credit picture is about the same since the earlier run, and the change is the analysis&#39;s, not the issuer&#39;s.<small class="changes-basis">Basis: CP-1 handoff; calculation C01</small>'));
++  assert.ok(html.includes('<li>Cash is unchanged at USD 6,261 million.</li>'));
++  assert.ok(html.includes('Leverage is 6.01x on EBITDA as defined against 6.57x on reported EBITDA, not comparable.'));
++  // Part 2: the pack's values with unit and period; the register verbatim.
++  assert.ok(html.includes('<td>6.57x (FY2024 / 2024-09-30)</td><td>6.01x (FY2024)</td>'));
++  assert.ok(html.includes('<td>6261 US$m (2024-09-30)</td><td>6261 US$m (2024-09-30)</td><td>0 US$m</td>'));
++  assert.ok(html.includes('Net debt change is not shown: gross debt is not stated in either run.'));
++  assert.ok(html.includes('<th scope="row">FY2028</th><td>6637</td><td>6637</td><td>0</td>'));
++  assert.ok(html.includes('Same definition; unchanged at USD 6,261 million.'));
++  assert.ok(html.includes('Debt maturities, US$m'));
++  // Part 3: one row per pack module, CP-8's status by the code in its first cell.
++  assert.equal(count(html, '<details class="change-module">'), 2);
++  assert.ok(html.includes('<span class="badge badge-gray change-status">Unchanged</span>'));
++  assert.ok(html.includes('<span class="badge badge-gray change-status">Not run this time</span>'));
++  assert.ok(html.includes('<small>Current</small>Did not run'));
++  assert.ok(html.includes('<p>The supplied sources support a bounded snapshot.</p>'));
++  // Part 4: the four counts as one bar (E1, E2 no longer stated; E3/C1 remaining; C2 new), then the ledger.
++  assert.ok(html.includes('aria-label="Limitations: Closed 0, Remaining 1, New 1, No longer stated 2"'));
++  assert.equal(count(html, 'class="ledger-bar"'), 1);
++  assert.ok(html.includes('<td>An earlier limitation in words.</td>'));
++  // Part 5 is present.
++  assert.ok(html.includes('id="changes-over-time"'));
++});
++
++test('a measure that is not comparable shows both values, no difference, no joining line and no arrow', () => {
++  const html = changesHtml(base());
++  // Total debt / EBITDA: CP-8 says Not comparable although the pack holds a difference of -0.56.
++  assert.ok(!html.includes('-0.56'), 'its difference is printed nowhere');
++  assert.ok(html.includes('<strong>Not comparable</strong><small>Not comparable: reported EBITDA against EBITDA As Defined.</small>'));
++  assert.ok(html.includes('Earlier 6.57x (FY2024 / 2024-09-30) · Current 6.01x (FY2024) · Not comparable'));
++  // Cash (same period, difference 0) is joined; coverage is one period with two values (0.31) and leverage is Not comparable: no line for either.
++  assert.equal(count(html, 'class="dumbbell-link"'), 1);
++  assert.ok(!/[←-⇿▲△▼▽⬆⬇]/.test(html), 'no direction arrow anywhere');
++  // comparable "no" from the pack itself: unit differs.
++  const pack = {...PACK, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'no', side('6.57', 'FY2024'), side('62', 'FY2024', '%'), null, {reason: 'the units differ'})]};
++  const no = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}}));
++  assert.ok(no.includes('<td>6.57x (FY2024)</td><td>62% (FY2024)</td><td><strong>Not comparable</strong><small>the units differ</small></td>'));
++  assert.equal(count(no, 'class="dumbbell-link"'), 0);
++});
++
++test('a judge measure without a verdict from CP-8 is left unjudged, with no difference', () => {
++  const pack = {...PACK, measures: [PACK.measures[0]]};
++  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}, cp8: null}));
++  assert.ok(html.includes('<strong>Comparability not judged</strong>'));
++  assert.ok(!html.includes('-0.56'));
++  assert.equal(count(html, 'class="dumbbell-link"'), 0);
++  assert.deepEqual(measureVerdict(PACK.measures[2], null), {kind: 'unjudged', label: 'Comparability not judged', reason: 'the label or definition text differs; CP-8 judges'});
++  assert.equal(measureVerdict({...PACK.measures[2], comparable: 'yes'}, null).kind, 'comparable');
++});
++
++test('a value the pack does not state is shown as not stated, never as zero', () => {
++  const pack = {...PACK, measures: [measure('coverage', 'EBITDA / cash interest', 'x', 'no', side('3.29', 'FY2024'), null, null, {reason: 'the current run does not state it'})]};
++  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}}));
++  assert.ok(html.includes('<td>3.29x (FY2024)</td><td>Not stated</td><td><strong>Not comparable</strong>'));
++  assert.ok(html.includes('Earlier 3.29x (FY2024) · Current Not stated · Not comparable'));
++  assert.equal(count(html, 'class="dumbbell-dot'), 1, 'one point, the stated one');
++  assert.equal(withUnit('0', 'US$m'), '0 US$m');
++  assert.equal(withUnit('4.51', 'x'), '4.51x');
++  assert.equal(withUnit('-0.56', 'x'), '-0.56x');
++});
++
++test('a CP-8 that was not produced says so plainly with its recorded reason and shows the pack-derived parts only', () => {
++  const note = 'changes: not produced — cpos_live_not_accepted: CP-8 not accepted within bounds';
++  const html = changesHtml(base({changes: {lead: 'CP-2', pack: PACK, note, problem: null}, cp8: null}));
++  assert.ok(html.includes('The explanation of what changed was not produced for this run.'));
++  assert.ok(html.includes('Recorded reason: cpos_live_not_accepted: CP-8 not accepted within bounds'));
++  assert.ok(html.includes('Since 30 September 2024 · Credit snapshot'));
++  assert.ok(!html.includes('id="changes-what"'), 'no CP-8 passage');
++  assert.ok(!html.includes('id="changes-limitations"'), 'no ledger');
++  assert.ok(html.includes('id="changes-issuer"') && html.includes('id="changes-analysis"') && html.includes('id="changes-over-time"'));
++  assert.equal(count(html, 'Explanation not produced'), 2, 'each module row says so');
++  assert.ok(!html.includes('Each change and its cause'));
++  assert.ok(!html.includes('-0.56') && !html.includes('0.31'), 'no difference without CP-8’s verdict');
++  // The delivery may hold the reason and no pack: the statement and Over time only.
++  const bare = changesHtml(base({changes: {lead: 'CP-2', pack: null, note, problem: null}, cp8: null}));
++  assert.ok(bare.includes('Since the earlier run · Credit snapshot'));
++  assert.ok(bare.includes('Recorded reason: cpos_live_not_accepted'));
++  assert.ok(!bare.includes('id="changes-issuer"') && bare.includes('id="changes-over-time"'));
++});
++
++test('a pack that could not be read is stated and is never shown as a first run', () => {
++  const html = changesHtml(base({changes: {lead: 'CP-2', pack: null, note: null, problem: 'deliveries/x/changes.json is not valid JSON'}, cp8: null}));
++  assert.ok(html.includes('The comparison with the earlier run could not be read.'));
++  assert.ok(html.includes('deliveries/x/changes.json is not valid JSON'));
++  assert.ok(!html.includes(FIRST_RUN));
++});
++
++test('handoff and pack text is escaped before it reaches the page', () => {
++  const evil = '<script>alert(1)</script><img src=x onerror=alert(2)>';
++  const pack = {...PACK, measures: [measure('cash', evil, 'US$m', 'yes', side('1', evil, evil), side('2', 'p', 'US$m'), '1')],
++    modules: [{module: 'CP-0', title: evil, ran_prior: true, ran_current: true, prior_bottom_line: evil, current_bottom_line: evil}],
++    maturity_profile: {unit: evil, rows: [{period: evil, prior: evil, current: '1', difference: evil}]}, omitted: {net_debt_change: evil}};
++  const cp8 = CP8.map(s => (s.heading === 'Bottom line' ? h3('Bottom line', text(evil)) : s.heading === 'Limitations ledger' ? h3('Limitations ledger', table(['Earlier ref', 'Current ref', 'Limitation', 'Status', 'What closed it'], ['E1', '—', evil, evil, evil])) : s));
++  const runs = [{...here, bottom: evil, metrics: {cash: {value: evil, unit: evil, period: evil}}}];
++  const html = changesHtml(base({changes: {lead: 'CP-2', pack, note: null, problem: null}, cp8, runs, pathway: evil}));
++  assert.ok(!html.includes('<script') && !html.includes('<img'), 'no tag of the model’s survives');
++  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
++  const note = changesHtml(base({changes: {lead: 'CP-2', pack: null, note: `changes: not produced — ${evil}`, problem: null}, cp8: null}));
++  assert.ok(!note.includes('<script') && note.includes('&lt;script&gt;'));
++  const problem = changesHtml(base({changes: {lead: 'CP-2', pack: null, note: null, problem: evil}, cp8: null}));
++  assert.ok(!problem.includes('<script') && !problem.includes('<img'));
++});
++
++test('Over time lists every run earliest first; a line joins two points only where the later run compares them under one definition', () => {
++  const metric = (value, period) => ({leverage: {value, unit: 'x', period, basis: 'b'}});
++  const packOf = (priorRun, comparable, prior, current, pp = 'FY2022', pc = 'FY2023') => ({...PACK, prior: {...PACK.prior, run: priorRun}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', comparable, side(prior, pp), side(current, pc), '0.50', {same_period: false})]});
++  const runs = [
++    {key: 'a', href: '#a', asOf: '2023-09-30', runId: 'r-a', current: false, bottom: 'Earlier view.', metrics: metric('5.00', 'FY2022'), changes: null, cp8: null},
++    {key: 'b', href: '#b', asOf: '2024-09-30', runId: 'r-b', current: false, bottom: null, metrics: metric('5.50', 'FY2023'), changes: {pack: packOf('r-a', 'yes', '5.00', '5.50')}, cp8: null},
++    {key: 'c', href: '#c', asOf: '2025-03-31', runId: 'r-c', current: true, bottom: 'Latest view.', metrics: metric('6.00', 'FY2024'), changes: {pack: packOf('r-b', 'yes', '5.50', '6.00', 'FY2023', 'FY2024')}, cp8: null},
++  ];
++  const lines = html => (/<li><strong>Total debt \/ EBITDA<\/strong>(.*?)<\/li>/.exec(html)[1].match(/<line /g) || []).length;
++  const html = changesHtml(base({runs}));
++  assert.equal(lines(html), 2, 'both neighbours are compared under one definition by the later run’s pack');
++  const over = html.slice(html.indexOf('id="changes-over-time"'));
++  assert.ok(over.indexOf('30 September 2023') < over.indexOf('30 September 2024') && over.indexOf('30 September 2024') < over.indexOf('31 March 2025'));
++  assert.ok(html.includes('<td>5.00x<small>FY2022</small></td>') && html.includes('<td>6.00x<small>FY2024</small></td>'));
++  assert.ok(html.includes('<td>Earlier view.</td>') && html.includes('<td>Not stated</td>') && html.includes('<td>Latest view.</td>'));
++  // Not comparable in the later run's pack: points only.
++  const apart = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-a', 'no', '5.00', '5.50')}}, runs[2]]}));
++  assert.equal(lines(apart), 1);
++  // A pack that compares other values than the two points, or another prior run, joins nothing.
++  const other = changesHtml(base({runs: [runs[0], {...runs[1], changes: {pack: packOf('r-x', 'yes', '5.00', '5.50')}}, {...runs[2], changes: {pack: packOf('r-b', 'yes', '5.51', '6.00', 'FY2023', 'FY2024')}}]}));
++  assert.equal(lines(other), 0);
++  // Units that differ between runs are not put on one scale.
++  const mixed = changesHtml(base({runs: [runs[0], {...runs[1], metrics: {leverage: {value: '50', unit: '%', period: 'FY2023'}}}]}));
++  assert.ok(mixed.includes('Not drawn: the runs state it in different units or without a number.'));
++});
++
++test('the lead module’s bottom line is the handoff’s first Bottom line paragraph, or an earlier-format summary’s', () => {
++  const newFormat = [{heading: 'Findings', level: 2, line: 1, blocks: []}, h3('Bottom line', text('Lead view.\nBasis: CP-1 handoff.'))];
++  assert.equal(leadBottom(newFormat, null), 'Lead view.');
++  assert.equal(leadBottom([], {bottomLine: 'Summary view.'}), 'Summary view.');
++  assert.equal(leadBottom([], null), null);
++});
++
++test('the chart has a text alternative, is keyboard reachable and every row names its values', () => {
++  const html = changesHtml(base());
++  assert.ok(html.includes('class="dumbbell-chart changes-chart" role="group" aria-label="Then and now: each measure on its own scale. The table below gives the same values." tabindex="0"'));
++  assert.ok(html.includes('<table class="history-table"><caption>Measures the pack states, earlier and current</caption>'));
++  assert.equal(count(html, 'aria-hidden="true"') >= 3, true, 'tracks are decoration; the text beside them carries the values');
++});
++
++test('one period with two values is the analysis changing: no line, and the difference only under Same definition beside its cause', () => {
++  const lev = (extra = {}) => measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('6.57', 'FY2024'), side('6.01', 'FY2024'), '-0.56', extra);
++  const withRow = effect => [h3('What changed: the issuer', table(ISSUER_HEAD, ['Total debt / EBITDA', '6.57x', '6.01x', 'Correction', effect]))];
++  const draw = (cp8, measures) => changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, measures}, note: null, problem: null}, cp8}));
++  const issuer = html => html.slice(html.indexOf('id="changes-issuer"'), html.indexOf('id="changes-analysis"'));
++  const same = issuer(draw(withRow('Same definition; corrected.'), [lev()]));
++  assert.ok(same.includes('<td>-0.56x<small>The analysis changed, not the issuer: Correction</small></td>'));
++  assert.ok(!same.includes('dumbbell-link'));
++  for (const html of [issuer(draw(withRow('Not comparable: basis.'), [lev()])), issuer(draw(null, [lev()]))]) {
++    assert.ok(!html.includes('-0.56') && !html.includes('dumbbell-link'));
++    assert.ok(html.includes('Earlier 6.57x (FY2024) · Current 6.01x (FY2024)'));
++  }
++  // The same period with a zero difference is unaffected.
++  const zero = issuer(draw(null, [measure('cash', 'Cash', 'US$m', 'yes', side('6261', 'FY2024', 'US$m'), side('6261', 'FY2024', 'US$m'), '0')]));
++  assert.ok(zero.includes('<td>0 US$m</td>') && zero.includes('dumbbell-link'));
++  // Over time draws no segment between two values of one period.
++  const runs = [{...here, key: 'a', runId: 'r-a', current: false, metrics: {leverage: {value: '6.57', unit: 'x', period: 'FY2024'}}}, {...here, key: 'b', runId: 'r-b', metrics: {leverage: {value: '6.01', unit: 'x', period: 'FY2024'}}, changes: {pack: {...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [lev()]}}}];
++  assert.ok(!/<line /.test(changesHtml(base({runs}))));
++});
++
++test('a run that records no comparison is not a first run: it says so, and still shows Over time when other runs are listed', () => {
++  const other = {...here, key: 'a', runId: 'r-a', asOf: '2023-09-30', current: false, bottom: 'Earlier view.'};
++  for (const changes of [null, {lead: 'CP-2', first_run: false, pack: null, note: null, problem: null}]) {
++    const alone = changesHtml(base({changes}));
++    assert.ok(alone.includes('No comparison was recorded for this run') && !alone.includes('First run of this pathway') && !alone.includes('changes-over-time'));
++    const html = changesHtml(base({changes, runs: [other, here]}));
++    assert.ok(html.includes('No comparison was recorded for this run') && !html.includes('First run of this pathway') && html.includes('id="changes-over-time"'));
++  }
++  assert.equal(changesState({pack: null, note: null, problem: null, first_run: true}), 'first');
++});
++
++test('Over time joins only points whose periods are the periods the later pack compares', () => {
++  const metric = (value, period) => ({leverage: {value, unit: 'x', period}});
++  const packWith = (pp, pc) => ({...PACK, prior: {...PACK.prior, run: 'r-a'}, measures: [measure('leverage', 'Total debt / EBITDA', 'x', 'yes', side('5', pp), side('6', pc), '1', {same_period: false})]});
++  const runs = pack => [{...here, key: 'a', runId: 'r-a', current: false, metrics: metric('5', 'FY2022')}, {...here, key: 'b', runId: 'r-b', metrics: metric('6', 'FY2023'), changes: {pack}}];
++  const lines = html => (html.match(/<line /g) || []).length;
++  assert.equal(lines(changesHtml(base({runs: runs(packWith('FY2022', 'FY2023'))}))), 1);
++  assert.equal(lines(changesHtml(base({runs: runs(packWith('H1 FY2022', 'H1 FY2023'))}))), 0);
++});
+diff --git a/apps/issuer-library/credit_os/web/icons/git-compare.svg b/apps/issuer-library/credit_os/web/icons/git-compare.svg
+new file mode 100644
+index 0000000..38c3296
+--- /dev/null
++++ b/apps/issuer-library/credit_os/web/icons/git-compare.svg
+@@ -0,0 +1,16 @@
++<svg
++  xmlns="http://www.w3.org/2000/svg"
++  width="24"
++  height="24"
++  viewBox="0 0 24 24"
++  fill="none"
++  stroke="currentColor"
++  stroke-width="2"
++  stroke-linecap="round"
++  stroke-linejoin="round"
++>
++  <circle cx="18" cy="18" r="3" />
++  <circle cx="6" cy="6" r="3" />
++  <path d="M13 6h3a2 2 0 0 1 2 2v7" />
++  <path d="M11 18H8a2 2 0 0 1-2-2V9" />
++</svg>
+diff --git a/apps/issuer-library/credit_os/web/screen.css b/apps/issuer-library/credit_os/web/screen.css
+index 7dccb1e..bb548cc 100644
+--- a/apps/issuer-library/credit_os/web/screen.css
++++ b/apps/issuer-library/credit_os/web/screen.css
+@@ -588,3 +588,19 @@ td .basis-link{margin-left:6px}
+ .citations-heading{margin-top:14px}
+ .library-not-shown{margin-top:24px}.library-not-shown summary,#evidence-record summary{cursor:pointer;font-weight:600}.library-not-shown h3,#evidence-record h3{margin:16px 0 6px}
+ .history-table .module-code{display:inline}
++/* Changes tab (changes.js): chart rows reuse the dumbbell rows; everything else is plain text and tables. */
++.changes{max-width:980px}.changes-heading{margin-bottom:12px}.changes-first{font-size:var(--fs-control);color:var(--muted);margin:24px 0}
++.changes h3{margin:22px 0 8px}.changes-basis{display:block;margin-top:4px;color:var(--muted);font-size:var(--fs-label)}
++.changes-row>.chart-open{cursor:default}.changes-row>.chart-open:hover{background:none}.changes-chart:focus-visible{outline:2px solid var(--blue)}
++.changes td small,.changes th small{display:block;color:var(--muted);font-size:var(--fs-label)}
++.net-debt-change{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0}.net-debt-change dt{font-size:var(--fs-label);color:var(--muted)}.net-debt-change dd{margin:2px 0 0;font:var(--fs-control) 'Red Hat Mono',monospace}
++.maturity-chart{margin:8px 0 14px}.maturity-pair{display:grid;grid-template-columns:96px minmax(0,1fr);gap:2px 10px;align-items:center;margin-bottom:6px;font-size:var(--fs-label)}.maturity-pair span{grid-row:1/3}.maturity-pair i{display:block;height:6px;min-width:1px}
++.change-modules{border-top:1px solid var(--rule)}.change-module{border-bottom:1px solid var(--rule)}.change-module>summary{display:grid;grid-template-columns:minmax(120px,.9fr) auto minmax(0,1.4fr) minmax(0,1.4fr);gap:6px 14px;align-items:start;padding:10px 0;cursor:pointer;list-style:none}.change-module>summary::-webkit-details-marker{display:none}
++.change-name{font-weight:600}.change-then,.change-now{font-size:var(--fs-compact);color:var(--muted);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}.change-then small,.change-now small{display:block;font-size:var(--fs-label)}
++.change-module[open]>summary .change-then,.change-module[open]>summary .change-now{display:none}
++.change-pair{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:4px 0 12px}.change-pair p{font-size:var(--fs-compact);line-height:1.7;max-width:70ch;overflow-wrap:anywhere}.change-why{padding:0 0 12px;color:var(--muted);font-size:var(--fs-compact)}
++.ledger-bar{display:flex;height:14px;border-radius:var(--radius-inline);overflow:hidden;background:var(--quiet);margin:8px 0}.ledger-bar i{display:block;min-width:2px}
++.ledger-closed{background:var(--green)}.ledger-remaining{background:var(--navy)}.ledger-new{background:var(--blue)}.ledger-no-longer-stated{background:var(--amber)}.ledger-other{background:#7482a1}
++.ledger-legend i{width:12px;height:12px;border-radius:2px}
++.trend-list{list-style:none;padding:0;margin:8px 0 16px;display:grid;gap:6px}.trend-list li{display:grid;grid-template-columns:minmax(150px,1fr) 160px minmax(0,2fr);gap:12px;align-items:center;font-size:var(--fs-compact)}.trend-list li>.muted:nth-child(2){grid-column:2/-1}.trend line{stroke:var(--muted);stroke-width:1.5}.trend circle{fill:var(--blue)}
++@media(max-width:720px){.change-module>summary{grid-template-columns:1fr auto}.change-then,.change-now{grid-column:1/-1}.change-pair{grid-template-columns:1fr}.trend-list li{grid-template-columns:1fr}.trend-list li>.muted:nth-child(2){grid-column:auto}}
+diff --git a/apps/issuer-library/credit_os/web/screen.js b/apps/issuer-library/credit_os/web/screen.js
+index 4bf9cb4..3d4fb2e 100644
+--- a/apps/issuer-library/credit_os/web/screen.js
++++ b/apps/issuer-library/credit_os/web/screen.js
+@@ -480,7 +480,7 @@ function contextPrefix({module,context}) {
+ }
+ // New-format handoff text is shown as written (decision 7: codes stay); an earlier-format page keeps names, not codes (the owner's standing rule).
+ // The Evidence page lists file names and hashes, which identify files: it is drawn with its names already and is never rewritten.
+-const keepsCodes=route=>route.module==='W-Evidence'||(route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections));
++const keepsCodes=route=>route.module==='W-Evidence'||route.module==='W-Changes'||(route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections));
+ const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
+ // The reading position of a page: a module report is one page whatever part is scrolled to.
+ const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;
+diff --git a/apps/issuer-library/credit_os/web/static-boot.js b/apps/issuer-library/credit_os/web/static-boot.js
+index 89651f5..8e8d73a 100644
+--- a/apps/issuer-library/credit_os/web/static-boot.js
++++ b/apps/issuer-library/credit_os/web/static-boot.js
+@@ -20,7 +20,7 @@
+   window.DESIGN_CATALOGUE={real:catalogue.real||[],sources:catalogue.sources||{}};
+   window.DESIGN_ACTIVITY=activity;
+   window.DESIGN_APP={workspace:catalogue.workspace||'',policy_locked:!!catalogue.policy_locked,issues:problem?catalogue.issues||[]:store.issues,problem};
+-  for(const name of ['calendar.js','reader.js','views.js','shared.js','screen.js'])await new Promise((resolve,reject)=>{
++  for(const name of ['calendar.js','reader.js','changes.js','views.js','shared.js','screen.js'])await new Promise((resolve,reject)=>{
+     const script=document.createElement('script');
+     script.src=name;script.onload=resolve;script.onerror=()=>reject(new Error(`${name} did not load`));
+     document.head.append(script);
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index 5f9ba93..1d2f3ad 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -22,10 +22,10 @@ test('the rail is Start a run, Issuer library, Run activity, Search: no Reports
+   assert.ok(!/Reports|W-Reports/.test(html));
+ });
+ 
+-test('the issuer tabs are Report, Overview, Modules, Forecast, Evidence; no Calendar or Reports tab and no report frame or adapter remains (decisions 1, 12)', () => {
++test('the issuer tabs are Report, Overview, Changes, Modules, Forecast, Evidence; no Calendar or Reports tab and no report frame or adapter remains (decisions 1, 12)', () => {
+   const views = read('views.js');
+   const tabs = views.slice(views.indexOf("querySelector('.workspace-tabs').innerHTML=["), views.indexOf(".map(([id,label,img])"));
+-  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)','[^']+'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Modules', 'Forecast', 'Evidence']);
++  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)','[^']+'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
+   for (const name of fs.readdirSync(__dirname).filter(f => /\.(js|css|html)$/.test(f))) {
+     const text = read(name);
+     for (const gone of ['report-adapter', 'report-preview', 'report-workspace', 'report-content', 'cancelReportFrame', 'isReportRoute', 'reportList', 'reportView', 'reportManifest', 'runReports', 'calendarSections']) {
+@@ -96,7 +96,7 @@ test('installDestinations keys are exactly the library and issuer pages plus Run
+   assert.ok(start >= 0, 'destinations table not found');
+   const end = text.indexOf('};', start);
+   const keys = [...text.slice(start, end).matchAll(/^\s*'([^']+)':\[/gm)].map(m => m[1]);
+-  assert.deepEqual(keys, ['W-Library', 'W-Report', 'W-Overview', 'W-Evidence', 'W-Forecast', 'CP-OS']);
++  assert.deepEqual(keys, ['W-Library', 'W-Report', 'W-Overview', 'W-Changes', 'W-Evidence', 'W-Forecast', 'CP-OS']);
+   const row = text.slice(text.indexOf("'CP-OS':["), end);
+   assert.deepEqual([...row.matchAll(/\['([^']+)','[^']*',\[\]\]/g)].map(m => m[1]), ['activity']);
+ });
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 5ad5ff0..7fbdb09 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -88,6 +88,7 @@ function installDestinations() {
+     'W-Library':['Issuer library',[['cases','Issuer cases',[]]]],
+     'W-Report':['Report history',[['history','Report history',[]]]],
+     'W-Overview':['Overview',[['overview','Overview',[]]]],
++    'W-Changes':['Changes',[['changes','Changes',[]]]],
+     'W-Evidence':['Evidence',[['sources','Evidence',[]]]],
+     'W-Forecast':['Forecast',[['forecast','Forecast',[]]]],
+     'CP-OS':['Run activity',[['activity','Run activity',[]]]]
+@@ -802,7 +803,7 @@ const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
+ function runLabel(module,context) {
+   const ctx=contexts[context];
+   if(!ctx)return '';
+-  const here=['W-Forecast','W-Evidence'].includes(module)?module:'W-Overview';
++  const here=['W-Forecast','W-Evidence','W-Changes'].includes(module)?module:'W-Overview';
+   const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${contexts[r.run].run}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
+   return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))} · <span class="code">${esc(ctx.run)}</span>${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(ctx)?` ${EARLIER_METHODS_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
+ }
+@@ -1340,10 +1341,23 @@ function evidenceView(context) {
+   if(!ev)return '<div class="missing-state"><h2>No evidence record was read for this run</h2><p>Rebuild the library and open this page again.</p></div>';
+   return evidenceSources(ev)+evidenceHandoffs(ev)+evidenceDownloads(ev)+evidenceRecord(ev,contexts[context].methodChanges);
+ }
++// ---- Changes (decision M8 of the 2026-11-11 module-presets ruling): changes.js draws the run's comparison pack and CP-8's handoff. Nothing is worked out here:
++// this gathers what the library holds, the runs of this issuer and pathway (earliest first) with their quoted figures, packs and lead-module bottom lines.
++function changesView(context) {
++  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
++  const sections=run=>{const id=run.modules['CP-8']?.default;return id&&data[id]?data[id].sections:null;};
++  const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||(sameIssuer(run.issuerKey,ctx.issuerKey)&&run.pathway===ctx.pathway))).reverse().map(run=>{
++    const key=keyOf.get(run),lead=run.changes?.lead&&run.modules[run.changes.lead]?.default,out=lead&&data[lead];
++    return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.runId,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
++      metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null,cp8:sections(run)};
++  });
++  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),pathway:runPathway(ctx),fmtDate:displayDate,runs});
++}
+ function workspaceView(module,section) {
+   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];
+   if(module==='W-Library')return libraryView();
+   if(module==='W-Overview')return runReport(context);
++  if(module==='W-Changes')return changesView(context);
+   if(module==='W-Report')return historyView(context);
+   if(module==='W-Evidence')return evidenceView(context);
+   if(module==='W-Forecast')return forecastView(context,section)+chartIndex(context);
+@@ -1358,7 +1372,7 @@ function updateWorkspaceChrome(module) {
+   document.querySelector('.workspace-tabs').hidden=isHome;
+   $('context-bar').hidden=isHome||module==='W-Report';
+   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
+-  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
++  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],['W-Changes','Changes','git-compare'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
+     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
+     return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${icon(img)}${label}</a>`;
+   }).join('');
+diff --git a/apps/issuer-library/update_library.py b/apps/issuer-library/update_library.py
+index c60d9d2..cbf9e51 100644
+--- a/apps/issuer-library/update_library.py
++++ b/apps/issuer-library/update_library.py
+@@ -36,6 +36,7 @@ if str(HERE) not in sys.path:
+ from credit_os.store import UnreadableFile, regular_chunks, workspace_store
+ 
+ from deploy_vii.registry import plan
++from deploy_workflow.changes import DEFAULT_LEAD, LEAD_MODULE, PACK_SCHEMA
+ from deploy_workflow.credit_os_catalogue import catalogue
+ from deploy_workflow.credit_os_chips import chips
+ from deploy_workflow.library_index import (
+@@ -145,6 +146,45 @@ def method_changes(store: dict[str, Any], library: Library) -> None:
+         run["methodChanges"] = list(changed[run["folder"]])
+ 
+ 
++def pack_of(workspace: Path, run: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
++    """CP-8's comparison pack as the delivery publishes it, or why it cannot be read. A pack that
++    is listed and unreadable is a problem the run states, never a first run."""
++    pin = run["changes"]["pack"]
++    if pin is None:
++        return None, None
++    path = pin["path"]
++    try:
++        value = json.loads(read_pinned(workspace / "runs" / run["id"], path, pin["sha256"]))
++    except Refused as error:
++        return None, f"{path} could not be read ({error})"
++    except ValueError:
++        return None, f"{path} is not valid JSON"
++    if not isinstance(value, dict):
++        return None, f"{path} is not a JSON object"
++    if value.get("schema") != PACK_SCHEMA:
++        return None, f"{path} has schema {value.get('schema')!r}, not {PACK_SCHEMA!r}"
++    return value, None
++
++
++def changes_data(workspace: Path, store: dict[str, Any], library: Library) -> None:
++    """Carry each listed run's comparison to its store run, as ``changes``: the lead module of its
++    pathway, the pack CP-8 was given (unchanged), the recorded reason CP-8 was not produced, and
++    the problem when the published pack cannot be read (also named in the build's issues)."""
++    listed = {run["id"]: run for run in library.runs}
++    for run in store["runs"].values():
++        record = listed[run["folder"]]
++        pack, problem = pack_of(workspace, record)
++        if problem:
++            store["issues"].append(f"{record['id']}: {problem}")
++        run["changes"] = {
++            "lead": LEAD_MODULE.get(record["pathway"], DEFAULT_LEAD),
++            "first_run": record["changes"]["first_run"],
++            "pack": pack,
++            "note": record["changes"]["note"],
++            "problem": problem,
++        }
++
++
+ def checked_bytes(path: Path, digest: str, label: str) -> bytes:
+     """The bytes of a run file, refused when they no longer have the hash the store holds."""
+     try:
+@@ -206,6 +246,7 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
+     store = workspace_store(workspace, cat)
+     run_records(workspace, store)
+     method_changes(store, library)
++    changes_data(workspace, store, library)
+     handoff_zips(folder, workspace, store)
+     # Run activity, as data: the folders left out and why, and every issue the build recorded
+     # (the store's list already holds the catalogue's; each is kept once, in order).
+diff --git a/src/deploy_workflow/library_index.py b/src/deploy_workflow/library_index.py
+index b0a4f80..221999c 100644
+--- a/src/deploy_workflow/library_index.py
++++ b/src/deploy_workflow/library_index.py
+@@ -416,6 +416,26 @@ def module_entries(
+     return entries
+ 
+ 
++CHANGES_PACK = "changes.json"  # `deploy_workflow.changes.PACK_NAME`, which imports this module
++
++
++def changes_record(delivered: Mapping[str, Any], completion: Mapping[str, Any]) -> dict[str, Any]:
++    """What the verified delivery says about CP-8's comparison: the pack it publishes (path inside
++    the run folder and hash; None when it holds none) and the reason CP-8 was planned and not
++    produced (`changes_note`; None otherwise). Neither: a first run of the pathway."""
++    digest = delivered["files"].get(CHANGES_PACK)
++    note = delivered["manifest"].get("changes_note")
++    # The run's own record that the approval named no earlier run (`changes: first run of this
++    # pathway`, deploy_workflow.changes.describe); a run that records nothing is not a first run.
++    return {
++        "first_run": completion.get("changes") == "changes: first run of this pathway",
++        "pack": {"path": f"{delivered['folder']}/{CHANGES_PACK}", "sha256": digest}
++        if isinstance(digest, str)
++        else None,
++        "note": note if isinstance(note, str) else None,
++    }
++
++
+ def admit_run(
+     folder: Path,
+     page_dir: Path,
+@@ -460,6 +480,7 @@ def admit_run(
+         "delivery_sha256": delivered["delivery_sha256"],
+         "execution": execution_record(folder),
+         "method_changes": method_changes,
++        "changes": changes_record(delivered, completion),
+     }
+     if deliveries is not None:  # Only a run that is listed is kept.
+         deliveries[folder.name] = delivered
+diff --git a/tests/library_fixtures.py b/tests/library_fixtures.py
+index 9d5dd24..bf997e5 100644
+--- a/tests/library_fixtures.py
++++ b/tests/library_fixtures.py
+@@ -10,6 +10,8 @@ from pathlib import Path
+ METHOD = {
+     "CP-0": "=== methods/cp0.md sha256 {h} ===\n# CP-0 method\nRead the sources.",
+     "CP-1": "=== prompts/CP-1.md sha256 {h} ===\n# CP-1 method\nBuild the foundation.",
++    "CP-2": "=== methods/cp2.md sha256 {h} ===\n# CP-2 method\nAssess the credit.",
++    "CP-8": "=== methods/cp8.md sha256 {h} ===\n# CP-8 method\nSay what changed.",
+ }
+ 
+ 
+@@ -87,6 +89,7 @@ class RunSpec:
+     first_call: str | None = None  # Every call's started_at, when a test orders runs by it.
+     selection: str | None = "preset"  # workflow.json `selection`; None: an older run without it
+     case_kind: str = "public"
++    cp8: str | None = None  # The whole CP-8 handoff, when the run has that module.
+ 
+ 
+ def make_run(workspace: Path, folder: str, **changes) -> Path:
+@@ -126,6 +129,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
+             confidence=spec.cp0_confidence if module == "CP-0" else "Medium",
+             finding=spec.cp1_finding if module == "CP-1" else FINDING_ROW,
+         )
++        if module == "CP-8" and spec.cp8 is not None:
++            answer = spec.cp8
+         if module == "CP-0":
+             answer += spec.cp0_extra
+         if module == "CP-1":
+@@ -351,3 +356,25 @@ ALIAS_CITED = """
+ | Bracketed | -11 | Annual p.71 prints it. |
+ | Listed | 1 | Annual pages 71, 72 and Annual filing pp.71–72. |
+ """
++
++
++FIRST_RUN_RECORD = "changes: first run of this pathway"
++
++
++def with_changes(
++    run_dir: Path, pack: bytes | None = None, note: str | None = None, first: bool = False
++) -> None:
++    """Make a current-kind delivery (see without_report) carry CP-8's comparison pack as
++    `changes.json` (the bytes given, listed in the receipt and hashed in the completion record)
++    and/or the manifest's `changes_note` (why CP-8 was planned and not produced)."""
++    if pack is not None:
++        (delivered,) = (run_dir / "deliveries").iterdir()
++        receipt = json.loads((delivered / "delivery.json").read_text())
++        receipt["files"]["changes.json"] = put(delivered / "changes.json", pack)
++        raw = json.dumps(receipt).encode()
++        (delivered / "delivery.json").write_bytes(raw)
++        rewrite_completion(run_dir, lambda record: record.update(delivery_sha256=sha(raw)))
++    if first:
++        rewrite_completion(run_dir, lambda record: record.update(changes=FIRST_RUN_RECORD))
++    if note is not None:
++        rewrite_manifest(run_dir, lambda manifest: manifest.update(changes_note=note))
+diff --git a/tests/test_library_changes_browser.py b/tests/test_library_changes_browser.py
+new file mode 100644
+index 0000000..e58a756
+--- /dev/null
++++ b/tests/test_library_changes_browser.py
+@@ -0,0 +1,212 @@
++"""The Changes tab in a real browser (headless Chrome), over a library built from two synthetic
++runs of one issuer and pathway. The pack and CP-8's handoff are written by hand; every expected
++string below is literal text from them. Needs Google Chrome or Chromium; skipped without one."""
++
++import json
++import re
++import sys
++from pathlib import Path
++
++import pytest
++from library_fixtures import CITED, make_run, method, with_changes, without_report  # noqa: F401
++from test_credit_os_catalogue import CHARTS
++from test_library_page_browser import visit
++
++ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT / "apps/issuer-library"))
++import update_library
++
++pytestmark = pytest.mark.browser
++
++NOTE = "changes: not produced — cpos_live_not_accepted: CP-8 not accepted within bounds"
++BOTTOM = (
++    "The credit picture is about the same since the earlier run, and the change is the analysis."
++)
++EVIL = "<script>window.hit=1</script>"
++PACK = {
++    "schema": "cpos-changes/2",
++    "prior": {
++        "run": "nbg-2024-09-30-credit_snapshot",
++        "as_of": "2024-09-30",
++        "pathway": "credit_snapshot",
++        "format": "earlier",
++        "methods_changed": [],
++    },
++    "current": {"as_of": "2025-03-31", "pathway": "credit_snapshot", "format": "current"},
++    "measures": [
++        {
++            "key": "leverage",
++            "label": "Total debt / EBITDA",
++            "unit": "x",
++            "comparable": "judge",
++            "reason": "the label or definition text differs; CP-8 judges",
++            "prior": {
++                "label": "Total debt / EBITDA",
++                "unit": "x",
++                "value": "6.57",
++                "period": "FY2024",
++            },
++            "current": {
++                "label": "Total debt / EBITDA",
++                "unit": "x",
++                "value": "6.01",
++                "period": "FY2025",
++            },
++            "difference": "-0.56",
++            "same_period": False,
++        },
++        {
++            "key": "cash",
++            "label": "Cash",
++            "unit": "US$m",
++            "comparable": "yes",
++            "reason": "",
++            "prior": {"label": "Cash", "unit": "US$m", "value": "6261", "period": "2024-09-30"},
++            "current": {"label": "Cash", "unit": "US$m", "value": "6300", "period": "2025-03-31"},
++            "difference": "39",
++            "same_period": False,
++        },
++    ],
++    "omitted": {"net_debt_change": "gross debt is not stated in either run"},
++    "modules": [
++        {
++            "module": "CP-2",
++            "title": "Fundamental credit",
++            "ran_prior": True,
++            "ran_current": True,
++            "prior_bottom_line": "CP-2 earlier view.",
++            "current_bottom_line": f"CP-2 current view {EVIL}.",
++        }
++    ],
++    "limitations": {"earlier": [], "current": []},
++}
++CP8 = f"""# CP-8 Changes since the last run
++
++## Findings
++
++### Bottom line
++
++{BOTTOM}
++Basis: CP-1 handoff.
++
++### Key findings
++
++- Cash is USD 6,300 million.
++
++### Contrary evidence and what would change the view
++
++None.
++
++### Limitations
++
++None.
++
++### What changed: the issuer
++
++| Measure or fact | Earlier | Current | Cause | Effect on the credit view |
++| --- | --- | --- | --- | --- |
++| Total debt / EBITDA | 6.57x (FY2024) | 6.01x (FY2025) | Unresolved | Not comparable. |
++| Cash | 6261 US$m (2024-09-30) | 6300 US$m (2025-03-31) | New period | Same definition. |
++
++### What changed: the analysis
++
++| Module | Status | Cause | Why |
++| --- | --- | --- | --- |
++| Fundamental credit (CP-2) | Unchanged | Presentation | The headings differ only. |
++
++### Limitations ledger
++
++| Earlier ref | Current ref | Limitation | Status | What closed it |
++| --- | --- | --- | --- | --- |
++| E1 | — | An earlier limitation. | No longer stated | — |
++| — | C1 | A current limitation. | New | — |
++
++## Gaps
++
++None.
++"""
++
++
++@pytest.fixture(autouse=True)
++def stand_in_method(monkeypatch):
++    monkeypatch.setattr("deploy_workflow.library_index.current_method", lambda: method())
++
++
++def run_of(workspace: Path, folder: str, **spec) -> Path:
++    return without_report(make_run(workspace, folder, **spec)).parent.parent
++
++
++def build(workspace: Path) -> Path:
++    update_library.update_library(workspace)
++    return workspace / "library/index.html"
++
++
++def two_runs(workspace: Path, *, pack=True, note=None) -> None:
++    run_of(
++        workspace, "earlier", as_of="2024-09-30", modules=("CP-0", "CP-1", "CP-2"), cp1_extra=CHARTS
++    )
++    now = run_of(
++        workspace,
++        "later",
++        as_of="2025-03-31",
++        modules=("CP-0", "CP-1", "CP-2", "CP-8"),
++        cp1_extra=CHARTS,
++        cp8=CP8,
++    )
++    with_changes(now, pack=json.dumps(PACK).encode() if pack else None, note=note)
++
++
++def tab_names(dom: str) -> list[str]:
++    tabs = re.search(r'<div class="workspace-tabs"[^>]*>(.*?)</div>', dom, re.DOTALL).group(1)
++    return re.findall(r"<a [^>]*>(?:<img[^>]*>)?([A-Za-z ]+)</a>", tabs)
++
++
++def test_the_changes_tab_sits_between_overview_and_modules_and_shows_the_comparison(tmp_path):
++    two_runs(tmp_path)
++    page = build(tmp_path)
++    dom, console = visit(page, "#W-Changes/changes?c=later")
++    assert console == []
++    assert tab_names(dom) == ["Report", "Overview", "Changes", "Modules", "Forecast", "Evidence"]
++    assert re.search(r'<a href="#W-Changes/changes[^"]*" aria-current="page"', dom)
++    assert "Since 30 September 2024 · Credit snapshot" in dom
++    assert BOTTOM in dom and "Cash is USD 6,300 million." in dom
++    # Part 2: values as the pack writes them; leverage is Not comparable and shows no difference.
++    assert "<td>6.57x (FY2024)</td><td>6.01x (FY2025)</td>" in dom
++    assert "-0.56" not in dom
++    assert "<td>6300 US$m (2025-03-31)</td><td>39 US$m</td>" in dom
++    # Part 3 and 5: the module row, and Over time with both runs, earliest first.
++    assert 'change-status">Unchanged</span>' in dom
++    over = dom[dom.index('id="changes-over-time"') :]
++    assert over.index("30 September 2024") < over.index("31 March 2025")
++    assert "CP-2 bottom line." in over
++    # Model output is text, never markup.
++    assert "window.hit" not in dom.replace("&lt;script&gt;window.hit=1&lt;/script&gt;", "")
++    assert "<script>window.hit=1" not in dom
++
++
++def test_a_first_run_says_so_and_shows_nothing_else(tmp_path):
++    with_changes(run_of(tmp_path, "only", as_of="2025-03-31"), first=True)
++    dom, console = visit(build(tmp_path), "#W-Changes/changes?c=only")
++    assert console == []
++    assert tab_names(dom)[2] == "Changes"
++    assert '<p class="changes-first">First run of this pathway</p>' in dom
++    for part in ("changes-issuer", "changes-analysis", "changes-over-time", "changes-heading"):
++        assert part not in dom
++
++
++def test_a_cp8_that_was_not_produced_says_so_with_its_reason(tmp_path):
++    two_runs(tmp_path, pack=False, note=NOTE)
++    dom, console = visit(build(tmp_path), "#W-Changes/changes?c=later")
++    assert console == []
++    assert "The explanation of what changed was not produced for this run." in dom
++    assert "Recorded reason: cpos_live_not_accepted: CP-8 not accepted within bounds" in dom
++    assert 'id="changes-what"' not in dom
++    assert 'id="changes-over-time"' in dom
++
++
++def test_a_run_with_no_recorded_comparison_is_not_called_a_first_run(tmp_path):
++    run_of(tmp_path, "old", as_of="2025-03-31")
++    dom, console = visit(build(tmp_path), "#W-Changes/changes?c=old")
++    assert console == []
++    assert "No comparison was recorded for this run" in dom
++    assert "First run of this pathway" not in dom
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index e0f5c28..3182746 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -972,7 +972,7 @@ def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_pat
+         assert seen["text"].startswith("Showing run: 31 December 2025 · Credit snapshot · ")
+         assert long.upper() in seen["text"]
+         assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
+-        assert seen["tabs"] == ["Report", "Overview", "Modules", "Forecast", "Evidence"]
++        assert seen["tabs"] == ["Report", "Overview", "Changes", "Modules", "Forecast", "Evidence"]
+         assert seen["current"] == [route.split("?")[0][3:]]
+         # The chart index is the Forecast page's; the Overview selects passages instead.
+         assert seen["indexRows"] == (
+diff --git a/tests/test_update_library.py b/tests/test_update_library.py
+index 6d017eb..2e29675 100644
+--- a/tests/test_update_library.py
++++ b/tests/test_update_library.py
+@@ -7,7 +7,7 @@ from pathlib import Path
+ from types import SimpleNamespace
+ 
+ import pytest
+-from library_fixtures import make_run, method
++from library_fixtures import make_run, method, with_changes, without_report
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+ sys.path.insert(0, str(ROOT / "apps/issuer-library"))
+@@ -455,3 +455,91 @@ def test_a_download_outside_the_library_folder_is_refused(tmp_path):
+     assert not (tmp_path / "escaped.md").exists()
+     update_library.write_download(library, library / "downloads/ok.md", b"x")
+     assert (library / "downloads/ok.md").read_bytes() == b"x"
++
++
++# ---- The Changes tab's data: each run carries what its delivery says about the comparison.
++PACK = {
++    "schema": "cpos-changes/2",
++    "prior": {"run": "nbg-2024-09-30-credit_snapshot", "as_of": "2024-09-30"},
++    "measures": [{"key": "cash", "comparable": "yes", "difference": "0"}],
++}
++NOTE = "changes: not produced \u2014 cpos_live_not_accepted: CP-8 not accepted within bounds"
++
++
++def changes_of(workspace: Path, folder: str) -> dict:
++    runs = data_of(workspace)["workspace"]["runs"]
++    return next(run["changes"] for run in runs.values() if run["folder"] == folder)
++
++
++def current_run(workspace: Path, folder: str, **spec) -> Path:
++    """A run with a current-kind delivery; returns its run folder."""
++    return without_report(make_run(workspace, folder, **spec)).parent.parent
++
++
++def test_a_run_that_records_no_comparison_is_not_a_first_run(tmp_path):
++    current_run(tmp_path, "old")
++    update_library.update_library(tmp_path)
++    assert changes_of(tmp_path, "old") == {
++        "lead": "CP-2",
++        "first_run": False,
++        "pack": None,
++        "note": None,
++        "problem": None,
++    }
++
++
++def test_a_first_run_is_the_run_that_records_it(tmp_path):
++    with_changes(current_run(tmp_path, "first"), first=True)
++    update_library.update_library(tmp_path)
++    assert changes_of(tmp_path, "first") == {
++        "lead": "CP-2",
++        "first_run": True,
++        "pack": None,
++        "note": None,
++        "problem": None,
++    }
++
++
++@pytest.mark.parametrize(
++    ("pathway", "lead"),
++    [("earnings_update", "CP-1B"), ("short_snapshot", "CP-L10"), ("relative_value", "CP-2")],
++)
++def test_the_lead_module_of_the_pathway_travels_with_the_run(tmp_path, pathway, lead):
++    current_run(tmp_path, "r", pathway=pathway)
++    update_library.update_library(tmp_path)
++    assert changes_of(tmp_path, "r")["lead"] == lead
++
++
++def test_the_published_pack_is_carried_unchanged(tmp_path):
++    with_changes(current_run(tmp_path, "later"), pack=json.dumps(PACK).encode())
++    update_library.update_library(tmp_path)
++    got = changes_of(tmp_path, "later")
++    assert got["pack"] == PACK
++    assert got["note"] is None
++    assert got["problem"] is None
++
++
++def test_a_cp8_that_was_not_produced_carries_its_recorded_reason(tmp_path):
++    with_changes(current_run(tmp_path, "later"), note=NOTE)
++    update_library.update_library(tmp_path)
++    got = changes_of(tmp_path, "later")
++    assert got["note"] == NOTE
++    assert got["pack"] is None
++
++
++@pytest.mark.parametrize(
++    ("raw", "why"),
++    [
++        (b"{not json", "is not valid JSON"),
++        (json.dumps({**PACK, "schema": "cpos-changes/1"}).encode(), "schema 'cpos-changes/1'"),
++        (b"[1]", "is not a JSON object"),
++    ],
++)
++def test_a_pack_that_cannot_be_read_is_said_so_and_is_never_a_first_run(tmp_path, raw, why):
++    with_changes(current_run(tmp_path, "later"), pack=raw)
++    update_library.update_library(tmp_path)
++    got = changes_of(tmp_path, "later")
++    assert got["pack"] is None
++    assert why in got["problem"]
++    issues = data_of(tmp_path)["workspace"]["issues"]
++    assert any(i.startswith("later: ") and "changes.json" in i and why in i for i in issues)

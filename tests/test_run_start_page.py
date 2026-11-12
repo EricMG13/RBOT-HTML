@@ -704,9 +704,37 @@ def test_the_review_shows_the_services_forecast_per_module(page):
     assert ["legal", "Go to Legal"] in seen["goto"]
     for text in ("GPT Sol, Balanced (the default)", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
         assert text in seen["facts"], text
+    # No earlier run in the service's folder: the summary says CP-8 has nothing to compare with.
+    assert summary["changes"] == "first run of this pathway"
+    assert "Changesfirst run of this pathway" in seen["facts"]
+    assert "CP-8" not in summary["modules"]
     for section in summary["omitted"]:
         assert section in seen["facts"]
     assert "confirmed when the summary is made" not in seen["ready"]
+
+
+def test_the_page_offers_the_short_snapshot_and_the_service_reviews_its_three_modules(page):
+    """Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page."""
+    seen = page.run(f"""
+    const cards = [...document.querySelectorAll('#pathcards input[data-k="pathway"]')].map(e => ({{
+      value: e.value, text: e.closest('label').textContent}}));
+    await issuer('short_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    const S = await review();
+    return {{cards, S, shown: [...document.querySelectorAll('#rv-ready [data-module]')]
+      .map(r => r.dataset.module).filter(id => id !== 'run'),
+      facts: document.getElementById('rv-facts').textContent}};
+    """)
+    card = next(c for c in seen["cards"] if c["value"] == "short_snapshot")
+    assert "Short Credit Snapshot" in card["text"]
+    names = "Source readiness, Financial foundation, Short credit snapshot"
+    assert f"3 modules: {names}" in card["text"]
+    assert len(seen["cards"]) == 7
+    summary = seen["S"]
+    assert summary["error"] == "" and summary["digest"]
+    assert summary["modules"] == ["CP-0", "CP-1", "CP-L10"]
+    assert seen["shown"] == ["CP-0", "CP-1", "CP-L10"]
+    assert "Short Credit Snapshot" in seen["facts"]
+    assert "CP-DR" not in summary["modules"] and "CP-2E" not in summary["modules"]
 
 
 def test_the_services_outcome_replaces_the_confirmed_when_the_summary_is_made_check(page):
@@ -2521,6 +2549,7 @@ def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypa
         "covenant_refinancing",
         "distressed_restructuring",
         "portfolio_decision",
+        "short_snapshot",
     ],
 )
 def test_no_module_code_is_shown_on_any_stage_at_any_level_of_a_pathway(page, pathway):
@@ -2611,6 +2640,36 @@ def test_a_service_refusal_naming_a_module_code_is_shown_with_the_modules_name(p
     )
     assert "--modules Source readiness: fills no" in seen["summary"]
     assert "delivery_scope: Research questions is outside the named scope" in seen["submit"]
+    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
+
+
+def test_a_short_snapshot_refusal_naming_module_codes_is_shown_with_the_modules_names(page):
+    """The Short Credit Snapshot's service refusals (a missing CP-1, a CP-L10 table) name modules by
+    code; the analyst reads the names, in the summary error and in the submit error."""
+    seen = page.run(
+        """
+    await issuer('short_snapshot', [file('annual.txt', REPORT_TEXT)]);
+    const real = window.fetch;
+    const refuse = text => new Response(JSON.stringify({error: text}),
+      {status: 400, headers: {'Content-Type': 'application/json'}});
+    window.fetch = async (path, init) => String(path).endsWith('/summary')
+      ? refuse('CP-L10 needs CP-1 in the run: missing CP-1') : real(path, init);
+    await review();
+    const summary = $('rv-state').textContent;
+    window.fetch = real;
+    SUMMARY = null; RENDERED = null;
+    await review();
+    tickAll(); approve();
+    window.fetch = async (path, init) => String(path).endsWith('/submit')
+      ? refuse('CP-L10: no Key figures table; CP-1 handoff missing') : real(path, init);
+    document.getElementById('submit').click();
+    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
+    return {summary, submit: $('rv-submit-error').textContent};
+    """.replace("REPORT_TEXT", json.dumps(REPORT))
+    )
+    assert "Short credit snapshot needs Financial foundation in the run" in seen["summary"]
+    assert "missing Financial foundation" in seen["summary"]
+    assert "no Key figures table" in seen["submit"] and "Short credit snapshot" in seen["submit"]
     assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
 
 

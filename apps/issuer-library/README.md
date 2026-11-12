@@ -19,8 +19,10 @@ The run start page's service (below) runs both steps for a shared folder, so ana
 by hand.
 
 `library/` is the Credit OS library (one row per listed run) and, for each run, its issuer report
-with tabs for Report history, Overview, Modules, Forecast and Evidence, in that order. Overview
-selects each module's own bottom line, key findings and limitations and the nearest dates; Modules
+with tabs for Report history, Overview, Changes, Modules, Forecast and Evidence, in that order.
+Overview selects each module's own bottom line, key findings and limitations and the nearest dates;
+Changes is what moved since the issuer's previous run of the same pathway, drawn from the run's
+`changes.json` and CP-8's handoff (a first run says so and shows nothing else); Modules
 is the flat navigator and each module's page (its charts, maps and timeline included); Forecast is
 the cash flow model and the chart index; Evidence lists the source files used, the handoffs (each
 downloadable), the calculation and Model files and the run record. The Report history tab is

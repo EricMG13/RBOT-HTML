@@ -1,0 +1,893 @@
+diff --git a/METHODOLOGY-REVIEW.md b/METHODOLOGY-REVIEW.md
+index 10c866a..e032dbe 100644
+--- a/METHODOLOGY-REVIEW.md
++++ b/METHODOLOGY-REVIEW.md
+@@ -729,6 +729,15 @@ earlier run is named at approval and bound into the digest; and CP-8 is optional
+ not accepted within its bounds, or the pack cannot be built or its call does not fit the cap, the run
+ delivers without it and records why.
+ 
++**CP-L10 method revision, 2026-11-12 (owner, decision M6: "cp-10 - re-write to be short version of credit
++shot"; "3. approved").** `src/deploy_vii/methods/cpl10.md` is rewritten: CP-L10 is now the one page of the
++Short Credit Snapshot pathway (`short_snapshot`: CP-0, CP-1, CP-L10; no CP-DR, CP-2E, CP-MODEL or CP-2G),
++a prose module whose Key figures table copies CP-1's figures and calculates nothing. This supersedes the
++two-quarter change-screen (TL10.1 to TL10.5) description in the CP-L10 rows above for CP-OS runs; those
++rows describe the Python screen owner, which CP-OS does not run and which is unchanged. The L20 to L40
++aliases are not produced. Selected source revision: this project's cpl10.md at the commit that records this
++note. Detail: `docs/rulings/2026-11-11-module-presets-and-changes.md`, amendment 2026-11-12 (M6).
++
+ **CP-DR source guidance, 2026-11-12 (owner: "focus primarily using reputable and relevant
+ sources").** CP-DR's web-search instruction (`WEB_SEARCH_RULES` in `src/deploy_workflow/model/handoff.py`)
+ now tells the module to rely primarily on the issuer's and peers' own filings and releases,
+diff --git a/README.md b/README.md
+index 15f460c..22ec591 100644
+--- a/README.md
++++ b/README.md
+@@ -154,8 +154,8 @@ Open the address and work through nine stages. A stage appears only when a modul
+ it, and a later stage stays locked while an earlier one has an error.
+ 
+ 1. **Pathway and level.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
+-   `covenant_refinancing`, `distressed_restructuring` or `portfolio_decision`; each card lists its
+-   modules. Pick Basic, Standard or Advanced, and enter your name.
++   `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or `short_snapshot` (the
++   Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each card lists its modules. Pick Basic, Standard or Advanced, and enter your name.
+ 2. **Documents.** Choose the issuer's folder; the files upload and the launcher's own offline
+    reading says what it recognises in each (kind, period end, whether a legal document reads as
+    executed) and which files it will not read. Each kind the pathway uses and the folder lacks is
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index af09bf5..c43e715 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,10 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Short Credit Snapshot pathway (branch `claude/short-snapshot`, stacked on `claude/changes-section`, decision M6)
++Scope: `short_snapshot` = CP-0, CP-1, CP-L10 (hand-written preset key); CP-L10 method rewritten as a one-page prose module with a Key figures table; CP-L10 leads the Overview; offline, canned provider, no paid call. Tests written by hand: the preset, the order, the other presets without CP-L10, an end-to-end canned run to a verified delivery, four refused variants (a passage figure in no table, no Bottom line, a module code in a sentence, no Key figures table), node tests (lead, label), browser tests (run start page card and the service's three-module review; the library lists the run as "Short credit snapshot" with CP-L10 as lead). Fix round 2: Key figures sign exact, one table, missing CP-1 refused, browser test renamed to be selected by the browser gate. Fix round 1: methodology.json title and purpose; Key figures header and Value figures checked against the CP-1 handoff (`prose_checks.key_figures_issues`; proves a figure exists in CP-1, not that it is the right measure or period). Gates, exit 0 each: CI fast list 2,277 passed; node 271; browser gate 148; test_cpos_launch.py 532 passed; quality gate 0 findings.
++Not verified: that a Key figures figure is the right measure or period in CP-1 (only that it exists there); a real CP-L10 answer from a model; a reader check against the VMO2 reference; an earlier-format or CP-8-compared short snapshot in the library; Chrome only. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 library-links entry.
++
+ ## 2026-11-12 — Changes tab in the issuer library (branch `claude/changes-section`, stacked on PR #55, decision M8)
+ Scope: `changes.js` renders the pack and CP-8's handoff; the store carries `run.changes`; offline. CI fast list 2,265 passed; node 268; browser gate 147 passed; quality gate 0; answer keys are literals; fix round 1: same-period differences are not issuer moves, no inferred first run, periods must match to join (probes exit 0).
+ Not verified: a real CP-8 run in the tab; a CP-8 refusal's pack (the delivery omits it); dark mode (none); a reader check against the VMO2 reference.
+@@ -972,28 +976,3 @@ proves its dated case and route only; outputs are unreviewed candidates.
+ - Not verified: the Forecast tab with a published model (no retained or new run has one); a
+   refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
+   Windows; analytical accuracy of either run.
+-
+-## 2026-11-10 — Library links to the report and to retained sources (branch `claude/library-open-report-link`)
+-
+-Cause: the page matched a catalogue deliverable to the store's report by a server address ending
+-`&embedded=1` and linked only root-absolute paths; the static build writes `reports/…` and `../…`
+-with the query removed. So "Open report" (row, selected run, deliverables list) was plain text and
+-"Open retained source" never appeared. Present since the web assets were copied (`5249e4e`).
+-
+-- Fix in `views.js`: match by the one address the build writes; `libraryPath` accepts only those two
+-  relative forms and refuses a scheme, a root, a backslash, a query, an empty or dot segment and
+-  percent-encoded dots or slashes.
+-- Tests written first and seen failing: the browser test on a fixture library (row and selected-run
+-  links to `#W-Reports/<delivery>?c=run-a`, source link to the retained `CP-1.md`) and a node test
+-  of the path guard (4 accepted, 31 refused forms). 107 node tests; 107 pytest (library set,
+-  browser included); quality gate exit 0.
+-- Real library rebuilt from this branch over the four TDG runs, headless Chrome: each row's
+-  deliverable opens its own report in the app; the two file links in the selected-run panel exist
+-  on disk; no script error. The row link is regular weight so rows stay 41px at 1440 and 1280.
+-- End-to-end walk on merged `main` before the fix (same build): library → run id → Overview → 20 of
+-  20 module pages → chip → evidence inspector; Reports, Evidence, Calendar, Run activity render;
+-  75 of 76 file links exist (`../activity.js` is written only by the inbox watcher).
+-- Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
+-  inbox-built library; a run with a published forecast model or without a report ("Open primary
+-  handoff"); the Windows package; Safari and Firefox.
+-
+diff --git a/apps/issuer-library/credit_os/web/reader.js b/apps/issuer-library/credit_os/web/reader.js
+index c818fb9..1c749b5 100644
+--- a/apps/issuer-library/credit_os/web/reader.js
++++ b/apps/issuer-library/credit_os/web/reader.js
+@@ -401,7 +401,9 @@ function historyRows(runs) {
+ }
+ 
+ // The pathway id as words: "credit_snapshot" is "Credit snapshot"; no id is null (the caller says "Not recorded").
++const PATHWAY_TITLES = {short_snapshot: 'Short credit snapshot'};
+ function pathwayTitle(id) {
++  if (Object.hasOwn(PATHWAY_TITLES, String(id))) return PATHWAY_TITLES[id];
+   const words = String(id || '').split(/[_\s-]+/).filter(word => word !== '').map(word => word.toLowerCase());
+   return words.length ? words.join(' ').replace(/^./, first => first.toUpperCase()) : null;
+ }
+diff --git a/apps/issuer-library/credit_os/web/reader.test.cjs b/apps/issuer-library/credit_os/web/reader.test.cjs
+index afc9434..60dd471 100644
+--- a/apps/issuer-library/credit_os/web/reader.test.cjs
++++ b/apps/issuer-library/credit_os/web/reader.test.cjs
+@@ -304,6 +304,8 @@ test('earlierBasis moves a citation written straight after sentence punctuation'
+ test('pathwayTitle reads the id as words, first word capitalised; no id is null', () => {
+   assert.equal(pathwayTitle('credit_snapshot'), 'Credit snapshot');
+   assert.equal(pathwayTitle('full-credit_review'), 'Full credit review');
++  assert.equal(pathwayTitle('short_snapshot'), 'Short credit snapshot');
++  assert.equal(pathwayTitle('constructor'), 'Constructor');
+   assert.equal(pathwayTitle(null), null);
+   assert.equal(pathwayTitle(''), null);
+ });
+diff --git a/apps/issuer-library/credit_os/web/screen.js b/apps/issuer-library/credit_os/web/screen.js
+index 3d4fb2e..e87c1db 100644
+--- a/apps/issuer-library/credit_os/web/screen.js
++++ b/apps/issuer-library/credit_os/web/screen.js
+@@ -29,7 +29,7 @@ const modules = {
+ };
+ const groups = [
+   ['Business and evidence',[['CP-0','Source readiness'],['CP-1A','Business & governance'],['CP-DR','Research questions']]],
+-  ['Financial performance',[['CP-1','Financial foundation'],['CP-1B','Earnings changes'],['CP-L10','Financial change screen'],['CP-1D','Earnings quality'],['CP-1C','Peer benchmark']]],
++  ['Financial performance',[['CP-1','Financial foundation'],['CP-1B','Earnings changes'],['CP-L10','Short credit snapshot'],['CP-1D','Earnings quality'],['CP-1C','Peer benchmark']]],
+   ['Liquidity and refinancing',[['CP-2D','Liquidity'],['CP-3C','Refinancing & LME']]],
+   ['Outlook and downside',[['CP-2','Fundamental credit'],['CP-2A','Downside'],['CP-2G','Forward credit model'],['CP-2E','Rates, FX & hedging'],['CP-2H','Ratings & triggers']]],
+   ['Capital structure and legal',[['CP-4','Legal & covenants'],['CP-4A','Covenant capacity'],['CP-4B','Structural priority'],['CP-4D','Intercreditor control'],['CP-4C','Recovery & fulcrum']]],
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index 1d2f3ad..d7b8cef 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -1013,6 +1013,28 @@ test('Overview lead: an unblocked earlier-format CP-6 has no Bottom line, so the
+   assert.ok(!html.includes('Old reader summary text.'));
+ });
+ 
++test('Overview lead on a short snapshot: CP-L10 leads with its Bottom line then Key findings, written by the module and linked (amendment 2026-11-11 to H5)', () => {
++  const html = overviewPage({
++    'CP-0': FIXTURE['CP-0'],
++    'CP-1': FIXTURE['CP-1'],
++    'CP-L10': passageSections({ bottom: 'Creditors are covered, but only just.', key: ['- Cover is thin.'] }),
++  }, { names: { ...FIXTURE_NAMES, 'CP-L10': 'Short credit snapshot' } }).runReport(RUN);
++  const lead = readText(part(html, 'overview-lead'));
++  assert.ok(lead.includes('Creditors are covered, but only just.') && lead.includes('Cover is thin.'));
++  assert.ok(/Written by <a class="text-action" href="#CP-L10\/[^"]*">Short credit snapshot/.test(html));
++  assert.ok(!part(html, 'overview-bottom-lines').includes('data-module="CP-L10"'), 'the lead is not repeated');
++});
++
++test('Overview lead: CP-2 still leads over CP-L10 when both ran, and a blocked CP-L10 leaves no lead', () => {
++  const both = overviewPage({
++    'CP-2': passageSections({ bottom: 'Credit view: refinancing risk.', key: ['- Leverage is moderate.'] }),
++    'CP-L10': passageSections({ bottom: 'Short view.', key: ['- Short finding.'] }),
++  }).runReport(RUN);
++  assert.ok(readText(part(both, 'overview-lead')).includes('Credit view: refinancing risk.') && !readText(part(both, 'overview-lead')).includes('Short view.'));
++  const blockedHtml = overviewPage({ 'CP-L10': passageSections({ bottom: 'Not assessable: CP-1 stated no figure.' }) }).runReport(RUN);
++  assert.equal(readText(part(blockedHtml, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
++});
++
+ test('Overview lead: neither CP-6 nor CP-2 usable gives the one sentence; both blocked is the same', () => {
+   const none = overviewPage({ 'CP-0': FIXTURE['CP-0'], 'CP-1': FIXTURE['CP-1'] }).runReport(RUN);
+   assert.equal(readText(part(none, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
+@@ -2477,6 +2499,11 @@ test('run label: the run\'s date, pathway and code, the Earlier format badge onl
+   assert.ok(page.runLabel('CP-1', 'run-b').includes('href="#W-Report/history?c=run-b"'));
+ });
+ 
++test('run label: a short snapshot run is labelled Short credit snapshot, not the id as words', () => {
++  const page = runPage(d => d, [], m => m, { ...HIST, runFields: { ...synthetic, pathway: 'short_snapshot', run: 'Run S', asOf: '2025-12-31' } });
++  assert.ok(strip(page.runLabel('W-Overview', RUN)).startsWith('Showing run: 31 December 2025 · Short credit snapshot · Run S'));
++});
++
+ test('run label: no run picker or file pop-over remains, no run chosen draws nothing, and the bar is hidden on the history page itself', () => {
+   const html = histPage().runLabel('W-Overview', RUN);
+   assert.ok(!/context-pop|context-list|context-role|Other runs of this issuer|Files \(|<summary/.test(html));
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 7fbdb09..96e5f22 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -1171,7 +1171,8 @@ function runGroups(context) {
+ const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
+ // ---- The Overview (ruling H5): selection and ordering of the handoffs' own passages, text unchanged. Nothing is written, counted or
+ // judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
+-const LEAD_MODULES=['CP-6','CP-2'];
++// CP-L10 leads only a short snapshot (amendment 2026-11-11 to H5): CP-2 and CP-6 do not run in it.
++const LEAD_MODULES=['CP-6','CP-2','CP-L10'];
+ const NO_LEAD='No credit view module completed in this run.';
+ const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
+ // The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.
+diff --git a/docs/VERIFICATION-ARCHIVE.md b/docs/VERIFICATION-ARCHIVE.md
+index 50b1be6..a6c5d82 100644
+--- a/docs/VERIFICATION-ARCHIVE.md
++++ b/docs/VERIFICATION-ARCHIVE.md
+@@ -211,3 +211,27 @@ the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `orig
+   forced colours (rule written, not rendered); touch input; the inbox-built library with Run
+   activity; runs without charts or with a committee band; whether a keyboard-only reader finds
+   the full basis (it is in the selected-run panel, not on focus).
++
++## 2026-11-10 — Library links to the report and to retained sources (branch `claude/library-open-report-link`)
++
++Cause: the page matched a catalogue deliverable to the store's report by a server address ending
++`&embedded=1` and linked only root-absolute paths; the static build writes `reports/…` and `../…`
++with the query removed. So "Open report" (row, selected run, deliverables list) was plain text and
++"Open retained source" never appeared. Present since the web assets were copied (`5249e4e`).
++
++- Fix in `views.js`: match by the one address the build writes; `libraryPath` accepts only those two
++  relative forms and refuses a scheme, a root, a backslash, a query, an empty or dot segment and
++  percent-encoded dots or slashes.
++- Tests written first and seen failing: the browser test on a fixture library (row and selected-run
++  links to `#W-Reports/<delivery>?c=run-a`, source link to the retained `CP-1.md`) and a node test
++  of the path guard (4 accepted, 31 refused forms). 107 node tests; 107 pytest (library set,
++  browser included); quality gate exit 0.
++- Real library rebuilt from this branch over the four TDG runs, headless Chrome: each row's
++  deliverable opens its own report in the app; the two file links in the selected-run panel exist
++  on disk; no script error. The row link is regular weight so rows stay 41px at 1440 and 1280.
++- End-to-end walk on merged `main` before the fix (same build): library → run id → Overview → 20 of
++  20 module pages → chip → evidence inspector; Reports, Evidence, Calendar, Run activity render;
++  75 of 76 file links exist (`../activity.js` is written only by the inbox watcher).
++- Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
++  inbox-built library; a run with a published forecast model or without a report ("Open primary
++  handoff"); the Windows package; Safari and Firefox.
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index b6a306b..3a50a89 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -189,3 +189,27 @@ reader-figure check apply as to every prose module. The module's display name, o
+ library, is "Changes since the last run".
+ 
+ Not decided here: charts and visuals for the Changes section (T5).
++
++## Amendment 2026-11-12: M6 built (Short Credit Snapshot)
++
++Owner approved 2026-11-11 ("3. approved"). Pathway id `short_snapshot`, label "Short Credit Snapshot",
++modules CP-0, CP-1 and CP-L10 and nothing else (no CP-DR, CP-2E, CP-MODEL, CP-2G or CP-2). CP-8 is not
++excluded: it runs last when an earlier run of the same issuer and `short_snapshot` pathway exists, as for
++any pathway, and an older run without a recorded selection counts as a base only if it delivered CP-L10.
++It is selectable on the run start page and context form and is one of the library's pathways; the six
++other presets are unchanged.
++
++**CP-L10 is rewritten** (`src/deploy_vii/methods/cpl10.md`), replacing the two-quarter change screen
++(TL10.1 to TL10.5), whose Python owner is not run by CP-OS. It is a prose module: the four reader
++passages, then `### Key figures`, exactly one table `Measure | Value | Period | Source` whose every figure
++is copied exactly from CP-1's handoff (CP-L10 calculates nothing new; a figure CP-1 does not state is
++`Not supplied: <reason>`, never zero), then the usual `## Sources`. It is one page: about 350 words of prose
++and six to ten rows. CP-L10 owns one report block, `key-figures`. The launcher applies the same checks as
++for any prose module (the nine prose checks and the fidelity check: a figure in a reader passage must be in
++a table of the handoff with the same sign, unit and scale). Fix round 1: the launcher also refuses a Key figures table whose header is not exactly
++`Measure | Value | Period | Source` or whose Value cell holds a figure the CP-1 handoff it was sent does not state
++(same sign, unit and scale; `prose_checks.key_figures_issues`). Fix round 2: the sign must match exactly, exactly one table is allowed under the heading, and a missing CP-1 handoff is a refusal, not a skip.
++Known limits: a figure is proven to exist in
++CP-1, not that it is the right measure or period; a unit CP-1 carries only in a column header (`Reporting unit`) is not matched, so a bare CP-1 `3.1` accepts `3.1x`, because CP-1's own tables write plain numbers with a separate unit column; that rests on the reader's check of a real run.
++CP-L10 leads the Overview of a short snapshot (amendment to H5 in
++`2026-11-11-reader-and-issuer-report.md`). The library names the pathway "Short credit snapshot".
+diff --git a/docs/rulings/2026-11-11-reader-and-issuer-report.md b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+index a5f0275..f11f9d2 100644
+--- a/docs/rulings/2026-11-11-reader-and-issuer-report.md
++++ b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+@@ -185,6 +185,12 @@ In this order, selection and ordering only, text unchanged:
+ 5. **Nearest dates**: the next five dated items on or after the run's as-of date, from the
+    timelines of the modules that own them.
+ 
++Amendment 2026-11-12 (owner approved 2026-11-11, "3. approved"): on a Short Credit Snapshot run
++(pathway `short_snapshot`: CP-0, CP-1 and CP-L10) CP-L10 is the lead, after CP-6 and CP-2, which do not
++run in that pathway: its `### Bottom line` and `### Key findings` lead the Overview and are not repeated
++in the bottom lines. Nothing else in H5 changes; CP-L10's `### Key figures` table is a report block, not
++Overview content.
++
+ ### H6. Mechanical prose checks (decision 11)
+ 
+ The checker runs these on the reader passages of every handoff. Excluded from "sentence text":
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index a1bbb7d..783d5aa 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -583,7 +583,8 @@ const PATHWAYS = {
+   relative_value: ['CP-0','CP-1','CP-MODEL','CP-1C','CP-DR','CP-2','CP-2D','CP-2E','CP-3','CP-3C','CP-3D','CP-5'],
+   covenant_refinancing: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2D','CP-2E','CP-2G','CP-4','CP-3C','CP-5'],
+   distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-1C','CP-DR','CP-2','CP-2A','CP-2E','CP-2G','CP-2H','CP-4','CP-4C','CP-5'],
+-  portfolio_decision: ['CP-0','CP-1','CP-MODEL','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6']
++  portfolio_decision: ['CP-0','CP-1','CP-MODEL','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6'],
++  short_snapshot: ['CP-0','CP-1','CP-L10']
+ };
+ // What CP-OS runs for an inbox drop, in order: deploy_vii.registry.plan over cpos_launch.pathway_modules
+ // (CP-MODEL and CP-8 have their own routes; required producers such as CP-1A are added). Owner,
+@@ -595,11 +596,12 @@ const RUN_ORDER = {
+   relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-DR','CP-1C','CP-2','CP-2E','CP-2D','CP-3C','CP-3','CP-5'],
+   covenant_refinancing: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2D','CP-2G','CP-3C','CP-5'],
+   distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-1C','CP-2','CP-2A','CP-2E','CP-2G','CP-2H','CP-4C','CP-5'],
+-  portfolio_decision: ['CP-0','CP-1','CP-1A','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6']
++  portfolio_decision: ['CP-0','CP-1','CP-1A','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6'],
++  short_snapshot: ['CP-0','CP-1','CP-L10']
+ };
+ // Consumer -> producer -> b (a refusal blocks it) | r (it restricts): deploy_vii.registry.edge_rule, as
+ // run_expectations.edges_for returns it for the orders above. Only producers in the run count.
+-const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"}};
++const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"},"CP-L10":{"CP-0":"b","CP-1":"b"}};
+ // Reader names: the module groups of apps/issuer-library/credit_os/web/screen.js.
+ const MODULES = {
+   'CP-0': ['Source readiness', 'Classifies every file and checks your declarations against them.'],
+@@ -608,6 +610,7 @@ const MODULES = {
+   'CP-1A': ['Business & governance', 'Business model, transactions and governance.'],
+   'CP-1B': ['Earnings changes', 'Compares the current period with the prior one.'],
+   'CP-1C': ['Peer benchmark', 'Benchmarks the issuer against peers and forms a valuation multiple.'],
++  'CP-L10': ['Short credit snapshot', 'One page: the credit view, its key figures, the contrary evidence and what is not known.'],
+   'CP-1D': ['Earnings quality', 'Tests EBITDA add-backs against the management bridge.'],
+   'CP-2': ['Fundamental credit', 'The credit view: leverage, coverage and cash flow.'],
+   'CP-2A': ['Downside', 'The stress path and the distress gate.'],
+@@ -632,7 +635,8 @@ const PATHS = {
+   relative_value: {label:'Relative Value', q:'Is this instrument cheap or rich?', needs:'Observed quotes.'},
+   covenant_refinancing: {label:'Covenant & Refinancing', q:'What do the documents allow, and can it refinance?', needs:'The executed credit agreement or indenture.'},
+   distressed_restructuring: {label:'Distressed & Restructuring', q:'How bad can it get, and who recovers what?', needs:'Executed documents, ratings and a fiscal-year base period.'},
+-  portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'}
++  portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'},
++  short_snapshot: {label:'Short Credit Snapshot', q:'The credit view on one page', needs:'Filings with financial statements. No legal documents or quotes.'}
+ };
+ const RUN_LABEL = {primary:'New issue', secondary:'Trading', research:'No market view', earnings:'Earnings update'};
+ // Fonts: the service's library route when the page is served; this repository's when it is opened
+@@ -2394,7 +2398,7 @@ $('new-submission').addEventListener('click', () => {
+ 
+ /* ======================================================================= Visibility */
+ let rtTouched = false, basisTouched = false, idTouched = false, cutTouched = false;
+-const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research'};
++const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research', short_snapshot:'research'};
+ function slug(s) {
+   let x = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+   if (x.length > MAX_ISSUER_ID) { x = x.slice(0, MAX_ISSUER_ID); const cut = x.lastIndexOf('-'); if (cut > 10) x = x.slice(0, cut); }
+diff --git a/src/deploy_vii/contracts.py b/src/deploy_vii/contracts.py
+index 9dcd9e4..3eecbf0 100644
+--- a/src/deploy_vii/contracts.py
++++ b/src/deploy_vii/contracts.py
+@@ -40,6 +40,7 @@ PathwayId = Literal[
+     "covenant_refinancing",
+     "distressed_restructuring",
+     "portfolio_decision",
++    "short_snapshot",
+ ]
+ # Requested module set per Pathway (decision 0009). Required producers are added when a view
+ # or plan is built (registry.dependencies), so these list the modules the Front Page asks for.
+@@ -66,6 +67,8 @@ _PRESETS: dict[PathwayId, tuple[str, ...]] = {
+     "portfolio_decision": (
+         *("CP-0", "CP-1", "CP-MODEL", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
+     ),
++    # Owner, 2026-11-11: its own pathway, one page; no CP-DR, CP-2E, CP-MODEL or CP-2G.
++    "short_snapshot": ("CP-0", "CP-1", "CP-L10"),
+ }
+ PATHWAY_MODULES: Mapping[PathwayId, tuple[str, ...]] = MappingProxyType(_PRESETS)
+ 
+diff --git a/src/deploy_vii/methodology.json b/src/deploy_vii/methodology.json
+index c7ecfc9..6701e80 100644
+--- a/src/deploy_vii/methodology.json
++++ b/src/deploy_vii/methodology.json
+@@ -562,7 +562,7 @@
+   },
+   {
+     "module_id": "CP-L10",
+-    "title": "Financial change screen",
++    "title": "Short credit snapshot",
+     "aliases": [
+       "CP-L20",
+       "CP-L23",
+@@ -574,7 +574,7 @@
+       "CP-1"
+     ],
+     "optional": [],
+-    "purpose": "Runs a bounded LITE screening synthesis for CP-1, CP-1B.",
++    "purpose": "Writes the one-page short credit snapshot from CP-1's figures: the view, key figures, contrary evidence and limitations.",
+     "table_ids": [
+       "TL40.1",
+       "TL40.2",
+diff --git a/src/deploy_vii/methods/cpl10.md b/src/deploy_vii/methods/cpl10.md
+index f6c5d5a..75e9843 100644
+--- a/src/deploy_vii/methods/cpl10.md
++++ b/src/deploy_vii/methods/cpl10.md
+@@ -1,43 +1,68 @@
+-# CP-L10 Financial change screen: method (LEAD adaptation)
++# CP-L10 — Short Credit Snapshot
+ 
+-Purpose (methodology.json): a bounded LITE screening synthesis for CP-1 (aliases CP-L20, CP-L23, CP-L30, CP-L40). CP-L10 screens ONE issuer for change between two quarters of one fiscal year, computed in Python from settled CP-1 T4.10 facts. The analyst chooses the pair of quarters and writes an assessment and a credit-transmission sentence for each topic Python rates Material or Watch, an overall judgment and gaps; the analyst writes no figure.
++Selected authority: the owner's ruling of 2026-11-11 (`docs/rulings/2026-11-11-module-presets-and-changes.md`,
++decision M6: "cp-10 - re-write to be short version of credit shot"; "3. approved"). This replaces the
++bounded two-quarter change screen (TL10.1 to TL10.5) that this file described before; that screen's
++Python owner is not part of this run, and its text is in git history. CP-L10 is the only module with
++its own pathway: CP-0, CP-1 and this page. There is no CP-DR, CP-2E, CP-MODEL or CP-2G in it.
+ 
+-## Topics
+-Seven, in register order: EBITDA, free cash flow, cash, total debt, net debt, total leverage, interest coverage. Each points to the full owner it would upgrade to (EBITDA to CP-1D; free cash flow, cash, total debt and net debt to CP-2D; the two ratios to CP-2A).
++Role: senior leveraged-finance credit analyst, creditor perspective. Write the short version of the
++credit snapshot for a portfolio manager who has not read the documents and will read one page. Reader
++question: on the financial evidence alone, what is the credit view, what supports it, what argues
++against it, and what is not known?
+ 
+-## The rule (one rule for amounts and multiples)
+-For a topic with CP-1 starting value `a` and closing value `b`:
+-- change `= b - a` (signed); change on starting level `= (b - a) / abs(a)` (signed).
+-- **Material** when `abs(b - a) * 10 >= abs(a)`; otherwise **Watch** when `abs(b - a) * 20 >= abs(a)`; otherwise **Stable**.
+-- The rating is made on the EXACT value, never on the rounded quotient or the percentage shown: a change of 99/2000 shows 5.0% and is Stable. A value exactly on a threshold rates up (10 to 11 is Material, 20 to 21 is Watch).
+-- `a = 0`: change 0 is Stable; any other change is Material and the change on starting level is not applicable (never infinity, never 0).
+-- `a` or `b` missing in CP-1: **Not assessed**, evidence Missing, disposition Evidence needed; change and change on starting level are missing with CP-1's own limitation text. A missing value is never read as 0.
+-- Dispositions: Material, Upgrade to full module; Watch, Monitor; Stable, No action; Not assessed, Evidence needed.
+-- Priority rank 1 to 7: Material (a zero-base Material first), Watch, Not assessed, Stable; inside a class the larger absolute change on starting level first, then register order. Not assessed ranks above Stable because an unscreened topic needs attention before a screened-quiet one.
++## What you are given
+ 
+-## Policy literals (D11)
+-The two thresholds (1/10 and 1/20 of the starting level), the single rule for every topic and the rank order are screening policy that no source states. They are literals of this method, recorded as such with an own limitation, never presented as sourced, and they are not covenant or credit tests.
++The CP-0 handoff (what the sources can support) and the CP-1 handoff (the financial foundation: periods,
++units, statements, leverage, coverage, liquidity, the debt stack and maturities), and the issuer's
++sources. You have no business-risk, research, stress, relative-value or committee handoff. Say so where it
++limits the view; never write as if those modules had run.
+ 
+-## What is held or left out (each recorded as an own limitation)
+-1. **Thresholds** are screening rules, not covenant or credit tests.
+-2. **Two quarters only.** No trend, seasonality or annual comparison; the pack has no prior-year statements.
+-3. **Ratios** are compared only where CP-1 carries a known value for both quarters (CP-1 gives leverage and coverage a twelve-month basis only for the quarter that ends the year).
+-4. **Movement, not quality.** No recommendation, covenant, recovery or refinancing conclusion.
+-5. **Exact rating, rounded display.** The rating uses the exact change on the starting level; the percentage shown is rounded, so a shown value at a threshold can carry the lower rating.
+-6. **Small and negative bases.** A small starting level inflates the relative change; a negative starting level is measured on its absolute value. The rating reads the size of movement, not its economic meaning.
+-Also recorded: one "Not screened" line per topic CP-1 cannot supply, one line per analyst gap, and (settled) `Synthetic case; not real issuer qualification`.
++## What to write
+ 
+-## Tables
+-TL10.1 scope and sources, TL10.2 topic screen, TL10.3 screen items, TL10.4 upgrade triggers, TL10.5 screen totals (topic counts per materiality). Column labels are the field names in words (`change_pct` reads "Change pct"); Python composes every table and the analyst writes no figure. TL20, TL23, TL30 and TL40 of the same entry are not produced by this slice (LEAD Q3); a later slice or a methodology coverage check decides their fate.
++Open `## Findings` with the four reader passages, in this order, each once, as the reader passages rule
++above requires. Keep the whole page short: the Bottom line one short paragraph, three to five key
++findings of one or two sentences each, the contrary evidence one short paragraph, and as many limitations
++as change a conclusion. The page is about 350 words of prose and one table.
+ 
+-## Review challenge
+-The independent review must challenge the thresholds and rank order as policy (Q1); the rule itself is exact and pinned by fixtures at 1/10, 1/20 and 99/2000.
++- `### Bottom line`: the credit view and what it means for a creditor, first, in plain words. A view
++  that rests on financials only says so in its first paragraph. Name the one thing that decides it.
++- `### Key findings`: the few findings that move the view, each starting with its judgement (leverage,
++  coverage, liquidity and maturities, free cash flow, how much of the evidence is missing). Give a figure
++  only where it moves the view, and only a figure the Key figures table holds.
++- `### Contrary evidence and what would change the view`: the strongest evidence against your view in
++  CP-1's figures, and the figure or event that would change it.
++- `### Limitations`: what this page cannot say and which conclusion that changes: for example that no
++  business-risk, downside, legal or relative-value work stands behind it, or a CP-1 measure that is
++  missing or not comparable. Add the limitations CP-0 and CP-1 record that change this page's
++  conclusion, worded for this page.
+ 
+-## Recorded limits (Stage 2)
+-- **Substring match of prohibited words (L10-b).** The analyst text is refused when it contains `recommend`, `recovery` or `covenant` anywhere, as a substring of any word. An operating "Recovery" (for example "cash recovery in the quarter") is therefore refused. Word boundaries would not fix it and a phrase guard would change the pinned refusal r10, so the limit is accepted and stated here (LEAD ruling L10-b).
+-- **Exact change in plain form.** The stored change is one exact subtraction of CP-1 decimals, kept in plain notation: zero is `0` (never `-0` or `0E+2`) and a whole number has no positive exponent. A magnitude below one millionth still prints in scientific notation (the decimal text form); the rating always uses the exact value.
+-- **Consumption (D3) is open.** `cpl10_reader` exposes status, per topic id, materiality, evidence, disposition, rank and change, and the counts. No consumer core reads CP-L10, so no completion is claimed.
++## Key figures
+ 
++After `### Limitations`, write `### Key figures`: exactly one table with the columns
++`| Measure | Value | Period | Source |`, six to ten rows. Every figure is copied exactly from the CP-1
++handoff, with its sign, unit, scale and period, from the CP-1 table cell that holds it. CP-L10 calculates
++nothing new: no ratio, difference, average, rounding, conversion or sum that CP-1 does not already state.
++A figure you would have to work out is not in the table; say in Limitations that it is not stated.
+ 
+-## Derived-fact citations
+-- **Derived-fact citations.** The lineage rule (rulings stage2 round 3 item 3, applied to this module at the Stage 2 close release, round 5 item 17): a calculated fact has one `Citation` per (source, page), quoting the first of its inputs' quotes on that page, in `derives_from` order (`deploy_workflow.owners.blank.one_per_page`). A copied CP-1 cell keeps CP-1's own citations. No quote is invented.
++- Choose the measures the view rests on, from those CP-1 states: total leverage, net leverage,
++  interest coverage, cash, undrawn committed facilities, gross debt, net debt, free cash flow, revenue
++  and EBITDA, and the nearest debt maturity. A measure CP-1 does not state, or states as
++  `Not supplied`, is written as `Not supplied: <reason from CP-1>` in the Value cell, never as zero.
++- Period: the period CP-1 labels the figure with. Do not put a figure of one period against another.
++- Source: `Canonical data foundation (CP-1)`. Where CP-1's own row names a source file and page, add it
++  in the Basis item form after a semicolon: `Canonical data foundation (CP-1); annual.txt, page 12`.
++- CP-OS refuses a Key figures table whose header is not exactly those four columns or whose Value cell holds a figure the CP-1 handoff does not state with the same sign, unit and scale.
++- Every figure in a reader passage is also a row of this table, with the same sign, unit and scale.
++- Leave out any measure whose definition differs between the CP-1 rows that state it, and say so in
++  Limitations.
++
++## What CP-L10 does not do
++
++No instrument recommendation, action bias (CP-6 owns that), relative value, recovery view or covenant
++reading. No forecast. The Calculations section is `None.`: CP-L10 calculates nothing. Write
++`## Gaps` for anything the page needed and CP-1 could not supply.
++
++If CP-1 is blocked or states no financial figure, this module is blocked: write only
++`### Bottom line` beginning `Not assessable: ` and the reason, and the Key figures table with one row
++stating not assessable.
+diff --git a/src/deploy_vii/report_view.py b/src/deploy_vii/report_view.py
+index e18c684..0d44d50 100644
+--- a/src/deploy_vii/report_view.py
++++ b/src/deploy_vii/report_view.py
+@@ -616,11 +616,17 @@ _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
+             "what-changed",
+         ),
+     ),
++    (
++        "short_snapshot",
++        "Short Credit Snapshot",
++        "What is the credit view on one page, and what would change it?",
++        ("key-figures",),
++    ),
+ )
+ 
+ 
+ def pathways() -> tuple[Pathway, ...]:
+-    """The six Pathway presets in Front Page order (FP 01 to FP 06)."""
++    """The Pathway presets in Front Page order (FP 01 to FP 06, then the Short Credit Snapshot)."""
+     return tuple(
+         Pathway(
+             id=pathway_id,
+@@ -1390,6 +1396,11 @@ def _strip_note(block_id: str) -> str:
+     )
+ 
+ 
++# The Short Credit Snapshot's one block (owner, 2026-11-11): CP-L10's Key figures table. Its prose
++# is the Overview lead (H5), not a block.
++_SHORT_SNAPSHOT: Mapping[str, _Spec] = MappingProxyType(
++    {"key-figures": _Spec("Key figures", "CP-L10", "dense", ("CP-L10",))}
++)
+ _COMPOSITIONS: tuple[Mapping[str, _Spec], ...] = (
+     _CREDIT_SNAPSHOT,
+     _EARNINGS_UPDATE,
+@@ -1397,6 +1408,7 @@ _COMPOSITIONS: tuple[Mapping[str, _Spec], ...] = (
+     _RELATIVE_VALUE,
+     _DISTRESSED,
+     _EARNINGS_QUALITY,
++    _SHORT_SNAPSHOT,
+ )
+ 
+ 
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 2e15fa2..01809e8 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -98,6 +98,7 @@ from deploy_workflow.prose_checks import (
+     DATA_MODULES,
+     READER_HEADINGS,
+     figure_issues,
++    key_figures_issues,
+     prose_issues,
+ )
+ from deploy_workflow.run_expectations import Item, edges_for, expectations, guess_kind
+@@ -143,6 +144,8 @@ _SELECTED: dict[str, tuple[str, ...]] = {
+         _SKILLS + "cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md",
+     ),
+     "CP-1D": (_SKILLS + "cp-1d-earnings-quality/SKILL.md",),
++    # Owner, 2026-11-11: the Short Credit Snapshot's one page, read from CP-1's handoff alone.
++    "CP-L10": (_VII + "cpl10.md",),
+     "CP-2": (_VII + "cp2.md",),
+     "CP-2A": (
+         _SKILLS + "cp-2a-downside-pathway/SKILL.md",
+@@ -2218,6 +2221,8 @@ def checker(layout: MarkdownLayout) -> Check:
+             issues.append("List each issuer source relied on with its exact name and sha256.")
+         issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
+         issues += figure_issues(text)
++        if task.module_id == "CP-L10":
++            issues += _key_figure_issues(task, text)
+         if task.module_id == "CP-8":
+             sent = [*task.handoffs.values()] + [
+                 raw for name, raw in task.sources.items() if name.startswith(PRIOR_PREFIX)
+@@ -2257,6 +2262,14 @@ def checker(layout: MarkdownLayout) -> Check:
+     return check
+ 
+ 
++def _key_figure_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
++    """CP-L10's Key figures against the CP-1 handoff it was sent; none sent is a refusal."""
++    if "CP-1" not in task.handoffs:
++        missing = "Key figures cannot be checked against the financial foundation: no CP-1 handoff."
++        return (missing,)
++    return key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
++
++
+ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+     """Live run tdg-forecast-004 (2026-11-10): a forecast block delivery cannot parse is sent
+     back for repair here, not dropped after payment. Declining (all null) stays the method's call
+diff --git a/src/deploy_workflow/prose_checks.py b/src/deploy_workflow/prose_checks.py
+index 81f28f0..da3517b 100644
+--- a/src/deploy_workflow/prose_checks.py
++++ b/src/deploy_workflow/prose_checks.py
+@@ -830,6 +830,45 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
+     )
+ 
+ 
++KEY_FIGURES_HEADING = "### Key figures"
++KEY_FIGURES_HEADER = ["Measure", "Value", "Period", "Source"]
++
++
++def key_figures_issues(text: str, cp1: str) -> tuple[str, ...]:
++    """CP-L10's Key figures: exactly one table with the columns `Measure | Value | Period |
++    Source`, and every figure of a Value cell held in the CP-1 handoff with the same sign, unit
++    and scale (the sign must match exactly; a unit CP-1 carries only in a column header is not
++    matched). It proves the figure exists in CP-1, not that it is the right measure or period."""
++    lines = text.splitlines()
++    start = next((i for i, line in enumerate(lines) if line.strip() == KEY_FIGURES_HEADING), None)
++    if start is None:
++        return ()  # the report selector check names a missing section
++    section: list[str] = []
++    for line in lines[start + 1 :]:
++        if re.match(r"#{1,6}\s", line):
++            break
++        section.append(line)
++    tables = _tables("\n".join(section))
++    if not tables or any(t[0] != KEY_FIGURES_HEADER for t in tables):
++        header = "`| Measure | Value | Period | Source |`"
++        return (f"Key figures: the table header must be exactly {header}.",)
++    issues = []
++    if len(tables) > 1:
++        issues.append("Key figures: write exactly one table under the heading.")
++    held = _figures(cp1)
++    for table in tables:
++        for row in table[2:]:
++            for figure in dict.fromkeys(_figures(row[1] if len(row) > 1 else "")):
++                same = [h for h in held if h.negative == figure.negative]
++                if _fidelity_problem(figure, same) is not None:
++                    issues.append(
++                        f'Key figures: "{figure.shown}" is not stated in the CP-1 handoff with '
++                        "the same sign, unit and scale: copy it exactly from CP-1 or remove "
++                        "the row."
++                    )
++    return tuple(issues)
++
++
+ FORECAST_HEADING = "### Forecast inputs (machine-readable)"
+ 
+ 
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 343b8c0..c955b9d 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -106,7 +106,11 @@ PRESET_ANSWER_KEY = {
+         "CP-0 CP-1 CP-1A CP-1C CP-DR CP-2 CP-2A CP-2E CP-2G CP-2H CP-4 CP-4C CP-5"
+     ),
+     "portfolio_decision": "CP-0 CP-1 CP-MODEL CP-DR CP-2 CP-2E CP-3 CP-5 CP-6",
++    # Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page; it gets
++    # no CP-DR, CP-2E, CP-MODEL or CP-2G.
++    "short_snapshot": "CP-0 CP-1 CP-L10",
+ }
++SHORT_SNAPSHOT = ("CP-0", "CP-1", "CP-L10")
+ 
+ 
+ def context_file(tmp_path: Path, pathway: str = "covenant_refinancing") -> Path:
+@@ -747,7 +751,7 @@ def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
+     assert "liquidity-runway" in prepared.omitted
+ 
+ 
+-@pytest.mark.parametrize("module", ["CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
++@pytest.mark.parametrize("module", ["CP-MEMO", "CP-OS", "NOPE"])
+ def test_modules_without_a_launchable_method_are_refused(tmp_path, capsys, module):
+     assert main([*launch(tmp_path), "--modules", module]) == 2
+     assert module in capsys.readouterr().err
+@@ -972,6 +976,172 @@ def prepare_routes(
+     )
+ 
+ 
++KEY_FIGURES = (
++    "| Measure | Value | Period | Source |\n| --- | --- | --- | --- |\n"
++    "| Interest cover | 3.1x | FY2024 | Canonical data foundation (CP-1) |\n"
++    "| Refinancing due | USD 1,250 million | FY2024 | Canonical data foundation (CP-1) |"
++)
++
++
++def short_snapshot_answer(context: dict, routes: list) -> str:
++    """CP-L10's answer in the new format, hand-written: the four reader passages, a Key figures
++    table whose Source column names CP-1, and no calculation. CP-0 and CP-1 answer as usual."""
++    if context["module_id"] == "CP-1":  # the figures CP-L10 copies
++        held = (
++            "| Item | Value |\n| --- | --- |\n| Cover | 3.1x |\n| Refinancing | USD 1,250 million |"
++        )
++        return answer(context, routes).replace(
++            "## Calculations\n\nNone.", f"## Calculations\n\n{held}", 1
++        )
++    if context["module_id"] != "CP-L10":
++        return answer(context, routes)
++    lines = ["# CP-L10", "", "## Request", f"{ISSUER} as of {AS_OF}.", "", "## Sources", ""]
++    lines += [f"- {n} {h}" for n, h in context["sources"].items()]
++    lines += [f"- {n} {h['sha256']}" for n, h in context["handoffs"].items()]
++    lines += [
++        *("", "## Findings", "", "### Bottom line", ""),
++        (
++            "Creditors are covered today but only just: cover is thin at 3.1x, so the near-term "
++            "refinancing decides the view."
++        ),
++        "Basis: annual.txt, page 2",
++        *("", "### Key findings", ""),
++        "Cover is thin at 3.1x, which leaves little room for a weaker year.",
++        "Basis: annual.txt, page 2",
++        *("", "### Contrary evidence and what would change the view", ""),
++        "Nothing supplied contradicts the view; a USD 1,250 million refinancing would.",
++        *("", "### Limitations", ""),
++        "- Only the financial statements were read, so the business view is not tested here.",
++        *("", "### Key figures", "", KEY_FIGURES),
++        *("", "## Calculations", "", "None.", "", "## Gaps", "", "None.", "", "## Next module"),
++        *("", "None.", ""),
++    ]
++    return "\n".join(lines)
++
++
++def test_short_snapshot_plans_exactly_cp0_cp1_and_cp_l10_in_order(tmp_path):
++    """Owner, 2026-11-11: its own pathway of CP-0, CP-1 and one CP-L10 page; no CP-DR, CP-2E,
++    CP-MODEL or CP-2G (the others' exception). The expected order is written by hand."""
++    prepared, _ = all_instructions(tmp_path, "short_snapshot")
++    assert tuple(prepared.plan.instructions) == SHORT_SNAPSHOT
++    assert prepared.plan.run.requested_modules == ("CP-0", "CP-1", "CP-L10")
++    assert prepared.ordered == SHORT_SNAPSHOT
++    assert {r.module_id for r in prepared.plan.layout.routes} == {"CP-L10"}
++    assert prepared.layout.title.endswith("Short Credit Snapshot")
++
++
++def test_the_other_presets_do_not_gain_cp_l10():
++    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
++
++    assert all("CP-L10" not in m for p, m in PRESETS.items() if p != "short_snapshot")
++
++
++def test_cp_l10_is_a_prose_module_sent_the_reader_passages_and_its_own_method(tmp_path):
++    _, texts = all_instructions(tmp_path, "short_snapshot")
++    head, _, method = texts["CP-L10"].partition(cpos_launch.METHOD_MARK)
++    method = " ".join(method.split())
++    assert "### Key findings" in head and "### Contrary evidence" in head
++    assert "### Key figures" in head
++    assert "short version of the credit snapshot" in method
++    assert "copied exactly from the CP-1 handoff" in method
++    assert "financial change screen" not in method.lower()
++
++
++def test_a_short_snapshot_runs_end_to_end_to_a_verified_delivery(tmp_path, provider, capsys):
++    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
++    routes = list(
++        prepare(
++            tmp_path / "context.json",
++            tmp_path / "issuer",
++            tmp_path / "preview",
++            config="sol-medium",
++            cap="50",
++        ).plan.layout.routes
++    )
++    provider.answer = lambda context: short_snapshot_answer(context, routes)
++    assert main(argv) == 0
++    out = tmp_path / "out"
++    assert tuple(c[0] for c in provider.calls) == SHORT_SNAPSHOT
++    receipt = next((out / "deliveries").glob("*/delivery.json"))
++    assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt
++    assert "Short Credit Snapshot" in json.loads(receipt.read_text())["scope"]
++
++
++def short_snapshot_issues(
++    tmp_path, change, cp1=b"# upstream\nCover 3.1x; refinancing USD 1,250 million."
++):
++    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
++    task = dataclasses.replace(task, handoffs={"CP-1": cp1})
++    context["handoffs"] = {"CP-1": {"sha256": hashlib.sha256(cp1).hexdigest()}}
++    raw = change(short_snapshot_answer(context, list(prepared.plan.layout.routes)))
++    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
++
++
++def test_the_checker_accepts_a_good_short_snapshot(tmp_path):
++    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
++
++
++def test_a_key_figure_that_cp1_never_states_is_refused_naming_it(tmp_path):
++    """The figure is in the Key figures table and the Bottom line, so the fidelity check alone
++    accepts it; the Key figures check holds it to the CP-1 handoff the module was sent."""
++    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace("3.1x", "9.9x"))
++    assert any("Key figures" in i and "9.9" in i for i in issues), issues
++
++
++def test_the_good_short_snapshot_passes_the_key_figures_check(tmp_path):
++    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
++
++
++def test_a_key_figure_that_drops_cp1s_sign_is_refused(tmp_path):
++    cp1 = b"# upstream\nChange -3.1x; refinancing USD 1,250 million."
++    issues = short_snapshot_issues(tmp_path, lambda raw: raw, cp1=cp1)
++    assert any("Key figures" in i and "3.1x" in i for i in issues), issues
++
++
++def test_a_second_key_figures_table_is_refused(tmp_path):
++    extra = "\n\n" + KEY_FIGURES.replace("3.1x", "9.9x")
++    issues = short_snapshot_issues(
++        tmp_path, lambda raw: raw.replace(KEY_FIGURES, KEY_FIGURES + extra)
++    )
++    assert any("Key figures" in i and "9.9x" in i for i in issues), issues
++    assert any("exactly one table" in i for i in issues), issues
++
++
++def test_no_cp1_handoff_means_the_key_figures_are_refused_not_skipped(tmp_path):
++    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
++    task = dataclasses.replace(task, handoffs={})
++    context["handoffs"] = {}
++    raw = short_snapshot_answer(context, list(prepared.plan.layout.routes))
++    issues = _checked_handoff(task, raw.encode(), checker(prepared.layout))
++    assert any("cannot be checked" in i for i in issues), issues
++
++
++def test_a_key_figures_table_with_other_columns_is_refused(tmp_path):
++    bad = "| Thing | Number |\n| --- | --- |\n| Interest cover | 3.1x |"
++    issues = short_snapshot_issues(tmp_path, lambda raw: raw.replace(KEY_FIGURES, bad))
++    assert any("Key figures" in i and "Measure | Value | Period | Source" in i for i in issues)
++
++
++@pytest.mark.parametrize(
++    ("change", "complaint"),
++    [
++        # Check 8 (figures in a reader passage are held in a table): 4.5x is in no table.
++        (lambda raw: raw.replace("cover is thin at 3.1x, so", "cover is thin at 4.5x, so"), "4.5"),
++        # Check 1: the Bottom line must lead.
++        (lambda raw: raw.replace("### Bottom line", "### Summary"), "Prose check 1"),
++        # Check 2: a module code in a sentence.
++        (lambda raw: raw.replace("little room", "little room per CP-1"), "Prose check 2"),
++        # The report selector: the Key figures table is required.
++        (lambda raw: raw.replace("### Key figures", "### Figures"), "Key figures"),
++    ],
++)
++def test_the_checker_refuses_a_short_snapshot_that_breaks_the_reader_checks(
++    tmp_path, change, complaint
++):
++    issues = short_snapshot_issues(tmp_path, change)
++    assert any(complaint in i for i in issues), issues
++
++
+ @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+ def test_every_pathway_runs_end_to_end_to_a_verified_report(tmp_path, provider, capsys, pathway):
+     argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway=pathway)
+@@ -3060,6 +3230,44 @@ def test_the_forecast_tab_shows_the_model_only_for_the_run_that_published_one(
+ UNFILLED = re.compile(r"\b(undefined|NaN|null|\[object Object\])\b")
+ 
+ 
++@pytest.mark.browser
++def test_a_short_snapshot_run_in_the_library_is_listed_with_its_label_and_cp_l10_leads_the_overview(
++    tmp_path, provider, capsys
++):
++    """Owner, 2026-11-11: CP-2 and CP-6 do not run in a short snapshot, so CP-L10 leads (H5)."""
++    from test_library_page_browser import visit
++
++    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
++    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
++    routes = list(
++        prepare(
++            tmp_path / "context.json",
++            tmp_path / "issuer",
++            tmp_path / "preview",
++            config="sol-medium",
++            cap="50",
++        ).plan.layout.routes
++    )
++    provider.answer = lambda context: short_snapshot_answer(context, routes)
++    assert main(argv) == 0
++    assert "Library not updated" not in capsys.readouterr().err
++    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
++    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
++    assert data["workspace"]["runs"][RUN_ID]["pathway"] == "short_snapshot"
++    index = tmp_path / "library/index.html"
++    dom, console = visit(index, f"#W-Overview?c={RUN_ID}")
++    assert console == []
++    shown = re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>|\s+", " ", dom)
++    assert "Short credit snapshot" in shown  # the run label names the pathway as words
++    lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
++    assert lead is not None
++    lead_text = re.sub(r"\s+([,.;:])", r"\1", " ".join(re.sub(r"<[^>]+>", " ", lead[0]).split()))
++    assert "Creditors are covered today but only just" in lead_text
++    assert "Cover is thin at 3.1x" in lead_text
++    assert 'href="#CP-L10/' in lead[0]  # written by CP-L10
++    assert UNFILLED.search(shown) is None, UNFILLED.findall(shown)
++
++
+ @pytest.mark.browser
+ @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
+ def test_each_pathways_run_reaches_the_library_screens(tmp_path, provider, capsys, pathway):
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index 3182746..6242ce6 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -843,7 +843,7 @@ def test_a_copy_of_the_page_marked_with_a_pathway_no_longer_fixes_it(tmp_path):
+     probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+     # The page is served by the start service, not opened from a folder: the copy's
+     # data-pathway mark is ignored, every pathway is offered and none is disabled.
+-    assert len(probe["shown"]) == 6 and probe["disabled"] == 0
++    assert len(probe["shown"]) == 7 and probe["disabled"] == 0  # the six and the short snapshot
+     assert probe["built"]["run"]["pathway"] == "credit_snapshot"  # The probe's own choice held ...
+     # The probe's event targets the form, not the radio, so the run type stays at the
+     # pathway's default (research for Credit Snapshot).
+diff --git a/tests/test_run_start_page.py b/tests/test_run_start_page.py
+index efc34fa..98a135e 100644
+--- a/tests/test_run_start_page.py
++++ b/tests/test_run_start_page.py
+@@ -702,6 +702,30 @@ def test_the_review_shows_the_services_forecast_per_module(page):
+     assert "confirmed when the summary is made" not in seen["ready"]
+ 
+ 
++def test_the_page_offers_the_short_snapshot_and_the_service_reviews_its_three_modules(page):
++    """Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page."""
++    seen = page.run(f"""
++    const cards = [...document.querySelectorAll('#pathcards input[data-k="pathway"]')].map(e => ({{
++      value: e.value, text: e.closest('label').textContent}}));
++    await issuer('short_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
++    const S = await review();
++    return {{cards, S, shown: [...document.querySelectorAll('#rv-ready [data-module]')]
++      .map(r => r.dataset.module).filter(id => id !== 'run'),
++      facts: document.getElementById('rv-facts').textContent}};
++    """)
++    card = next(c for c in seen["cards"] if c["value"] == "short_snapshot")
++    assert "Short Credit Snapshot" in card["text"]
++    names = "Source readiness, Financial foundation, Short credit snapshot"
++    assert f"3 modules: {names}" in card["text"]
++    assert len(seen["cards"]) == 7
++    summary = seen["S"]
++    assert summary["error"] == "" and summary["digest"]
++    assert summary["modules"] == ["CP-0", "CP-1", "CP-L10"]
++    assert seen["shown"] == ["CP-0", "CP-1", "CP-L10"]
++    assert "Short Credit Snapshot" in seen["facts"]
++    assert "CP-DR" not in summary["modules"] and "CP-2E" not in summary["modules"]
++
++
+ def test_the_services_outcome_replaces_the_confirmed_when_the_summary_is_made_check(page):
+     seen = page.run(f"""
+     await issuer('earnings_update', [file('annual.txt', {json.dumps(REPORT)}),

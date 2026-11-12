@@ -3434,7 +3434,8 @@ def run_evidence(
     dates: dict[str, str] = {}
     supplied = workflow.get("sources")
     supplied = supplied if isinstance(supplied, dict) else {}
-    names = [name for name in supplied if name != "context"]
+    # The earlier run's handoffs, pinned for CP-8 alone (owner, 2026-11-11), are not issuer files.
+    names = [name for name in supplied if name != "context" and not name.startswith("prior/")]
     for module, entry in run["modules"].items():
         output = held.outputs.get(entry["default"] or "")
         if output is None:

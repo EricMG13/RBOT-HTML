@@ -45,9 +45,13 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
     "model", "effort"}``. ``model`` is "gpt" or "claude", ``effort`` "fast", "balanced" or "high";
     other than "gpt" and "balanced" only at the "advanced" level.
     200 ``{"error": "", "digest", "modules", "items", "documents", "ignored", "omitted", "model",
-    "effort"}``, the launcher's own forecast and the digest to approve; or 200
-    ``{"error": "<sentence>"}`` with no digest when the answers or files are refused (Claude Opus
-    without an Anthropic key on the service included). Only the latest digest issued is accepted.
+    "effort", "changes", "prior"}``, the launcher's own forecast and the digest to approve
+    (``changes`` says whether CP-8 will run, and against which earlier run: its pathway and as-of
+    date; ``prior`` is ``{"id", "as_of", "pathway"}`` of that run or null for a first run, and is
+    part of the digest: the launcher is started with that run, ``--prior <id>`` or ``--prior
+    none``; the modules list holds CP-8 when it will); or 200 ``{"error": "<sentence>"}`` with no
+    digest when the answers or files are refused (Claude Opus without an Anthropic key on the
+    service included). Only the latest digest issued is accepted.
 ``POST /api/submissions/<id>/submit``
     Body: ``{"answers": <the answers object>, "digest": "<digest of the latest summary>"}``.
     200 ``{"run": "<run id>", "status": "queued"}``. Repeating it returns the same run. 400 when

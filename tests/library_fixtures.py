@@ -10,6 +10,8 @@ from pathlib import Path
 METHOD = {
     "CP-0": "=== methods/cp0.md sha256 {h} ===\n# CP-0 method\nRead the sources.",
     "CP-1": "=== prompts/CP-1.md sha256 {h} ===\n# CP-1 method\nBuild the foundation.",
+    "CP-2": "=== methods/cp2.md sha256 {h} ===\n# CP-2 method\nAssess the credit.",
+    "CP-8": "=== methods/cp8.md sha256 {h} ===\n# CP-8 method\nSay what changed.",
 }
 
 
@@ -83,6 +85,11 @@ class RunSpec:
     sent_extra: str = ""  # Text sent after the method block, such as a section since dropped.
     supplied: tuple[str, ...] = ()  # Supplied file names, as workflow.json `sources` lists them.
     report_page: bool = True  # False: a current delivery, with no report.html, stated by receipt.
+    pathway: str = "credit_snapshot"
+    first_call: str | None = None  # Every call's started_at, when a test orders runs by it.
+    selection: str | None = "preset"  # workflow.json `selection`; None: an older run without it
+    case_kind: str = "public"
+    cp8: str | None = None  # The whole CP-8 handoff, when the run has that module.
 
 
 def make_run(workspace: Path, folder: str, **changes) -> Path:
@@ -97,13 +104,13 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
     run_dir = workspace / "runs" / folder
     run = {
         "schema_version": "run/2",
-        "run_id": f"{issuer_id}-{as_of}-credit_snapshot",
+        "run_id": f"{issuer_id}-{as_of}-{spec.pathway}",
         "issuer_id": issuer_id,
         "issuer_name": issuer_name,
         "as_of": as_of,
         "method_version": "deploy-v-r14",
-        "case_kind": "public",
-        "pathway": "credit_snapshot",
+        "case_kind": spec.case_kind,
+        "pathway": spec.pathway,
         "requested_modules": list(modules),
     }
     instructions, handoffs, selected = {}, {}, {}
@@ -122,6 +129,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
             confidence=spec.cp0_confidence if module == "CP-0" else "Medium",
             finding=spec.cp1_finding if module == "CP-1" else FINDING_ROW,
         )
+        if module == "CP-8" and spec.cp8 is not None:
+            answer = spec.cp8
         if module == "CP-0":
             answer += spec.cp0_extra
         if module == "CP-1":
@@ -144,6 +153,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         handoffs[module] = {"path": path, "sha256": put(run_dir / path, answer.encode())}
         selected[module] = path
     workflow = {"run": run, "instructions": instructions, "provider_cap_usd": "12"}
+    if spec.selection is not None:
+        workflow["selection"] = spec.selection
     if spec.supplied:
         workflow["sources"] = {
             name: {
@@ -199,7 +210,7 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
             "requested_model": "gpt-6.1-sol",
             "reported_model": "gpt-6.1-sol",
             "requested_effort": "medium",
-            "started_at": f"2026-11-0{i + 1}T10:00:00Z",
+            "started_at": spec.first_call or f"2026-11-0{i + 1}T10:00:00Z",
             "settled_usd": amount,
         }
         for i, amount in enumerate(spec.settled)
@@ -345,3 +356,32 @@ ALIAS_CITED = """
 | Bracketed | -11 | Annual p.71 prints it. |
 | Listed | 1 | Annual pages 71, 72 and Annual filing pp.71–72. |
 """
+
+
+FIRST_RUN_RECORD = "changes: first run of this pathway"
+
+
+def with_changes(
+    run_dir: Path,
+    pack: bytes | None = None,
+    note: str | None = None,
+    first: bool = False,
+    line: str | None = None,
+) -> None:
+    """Make a current-kind delivery (see without_report) carry CP-8's comparison pack as
+    `changes.json` (the bytes given, listed in the receipt and hashed in the completion record)
+    and/or the manifest's `changes_note` (why CP-8 was planned and not produced); `line` is the
+    completion record's own `changes` line, as the launcher writes it."""
+    if pack is not None:
+        (delivered,) = (run_dir / "deliveries").iterdir()
+        receipt = json.loads((delivered / "delivery.json").read_text())
+        receipt["files"]["changes.json"] = put(delivered / "changes.json", pack)
+        raw = json.dumps(receipt).encode()
+        (delivered / "delivery.json").write_bytes(raw)
+        rewrite_completion(run_dir, lambda record: record.update(delivery_sha256=sha(raw)))
+    if first:
+        rewrite_completion(run_dir, lambda record: record.update(changes=FIRST_RUN_RECORD))
+    if line is not None:
+        rewrite_completion(run_dir, lambda record: record.update(changes=line))
+    if note is not None:
+        rewrite_manifest(run_dir, lambda manifest: manifest.update(changes_note=note))

@@ -614,7 +614,8 @@ CODES_PROBE = """(async () => {
     scan('inspector');
   }
   for (const route of ['#W-Evidence/sources?c=RUN', '#W-Report/history?c=RUN',
-                       '#W-Overview/overview?c=RUN', '#CP-OS/activity']) {
+                       '#W-Overview/overview?c=RUN', '#W-Changes/changes?c=RUN',
+                       '#CP-OS/activity']) {
     location.hash = route;
     await sleep(300);
     scan(route);
@@ -932,7 +933,7 @@ def test_a_copy_of_the_page_marked_with_a_pathway_no_longer_fixes_it(tmp_path):
     probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     # The page is served by the start service, not opened from a folder: the copy's
     # data-pathway mark is ignored, every pathway is offered and none is disabled.
-    assert len(probe["shown"]) == 6 and probe["disabled"] == 0
+    assert len(probe["shown"]) == 7 and probe["disabled"] == 0  # the six and the short snapshot
     assert probe["built"]["run"]["pathway"] == "credit_snapshot"  # The probe's own choice held ...
     # The probe's event targets the form, not the radio, so the run type stays at the
     # pathway's default (research for Credit Snapshot).
@@ -1061,7 +1062,7 @@ def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_pat
         assert seen["text"].startswith("Showing run: 31 December 2025 · Credit snapshot · ")
         assert long.upper() in seen["text"]
         assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
-        assert seen["tabs"] == ["Report", "Overview", "Modules", "Forecast", "Evidence"]
+        assert seen["tabs"] == ["Report", "Overview", "Changes", "Modules", "Forecast", "Evidence"]
         assert seen["current"] == [route.split("?")[0][3:]]
         # The chart index is the Forecast page's; the Overview selects passages instead.
         assert seen["indexRows"] == (

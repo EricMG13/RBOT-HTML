@@ -23,18 +23,18 @@ const modules = {
     ['outlook','Outlook & downside chain',['Outlook and issuer']], ['factors','Six-factor matrix & monitoring',['Six-factor']],
     ['gaps','Gaps & limitations',['Gaps']], ['basis','Evidence & definitions',['Sources','Evidence rows','Calculations']],
     ['audit','Technical audit',['Request','Next module']]]},
-  [pins['CP-8']]: {name:'Deliverable comparison', subtitle:'What changed between deliverables, and why?', first:'comparison', sections:[
-    ['comparison','Deliverable comparison',['Findings','All five report sections','Material analytical changes','Unresolved regressions']],
+  [pins['CP-8']]: {name:'Changes since the last run', subtitle:'What changed between deliverables, and why?', first:'comparison', sections:[
+    ['comparison','Changes since the last run',['Findings','All five report sections','Material analytical changes','Unresolved regressions']],
     ['gaps','Gaps & limitations',['Gaps']],['sources','Sources',['Sources']],['audit','Technical audit',['Request','Calculations','Next module']]]}
 };
 const groups = [
   ['Business and evidence',[['CP-0','Source readiness'],['CP-1A','Business & governance'],['CP-DR','Research questions']]],
-  ['Financial performance',[['CP-1','Financial foundation'],['CP-1B','Earnings changes'],['CP-L10','Financial change screen'],['CP-1D','Earnings quality'],['CP-1C','Peer benchmark']]],
+  ['Financial performance',[['CP-1','Financial foundation'],['CP-1B','Earnings changes'],['CP-L10','Short credit snapshot'],['CP-1D','Earnings quality'],['CP-1C','Peer benchmark']]],
   ['Liquidity and refinancing',[['CP-2D','Liquidity'],['CP-3C','Refinancing & LME']]],
   ['Outlook and downside',[['CP-2','Fundamental credit'],['CP-2A','Downside'],['CP-2G','Forward credit model'],['CP-2E','Rates, FX & hedging'],['CP-2H','Ratings & triggers']]],
   ['Capital structure and legal',[['CP-4','Legal & covenants'],['CP-4A','Covenant capacity'],['CP-4B','Structural priority'],['CP-4D','Intercreditor control'],['CP-4C','Recovery & fulcrum']]],
   ['Relative value',[['CP-3','Security selection'],['CP-3D','Market-implied risk']]],
-  ['Decision and review',[['CP-6','Committee decision'],['CP-5','Evidence validation'],['CP-8','Deliverable comparison']]]
+  ['Decision and review',[['CP-6','Committee decision'],['CP-5','Evidence validation'],['CP-8','Changes since the last run']]]
 ];
 // A module the reading groups do not name still gets a place, as an unnamed module.
 const unnamed=[...new Set(Object.values(data).map(output=>output.module))].filter(id=>id!=='CP-MODEL'&&!groups.some(group=>group[1].some(item=>item[0]===id))).sort();

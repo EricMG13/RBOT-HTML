@@ -154,8 +154,8 @@ Open the address and work through nine stages. A stage appears only when a modul
 it, and a later stage stays locked while an earlier one has an error.
 
 1. **Pathway and level.** Pick one of `credit_snapshot`, `earnings_update`, `relative_value`,
-   `covenant_refinancing`, `distressed_restructuring` or `portfolio_decision`; each card lists its
-   modules. Pick Basic, Standard or Advanced, and enter your name.
+   `covenant_refinancing`, `distressed_restructuring`, `portfolio_decision` or `short_snapshot` (the
+   Short Credit Snapshot: CP-0, CP-1 and one CP-L10 page); each card lists its modules. Pick Basic, Standard or Advanced, and enter your name.
 2. **Documents.** Choose the issuer's folder; the files upload and the launcher's own offline
    reading says what it recognises in each (kind, period end, whether a legal document reads as
    executed) and which files it will not read. Each kind the pathway uses and the folder lacks is
