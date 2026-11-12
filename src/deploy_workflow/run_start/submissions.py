@@ -15,7 +15,6 @@ import os
 import re
 import secrets
 import shutil
-import stat
 import tempfile
 import threading
 import unicodedata
@@ -29,6 +28,7 @@ from deploy_workflow.context import load_context
 from deploy_workflow.inbox.filing import safe_name
 from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
 from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
+from deploy_workflow.platform_io import regular_open
 
 MAX_FILE = 50 * 1024 * 1024
 MAX_FILES = 500
@@ -199,19 +199,25 @@ def _parts(name: str) -> list[str]:
     return parts
 
 
-def _stored(root: Path, *, strict: bool = False) -> dict[str, int]:
+def _stored(root: Path, *, strict: bool = False, any_error: bool = False) -> dict[str, int]:
     """Relative posix name -> size of each regular file under ``root``; links are not followed.
 
     With ``strict`` a link anywhere under ``root`` is a ``Refused``: the launcher follows links and
-    the digest does not, so a link would let bytes change without the digest changing."""
+    the digest does not, so a link would let bytes change without the digest changing. With
+    ``any_error`` (and ``strict``) every walk error is a ``Refused``, not only an unreadable folder:
+    a folder that is never renamed under the walk (a source folder) has no vanishing to forgive."""
     found: dict[str, int] = {}
 
     def unreadable(error: OSError) -> None:
         # Only a folder that exists but cannot be read is refused; one that vanished (a seal
         # renamed it) is left to the callers' own retry, as before.
-        if not isinstance(error, PermissionError):
+        if not any_error and not isinstance(error, PermissionError):
             return
-        shown = Path(error.filename).relative_to(root).as_posix() if error.filename else "a folder"
+        try:
+            shown = Path(error.filename).relative_to(root).as_posix() if error.filename else ""
+        except ValueError:
+            shown = ""
+        shown = shown or "a folder"
         raise Refused(f"{shown!r} cannot be read")
 
     walk = os.walk(root, followlinks=False, onerror=unreadable if strict else None)
@@ -375,11 +381,13 @@ def remove_file(layout: Layout, sid: str, name: str) -> None:
 def listing(source: Path) -> dict[str, int]:
     """Relative posix name -> size of each regular file under ``source``, but its own context.json.
 
-    ``Refused`` when anything under ``source`` is a link: a copy must never follow one."""
+    ``Refused`` when anything under ``source`` is a link or cannot be walked: a copy must never
+    follow a link. A name with a part starting ``.`` (``.DS_Store``) is left out: the launcher
+    does not read it, so it is neither carried nor counted."""
     return {
         name: size
-        for name, size in _stored(source, strict=True).items()
-        if name.casefold() != _CONTEXT_NAME
+        for name, size in _stored(source, strict=True, any_error=True).items()
+        if name.casefold() != _CONTEXT_NAME and not any(p.startswith(".") for p in name.split("/"))
     }
 
 
@@ -388,21 +396,25 @@ class _Taken(Refused):
 
 
 class _Carried(io.BufferedReader):
-    """A source file opened by ``open_regular``; ``add_file`` never replaces a file for one."""
+    """A source file opened by ``open_regular``; ``add_file`` never replaces a file for one.
+
+    Kept as a handle type, not a ``replace`` keyword: the tests' and probes' wrappers around
+    ``add_file`` take its five positional arguments only."""
 
 
 def open_regular(path: Path, size: int | None = None) -> _Carried:
     """Open ``path`` for reading; ``Refused`` unless it is a regular file with one link (and
     ``size`` bytes when given). The last part is not followed if it is a link."""
+    # O_NONBLOCK: opening a FIFO must not wait for a writer (regular_open then refuses it).
+    # regular_open adds O_BINARY where the platform has it and refuses a reparse point.
+    options = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
-        # O_NONBLOCK: opening a FIFO must not wait for a writer (fstat then refuses it).
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-        fd = os.open(path, flags)
+        fd = regular_open(path, options)
     except OSError as error:
         raise Refused(f"{path.name!r} cannot be read as a regular file") from error
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        if info.st_nlink != 1:
             raise Refused(f"{path.name!r} is a link, not an uploaded file")
         if size is not None and info.st_size != size:
             raise Refused(f"{path.name!r} changed while it was being copied")
@@ -483,13 +495,18 @@ def carry(layout: Layout, sid: str, source: Path) -> dict[str, list[str]]:
             _refuse_links(source, name.split("/"))
             with open_regular(source / name, wanted[name]) as handle:
                 try:
-                    made.append((add_file(layout, sid, name, handle, wanted[name]), wanted[name]))
+                    made.append(
+                        (
+                            add_file(layout, sid, name, handle, wanted[name]),
+                            wanted[name],
+                        )
+                    )
                 except _Taken:
                     kept.append("/".join(_parts(name)))
     except BaseException:
         _roll_back(layout, sid, made)
         raise
-    return {"carried": sorted(stored for stored, _ in made), "kept": sorted(kept)}
+    return {"carried": sorted(stored for stored, _ in made), "kept": sorted(set(kept))}
 
 
 def reading(layout: Layout, sid: str) -> dict[str, Any]:

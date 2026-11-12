@@ -56,7 +56,8 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes 
     ``report`` is a path under the library folder, relative to the root, once filed.
 ``GET /api/runs/<run id>/inputs``
     200 ``prior.inputs``: the earlier run's context (dates blank), file names and sizes (never file
-    content), level, modules and turns. 404 for an unknown run.
+    content), level, modules and turns; ``error`` (relative names only) when the folder's listing
+    was refused. 404 for an unknown run.
 ``GET /api/issuers/<issuer id>`` (``[a-z0-9-]{1,40}``)
     200 ``prior.issuer``: ``{"runs", "latest_as_of", "latest_run", "issuer_name"}``.
 ``POST /api/submissions/<id>/carry``
@@ -127,9 +128,9 @@ _FAILED = "the service failed; see its log"
 _UNKNOWN = "unknown submission"  # the text submissions raises for an id it does not hold
 _UNKNOWN_RUN = "unknown run"  # the text prior raises for a run id with no record
 _SUBMISSION = re.compile(r"/api/submissions/([^/]+)/(files|reading|summary|submit|carry)")
-_RUN_ID = re.compile(r"[0-9A-Za-z._-]{1,80}")
-_RUN = re.compile(r"/api/runs/([0-9A-Za-z._-]{1,80})")
-_RUN_INPUTS = re.compile(r"/api/runs/([0-9A-Za-z._-]{1,80})/inputs")
+_RUN_ID = r"[0-9A-Za-z._-]{1,80}"
+_RUN = re.compile(rf"/api/runs/({_RUN_ID})")
+_RUN_INPUTS = re.compile(rf"/api/runs/({_RUN_ID})/inputs")
 _ISSUER = re.compile(r"/api/issuers/([a-z0-9-]{1,40})")
 _NO_FILES = "that run has no stored documents"
 _RUN_FIELDS = (
@@ -418,7 +419,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _carry(self, sid: str, body: Any) -> None:
         run = body.get("run") if isinstance(body, dict) else None
-        if not isinstance(run, str) or not _RUN_ID.fullmatch(run):
+        if not isinstance(run, str) or not re.fullmatch(_RUN_ID, run):
             raise _refuse(400, "the request needs the id of an earlier run")
 
         def copy() -> dict[str, list[str]]:

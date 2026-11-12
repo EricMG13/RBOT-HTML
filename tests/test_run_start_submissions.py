@@ -1036,7 +1036,7 @@ def test_a_name_that_sanitises_to_a_stored_name_is_kept_not_replaced(layout, tmp
     put(layout, sid, "a b.txt", b"mine")
     src = _source(tmp_path, **{"a  b.txt": b"theirs", "a:b.txt": b"also"})
     got = submissions.carry(layout, sid, src)
-    assert got == {"carried": [], "kept": ["a b.txt", "a b.txt"]}
+    assert got == {"carried": [], "kept": ["a b.txt"]}  # one name, however many sources map to it
     assert (files_folder(layout, sid) / "a b.txt").read_bytes() == b"mine"
 
 
@@ -1237,3 +1237,66 @@ def test_a_carry_from_a_folder_with_an_unreadable_subfolder_is_refused(layout, t
         (src / "q3").chmod(0o700)
     assert str(tmp_path) not in str(refused.value)
     assert not any(files_folder(layout, sid).iterdir())
+
+
+def test_a_carry_leaves_out_hidden_names_and_does_not_count_them(layout, tmp_path):
+    src = _source(tmp_path, **{"a.txt": b"one", ".DS_Store": b"\x00", "q/.hidden/b.txt": b"two"})
+    assert submissions.listing(src) == {"a.txt": 3}
+    sid = new(layout)
+    assert submissions.carry(layout, sid, src) == {"carried": ["a.txt"], "kept": []}
+    assert submissions.listing(files_folder(layout, sid)) == {"a.txt": 3}
+
+
+def test_listing_refuses_on_any_walk_error_but_the_stored_walk_forgives_a_vanished_folder(
+    tmp_path, monkeypatch
+):
+    src = _source(tmp_path, **{"a.txt": b"one"})
+    real = os.walk
+
+    def walk(top, followlinks=False, onerror=None):
+        if onerror:
+            onerror(FileNotFoundError(2, "gone", str(Path(top) / "q3")))
+        return real(top, followlinks=followlinks, onerror=onerror)
+
+    monkeypatch.setattr(submissions.os, "walk", walk)
+    with pytest.raises(Refused, match="q3") as refused:
+        submissions.listing(src)
+    assert str(tmp_path) not in str(refused.value)
+    assert submissions._stored(src, strict=True) == {"a.txt": 3, "context.json": 2}
+
+
+def test_open_regular_opens_through_platform_io_and_a_carried_handle_never_replaces(
+    layout, tmp_path, monkeypatch
+):
+    seen: list[int] = []
+    real = submissions.regular_open
+
+    def spy(path, options, *rest):
+        seen.append(options)
+        return real(path, options, *rest)
+
+    monkeypatch.setattr(submissions, "regular_open", spy)
+    src = _source(tmp_path, **{"a.txt": b"one"})
+    with submissions.open_regular(src / "a.txt", 3) as handle:
+        assert handle.read() == b"one"
+    assert seen and seen[0] & os.O_NONBLOCK
+    sid = new(layout)
+    put(layout, sid, "a.txt", b"mine")
+    with (
+        submissions.open_regular(src / "a.txt", 3) as handle,
+        pytest.raises(Refused, match="already stored"),
+    ):
+        submissions.add_file(layout, sid, "a.txt", handle, 3)
+    assert (files_folder(layout, sid) / "a.txt").read_bytes() == b"mine"
+
+
+def test_two_submissions_carrying_from_one_run_both_end_with_the_runs_files(layout, tmp_path):
+    src = _source(tmp_path, **{"a.txt": b"one", "sub/b.txt": b"two"})
+    first, second = new(layout), new(layout)
+    for sid in (first, second):
+        assert submissions.carry(layout, sid, src)["carried"] == ["a.txt", "sub/b.txt"]
+    assert _held(layout, first) == _held(layout, second) == {"a.txt": 3, "sub/b.txt": 3}
+    assert submissions.listing(src) == {
+        "a.txt": 3,
+        "sub/b.txt": 3,
+    }  # the earlier run's own files stay

@@ -129,3 +129,14 @@ def test_files_are_listed_when_the_context_is_not_usable(scheduler, root, caplog
     context.write_text('{"run": 1, "identity": {}}')
     assert prior.inputs(layout(root), record.id)["context"] is None
     assert "lacks a run or identity object" in caplog.text
+
+
+def test_a_refused_listing_is_named_in_the_reply_and_a_good_one_has_no_error(scheduler, root):
+    record = submit_run(scheduler, root, "acme")
+    folder = layout(root).drops / record.id
+    pump(scheduler, (folder / "context.json").is_file)
+    assert "error" not in prior.inputs(layout(root), record.id)
+    (folder / "linked.txt").symlink_to(folder / "a.txt")
+    got = prior.inputs(layout(root), record.id)
+    assert got["files"] == [] and "linked.txt" in got["error"]
+    assert str(folder) not in got["error"]

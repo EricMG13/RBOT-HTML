@@ -1,6 +1,6 @@
 # Run start on an existing issuer: design (2026-11-11)
 
-Adds to `2026-11-11-staged-run-start-design.md`. Status: for owner approval.
+Adds to `2026-11-11-staged-run-start-design.md`. Status: approved by the owner 2026-11-11; built on branch claude/initiating-runs-existing-issuers-4a8739.
 
 ## 1. Intent
 
@@ -66,7 +66,7 @@ name only. An unknown run ID is refused.
 
 | Stage | Carried over | Not carried over |
 |---|---|---|
-| 1 Pathway and level | Pathway, level | Submitter's name |
+| 1 Pathway and level | Pathway, level, module subset and turns per module (each marked beside its input; a subset naming a module the pathway lacks is not applied) | Submitter's name |
 | 2 Documents | Every prior file, listed as "carried over from run <id>", each removable | - |
 | 3 Issuer and dates | Issuer name and ID (ID locked), currency, identity fields | As-of date, cutoff, current and prior period |
 | 4 Legal | - | Which file is the agreement: asked again, so the answer is `none` until a file is chosen |
@@ -76,7 +76,9 @@ name only. An unknown run ID is refused.
 - The page fills the form with its existing `fill()`; no second loader is added.
 - Dates default from the newest document, as on a blank start.
 - The locked ID has an "this is a different issuer" control that unlocks it and clears the
-  carried-over files and answers.
+  carried-over files and answers. The level stays; a file the analyst uploaded stays.
+- When the earlier run's answers cannot be used (no source folder, or unreadable), only the issuer
+  name and ID are carried: the level, module subset, turns and anything the analyst typed stay.
 - Each carried-over answer is marked "from run <id>" beside its input. The summary lists them in
   one block, the way it lists defaulted inputs, so approval covers them.
 - The file questions are not carried over because `context/1` records no per-file choice (staged
@@ -126,7 +128,8 @@ What this design owes to it:
 - Both pieces of work change `run_start/submissions.py` and `docs/templates/context-form.html`.
   CP-8 lands first; this build starts from its merged result.
 
-Until CP-8 lands, the summary shows neither line. Nothing here depends on it to start a run.
+The CP-8 redesign had not merged when this was built, so the two summary lines are not built.
+Nothing here depends on it to start a run.
 
 ## 6. Trust boundary
 
@@ -167,8 +170,9 @@ Until CP-8 lands, the summary shows neither line. Nothing here depends on it to 
 - A record with no source folder yields the issuer ID and name only.
 - Tests use the existing canned launcher fixtures. No test calls a provider.
 - A presentation change needs the reader check `AGENTS.md` names, recorded in VERIFICATION.md.
-- Not proven by this build: Windows behaviour of the copy; two analysts carrying from the same
-  run at once beyond a two-submission test; that source folders of old runs are never removed
+- A test shows two submissions carrying from one run both end with the run's files. Not proven by
+  this build: Windows behaviour of the copy; two analysts carrying from the same run at the same
+  moment; that source folders of old runs are never removed
   (no code that deletes them was found; it was not tested).
 
 ## 9. Left to the builder

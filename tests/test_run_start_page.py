@@ -1574,10 +1574,16 @@ def page_from_executed(root, tmp_path, monkeypatch, fake_env):
 @pytest.fixture
 def page_from_bare(root, tmp_path, monkeypatch, fake_env):
     import shutil
+    from dataclasses import replace
 
-    with _earlier_run(
-        root, tmp_path, monkeypatch, fake_env, lambda folder: shutil.rmtree(folder)
-    ) as got:
+    def edit(folder: Path) -> None:
+        # The record keeps a level, a module subset and turns; with no folder none of them applies.
+        lay = layout(root)
+        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
+        runs.save(lay, replace(record, modules=("CP-0", "CP-1"), max_turns=16, level="advanced"))
+        shutil.rmtree(folder)
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
         yield got
 
 
@@ -1686,7 +1692,7 @@ def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
         path=f"/?from={run_id}",
     )
     assert (third["rows"], third["run"]) == (1, run_id)
-    assert f"Run {run_id} was not used: your earlier answers are back." in third["msg"]
+    assert "was not used" not in third["msg"] and "Your earlier answers are back." in third["msg"]
 
 
 def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):
@@ -1695,11 +1701,15 @@ def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare)
         """
       return {id: $('i-issuer_id').value, name: $('i-issuer_name').value,
               locked: $('i-issuer_id').readOnly, rows: rows(), run: CARRIED.run,
-              msg: $('loadmsg').textContent};""",
+              msg: $('loadmsg').textContent, level: LEVEL, skipped: [...SKIPPED],
+              turns: $('turns').value, fields: [...CARRIED.fields]};""",
         path=f"/?from={run_id}",
     )
     assert got["id"] == "acme" and got["name"] == "Acme Corp" and got["locked"] is True
     assert got["rows"] == [] and got["run"] == run_id
+    # No folder: the record's level, subset and turns are not applied either.
+    assert got["level"] == "basic" and got["skipped"] == [] and got["turns"] == "32"
+    assert "@modules" not in got["fields"] and "@turns" not in got["fields"]
     assert "No documents or answers were kept for run" in got["msg"]
 
 
@@ -2137,3 +2147,239 @@ def test_a_carried_subset_naming_a_module_the_pathway_lacks_is_not_applied(
     assert (
         "The earlier run's module subset was not carried: CP-ZZ not in this pathway." in got["msg"]
     )
+
+
+# ---- the whole-branch fixes: the seams between the page, the routes and the core ----
+
+MINE = "Annual Report 2026\nFor the fiscal year ended December 31, 2026\nNet sales were 250.\n"
+_STORED = "localStorage.setItem('run-start/run', JSON.stringify({{v: 1, id: '{}'}}));"
+
+
+def test_from_with_a_run_still_shown_says_so_and_another_run_starts_from_it(page_from):
+    page, run_id = page_from
+    unknown = "20990101-000000-01"  # a stored run the service has no record of: it never ends
+    page.run(_STORED.format(unknown) + " return {};")
+    got = page.run(
+        """
+      await settle(300);
+      const note = $('run-from-note');
+      const out = {progress: !$('run-progress').hidden, note: note.hidden ? '' : note.textContent,
+                   run: CARRIED.run};
+      $('another').click();
+      for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
+      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
+      out.after = {run: CARRIED.run, locked: CARRIED.locked, id: $('i-issuer_id').value,
+                   progress: !$('run-progress').hidden, files: [...CARRIED.files],
+                   note: $('run-from-note').hidden};
+      return out;""",
+        path=f"/?from={run_id}",
+    )
+    assert got["progress"] is True and got["run"] == ""
+    assert (
+        got["note"]
+        == f"Run {run_id} has not been started from yet: this page is showing run {unknown}."
+    )
+    assert got["after"] == {
+        "run": run_id, "locked": True, "id": "acme", "progress": False,
+        "files": ["a.txt"], "note": True,
+    }  # fmt: skip
+
+
+def test_from_with_an_ended_stored_run_starts_from_it_at_once(page_from):
+    page, run_id = page_from
+    page.run(_STORED.format(run_id) + " return {};")
+    got = page.run(
+        """
+      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
+      return {run: CARRIED.run, progress: !$('run-progress').hidden, files: [...CARRIED.files],
+              stored: localStorage.getItem('run-start/run')};""",
+        path=f"/?from={run_id}",
+    )
+    assert got == {"run": run_id, "progress": False, "files": ["a.txt"], "stored": None}
+
+
+def test_an_upload_over_a_carried_name_is_the_analysts_file(page_from):
+    page, run_id = page_from
+    first = page.run(
+        f"""
+      await uploadFiles([file('a.txt', {json.dumps(MINE)})]);
+      await review();
+      return {{rows: rows(), files: [...CARRIED.files], sub: SUB,
+               review: $('rv-carried').textContent}};""",
+        path=f"/?from={run_id}",
+    )
+    held = layout(page.root).uploads / first["sub"] / "files" / "a.txt"
+    assert held.read_text("utf-8") == MINE
+    assert first["files"] == [] and "carried over from run" not in " ".join(
+        " ".join(r) for r in first["rows"]
+    )
+    assert "0 documents carried over" in first["review"]
+    page.run(
+        """
+      $('unlock-issuer').click();
+      for (let i = 0; i < 60 && CARRIED.locked; i++) await settle(50);
+      return {};"""
+    )
+    assert held.exists()  # "this is a different issuer" leaves the analyst's own upload
+
+
+def test_a_lost_submission_does_not_leave_carried_file_marks(page_from):
+    import shutil
+
+    page, run_id = page_from
+    first = page.run("return {sub: SUB};", path=f"/?from={run_id}")
+    shutil.rmtree(layout(page.root).uploads / first["sub"])
+    got = page.run(
+        f"""
+      const gone = !$('submission-gone').hidden;
+      $('new-submission').click();
+      await uploadFiles([file('a.txt', {json.dumps(MINE)})]);
+      await review();
+      return {{gone, rows: rows(), files: [...CARRIED.files], sub: SUB,
+               review: $('rv-carried').textContent}};"""
+    )
+    assert got["gone"] is True and got["sub"] != first["sub"], got
+    assert got["files"] == [] and "carried over from run" not in str(got["rows"]), got
+    assert "1 document carried over" not in got["review"], got
+
+
+@pytest.fixture
+def page_from_other_pathway(root, tmp_path, monkeypatch, fake_env):
+    def other(stored):
+        stored["run"]["pathway"] = "covenant_refinancing"
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, _edit_stored(root, other)) as got:
+        yield got
+
+
+def test_a_carried_pathway_is_marked_and_listed(page_from_other_pathway):
+    page, run_id = page_from_other_pathway
+    got = page.run(
+        """
+      const pathway = getV($('st-pathway'), 'pathway');
+      const marks = [...$('st-pathway').querySelectorAll('.from-run')].length;
+      await review();
+      return {pathway, marks, review: $('rv-carried').textContent};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["pathway"] == "covenant_refinancing" and got["marks"] >= 1, got
+    assert "athway" in got["review"], got
+
+
+def test_the_module_subset_and_turns_are_marked_beside_their_inputs(page_from_subset):
+    page, run_id = page_from_subset
+    got = page.run(
+        """
+      const mark = el => {
+        const n = el.nextElementSibling;
+        return !!(n && n.classList.contains('from-run'));
+      };
+      const out = {mods: mark($('modbox')), turns: mark($('turns')),
+                   text: $('modbox').nextElementSibling.textContent};
+      type('turns', '20');
+      out.turnsAfter = mark($('turns')); out.modsAfter = mark($('modbox'));
+      const box = document.querySelector('[data-c="mod"]'); box.checked = !box.checked; change(box);
+      out.modsEdited = mark($('modbox'));
+      return out;""",
+        path=f"/?from={run_id}",
+    )
+    assert got["mods"] is True and got["turns"] is True and got["text"] == f"from run {run_id}"
+    assert got["turnsAfter"] is False and got["modsAfter"] is True and got["modsEdited"] is False
+
+
+def test_the_locked_id_is_never_blank_while_the_carry_runs(page_from):
+    page, _run_id = page_from
+    got = page.run(
+        NOTICE
+        + """
+      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
+      await waitNotice();
+      const real = window.fetch; let mid = null;
+      window.fetch = async (path, init) => {
+        if (String(path).endsWith('/carry')) {
+          update();
+          const saved = JSON.parse(localStorage.getItem('run-start/1'));
+          mid = {id: $('i-issuer_id').value, saved: saved.context.identity.issuer_id,
+                 locked: !!(saved.extra.carried && saved.extra.carried.locked)};
+        }
+        return real(path, init);
+      };
+      $('issuer-carry').click();
+      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
+      await settle(200);
+      return {mid, end: $('i-issuer_id').value};"""
+    )
+    assert got["mid"] is not None and got["end"] == "acme", got
+    assert got["mid"]["id"] == "acme" and got["mid"]["saved"] == "acme", got
+
+
+def test_a_name_changed_after_the_lookup_is_named_against_the_filed_one(page_from):
+    page, _run_id = page_from
+    got = page.run(
+        NOTICE
+        + """
+      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
+      const first = await waitNotice();
+      type('i-issuer_name', 'Another Name');
+      await settle(400);
+      const second = $('issuer-exists-text').textContent;
+      type('i-issuer_name', 'Acme Corp');
+      await settle(200);
+      return {first: first.text, second, third: $('issuer-exists-text').textContent,
+              id: $('i-issuer_id').value, hidden: $('issuer-exists').hidden};"""
+    )
+    assert got["id"] == "acme" and got["hidden"] is False, got
+    assert 'filed as "Acme Corp"' not in got["first"] and 'filed as "Acme Corp"' in got["second"]
+    assert 'filed as "Acme Corp"' not in got["third"], got
+
+
+def test_the_notice_carry_keeps_the_analysts_own_name(page_from):
+    page, _run_id = page_from
+    got = page.run(
+        NOTICE
+        + """
+      type('submitter', 'Dana Reyes');
+      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
+      await waitNotice();
+      $('issuer-carry').click();
+      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
+      await settle(200);
+      return {submitter: $('submitter').value, sent: answers().submitted_by};"""
+    )
+    assert got["submitter"] == "Dana Reyes" and got["sent"] == "Dana Reyes", got
+
+
+def test_unreadable_answers_set_only_the_name_and_id_and_keep_what_was_typed(
+    root, tmp_path, monkeypatch, fake_env
+):
+    def broken(folder: Path) -> None:
+        (folder / "context.json").write_text('{"schema": "context/9"}', encoding="utf-8")
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, broken) as (page, run_id):
+        got = page.run(
+            """
+          pick('data-k="pathway"', 'earnings_update'); type('d-as_of', '2026-09-30');
+          type('submitter', 'Dana Reyes');
+          await startFrom(RUN_ID);
+          return {pathway: getV($('st-pathway'), 'pathway'), asOf: $('d-as_of').value,
+                  who: $('submitter').value, id: $('i-issuer_id').value,
+                  name: $('i-issuer_name').value, msg: $('loadmsg').textContent,
+                  level: LEVEL};""".replace("RUN_ID", json.dumps(run_id))
+        )
+    assert got["pathway"] == "earnings_update" and got["asOf"] == "2026-09-30"
+    assert got["who"] == "Dana Reyes" and got["id"] == "acme" and got["name"] == "Acme Corp"
+    assert "and its answers" not in got["msg"] and "1 document carried over" in got["msg"]
+
+
+def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypatch, fake_env):
+    def linked(folder: Path) -> None:
+        (folder / "link.txt").symlink_to(folder / "a.txt")
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, linked) as (page, run_id):
+        got = page.run(
+            "return {msg: $('loadmsg').textContent, files: [...CARRIED.files], rows: rows()};",
+            path=f"/?from={run_id}",
+        )
+    assert "could not be listed" in got["msg"] and "link.txt" in got["msg"]
+    assert str(root) not in got["msg"]
+    assert got["files"] == [] and got["rows"] == []

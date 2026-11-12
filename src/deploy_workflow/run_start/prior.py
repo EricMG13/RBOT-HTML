@@ -58,30 +58,38 @@ def _read_context(folder: Path) -> dict[str, Any] | None:
     return data
 
 
-def _files(folder: Path) -> list[dict[str, Any]]:
+def _files(folder: Path) -> tuple[list[dict[str, Any]], str]:
+    """The file list and, when the listing was refused, the refusal (relative names only)."""
     try:
         found = submissions.listing(folder)
     except Refused as error:
         log.warning("earlier run files not listed at %s (%s)", folder, error)
-        return []
-    return [{"name": name, "size": found[name]} for name in sorted(found)]
+        return [], str(error)
+    return [{"name": name, "size": found[name]} for name in sorted(found)], ""
 
 
 def inputs(layout: Layout, run_id: str) -> dict[str, Any]:
-    """What a new run can start from: the earlier run's context (dates blank) and file list."""
+    """What a new run can start from: the earlier run's context (dates blank) and file list.
+
+    ``error`` is present only when the folder's listing was refused (a link or an unreadable
+    folder); the page then shows it and carries nothing."""
     record, folder = source(layout, run_id)
     context = _read_context(folder) if folder else None
-    return {
+    files, error = _files(folder) if folder else ([], "")
+    reply: dict[str, Any] = {
         "run": record.id,
         "issuer_id": record.issuer_id,
         "issuer_name": record.issuer_name,
         "pathway": record.pathway,
         "context": context,
-        "files": _files(folder) if folder else [],
+        "files": files,
         "level": record.level,
         "modules": list(record.modules),
         "max_turns": record.max_turns,
     }
+    if error:
+        reply["error"] = error
+    return reply
 
 
 def issuer(layout: Layout, issuer_id: str) -> dict[str, Any]:

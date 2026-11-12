@@ -122,14 +122,24 @@ is per issuer by evidence date; runs sharing that date are all marked and counte
 ## Starting a run from Report history
 
 When the library is served over http, an issuer's Report history has a "Start a run" link above its
-table; it works only when that server is the run start service. It opens the start page from the latest run listed (`/?from=<run id>`): the
-issuer ID is locked to that run's, its documents are copied into the new submission, and its answers,
-module subset and turns per module fill the form, each marked "from run <id>". The as-of and cutoff
-dates and the submitter are not carried, nor is an executed-agreement answer that depends on a file;
-the analyst sets them, and chooses "this is a different issuer" to drop the carry. A subset naming a
-module the pathway lacks is not carried at all. The link is absent when the library is opened from
-disk. The start page also says when a typed issuer ID already has runs, and a failed, capped,
-rejected or interrupted run's progress view offers "Start again from this run".
+table; it works only when that server is the run start service. It opens the start page from the latest
+run listed (`/?from=<run id>`): the issuer ID is locked to that run's, its documents are copied into
+the new submission, and its pathway, answers, module subset and turns per module fill the form. Each
+carried-over answer, the pathway, the module box and the turns input carries a "from run <id>" mark
+beside it, and the review lists them in one block; editing one removes its mark. Each carried
+document is marked "carried over from run <id>" and removable; a file the analyst uploads over a
+carried name is theirs and is not marked. Not carried, and not marked: the as-of and cutoff dates
+and periods, the submitter (the analyst's own name is kept), and the answers that depend on a chosen
+file (the agreement, bridge, portfolio and prior-case files). A subset naming a module the pathway
+lacks is not carried at all. When the earlier run has no usable stored answers, only the issuer name
+and ID are carried and nothing the analyst typed is cleared. "This is a different issuer" drops the
+carry (the level and the analyst's own uploads stay). If the browser still holds a submitted run,
+the link shows that run's progress with "Run <from> has not been started from yet: this page is
+showing run <stored id>." and "Start another run" then starts from `<from>`; when the stored run has
+already ended, the page starts from `<from>` at once. The link is absent when the library is opened
+from disk. The start page also says when a typed issuer ID already has runs (and, if the typed name
+differs from the filed one, shows the filed name), and a failed, capped, rejected or interrupted
+run's progress view offers "Start again from this run".
 
 ## Windows package
 

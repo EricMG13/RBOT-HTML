@@ -4,20 +4,24 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
-## 2026-11-11 — Starting a run from an earlier run: notice, start again, library link (branch `claude/initiating-runs-existing-issuers-4a8739`)
+## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
 
 Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
-called, no paid run). Task 4 of the plan: the existing-issuer notice on the start page, "Start again from
-this run" on a failed, capped, rejected or interrupted run's progress view, "Start a run" on the library's
-Report history (only when the library is served over http), and a carried module subset naming a module
-the pathway lacks is no longer applied silently (it is dropped whole and the load message names the modules).
-- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 117 passed, none skipped (Chrome ran).
+called, no paid run). The whole branch after its whole-branch review: carry from an earlier run (locked
+ID, documents, answers, pathway, module subset, turns), the existing-issuer notice, "Start again from
+this run", and "Start a run" on the library's Report history. This wave fixed the review's seam findings
+(`?from=` with a submitted run still held, carried-file marks against uploads, the carried pathway and
+subset/turns marks, `open_regular` through `platform_io.regular_open`, hidden names, refused listings).
+- `uv run pytest tests/test_run_start_prior.py tests/test_run_start_submissions.py tests/test_run_start_service.py -q`: exit 0, 170 passed.
+- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 131 passed (91 page, 40 library), none skipped (Chrome ran).
   `test_upload_to_filed_report_with_the_real_launcher` fails on the base already and is not part of this change.
+- Review probes (`wb_seams.py`: 10 passed; the earlier probes exit as before, `probe_carry_races.py`'s
+  seal-between-copies case still fails: ruled out of this wave).
 - `uv run python tools/quality_gate.py`: exit 0.
-- Fidelity: the notice text, the button, the start-again state and the link href are asserted in the DOM
-  Chrome builds; the library link was read from a local static server over http and from disk (absent).
-- Reader check: not done in this task; pending. No real run was read against the September VMO2 reference.
-- CP-8 summary lines (plan Step 7) were not built: the CP-8 redesign has not merged.
+- Fidelity: the notice text, marks, load messages and the progress note are asserted in the DOM Chrome builds.
+- Reader check: not done; pending. No real run was read against the September VMO2 reference.
+- CP-8 summary lines (the "changes section" and the two-prior-runs lines) are not built: the CP-8 redesign has not merged.
+- Windows not run: the `O_BINARY` open of a carried file is from reading `platform_io.regular_open` only.
 
 ## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
 

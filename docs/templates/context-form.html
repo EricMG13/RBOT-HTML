@@ -534,6 +534,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 <section class="run-progress" id="run-progress" hidden aria-live="polite">
   <h2 tabindex="-1">Run started</h2>
   <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
+  <p id="run-from-note" hidden></p>
   <dl class="rv-facts"><dt>Run</dt><dd id="run-id"></dd><dt>State</dt><dd id="run-state"></dd><dt>Why</dt><dd id="run-reason"></dd></dl>
   <h3 class="sub">Modules</h3>
   <ol class="run-stages modules" id="run-modules"></ol>
@@ -1856,7 +1857,7 @@ function showProgress() {
   $('run-id').textContent = RUN;
   $('scope').textContent = '';
   $('run-progress').querySelector('h2').focus();
-  pollRun();
+  return pollRun();
 }
 const RESTARTABLE = ['failed', 'capped', 'rejected', 'interrupted'];
 function renderRun(r) {
@@ -1886,18 +1887,20 @@ function renderRun(r) {
 async function pollRun() {
   clearTimeout(pollTimer);
   const err = $('run-error');
-  let again = true;
+  let again = true, ended = false;
   try {
     const r = await call('GET', `/api/runs/${encodeURIComponent(RUN)}`);
     renderRun(r);
     err.hidden = true;
-    again = !ENDED.includes(r.status);
+    ended = ENDED.includes(r.status);
+    again = !ended;
   } catch (e) {
     err.hidden = false;
     err.textContent = 'Could not read the run: ' + e.message;
     if (e.status === 404) again = false;
   }
   if (again) pollTimer = setTimeout(pollRun, POLL_MS);
+  return ended;
 }
 
 /* ======================================================================= Documents (the start service) */
@@ -1959,7 +1962,13 @@ async function uploadFiles(files) {
     let n = 0;
     for (const [name, f] of send) {
       say(`Uploading ${++n} of ${send.length}: ${name}`);
-      try { await call('POST', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`, f); failed(name, ''); sent++; }
+      try {
+        const put = await call('POST', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`, f);
+        failed(name, ''); sent++;
+        // The file is now the analyst's own, whatever the earlier run's file of that name was.
+        CARRIED.files.delete(name);
+        if (isObj(put) && typeof put.name === 'string') CARRIED.files.delete(put.name);
+      }
       catch (err) { failed(name, err.message); }
     }
   } catch (err) { failed('', err.message); }
@@ -2090,9 +2099,11 @@ function forget() {
   try { localStorage.removeItem(STORE); } catch (err) { storeFailed(err); }
 }
 const fromParam = new URLSearchParams(location.search).get('from');
-const FROM = fromParam !== null && /^[0-9A-Za-z._-]{1,80}$/.test(fromParam) ? fromParam : '';
+const RUN_ID_RE = /^[0-9A-Za-z._-]{1,80}$/; // the shape of a run ID, as the service matches it
+const FROM = fromParam !== null && RUN_ID_RE.test(fromParam) ? fromParam : '';
+let PENDING_FROM = ''; // the ?from= run not yet started from because this browser still showed a submitted run
 function restoreCarried(c) {
-  if (!isObj(c) || typeof c.run !== 'string' || !/^[0-9A-Za-z._-]{1,80}$/.test(c.run)) return;
+  if (!isObj(c) || typeof c.run !== 'string' || !RUN_ID_RE.test(c.run)) return;
   const strings = a => Array.isArray(a) ? a.filter(v => typeof v === 'string') : [];
   CARRIED.run = c.run; CARRIED.files = new Set(strings(c.files)); CARRIED.fields = new Set(strings(c.fields)); CARRIED.locked = c.locked === true;
 }
@@ -2149,6 +2160,9 @@ function renderMarks() {
     seen.add(anchor);
     anchor.after(h('small', {className: 'from-run', textContent: 'from run ' + CARRIED.run}));
   });
+  const mark = () => h('small', {className: 'from-run', textContent: 'from run ' + CARRIED.run});
+  if (CARRIED.fields.has('@modules')) $('modbox').after(mark());
+  if (CARRIED.fields.has('@turns')) $('turns').after(mark());
 }
 function renderCarried() {
   const box = $('rv-carried'), body = $('rv-carried-body');
@@ -2163,46 +2177,52 @@ function renderCarried() {
 // Starts the form from an earlier run of the issuer: its documents are copied into a new submission by the
 // service and its answers fill the form, except the dates and the submitter. Returns whether the run was found.
 async function startFrom(runId) {
+  LOOK_SEQ++; LATEST_RUN = ''; NOTICE = null; $('issuer-exists').hidden = true; // a lookup in flight must not show its notice over the lock
   let got;
   try { got = await call('GET', `/api/runs/${runId}/inputs`); }
   catch (err) {
+    LOOKED = ''; // the ID was not locked: it may be looked up again
     loadMsg(err.status === 404 ? `Run ${runId} was not found. This is a blank start.` : `Run ${runId} could not be read (${err.message}). This is a blank start.`, true);
     return false;
   }
   const problems = [];
-  CARRIED.run = runId; CARRIED.locked = true; CARRIED.files = new Set(); CARRIED.fields = new Set();
-  LOOK_SEQ++; LATEST_RUN = ''; $('issuer-exists').hidden = true; // a lookup in flight must not show its notice over the lock
-  let kept = [];
-  if (Array.isArray(got.files) && got.files.length) {
+  const ctx = got.context;
+  const bad = isObj(ctx) ? shapeProblem(ctx) : 'none';
+  const usable = isObj(ctx) && !bad; // only then are the earlier run's answers, level, subset and turns applied
+  // The lock and its value are one state: any update while the requests below are in flight keeps the ID.
+  CARRIED.run = runId; CARRIED.locked = true; LOCKED_ID = txt(got.issuer_id); CARRIED.files = new Set(); CARRIED.fields = new Set();
+  let heldMine = [];
+  if (typeof got.error === 'string' && got.error) problems.push('The earlier run\'s documents could not be listed (' + got.error + '); none were carried over.');
+  else if (Array.isArray(got.files) && got.files.length) {
     try {
       // The analyst's own uploads stay: the carry goes into the submission they already have, and a name already held is kept.
       if (!SUB) SUB = (await call('POST', '/api/submissions')).id;
       const moved = await call('POST', `/api/submissions/${SUB}/carry`, JSON.stringify({run: runId}));
       CARRIED.files = new Set(moved.carried);
-      kept = Array.isArray(moved.kept) ? moved.kept.filter(n => typeof n === 'string') : [];
+      heldMine = Array.isArray(moved.kept) ? moved.kept.filter(n => typeof n === 'string') : [];
     } catch (err) { problems.push('The documents could not be carried over (' + err.message + ').'); }
   }
   await refreshReading();
-  if (typeof got.level === 'string' && got.level in RANK) LEVEL = got.level;
-  resetAll();
-  const base = fieldValues();
-  const ctx = got.context;
-  const bad = isObj(ctx) ? shapeProblem(ctx) : 'none';
-  if (isObj(ctx) && !bad) fill(ctx, {}, true);
-  else {
-    if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
-    $('i-issuer_name').value = txt(got.issuer_name);
-  }
+  const submitter = $('submitter').value; // the submitter is the analyst's own, never the earlier run's (fill resets the form)
+  if (usable) {
+    if (typeof got.level === 'string' && got.level in RANK) LEVEL = got.level;
+    resetAll();
+  } else if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
+  const base = fieldValues(); // when the answers are unusable nothing the analyst typed is cleared: only the name and ID are set
+  if (usable) {
+    fill(ctx, {}, true);
+    $('submitter').value = submitter;
+  } else $('i-issuer_name').value = txt(got.issuer_name);
   $('i-issuer_id').value = txt(got.issuer_id);
-  LOCKED_ID = txt(got.issuer_id);
-  $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
+  if (usable) $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
   const now = fieldValues();
-  CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|pathway' && k !== '|legal_documents'));
+  CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|legal_documents'));
+  if (usable) CARRIED.fields.add('|pathway'); // the pathway is an answer carried from the run even when it is the default one
   applyRowKeys();
   // The earlier run's module subset and turns: a subset run started again stays a subset.
   // A subset naming a module this pathway lacks is not applied at all (a partial subset would run other modules than the earlier run's).
   const notes = [];
-  if (Array.isArray(got.modules) && got.modules.length) {
+  if (usable && Array.isArray(got.modules) && got.modules.length) {
     const inPathway = runOf(getV($('st-pathway'), 'pathway')), unknown = got.modules.filter(m => !inPathway.includes(m));
     if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.join(', ')} not in this pathway.`);
     else {
@@ -2210,11 +2230,11 @@ async function startFrom(runId) {
       CARRIED.fields.add('@modules');
     }
   }
-  if (Number.isInteger(got.max_turns) && got.max_turns !== DEFAULT_TURNS) { $('turns').value = String(got.max_turns); CARRIED.fields.add('@turns'); }
+  if (usable && Number.isInteger(got.max_turns) && got.max_turns !== DEFAULT_TURNS) { $('turns').value = String(got.max_turns); CARRIED.fields.add('@turns'); }
   const files = CARRIED.files.size;
   loadMsg(!isObj(ctx) && !files && !problems.length ? `No documents or answers were kept for run ${runId}. Only the issuer name and ID are carried over.`
-    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (isObj(ctx) && !bad ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : '') + (notes.length ? ' ' + notes.join(' ') : '')
-    + (kept.length ? ` ${kept.length} of your files were kept instead of the earlier run's: ${kept.join(', ')}.` : ''), problems.length > 0);
+    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (usable ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : '') + (notes.length ? ' ' + notes.join(' ') : '')
+    + (heldMine.length ? ` ${heldMine.length} of your files were kept instead of the earlier run's: ${heldMine.join(', ')}.` : ''), problems.length > 0);
   update();
   return true;
 }
@@ -2231,14 +2251,14 @@ async function unlockIssuer() {
 }
 $('unlock-issuer').addEventListener('click', unlockIssuer);
 // An issuer ID the service already holds a run for: say so and offer the carry. The lookup never blocks the form.
-let LOOKED = '', LOOK_SEQ = 0, LATEST_RUN = '';
+let LOOKED = '', LOOK_SEQ = 0, LATEST_RUN = '', NOTICE = null; // NOTICE: the cached reply, so a name edited later is compared with the filed one
 async function lookIssuer() {
   const id = $('i-issuer_id').value, box = $('issuer-exists');
-  if (CARRIED.locked || !SERVED || !/^[a-z0-9-]{1,40}$/.test(id)) { LOOKED = ''; LOOK_SEQ++; box.hidden = true; return; }
-  if (id === LOOKED) return;
+  if (CARRIED.locked || !SERVED || !/^[a-z0-9-]{1,40}$/.test(id)) { LOOKED = ''; LOOK_SEQ++; NOTICE = null; box.hidden = true; return; }
+  if (id === LOOKED) { drawNotice(); return; }
   LOOKED = id;
   const seq = ++LOOK_SEQ;
-  LATEST_RUN = ''; box.hidden = true; // the notice of the previous ID is not this one's
+  LATEST_RUN = ''; NOTICE = null; box.hidden = true; // the notice of the previous ID is not this one's
   let got;
   try { got = await call('GET', `/api/issuers/${id}`); }
   catch (err) {
@@ -2247,12 +2267,16 @@ async function lookIssuer() {
     return;
   }
   if (seq !== LOOK_SEQ) return; // the ID changed while the answer was on its way
-  LATEST_RUN = isObj(got) && typeof got.latest_run === 'string' && /^[0-9A-Za-z._-]{1,80}$/.test(got.latest_run) ? got.latest_run : '';
+  LATEST_RUN = isObj(got) && typeof got.latest_run === 'string' && RUN_ID_RE.test(got.latest_run) ? got.latest_run : '';
   box.hidden = !LATEST_RUN;
   if (!LATEST_RUN) return;
-  const n = Number.isInteger(got.runs) ? got.runs : 0, asOf = txt(got.latest_as_of), filed = txt(got.issuer_name);
+  NOTICE = {n: Number.isInteger(got.runs) ? got.runs : 0, asOf: txt(got.latest_as_of), filed: txt(got.issuer_name)};
+  drawNotice();
+}
+function drawNotice() {
+  if (!NOTICE || !LATEST_RUN) return;
   const typed = $('i-issuer_name').value.trim();
-  $('issuer-exists-text').textContent = `This issuer exists: ${n} runs` + (asOf ? `, latest as-of ${asOf}` : '') + (filed && filed !== typed ? ` (filed as "${filed}")` : '');
+  $('issuer-exists-text').textContent = `This issuer exists: ${NOTICE.n} runs` + (NOTICE.asOf ? `, latest as-of ${NOTICE.asOf}` : '') + (NOTICE.filed && NOTICE.filed !== typed ? ` (filed as "${NOTICE.filed}")` : '');
 }
 $('issuer-carry').addEventListener('click', () => { if (LATEST_RUN) startFrom(LATEST_RUN); });
 $('run-again').addEventListener('click', async () => {
@@ -2260,16 +2284,30 @@ $('run-again').addEventListener('click', async () => {
   startAgain();
   await startFrom(id);
 });
+// "Start another run": a blank start, or the ?from= run this browser's submitted run kept the page from starting from.
+async function startAnother() {
+  const from = PENDING_FROM; // startAgain clears it
+  startAgain();
+  if (from) await startFrom(from);
+}
 async function restore() {
   let saved = null, run = null;
   if (SERVED) {
     try { saved = JSON.parse(localStorage.getItem(STORE) || 'null'); run = JSON.parse(localStorage.getItem(RUN_STORE) || 'null'); }
     catch (err) { storeFailed(err); }
   }
-  if (isObj(run) && run.v === 1 && typeof run.id === 'string' && /^[0-9A-Za-z._-]{1,80}$/.test(run.id)) {
+  if (isObj(run) && run.v === 1 && typeof run.id === 'string' && RUN_ID_RE.test(run.id)) {
     RUN = run.id; // a submitted run: its progress, not the form
     kept = true;
-    showProgress();
+    const ended = await showProgress();
+    if (FROM) {
+      PENDING_FROM = FROM;
+      if (ended) { await startAnother(); return; } // nothing is running to look at: go straight to starting from it
+      if (FROM !== RUN) {
+        $('run-from-note').hidden = false;
+        $('run-from-note').textContent = `Run ${FROM} has not been started from yet: this page is showing run ${RUN}.`;
+      }
+    }
     return;
   }
   try {
@@ -2289,6 +2327,7 @@ async function restore() {
       }
       const x = isObj(saved.extra) ? saved.extra : {};
       restoreCarried(x.carried);
+      if (!SUB) CARRIED.files = new Set(); // a submission the service no longer holds carried nothing into the next one
       LOCKED_ID = CARRIED.locked ? txt(saved.context.identity.issuer_id) : '';
       renderDocs(); renderFileSelects();
       const notes = fill(saved.context, isObj(saved.files) ? saved.files : {}, true);
@@ -2298,7 +2337,7 @@ async function restore() {
       if (Array.isArray(x.skipped)) x.skipped.forEach(m => SKIPPED.add(String(m)));
       newestTouched = x.newestTouched === true;
       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();
-      loadMsg((FROM ? `Run ${FROM} was not used: your earlier answers are back.` : 'Your earlier answers are back.') + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
+      loadMsg((FROM && FROM !== CARRIED.run ? `Run ${FROM} was not used: your earlier answers are back.` : 'Your earlier answers are back.') + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
       if (gone) showGone();
     } else if (FROM && !(isObj(saved) && saved.v === 1)) {
       await startFrom(FROM);
@@ -2694,7 +2733,8 @@ function fillAssumptions(a, warn) {
 }
 function startAgain() {
   clearTimeout(pollTimer);
-  RUN = ''; SUMMARY = null; RENDERED = null; SUBMIT_ERROR = ''; SUBMITTING = false; $('approve').checked = false;
+  RUN = ''; PENDING_FROM = ''; SUMMARY = null; RENDERED = null; SUBMIT_ERROR = ''; SUBMITTING = false; $('approve').checked = false;
+  $('run-from-note').hidden = true;
   try { localStorage.removeItem(RUN_STORE); } catch (err) { storeFailed(err); }
   FORM_PARTS().forEach(el => { el.hidden = false; });
   $('steperr').hidden = true;
@@ -2710,7 +2750,7 @@ $('reset').addEventListener('click', () => {
   if (!window.confirm(RUN ? 'Leave this run and start a new one?' : 'Clear every answer and start again?')) return;
   startAgain();
 });
-$('another').addEventListener('click', startAgain);
+$('another').addEventListener('click', startAnother);
 
 /* ======================================================================= Init */
 const wide = window.matchMedia('(min-width:960px)');
