@@ -4,6 +4,38 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Module output review changes: sources resolve, each drawing shown once, reader vocabulary checked everywhere (branch `claude/modules-page-sources-charts`, ruling `2026-11-12-module-output-review-changes.md`)
+Scope: offline only. No provider or model call was made. Decisions 7 to 11 (launcher text, checker, confidence score, post-balance-sheet table) are proven by tests and hand-written handoffs only, not by a model run. Display changes were checked on a copy of the retained real run `tdg-proof-snapshot-opus-002` (TDG, as of 2024-09-30, credit snapshot): one run, 1440 px, headless Chrome.
+Library:
+- A chart, map or timeline is shown once, as a drawing with a "Table form" fold; a drawing with no numbers gets a "Not established for this run" card (decision 1).
+- Request, Next module and front matter sit in an "Evidence & audit" fold; the front-matter `filename` line is not drawn (decision 2).
+- Figures, Basis links, table rows and `Source` cells open the inspector on the file and page; "Row" replaces "Handoff"; "unresolved citations" replaces "citations without a page" (decision 3).
+- Register ids lose their module code; no heading says "a method step"; a negative amount is one figure; a fenced block is drawn as a block; wide tables scroll from the keyboard (decisions 4, 5).
+- Drawings: bridge labels wrap, the debt stack has a ranking and security legend, the timeline has year ticks, an as-of line and a numbered key, map text wraps on words (decision 6).
+Method and checks (new runs only):
+- Reader vocabulary is checked in Findings, Calculations and Gaps; new check 10 refuses pipeline wording; the bottom line is at most 45 words in the first sentence and 180 in all (decisions 7, 8).
+- Modules state no confidence score, band or QA status and mention no helper scripts; a `### Confidence inputs` table is written and Python computes the score by the method's formula (decision 9).
+- Financial foundation writes `### Post-balance-sheet adjustments`; `## Sources` names file, description and date; modules use plain module names; chart tables carry one qualification sentence; map text is at most 60 characters (decisions 10, 11).
+Fidelity check (13 module pages of the run, before the branch vs after; every number token; three handoffs against their pages): no number, period, unit or source file name lost unexplained. One loss class was found: the "Not established" card dropped a stating row's other cells on Legal & covenants and Committee decision. Fixed in 188cb5f; re-checked: 8 of 8 statements back on the page. The compare script is `compare.py` in the session scratchpad (not in the repo).
+Reader check against the September VMO2 reference: Financial foundation, Business & governance, Fundamental credit. Verdict: pass with issues. Open issues (display or wording, none loses content):
+- Business & governance timeline: 8 of 11 events stacked at the right edge, markers on the as-of line.
+- Map labels at crossings and arrowheads are ambiguous (the edge table is unambiguous).
+- Bar labels are raw ("6585", "7940"); "1 unresolved citation" repeats six times on Debt maturities; the Sources table spends a column on sha256.
+- Figure buttons that open a file and page: 29 of 29, 42 of 42, 0 of 65 (Fundamental credit cites upstream modules only). Basis buttons that open a file and page: 62 of 111, 58 of 78, 0 of 58.
+Real-run numbers (they measure different things; each is from its own step):
+- Task A2 (chips): `issuer_page` chips 0 to 580 on the run. Whole-branch review, three retained runs: 116, 501 and 494 gap chips became page chips (1,111 in all), 0 regressions.
+- Task A3: "a method step" on the run 375 to 4 (4 left in CP-5 table cells, the no-title fallback). Task A4: sign-outside-figure 8 to 0.
+Gates at a816851 (all exit 0): node tests 363 passed; `uv run python tools/quality_gate.py --base a873f6f` 0 findings, 3165 lines in scope; PR-check pytest 3435 passed, 122 deselected; browser tests 83 passed, 1 skipped (a screenshot helper). Two one-line residual fixes followed (earlier-format map fold guard; "or cash" restored); gates re-run at the final code commit 02a06f6, all exit 0: node tests 364 passed; quality gate 0 findings, 3177 lines in scope; PR-check pytest 3435 passed; browser tests 83 passed, 1 skipped.
+Not verified: a paid run (whether a model obeys the new text; the refused-draft rate under the tighter checks); other runs and widths; earlier-format pages on a real run with maps; screen readers; the weekly slow suite.
+For the owner:
+- Bottom-line limits 45 and 180 words are the controller's values; 11 of 13 real bottom lines on the run exceed 180 words (184 to 286). Keep, raise or drop.
+- Check 10 refuses some ordinary wording ("canonical basis", "the pack mix", "upstream module prices"); narrow the list or accept retries.
+- The 60-character map limit as worded also shortens Relationship and Evidence, which are not drawn.
+- Decision 10 gaps: no pro forma cash column; cumulative rows with two events; the Amount sign convention chosen (4348 and -4348 are both accepted); the table is drawn only on Financial foundation.
+- PR size is 3,524 changed lines (whole-branch review) against the 800-line convention: one PR or split by commit range.
+- Longer shared text raised the per-call hold (opus-medium largest call 2.98 to 3.02 USD); an opus-medium run with `--cap 3` now refuses offline; the cap test moved 3 to 3.5.
+- The confidence score rests on the module's own stated inputs; nothing checks them. A score, band or QA status stated in front matter is refused; one stated in body text is not.
+- The bottom line is set in headline type (recorded redesign decision); labels at crossings stay ambiguous; "unnamed module" is shown for a code with no display name; the paid run that proves decisions 7 to 11 is not made.
 ## 2026-11-12 — A withheld difference is refused in the analysis register's Why and the ledger (branch `claude/cp8-why-cell-withheld`, owner "fine, PR and merge")
 Scope: offline, synthetic; no provider. K9's register exemption narrowed to the Effect cell of the measure's own issuer row (`Same definition` with `Correction` or `Method change`); the analysis Why, ledger, fact rows and other measures' rows refuse a withheld size (pack `no`, said `Not comparable`, same-period flagged, same-period net debt change incl. cash), as before in passages. Same functions, per-line exemption. 295 tests in `tests/test_changes.py` pass, none changed or weakened; 9 new cases failed on the old code first. CI fast-tests: exit 0, 3000 passed; node set: exit 0, 298 passed; `tools/quality_gate.py`: exit 0, 0 findings; reviewer probes ndsame_why, ndsame_k9, ndsame_flag, netdebt2_attacks, seam3_verdicts, realfix_check (real accepted-then-corrected handoff), t4r4_same_period: all exit 0.
 Not verified: a real model writing a Why cell; a collision of a withheld size with another measure's stated value is still refused (as in passages).
@@ -960,40 +992,3 @@ sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-s
   accepted report (fixture only); a live run's activity view; the delivered report's own layout
   inside the frame, which belongs to the delivery renderer; no independent review of this pass.
 
-## 2026-11-10 — Forecast tab: open items of run tdg-forecast-005 and CP-2G's own cases (branch `claude/forecast-tab-register`)
-
-Owner: investigate the open items; leave any that come from the sources lacking the needed files, but
-check the code would produce the output if they were there. All checks offline on retained data.
-
-- In-loop forecast check (not triggered live): replaying run 004's real CP-2G answer through
-  `_forecast_issues` gives the repair request naming `ebitda_margin`'s pattern failure (9 problems),
-  and replaying run 005's answer gives none. Verified on real model output; no provider call.
-- No downside case (sources): CP-2A's method forbids unsupported stress magnitudes, and the filings
-  give no rate path or stated stress case, so CP-2G wrote `downside_shock: null` and said why. With
-  a shock of 0.20/0.10 set in run 005's real CP-2G block, `model_files` writes REFERENCE and
-  DOWNSIDE, and the library grid shows a Downside group: Adj EBITDA 3,364 / 3,710 / 4,092, each
-  the base figure × 0.8 by hand; FY2025 interest 1,156.92 × 1.1 = 1,272.612.
-- Upside footnote (code): the cash flow notes said "The upside case stays in the calculation record".
-  CP-OS models never had one; the predecessor's models (`final-workflow` deliverables) do carry an
-  UPSIDE case, which the library hid. Sentence removed; the grid now shows UPSIDE (below).
-- No assumption register (code): `register_of` matched only headings containing "assumption
-  register", but the method fixes the id T2H.3, not the wording; runs 001–005 wrote "Assumption
-  register", "assumption lock", "assumption disposition" and "Assumptions and definition lock". It
-  now also matches a heading starting with T2H.3. Run 005's rebuilt library shows the register
-  (B1–B7, F1–F4, U1, D1–D2, L1–L2).
-- Tests written first and seen failing (4 of 5); library tests 68 passed incl. browser; gate exit 0.
-- CP-2G's own cases computed (owner, 2026-11-10, "Yes, compute them"): the inputs block takes
-  optional `upside_drivers` and `downside_drivers`, each only the drivers that differ from base
-  (the rest inherited). Python writes UPSIDE and DOWNSIDE_DRIVERS; CP-2A's shock stays DOWNSIDE on
-  base drivers (the predecessor's meaning), never compounded with CP-2G's downside. The keys are
-  written only when stated: run 005's delivery, made before this, still re-verifies byte for byte
-  (it failed with `delivery_changed: forecast_exact.json` in the first version, caught in review).
-  Grid groups: Base, Upside, Downside (CP-2G drivers), Downside stress (shock on base drivers).
-- Answer key written by hand, not by production code: upside year 1 (growth 0.10, margin 0.35)
-  revenue 1,100, EBITDA 385, CFO 239, FCF 195, closing cash 225; downside year 1 (no growth, no
-  dividends) 1,000 / 300 / 164 / 124 / 174; all three years of every case against the test's
-  fraction model. Run 005 replayed offline with its register's U1 (growth 0.2058) and D1–D2 (growth
-  0, margin 0.4781): upside revenue 9,574.052 = 7,940 × 1.2058; downside EBITDA 3,796.114 = 7,940 ×
-  0.4781. Tests first and seen failing (9); 237 passed incl. browser; node 105; gate exit 0.
-- Not verified: a live CP-2G run writing the case blocks (instructions changed, no paid run); the
-  predecessor's UPSIDE shown in this library (no such workspace built here).
