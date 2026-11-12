@@ -4,6 +4,27 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
+
+Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
+
+Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
+called, no paid run). The whole branch after its whole-branch review: carry from an earlier run (locked
+ID, documents, answers, pathway, module subset, turns), the existing-issuer notice, "Start again from
+this run", and "Start a run" on the library's Report history. This wave fixed the review's seam findings
+(`?from=` with a submitted run still held, carried-file marks against uploads, the carried pathway and
+subset/turns marks, `open_regular` through `platform_io.regular_open`, hidden names, refused listings).
+- `uv run pytest tests/test_run_start_prior.py tests/test_run_start_submissions.py tests/test_run_start_service.py -q`: exit 0, 170 passed.
+- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 131 passed (91 page, 40 library), none skipped (Chrome ran).
+  `test_upload_to_filed_report_with_the_real_launcher` fails on the base already and is not part of this change.
+- Review probes (`wb_seams.py`: 10 passed; the earlier probes exit as before, `probe_carry_races.py`'s
+  seal-between-copies case still fails: ruled out of this wave).
+- `uv run python tools/quality_gate.py`: exit 0.
+- Fidelity: the notice text, marks, load messages and the progress note are asserted in the DOM Chrome builds.
+- Reader check: not done; pending. No real run was read against the September VMO2 reference.
+- CP-8 summary lines (the "changes section" and the two-prior-runs lines) are not built: the CP-8 redesign has not merged.
+- Windows not run: the `O_BINARY` open of a carried file is from reading `platform_io.regular_open` only.
+
 ## 2026-11-12 — Run start page browser tests after the preset change (branch `claude/web-search-run-page`)
 
 The browser tests (`-m browser`) were not run for the commits from 73b499b (presets) to d185d83. Run then:
@@ -963,34 +984,3 @@ provider was called and nothing ran on Windows. Report with all measurements and
   four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
   inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
   sub-agents), only the author's adversarial pass.
-
-## 2026-11-10 — Run report Phase A (library Overview and module pages)
-
-Scope: the library page Overview is now a run report (what the run establishes, credit story by
-question, findings register, open items, module matrix); module pages split View from Statements
-and registers. Spec `docs/design/2026-11-09-run-report-spec.md`, plan
-`docs/superpowers/plans/2026-11-09-run-report-phase-a.md`. Commits fdb21ee..a887ba4, then merge
-4dad3d9 of `origin/main` 51203a9.
-- Real-data check: deterministic rebuild of one retained run, `cpos-tdg-sol-medium-all-001`, into a
-  temporary folder; no model call, nothing written under `runs/` or `library/`. Result: `7 of 20
-  modules reach a conclusion · 13 not assessable`; established CP-1, CP-1A, CP-2, CP-2D, CP-2E,
-  CP-3C, CP-DR; findings register 33 rows shown, 84 with not-assessable modules included; 58 checks
-  pass; key-numbers differences against the previous page 0.
-- Gates on 4dad3d9, all exit 0: `node --test apps/issuer-library/credit_os/web/static.test.cjs` (82
-  pass); pytest on the seven affected files (300 passed, 1 skipped: the paid live test); `uv run
-  python tools/quality_gate.py --base origin/main`.
-- Reviews: per-task and whole-branch; one Medium fixed test-first in a887ba4 (an empty
-  `committee_status:` took the next front-matter line as the status); the merge resolution was
-  reviewed separately and found sound.
-- Merge ruling: front matter follows `main` (dc2320c): a level-2 `Front matter` section whose
-  locator covers only the lines between the `---` markers. Placements of the 20 real handoffs are
-  identical before and after.
-- Second merge 85d47f6 of `origin/main` 2ecfc8f (inbox automation), then fix 4abfb18: the review of
-  that merge found the live Run activity chips had lost their running, done and waiting colours to
-  the run report's `.chip` rule; fixed test-first. On 4abfb18, exit 0: node (93 pass), pytest on the
-  affected files with the inbox tests (409 passed, 1 skipped, run on 85d47f6; the two page files
-  re-run on 4abfb18, 34 passed), the quality gate, and the same real-run rebuild.
-- Not verified: runs other than `cpos-tdg-sol-medium-all-001` were only built without error; widths
-  below 1280px; keyboard and screen-reader use; a bold `**Not assessable**` bottom line or an empty
-  Confidence cell reads as established (neither occurs in retained data); the Overview opened with
-  no run context; the branch diff is 2,245 lines against the 800-line cap.

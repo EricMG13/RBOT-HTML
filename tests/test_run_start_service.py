@@ -10,6 +10,7 @@ import errno
 import json
 import logging
 import os
+import shutil
 import socket
 import struct
 import threading
@@ -355,6 +356,9 @@ def test_no_response_carries_the_provider_key(svc, monkeypatch):
         svc.call("POST", f"/api/submissions/{sid}/summary", answers),
         svc.call("POST", "/api/submissions", origin="http://evil.example"),
         svc.call("GET", "/api/runs/none"),
+        svc.call("GET", "/api/runs/none/inputs"),
+        svc.call("GET", "/api/issuers/acme"),
+        svc.call("POST", f"/api/submissions/{sid}/carry", {"run": "none"}),
         svc.call("GET", "/library/../x"),
         svc.call("POST", f"/api/submissions/{sid}/submit", {"answers": answers, "digest": "x"}),
     ]
@@ -824,3 +828,98 @@ def test_main_stops_on_interrupt_and_releases_the_folder_lock(root, fake_env, mo
     monkeypatch.setattr(service, "_loop", interrupt)
     assert service.main(["--root", str(root), "--port", "0", "--host", "127.0.0.1"]) == 0
     scheduler_module.Scheduler(settings(root)).close()  # the lock was released
+
+
+def _finished_run(svc: Service, fake_env: Callable[[dict[str, Any]], None], payload: bytes) -> str:
+    fake_env({"events": [["delivered", {}]]})
+    sid = svc.new()
+    assert svc.upload(sid, "notes/a.txt", payload).status == 200
+    answers = answers_for()
+    summary = svc.call("POST", f"/api/submissions/{sid}/summary", answers).json()
+    body = {"answers": answers, "digest": summary["digest"]}
+    run_id = str(svc.call("POST", f"/api/submissions/{sid}/submit", body).json()["run"])
+    lay = layout(svc.root)
+    pump(
+        svc.watcher,
+        lambda: (
+            [r.status for r in load_all(lay) if r.id == run_id] == ["finished"]
+            and (lay.drops / run_id / "context.json").is_file()
+        ),
+        limit=60,
+    )
+    return run_id
+
+
+def test_an_earlier_runs_inputs_are_read_and_its_files_carried(svc, fake_env):
+    run = _finished_run(svc, fake_env, b"Net sales were 100.")
+    got = svc.call("GET", f"/api/runs/{run}/inputs")
+    assert got.status == 200 and got.json()["context"]["run"]["as_of"] == ""
+    sid = svc.new()
+    carried = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": run})
+    assert carried.status == 200 and carried.json()["kept"] == []
+    reading = svc.call("GET", f"/api/submissions/{sid}/reading").json()
+    assert reading["error"] == "" and reading["documents"], reading
+    assert [f["name"] for f in got.json()["files"]] == ["notes/a.txt"]
+    assert carried.json()["carried"] == ["notes/a.txt"]
+    assert [d["source"] for d in reading["documents"]] == [f["name"] for f in got.json()["files"]]
+
+
+def test_inputs_and_carry_for_an_unknown_run_are_404(svc):
+    unknown = "20200101-000000-01"
+    assert svc.call("GET", f"/api/runs/{unknown}/inputs").status == 404
+    sid = svc.new()
+    reply = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": unknown})
+    assert reply.status == 404 and reply.json() == {"error": "unknown run"}
+    assert not any(submissions.files_folder(layout(svc.root), sid).iterdir())
+    known = svc.call("POST", "/api/submissions/" + "0" * 32 + "/carry", {"run": unknown})
+    assert known.status == 404
+
+
+def test_a_carry_for_an_unknown_submission_is_404(svc, fake_env):
+    run = _finished_run(svc, fake_env, b"Net sales were 100.")
+    reply = svc.call("POST", "/api/submissions/" + "0" * 32 + "/carry", {"run": run})
+    assert reply.status == 404 and reply.json() == {"error": "unknown submission"}
+
+
+def test_a_carry_without_or_with_a_foreign_origin_copies_nothing(svc, fake_env):
+    run = _finished_run(svc, fake_env, b"Net sales were 100.")
+    sid = svc.new()
+    for origin in (None, "http://evil.example", f"https://{svc.host}", "null"):
+        reply = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": run}, origin=origin)
+        assert reply.status == 403, origin
+    assert not any(submissions.files_folder(layout(svc.root), sid).iterdir())
+
+
+@pytest.mark.parametrize("body", [{"run": "../x"}, {"run": 3}, [], {}, {"run": ""}, {"run": "a/b"}])
+def test_a_carry_body_that_is_not_a_run_id_is_400(svc, body):
+    sid = svc.new()
+    reply = svc.call("POST", f"/api/submissions/{sid}/carry", json.dumps(body).encode())
+    assert reply.status == 400, reply.body
+    assert not any(submissions.files_folder(layout(svc.root), sid).iterdir())
+
+
+def test_a_carry_from_a_run_without_stored_documents_is_400(svc, fake_env):
+    run = _finished_run(svc, fake_env, b"Net sales were 100.")
+    shutil.rmtree(layout(svc.root).drops / run)
+    sid = svc.new()
+    reply = svc.call("POST", f"/api/submissions/{sid}/carry", {"run": run})
+    assert reply.status == 400
+    assert reply.json() == {"error": "that run has no stored documents"}
+
+
+def test_an_issuer_id_is_looked_up_and_an_unsafe_one_is_404(svc, fake_env):
+    _finished_run(svc, fake_env, b"Net sales were 100.")
+    assert svc.call("GET", "/api/issuers/acme").json()["runs"] == 1
+    assert svc.call("GET", "/api/issuers/nobody").json()["runs"] == 0
+    assert svc.call("GET", "/api/issuers/..%2Fx").status == 404
+    assert svc.call("GET", "/api/issuers/Acme").status == 404
+    assert svc.call("GET", "/api/issuers/" + "a" * 41).status == 404
+
+
+def test_the_inputs_route_does_not_serve_file_content(svc, fake_env):
+    secret = b"Net sales were 424242 and the secret phrase is plover."
+    run = _finished_run(svc, fake_env, secret)
+    reply = svc.call("GET", f"/api/runs/{run}/inputs")
+    assert reply.status == 200
+    assert b"plover" not in reply.body and b"424242" not in reply.body
+    assert reply.json()["files"] == [{"name": "notes/a.txt", "size": len(secret)}]

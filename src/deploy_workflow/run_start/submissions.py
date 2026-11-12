@@ -8,6 +8,7 @@ a path outside the submission's own ``files`` folder. A refusal leaves no file b
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
@@ -16,6 +17,7 @@ import secrets
 import shutil
 import tempfile
 import threading
+import unicodedata
 import uuid
 from collections.abc import Collection
 from decimal import Decimal
@@ -28,6 +30,7 @@ from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
 from deploy_workflow.inbox.startup import STANDING_RULING
 from deploy_workflow.owners.cpos import web_search_ruled
 from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
+from deploy_workflow.platform_io import regular_open
 
 MAX_FILE = 50 * 1024 * 1024
 MAX_FILES = 500
@@ -198,13 +201,29 @@ def _parts(name: str) -> list[str]:
     return parts
 
 
-def _stored(root: Path, *, strict: bool = False) -> dict[str, int]:
+def _stored(root: Path, *, strict: bool = False, any_error: bool = False) -> dict[str, int]:
     """Relative posix name -> size of each regular file under ``root``; links are not followed.
 
     With ``strict`` a link anywhere under ``root`` is a ``Refused``: the launcher follows links and
-    the digest does not, so a link would let bytes change without the digest changing."""
+    the digest does not, so a link would let bytes change without the digest changing. With
+    ``any_error`` (and ``strict``) every walk error is a ``Refused``, not only an unreadable folder:
+    a folder that is never renamed under the walk (a source folder) has no vanishing to forgive."""
     found: dict[str, int] = {}
-    for here, dirs, names in os.walk(root, followlinks=False):
+
+    def unreadable(error: OSError) -> None:
+        # Only a folder that exists but cannot be read is refused; one that vanished (a seal
+        # renamed it) is left to the callers' own retry, as before.
+        if not any_error and not isinstance(error, PermissionError):
+            return
+        try:
+            shown = Path(error.filename).relative_to(root).as_posix() if error.filename else ""
+        except ValueError:
+            shown = ""
+        shown = shown or "a folder"
+        raise Refused(f"{shown!r} cannot be read")
+
+    walk = os.walk(root, followlinks=False, onerror=unreadable if strict else None)
+    for here, dirs, names in walk:
         linked = [d for d in dirs if (Path(here) / d).is_symlink()]
         if strict and linked:
             raise Refused(f"{linked[0]!r} is a link, not an uploaded file")
@@ -283,7 +302,7 @@ def _write(body: BinaryIO, target: Path, length: int) -> None:
             left -= len(chunk)
 
 
-def _place(folder: Path, parts: list[str], temp_path: Path) -> None:
+def _place(folder: Path, parts: list[str], temp_path: Path, *, replace: bool = True) -> None:
     """Move a finished upload into ``files``; the folder creation and the rename are one step."""
     with _LOCK:
         root = _usable_root(folder)
@@ -294,6 +313,8 @@ def _place(folder: Path, parts: list[str], temp_path: Path) -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_dir():
                 raise Refused(f"{stored!r} is already a folder")
+            if not replace and os.path.lexists(target):
+                raise _Taken(f"{stored!r} is already stored")
             os.replace(temp_path, target)
         except (NotADirectoryError, FileExistsError) as error:
             raise Refused(f"{stored!r} clashes with a file or folder already stored") from error
@@ -314,7 +335,7 @@ def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -
 
     The bytes go to a temporary name in the submission folder and are renamed into place on
     success, so a refusal or a cut-off upload leaves nothing behind. A name already stored is
-    replaced."""
+    replaced, except for a file opened by ``open_regular`` (a carry), which is refused as taken."""
     folder = _folder(layout, sid)
     if _is_sealed(folder):
         raise Refused("this submission has been submitted")
@@ -328,7 +349,7 @@ def add_file(layout: Layout, sid: str, name: str, body: BinaryIO, length: int) -
     temp_path = folder / tmp
     try:
         _write(body, temp_path, length)
-        _place(folder, parts, temp_path)
+        _place(folder, parts, temp_path, replace=not isinstance(body, _Carried))
     finally:
         # The reservation is released first: a failed unlink must not hold it for the life of the
         # process (it blocks ``seal`` and the sweep).
@@ -357,6 +378,137 @@ def remove_file(layout: Layout, sid: str, name: str) -> None:
                 break
             parent.rmdir()
     _touch(folder)
+
+
+def listing(source: Path) -> dict[str, int]:
+    """Relative posix name -> size of each regular file under ``source``, but its own context.json.
+
+    ``Refused`` when anything under ``source`` is a link or cannot be walked: a copy must never
+    follow a link. A name with a part starting ``.`` (``.DS_Store``) is left out: the launcher
+    does not read it, so it is neither carried nor counted."""
+    return {
+        name: size
+        for name, size in _stored(source, strict=True, any_error=True).items()
+        if name.casefold() != _CONTEXT_NAME and not any(p.startswith(".") for p in name.split("/"))
+    }
+
+
+class _Taken(Refused):
+    """A carried file's name is already stored; the carry keeps the stored file."""
+
+
+class _Carried(io.BufferedReader):
+    """A source file opened by ``open_regular``; ``add_file`` never replaces a file for one.
+
+    Kept as a handle type, not a ``replace`` keyword: the tests' and probes' wrappers around
+    ``add_file`` take its five positional arguments only."""
+
+
+def open_regular(path: Path, size: int | None = None) -> _Carried:
+    """Open ``path`` for reading; ``Refused`` unless it is a regular file with one link (and
+    ``size`` bytes when given). The last part is not followed if it is a link."""
+    # O_NONBLOCK: opening a FIFO must not wait for a writer (regular_open then refuses it).
+    # regular_open adds O_BINARY where the platform has it and refuses a reparse point.
+    options = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = regular_open(path, options)
+    except OSError as error:
+        raise Refused(f"{path.name!r} cannot be read as a regular file") from error
+    try:
+        info = os.fstat(fd)
+        if info.st_nlink != 1:
+            raise Refused(f"{path.name!r} is a link, not an uploaded file")
+        if size is not None and info.st_size != size:
+            raise Refused(f"{path.name!r} changed while it was being copied")
+        return _Carried(io.FileIO(fd, "rb"))
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _fold(name: str) -> str:
+    """A stored name as a case- and normalisation-insensitive disk sees it."""
+    return unicodedata.normalize("NFC", "/".join(_parts(name))).casefold()
+
+
+def _check_carry(root: Path, sid: str, wanted: dict[str, int]) -> tuple[list[str], list[str]]:
+    """The names to copy and the names kept (in stored form), the limits checked against what is
+    stored and in flight. A name is compared in its stored form, as the disk compares it."""
+    existing = _stored(root)
+    taken = {_fold(name) for name in existing}
+    names: list[str] = []
+    kept: list[str] = []
+    for name in sorted(wanted):
+        key = _fold(name)
+        if key in taken:
+            kept.append("/".join(_parts(name)))
+        else:
+            taken.add(key)
+            names.append(name)
+    for name in names:
+        if wanted[name] > MAX_FILE:
+            raise Refused(f"a file is at most {MAX_FILE // (1024 * 1024)} MB")
+    own = _PENDING.get(sid, {})
+    if len(existing) + len(own) + len(names) > MAX_FILES:
+        raise Refused(f"more than {MAX_FILES} files")
+    total = sum(existing.values()) + sum(size for _, size in own.values())
+    if total + sum(wanted[name] for name in names) > MAX_TOTAL:
+        raise Refused(f"more than {MAX_TOTAL // (1024 * 1024)} MB in total")
+    return names, kept
+
+
+def _roll_back(layout: Layout, sid: str, made: list[tuple[str, int]]) -> None:
+    """Remove the files this carry created, each only while it still has the size it wrote."""
+    try:
+        root = files_folder(layout, sid)
+    except Refused as error:
+        log.warning("carry %s: the files could not be rolled back (%s)", sid, error)
+        return
+    for stored, size in made:
+        path = root.joinpath(*stored.split("/"))
+        try:
+            if path.is_symlink() or not path.is_file() or path.lstat().st_size != size:
+                continue  # replaced since: no longer this call's file
+            remove_file(layout, sid, stored)
+        except (Refused, OSError) as error:  # logged; the caller sees the original failure
+            log.warning("carry %s: could not remove %s (%s)", sid, stored, error)
+
+
+def carry(layout: Layout, sid: str, source: Path) -> dict[str, list[str]]:
+    """Copy each file under ``source`` (but its context.json) into the submission.
+
+    A name already stored is kept, never replaced, and is reported as kept. Nothing is copied when
+    a link is found or a limit would be passed; a copy that fails part-way removes the files this
+    call created. Returns the names carried and the names kept, each sorted."""
+    folder = _folder(layout, sid)
+    if source.is_symlink() or not source.is_dir():
+        raise Refused("the earlier run's files are not a plain folder")
+    wanted = listing(source)
+    with _LOCK:
+        root = _usable_root(folder)
+        names, kept = _check_carry(root, sid, wanted)
+    # ponytail: the pre-check and the copies are not one atomic step. Each copy is created without
+    # replacing (``_place`` refuses a name taken since, and the file is then kept), ``add_file``
+    # re-checks the limits, and a failure removes only what this call created. A seal landing
+    # between two copies leaves the earlier ones in the sealed folder (a wider lock is needed).
+    made: list[tuple[str, int]] = []
+    try:
+        for name in names:
+            _refuse_links(source, name.split("/"))
+            with open_regular(source / name, wanted[name]) as handle:
+                try:
+                    made.append(
+                        (
+                            add_file(layout, sid, name, handle, wanted[name]),
+                            wanted[name],
+                        )
+                    )
+                except _Taken:
+                    kept.append("/".join(_parts(name)))
+    except BaseException:
+        _roll_back(layout, sid, made)
+        raise
+    return {"carried": sorted(stored for stored, _ in made), "kept": sorted(set(kept))}
 
 
 def reading(layout: Layout, sid: str) -> dict[str, Any]:
