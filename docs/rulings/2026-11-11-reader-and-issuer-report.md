@@ -233,8 +233,9 @@ labelled `Fidelity check:` inside the same retry and cost cap, and it is not one
 checks.
 
 Amendment 2026-11-12 (check 9, found by the paid web-search test `tdg-cpdr-web-001`): a ninth prose
-check, **no provider citation marker**: sentence text contains no private-use character
-(U+E000-U+F8FF) and does not match `cite` + `turn\d+(view|search|news|open)\d+`. The run's CP-DR
+check, **no provider citation marker**: the handoff, anywhere in it, contains none of the
+provider's delimiters (U+E200, U+E201, U+E202; any other private-use character is left alone) and
+nothing that matches `cite\s*turn\d+[a-z]+\d+` (citeturn0view0, citeturn0image0, cite turn0fetch1). The run's CP-DR
 handoff carried 54 markers of the form U+E200 `cite` U+E202 `turn123066view0` ... U+E201 that the
 eight checks did not catch. A searching module's answer text now has such markers removed
 mechanically before it is checked (the count is recorded in the run record; the provider's

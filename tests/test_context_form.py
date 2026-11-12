@@ -233,6 +233,17 @@ def test_the_summary_tells_the_analyst_what_goes_to_openai_before_submit() -> No
     assert lead is not None
     text = lead[1]
     assert "Pages of the documents you uploaded that modules read are sent to OpenAI" in text
-    assert "web queries (public names only) go to OpenAI's search" in text
+    assert "web searches go to OpenAI's search" in text
+    assert "told to search with public names only" in text
+    assert "queries it actually sent are kept in the run record" in text
+    assert "private case the issuer's name and the questions it researches" in text
+    assert "use public names only and go to" not in FORM  # the old claim: nothing enforced it
     assert text.index("OpenAI") < FORM.index('id="approve"')
     assert "supplied files only" not in FORM
+
+
+def test_the_page_states_before_submit_whether_the_run_searches_by_case_kind() -> None:
+    assert "This is a private case: the research module will search the web" in FORM
+    assert "This is a synthetic case: the research module does not search the web" in FORM
+    assert "const SEARCH_KINDS = ['public', 'private'];" in FORM
+    assert "['Web search'," in FORM

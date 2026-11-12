@@ -3,7 +3,7 @@
 Pure module: no I/O. The specification is `docs/rulings/2026-11-11-reader-and-issuer-report.md`
 (H1, H2, H3, H6); where this file and the ruling differ, the ruling wins.
 
-Reader passages are the bodies of the four H3 sections of `## Findings`. Checks 2-6, 8 and 9 read
+Reader passages are the bodies of the four H3 sections of `## Findings`. Checks 2-6 and 8 read
 only "sentence text": a passage without headings, Basis lines, table rows, fenced code and HTML
 comments, list markers removed. Decisions where the ruling is silent:
 
@@ -654,22 +654,24 @@ def _check_figures(lines: list[_Line]) -> list[str]:
     return issues
 
 
-PROVIDER_MARKER = re.compile(
-    r"[-]|cite[-]*turn\d+(?:view|search|news|open)\d+"
-)  # Check 9: a private-use character, or the plain-text form of a search citation.
+# Check 9: the provider's citation delimiters (U+E200 to U+E202; a genuine private-use character
+# elsewhere is not refused) or the plain-text form a copy step leaves, citeturn0view0,
+# citeturn0image0, cite turn0fetch1. Unlike checks 2-6 it reads the whole handoff, not only the
+# reader passages: a marker left in Gaps or a Sources cell is as much a defect.
+PROVIDER_MARKER = re.compile(r"[\ue200-\ue202]|cite\s*turn\d+[a-z]+\d+")
 
 
-def _check_provider_markers(lines: list[_Line]) -> list[str]:
+def _check_provider_markers(text: str) -> list[str]:
     return [
         _issue(
             9,
             "no provider citation marker",
-            line.number,
-            f"U+{ord(found[0]):04X}" if found[0] >= "" and len(found[0]) == 1 else found[0],
+            number,
+            f"U+{ord(found[0]):04X}" if len(found[0]) == 1 else found[0],
             "remove the marker; put the source in the paragraph's Basis line.",
         )
-        for line in lines
-        for found in PROVIDER_MARKER.finditer(line.text)
+        for number, line in enumerate(text.split("\n"), start=1)
+        for found in PROVIDER_MARKER.finditer(line)
     ]
 
 
@@ -689,7 +691,7 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
         + _check_register_ids(text, lines)
         + _check_limitation_repeats(text, accepted)
         + _check_figures(lines)
-        + _check_provider_markers(lines)
+        + _check_provider_markers(text)
     )
 
 
