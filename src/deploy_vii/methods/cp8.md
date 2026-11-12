@@ -106,7 +106,7 @@ accepted, the run is delivered without it.
      change's cash has no such row, so its difference is printed nowhere. A withheld difference
      is refused without its unit too: a bare number (`Cash fell by 30.`) equal to a withheld size
      is refused wherever the sized one is, so write a count that happens to equal it another way
-     (the words are not read; the repair names the figure and the measure). The verdict words
+     (a size written in words, `thirty`, is refused as well; the repair names the figure and the measure). The verdict words
      `Same definition` and `Not comparable` are read from the start of the Effect cell only; the
      same words starting any other cell of the row are refused, naming the cell (a `Not comparable`
      for a measure the pack marks `comparable: no` is accepted in any cell of its row).

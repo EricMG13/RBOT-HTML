@@ -821,33 +821,129 @@ def _may_print(
 
 
 _LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
+_BULLET_ITEM = re.compile(r"\s*[-*+]\s")
 _LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
+_FIRST_NUMBER = re.compile(r"\s*1[.)]\s")
 _MONTH = (
     r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
     r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
 )
-_DAY = r"(?<![\w.,])\d{1,2}(?:st|nd|rd|th)?\b(?![.,]\d)"
-_DAY_BEFORE = re.compile(rf"{_DAY}(?=\s+\b{_MONTH})")
-_DAY_AFTER = re.compile(rf"(\b{_MONTH}\s+)({_DAY})")
+_DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
+_YEAR = r"\d{4}\b(?![.,]\d)"
+# A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
+# and month with no year is read as a number.
+_DATE = re.compile(
+    rf"(?<![\w.,])(?:{_DAY}\s+{_MONTH},?\s+{_YEAR}|\b{_MONTH}\s+{_DAY},?\s+{_YEAR})",
+    re.IGNORECASE,
+)
+_UNITS = {
+    word: n
+    for n, word in enumerate(
+        (
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+        ),
+        1,
+    )
+}
+_TENS = {
+    word: 10 * n
+    for n, word in enumerate(
+        ("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"), 2
+    )
+}
+_WORD_RUN = re.compile(r"[A-Za-z]+(?:[\s-]+[A-Za-z]+)*")
 
 
 def _starts_list_item(lines: Sequence[str], i: int) -> bool:
     """Whether line `i` can begin a list item: the first line of the passage, or one after a blank
-    line, a heading or a list item. A line that continues a paragraph cannot."""
+    line, a heading or a list item. A line that continues a paragraph cannot, and after a bulleted
+    item only `1.` can (CommonMark: a list not starting at 1 cannot interrupt a paragraph)."""
     if i == 0:
         return True
     before = lines[i - 1]
+    if _BULLET_ITEM.match(before):
+        return bool(_FIRST_NUMBER.match(lines[i]))
     return not before.strip() or bool(_HEADING.match(before) or _LIST_ITEM.match(before))
+
+
+def _group(words: Sequence[str], i: int) -> tuple[int, int]:
+    """(value, next index) of the words from `i` that spell a number below 1,000: `[N hundred]
+    [and] [tens [unit] | 1-19]`. Value 0 and the same index when none."""
+    start, value = i, 0
+    if i + 1 < len(words) and words[i] in _UNITS and words[i + 1] == "hundred":
+        value, i = _UNITS[words[i]] * 100, i + 2
+        if (
+            i + 1 < len(words)
+            and words[i] == "and"
+            and (words[i + 1] in _UNITS or words[i + 1] in _TENS)
+        ):
+            i += 1
+    if i < len(words) and words[i] in _TENS:
+        value, i = value + _TENS[words[i]], i + 1
+        if i < len(words) and words[i] in _UNITS and _UNITS[words[i]] < 10:
+            value, i = value + _UNITS[words[i]], i + 1
+    elif i < len(words) and words[i] in _UNITS:
+        value, i = value + _UNITS[words[i]], i + 1
+    return (value, i) if i > start else (0, start)
+
+
+def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
+    """(value, next index) of the whole number in English words that starts at `i`, up to 999,999
+    (`two thousand five`); value 0 and the same index when none starts there."""
+    value, j = _group(words, i)
+    if j < len(words) and words[j] == "thousand" and value:
+        value, j = value * 1000, j + 1
+        if j + 1 < len(words) and words[j] == "and" and _group(words, j + 1)[0]:
+            j += 1
+        rest, j = _group(words, j)
+        value += rest
+    return (value, j) if j > i else (0, i)
+
+
+def _spelled(line: str) -> list[Decimal]:
+    """The whole numbers from two up that the line writes in English words, any case, hyphenated or
+    spaced. Not read: `one` alone, ordinals, fractions, `a hundred`, `a dozen`, and a number that a
+    decimal point continues."""
+    found: list[Decimal] = []
+    for run in _WORD_RUN.finditer(line):
+        words = re.split(r"[\s-]+", run[0].lower())
+        i = 0
+        while i < len(words):
+            value, j = _spelled_number(words, i)
+            if j == i:
+                i += 1
+                continue
+            if value >= 2 and words[j : j + 1] != ["point"]:
+                found.append(Decimal(value))
+            i = j
+    return found
 
 
 def _bare(line: str, *, listed: bool) -> str:
     """The line as the bare-number reading of the withheld-difference rule (K9) takes it: module
-    codes blanked; a leading list number blanked when `listed` (the line begins a list item, never a
-    table cell); and a one- or two-digit day beside a month name blanked (a date, not a size)."""
+    codes blanked and a leading list number blanked when `listed` (the line begins a list item,
+    never a table cell). Complete dates are blanked by the caller, for both readings."""
     if listed:
         line = _LIST_NUMBER.sub(_blanks, line)
-    line = _DAY_AFTER.sub(lambda m: m[1] + " " * len(m[2]), _MODULE.sub(_blanks, line))
-    return _DAY_BEFORE.sub(_blanks, line)
+    return _MODULE.sub(_blanks, line)
 
 
 def _blanks(match: re.Match[str]) -> str:
@@ -896,9 +992,11 @@ def _passage_issues(
         )
         if h2 in NOT_PASSAGES:
             continue
+        line = _DATE.sub(_blanks, line)
         figures = [f.size for f in _figures(line, counts=False)]
         listed = not row and _starts_list_item(lines, i)
-        bare = [f.size for f in _figures(_bare(line, listed=listed))]
+        bare_line = _bare(line, listed=listed)
+        bare = [f.size for f in _figures(bare_line)] + _spelled(bare_line)
         for size in dict.fromkeys([*figures, *bare]):
             if size in sizes:
                 issues.append(

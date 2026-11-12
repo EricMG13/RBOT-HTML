@@ -2922,10 +2922,6 @@ def test_the_refusal_names_the_figure_and_the_measure():
     assert any("figure 30" in i and "difference of Cash" in i for i in found), found
 
 
-def test_a_withheld_size_written_in_words_is_not_read():  # recorded limit
-    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by thirty.\n\n"), _ndpack()) == ()
-
-
 def test_a_bare_decimal_withheld_difference_is_refused():
     found = cp8_issues(with_row(LEVERAGE_ROW, "Leverage fell by 0.56.\n\n"), PACK2)
     assert any("0.56" in i and "difference" in i for i in found), found
@@ -3013,7 +3009,6 @@ def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
     [
         "80. Net debt is the largest item.\n\n",
         "Findings follow.\n\n80. Net debt is the largest item.\n\n",
-        "- First point.\n80. Net debt is the largest item.\n\n",
         "1. First point.\n80. Net debt is the largest item.\n\n",
     ],
 )
@@ -3047,3 +3042,138 @@ def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refus
     )
     found = cp8_issues(with_row(row), PACK2)
     assert any("Earlier cell" in i and "not comparable" in i for i in found), found
+
+
+# --- the withheld-size limits: wrapped bullets, dates need a year, numbers in words ---------------
+
+
+def _says(passage, pack=None):
+    return cp8_issues(with_row(LEVERAGE_ROW, passage + "\n\n"), pack or _ndpack())
+
+
+@pytest.mark.parametrize(
+    "passage",
+    [
+        "- Cash fell by\n30. The rest holds.",
+        "  - Cash fell by\n  30. The rest holds.",
+        "* Cash fell by\n30) The rest holds.",
+        "- First point.\n80. Net debt is the largest item.",
+    ],
+)
+def test_a_number_wrapped_onto_a_line_after_a_bullet_is_a_figure(passage):
+    assert any("figure " in i for i in _says(passage))
+
+
+@pytest.mark.parametrize(
+    "passage",
+    [
+        "- item\n1. first sub-item",
+        "Findings.\n\n30. A numbered item.",
+        "1. First.\n30. A numbered item.",
+    ],
+)
+def test_a_list_marker_after_a_bullet_one_or_elsewhere_is_no_figure(passage):
+    assert _says(passage) == ()
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash fell by 30 March-to-September.",
+        "Cash fell by 30 Mar-to-Sep.",
+        "Cash fell by 30 March quarter on March quarter.",
+        "Cash fell by 30 May be restated.",
+        "The period ends 30 September.",
+    ],
+)
+def test_a_day_beside_a_month_without_a_year_is_a_number(sentence):
+    assert any("figure 30" in i for i in _says(sentence))
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The period ends 30 September 2024.",
+        "The period ends 30th Sep 2024.",
+        "The period ends September 30 2024.",
+        "The period ends Sep 30, 2024.",
+        "The period ends September 30, 2024.",
+        "The period ends 30 September, 2024.",
+    ],
+)
+def test_a_day_of_a_complete_date_is_no_size(sentence):
+    assert _says(sentence) == ()
+
+
+def test_a_full_date_on_a_line_hides_no_other_figure():
+    found = _says("September 30, 2024 US$m 437 is held nowhere.")
+    assert any("437" in i and "held in neither" in i for i in found), found
+    assert _says("September 30, 2024 US$m 7,100 is the gross debt.") == ()
+    found = _says("On 30 September 2024 cash fell by 30 US$m.")
+    assert any("figure 30" in i for i in found), found
+
+
+def _cash_163_pack():
+    pack = _ndpack()
+    pack["net_debt_change"] |= {"change_in_cash": "-163", "current_cash": "747"}
+    return pack
+
+
+@pytest.mark.parametrize(
+    ("sentence", "pack"),
+    [
+        ("Cash fell by thirty.", None),
+        ("Cash fell by THIRTY.", None),
+        ("Net debt is eighty lower.", None),
+        ("Gross debt changed by one hundred and ten.", None),
+        ("Gross debt changed by One Hundred Ten.", None),
+        ("Cash fell by one hundred and sixty-three.", _cash_163_pack()),
+        ("Cash fell by one hundred sixty three.", _cash_163_pack()),
+        ("Cash fell by one hundred sixty-three.", _cash_163_pack()),
+    ],
+)
+def test_a_withheld_size_written_in_words_is_refused(sentence, pack):
+    found = _says(sentence, pack)
+    assert any("difference" in i and "reword" in i for i in found), found
+
+
+def test_a_large_withheld_size_in_words_is_refused():
+    pack = _ndpack()
+    pack["net_debt_change"] |= {"change_in_cash": "-2005", "current_cash": "-1095"}
+    for sentence in ("Cash fell by two thousand five.", "Cash fell by two thousand and five."):
+        assert any("figure 2005" in i for i in _says(sentence, pack)), sentence
+    pack["net_debt_change"] |= {"change_in_cash": "-250000", "current_cash": "-249090"}
+    assert any("figure 250000" in i for i in _says("It fell by two hundred fifty thousand.", pack))
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Cash fell by forty.",
+        "Cash fell by thirty-one.",
+        "The one covenant is tested.",
+        "The thirtieth covenant is tested.",
+        "A hundred covenants and a dozen facilities.",
+        "Cash fell by thirty point five.",
+        "Cash fell by twenty and forty.",
+    ],
+)
+def test_a_number_in_words_that_is_no_withheld_size_is_accepted(sentence):
+    assert _says(sentence) == ()
+
+
+def test_the_word_one_is_never_read_as_a_size():
+    pack = _ndpack()
+    pack["net_debt_change"] |= {"change_in_cash": "-1", "current_cash": "909"}
+    assert _says("One facility matured, and no one asked.", pack) == ()
+
+
+def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
+    net = (
+        "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
+        "| Same definition; net debt is eighty lower after the correction. |"
+    )
+    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
+    elsewhere = net.replace("Net debt |", "Refinancing |")
+    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
+    assert any("80" in i and "difference" in i for i in found), found

@@ -378,8 +378,25 @@ condition; a size equal to one of the measure's own values). Counts under K10 ar
 begins a list item (the first line, or after a blank line, a heading or a list item; never a table cell or a line that
 continues a paragraph) and a one- or two-digit day beside a month name are not read as numbers. Limits, recorded: a legitimate bare count equal to a withheld size ("30
 limitations" while a difference of 30 is withheld) is refused and must be reworded (the message names the figure, the
-measure and the word "difference"); a size written in words ("thirty") is not read. (B) The verdict words `Same
+measure and the word "difference"); a size written in words ("thirty") was not read (closed by the amendment
+below). (B) The verdict words `Same
 definition` and `Not comparable` are read from the start of the Effect cell only, by the checker and by
 `page_verdicts` alike (`_says`); the same words starting another cell of the measure's row are refused, naming the
 cell, not ignored. Unchanged: for a measure the pack marks `no`, `Not comparable` is accepted anywhere in its row.
 The shared fixture `tests/fixtures/changes-seam/rows.json` gains five cases; no existing case changed.
+
+Amendment, 2026-11-12 (owner: "Fix the limits first"; controller rulings L1 to L4). (L1) After a bulleted item line a
+leading number is a list marker only if it is `1` (CommonMark: a list not starting at 1 cannot interrupt a
+paragraph), so a hard-wrapped `- Cash fell by` / `30. The rest holds.` is read as a figure; after a blank line, a
+heading, the first line or a numbered item the earlier rule stands. (L2) A day beside a month name is a date only when
+a four-digit year completes it (`30 September 2024`, `30th Sep 2024`, `September 30 2024`, `Sep 30, 2024`); a day and
+month with no year is a number, so "The period ends 30 September." with 30 withheld is refused (accepted cost: reword).
+(L3) A complete date is blanked from the line before both readings (the raw K9/K10 reading and the bare reading);
+`_FIGURE` is unchanged, so `September 30, 2024` no longer reads `30,`, and an unheld figure on a line that also holds a
+date is still refused by K10. (L4) In the bare-number K9 reading only, whole numbers from two to 999,999 in English
+words (`thirty`, `one hundred and sixty-three`, `two thousand five`; hyphenated or spaced, any case) are read as the
+number they spell, with the same exemptions and message; `one` alone is never read. Remaining limits, recorded: a
+legitimate bare count (or a spelled one) equal to a withheld size is refused, since the checker cannot tell a count
+from a size; decimals, fractions, ordinals (`thirtieth`), `a hundred` and `a dozen` in words are not read. The two
+tests that pinned the old limits (a size in words accepted; `- First point.` then `80. ...` accepted) now assert the
+new rulings; no other expectation and no `rows.json` case changed.
