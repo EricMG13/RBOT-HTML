@@ -231,10 +231,7 @@ the run folder name on both sides (the pack names its prior by folder). (3) A re
 making no comparison reaches the library verbatim. (4) The published scope no longer says CP-8's handoff is
 delivered whole when CP-8 was not produced.
 
-Known limits, recorded (owner decision pending on the first): four pathways (relative_value,
-distressed_restructuring, portfolio_decision, short_snapshot) never ask CP-1 for the chart tables the pack
-reads (`cpos_launch.py` layout rule), so their pack states no measure and their Changes tab says so; the
-layout rule is unchanged. L4: `find_prior` accepts any listed run folder name, including one the launcher
+Known limits, recorded: the chart-tables limit (the whole-branch review's finding) is closed by the amendment of 2026-11-12 below. L4: `find_prior` accepts any listed run folder name, including one the launcher
 refuses at launch (a space, a leading underscore, non-ASCII); that fails closed with no spend. L5: the
 forecast inputs block can vouch for a Key figure when only CP-0, CP-1, CP-MODEL and CP-L10 run.
 
@@ -254,3 +251,16 @@ without its closing pipe, or a second table, stays visible as text although it c
 handoffs are re-read only through the checker's per-row rules; their passages are not re-checked against
 K9 and K10. (3) A malformed issuer register counts as having no rows, so a measure the pack marks `yes`
 still shows the pack's difference.
+
+## Amendment 2026-11-12: every pathway asks CP-1 for the chart tables (owner: "Yes, all pathways")
+
+Asked whether all pathways should ask CP-1 for the chart tables the Changes tab needs, the owner answered
+"Yes, all pathways". Until then CP-1 was asked for the four `### Chart data:` tables (leverage, interest cover,
+liquidity, debt maturities) only where the pathway's report had the chart blocks: credit_snapshot asked for
+all four, earnings_update lacked debt maturities, covenant_refinancing had only debt maturities, and
+relative_value, distressed_restructuring, portfolio_decision and short_snapshot had none, so their pack
+stated no measure. Now `cpos_launch._owner_tables` asks CP-1, on every pathway, for each of the four tables
+its report routes do not already carry, as owner tables (header, plain-number and unit checks identical to
+the routed ones; the checker refuses a handoff without them). No report section is added: those tables are
+read by the library and the pack, not delivered. CP-1's output grows on those pathways; the USD 20 cap check
+admits every preset (largest single hold unchanged; short_snapshot's hold rises from 0.97 to 0.99 on the Opus configs).
