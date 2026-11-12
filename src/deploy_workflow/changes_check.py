@@ -187,10 +187,24 @@ def _plain(text: str) -> str:
     return " ".join(text.replace("**", "").replace("`", "").split())
 
 
+EFFECT = 4  # the column of an issuer row that holds the verdict (`Effect on the credit view`)
+
+
 def _says(row: Sequence[str], word: str) -> bool:
-    """Whether a cell of the row starts with the verdict word; the word anywhere else in a cell is
-    no verdict."""
-    return any(_plain(cell).lower().startswith(word) for cell in row)
+    """Whether the Effect cell of an issuer row starts with the verdict word; the word anywhere else
+    in that cell, or at the start of another cell (`_misplaced`), is no verdict."""
+    return len(row) > EFFECT and _plain(row[EFFECT]).lower().startswith(word)
+
+
+def _misplaced(where: str, row: Sequence[str], word: str) -> list[str]:
+    """A verdict word at the start of a cell of the row other than the Effect cell: refused, naming
+    the cell, never silently read as the verdict."""
+    return [
+        f"{where}: `{word}` starts the {COLUMNS[ISSUER][i]} cell, where it is no verdict; write it "
+        "first in the Effect cell."
+        for i, cell in enumerate(row)
+        if i != EFFECT and _plain(cell).lower().startswith(word)
+    ]
 
 
 def _signed(value: Any) -> Decimal | None:
@@ -380,11 +394,10 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
     text = " ".join(_plain(cell) for cell in row).lower()
     issues = []
     for word in (SAME, NOT_COMPARABLE):
-        if measure["comparable"] != "no" and word in text and not _says(row, word):
-            issues.append(
-                f"{where}: `{word}` is a verdict only at the start of a cell; write it first in "
-                "the Effect cell."
-            )
+        if measure["comparable"] == "no" or word not in text or _says(row, word):
+            continue
+        elsewhere = f"{where}: `{word}` is a verdict only at the start of the Effect cell."
+        issues += _misplaced(where, row, word) or [elsewhere]
     if measure["comparable"] == "judge":
         said = [word for word in (SAME, NOT_COMPARABLE) if word in text]
         if len(said) != 1:
@@ -397,7 +410,7 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
             f"{where}: the pack marks this measure not comparable ({measure['reason']}); say "
             '"not comparable" and give no difference.'
         )
-    if NOT_COMPARABLE in text and _TREND.search(row[4]):
+    if NOT_COMPARABLE in text and _TREND.search(row[EFFECT]):
         issues.append(f"{where}: a `Not comparable` row draws no trend from the two values.")
     return issues
 
@@ -807,6 +820,16 @@ def _may_print(
     return frozenset()
 
 
+def _bare(line: str) -> str:
+    """The line with module codes and a leading list number blanked: a whole number below 100 of the
+    rest, written without a unit, is read as a size only by the withheld-difference rule (K9)."""
+    return _MODULE.sub(_blanks, re.sub(r"^\s*\d+[.)](?=\s)", _blanks, line))
+
+
+def _blanks(match: re.Match[str]) -> str:
+    return " " * len(match[0])
+
+
 def _passage_issues(
     lines: list[str],
     pack: Mapping[str, Any],
@@ -849,14 +872,16 @@ def _passage_issues(
         )
         if h2 in NOT_PASSAGES:
             continue
-        for size in dict.fromkeys(f.size for f in _figures(line, counts=False)):
+        figures = {f.size for f in _figures(line, counts=False)}
+        for size in dict.fromkeys(f.size for f in _figures(_bare(line))):
             if size in sizes:
                 issues.append(
                     f"A passage: the figure {size} is the difference of {sizes[size]}, which "
                     "this handoff withholds (not comparable, or one period with two values); a "
-                    "difference of it is not printed here."
+                    "difference of it is not printed here, with a unit or without one. A count "
+                    f"that happens to equal it ({size}) is refused too: reword it."
                 )
-            elif size not in allowed:
+            elif size in figures and size not in allowed:
                 issues.append(_not_held("A passage", size))
     return issues
 

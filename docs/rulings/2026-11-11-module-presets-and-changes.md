@@ -369,3 +369,16 @@ measure is of one period with two values and its row says `Same definition` with
 it, naming the figure and the word "difference"; the net debt change's cash, which has no issuer row, is printed
 nowhere. A size equal to a value of the measure itself stays accepted. Same functions (`_withheld_sizes`), per-line
 exemption (`_may_print`). `cp8.md` states the rule.
+
+Amendment, 2026-11-12 (owner: asked "Fix the two remaining checker gaps in one small follow-up?", the owner
+answered "Yes, fix both"). (A) K9 also refuses a withheld difference written without a unit: a whole number below 100
+is a count everywhere but here, and for the withheld-difference rule only a bare number equal in magnitude to a
+withheld size is refused, on the same lines and with the same exemptions (the measure's own issuer row under its
+condition; a size equal to one of the measure's own values). Counts under K10 are unchanged; module codes and a leading
+list number are not read as numbers. Limits, recorded: a legitimate bare count equal to a withheld size ("30
+limitations" while a difference of 30 is withheld) is refused and must be reworded (the message names the figure, the
+measure and the word "difference"); a size written in words ("thirty") is not read. (B) The verdict words `Same
+definition` and `Not comparable` are read from the start of the Effect cell only, by the checker and by
+`page_verdicts` alike (`_says`); the same words starting another cell of the measure's row are refused, naming the
+cell, not ignored. Unchanged: for a measure the pack marks `no`, `Not comparable` is accepted anywhere in its row.
+The shared fixture `tests/fixtures/changes-seam/rows.json` gains five cases; no existing case changed.

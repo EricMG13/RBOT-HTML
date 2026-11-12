@@ -2851,3 +2851,135 @@ def test_a_register_cell_stating_values_or_a_quotable_difference_is_still_accept
     pack, handoff, sentence, cell
 ):
     assert cp8_issues(_in_cell(handoff, cell, sentence), pack) == ()
+
+
+# --- a withheld difference without a unit is refused too (owner, 2026-11-12: "Yes, fix both") ---
+# A whole number below 100 without a unit is a count everywhere but here: for the withheld-
+# difference rule only, a bare number equal in magnitude to a withheld size is refused (same
+# lines, same exemptions as with a unit). Expectations hand-written. Recorded limits: a bare count
+# equal to a withheld size ("30 limitations" while a difference of 30 is withheld) is refused, and
+# a size written in words ("thirty") is not read.
+
+NC_CASH = (
+    "| Cash | 300 US$m (FY2023) | 250 US$m (FY2024) | Unresolved "
+    "| Not comparable: the definition changed. |"
+)
+GAPS = "\n## Gaps\n\n{}\n"
+
+
+def _cash_pack(mark):
+    cash = {**PACK["measures"][1], "comparable": mark}
+    return {**PACK, "measures": [PACK["measures"][0], cash, *PACK["measures"][2:]]}
+
+
+def _cash_nc_text(**kw):
+    return with_row(LEVERAGE_ROW, **kw).replace(CASH_ROW, NC_CASH)
+
+
+def _lever_text(**kw):
+    return with_row(LEVERAGE_ROW, **kw)
+
+
+def _nc_text(**kw):
+    return with_row(NC_ROW, **kw)
+
+
+BARE_KINDS = {
+    "pack marks no": (_cash_pack("no"), _cash_nc_text, "Cash fell by 50."),
+    "said Not comparable": (PACK, _cash_nc_text, "Cash fell by 50."),
+    "same period flagged": (PACK2, _nc_text, "Leverage fell by 0.56."),
+    "net debt, cash": (_ndpack(), _lever_text, "Cash fell by 30."),
+    "net debt, net debt": (_ndpack(), _lever_text, "Net debt is 80 lower."),
+}
+
+
+def _bare_places(build, sentence):
+    return {
+        "passage": build(passage=sentence + "\n\n"),
+        "gaps": build(gaps=GAPS.format(sentence)),
+        "why": _in_cell(build(), WHY_CELL, sentence),
+        "ledger": _in_cell(build(), LEDGER_CELL, sentence),
+    }
+
+
+@pytest.mark.parametrize("kind", list(BARE_KINDS))
+@pytest.mark.parametrize("place", ["passage", "gaps", "why", "ledger"])
+def test_a_withheld_difference_without_a_unit_is_refused_wherever_one_with_a_unit_is(kind, place):
+    pack, build, sentence = BARE_KINDS[kind]
+    assert cp8_issues(build(), pack) == ()
+    found = cp8_issues(_bare_places(build, sentence)[place], pack)
+    assert any("difference" in i and "reword" in i for i in found), found
+
+
+@pytest.mark.parametrize("sentence", ["Cash moved -30.", "Cash fell by -30.", "Cash fell by 30 ."])
+def test_a_signed_or_spaced_bare_withheld_difference_is_refused(sentence):
+    found = cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack())
+    assert any("30" in i and "difference" in i for i in found), found
+
+
+def test_the_refusal_names_the_figure_and_the_measure():
+    found = cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30.\n\n"), _ndpack())
+    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
+
+
+def test_a_withheld_size_written_in_words_is_not_read():  # recorded limit
+    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by thirty.\n\n"), _ndpack()) == ()
+
+
+def test_a_bare_decimal_withheld_difference_is_refused():
+    found = cp8_issues(with_row(LEVERAGE_ROW, "Leverage fell by 0.56.\n\n"), PACK2)
+    assert any("0.56" in i and "difference" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The three facilities are secured.",
+        "Twelve of 12 modules ran.",
+        "The pack lists 7 limitations.",
+    ],
+)
+def test_a_bare_count_that_equals_no_withheld_size_is_accepted(sentence):
+    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
+
+
+def test_a_bare_count_equal_to_a_withheld_size_is_refused():  # recorded limit
+    found = cp8_issues(with_row(LEVERAGE_ROW, "The handoff states 30 limitations.\n\n"), _ndpack())
+    assert any("30" in i and "reword" in i for i in found), found
+
+
+def test_a_module_code_or_list_number_is_no_bare_count():
+    pack = _ndpack()
+    pack["net_debt_change"] |= {"change_in_cash": "-2", "current_cash": "908"}
+    text = with_row(LEVERAGE_ROW, "1. The credit view (CP-2) ran.\n\n")
+    assert cp8_issues(text, pack) == ()
+
+
+def test_a_bare_withheld_difference_is_accepted_in_its_own_issuer_row():
+    row = same_period_row("Same definition; leverage is 0.56 lower after the correction.")
+    assert cp8_issues(with_row(row.replace("Unresolved", "Correction")), PACK2) == ()
+    net = (
+        "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
+        "| Same definition; net debt is 80 lower after the correction. |"
+    )
+    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
+    elsewhere = net.replace("Net debt |", "Refinancing |")
+    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
+    assert any("80" in i and "difference" in i for i in found), found
+
+
+def test_a_bare_size_equal_to_the_measures_own_value_is_accepted():
+    pack = _ndpack()
+    pack["net_debt_change"] |= {"prior_cash": "60", "current_cash": "30", "change_in_cash": "-30"}
+    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash is 60 earlier and 30 now.\n\n"), pack) == ()
+
+
+def test_a_zero_difference_withholds_nothing():
+    said = "Net debt is 6,190 in both runs; 0 changed.\n\n"
+    assert cp8_issues(with_row(LEVERAGE_ROW, said), _zero_pack()) == ()
+
+
+def test_a_bare_count_is_still_no_figure_of_a_held_line():
+    # K10 is untouched: an unheld whole number below 100 is still a count.
+    said = "Seven covenants are tested.\n\nThere are 77 of them.\n\n"
+    assert cp8_issues(with_row(LEVERAGE_ROW, said), PACK) == ()

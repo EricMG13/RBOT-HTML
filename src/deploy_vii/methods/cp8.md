@@ -103,7 +103,13 @@ accepted, the run is delivered without it.
      passages, `## Gaps`, fact rows, the analysis register's Why cells and the ledger's cells. The
      one place a withheld difference may be printed is the Effect cell of that same measure's issuer
      row, said `Same definition` with the cause `Correction` or `Method change`; the net debt
-     change's cash has no such row, so its difference is printed nowhere.
+     change's cash has no such row, so its difference is printed nowhere. A withheld difference
+     is refused without its unit too: a bare number (`Cash fell by 30.`) equal to a withheld size
+     is refused wherever the sized one is, so write a count that happens to equal it another way
+     (the words are not read; the repair names the figure and the measure). The verdict words
+     `Same definition` and `Not comparable` are read from the start of the Effect cell only; the
+     same words starting any other cell of the row are refused, naming the cell (a `Not comparable`
+     for a measure the pack marks `comparable: no` is accepted in any cell of its row).
 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
    for a module's. If you think a module's change of view is unexplained, say so and mark the row
