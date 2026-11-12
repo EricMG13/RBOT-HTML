@@ -35,7 +35,7 @@ comments, list markers removed. Decisions where the ruling is silent:
 
 import re
 from collections.abc import Mapping
-from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal, localcontext
 from itertools import groupby
 from typing import NamedTuple
 
@@ -928,37 +928,68 @@ _REFERENCE = re.compile(
     r"\b(?:notes?|pages?|pp?\.|rows?|items?|steps?|sections?|tables?)\s*$", re.IGNORECASE
 )
 _YEAR = re.compile(r"(?:19|20)\d\d")
+_CURRENCY_BEFORE = re.compile(r"(?:US\$|USD|\$|EUR|€|GBP|£)\s?$", re.IGNORECASE)
+_PERIOD_BEFORE = re.compile(
+    r"\b(?:FY|CY|LTM|YTD|Q[1-4]|H[12]|[1-4]Q|[12]H|years?|yr)\s?$", re.IGNORECASE
+)
+
+
+def _is_amount_alone(found: re.Match[str], base: str) -> bool:
+    """An amount, not a label number or a glued token: after a space, `|`, `(`, `:` or the start
+    (a currency sign or code and a minus sign aside), and carrying a unit, a decimal part, a
+    thousands separator or 100 or more (`Year 2`, `FY 24`, `Sep-24`, `A1`, `v2.5` are not)."""
+    head = base[: found.start("minus") if found["minus"] else found.start("n")]
+    currency = _CURRENCY_BEFORE.search(head)
+    head = head[: currency.start()] if currency else head
+    unit = found["u1"] or found["u2"] or currency or "." in found["n"] or "," in found["n"]
+    return (not head or head[-1].isspace() or head[-1] in "|(:") and bool(
+        unit or len(found["n"].lstrip("0")) >= 3
+    )
 
 
 def _is_real_figure(found: re.Match[str], base: str, labels: list[tuple[int, int]]) -> bool:
-    """A figure that is not in parentheses, not a digit run glued to letters (`FY2024`, `C12`), not
-    part of a date or period label, not a bare year, not a reference after `Note`, `page`, ..."""
+    """A figure that is an amount (see `_is_amount_alone`), not in parentheses, not part of a date
+    or period label, not a bare year, not a reference after `Note`, `page`, ... and not directly
+    after a period word (`FY`, `Q3`, `H1`, `LTM`, `year`, ...)."""
     start, end = found.start("n"), found.end("n")
-    return not (
+    return _is_amount_alone(found, base) and not (
         found["open"]
         or found["close"]
         or any(a < end and start < b for a, b in labels)
-        or (start and base[start - 1].isalpha())
         or (_YEAR.fullmatch(found["n"]) and not (found["u1"] or found["u2"]))
         or _REFERENCE.search(base[:start])
+        or _PERIOD_BEFORE.search(base[:start])
     )
 
 
 def _is_note_on(found: re.Match[str], before: re.Match[str]) -> bool:
-    """A bracketed figure that is a ratio (`%` or `x`) or a rounding of the figure before it (the
-    same number to the bracketed figure's decimal places, same unit or none)."""
+    """A bracketed figure that is a ratio (`%` or `x`), or, with no unit change, either the figure
+    before it rounded to FEWER decimal places, or the same number to the same places with
+    thousands separators the figure before it lacks (`9432.72 (9,432.72)`). `100 (100)` is
+    neither."""
     unit = _unit(found["u1"] or found["u2"])
     if unit in ("%", "x"):
         return True
     if unit not in (None, _unit(before["u1"] or before["u2"])):
         return False
-    places = Decimal(1).scaleb(-len(found["n"].partition(".")[2]))
-    written = Decimal(found["n"].replace(",", ""))
-    original = Decimal(before["n"].replace(",", ""))
-    return written in (
-        original.quantize(places, ROUND_HALF_UP),
-        original.quantize(places, ROUND_HALF_EVEN),
-    )
+    original, written = before["n"], found["n"]
+    places = len(written.partition(".")[2])
+    if len(original.partition(".")[2]) <= places:
+        return (
+            len(original.partition(".")[2]) == places
+            and "," in written
+            and "," not in original
+            and written.replace(",", "") == original
+        )
+    # The context is sized from the operands, so quantize cannot overflow on a long figure.
+    size = len(original.replace(",", "")) + places + 2
+    with localcontext(Context(prec=size, Emax=size)):
+        digits = Decimal(original.replace(",", ""))
+        exponent = Decimal(1).scaleb(-places)
+        return Decimal(written.replace(",", "")) in (
+            digits.quantize(exponent, ROUND_HALF_UP),
+            digits.quantize(exponent, ROUND_HALF_EVEN),
+        )
 
 
 def _figures(text: str, passage: bool = False) -> list[_Figure]:

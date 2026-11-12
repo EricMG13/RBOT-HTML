@@ -921,6 +921,30 @@ NEGATIVE_AFTER_A_LABEL_OR_FIGURE = [
     ("row 7 (12)", "12"),
     ("p. 9 (12)", "12"),
     ("1291.272 (1,291.28)", "1,291.28"),
+    # A label spelling the date and period patterns do not cover (round 2).
+    ("LTM Jun-24 (3.2%)", "3.2%"),
+    ("Sep-24 (3.2%)", "3.2%"),
+    ("FY24/25 (1.5%)", "1.5%"),
+    ("2024/25 (2.2%)", "2.2%"),
+    ("24/25 (2.2%)", "2.2%"),
+    ("FY 24 (2.1%)", "2.1%"),
+    ("FY-24 (2.1%)", "2.1%"),
+    ("Q3'24 (4.5%)", "4.5%"),
+    ("Q3-24 (4.5%)", "4.5%"),
+    ("H1 24 (0.4x)", "0.4x"),
+    ("3Q 24 (4.5%)", "4.5%"),
+    ("2024-09 (3.2%)", "3.2%"),
+    ("Year 2 (1.5%)", "1.5%"),
+    ("A1 (5%)", "5%"),
+    ("v2.5 (1.2x)", "1.2x"),
+    # A unitless whole number below 100 is a label number, not an amount.
+    ("Tranche 2 (45%)", "45%"),
+    ("Level 3 (45%)", "45%"),
+    ("12 (5.2%)", "5.2%"),
+    # A long figure must not raise; the bracket is a negative.
+    ("123,456,789,012,345,678,901,234,567,890 (5)", "5"),
+    ("123456789012345.5 (1.123456789012345)", "1.123456789012345"),
+    ("999,999,999,999,999 (1.123456789012345)", "1.123456789012345"),
 ]
 
 
@@ -945,27 +969,53 @@ def test_a_bracketed_figure_on_the_passage_side_keeps_its_sign(passage: str, fig
     assert f'"({figure})"' in issue
 
 
-@pytest.mark.parametrize(
-    ("passage", "cell"),
-    [
-        ("Margin was 51.6%.", "3,395 (51.6%)"),
-        ("Leverage was 5.89x.", "5.8905x (5.89x)"),
-        ("Margin was 45.05%.", "0.45052 (45.05%)"),
-        ("Debt was 1,291.27.", "1291.272 (1,291.27)"),
-        ("Debt was 1291.27.", "1291.272 (1,291.27)"),
-        ("Leverage was 4.72x.", "USD 19,702 million (4.72x)"),
-        ("Margin was 16.2%.", "USD 1,067 million (16.2%)"),
-        ("Leverage was 5.89x.", "5.885x (5.89x)"),
-        ("Leverage was 5.88x.", "5.885x (5.88x)"),
-        ("Leverage was 5.90x.", "5.8905x (5.90x)"),
-        ("Cover was 100.", "100 (100)"),
-    ],
-)
+# (passage with the figure positive, passage with the same figure in parentheses, held cell), all
+# hand-written: the bracket is a note, so the positive passage is held and the negative one is not.
+NOTES = [
+    ("Margin was 51.6%.", "Margin was (51.6%).", "3,395 (51.6%)"),
+    ("Leverage was 5.89x.", "Leverage was (5.89x).", "5.8905x (5.89x)"),
+    ("Margin was 45.05%.", "Margin was (45.05%).", "0.45052 (45.05%)"),
+    ("Debt was 1,291.27.", "Debt was (1,291.27).", "1291.272 (1,291.27)"),
+    ("Debt was 1291.27.", "Debt was (1291.27).", "1291.272 (1,291.27)"),
+    ("Debt was 9,432.7.", "Debt was (9,432.7).", "9432.72 (9,432.7)"),
+    ("Leverage was 4.72x.", "Leverage was (4.72x).", "USD 19,702 million (4.72x)"),
+    ("Margin was 16.2%.", "Margin was (16.2%).", "USD 1,067 million (16.2%)"),
+    ("Leverage was 5.89x.", "Leverage was (5.89x).", "5.885x (5.89x)"),
+    ("Leverage was 5.88x.", "Leverage was (5.88x).", "5.885x (5.88x)"),
+    ("Leverage was 5.90x.", "Leverage was (5.90x).", "5.8905x (5.90x)"),
+    # The same number written with thousands separators, to the same decimal places.
+    ("Debt was 9,432.72.", "Debt was (9,432.72).", "9432.72 (9,432.72)"),
+    ("Debt was 7,844.72.", "Debt was (7,844.72).", "7844.72 (7,844.72)"),
+    ("Debt was 2,180.", "Debt was (2,180).", "2180 (2,180)"),
+    # An amount, not a label number: a unit, a decimal part, a separator or 100 or more.
+    ("Margin was 5.2%.", "Margin was (5.2%).", "12.0 (5.2%)"),
+    ("Margin was 5.2%.", "Margin was (5.2%).", "120 (5.2%)"),
+    ("Leverage was 0.1x.", "Leverage was (0.1x).", "12% (0.1x)"),
+    ("Margin was 5.2%.", "Margin was (5.2%).", "USD 12 million (5.2%)"),
+    ("Margin was 5.2%.", "Margin was (5.2%).", "1,200 (5.2%)"),
+]
+
+
+@pytest.mark.parametrize(("passage", "negative", "cell"), NOTES)
 def test_a_ratio_or_a_rounding_after_a_figure_is_a_note_read_as_positive(
-    passage: str, cell: str
+    passage: str, negative: str, cell: str
 ) -> None:
     assert fidelity(passage, annotated(cell)) == ()
-    assert len(fidelity(passage.replace(" was ", " was ("), annotated(cell))) <= 1
+    (issue,) = fidelity(negative, annotated(cell))
+    assert "does not match the handoff" in issue
+
+
+@pytest.mark.parametrize(
+    ("cell", "negative"),
+    [
+        ("100 (100)", "(100)"),
+        ("2,180 (2,180)", "(2,180)"),
+        ("45 (45)", "(45)"),
+        ("9,432.72 (9432.72)", "(9,432.72)"),
+    ],
+)
+def test_an_identically_written_bracket_is_a_negative_not_a_note(cell: str, negative: str) -> None:
+    assert fidelity(f"Cover was {negative}.", annotated(cell)) == ()
 
 
 def test_a_note_on_the_passage_side_is_read_as_written() -> None:

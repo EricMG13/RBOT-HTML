@@ -261,18 +261,30 @@ that refused correct handoffs in paid runs `tdg-proof-short-001`, `tdg-reader-fo
    parenthesised figure is an accounting negative unless all of these hold, and then it is read as
    written inside the parentheses (positive unless it carries a minus): (1) it directly follows a
    figure (that figure, its optional unit, spaces or tabs only, then the opening parenthesis);
-   (2) that figure is real and unbracketed: not itself in parentheses, not a digit run glued to
-   letters (`FY2024`, `Q3`, `C12`), not part of a date or period label (`2024-09-30`,
-   `31 Dec 2024`, `H1 2024`, `Q2`), not a bare year, and not a reference after `Note`, `page`,
-   `p.`, `row`, `item`, `step`, `section` or `table`; (3) the bracketed figure either carries `%` or
-   `x` (`3,395 (51.6%)`, `5.8905x (5.89x)`) or is the preceding figure rounded to the bracketed
-   figure's decimal places (ROUND_HALF_UP or ROUND_HALF_EVEN, same unit or none:
-   `1291.272 (1,291.27)`). `100 (-5.2%)` holds `100` and `-5.2%`. Everything else stays an
-   accounting negative, on the held side and on a passage: `100 (25)`, `40% (364)`,
-   `2,200 (20) 2,180`, `Capital expenditures (42) (36)`, `FY2024 (120)`, `(12.3)%`, `a loss of (45)`.
-   Limit, accepted: a bracketed non-ratio note of a different quantity (`40% (364)`) is still read as
-   a negative, as before this amendment; an identical bracket (`100 (100)`) is a rounding of itself
-   and is read as positive.
+   (2) that figure is a real amount: not itself in parentheses; not glued (the character before its
+   first digit, after an optional currency sign or code and a minus sign, is the start of the text, a
+   space, `|`, `(` or `:`, so `Sep-24`, `FY-24`, `Q3'24`, `24/25`, `A1`, `v2.5`, `3Q` and `FY2024`
+   are labels); not part of a date or period label or a bare year; not a reference after `Note`,
+   `page`, `p.`, `row`, `item`, `step`, `section` or `table`; not directly after `FY`, `CY`, `LTM`,
+   `YTD`, `Q1` to `Q4`, `H1`, `H2`, `1Q` to `4Q`, `1H`, `2H`, `year(s)` or `yr`; and an amount, not a
+   label number: it carries a unit (`%`, `x`, a currency, a scale word) or a decimal part or a
+   thousands separator, or it is 100 or more (a unitless whole number below 100, `Year 2`, `FY 24`,
+   `Tranche 2`, is a label); (3) the bracketed figure either carries `%` or `x`
+   (`3,395 (51.6%)`, `5.8905x (5.89x)`), or, with no unit change, (i) has fewer decimal places than
+   the figure before it and equals it rounded to those places (ROUND_HALF_UP or ROUND_HALF_EVEN:
+   `1291.272 (1,291.27)`), or (ii) is the same number to the same places written with thousands
+   separators the figure before it lacks (`9432.72 (9,432.72)`, `2180 (2,180)`). `100 (-5.2%)` holds
+   `100` and `-5.2%`. Everything else stays an accounting negative, on the held side and on a
+   passage: `100 (25)`, `40% (364)`, `2,200 (20) 2,180`, `Capital expenditures (42) (36)`,
+   `FY2024 (120)`, `LTM Jun-24 (3.2%)`, `Year 2 (1.5%)`, `(12.3)%`, `a loss of (45)`, and an
+   identically written bracket (`100 (100)`, `2,180 (2,180)`, `45 (45)`, `9,432.72 (9432.72)`). The
+   rounding comparison runs in a Decimal context sized from the two figures, so a long figure
+   cannot raise.
+   Limits, accepted: a bracketed non-ratio note of a different quantity (`40% (364)`) is read as a
+   negative, as before this amendment; a coincidental rounding of a different quantity with fewer
+   decimals (`4,173.4 (4,173)`, `0.5 (1)`) is read as a note; a bracketed ratio after a small
+   unitless whole number (`45 (12.3%)`) is read as a negative; reference words outside the list
+   (`Fig. 3`, `line 12`) are not recognised.
 
 Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
 judgement-first wording, and whether a limitation truly changes a conclusion. These are judged
