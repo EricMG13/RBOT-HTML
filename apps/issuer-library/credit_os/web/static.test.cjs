@@ -2818,3 +2818,27 @@ test('module page (A1): an earlier-format page draws its charts, maps and lanes 
   assert.ok(!html.includes('Not established for this run') && !html.includes('<summary>Table form</summary><div class="table-card"><table class="event-table"'));
   assert.ok(!/<section class="part" id="timeline">.*<summary>Table form<\/summary>.*<table class="event-table">/s.test(html));
 });
+
+test('Overview (A1 fix): a new-format run\'s Overview map cards, charts and lanes carry no s-<line> id and no drawing caption; the module page keeps both', () => {
+  const sections = a1Sections(), set = a1Set;
+  const page = runPage(() => { const d = overviewData({ 'CP-1': sections }); Object.assign(d[a1Id], set); return d; }, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Overview; Model' }], record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  const charts = part(page.runReport(RUN), 'overview-charts');
+  assert.ok(/<div class="map-card"/.test(charts) && charts.includes('class="panel-card"'), 'the Overview does draw the map and the charts');
+  assert.ok(!/ id="s-\d+"/.test(charts) && !charts.includes('drawing-caption') && !charts.includes('The driver is the only one stated.'), charts);
+  assert.ok(page.moduleReport(a1Id).includes('<div class="map-card" id="s-400">'));
+});
+
+test('module page (A1 fix): a later level-2 section named Front matter is ordinary body, with its table; only the first section is the block', () => {
+  const later = sec('Front matter', 2, 80, 'consumed', [text(81, 'A body paragraph.'), table(82, ['A', 'B'], [[83, 'x', 'y']])]);
+  const html = a1Page(a1Sections([later])).moduleReport(a1Id), fold = /<details class="fold" id="audit">.*?<\/details>/s.exec(html)[0];
+  assert.ok(!fold.includes('A body paragraph.') && html.replace(fold, '').includes('A body paragraph.'), 'the later section stays in the body');
+  assert.ok(html.replace(fold, '').includes('<table'), 'its table is drawn');
+  assert.ok(!html.includes('<ul class="front-matter"><li>A body paragraph.'), 'not drawn as front-matter lines');
+});
+
+test('Overview (A1 fix): two modules\' maps at the same table line draw no duplicate id (the arrow marker is keyed by its output)', () => {
+  const two = { 'CP-1': a1Sections(), 'CP-2': a1Sections() };
+  const page = runPage(() => { const d = overviewData(two); for (const code of ['CP-1', 'CP-2']) Object.assign(d[outId(code)], a1Set); return d; }, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Overview' }, { module: 'CP-2', placement: 'Overview' }], record: steps(['CP-1', 'CP-2']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  const ids = [...part(page.runReport(RUN), 'overview-charts').matchAll(/ id="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(ids.some(i => i.startsWith('map-arrow-')) && new Set(ids).size === ids.length, ids.join(' '));
+});

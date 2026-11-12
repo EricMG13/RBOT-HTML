@@ -590,7 +590,7 @@ function newFormatSplit(id) {
   const split={rest:[],audit:[],drawings:[]};
   let parent='';
   for(const section of data[id].sections) {
-    if(section.level<=2)parent=section.level===2?section.heading:'';
+    if(section.level<=2)parent=section.level===2&&(section.heading!=='Front matter'||section===data[id].sections[0])?section.heading:'';
     if(held.has(section)||!section.blocks.length)continue;
     if(CHART_HEADING.test(section.heading)&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
     else split[AUDIT_HEADINGS.includes(parent)?'audit':'rest'].push(section);
@@ -629,7 +629,7 @@ const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
 const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,caption:heading=>plain(heading).replace(METHOD_CODE,'')});
 const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
 // Front matter is drawn as its stated lines. Its `filename` line names the handoff with a module code, and the download carries the file, so it is not drawn.
-const frontMatter=section=>section.level===2&&section.heading==='Front matter';
+const frontMatter=(section,sections)=>section===sections[0]&&section.level===2&&section.heading==='Front matter';
 const frontMatterView=section=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}<ul class="front-matter">${section.blocks.filter(block=>block.type==='text').flatMap(block=>block.text.split('\n')).map(line=>line.trim()).filter(line=>line&&!/^filename\s*:/i.test(line)).map(line=>`<li>${esc(line)}</li>`).join('')}</ul></div>`;
 function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections);
@@ -647,7 +647,7 @@ function newFormatParts(id) {
   if(maps)parts.push(['maps','Maps',maps]);
   const {rest,audit}=newFormatSplit(id);
   for(const section of rest)parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
-  if(audit.length)parts.push(['audit','Evidence & audit',fold('audit','Evidence & audit',plural(audit.length,'section'),audit.map(section=>frontMatter(section)?frontMatterView(section):newFormatSection(id,section)).join(''))]);
+  if(audit.length)parts.push(['audit','Evidence & audit',fold('audit','Evidence & audit',plural(audit.length,'section'),audit.map(section=>frontMatter(section,data[id].sections)?frontMatterView(section):newFormatSection(id,section)).join(''))]);
   return parts;
 }
 const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
@@ -784,27 +784,28 @@ function mapDiagram(id,map,rows) {
   const lines=name=>[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
   const drawn=edges.map((edge,at)=>{
     const p=path(edge,cut[at]),dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length];
-    return `<path class="map-edge${cut[at]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${p.x}" y="${p.y}" text-anchor="middle">${esc(edge.type)}</text>`;
+    return `<path class="map-edge${cut[at]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${id.replace(/\W/g,'-')}-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${p.x}" y="${p.y}" text-anchor="middle">${esc(edge.type)}</text>`;
   }).join('');
   const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
   const label=`${map.name}: ${names.length} nodes, ${edges.length} edges. The edge table follows.`;
-  const marker=`<defs><marker id="map-arrow-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
+  const marker=`<defs><marker id="map-arrow-${id.replace(/\W/g,'-')}-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
   const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
   return `<div class="map-scroll" role="region" aria-label="${esc(label)}" tabindex="0"><svg role="img" aria-label="${esc(label)}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${marker}${drawn}${nodes}</svg></div>${note}`;
 }
 // A map with only a stated gap is drawn as its reason, never as an empty diagram.
-function mapsView(id,tag='h2',keep=()=>true) {
+// `own` is the module page's: the map card carries its section route and caption there; the Overview draws the card alone.
+function mapsView(id,tag='h2',keep=()=>true,own=false) {
   return (data[id]?.maps||[]).filter(keep).map(map=>{
     const title=`<${tag}>${esc(map.name[0].toUpperCase()+map.name.slice(1))}</${tag}>`;
-    const own=drawingAnchor(id,map.table);
-    if(map.gap!==null)return `<div class="map-card"${own}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${drawingCaption(id,map.table)}</div>`;
+    const anchor=own?drawingAnchor(id,map.table):'',caption=own?drawingCaption(id,map.table):'';
+    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${caption}</div>`;
     const rows=fixtureTable(id,map.table).rows,link=row=>`<a class="event-link" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}">${rich(row.cells[1])}</a>`;
     const body=rows.map(row=>`<tr><td>${rich(row.cells[0])}</td><td>${link(row)}</td><td>${esc(row.cells[2])}</td><td>${rich(row.cells[3])}</td><td>${rich(row.cells[4])}</td></tr>`).join('');
-    return `<div class="map-card"${own}>${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>${drawingCaption(id,map.table)}</div>`;
+    return `<div class="map-card"${anchor}>${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>${caption}</div>`;
   }).join('');
 }
 // Maps on a module page.
-const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4')}</section>`:'';
+const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4',()=>true,true)}</section>`:'';
 // ---- Chart index (CP-MODEL-V02): one row per `Chart data:`, `Map:` or `Events:` table the run's handoffs hold, in the state the build gave it. It lists and links; nothing is drawn or recomputed here.
 const CHART_HEADING=/^(Chart data|Map|Events): /;
 const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';
