@@ -260,11 +260,50 @@ def _pages(name: str, raw: bytes) -> list[str]:
     return [text[i : i + 12000] for i in range(0, len(text), 12000)] or [""]
 
 
+# A hosted-search answer carries provider citation markers: U+E200 "cite" U+E202 "turn<N>view<M>"
+# (U+E202 again per further source) U+E201. The sources they point at are already in the handoff's
+# Sources table and Basis lines, so the markers add nothing and reach the reader as run-together
+# text. They are removed mechanically before the draft is checked; the provider's retained
+# response is not touched.
+CITATION_MARKER = "[^]*"
+_MARKER_RUN = re.compile(rf"(?P<pre>[ \t]*)(?P<run>(?:{CITATION_MARKER}[ \t]*)+)")
+_MARKER = re.compile(CITATION_MARKER)
+_CLOSERS = ".,;:!?)]}"
+
+
+def _marker_replacement(found: re.Match[str]) -> str:
+    """What a run of markers leaves behind: nothing at a line end or before punctuation, else one
+    space when there was any whitespace around it (none when the marker touched both words)."""
+    after = found.string[found.end() : found.end() + 1]
+    start = found.start()
+    if start == 0 or found.string[start - 1] == "\n":
+        return found["pre"]  # indentation of a line that began with the marker
+    if after in {"", "\n", "\r"} or after in _CLOSERS:
+        return ""
+    return " " if found["pre"] or found["run"].endswith((" ", "\t")) else ""
+
+
+def strip_citation_markers(text: str) -> tuple[str, int]:
+    """The text without provider citation markers, whitespace left by them tidied, and how many
+    markers were removed. Text with no marker is returned as it is."""
+    count = len(_MARKER.findall(text))
+    if not count:
+        return text, 0
+    return _MARKER_RUN.sub(_marker_replacement, text), count
+
+
 class ModuleTools:
     def __init__(
-        self, task: HandoffTask, directory: Path, check: Check, events: Path | None = None
+        self,
+        task: HandoffTask,
+        directory: Path,
+        check: Check,
+        events: Path | None = None,
+        *,
+        strip_markers: bool = False,
     ) -> None:
         self.task, self.directory, self.check = task, directory, check
+        self.strip_markers = strip_markers
         self.events = events
         self.sources = {
             name: {"sha256": hashlib.sha256(raw).hexdigest(), "pages": _pages(name, raw)}
@@ -397,6 +436,20 @@ class ModuleTools:
         if not isinstance(markdown, str):
             return "ERROR: markdown must be text"
         self.writes += 1
+        if self.strip_markers:
+            markdown, removed = strip_citation_markers(markdown)
+            if removed:
+                _put(
+                    self.directory / f"{self.writes}.markers.json",
+                    dump_json({"citation_markers_removed": removed}).encode(),
+                )
+                if self.events is not None:
+                    append_event(
+                        self.events,
+                        "citation_markers_removed",
+                        module=self.task.module_id,
+                        count=removed,
+                    )
         self.draft = markdown.encode("utf-8")
         _put(self.directory / f"{self.writes}.draft.md", self.draft)
         issues = _checked_handoff(self.task, self.draft, self.check)
@@ -549,7 +602,7 @@ class HandoffExecutor:
             )
         folder.mkdir(parents=True)
         _put(folder / "invocation.json", encoded)
-        module = ModuleTools(task, folder, self.check, self.events)
+        module = ModuleTools(task, folder, self.check, self.events, strip_markers=searching)
         nudges = 0
         for index in range(self.max_turns):
             request = redacted_request(
