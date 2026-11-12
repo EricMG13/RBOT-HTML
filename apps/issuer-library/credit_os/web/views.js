@@ -534,7 +534,7 @@ function reportAnalysis(id) {
 // The summary is a row: its title, then (after the first " · ") a detail drawn at the right.
 function fold(anchor,summary,body) {
   const at=summary.indexOf(' · '),title=at<0?summary:summary.slice(0,at),detail=at<0?'':summary.slice(at+3);
-  return `<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}<span class="fold-title">${esc(title)}</span>${detail?`<span class="fold-detail">${esc(detail)}</span>`:''}</summary>${body}</details>`;
+  return `<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}<span class="fold-title">${esc(title)}</span>${detail?` <span class="fold-detail">${esc(detail)}</span>`:''}</summary>${body}</details>`;
 }
 function reportReference(id) {
   const sections=drawn(id,'reference');
@@ -556,7 +556,7 @@ function reportLimits(id) {
 function reportAudit(id) {
   const out=data[id],kept=['audit','consumed'];
   const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])));
-  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span><span class="fold-detail">${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
+  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
     const first=sectionData(id,sectionId)[0];
     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
   }).join('')}</ul></details>`;

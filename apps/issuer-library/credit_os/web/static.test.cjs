@@ -283,7 +283,7 @@ test('the navigator names every module in catalog.json', () => {
 const OUT = 'run-a/deliveries/d1/CP-1.md';
 // The workspace's module names, as the fixtures use them.
 const NAMES = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance', 'CP-6': 'Committee decision' };
-const GROUPS = [['Business and evidence', [['CP-0', 'Source readiness'], ['CP-1A', 'Business & governance']]], ['Financial performance', [['CP-1', 'Financial foundation']]]];
+const GROUPS = [['Business and evidence', [['CP-0', 'Source readiness'], ['CP-1A', 'Business & governance']]], ['Financial performance', [['CP-1', 'Financial foundation']]], ['Other modules', [['CP-6', 'Unnamed module']]]];
 const table = (line, headers, rows) => ({ type: 'table', line, headers, rows: rows.map(([n, ...cells]) => ({ line: n, cells })) });
 const text = (line, body) => ({ type: 'text', line, text: body });
 // `where` is the placement the store would give the section (Task 1); report() turns it into the output's parallel `placement` list.
@@ -364,7 +364,7 @@ function realEventTimeline(esc, rich) {
   return new Function('esc', 'rich', 'eventOrder', 'orderEvents', 'sourceFooter', `${screen.slice(screen.indexOf('function eventTimeline('), screen.indexOf('function businessVisual('))}; return eventTimeline;`)(esc, rich, calendar.eventOrder, calendar.orderEvents, key => `<small class="footer">${esc(key)}</small>`);
 }
 // The summary as a reader reads it: the title, then the detail the row draws at its right, joined by the " · " the page now draws in CSS.
-const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1].replace('</span><span class="fold-detail">', ' · '));
+const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1].replace('</span> <span class="fold-detail">', ' · '));
 const NINE = ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'reference', 'calculations', 'audit'];
 const NINE_RE = /\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"/g;
 const anchorsOf = (html, re = NINE_RE) => [...html.matchAll(re)].map(m => m[1]);
@@ -2626,13 +2626,16 @@ test('the meta line under the issuer title joins ticker, sector and run count wi
 test('a fold draws its summary as a title and a right-hand detail, split at the first " · "', () => {
   const r = report();
   const row = r.fold('reference', 'Statements and registers · 3 tables · 40 rows', '<p>body</p>');
-  assert.ok(row.includes('<span class="fold-title">Statements and registers</span><span class="fold-detail">3 tables · 40 rows</span></summary>'), row);
+  assert.ok(row.includes('<span class="fold-title">Statements and registers</span> <span class="fold-detail">3 tables · 40 rows</span></summary>'), row);
+  // The summary's accessible name reads title, one space, detail.
+  assert.equal(strip(row.match(/<summary>(.*?)<\/summary>/)[1]), 'Statements and registers 3 tables · 40 rows');
+  assert.match(strip(r.reportAudit(OUT).match(/<summary>(.*?)<\/summary>/)[1]), /^Evidence &amp; audit \d+ sections · unchanged from the handoff$/);
   assert.ok(row.startsWith('<details class="fold" id="reference">') && row.endsWith('<p>body</p></details>'));
   const plainRow = r.fold('handoff-text', 'Full handoff text', '');
   assert.ok(plainRow.includes('<span class="fold-title">Full handoff text</span></summary>') && !plainRow.includes('fold-detail'), plainRow);
   // The audit row has the same two parts: its title, then the detail it always had.
   const audit = r.reportAudit(OUT);
-  assert.ok(audit.includes('<span class="fold-title">Evidence &amp; audit</span><span class="fold-detail">14 sections · unchanged from the handoff</span></summary>') || /<span class="fold-title">Evidence &amp; audit<\/span><span class="fold-detail">\d+ sections · unchanged from the handoff<\/span>/.test(audit), audit);
+  assert.ok(audit.includes('<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">14 sections · unchanged from the handoff</span></summary>') || /<span class="fold-title">Evidence &amp; audit<\/span> <span class="fold-detail">\d+ sections · unchanged from the handoff<\/span>/.test(audit), audit);
 });
 
 test('the head names the reading group, and says whether the page has a bottom line', () => {
@@ -2645,9 +2648,9 @@ test('the head names the reading group, and says whether the page has a bottom l
   assert.ok(call.includes('has-bottom-line'), call);
   // The tools keep today's controls.
   assert.ok(withLine.includes('class="head-tools"') && withLine.includes('Candidate · not accepted') && /<a class="btn" href="\.\.\/runs\/run-a\/deliveries\/d1\/CP-1\.md" download>/.test(withLine));
-  // A module no reading group names has no group title.
+  // A module no reading group names is gathered under the runtime group "Other modules".
   const unnamed = report({ module: 'CP-6' }).reportHead(OUT);
-  assert.ok(!unnamed.includes('head-group'), unnamed);
+  assert.ok(unnamed.includes('<span class="head-group">Other modules</span><h2>Committee decision</h2>'), unnamed);
 });
 
 test('a new-format page has a bottom line when the Bottom line passage exists; a Not assessable module shows its badge in the head tools', () => {

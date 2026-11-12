@@ -708,11 +708,11 @@ details.fold,details.audit{margin-top:8px;padding:0;border:1px solid var(--gray-
 details.fold details.fold{margin:8px 14px 14px}
 details.fold>summary,details.audit>summary{display:flex;align-items:center;gap:8px;padding:12px 14px;font:600 14px/20px 'Red Hat Text',sans-serif;letter-spacing:0;color:var(--text-primary)}
 details.fold>summary img,details.audit>summary img{flex:none}
-details:is(.fold,.audit)>summary .fold-title{margin:0;font:inherit}
+details:is(.fold,.audit)>summary .fold-title{margin:0;font:inherit;color:var(--text-primary)}
 details:is(.fold,.audit)>summary .fold-detail{margin:0 0 0 auto;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-align:right}
 details.fold[open]>:not(summary),details.audit[open]>:not(summary){margin-left:14px;margin-right:14px}
 details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14px}
-.inspector-body{padding:20px 22px}
+@media(min-width:1051px){.inspector-body{padding:20px 22px}}
 .inspector-body>*+*{margin-top:18px}
 .inspector-body>.sr-only+*{margin-top:0}
 .inspector-body>h2.kicker{margin:0}
@@ -720,7 +720,8 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .inspector-figure .kicker{display:block}
 .inspector-figure strong{display:block;margin-top:4px;font:500 22px/28px 'Red Hat Mono',monospace;color:var(--text-primary);overflow-wrap:anywhere}
 .inspector-body>h3:not(.citations-heading){margin:8px 0 0}
-.inspector-body>.evidence-context{margin:4px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
+@media(min-width:1051px){.inspector-body>.evidence-context{margin:4px 0 0}}
+.inspector-body>.evidence-context{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
 .inspector-body>.classification{margin:10px 0 0}
 .evidence-fields{display:grid;gap:10px;border-top:0}
 .evidence-fields>div{padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff}

@@ -1418,7 +1418,16 @@ def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
         "Confidence High",
     ):
         assert word in finding["text"], word
-    assert len(finding["basis"]) == 1 and finding["basis"][0]["paragraph"].endswith("CP-1.md:16")
+    # The Basis control carries the same data-* attributes as before the redesign (commit 4b88927).
+    assert finding["basis"] == [
+        {
+            "paragraph": (
+                "run-a/deliveries/da292fe29d5ecda6b4c8830c8fa4bb54b746f30bd1890c290552a92e50aba995"
+                "/CP-1.md:16"
+            ),
+            "basis": "[]",
+        }
+    ]
     lead = seen["finding0"]
     assert (lead["size"], lead["line"], lead["weight"]) == ("15px", "24px", "600")
     assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 23, 229)", "0px")
@@ -1523,6 +1532,8 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
     assert chip["card"] == "10px" and chip["fits"] is True
     for literal in (
         "Back to analysis",
+        "Esc",
+        "Evidence inspector",
         "Fundamental credit · Line 26",
         "Key findings",
         (
@@ -1531,7 +1542,9 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
         ),
         "NBG_2024-12-31_Q4-results.pdf, page 7",
         "Citation gap · NBG_2024-12-31_Q4-results.pdf p.7 · not in inventory",
+        "Source location",
         "Download retained handoff",
+        "Reading boundary",
     ):
         assert literal in chip["text"], literal
 
@@ -1572,6 +1585,36 @@ def test_the_run_header_keeps_the_phone_layout_at_600px(tmp_path):
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["padL"], seen["padT"], seen["scopeBelowTitle"]) == ("15px", "12px", True)
+
+
+INSPECTOR_PADDING_PROBE = """(async () => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < 200 && !document.querySelector('#content .basis-link'); i++) await sleep(50);
+  document.querySelector('#content .basis-link:not([data-figure])').click();
+  await sleep(300);
+  const body = document.querySelector('.inspector-body');
+  const ctx = body.querySelector('.evidence-context');
+  const seen = {padding: getComputedStyle(body).padding,
+    contextBottom: getComputedStyle(ctx).marginBottom};
+  const out = document.createElement('pre'); out.id = 'probe';
+  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
+})();"""
+
+
+@pytest.mark.parametrize(
+    ("width", "padding", "context_bottom"),
+    [(1000, "24px", "14px"), (600, "18px 15px", None)],
+)
+def test_the_inspector_keeps_its_small_screen_padding(tmp_path, width, padding, context_bottom):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    (page.parent / "probe.js").write_text(INSPECTOR_PADDING_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, f"#CP-2?c={NEW_FORMAT_RUN}", width)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["padding"] == padding
+    if context_bottom:
+        assert seen["contextBottom"] == context_bottom
 
 
 OVERVIEW_LAYOUT_PROBE = (
