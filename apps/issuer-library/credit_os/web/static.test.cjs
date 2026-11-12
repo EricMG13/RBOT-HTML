@@ -1640,6 +1640,14 @@ test('module tables: a numeric column is .num, a number in a text column is .fig
   assert.ok(css.includes(".table-card td{font-family:'Red Hat Text',sans-serif}.table-card td.fig{font-family:'Red Hat Mono',monospace"));
 });
 
+test('screen.css (decision 5): a module-page table box shows a scroll shadow, may wrap its headers and takes the keyboard; a fenced block keeps its lines', () => {
+  const css = read('screen.css');
+  const box = /\.analysis-section \.table-card\{background:([^}]*)\}/.exec(css);
+  assert.ok(box && /local/.test(box[1]) && /scroll/.test(box[1]), 'local covers over scroll shadows');
+  assert.ok(css.includes('.analysis-section .table-card:focus-visible{') && css.includes('.analysis-section .table-card thead th{white-space:normal'));
+  assert.ok(/\.passage-code\{[^}]*white-space:pre/.test(css));
+});
+
 test('library: a row is one item per column; what left the row is the cell title or the selected-run panel', () => {
   const { libraryRow } = runPage();
   const metric = (value, basis) => ({ value, unit: 'x', basis, period: 'FY2024' });

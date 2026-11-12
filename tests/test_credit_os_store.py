@@ -1993,3 +1993,12 @@ def test_the_page_budget_charges_both_grids_of_every_model(monkeypatch):
         monkeypatch.setattr(store, "CASHFLOW_CELL_BUDGET", budget)
         models, _ = store.catalogue_models(Path("."), catalogue, prior)
         assert [m["cashflow"] is not None for m in models] == [True, second_shown]
+
+
+def test_a_fenced_block_is_one_text_block_with_its_blank_lines_and_markers():
+    fence = '```json\n{"a": 1,\n\n- not a list\n# not a heading\n| not | a table |\n"b": -2}\n```'
+    blocks = store.parse_source(f"## Inputs\nBefore.\n\n{fence}\nAfter.\n")[0]["blocks"]
+    assert [b["type"] for b in blocks] == ["text", "text", "text"]
+    assert blocks[1]["text"] == fence
+    assert (blocks[1]["line"], blocks[1]["end"]) == (4, 11)
+    assert blocks[2]["text"] == "After."

@@ -298,8 +298,19 @@ def table_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
 
 
 def text_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
-    """The paragraph starting at `lines[i]`, up to a blank line or the next structure."""
+    """The paragraph starting at `lines[i]`, up to a blank line or the next structure.
+    A line opening with three backticks starts a fenced block: one block up to its closing
+    fence, blank lines and structure markers inside it kept. An unclosed fence is a paragraph."""
     start = i + 1
+    if lines[i].startswith("```"):
+        close = next((n for n in range(i + 1, len(lines)) if lines[n].rstrip() == "```"), None)
+        if close is not None:
+            return {
+                "type": "text",
+                "line": start,
+                "end": close + 1,
+                "text": "\n".join(lines[i : close + 1]),
+            }, close + 1
     parts = [lines[i]]
     i += 1
     while (

@@ -125,6 +125,14 @@ test('figureSpans keeps numbers that carry no unit as figures, and years out of 
   assert.deepEqual(figures('Margin 0.5% and 99%'), ['0.5%', '99%']);
 });
 
+test('figureSpans: a negative amount is one figure with its sign and currency; a range or a label is not signed', () => {
+  assert.deepEqual(figures('Free cash flow of USD -158 million and USD \u22122,505 million'), ['USD -158 million', 'USD \u22122,505 million']);
+  assert.deepEqual(figures('A loss of -3.5% and (-12 bps) and $-5 million, -2,505 and -7x'), ['-3.5%', '-12 bps', '$-5 million', '-2,505', '-7x']);
+  assert.deepEqual(figureSpans('USD -158 million'), [{start: 0, end: 16, text: 'USD -158 million'}]);
+  assert.deepEqual(figures('Spreads of 10-12 bps, 5.50%-6.00%, USD 150-200 million, pages 58-59, FY2023-24 and 2024-09-30'), ['12 bps', '5.50%', '6.00%', 'USD 150', '200 million']);
+  assert.deepEqual(figures('range 1,000-1,200'), ['1,000', '1,200']);
+});
+
 test('figureSpans of the synthetic CP-2 bottom line', () => {
   const line = fixture('CP-2').find(l => l.startsWith('Creditors are exposed'));
   assert.deepEqual(figures(line), ['USD 1,390 million', '4.2x']);
@@ -384,7 +392,7 @@ test('sectionBodyHtml: list items share one list, paragraphs stand alone, tables
   const ctx = {id: 'o', tables: true, chips: key => (key === 'o:11' ? 1 : 0), caption: heading => heading};
   const html = sectionBodyHtml(section, ctx);
   assert.ok(html.startsWith('<ul class="passage-list"><li>A <button type="button" class="figure" data-paragraph="o:2"'));
-  assert.ok(html.includes('</button></li><li>B</li></ul><p class="passage-text">Plain.</p><div class="table-card">'));
+  assert.ok(html.includes('</button></li><li>B</li></ul><p class="passage-text">Plain.</p><div class="table-card" role="region"'));
   assert.ok(html.includes('<thead><tr><th scope="col">Item</th><th scope="col">Source</th></tr></thead>'), 'the handoff\'s own columns, none added');
   assert.equal((html.match(/<th /g) || []).length, 2);
   assert.ok(html.includes('<td>Debt</td><td>X.pdf, page 3</td>') && html.includes('<td>Cash <button type="button" class="basis-link" data-paragraph="o:11"'));
@@ -397,6 +405,20 @@ test('tableView (H4): a missing cell is drawn as written, never "n.a."; a numeri
   assert.ok(html.includes('<td class="num">—</td>') && !html.includes('n.a.'));
   const blank = tableView('T', {headers: ['Item', 'Value'], rows: [{line: 1, cells: ['A', '']}, {line: 2, cells: ['B', 'Not supplied']}]}, {id: 'o', chips: () => 0});
   assert.ok(blank.includes('<td></td>') && blank.includes('<td>Not supplied</td>') && !blank.includes('n.a.'));
+});
+
+test('tableView: the wrapper is a focusable named region so a wide table can be scrolled from the keyboard', () => {
+  const html = tableView('Debt "stack"', {headers: ['Item', 'Value'], rows: [{line: 1, cells: ['A', '1']}]}, {id: 'o', chips: () => 0});
+  assert.ok(html.startsWith('<div class="table-card" role="region" tabindex="0" aria-label="Debt &quot;stack&quot;">'), html);
+});
+
+test('sectionBodyHtml: a fenced block is one pre/code of its escaped inner text, no figure buttons, no Basis', () => {
+  const text = '```json\n{"a": "<b>", "amount": -158,\n\n  "n": 1,250}\n```';
+  const section = {heading: 'Forecast inputs', blocks: [{type: 'text', line: 5, text}]};
+  const html = sectionBodyHtml(section, {id: 'o', tables: true, chips: () => 3, caption: h => h});
+  assert.equal(html, '<pre class="passage-code"><code>{&quot;a&quot;: &quot;&lt;b&gt;&quot;, &quot;amount&quot;: -158,\n\n  &quot;n&quot;: 1,250}</code></pre>');
+  const bare = sectionBodyHtml({heading: 'x', blocks: [{type: 'text', line: 1, text: '```\nplain\n```'}]}, {id: 'o', tables: true, chips: () => 0, caption: h => h});
+  assert.equal(bare, '<pre class="passage-code"><code>plain</code></pre>');
 });
 
 test('calculationRow: the row of the Calculations table whose ID column equals the id, headers and cells as written', () => {

@@ -215,10 +215,14 @@ function figureSpans(text) {
     const symbolic = SYMBOLIC_UNIT.exec(rest), scale = SCALE_UNIT.exec(rest), other = OTHER_UNIT.exec(rest);
     const unit = symbolic || scale || other;
     if (!unit && /^[A-Za-z]/.test(rest)) continue;
-    let from = start;
-    if (SYMBOLS.includes(before)) from = start - 1;
-    else if (before === ' ' && CURRENCY_BEFORE.test(text.slice(0, start - 1))) from = start - 4;
-    const prefixed = from !== start;
+    // A minus sign joins the figure only when it stands alone before the digits (after a space, an opening bracket, a currency symbol or the
+    // text start), so a range or a label (10-12, FY2023-24, 5.50%-6.00%) is never signed.
+    const signed = (before === '-' || before === '\u2212') && /^(?:[\s($\u20ac\u00a3\u00a5]|$)/.test(text[start - 2] || '');
+    const at = signed ? start - 1 : start, lead = text[at - 1] || '';
+    let from = at;
+    if (SYMBOLS.includes(lead)) from = at - 1;
+    else if (lead === ' ' && CURRENCY_BEFORE.test(text.slice(0, at - 1))) from = at - 4;
+    const prefixed = from !== at;
     const plain = !m[0].includes(',') && !m[0].includes('.');
     if (!prefixed && !symbolic && !scale && plain) {
       const value = Number(m[0]);
@@ -363,7 +367,14 @@ function tableView(caption, block, ctx) {
     const chips = ctx.chipList?.(key) || [];
     return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '', block.headers[c] === 'Source' ? {key, chips} : null)).join('')}</tr>`;
   }).join('');
-  return `<div class="table-card"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="table-card" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// A fenced block as a block: its inner lines (the fence lines and the language word left out) escaped, line breaks kept, no figure buttons, no Basis.
+function fencedBlockHtml(text) {
+  const lines = text.split('\n');
+  const inner = lines.slice(1, lines.length > 1 && lines[lines.length - 1].trim() === '```' ? -1 : undefined);
+  return `<pre class="passage-code"><code>${escapeHtml(inner.join('\n'))}</code></pre>`;
 }
 
 // A new-format section's content: prose paragraphs (list items grouped in one list) and, when `ctx.tables`, its tables.
@@ -372,6 +383,11 @@ function sectionBodyHtml(section, ctx) {
   let html = '', open = false;
   const close = () => { if (open) html += '</ul>'; open = false; };
   for (const block of section.blocks) {
+    if (block.type === 'text' && block.text.startsWith('```')) {
+      close();
+      html += fencedBlockHtml(block.text);
+      continue;
+    }
     if (block.type === 'table') {
       if (!ctx.tables) continue;
       close();
