@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal, Inexact, localcontext
+from typing import NamedTuple
 
 from deploy_workflow.owners import cp2g
 from deploy_workflow.owners.cpos_forecast import _agrees, _cut, _plain, _signed
@@ -106,6 +107,14 @@ _YEAR = re.compile(r"(?<!\d)(?:19|20)\d\d(?!\d)")
 _MAX_DIGITS = 38  # a numeral of more digits than the exact context holds is not a figure
 _MAX_REASON = 200
 _BASE_SIGNED = frozenset({"interest", "taxes", "capex"})  # signed by their base cell
+
+
+class ByColumn(NamedTuple):
+    """A forecast-inputs name for a cell of a table with one row per period: the period's row
+    label and the measure's column header (the pair `(row, period)` otherwise)."""
+
+    row: str
+    column: str
 
 
 @dataclass(frozen=True)
@@ -269,7 +278,7 @@ def lines(
     that print the operand's base amount under the period the forecast inputs name for it, read
     from the rows of the label they name (`named`: `{key: (row label, period header)}`; None is
     none named). An operand with an amount and no name has no history. Never raises on a table
-    shape."""
+    shape. A `ByColumn` name is read as a period row's cell under a measure column."""
     return _locate(tables, operands, named or {}, 1)[0]
 
 
@@ -296,19 +305,51 @@ def _locate(
 
 
 def _named_base(named: Mapping[str, tuple[str, str]]) -> Period | None:
-    """The latest period that the forecast inputs name for revenue or EBITDA."""
+    """The latest period that the forecast inputs name for revenue or EBITDA (by its header, or
+    by its row label when the operand is named by column)."""
     periods = [
-        p for key in ("revenue", "ebitda") if key in named and (p := period_of(named[key][1]))
+        p
+        for key in ("revenue", "ebitda")
+        if key in named
+        and (p := period_of(named[key][0 if isinstance(named[key], ByColumn) else 1]))
     ]
     return max(periods, key=lambda p: (p[1], p[2]), default=None)
 
 
+def _transposed(tables: list[list[list[str]]], column: str) -> list[list[list[str]]]:
+    """The tables that hold `column` as a header (not the first), each as a two-row measure table:
+    the header is the first header cell then the row labels, the one row is `column` then its cells,
+    so a table with one row per period reads as a table with the periods as headers."""
+    found = []
+    for table in tables:
+        header, rows = (table[0], table[1:]) if table else ([], [])
+        for index in (i for i, name in enumerate(header) if i > 0 and _plain(name) == column):
+            kept = [row for row in rows if row and len(row) > index]
+            found.append(
+                [
+                    [header[0], *(row[0] for row in kept)],
+                    [header[index], *(row[index] for row in kept)],
+                ]
+            )
+    return found
+
+
 def _named_line(
-    tables: list[list[list[str]]], key: str, amount: Decimal, name: tuple[str, str] | None
+    tables: list[list[list[str]]],
+    key: str,
+    amount: Decimal,
+    name: tuple[str, str] | None,
 ) -> Line:
-    """An operand's line: the rows labelled as it names, under the period it names."""
+    """An operand's line: the rows labelled as it names, under the period it names. By column, the
+    name is (period row label, measure header): the tables are read transposed and the period is
+    the row's."""
     if name is None or not _plain(name[0]) or not _plain(name[1]):
         return Line(reason=NOT_NAMED)
+    if isinstance(name, ByColumn):
+        target = period_of(name[0])
+        if target is None:
+            return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[0]))))
+        return _line(_transposed(tables, _plain(name[1])), key, amount, _plain(name[1]), target)
     target = period_of(name[1])
     if target is None:
         return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[1]))))
@@ -814,10 +855,11 @@ def history(
     scale: int = 1,
 ) -> dict[str, object]:
     """The Forecast page's historical columns, read from CP-1's period-labelled tables (`named`:
-    the forecast inputs' row and period for each operand; `forecast_year`: the first forecast
-    year, from which no fiscal year is history; `scale`: 1000 when CP-1's cells are in thousands
-    and the operands in millions, then every figure is published in millions). Never raises: a
-    value that cannot be built is missing with its reason."""
+    the forecast inputs' row and period for each operand, a `ByColumn` where it names a measure
+    column; `forecast_year`: the first forecast year, from which no fiscal year is history;
+    `scale`: 1000 when CP-1's cells are in thousands and the operands in millions, then every
+    figure is published in millions). Never raises: a value that cannot be built is missing with
+    its reason."""
     located_lines, base = _locate(tables, operands, named or {}, scale)
     found, forecast = _before_forecast(located_lines, forecast_year, base)
     located = [line for line in found.values() if line.reason is None]

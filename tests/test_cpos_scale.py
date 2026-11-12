@@ -240,7 +240,7 @@ def test_a_block_that_names_one_operand_is_judged_by_the_named_rule_not_the_unna
     base = {k: {"amount": v, "reason": None} for k, v in K.items()}
     base["revenue"] = named_base(K)["revenue"]
     with pytest.raises(
-        ValueError, match="CP-2G: base ebitda must name the `row` label and `period`"
+        ValueError, match="CP-2G: base ebitda must name the `row` label and either the `period`"
     ):
         parse(block_k(base=base), CP1_K)
 

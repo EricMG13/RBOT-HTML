@@ -2864,7 +2864,10 @@ def test_a_cp2g_block_may_name_the_row_and_period_of_every_base_operand():
     assert inputs.downside_shock is not None  # still CP-2G's block: the shock and cases stay
 
 
-MUST_NAME = "CP-2G: base revenue must name the `row` label and `period` header it was read from"
+MUST_NAME = (
+    "CP-2G: base revenue must name the `row` label and either the `period` header or the "
+    "`column` header it was read from"
+)
 
 
 @pytest.mark.parametrize(
@@ -2902,7 +2905,8 @@ def test_a_cp2g_block_naming_some_operands_is_refused_at_the_first_one_missing()
         _named_cp2g(_cp1_doc(TWO_YEARS), **unnamed)
     assert (
         str(caught.value)
-        == "CP-2G: base taxes must name the `row` label and `period` header it was read from"
+        == "CP-2G: base taxes must name the `row` label and either the `period` header or the "
+        "`column` header it was read from"
     )
 
 
