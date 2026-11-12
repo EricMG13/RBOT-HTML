@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import get_args
 
@@ -178,7 +179,9 @@ def tokens(css: str) -> dict[str, str]:
 def test_the_design_tokens_are_the_librarys() -> None:
     library, form = tokens((WEB / "screen.css").read_text(encoding="utf-8")), tokens(FORM)
     shared = sorted(form.keys() & library.keys())
-    assert len(shared) >= len(form) - 3  # Only --ring-error, --red-bg and --red-border are its own.
+    # Only --ring-error, --red-bg, --red-border and the redesign's --green-bg are its own.
+    assert len(shared) >= len(form) - 4
+    assert set(form) - set(library) == {"--ring-error", "--red-bg", "--red-border", "--green-bg"}
     assert {k: form[k] for k in shared} == {k: library[k] for k in shared}
 
 
@@ -271,3 +274,42 @@ def test_the_page_states_before_submit_whether_the_run_searches_by_case_kind() -
     assert "This is a synthetic case: the research module does not search the web" in FORM
     assert "const SEARCH_KINDS = ['public', 'private'];" in FORM
     assert "['Web search'," in FORM
+
+
+class _VisibleText(HTMLParser):
+    """The markup's text nodes outside ``<script>`` and ``<style>``, whitespace collapsed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.skipping = 0
+        self.nodes: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.skipping += tag in ("script", "style")
+
+    def handle_endtag(self, tag: str) -> None:
+        self.skipping -= tag in ("script", "style")
+
+    def handle_data(self, data: str) -> None:
+        text = re.sub(r"\s+", " ", data).strip()
+        if text and not self.skipping:
+            self.nodes.add(text)
+
+
+# What Rulings 6-9 of the redesign plan change in the markup after the step logic: nothing.
+# Ruling 6 (the title) and 9 (the group number) landed there; 8 (button labels) is script.
+CHANGED_BY_RULINGS: frozenset[str] = frozenset()
+
+
+def test_the_redesigned_markup_keeps_every_sentence_of_the_step_logic_commit() -> None:
+    """The answer key is the markup text at a6eec82 (tests/fixtures), written down once: the frame,
+    stepper, documents zone and pathway rows restyle the page without dropping a sentence."""
+    before = json.loads(
+        (ROOT / "tests/fixtures/run_start_sentences_a6eec82.json").read_text(encoding="utf-8")
+    )
+    page = _VisibleText()
+    page.feed(FORM)
+    assert len(before) > 100  # a fixture that lost its text would pass anything
+    assert set(before) - CHANGED_BY_RULINGS <= page.nodes, sorted(
+        set(before) - CHANGED_BY_RULINGS - page.nodes
+    )

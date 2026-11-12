@@ -144,7 +144,7 @@ class Page:
     console: list[str]
     root: Path | None = None  # the shared folder, for tests that read the service's records
 
-    def run(self, body: str, path: str = "/") -> dict[str, Any]:
+    def run(self, body: str, path: str = "/", size: str = "1280,900") -> dict[str, Any]:
         text = FORM.read_text(encoding="utf-8")
         probe = WRAP.replace("BODY", PRELUDE + body)
         patched = self.folder / "form.html"
@@ -155,7 +155,8 @@ class Page:
                 chrome(),
                 "--headless=new",
                 "--disable-gpu",
-                "--window-size=1280,900",
+                "--disable-popup-blocking",
+                f"--window-size={size}",
                 "--enable-logging=stderr",
                 "--v=0",
                 f"--user-data-dir={self.profile}",
@@ -2852,3 +2853,279 @@ def test_more_context_stays_on_screen_while_it_is_the_step_being_edited(page):
     assert seen["held"]["cur"] == "more" and "more" in seen["held"]["steps"]
     assert seen["held"]["valuation"] is True
     assert "more" not in seen["left"]  # once the analyst leaves it with nothing held, it goes
+
+
+# ---- The redesign's look (Task 2): literal sizes from the mock-up, measured in Chrome ----------
+
+REPORT_FILE = f"await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);"
+BOX = """
+const box = el => { const r = el.getBoundingClientRect();
+  return {left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width}; };
+"""
+
+
+def test_purpose_is_a_left_column_and_a_340px_aside_with_the_footer_always_in_view(page):
+    seen = page.run(
+        BOX
+        + REPORT_FILE
+        + """
+    gotoStep('purpose');
+    const card = box($('card')), aside = box($('panel'));
+    const footer = document.querySelector('.step-actions');
+    const before = box(footer), main = $('canvas');
+    main.scrollTop = 150;
+    const after = box(footer);
+    return {inner: [innerWidth, innerHeight], card, aside, before, after,
+      scrolled: main.scrollTop, canScroll: main.scrollHeight > main.clientHeight,
+      main: box(main), display: getComputedStyle($('panel')).display};
+    """,
+        size="1440,900",
+    )
+    assert seen["inner"][0] == 1440
+    assert abs(seen["aside"]["left"] - (seen["card"]["right"] - 340)) <= 1
+    assert seen["aside"]["width"] == 340 and seen["aside"]["top"] == seen["card"]["top"]
+    assert seen["aside"]["bottom"] == seen["card"]["bottom"]
+    assert seen["canScroll"] and seen["scrolled"] > 0
+    assert seen["before"]["top"] == seen["after"]["top"]
+    assert seen["after"]["bottom"] <= seen["inner"][1]
+    assert seen["main"]["right"] <= seen["aside"]["left"] + 1
+
+
+def test_the_aside_is_300px_at_1100_and_below(page):
+    seen = page.run(
+        BOX + REPORT_FILE + "gotoStep('purpose'); return {w: box($('panel')).width};",
+        size="1100,900",
+    )
+    assert seen["w"] == 300
+
+
+def test_documents_and_start_are_one_column_with_main_across_the_card(page):
+    seen = page.run(
+        BOX
+        + REPORT_FILE
+        + """
+    const one = () => ({aside: getComputedStyle($('panel')).display, main: box($('canvas')).width,
+      card: box($('card')).width});
+    const out = {documents: one()};
+    gotoStep('start'); out.start = one();
+    return out;
+    """,
+        size="1440,900",
+    )
+    for name in ("documents", "start"):
+        assert seen[name]["aside"] == "none", name
+        assert abs(seen[name]["main"] - seen[name]["card"]) <= 1, name
+
+
+def test_the_stepper_is_numbered_circles_and_names_with_the_states_in_the_markup(page):
+    seen = page.run(
+        REPORT_FILE
+        + """
+    gotoStep('confirm'); gotoStep('purpose');
+    const shown = el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 2 && r.height > 2;
+    };
+    return [...document.querySelectorAll('#stepper button')].map(b => ({
+      step: b.dataset.step, name: b.getAttribute('aria-label') || b.textContent,
+      bg: getComputedStyle(b.querySelector('.dot')).backgroundColor,
+      check: !!b.querySelector('.dot svg'), dotText: b.querySelector('.dot').textContent,
+      state: b.querySelector('.sstate').textContent, stateShown: shown(b.querySelector('.sstate')),
+      sep: [...b.parentNode.children].filter(x => x !== b && x.textContent === '\u203a').length}));
+    """
+    )
+    by = {b["step"]: b for b in seen}
+    assert by["purpose"]["bg"] == "rgb(0, 23, 229)"  # current: blue circle
+    assert by["documents"]["check"] is True  # done: the check
+    assert by["purpose"]["check"] is False and by["purpose"]["dotText"] == "2"
+    assert by["confirm"]["state"] == "Needs attention" and by["confirm"]["stateShown"] is True
+    assert [b["step"] for b in seen if b["stateShown"]] == ["confirm"]
+    assert all(b["state"] for b in seen)  # the words stay in the DOM for screen readers
+    for step, name in (
+        ("documents", "Documents"),
+        ("purpose", "Purpose"),
+        ("confirm", "Confirm"),
+        ("start", "Start"),
+    ):
+        assert name in by[step]["name"]
+    assert sum(b["sep"] for b in seen) == 3  # a decorative "›" between four steps
+
+
+def test_the_pathways_are_rows_in_three_columns_and_the_chosen_row_is_blue_50(page):
+    seen = page.run(
+        BOX
+        + REPORT_FILE
+        + """
+    gotoStep('purpose');
+    const prows = [...document.querySelectorAll('#pathcards label')];
+    const chosen = prows.find(r => r.querySelector('input').checked);
+    const other = prows.find(r => r !== chosen);
+    const first = prows[0];
+    const bg = el => getComputedStyle(el).backgroundColor;
+    return {n: prows.length, label: box(first.querySelector('b')),
+      needs: box(first.querySelector('.imp')), chosen: bg(chosen), other: bg(other),
+      radius: getComputedStyle(chosen).borderTopLeftRadius,
+      needsText: first.querySelector('.imp').textContent,
+      cards: document.querySelectorAll('#pathcards .card').length};
+    """,
+        size="1440,900",
+    )
+    assert (seen["n"], seen["cards"]) == (7, 0), seen
+    assert seen["needs"]["left"] > seen["label"]["right"]
+    assert seen["chosen"] == "rgb(238, 240, 255)" and seen["other"] != seen["chosen"]
+    assert seen["radius"] == "8px" and seen["needsText"].startswith("Needs: ")
+
+
+def test_the_level_and_the_name_sit_side_by_side(page):
+    seen = page.run(
+        BOX
+        + REPORT_FILE
+        + """
+    gotoStep('purpose');
+    return {level: box($('levelf')), name: box($('submitter').closest('.f'))};
+    """,
+        size="1440,900",
+    )
+    assert (
+        seen["name"]["left"] > seen["level"]["right"]
+        and seen["name"]["top"] == seen["level"]["top"]
+    )
+
+
+def test_the_documents_zone_is_dashed_then_a_compact_row_and_the_files_are_rows(page):
+    seen = page.run(
+        """
+    const zone = () => { const z = getComputedStyle($('docf'));
+      return {pad: z.paddingTop, border: z.borderTopStyle, width: z.borderTopWidth,
+        radius: z.borderTopLeftRadius,
+        bg: z.backgroundColor, text: z.textAlign}; };
+    const buttons = () => [...$('docf').querySelectorAll('.file-action')]
+      .map(b => b.className.includes('primary') ? 'primary' : 'secondary');
+    const title = "Choose the issuer's folder, or add files";
+    const out = {empty: zone(), emptyButtons: buttons(),
+      title: $('docf').textContent.includes(title)};
+    await uploadFiles([file('annual.txt', """
+        + json.dumps(REPORT)
+        + """), file('memo.txt', """
+        + json.dumps(MEMO)
+        + """), file('deck.pptx', 'PK')]);
+    out.listed = zone();
+    const dot = td => {
+      const s = getComputedStyle(td, '::before');
+      return [s.width, s.height, s.backgroundColor];
+    };
+    const trs = [...document.querySelectorAll('#doclist tbody tr')];
+    out.dots = trs.map(r => dot(r.cells[0]));
+    const wrap = document.querySelector('#docresult .table-scroll');
+    out.table = getComputedStyle(wrap).borderLeftWidth;
+    out.remove = trs.map(r => r.querySelector('[data-remove-file]').textContent);
+    out.row = getComputedStyle(trs[0].cells[0]).paddingTop;
+    return out;
+    """
+    )
+    assert seen["empty"] == {
+        "pad": "44px",
+        "border": "dashed",
+        "width": "1px",  # 1.5px in the sheet, snapped down to a whole pixel at 1x
+        "radius": "12px",
+        "bg": "rgb(252, 253, 255)",
+        "text": "center",
+    }
+    assert seen["emptyButtons"] == ["primary", "secondary"] and seen["title"] is True
+    assert seen["listed"]["pad"] == "14px"
+    assert seen["dots"] == [
+        ["8px", "8px", "rgb(14, 122, 70)"],  # read: green
+        ["8px", "8px", "rgb(138, 83, 0)"],  # not recognised: amber
+        ["8px", "8px", "rgb(179, 38, 30)"],  # will not be read: red
+    ]
+    assert seen["remove"] == ["Remove"] * 3 and seen["row"] == "11px" and seen["table"] == "0px"
+
+
+def test_the_readiness_aside_has_dot_rows_and_borderless_tally_pills(page):
+    seen = page.run(
+        REPORT_FILE
+        + """
+    gotoStep('purpose');
+    const tally = $('pn-tally'), made = {};
+    for (const k of ['ready', 'limited', 'gap', 'check', 'will_refuse']) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="badge ${k}"><i></i>${k}</span>`;
+      tally.appendChild(li);
+      const s = getComputedStyle(li.firstChild);
+      made[k] = [s.backgroundColor, s.borderTopWidth, s.borderTopStyle, s.height, s.color];
+    }
+    const row = document.querySelector('#pn-mods > li');
+    const dot = getComputedStyle(row.querySelector('summary, .mrow'), '::before');
+    const head = getComputedStyle(document.querySelector('.inspector-bar'));
+    return {made, dot: [dot.width, dot.height], head: head.paddingTop + ' ' + head.paddingLeft,
+      hide: $('panel').textContent.includes('Hide'),
+      name: getComputedStyle(row.querySelector('.nm')).fontWeight,
+      details: !!document.querySelector('#pn-mods details'),
+      legend: document.querySelector('.note-foot').textContent.startsWith('Expected from')};
+    """
+    )
+    assert seen["details"] and seen["legend"] and seen["hide"] is False
+    made = seen["made"]
+    assert (
+        made["ready"][:3] == ["rgb(233, 245, 238)", "0px", "none"]
+        and made["ready"][4] == "rgb(14, 122, 70)"
+    )
+    assert made["limited"][:3] == ["rgb(255, 241, 199)", "0px", "none"] == made["gap"][:3]
+    assert made["will_refuse"][:3] == ["rgb(254, 243, 242)", "0px", "none"]
+    assert made["check"][2] == "dashed" and all(m[3] == "24px" for m in made.values())
+    assert seen["dot"] == ["8px", "8px"] and seen["head"] == "22px 22px" and seen["name"] == "600"
+
+
+def test_no_step_scrolls_sideways_at_375px(page):
+    # Chrome will not open a window under 500px and the service refuses to be framed, so the page
+    # opens itself again in a 375px popup; the popup runs the same probe, measures its own window
+    # and hands the numbers to its opener.
+    seen = page.run(
+        """
+    const measure = async () => {
+      window.resizeTo(375, 812); await settle(300);
+      await issuer('credit_snapshot', [file('annual.txt', REPORT_JS)]);
+      level('standard');
+      const out = {inner: innerWidth, widths: {}};
+      for (const step of ['documents', 'purpose', 'confirm', 'more', 'start']) {
+        gotoStep(step);
+        out.widths[step] = document.documentElement.scrollWidth;
+      }
+      return out;
+    };
+    if (window.opener) { window.opener.NARROW = await measure(); return {popup: true}; }
+    window.open(location.href, 'narrow', 'popup,width=375,height=812');
+    for (let i = 0; i < 300 && !window.NARROW; i++) await settle(100);
+    return window.NARROW;
+    """.replace("REPORT_JS", json.dumps(REPORT))
+    )
+    assert seen["inner"] == 375
+    assert seen["widths"] == dict.fromkeys(
+        ("documents", "purpose", "confirm", "more", "start"), 375
+    )
+
+
+def test_no_text_is_drawn_in_the_failing_grey(page):
+    seen = page.run(
+        """
+    await issuer('credit_snapshot', [file('annual.txt', """
+        + json.dumps(REPORT)
+        + """)]);
+    level('standard');
+    const found = [];
+    for (const step of ['documents', 'purpose', 'confirm', 'more', 'start']) {
+      gotoStep(step);
+      for (const el of document.body.querySelectorAll('*')) {
+        if (['SCRIPT', 'STYLE'].includes(el.tagName)) continue;
+        if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') continue;
+        if (getComputedStyle(el).color === 'rgb(138, 144, 163)') {
+          found.push(step + ':' + el.tagName + '.' + el.className);
+        }
+      }
+    }
+    return found;
+    """
+    )
+    assert seen == []

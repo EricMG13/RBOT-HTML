@@ -17,7 +17,7 @@
 
 /* Tokens: copied from screen.css (lines 5 and 81). */
 :root{--fs-label:11px;--fs-compact:12px;--fs-body:13px;--fs-control:14px;--navy:#000533;--blue:#0017e5;--ground:#eef0f5;--rule:#dde1ea;--muted:#4a5068;--quiet:#f6f7fa;--selection:#e7ecff;--amber:#8a5300;--amber-bg:#fff1c7;--amber-border:#f2d58a;--red:#b3261e;--green:#0e7a46;--depth:0 8px 28px rgba(0,5,51,.085)}
-:root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--ring:0 0 0 4px rgba(0,23,229,.16);--ring-error:0 0 0 4px rgba(179,38,30,.14);--red-bg:#fef3f2;--red-border:#f6c9c4;--radius-inline:4px;--radius-control:8px;--radius-card:12px}
+:root{--gray-25:#fcfcfd;--gray-50:#f8f9fb;--gray-100:#f1f2f6;--gray-200:#e4e6ec;--gray-300:#cfd3dd;--text-primary:#0b1030;--text-secondary:#3a4056;--text-tertiary:#4f566b;--text-quaternary:#5b6279;--border-primary:var(--gray-300);--border-secondary:var(--gray-200);--blue-50:#eef0ff;--blue-100:#dfe3ff;--blue-700:#0012b3;--shadow-xs:0 1px 2px rgba(0,5,51,.05);--ring:0 0 0 4px rgba(0,23,229,.16);--ring-error:0 0 0 4px rgba(179,38,30,.14);--green-bg:#e9f5ee;--red-bg:#fef3f2;--red-border:#f6c9c4;--radius-inline:4px;--radius-control:8px;--radius-card:12px}
 
 /* Base, as screen.css. */
 *{box-sizing:border-box}
@@ -34,7 +34,8 @@ svg.i{width:16px;height:16px;flex:none}
 .sr-only,.skip{position:fixed;top:-60px;left:70px;z-index:20;background:#fff;padding:10px}.skip:focus{top:4px}
 .muted{color:var(--text-quaternary)}
 
-/* Frame: the library's rail, one white card (title, stages, workbench) on the ground. */
+/* Frame: the library's rail, one white card on the ground. From Purpose to More context the card is the
+   left column (title, stepper, form, footer) and the run readiness aside; elsewhere it is one column. */
 .rail{position:fixed;left:0;top:0;width:56px;height:100dvh;background:var(--navy);display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px 8px;z-index:5}
 .symbol{width:27px;height:30px;background:center/contain no-repeat url("data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDE1MjEgMTUxNSIgd2lkdGg9IjE1MjEiIGhlaWdodD0iMTUxNSI+Cgk8dGl0bGU+c3RhdGUtc3RyZWV0LWxvZ28tZmluYWwtc3ZnPC90aXRsZT4KCTxzdHlsZT4KCQkuczAgeyBmaWxsOiAjZmZmZmZmIH0gCgk8L3N0eWxlPgoJPHBhdGggaWQ9IlN5bWJvbCIgY2xhc3M9InMwIiBkPSJtNzI0LjggMTczYzIzOC42LTgyLjQgNDg5LjktMTcyLjcgNzk1LjMtMTcyLjd2MjExYy0yNjcuMSAwLTQ4OCA3OC41LTcyNi41IDE2MC45LTIzNS43IDgyLjQtNDg4IDE3Mi43LTc5My4zIDE3Mi43di0yMTFjMjY3IDAgNDg3LjktNzguNSA3MjQuNS0xNjAuOXptLTcyNC41IDQ3Ny44aDE1MTkuOHYyMTNoLTExMS0xNDA4Ljh6bTAgNjUyLjVjMjY3IDAgNDg3LjktNzguNSA3MjQuNS0xNjEgMjM4LjYtODIuNCA0ODkuOS0xNzIuNiA3OTUuMy0xNzIuNnYyMTAuOWMtMjY3LjEgMC00ODggNzguNS03MjYuNSAxNjAuOS0yMzYuNiA4Mi41LTQ4OCAxNzIuNy03OTMuMyAxNzIuN3oiLz4KPC9zdmc+")}
 .rail-rule{width:25px;height:1px;background:#30365e;margin:10px 0}
@@ -42,33 +43,48 @@ svg.i{width:16px;height:16px;flex:none}
 .rail a:hover{background:#ffffff20}
 .rail a svg{width:18px;height:18px}
 .app{margin-left:56px;padding:18px;height:100dvh;display:flex;flex-direction:column;min-width:0}
-.page-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 22px;background:#fff;border-radius:var(--radius-card) var(--radius-card) 0 0}
+.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);border-radius:var(--radius-card);box-shadow:var(--depth);overflow:hidden}
+.workbench:has(#panel[hidden]){grid-template-columns:minmax(0,1fr)}
+.left{display:flex;flex-direction:column;min-width:0;min-height:0}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 32px 0}
+.page-head>div:first-child{min-width:0}
 .page-head h1{font:600 24px/32px 'Red Hat Display',system-ui,sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
-.scope{margin-top:2px;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary)}
+.stagebar{margin-top:10px}
+.scope{margin-top:10px;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary)}
+.scope:empty{display:none}
 .page-actions{display:flex;gap:12px;flex:none;align-items:center}
-.stagebar{background:#fff;padding:4px 22px 14px;border-bottom:1px solid var(--border-secondary)}
-.workbench{flex:1;min-height:0;background:#fff;display:grid;grid-template-columns:minmax(0,1fr) 320px;border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:var(--depth);overflow:hidden}
-#canvas{min-width:0;min-height:0;overflow:auto}
+#canvas{flex:1;min-width:0;min-height:0;overflow:auto;padding:28px 32px}
 #canvas:focus{outline:none}
-.canvas-in{max-width:820px;padding:22px 26px 32px}
+.canvas-in{max-width:860px}
 
-/* Stages: the New run progress-bar stages (screen.css .run-stages). */
-.run-stages{display:grid;grid-template-columns:repeat(var(--n,8),minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
-.run-stages button{display:block;width:100%;padding:10px 0 0;border-top:4px solid var(--border-secondary);text-align:left;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
-.run-stages .nm{display:block}
-.run-stages .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
-.run-stages button:hover{color:var(--text-secondary)}
-.run-stages .done{border-top-color:var(--blue);color:var(--text-secondary)}
-.run-stages [aria-current]{border-top-color:var(--blue);color:var(--blue-700)}
-.run-stages [aria-current] .sstate{color:var(--blue-700)}
-.run-stages .needs-attention{border-top-color:var(--red);color:var(--red)}
-.run-stages .needs-attention .sstate{color:var(--red)}
-.run-stages [aria-disabled=true]{cursor:not-allowed;opacity:.55}
-.run-stages [aria-disabled=true]:hover{color:var(--text-quaternary)}
-.run-stages button:focus-visible{outline:none;box-shadow:var(--ring);border-radius:0 0 var(--radius-inline) var(--radius-inline)}
+/* The stepper: numbered circles and names in one row (the mock-up), under the title. */
+.stepper{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0;list-style:none}
+.stepper li{display:flex;align-items:center;gap:6px}
+.stepper .sep{padding:0 4px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--gray-300)}
+.stepper button{position:relative;display:flex;align-items:center;gap:8px;padding:2px 6px 2px 2px;border-radius:999px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary);text-align:left}
+.stepper button:hover{color:var(--text-secondary)}
+.stepper .dot{display:grid;place-items:center;flex:none;width:22px;height:22px;border:1px solid var(--gray-300);border-radius:50%;background:#fff;font:600 var(--fs-compact)/1 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.stepper .dot svg{width:12px;height:12px}
+.stepper .sstate{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.stepper .done{color:var(--text-secondary)}
+.stepper .done .dot{border-color:var(--gray-200);background:var(--gray-200);color:var(--text-secondary)}
+.stepper [aria-current]{color:var(--blue-700)}
+.stepper [aria-current] .dot{border-color:var(--blue);background:var(--blue);color:#fff}
+.stepper .needs-attention{color:var(--red)}
+.stepper .needs-attention .dot{border-color:var(--red);color:var(--red)}
+.stepper .needs-attention .sstate{position:static;width:auto;height:auto;margin:0;overflow:visible;clip:auto;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--red)}
+.stepper [aria-disabled=true]{cursor:not-allowed;opacity:.55}
+.stepper [aria-disabled=true]:hover{color:var(--text-quaternary)}
+.stepper button:focus-visible{outline:none;box-shadow:var(--ring)}
 .stepsum{display:none;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
 .stepsum .prog{height:4px;margin-top:8px;background:var(--border-secondary);border-radius:2px}
 .stepsum .prog span{display:block;height:100%;background:var(--blue);border-radius:2px}
+
+/* The module list of a started run keeps the progress-bar stages (screen.css .run-stages); Task 3 restyles it. */
+.run-stages{display:grid;grid-template-columns:repeat(var(--n,8),minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.run-stages .nm{display:block}
+.run-stages .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.run-stages .done{border-top-color:var(--blue);color:var(--text-secondary)}
 
 /* Buttons, as screen.css. */
 .primary-action,.secondary-action,.tertiary-action{position:relative;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-control);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
@@ -87,7 +103,8 @@ svg.i{width:16px;height:16px;flex:none}
 .text-button:hover{text-decoration:underline;text-underline-offset:3px}
 
 /* Stage content. */
-.run-step>h2,.run-progress>h2{display:flex;align-items:baseline;gap:10px;font:600 18px/28px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.run-step>h2{display:flex;align-items:baseline;gap:10px;font:600 22px/30px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.run-progress>h2{display:flex;align-items:baseline;gap:10px;font:600 18px/28px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
 .run-step>h2:focus{outline:0}.run-step>h2:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 .run-progress>h2:focus{outline:0}
 .run-stages .mod{display:block;padding:10px 0 0;border-top:4px solid var(--border-secondary);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
@@ -97,10 +114,11 @@ svg.i{width:16px;height:16px;flex:none}
 .rv-tick input{margin:2px 0 0;flex:none;accent-color:var(--blue)}
 .rv-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 24px;margin:10px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
 .rv-facts dt{font-weight:600;color:var(--text-primary)}.rv-facts dd{margin:0;overflow-wrap:anywhere}
-.run-step:not([hidden])~.run-step:not([hidden]){margin-top:32px;padding-top:24px;border-top:1px solid var(--border-secondary)}
-.readiness-pill{align-self:start;margin:16px 18px;padding:6px 12px;border:1px solid var(--border-secondary);border-radius:999px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
+.run-step:not([hidden])~.run-step:not([hidden]){margin-top:28px;padding-top:24px;border-top:1px solid var(--border-secondary)}
+.readiness-pill{align-self:flex-end;display:inline-flex;align-items:center;gap:8px;height:40px;margin:0 32px 12px;padding:0 16px;border:1px solid var(--border-secondary);border-radius:999px;background:#fcfdff;box-shadow:var(--shadow-xs);font:600 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
+.readiness-pill::before{content:'';width:8px;height:8px;border:1.5px dashed var(--text-quaternary);border-radius:50%}
 .stepline{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
-.lead{max-width:68ch;margin:12px 0 4px;font-size:var(--fs-control);line-height:22px;color:var(--text-secondary)}
+.lead{max-width:68ch;margin:6px 0 4px;font-size:15px;line-height:23px;color:var(--text-secondary)}
 .legend-req{margin:8px 0 0;font-size:var(--fs-compact);color:var(--text-quaternary)}
 .block{margin-top:28px;padding-top:20px;border-top:1px solid var(--border-secondary)}
 .block>h3{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
@@ -120,7 +138,7 @@ legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Tex
 .f input[type=text],.f input[type=date],.f select,.f textarea{display:block;width:100%;height:40px;padding:0 12px;background:#fff;border:1px solid var(--border-primary);border-radius:var(--radius-control);box-shadow:var(--shadow-xs);font:400 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
 .f textarea{height:auto;min-height:72px;padding:9px 12px;resize:vertical}
 .f select{appearance:none;padding-right:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%236b7287' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E") no-repeat right 10px center}
-.f input::placeholder,.f textarea::placeholder{color:#8a90a3}
+.f input::placeholder,.f textarea::placeholder{color:var(--text-quaternary)}
 .f :is(input,select,textarea):focus{outline:none;border-color:var(--blue);box-shadow:var(--shadow-xs),var(--ring)}
 .f :is(input,select,textarea)[aria-invalid=true]{border-color:var(--red)}
 .f :is(input,select,textarea)[aria-invalid=true]:focus{box-shadow:var(--shadow-xs),var(--ring-error)}
@@ -131,6 +149,24 @@ legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Tex
 .note{color:var(--amber)}
 .err svg,.note svg{width:16px;height:16px;margin-top:2px;flex:none}
 @media(max-width:640px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Pathways as rows: radio, label with its question and modules, what it needs. */
+.prows{margin-top:22px}
+.prow{display:grid;grid-template-columns:20px minmax(0,1fr) 300px;gap:14px;align-items:start;margin:0 -14px;padding:16px 14px;border-bottom:1px solid #eef0f5;cursor:pointer}
+.prow:first-child{border-top:1px solid var(--border-secondary)}
+.prow:hover{background:var(--gray-50);border-radius:var(--radius-control)}
+.prow:has(input:checked){background:var(--blue-50);border-radius:var(--radius-control)}
+.prow:has(input:focus-visible){box-shadow:var(--ring);border-radius:var(--radius-control)}
+.prow input{width:16px;height:16px;margin:3px 0 0;accent-color:var(--blue)}
+.prow .ctl{gap:0 10px;align-items:baseline;font:600 16px/22px 'Red Hat Text',system-ui,sans-serif}
+.prow .ctl b{font-weight:600}
+.prow .q{display:inline;margin:0;font:400 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif}
+.prow .mods-line{margin-top:2px;font-size:var(--fs-body);line-height:19px}
+.prow .imp{margin:0;font-size:var(--fs-body);line-height:19px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px}
+.pair>*{min-width:0}
+.pair fieldset,.pair .f{margin-top:0}
+.pair legend,.pair .f label{font-weight:600;color:var(--text-primary)}
 
 /* Option cards (radio) and the yes/no button group. */
 .cards{display:grid;gap:10px}
@@ -201,9 +237,27 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
 @media(max-width:640px){.chk{grid-template-columns:minmax(0,1fr)}}
 
-/* The documents the service read. */
+/* The documents the service read: a dashed zone, then the files as rows. */
+.dropzone{margin-top:22px;padding:44px 32px;border:1.5px dashed #b9bfd0;border-radius:var(--radius-card);background:#fcfdff;text-align:center}
+.dropzone .dz-t{font:600 16px/24px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.dropzone .dl{justify-content:center;margin-top:14px}
+.dropzone .err{max-width:none;margin:12px auto 0;justify-content:center;text-align:left}
+#st-documents:has(#doclist) .dropzone{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;text-align:left}
+#st-documents:has(#doclist) .dropzone .dl{margin-top:0}
+#st-documents:has(#doclist) .dropzone .err{flex-basis:100%}
 .docres .no{color:var(--red)}.docres .maybe{color:var(--amber)}.docres .ok{color:var(--green)}
 .docres p{margin-top:14px;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
+.docres .table-scroll{margin-top:14px;border:0;border-top:1px solid var(--border-secondary);border-radius:0;box-shadow:none;background:none}
+.docres .table-scroll thead th{padding:8px 16px 8px 0;background:none;border-bottom:1px solid #eef0f5}
+.docres .table-scroll td{padding:11px 16px 11px 0;border-bottom:1px solid #eef0f5}
+.docres .table-scroll tbody tr:last-child>*{border-bottom:1px solid #eef0f5}
+.docres .table-scroll th:first-child,.docres .table-scroll td:first-child{position:relative;padding-left:20px}
+.docres .table-scroll td:first-child{font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.docres .table-scroll td:first-child::before{content:'';position:absolute;left:0;top:17px;width:8px;height:8px;border-radius:50%;background:var(--green)}
+.docres tr[data-state=maybe] td:first-child::before{background:var(--amber)}
+.docres tr[data-state=no] td:first-child::before{background:var(--red)}
+.docres .table-scroll td:last-child{position:relative;padding-right:76px}
+.docres .table-scroll td .text-button{position:absolute;right:0;top:11px;font-size:var(--fs-body);color:var(--text-quaternary)}
 
 /* Tables: the content table (screen.css .table-scroll). */
 .table-scroll{max-width:100%;overflow:auto;margin-top:10px;background:#fff;border:1px solid var(--border-secondary);border-radius:var(--radius-card);box-shadow:var(--shadow-xs)}
@@ -229,35 +283,49 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .tl .arrow{color:var(--text-quaternary)}
 #rows-peers[data-mode=user_list] .comps{display:none}
 
-/* Step actions: the New run footer (screen.css .step-actions). */
-.step-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:28px;padding-top:16px;border-top:1px solid var(--border-secondary)}
+/* Step actions: the card's footer, always in view (screen.css .step-actions). */
+.step-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px 32px 22px;border-top:1px solid var(--border-secondary)}
 .step-actions .live{flex:1 1 160px;font-size:var(--fs-control);line-height:20px;color:var(--text-tertiary)}
 #loadmsg:empty{display:none}
 
-/* Run readiness: the inspector column. */
+/* Run readiness: the aside, the card's right column from Purpose to More context. */
 .inspector{min-width:0;min-height:0;overflow:auto;border-left:1px solid var(--border-secondary);background:#fcfdff}
 .inspector>summary{display:none}
-.inspector-bar{position:sticky;top:0;z-index:1;padding:16px 18px 12px;background:#fcfdff;border-bottom:1px solid var(--border-secondary)}
+.inspector-bar{position:sticky;top:0;z-index:1;padding:22px 22px 14px;background:#fcfdff;border-bottom:1px solid var(--border-secondary)}
 .inspector-bar h2{font:600 16px/24px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
-.inspector-bar p{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
-.tally{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0;list-style:none}
-.inspector-body{padding:6px 18px 18px}
-.runrow{margin:10px 0 4px;padding:10px 12px;border:1px solid var(--border-secondary);border-radius:var(--radius-control);background:var(--gray-50);font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+.inspector-bar p{margin-top:2px;font-size:var(--fs-body);line-height:19px;color:var(--text-tertiary)}
+.tally{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0;padding:0;list-style:none}
+.tally .badge{height:24px;padding:0 9px;border:0;font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
+.tally .badge.ready{background:var(--green-bg);color:var(--green)}
+.tally .badge.limited,.tally .badge.gap{background:var(--amber-bg);color:var(--amber)}
+.tally .badge.check{border:1px dashed var(--border-primary)}
+.tally .badge.will_refuse{background:var(--red-bg);color:var(--red)}
+.inspector-body{padding:8px 22px 22px}
+.runrow{margin:10px 0 4px;padding:10px 12px;border-radius:var(--radius-control);background:var(--amber-bg);font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
 .runrow b{display:block;font-weight:600;color:var(--text-primary)}
 .runrow ul{margin:4px 0 0;padding-left:16px}
 .mods{list-style:none;margin:0;padding:0}
-.mods>li{border-bottom:1px solid var(--border-secondary)}
+.mods>li{border-bottom:1px solid #eef0f5;--sd:var(--text-quaternary)}
 .mods>li:last-child{border-bottom:0}
-.mods details>summary,.mods .mrow{display:grid;grid-template-columns:minmax(0,1fr) auto 12px;gap:10px;align-items:center;padding:10px 0;list-style:none}
+.mods>li[data-status=ready]{--sd:var(--green)}
+.mods>li[data-status=limited],.mods>li[data-status=gap]{--sd:var(--amber)}
+.mods>li[data-status=will_refuse]{--sd:var(--red)}
+.mods>li[data-status=information]{--sd:var(--blue)}
+.mods details>summary,.mods .mrow{display:grid;grid-template-columns:10px minmax(0,1fr) auto 12px;gap:12px;align-items:start;padding:9px 0;list-style:none}
+.mods details>summary::before,.mods .mrow::before{content:'';width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--sd)}
+.mods>li[data-status=check] summary::before,.mods>li[data-status=check] .mrow::before{background:transparent;border:1.5px dashed var(--text-quaternary)}
 .mods details>summary{cursor:pointer}
 .mods details>summary::-webkit-details-marker{display:none}
-.mods details>summary::after{content:'';width:5px;height:5px;margin-left:2px;border-right:1px solid var(--text-quaternary);border-bottom:1px solid var(--text-quaternary);transform:rotate(-45deg)}
+.mods details>summary::after{content:'';width:5px;height:5px;margin:8px 0 0 2px;border-right:1px solid var(--text-quaternary);border-bottom:1px solid var(--text-quaternary);transform:rotate(-45deg)}
 .mods details[open]>summary::after{transform:rotate(45deg)}
-.mods .nm{min-width:0;font:600 var(--fs-compact)/1.35 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
-.mods .nm small{display:block;margin-top:2px;font:400 var(--fs-label)/1.4 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
-.why-list{margin:0 0 12px;padding:0;list-style:none;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
+.mods .badge{height:auto;padding:0;border:0;background:none;font:500 var(--fs-compact)/20px 'Red Hat Text',system-ui,sans-serif}
+.mods .badge i{display:none}
+.mods .badge.ready{color:var(--green)}
+.mods .nm{min-width:0;font:600 var(--fs-body)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.mods .nm small{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
+.why-list{margin:0 0 10px 22px;padding:0;list-style:none;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
 .why-list li{margin:6px 0;padding-left:10px;border-left:2px solid var(--border-secondary)}
-.note-foot{margin-top:14px;font-size:var(--fs-label);line-height:16px;color:var(--text-quaternary)}
+.note-foot{margin-top:14px;font-size:var(--fs-compact);line-height:17px;color:var(--text-quaternary)}
 
 /* Review. */
 .review-summary{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:0 24px;margin:10px 0 0}
@@ -276,30 +344,36 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .dl .muted{font-size:var(--fs-control)}
 
 /* Narrow widths: the page scrolls, as the library does below 720px. */
-@media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 280px}}
+@media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 300px}.prow{grid-template-columns:20px minmax(0,1fr)}.prow .imp{grid-column:2}}
 @media(max-width:960px){
   body{overflow:auto}
   .app{height:auto;min-height:100dvh}
   .workbench{display:flex;flex-direction:column;overflow:visible}
-  #canvas{overflow:visible;order:2}
-  .inspector{order:1;border-left:0;border-bottom:1px solid var(--border-secondary);overflow:visible}
+  .left{display:contents}
+  .page-head{order:1}
+  .inspector{order:2;border-left:0;border-bottom:1px solid var(--border-secondary);overflow:visible}
+  #canvas{order:3;flex:none;overflow:visible}
+  .readiness-pill{order:4}
+  .step-actions{order:5}
   .inspector>summary{display:flex;gap:8px;align-items:center;padding:12px 22px;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);cursor:pointer}
   .inspector-bar{position:static}
-  .run-stages{display:none}.stepsum{display:block}
+  .stepper{display:none}.stepsum{display:block}
 }
 @media(max-width:720px){
   .rail{width:46px;padding:15px 4px}.rail .symbol{width:24px}
   .app{margin-left:46px;padding:9px}
-  .page-head{display:block;padding:12px 15px}.page-head h1{font-size:22px;line-height:30px}
+  .page-head{display:block;padding:12px 15px 0}.page-head h1{font-size:22px;line-height:30px}
   .page-actions{margin-top:10px;flex-wrap:wrap}
-  .stagebar{padding:4px 15px 12px}
-  .canvas-in{padding:16px 15px 24px}
+  #canvas{padding:16px 15px 24px}
+  .step-actions{padding:12px 15px 16px}
+  .readiness-pill{margin:0 15px 10px}
   .inspector>summary{padding:12px 15px}
   .review-summary{grid-template-columns:minmax(0,1fr)}.review-summary dd{border-top:0;padding-top:0}
 }
+@media(max-width:700px){.pair{grid-template-columns:minmax(0,1fr);gap:0}.pair>*+*{margin-top:24px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-@media(forced-colors:active){.badge,.primary-action,.secondary-action,.tertiary-action,.card,.seg{border:1px solid}.run-stages [aria-current]{outline:2px solid;outline-offset:2px}}
-@media print{.rail,.page-actions,.step-actions,.inspector>summary,.stagebar{display:none}.app{margin:0;height:auto;padding:0}.workbench{display:block;box-shadow:none}#canvas{overflow:visible}}
+@media(forced-colors:active){.badge,.primary-action,.secondary-action,.tertiary-action,.card,.prow,.seg{border:1px solid}.stepper [aria-current]{outline:2px solid;outline-offset:2px}}
+@media print{.rail,.page-actions,.step-actions,.inspector>summary,.stagebar,.readiness-pill{display:none}.app{margin:0;height:auto;padding:0}.workbench{display:block;box-shadow:none;overflow:visible}.left{display:block}#canvas{overflow:visible}}
 </style>
 </head>
 <body>
@@ -310,17 +384,18 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <a id="rail-activity" href="/library/#CP-OS/activity" title="Run activity"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg><span class="sr-only">Run activity</span></a>
 </aside>
 <div class="app">
+  <div class="workbench" id="card">
+  <div class="left">
   <header class="page-head">
     <div>
       <h1>Start a run</h1>
+      <nav class="stagebar" aria-label="Steps"><ol class="stepper" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
       <p class="scope" id="scope"></p>
     </div>
     <div class="page-actions">
       <button type="button" class="tertiary-action" id="reset">Start over</button>
     </div>
   </header>
-  <nav class="stagebar" aria-label="Steps"><ol class="run-stages" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
-  <div class="workbench">
   <main id="canvas" tabindex="-1"><div class="canvas-in">
 <div id="loadmsg" role="status" aria-live="polite"></div>
 <div id="steperr" class="run-strip" data-tone="error" role="alert" hidden></div>
@@ -331,10 +406,11 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <h2 tabindex="-1"><span>Which documents does the issuer have?</span></h2>
   <p class="stepline"></p>
   <p class="lead">Pick the issuer's folder, or add files. Each file goes to the start service, which reads it as the run will (offline, no model) and lists what it recognises. The questions that follow are limited by what these documents support.</p>
-  <div class="f" id="docf">
+  <div class="f dropzone" id="docf">
+    <p class="dz-t">Choose the issuer's folder, or add files</p>
     <div class="dl">
-      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Choose folder<input type="file" id="pick-folder" webkitdirectory multiple aria-label="Choose the issuer folder"></span>
-      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Add files<input type="file" id="pick-files" multiple aria-label="Add files to the issuer's documents"></span>
+      <span class="primary-action file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Choose folder<input type="file" id="pick-folder" webkitdirectory multiple aria-label="Choose the issuer folder"></span>
+      <span class="secondary-action file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Add files<input type="file" id="pick-files" multiple aria-label="Add files to the issuer's documents"></span>
     </div>
   </div>
   <div id="docstatus" class="help" role="status" aria-live="polite"></div>
@@ -348,11 +424,11 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <p class="stepline"></p>
   <p class="lead">Your answer picks the pathway: the modules the run will use, in order. Then choose how much you want to be asked. Every level runs the same modules by the same method; a level only changes which questions you answer and which take their defaults.</p>
   <p class="legend-req"><span class="req">*</span> Required. Your answers are kept in this browser until you start the run; the documents go to the start service on this machine.</p>
-  <fieldset id="pathf"><legend>Pathway</legend><div class="cards two" id="pathcards"></div><p class="help" id="pathnote"></p></fieldset>
+  <fieldset id="pathf"><legend>Pathway</legend><div class="prows" id="pathcards"></div><p class="help" id="pathnote"></p></fieldset>
+  <div class="pair">
   <fieldset id="levelf"><legend>How much do you want to be asked?</legend>
     <div class="seg"><label><input type="radio" name="level" data-c="level" value="basic" checked>Basic</label><label><input type="radio" name="level" data-c="level" value="standard">Standard</label><label><input type="radio" name="level" data-c="level" value="advanced">Advanced</label></div>
     <p class="help" id="levelnote"></p></fieldset>
-  <div class="grid">
     <div class="f"><label for="submitter">Your name</label><input type="text" id="submitter" data-c="submitter" maxlength="80" placeholder="e.g. Dana Reyes" aria-describedby="submitter-h"><p class="help" id="submitter-h">Saved with the run, so Run activity shows who started it. Optional.</p></div>
   </div>
   <div class="block" id="adv-run" hidden>
@@ -531,11 +607,6 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <div class="dl"><button type="button" class="primary-action" id="submit" disabled>Submit and start the run</button><span id="submitnote" class="muted"></span></div>
 </section>
 </form>
-<div class="step-actions">
-  <button type="button" class="secondary-action" id="back"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span id="back-t">Back</span></button>
-  <span id="nextlive" class="live" role="status" aria-live="polite"></span>
-  <button type="button" class="primary-action" id="next"><span id="next-t">Next</span><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
-</div>
 <section class="run-progress" id="run-progress" hidden aria-live="polite">
   <h2 tabindex="-1">Run started</h2>
   <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
@@ -555,6 +626,12 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 </div></main>
 
 <p class="readiness-pill" id="panel-pill" hidden>Run readiness · appears once a purpose is chosen</p>
+<div class="step-actions">
+  <button type="button" class="secondary-action" id="back"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span id="back-t">Back</span></button>
+  <span id="nextlive" class="live" role="status" aria-live="polite"></span>
+  <button type="button" class="primary-action" id="next"><span id="next-t">Next</span><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+</div>
+  </div>
 <details class="inspector" id="panel">
   <summary><span>Run readiness</span> <span id="pn-sum"></span></summary>
   <div class="inspector-bar">
@@ -1406,6 +1483,7 @@ function stepLine(st, o) {
     default: return 'Nothing to fill in: read, accept each limit, approve, submit once';
   }
 }
+const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 function renderSteps(sq, o, gs) {
   const ol = $('stepper');
   document.querySelectorAll('section.run-step').forEach(x => { x.hidden = true; });
@@ -1416,17 +1494,19 @@ function renderSteps(sq, o, gs) {
     sq.forEach(st => {
       const li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.dataset.step = st;
-      b.innerHTML = '<span class="nm"></span><span class="sstate"></span>';
+      b.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="sstate"></span>';
+      if (ol.children.length) li.innerHTML = '<span class="sep" aria-hidden="true">\u203a</span>';
       li.appendChild(b); ol.appendChild(li);
     });
   }
   sq.forEach((st, i) => {
-    const s = stepState(st, sq, o, gs), b = ol.children[i].firstChild;
+    const s = stepState(st, sq, o, gs), b = ol.children[i].querySelector('button');
     b.className = s.word.toLowerCase().replace(/ /g, '-');
     if (st === cur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
     if (s.locked) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
-    b.children[0].textContent = STEP_NAME[st];
-    b.children[1].textContent = s.word === 'Current' ? 'In progress' : s.word;
+    b.querySelector('.dot').innerHTML = s.word === 'Done' ? CHECK : String(i + 1);
+    b.querySelector('.nm').textContent = STEP_NAME[st];
+    b.querySelector('.sstate').textContent = s.word === 'Current' ? 'In progress' : s.word;
   });
   gs.forEach(g => { $('st-' + g).querySelector('.stepline').textContent = stepLine(g, o); });
   groupsOf(cur, gs).forEach(g => { $('st-' + g).hidden = false; });
@@ -1599,8 +1679,8 @@ function readyList(R) {
   const item = it => `<li>${esc(named(it.reason))}${it.fix ? `<span class="fix"><b>Fix:</b> ${esc(named(it.fix))}</span>` : ''}</li>`;
   return R.mods.map(m => {
     const head = `<span class="nm">${esc(mname(m.id))}<small>${esc(MODULES[m.id][1])}</small></span>${badgeFor(m.status)}`;
-    if (!m.items.length) return `<li><div class="mrow">${head}<span></span></div></li>`;
-    return `<li><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
+    if (!m.items.length) return `<li data-status="${known(m.status)}"><div class="mrow">${head}<span></span></div></li>`;
+    return `<li data-status="${known(m.status)}"><details data-mod="${m.id}"${openMods.has(m.id) ? ' open' : ''}><summary>${head}</summary><ul class="why-list">${m.items.map(item).join('')}</ul></details></li>`;
   }).join('');
 }
 function tally(R) {
@@ -2064,6 +2144,7 @@ function renderDocs() {
   };
   READING.documents.forEach(d => {
     const tr = document.createElement('tr'), name = docName(d.source);
+    tr.dataset.state = d.kind === 'unrecognised' ? 'maybe' : 'ok';
     cell(tr, name);
     const kind = d.kind === 'unrecognised' ? 'Not recognised' : (KIND_LABEL[d.kind] || d.kind) + (d.period_end ? ' · period ends ' + d.period_end : '') + (d.executed === true ? ' · executed' : d.executed === false ? ' · draft' : '');
     cell(tr, kind).className = d.kind === 'unrecognised' ? 'maybe' : 'ok';
@@ -2072,6 +2153,7 @@ function renderDocs() {
   });
   READING.ignored.forEach(name => {
     const tr = document.createElement('tr');
+    tr.dataset.state = 'no';
     cell(tr, name);
     cell(tr, 'Will not be read').className = 'no';
     remove(cell(tr, carriedNote(name) + whyIgnored(name)), name);
@@ -2426,9 +2508,10 @@ function setRadio(scope, k, v) { const m = [...els(scope, k)].find(x => x.value 
 function renderPathCards() {
   $('pathcards').innerHTML = Object.keys(PATHS).map(p => {
     const id = 'path-' + p, d = PATHS[p];
-    return `<label class="card" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
-      `<span class="ct"><span class="ctl"><b>${d.label}</b></span><span class="q">${d.q}</span><span class="imp">Needs: ${d.needs}</span>` +
-      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span>${esc(mname(m))}</span>`).join(', ')}</span></span></label>`;
+    return `<label class="prow" for="${id}"><input type="radio" id="${id}" name="pathway" data-k="pathway" value="${p}"${p === 'credit_snapshot' ? ' checked' : ''}>` +
+      `<span class="ct"><span class="ctl"><b>${d.label}</b><span class="q">${d.q}</span></span>` +
+      `<span class="mods-line">${runOf(p).length} modules: ${runOf(p).map(m => `<span>${esc(mname(m))}</span>`).join(', ')}</span></span>` +
+      `<span class="imp">Needs: ${d.needs}</span></label>`;
   }).join('');
 }
 function renderTimeline() {
