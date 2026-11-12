@@ -9,22 +9,19 @@ from fractions import Fraction
 import pytest
 from test_cpos_launch import forecast_block
 
-from deploy_workflow.owners import cp2g, cpos_forecast
+from deploy_workflow.owners import cp2g, cpos_forecast, cpos_periods
 from deploy_workflow.owners.cpos_forecast import model_files
 from deploy_workflow.owners.cpos_periods import (
     NO_ANCHOR,
-    NO_BASE_PERIOD,
     NO_PF,
     NO_SIGN,
     NOT_A_CELL,
     NOT_BUILT,
     NOT_DATED,
     NOT_EXACT,
-    NOT_IDENTIFIED,
-    NOT_IN_BASE_PERIOD,
+    NOT_NAMED,
+    NOT_UNDER_A_PERIOD,
     PART_YEAR,
-    history,
-    lines,
     period_dates,
     period_label,
     period_of,
@@ -119,6 +116,36 @@ BASE = {
 OPERANDS = cp2g.Operands(**{key: cp2g.Val(D(amount), None) for key, amount in BASE.items()})
 TABLES = cpos_forecast._tables(CP1)
 
+NAMED = {
+    "revenue": ("Net sales", "FY2024"),
+    "ebitda": ("Adjusted EBITDA", "FY2024"),
+    "interest": ("Cash paid for interest", "FY2024"),
+    "taxes": ("Income taxes paid", "FY2024"),
+    "wc": ("Change in working capital", "FY2024"),
+    "capex": ("Capital expenditures", "FY2024"),
+    "fcf": ("Free cash flow", "FY2024"),
+    "debt": ("Total debt", "FY2024"),
+    "cash": ("Cash and cash equivalents", "FY2024"),
+    "undrawn": ("Undrawn revolver", "FY2024"),
+}
+
+
+def lines(tables, operands, *, named=NAMED):
+    """The lines with the fixture's rows named, as a block that names them has them read."""
+    return cpos_periods.lines(tables, operands, named=named)
+
+
+def history(tables, operands, *, named=NAMED, **kwargs):
+    return cpos_periods.history(tables, operands, named=named, **kwargs)
+
+
+def named_block(**changes):
+    base = {
+        k: {"amount": v, "reason": None, "row": NAMED[k][0], "period": NAMED[k][1]}
+        for k, v in BASE.items()
+    }
+    return forecast_block(base=base, **changes)
+
 
 def test_each_base_line_is_read_in_every_period_cp1_prints():
     found = lines(TABLES, OPERANDS)
@@ -138,27 +165,6 @@ def test_each_base_line_is_read_in_every_period_cp1_prints():
     assert found["wc"].values[("YTD", 2025, 3)] == D("12")  # (12) printed: an investment
     assert found["debt"].values[("YTD", 2024, 3)] == D("620")
     assert all(line.reason is None for line in found.values())
-
-
-def test_a_second_row_with_the_base_amount_leaves_the_line_unidentified():  # Review Focus 1
-    cp1 = CP1.replace(
-        "| Free cash flow |", "| Amortisation | (33) | (30) | (40) | p.4 |\n| Free cash flow |"
-    )
-    found = lines(cpos_forecast._tables(cp1), OPERANDS)
-    assert found["capex"].reason == NOT_IDENTIFIED and found["capex"].values == {}
-    assert found["revenue"].reason is None
-
-
-def test_the_same_line_in_two_tables_is_one_line_when_they_agree():
-    cp1 = CP1 + "\n| Summary | FY2024 | 9M 2025 |\n| --- | --- | --- |\n| Revenue | 1,000 | 780 |\n"
-    assert lines(cpos_forecast._tables(cp1), OPERANDS)["revenue"].values[("YTD", 2025, 3)] == D(
-        "780"
-    )
-
-
-def test_two_labels_that_disagree_in_a_shared_period_are_not_identified():
-    cp1 = CP1 + "\n| Summary | FY2024 | 9M 2025 |\n| --- | --- | --- |\n| Revenue | 1,000 | 781 |\n"
-    assert lines(cpos_forecast._tables(cp1), OPERANDS)["revenue"].reason == NOT_IDENTIFIED
 
 
 # Review Focus 2
@@ -219,35 +225,6 @@ def test_odd_table_shapes_do_not_raise():
 
 def _read(cp1, key):
     return lines(cpos_forecast._tables(cp1), OPERANDS)[key]
-
-
-def test_a_match_under_a_header_that_is_not_a_period_does_not_anchor_a_row():
-    cp1 = (
-        CP1 + "\n| Item | Note | FY2023 |\n| --- | --- | --- |\n| Lease liabilities | 600 | 75 |\n"
-    )
-    debt = _read(cp1, "debt")
-    assert debt.reason is None and ("FY", 2023, 4) not in debt.values
-    assert debt.values[("FY", 2024, 4)] == D("600")
-
-
-def test_a_base_amount_printed_only_under_a_date_header_has_no_history():
-    cp1 = CP1.replace(
-        "| Metric | FY2024 | 9M 2025 | 9M 2024 |",
-        "| Metric | December 31, 2024 | 9M 2025 | 9M 2024 |",
-    )
-    debt = _read(cp1, "debt")
-    assert debt.values == {}
-    assert debt.reason == (
-        "CP-1 prints the base amount only under a column header that is not a period "
-        "(December 31, 2024)"
-    )
-
-
-def test_a_row_printing_the_amount_in_another_period_is_not_the_line():
-    cp1 = CP1 + "\n| Other | Q2 2025 |\n| --- | --- |\n| Other income | 50 |\n"
-    undrawn = _read(cp1, "undrawn")
-    assert undrawn.reason is None and ("QUARTER", 2025, 2) not in undrawn.values
-    assert undrawn.values[("FY", 2024, 4)] == D("50")
 
 
 def test_a_period_column_without_a_number_is_a_not_printed_gap():
@@ -455,14 +432,14 @@ def test_a_quarter_without_its_year_to_date_period_is_not_summed():
 
 def test_no_base_line_under_a_period_header_gives_every_column_its_reason():
     ops = replace(OPERANDS, undrawn=cp2g.Val(None, "CP-1 states no facility"))
-    record = history([[["Metric", "Note"], ["Net sales", "1,000"]]], ops)
+    record = history([[["Metric", "Note"], ["Net sales", "1,000"]]], ops, named=None)
     assert [c["id"] for c in record["columns"]] == [
         "Quarter", "YTD", "PYTD", "Fiscal year", "LTM", "PRIOR_LTM", "PF",
     ]  # fmt: skip
     for column in record["columns"][:-1]:
         assert column["reason"] == NO_ANCHOR
         assert cell(record, column["id"], "fcf") == {"amount": None, "reason": NO_ANCHOR}
-        assert cell(record, column["id"], "revenue")["reason"] == NO_BASE_PERIOD
+        assert cell(record, column["id"], "revenue")["reason"] == NOT_NAMED
         assert cell(record, column["id"], "undrawn")["reason"] == "CP-1 states no facility"
     assert record["columns"][-1]["reason"] == NO_PF
 
@@ -832,7 +809,7 @@ def test_the_prior_ltm_built_without_dates_is_flagged_and_a_checked_one_is_not()
 
 
 def test_model_files_publishes_the_history_record():
-    files = model_files(CP1.encode(), forecast_block().encode(), history=True)
+    files = model_files(CP1.encode(), named_block().encode(), history=True)
     record = json.loads(files["calculation.json"])["history"]
     ltm = next(c for c in record["columns"] if c["id"] == "LTM")
     assert D(ltm["values"]["revenue"]["amount"]) == D("1060")
@@ -869,7 +846,7 @@ def test_the_forecast_figures_do_not_change():
 def test_a_cell_too_long_to_read_exactly_does_not_end_the_forecast():
     long = "| Other | (" + "1" * 40 + ") |"
     cp1 = CP1 + "\n| Item | FY2024 |\n| --- | --- |\n" + long + "\n"
-    files = model_files(cp1.encode(), forecast_block().encode(), history=True)
+    files = model_files(cp1.encode(), named_block().encode(), history=True)
     record = json.loads(files["calculation.json"])["history"]
     assert D(cell(record, "LTM", "revenue")["amount"]) == D("1060")
 
@@ -893,21 +870,23 @@ def test_a_figure_of_39_digits_is_not_a_figure(key, sign):
         f"| Other | {sign.format(BIG)} | 1 | 1 |\n"
     )
     ops = replace(REVENUE_ONLY, **{key: cp2g.Val(D(BIG), None)})
-    record = history(cpos_forecast._tables(cp1), ops)  # must not raise
+    named = {**NAMED, key: ("Other", "9M 2025")}
+    record = history(cpos_forecast._tables(cp1), ops, named=named)  # must not raise
     assert record["columns"][-1]["id"] == "PF"
-    line = lines(cpos_forecast._tables(cp1), ops)[key]
+    line = lines(cpos_forecast._tables(cp1), ops, named=named)[key]
     assert line.values == {}
-    assert line.reason == (NO_BASE_PERIOD if key == "revenue" else NOT_A_CELL)
+    assert line.reason == NOT_A_CELL
 
 
 def test_an_ltm_that_cannot_be_built_is_not_called_checked():
     ops = replace(REVENUE_ONLY, revenue=cp2g.Val(D("780"), None))
+    named = {"revenue": ("Net sales", "9M 2025")}
     cp1 = (
         "| Reported label | 9M 2025 | 9M 2024 |\n| --- | --- | --- |\n| Net sales | 780 | 720 |\n\n"
         "| Period | Start | End |\n| --- | --- | --- |\n| FY2024 | 2024-01-01 | 2024-12-31 |\n"
         "| 9M 2025 | 2025-01-01 | 2025-09-30 |\n| 9M 2024 | 2024-01-01 | 2024-09-30 |\n"
     )
-    record = history(cpos_forecast._tables(cp1), ops)
+    record = history(cpos_forecast._tables(cp1), ops, named=named)
     ltm = next(c for c in record["columns"] if c["id"] == "LTM")
     assert record["limits"][0] == NOT_BUILT and (ltm["start"], ltm["end"]) == (None, None)
     assert ltm["values"]["revenue"] == {
@@ -938,44 +917,14 @@ def _hist(cp1, ops=OPERANDS, **kwargs):
     return history(cpos_forecast._tables(cp1), ops, **kwargs)
 
 
-NAMED = {
-    "revenue": ("Net sales", "FY2024"),
-    "ebitda": ("Adjusted EBITDA", "FY2024"),
-    "interest": ("Cash paid for interest", "FY2024"),
-    "taxes": ("Income taxes paid", "FY2024"),
-    "wc": ("Change in working capital", "FY2024"),
-    "capex": ("Capital expenditures", "FY2024"),
-    "fcf": ("Free cash flow", "FY2024"),
-    "debt": ("Total debt", "FY2024"),
-    "cash": ("Cash and cash equivalents", "FY2024"),
-    "undrawn": ("Undrawn revolver", "FY2024"),
-}
-
-
-def test_two_labels_sharing_only_the_base_period_are_not_one_line():
-    cp1 = (
-        CP1
-        + "\n| Item | FY2024 | FY2023 |\n| --- | --- | --- |\n| Lease payments | (36) | (33) |\n"
-    )
-    interest = _read(cp1, "interest")
-    assert interest.reason == NOT_IDENTIFIED and interest.values == {}
-
-
 def test_an_accrual_row_does_not_supply_another_periods_cash_interest():  # adv_wrong_row a1
     cp1 = CP1 + "\n" + _md(["Income", "FY2024", "FY2023"], [["Interest expense", "(36)", "(31)"]])
     record = _hist(cp1)
-    assert cell(record, "FY2023", "interest")["amount"] is None
-    assert _read(cp1, "interest").reason == NOT_IDENTIFIED
-
-
-def test_revenue_and_ebitda_printed_in_two_periods_leave_no_base_period():
-    cp1 = (
-        "| Reported label | FY2024 | FY2023 |\n| --- | --- | --- |\n"
-        "| Net sales | 1,000 | 1,000 |\n| Adjusted EBITDA | 300 | 300 |\n"
-        "| Cash paid for interest | (36) | (30) |\n"
-    )
-    found = lines(cpos_forecast._tables(cp1), OPERANDS)
-    assert all(line.reason == NO_BASE_PERIOD and not line.values for line in found.values())
+    assert cell(record, "FY2023", "interest") == {
+        "amount": None,
+        "reason": "CP-1 does not print this line for FY2023",
+    }
+    assert _read(cp1, "interest").reason is None
 
 
 def test_an_ltm_base_amount_gives_the_interest_line_no_history():  # adv_wrong_row a3
@@ -991,43 +940,10 @@ def test_an_ltm_base_amount_gives_the_interest_line_no_history():  # adv_wrong_r
         OPERANDS, revenue=cp2g.Val(D(1060), None), ebitda=cp2g.Val(D(324), None),
         interest=cp2g.Val(D(35), None),
     )  # fmt: skip
-    interest = lines(cpos_forecast._tables(cp1), ops)["interest"]
-    assert interest.values == {} and interest.reason is not None
-
-
-def test_an_amount_printed_only_under_other_periods_names_them():
-    ops = replace(OPERANDS, debt=cp2g.Val(D("620"), None))
-    debt = lines(TABLES, ops)["debt"]
-    assert debt.values == {}
-    assert debt.reason == NOT_IN_BASE_PERIOD.format(periods="9M 2024", base="FY2024")
-
-
-def test_the_periods_named_are_ascending_and_at_most_five():
-    heads = ["Q1 2021", "Q2 2021", "Q3 2021", "Q4 2021", "Q1 2022", "Q2 2022", "Q3 2022"]
-    cp1 = CP1 + "\n" + _md(["Metric", *reversed(heads)], [["Other", *["77"] * 7]])
-    ops = replace(OPERANDS, undrawn=cp2g.Val(D("77"), None))
-    assert lines(cpos_forecast._tables(cp1), ops)["undrawn"].reason == (
-        "CP-1 prints the base amount under Q1 2021, Q2 2021, Q3 2021, Q4 2021, Q1 2022, ..., "
-        "not under the base period FY2024"
-    )
-
-
-def test_layer_one_names_read_the_same_values_as_the_cp2g_path():
-    found = lines(TABLES, OPERANDS, named=NAMED)
-    assert found["revenue"].values == {
-        ("QUARTER", 2025, 3): D("270"),
-        ("QUARTER", 2024, 3): D("250"),
-        ("YTD", 2025, 3): D("780"),
-        ("YTD", 2024, 3): D("720"),
-        ("FY", 2024, 4): D("1000"),
-        ("FY", 2023, 4): D("940"),
-    }
-    assert found["interest"].values == {
-        ("YTD", 2025, 3): D("27"),
-        ("YTD", 2024, 3): D("28"),
-        ("FY", 2024, 4): D("36"),
-    }
-    assert all(line.reason is None for line in found.values())
+    named = {**NAMED, "interest": ("Cash paid for interest", "LTM Q3 2025")}
+    interest = lines(cpos_forecast._tables(cp1), ops, named=named)["interest"]
+    assert interest.values == {}
+    assert interest.reason == NOT_UNDER_A_PERIOD.format(header="LTM Q3 2025")
 
 
 def test_layer_one_reads_the_named_row_only():
@@ -1133,12 +1049,17 @@ def test_an_ebitda_cell_of_a_million_digits_is_not_a_figure_and_nothing_raises()
         + "\n"
         + _md(
             ["Reported label", "FY2024", "FY2022"],
-            [["EBITDA", "300", tiny], ["Total debt", "600", "600"]],
+            [["Adjusted EBITDA", "300", tiny], ["Total debt", "600", "600"]],
         )
     )
     record = _hist(cp1)
+    assert cell(record, "FY2022", "ebitda") == {
+        "amount": None,
+        "reason": "CP-1 does not print this line for FY2022",
+    }
+    assert D(cell(record, "FY2022", "closing_debt")["amount"]) == D(600)
     assert cell(record, "FY2022", "total_leverage")["amount"] is None
-    files = model_files(cp1.encode(), forecast_block().encode(), history=True)
+    files = model_files(cp1.encode(), named_block().encode(), history=True)
     assert json.loads(files["calculation.json"])["history"]["columns"][-1]["id"] == "PF"
 
 
@@ -1147,7 +1068,8 @@ def test_a_header_quoted_in_a_reason_is_cut_to_80_characters():
     cp1 = CP1.replace("| Metric | FY2024 |", "| Metric | " + "x" * 200 + " 2024 |")
     cp1 = cp1.replace("| Total debt | 600 |", "| Total debt | 599 |")
     ops = replace(OPERANDS, debt=cp2g.Val(D(599), None))
-    debt = lines(cpos_forecast._tables(cp1), ops)["debt"]
+    named = {**NAMED, "debt": ("Total debt", "x" * 200 + " 2024")}
+    debt = lines(cpos_forecast._tables(cp1), ops, named=named)["debt"]
     assert debt.reason == (
         "CP-1 prints the base amount only under a column header that is not a period "
         f"({'x' * 80}...)"
@@ -1202,8 +1124,14 @@ def test_a_30_kb_handoff_of_the_reason_amplification_shape_gives_a_small_record(
     heads = [f"Q{q} {y}" for y in range(1925, 2025) for q in range(1, 5)]
     cp1 = _md(["Label", *heads], [["Net sales", *["1,000"] * len(heads)]])
     cp1 += "\n" + _md(["Label", "x" * 26_000 + " 2025"], [["Adjusted EBITDA", "300"]])
+    named = {
+        "revenue": ("Net sales", "Q4 2024"),
+        "ebitda": ("Adjusted EBITDA", "x" * 26_000 + " 2025"),
+    }
     assert len(cp1) >= 30_000
-    assert len(json.dumps(_hist(cp1))) < 1_000_000
+    record = _hist(cp1, named=named)
+    assert len([c for c in record["columns"] if c["kind"] == "QUARTER"]) == 12
+    assert len(json.dumps(record)) < 1_000_000
 
 
 # --- ruling 8: reasons state the cause ----------------------------------------------------------
@@ -1262,14 +1190,6 @@ def test_the_forecast_year_never_drops_the_base_period():  # B, adv2_forecast_gu
     assert D(cell(record, "LTM", "revenue")["amount"]) == D(1060)
     assert not any("forecast years" in x for x in record["limits"])
     assert "FY2024" in [c["id"] for c in record["columns"]]
-    cp1 = _md(
-        ["Label", "FY2025", "FY2024"],
-        [["Net sales", "1,000", "940"], ["Adjusted EBITDA", "300", "276"]],
-    )
-    ops = replace(OPERANDS, revenue=cp2g.Val(D(1000), None))
-    record = _hist(cp1, ops, forecast_year=2025)
-    assert _column(record, "LTM")["label"] == "LTM FY2025"
-    assert D(cell(record, "LTM", "revenue")["amount"]) == D(1000)
 
 
 def test_the_forecast_year_guard_on_the_layer_one_path_protects_the_named_base():  # B
@@ -1286,35 +1206,20 @@ def test_the_forecast_year_guard_on_the_layer_one_path_protects_the_named_base()
     assert forecast in record["limits"]
 
 
-def test_revenue_printed_under_no_period_leaves_no_base_period_and_names_the_header():  # C
-    cp1 = _md(
-        ["Reported label", "FY2024", "LTM Q3 2025"],
-        [["Net sales", "1,000", "1,060"], ["Adjusted EBITDA", "300", "324"]],
-    )
-    ops = replace(OPERANDS, revenue=cp2g.Val(D(1060), None))
-    found = lines(cpos_forecast._tables(cp1), ops)
-    assert all(line.reason == NO_BASE_PERIOD for line in found.values())
-    limits = _hist(cp1, ops)["limits"]
-    assert "CP-1 column headers not read as periods: LTM Q3 2025." in limits
-
-
 def test_a_weeks_tail_is_not_read_on_a_fiscal_year_header():  # D
-    cp1 = CP1.replace("| FY2024 |", "| FY2024: thirty-nine weeks ended 2024-09-28 |")
-    record = _hist(cp1)
+    stub = "FY2024: thirty-nine weeks ended 2024-09-28"
+    cp1 = CP1.replace("| FY2024 |", f"| {stub} |")
+    named = {key: (row, stub) for key, (row, _) in NAMED.items()}
+    record = _hist(cp1, named=named)
     assert "FY2024" not in [c["id"] for c in record["columns"]]
-    assert cell(record, "LTM", "revenue")["amount"] is None
-    assert any("thirty-nine weeks" in x for x in record["limits"] if "not read as periods" in x)
-
-
-def test_a_different_label_printed_for_the_base_period_alone_leaves_the_line_unidentified():
-    cp1 = (
-        CP1
-        + "\n"
-        + _md(["Key metric", "FY2024"], [["Revenue", "1,000"], ["Cash interest, net", "36"]])
-    )
-    found = lines(cpos_forecast._tables(cp1), OPERANDS)
-    for key in ("revenue", "interest"):
-        assert found[key].reason is not None and not found[key].values
+    assert cell(record, "LTM", "revenue") == {
+        "amount": None,
+        "reason": NOT_UNDER_A_PERIOD.format(header=stub),
+    }
+    assert (
+        "revenue: CP-1 prints the base amount only under a column header that is not a period "
+        "(FY2024: thirty-nine weeks ended 2024-09-28)"
+    ) in record["limits"]
 
 
 def test_a_line_printed_only_for_the_base_period_has_that_one_value():
@@ -1330,3 +1235,92 @@ def test_a_line_printed_only_for_the_base_period_has_that_one_value():
 def test_an_operand_reason_is_cut_to_200_characters():  # F
     ops = replace(OPERANDS, undrawn=cp2g.Val(None, "r" * 500))
     assert _read_ops(CP1, ops, "undrawn").reason == "r" * 200 + "..."
+
+
+# --- history from named rows only (Task A2) -----------------------------------------------------
+RESIDUAL_HEAD = "| Reported label | 9M 2025 | 9M 2024 | FY2024 | Locator |"
+RESIDUAL = CP1.replace(
+    RESIDUAL_HEAD, "| Reported label | 9M 2025 | 9M 2024 | Year ended 2024-12-31 | Locator |"
+) + ("\n" + _md(["Income statement", "FY2024", "FY2023"], [["Interest expense", "(36)", "(31)"]]))
+UNHEADED = ("interest", "taxes", "wc", "capex", "fcf")
+
+
+def test_a_cp2g_block_on_the_residuals_handoff_publishes_no_other_rows_interest():  # AK-2
+    unnamed = model_files(RESIDUAL.encode(), forecast_block().encode(), history=True)
+    record = json.loads(unnamed["calculation.json"])["history"]
+    assert all(c["values"]["interest"]["amount"] is None for c in record["columns"])
+    base = {
+        k: {
+            "amount": v,
+            "reason": None,
+            "row": NAMED[k][0],
+            "period": "Year ended 2024-12-31" if k in UNHEADED else "FY2024",
+        }
+        for k, v in BASE.items()
+    }
+    files = model_files(RESIDUAL.encode(), forecast_block(base=base).encode(), history=True)
+    record = json.loads(files["calculation.json"])["history"]
+    assert cell(record, "FY2023", "interest") == {
+        "amount": None,
+        "reason": "CP-1 prints the base amount only under a column header that is not a period "
+        "(Year ended 2024-12-31)",
+    }
+    assert D(cell(record, "FY2023", "revenue")["amount"]) == D(940)
+
+
+def test_unnamed_operands_have_no_history_and_one_reason():
+    found = lines(TABLES, OPERANDS, named=None)
+    assert all(line.reason == NOT_NAMED and not line.values for line in found.values())
+    record = history(TABLES, OPERANDS, named=None)
+    assert [c["id"] for c in record["columns"]] == [
+        "Quarter", "YTD", "PYTD", "Fiscal year", "LTM", "PRIOR_LTM", "PF",
+    ]  # fmt: skip
+    assert cell(record, "LTM", "revenue") == {"amount": None, "reason": NOT_NAMED}
+    assert cell(record, "LTM", "fcf") == {"amount": None, "reason": NO_ANCHOR}
+    assert record["limits"][0] == NOT_BUILT and f"revenue: {NOT_NAMED}" in record["limits"]
+
+
+def test_an_operand_with_an_amount_and_no_name_is_the_only_line_without_history():
+    found = lines(TABLES, OPERANDS, named={k: v for k, v in NAMED.items() if k != "capex"})
+    assert found["capex"].reason == NOT_NAMED and found["capex"].values == {}
+    assert found["revenue"].reason is None and found["interest"].reason is None
+
+
+def test_named_periods_may_differ_between_operands():
+    ops = replace(OPERANDS, debt=cp2g.Val(D(590), None), cash=cp2g.Val(D(120), None))
+    named = {
+        **NAMED,
+        "debt": ("Total debt", "9M 2025"),
+        "cash": ("Cash and cash equivalents", "9M 2025"),
+    }
+    record = _hist(CP1, ops, named=named, forecast_year=2025)
+    assert D(cell(record, "LTM", "closing_debt")["amount"]) == D(590)
+    assert D(cell(record, "FY2024", "closing_debt")["amount"]) == D(600)
+    assert D(cell(record, "LTM", "revenue")["amount"]) == D(1060)
+
+
+def test_a_named_row_in_two_tables_with_another_figure_for_the_named_period():  # Review Focus 3
+    cp1 = (
+        CP1 + "\n" + _md(["Restated", "FY2024 revised", "FY2023"], [["Net sales", "1,010", "950"]])
+    )
+    revenue = _read(cp1, "revenue")
+    assert revenue.reason is None
+    assert revenue.values[("FY", 2024, 4)] == D(1000) and revenue.values[("FY", 2023, 4)] == D(940)
+    same = CP1 + "\n" + _md(["Restated", "FY2024", "FY2023"], [["Net sales", "1,010", "950"]])
+    with pytest.raises(ValueError, match="is not one number in CP-1"):
+        model_files(same.encode(), named_block().encode(), history=True)
+
+
+def test_model_files_reads_a_named_cp2g_block_through_its_rows():  # AK-1
+    files = model_files(CP1.encode(), named_block().encode(), history=True)
+    record = json.loads(files["calculation.json"])["history"]
+    assert D(cell(record, "LTM", "revenue")["amount"]) == D("1060")
+    assert D(cell(record, "LTM", "fcf")["amount"]) == D("211")
+    unnamed = model_files(CP1.encode(), forecast_block().encode(), history=True)
+    outputs = json.loads(unnamed["forecast_exact.json"])["outputs"]
+    assert outputs == json.loads(files["forecast_exact.json"])["outputs"]
+    record = json.loads(unnamed["calculation.json"])["history"]
+    assert cell(record, "LTM", "revenue") == {"amount": None, "reason": NOT_NAMED}
+    assert all(
+        v["amount"] is None and v["reason"] for c in record["columns"] for v in c["values"].values()
+    )

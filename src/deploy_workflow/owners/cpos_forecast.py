@@ -562,15 +562,11 @@ def model_files(
     # Imported here: cpos_periods imports this module's helpers at module level.
     from deploy_workflow.owners.cpos_periods import history as period_history
 
-    named = (
-        {
-            key: (o.row, o.period)
-            for key, o in inputs.base.items()
-            if o.amount is not None and o.row is not None and o.period is not None
-        }
-        if source == "CP-1"
-        else None
-    )
+    named = {
+        key: (o.row, o.period)
+        for key, o in inputs.base.items()
+        if o.amount is not None and o.row is not None and o.period is not None
+    }
     calculation = _json(
         {
             "schema_version": "cpos-model/1",

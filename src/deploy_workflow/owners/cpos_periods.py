@@ -9,7 +9,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal, Inexact, localcontext
-from itertools import combinations
 
 from deploy_workflow.owners import cp2g
 from deploy_workflow.owners.cpos_forecast import _agrees, _plain, _signed
@@ -95,11 +94,7 @@ def period_dates(tables: list[list[list[str]]]) -> tuple[Dates, tuple[str, ...]]
 
 
 NOT_A_CELL = "the base amount is not a table cell of CP-1"
-NOT_IDENTIFIED = (
-    "CP-1 prints the base amount in more than one row and they differ; the line is not identified"
-)
-NO_BASE_PERIOD = "the base period could not be identified from CP-1's revenue and EBITDA rows"
-NOT_IN_BASE_PERIOD = "CP-1 prints the base amount under {periods}, not under the base period {base}"
+NOT_NAMED = "the forecast inputs do not name the row and period of this line"
 NO_REASON = "no reason was stated"
 NO_SIGN = "the base cell is zero, so the sign of this row's figures is not known"
 DIFFERENT = "CP-1 prints different figures for this line in {period}"
@@ -111,7 +106,6 @@ _YEAR = re.compile(r"(?<!\d)(?:19|20)\d\d(?!\d)")
 _MAX_DIGITS = 38  # a numeral of more digits than the exact context holds is not a figure
 _MAX_HEADER = 80
 _MAX_REASON = 200
-_MAX_PERIODS_NAMED = 5
 _BASE_SIGNED = frozenset({"interest", "taxes", "capex"})  # signed by their base cell
 
 
@@ -166,16 +160,14 @@ def _published(key: str, number: Decimal, flip: bool) -> Decimal:
     return -number if key == "wc" or flip else number
 
 
-def _hits(
-    tables: list[list[list[str]]], key: str, amount: Decimal, label: str | None
-) -> list[_Hit]:
-    """The rows (of the labelled row only, when `label` is given) with a cell that reads as the
-    amount under a header of the same table."""
+def _hits(tables: list[list[list[str]]], key: str, amount: Decimal, label: str) -> list[_Hit]:
+    """The rows labelled `label` with a cell that reads as the amount under a header of the same
+    table."""
     found: list[_Hit] = []
     for index, table in enumerate(tables):
         header, rows = (table[0], table[1:]) if table else ([], [])
         for row in rows:
-            if not row or (label is not None and _plain(row[0]) != label):
+            if not row or _plain(row[0]) != label:
                 continue
             agreeing = [
                 (column, number)
@@ -187,16 +179,6 @@ def _hits(
             if agreeing:
                 found.append(_Hit(index, header, row, agreeing))
     return found
-
-
-def _printed_in(hits: list[_Hit]) -> set[Period]:
-    """The periods whose header carries a cell that reads as the amount."""
-    return {
-        period
-        for hit in hits
-        for column, _ in hit.agreeing
-        if (period := period_of(hit.header[column])) is not None
-    }
 
 
 def _negative(cell: str) -> bool:
@@ -248,56 +230,6 @@ def _rows_under(hits: list[_Hit], key: str, target: Period) -> list[_Row]:
     return rows
 
 
-def _listed(periods: set[Period]) -> str:
-    ordered = sorted(periods, key=lambda p: (p[1], p[2], p[0]))
-    names = [period_label(p) for p in ordered[:_MAX_PERIODS_NAMED]]
-    return ", ".join([*names, "..."] if len(ordered) > _MAX_PERIODS_NAMED else names)
-
-
-def _why_not(hits: list[_Hit], target: Period) -> str:
-    """Why no row prints the base amount under the target period."""
-    others = _printed_in(hits) - {target}
-    if others:
-        return NOT_IN_BASE_PERIOD.format(periods=_listed(others), base=period_label(target))
-    for hit in hits:
-        for column, _ in hit.agreeing:
-            return NOT_UNDER_A_PERIOD.format(header=_cut(_plain(hit.header[column])))
-    return NOT_A_CELL
-
-
-def _by_label(rows: list[_Row]) -> dict[str, dict[Period, set[Decimal]]]:
-    merged: dict[str, dict[Period, set[Decimal]]] = {}
-    for row in rows:
-        into = merged.setdefault(row.label, {})
-        for period, figures in row.figures.items():
-            into.setdefault(period, set()).update(figures)
-    return merged
-
-
-def _identified(rows: list[_Row], target: Period) -> bool:
-    """Whether the candidate rows are one line: no two labels in one table; labels that print the
-    same figures in every period they share; and, for several labels, each sharing a period other
-    than the base period with another label."""
-    labels_by_table: dict[int, set[str]] = {}
-    for row in rows:
-        labels_by_table.setdefault(row.table, set()).add(row.label)
-    if any(len(labels) > 1 for labels in labels_by_table.values()):
-        return False
-    merged = _by_label(rows)
-    both = combinations(merged.values(), 2)
-    if any(a[p] != b[p] for a, b in both for p in a.keys() & b.keys()):
-        return False
-    return len(merged) == 1 or all(
-        any(
-            p != target
-            for other, theirs in merged.items()
-            if other != label
-            for p in mine.keys() & theirs.keys()
-        )
-        for label, mine in merged.items()
-    )
-
-
 def _unread(tables: list[list[list[str]]], rows: list[_Row]) -> tuple[str, ...]:
     found: dict[str, None] = {}
     for index in dict.fromkeys(row.table for row in rows):
@@ -308,22 +240,19 @@ def _unread(tables: list[list[list[str]]], rows: list[_Row]) -> tuple[str, ...]:
 
 
 def _line(
-    tables: list[list[list[str]]], key: str, amount: Decimal, label: str | None, target: Period
+    tables: list[list[list[str]]], key: str, amount: Decimal, label: str, target: Period
 ) -> Line:
-    """The operand's history from the rows (of `label`, when given) that print its base amount
-    under a header of the target period."""
-    hits = _hits(tables, key, amount, label)
-    rows = _rows_under(hits, key, target)
+    """The operand's history from the rows labelled `label` that print its base amount under a
+    header of the target period."""
+    rows = _rows_under(_hits(tables, key, amount, label), key, target)
     if not rows:
-        return Line(reason=_why_not(hits, target))
+        return Line(reason=NOT_A_CELL)
     unread = _unread(tables, rows)
-    if not _identified(rows, target):
-        return Line(reason=NOT_IDENTIFIED, unread=unread)
     if any(row.signless for row in rows):
         return Line(reason=NO_SIGN, unread=unread)
     figures: dict[Period, set[Decimal]] = {}
-    for per_label in _by_label(rows).values():
-        for period, found in per_label.items():
+    for row in rows:
+        for period, found in row.figures.items():
             figures.setdefault(period, set()).update(found)
     values: dict[Period, Decimal] = {}
     gaps: dict[Period, str] = {}
@@ -337,34 +266,6 @@ def _line(
     return Line(values=values, gaps=gaps, unread=unread)
 
 
-def _base_period(tables: list[list[list[str]]], operands: cp2g.Operands) -> Period | None:
-    """The one period in which a row prints the revenue base amount and a row prints the EBITDA
-    base amount. An operand with no amount does not take part; one with an amount that no row
-    prints under a period leaves no base period. None when there is no such period or several."""
-    given = dict(operands.items())
-    printed = [
-        _printed_in(_hits(tables, key, amount, None))
-        for key in ("revenue", "ebitda")
-        if (amount := given[key].amount) is not None
-    ]
-    common = set.intersection(*printed) if printed else set()
-    return next(iter(common)) if len(common) == 1 else None
-
-
-def _refused_headers(tables: list[list[list[str]]], operands: cp2g.Operands) -> tuple[str, ...]:
-    """The headers that are not periods under which revenue or EBITDA print their base amount."""
-    given = dict(operands.items())
-    found: dict[str, None] = {}
-    for key in ("revenue", "ebitda"):
-        if (amount := given[key].amount) is None:
-            continue
-        for hit in _hits(tables, key, amount, None):
-            for column, _ in hit.agreeing:
-                if period_of(hit.header[column]) is None:
-                    found[_plain(hit.header[column])] = None
-    return tuple(found)
-
-
 def lines(
     tables: list[list[list[str]]],
     operands: cp2g.Operands,
@@ -372,40 +273,31 @@ def lines(
     named: Mapping[str, tuple[str, str]] | None = None,
 ) -> dict[str, Line]:
     """One `Line` per operand key: the figure, in each period its table headers name, of the rows
-    that print the operand's base amount under the base period. The base period is the one in which
-    CP-1 prints both the revenue and the EBITDA base amount; with `named` (a layer-1 forecast's
-    `{key: (row label, period header)}`) it is the period each operand names, read from the rows of
-    that label. Never raises on a table shape."""
-    return _locate(tables, operands, named)[0]
+    that print the operand's base amount under the period the forecast inputs name for it, read
+    from the rows of the label they name (`named`: `{key: (row label, period header)}`; None is
+    none named). An operand with an amount and no name has no history. Never raises on a table
+    shape."""
+    return _locate(tables, operands, named or {})[0]
 
 
 def _locate(
     tables: list[list[list[str]]],
     operands: cp2g.Operands,
-    named: Mapping[str, tuple[str, str]] | None,
+    named: Mapping[str, tuple[str, str]],
 ) -> tuple[dict[str, Line], Period | None]:
-    """The lines and the base period (on the layer-1 path, the latest period named for revenue or
-    EBITDA)."""
+    """The lines and the base period (the latest period named for revenue or EBITDA)."""
     found: dict[str, Line] = {}
     with localcontext(cp2g._EXACT):
-        base = _base_period(tables, operands) if named is None else _named_base(named)
-        refused = _refused_headers(tables, operands)
         for key, operand in operands.items():
             if operand.amount is None:
                 found[key] = Line(reason=_cut(operand.reason or NO_REASON, _MAX_REASON))
-            elif named is None:
-                found[key] = (
-                    Line(reason=NO_BASE_PERIOD, unread=refused)
-                    if base is None
-                    else _line(tables, key, operand.amount, None, base)
-                )
             else:
                 found[key] = _named_line(tables, key, operand.amount, named.get(key))
-    return found, base
+    return found, _named_base(named)
 
 
 def _named_base(named: Mapping[str, tuple[str, str]]) -> Period | None:
-    """The latest period that a layer-1 forecast names for revenue or EBITDA."""
+    """The latest period that the forecast inputs name for revenue or EBITDA."""
     periods = [
         p for key in ("revenue", "ebitda") if key in named and (p := period_of(named[key][1]))
     ]
@@ -415,9 +307,9 @@ def _named_base(named: Mapping[str, tuple[str, str]]) -> Period | None:
 def _named_line(
     tables: list[list[list[str]]], key: str, amount: Decimal, name: tuple[str, str] | None
 ) -> Line:
-    """A layer-1 operand's line: the rows labelled as it names, under the period it names."""
+    """An operand's line: the rows labelled as it names, under the period it names."""
     if name is None:
-        return Line(reason=NOT_A_CELL)
+        return Line(reason=NOT_NAMED)
     target = period_of(name[1])
     if target is None:
         return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[1]))))
@@ -877,7 +769,7 @@ def _limits(
         dict.fromkeys(
             _cut(_plain(header))
             for line in found.values()
-            if line.reason in (None, NO_BASE_PERIOD)
+            if line.reason is None
             for header in line.unread
         )
     )
@@ -921,10 +813,10 @@ def history(
     forecast_year: int | None = None,
 ) -> dict[str, object]:
     """The Forecast page's historical columns, read from CP-1's period-labelled tables (`named`:
-    a layer-1 forecast's row and period for each operand; `forecast_year`: the first forecast
+    the forecast inputs' row and period for each operand; `forecast_year`: the first forecast
     year, from which no fiscal year is history). Never raises: a value that cannot be built is
     missing with its reason."""
-    located_lines, base = _locate(tables, operands, named)
+    located_lines, base = _locate(tables, operands, named or {})
     found, forecast = _before_forecast(located_lines, forecast_year, base)
     located = [line for line in found.values() if line.reason is None]
     printed = frozenset(p for line in located for p in (*line.values, *line.gaps))
