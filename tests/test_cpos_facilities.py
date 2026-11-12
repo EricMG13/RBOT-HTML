@@ -1,5 +1,6 @@
 """CP-2G facility schedule: stated terms to interest and repayment (hand-computed answer key)."""
 
+import json
 from dataclasses import replace
 from decimal import Decimal
 from fractions import Fraction
@@ -136,3 +137,202 @@ def test_missing_base_debt_stays_missing_with_its_reason():
     y = cp2g.forecast(operands=ops, drivers=DRIVERS, shock=None, schedule=TOTALS).years[0]
     assert (y.interest.amount, y.interest.reason) == (None, "why")
     assert y.closing_debt.amount is None
+
+
+# --- the inputs block states facilities (Task 3) ------------------------------------------------
+# A local builder modelled on forecast_block in tests/test_cpos_launch.py (not importable).
+_CP1 = " ".join(_BASE.values()) + " 400 150 6.00 3.00 1.00"
+
+
+def _block(**changes) -> bytes:
+    inputs = {
+        "schema_version": "cpos-forecast-inputs/1",
+        "base": {k: {"amount": v, "reason": None} for k, v in _BASE.items()},
+        "base_drivers": {
+            name: {
+                "values": list(v),
+                "category": "Analyst Interpretation",
+                "rationale": "Synthetic.",
+                "limitation": None,
+            }
+            for name, v in _PATHS.items()
+        },
+        "downside_shock": {"ebitda_decline": "0.20", "rate_increase": "0.10"},
+        "years": [
+            {"year": 2025 + i, "start": f"{2025 + i}-04-01", "end": f"{2026 + i}-03-31"}
+            for i in range(3)
+        ],
+        "scope_limits": ["Synthetic; not analytical review."],
+        **changes,
+    }
+    return (
+        f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(inputs)}\n```\n".encode()
+    )
+
+
+def _exact(cp1: str = _CP1, **changes) -> dict:
+    from deploy_workflow.owners.cpos_forecast import model_files
+
+    return json.loads(model_files(cp1.encode(), _block(**changes))["forecast_exact.json"])
+
+
+def _refusal(cp1: str = _CP1, source: str = "CP-2G", **changes) -> str:
+    from deploy_workflow.owners import cpos_forecast
+
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(_block(**changes).decode(), cp1, source)
+    return str(caught.value)
+
+
+def test_a_block_with_facilities_publishes_the_answer_key():
+    exact = _exact(facilities=[A, B])
+    ref = exact["outputs"]["REFERENCE"]["years"]
+    assert [D(y["interest"]["amount"]) for y in ref] == [D("34.5"), D("31.8"), D("27.6")]
+    assert [D(y["closing_debt"]["amount"]) for y in ref] == [D("580"), D("560"), D("540")]
+    assert D(exact["unallocated_debt"]["amount"]) == D("50")
+    assert exact["unallocated_debt"]["reason"] is None
+    assert D(exact["facility_schedule"][1]["years"][2]["rate"]) == D("0.04")
+    assert exact["facility_schedule"][1]["years"][2]["year"] == 2027
+    assert [f["name"] for f in exact["facility_schedule"]] == ["Notes", "Term loan"]
+    assert exact["facilities"][0]["balance"] == "400"
+    limits = exact["scope_limits"]
+    assert limits[1] == "Synthetic; not analytical review."
+    assert limits[2].startswith("Cash interest and scheduled repayment are computed from the")
+    assert limits[3] == (
+        "Debt of 50 is not in a stated facility; it bears no interest and is not repaid in this "
+        "forecast."
+    )
+
+
+def test_a_block_without_facilities_publishes_no_facility_key():
+    # The handoff text differs (null vs absent), so its hash in `consumed` does; all else is equal.
+    from deploy_workflow.owners.cpos_forecast import model_files
+
+    cp1 = _CP1.encode()
+    plain = json.loads(model_files(cp1, _block())["forecast_exact.json"])
+    nulled = json.loads(model_files(cp1, _block(facilities=None))["forecast_exact.json"])
+    plain["consumed"] = nulled["consumed"] = None
+    assert plain == nulled
+    assert b"facilit" not in model_files(cp1, _block())["forecast_exact.json"]
+    assert plain["scope_limits"][1:] == ["Synthetic; not analytical review."]
+
+
+def test_balances_equal_to_base_debt_publish_no_unallocated_limit():
+    rows = [{**A, "balance": "450"}, {**B, "balance": "150"}]
+    exact = _exact(_CP1 + " 450", facilities=rows)
+    assert D(exact["unallocated_debt"]["amount"]) == 0
+    assert not any("is not in a stated facility" in s for s in exact["scope_limits"])
+
+
+def test_balances_above_base_debt_within_the_bound_publish_a_signed_amount_and_no_limit():
+    rows = [{**A, "balance": "500"}, {**B, "balance": "150"}]
+    exact = _exact(_CP1 + " 500", facilities=rows)
+    assert D(exact["unallocated_debt"]["amount"]) == D("-50")
+    assert not any("is not in a stated facility" in s for s in exact["scope_limits"])
+
+
+def test_missing_base_debt_says_so():
+    base = {k: {"amount": v, "reason": None} for k, v in _BASE.items()}
+    base["debt"] = {"amount": None, "reason": "CP-1 gives no debt"}
+    exact = _exact(base=base, facilities=[A])
+    assert exact["unallocated_debt"] == {"amount": None, "reason": "CP-1 gives no debt"}
+    assert (
+        "Base debt is missing, so debt outside the stated facilities is not known."
+        in exact["scope_limits"]
+    )
+
+
+@pytest.mark.parametrize(
+    "rows, cp1, message",
+    [
+        (
+            [{**A, "fixed_rate_pct": "6.0"}],
+            _CP1,
+            "CP-2G: facility Notes fixed_rate_pct 6.0 is not printed in CP-1",
+        ),
+        (
+            [{**A, "balance": "999"}],
+            _CP1,
+            "CP-2G: facility Notes balance 999 is not printed in CP-1",
+        ),
+        (
+            [B, {**B, "name": "T2", "floor_pct": "2.50"}],
+            _CP1,
+            "CP-2G: facility T2 floor_pct 2.50 is not printed in CP-1",
+        ),
+        (
+            [{**A, "balance": "400000"}],
+            _CP1 + " 400000",
+            (
+                "CP-2G: facility balances total 400000, more than 1.25 times base debt 600; "
+                "check the unit"
+            ),
+        ),
+    ],
+)
+def test_refusals(rows, cp1, message):
+    assert _refusal(cp1, facilities=rows) == message
+
+
+def test_the_balance_check_is_one_and_a_quarter_inclusive():
+    exact = _exact(_CP1 + " 750", facilities=[{**A, "balance": "750"}])
+    assert D(exact["unallocated_debt"]["amount"]) == D("-150")
+    assert "more than 1.25 times" in _refusal(_CP1 + " 751", facilities=[{**A, "balance": "751"}])
+
+
+@pytest.mark.parametrize("case", ["upside_drivers", "downside_drivers"])
+@pytest.mark.parametrize("driver", ["interest_rate", "debt_repayment"])
+def test_a_case_override_of_an_unused_driver_is_refused(case, driver):
+    override = {driver: {**_driver(driver)}}
+    message = _refusal(facilities=[A], **{case: override})
+    assert message == f"CP-2G: {case} states {driver}, which is not used when facilities are stated"
+
+
+def _driver(name: str) -> dict:
+    return {
+        "values": list(_PATHS[name]),
+        "category": "Analyst Interpretation",
+        "rationale": "Synthetic.",
+        "limitation": None,
+    }
+
+
+def test_a_case_override_of_another_driver_is_allowed_with_facilities():
+    exact = _exact(facilities=[A], upside_drivers={"dividends": _driver("dividends")})
+    assert "UPSIDE" in exact["outputs"]
+
+
+def test_cp1s_layer1_block_states_no_facilities():
+    message = _refusal(source="CP-1", downside_shock=None, facilities=[A])
+    assert message == "CP-1: a layer-1 forecast states no facilities"
+
+
+def test_duplicate_names_are_refused():
+    assert "facility names must be unique" in _refusal(facilities=[A, {**B, "name": "Notes"}])
+
+
+@pytest.mark.parametrize("rows", [[], [{**A, "name": f"F{i}"} for i in range(41)]])
+def test_one_to_forty_facilities(rows):
+    assert "forecast inputs" in _refusal(facilities=rows)
+
+
+def test_a_maturity_inside_the_forecast_is_named():
+    limits = _exact(facilities=[{**A, "maturity": "2026-09-30"}])["scope_limits"]
+    assert "Notes matures in FY2026 and is assumed refinanced; its balance is held." in limits
+
+
+def test_a_maturity_before_the_forecast_is_named_in_the_first_year_and_a_late_one_is_not():
+    rows = [
+        {**A, "maturity": "2020-01-01"},
+        {**B, "maturity": "2028-03-31"},
+    ]
+    limits = _exact(facilities=rows)["scope_limits"]
+    assert "Notes matures in FY2025 and is assumed refinanced; its balance is held." in limits
+    assert "Term loan matures in FY2027 and is assumed refinanced; its balance is held." in limits
+    after = _exact(facilities=[{**A, "maturity": "2028-04-01"}])["scope_limits"]
+    assert not any("matures in" in s for s in after)
+
+
+def test_a_maturity_is_a_dated_form_only():
+    with pytest.raises(ValidationError):
+        Facility(**{**A, "maturity": "20300101"})

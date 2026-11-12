@@ -32,7 +32,7 @@ class Facility(Contract):
         Annotated[tuple[cp2g.Growth, cp2g.Growth, cp2g.Growth], Field(strict=False)] | None
     )
     annual_amortisation: cp2g.Amount | None
-    maturity: str | None
+    maturity: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] | None
 
     @model_validator(mode="after")
     def _one_rate_form(self) -> "Facility":
