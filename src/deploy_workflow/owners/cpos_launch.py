@@ -1501,12 +1501,16 @@ FORECAST_BLOCK = (
     "`spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for "
     "each forecast year as three decimal fractions "
     '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
-    "must be between 0% and 30% in every year. Facility names are unique. The facilities' "
+    "must be between 0% and 30% in every year. The facilities' "
     "scheduled repayments over the three years must not exceed base debt. "
     "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
-    "YYYY-MM-DD or null. When `facilities` is stated Python computes cash interest and scheduled "
-    "repayment from it and does not use the `interest_rate` and `debt_repayment` drivers, so do "
-    "not vary those two in `upside_drivers` or `downside_drivers`. "
+    "YYYY-MM-DD or null. A row's `balance` is its drawn principal. At most 40 rows; names are "
+    "unique ignoring case; balances may total at most 1.25 times base debt; `fixed_rate_pct` is "
+    "at most 30, `spread_pct` at most 20 and `floor_pct` at most 10; `reference_rate` values have "
+    "at most four decimal places. When `facilities` is stated Python computes cash interest on "
+    "those facilities and scheduled repayment from it; debt not in a row bears interest at your "
+    "`interest_rate` driver and is not repaid; the `debt_repayment` driver is not used, so do "
+    "not vary it in `upside_drivers` or `downside_drivers`. "
     "`years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
     "`scope_limits` is a list of text limits. Set `schema_version` to "
@@ -1965,6 +1969,11 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
         if "gives no forecast drivers" not in str(error):
+            if "facilit" in str(error) or "scheduled repayments" in str(error):
+                fallback = "write `facilities` as null and keep the drivers."
+                return (
+                    f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",
+                )
             fix = "Correct the block; if you cannot, set every driver's values to "
             return (
                 f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",

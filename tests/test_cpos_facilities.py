@@ -126,10 +126,10 @@ def test_the_downside_rate_increase_scales_scheduled_interest():
     assert [y.interest.amount for y in years] == [D("37.95"), D("34.98"), D("30.36")]
 
 
-def test_no_schedule_is_todays_forecast():
-    assert cp2g.forecast(
-        operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=None
-    ) == cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None)
+def test_no_schedule_uses_the_two_drivers():
+    year = cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=None).years[0]
+    assert year.interest.amount == D("36")  # 600 x 0.06
+    assert year.closing_debt.amount == D("550")  # 600 - 50
 
 
 def test_missing_base_debt_stays_missing_with_its_reason():
@@ -187,7 +187,8 @@ def _refusal(cp1: str = _CP1, source: str = "CP-2G", **changes) -> str:
 def test_a_block_with_facilities_publishes_the_answer_key():
     exact = _exact(facilities=[A, B])
     ref = exact["outputs"]["REFERENCE"]["years"]
-    assert [D(y["interest"]["amount"]) for y in ref] == [D("34.5"), D("31.8"), D("27.6")]
+    # 50 of base debt is outside the facilities and bears the analyst's 6%: 3 on top of 34.5 etc.
+    assert [D(y["interest"]["amount"]) for y in ref] == [D("37.5"), D("34.8"), D("30.6")]
     assert [D(y["closing_debt"]["amount"]) for y in ref] == [D("580"), D("560"), D("540")]
     assert D(exact["unallocated_debt"]["amount"]) == D("50")
     assert exact["unallocated_debt"]["reason"] is None
@@ -197,11 +198,42 @@ def test_a_block_with_facilities_publishes_the_answer_key():
     assert exact["facilities"][0]["balance"] == "400"
     limits = exact["scope_limits"]
     assert limits[1] == "Synthetic; not analytical review."
-    assert limits[2].startswith("Cash interest and scheduled repayment are computed from the")
-    assert limits[3] == (
-        "Debt of 50 is not in a stated facility; it bears no interest and is not repaid in this "
-        "forecast."
+    assert limits[2] == (
+        "Cash interest on the stated facilities and scheduled repayment are computed from the "
+        "facility terms the CP-2G handoff stated; the analyst's repayment assumption is not used."
     )
+    assert limits[3] == (
+        "Debt of 50 is not in a stated facility; it bears interest at the analyst's assumed rate "
+        "and is not repaid in this forecast."
+    )
+
+
+def _interest(exact: dict, case: str) -> list[Decimal]:
+    return [D(y["interest"]["amount"]) for y in exact["outputs"][case]["years"]]
+
+
+def test_debt_outside_the_facilities_bears_the_analyst_rate_in_every_case():
+    exact = _exact(
+        facilities=[A, B],
+        downside_drivers={"interest_rate": {**_driver("interest_rate"), "values": ["0.08"] * 3}},
+    )
+    assert _interest(exact, "REFERENCE") == [D("37.5"), D("34.8"), D("30.6")]
+    assert _interest(exact, "DOWNSIDE") == [D("41.25"), D("38.28"), D("33.66")]
+    assert _interest(exact, "DOWNSIDE_DRIVERS") == [D("38.5"), D("35.8"), D("31.6")]
+
+
+def test_no_remainder_adds_no_interest():
+    # hand-computed on opening balances: 400 at 6% + 200 at 7%/6%/4%, A amortising 20 a year
+    rows = [A, {**B, "balance": "200"}]
+    exact = _exact(_CP1 + " 200", facilities=rows)
+    assert _interest(exact, "REFERENCE") == [D("38"), D("34.8"), D("29.6")]
+
+
+def test_balances_above_base_debt_add_no_remainder_interest():
+    rows = [{**A, "balance": "500"}, {**B, "balance": "150"}]
+    exact = _exact(_CP1 + " 500", facilities=rows)
+    # 500 at 6% (480, 460 after amortisation) + 150 at 7%/6%/4%
+    assert _interest(exact, "REFERENCE") == [D("40.5"), D("37.8"), D("33.6")]
 
 
 def test_a_block_without_facilities_publishes_no_facility_key():
@@ -215,20 +247,6 @@ def test_a_block_without_facilities_publishes_no_facility_key():
     assert plain == nulled
     assert b"facilit" not in model_files(cp1, _block())["forecast_exact.json"]
     assert plain["scope_limits"][1:] == ["Synthetic; not analytical review."]
-
-
-def test_balances_equal_to_base_debt_publish_no_unallocated_limit():
-    rows = [{**A, "balance": "450"}, {**B, "balance": "150"}]
-    exact = _exact(_CP1 + " 450", facilities=rows)
-    assert D(exact["unallocated_debt"]["amount"]) == 0
-    assert not any("is not in a stated facility" in s for s in exact["scope_limits"])
-
-
-def test_balances_above_base_debt_within_the_bound_publish_a_signed_amount_and_no_limit():
-    rows = [{**A, "balance": "500"}, {**B, "balance": "150"}]
-    exact = _exact(_CP1 + " 500", facilities=rows)
-    assert D(exact["unallocated_debt"]["amount"]) == D("-50")
-    assert not any("is not in a stated facility" in s for s in exact["scope_limits"])
 
 
 def test_missing_base_debt_says_so():
@@ -281,11 +299,17 @@ def test_the_balance_check_is_one_and_a_quarter_inclusive():
 
 
 @pytest.mark.parametrize("case", ["upside_drivers", "downside_drivers"])
-@pytest.mark.parametrize("driver", ["interest_rate", "debt_repayment"])
-def test_a_case_override_of_an_unused_driver_is_refused(case, driver):
-    override = {driver: {**_driver(driver)}}
+def test_a_case_override_of_debt_repayment_is_refused(case):
+    override = {"debt_repayment": {**_driver("debt_repayment")}}
     message = _refusal(facilities=[A], **{case: override})
-    assert message == f"CP-2G: {case} states {driver}, which is not used when facilities are stated"
+    assert message == (
+        f"CP-2G: {case} states debt_repayment, which is not used when facilities are stated"
+    )
+
+
+@pytest.mark.parametrize("case", ["upside_drivers", "downside_drivers"])
+def test_a_case_override_of_interest_rate_is_accepted_with_facilities(case):
+    assert _exact(facilities=[A], **{case: {"interest_rate": _driver("interest_rate")}})
 
 
 def _driver(name: str) -> dict:
@@ -318,9 +342,15 @@ def test_a_facility_name_is_trimmed_and_unique_ignoring_case_and_edges():
     assert "facility names must be unique" in _refusal(facilities=[B, {**B, "name": "TERM LOAN"}])
 
 
-@pytest.mark.parametrize("rows", [[], [{**A, "name": f"F{i}"} for i in range(41)]])
-def test_one_to_forty_facilities(rows):
-    assert "forecast inputs" in _refusal(facilities=rows)
+@pytest.mark.parametrize(
+    "rows, bound",
+    [
+        ([], "facilities: Tuple should have at least 1 item"),
+        ([{**A, "name": f"F{i}"} for i in range(41)], "facilities: Tuple should have at most 40"),
+    ],
+)
+def test_one_to_forty_facilities(rows, bound):
+    assert bound in _refusal(facilities=rows)
 
 
 MATURES_2026 = (
@@ -356,6 +386,11 @@ def test_a_maturity_is_a_dated_form_only():
         Facility(**{**A, "maturity": "20300101"})
 
 
+def test_a_maturity_that_is_not_a_calendar_date_names_the_field():
+    with pytest.raises(ValidationError, match="maturity 2030-13-01 is not a calendar date"):
+        Facility(**{**A, "maturity": "2030-13-01"})
+
+
 # --- fix round 1 --------------------------------------------------------------------------------
 def test_scheduled_repayments_above_base_debt_are_refused():
     row = {**A, "balance": "700", "annual_amortisation": "300"}
@@ -371,7 +406,9 @@ def test_scheduled_repayments_equal_to_base_debt_are_accepted():
 
 def test_balances_above_base_debt_name_the_excess_in_a_scope_limit():
     rows = [{**A, "balance": "500"}, {**B, "balance": "150"}]
-    limits = _exact(_CP1 + " 500", facilities=rows)["scope_limits"]
+    exact = _exact(_CP1 + " 500", facilities=rows)
+    assert D(exact["unallocated_debt"]["amount"]) == D("-50")
+    limits = exact["scope_limits"]
     assert limits[3] == (
         "Stated facility balances exceed base debt by 50; interest is computed on the stated "
         "balances."

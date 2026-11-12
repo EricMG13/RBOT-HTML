@@ -47,7 +47,10 @@ class Facility(Contract):
         elif self.reference_rate is None or self.spread_pct is None:
             raise ValueError("a facility states a fixed rate, or a reference rate with a spread")
         if self.maturity is not None:
-            date.fromisoformat(self.maturity)
+            try:
+                date.fromisoformat(self.maturity)
+            except ValueError:
+                raise ValueError(f"maturity {self.maturity} is not a calendar date") from None
         if self.name != self.name.strip():
             raise ValueError("facility name must not start or end with whitespace")
         if self.reference_rate is not None:

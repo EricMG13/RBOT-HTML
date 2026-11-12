@@ -360,17 +360,16 @@ def _check_facilities(
             )
     for name in ("upside_drivers", "downside_drivers"):
         case: CaseDrivers | None = getattr(inputs, name)
-        for driver in ("interest_rate", "debt_repayment"):
-            if case is not None and getattr(case, driver) is not None:
-                raise ValueError(
-                    f"CP-2G: {name} states {driver}, which is not used when facilities are stated"
-                )
+        if case is not None and case.debt_repayment is not None:
+            raise ValueError(
+                f"CP-2G: {name} states debt_repayment, which is not used when facilities are stated"
+            )
 
 
 _FACILITY_YEAR = ("opening", "rate", "interest", "repaid", "closing")
 FACILITY_LIMIT = (
-    "Cash interest and scheduled repayment are computed from the facility terms the CP-2G "
-    "handoff stated; the interest_rate and debt_repayment drivers are not used."
+    "Cash interest on the stated facilities and scheduled repayment are computed from the "
+    "facility terms the CP-2G handoff stated; the analyst's repayment assumption is not used."
 )
 
 
@@ -413,8 +412,8 @@ def _facility_detail(
         limits.append("Base debt is missing, so debt outside the stated facilities is not known.")
     elif unallocated > 0:
         limits.append(
-            f"Debt of {_plain_amount(unallocated)} is not in a stated facility; it bears no "
-            "interest and is not repaid in this forecast."
+            f"Debt of {_plain_amount(unallocated)} is not in a stated facility; it bears interest "
+            "at the analyst's assumed rate and is not repaid in this forecast."
         )
     elif unallocated < 0:
         limits.append(
@@ -455,6 +454,30 @@ def _json(document: object) -> bytes:
     return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
 
 
+def _unallocated(debt: Decimal | None, facilities: tuple[Facility, ...] | None) -> Decimal | None:
+    """Base debt not in a stated facility, when known and positive; else None."""
+    if debt is None or facilities is None:
+        return None
+    with localcontext(cp2g._EXACT):
+        rest = Decimal(debt) - sum((Decimal(f.balance) for f in facilities), Decimal(0))
+    return rest if rest > 0 else None
+
+
+def _with_remainder(
+    totals: tuple[tuple[Decimal, Decimal], ...] | None,
+    remainder: Decimal | None,
+    rate: cp2g.Triple,
+) -> tuple[tuple[Decimal, Decimal], ...] | None:
+    """The schedule's pairs with the unallocated debt's interest at the case's own rate added;
+    it is not repaid."""
+    if totals is None or remainder is None:
+        return totals
+    with localcontext(cp2g._EXACT):
+        return tuple(
+            (i + remainder * r, repaid) for (i, repaid), r in zip(totals, rate, strict=True)
+        )
+
+
 def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
     """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
     forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
@@ -481,11 +504,15 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, 
     facilities = inputs.facilities
     plan = None if facilities is None else schedule(facilities)
     totals = None if plan is None else plan.totals()
+    remainder = _unallocated(operands.debt.amount, facilities)
     outputs = {}
     for case, (submitted, shock_pair) in cases.items():
         drivers = cp2g.Drivers.from_submission(submitted)
         result = cp2g.forecast(
-            operands=operands, drivers=drivers, shock=shock_pair, schedule=totals
+            operands=operands,
+            drivers=drivers,
+            shock=shock_pair,
+            schedule=_with_remainder(totals, remainder, drivers.interest_rate),
         )
         outputs[case] = {
             "years": [

@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import types
 import typing
 from decimal import Decimal
 from fractions import Fraction
@@ -3215,6 +3216,39 @@ def test_checker_asks_for_repair_of_an_over_precise_driver(tmp_path):
     assert any("ebitda_margin" in i and "Forecast inputs" in i for i in issues), issues
 
 
+FACILITY_ROW = {
+    "name": "Notes",
+    "balance": "400",  # CP-1 here prints no 400, so the row is refused
+    "fixed_rate_pct": "6.00",
+    "spread_pct": None,
+    "floor_pct": None,
+    "reference_rate": None,
+    "annual_amortisation": None,
+    "maturity": None,
+}
+
+
+def test_a_facility_refusal_is_told_it_may_write_facilities_as_null(tmp_path):
+    """A row that cannot be corrected must not cost the whole forecast: the repair line offers
+    dropping `facilities`, not only nulling every driver."""
+    (issue,) = cp2g_check(tmp_path, forecast_block(facilities=[FACILITY_ROW]))
+    assert issue == (
+        "Forecast inputs: CP-2G: facility Notes balance 400 is not printed in CP-1. "
+        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
+    )
+
+
+def test_a_scheduled_repayment_refusal_is_told_the_same():
+    cp1 = (" ".join(BASE.values()) + " 700 6.00%").encode()
+    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1})
+    row = {**FACILITY_ROW, "balance": "700", "annual_amortisation": "300"}
+    (issue,) = cpos_launch._forecast_issues(task, forecast_block(facilities=[row]))
+    assert issue == (
+        "Forecast inputs: CP-2G: scheduled repayments total 700, more than base debt 600. "
+        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
+    )
+
+
 def test_checker_accepts_a_valid_or_declined_forecast_block(tmp_path):
     assert cp2g_check(tmp_path, forecast_block()) == ()
     (tmp_path / "declined").mkdir()
@@ -4210,6 +4244,8 @@ def test_cp2g_is_told_how_to_state_facilities(tmp_path):
     head = texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
     for word in (
         "`facilities`",
+        "1.25 times base debt",
+        "drawn principal",
         "fixed_rate_pct",
         "spread_pct",
         "floor_pct",

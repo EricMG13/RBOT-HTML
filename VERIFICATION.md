@@ -9,17 +9,17 @@ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflo
 Scope: CP-2G facility schedule: offline synthetic tests only; no provider called, no model response
 retained; a live CP-2G run that states `facilities` has not been done; the Forecast page was not
 exercised with the new `forecast_exact.json` keys.
-- `uv run pytest tests/test_cpos_facilities.py -q`: exit 0, 53 passed.
+- `uv run pytest tests/test_cpos_facilities.py -q`: exit 0, 55 passed (the answer key puts the debt outside the stated facilities at the analyst's rate: 37.5, 34.8, 30.6).
 - `uv run pytest tests/test_cpos_launch.py -q -k "forecast or told_how"`: exit 0, 24 passed; the whole
-  file: 505 passed, 1 skipped (the paid live test).
+  file: 507 passed, 1 skipped (the paid live test).
 - `uv run python tools/quality_gate.py`: exit 0, 0 findings.
-- Independent checks: the output for a block without facilities is byte-identical to main 36b6d8f
+- Independent checks: the output for a block without facilities is byte-identical to origin/main 36b6d8f
   (sha256 e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089 over the five model files);
   the arithmetic matched an independent Fraction calculation over 60 seeded random blocks; the
   adversarial review found and fixed two Medium defects (negative total debt from repayments above
   base debt; unbounded floating all-in rate). Three boundary tests each kill their mutant (`0 <= rate`
   to `0 < rate`; `unallocated < 0` to `<= 0`; `due < start` to `<=`).
-- Known limits: debt outside the stated facilities bears no interest in the forecast; with base debt
+- Known limits: debt outside the stated facilities bears interest at the analyst's assumed rate, not a sourced one; with base debt
   missing no unit check runs on facility balances; the printed-in-CP-1 check for rate terms accepts
   any matching percent anywhere in CP-1.
 
