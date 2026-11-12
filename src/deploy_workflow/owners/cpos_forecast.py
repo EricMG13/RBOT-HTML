@@ -51,18 +51,31 @@ Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 class Operand(Contract):
     """A base operand. Either source's block may also say where it read an amount: the first cell
-    of the table row (`row`) and the header of the period column (`period`)."""
+    of the table row (`row`) and the header of the period column (`period`). Where the table has
+    one row per period and the measure is the column header (CP-1's liquidity and net debt
+    tables), `row` is the period's row label and `column` the measure's header; `column` and
+    `period` are never both stated."""
 
     amount: Signed | None
     reason: str | None
     row: str | None = None
     period: str | None = None
+    column: str | None = None
 
     @model_validator(mode="after")
     def one_of(self) -> "Operand":
         if (self.amount is None) == (self.reason is None):
             raise ValueError("an operand states an amount or a reason, never both or neither")
+        if self.period is not None and self.column is not None:
+            raise ValueError(
+                "an operand names the `period` header or the `column` header, not both"
+            )
         return self
+
+    @property
+    def header(self) -> str:
+        """The header of the column the operand's cell is under, whichever key named it."""
+        return self.period or self.column or ""
 
 
 class Shock(Contract):
@@ -262,13 +275,17 @@ def _layer1_problem(text: str, key: str, operand: Operand, amount: str | None) -
     if amount is None:
         return (
             None
-            if operand.row is None and operand.period is None
-            else (f"base {key} states no amount, so it names no row or period")
+            if operand.row is None and operand.period is None and operand.column is None
+            else (f"base {key} states no amount, so it names no row, period or column")
         )
-    row, period = operand.row or "", operand.period or ""
+    row, period = operand.row or "", operand.header
     if not _plain(row) or not _plain(period):
-        return f"base {key} must name the `row` label and `period` header it was read from"
-    where = f"row `{_cut(row, 77)}`, period `{_cut(period, 77)}`"
+        return (
+            f"base {key} must name the `row` label and either the `period` header or the "
+            "`column` header it was read from"
+        )
+    kind = "column" if operand.column is not None else "period"
+    where = f"row `{_cut(row, 77)}`, {kind} `{_cut(period, 77)}`"
     found = _cells(text, row, period)
     if not found:
         return f"base {key}: no table cell of CP-1 is at {where}"
@@ -312,7 +329,9 @@ def _units_named(text: str) -> frozenset[str]:
     )
 
 
-def _unit_cells(text: str, label: str, period: str) -> list[list[tuple[str, str]]]:
+def _unit_cells(
+    text: str, label: str, period: str, kind: str = "period"
+) -> list[list[tuple[str, str]]]:
     """For each row labelled `label` under a column headed `period`, in any table of the
     handoff: the `(what, text)` of every cell that may state the row's unit: the row's other
     cells (never the amount cell), the named column's header and the table's first header cell."""
@@ -322,7 +341,7 @@ def _unit_cells(text: str, label: str, period: str) -> list[list[tuple[str, str]
         for column in (i for i, h in enumerate(header) if i > 0 and _plain(h) == _plain(period)):
             for row in (r for r in rows if len(r) > column and _plain(r[0]) == _plain(label)):
                 groups.append(
-                    [("period header", header[column]), ("first header cell", header[0])]
+                    [(f"{kind} header", header[column]), ("first header cell", header[0])]
                     + [
                         (_plain(header[i]) if i < len(header) else "unit", cell)
                         for i, cell in enumerate(row)
@@ -338,7 +357,8 @@ def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | No
     them names the block's."""
     block, other = ("thousands", "millions") if scale == 1000 else ("millions", "thousands")
     issues = []
-    for group in _unit_cells(text, operand.row or "", operand.period or ""):
+    kind = "column" if operand.column is not None else "period"
+    for group in _unit_cells(text, operand.row or "", operand.header, kind):
         named = [(what, cell, _units_named(cell)) for what, cell in group]
         if not any(block in units for *_, units in named):
             issues += [(what, cell) for what, cell, units in named if other in units]
@@ -441,7 +461,8 @@ def _check_base(inputs: ForecastInputs, cp1_text: str, source: str, stated: dict
     """Each base amount, as the block states it, is the cell it names (a named block, or the
     layer-1 block) or is printed somewhere in CP-1. A CP-2G block at scale 1000 must name."""
     named = source == "CP-1" or any(
-        operand.row is not None or operand.period is not None for operand in inputs.base.values()
+        operand.row is not None or operand.period is not None or operand.column is not None
+        for operand in inputs.base.values()
     )
     if (
         not named
@@ -735,12 +756,13 @@ def model_files(
         }
     )
     # Imported here: cpos_periods imports this module's helpers at module level.
+    from deploy_workflow.owners.cpos_periods import ByColumn
     from deploy_workflow.owners.cpos_periods import history as period_history
 
-    named = {
-        key: (o.row, o.period)
+    named: dict[str, tuple[str, str]] = {
+        key: ByColumn(o.row, o.header) if o.column is not None else (o.row, o.header)
         for key, o in inputs.base.items()
-        if o.amount is not None and o.row is not None and o.period is not None
+        if o.amount is not None and o.row is not None and o.header != ""
     }
     calculation = _json(
         {
