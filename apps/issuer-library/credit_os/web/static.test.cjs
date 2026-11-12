@@ -477,6 +477,18 @@ test('(i) the declared status is a badge beside the acceptance badge; none decla
   assert.ok(!none.includes('Blocked'));
 });
 
+test('(i2) the head shows the confidence Python computed, or why there is none; no field draws nothing', () => {
+  const head = c => report({ confidence: c }).reportHead(OUT);
+  assert.ok(head({ value: 58, band: 'Low' }).includes('<span class="output-meta">Confidence 58 · Low</span>'));
+  assert.ok(head({ value: 0, band: 'Insufficient Information' }).includes('Confidence 0 · Insufficient Information'));
+  const missing = head({ missing: 'the table has no row for Source gate' });
+  assert.ok(missing.includes('<span class="output-meta">Confidence not computed: the table has no row for Source gate</span>'));
+  assert.ok(head({ missing: '<b>x</b>' }).includes('Confidence not computed: &lt;b&gt;x&lt;/b&gt;'));
+  assert.ok(!report().reportHead(OUT).includes('Confidence'));
+  assert.equal(report({ confidence: { value: 58, band: 'Low' } }).reportHead(OUT).match(/class="badge badge-gray"/g).length, 1);
+  noCode(head({ value: 58, band: 'Low' }));
+});
+
 test('(j) Analysis holds only the view sections, open, in handoff order, each with its line id', () => {
   const html = report().reportAnalysis(OUT);
   // Decisions 7 and 14, H7 (earlier format): no chip is printed in prose; a paragraph with no citation and no chip in the build has no Basis button.

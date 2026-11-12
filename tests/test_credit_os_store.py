@@ -17,9 +17,9 @@ from credit_os import store
 MODULES = ("CP-0", "CP-1")
 
 
-def read_store(tmp_path: Path) -> dict:
+def read_store(tmp_path: Path, **changes) -> dict:
     """The store over one fixture run that the catalogue lists with its delivery as a report."""
-    run_dir = make_run(tmp_path, "run-a")
+    run_dir = make_run(tmp_path, "run-a", **changes)
     (delivery,) = (run_dir / "deliveries").iterdir()
     folder = f"runs/run-a/deliveries/{delivery.name}"
     (report,) = delivery.glob("report.html")
@@ -415,7 +415,9 @@ def test_launcher_and_store_accept_every_independently_written_owner_fixture():
         assert launcher.chart_issues(text, specs[heading]) == (), heading
         fields = synthetic_charts(text)
         assert fields["issue"] is None, heading
-        assert len(fields["charts"] + fields["maps"] + fields["events"]) == 1, heading
+        # The confidence inputs table is read for a score, never drawn (decision 9, 2026-11-12).
+        drawn = 0 if heading == "Confidence inputs" else 1
+        assert len(fields["charts"] + fields["maps"] + fields["events"]) == drawn, heading
     assert store.EVENT_HEADERS == list(launcher.EVENT_COLUMNS)
     assert store.EVENT_STATUS.pattern == launcher.EVENT_STATUS.pattern
     assert store.DIRECTIONS == launcher.DIRECTIONS
@@ -2042,3 +2044,32 @@ def test_document_dates_keeps_a_real_date_and_a_later_module_supplies_it() -> No
         for name, date in found.items():
             merged.setdefault(name, date)
     assert merged == {"a.pdf": "2024-11-12"}
+
+
+# ---- Task C3 (2026-11-12, decision 9): the score Python computes from a module's inputs table.
+INPUTS = (
+    "\n### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n"
+    "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
+    "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
+    "| Insufficient Information | 0 |\n| Fields present | 95 |\n| Fields total | 100 |\n"
+    "| Source gate | pass |\n| CRITICAL | 0 |\n| MATERIAL | 0 |\n| MINOR | 1 |\n"
+)
+
+
+def test_an_output_without_the_inputs_section_has_no_confidence_field(tmp_path):
+    outputs = read_store(tmp_path)["outputs"].values()
+    assert outputs and all("confidence" not in o for o in outputs)
+
+
+def test_an_output_with_the_inputs_table_carries_the_computed_score(tmp_path):
+    result = read_store(tmp_path, cp0_extra=INPUTS)
+    by_module = {o["module"]: o for o in result["outputs"].values()}
+    assert by_module["CP-0"]["confidence"] == {"value": 89, "band": "High"}
+    assert all("confidence" not in o for m, o in by_module.items() if m != "CP-0")
+
+
+def test_an_output_with_a_wrong_inputs_table_says_why_there_is_no_score(tmp_path):
+    result = read_store(tmp_path, cp0_extra=INPUTS.replace("| Source gate | pass |\n", ""))
+    (cp0,) = (o for o in result["outputs"].values() if o["module"] == "CP-0")
+    assert list(cp0["confidence"]) == ["missing"]
+    assert "Source gate" in cp0["confidence"]["missing"]

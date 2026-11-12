@@ -513,6 +513,8 @@ function runAcceptanceText(context) {
   const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===contexts[context].folder);
   return record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
 }
+// The score Python computed from the module's confidence inputs table (the store's `confidence`), or why there is none; an output with no such table draws nothing.
+const confidenceText=c=>!c?'':`<span class="output-meta">${c.missing!=null?`Confidence not computed: ${esc(c.missing)}`:`Confidence ${esc(c.value)} · ${esc(c.band)}`}</span>`;
 function reportHead(id) {
   const out=data[id],{module,run:context}=out;
   const {meta,flag}=headTools(module,context,id);
@@ -522,7 +524,7 @@ function reportHead(id) {
   const group=groups.find(([,items])=>items.some(item=>item[0]===module))?.[0];
   // A bottom line: the earlier format's Reader summary or call; the new format's Bottom line passage. With one, the name is the eyebrow and the bottom line the headline.
   const hasBottom=isNewFormat(out.sections)?Boolean(readerPassages(out.sections).bottom):Boolean(out.summary||out.call);
-  return `<div class="module-head${hasBottom?' has-bottom-line':''}" id="head"><div class="head-title">${group?`<span class="head-group">${esc(group)}</span>`:''}<h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  return `<div class="module-head${hasBottom?' has-bottom-line':''}" id="head"><div class="head-title">${group?`<span class="head-group">${esc(group)}</span>`:''}<h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}${confidenceText(out.confidence)}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;

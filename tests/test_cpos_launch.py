@@ -420,6 +420,19 @@ for _heading, (_module, _types, _) in MAPS.items():
     OWNER_TABLES.setdefault(_module, {})[_heading] = synthetic_table(
         EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
     )
+SCORED = ("CP-1B", "CP-1C", "CP-1D", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-2H", "CP-3")
+SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
+UNSCORED = ("CP-0", "CP-1", "CP-1A", "CP-L10", "CP-2", "CP-3C", "CP-8")
+CONFIDENCE_ROWS = (
+    "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
+    "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
+    "| Insufficient Information | 0 |\n| Fields present | 95 |\n| Fields total | 100 |\n"
+    "| Source gate | pass |\n| CRITICAL | 0 |\n| MATERIAL | 0 |\n| MINOR | 1 |"
+)
+for _module in SCORED:  # Every module whose method carries the score writes its inputs table.
+    OWNER_TABLES.setdefault(_module, {})["Confidence inputs"] = synthetic_table(
+        "| Input | Value |", *CONFIDENCE_ROWS.splitlines()
+    )
 OWNER_PATHWAY = {
     "CP-3": "portfolio_decision",
     "CP-DR": "relative_value",
@@ -5502,3 +5515,54 @@ def test_post_balance_sheet_none_row_needs_its_unit_and_basis(tmp_path):
     )
     issues = _checked_handoff(task, blank.encode(), checker(prepared.layout))
     assert any("Post-balance-sheet adjustments" in i for i in issues), issues
+
+
+# ---- Task C3 (2026-11-12, decision 9): the confidence score is computed from a table of inputs.
+CONFIDENCE_TEXT = f"### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n{CONFIDENCE_ROWS}\n"
+
+
+def confidence_spec(module: str):
+    return next(t for t in cpos_launch.OWNER_TABLES[module] if t.heading == "Confidence inputs")
+
+
+def test_the_modules_whose_method_carries_the_score_are_the_ones_asked_for_the_table():
+    carrying = {m for m, paths in cpos_launch.METHODS.items() if cpos_launch._SCORE in paths}
+    assert carrying == set(SCORED)
+    for module in SCORED:
+        assert confidence_spec(module)
+    for module in UNSCORED:
+        assert all(
+            t.heading != "Confidence inputs" for t in cpos_launch.OWNER_TABLES.get(module, ())
+        )
+
+
+def test_the_table_is_asked_in_one_sentence_of_the_shared_text_and_only_of_scored_modules(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=tuple(m for m in METHODS if m != "CP-8"))
+    for module in SCORED:
+        head = texts[module].partition(cpos_launch.METHOD_MARK)[0]
+        assert "`### Confidence inputs`" in head, module
+        assert "computed from it" in head and "not sentence text" in head, module
+        assert "| Input | Value |" in head and "Source gate" in head, module
+    for module in set(UNSCORED) & set(texts):  # CP-8 is planned by CP-OS, not selected.
+        head = texts[module].partition(cpos_launch.METHOD_MARK)[0]
+        assert "Confidence inputs" not in head, module
+    # The existing rule that a module states no score still stands, for every module.
+    assert all("Do not state a confidence score" in t for t in texts.values())
+
+
+def test_a_scoring_modules_draft_without_a_well_formed_table_is_refused():
+    spec = confidence_spec("CP-2D")
+    assert cpos_launch.chart_issues(CONFIDENCE_TEXT, spec) == ()
+    assert cpos_launch.chart_issues("### Other\n\ntext\n", spec) == (
+        "Add `### Confidence inputs` inside ## Findings, with its table.",
+    )
+    no_gate = CONFIDENCE_TEXT.replace("| Source gate | pass |\n", "")
+    assert any("Source gate" in i for i in cpos_launch.chart_issues(no_gate, spec))
+    word = CONFIDENCE_TEXT.replace("| Calculated | 2 |", "| Calculated | two |")
+    assert any("Calculated" in i for i in cpos_launch.chart_issues(word, spec))
+    zero = CONFIDENCE_TEXT.replace("| Fields total | 100 |", "| Fields total | 0 |")
+    assert any("Fields total" in i for i in cpos_launch.chart_issues(zero, spec))
+    other = CONFIDENCE_TEXT.replace("| Input | Value |", "| Name | Amount |")
+    assert any("Input | Value" in i for i in cpos_launch.chart_issues(other, spec))
+    score = CONFIDENCE_TEXT.replace("| MINOR | 1 |", "| MINOR | 1 |\n| Score | 89 |")
+    assert any("Score" in i for i in cpos_launch.chart_issues(score, spec))

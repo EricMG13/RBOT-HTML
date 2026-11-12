@@ -32,7 +32,7 @@ from deploy_vii.contracts import PATHWAY_MODULES, Run
 from deploy_vii.live.prompts import STEP_CONTRACTS
 from deploy_vii.registry import modules, plan
 from deploy_vii.report_view import _spec_of, pathways
-from deploy_workflow import platform_io
+from deploy_workflow import confidence, platform_io
 from deploy_workflow.changes import (
     DELIVERED_WHOLE,
     PACK_NAME,
@@ -427,6 +427,12 @@ CHART_NOTE_RULE = (
     'reader needs to read the figures correctly, or "No qualification." if there is none.\n\n'
 )
 MAP_TEXT_RULE = "Text in a map node or edge is at most 60 characters.\n\n"
+# Sent only to a module whose method carries the score (decision 9 of 2026-11-12).
+CONFIDENCE_RULE = (
+    f"Write the inputs for your confidence score in `### {confidence.HEADING}`, listed with the "
+    "report selectors below; the score and band are computed from it by Python, and the section "
+    "is a data section, not sentence text.\n\n"
+)
 
 
 class LaunchRefused(ValueError):
@@ -623,6 +629,7 @@ class OwnerTable:
     none_text: str = (
         ""  # The words of an Event cell that states none: the one row `_states_none` takes.
     )
+    scored: bool = False  # The confidence inputs table: its rows are `confidence`'s, not columns.
 
     @property
     def bare(self) -> bool:
@@ -1231,6 +1238,10 @@ MAPS: tuple[tuple[str, str, tuple[str, ...], str], ...] = (
         ),
     ),
 )
+CONFIDENCE = OwnerTable(confidence.HEADING, (), "", scored=True)
+for _module, _paths in METHODS.items():
+    if _SCORE in _paths:  # The method carries the score the module may not state: it states inputs.
+        OWNER_TABLES[_module] = (*OWNER_TABLES.get(_module, ()), CONFIDENCE)
 for _heading, _module, _types, _guard in MAPS:
     OWNER_TABLES[_module] = (
         *OWNER_TABLES.get(_module, ()),
@@ -1508,15 +1519,22 @@ def _misheaded(text: str, heading: str) -> tuple[str, ...]:
     return (f"Write the heading exactly as `### {heading}`, not `{near[0]}`.",) if near else ()
 
 
+def _absent_issues(text: str, spec: OwnerTable, heading: str) -> tuple[str, ...]:
+    near = _misheaded(text, spec.heading) if spec.optional or spec.bare else ()
+    if spec.optional or near:  # An optional case not supplied is not asked for, nor drawn.
+        return near
+    return (f"Add `{heading}` inside ## Findings, with its table.",)
+
+
 def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...]:
     """A chart table's cells reach the page as they are, so each must already be chart-ready."""
     spec = _owner_table(table)
     heading = f"### {spec.heading}"
     if heading not in text.splitlines():
-        near = _misheaded(text, spec.heading) if spec.optional or spec.bare else ()
-        if spec.optional or near:  # An optional case not supplied is not asked for, nor drawn.
-            return near
-        return (f"Add `{heading}` inside ## Findings, with its table.",)
+        return _absent_issues(text, spec, heading)
+    if spec.scored:  # `confidence` reads the table; a refusal is its reason, nothing is repaired.
+        got = confidence.from_handoff(text)
+        return (f"`{heading}`: {got.reason}.",) if isinstance(got, confidence.Refused) else ()
     rows = _stated_rows(text, heading)
     header = _chart_header(spec)
     if not rows or rows[0] != header:
@@ -1904,6 +1922,20 @@ def _none_rule(spec: OwnerTable) -> str:
 def _selector(route: MarkdownRoute | OwnerTable) -> str:
     if isinstance(route, OwnerTable) or route.kind == "chart":
         spec = _owner_table(route)
+        if spec.scored:
+            return (
+                f"- `### {spec.heading}`: exactly one Markdown table headed "
+                f"`| {' | '.join(confidence.HEADER)} |`, with one row for each of these inputs, "
+                f"named exactly: {', '.join(confidence.INPUT_ROWS)}. "
+                f"{', '.join(confidence.LINEAGE_ROWS)} are whole numbers (0 where none) of the "
+                "material claims whose strongest evidence is of that lineage class; "
+                f"{confidence.PRESENT_ROW} and {confidence.TOTAL_ROW} are whole numbers of the "
+                "required fields (the source gate and the method's required schema fields) "
+                f"present and in all, {confidence.TOTAL_ROW} at least 1 and not below "
+                f"{confidence.PRESENT_ROW}; {confidence.GATE_ROW} is `pass`, `partial` or `fail`; "
+                f"{', '.join(confidence.FINDING_ROWS)} are whole numbers of unresolved findings of "
+                "that severity. Write no score, band or status."
+            )
         if spec.bare:
             return (
                 f"- `### {spec.heading}`: exactly one Markdown table headed "
@@ -2052,6 +2084,7 @@ def _instructions(
         + VOICE_RULES
         + (CHART_NOTE_RULE if "### Chart data:" in selectors else "")
         + (MAP_TEXT_RULE if "### Map:" in selectors else "")
+        + (CONFIDENCE_RULE if _SCORE in METHODS[module] else "")
         + (
             "Report selectors, each exactly once inside `## Findings`, using these exact "
             f"headings. They place content in the report and are not analytical completion:\n"
