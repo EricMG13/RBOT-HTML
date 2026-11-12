@@ -13,7 +13,7 @@ import json
 import re
 from dataclasses import fields
 from datetime import date, timedelta
-from decimal import Decimal, localcontext
+from decimal import Decimal, Inexact, localcontext
 from typing import Annotated
 
 from pydantic import Field, ValidationError, model_validator
@@ -43,8 +43,8 @@ Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 
 class Operand(Contract):
-    """A base operand. CP-1's layer-1 block also says where it read an amount: the first cell of
-    the table row (`row`) and the header of the period column (`period`)."""
+    """A base operand. Either source's block may also say where it read an amount: the first cell
+    of the table row (`row`) and the header of the period column (`period`)."""
 
     amount: Signed | None
     reason: str | None
@@ -158,6 +158,11 @@ _CELL = re.compile(r"(?:\+|(?P<minus>[-\u2212]))?(?P<digits>[0-9]+(?:,[0-9]{3})*
 _BRACKET = re.compile(r"\((?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\)")
 
 
+def _cut(text: str, size: int = 80) -> str:
+    """Handoff text quoted in a message: at most `size` characters, then `...`."""
+    return text if len(text) <= size else text[:size] + "..."
+
+
 def _plain(cell: str) -> str:
     """A label or header as compared: trimmed, without Markdown emphasis; case kept."""
     return cell.strip().strip("*_`").strip()
@@ -167,12 +172,13 @@ def _signed(cell: str) -> Decimal | None:
     """`1,000`, `+1,000`, `-1,000`, `\u22121,000` and `(1,000)` as signed numbers; anything else,
     such as a unit or scale suffix, a percentage or `n.a.`, is not a number."""
     text = _plain(cell)
-    if (bracket := _BRACKET.fullmatch(text)) is not None:
-        return -Decimal(bracket["digits"].replace(",", ""))
-    if (plain := _CELL.fullmatch(text)) is None:
-        return None
-    value = Decimal(plain["digits"].replace(",", ""))
-    return -value if plain["minus"] else value
+    with localcontext(cp2g._EXACT):  # a numeral the context cannot hold raises Inexact, not rounds
+        if (bracket := _BRACKET.fullmatch(text)) is not None:
+            return -Decimal(bracket["digits"].replace(",", ""))
+        if (plain := _CELL.fullmatch(text)) is None:
+            return None
+        value = Decimal(plain["digits"].replace(",", ""))
+        return -value if plain["minus"] else value
 
 
 def _tables(text: str) -> list[list[list[str]]]:
@@ -235,34 +241,46 @@ def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
     printed +45, a release, is -45; a magnitude match would turn a release into an outflow.
     Interest, taxes and capex are positive magnitudes however CP-1 prints them; every other
     operand compares signed."""
-    if key == "wc":
-        return -cell == amount
-    return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
+    with localcontext(cp2g._EXACT):
+        if key == "wc":
+            return -cell == amount
+        return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
 
 
 def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
-    """Why the operand is not the cell it names, or None when it is."""
+    """Why the operand is not the cell it names, or None when it is. Both sources use it: CP-1's
+    layer-1 block always, a CP-2G block when it names any cell."""
     if operand.amount is None:
         return (
             None
             if operand.row is None and operand.period is None
             else (f"base {key} states no amount, so it names no row or period")
         )
-    if not operand.row or not operand.period:
+    row, period = operand.row or "", operand.period or ""
+    if not _plain(row) or not _plain(period):
         return f"base {key} must name the `row` label and `period` header it was read from"
-    where = f"row `{operand.row}`, period `{operand.period}`"
-    found = _cells(text, operand.row, operand.period)
+    where = f"row `{_cut(row, 77)}`, period `{_cut(period, 77)}`"
+    found = _cells(text, row, period)
     if not found:
         return f"base {key}: no table cell of CP-1 is at {where}"
-    values = {_signed(cell) for cell in found}
+    not_the_cell = (
+        f"base {key} {operand.amount} is not CP-1's cell at {where} ({_cut(min(found), 77)})"
+    )
+    try:
+        values = {_signed(cell) for cell in found}
+    except Inexact:
+        return not_the_cell
     if len(found) > 1 and len(values) > 1 or None in values:
-        return (
-            f"base {key}: {where} is not one number in CP-1 ({len(found)} cells: {sorted(found)})"
-        )
+        shown = sorted(_cut(cell, 77) for cell in found)
+        more = f" and {len(shown) - 5} more" if len(shown) > 5 else ""
+        count = f"{len(found)} cells: {shown[:5]}{more}"
+        return f"base {key}: {where} is not one number in CP-1 ({count})"
     (value,) = values
-    if value is None or not _agrees(key, value, Decimal(operand.amount)):
-        return f"base {key} {operand.amount} is not CP-1's cell at {where} ({min(found)})"
-    return None
+    try:
+        agrees = value is not None and _agrees(key, value, Decimal(operand.amount))
+    except Inexact:
+        agrees = False
+    return None if agrees else not_the_cell
 
 
 def _declined(document: dict[str, object], source: str) -> None:
@@ -312,14 +330,15 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
     if source == "CP-1" and inputs.facilities:
         raise ValueError("CP-1: a layer-1 forecast states no facilities")
+    named = source == "CP-1" or any(
+        operand.row is not None or operand.period is not None for operand in inputs.base.values()
+    )
     for key, operand in inputs.base.items():
-        if source == "CP-2G":
-            if operand.row is not None or operand.period is not None:
-                raise ValueError(f"{source}: base {key} names a row or period; only CP-1 does")
-            if operand.amount is not None and not _printed(cp1_text, operand.amount):
-                raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
-        elif (problem := _layer1_problem(cp1_text, key, operand)) is not None:
-            raise ValueError(f"{source}: {problem}")
+        if named:
+            if (problem := _layer1_problem(cp1_text, key, operand)) is not None:
+                raise ValueError(f"{source}: {problem}")
+        elif operand.amount is not None and not _printed(cp1_text, operand.amount):
+            raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
     if inputs.facilities:
         _check_facilities(inputs, inputs.facilities, cp1_text)
     return inputs
@@ -560,15 +579,11 @@ def model_files(
     # Imported here: cpos_periods imports this module's helpers at module level.
     from deploy_workflow.owners.cpos_periods import history as period_history
 
-    named = (
-        {
-            key: (o.row, o.period)
-            for key, o in inputs.base.items()
-            if o.amount is not None and o.row is not None and o.period is not None
-        }
-        if source == "CP-1"
-        else None
-    )
+    named = {
+        key: (o.row, o.period)
+        for key, o in inputs.base.items()
+        if o.amount is not None and o.row is not None and o.period is not None
+    }
     calculation = _json(
         {
             "schema_version": "cpos-model/1",
