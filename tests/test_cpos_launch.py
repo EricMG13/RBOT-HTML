@@ -2919,9 +2919,35 @@ def test_a_named_cp2g_operand_that_is_not_its_cell_is_sent_back_for_repair():
     (issue,) = cpos_launch._forecast_issues(task, forecast_block(base=base))
     assert issue == (
         "Forecast inputs: CP-2G: base capex: no table cell of CP-1 is at row `Capex`, period "
-        "`FY2025`. Correct the block; if you cannot, set every driver's values to "
+        "`FY2025`. Correct the row, period or amount of capex; if you cannot, state capex as "
+        "missing: amount null, no row or period, and the reason."
+    )
+
+
+def test_a_refusal_that_is_not_about_a_base_operand_keeps_the_null_every_driver_line():
+    cp1 = "| Base | FY2025 |\n| --- | --- |\n" + "\n".join(
+        f"| {k} | {printed(k, v)} |" for k, v in BASE.items()
+    )
+    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1.encode()})
+    base = {k: _operand(v, k) for k, v in BASE.items()}
+    (issue,) = cpos_launch._forecast_issues(task, forecast_block(base=base, years=[1]))
+    assert issue.startswith("Forecast inputs: CP-2G: ") and "base " not in issue.split(". ")[0]
+    assert issue.endswith(
+        ". Correct the block; if you cannot, set every driver's values to "
         "[null, null, null] and say why in scope_limits."
     )
+
+
+def test_a_cp2g_block_that_names_its_rows_publishes_their_history(tmp_path, provider, capsys):
+    base = {k: _operand(v, k) for k, v in BASE.items()}
+    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block(base=base))
+    assert code == 0, seen.err
+    assert "Model not published" not in seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    record = json.loads((folder / "calculation.json").read_text())["history"]
+    column = next(c for c in record["columns"] if c["id"] == "FY2025")
+    assert column["values"]["revenue"] == {"amount": "1000", "reason": None}
+    assert column["values"]["tax_wc"] == {"amount": "30", "reason": None}  # 20 + 10
 
 
 def test_the_layer1_instruction_asks_for_the_row_and_period_not_for_extra_rows():
@@ -3122,7 +3148,12 @@ def test_an_invalid_or_missing_inputs_block_is_sent_back_for_repair_naming_why(
     after payment. The in-loop check now asks for a repair, or a declined block."""
     issues = cp2g_check(tmp_path, block)
     assert any(f"Forecast inputs: CP-2G: {reason}" in i for i in issues), issues
-    assert all("[null, null, null]" in i for i in issues if i.startswith("Forecast inputs"))
+    ending = (
+        "as missing: amount null, no row or period, and the reason."
+        if "base " in reason
+        else ("[null, null, null] and say why in scope_limits.")
+    )
+    assert all(i.endswith(ending) for i in issues if i.startswith("Forecast inputs")), issues
 
 
 def test_without_a_shock_only_the_reference_case_is_published(tmp_path, provider, capsys):

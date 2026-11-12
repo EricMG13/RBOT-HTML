@@ -2338,6 +2338,12 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
                 return (
                     f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",
                 )
+            operand = re.search(r"^[\w-]+: base (\w+)\b", str(error))
+            if operand:  # a wrong row label should not cost the forecast
+                name = operand.group(1)
+                fix = f"Correct the row, period or amount of {name}; if you cannot, state {name} "
+                missing = "as missing: amount null, no row or period, and the reason."
+                return (f"Forecast inputs: {error}. {fix}{missing}",)
             fix = "Correct the block; if you cannot, set every driver's values to "
             return (
                 f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
