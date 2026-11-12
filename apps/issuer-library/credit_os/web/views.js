@@ -1437,8 +1437,8 @@ function runReport(context) {
 // library does not show and the build's issues are on the library page.
 function activityView(live) {
   const top=liveActivityView(live);
-  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>No live run data was supplied, so nothing is claimed about runs in progress or waiting.</p></div>';
-  if(!top.includes('<section'))return top+'<div class="missing-state"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p></div>';
+  if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>Run activity could not be read</h2><p>No live run data was supplied, so nothing is claimed about runs in progress or waiting.</p></div>';
+  if(!top.includes('<section'))return top+'<div class="missing-state activity-empty"><div class="empty-symbol">'+icon('file-text')+'</div><h2>No run in progress</h2><p>No run is running or waiting. Finished runs are in the Issuer library.</p><a class="run-primary" href="#W-Library/cases">Issuer library</a></div>';
   return top;
 }
 // Live runs from _engine/activity.js (window.RUN_ACTIVITY). Every field may be missing and the whole object may be malformed:
@@ -1449,27 +1449,47 @@ const ENDED_STATUSES=['finished','failed','capped','rejected','interrupted'];
 // Only strings and finite numbers reach the page; any other value in a field renders as empty text.
 function liveText(value) {return esc(typeof value==='string'||(typeof value==='number'&&Number.isFinite(value))?value:'');}
 const LIVE_STATUSES=['queued','running','finished','failed','capped','rejected','interrupted'];
-function liveRunSpend(run,cap) {
-  if(run.spent===null)return '<span class="run-spend">spend could not be read</span>';
-  if(typeof run.spent!=='string')return '';
-  return `<span class="run-spend">USD ${liveText(run.spent)}${cap===undefined||cap===null||cap===''?'':` of ${liveText(cap)}`}</span>`;
-}
 const servedOverHttp=()=>typeof window!=='undefined'&&/^https?:$/.test(window.location?.protocol); // a page with no location (the node tests) is not served
-function liveRunRow(run,cap) {
+const MODULE_STATES=['done','running','waiting'];
+// What a run's head and a waiting row say about it: each part that has text, joined with " · ".
+function liveRunLine(run,extra=[]) {
+  const part=(value,html)=>liveText(value)?html:'';
+  return [part(run.submitted_by,`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`),part(run.started_at,`<span class="run-time">started ${liveText(run.started_at)}</span>`),part(run.folder,`<span class="code">${liveText(run.folder)}</span>`),...extra].filter(Boolean).join(' · ');
+}
+function liveRunProgress(modules) {
+  if(!modules.length)return '';
+  const done=modules.filter(m=>m[1]==='done').length;
+  const badges=modules.map(([name,state])=>{const kind=MODULE_STATES.includes(state)?state:'waiting';return `<span class="chip chip-${kind}">${liveText(name)}<span class="run-vh">, ${kind}</span></span>`;}).join('');
+  return `<div class="run-progress"><progress max="${modules.length}" value="${done}" aria-label="Modules done"></progress><span class="run-done">${done} of ${modules.length} done</span></div><div class="run-mods">${badges}</div>`;
+}
+function liveRunCard(run) {
   const files=Array.isArray(run.files)?run.files:[];
   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
-  const chips=Array.isArray(run.modules)?run.modules.filter(Array.isArray).map(([name,state])=>`<span class="chip chip-${['done','running','waiting'].includes(state)?state:'waiting'}">${liveText(name)}</span>`).join(''):'';
+  const modules=Array.isArray(run.modules)?run.modules.filter(Array.isArray):[];
   const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
-  return `<li class="report-row live-run live-${kind}"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong><span>${liveText(run.pathway)}</span><span class="code">${liveText(run.folder)}</span>${run.submitted_by?`<span class="run-by">submitted by ${liveText(run.submitted_by)}</span>`:''}${run.started_at?`<span class="run-time">started ${liveText(run.started_at)}</span>`:''}${chips?`<span class="chips">${chips}</span>`:''}${liveRunSpend(run,cap)}${run.stalled?'<span class="run-stalled">stalled</span>':''}${run.reason?`<span class="run-reason">${liveText(run.reason)}</span>`:''}${run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''}${files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:''}</li>`;
+  const line=liveRunLine(run),pathway=liveText(run.pathway);
+  const notes=[run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''].filter(Boolean).join(' ');
+  const list=files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:'';
+  const badge=run.stalled?'<span class="run-badge run-badge-stalled">Running · stalled</span>':'<span class="run-badge run-badge-running">Running</span>';
+  return `<li class="run-card live-run live-${kind}"><div class="run-head"><div class="run-who"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${pathway?`<span class="run-tag">${pathway}</span>`:''}${badge}</div></div>${liveRunProgress(modules)}${list||notes?`<div class="run-foot">${list}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
+}
+function liveWaitingRow(run) {
+  const extra=[run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':'',run.stalled?'<span class="run-stalled">stalled</span>':''].filter(Boolean);
+  const line=liveRunLine({submitted_by:run.submitted_by,folder:run.folder},extra);
+  return `<tr class="live-run live-queued"><th scope="row"><span class="run-name">${liveText(run.issuer_name||run.folder||run.id)}</span>${line?`<span class="run-sub">${line}</span>`:''}</th><td>${liveText(run.pathway)}</td></tr>`;
 }
 function liveActivityView(live) {
   if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';
   const runs=live.runs.filter(r=>r&&typeof r==='object'&&!Array.isArray(r));
-  const section=(title,cls,list,note='')=>list.length||note?`<section class="${cls}"><h2>${title}</h2>${note}${list.length?`<ul class="report-list">${list.map(r=>liveRunRow(r,live.cap)).join('')}</ul>`:''}</section>`:'';
-  const waiting=runs.filter(r=>r.status==='queued');
-  const held=live.held&&liveText(live.held)?`<p class="run-held">${liveText(live.held)}</p>`:'';
+  const running=runs.filter(r=>r.status==='running'),waiting=runs.filter(r=>r.status==='queued');
+  const held=live.held&&liveText(live.held)?`<p class="run-held" role="note">${liveText(live.held)}</p>`:'';
+  const runningHtml=running.length?`<section class="activity-running"><h2>Running</h2><ul class="run-cards">${running.map(liveRunCard).join('')}</ul></section>`:'';
+  const table=waiting.length?`<div class="run-table-wrap"><table class="run-table"><caption class="run-vh">Waiting runs</caption><thead><tr><th scope="col">Issuer</th><th scope="col">Pathway</th></tr></thead><tbody>${waiting.map(liveWaitingRow).join('')}</tbody></table></div>`:'';
+  const waitingHtml=waiting.length||held?`<section class="activity-waiting"><h2>Waiting</h2>${held}${table}</section>`:'';
   const stamp=`<p class="run-updated">Updated <span class="run-updated-at">${liveText(live.updated)}</span></p>`;
-  return stamp+section('Running','activity-running',runs.filter(r=>r.status==='running'))+section('Waiting','activity-waiting',waiting,held);
+  const counts=`<dl class="run-tally"><div><dt>Running</dt><dd>${running.length}</dd></div><div><dt>Waiting</dt><dd>${waiting.length}</dd></div></dl>`;
+  const cols=runningHtml&&waitingHtml?'':' one';
+  return `<div class="run-activity-head">${stamp}${counts}</div>${runningHtml||waitingHtml?`<div class="activity-cols${cols}">${runningHtml}${waitingHtml}</div>`:''}`;
 }
 // The Run activity view re-loads activity.js every 30 s while it is showing; no other view schedules anything.
 function nextActivityReload(route) {return route&&route.module==='CP-OS'?ACTIVITY_RELOAD_MS:null;}

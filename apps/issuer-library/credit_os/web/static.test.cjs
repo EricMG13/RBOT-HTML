@@ -1464,7 +1464,7 @@ const liveFns = () => {
 };
 const { liveActivityView, nextActivityReload, swapActivityScript, activityView: activityViewLive } = liveFns();
 
-test('live run activity shows spend, chips and escapes names', () => {
+test('live run activity draws cards with progress and module badges, escapes names, and shows no spend', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
     {id:'a', status:'running', pathway:'earnings_update', folder:'<img src=x onerror=1>', issuer_name:'Acme',
      started_at:'2026-11-09T13:41:00Z', spent:'3.10', files:['a.pdf'], modules:[['CP-0','done'],['CP-1','running'],['Report','waiting']]},
@@ -1472,9 +1472,94 @@ test('live run activity shows spend, chips and escapes names', () => {
      report:'issuers/Initech (ini)/2026-11-09 credit_snapshot.html'},
     {id:'c', status:'running', pathway:'credit_snapshot', folder:'y', issuer_name:'Z', spent:null, modules:[]}]});
   assert.ok(!html.includes('<img'));
-  assert.ok(html.includes('USD 3.10 of 20') && html.includes('spend could not be read'));
   assert.ok(html.includes('chip-done') && html.includes('chip-running') && html.includes('chip-waiting'));
   assert.ok(!html.includes('Initech') && !html.includes('<a '), 'a finished run is not drawn, and no run links to a report');
+});
+test('a running run with 6 modules, 3 done, draws a progress element and "3 of 6 done"; with no modules, none', () => {
+  const six = ['done', 'done', 'done', 'running', 'waiting', 'waiting'].map((s, i) => [`M${i}`, s]);
+  const html = liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: six }] });
+  assert.ok(html.includes('<progress') && html.includes('max="6"') && html.includes('value="3"'), html);
+  assert.ok(html.includes('aria-label="Modules done"') && html.includes('3 of 6 done'));
+  assert.ok(!liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: [] }] }).includes('<progress'));
+  assert.ok(!liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f' }] }).includes('<progress'));
+});
+test('the status badge says Running, or Running · stalled', () => {
+  const badge = run => liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', ...run }] }).match(/<span class="run-badge[^"]*">(.*?)<\/span>(?:<\/span>)?/);
+  assert.ok(badge({ stalled: true })[0].includes('Running · stalled'));
+  assert.ok(badge({})[0].includes('>Running') && !badge({})[0].includes('stalled'));
+  assert.ok(liveActivityView({ runs: [{ status: 'running', folder: 'f', stalled: true }] }).includes('run-badge-stalled'));
+});
+test('the page shows no spend or cap for a run whose spent is a string, null or absent', () => {
+  for (const spent of ['3.10', null, undefined, 3.1, '<b>']) {
+    for (const status of ['running', 'queued']) {
+      const html = liveActivityView({ cap: '20', held: '', runs: [{ id: 'a', status, folder: 'f', issuer_name: 'N', pathway: 'p', spent, modules: [['M', 'done']] }] });
+      for (const word of ['USD', 'spend', 'run-spend', '3.10', ' of 20']) assert.ok(!html.includes(word), `${status} ${spent}: ${word}`);
+    }
+  }
+  assert.ok(!read('views.js').includes('liveRunSpend') && !read('screen.css').includes('run-spend'));
+});
+test('waiting runs are one table with a caption, two column headers and a row each; the held notice is above it', () => {
+  const html = liveActivityView({ held: 'daily limit reached', runs: [
+    { id: 'q1', status: 'queued', pathway: 'credit_snapshot', folder: 'f1', issuer_name: 'Qone', submitted_by: 'Dana', reason: 'waiting for a slot' },
+    { id: 'q2', status: 'queued', pathway: 'earnings_update', folder: 'f2', issuer_name: 'Qtwo' },
+    { id: 'r', status: 'running', folder: 'g', issuer_name: 'Runner' }] });
+  assert.strictEqual(countOf(html, /<table/g), 1);
+  assert.ok(html.includes('<caption class="run-vh">Waiting runs</caption>'));
+  assert.ok(html.includes('<th scope="col">Issuer</th>') && html.includes('<th scope="col">Pathway</th>'));
+  assert.strictEqual(countOf(html, /<th scope="row">/g), 2);
+  assert.strictEqual(countOf(html, /<tr class="live-run live-queued">/g), 2);
+  assert.ok(html.includes('<span class="run-by">submitted by Dana</span>') && html.includes('waiting for a slot') && html.includes('credit_snapshot'));
+  assert.ok(html.indexOf('role="note"') > 0 && html.indexOf('daily limit reached') < html.indexOf('<table'));
+  assert.ok(html.indexOf('Runner') < html.indexOf('<table'), 'Running comes first');
+});
+test('the counts show running and waiting as numbers under their labels; empty runs give 0 and 0 and the empty state with one link', () => {
+  const run = (status, n) => Array.from({ length: n }, (_, i) => ({ id: `${status}${i}`, status, folder: 'f', issuer_name: `N${i}` }));
+  const html = liveActivityView({ runs: [...run('running', 2), ...run('queued', 3), ...run('finished', 4)] });
+  assert.ok(html.includes('<dl class="run-tally"><div><dt>Running</dt><dd>2</dd></div><div><dt>Waiting</dt><dd>3</dd></div></dl>'), html);
+  const empty = activityViewLive({ runs: [] });
+  assert.ok(empty.includes('<dt>Running</dt><dd>0</dd>') && empty.includes('<dt>Waiting</dt><dd>0</dd>'));
+  assert.ok(empty.includes('No run in progress') && empty.includes('No run is running or waiting. Finished runs are in the Issuer library.'));
+  assert.strictEqual(countOf(empty, /<a /g), 1);
+  assert.ok(empty.includes('<a class="run-primary" href="#W-Library/cases">Issuer library</a>'));
+  const unread = activityViewLive(null);
+  assert.ok(unread.includes('Run activity could not be read') && !unread.includes('<a ') && !unread.includes('<dl'));
+});
+test('a column holding no run is not drawn, and a single column takes the full width', () => {
+  const only = status => liveActivityView({ runs: [{ id: 'a', status, folder: 'f' }] });
+  assert.ok(only('running').includes('class="activity-cols one"') && !only('running').includes('<h2>Waiting</h2>'));
+  assert.ok(only('queued').includes('class="activity-cols one"') && !only('queued').includes('<h2>Running</h2>'));
+  const both = liveActivityView({ runs: [{ status: 'running', folder: 'f' }, { status: 'queued', folder: 'g' }] });
+  assert.ok(both.includes('class="activity-cols"'));
+});
+test('malformed runs and script strings in every text field never reach the page as markup', () => {
+  const x = '<script>alert(1)</script>';
+  const html = liveActivityView({ updated: x, cap: x, held: x, runs: [null, 3, 'r', [], { status: 'running', id: x, issuer_name: x, pathway: x, folder: x, submitted_by: x,
+    started_at: x, reason: x, name_differs: true, files: [x, { a: 1 }, null], modules: [[x, 'done'], [x, x], 'bad', [x], null, [{ a: 1 }, 'running']] },
+  { status: 'queued', id: x, issuer_name: x, pathway: x, folder: x, submitted_by: x, reason: x }] });
+  assert.ok(!html.includes('<script') && html.includes('&lt;script&gt;'));
+  for (const bad of [null, 5, 'x', [], {}, { runs: 'no' }, { runs: {} }]) assert.doesNotThrow(() => activityViewLive(bad));
+});
+test('Run activity styles take the component reference values (card, badge, tag, progress, table, notice, button)', () => {
+  const css = read('screen.css');
+  const rule = sel => { const m = css.match(new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\{([^}]*)\\}`)); assert.ok(m, sel); return m[1]; };
+  assert.ok(/border-radius:12px/.test(rule('.run-card')) && rule('.run-card').includes('var(--shadow-xs)') && rule('.run-card').includes('var(--border-secondary)'));
+  assert.ok(/height:24px/.test(rule('.run-badge')) && /padding:2px 8px 2px 6px/.test(rule('.run-badge')) && /500 14px\/20px/.test(rule('.run-badge')));
+  assert.ok(/height:22px/.test(rule('.run-tag')) && /padding:0 7px/.test(rule('.run-tag')) && /border-radius:4px/.test(rule('.run-tag')));
+  assert.ok(/height:8px/.test(rule('.run-progress progress')) && /border-radius:6px/.test(rule('.run-progress progress')));
+  assert.ok(/height:44px/.test(rule('.run-table thead th')) && /600 12px\/18px/.test(rule('.run-table thead th')));
+  assert.ok(/padding:8px 12px/.test(rule('.run-held')) && /border-radius:8px/.test(rule('.run-held')) && rule('.run-held').includes('var(--amber-bg)'));
+  assert.ok(/height:40px/.test(rule('.run-primary')) && /padding:10px 14px/.test(rule('.run-primary')) && rule('.run-primary').includes('var(--blue)'));
+  assert.ok(css.includes('grid-template-columns:minmax(0,1fr) 440px') && css.includes('--green-bg:#e8fff4'));
+  assert.ok(!/run-(badge|tag|tally|done|primary)[^{]*\{[^}]*Red Hat Display/.test(css), 'Red Hat Text only');
+});
+test('each module badge carries its state as text, not colour alone', () => {
+  const html = liveActivityView({ runs: [{ id: 'a', status: 'running', folder: 'f', modules: [['One', 'done'], ['Two', 'running'], ['Three', 'waiting'], ['Four', 'odd']] }] });
+  const badges = [...html.matchAll(/<span class="chip chip-[^"]*">.*?<\/span><\/span>/g)].map(m => m[0]);
+  assert.strictEqual(badges.length, 4);
+  assert.ok(badges[0].includes('One') && badges[0].includes(', done'));
+  assert.ok(badges[1].includes('Two') && badges[1].includes(', running'));
+  assert.ok(badges[2].includes('Three') && badges[2].includes(', waiting'));
+  assert.ok(badges[3].includes('Four') && badges[3].includes(', waiting') && badges[3].includes('chip-waiting'));
 });
 test('live run activity names who submitted a run, as text', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
@@ -1549,9 +1634,9 @@ test('the live section says how old the snapshot is, and the view re-loads at on
 });
 
 test('a status adds no class names to the row; only running and queued runs have one', () => {
-  const rows = status => [...liveActivityView({ runs: [{ status, folder: 'f' }] }).matchAll(/<li class="([^"]*)"/g)].map(m => m[1]);
-  assert.deepEqual(rows('running'), ['report-row live-run live-running']);
-  assert.deepEqual(rows('queued'), ['report-row live-run live-queued']);
+  const rows = status => [...liveActivityView({ runs: [{ status, folder: 'f' }] }).matchAll(/<(?:li|tr) class="([^"]*)"/g)].map(m => m[1]);
+  assert.deepEqual(rows('running'), ['run-card live-run live-running']);
+  assert.deepEqual(rows('queued'), ['live-run live-queued']);
   for (const other of ['x sr-only skip', '__proto__', 'finished', 'failed', 'capped', 'rejected', 'interrupted']) assert.deepEqual(rows(other), [], other);
 });
 

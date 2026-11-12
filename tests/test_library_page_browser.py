@@ -331,9 +331,93 @@ def test_live_run_chips_show_their_state_colours(tmp_path):
     dom, console = visit(probe, "#CP-OS/activity")
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="chips">(.*?)</pre>', dom, re.DOTALL)[1]))
-    assert seen["running"] == ["rgb(0, 5, 51)", "rgb(255, 255, 255)"]
-    assert seen["done"][0] == "rgb(250, 250, 251)"
-    assert seen["waiting"][1] == "rgb(71, 74, 79)"
+    # Module badges follow the component reference: running blue-700 on blue-50, done green on
+    # green-bg, waiting text-tertiary on gray-100.
+    assert seen["running"] == ["rgb(229, 232, 255)", "rgb(0, 18, 178)"]
+    assert seen["done"] == ["rgb(232, 255, 244)", "rgb(15, 128, 72)"]
+    assert seen["waiting"] == ["rgb(244, 244, 245)", "rgb(71, 74, 79)"]
+
+
+RUN_ACTIVITY_PROBE = (
+    Path(__file__).with_name("browser_probe_run_activity.js").read_text(encoding="utf-8")
+)
+LONG_FOLDER = (
+    "2026-11-12-a-very-long-issuer-folder-name-that-would-not-fit-a-narrow-card-without-wrapping"
+)
+
+
+def run_activity_library(tmp_path: Path) -> Path:
+    make_run(tmp_path, "run-a")
+    update_library.update_library(tmp_path)
+    modules = [
+        [f"Module {i}", s] for i, s in enumerate(["done"] * 3 + ["running"] + ["waiting"] * 4)
+    ]
+    activity = {
+        "updated": "2026-11-12T00:00:00Z",
+        "cap": "20",
+        "runs": [
+            {
+                "id": "r1",
+                "status": "running",
+                "issuer_name": "Northbridge Synthetic Group",
+                "pathway": "credit_snapshot",
+                "folder": LONG_FOLDER,
+                "submitted_by": "Dana Reyes",
+                "started_at": "2026-11-12T00:00:00Z",
+                "spent": "3.10",
+                "modules": modules,
+                "files": ["annual-report.pdf", "presentation.pdf"],
+                "reason": "reading",
+            },
+            {
+                "id": "q1",
+                "status": "queued",
+                "issuer_name": "Queued Issuer One",
+                "pathway": "earnings_update",
+                "folder": LONG_FOLDER + "-q1",
+            },
+            {
+                "id": "q2",
+                "status": "queued",
+                "issuer_name": "Queued Issuer Two",
+                "pathway": "credit_snapshot",
+                "folder": "q2",
+            },
+        ],
+    }
+    (tmp_path / "activity.js").write_text(
+        f"window.RUN_ACTIVITY={json.dumps(activity)};\n", encoding="utf-8"
+    )
+    return tmp_path / "library/index.html"
+
+
+def test_run_activity_puts_waiting_beside_running_on_a_wide_window(tmp_path):
+    page = run_activity_library(tmp_path)
+    seen = read_probe(page, "#CP-OS/activity", 1440, RUN_ACTIVITY_PROBE)
+    assert seen["waitingLeft"] > seen["runningRight"], seen
+    assert seen["progressName"] == "Modules done"
+    assert (seen["progressMax"], seen["progressValue"], seen["barHeight"]) == (8, 3, 8)
+    # A list opened before the reload is still open after it.
+    assert seen["openBefore"] is True and seen["openAfter"] is True and seen["changedShown"] is True
+
+
+def test_run_activity_has_no_horizontal_scroll_on_a_phone(tmp_path):
+    # Chrome will not open a window under 500px, so the page opens in a 375px frame.
+    page = run_activity_library(tmp_path)
+    (page.parent / "probe.js").write_text(RUN_ACTIVITY_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    wrapper = page.parent / "wrap.html"
+    wrapper.write_text(
+        '<iframe src="index.html#CP-OS/activity" width="375" height="800"></iframe><pre id="probe">'
+        "</pre><script>addEventListener('message', e => "
+        "{ document.getElementById('probe').textContent = e.data; });</script>",
+        encoding="utf-8",
+    )
+    dom, console = visit(wrapper, "", 1000)
+    assert console == []
+    seen = probe_json(dom)
+    assert seen["innerWidth"] == 375 and seen["scrollWidth"] <= 375, seen
+    assert seen["contentScroll"] <= seen["contentClient"], seen
 
 
 def test_an_empty_library_says_so(tmp_path):

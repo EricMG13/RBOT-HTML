@@ -260,3 +260,11 @@ The delivered report is retired from the library, so the copied report pages and
 | --- | --- | --- |
 | `web/screen.css` | Box properties only, no font change: `.badge`, `.grade`, `.forecast-built .code` and the live-run `.chip-*` take radius 6px (badge and grade padding `0 6px` / `1px 6px`); the current workspace tab is `--text-primary` under its 2px `--blue` underline, other tabs `--text-quaternary`, hover `--text-secondary`; `.tertiary-action` pads 12px; table header text is `--text-quaternary`; `.metric-label` and `.missing-state p` are `--text-quaternary`; `.empty-symbol` is 48px with radius 10px; `.caution` has radius 8px and an inset ring in `--amber-border`; `.run-strip` radius 8px; compact toolbar selects take radius 8px; module-step markers are white with a 1.5px ring, a completed step is `--gray-200` with a dark tick | the component reference (Untitled UI, Ant Design) as the look of the existing components |
 | `web/static.test.cjs` | A static test of the button, input, badge and tab values | covers the above |
+
+## Run activity redesign (brand application plan, Task 5; owner, 2026-11-12: "Yes, build it", "remove the run spend")
+
+| File | Change | Why |
+| --- | --- | --- |
+| `web/views.js` | `liveRunRow` becomes `liveRunCard` (name, one line, pathway tag, status badge, `<progress>`, module badges, foot); `liveWaitingRow` and a waiting `table`; counts `dl`; `liveRunSpend` removed; the empty state gains an "Issuer library" link | the approved Run activity design; the page no longer shows spend |
+| `web/screen.css` | A Run activity block at the end (cards, badges, tag, progress, table, notice, counts, centred empty state, narrow and print rules); `--green-bg` added to `:root` | the same design; Red Hat faces as before |
+| `web/static.test.cjs`, `tests/test_library_page_browser.py`, `tests/browser_probe_run_activity.js` | Old row-markup and spend tests rewritten; tests added for progress, badges, the table, counts, escaping, layout at 1440 and 375, and an open file list across a reload | covers the above |
