@@ -38,6 +38,17 @@ pytestmark = pytest.mark.browser
 
 ROOT = Path(__file__).resolve().parents[1]
 FORM = ROOT / "docs/templates/context-form.html"
+# The page's own module names (its `MODULES` table), read from the file: the answer key for what an
+# analyst sees where a module code stood. The review names every module, never shows its code.
+NAMES = dict(
+    re.findall(r"^\s+'(CP-[A-Z0-9]+)': \['([^']+)'", FORM.read_text("utf-8"), re.MULTILINE)
+)
+
+
+def named(text: str) -> str:
+    return re.sub(r"\bCP-[A-Z0-9]+\b", lambda m: NAMES.get(m[0], "a module"), text)
+
+
 RESEARCH_MINIMAL = json.loads((ROOT / "cases/context/research-minimal.json").read_text("utf-8"))
 
 # Synthetic documents the launcher's own offline reading classifies by their cover lines.
@@ -680,7 +691,7 @@ def test_the_review_shows_the_services_forecast_per_module(page):
         want = min(own, key=ORDER.index) if own else "ready"
         assert by_module[module]["outcome"] == want, module
     for item in summary["items"]:  # every reason the service gave is shown
-        assert item["reason"] in seen["ready"]
+        assert named(item["reason"]) in seen["ready"]
     assert by_module["CP-4"]["outcome"] == "will_refuse"  # legal documents: none, on CP-4
     assert ["legal", "Go to Legal"] in seen["goto"]
     for text in ("sol-medium", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
@@ -1175,7 +1186,7 @@ def test_the_review_needs_a_tick_for_an_as_of_date_before_the_newest_document(pa
     seen = _reviewed(page, _AS_OF_EARLY)
     row = seen["rows"]["run"]
     assert row["outcome"] == "limited" and "before your newest file" in row["text"]
-    assert "CP-1" in row["text"] and len(row["ticks"]) >= 1
+    assert NAMES["CP-1"] in row["text"] and len(row["ticks"]) >= 1
     assert row["ticks"][0] == "I accept this limit."
     _blocked_until_ticked(seen)
 
@@ -1187,7 +1198,7 @@ def test_the_review_needs_a_tick_for_an_executed_answer_on_a_file_that_is_no_agr
     assert "I have checked this." in cp4["ticks"]  # a check with a fix is ticked
     run = seen["rows"]["run"]  # the page's own limit, run level, naming the file and the modules
     assert run["outcome"] == "limited" and "memo.txt" in run["text"]
-    assert "CP-4" in run["text"] and "CP-2A" in run["text"] and len(run["ticks"]) >= 1
+    assert NAMES["CP-4"] in run["text"] and NAMES["CP-2A"] in run["text"] and len(run["ticks"]) >= 1
     _blocked_until_ticked(seen)
 
 
@@ -1419,7 +1430,8 @@ def test_the_review_shows_turns_and_left_out_modules_at_every_level_when_they_di
     for lvl in ("advanced", "standard", "basic"):
         text = seen[lvl]
         assert "Turns per module2 (the default is 32)" in text, (lvl, text)
-        assert "Modules left out" in text and f"({seen['left']})" in text, (lvl, text)
+        assert "Modules left out" in text and NAMES[seen["left"]] in text, (lvl, text)
+        assert seen["left"] not in text, (lvl, text)
 
 
 def _stale(page, setup: str, change: str):
@@ -2397,3 +2409,65 @@ def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypa
     assert "could not be listed" in got["msg"] and "link.txt" in got["msg"]
     assert str(root) not in got["msg"]
     assert got["files"] == [] and got["rows"] == []
+
+
+@pytest.mark.parametrize(
+    "pathway",
+    [
+        "credit_snapshot",
+        "earnings_update",
+        "relative_value",
+        "covenant_refinancing",
+        "distressed_restructuring",
+        "portfolio_decision",
+    ],
+)
+def test_no_module_code_is_shown_on_any_stage_at_any_level_of_a_pathway(page, pathway):
+    """R7 (owner ruling 2026-11-12): every string the page renders (text, title, aria-label,
+    placeholder, alt) names a module by its `MODULES` name, never its code. Every stage of every
+    pathway at every level is visited with a row of each kind added and the review summarised; the
+    saved answer keys and option values stay the codes."""
+    seen = page.run(
+        """
+    const found = new Set(), code = /\\bCP-[A-Z0-9]+\\b/;
+    const scan = where => {
+      const walker = document.createTreeWalker(
+        document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const values = node.nodeType === 3
+          ? [node.parentElement.closest('script,style,#probe') ? '' : node.data]
+          : ['title', 'aria-label', 'placeholder', 'alt'].map(a => node.getAttribute(a) || '');
+        for (const value of values) if (code.test(value)) found.add(value.slice(0, 90));
+      }
+    };
+    const focusValues = new Set();
+    let tables = 0;
+    for (const pathway of ['PATHWAY']) {
+      for (const lv of ['advanced', 'standard', 'basic']) {
+        pick('data-k="pathway"', pathway);
+        level(lv);
+        if (lv === 'advanced') {
+          await issuer(pathway,
+            [file('annual.txt', REPORT_TEXT), file('prior.txt', PRIOR_TEXT)]);
+          type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
+          await review();
+          document.querySelectorAll('[data-mod]').forEach(d => { d.open = true; });
+          scan(pathway + '/' + lv + '/review');
+          tables += document.querySelectorAll('#rv-ready tr[data-module]').length;
+        }
+        document.querySelectorAll('[data-add]').forEach(b => b.click());
+        for (const st of stages()) { gotoStep(st); scan(pathway + '/' + lv + '/' + st); }
+        document.querySelectorAll('select[data-k="focus_module"] option')
+          .forEach(o => focusValues.add(o.value));
+      }
+    }
+    return {tables, hits: [...found], keys: Object.keys(MODULES).sort(),
+      focus: [...focusValues].filter(Boolean).sort()};
+    """.replace("REPORT_TEXT", json.dumps(REPORT))
+        .replace("PRIOR_TEXT", json.dumps(REPORT.replace("2025", "2024")))
+        .replace("PATHWAY", pathway)
+    )
+    assert seen["tables"] > 0, "the review's readiness table was drawn and scanned"
+    assert not seen["hits"], "\n".join(seen["hits"])
+    assert seen["focus"] == seen["keys"], "a Focus module option keeps the code as its value"

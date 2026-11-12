@@ -66,7 +66,7 @@ function nameCodes(root,output=current?.output,marks=true) {
   while(walker.nextNode())nodes.push(walker.currentNode);
   for(const node of nodes) {
     const parent=node.parentElement;
-    if(parent.closest('.ref,.excerpt,.basis,.module-code'))continue; // a source excerpt is the issuer's own text, quoted as it is; a Basis line is printed as written; a navigator code is the code
+    if(parent.closest('.ref,.excerpt'))continue; // a source excerpt is the issuer's own text, quoted as it is; a register reference keeps its mark
     const named=namedText(node.data,output);
     if(named!==node.data)node.data=named;
     // A chart, a select or a chip cannot hold the mark, so these keep the reference as text.
@@ -346,7 +346,7 @@ function paragraphBasisHtml(key,item,output,mode,chips) {
     const {body}=paragraphBody(item.text,earlier);
     const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
     figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
-    // reader.js draws the list (the same code the node tests read). New-format items stay as written (nameCodes skips .basis); an earlier-format page keeps names, not codes, for its citations too.
+    // reader.js draws the list (the same code the node tests read): an upstream-handoff item shows its written name; nameCodes names the rest, citations of an earlier-format page included.
     const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
     const ev=contexts[output.run]?.evidence||{},files=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name);
     items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,files,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
@@ -478,9 +478,9 @@ function contextPrefix({module,context}) {
   const ctx=contexts[context];
   return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
 }
-// New-format handoff text is shown as written (decision 7: codes stay); an earlier-format page keeps names, not codes (the owner's standing rule).
-// The Evidence page lists file names and hashes, which identify files: it is drawn with its names already and is never rewritten.
-const keepsCodes=route=>route.module==='W-Evidence'||(route.module==='W-Overview'?Boolean(contexts[route.context])&&!earlierFormat(contexts[route.context]):Boolean(route.output)&&isAnalytical(route.module)&&isNewFormat(data[route.output].sections));
+// No page shows a module code (owner ruling 2026-11-12). The Evidence page lists issuer source file names and hashes, which identify files:
+// it is drawn with its module names already (views.js) and is never rewritten; every other page is named here.
+const keepsCodes=route=>route.module==='W-Evidence';
 const reportPage=route=>Boolean(route?.output&&isAnalytical(route.module));
 // The reading position of a page: a module report is one page whatever part is scrolled to.
 const positionKey=route=>`${route.context}:${route.output||route.module}:${reportPage(route)?'report':route.section}`;

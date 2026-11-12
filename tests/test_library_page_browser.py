@@ -561,41 +561,42 @@ def nine_part_library(tmp_path: Path) -> Path:
     return tmp_path / "library/index.html"
 
 
-# Names, not codes: the module page with its audit section and the inspector open, then the Evidence
-# tab, Run activity and a search, read as a reader sees and hears them (text, title, aria-label).
-# Register references (C1, K) are not codes of this kind. A navigator entry shows its module code
-# in the code style (ruling decision 5), so `.module-code` text is the one place a code appears.
+# Names, not codes (owner ruling 2026-11-12: no module code is shown anywhere on screen): the module
+# page with its audit section and the inspector open, the Evidence tab, Report history, Overview,
+# Run activity and a search, read as a reader sees and hears them (text, title, aria-label). The
+# module navigator is on every module page. Register references (C1, K) are not codes of this kind;
+# `.excerpt` is the issuer's own quoted text. RUN is replaced by the run the probe reads.
 CODES_PROBE = """(async () => {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), hits = [];
   const code = /\\bCP-[A-Z0-9]+\\b|\\bT\\d+[A-Z]?(?:\\.\\d+)?\\b/;
-  // A file name is the file's identity, shown as stored (Evidence's handoff and
-  // instruction names), not a module code.
-  const fileName = /^(?:instructions\\/)?CP-[A-Z0-9]+\\.md$/;
   const scan = where => {
     const walker = document.createTreeWalker(
       document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
     while (walker.nextNode()) {
       const node = walker.currentNode, text = node.nodeType === 3;
       const seen = text
-        ? [node.parentElement.closest('script,style,#probe,.module-code')
-            || fileName.test(node.data.trim()) ? '' : node.data]
+        ? [node.parentElement.closest('script,style,#probe,.excerpt') ? '' : node.data]
         : ['title', 'aria-label'].map(a => node.getAttribute(a) || '');
       for (const value of seen) if (code.test(value)) hits.push(where + ': ' + value.slice(0, 80));
     }
   };
   for (let i = 0; i < 200 && !document.querySelector('.module-head'); i++) await sleep(50);
-  document.querySelector('.audit-open').click();
+  // An earlier-format page opens its audit section from a button and its inspector from a chip; a
+  // new-format page opens its inspector from a paragraph's figure or Basis control.
+  const audit = document.querySelector('.audit-open');
+  if (audit) audit.click();
   await sleep(100);
   scan('module page');
-  document.querySelector('.chip[data-evidence]').click();
+  document.querySelector('.chip[data-evidence], #content [data-paragraph]').click();
   await sleep(300);
   scan('inspector');
-  for (const route of ['#W-Evidence/sources?c=run-a', '#CP-OS/activity']) {
+  for (const route of ['#W-Evidence/sources?c=RUN', '#W-Report/history?c=RUN',
+                       '#W-Overview/overview?c=RUN', '#CP-OS/activity']) {
     location.hash = route;
     await sleep(300);
     scan(route);
   }
-  location.hash = '#CP-1/head?c=run-a';
+  location.hash = 'START';
   await sleep(300);
   const search = document.getElementById('module-search');
   search.value = 'cp-1';
@@ -607,21 +608,54 @@ CODES_PROBE = """(async () => {
   out.textContent = JSON.stringify({
     hits,
     titled: document.querySelectorAll('a.module-item[title]').length,
+    audit: !!audit,
     inspector: !!document.querySelector('.evidence-context'),
     searched: document.querySelectorAll('.search-hit').length,
+    moduleCodes: document.querySelectorAll('.module-code').length,
   });
   document.body.append(out);
 })();"""
 
 
-def test_no_module_code_or_step_id_reaches_a_reader_from_a_module_page(tmp_path):
-    page = nine_part_library(tmp_path)
-    (page.parent / "probe.js").write_text(CODES_PROBE, encoding="utf-8")
+def read_codes_probe(page: Path, run: str, start: str) -> dict:
+    script = CODES_PROBE.replace("RUN", run).replace("START", start)
+    (page.parent / "probe.js").write_text(script, encoding="utf-8")
     page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
-    dom, console = visit(page, "#CP-1/head?c=run-a")
+    dom, console = visit(page, start)
     assert console == []
-    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+
+
+def test_no_module_code_or_step_id_reaches_a_reader_from_a_module_page(tmp_path):
+    seen = read_codes_probe(nine_part_library(tmp_path), "run-a", "#CP-1/head?c=run-a")
+    assert seen["audit"] is True
     assert seen["inspector"] is True and seen["titled"] == 0 and seen["searched"] > 0
+    assert seen["moduleCodes"] == 0
+    assert seen["hits"] == []
+
+
+def test_no_module_code_reaches_a_reader_from_a_new_format_run(tmp_path):
+    """The synthetic new-format run (its own handoffs, Basis lines naming `Liquidity (CP-2D)`)."""
+    fixtures = ROOT / "apps/issuer-library/fixtures"
+    subprocess.run(
+        [sys.executable, str(fixtures / "build_synthetic_run.py"), "--workspace", str(tmp_path)],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "apps/issuer-library/update_library.py"),
+            "--workspace",
+            str(tmp_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    run = "synthetic-nbg-new-format-001"
+    seen = read_codes_probe(tmp_path / "library/index.html", run, f"#CP-2?c={run}")
+    assert seen["inspector"] is True and seen["titled"] == 0 and seen["searched"] > 0
+    assert seen["moduleCodes"] == 0
     assert seen["hits"] == []
 
 
@@ -1073,7 +1107,8 @@ def test_the_inspector_draws_every_basis_item_of_every_paragraph_as_the_handoff_
                     x for pair in zip(k1_headers, k1_cells, strict=True) for x in pair
                 ], drawn
             elif m := re.fullmatch(r"(.+) \((CP-[A-Z0-9]+)\)", item):
-                assert item in drawn["text"]
+                # The handoff's `Name (code)` item is drawn as its written name only (R5).
+                assert drawn["text"].startswith(m[1]) and m[2] not in drawn["text"], drawn
                 assert bool(drawn["links"]) == (m[2] in ran), drawn
                 assert ("Not run in this run" in drawn["text"]) == (m[2] not in ran)
             else:
@@ -1122,14 +1157,14 @@ def test_wide_tables_scroll_in_their_own_region_on_a_narrow_page(tmp_path, route
 
 
 def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_recorded(tmp_path):
-    """L3, L4: the Hashes table shows `instructions/CP-0.md`, not a module name; a run record
-    with no supplied-file list does not claim every supplied file was used."""
+    """R6: the Hashes table labels a module-named file by its module's name (the hash stays); a run
+    record with no supplied-file list does not claim every supplied file was used."""
     make_run(tmp_path, "run-a")
     update_library.update_library(tmp_path)
     dom, console = visit(tmp_path / "library/index.html", "#W-Evidence/sources?c=run-a")
     assert console == []
-    cells = re.findall(r"<td>(instructions/[^<]*)</td>", dom)
-    assert cells == ["instructions/CP-0.md", "instructions/CP-1.md"]
+    cells = re.findall(r"<td>([^<]*instructions)</td>", dom)
+    assert cells == ["Source readiness instructions", "Financial foundation instructions"]
     assert "The run record lists no supplied files." in dom
     assert "Every supplied file is named" not in dom
     # Each handoff and instruction link stays inside library/, where the served page can open it.
