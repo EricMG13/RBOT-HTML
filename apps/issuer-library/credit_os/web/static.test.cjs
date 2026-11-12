@@ -1787,6 +1787,31 @@ test('reader charts: nine long step labels wrap word-wise inside their step, at 
   assert.ok(labels[3].lines.join(' ') === 'Refinancing costs' || labels[3].lines.length <= 3);
 });
 
+test('reader charts: the real nine-step bridge labels break only between words, unless one word alone exceeds the line', () => {
+  const names = ['Net income (reported, US GAAP) FY2024', 'Interest expense-net', 'Income tax provision', 'Depreciation and amortization expense', 'Non-cash stock and deferred compensation expense', 'Acquisition transaction and integration-related expenses', 'Refinancing costs', 'Other, net', 'Issuer As Defined EBITDA'];
+  const rows = names.map((n, i) => [63 + i, n, i === 0 ? '1000' : i === 8 ? '1400' : '50', 'US$m', 'Synthetic.']);
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; });
+  const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
+  const labels = [...html.matchAll(/<text class="axis-label" x="([\d.]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: Number(m[1]), lines: [...m[2].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(t => t[1]) }));
+  const step = Number(/<rect class="[^"]*" x="[\d.]+" y="[\d.]+" width="([\d.]+)"/.exec(html)[1]) + 20;
+  const room = Math.floor((step - 6) / 8.4);
+  assert.ok(html.includes('vector-chart bridge-wide'), 'a many-step bridge takes the card width');
+  labels.forEach((l, i) => {
+    const words = names[i].split(' ');
+    assert.ok(l.lines.length <= 3, l.lines.join('|'));
+    for (const w of l.lines.join(' ').split(' ')) {
+      const stem = w.replace(/\u2026$/, '');
+      if (words.includes(w)) continue;
+      assert.ok(w.endsWith('\u2026') && words.some(o => o.startsWith(stem) && (o.length > room || o === stem)), `${names[i]}: "${w}" is cut inside a word`);
+    }
+    if (words.every(w => w.length <= room) && l.lines.length < 3) assert.ok(!l.lines.join(' ').includes('\u2026'), l.lines.join('|'));
+  });
+  for (const n of [1, 2, 3, 6, 7]) assert.equal(labels[n].lines.join(' '), names[n], names[n]);
+  const boxes = labels.map(l => { const w = Math.max(...l.lines.map(t => t.length)) * 8.4; return [l.x - w / 2, l.x + w / 2]; });
+  for (let i = 1; i < boxes.length; i++) assert.ok(boxes[i - 1][1] < boxes[i][0], `labels ${i - 1} and ${i} overprint`);
+  assert.ok(Math.max(...boxes.flat()) <= Number(/viewBox="(-?[\d.]+) -?[\d.]+ ([\d.]+)/.exec(html)[2]), 'inside the viewBox');
+});
+
 test('reader charts: every chart has its table form, the handoff table as written with its chips', () => {
   const page = runPage(withBridge);
   const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);

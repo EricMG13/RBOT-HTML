@@ -814,3 +814,5 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .stack-seg.series-3,.stack-key .series-3,.stack-legend .series-3{background:var(--muted)}
 .stack-seg.stack-neutral,.stack-key .stack-neutral,.stack-legend .stack-neutral{background:var(--rule);box-shadow:inset 0 0 0 1px var(--muted)}
 .stack-legend i{height:12px;width:12px;border-radius:2px}
+.vector-chart.bridge-wide{max-width:none}
+@media(max-width:1050px){.vector-chart.bridge-wide{overflow-x:auto}.vector-chart.bridge-wide svg{min-width:900px}}
