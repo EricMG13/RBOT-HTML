@@ -20,10 +20,14 @@ UTF-8 is not compared (reason in `skipped`).
 
 The pack (`build_pack`) is computed before CP-8 is called, given to CP-8 as the source
 `changes.json` and published unchanged in the delivery as `changes.json`. Schema
-`cpos-changes/2` (every number is a decimal string; missing is null, never zero):
+`cpos-changes/3` (the library also reads `cpos-changes/2`, which lacks `selection`; every number is
+a decimal string; missing is null, never zero):
 
-- `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text]}`;
-  `current`: `{as_of, pathway, format}`.
+- `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text], selection}`;
+  `current`: `{as_of, pathway, format, selection}`. `selection` is `"preset"` when the run's modules
+  were the pathway's own, `"explicit"` for a `--modules` subset and null when the run's manifest
+  records neither. When a module is `New` or `Not run this time` and both are `"preset"`, the
+  pathway's module set changed between the runs (CP-8's cause is `Method change`).
 - `measures`: a list of `{key, label, unit, comparable, reason, prior, current, difference,
   same_period}`; `prior` and `current` are `{label, unit, value, period, definition,
   definition_resolved, definition_written}` or null when the run does
@@ -43,9 +47,11 @@ The pack (`build_pack`) is computed before CP-8 is called, given to CP-8 as the 
   of the definition; page and locator numbers are not.
 - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
   current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
-  unit, each under the same definition ("yes"), and each run's net debt is its gross debt less its
-  cash. A two-point identity of stated balances; it does not say what drove the change. An
-  increase in cash reduces net debt.
+  unit (gross and net debt are read only from a CP-1 table row labelled exactly as `ROW_MEASURES`
+  says, the unit in brackets after the label or in a `Reporting unit` column; a row labelled
+  otherwise is not read, and `omitted` says so), each under the same definition ("yes"), and each
+  run's net debt is its gross debt less its cash. A two-point identity of stated balances; it does
+  not say what drove the change. An increase in cash reduces net debt.
 - `maturity_profile`: `{unit, rows: [{period, prior, current, difference}]}` from the CP-1
   "Chart data: debt maturities" tables (the table directly under that heading), only when both
   runs have one in one unit.
@@ -71,7 +77,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import Field
 
 from deploy_vii.contracts import Contract, Identifier
 from deploy_workflow.credit_os_catalogue import chart_row, period_order
@@ -98,7 +106,8 @@ log = logging.getLogger(__name__)
 
 PRIOR_PREFIX = "prior/"
 PACK_NAME = "changes.json"
-PACK_SCHEMA = "cpos-changes/2"
+PACK_SCHEMA = "cpos-changes/3"
+PACK_SCHEMAS = ("cpos-changes/2", PACK_SCHEMA)  # the shapes the library reads
 FIRST_RUN = "first run of this pathway"
 DELIVERED_WHOLE = " The changes since the last run are CP-8's handoff, delivered whole."
 NO_LIMITATION = re.compile(r"no limitation changes\b", re.IGNORECASE)
@@ -139,6 +148,10 @@ class PriorRun(Contract):
     methods_changed: tuple[str, ...]
     started_at: str | None
     modules: tuple[str, ...]
+    # How the run's modules were chosen, as its manifest records it (None: not recorded).
+    selection: Literal["preset", "explicit"] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 
 
 def workspace_of(directory: Path) -> Path | None:
@@ -199,7 +212,7 @@ def find_prior(  # noqa: PLR0913 - the identity of the run and the library's met
     runs = workspace / "runs"
     reasons = skipped if skipped is not None else []
     me = {"issuer_name": issuer_name, "case_kind": case_kind, "pathway": pathway}
-    found: list[tuple[tuple[str, str, str], dict[str, Any], Mapping[str, Any]]] = []
+    found: list[tuple[tuple[str, str, str], dict[str, Any], Mapping[str, Any], Any]] = []
     for name in sorted(os.listdir(runs)) if runs.is_dir() else []:
         path = runs / name
         if name == folder or name.startswith(".") or path.is_symlink() or not path.is_dir():
@@ -232,10 +245,12 @@ def find_prior(  # noqa: PLR0913 - the identity of the run and the library's met
             log.warning("earlier run %s is not a comparison base: %s", name, why)
             continue
         started = record["execution"].get("started_at") or ""
-        found.append(((record["as_of"], started, name), record, deliveries[name]))
+        found.append(
+            ((record["as_of"], started, name), record, deliveries[name], workflow.get("selection"))
+        )
     if not found:
         return None
-    _, record, delivered = max(found, key=lambda item: item[0])
+    _, record, delivered, selection = max(found, key=lambda item: item[0])
     handoffs = {
         module: read_pinned(runs / record["id"], pin["path"], pin["sha256"])
         for module, pin in delivered["handoffs"].items()
@@ -259,6 +274,7 @@ def find_prior(  # noqa: PLR0913 - the identity of the run and the library's met
         methods_changed=tuple(record["method_changes"]),
         started_at=record["execution"].get("started_at"),
         modules=tuple(handoffs),
+        selection=selection,
     )
     return prior, handoffs
 
@@ -575,6 +591,22 @@ def _compare(
     }
 
 
+def _exactly(labels: Sequence[str]) -> str:
+    quoted = " or ".join(f'"{label.capitalize()}"' for label in labels)
+    return (
+        f"the comparison reads only a table row labelled exactly {quoted}, with its unit in "
+        "brackets after the label or in a Reporting unit column"
+    )
+
+
+# What the pack reads each net debt input from, for the reason it leaves the change out.
+_READS = {
+    "gross_debt": _exactly(dict(ROW_MEASURES)["gross_debt"]),
+    "net_debt": _exactly(dict(ROW_MEASURES)["net_debt"]),
+    "cash": "the comparison reads the Cash column of the CP-1 liquidity chart table",
+}
+
+
 def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, str] | None, str]:
     """The net debt change, or None and why not. It needs gross debt, net debt and cash stated in
     both runs in one unit under the same definition, and each run's net debt to be its gross debt
@@ -584,7 +616,7 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
         name = key.replace("_", " ")
         measure = by_key.get(key)
         if measure is None:
-            return None, f"{name} is not stated in either run"
+            return None, f"{name} is not read from either run's CP-1 ({_READS[key]})"
         if measure["comparable"] == "no":
             return None, f"{name} cannot be compared ({measure['reason']})"
         if measure["comparable"] != "yes":
@@ -693,16 +725,18 @@ def _format(text_by_module: Mapping[str, str]) -> str:
     return "earlier" if any(is_earlier_format(t) for t in text_by_module.values()) else "current"
 
 
-def build_pack(
+def build_pack(  # noqa: PLR0913 - the two runs' texts and the current run's identity
     prior: PriorRun,
     prior_texts: Mapping[str, str],
     current_texts: Mapping[str, str],
     *,
     as_of: str,
     pathway: str,
+    selection: str | None = None,
 ) -> dict[str, Any]:
     """The comparison pack (this module's docstring) for the prior run and the handoffs accepted so
-    far in this run. CP-8 is not compared with itself."""
+    far in this run. CP-8 is not compared with itself. `selection` is how this run's modules were
+    chosen (`preset`, `explicit` or None when not recorded)."""
     before = {m: t for m, t in prior_texts.items() if m != "CP-8"}
     now = {m: t for m, t in current_texts.items() if m != "CP-8"}
     seen_before, unread_before = _read(before["CP-1"]) if "CP-1" in before else ({}, {})
@@ -727,8 +761,14 @@ def build_pack(
             "pathway": prior.pathway,
             "format": "earlier" if prior.earlier_format else "current",
             "methods_changed": list(prior.methods_changed),
+            "selection": prior.selection,
         },
-        "current": {"as_of": as_of, "pathway": pathway, "format": _format(now)},
+        "current": {
+            "as_of": as_of,
+            "pathway": pathway,
+            "format": _format(now),
+            "selection": selection,
+        },
         "measures": measures,
     }
     change, why = _net_debt_change({m["key"]: m for m in measures})
@@ -770,7 +810,7 @@ def pack_bytes(pack: Mapping[str, Any]) -> bytes:
 
 
 def pack_builder(
-    prior: PriorRun, as_of: str, pathway: str
+    prior: PriorRun, as_of: str, pathway: str, selection: str | None = None
 ) -> Callable[[Mapping[str, bytes], Mapping[str, bytes]], bytes]:
     """`(sources, handoffs) -> pack bytes`; the earlier handoffs are the `prior/` sources."""
 
@@ -787,6 +827,7 @@ def pack_builder(
                 {m: raw.decode("utf-8") for m, raw in handoffs.items()},
                 as_of=as_of,
                 pathway=pathway,
+                selection=selection,
             )
         )
 
@@ -796,6 +837,7 @@ def pack_builder(
 __all__ = [
     "FIRST_RUN",
     "PACK_NAME",
+    "PACK_SCHEMAS",
     "PRIOR_PREFIX",
     "PriorRun",
     "build_pack",

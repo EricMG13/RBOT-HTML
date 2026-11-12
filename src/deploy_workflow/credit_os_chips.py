@@ -44,6 +44,11 @@ BASIS = "Basis: "
 BASIS_FILE = re.compile(r"(?P<file>.+), pages? (?P<a>\d+)(?:\s*[-–]\s*(?P<b>\d+))?")
 BASIS_MODULE = re.compile(r".+ \((?P<module>CP-[0-9A-Z]+)\)")
 BASIS_CALCULATION = re.compile(r"calculation \S+")
+# CP-8's two extra items, read only in a CP-8 handoff: the comparison pack (exactly the words) and
+# an earlier run's handoff (a plain name, no digits or file names, and a registered module code).
+# Neither names a page or a handoff of this run, so there is nothing to open.
+BASIS_COMPARISON = "Run comparison"
+BASIS_EARLIER_RUN = re.compile(r"[A-Za-z][A-Za-z ,'&/-]* \((?P<code>CP-[0-9A-Z]+)\), earlier run")
 
 
 class Locator(TypedDict):
@@ -176,13 +181,30 @@ def page_locators(match: re.Match[str], key: Resolved | None) -> list[Locator]:
     return result
 
 
-def basis_locators(line: str, files: dict[str, str | None]) -> list[Locator]:
+def _cp8_item(item: str) -> bool:
+    """CP-8's own Basis items: `Run comparison`, or `<plain module name> (<code>), earlier run`
+    with a code the registry knows."""
+    from deploy_vii.registry import modules
+
+    found = BASIS_EARLIER_RUN.fullmatch(item)
+    return item == BASIS_COMPARISON or (
+        found is not None and found["code"] in {m.module_id for m in modules()}
+    )
+
+
+def basis_locators(
+    line: str, files: dict[str, str | None], writer: str | None = None
+) -> list[Locator]:
     """The locators of one ``Basis: `` line (H3): items split on ``; `` and read by their form.
-    ``files`` maps an inventory file name to its key, or None when two keys hold different bytes."""
+    ``files`` maps an inventory file name to its key, or None when two keys hold different bytes.
+    ``writer`` is the module whose handoff holds the line; only CP-8 may write the two items
+    `_cp8_item` reads."""
     result: list[Locator] = []
     for item in (i.strip() for i in line.removeprefix(BASIS).removesuffix(".").split("; ")):
         if BASIS_CALCULATION.fullmatch(item):
             continue  # the library reads calculations from ## Calculations
+        if writer == "CP-8" and _cp8_item(item):
+            continue  # the comparison pack or an earlier run's handoff: nothing to quote
         if module := BASIS_MODULE.fullmatch(item):
             result.append(locator("upstream", module=module["module"]))
         elif item in files:
@@ -212,6 +234,7 @@ def scan(
     index: KeyIndex | None = None,
     row_key: Resolved | None = None,
     files: dict[str, str | None] | None = None,
+    module: str | None = None,
 ) -> list[tuple[int, Locator]]:
     """Every citation in ``text`` with its position; what no pattern matches is not guessed.
     ``row_key`` is the source key the row itself names, for a page with no key of its own.
@@ -222,7 +245,7 @@ def scan(
     last_line = last_line.strip()
     if files is not None and last_line.startswith(BASIS):
         at = len(head) + 1
-        found = [(at, loc) for loc in basis_locators(last_line, files)]
+        found = [(at, loc) for loc in basis_locators(last_line, files, module)]
         text = head
     for m in BRACKET.finditer(text):
         found.append((m.start(), locator("upstream", module=m[1], codes=split_codes(m[2]))))
@@ -516,7 +539,7 @@ def chips_for_cells(row: Row, module: str, pages: Pages) -> list[dict[str, Any]]
     named = pages.index.lookup(first) if row.headers else None
     result = []
     for index, cell in enumerate(row.cells):
-        found = scan(cell, pages.index, named if index else None, pages.files)
+        found = scan(cell, pages.index, named if index else None, pages.files, module)
         quotes = bound_quotes(cell, found)
         for pos, loc in found:
             if loc["kind"] == "issuer_page":
