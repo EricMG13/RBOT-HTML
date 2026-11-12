@@ -569,11 +569,64 @@ class OwnerTable:
         return self.events or self.edges
 
 
+NET_DEBT_HEADING = "Net debt data"  # not a `Chart data:` heading: the library does not draw it
+NET_DEBT = OwnerTable(
+    NET_DEBT_HEADING,
+    ("Gross debt", "Cash", "Net debt"),
+    "US$m",
+    rules=(
+        "Gross debt is the total debt principal as the issuer reports it, and the Basis and "
+        "limitation cell says what gross debt includes (for example securitization, finance "
+        "leases). Cash is the same figure as the Cash column of the `Chart data: liquidity` table "
+        "for that period. Net debt is gross debt less cash, worked with `calculate` and listed in "
+        "`## Calculations`. Write one row per period you state, at least the latest balance-sheet "
+        "date. A row whose three figures are all stated is refused if net debt differs from gross "
+        "debt less cash by any amount, and a row is refused if its cash differs from the "
+        "liquidity table's for the same period; a figure you cannot state is "
+        "`Not supplied: <reason>`."
+    ),
+)
+
+
+def _decimal(cell: str) -> Decimal | None:
+    return Decimal(cell.replace(",", "")) if PLAIN_NUMBER.fullmatch(cell) else None
+
+
+def _net_debt_issues(text: str) -> tuple[str, ...]:
+    """Each stated row of the net debt table holds net debt = gross debt - cash exactly, and its
+    cash is the liquidity table's for the same period. A figure that is not stated is not checked;
+    the table's own shape is `chart_issues`'s."""
+    heading, liquidity = f"### {NET_DEBT_HEADING}", "### Chart data: liquidity"
+    lines = text.splitlines()
+    rows = _stated_rows(text, heading) if heading in lines else []
+    if not rows or rows[0] != _chart_header(NET_DEBT):
+        return ()
+    liquid = _stated_rows(text, liquidity) if liquidity in lines else []
+    cash_of = {row[0]: row[1] for row in liquid[2:] if len(row) == 5 and liquid[0][1] == "Cash"}
+    issues = []
+    for row in rows[2:]:
+        if len(row) != len(rows[0]):
+            continue
+        period, gross, cash, net = (row[0], *(_decimal(c) for c in row[1:4]))
+        if gross is not None and cash is not None and net is not None and net != gross - cash:
+            issues.append(
+                f"`{heading}` {period}: net debt {row[3]} is not gross debt {row[1]} less cash "
+                f"{row[2]}; correct the row, nothing is filled in for you."
+            )
+        stated = _decimal(cash_of.get(period, ""))
+        if cash is not None and stated is not None and cash != stated:
+            issues.append(
+                f"`{heading}` {period}: cash {row[2]} is not the Cash {cash_of[period]} stated "
+                f"for {period} in `{liquidity}`; state one figure."
+            )
+    return tuple(issues)
+
+
 def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTable, ...]:
     """The tables a module is asked for beside its report routes. CP-1 is on every pathway asked
     for all four chart tables CP-8's pack reads (owner, 2026-11-12, "Yes, all pathways"): those
     its report's chart blocks do not already route are asked as owner tables, with no new
-    report section."""
+    report section. It is also asked for the net debt table (owner, 2026-11-12, "Yes, add it")."""
     tables = OWNER_TABLES.get(module, ())
     if module != "CP-1":
         return tables
@@ -581,7 +634,7 @@ def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTa
     chart = tuple(
         OwnerTable(h, cols, unit) for h, cols, unit in CHART_TABLES.values() if h not in routed
     )
-    return (*chart, *tables)
+    return (*chart, NET_DEBT, *tables)
 
 
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
@@ -2250,6 +2303,13 @@ def without_for(ordered: Sequence[str], items: Sequence[Item]) -> dict[str, list
     return result
 
 
+def _owned_issues(module: str, routes: Sequence[MarkdownRoute], text: str) -> list[str]:
+    """The tables a module is asked for beside its report routes, checked; for CP-1 also the net
+    debt table's arithmetic."""
+    issues = [i for owned in _owner_tables(module, routes) for i in chart_issues(text, owned)]
+    return [*issues, *_net_debt_issues(text)] if module == "CP-1" else issues
+
+
 def checker(layout: MarkdownLayout) -> Check:
     """Anchors and report selectors for one module's answer, so a defect is repaired inside the
     module's loop rather than found at delivery after every module was paid for."""
@@ -2301,8 +2361,7 @@ def checker(layout: MarkdownLayout) -> Check:
         for route in routes:
             if route.kind == "chart":
                 issues += chart_issues(text, route)
-        for owned in _owner_tables(task.module_id, routes):
-            issues += chart_issues(text, owned)
+        issues += _owned_issues(task.module_id, routes, text)
         return (*issues, *_forecast_issues(task, text))
 
     return check

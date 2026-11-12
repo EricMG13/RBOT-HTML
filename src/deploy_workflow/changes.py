@@ -47,9 +47,9 @@ a decimal string; missing is null, never zero):
   of the definition; page and locator numbers are not.
 - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
   current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
-  unit (gross and net debt are read only from a CP-1 table row labelled exactly as `ROW_MEASURES`
-  says, the unit in brackets after the label or in a `Reporting unit` column; a row labelled
-  otherwise is not read, and `omitted` says so), each under the same definition ("yes"), and each
+  unit (gross and net debt are read only from the Gross debt and Net debt columns of CP-1's
+  `### Net debt data` table; a run without that table does not state them, and `omitted` says
+  which run), each under the same definition ("yes"), and each
   run's net debt is its gross debt less its cash. A two-point identity of stated balances; it does
   not say what drove the change. An increase in cash reduces net debt.
 - `maturity_profile`: `{unit, rows: [{period, prior, current, difference}]}` from the CP-1
@@ -82,7 +82,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from deploy_vii.contracts import Contract, Identifier
-from deploy_workflow.credit_os_catalogue import chart_row, period_order
+from deploy_workflow.credit_os_catalogue import CHART_PREFIX, chart_row, period_order
 from deploy_workflow.library_index import (
     MethodHeadings,
     MethodText,
@@ -112,20 +112,21 @@ FIRST_RUN = "first run of this pathway"
 DELIVERED_WHOLE = " The changes since the last run are CP-8's handoff, delivered whole."
 NO_LIMITATION = re.compile(r"no limitation changes\b", re.IGNORECASE)
 NOT_SUPPLIED = "Not supplied"
-# (key, CP-1 chart table, value column): the five measures the library already quotes.
+NET_DEBT_TABLE = "Net debt data"  # CP-1's period-row table of gross debt, cash and net debt
+# (key, CP-1 period-row table, value column): the five measures the library already quotes, then
+# gross and net debt from the net debt table (owner, 2026-11-12, "Yes, add it"). The tables are
+# `### Chart data: <name>`, except the net debt table, which the library does not draw.
 CHART_MEASURES = (
     ("leverage", "leverage", "Total debt / EBITDA"),
     ("net_leverage", "leverage", "Net debt / EBITDA"),
     ("coverage", "interest cover", "EBITDA / cash interest"),
     ("cash", "liquidity", "Cash"),
     ("undrawn", "liquidity", "Undrawn committed facilities"),
+    ("gross_debt", NET_DEBT_TABLE, "Gross debt"),
+    ("net_debt", NET_DEBT_TABLE, "Net debt"),
 )
 # (key, row labels): read from the one CP-1 table row of that label, only when it states its unit.
-ROW_MEASURES = (
-    ("free_cash_flow", ("free cash flow", "fcf")),
-    ("gross_debt", ("gross debt", "total debt")),
-    ("net_debt", ("net debt",)),
-)
+ROW_MEASURES = (("free_cash_flow", ("free cash flow", "fcf")),)
 MATURITIES = "debt maturities"
 NET_DEBT_CONVENTION = (
     "net debt = gross debt - cash: an increase in cash reduces net debt, a decrease raises it; "
@@ -389,6 +390,10 @@ Reading = Observation | str | None
 POINTER = re.compile(r"\b(?:identical|same)\s+(?:definition|measure|basis)\b", re.IGNORECASE)
 
 
+def _heading(chart: str) -> str:
+    return chart if chart == NET_DEBT_TABLE else f"Chart data: {chart}"
+
+
 def _followed(lines: list[str], chart: str, period: str, text: str | None) -> str | None:
     """The definition a basis cell points to, or None. A basis that says `identical definition` or
     `same measure` points to the basis of the table's row for the period before; that is followed,
@@ -396,7 +401,7 @@ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> st
     is another section of the handoff, and the text is then left as written."""
     if text is None or POINTER.search(text) is None:
         return None
-    start = lines.index(f"### Chart data: {chart}")
+    start = lines.index(f"### {_heading(chart)}")
     rows: list[tuple[tuple[int, ...], str]] = []
     header: list[str] = []
     for line in lines[start + 1 :]:
@@ -422,7 +427,7 @@ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> st
 
 def _chart_observation(lines: list[str], chart: str, column: str) -> Reading:
     try:
-        found = chart_row(lines, chart)
+        found = chart_row(lines, chart, prefix="" if chart == NET_DEBT_TABLE else CHART_PREFIX)
     except ValueError:  # Periods that cannot be ordered: never guess which row is the latest.
         return "has periods in its table that cannot be ordered"
     if found is None or column not in found[0]:
@@ -591,18 +596,11 @@ def _compare(
     }
 
 
-def _exactly(labels: Sequence[str]) -> str:
-    quoted = " or ".join(f'"{label.capitalize()}"' for label in labels)
-    return (
-        f"the comparison reads only a table row labelled exactly {quoted}, with its unit in "
-        "brackets after the label or in a Reporting unit column"
-    )
-
-
 # What the pack reads each net debt input from, for the reason it leaves the change out.
 _READS = {
-    "gross_debt": _exactly(dict(ROW_MEASURES)["gross_debt"]),
-    "net_debt": _exactly(dict(ROW_MEASURES)["net_debt"]),
+    "gross_debt": f'the comparison reads the Gross debt column of the CP-1 "{NET_DEBT_TABLE}" '
+    "table",
+    "net_debt": f'the comparison reads the Net debt column of the CP-1 "{NET_DEBT_TABLE}" table',
     "cash": "the comparison reads the Cash column of the CP-1 liquidity chart table",
 }
 

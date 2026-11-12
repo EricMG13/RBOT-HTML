@@ -609,12 +609,21 @@ def maturities(*rows: str) -> str:
     )
 
 
-def balance(debt: str, net: str, fcf: str, period: str, label: str = "Total debt") -> str:
+def balance(fcf: str, period: str) -> str:
     return (
-        f"### Reported balance sheet\n\n| Line item | FY2022 | {period} | Reporting unit |\n"
+        f"### Reported cash flow\n\n| Line item | FY2022 | {period} | Reporting unit |\n"
         "| --- | --- | --- | --- |\n"
-        f"| {label} | 1 | {debt} | US$m |\n| Net debt | 1 | {net} | US$m |\n"
         f"| Free cash flow | 1 | {fcf} | US$m |\n\n"
+    )
+
+
+def netdebt(gross: str, cash: str, net: str, period: str, basis: str = "Gross debt: loans.") -> str:
+    """CP-1's net debt table (owner, 2026-11-12): hand-written cells, no arithmetic here."""
+    return (
+        "### Net debt data\n\n"
+        "| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |\n"
+        f"| --- | --- | --- | --- | --- | --- |\n| {period} | {gross} | {cash} | {net} | US$m "
+        f"| {basis} |\n\n"
     )
 
 
@@ -624,9 +633,9 @@ MEASURE_KEYS = [
     "coverage",
     "cash",
     "undrawn",
-    "free_cash_flow",
     "gross_debt",
     "net_debt",
+    "free_cash_flow",
 ]
 
 
@@ -702,7 +711,8 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
         )
         + liquidity("| FY2023 | 300 | 450 | US$m | Cash excluding restricted cash. |")
         + maturities("| FY2026 | 500 | US$m | Schedule. |", "| FY2027 | 100 | US$m | Schedule. |")
-        + balance("2,100", "1,800", "60", "FY2023"),
+        + balance("60", "FY2023")
+        + netdebt("2,100", "300", "1,800", "FY2023", "Gross debt: loans and finance leases."),
     )
     current = handoff(
         "CP-1",
@@ -717,7 +727,8 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
             "| FY2027 | Not supplied: the schedule ends | US$m | Schedule. |",
             "| FY2028 | 1,250 | US$m | Schedule. |",
         )
-        + balance("2,000", "1,750", "70", "FY2024", label="Gross debt"),
+        + balance("70", "FY2024")
+        + netdebt("2,000", "250", "1,750", "FY2024", "Gross debt: loans only."),
     )
     pack = pair_pack(prior, current)
     found = measures_of(pack)
@@ -753,8 +764,9 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
     assert found["cash"]["prior"]["definition"] == "Cash excluding restricted cash."
     assert found["cash"]["current"]["definition"] == "Cash on another basis."
     assert (found["undrawn"]["comparable"], found["undrawn"]["difference"]) == ("judge", "-50")
-    # Rows read from CP-1's tables when they state a unit: free cash flow (no definition text in
-    # either run, so the same), and a label that differs (a judgement, the difference stands).
+    # Free cash flow is a row read from CP-1's tables when it states a unit (no definition text in
+    # either run, so the same); gross and net debt come from the net debt table, whose basis text
+    # differs here (a judgement, the difference stands).
     assert (found["free_cash_flow"]["comparable"], found["free_cash_flow"]["difference"]) == (
         "yes",
         "10",
@@ -767,7 +779,7 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
         "1,800",
         "1,750",
     )
-    assert (found["net_debt"]["comparable"], found["net_debt"]["difference"]) == ("yes", "-50")
+    assert (found["net_debt"]["comparable"], found["net_debt"]["difference"]) == ("judge", "-50")
     assert found["net_debt"]["unit"] == "US$m"
     # The net debt change is left out with its reason; the maturity profile is built.
     assert "net_debt_change" not in pack
@@ -792,13 +804,15 @@ def bridge_pack(
         "CP-1",
         "Earlier.",
         tables=liquidity(f"| FY2023 | 300 | 450 | US$m | {cash_basis} |")
-        + balance("2,100", prior_net, "60", "FY2023"),
+        + balance("60", "FY2023")
+        + netdebt("2,100", "300", prior_net, "FY2023"),
     )
     current = handoff(
         "CP-1",
         "Now.",
         tables=liquidity("| FY2024 | 250 | 400 | US$m | Cash. |")
-        + balance("2,000", current_net, "70", "FY2024"),
+        + balance("70", "FY2024")
+        + netdebt("2,000", "250", current_net, "FY2024"),
     )
     return pair_pack(prior, current)
 
@@ -956,10 +970,9 @@ def test_an_ambiguous_or_unitless_row_is_not_a_measure():
     twice = handoff(
         "CP-1",
         "x",
-        tables=balance("2,100", "1,800", "60", "FY2023")
-        + balance("2,200", "1,900", "70", "FY2023"),
+        tables=balance("60", "FY2023") + balance("70", "FY2023"),
     )
-    assert "net_debt" not in observations(twice)  # two rows of one label: not guessed
+    assert "free_cash_flow" not in observations(twice)  # two rows of one label: not guessed
     unitless = "## Findings\n\n| Line item | FY2023 |\n| --- | --- |\n| Net debt | 1,800 |\n"
     assert observations(unitless) == {}
 
@@ -1047,11 +1060,10 @@ def test_an_ambiguous_row_says_so_rather_than_that_the_run_does_not_state_it():
     twice = handoff(
         "CP-1",
         "x",
-        tables=balance("2,100", "1,800", "60", "FY2023")
-        + balance("2,200", "1,900", "70", "FY2023"),
+        tables=balance("60", "FY2023") + balance("70", "FY2023"),
     )
-    once = handoff("CP-1", "x", tables=balance("2,000", "1,750", "70", "FY2024"))
-    found = measures_of(pair_pack(twice, once))["net_debt"]
+    once = handoff("CP-1", "x", tables=balance("70", "FY2024"))
+    found = measures_of(pair_pack(twice, once))["free_cash_flow"]
     assert found["comparable"] == "no"
     assert found["reason"] == "the earlier run states it in more than one row"
     assert found["prior"] is None
@@ -2539,7 +2551,34 @@ def test_the_net_debt_change_reason_says_what_the_comparison_reads_not_that_debt
     )
     assert "net_debt_change" not in pack
     assert pack["omitted"]["net_debt_change"] == (
-        "gross debt is not read from either run's CP-1 (the comparison reads only a table row "
-        'labelled exactly "Gross debt" or "Total debt", with its unit in brackets after the '
-        "label or in a Reporting unit column)"
+        "gross debt is not read from either run's CP-1 (the comparison reads the Gross debt "
+        'column of the CP-1 "Net debt data" table)'
+    )
+
+
+def test_a_pack_from_two_runs_with_the_net_debt_table_states_the_hand_computed_change():
+    """Hand-computed: 2,100 - 300 = 1,800 and 2,000 - 250 = 1,750; gross fell 100, cash fell 50."""
+    pack = bridge_pack()
+    assert pack["net_debt_change"]["prior_net_debt"] == "1800"
+    assert pack["net_debt_change"]["change_in_gross_debt"] == "-100"
+    assert pack["net_debt_change"]["change_in_cash"] == "-50"
+    assert pack["net_debt_change"]["current_net_debt"] == "1750"
+    found = measures_of(pack)
+    assert (found["gross_debt"]["comparable"], found["net_debt"]["comparable"]) == ("yes", "yes")
+
+
+@pytest.mark.parametrize(("lacking", "run"), [("prior", "earlier"), ("current", "current")])
+def test_a_run_without_the_net_debt_table_leaves_the_change_out_and_names_that_run(lacking, run):
+    with_table = handoff(
+        "CP-1",
+        "x",
+        tables=liquidity("| FY2024 | 250 | 400 | US$m | Cash. |")
+        + netdebt("2,000", "250", "1,750", "FY2024"),
+    )
+    without = handoff("CP-1", "x", tables=liquidity("| FY2023 | 300 | 450 | US$m | Cash. |"))
+    prior, current = (without, with_table) if lacking == "prior" else (with_table, without)
+    pack = pair_pack(prior, current)
+    assert "net_debt_change" not in pack
+    assert pack["omitted"]["net_debt_change"] == (
+        f"gross debt cannot be compared (the {run} run does not state it)"
     )
