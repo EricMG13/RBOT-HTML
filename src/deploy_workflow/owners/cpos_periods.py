@@ -270,22 +270,28 @@ def lines(
     from the rows of the label they name (`named`: `{key: (row label, period header)}`; None is
     none named). An operand with an amount and no name has no history. Never raises on a table
     shape."""
-    return _locate(tables, operands, named or {})[0]
+    return _locate(tables, operands, named or {}, 1)[0]
 
 
 def _locate(
     tables: list[list[list[str]]],
     operands: cp2g.Operands,
     named: Mapping[str, tuple[str, str]],
+    scale: int,
 ) -> tuple[dict[str, Line], Period | None]:
-    """The lines and the base period (the latest period named for revenue or EBITDA)."""
+    """The lines and the base period (the latest period named for revenue or EBITDA). At a scale
+    other than 1 each cell is compared with the operand times the scale, and the figures found are
+    divided by it, so the lines are in the operands' unit; at scale 1 no cell is touched."""
     found: dict[str, Line] = {}
     with localcontext(cp2g._EXACT):
         for key, operand in operands.items():
             if operand.amount is None:
                 found[key] = Line(reason=_cut(operand.reason or NO_REASON, _MAX_REASON))
-            else:
+            elif scale == 1:
                 found[key] = _named_line(tables, key, operand.amount, named.get(key))
+            else:
+                line = _named_line(tables, key, operand.amount * scale, named.get(key))
+                found[key] = replace(line, values={p: v / scale for p, v in line.values.items()})
     return found, _named_base(named)
 
 
@@ -805,12 +811,14 @@ def history(
     *,
     named: Mapping[str, tuple[str, str]] | None = None,
     forecast_year: int | None = None,
+    scale: int = 1,
 ) -> dict[str, object]:
     """The Forecast page's historical columns, read from CP-1's period-labelled tables (`named`:
     the forecast inputs' row and period for each operand; `forecast_year`: the first forecast
-    year, from which no fiscal year is history). Never raises: a value that cannot be built is
-    missing with its reason."""
-    located_lines, base = _locate(tables, operands, named or {})
+    year, from which no fiscal year is history; `scale`: 1000 when CP-1's cells are in thousands
+    and the operands in millions, then every figure is published in millions). Never raises: a
+    value that cannot be built is missing with its reason."""
+    located_lines, base = _locate(tables, operands, named or {}, scale)
     found, forecast = _before_forecast(located_lines, forecast_year, base)
     located = [line for line in found.values() if line.reason is None]
     printed = frozenset(p for line in located for p in (*line.values, *line.gaps))
