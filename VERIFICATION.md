@@ -4,6 +4,22 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Run start page browser tests after the preset change (branch `claude/web-search-run-page`)
+
+The browser tests (`-m browser`) were not run for the commits from 73b499b (presets) to d185d83. Run then:
+`tests/test_run_start_page.py` 14 failed, 42 passed (at 0e2c564: 1 failed, 55 passed). Causes: (a) real page
+defect, `build()` required "Current period" whenever CP-2G was in the run; CP-2G joined credit_snapshot and
+covenant_refinancing, so a Basic submission that the launcher accepts (`cpos_launch.prepare` takes a blank period)
+was blocked. The page now requires it for an earnings update only, labels it recommended, and adds a "Note" row
+for CP-2G when it is blank (10 tests). (b) stale expectations: Standard now shows the research-questions stage
+for credit_snapshot and covenant_refinancing (CP-DR is in every pathway); the services-forecast and limit-tick
+tests now count the page's own CP-DR note, CP-2A no-legal-documents limit and CP-2G reading it. (c) pre-existing
+since PR #46: a delivery files no report page, so `record.report` is `""`; the assertion now says so (the run
+page's link to the library's Report history for the run is checked by the next test). The research-text
+assertion already matched the final copy. After: that file 56 passed; `-m browser -k "run_start or context_form
+or library or inbox"` 100 passed, exit 0; the fast set 756 passed, exit 0; quality gate 0 findings, exit 0.
+Not verified: a forecast run with a blank current period through a live provider.
+
 ## 2026-11-12 — Web search from the run page; leaked citation markers (branch `claude/web-search-run-page`, decisions M1, M4)
 
 (a) Paid test, this dated case only (TDG FY2024, ruling `2026-11-11-cpdr-web-search-live-test.md`, run `tdg-cpdr-web-001`): CP-0, CP-1, CP-DR and CP-1C accepted, charged USD 3.39131650. CP-DR located HEICO and

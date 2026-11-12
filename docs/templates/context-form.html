@@ -998,8 +998,10 @@ function build() {
   runAsOf = as_of;
   const earn = run_type === 'earnings';
   const cutoff = fld(sd, 'cutoff', {t:'date', after:true});
-  // Form-only rule: the forecast (CP-2G) starts from the current period, so it is required there.
-  const current_period = fld(sd, 'current_period', {t:'period', req: earn || has('CP-2G')});
+  // Only an earnings update needs the period: cpos_launch.prepare accepts a blank one for the forecast
+  // (CP-2G, now in credit_snapshot and covenant_refinancing too), so the page must not be stricter; the
+  // readiness list notes the unnamed base instead.
+  const current_period = fld(sd, 'current_period', {t:'period', req: earn});
   const prior_period = fld(sd, 'prior_period', {t:'period', req: earn});
   const a = pkey(current_period), b = pkey(prior_period);
   if (earn) {
@@ -1218,6 +1220,7 @@ const RULES = [
   {s:'CP-2A', o:'limited', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the downside path has no covenant or financing-document evidence (a TDG run came back Restricted this way).', fix:'Add the executed agreement if you have it, and choose it under Legal.', go:'legal'},
   {s:'CP-2D', o:'limited', c:f => f.o.deal_terms.some(d => d.currency && d.currency !== f.o.run.reporting_currency), r:'A facility is in another currency than the reporting currency: it is not calculable (no FX conversion).', fix:'Nothing to add; read that facility as excluded.', go:'market'},
   {s:'CP-2G', o:'check', nc:true, c:f => f.chk.guidance === '', r:'Whether the documents state company guidance is confirmed when the summary is made.', rv:'Whether the documents state company guidance is not checked before the run: Source readiness checks it during the run.'},
+  {s:'CP-2G', o:'information', c:f => !f.o.run.current_period, r:'No current period: the forecast base is not named, so the forecast module takes the latest period in the filings.', fix:'Name the latest reported period (fy-YYYY or q4-YYYY) as the current period.', go:'issuer'},
   {s:'CP-2G', o:'check', c:f => { const b = pkey(f.o.run.current_period); return b && !(b.kind === 'fy' || b.kind === 'q' && b.n === 4); }, r:'The forecast base is not a fiscal year: the model forecasts the three fiscal years after it.', fix:'Use fy-YYYY or q4-YYYY as the current period.', go:'issuer'},
   {s:'CP-2H', k:'cp2h-no-ratings', o:'gap', c:f => !f.o.ratings.length && f.chk.ratingsfile !== 'yes', r:'No ratings entered and no rating report in the folder: Insufficient Information.', fix:'Enter the ratings under Market, or add the agency report to the documents.', go:'market'},
   {s:'CP-2H', o:'gap', c:f => ratingProblems(f.o.ratings).length > 0, r:'A rating row it cannot place (another agency, two rows for one agency, or a rating off the scale): the ratings are set aside.', fix:'One row per agency (S&P, Moody\'s, Fitch), each rating as the agency writes it.', go:'market'},
@@ -1504,7 +1507,7 @@ function tagFor(el, o) {
     case 'issuer':
       if (['issuer_name', 'issuer_id', 'issue_classification', 'case_kind', 'listed_equity', 'run_type', 'as_of', 'reporting_currency'].includes(k)) return REQ;
       if (['aliases', 'borrower_name', 'sector', 'ticker'].includes(k) || el.dataset.c === 'newest') return REC;
-      if (k === 'current_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : has('CP-2G') ? ['req', 'Required: the forecast base'] : REC;
+      if (k === 'current_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : REC;
       if (k === 'prior_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : OPT;
       return OPT;
     case 'market':
