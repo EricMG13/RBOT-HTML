@@ -2570,6 +2570,50 @@ test('maps: a wide map keeps its natural width and scrolls inside its card', () 
   assert.ok(Number(/<svg[^>]*width="(\d+)"/.exec(html)[1]) > 1440, 'twelve layers are wider than the page');
 });
 
+const mapHtml = rowsFor => runPage(d => { const o = d[outId('CP-1')]; o.sections.push(sec('Map: credit-risk transmission', 3, 890, 'consumed', [table(892, MAP_HEAD, rowsFor)])); o.maps = [{ name: 'credit-risk transmission', table: 892, gap: null }]; return d; }).mapsView(outId('CP-1'), 'h3');
+const nodeLines = (svg, title) => { const g = [...svg.matchAll(/<g class="map-node"><title>(.*?)<\/title>.*?<\/g>/gs)].find(m => m[1] === title); return [...g[0].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(m => m[1]); };
+
+test('maps: node text wraps on whole words and numbers, in at most three lines', () => {
+  const name = 'Net leverage 6.01x covenant headroom narrowing sharply';
+  const html = mapHtml([edgeRow(900, name, 'drives', 'Documentary Fact', 'Synthetic outcome')]);
+  const lines = nodeLines(/<svg.*?<\/svg>/s.exec(html)[0], name);
+  assert.ok(lines.length >= 2 && lines.length <= 3, lines.join('|'));
+  assert.equal(lines.join(' '), name, 'every word is whole and none is dropped');
+  assert.ok(lines.some(line => line.split(' ').includes('6.01x')), '6.01x stays whole');
+});
+
+test('maps: node text over three lines ends with an ellipsis and the whole text is in its title', () => {
+  const html = mapHtml([edgeRow(900, LONG, 'owns', 'Documentary Fact', 'Synthetic driver')]);
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0], lines = nodeLines(svg, LONG);
+  assert.equal(lines.length, 3);
+  assert.ok(lines[2].endsWith('\u2026') && !lines[0].includes('\u2026'), lines.join('|'));
+  for (const line of lines) assert.ok(line.replace('\u2026', '').split(' ').every(word => LONG.split(' ').includes(word)), `no word is cut: ${line}`);
+});
+
+test('maps: edge labels do not overlap one another or a node', () => {
+  const html = mapHtml([
+    edgeRow(901, 'Synthetic driver', 'drives', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(902, 'Synthetic driver', 'also hits', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(903, 'Synthetic mechanism', 'squeezes', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(904, 'Synthetic driver', 'feeds', 'Documentary Fact', 'Synthetic mechanism'),
+  ]);
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0];
+  const labels = [...svg.matchAll(/<text class="map-edge-label" x="([\d.-]+)" y="([\d.-]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: +m[1], y: +m[2], w: m[3].length * 6.6 }));
+  assert.equal(labels.length, 4);
+  const hit = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < 12;
+  for (let i = 0; i < labels.length; i++) for (let j = i + 1; j < labels.length; j++) assert.ok(!hit(labels[i], labels[j]), `labels ${i} and ${j}: ${JSON.stringify([labels[i], labels[j]])}`);
+  const boxes = [...svg.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.]+)" height="([\d.]+)"/g)].map(m => m.slice(1).map(Number));
+  for (const l of labels) for (const [x, y, w, h] of boxes) assert.ok(!(l.x + l.w / 2 > x && l.x - l.w / 2 < x + w && l.y > y && l.y - 9 < y + h), `a label sits on a node: ${JSON.stringify(l)}`);
+});
+
+test('maps: a map wider than its card is a keyboard-reachable scroll region that says so, as the bridge and tables do', () => {
+  const chain = [...Array(6)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', 'Documentary Fact', `Layer ${i + 1}`));
+  const html = mapHtml(chain);
+  assert.ok(/<div class="map-scroll" role="region" aria-label="[^"]*scroll horizontally[^"]*" tabindex="0">/.test(html), 'the region names the scroll');
+  assert.ok(/scroll horizontally/.test(mapHtml([edgeRow(900, 'A', 'next', 'Documentary Fact', 'B')])), 'so does a short map, which may still scroll in a narrow card');
+  assert.ok(/\.map-scroll\{[^}]*overflow-x:auto/.test(read('screen.css')));
+});
+
 // ---- Package 7 views (2026-11-10): the chart index, the report manifest and the run/file context bar. Every value is synthetic.
 const withIndex = d => {
   withLanes(d);
