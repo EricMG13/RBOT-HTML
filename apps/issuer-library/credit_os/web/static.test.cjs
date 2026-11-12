@@ -1549,7 +1549,9 @@ test('Run activity styles take the component reference values (card, badge, tag,
   assert.ok(/height:44px/.test(rule('.run-table thead th')) && /600 12px\/18px/.test(rule('.run-table thead th')));
   assert.ok(/padding:8px 12px/.test(rule('.run-held')) && /border-radius:8px/.test(rule('.run-held')) && rule('.run-held').includes('var(--amber-bg)'));
   assert.ok(/height:40px/.test(rule('.run-primary')) && /padding:10px 14px/.test(rule('.run-primary')) && rule('.run-primary').includes('var(--blue)'));
-  assert.ok(css.includes('grid-template-columns:minmax(0,1fr) 440px') && css.includes('--green-bg:#e8fff4'));
+  assert.ok(css.includes('grid-template-columns:minmax(0,1fr) 440px'));
+  assert.ok(/\.run-mods \.chip-done\{[^}]*background:#e8fff4/.test(css), 'done badge ground is the literal #e8fff4');
+  assert.ok(!/:root\{[^}]*--green-bg/.test(css), 'the library :root declares no --green-bg (the run start page owns it)');
   assert.ok(!/run-(badge|tag|tally|done|primary)[^{]*\{[^}]*Red Hat Display/.test(css), 'Red Hat Text only');
 });
 test('each module badge carries its state as text, not colour alone', () => {
@@ -1560,6 +1562,33 @@ test('each module badge carries its state as text, not colour alone', () => {
   assert.ok(badges[1].includes('Two') && badges[1].includes(', running'));
   assert.ok(badges[2].includes('Three') && badges[2].includes(', waiting'));
   assert.ok(badges[3].includes('Four') && badges[3].includes(', waiting') && badges[3].includes('chip-waiting'));
+});
+test('a running card shows its reason, the name warning and its start time', () => {
+  const html = liveActivityView({ runs: [{ id: 'r', status: 'running', folder: 'f', issuer_name: 'Runner', started_at: 'T', reason: 'reading the filing', name_differs: true }] });
+  assert.ok(html.includes('<span class="run-reason">reading the filing</span>'));
+  assert.ok(html.includes('<span class="run-note">issuer name differs from earlier runs</span>'));
+  assert.ok(html.includes('<span class="run-time">started T</span>'));
+});
+test('a waiting row lists its files in the Issuer cell, with data-run, when it has any', () => {
+  const html = liveActivityView({ runs: [
+    { id: 'q1', status: 'queued', pathway: 'p', folder: 'f1', issuer_name: 'Qone', files: ['a.pdf', 'b <i>.pdf'] },
+    { id: 'q2', status: 'queued', pathway: 'p', folder: 'f2', issuer_name: 'Qtwo' },
+    { id: 'q3', status: 'queued', pathway: 'p', folder: 'f3', issuer_name: 'Qthree', files: [] }] });
+  const rows = html.split('<tr class="live-run live-queued">').slice(1);
+  assert.strictEqual(rows.length, 3);
+  assert.ok(rows[0].includes('<details class="run-files" data-run="q1"><summary>2 files read</summary>') && rows[0].includes('<li>a.pdf</li>') && rows[0].includes('b &lt;i&gt;.pdf'));
+  assert.ok(rows[0].indexOf('<details') < rows[0].indexOf('</th>'), 'the list is in the Issuer cell');
+  assert.ok(!rows[1].includes('<details') && !rows[2].includes('<details'));
+  assert.ok(liveActivityView({ runs: [{ id: 'q', status: 'queued', folder: 'f', files: ['one.pdf'] }] }).includes('1 file read'));
+});
+test('the empty-state heading and sentence set no font property', () => {
+  const rules = cssRules(read('screen.css')).filter((r) => r.selector.split(',').some((s) => /\.missing-state\.activity-empty\s+(h2|p)\b/.test(s)));
+  assert.ok(rules.length >= 2);
+  for (const r of rules) assert.ok(!/(?:^|;)\s*(font|font-size|line-height|font-weight|font-family)\s*:/.test(r.body), `${r.selector} sets a font property`);
+});
+test('forced colours keep an outline on the run badges and module badges', () => {
+  const m = /@media\(forced-colors:active\)\{([^@]*?\{[^}]*\})/.exec(read('screen.css'));
+  assert.ok(m && /\.run-mods \.chip/.test(m[1]) && /\.run-badge/.test(m[1]) && /border:1px solid/.test(m[1]));
 });
 test('live run activity names who submitted a run, as text', () => {
   const html = liveActivityView({cap:'20', held:'', runs:[
@@ -3485,10 +3514,10 @@ test('brand colours: a hatched stack segment on a bright fill draws its stripe i
   for (const [n, fill] of [[1, 2], [2, 3], [3, 4]]) {
     for (const prefix of ['.stack-seg', '.stack-key', '.stack-legend']) {
       const sel = prefix === '.stack-seg' ? `.stack-seg.series-${n}.hatch` : `${prefix} .series-${n}.hatch`;
-      const rule = rules.find((r) => r.selector.split(',').map((s) => s.trim()).includes(sel));
-      assert.ok(rule, `no hatch rule for ${sel}`);
-      assert.ok(rule.body.includes(`var(--series-${fill}-ln)`), `${sel} stripe is not --series-${fill}-ln`);
-      assert.ok(!/rgba?\(\s*255\s*,\s*255\s*,\s*255|#fff/i.test(rule.body), `${sel} draws a white stripe`);
+      const found = rules.filter((r) => r.selector.split(',').map((s) => s.trim()).includes(sel));
+      assert.ok(found.length, `no hatch rule for ${sel}`);
+      assert.ok(found.some((r) => r.body.includes(`var(--series-${fill}-ln)`)), `${sel} stripe is not --series-${fill}-ln`);
+      for (const rule of found) assert.ok(!/rgba?\(\s*255\s*,\s*255\s*,\s*255|#fff/i.test(rule.body), `${sel} draws a white stripe`);
     }
   }
 });
@@ -3498,6 +3527,7 @@ test('brand colours: no legend or key swatch is filled with a bright series toke
   for (const r of rules) {
     if (!/\.(chart-legend|signal-key)\b/.test(r.selector) || !/\.series-\d/.test(r.selector)) continue;
     assert.ok(!/(?:^|;)\s*background(?:-color)?\s*:\s*var\(--series-[234]\)/.test(r.body), `${r.selector} fills a swatch with a bright series token`);
+    assert.ok(!/(?:^|;)\s*background(?:-color)?\s*:[^;]*#(?:1eff8f|eaff00|a29aff)\b/i.test(r.body), `${r.selector} fills a swatch with a bright literal`);
   }
   const ledger = { 'ledger-closed': 'var(--green)', 'ledger-remaining': 'var(--navy)', 'ledger-new': 'var(--blue)', 'ledger-no-longer-stated': 'var(--amber)' };
   for (const [cls, value] of Object.entries(ledger)) {
@@ -3545,7 +3575,14 @@ test('component look: buttons, text inputs, state badges and the current tab tak
   for (const sel of ['.badge', '.grade']) assert.match(body(sel), /border-radius:6px/, sel);
   // The current tab: 2px underline in --blue, text in --text-primary.
   assert.match(body('.workspace-tabs>a'), /border-bottom:2px solid transparent/);
-  const current = body('.workspace-tabs>a[aria-current]');
-  assert.match(current, /border-color:var\(--blue\)/);
-  assert.match(current, /color:var\(--text-primary\)/);
+  const curRules = rules.filter((x) => x.selector.split(',').map((t) => t.trim()).includes('.workspace-tabs>a[aria-current]') && !/^\s*outline/.test(x.body));
+  assert.ok(curRules.length >= 1);
+  for (const r of curRules) {
+    assert.match(r.body, /border-color:var\(--blue\)/, r.selector);
+    assert.match(r.body, /(?:^|;)color:var\(--text-primary\)/, r.selector);
+  }
+  for (const r of rules) {
+    if (!r.selector.split(',').some((t) => t.trim().startsWith('.workspace-tabs>a'))) continue;
+    for (const m of r.body.matchAll(/border-bottom-width\s*:\s*([^;]+)/g)) assert.equal(m[1].trim(), '2px', r.selector);
+  }
 });

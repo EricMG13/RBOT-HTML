@@ -1462,21 +1462,24 @@ function liveRunProgress(modules) {
   const badges=modules.map(([name,state])=>{const kind=MODULE_STATES.includes(state)?state:'waiting';return `<span class="chip chip-${kind}">${liveText(name)}<span class="run-vh">, ${kind}</span></span>`;}).join('');
   return `<div class="run-progress"><progress max="${modules.length}" value="${done}" aria-label="Modules done"></progress><span class="run-done">${done} of ${modules.length} done</span></div><div class="run-mods">${badges}</div>`;
 }
-function liveRunCard(run) {
+function liveRunFiles(run) {
   const files=Array.isArray(run.files)?run.files:[];
   const has=typeof run.id==='string'&&run.id||typeof run.id==='number'&&Number.isFinite(run.id),tag=has?` data-run="${liveText(run.id)}"`:'';
+  return files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:'';
+}
+function liveRunCard(run) {
   const modules=Array.isArray(run.modules)?run.modules.filter(Array.isArray):[];
   const kind=LIVE_STATUSES.includes(run.status)?run.status:'unknown';
   const line=liveRunLine(run),pathway=liveText(run.pathway);
   const notes=[run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':''].filter(Boolean).join(' ');
-  const list=files.length?`<details class="run-files"${tag}><summary>${files.length} file${files.length===1?'':'s'} read</summary><ul>${files.map(f=>`<li>${liveText(f)}</li>`).join('')}</ul></details>`:'';
+  const list=liveRunFiles(run);
   const badge=run.stalled?'<span class="run-badge run-badge-stalled">Running · stalled</span>':'<span class="run-badge run-badge-running">Running</span>';
   return `<li class="run-card live-run live-${kind}"><div class="run-head"><div class="run-who"><strong>${liveText(run.issuer_name||run.folder||run.id)}</strong>${line?`<p>${line}</p>`:''}</div><div class="run-marks">${pathway?`<span class="run-tag">${pathway}</span>`:''}${badge}</div></div>${liveRunProgress(modules)}${list||notes?`<div class="run-foot">${list}${notes?`<span class="run-foot-notes">${notes}</span>`:''}</div>`:''}</li>`;
 }
 function liveWaitingRow(run) {
   const extra=[run.reason&&liveText(run.reason)?`<span class="run-reason">${liveText(run.reason)}</span>`:'',run.name_differs?'<span class="run-note">issuer name differs from earlier runs</span>':'',run.stalled?'<span class="run-stalled">stalled</span>':''].filter(Boolean);
   const line=liveRunLine({submitted_by:run.submitted_by,folder:run.folder},extra);
-  return `<tr class="live-run live-queued"><th scope="row"><span class="run-name">${liveText(run.issuer_name||run.folder||run.id)}</span>${line?`<span class="run-sub">${line}</span>`:''}</th><td>${liveText(run.pathway)}</td></tr>`;
+  return `<tr class="live-run live-queued"><th scope="row"><span class="run-name">${liveText(run.issuer_name||run.folder||run.id)}</span>${line?`<span class="run-sub">${line}</span>`:''}${liveRunFiles(run)}</th><td>${liveText(run.pathway)}</td></tr>`;
 }
 function liveActivityView(live) {
   if(!live||typeof live!=='object'||Array.isArray(live)||!Array.isArray(live.runs))return '';

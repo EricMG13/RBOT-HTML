@@ -131,6 +131,27 @@ def test_legend_swatches_carry_an_inset_line_edge():
 
 def test_series_three_labels_are_ink():
     assert "fill:var(--rb-ink)" in _body(".chart text.f3")
+    # Every rule that reaches series-3 chart text or a .lb label sets only the ink fill.
+    wrong = [
+        (sel.strip(), m)
+        for sel, body in rules()
+        if re.search(r"(?:\btext\b|\.lb\b)", sel) and re.search(r"\.f3\b", sel)
+        for m in re.findall(r"(?<![\w-])fill:\s*([^;}]+)", body)
+        if m.strip() != "var(--rb-ink)"
+    ]
+    assert wrong == []
+
+
+def test_no_rule_gives_a_swatch_a_shadow_edge_other_than_its_own_line():
+    for n in range(1, 6):
+        wrong = [
+            sel.strip()
+            for sel, body in rules()
+            if re.search(rf"\.sw{n}\b", sel)
+            and "box-shadow" in body
+            and f"var(--rb-ch-{n}-ln)" not in body
+        ]
+        assert wrong == [], f".sw{n}"
 
 
 def test_hex_followed_by_important_is_caught():

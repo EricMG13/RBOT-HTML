@@ -375,6 +375,7 @@ def run_activity_library(tmp_path: Path) -> Path:
                 "issuer_name": "Queued Issuer One",
                 "pathway": "earnings_update",
                 "folder": LONG_FOLDER + "-q1",
+                "files": ["queued-a.pdf", "queued-b.pdf"],
             },
             {
                 "id": "q2",
@@ -399,6 +400,8 @@ def test_run_activity_puts_waiting_beside_running_on_a_wide_window(tmp_path):
     assert (seen["progressMax"], seen["progressValue"], seen["barHeight"]) == (8, 3, 8)
     # A list opened before the reload is still open after it.
     assert seen["openBefore"] is True and seen["openAfter"] is True and seen["changedShown"] is True
+    # A queued run's list, opened before the reload, is open after it too.
+    assert seen["queuedBefore"] is True and seen["queuedAfter"] is True
 
 
 def test_run_activity_has_no_horizontal_scroll_on_a_phone(tmp_path):

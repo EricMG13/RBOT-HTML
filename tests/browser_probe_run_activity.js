@@ -16,12 +16,15 @@
   };
   const details = document.querySelector('details.run-files');
   details.open = true;
+  const queued = document.querySelector('.run-table details.run-files');
+  queued.open = true;
   const before = details.open;
   // A changed snapshot, as the 30 s reload brings: the open list stays open.
   window.RUN_ACTIVITY = { ...window.RUN_ACTIVITY, updated: 'later', runs: window.RUN_ACTIVITY.runs.map(r => (r.id === 'r1' ? { ...r, reason: 'changed' } : r)) };
   window.onRunActivity();
   await sleep(100);
   const after = document.querySelector('details.run-files');
+  out.queuedBefore = queued.open; out.queuedAfter = document.querySelector('.run-table details.run-files').open;
   out.openBefore = before; out.openAfter = after.open; out.changedShown = document.body.textContent.includes('changed');
   const text = JSON.stringify(out);
   // Framed (the 375px test), the page posts its measures to the wrapper; otherwise it writes them here.
