@@ -62,6 +62,12 @@ In `cp2g._year`, with a schedule: cash interest is `interest[t] * (1 + k)` (k th
 10. Maturity limits read `{name} matures in FY{year} and is assumed refinanced; no repayment at maturity is modelled.` and, before the forecast, `{name} has a stated maturity of {YYYY-MM-DD}, before the forecast; it is assumed refinanced and no repayment at maturity is modelled.` These replace the text in ruling 3 and Task 3.
 11. Facility names carry no leading or trailing whitespace and are unique ignoring case.
 
+### Rulings added at the whole-branch review (2026-11-12)
+
+12. Supersedes rulings 1 and 2 in part: debt outside the stated facilities (base debt less facility balances, when positive) bears interest at the analyst's `interest_rate` driver of the case and is not repaid. Missing is never zero: publishing interest on part of the debt as the whole was a credit-positive bias. `interest_rate` may therefore vary by case; only `debt_repayment` is unused and refused in a case. Answer key with facilities A and B on base debt 600 at 0.06: interest 37.5, 34.8, 30.6; downside 41.25, 38.28, 33.66. The limit texts in Task 3 are replaced by those in the code (`FACILITY_LIMIT` and the remainder line).
+13. A refused facility row may be repaired by writing `facilities` as null; the retry text says so.
+14. `tests/test_cpos_facilities.py` runs in the PR check.
+
 ## Global Constraints
 
 - Excel is input only; no workbook output.
