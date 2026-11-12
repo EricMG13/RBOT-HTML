@@ -2,6 +2,24 @@
 
 Entries moved verbatim from VERIFICATION.md when older than two days.
 
+## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
+
+Owner: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
+`Chart data:` table whose first column is Period (`store.py` `_chart_table`), so `readerChart` now
+draws columns over periods: periods along the x axis in table order, one column per series from a
+zero baseline (a raised baseline when a value is negative), the exact value on each column, the
+series named once in a legend, and each period's chips under its label. Values, periods, labels and
+chips are unchanged; a value that is text still prints n.a. with the text in its title.
+
+- Tests written first and seen failing (two in `static.test.cjs`); one older test updated for the
+  new value markup. 109 node tests; `tests/test_library_page_browser.py` 20 passed; quality gate 0.
+- Built TDG library in headless Chrome, CP-1 Key numbers (Leverage, Interest cover, Liquidity, Debt
+  maturities): fits at 1440, 1280, 1024, 768 and 500px and with the inspector open; no value label
+  outside its card; no two value labels overlap; chips stay under their own period. Below about 96px
+  a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
+  charts print whole.
+- Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
+
 ## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
 
 Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
