@@ -75,7 +75,9 @@ ruling's `configs:` line also lists `web-search` (for example `configs: sol-medi
 and only on the OpenAI configs (`sol-medium`, `sol-high`). Each search costs USD 0.01, and each
 CP-DR call holds USD 0.16 more for up to 16 searches (`cases/pricing/openai-web-search.json`).
 Queries leave the environment, so CP-DR is told to put only public names in them. Without
-`web-search` it reads only the run's files. The launcher's `Web:` line says which applies.
+`web-search` it reads only the run's files. The launcher's `Web:` line says which applies. Runs started
+from the run start page search the web for CP-DR: the standing ruling lists `web-search` (2026-11-12). The
+offline cap check holds the same USD 0.16 for each CP-DR call as the live loop.
 
 ## 2. Update the library
 

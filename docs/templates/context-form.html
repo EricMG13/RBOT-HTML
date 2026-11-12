@@ -461,7 +461,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
     <h3>Module settings</h3>
     <fieldset id="cp3f"><legend>Relative value mode</legend><p class="uses" data-uses="cp3mode"></p><div data-cards="cp3_mode" data-class="two"></div></fieldset>
     <fieldset id="cp6f"><legend>Committee decision</legend><p class="uses" data-uses="cp6"></p><label class="confirm" for="cp6_deep_debate"><input type="checkbox" id="cp6_deep_debate" data-k="cp6_deep_debate"><span>Deep Debate: a longer, fuller argument (more attacks and cross-examination rounds), never a softer sizing posture. Off by default; the compact form is used.</span></label></fieldset>
-    <div class="run-strip" data-tone="brand" id="research-src" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">Research source</span><p class="strip-text">Research works from the supplied files only. Add peers' filings to the documents if you want them used.</p></div></div>
+    <div class="run-strip" data-tone="brand" id="research-src" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">Research source</span><p class="strip-text" id="research-src-text">Research searches the web for public peers as well as reading the supplied files. Add peers' filings to the documents if you want them used.</p></div></div>
   </div>
   <fieldset id="basisf"><legend>Valuation basis</legend><div data-cards="basis" data-class="two"></div></fieldset>
   <div id="prec" class="block" hidden>
@@ -510,7 +510,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 <section class="run-step" id="st-review" data-st="review" hidden>
   <h2 tabindex="-1"><span class="n"></span> <span>Summary and start</span></h2>
   <p class="stepline"></p>
-  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap): read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, unless the case is synthetic, the research module's web searches go to OpenAI's search: it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
   <div id="rv-state" role="status" aria-live="polite"></div>
   <dl class="rv-facts" id="rv-facts"></dl>
   <h3 class="sub">What each module is expected to do</h3>
@@ -998,8 +998,10 @@ function build() {
   runAsOf = as_of;
   const earn = run_type === 'earnings';
   const cutoff = fld(sd, 'cutoff', {t:'date', after:true});
-  // Form-only rule: the forecast (CP-2G) starts from the current period, so it is required there.
-  const current_period = fld(sd, 'current_period', {t:'period', req: earn || has('CP-2G')});
+  // Only an earnings update needs the period: cpos_launch.prepare accepts a blank one for the forecast
+  // (CP-2G, now in credit_snapshot and covenant_refinancing too), so the page must not be stricter; the
+  // readiness list notes the unnamed base instead.
+  const current_period = fld(sd, 'current_period', {t:'period', req: earn});
   const prior_period = fld(sd, 'prior_period', {t:'period', req: earn});
   const a = pkey(current_period), b = pkey(prior_period);
   if (earn) {
@@ -1208,8 +1210,8 @@ const RULES = [
   // Owner, 2026-11-10: "Cp-dr supplies the peers, the user does not provide them unless they specifically
   // want to in the context file." The research module searches the web only when the run's ruling lists
   // web-search (owners/cpos.py WEB_SEARCH_GRANT); without it, in live run tdg-all-001, it came back
-  // Blocked and the peer benchmark had no peers.
-  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web only when the run\'s ruling allows it (web-search). Without that it cannot reach public sources: in a TDG run it came back Blocked and the peer benchmark had no peers. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
+  // Blocked and the peer benchmark had no peers. The standing ruling lists it from 2026-11-12.
+  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web for public peers unless the case is synthetic: the standing ruling for runs from this page lists web-search (2026-11-12). It is told to use public names only, its searches go to OpenAI\'s search, and the queries it sent are kept in the run record. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
   {s:'CP-1C', k:'cp1c-no-peer-source', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
   {s:'CP-1C', o:'gap', c:f => f.o.valuation.basis === 'auto' && f.o.valuation.peer_source === 'user_comps' && f.peersIn < MIN_ADMITTED && f.precIn < MIN_ADMITTED,
     r:f => `Automatic basis: ${f.peersIn} peer${f.peersIn === 1 ? '' : 's'} admitted (needs ${MIN_ADMITTED}, at most ${PEER_MONTHS} months old) and ${f.precIn} precedent${f.precIn === 1 ? '' : 's'} (needs ${MIN_ADMITTED}, at most ${PRECEDENT_MONTHS} months old): no multiple is selected.`, fix:'Add peers or precedents, or choose another basis.', go:'valuation'},
@@ -1218,6 +1220,7 @@ const RULES = [
   {s:'CP-2A', o:'limited', c:f => f.o.attachments.legal_documents === 'none', r:'No legal documents: the downside path has no covenant or financing-document evidence (a TDG run came back Restricted this way).', fix:'Add the executed agreement if you have it, and choose it under Legal.', go:'legal'},
   {s:'CP-2D', o:'limited', c:f => f.o.deal_terms.some(d => d.currency && d.currency !== f.o.run.reporting_currency), r:'A facility is in another currency than the reporting currency: it is not calculable (no FX conversion).', fix:'Nothing to add; read that facility as excluded.', go:'market'},
   {s:'CP-2G', o:'check', nc:true, c:f => f.chk.guidance === '', r:'Whether the documents state company guidance is confirmed when the summary is made.', rv:'Whether the documents state company guidance is not checked before the run: Source readiness checks it during the run.'},
+  {s:'CP-2G', o:'information', c:f => !f.o.run.current_period, r:'No current period: the forecast base is not named, so the forecast module takes the latest period in the filings.', fix:'Name the latest reported period (fy-YYYY or q4-YYYY) as the current period.', go:'issuer'},
   {s:'CP-2G', o:'check', c:f => { const b = pkey(f.o.run.current_period); return b && !(b.kind === 'fy' || b.kind === 'q' && b.n === 4); }, r:'The forecast base is not a fiscal year: the model forecasts the three fiscal years after it.', fix:'Use fy-YYYY or q4-YYYY as the current period.', go:'issuer'},
   {s:'CP-2H', k:'cp2h-no-ratings', o:'gap', c:f => !f.o.ratings.length && f.chk.ratingsfile !== 'yes', r:'No ratings entered and no rating report in the folder: Insufficient Information.', fix:'Enter the ratings under Market, or add the agency report to the documents.', go:'market'},
   {s:'CP-2H', o:'gap', c:f => ratingProblems(f.o.ratings).length > 0, r:'A rating row it cannot place (another agency, two rows for one agency, or a rating off the scale): the ratings are set aside.', fix:'One row per agency (S&P, Moody\'s, Fitch), each rating as the agency writes it.', go:'market'},
@@ -1504,7 +1507,7 @@ function tagFor(el, o) {
     case 'issuer':
       if (['issuer_name', 'issuer_id', 'issue_classification', 'case_kind', 'listed_equity', 'run_type', 'as_of', 'reporting_currency'].includes(k)) return REQ;
       if (['aliases', 'borrower_name', 'sector', 'ticker'].includes(k) || el.dataset.c === 'newest') return REC;
-      if (k === 'current_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : has('CP-2G') ? ['req', 'Required: the forecast base'] : REC;
+      if (k === 'current_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : REC;
       if (k === 'prior_period') return o.run.run_type === 'earnings' ? ['req', 'Required for an earnings update'] : OPT;
       return OPT;
     case 'market':
@@ -1752,13 +1755,24 @@ function readyTable(sq, own = []) {
   const table = h('table', {innerHTML: '<colgroup><col style="width:28%"><col style="width:132px"><col></colgroup><thead><tr><th scope="col">Module</th><th scope="col">Expected</th><th scope="col">Why, and what fixes it</th></tr></thead>'}, body);
   return h('div', {className: 'table-scroll'}, table);
 }
+// Mirrors WEB_SEARCH_CASE_KINDS in model/handoff.py, the one rule the launcher applies: a public or
+// a private case searches the web, a synthetic one does not. The research module is TOLD to use
+// public names only; the queries it sent are kept in the run record and checked afterwards.
+const SEARCH_KINDS = ['public', 'private'];
+function webSearchNote(kind) {
+  const told = ' It is told to search with public names only, and the queries it actually sent are kept in the run record.';
+  if (kind === 'synthetic') return 'This is a synthetic case: the research module does not search the web and reads only the supplied files.';
+  if (kind === 'private') return "This is a private case: the research module will search the web, and the issuer's name and the questions it researches go to OpenAI's search." + told;
+  return "The research module searches the web for public peers as well as reading the supplied files; its searches go to OpenAI's search." + told;
+}
 function renderFacts(o) {
   const box = $('rv-facts'), rows = [];
   if (summaryOk()) {
     const dates = [['As-of', o.run.as_of], ['Cutoff', o.run.cutoff], ['Current period', o.run.current_period], ['Prior period', o.run.prior_period]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(', ');
     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
-      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'], ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'],
+      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', SEARCH_KINDS.includes(o.run.case_kind) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : 'No: a synthetic case reads only its files']] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
     // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
     const sent = SUMMARY.answers || {}, left = runOf(o.run.pathway).filter(m => Array.isArray(sent.modules) && sent.modules.length && !sent.modules.includes(m));
     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
@@ -2220,6 +2234,7 @@ function vis() {
   $('cp3f').hidden = !(has('CP-3') || getV(sv, 'cp3_mode'));
   $('cp6f').hidden = !(has('CP-6') || getV(sv, 'cp6_deep_debate'));
   $('research-src').hidden = !has('CP-DR');
+  $('research-src-text').textContent = webSearchNote(getV(si, 'case_kind')) + " Add peers' filings to the documents if you want them used.";
   $('b-modes').hidden = $('cp3f').hidden && $('cp6f').hidden && !has('CP-DR');
   document.querySelectorAll('[data-uses="cp3mode"],[data-uses="cp6"]').forEach(u => setHTML(u, usesList(BLOCK_USES[u.dataset.uses].filter(has))));
 

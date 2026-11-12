@@ -361,7 +361,7 @@ OPERAND_METRIC = {
     "cash": "cash_closing",
     "undrawn": "undrawn_rcf",
 }
-_OUTFLOWS = frozenset({"interest", "taxes", "wc", "capex"})  # CP-1 stores them negative
+OUTFLOWS = frozenset({"interest", "taxes", "wc", "capex"})  # CP-1 stores them negative
 # The name of each base operand in the missing-operand frames (cash pinned by
 # fixture_cash_missing, the rest LEAD ruling G-1).
 _OPERAND_WORDS = {
@@ -433,7 +433,7 @@ class Operands:
                 vals[key] = Val(None, _operand_reason(key, basis))
             else:
                 _book_millions(f"CP-1 {metric}", fact, basis)
-                vals[key] = _known(-fact.amount if key in _OUTFLOWS else fact.amount)
+                vals[key] = _known(-fact.amount if key in OUTFLOWS else fact.amount)
         return cls(**vals)
 
     def items(self) -> tuple[tuple[str, Val], ...]:
@@ -1478,7 +1478,7 @@ def _t2h2(b: _Book, run: _Run) -> None:
 
     def copy(key: str, label: str) -> None:
         metric = OPERAND_METRIC[key]
-        formula = f"CP-1 {metric}" + (", sign reversed" if key in _OUTFLOWS else "")
+        formula = f"CP-1 {metric}" + (", sign reversed" if key in OUTFLOWS else "")
         _t2h2_row(
             b,
             key,

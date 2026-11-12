@@ -708,3 +708,13 @@ read-only into `docs/reuse/selected-methods/` and listed with hashes in its `man
 `docs/rulings/2026-11-11-module-presets-and-changes.md`).** CP-DR and CP-2E are now selected for every
 pathway; CP-1C needs CP-DR's peers and CP-2E follows CP-2. CP-8 leaves the portfolio_decision preset
 pending its redesign as a same-pathway comparison.
+
+**CP-DR source guidance, 2026-11-12 (owner: "focus primarily using reputable and relevant
+sources").** CP-DR's web-search instruction (`WEB_SEARCH_RULES` in `src/deploy_workflow/model/handoff.py`)
+now tells the module to rely primarily on the issuer's and peers' own filings and releases,
+regulators, exchanges and courts, rating agencies, central banks and official statistics, recognised
+industry bodies and established financial and trade press; not to rest a finding on forums, social
+media, anonymous blogs, content farms or aggregators (it goes to the original); and to state a
+weaker source as a limitation under `## Gaps`. Each web row of `## Sources` carries a `Source type`
+cell from a fixed list, and a web row without one is refused (no domain list). This is a project
+addition to the Deploy V research method, which supplied no web search; no paid run has used it.

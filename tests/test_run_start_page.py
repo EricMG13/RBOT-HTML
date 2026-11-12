@@ -236,6 +236,7 @@ def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
     """)
     five = ["pathway", "documents", "issuer", "legal", "review"]
     assert seen["basic"] == five
+    # CP-DR is in every pathway (owner, 2026-11-11): its research questions are asked from Standard.
     assert seen["standard"] == [
         "pathway",
         "documents",
@@ -243,6 +244,7 @@ def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
         "legal",
         "market",
         "valuation",
+        "assumptions",
         "review",
     ]
     assert seen["advanced"] == seen["standard"]
@@ -258,7 +260,7 @@ def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
         "assumptions",
         "review",
     ]
-    assert seen["covStandard"] == five
+    assert seen["covStandard"] == [*five[:-1], "assumptions", "review"]  # CP-DR: research questions
     assert seen["covAdvanced"] == [
         "pathway",
         "documents",
@@ -671,6 +673,10 @@ def test_the_review_shows_the_services_forecast_per_module(page):
     by_module = {r["id"]: r for r in seen["rows"]}
     for module in summary["modules"]:
         own = [i["outcome"] for i in summary["items"] if i["scope"] == module]
+        # The page's own rules join the service's items: CP-DR's web-search note, and CP-2A's
+        # no-legal-documents limit with CP-2G reading it (both joined this pathway on 2026-11-11).
+        page_own = {"CP-DR": ["information"], "CP-2A": ["limited"], "CP-2G": ["limited"]}
+        own = [*own, *page_own.get(module, [])]
         want = min(own, key=ORDER.index) if own else "ready"
         assert by_module[module]["outcome"] == want, module
     for item in summary["items"]:  # every reason the service gave is shown
@@ -721,6 +727,7 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
     const S = await review();
     const itemPs = [...document.querySelectorAll('#rv-ready [data-module] p')];
     const out = {{S, start: gate(), n: ticks().length,
+      tickModules: ticks().map(t => t.closest('[data-module]').dataset.module),
       maxPerItem: Math.max(...itemPs.map(p => p.querySelectorAll('[data-tick]').length)),
       rowOutcomes: ticks().map(t => t.closest('[data-module]').dataset.outcome)}};
     const all = ticks();
@@ -744,7 +751,11 @@ def test_a_limit_must_be_ticked_before_approval_and_an_error_blocks_it(page):
     """)
     need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
     # One tick per item that needs one, counted from the service's items, not from the page.
-    assert need and seen["n"] == len(need)
+    # Two ticks come from the page's own rule, not the service: CP-2A with no legal documents (in
+    # this pathway, owner 2026-11-11) and CP-2G, which reads CP-2A's downside.
+    page_only = ["CP-2A", "CP-2G"]
+    assert need and seen["n"] == len(need) + len(page_only)
+    assert sorted(m for m in seen["tickModules"] if m in page_only) == page_only
     assert seen["maxPerItem"] == 1
     assert set(seen["rowOutcomes"]) <= set(LIMITS)
     assert seen["start"] == {"approve": True, "approved": False, "submit": True}
@@ -940,7 +951,9 @@ def test_the_research_text_is_fixed(page):
     return {text: document.querySelector('#research-src .strip-text').textContent};
     """)
     assert seen["text"] == (
-        "Research works from the supplied files only. "
+        "The research module searches the web for public peers as well as reading the supplied "
+        "files; its searches go to OpenAI's search. It is told to search with public names only, "
+        "and the queries it actually sent are kept in the run record. "
         "Add peers' filings to the documents if you want them used."
     )
 
@@ -982,8 +995,9 @@ def test_upload_to_filed_report_with_the_real_launcher(
     [record] = load_all(layout(root))
     assert record.id == first["id"]
     assert record.status == "finished", record.reason
-    assert record.report.startswith("issuers/") or "/issuers/" in record.report
-    assert (root / record.report).is_file()
+    # A delivery has no report page (PR #46): nothing is filed, so the record names none. The
+    # library lists the run itself, and the page links to it (the next test follows that link).
+    assert record.report == ""
     assert f'"{record.id}"' in (root / "_engine/library/data.js").read_text(encoding="utf-8")
     after = page.run("""
     const text = () => $('run-progress').textContent;

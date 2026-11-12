@@ -66,7 +66,8 @@ the launcher's reading disagrees with are Limited for the whole run.
   submissions, and uploads of at most 50 MiB a file, 500 files and 512 MiB in total.
 - **Key and ruling:** the provider key comes only from the environment of the account that runs
   the service. Every live launch passes the standing ruling `2026-11-11-run-start-submit.md`: in
-  the package at `engine\docs\rulings`, from a checkout at `docs\rulings`.
+  the package at `engine\docs\rulings`, from a checkout at `docs\rulings`. The ruling lists `web-search`, so runs from the page search the web for CP-DR (queries use
+  public names only and go to OpenAI's search; the USD 20 cap counts the fees).
 - **One service, one machine:** it holds an operating-system file lock on `_engine\watcher.lock`
   (the name is kept so an old folder watcher and the service exclude each other) while it runs. A
   second one on the same root is refused with exit code 2 ("another run page service (or an old

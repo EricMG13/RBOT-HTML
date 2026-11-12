@@ -1,9 +1,10 @@
 """The CP-2G forecast files a launcher run publishes beside its report. Pure: bytes in, bytes out.
 
-The CP-2G handoff states inputs only, in one fenced JSON block under ``HEADING``: the CP-1 base
-amounts, the seven driver paths, an optional downside shock and the three forecast years. Python
-(``cp2g.forecast``, 38-digit exact) computes every figure; no figure is read from the handoff's
-prose. A block that is missing, malformed or states a base amount CP-1 does not print raises
+The forecast source's handoff (CP-2G's, else CP-1's run-rate block) states inputs only, in one
+fenced JSON block under ``HEADING``: the CP-1 base amounts, the seven driver
+paths, an optional downside shock and the three forecast years. Python (``cp2g.forecast``,
+38-digit exact) computes every figure; no figure is read from the handoff's prose. A block that
+is missing, malformed or states a base amount CP-1 does not print raises
 ValueError; the caller decides what that means (the run fails open, see cpos.run_handoffs).
 """
 
@@ -21,19 +22,33 @@ from deploy_vii.contracts import Contract
 from deploy_vii.live.schema import exact_json, json_object
 from deploy_vii.readiness import shape_issues
 from deploy_workflow.owners import cp2g
+from deploy_workflow.prose_checks import FORECAST_HEADING, reader_passages
 
-HEADING = "### Forecast inputs (machine-readable)"
+HEADING = FORECAST_HEADING
 SCHEMA_VERSION = "cpos-forecast-inputs/1"
 LIMIT = (
     "Every figure is Python's arithmetic over inputs the CP-2G handoff stated; the inputs, not "
     "the arithmetic, are unreviewed. Not analytical review."
 )
+# Owner, 2026-11-11: a forecast works from layer 1 and is better with CP-2G. Without CP-2G the
+# source is CP-1's run-rate block, and the published limit says so.
+LAYER1_LIMIT = (
+    "Every figure is Python's arithmetic over run-rate inputs the CP-1 handoff stated, from the "
+    "financial foundation's own figures; no CP-2G model, case or shock was run. The inputs, not "
+    "the arithmetic, are unreviewed. Not analytical review."
+)
+SOURCES = ("CP-2G", "CP-1")
 Signed = Annotated[str, Field(pattern=r"^-?[0-9]{1,6}(\.[0-9]{1,4})?$")]
 
 
 class Operand(Contract):
+    """A base operand. CP-1's layer-1 block also says where it read an amount: the first cell of
+    the table row (`row`) and the header of the period column (`period`)."""
+
     amount: Signed | None
     reason: str | None
+    row: str | None = None
+    period: str | None = None
 
     @model_validator(mode="after")
     def one_of(self) -> "Operand":
@@ -102,11 +117,11 @@ class ForecastInputs(Contract):
         return self
 
 
-def _block(text: str) -> str:
+def _block(text: str, source: str = "CP-2G") -> str:
     lines = text.replace("\r\n", "\n").split("\n")
     starts = [i for i, line in enumerate(lines) if line.strip() == HEADING]
     if len(starts) != 1:
-        raise ValueError(f"CP-2G: needs exactly one `{HEADING}` heading, found {len(starts)}")
+        raise ValueError(f"{source}: needs exactly one `{HEADING}` heading, found {len(starts)}")
     body: list[str] = []
     for line in lines[starts[0] + 1 :]:
         if re.match(r"#{1,6}\s", line):
@@ -114,7 +129,7 @@ def _block(text: str) -> str:
         body.append(line)
     found = re.findall(r"^```json\n(.*?)\n```[ \t]*$", "\n".join(body), re.DOTALL | re.MULTILINE)
     if len(found) != 1 or "\n".join(body).count("```") != 2:
-        raise ValueError(f"CP-2G: `{HEADING}` needs exactly one fenced json block")
+        raise ValueError(f"{source}: `{HEADING}` needs exactly one fenced json block")
     return str(found[0])
 
 
@@ -127,7 +142,118 @@ def _printed(text: str, amount: str) -> bool:
     )
 
 
-def _declined(document: dict[str, object]) -> None:
+_CELL = re.compile(r"(?:\+|(?P<minus>[-\u2212]))?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
+_BRACKET = re.compile(r"\((?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\)")
+
+
+def _plain(cell: str) -> str:
+    """A label or header as compared: trimmed, without Markdown emphasis; case kept."""
+    return cell.strip().strip("*_`").strip()
+
+
+def _signed(cell: str) -> Decimal | None:
+    """`1,000`, `+1,000`, `-1,000`, `\u22121,000` and `(1,000)` as signed numbers; anything else,
+    such as a unit or scale suffix, a percentage or `n.a.`, is not a number."""
+    text = _plain(cell)
+    if (bracket := _BRACKET.fullmatch(text)) is not None:
+        return -Decimal(bracket["digits"].replace(",", ""))
+    if (plain := _CELL.fullmatch(text)) is None:
+        return None
+    value = Decimal(plain["digits"].replace(",", ""))
+    return -value if plain["minus"] else value
+
+
+def _tables(text: str) -> list[list[list[str]]]:
+    """The Markdown tables of CP-1 outside fenced code, `## Sources`, the forecast block and the
+    reader passages: each a list of rows of cells, header first, delimiter row dropped."""
+    skipped = {number for body in reader_passages(text).values() for number, _ in body}
+    tables: list[list[list[str]]] = []
+    run: list[list[str]] = []
+    seen_delimiter = False
+    fence = ""  # the marker (``` or ~~~) of the code fence in force, else empty
+    block = sources = False
+    for number, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if marker := next((m for m in ("```", "~~~") if stripped.startswith(m)), ""):
+            fence = "" if fence == marker else (fence or marker)
+        fenced = bool(fence)
+        heading = None if fenced else re.match(r"(#{1,6})\s+(.*?)\s*#*\s*$", line)
+        if heading is not None:
+            block = stripped == HEADING
+            if len(heading[1]) <= 2:
+                sources = len(heading[1]) == 2 and heading[2] == "Sources"
+        cells = (
+            [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", stripped[1:-1])]
+            if stripped.startswith("|") and stripped.endswith("|") and len(stripped) > 1
+            else None
+        )
+        if cells is None or fenced or block or sources or number in skipped:
+            if len(run) > 1:
+                tables.append(run)
+            run, seen_delimiter = [], False
+            continue
+        if run and not seen_delimiter:
+            if all(re.fullmatch(r":?-+:?", c) for c in cells):
+                seen_delimiter = True
+            else:
+                run = [cells]  # no delimiter row under the first row: not a table
+        else:
+            run.append(cells)
+    if len(run) > 1:
+        tables.append(run)
+    return tables
+
+
+def _cells(text: str, label: str, period: str) -> set[str]:
+    """The distinct texts of the cells at `label` (a row's first cell) and `period` (a header
+    cell) over every table of the handoff."""
+    found: set[str] = set()
+    for table in _tables(text):
+        header, *rows = table
+        for column in (i for i, h in enumerate(header) if i > 0 and _plain(h) == _plain(period)):
+            found.update(
+                row[column] for row in rows if len(row) > column and _plain(row[0]) == _plain(label)
+            )
+    return found
+
+
+def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
+    """The one sign rule. Working capital is read as CP-2G reads it (`Operands.from_cp1`): the
+    operand is the cell with its sign reversed, so a printed (45), an investment, is 45 and a
+    printed +45, a release, is -45; a magnitude match would turn a release into an outflow.
+    Interest, taxes and capex are positive magnitudes however CP-1 prints them; every other
+    operand compares signed."""
+    if key == "wc":
+        return -cell == amount
+    return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
+
+
+def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
+    """Why the operand is not the cell it names, or None when it is."""
+    if operand.amount is None:
+        return (
+            None
+            if operand.row is None and operand.period is None
+            else (f"base {key} states no amount, so it names no row or period")
+        )
+    if not operand.row or not operand.period:
+        return f"base {key} must name the `row` label and `period` header it was read from"
+    where = f"row `{operand.row}`, period `{operand.period}`"
+    found = _cells(text, operand.row, operand.period)
+    if not found:
+        return f"base {key}: no table cell of CP-1 is at {where}"
+    values = {_signed(cell) for cell in found}
+    if len(found) > 1 and len(values) > 1 or None in values:
+        return (
+            f"base {key}: {where} is not one number in CP-1 ({len(found)} cells: {sorted(found)})"
+        )
+    (value,) = values
+    if value is None or not _agrees(key, value, Decimal(operand.amount)):
+        return f"base {key} {operand.amount} is not CP-1's cell at {where} ({min(found)})"
+    return None
+
+
+def _declined(document: dict[str, object], source: str) -> None:
     """A block whose every driver has all-null values is the method declining to forecast."""
     drivers = document.get("base_drivers")
     if not isinstance(drivers, dict) or not drivers:
@@ -144,29 +270,42 @@ def _declined(document: dict[str, object]) -> None:
     why = limits[0] if isinstance(limits, list) and limits and isinstance(limits[0], str) else ""
     why = why if len(why) <= 200 else why[:197] + "..."
     raise ValueError(
-        "CP-2G: the handoff gives no forecast drivers, so no forecast was computed"
+        f"{source}: the handoff gives no forecast drivers, so no forecast was computed"
         + (f" ({why})" if why else "")
     )
 
 
-def parse(cp2g_text: str, cp1_text: str) -> ForecastInputs:
-    """The validated inputs block; ValueError names the first thing wrong with it."""
-    document = json_object(_block(cp2g_text))
+def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInputs:
+    """The validated inputs block; ValueError names the first thing wrong with it. `source` is
+    the module that wrote the block: CP-2G, or CP-1 for a layer-1 forecast (base operands and
+    run-rate drivers only: no shock and no cases)."""
+    if source not in SOURCES:
+        raise ValueError(f"{source}: is not a forecast source")
+    document = json_object(_block(source_text, source))
     if document is None:
-        raise ValueError("CP-2G: the forecast inputs block is not a bounded JSON object")
-    _declined(document)
+        raise ValueError(f"{source}: the forecast inputs block is not a bounded JSON object")
+    _declined(document, source)
     try:
         inputs = ForecastInputs.model_validate_json(exact_json(document))
     except ValidationError as error:
         issues = shape_issues(error)
         if len(issues) <= 3:
-            raise ValueError(f"CP-2G: forecast inputs: {'; '.join(issues)}") from error
+            raise ValueError(f"{source}: forecast inputs: {'; '.join(issues)}") from error
         raise ValueError(
-            f"CP-2G: forecast inputs: {len(issues)} problems; first: {'; '.join(issues[:3])}"
+            f"{source}: forecast inputs: {len(issues)} problems; first: {'; '.join(issues[:3])}"
         ) from error
+    if source == "CP-1" and (
+        inputs.downside_shock or inputs.upside_drivers or inputs.downside_drivers
+    ):
+        raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
     for key, operand in inputs.base.items():
-        if operand.amount is not None and not _printed(cp1_text, operand.amount):
-            raise ValueError(f"CP-2G: base {key} {operand.amount} is not printed in CP-1")
+        if source == "CP-2G":
+            if operand.row is not None or operand.period is not None:
+                raise ValueError(f"{source}: base {key} names a row or period; only CP-1 does")
+            if operand.amount is not None and not _printed(cp1_text, operand.amount):
+                raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
+        elif (problem := _layer1_problem(cp1_text, key, operand)) is not None:
+            raise ValueError(f"{source}: {problem}")
     return inputs
 
 
@@ -187,9 +326,10 @@ def _json(document: object) -> bytes:
     return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
 
 
-def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
-    """The five files `credit_os/store.py` reads for a model, from the CP-1 and CP-2G handoffs."""
-    inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"))
+def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
+    """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
+    forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
+    inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"), source)
     operands = cp2g.Operands(
         **{
             key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
@@ -227,7 +367,10 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
     exact = _json(
         {
             "schema_version": "cpos-forecast-exact/1",
-            "consumed": {"CP-1.md": _sha(cp1), "CP-2G.md": _sha(handoff)},
+            "consumed": {
+                "CP-1.md": _sha(cp1),
+                **({"CP-2G.md": _sha(handoff)} if source == "CP-2G" else {}),
+            },
             "base": {key: _cell(value) for key, value in operands.items()},
             "reference_drivers": inputs.base_drivers.model_dump(mode="json"),
             "downside_shock": None
@@ -238,7 +381,7 @@ def model_files(cp1: bytes, handoff: bytes) -> dict[str, bytes]:
             **_stated("upside_drivers", inputs.upside_drivers),
             **_stated("downside_drivers", inputs.downside_drivers),
             "outputs": outputs,
-            "scope_limits": [LIMIT, *inputs.scope_limits],
+            "scope_limits": [LIMIT if source == "CP-2G" else LAYER1_LIMIT, *inputs.scope_limits],
         }
     )
     calculation = _json(

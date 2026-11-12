@@ -746,7 +746,7 @@ def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
     assert "liquidity-runway" in prepared.omitted
 
 
-@pytest.mark.parametrize("module", ["CP-MODEL", "CP-8", "CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
+@pytest.mark.parametrize("module", ["CP-8", "CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
 def test_modules_without_a_launchable_method_are_refused(tmp_path, capsys, module):
     assert main([*launch(tmp_path), "--modules", module]) == 2
     assert module in capsys.readouterr().err
@@ -776,6 +776,97 @@ def test_cap_too_small_for_one_call_is_refused_offline(tmp_path, capsys):
     assert main(argv) == 2
     assert "--cap" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
+
+
+def test_the_offline_cap_check_holds_the_research_modules_search_fee_when_it_will_search(tmp_path):
+    # The live loop holds USD 0.16 more for each CP-DR call when the ruling lists web-search
+    # (16 calls at USD 0.01; tests/test_handoff_loop.py). The offline check holds the same.
+    context, folder = context_file(tmp_path), issuer_folder(tmp_path)
+
+    def hold(cap: str, out: str, **extra: bool) -> Decimal:
+        return prepare(
+            context,
+            folder,
+            tmp_path / out,
+            config="sol-medium",
+            cap=cap,
+            modules=("CP-DR",),
+            **extra,
+        ).hold
+
+    plain = hold("50", "a")
+    assert hold("50", "b", web_search=True) - plain == Decimal("0.16")
+    between = str(plain + Decimal("0.05"))  # fits one call without search, not with it
+    hold(between, "c")
+    with pytest.raises(LaunchRefused, match="--cap"):
+        hold(between, "d", web_search=True)
+
+
+def with_case_kind(path: Path, kind: str) -> Path:
+    data = json.loads(path.read_text())
+    data["run"]["case_kind"] = kind
+    path.write_text(json.dumps(data))
+    return path
+
+
+STANDING = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
+
+
+def search_holds(tmp_path: Path, kind: str) -> tuple[Decimal, Decimal, list[str], str]:
+    """The CP-DR hold without and with the ruling's search, the launcher's argv and its Web line."""
+    argv = launch(tmp_path, "--modules", "CP-DR", "--ruling", str(STANDING))
+    context = with_case_kind(tmp_path / "context.json", kind)
+    holds = [
+        prepare(
+            context,
+            tmp_path / "issuer",
+            tmp_path / name,
+            config="sol-medium",
+            cap="50",
+            modules=("CP-DR",),
+            web_search=searching,
+        ).hold
+        for name, searching in (("plain", False), ("search", True))
+    ]
+    return holds[0], holds[1], argv, kind
+
+
+def test_a_synthetic_case_holds_no_search_fee_and_the_launcher_says_why(tmp_path, capsys):
+    # One rule (model/handoff.py web_search_offered): the offline check holds what the loop holds.
+    plain, searching, argv, _ = search_holds(tmp_path, "synthetic")
+    assert searching == plain
+    assert main(argv) == 0
+    assert "Web:      off: synthetic case" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("kind", ["public", "private"])
+def test_a_public_or_private_case_holds_the_search_fee_and_the_launcher_says_it_searches(
+    tmp_path, capsys, kind
+):
+    plain, searching, argv, _ = search_holds(tmp_path, kind)
+    assert searching - plain == Decimal("0.16")
+    assert main(argv) == 0
+    assert "Web:      CP-DR searches the web" in capsys.readouterr().out
+
+
+def test_a_ruling_that_lists_web_search_makes_the_command_line_check_the_search_hold(
+    tmp_path, capsys
+):
+    base = launch(tmp_path, "--modules", "CP-DR")
+    plain = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "probe",
+        config="sol-medium",
+        cap="50",
+        modules=("CP-DR",),
+    )
+    base[base.index("--cap") + 1] = str(plain.hold + Decimal("0.05"))
+    standing = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
+    assert main([*base, "--ruling", str(RULING)]) == 0  # no web-search in this ruling
+    base[base.index("--out") + 1] = str(tmp_path / "out2")
+    assert main([*base, "--ruling", str(standing)]) == 2
+    assert "--cap" in capsys.readouterr().err
 
 
 def test_cap_is_sized_for_the_largest_module_not_the_smallest(tmp_path, capsys):
@@ -1686,11 +1777,22 @@ def test_yield_against_maturity_stays_omitted(tmp_path):
 
 
 def test_the_report_scope_no_longer_says_charts_are_unpublished(tmp_path):
-    # credit_snapshot runs CP-2G since 2026-11-11, so the scope without a forecast is read on
-    # earnings_update, and the one with it on credit_snapshot.
+    # Every preset now publishes a forecast (CP-MODEL, or CP-2G): earnings_update from CP-1's
+    # run-rate figures (owner, 2026-11-11), credit_snapshot from CP-2G. The scope with no forecast
+    # is read on an explicit module list.
     prepared, *_ = good_task(tmp_path, "CP-1", "earnings_update")
-    assert "The HTML Model and calculation JSON are not published" in prepared.layout.scope
+    assert "run-rate figures" in prepared.layout.scope
     assert "charts" not in prepared.layout.scope.lower()
+    (tmp_path / "b").mkdir()
+    bare = prepare(
+        context_file(tmp_path / "b", "earnings_update"),
+        issuer_folder(tmp_path / "b"),
+        tmp_path / "b" / "out",
+        config="sol-medium",
+        cap="50",
+        modules=("CP-1",),
+    )
+    assert "The HTML Model and calculation JSON are not published" in bare.plan.layout.scope
     (tmp_path / "f").mkdir()
     forecast, *_ = good_task(tmp_path / "f", "CP-1", "credit_snapshot")
     assert "A forecast table is published with the issuer report" in forecast.layout.scope
@@ -2108,6 +2210,14 @@ BASE = {
     "cash": "100",
     "undrawn": "50",
 }
+
+
+def printed(key: str, amount: str) -> str:
+    """How CP-1 prints a base operand. A working capital investment (the operand, an outflow) is
+    printed negative, as CP-2G reads it (`Operands.from_cp1` reverses the sign): `(10)` for 10."""
+    return f"({amount})" if key == "wc" else amount
+
+
 PATHS = {
     "revenue_growth": ("0.05", "0.04", "0.03"),
     "ebitda_margin": ("0.30", "0.31", "0.32"),
@@ -2148,15 +2258,25 @@ def forecast_block(**changes) -> str:
     return f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(inputs)}\n```\n"
 
 
-def forecast_answer(context: dict, routes: list, block: str | None = None) -> str:
-    """CP-1 prints the base amounts; CP-2G ends its findings with the inputs block."""
+def forecast_answer(
+    context: dict, routes: list, block: str | None = None, cp1_block: str | None = None
+) -> str:
+    """CP-1 prints the base amounts (and ends with the layer-1 block when `cp1_block` is given);
+    CP-2G ends its findings with the inputs block."""
     text = answer(context, routes)
     if context["module_id"] == "CP-1":
-        rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items())
+        rows = "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items())
         # Above the owner's chart table, so the base amounts do not read as rows of that table.
         mark = "### Chart data: revenue and EBITDA"
+        # Where another chart table sits above (the covenant pathway), or none, the base table
+        # gets a heading of its own.
+        alone = mark in text and "### Chart data: debt maturities" not in text
+        lead = "" if alone else "### Base operands\n\n"
         mark = mark if mark in text else "## Calculations"
-        return text.replace(mark, f"| Base | USD m |\n| --- | --- |\n{rows}\n\n{mark}", 1)
+        text = text.replace(mark, f"{lead}| Base | FY2025 |\n| --- | --- |\n{rows}\n\n{mark}", 1)
+        if cp1_block is not None:
+            text = text.replace("## Calculations", f"{cp1_block}\n## Calculations", 1)
+        return text
     if context["module_id"] == "CP-2G" and block is not None:
         return text.replace("## Calculations", f"{block}\n## Calculations", 1)
     return text
@@ -2209,8 +2329,16 @@ def key_case(shock: dict | None, paths: dict = PATHS) -> list[dict[str, Fraction
     return years
 
 
-def forecast_run(tmp_path, provider, capsys, block, modules=("CP-2G",)):
-    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="distressed_restructuring")
+def forecast_run(  # noqa: PLR0913 - one keyword per scenario setting
+    tmp_path,
+    provider,
+    capsys,
+    block,
+    modules=("CP-2G",),
+    cp1_block=None,
+    pathway="distressed_restructuring",
+):
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway=pathway)
     argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
     argv += ["--modules", *modules]
     routes = list(
@@ -2223,7 +2351,7 @@ def forecast_run(tmp_path, provider, capsys, block, modules=("CP-2G",)):
             modules=modules,
         ).plan.layout.routes
     )
-    provider.answer = lambda context: forecast_answer(context, routes, block)
+    provider.answer = lambda context: forecast_answer(context, routes, block, cp1_block)
     code = main(argv)
     return code, tmp_path / "runs" / RUN_ID, capsys.readouterr()
 
@@ -2289,6 +2417,335 @@ def test_cp2g_run_publishes_model_delivery(tmp_path, provider, capsys):
     assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
 
 
+def layer1_block(**changes) -> str:
+    """CP-1's block: each stated operand names the label and period header of the cell it read."""
+    base = changes.pop("base", None) or {
+        k: {"amount": v, "reason": None, "row": k, "period": "FY2025"} for k, v in BASE.items()
+    }
+    return forecast_block(downside_shock=None, base=base, **changes)
+
+
+def _operand(amount, row="revenue", period="FY2025"):
+    return {"amount": amount, "reason": None, "row": row, "period": period}
+
+
+def _cp1_doc(revenue_table: str, key: str = "revenue", head: str = "", tail: str = "") -> str:
+    """A CP-1 handoff: the other nine operands in a plain table, `key`'s in the given one."""
+    rows = "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items() if k != key)
+    return (
+        f"# CP-1\n\n## Findings\n\n### Bottom line\n\nText.\n\n### Base operands\n\n{head}"
+        f"| Base | FY2025 |\n| --- | --- |\n{rows}\n\n{revenue_table}\n\n__BLOCK__\n"
+        f"## Calculations\n\nNone.\n{tail}"
+    )
+
+
+def _parse_layer1(doc: str, key: str = "revenue", **operand):
+    base = {k: _operand(v, k) for k, v in BASE.items()}
+    base[key] = _operand(**{"row": key, **operand})
+    full = doc.replace("__BLOCK__", layer1_block(base=base))
+    return cpos_forecast.parse(full, full, "CP-1")
+
+
+TWO_YEARS = "| Metric | FY2024 | FY2025 |\n| --- | --- | --- |\n| revenue | 900 | 1,000 |"
+
+
+def test_a_layer1_operand_is_the_cell_at_its_row_and_period():
+    inputs = _parse_layer1(_cp1_doc(TWO_YEARS), amount="1000", period="FY2025")
+    assert inputs.base["revenue"].amount == "1000"
+    assert _parse_layer1(_cp1_doc(TWO_YEARS), amount="900", period="FY2024")
+
+
+@pytest.mark.parametrize(
+    ("table", "operand", "complaint"),
+    [
+        (TWO_YEARS, {"amount": "900", "period": "FY2025"}, "is not CP-1's cell"),
+        (TWO_YEARS, {"amount": "1000", "period": "FY2024"}, "is not CP-1's cell"),
+        (TWO_YEARS, {"amount": "1000", "period": "FY2023"}, "no table cell"),
+        (
+            "| Metric | FY2025 | Growth % |\n| --- | --- | --- |\n| revenue | 1,000 | 12 |",
+            {"amount": "12", "period": "FY2025"},
+            "is not CP-1's cell",
+        ),
+        (
+            "| Metric | FY2025 | Growth % |\n| --- | --- | --- |\n| revenue | 1,000 | 12% |",
+            {"amount": "12", "period": "Growth %"},
+            "is not one number",
+        ),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | (1,000) |", {"amount": "1000"}, "is not"),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000k |", {"amount": "1000"}, "number"),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000m |", {"amount": "1000"}, "number"),
+        ("| Metric | FY2025 |\n| --- | --- |\n| revenue | n.a. |", {"amount": "1000"}, "number"),
+        (
+            "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |",
+            {"amount": "1000", "row": "Revenue"},
+            "no table cell",
+        ),
+        (
+            "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |\n| revenue | 1,100 |",
+            {"amount": "1000"},
+            "is not one number",
+        ),
+    ],
+    ids=[
+        "prior-period-cell",
+        "neighbour-period",
+        "unknown-period",
+        "growth-column",
+        "percent-cell",
+        "bracket-negative",
+        "k-suffix",
+        "m-suffix",
+        "not-a-number",
+        "label-case",
+        "ambiguous-label",
+    ],
+)
+def test_a_layer1_operand_that_is_not_its_named_cell_is_refused(table, operand, complaint):
+    with pytest.raises(ValueError, match=complaint) as caught:
+        _parse_layer1(_cp1_doc(table), **operand)
+    assert "CP-1: base revenue" in str(caught.value)
+
+
+_ROW = "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1234 |"
+
+
+@pytest.mark.parametrize(
+    "doc",
+    [
+        _cp1_doc("", head=f"```text\n{_ROW}\n```\n\n"),
+        _cp1_doc("", tail=f"\n## Sources\n\n{_ROW}\n"),
+        _cp1_doc("").replace("Text.", f"Text.\n\n{_ROW}"),
+        _cp1_doc("| Metric | FY2025 |\n| revenue | 1234 |"),
+        _cp1_doc("", head="Basis: revenue 1,234 per annual report\n\n"),
+    ],
+    ids=["fenced", "sources", "reader-passage", "no-delimiter", "prose"],
+)
+def test_a_layer1_operand_outside_cp1s_tables_is_refused(doc):
+    with pytest.raises(ValueError, match="no table cell"):
+        _parse_layer1(doc, amount="1234")
+
+
+def test_a_layer1_table_under_a_later_heading_still_counts_after_sources_ends():
+    row = "| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,234 |"
+    doc = _cp1_doc("", tail=f"\n## Sources\n\nx\n\n## Appendix\n\n{row}\n")
+    assert _parse_layer1(doc, amount="1234")
+
+
+def _wc_doc(cell: str) -> str:
+    return _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Working capital | {cell} |", "wc")
+
+
+@pytest.mark.parametrize(
+    ("cell", "amount"), [("(45)", "45"), ("-45", "45"), ("45", "-45"), ("+45", "-45")]
+)
+def test_a_layer1_working_capital_is_the_cell_sign_reversed_as_cp2g_reads_it(cell, amount):
+    assert _parse_layer1(_wc_doc(cell), "wc", amount=amount, row="Working capital")
+
+
+@pytest.mark.parametrize(("cell", "amount"), [("45", "45"), ("+45", "45"), ("(45)", "-45")])
+def test_a_layer1_working_capital_release_read_as_an_outflow_is_refused(cell, amount):
+    with pytest.raises(ValueError, match="is not CP-1's cell"):
+        _parse_layer1(_wc_doc(cell), "wc", amount=amount, row="Working capital")
+
+
+def test_a_layer1_table_in_a_tilde_fence_is_code_and_not_a_cell():
+    doc = _cp1_doc("~~~\n" + TWO_YEARS + "\n~~~")
+    with pytest.raises(ValueError, match="no table cell"):
+        _parse_layer1(doc, amount="1000", period="FY2025")
+
+
+def test_a_layer1_escaped_pipe_stays_inside_its_cell():
+    table = "| Metric | Note | FY2025 |\n| --- | --- | --- |\n| revenue | a \\| 900 | 1,000 |"
+    assert _parse_layer1(_cp1_doc(table), amount="1000", period="FY2025")
+    with pytest.raises(ValueError, match="is not CP-1's cell"):
+        _parse_layer1(_cp1_doc(table), amount="900", period="FY2025")
+
+
+@pytest.mark.parametrize("printed", ["85", "-85", "(85)", "\u221285", "**(85)**"])
+def test_a_layer1_outflow_is_stated_as_a_magnitude_however_cp1_prints_it(printed):
+    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Interest paid | {printed} |", "interest")
+    assert _parse_layer1(doc, "interest", amount="85", row="Interest paid").base["interest"]
+
+
+def test_a_layer1_outflow_stated_negative_is_refused():
+    doc = _cp1_doc("| Metric | FY2025 |\n| --- | --- |\n| Interest paid | -85 |", "interest")
+    with pytest.raises(ValueError, match="is not CP-1's cell"):
+        _parse_layer1(doc, "interest", amount="-85", row="Interest paid")
+
+
+@pytest.mark.parametrize(
+    ("printed", "amount", "accepted"),
+    [("(50)", "50", False), ("(50)", "-50", True), ("50", "-50", False), ("\u221250", "-50", True)],
+)
+def test_a_layer1_non_outflow_compares_with_its_sign(printed, amount, accepted):
+    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| Free cash flow | {printed} |", "fcf")
+    if accepted:
+        assert _parse_layer1(doc, "fcf", amount=amount, row="Free cash flow")
+    else:
+        with pytest.raises(ValueError, match="is not CP-1's cell"):
+            _parse_layer1(doc, "fcf", amount=amount, row="Free cash flow")
+
+
+def test_a_layer1_label_is_compared_without_emphasis_and_a_repeated_row_that_agrees_is_one_cell():
+    table = "| Metric | FY2025 |\n| --- | --- |\n|  **Net sales**  | 1,000 |\n| Net sales | 1000 |"
+    assert _parse_layer1(_cp1_doc(table), amount="1000", row="Net sales")
+
+
+@pytest.mark.parametrize(
+    "operand",
+    [
+        {"amount": "1000", "reason": None},
+        {"amount": "1000", "reason": None, "row": "revenue"},
+        {"amount": None, "reason": "unknown", "row": "revenue", "period": "FY2025"},
+    ],
+)
+def test_a_layer1_operand_must_name_its_cell_exactly_when_it_states_an_amount(operand):
+    doc = _cp1_doc("| Metric | FY2025 |\n| --- | --- |\n| revenue | 1,000 |")
+    base = {k: _operand(v, k) for k, v in BASE.items()} | {"revenue": operand}
+    full = doc.replace("__BLOCK__", layer1_block(base=base))
+    with pytest.raises(ValueError, match="CP-1: base revenue"):
+        cpos_forecast.parse(full, full, "CP-1")
+
+
+def test_a_cp2g_operand_names_no_row_or_period():
+    base = {k: _operand(v, k) for k, v in BASE.items()}
+    with pytest.raises(ValueError, match="only CP-1 does"):
+        cpos_forecast.parse(forecast_block(base=base), " ".join(BASE.values()))
+
+
+def test_the_layer1_instruction_asks_for_the_row_and_period_not_for_extra_rows():
+    block = cpos_launch.LAYER1_FORECAST_BLOCK
+    assert '"row"' in block and '"period"' in block and "exact first-cell text" in block
+    assert "Base operands" not in block and "positive magnitude" in block
+
+
+def test_cp_model_without_cp2g_publishes_a_model_from_cp1s_block(tmp_path, provider, capsys):
+    modules = ("CP-1", "CP-MODEL")
+    code, out, seen = forecast_run(
+        tmp_path,
+        provider,
+        capsys,
+        None,
+        modules=modules,
+        cp1_block=layer1_block(),
+        pathway="covenant_refinancing",
+    )
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    cp1 = hashlib.sha256((folder / "CP-1.md").read_bytes()).hexdigest()
+    assert (folder / "forecast.md").read_bytes() == (folder / "CP-1.md").read_bytes()
+    exact = json.loads((folder / "forecast_exact.json").read_text())
+    assert exact["consumed"] == {"CP-1.md": cp1}  # no CP-2G handoff was consumed
+    assert list(exact["outputs"]) == ["REFERENCE"]  # no case and no shock
+    assert "run-rate inputs the CP-1 handoff stated" in exact["scope_limits"][0]
+    first = exact["outputs"]["REFERENCE"]["years"][0]  # the hand-written year 1 of the base case
+    assert [first[n]["amount"] for n in ("revenue", "ebitda", "fcf", "closing_debt")] == [
+        "1050",
+        "315",
+        "132",
+        "550",
+    ]
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is True and completed["forecast_failure"] is None
+
+
+def test_cp2gs_block_wins_when_both_modules_state_one(tmp_path, provider, capsys):
+    cp1_paths = {**PATHS, "revenue_growth": ("0.50", "0.50", "0.50")}  # would give 1500 in year 1
+    cp1_block = layer1_block(
+        base_drivers={
+            n: {
+                "values": list(v),
+                "category": "Analyst Interpretation",
+                "rationale": "x",
+                "limitation": None,
+            }
+            for n, v in cp1_paths.items()
+        }
+    )
+    code, out, seen = forecast_run(
+        tmp_path,
+        provider,
+        capsys,
+        forecast_block(),
+        modules=("CP-2G", "CP-MODEL"),
+        cp1_block=cp1_block,
+    )
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    assert (folder / "forecast.md").read_bytes() == (folder / "CP-2G.md").read_bytes()
+    exact = json.loads((folder / "forecast_exact.json").read_text())
+    assert set(exact["consumed"]) == {"CP-1.md", "CP-2G.md"}
+    assert exact["outputs"]["REFERENCE"]["years"][0]["revenue"]["amount"] == "1050"
+    assert "DOWNSIDE" in exact["outputs"]
+    assert "run-rate" not in exact["scope_limits"][0]
+
+
+@pytest.mark.parametrize(
+    ("cp1_block", "reason"),
+    [
+        (layer1_block(years=[]), "CP-1: forecast inputs: years"),
+        (None, "CP-1: needs exactly one `### Forecast inputs (machine-readable)` heading"),
+        (forecast_block(), "CP-1: a layer-1 forecast states no shock and no cases"),
+        (
+            layer1_block(
+                base={k: _operand("1234" if k == "revenue" else v, k) for k, v in BASE.items()}
+            ),
+            "CP-1: base revenue 1234 is not CP-1's cell at row `revenue`, period `FY2025`",
+        ),
+    ],
+)
+def test_a_bad_layer1_block_withholds_the_model_and_never_rejects_cp1(
+    tmp_path, provider, capsys, cp1_block, reason
+):
+    code, out, seen = forecast_run(
+        tmp_path,
+        provider,
+        capsys,
+        None,
+        modules=("CP-1", "CP-MODEL"),
+        cp1_block=cp1_block,
+        pathway="covenant_refinancing",
+    )
+    assert code == 0, seen.err  # CP-1 was accepted; the run delivered
+    (folder,) = (out / "deliveries").iterdir()
+    assert (folder / "delivery.json").is_file() and not (folder / "forecast_exact.json").exists()
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["cp_forecast_published"] is False
+    assert reason in completed["forecast_failure"]
+    assert f"Model not published: {completed['forecast_failure']}" in seen.err
+
+
+def test_cp1_gets_the_layer_1_block_only_when_the_forecast_lacks_cp2g(tmp_path):
+    def instructions(name, pathway, modules=None):
+        folder = tmp_path / name
+        folder.mkdir()
+        prepared = prepare(
+            context_file(folder, pathway),
+            issuer_folder(folder),
+            folder / "out",
+            config="sol-medium",
+            cap="50",
+            modules=modules,
+        )
+        return prepared, (folder / "out/instructions/CP-1.md").read_text()
+
+    marker = "### Forecast inputs (machine-readable)"
+    for name, pathway, modules in (
+        ("preset", "earnings_update", None),  # CP-MODEL in the preset, no CP-2G
+        ("explicit", "covenant_refinancing", ("CP-1", "CP-MODEL")),
+    ):
+        prepared, text = instructions(name, pathway, modules)
+        before, _, method = text.partition(cpos_launch.METHOD_MARK)
+        assert marker in before and marker not in method, name
+        assert prepared.plan.publish_forecast is True, name
+        assert "CP-MODEL" not in prepared.ordered, name
+    prepared, text = instructions("with-2g", "distressed_restructuring")  # CP-2G in the run
+    assert marker not in text and prepared.plan.publish_forecast is True
+    assert marker in (tmp_path / "with-2g/out/instructions/CP-2G.md").read_text()
+    prepared, text = instructions("bare", "earnings_update", ("CP-1",))  # no CP-MODEL, no CP-2G
+    assert marker not in text and prepared.plan.publish_forecast is False
+
+
 def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
     code, out, seen = forecast_run(tmp_path, provider, capsys, None, modules=("CP-2A",))
     assert code == 0, seen.err
@@ -2306,7 +2763,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
 
 
 def test_model_publish_failure_keeps_the_delivery(tmp_path, provider, capsys, monkeypatch):
-    def refuse(cp1, handoff):
+    def refuse(cp1, handoff, source="CP-2G"):
         raise ValueError("synthetic failure")
 
     monkeypatch.setattr(cpos_forecast, "model_files", refuse)
@@ -3738,3 +4195,11 @@ def test_checker_rejects_a_reader_number_the_handoff_does_not_hold(tmp_path):
     issues = _checked_handoff(task, wrong.encode(), checker(prepared.layout))
     assert any(i.startswith("Fidelity check, line ") and '"9.87x"' in i for i in issues)
     assert not any("Prose check 9" in i for i in issues)
+
+
+def test_the_service_standing_ruling_lists_web_search_so_runs_from_the_page_search():
+    from deploy_workflow.inbox.startup import STANDING_RULING
+    from deploy_workflow.owners.cpos import web_search_ruled
+
+    assert web_search_ruled(STANDING_RULING)
+    assert not web_search_ruled(RULING)  # a ruling that lists only the config does not
