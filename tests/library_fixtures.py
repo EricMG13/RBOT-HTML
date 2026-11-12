@@ -85,6 +85,8 @@ class RunSpec:
     report_page: bool = True  # False: a current delivery, with no report.html, stated by receipt.
     pathway: str = "credit_snapshot"
     first_call: str | None = None  # Every call's started_at, when a test orders runs by it.
+    selection: str | None = "preset"  # workflow.json `selection`; None: an older run without it
+    case_kind: str = "public"
 
 
 def make_run(workspace: Path, folder: str, **changes) -> Path:
@@ -104,7 +106,7 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         "issuer_name": issuer_name,
         "as_of": as_of,
         "method_version": "deploy-v-r14",
-        "case_kind": "public",
+        "case_kind": spec.case_kind,
         "pathway": spec.pathway,
         "requested_modules": list(modules),
     }
@@ -146,6 +148,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
         handoffs[module] = {"path": path, "sha256": put(run_dir / path, answer.encode())}
         selected[module] = path
     workflow = {"run": run, "instructions": instructions, "provider_cap_usd": "12"}
+    if spec.selection is not None:
+        workflow["selection"] = spec.selection
     if spec.supplied:
         workflow["sources"] = {
             name: {

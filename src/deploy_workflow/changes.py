@@ -5,37 +5,52 @@ run itself. Everything here is Python and reads files only; nothing calls a prov
 
 Prior run (`find_prior`, one rule). Among the runs the issuer library lists (`library_index
 .admit_run`: completed, answered in their own run, earlier-format and earlier-methods runs
-included), those of the same issuer and pathway whose as-of date is on or before this run's,
-excluding this run's own folder. The latest is chosen by (as-of date, first model-call start,
-folder name). None means no CP-8: the run records "first run of this pathway". The prior run's
-folder is read, never written. `prepare` copies its delivered handoffs into the run folder as
-`prior/<module>.md` and pins them as sources; a resume reuses those pins.
+included), those that are a comparison base and have the same issuer ID (compared without regard
+to case), pathway and case kind, an issuer name equal after case and whitespace folding, and an
+as-of date on or before this run's, excluding this run's own folder. A run is a comparison base
+when its manifest records `selection: "preset"` (the pathway's own modules) and is not when it
+records `"explicit"` (a `--modules` subset); an older run that records neither is a base only if
+it delivered the pathway's lead module (`LEAD_MODULE`: CP-2, CP-1B for an earnings update, CP-L10
+for a short snapshot). A candidate that fails a test is never used and the reason is returned in
+`skipped`. The latest is chosen by (as-of date, first model-call start, folder name). None means
+no CP-8: the run records "first run of this pathway". The prior run's folder is read, never
+written. `prepare` copies its delivered handoffs into the run folder as `prior/<module>.md` and
+pins them as sources; a resume reuses those pins. A chosen run with a handoff that is not valid
+UTF-8 is not compared (reason in `skipped`).
 
 The pack (`build_pack`) is computed before CP-8 is called, given to CP-8 as the source
 `changes.json` and published unchanged in the delivery as `changes.json`. Schema
-`cpos-changes/1` (every number is a decimal string; missing is null, never zero):
+`cpos-changes/2` (every number is a decimal string; missing is null, never zero):
 
 - `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text]}`;
   `current`: `{as_of, pathway, format}`.
 - `measures`: a list of `{key, label, unit, comparable, reason, prior, current, difference}`;
   `prior` and `current` are `{label, unit, value, period, definition}` or null when the run does
-  not state the measure. `comparable` is false when a run does not state it, or its label, unit or
-  definition text (the table's "Basis and limitation", compared after normalisation) differs;
-  `difference` is current minus prior, computed here with Decimal, and null unless `comparable` and
-  both values are stated. `reason` says why there is no difference.
-- `net_debt_bridge`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
-  current_net_debt}`, only when both runs state gross debt, net debt and cash in one unit and
-  each run's net debt is its gross debt less its cash.
+  not state the measure. `difference` is current minus prior, computed here with Decimal whenever
+  both values are stated and the units are equal. `comparable` is "no" when the units differ or a
+  value or a run is missing (no difference), "yes" when the label and the definition texts (the
+  table's "Basis and limitation") are equal once digits, page and locator words and punctuation
+  are removed, and otherwise "judge": the difference is given, both definition texts are in the
+  pack, and CP-8 states for that row `Same definition` or `Not comparable` (the checker enforces
+  it). `reason` says why there is no difference or why a judgement is needed.
+- `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
+  current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
+  unit, each under the same definition ("yes"), and each run's net debt is its gross debt less its
+  cash. A two-point identity of stated balances; it does not say what drove the change. An
+  increase in cash reduces net debt.
 - `maturity_profile`: `{unit, rows: [{period, prior, current, difference}]}` from the CP-1
-  "Chart data: debt maturities" tables, only when both runs have one in one unit.
-- `omitted`: `{net_debt_bridge|maturity_profile: reason}` for each of the two left out.
+  "Chart data: debt maturities" tables (the table directly under that heading), only when both
+  runs have one in one unit.
+- `omitted`: `{net_debt_change|maturity_profile: reason}` for each of the two left out.
 - `modules`: `{module, title, ran_prior, ran_current, prior_bottom_line, current_bottom_line}` for
   every module in either run (CP-8 excluded): the first paragraph of `### Bottom line`, Basis line
   dropped; for an earlier-format handoff the "Bottom line" cell of its Reader summary; else null.
-- `limitations`: `{key, text, modules, prior, current}`, one per distinct normalised key
-  (`prose_checks.normalise_limitation`) over both runs' `### Limitations` items (an earlier-format
-  handoff: its Reader summary's "Main limitation"); a "No limitation changes ..." item is not a
-  limitation.
+- `limitations`: `{earlier: [{ref, module, text}], current: [{ref, module, text}]}`: each item of
+  either run's `### Limitations` (an earlier-format handoff: its Reader summary's "Main
+  limitation"; a "No limitation changes ..." item is not a limitation) with a ref, `E1`, `E2` ...
+  for the earlier run and `C1`, `C2` ... for the current one, in the order the handoffs are given
+  (a run's modules in the order they ran), then the order in the handoff. CP-8 pairs them by
+  meaning; Python does not.
 """
 
 from __future__ import annotations
@@ -75,7 +90,7 @@ log = logging.getLogger(__name__)
 
 PRIOR_PREFIX = "prior/"
 PACK_NAME = "changes.json"
-PACK_SCHEMA = "cpos-changes/1"
+PACK_SCHEMA = "cpos-changes/2"
 FIRST_RUN = "first run of this pathway"
 NO_LIMITATION = re.compile(r"no limitation changes\b", re.IGNORECASE)
 NOT_SUPPLIED = "Not supplied"
@@ -94,6 +109,14 @@ ROW_MEASURES = (
     ("net_debt", ("net debt",)),
 )
 MATURITIES = "debt maturities"
+NET_DEBT_CONVENTION = (
+    "net debt = gross debt - cash: an increase in cash reduces net debt, a decrease raises it; "
+    "a two-point identity of the stated balances, not an analysis of what drove the change"
+)
+# The module a pathway's run is built around; an older run that did not record whether its
+# modules were the preset's or a subset is a comparison base only if it delivered this one.
+LEAD_MODULE = {"earnings_update": "CP-1B", "short_snapshot": "CP-L10"}
+DEFAULT_LEAD = "CP-2"
 
 
 class PriorRun(Contract):
@@ -115,33 +138,72 @@ def workspace_of(directory: Path) -> Path | None:
     return directory.parent.parent if directory.parent.name == "runs" else None
 
 
+def _fold(name: str) -> str:
+    return " ".join(name.casefold().split())
+
+
+def _not_a_base(
+    workflow: Mapping[str, Any],
+    run: Mapping[str, Any],
+    delivered: Sequence[str],
+    me: Mapping[str, str],
+) -> str | None:
+    """Why a run of the same issuer and pathway is not a comparison base, or None when it is."""
+    if _fold(str(run.get("issuer_name", ""))) != _fold(me["issuer_name"]):
+        return f"its issuer name is {run.get('issuer_name')!r}, not {me['issuer_name']!r}"
+    if run.get("case_kind") != me["case_kind"]:
+        return f"its case kind is {run.get('case_kind')!r}, not {me['case_kind']!r}"
+    selection = workflow.get("selection")
+    if selection == "explicit":
+        return "it was launched with an explicit module subset"
+    if selection is None:
+        lead = LEAD_MODULE.get(me["pathway"], DEFAULT_LEAD)
+        if lead not in delivered:
+            return f"it records no module selection and did not run {lead}"
+    elif selection != "preset":
+        return f"its module selection {selection!r} is not understood"
+    return None
+
+
 def find_prior(  # noqa: PLR0913 - the identity of the run and the library's method record
     workspace: Path,
     *,
     folder: str,
     issuer_id: str,
+    issuer_name: str,
+    case_kind: str,
     pathway: str,
     as_of: str,
     method: tuple[MethodText, MethodHeadings] | None = None,
+    only: str | None = None,
+    skipped: list[str] | None = None,
 ) -> tuple[PriorRun, dict[str, bytes]] | None:
     """The prior run (the rule in this module's docstring) and its delivered handoffs, or None.
 
     A folder the library would not list is not a candidate: it is skipped, as the library skips
     it. An unreadable one is logged; a refusal is the library's own record of why it is not
-    listed, so it is logged at debug level only."""
+    listed, so it is logged at debug level only. A run of the same issuer and pathway that is not
+    a comparison base, or whose delivered handoff cannot be read, is never used, and the reason is
+    appended to ``skipped`` (one line per run) and logged once. ``only`` limits the candidates to
+    the run folder of that name."""
     method = method or current_method()
     runs = workspace / "runs"
+    reasons = skipped if skipped is not None else []
+    me = {"issuer_name": issuer_name, "case_kind": case_kind, "pathway": pathway}
     found: list[tuple[tuple[str, str, str], dict[str, Any], Mapping[str, Any]]] = []
     for name in sorted(os.listdir(runs)) if runs.is_dir() else []:
         path = runs / name
         if name == folder or name.startswith(".") or path.is_symlink() or not path.is_dir():
+            continue
+        if only is not None and name != only:
             continue
         try:
             workflow = json_object(read_inside(path, "workflow.json"), "workflow.json")
             run = workflow.get("run")
             if (
                 not isinstance(run, dict)
-                or run.get("issuer_id") != issuer_id
+                or not isinstance(run.get("issuer_id"), str)
+                or run["issuer_id"].casefold() != issuer_id.casefold()
                 or run.get("pathway") != pathway
                 or not isinstance(run.get("as_of"), str)
                 or run["as_of"] > as_of
@@ -149,11 +211,16 @@ def find_prior(  # noqa: PLR0913 - the identity of the run and the library's met
                 continue
             deliveries: dict[str, dict[str, Any]] = {}
             record = admit_run(path, workspace / "library", method, deliveries)
+            why = _not_a_base(workflow, run, tuple(deliveries[name]["handoffs"]), me)
         except Refused as refusal:
             log.debug("earlier run %s is not listed: %s", name, refusal)
             continue
         except (OSError, ValueError, TypeError, KeyError, RecursionError) as error:
             log.warning("earlier run %s is unreadable and is not compared: %r", name, error)
+            continue
+        if why is not None:
+            reasons.append(f"{name}: {why}")
+            log.warning("earlier run %s is not a comparison base: %s", name, why)
             continue
         started = record["execution"].get("started_at") or ""
         found.append(((record["as_of"], started, name), record, deliveries[name]))
@@ -165,12 +232,21 @@ def find_prior(  # noqa: PLR0913 - the identity of the run and the library's met
         for module, pin in delivered["handoffs"].items()
         if module != "CP-8"
     }
+    texts = {}
+    for module, raw in handoffs.items():
+        try:
+            texts[module] = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            why = f"its delivered {module} handoff is not valid UTF-8"
+            reasons.append(f"{record['id']}: {why}")
+            log.warning("earlier run %s is not compared: %s", record["id"], why)
+            return None
     prior = PriorRun(
         folder=record["id"],
         run_id=record["run_id"],
         as_of=record["as_of"],
         pathway=record["pathway"],
-        earlier_format=any(is_earlier_format(raw.decode("utf-8")) for raw in handoffs.values()),
+        earlier_format=any(is_earlier_format(text) for text in texts.values()),
         methods_changed=tuple(record["method_changes"]),
         started_at=record["execution"].get("started_at"),
         modules=tuple(handoffs),
@@ -225,12 +301,16 @@ class Observation:
 
 _PLAIN = re.compile(r"-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
 _BRACKETED = re.compile(r"\((\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\)")
+_MARK = re.compile(r"\s?[x%]$")  # a unit mark written beside the figure: the unit column says it
 
 
 def number(cell: str) -> str | None:
-    """A cell that is exactly one number, as written (a bracketed one negated); else None. A
-    stated gap ("Not supplied: ...") and any other text are None: missing is never zero."""
-    text = cell.replace("*", "").strip()
+    """A cell that is exactly one number, as written (a bracketed one negated, a Unicode minus
+    read as a minus, a trailing `x` or `%` dropped); else None. A stated gap ("Not supplied: ...")
+    and any other text are None: missing is never zero."""
+    text = cell.replace("*", "").replace("\u2212", "-").strip()
+    if not _PLAIN.fullmatch(text):
+        text = _MARK.sub("", text)
     if _PLAIN.fullmatch(text):
         return text
     bracketed = _BRACKETED.fullmatch(text)
@@ -273,11 +353,16 @@ def _plain(label: str) -> str:
     )
 
 
-def _chart_observation(lines: list[str], chart: str, column: str) -> Observation | None:
+# A measure either is read (Observation), is not stated (None), or is present but unusable (the
+# reason, as a clause that follows "the earlier run" or "the current run").
+Reading = Observation | str | None
+
+
+def _chart_observation(lines: list[str], chart: str, column: str) -> Reading:
     try:
         found = chart_row(lines, chart)
     except ValueError:  # Periods that cannot be ordered: never guess which row is the latest.
-        return None
+        return "has periods in its table that cannot be ordered"
     if found is None or column not in found[0]:
         return None
     row = found[0]
@@ -290,10 +375,10 @@ def _chart_observation(lines: list[str], chart: str, column: str) -> Observation
     )
 
 
-def _row_observation(text: str, labels: Sequence[str]) -> Observation | None:
-    """The latest-period cell of the one table row labelled `labels`; None when no row or more than
-    one such row exists, when its periods cannot be ordered, or when no unit is stated (a trailing
-    `(unit)` in the label or a `Reporting unit` column)."""
+def _row_observation(text: str, labels: Sequence[str]) -> Reading:
+    """The latest-period cell of the one table row labelled `labels`. None when no such row exists;
+    a reason when more than one does, when its periods cannot be ordered, or when no unit is
+    stated (a trailing `(unit)` in the label or a `Reporting unit` column)."""
     matches = [
         (table[0], row)
         for table in _tables(text)
@@ -301,18 +386,20 @@ def _row_observation(text: str, labels: Sequence[str]) -> Observation | None:
         for row in table[1:]
         if row and _plain(row[0]) in labels and len(row) == len(table[0])
     ]
-    if len(matches) != 1:
+    if not matches:
         return None
+    if len(matches) != 1:
+        return "states it in more than one row"
     header, row = matches[0]
     columns = [(period_order(cell), i) for i, cell in enumerate(header) if i and period_order(cell)]
     if not columns or len({key[0] for key, _ in columns if key}) != 1:
-        return None
+        return "has periods in its row that cannot be ordered"
     _, at = max(columns, key=lambda item: item[0] or ())
     held = dict(zip(header, row, strict=True))
     unit = re.search(r"\(([^)]+)\)\s*$", row[0].replace("*", ""))
     stated = (unit[1].strip() if unit else None) or held.get("Reporting unit") or None
     if stated is None:
-        return None
+        return "states it with no unit"
     return Observation(
         _plain(row[0]),
         stated,
@@ -322,105 +409,142 @@ def _row_observation(text: str, labels: Sequence[str]) -> Observation | None:
     )
 
 
-def observations(text: str) -> dict[str, Observation]:
-    """The measures a CP-1 handoff states (the five chart measures, then the row measures)."""
+def _read(text: str) -> tuple[dict[str, Observation], dict[str, str]]:
+    """The measures a CP-1 handoff states (the five chart measures, then the row measures), and
+    the reason for each it holds but cannot use."""
     lines = text.replace("\r\n", "\n").split("\n")
-    found: dict[str, Observation | None] = {
+    found: dict[str, Reading] = {
         key: _chart_observation(lines, chart, column) for key, chart, column in CHART_MEASURES
     }
     found.update({key: _row_observation(text, labels) for key, labels in ROW_MEASURES})
-    return {key: seen for key, seen in found.items() if seen is not None}
+    seen = {key: item for key, item in found.items() if isinstance(item, Observation)}
+    return seen, {key: item for key, item in found.items() if isinstance(item, str)}
 
 
-def _same(a: str | None, b: str | None) -> bool:
-    return (a is None and b is None) or (
-        a is not None and b is not None and normalise_limitation(a) == normalise_limitation(b)
-    )
+def observations(text: str) -> dict[str, Observation]:
+    """The measures a CP-1 handoff states."""
+    return _read(text)[0]
 
 
-def _compare(key: str, prior: Observation | None, current: Observation | None) -> dict[str, Any]:
+_LOCATOR = re.compile(
+    r"\b(?:pages?|pp?|paras?|paragraphs?|sections?|notes?|lines?|slides?|exhibits?)\b\.?\s*"
+    r"(?:\d+(?:[.,]\d+)*(?:\s*(?:[-\u2013/&,]|and(?=\s*\d)|to(?=\s*\d))\s*\d+(?:[.,]\d+)*)*)",
+    re.IGNORECASE,
+)
+
+
+def _definition_key(text: str | None) -> str | None:
+    """A definition text compared: no page or locator references, no digits, no punctuation, lower
+    case, one space between words. None stays None (no text)."""
+    if text is None:
+        return None
+    bare = _LOCATOR.sub(" ", text.casefold())
+    return " ".join(re.sub(r"[^\w\s]|_|\d", " ", bare).split())
+
+
+def _clause(who: str, why: str | None) -> str:
+    return f"the {who} run {why or 'does not state it'}"
+
+
+def _compare(
+    key: str,
+    prior: Observation | None,
+    current: Observation | None,
+    prior_why: str | None = None,
+    current_why: str | None = None,
+) -> dict[str, Any]:
     stated = current if current is not None else prior
     if stated is None:
         raise ValueError(f"measure {key} is stated in neither run")
-    reason: str | None = None
+    comparable, reason, difference = "no", None, None
     if prior is None or current is None:
-        reason = "the " + ("earlier" if prior is None else "current") + " run does not state it"
-    elif prior.unit is None or current.unit is None or prior.unit != current.unit:
+        reason = _clause(*(("earlier", prior_why) if prior is None else ("current", current_why)))
+    elif (
+        prior.unit is None
+        or current.unit is None
+        or " ".join(prior.unit.split()) != " ".join(current.unit.split())
+    ):
         reason = "the unit differs or is not stated"
-    elif prior.label != current.label:
-        reason = "the label differs"
-    elif not _same(prior.definition, current.definition):
-        reason = "the definition text differs"
-    comparable = reason is None
-    difference = None
-    if comparable and prior is not None and current is not None:
-        if prior.value is None or current.value is None:
-            reason = "a value is not stated"
-        else:
-            difference = format(decimal(current.value) - decimal(prior.value), "f")
+    elif prior.value is None or current.value is None:
+        reason = "a value is not stated"
+    else:
+        difference = format(decimal(current.value) - decimal(prior.value), "f")
+        same = prior.label.casefold() == current.label.casefold() and _definition_key(
+            prior.definition
+        ) == _definition_key(current.definition)
+        comparable = "yes" if same else "judge"
+        reason = None if same else "the label or definition text differs; CP-8 judges"
     return {
         "key": key,
         "label": stated.label,
         "unit": stated.unit,
         "comparable": comparable,
-        "reason": None if difference is not None else reason or "no difference",
+        "reason": reason,
         "prior": None if prior is None else prior.record(),
         "current": None if current is None else current.record(),
         "difference": difference,
     }
 
 
-def _bridge(
-    prior: Mapping[str, Observation], current: Mapping[str, Observation]
-) -> tuple[dict[str, str] | None, str]:
-    """The net debt bridge, or None and why not. It needs gross debt, net debt and cash stated in
-    both runs under the same label, unit and definition, and each run's net debt to be its gross
-    debt less its cash."""
+def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, str] | None, str]:
+    """The net debt change, or None and why not. It needs gross debt, net debt and cash stated in
+    both runs in one unit under the same definition, and each run's net debt to be its gross debt
+    less its cash."""
     pairs = {}
     for key in ("gross_debt", "net_debt", "cash"):
         name = key.replace("_", " ")
-        if key not in prior and key not in current:
+        measure = by_key.get(key)
+        if measure is None:
             return None, f"{name} is not stated in either run"
-        compared = _compare(key, prior.get(key), current.get(key))
-        if not compared["comparable"]:
-            return None, f"{name} cannot be compared ({compared['reason']})"
-        before, now = prior[key], current[key]
-        if before.value is None or now.value is None:
-            return None, f"{name} has no stated value in a run"
-        pairs[key] = (decimal(before.value), decimal(now.value))
+        if measure["comparable"] == "no":
+            return None, f"{name} cannot be compared ({measure['reason']})"
+        if measure["comparable"] != "yes":
+            return None, f"{name} is not comparable under one definition ({measure['comparable']})"
+        pairs[key] = (decimal(measure["prior"]["value"]), decimal(measure["current"]["value"]))
     (pg, cg), (pn, cn), (pc, cc) = pairs["gross_debt"], pairs["net_debt"], pairs["cash"]
     if pn != pg - pc or cn != cg - cc:
         return None, "a run's net debt is not its gross debt less its cash"
-    if len({prior[k].unit for k in pairs}) != 1:
+    units = {" ".join(by_key[k]["unit"].split()) for k in pairs}
+    if len(units) != 1:
         return None, "debt and cash are in different units"
     return {
-        "unit": str(prior["cash"].unit),
+        "unit": str(by_key["cash"]["unit"]),
         "prior_net_debt": format(pn, "f"),
         "change_in_gross_debt": format(cg - pg, "f"),
         "change_in_cash": format(cc - pc, "f"),
         "current_net_debt": format(cn, "f"),
+        "convention": NET_DEBT_CONVENTION,
     }, ""
 
 
 def _maturities(text: str) -> tuple[str | None, dict[str, str | None]] | None:
-    """(unit, period -> value) of the CP-1 debt maturities chart table; None when it is absent, has
-    no unit or mixes units, or repeats a period."""
-    for table in _tables(text):
-        header = table[0]
-        if header[:2] != ["Period", "Debt maturing"] or "Reporting unit" not in header:
-            continue
-        # Only the chart table, not another table that happens to share its first two columns.
-        if f"### Chart data: {MATURITIES}" not in text.replace("\r\n", "\n"):
-            continue
-        rows = [
-            dict(zip(header, row, strict=False)) for row in table[1:] if len(row) == len(header)
-        ]
-        units = {row["Reporting unit"] for row in rows}
-        periods = [row["Period"] for row in rows]
-        if len(units) != 1 or len(set(periods)) != len(periods):
-            return None
-        return units.pop(), {row["Period"]: number(row["Debt maturing"]) for row in rows}
-    return None
+    """(unit, period -> value) of the table directly under the CP-1 debt maturities chart heading;
+    None when the heading or that table is absent, has no unit or mixes units, or repeats a
+    period."""
+    lines = text.replace("\r\n", "\n").split("\n")
+    try:
+        start = lines.index(f"### Chart data: {MATURITIES}")
+    except ValueError:
+        return None
+    rows: list[list[str]] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("|") and line.rstrip().endswith("|"):
+            rows.append(_cells(line))
+        elif rows or line.strip():
+            break  # the table follows the heading (blank lines aside) and ends at a non-row
+    if (
+        len(rows) < 3
+        or rows[0][:2] != ["Period", "Debt maturing"]
+        or "Reporting unit" not in rows[0]
+    ):
+        return None
+    header = rows[0]
+    body = [dict(zip(header, row, strict=False)) for row in rows[2:] if len(row) == len(header)]
+    units = {row["Reporting unit"] for row in body}
+    periods = [row["Period"] for row in body]
+    if len(units) != 1 or len(set(periods)) != len(periods):
+        return None
+    return units.pop(), {row["Period"]: number(row["Debt maturing"]) for row in body}
 
 
 def _maturity_profile(prior_text: str, current_text: str) -> tuple[dict[str, Any] | None, str]:
@@ -465,23 +589,15 @@ def _limitations(text: str) -> tuple[str, ...]:
     return tuple(item for item in items if item.strip() and not NO_LIMITATION.match(item.strip()))
 
 
-def _limitation_rows(prior: Mapping[str, str], current: Mapping[str, str]) -> list[dict[str, Any]]:
-    rows: dict[str, dict[str, Any]] = {}
-    for side, texts in (("prior", prior), ("current", current)):
-        for module, text in texts.items():
-            for item in _limitations(text):
-                key = normalise_limitation(item)
-                if not key:
-                    continue
-                row = rows.setdefault(
-                    key, {"key": key, "text": item, "modules": [], "prior": False, "current": False}
-                )
-                if side == "current":
-                    row["text"] = item
-                row[side] = True
-                if module not in row["modules"]:
-                    row["modules"].append(module)
-    return list(rows.values())
+def _limitation_refs(texts: Mapping[str, str], letter: str) -> list[dict[str, str]]:
+    """Every limitation item of a run with its ref: `E1`, `E2` ... or `C1`, `C2` ...; the order is
+    the order of the modules as given, then of the items in the handoff."""
+    refs: list[dict[str, str]] = []
+    for module, text in texts.items():
+        for item in _limitations(text):
+            if normalise_limitation(item):
+                refs.append({"ref": f"{letter}{len(refs) + 1}", "module": module, "text": item})
+    return refs
 
 
 def _format(text_by_module: Mapping[str, str]) -> str:
@@ -500,10 +616,16 @@ def build_pack(
     far in this run. CP-8 is not compared with itself."""
     before = {m: t for m, t in prior_texts.items() if m != "CP-8"}
     now = {m: t for m, t in current_texts.items() if m != "CP-8"}
-    seen_before = observations(before["CP-1"]) if "CP-1" in before else {}
-    seen_now = observations(now["CP-1"]) if "CP-1" in now else {}
+    seen_before, unread_before = _read(before["CP-1"]) if "CP-1" in before else ({}, {})
+    seen_now, unread_now = _read(now["CP-1"]) if "CP-1" in now else ({}, {})
     measures = [
-        _compare(key, seen_before.get(key), seen_now.get(key))
+        _compare(
+            key,
+            seen_before.get(key),
+            seen_now.get(key),
+            unread_before.get(key),
+            unread_now.get(key),
+        )
         for key in (*(k for k, _, _ in CHART_MEASURES), *(k for k, _ in ROW_MEASURES))
         if key in seen_before or key in seen_now
     ]
@@ -520,11 +642,11 @@ def build_pack(
         "current": {"as_of": as_of, "pathway": pathway, "format": _format(now)},
         "measures": measures,
     }
-    bridge, why = _bridge(seen_before, seen_now)
-    if bridge is None:
-        omitted["net_debt_bridge"] = why
+    change, why = _net_debt_change({m["key"]: m for m in measures})
+    if change is None:
+        omitted["net_debt_change"] = why
     else:
-        pack["net_debt_bridge"] = bridge
+        pack["net_debt_change"] = change
     if "CP-1" in before and "CP-1" in now:
         profile, why = _maturity_profile(before["CP-1"], now["CP-1"])
     else:
@@ -547,7 +669,10 @@ def build_pack(
         }
         for m in ids
     ]
-    pack["limitations"] = _limitation_rows(before, now)
+    pack["limitations"] = {
+        "earlier": _limitation_refs(before, "E"),
+        "current": _limitation_refs(now, "C"),
+    }
     return pack
 
 

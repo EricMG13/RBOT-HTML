@@ -8,6 +8,7 @@ import importlib.util
 import json
 import re
 import shutil
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ from test_cpos_launch import (
 from deploy_workflow import library_index
 from deploy_workflow.changes import (
     FIRST_RUN,
+    _not_a_base,
     build_pack,
     find_prior,
     observations,
@@ -40,6 +42,7 @@ from deploy_workflow.prose_checks import bottom_line_text, is_earlier_format
 
 SNAPSHOT_MODULES = PATHWAY_MODULES["credit_snapshot"]
 PRIOR_ID = "prior-1"
+ME = {"issuer_name": "Northbridge Synthetic Group", "case_kind": "public"}  # the fixtures' run
 PATHWAY = "credit_snapshot"  # its CP-1 states the leverage, cover and liquidity tables
 
 
@@ -71,6 +74,7 @@ def test_the_prior_run_is_the_latest_listed_run_of_the_same_issuer_and_pathway_o
             tmp_path,
             folder=folder,
             issuer_id="nbg",
+            **ME,
             pathway="credit_snapshot",
             as_of=as_of,
             method=method(),
@@ -93,6 +97,7 @@ def test_runs_of_one_as_of_date_are_ordered_by_their_first_call(tmp_path):
         tmp_path,
         folder="cur",
         issuer_id="nbg",
+        **ME,
         pathway="credit_snapshot",
         as_of="2025-03-31",
         method=method(),
@@ -108,6 +113,7 @@ def test_an_earlier_format_run_is_found_with_its_delivered_handoffs_and_flagged(
         tmp_path,
         folder="cur",
         issuer_id="nbg",
+        **ME,
         pathway="credit_snapshot",
         as_of="2025-03-31",
         method=method("changed"),  # the method since changed: the library marks it
@@ -119,6 +125,104 @@ def test_an_earlier_format_run_is_found_with_its_delivered_handoffs_and_flagged(
     assert prior.modules == ("CP-0", "CP-1")
     (delivered,) = (run_dir / "deliveries").iterdir()
     assert handoffs == {m: (delivered / f"{m}.md").read_bytes() for m in ("CP-0", "CP-1")}
+
+
+def chosen(workspace, skipped=None, *, issuer_id="nbg", only=None, **me):
+    found = find_prior(
+        workspace,
+        folder="cur",
+        issuer_id=issuer_id,
+        **{**ME, **me},
+        pathway="credit_snapshot",
+        as_of="2025-03-31",
+        method=method(),
+        only=only,
+        skipped=skipped,
+    )
+    return None if found is None else found[0].folder
+
+
+def test_a_prior_run_is_the_same_issuer_name_and_case_kind_and_the_reason_is_recorded(tmp_path):
+    make_run(tmp_path, "private", as_of="2024-12-01", case_kind="private")
+    make_run(tmp_path, "renamed", as_of="2024-12-02", issuer_name="Some Other Company plc")
+    make_run(
+        tmp_path,
+        "upper",
+        as_of="2024-12-03",
+        issuer_id="NBG",  # the same ID in another case
+        issuer_name="  northbridge   SYNTHETIC group ",  # the same name, folded
+    )
+    skipped: list[str] = []
+    assert chosen(tmp_path, skipped) == "upper"
+    assert skipped == [
+        "private: its case kind is 'private', not 'public'",
+        "renamed: its issuer name is 'Some Other Company plc', not 'Northbridge Synthetic Group'",
+    ]
+    # A candidate that fails a test is never used, even when it is the only one.
+    only_private = tmp_path / "second"
+    make_run(only_private, "private", as_of="2024-12-01", case_kind="private")
+    assert chosen(only_private) is None
+
+
+def test_a_run_launched_with_an_explicit_module_subset_is_not_a_comparison_base(tmp_path):
+    make_run(tmp_path, "subset", as_of="2024-12-31", selection="explicit")
+    make_run(tmp_path, "full", as_of="2024-11-30", selection="preset")
+    skipped: list[str] = []
+    assert chosen(tmp_path, skipped) == "full"  # though the subset run is the later one
+    assert skipped == ["subset: it was launched with an explicit module subset"]
+
+
+def test_an_older_run_without_a_recorded_selection_is_a_base_only_with_the_leading_module(tmp_path):
+    make_run(tmp_path, "old", as_of="2024-12-31", selection=None)  # ran CP-0 and CP-1 only
+    skipped: list[str] = []
+    assert chosen(tmp_path, skipped) is None
+    assert skipped == ["old: it records no module selection and did not run CP-2"]
+
+
+@pytest.mark.parametrize(
+    ("pathway", "lead"),
+    [
+        ("credit_snapshot", "CP-2"),
+        ("covenant_refinancing", "CP-2"),
+        ("earnings_update", "CP-1B"),
+        ("short_snapshot", "CP-L10"),
+    ],
+)
+def test_the_lead_module_of_each_pathway_decides_an_older_run(pathway, lead):
+    me = {"issuer_name": "A", "case_kind": "public", "pathway": pathway}
+    run = {"issuer_name": "a", "case_kind": "public"}
+    assert _not_a_base({}, run, (lead, "CP-0"), me) is None
+    assert (
+        _not_a_base({}, run, ("CP-0", "CP-1"), me)
+        == f"it records no module selection and did not run {lead}"
+    )
+    assert _not_a_base({"selection": "preset"}, run, ("CP-0",), me) is None
+    assert _not_a_base({"selection": "explicit"}, run, (lead,), me) is not None
+    assert "not understood" in (_not_a_base({"selection": "all"}, run, (lead,), me) or "")
+
+
+def test_a_prior_handoff_that_is_not_utf8_means_no_cp8_and_the_reason_is_recorded(
+    tmp_path, monkeypatch
+):
+    import library_fixtures
+
+    real = library_fixtures.put
+
+    def put(path, raw):
+        if path.name == "1.response.md" and "/CP-1/" in str(path):
+            raw = raw.replace(
+                b"CP-1 bottom line.", b"CP-1 bottom line \xa3."
+            )  # a cp1252 pound sign
+        return real(path, raw)
+
+    monkeypatch.setattr(library_fixtures, "put", put)
+    make_run(tmp_path, "prior", as_of="2024-12-31")
+    assert library_index.build_library(
+        tmp_path, tmp_path / "library", method()
+    ).runs  # it is listed
+    skipped: list[str] = []
+    assert chosen(tmp_path, skipped) is None
+    assert skipped == ["prior: its delivered CP-1 handoff is not valid UTF-8"]
 
 
 def test_the_workspace_is_the_folder_holding_runs():
@@ -216,7 +320,150 @@ def test_the_offline_cap_check_holds_cp8s_call_when_it_is_planned(tmp_path):
     assert (
         "CP-8" in sizes
     )  # its instructions exist, so its call is among those the hold is sized by
-    assert prepared.hold > 0
+    # sol-medium holds its whole 1,050,000-token context at USD 5/M plus 32,000 output tokens at
+    # USD 15/M, however long the request: 5.25 + 0.48 (written from the price table by hand).
+    assert prepared.hold == Decimal("5.73")
+
+
+def two_priors(tmp_path):
+    workspace = tmp_path / "ws"
+    make_run(workspace, "older", as_of="2024-09-30", pathway=PATHWAY)
+    make_run(workspace, "newer", as_of="2024-12-31", pathway=PATHWAY)
+    context, folder = snapshot_context(tmp_path)
+    return workspace, context, folder
+
+
+def test_the_run_the_approval_named_is_the_one_compared_with(tmp_path):
+    workspace, context, folder = two_priors(tmp_path)
+    named = prepare(
+        context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior="older"
+    )
+    assert named.prior is not None
+    assert named.prior.folder == "older"  # not "newer", which a search would find
+    searched = prepare(context, folder, workspace / "runs/cur2", config="sol-medium", cap="50")
+    assert searched.prior is not None
+    assert searched.prior.folder == "newer"
+
+
+def test_an_approval_that_named_no_earlier_run_is_a_first_run_whatever_is_listed_since(tmp_path):
+    workspace, context, folder = two_priors(tmp_path)
+    first = prepare(
+        context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior="none"
+    )
+    assert first.prior is None
+    assert "CP-8" not in first.ordered
+    assert first.plan.changes_note == f"changes: {FIRST_RUN}"
+
+
+def test_a_named_run_that_is_no_longer_available_goes_without_cp8_and_says_so(tmp_path):
+    workspace, context, folder = two_priors(tmp_path)
+    gone = prepare(
+        context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior="deleted"
+    )
+    assert gone.prior is None
+    assert "CP-8" not in gone.ordered
+    assert gone.plan.changes_note == (
+        "changes: not compared: the earlier run named at approval is no longer available"
+    )
+    # A named run that is listed but no longer passes the tests is as unavailable, with the reason.
+    make_run(workspace, "subset", as_of="2025-01-31", pathway=PATHWAY, selection="explicit")
+    out = prepare(
+        context, folder, workspace / "runs/cur2", config="sol-medium", cap="50", prior="subset"
+    )
+    assert out.prior is None
+    assert out.plan.changes_note == (
+        "changes: not compared: the earlier run named at approval is no longer available "
+        "(not used: subset: it was launched with an explicit module subset)"
+    )
+
+
+@pytest.mark.parametrize("name", ["../x", "-x", "a b", "", "--live"])
+def test_a_prior_that_is_not_a_run_folder_name_is_refused(tmp_path, name):
+    workspace, context, folder = two_priors(tmp_path)
+    with pytest.raises(LaunchRefused, match="--prior"):
+        prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50", prior=name)
+
+
+def test_the_launcher_takes_the_prior_flag_and_runs_as_it_names(tmp_path, capsys):
+    workspace, context, folder = two_priors(tmp_path)
+
+    def launch(name: str, prior: str) -> str:
+        argv = [
+            *("--context", str(context), "--sources", str(folder)),
+            *("--config", "sol-medium", "--cap", "50", "--no-library"),
+            *("--out", str(workspace / "runs" / name), "--prior", prior),
+        ]
+        assert main(argv) == 0
+        return capsys.readouterr().out
+
+    assert "CP-8 compares with the credit_snapshot run as of 2024-09-30" in launch("a", "older")
+    assert f"Changes:  {FIRST_RUN}" in launch("b", "none")
+
+
+def test_the_selection_is_recorded_for_a_run_and_left_out_of_an_older_manifest(tmp_path):
+    workspace, context, folder = two_priors(tmp_path)
+    preset = prepare(context, folder, workspace / "runs/a", config="sol-medium", cap="50")
+    assert preset.plan.selection == "preset"
+    assert json.loads((workspace / "runs/a/workflow.json").read_text())["selection"] == "preset"
+    subset = prepare(
+        context,
+        folder,
+        workspace / "runs/b",
+        config="sol-medium",
+        cap="50",
+        modules=("CP-0", "CP-1"),
+    )
+    assert subset.plan.selection == "explicit"
+    document = json.loads(preset.plan.model_dump_json())
+    del document["selection"]
+    older = HandoffPlan.model_validate_json(json.dumps(document))
+    assert older.selection is None
+    assert "selection" not in json.loads(older.model_dump_json())  # an older manifest is unchanged
+
+
+def test_the_scope_and_omitted_sections_do_not_say_what_changed_was_not_produced_when_cp8_runs(
+    tmp_path,
+):
+    workspace, context, folder = two_priors(tmp_path)
+    with_cp8 = prepare(context, folder, workspace / "runs/a", config="sol-medium", cap="50")
+    assert with_cp8.ordered[-1] == "CP-8"
+    assert "what-changed" not in with_cp8.omitted
+    assert "what-changed" not in with_cp8.layout.scope
+    assert "CP-8's handoff, delivered whole" in with_cp8.layout.scope
+    assert [r for r in with_cp8.layout.routes if r.module_id == "CP-8"] == []
+    without = prepare(
+        context, folder, workspace / "runs/b", config="sol-medium", cap="50", prior="none"
+    )
+    assert "what-changed" in without.omitted
+    assert "Sections not produced: what-changed" in without.layout.scope
+
+
+def test_cp8_is_left_out_with_a_note_when_its_first_request_would_not_fit_the_cap(tmp_path):
+    """opus-medium holds 8 USD per million input tokens. The earlier run's CP-1 handoff is 200 KB,
+    so CP-8's first request, estimated from the earlier handoffs (this run's are unwritten) holds
+    more than 3 USD; the other modules' calls hold about 2.34."""
+    workspace = tmp_path / "ws"
+    make_run(
+        workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY, cp1_extra="\n" + "x" * 200_000
+    )
+    context, folder = snapshot_context(tmp_path)
+    out = workspace / "runs/cur"
+    prepared = prepare(context, folder, out, config="opus-medium", cap="3")
+    assert "CP-8" not in prepared.ordered
+    assert prepared.prior is None
+    assert prepared.plan.changes_note is not None
+    assert prepared.plan.changes_note.startswith(
+        "changes: not compared: CP-8's first request (about "
+    )
+    assert "estimated from the earlier run's handoff sizes" in prepared.plan.changes_note
+    assert prepared.plan.changes_note.endswith(
+        "over the cap USD 3; the run is planned without CP-8"
+    )
+    assert not [n for n in prepared.plan.sources if n.startswith("prior/")]
+    # With a cap that holds it, CP-8 is planned.
+    big = prepare(context, folder, workspace / "runs/cur2", config="opus-medium", cap="10")
+    assert big.ordered[-1] == "CP-8"
+    assert big.hold > Decimal(4)
 
 
 def test_cp8s_instructions_carry_the_method_and_the_earlier_run(tmp_path):
@@ -417,9 +664,10 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
     )
     pack = pair_pack(prior, current)
     found = measures_of(pack)
+    assert pack["schema"] == "cpos-changes/2"
     assert [m["key"] for m in pack["measures"]] == MEASURE_KEYS
-    # Same definition: Python's difference, 3.60 - 4.20.
-    assert found["leverage"]["comparable"] is True
+    # Same definition text ("Reported."): Python's difference, 3.60 - 4.20.
+    assert found["leverage"]["comparable"] == "yes"
     assert (found["leverage"]["prior"]["value"], found["leverage"]["current"]["value"]) == (
         "4.20",
         "3.60",
@@ -433,32 +681,42 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
     assert found["net_leverage"]["prior"]["value"] is None
     assert found["net_leverage"]["current"]["value"] == "3.25"
     assert found["net_leverage"]["difference"] is None
+    assert found["net_leverage"]["comparable"] == "no"
     assert found["net_leverage"]["reason"] == "a value is not stated"
     # Present in one run only.
     assert found["coverage"]["prior"] is None
     assert found["coverage"]["current"]["value"] == "3.40"
-    assert (found["coverage"]["comparable"], found["coverage"]["difference"]) == (False, None)
+    assert (found["coverage"]["comparable"], found["coverage"]["difference"]) == ("no", None)
     assert found["coverage"]["reason"] == "the earlier run does not state it"
-    # A definition text that differs: both values, no difference.
-    assert found["cash"]["comparable"] is False
-    assert found["cash"]["reason"] == "the definition text differs"
+    # A definition text that differs after normalisation: Python still computes the difference,
+    # both texts are in the pack and CP-8 judges ("judge").
+    assert found["cash"]["comparable"] == "judge"
     assert (found["cash"]["prior"]["value"], found["cash"]["current"]["value"]) == ("300", "250")
-    assert found["cash"]["difference"] is None
-    assert found["undrawn"]["comparable"] is False
-    # Rows read from CP-1's tables when they state a unit: free cash flow, and a label that differs.
-    assert found["free_cash_flow"]["difference"] == "10"
-    assert found["gross_debt"]["comparable"] is False
-    assert found["gross_debt"]["reason"] == "the label differs"
+    assert found["cash"]["difference"] == "-50"
+    assert found["cash"]["prior"]["definition"] == "Cash excluding restricted cash."
+    assert found["cash"]["current"]["definition"] == "Cash on another basis."
+    assert (found["undrawn"]["comparable"], found["undrawn"]["difference"]) == ("judge", "-50")
+    # Rows read from CP-1's tables when they state a unit: free cash flow (no definition text in
+    # either run, so the same), and a label that differs (a judgement, the difference stands).
+    assert (found["free_cash_flow"]["comparable"], found["free_cash_flow"]["difference"]) == (
+        "yes",
+        "10",
+    )
+    assert (found["gross_debt"]["comparable"], found["gross_debt"]["difference"]) == (
+        "judge",
+        "-100",
+    )
     assert (found["net_debt"]["prior"]["value"], found["net_debt"]["current"]["value"]) == (
         "1,800",
         "1,750",
     )
-    assert found["net_debt"]["difference"] == "-50"
+    assert (found["net_debt"]["comparable"], found["net_debt"]["difference"]) == ("yes", "-50")
     assert found["net_debt"]["unit"] == "US$m"
-    # The bridge is left out with its reason; the maturity profile is built.
+    # The net debt change is left out with its reason; the maturity profile is built.
+    assert "net_debt_change" not in pack
     assert "net_debt_bridge" not in pack
     assert pack["omitted"] == {
-        "net_debt_bridge": "gross debt cannot be compared (the label differs)"
+        "net_debt_change": "gross debt is not comparable under one definition (judge)"
     }
     assert pack["maturity_profile"] == {
         "unit": "US$m",
@@ -488,16 +746,22 @@ def bridge_pack(
     return pair_pack(prior, current)
 
 
-def test_the_net_debt_bridge_is_built_when_both_runs_state_it_under_one_definition():
+def test_the_net_debt_change_is_built_when_both_runs_state_it_under_one_definition():
     pack = bridge_pack()
     # 1,800 = 2,100 - 300 and 1,750 = 2,000 - 250; gross fell 100, cash fell 50.
-    assert pack["net_debt_bridge"] == {
+    assert pack["net_debt_change"] == {
         "unit": "US$m",
         "prior_net_debt": "1800",
         "change_in_gross_debt": "-100",
         "change_in_cash": "-50",
         "current_net_debt": "1750",
+        "convention": (
+            "net debt = gross debt - cash: an increase in cash reduces net debt, a decrease "
+            "raises it; a two-point identity of the stated balances, not an analysis of what "
+            "drove the change"
+        ),
     }
+    assert "net_debt_bridge" not in pack
     assert pack["omitted"] == {
         "maturity_profile": "a run has no debt maturities table with one unit"
     }
@@ -509,14 +773,14 @@ def test_the_net_debt_bridge_is_built_when_both_runs_state_it_under_one_definiti
         ({"current_net": "1,700"}, "a run's net debt is not its gross debt less its cash"),
         (
             {"cash_basis": "Cash excluding restricted cash."},
-            "cash cannot be compared (the definition text differs)",
+            "cash is not comparable under one definition (judge)",
         ),
     ],
 )
-def test_the_net_debt_bridge_is_omitted_with_its_reason(kwargs, reason):
+def test_the_net_debt_change_is_omitted_with_its_reason(kwargs, reason):
     pack = bridge_pack(**kwargs)
-    assert "net_debt_bridge" not in pack
-    assert pack["omitted"]["net_debt_bridge"] == reason
+    assert "net_debt_change" not in pack
+    assert pack["omitted"]["net_debt_change"] == reason
 
 
 def test_the_pack_lists_every_module_and_limitation_of_either_run():
@@ -546,7 +810,7 @@ def test_the_pack_lists_every_module_and_limitation_of_either_run():
         "CP-2E": handoff("CP-2E", "Macro view."),
     }
     pack = build_pack(_prior(), prior, current, as_of="2025-03-31", pathway="credit_snapshot")
-    assert pack["schema"] == "cpos-changes/1"
+    assert pack["schema"] == "cpos-changes/2"
     assert pack["prior"] == {
         "run": "p",
         "as_of": "2024-12-31",
@@ -593,29 +857,29 @@ def test_the_pack_lists_every_module_and_limitation_of_either_run():
             "current_bottom_line": None,
         },
     ]
-    assert pack["limitations"] == [
-        {
-            "key": "segment data is not supplied so segment margins are not assessed",
-            "text": "Segment data is not supplied so segment margins are not assessed",
-            "modules": ["CP-1"],
-            "prior": True,
-            "current": True,
-        },
-        {
-            "key": "old limitation text",
-            "text": "Old limitation text.",
-            "modules": ["CP-2"],
-            "prior": True,
-            "current": False,
-        },
-        {
-            "key": "the covenant package is not supplied so covenant headroom is unknown",
-            "text": "The covenant package is not supplied, so covenant headroom is unknown.",
-            "modules": ["CP-2"],
-            "prior": False,
-            "current": True,
-        },
-    ]
+    # Refs are given in module order, then the order in the handoff; every item has its own ref.
+    assert pack["limitations"] == {
+        "earlier": [
+            {
+                "ref": "E1",
+                "module": "CP-1",
+                "text": "Segment data is not supplied, so segment margins are not assessed.",
+            },
+            {"ref": "E2", "module": "CP-2", "text": "Old limitation text."},
+        ],
+        "current": [
+            {
+                "ref": "C1",
+                "module": "CP-1",
+                "text": "Segment data is not supplied so segment margins are not assessed",
+            },
+            {
+                "ref": "C2",
+                "module": "CP-2",
+                "text": "The covenant package is not supplied, so covenant headroom is unknown.",
+            },
+        ],
+    }
 
 
 def test_a_prior_cp8_handoff_is_not_compared():
@@ -650,7 +914,111 @@ def test_the_bottom_line_and_format_helpers():
     assert bottom_line_text(old) is None
 
 
-# --- the checker ----------------------------------------------------------------------------------
+def liq(prior_cell: str, current_cell: str, prior_basis="Cash.", current_basis="Cash.") -> dict:
+    prior = handoff(
+        "CP-1", "x", tables=liquidity(f"| FY2023 | {prior_cell} | 843 | US$m | {prior_basis} |")
+    )
+    current = handoff(
+        "CP-1", "x", tables=liquidity(f"| FY2024 | {current_cell} | 843 | US$m | {current_basis} |")
+    )
+    return measures_of(pair_pack(prior, current))["cash"]
+
+
+def test_a_new_period_with_an_unchanged_definition_is_comparable_whatever_pages_it_cites():
+    leverage_row = "| {p} | {a} | 5.00 | x | Gross debt / EBITDA {n}. Pages {pg}. |"
+    prior = handoff(
+        "CP-1",
+        "x",
+        tables=leverage(leverage_row.format(p="FY2023", a="6.50", n="3,500", pg="60-62")),
+    )
+    current = handoff(
+        "CP-1",
+        "x",
+        tables=leverage(leverage_row.format(p="FY2024", a="6.01", n="3,813", pg="63 and 65")),
+    )
+    found = measures_of(pair_pack(prior, current))["leverage"]
+    assert (found["comparable"], found["difference"]) == ("yes", "-0.49")
+    # The real basis cells of the issuer library's TDG pair differ in the pages cited only.
+    real_basis = "reported cash and available revolving commitments, after letters of credit."
+    real_prior = "Annual filing pages 120 and 152; " + real_basis
+    real_now = "Annual filing pages 118 and 150; " + real_basis
+    same = liq("3472", "6261", real_prior, real_now)
+    assert (same["comparable"], same["difference"]) == ("yes", "2789")
+    # A different definition is for CP-8 to judge: the difference stands, both texts are given.
+    other = liq("3472", "6261", real_prior, real_now.replace("after letters", "before letters"))
+    assert (other["comparable"], other["difference"]) == ("judge", "2789")
+    assert other["current"]["definition"].endswith("before letters of credit.")
+
+
+def test_identical_values_under_one_definition_give_a_zero_difference():
+    same = liq("6261", "6261")
+    assert (same["comparable"], same["difference"]) == ("yes", "0")
+
+
+def test_a_unit_that_differs_or_a_value_that_is_missing_gives_no_difference():
+    prior = handoff("CP-1", "x", tables=liquidity("| FY2023 | 6261 | 843 | US$m | Cash. |"))
+    bn = handoff("CP-1", "x", tables=liquidity("| FY2024 | 6.3 | 0.8 | US$bn | Cash. |"))
+    found = measures_of(pair_pack(prior, bn))["cash"]
+    assert (found["comparable"], found["difference"]) == ("no", None)
+    assert found["reason"] == "the unit differs or is not stated"
+    gap = liq("0", "Not supplied: not stated")
+    assert (gap["comparable"], gap["difference"], gap["reason"]) == (
+        "no",
+        None,
+        "a value is not stated",
+    )  # a zero is a value; a stated gap is not one
+
+
+@pytest.mark.parametrize(
+    ("prior_cell", "current_cell", "difference"),
+    [
+        ("(120)", "100", "220"),  # a bracketed figure is negative
+        ("\u2212120", "100", "220"),  # so is one with a Unicode minus
+        ("6.5x", "6.0x", "-0.5"),  # a unit mark beside the figure is not part of the value
+        ("12%", "13.5%", "1.5"),
+        ("1,234.5", "1,300", "65.5"),
+    ],
+)
+def test_the_figure_forms_a_handoff_writes_are_read(prior_cell, current_cell, difference):
+    found = liq(prior_cell, current_cell)
+    assert (found["comparable"], found["difference"]) == ("yes", difference)
+
+
+def test_an_ambiguous_row_says_so_rather_than_that_the_run_does_not_state_it():
+    twice = handoff(
+        "CP-1",
+        "x",
+        tables=balance("2,100", "1,800", "60", "FY2023")
+        + balance("2,200", "1,900", "70", "FY2023"),
+    )
+    once = handoff("CP-1", "x", tables=balance("2,000", "1,750", "70", "FY2024"))
+    found = measures_of(pair_pack(twice, once))["net_debt"]
+    assert found["comparable"] == "no"
+    assert found["reason"] == "the earlier run states it in more than one row"
+    assert found["prior"] is None
+
+
+def test_the_maturities_table_must_sit_directly_under_its_heading():
+    table = (
+        "| Period | Debt maturing | Reporting unit | Basis and limitation |\n"
+        "| --- | --- | --- | --- |\n"
+    )
+    right = handoff("CP-1", "x", tables=maturities("| FY2026 | 500 | US$m | Schedule. |"))
+    # The same columns under another heading, with the real heading far above another table.
+    elsewhere = handoff(
+        "CP-1",
+        "x",
+        tables="### Chart data: debt maturities\n\nNot supplied.\n\n### Other\n\n"
+        + table
+        + "| FY2026 | 450 | US$m | Other. |\n\n",
+    )
+    assert "maturity_profile" in pair_pack(right, right)
+    pack = pair_pack(right, elsewhere)
+    assert "maturity_profile" not in pack
+    assert pack["omitted"]["maturity_profile"] == "a run has no debt maturities table with one unit"
+
+
+# --- the checker ---------------------------------------------------------------------------------
 
 LEVERAGE_PRIOR = {
     "label": "Total debt / EBITDA",
@@ -666,12 +1034,20 @@ CASH_PRIOR = {
     "period": "FY2023",
     "definition": "Cash.",
 }
+COVER_NOW = {
+    "label": "EBITDA / cash interest",
+    "unit": "x",
+    "value": "3.60",
+    "period": "FY2024",
+    "definition": None,
+}
 PACK = {
     "measures": [
         {
             "key": "leverage",
             "label": "Total debt / EBITDA",
-            "comparable": True,
+            "unit": "x",
+            "comparable": "yes",
             "reason": None,
             "prior": LEVERAGE_PRIOR,
             "current": {**LEVERAGE_PRIOR, "value": "3.60", "period": "FY2024"},
@@ -680,10 +1056,21 @@ PACK = {
         {
             "key": "cash",
             "label": "Cash",
-            "comparable": False,
-            "reason": "the definition text differs",
+            "unit": "US$m",
+            "comparable": "judge",
+            "reason": "the definition text differs after normalisation",
             "prior": CASH_PRIOR,
             "current": {**CASH_PRIOR, "value": "250", "period": "FY2024", "definition": "Other."},
+            "difference": "-50",
+        },
+        {
+            "key": "coverage",
+            "label": "EBITDA / cash interest",
+            "unit": "x",
+            "comparable": "no",
+            "reason": "the earlier run does not state it",
+            "prior": None,
+            "current": COVER_NOW,
             "difference": None,
         },
     ],
@@ -692,17 +1079,25 @@ PACK = {
         {"module": "CP-DR", "ran_prior": True, "ran_current": False},
         {"module": "CP-2E", "ran_prior": False, "ran_current": True},
     ],
-    "limitations": [
-        {
-            "key": "old limitation text",
-            "text": "Old limitation text.",
-            "prior": True,
-            "current": False,
-        },
-        {"key": "new one", "text": "New one.", "prior": False, "current": True},
-        {"key": "both", "text": "Both.", "prior": True, "current": True},
-    ],
+    "limitations": {
+        "earlier": [
+            {"ref": "E1", "module": "CP-2", "text": "The covenant package was not supplied."},
+            {"ref": "E2", "module": "CP-1", "text": "Segment data is not supplied."},
+        ],
+        "current": [
+            {"ref": "C1", "module": "CP-2E", "text": "Hedging data is not supplied."},
+            {"ref": "C2", "module": "CP-1", "text": "Segment data are not supplied."},
+        ],
+    },
 }
+CASH_ROW = (
+    "| Cash | 300 US$m (FY2023) | 250 US$m (FY2024) | New period "
+    "| Same definition: cash fell by 50 US$m. |"
+)
+CLOSED_ROW = (
+    "| E1 | — | The covenant package gap. | Closed "
+    "| The Macro handoff (CP-2E) now shows the package. |"
+)
 REGISTERS = """## Findings
 
 ### What changed: the issuer
@@ -710,7 +1105,7 @@ REGISTERS = """## Findings
 | Measure or fact | Earlier | Current | Cause | Effect on the credit view |
 | --- | --- | --- | --- | --- |
 | Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period | Leverage fell by 0.60x. |
-| Cash | 300 US$m (FY2023) | 250 US$m (FY2024) | New period | Not comparable: definition differs. |
+@@CASH@@
 
 ### What changed: the analysis
 
@@ -722,14 +1117,14 @@ REGISTERS = """## Findings
 
 ### Limitations ledger
 
-| Limitation | Status | What closed it |
-| --- | --- | --- |
-| Old limitation text. | Closed | The Macro handoff (CP-2E) now shows the package. |
-| New one. | New | — |
-| Both. | Remaining | — |
+| Earlier ref | Current ref | Limitation | Status | What closed it |
+| --- | --- | --- | --- | --- |
+@@CLOSED@@
+| — | C1 | A hedging data gap. | New | — |
+| E2 | C2 | Segment data is missing. | Remaining | — |
 
 ## Calculations
-"""
+""".replace("@@CASH@@", CASH_ROW).replace("@@CLOSED@@", CLOSED_ROW)
 
 
 def issues_after(old: str, new: str) -> tuple[str, ...]:
@@ -748,11 +1143,47 @@ def test_a_complete_cp8_handoff_is_accepted():
         ("4.20x (FY2023)", "4.30x (FY2023)", "4.30"),
         ("by 0.60x", "by 0.65x", "0.65"),  # a difference Python did not compute
         (
-            "definition differs.",
-            "definition differs, so cash fell by 50 US$m.",
-            "50",
-        ),  # a difference for a not-comparable measure
-        ("| Not comparable: definition", "| Definition", "not comparable"),
+            "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) |",
+            "| Total debt / EBITDA | 3.60x (FY2023) | 4.20x (FY2024) |",
+            "earlier figure 3.60",
+        ),  # the pack's values in the wrong columns
+        (
+            "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) |",
+            "| Leverage | 3.60x (FY2023) | 4.20x (FY2024) |",
+            "name a pack measure",
+        ),  # a row with figures that names no pack measure, whatever its values
+        ("| Cash |", "| Cash balance |", "name a pack measure"),
+        ("| 4.20x (FY2023) |", "| -4.20x (FY2023) |", "earlier figure -4.20"),  # the sign counts
+        ("by 0.60x", "by -0.60x", "-0.60"),  # a difference printed with the wrong sign
+        ("Leverage fell by 0.60x.", "Leverage rose by 0.60x.", "direction"),
+        ("300 US$m (FY2023)", "300 US$bn (FY2023)", "unit"),  # the scale is part of the value
+        (
+            "Same definition: cash fell by 50 US$m.",
+            "Same definition: cash fell by 50 US$m; it was 9999M.",
+            "9999",
+        ),  # the month exemption is for periods of 1M to 12M only
+        (
+            "Leverage fell by 0.60x.",
+            "Leverage fell by 0.60x; debt was 300 US$m.",
+            "300",
+        ),  # a value of another measure is not this row's
+        # A definition the pack leaves to CP-8's judgement: one of the two words is required.
+        ("Same definition: cash fell by 50 US$m.", "Cash fell by 50 US$m.", "Same definition"),
+        (
+            "Same definition: cash fell by 50 US$m.",
+            "Not comparable: cash fell by 50 US$m.",
+            "difference",
+        ),  # not comparable: the difference is not printed
+        (
+            "Same definition: cash fell by 50 US$m.",
+            "Not comparable: the definition differs, so cash weakened.",
+            "trend",
+        ),  # not comparable: no trend is drawn
+        (
+            "Same definition: cash fell by 50 US$m.",
+            "Same definition, and not comparable: cash fell by 50 US$m.",
+            "only one",
+        ),
         (
             "| New period | Leverage fell by",
             "| Method change | Leverage fell by",
@@ -776,21 +1207,6 @@ def test_a_complete_cp8_handoff_is_accepted():
             "| Wrong cause | The module was added.",
             "Wrong cause",
         ),
-        (
-            "| Old limitation text. | Closed | The Macro handoff (CP-2E) now shows the package. |",
-            "| Old limitation text. | Closed | — |",
-            "Closed",
-        ),
-        (
-            "(CP-2E) now shows",
-            "(CP-DR) now shows",
-            "Closed",
-        ),  # evidence must be a module of the current run
-        ("The Macro handoff (CP-2E) now shows the package.", "Resolved.", "Closed"),
-        ("| New one. | New |", "| New one. | Remaining |", "the pack says New"),
-        ("| Both. | Remaining |", "| Both. | Closed |", "the pack says Remaining"),
-        ("| Both. | Remaining |", "| Both. | Unknown |", "Unknown"),
-        ("| Old limitation text. |", "| Some other limitation. |", "not a limitation in the pack"),
     ],
 )
 def test_the_checker_refuses_each_broken_cp8_handoff(old, new, fragment):
@@ -799,15 +1215,138 @@ def test_the_checker_refuses_each_broken_cp8_handoff(old, new, fragment):
     assert any(fragment.lower() in issue.lower() for issue in found), found
 
 
-def test_a_missing_module_row_a_duplicate_row_and_a_missing_ledger_row_are_refused():
-    macro = "| Macro (CP-2E) | New | New source | The module was added. |\n"
-    assert any("CP-2E needs exactly one row (found 0)" in i for i in issues_after(macro, ""))
-    assert any(
-        "CP-2E needs exactly one row (found 2)" in i for i in issues_after(macro, macro + macro)
+def test_a_fact_row_without_figures_is_free_text_and_one_with_a_figure_names_a_measure():
+    fact = "| Refinancing | Not announced | Announced | New source | Maturities were extended. |\n"
+    text = REGISTERS.replace(
+        "\n### What changed: the analysis", fact + "\n### What changed: the analysis", 1
     )
-    both = "| Both. | Remaining | — |\n"
-    assert any("needs exactly one row (found 0)" in i for i in issues_after(both, ""))
-    assert any("needs exactly one row (found 2)" in i for i in issues_after(both, both + both))
+    assert cp8_issues(text, PACK) == ()
+    figured = fact.replace("Announced", "Announced, 500 US$m")
+    again = REGISTERS.replace(
+        "\n### What changed: the analysis", figured + "\n### What changed: the analysis", 1
+    )
+    assert any("name a pack measure" in i for i in cp8_issues(again, PACK))
+
+
+def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_comparable():
+    row = (
+        "| EBITDA / cash interest | not stated | 3.60x (FY2024) | New source "
+        "| The earlier run does not state it, so it is not comparable. |\n"
+    )
+    text = REGISTERS.replace(
+        "\n### What changed: the analysis", row + "\n### What changed: the analysis", 1
+    )
+    assert cp8_issues(text, PACK) == ()
+    bare = row.replace("The earlier run does not state it, so it is not comparable.", "Cover rose.")
+    again = REGISTERS.replace(
+        "\n### What changed: the analysis", bare + "\n### What changed: the analysis", 1
+    )
+    assert any("not comparable" in i.lower() for i in cp8_issues(again, PACK))
+    wrong = row.replace("not stated |", "2.90x (FY2023) |")
+    third = REGISTERS.replace(
+        "\n### What changed: the analysis", wrong + "\n### What changed: the analysis", 1
+    )
+    assert any("earlier figure 2.90" in i for i in cp8_issues(third, PACK))
+
+
+def test_a_judged_row_that_says_not_comparable_may_give_both_values_and_no_difference():
+    text = REGISTERS.replace(
+        "Same definition: cash fell by 50 US$m.", "Not comparable: the definitions differ."
+    )
+    assert cp8_issues(text, PACK) == ()
+
+
+def test_a_difference_printed_in_a_reader_passage_or_in_the_gaps_must_be_the_packs():
+    passage = "## Findings\n\n### Bottom line\n\nLeverage fell from 4.20x to 3.60x, by 0.60x.\n\n"
+    good = REGISTERS.replace("## Findings\n\n", passage, 1)
+    assert cp8_issues(good, PACK) == ()
+    wrong = good.replace("by 0.60x.\n", "by 0.65x.\n", 1)
+    assert any("0.65" in i for i in cp8_issues(wrong, PACK))
+    not_a_difference = good.replace("by 0.60x.\n", "by 4.20x.\n", 1)
+    assert any("4.20" in i and "difference" in i for i in cp8_issues(not_a_difference, PACK))
+    gaps = REGISTERS + "\n## Gaps\n\nCash fell by 55 US$m between the runs.\n"
+    assert any("55" in i for i in cp8_issues(gaps, PACK))
+    fine = REGISTERS + "\n## Gaps\n\nThe earlier cover figure is not stated.\n"
+    assert cp8_issues(fine, PACK) == ()
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "fragment"),
+    [
+        (
+            CLOSED_ROW,
+            "| E1 | — | The covenant package gap. | Closed | — |",
+            "Closed",
+        ),
+        (
+            "(CP-2E) now shows",
+            "(CP-DR) now shows",
+            "Closed",
+        ),  # evidence must be a module of the current run
+        ("The Macro handoff (CP-2E) now shows the package.", "Resolved.", "Closed"),
+        (
+            "| — | C1 | A hedging data gap. | New |",
+            "| — | C1 | A hedging data gap. | Remaining |",
+            "New",
+        ),
+        (
+            "| E2 | C2 | Segment data is missing. | Remaining |",
+            "| E2 | C2 | Segment data is missing. | Closed |",
+            "Remaining",
+        ),
+        (
+            "| E2 | C2 | Segment data is missing. | Remaining |",
+            "| E2 | C2 | Segment data is missing. | Unknown |",
+            "Unknown",
+        ),
+        ("| E2 | C2 |", "| E9 | C2 |", "E9"),  # a ref the pack does not hold
+        ("| — | C1 |", "| — | C1, C9 |", "C9"),
+        ("| E2 | C2 |", "| C2 | E2 |", "Earlier ref"),  # a ref in the other column
+    ],
+)
+def test_the_checker_refuses_each_broken_ledger_row(old, new, fragment):
+    found = issues_after(old, new)
+    assert found, "accepted"
+    assert any(fragment.lower() in issue.lower() for issue in found), found
+
+
+def test_a_reworded_limitation_is_paired_by_meaning_through_its_refs():
+    # The pack's two texts differ in words; CP-8 pairs them and writes its own: Remaining.
+    assert PACK["limitations"]["earlier"][1]["text"] != PACK["limitations"]["current"][1]["text"]
+    assert cp8_issues(REGISTERS, PACK) == ()
+    split = REGISTERS.replace(
+        "| E2 | C2 | Segment data is missing. | Remaining | — |",
+        "| E2 | — | Segment data was missing. | No longer stated | — |\n"
+        "| — | C2 | Segment data is missing again. | New | — |",
+    )
+    assert cp8_issues(split, PACK) == ()
+
+
+def test_a_closed_limitation_names_a_module_of_the_current_run_and_a_gone_one_names_none():
+    text = REGISTERS.replace(
+        CLOSED_ROW,
+        "| E1 | — | The covenant package gap. | No longer stated | — |",
+    )
+    assert cp8_issues(text, PACK) == ()
+
+
+def test_a_ref_appears_in_exactly_one_row_and_only_in_the_two_ref_columns():
+    macro = "| — | C1 | A hedging data gap. | New | — |\n"
+    assert any("C1" in i and "found 0" in i for i in issues_after(macro, ""))
+    assert any("C1" in i and "found 2" in i for i in issues_after(macro, macro + macro))
+    both = "| E2 | C2 | Segment data is missing. | Remaining | — |\n"
+    assert any("E2" in i and "found 0" in i for i in issues_after(both, ""))
+    assert any("E2" in i and "found 2" in i for i in issues_after(both, both + both))
+    # A ref in a sentence, or in the Limitation cell, is refused.
+    in_sentence = REGISTERS.replace("Leverage fell.", "Leverage fell, as E1 shows.")
+    assert any("E1" in i and "only in" in i for i in cp8_issues(in_sentence, PACK))
+    in_cell = REGISTERS.replace("A hedging data gap.", "A gap like C2.")
+    assert any("C2" in i and "only in" in i for i in cp8_issues(in_cell, PACK))
+
+
+def test_a_ledger_row_needs_a_limitation_in_words():
+    empty = REGISTERS.replace("| A hedging data gap. |", "| — |")
+    assert any("Limitation" in i for i in cp8_issues(empty, PACK))
 
 
 @pytest.mark.parametrize(
@@ -815,6 +1354,7 @@ def test_a_missing_module_row_a_duplicate_row_and_a_missing_ledger_row_are_refus
     [
         ("### What changed: the issuer", "### What changed: the lot", "exactly once"),
         ("| Measure or fact | Earlier |", "| Measure | Earlier |", "exactly these columns"),
+        ("| Earlier ref | Current ref |", "| Earlier | Current |", "exactly these columns"),
     ],
 )
 def test_a_register_that_is_missing_or_has_other_columns_is_refused(old, new, fragment):
@@ -822,10 +1362,18 @@ def test_a_register_that_is_missing_or_has_other_columns_is_refused(old, new, fr
     assert any(fragment in issue for issue in found), found
 
 
+def test_a_missing_module_row_and_a_duplicate_row_are_refused():
+    macro = "| Macro (CP-2E) | New | New source | The module was added. |\n"
+    assert any("CP-2E needs exactly one row (found 0)" in i for i in issues_after(macro, ""))
+    assert any(
+        "CP-2E needs exactly one row (found 2)" in i for i in issues_after(macro, macro + macro)
+    )
+
+
 def test_a_register_with_a_header_and_no_row_or_no_table_is_refused():
-    cut = REGISTERS[: REGISTERS.index("| Old limitation text.")] + "\n## Calculations\n"
+    cut = REGISTERS[: REGISTERS.index("| E1 |")] + "\n## Calculations\n"
     assert any("needs exactly one row" in i for i in cp8_issues(cut, PACK))
-    bare = REGISTERS[: REGISTERS.index("| Limitation | Status")] + "\n## Calculations\n"
+    bare = REGISTERS[: REGISTERS.index("| Earlier ref")] + "\n## Calculations\n"
     assert any("holds no table" in i for i in cp8_issues(bare, PACK))
 
 
@@ -915,13 +1463,16 @@ def cp8_answer(context: dict) -> str:
         "",
         "### Limitations ledger",
         "",
-        "| Limitation | Status | What closed it |",
-        "| --- | --- | --- |",
-        "| Synthetic fixture only. | No longer stated | — |",
+        "| Earlier ref | Current ref | Limitation | Status | What closed it |",
+        "| --- | --- | --- | --- | --- |",
+        # The earlier run's CP-0 and CP-1 each stated "Synthetic fixture only." (E1, E2).
+        "| E1, E2 | — | Synthetic fixture only. | No longer stated | — |",
     ]
+    number = 0  # C1, C2 ...: module order, then order in the handoff
     for module in modules:
         for text in LIMITATION_LINE.findall(context["handoffs"][module]["markdown"]):
-            lines.append(f"| {text} | New | — |")
+            number += 1
+            lines.append(f"| — | C{number} | {text} | New | — |")
     lines += [
         "",
         "## Calculations",
@@ -994,7 +1545,9 @@ def test_a_run_with_a_prior_run_gives_cp8_alone_the_earlier_handoffs_and_deliver
         "-0.60",
         "-0.60",
     )
-    assert found["cash"]["comparable"] is False
+    assert found["leverage"]["comparable"] == "yes"  # "Synthetic." in both runs
+    assert found["cash"]["comparable"] == "judge"  # "Earlier basis." against "Synthetic."
+    assert found["cash"]["difference"] == "-25"
     assert (found["cash"]["prior"]["value"], found["cash"]["current"]["value"]) == ("300", "275")
     assert found["coverage"]["prior"] is None
     assert pack["prior"]["run"] == PRIOR_ID
@@ -1010,22 +1563,118 @@ def test_a_run_with_a_prior_run_gives_cp8_alone_the_earlier_handoffs_and_deliver
     assert [m["id"] for m in listed["cur"]["modules"]][-1] == "CP-8"
 
 
-@pytest.mark.usefixtures("provider")
-def test_a_wrong_cp8_answer_is_sent_back_and_a_run_that_cannot_fix_it_stops(tmp_path, capsys):
-    _, out, argv = run_with_prior(tmp_path)
+def wrong_cp8():
+    """A provider whose CP-8 answers print a current figure the pack does not hold."""
     good = provider.answer
     provider.answer = lambda context: (
         good(context).replace("3.60x (FY2024)", "3.70x (FY2024)")
         if context["module_id"] == "CP-8"
         else good(context)
     )
-    assert main(argv) == 1
-    assert "CP-8 not accepted" in capsys.readouterr().err
-    # The loop sent it back, naming the figure; no delivery was made.
+
+
+@pytest.mark.usefixtures("provider")
+def test_a_cp8_that_is_not_accepted_loses_only_itself_and_the_run_says_why(tmp_path, capsys):
+    """Owner, 2026-11-12: CP-8 is optional to completion. Its refusal is the one fail-open: the
+    delivery of every other module stands and the reason is recorded in four places."""
+    _, out, argv = run_with_prior(tmp_path)
+    wrong_cp8()
+    assert main(argv) == 0
+    err = capsys.readouterr().err
+    reason = "changes: not produced \u2014 cpos_live_not_accepted: CP-8 not accepted within bounds"
+    assert reason in err  # 1. stderr
+    # The loop sent the answer back, naming the figure, before it gave up.
     sent_back = " ".join(p.read_text() for p in (out / "live/modules").glob("*/*.tools.json"))
     assert "REJECTED" in sent_back
-    assert "the figure 3.70 is not in the comparison pack" in sent_back
+    assert "current figure 3.70 is not the pack's current value (3.60)" in sent_back
+    (receipt,) = (out / "deliveries").glob("*/delivery.json")
+    assert not (receipt.parent / "CP-8.md").exists()
+    assert not (receipt.parent / "changes.json").exists()
+    assert {m: (receipt.parent / f"{m}.md").is_file() for m in SNAPSHOT_MODULES} == dict.fromkeys(
+        SNAPSHOT_MODULES, True
+    )
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())  # 2. completion record
+    assert completed["changes"] == reason
+    assert "CP-8" not in completed["modules"]
+    manifest = json.loads(next(out.glob("delivery-*.json")).read_text())  # 3. delivery manifest
+    assert manifest["changes_note"] == reason
+    assert "CP-8" not in manifest["handoffs"]
+    events = [json.loads(line) for line in (out / "events.jsonl").read_text().splitlines()]
+    assert {
+        "event": "changes_not_produced",
+        "reason": reason.removeprefix("changes: not produced \u2014 "),
+    } in [  # 4. event
+        {k: v for k, v in e.items() if k != "at"} for e in events
+    ]
+    assert events[-1]["event"] == "delivered"
+    assert "Changes since the last run (CP-8): " + reason in manifest["layout"]["scope"]
+
+
+@pytest.mark.usefixtures("provider")
+def test_a_relaunch_after_a_cp8_refusal_leaves_the_delivery_and_makes_no_call(tmp_path, capsys):
+    _, out, argv = run_with_prior(tmp_path)
+    wrong_cp8()
+    assert main(argv) == 0
+    capsys.readouterr()
+    calls = list(provider.calls)
+    before = tree(out / "deliveries")
+    completed = sorted(p.name for p in out.glob("completed-*.json"))
+    assert main(argv) == 0
+    assert provider.calls == calls  # no new call, CP-8's included
+    assert tree(out / "deliveries") == before
+    assert sorted(p.name for p in out.glob("completed-*.json")) == completed
+    err = capsys.readouterr().err
+    assert "recorded by the earlier launch of this run; no new call" in err
+
+
+@pytest.mark.usefixtures("provider")
+def test_another_modules_failure_is_not_masked_by_the_cp8_fail_open(tmp_path, capsys):
+    _, out, argv = run_with_prior(tmp_path)
+    good = provider.answer
+    provider.answer = lambda context: (
+        "not a handoff" if context["module_id"] == "CP-1" else good(context)
+    )
+    assert main(argv) == 1
+    assert "Stopped:" in capsys.readouterr().err
     assert not (out / "deliveries").exists()
+    assert "CP-8" not in {c[0] for c in provider.calls}
+
+
+def test_only_cp8s_two_refusals_are_survived():
+    from deploy_workflow.model.budget import BudgetExhausted, OverrunStop
+    from deploy_workflow.owners.cpos import _cp8_unaccepted
+
+    assert _cp8_unaccepted(RuntimeError("cpos_live_not_accepted: CP-8 not accepted within bounds"))
+    assert _cp8_unaccepted(ValueError("cpos_module_failed: CP-8: a figure"))
+    assert _cp8_unaccepted(BudgetExhausted("the reservation would pass the cap"))
+    assert not _cp8_unaccepted(RuntimeError("cpos_live_stopped: error; charge=None; overrun=False"))
+    assert not _cp8_unaccepted(OverrunStop("charged above the hold"))
+    assert not _cp8_unaccepted(ValueError("cpos_interrupted: response not retained for CP-8"))
+    assert not _cp8_unaccepted(
+        RuntimeError("cpos_live_not_accepted: CP-4 not accepted within bounds")
+    )
+
+
+@pytest.mark.usefixtures("provider")
+def test_a_pack_that_cannot_be_built_delivers_without_cp8(tmp_path, capsys, monkeypatch):
+    """The pack builder is made to fail as it does on a handoff text it cannot read."""
+    _, out, argv = run_with_prior(tmp_path)
+
+    def builder(prior, as_of, pathway):
+        def build(sources, handoffs):
+            raise ValueError("a handoff is not readable")
+
+        return build
+
+    monkeypatch.setattr("deploy_workflow.owners.cpos.pack_builder", builder)
+    assert main(argv) == 0
+    assert "CP-8" not in {c[0] for c in provider.calls}
+    completed = json.loads(next(out.glob("completed-*.json")).read_text())
+    assert completed["changes"] == (
+        "changes: not produced \u2014 the comparison pack could not be built "
+        "(a handoff is not readable)"
+    )
+    assert "not produced" in capsys.readouterr().err
 
 
 @pytest.mark.usefixtures("provider")
@@ -1083,5 +1732,5 @@ def test_the_canned_launcher_delivers_the_pack_and_an_accepted_cp8_handoff(tmp_p
     pack = json.loads((receipt.parent / "changes.json").read_text())
     assert measures_of(pack)["leverage"]["difference"] == "-0.60"  # hand-written above
     handoff = (receipt.parent / "CP-8.md").read_text()
-    assert "| Total debt / EBITDA | 4.20 (FY2023) | 3.60 (FY2024) | New period |" in handoff
+    assert "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period |" in handoff
     assert "### Limitations ledger" in handoff

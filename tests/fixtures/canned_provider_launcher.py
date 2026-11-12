@@ -24,13 +24,25 @@ def cp8_answer(context: dict, out: Path) -> str:
     `inputs/<sha256>` the run folder holds, named by the `changes.json` source's hash), as a model
     that read the pack would write them. The checker stays the real one."""
     pack = json.loads((out / "inputs" / context["sources"]["changes.json"]).read_text())
-    issuer = [
-        f"| {m['label']} | {m['prior']['value']} ({m['prior']['period']}) "
-        f"| {m['current']['value']} ({m['current']['period']}) | New period "
-        f"| The pack's difference is {m['difference']}. |"
-        for m in pack["measures"]
-        if m["difference"] is not None
-    ] or ["| No material change | — | — | None | The comparison pack shows no comparable change. |"]
+
+    def shown(side: dict, unit: str) -> str:
+        joined = f"{side['value']}{unit}" if unit in ("x", "%") else f"{side['value']} {unit}"
+        return f"{joined} ({side['period']})"
+
+    issuer = []
+    for m in pack["measures"]:
+        if m["difference"] is None:
+            continue
+        effect = (
+            f"The pack's difference is {m['difference']}."
+            if m["comparable"] == "yes"
+            else "Not comparable: the definitions differ."
+        )
+        before, now = shown(m["prior"], m["unit"]), shown(m["current"], m["unit"])
+        issuer.append(f"| {m['label']} | {before} | {now} | New period | {effect} |")
+    issuer = issuer or [
+        "| No material change | — | — | None | The comparison pack shows no comparable change. |"
+    ]
     analysis = [
         f"| Module ({m['module']}) | "
         + (
@@ -43,17 +55,19 @@ def cp8_answer(context: dict, out: Path) -> str:
         + " |"
         for m in pack["modules"]
     ]
+    earlier, current = pack["limitations"]["earlier"], pack["limitations"]["current"]
     ledger = [
-        f"| {row['text']} | "
-        + (
-            "Remaining"
-            if row["prior"] and row["current"]
-            else "New"
-            if row["current"]
-            else "No longer stated"
-        )
-        + " | — |"
-        for row in pack["limitations"]
+        *(
+            [
+                (
+                    f"| {', '.join(row['ref'] for row in earlier)} | — "
+                    "| The earlier run's limitations are no longer stated. | No longer stated | — |"
+                )
+            ]
+            if earlier
+            else []
+        ),
+        *(f"| — | {row['ref']} | {row['text']} | New | — |" for row in current),
     ]
     lines = ["# CP-8", "", "## Request", f"{ISSUER} as of {AS_OF}.", "", "## Sources", ""]
     lines += [f"- {n} {h}" for n, h in context["sources"].items()]
@@ -72,8 +86,9 @@ def cp8_answer(context: dict, out: Path) -> str:
         *("", "### What changed: the analysis", "", "| Module | Status | Cause | Why |"),
         "| --- | --- | --- | --- |",
         *analysis,
-        *("", "### Limitations ledger", "", "| Limitation | Status | What closed it |"),
-        "| --- | --- | --- |",
+        *("", "### Limitations ledger", ""),
+        "| Earlier ref | Current ref | Limitation | Status | What closed it |",
+        "| --- | --- | --- | --- | --- |",
         *ledger,
         *("", "## Calculations", "", "None.", "", "## Gaps", "", "None.", "", "## Next module"),
         *("", "None.", ""),
