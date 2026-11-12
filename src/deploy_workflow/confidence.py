@@ -2,11 +2,14 @@
 
 The formula, weights, caps and bands are those of CANON_SHARED.md (CP_CONFIDENCE_SCORE.md) and of
 the archived `confidence_score.py`, whose float arithmetic and `round` (half to even) are kept
-exactly. A module states inputs only; it never writes the score or the band. Pure functions."""
+exactly. A module states inputs only; it never writes the score or the band; a blocked module
+states one not-assessable row. Pure functions."""
 
 import re
 from dataclasses import dataclass
 from typing import NamedTuple
+
+from deploy_workflow.prose_checks import bottom_line_text
 
 HEADING = "Confidence inputs"
 LINEAGE_WEIGHTS = {
@@ -51,6 +54,12 @@ MAX_DIGITS = 20
 MAX_COUNT = 10**MAX_DIGITS - 1
 MAX_FIELD_DIGITS = 4000
 FENCE = "```"
+# A blocked module's Bottom line begins `Not assessable:` (the launcher's words, and the reader's
+# test for a blocked module); it then writes the one row the launcher's blocked rule gives every
+# table, `| Not assessable | Not supplied: <reason> |`, in place of the fourteen.
+BLOCKED_MARK = "Not assessable:"
+BLOCKED_ROW = "Not assessable"
+GAP_MARK = "Not supplied:"
 
 # What the library page shows when there is no score: one of these plain sentences, never model
 # text, a heading marker or a module code. The detailed `reason` goes only to the retry message.
@@ -59,7 +68,15 @@ SHOWN_NOT_WHOLE = "the inputs table has a value that is not a whole number"
 SHOWN_TWICE = "the inputs table is written more than once"
 SHOWN_UNREADABLE = "the inputs table could not be read"
 SHOWN_RANGE = "the inputs table has a value outside its allowed range"
-SHOWN = (SHOWN_MISSING, SHOWN_NOT_WHOLE, SHOWN_TWICE, SHOWN_UNREADABLE, SHOWN_RANGE)
+SHOWN_BLOCKED = "the module was blocked, so no score is computed"
+SHOWN = (
+    SHOWN_MISSING,
+    SHOWN_NOT_WHOLE,
+    SHOWN_TWICE,
+    SHOWN_UNREADABLE,
+    SHOWN_RANGE,
+    SHOWN_BLOCKED,
+)
 
 
 class Score(NamedTuple):
@@ -72,11 +89,13 @@ class Score(NamedTuple):
 class Refused:
     """No score: `reason` says why in words for the module's retry; `shown` is the one plain
     sentence of `SHOWN` for the page; `absent` is true when the section is not there at all
-    (nothing was asked of the module), false when it is there and wrong."""
+    (nothing was asked of the module), false when it is there and wrong; `blocked` is true for a
+    blocked module's one not-assessable row, which is the form it was asked to write."""
 
     reason: str
     absent: bool = False
     shown: str = SHOWN_UNREADABLE
+    blocked: bool = False
 
 
 class Absent(ValueError):
@@ -89,6 +108,24 @@ class Unreadable(ValueError):
     def __init__(self, reason: str, shown: str = SHOWN_UNREADABLE):
         super().__init__(reason)
         self.shown = shown
+
+
+class Blocked(Unreadable):
+    """A blocked module's one not-assessable row: no score, and nothing wrong."""
+
+    def __init__(self) -> None:
+        super().__init__("the module is blocked, so it states no inputs", SHOWN_BLOCKED)
+
+
+def _is_blocked_row(text: str, rows: list[list[str]]) -> bool:
+    """Exactly one body row, `Not assessable` with a stated gap, in a handoff whose Bottom line
+    begins `Not assessable:`. Any other handoff writing it is wrong, as before."""
+    if len(rows) != 2 or rows[1][0] != BLOCKED_ROW or len(rows[1]) != len(HEADER):
+        return False
+    cell = rows[1][1]
+    if not (cell.startswith(GAP_MARK) and cell.removeprefix(GAP_MARK).strip()):
+        return False
+    return (bottom_line_text(text) or "").startswith(BLOCKED_MARK)
 
 
 def _count(value: int, what: str, limit: int = MAX_COUNT) -> None:
@@ -190,6 +227,8 @@ def inputs(text: str) -> dict[str, str]:
     rows = _table_rows(body)
     if not rows or tuple(rows[0]) != HEADER:
         raise Unreadable(f"`### {HEADING}` needs a table headed `| {' | '.join(HEADER)} |`")
+    if _is_blocked_row(text, rows):
+        raise Blocked
     found: dict[str, str] = {}
     for row in rows[1:]:
         if len(row) != len(HEADER):
@@ -231,6 +270,8 @@ def from_handoff(text: str) -> Score | Refused:
         )
     except Absent as error:
         return Refused(str(error), absent=True)
+    except Blocked as error:
+        return Refused(str(error), shown=error.shown, blocked=True)
     except Unreadable as error:
         return Refused(str(error), shown=error.shown)
     except ValueError as error:  # `score` refusing a value that is outside what it allows

@@ -1788,7 +1788,7 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
             "do not block for want of an acceptance receipt",
             "`prepare_invocation.py`",
             "`validate_handoff.py`",
-            "`confidence_score.py`",
+            "`completeness_check.py`",
             "do each check or calculation yourself",
             "Nobody can answer a question during this run",
             "then the method's declared safe default",
@@ -5603,3 +5603,90 @@ def test_a_scoring_modules_draft_without_a_well_formed_table_is_refused():
     assert any("Input | Value" in i for i in cpos_launch.chart_issues(other, spec))
     score = CONFIDENCE_TEXT.replace("| MINOR | 1 |", "| MINOR | 1 |\n| Score | 89 |")
     assert any("Score" in i for i in cpos_launch.chart_issues(score, spec))
+
+
+# ---- Whole-branch wave (H2): a blocked scoring module obeys the blocked rule and is accepted.
+BLOCKED_BOTTOM = "## Findings\n\n### Bottom line\n\nNot assessable: no source file was read.\n\n"
+ONE_ROW = (
+    "### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n"
+    "| Not assessable | Not supplied: blocked |\n"
+)
+
+
+def test_a_blocked_scoring_module_writes_one_not_assessable_row_and_is_accepted():
+    spec = confidence_spec("CP-2D")
+    assert cpos_launch.chart_issues(BLOCKED_BOTTOM + ONE_ROW, spec) == ()
+    assert cpos_launch.chart_issues(BLOCKED_BOTTOM + CONFIDENCE_TEXT, spec) == ()
+
+
+def test_a_module_that_is_not_blocked_is_refused_for_the_not_assessable_row():
+    spec = confidence_spec("CP-2D")
+    text = "## Findings\n\n### Bottom line\n\nThe view is stable.\n\n" + ONE_ROW
+    (issue,) = cpos_launch.chart_issues(text, spec)
+    assert "Not assessable" in issue and "not an input" in issue
+
+
+def test_the_confidence_text_says_what_a_blocked_module_writes_before_the_method(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=("CP-3",))
+    head = texts["CP-3"].partition(cpos_launch.METHOD_MARK)[0]
+    assert (
+        "A blocked module writes one row in it instead, `| Not assessable | Not supplied: "
+        "<reason> |`, and no score is computed." in head
+    )
+
+
+# ---- Whole-branch wave (L7): a front-matter score, band or QA status the module states itself.
+@pytest.mark.parametrize(
+    "key", ["confidence_score: 62", "confidence_band: Medium", "qa_status: Passed"]
+)
+def test_a_front_matter_score_band_or_qa_status_is_refused(tmp_path, key):
+    front = f"---\nissuer_id: nbg\nmodule_id: CP-4\n{key}\n---\n\n"
+    issues = prose_issues_of(tmp_path, "CP-4", lambda raw: front + raw)
+    name = key.split(":")[0]
+    assert any(name in i and "front matter" in i for i in issues), issues
+
+
+def test_front_matter_without_those_keys_and_the_words_in_body_text_are_not_refused(tmp_path):
+    front = "---\nissuer_id: nbg\nmodule_id: CP-4\n---\n\n"
+    body = "\n\nThe qa_status: value is not stated.\n"
+    issues = prose_issues_of(tmp_path, "CP-4", lambda raw: front + raw + body)
+    assert not any("front matter" in i for i in issues), issues
+
+
+# ---- Whole-branch wave (L4): wording gaps in the shared and per-table text.
+def test_a_near_miss_none_row_is_refused_naming_the_exact_text(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert POST_BS_NONE in raw
+    for near in ("None found in the sources read.", "none found in the sources read"):
+        text = raw.replace("| None found in the sources read |", f"| {near} |")
+        assert text != raw
+        issues = _checked_handoff(task, text.encode(), checker(prepared.layout))
+        assert any("exactly `None found in the sources read`" in i for i in issues), (near, issues)
+
+
+def test_the_none_rule_names_the_tables_own_columns_and_the_sign_of_amount_is_stated(tmp_path):
+    spec = cpos_launch.POST_BS
+    rule = cpos_launch._none_rule(spec)
+    assert "whose Date, Amount, Pro forma net debt and Pro forma net leverage are each" in rule
+    assert "exactly `None found in the sources read` (no other punctuation or wording)" in rule
+    assert cpos_launch._and_list(("A", "B", "C")) == "A, B and C"
+    assert "without a sign when net debt rises and with a minus sign when it falls" in spec.rules
+    assert "cash effect" not in spec.rules
+    assert "net leverage or cash" not in cpos_launch.PROSE_PASSAGES
+
+
+def test_the_shared_text_names_no_confidence_script_and_separates_the_score_from_claim_labels(
+    tmp_path,
+):
+    _, texts = all_instructions(tmp_path, modules=("CP-3",))
+    head = texts["CP-3"].partition(cpos_launch.METHOD_MARK)[0]
+    assert "confidence_score.py" not in head
+    assert "Python computes any score and band the report shows" in head
+    assert "a claim's own confidence label" in head
+    assert (
+        "list each issuer source it relied on in `## Sources`, naming the exact file and its "
+        "sha256;" in head
+    )
+    assert "as a table with the columns `Source | Document | Document date | sha256 | Use`" in head
+    assert "rejected unless it does all of this" in head

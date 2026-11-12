@@ -404,7 +404,7 @@ VOICE_RULES = (
     "follows the sentence rules (no bracket tag, no page locator, no ID).\n"
     "- Keep `## Request` to the issuer, as-of date, pathway and scope, in at most three "
     "sentences.\n"
-    "- When you quote year-end net debt, net leverage or cash from Financial foundation and its "
+    "- When you quote year-end net debt or net leverage from Financial foundation and its "
     "`Post-balance-sheet adjustments` table has a row for an event, state the pro forma figure "
     "beside it, with its unit and the event's date. When the table says none was found, add "
     "nothing. When Financial foundation does not state the pro forma figure, say it is not "
@@ -433,7 +433,8 @@ MAP_TEXT_RULE = "Text in a map node or edge is at most 60 characters.\n\n"
 CONFIDENCE_RULE = (
     f"Write the inputs for your confidence score in `### {confidence.HEADING}`, listed with the "
     "report selectors below; the score and band are computed from it by Python, and the section "
-    "is a data section, not sentence text.\n\n"
+    "is a data section, not sentence text. A blocked module writes one row in it instead, "
+    "`| Not assessable | Not supplied: <reason> |`, and no score is computed.\n\n"
 )
 
 
@@ -715,9 +716,11 @@ POST_BS = OwnerTable(
         "repayment, acquisition, disposal or dividend that the sources state. Date is the event "
         "date: YYYY-MM-DD only when the source states the day; when it gives only a month, "
         "quarter or year, write `Not supplied: the source states <what it gives> only` and never "
-        "invent a day. Amount is the event's cash effect and Pro forma net debt is year-end net "
-        "debt after the event, both in the Reporting unit; Pro forma net leverage is the same net "
-        "debt over the same EBITDA as the year-end net leverage, as times without an `x`. "
+        "invent a day. Amount is the event's effect on net debt, a plain number without a sign "
+        "when net debt rises and with a minus sign when it falls; Pro forma net debt is "
+        "year-end net debt after the event, both in the Reporting unit; Pro forma net leverage is "
+        "the same net debt over the same EBITDA as the year-end net leverage, as times without "
+        "an `x`. "
         "Work each figure with `calculate`; a figure you cannot state is `Not supplied: "
         "<reason>`; Basis and limitation names the event's source and what is not yet reflected. "
         "Do not add a pro forma row to any chart or net debt table."
@@ -1461,6 +1464,17 @@ def _states_none(spec: OwnerTable, header: list[str], rows: list[list[str]]) -> 
     )
 
 
+def _near_none_issues(spec: OwnerTable, heading: str, event: str) -> list[str]:
+    """An Event that is the none text with other case or punctuation is not the none row: it
+    would pass as an event with gaps, so the module is told the exact text."""
+    if not spec.none_text or event == spec.none_text:
+        return []
+    if event.casefold().strip(" .") != spec.none_text.casefold():
+        return []
+    advice = f"`{spec.none_text}` and the other cells as asked; any other Event names an event."
+    return [f"`{heading}`: to state that there is no event, write the Event exactly {advice}"]
+
+
 def _row_table_issues(
     spec: OwnerTable, heading: str, header: list[str], rows: list[list[str]]
 ) -> list[str]:
@@ -1473,6 +1487,7 @@ def _row_table_issues(
         if len(row) != len(header):
             issues.append(f"`{heading}` row needs {len(header)} cells: {' | '.join(row)}")
             continue
+        issues += _near_none_issues(spec, heading, row[0])
         unit = row[-2]
         for name, cell in zip(header, row, strict=True):
             problem = _cell_issue(spec, name, cell, unit)
@@ -1533,15 +1548,23 @@ def _absent_issues(text: str, spec: OwnerTable, heading: str) -> tuple[str, ...]
     return (f"Add `{heading}` inside ## Findings, with its table.",)
 
 
+def _confidence_issues(text: str, heading: str) -> tuple[str, ...]:
+    """`confidence` reads the table; a refusal is its reason, nothing is repaired. A blocked
+    module's one not-assessable row is the form it was asked to write, so it is no refusal."""
+    got = confidence.from_handoff(text)
+    if isinstance(got, confidence.Refused) and not got.blocked:
+        return (f"`{heading}`: {got.reason}.",)
+    return ()
+
+
 def chart_issues(text: str, table: MarkdownRoute | OwnerTable) -> tuple[str, ...]:
     """A chart table's cells reach the page as they are, so each must already be chart-ready."""
     spec = _owner_table(table)
     heading = f"### {spec.heading}"
     if heading not in text.splitlines():
         return _absent_issues(text, spec, heading)
-    if spec.scored:  # `confidence` reads the table; a refusal is its reason, nothing is repaired.
-        got = confidence.from_handoff(text)
-        return (f"`{heading}`: {got.reason}.",) if isinstance(got, confidence.Refused) else ()
+    if spec.scored:
+        return _confidence_issues(text, heading)
     rows = _stated_rows(text, heading)
     header = _chart_header(spec)
     if not rows or rows[0] != header:
@@ -1659,13 +1682,15 @@ TRANSPORT_RULES = (
     "validation and lineage the method asks of an upstream handoff: do not block for want of an "
     "acceptance receipt, invocation digest, settled-head verification or fresh snapshot. The "
     "method's helper scripts (`prepare_invocation.py`, `validate_handoff.py`, "
-    "`confidence_score.py`, `completeness_check.py` and any other `scripts/*.py`) cannot be run "
+    "`completeness_check.py` and any other `scripts/*.py`) cannot be run "
     "here: do each check or calculation yourself, with `calculate` and by the rules in the "
     "method block, and do not block for it. Never mention the scripts, the tooling or anything "
     "that could not be run anywhere in the handoff. Do not state a confidence score, a "
     "confidence band or a QA status: this overrides the method's `qa_status`, confidence score "
     "and band fields, its Audit Summary score and its helper-script steps, so leave those fields "
-    "and steps out. A companion file the method names that "
+    "and steps out. Python computes any score and band the report shows; a claim's own "
+    "confidence label, where the method asks for one, is still written. A companion file "
+    "the method names that "
     "is not in the method block below is unavailable; do not block the module for it. CP-OS "
     "supplies only the handoffs of the modules the registry "
     "names as this module's producers (CP-5: every analyst before it); an upstream module the "
@@ -1906,6 +1931,10 @@ CURRENCY_RULE = (
 )
 
 
+def _and_list(names: Sequence[str]) -> str:
+    return f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else "".join(names)
+
+
 def _none_rule(spec: OwnerTable) -> str:
     """The one sentence every row table (not a step table, which has its own) is sent for the case
     that its module has nothing to report; `_states_none` accepts exactly that row."""
@@ -1913,9 +1942,10 @@ def _none_rule(spec: OwnerTable) -> str:
         return ""
     if spec.none_text:
         return (
-            f" If no such event is stated, write one row whose Event is `{spec.none_text}`, whose "
-            "Date, Amount, Pro forma net debt and Pro forma net leverage are each `\u2014`, with "
-            "Reporting unit and Basis and limitation stated (say which sources were read)."
+            f" If no such event is stated, write one row whose Event is exactly `{spec.none_text}` "
+            f"(no other punctuation or wording), whose {_and_list(spec.columns[1:])} are each "
+            "`\u2014`, with Reporting unit and Basis and limitation stated (say which sources "
+            "were read)."
         )
     cells = "every cell" if spec.bare else "every cell before Reporting unit"
     return (
@@ -2019,7 +2049,9 @@ DEEP_DEBATE_BLOCK = (
     "module_options.cp6_deep_debate). Deep Debate Mode is ON.\n\n"
 )
 SOURCES_RULES = (
-    "In the `## Sources` table of issuer sources, `Source` is the exact file name as supplied "
+    "Write the issuer sources in `## Sources` as a table with the columns "
+    "`Source | Document | Document date | sha256 | Use`. `Source` is the exact file name as "
+    "supplied "
     "(it is the key that joins the row to the file; never shorten or reword it). `Document` says "
     'in plain words what the document is, for example "Annual report on Form 10-K for the year '
     'ended 30 September 2024". `Document date` is the date the document was filed or published '
@@ -2082,8 +2114,8 @@ def _instructions(
         + TRANSPORT_RULES
         + "A handoff is rejected unless it does all of this:\n"
         f"- name {run.issuer_name} in `## Request`, and state the as-of date {run.as_of} there;\n"
-        "- list each issuer source it relied on in `## Sources`, as a table with the columns "
-        "`Source | Document | Document date | sha256 | Use`;\n"
+        "- list each issuer source it relied on in `## Sources`, naming the exact file and its "
+        "sha256;\n"
         "- list each supplied handoff in `## Sources`, with its module and exact sha256.\n\n"
         + SOURCES_RULES
         + READER_PERSONA
@@ -2519,6 +2551,28 @@ def _owned_issues(module: str, routes: Sequence[MarkdownRoute], text: str) -> li
     return [*issues, *_net_debt_issues(text)] if module == "CP-1" else issues
 
 
+_FRONT_SCORE_KEY = re.compile(r"(confidence_score|confidence_band|qa_status)\s*:")
+
+
+def _front_matter_score_issues(text: str) -> tuple[str, ...]:
+    """The method's own front matter carries a score, band and QA status; the module states none
+    (decision 9 of 2026-11-12: Python computes them). Only those three keys in the block that
+    opens the handoff (`---` on its first line to the next `---`) are read, nothing in the body."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ()
+    issues = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if found := _FRONT_SCORE_KEY.match(line):
+            issues.append(
+                f"Remove `{found[1]}` from the front matter: a module states no confidence "
+                "score, band or QA status."
+            )
+    return tuple(issues)
+
+
 def checker(layout: MarkdownLayout) -> Check:
     """Anchors and report selectors for one module's answer, so a defect is repaired inside the
     module's loop rather than found at delivery after every module was paid for."""
@@ -2536,6 +2590,7 @@ def checker(layout: MarkdownLayout) -> Check:
             issues.append("List each issuer source relied on with its exact name and sha256.")
         issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
         issues += figure_issues(text)
+        issues += _front_matter_score_issues(text)
         if task.module_id == "CP-L10":
             issues += _key_figure_issues(task, text)
         if task.module_id == "CP-8":

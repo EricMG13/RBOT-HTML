@@ -392,3 +392,45 @@ def test_a_negative_count_is_not_a_whole_number():
     rows = [("Calculated", "-1") if r[0] == "Calculated" else r for r in GOOD_ROWS]
     got = confidence.from_handoff(handoff(rows))
     assert isinstance(got, Refused) and got.shown == confidence.SHOWN_NOT_WHOLE
+
+
+# ---- Whole-branch wave (H2): a blocked scoring module writes one not-assessable row.
+NOT_ASSESSABLE_ROW = [("Not assessable", "Not supplied: the module was blocked")]
+
+
+def blocked_handoff(rows=NOT_ASSESSABLE_ROW, bottom="Not assessable: no source file was read."):
+    head = f"## Findings\n\n### Bottom line\n\n{bottom}\n\n### Confidence inputs\n\n"
+    return f"{head}{table(rows, '| Input | Value |')}\n\n### Next\n\ntext\n"
+
+
+def test_a_blocked_modules_one_not_assessable_row_is_refused_as_blocked_with_a_fixed_sentence():
+    got = confidence.from_handoff(blocked_handoff())
+    assert isinstance(got, Refused) and not got.absent and got.blocked
+    assert (
+        got.shown == confidence.SHOWN_BLOCKED == ("the module was blocked, so no score is computed")
+    )
+    assert got.shown in confidence.SHOWN
+
+
+def test_a_module_that_is_not_blocked_cannot_use_the_not_assessable_row():
+    got = confidence.from_handoff(blocked_handoff(bottom="The view is stable."))
+    assert isinstance(got, Refused) and not got.blocked
+    assert got.shown != confidence.SHOWN_BLOCKED and "Not assessable" in got.reason
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [("Not assessable", "5")],
+        [("Not assessable", "Not supplied:")],
+        [("Not assessable", "Not supplied: x"), ("Fields total", 1)],
+        [("Not assessable", "Not supplied: x"), ("Not assessable", "Not supplied: y")],
+    ],
+)
+def test_a_blocked_module_gets_no_other_form_of_the_row(rows):
+    got = confidence.from_handoff(blocked_handoff(rows))
+    assert isinstance(got, Refused) and not got.blocked
+
+
+def test_a_blocked_module_may_still_write_the_fourteen_rows():
+    assert isinstance(confidence.from_handoff(blocked_handoff(GOOD_ROWS)), Score)

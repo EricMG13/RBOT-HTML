@@ -1010,3 +1010,12 @@ def test_the_real_run_cell_with_a_comma_page_list_keeps_its_chips():
     found = scan(f"{name}, pages 71, 121", index)
     assert [(l["kind"], l["page"]) for _, l in found] == [("issuer_page", 71), ("issuer_page", 121)]
     assert {l["source"] for _, l in found} == {name}
+
+
+@pytest.mark.parametrize("spaces", [1, 8, 9, 10, 40])
+def test_a_longer_unlisted_file_name_after_any_whitespace_run_does_not_open_the_listed_one(spaces):
+    keys = ("report.pdf", "Annual report.pdf")
+    found = parse_locators("Draft" + " " * spaces + "report.pdf, page 3", keys)
+    assert [(loc["kind"], loc.get("source")) for loc in found] == [("gap", None)]
+    cited = parse_locators("Source:" + " " * spaces + "report.pdf, page 3", keys)
+    assert [(loc["kind"], loc["source"]) for loc in cited] == [("issuer_page", "report.pdf")]

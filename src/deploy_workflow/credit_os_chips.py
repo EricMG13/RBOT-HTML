@@ -140,15 +140,16 @@ class KeyIndex(NamedTuple):
 # precede it, or the citation names a longer unlisted file ("annual-report.pdf", "Draft report.pdf")
 # and must not open the listed one. "Source: report.pdf" still reads; "see report.pdf" stays a gap.
 FILE_KEY = re.compile(r"\.[A-Za-z0-9]{1,5}$")
-# Python lookbehinds are fixed width, so one lookbehind per whitespace run of 1 to 8 characters.
-FILE_START = r"(?<![\w.\-/])" + "".join(rf"(?<![\w.\-/]\s{{{n}}})" for n in range(1, 9))
+# The key's match opens at the start of the whitespace run before it, so that run is read whole
+# (a lookbehind is fixed width): the character before the run may not be a file-name character.
+FILE_START = r"(?<![\w.\-/\s])\s*"
 
 
 @lru_cache(maxsize=32)
 def key_index(keys: tuple[str, ...], alternates: frozenset[str] = frozenset()) -> KeyIndex:
     """The page-citation pattern for one run: keys are the inventory's, longest first, exact. A key
-    that is a file name (a ``## Sources`` row) takes the strict start and registers no word-prefix
-    alias; an older inventory alias keeps both."""
+    that ends in an extension (``FILE_KEY``), whichever inventory section it came from, takes the
+    strict start of ``FILE_START`` and registers no word-prefix alias; any other key keeps both."""
     exact: dict[str, str] = {}
     prefixes: dict[str, list[str]] = {}
     for key in keys:
@@ -288,16 +289,18 @@ def scan(
     last_key: Resolved | None = None
     previous = 0
     for m in (index or key_index(())).pattern.finditer(text):
-        if SENTENCE_END.search(text, previous, m.start()):
-            last_key = None
         spelled = m.groupdict().get("key")
         written = index.lookup(spelled) if index and spelled else None
+        # A strict key's match opens at the whitespace before it: the citation starts at the key.
+        begin = m.start() + len(spelled) - len(spelled.lstrip()) if spelled else m.start()
+        if SENTENCE_END.search(text, previous, begin):
+            last_key = None
         last_key = written or last_key
         previous = m.end()
         # A bare page after an unknown capitalised key ("X, page:3") is a gap, not the last key's.
-        stray = written is None and UNKNOWN_KEY.search(text, 0, m.start())
+        stray = written is None and UNKNOWN_KEY.search(text, 0, begin)
         key = written or (None if stray else last_key or row_key)
-        found.extend((m.start(), loc) for loc in page_locators(m, key))
+        found.extend((begin, loc) for loc in page_locators(m, key))
     if (at := text.find(NOT_SUPPLIED)) >= 0:
         found.append((at, locator("gap", label=NOT_SUPPLIED)))
     if (tail := TRAILING.search(text)) and not BRACKET.search(text[tail.start(1) :]):

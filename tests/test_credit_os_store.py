@@ -2097,6 +2097,21 @@ def test_an_output_with_a_wrong_inputs_table_says_why_there_is_no_score(tmp_path
         assert bad not in cp0["confidence"]["missing"]
 
 
+def test_a_blocked_modules_not_assessable_row_is_a_missing_field_with_the_fixed_sentence():
+    blocked = (
+        "## Findings\n\n### Bottom line\n\nNot assessable: no source file was read.\n\n"
+        "### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n"
+        "| Not assessable | Not supplied: blocked |\n"
+    )
+    assert store.confidence_fields(blocked.encode()) == {
+        "confidence": {"missing": "the module was blocked, so no score is computed"}
+    }
+    live = blocked.replace("Not assessable: no source", "The view is stable: no source")
+    assert store.confidence_fields(live.encode())["confidence"]["missing"] != (
+        "the module was blocked, so no score is computed"
+    )
+
+
 def test_a_huge_count_hides_no_other_run_output(tmp_path):
     huge = INPUTS.replace("| Calculated | 2 |", "| Calculated | " + "9" * 400 + " |")
     result = read_store(tmp_path, cp0_extra=huge)
