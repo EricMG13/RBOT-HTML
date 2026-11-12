@@ -630,8 +630,9 @@ def _bridge_amounts(table: dict[str, Any]) -> list[decimal.Decimal] | None:
     """A step table's stated amounts when it is a bridge that reconciles, else None.
 
     Mirrors the launcher's check (cpos_launch.py `_bridge_issues`; the store imports the standard
-    library only): every Amount a plain signed number, and the opening plus the stated changes equal
-    to the closing. Each amount has at most the table's own decimals, so the sum is exact."""
+    library and `deploy_workflow.confidence` only): every Amount a plain signed number, and the
+    opening plus the stated changes equal to the closing. Each amount has at most the table's own
+    decimals, so the sum is exact."""
     cells = [row["cells"][1] for row in table["rows"]]
     if len(cells) < 2 or not all(PLAIN_AMOUNT.fullmatch(c) for c in cells):
         return None

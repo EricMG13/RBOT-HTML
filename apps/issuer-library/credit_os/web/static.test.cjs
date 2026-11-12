@@ -3250,6 +3250,13 @@ test('module page (H1): an events lane with no event keeps its table as a Table 
   assert.ok(strip(timeline).includes('these are undated triggers recorded in other lanes') && /<summary>Table form<\/summary>/.test(timeline), 'the gap lane row is in the Table form');
 });
 
+test('module page (H1): an earlier-format page whose map states none has no Table form fold; a new-format one has it', () => {
+  const early = /<section class="part" id="maps">.*?<\/section>/s.exec(runPage(withMaps).moduleReport(outId('CP-1')))[0];
+  assert.ok(early.includes('Not established for this run') && !early.includes('<summary>Table form</summary>'), 'earlier format is unchanged');
+  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, ...Array(5).fill('Not supplied: no edge is stated'), 'Not supplied: p']])])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
+  assert.ok(/<div class="map-card" id="s-410">.*?<summary>Table form<\/summary>/s.test(page.moduleReport(a1Id)));
+});
+
 test('module page (H1): a map with no edge keeps its table as a Table form fold, every cell as written', () => {
   const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, 'Not supplied: no edge is stated', 'Not supplied: x', 'Not supplied: x', 'Not supplied: x', 'no edge with applicable document and jurisdiction can be drawn', 'Not supplied: p']]), text(414, 'Map caption.')])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
   const html = page.moduleReport(a1Id), card = /<div class="map-card" id="s-410">.*?Map caption\./s.exec(html)[0];

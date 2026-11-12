@@ -5673,7 +5673,7 @@ def test_the_none_rule_names_the_tables_own_columns_and_the_sign_of_amount_is_st
     assert cpos_launch._and_list(("A", "B", "C")) == "A, B and C"
     assert "without a sign when net debt rises and with a minus sign when it falls" in spec.rules
     assert "cash effect" not in spec.rules
-    assert "net leverage or cash" not in cpos_launch.PROSE_PASSAGES
+    assert "net debt, net leverage or cash from Financial foundation" in cpos_launch.VOICE_RULES
 
 
 def test_the_shared_text_names_no_confidence_script_and_separates_the_score_from_claim_labels(

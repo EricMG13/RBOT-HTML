@@ -404,7 +404,7 @@ VOICE_RULES = (
     "follows the sentence rules (no bracket tag, no page locator, no ID).\n"
     "- Keep `## Request` to the issuer, as-of date, pathway and scope, in at most three "
     "sentences.\n"
-    "- When you quote year-end net debt or net leverage from Financial foundation and its "
+    "- When you quote year-end net debt, net leverage or cash from Financial foundation and its "
     "`Post-balance-sheet adjustments` table has a row for an event, state the pro forma figure "
     "beside it, with its unit and the event's date. When the table says none was found, add "
     "nothing. When Financial foundation does not state the pro forma figure, say it is not "
