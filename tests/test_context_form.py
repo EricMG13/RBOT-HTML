@@ -184,8 +184,8 @@ def test_the_design_tokens_are_the_librarys() -> None:
 
 def test_the_stages_are_the_start_pages() -> None:
     assert re.findall(r"'([^']*)'", constant("STAGES")) == [
-        "pathway",
         "documents",
+        "pathway",
         "issuer",
         "legal",
         "market",
@@ -193,6 +193,30 @@ def test_the_stages_are_the_start_pages() -> None:
         "assumptions",
         "review",
     ]
+
+
+def test_the_steps_lay_over_the_stages_in_their_order() -> None:
+    steps = lists("STEPS")
+    assert steps == {
+        "documents": ["documents"],
+        "purpose": ["pathway"],
+        "confirm": ["issuer", "legal"],
+        "more": ["market", "valuation", "assumptions"],
+        "start": ["review"],
+    }
+    stages = re.findall(r"'([^']*)'", constant("STAGES"))
+    assert [
+        g for step in steps.values() for g in step
+    ] == stages  # every group in one step, in order
+    assert re.findall(r"(\w+):'([^']*)'", constant("STEP_NAME")) == [
+        ("documents", "Documents"),
+        ("purpose", "Purpose"),
+        ("confirm", "Confirm"),
+        ("more", "More context"),
+        ("start", "Start"),
+    ]
+    sections = re.findall(r'<section class="run-step" id="st-(\w+)"', FORM)
+    assert sections[: len(stages)] == stages  # the markup follows the same order
 
 
 def test_the_cp3_modes_are_the_contexts() -> None:

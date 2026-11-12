@@ -5,7 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Run context</title>
+<title>Start a run</title>
 <style>
 /* The run context form: writes context.json (schema context/1), read by src/deploy_workflow/context.py;
    build() is the normative rule set, plus the form-only rules marked in it. Adopted 2026-11-10 (owner:
@@ -97,7 +97,8 @@ svg.i{width:16px;height:16px;flex:none}
 .rv-tick input{margin:2px 0 0;flex:none;accent-color:var(--blue)}
 .rv-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 24px;margin:10px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
 .rv-facts dt{font-weight:600;color:var(--text-primary)}.rv-facts dd{margin:0;overflow-wrap:anywhere}
-.run-step>h2 .n{font:500 var(--fs-control)/20px 'Red Hat Mono',monospace;color:var(--text-quaternary)}
+.run-step:not([hidden])~.run-step:not([hidden]){margin-top:32px;padding-top:24px;border-top:1px solid var(--border-secondary)}
+.readiness-pill{align-self:start;margin:16px 18px;padding:6px 12px;border:1px solid var(--border-secondary);border-radius:999px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
 .stepline{margin-top:2px;font-size:var(--fs-compact);line-height:18px;color:var(--text-tertiary)}
 .lead{max-width:68ch;margin:12px 0 4px;font-size:var(--fs-control);line-height:22px;color:var(--text-secondary)}
 .legend-req{margin:8px 0 0;font-size:var(--fs-compact);color:var(--text-quaternary)}
@@ -311,23 +312,39 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 <div class="app">
   <header class="page-head">
     <div>
-      <h1>Run context</h1>
+      <h1>Start a run</h1>
       <p class="scope" id="scope"></p>
     </div>
     <div class="page-actions">
       <button type="button" class="tertiary-action" id="reset">Start over</button>
     </div>
   </header>
-  <nav class="stagebar" aria-label="Stages"><ol class="run-stages" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
+  <nav class="stagebar" aria-label="Steps"><ol class="run-stages" id="stepper"></ol><div class="stepsum"><span id="stepsum-t"></span><div class="prog" aria-hidden="true"><span id="prog-b"></span></div></div></nav>
   <div class="workbench">
   <main id="canvas" tabindex="-1"><div class="canvas-in">
 <div id="loadmsg" role="status" aria-live="polite"></div>
 <div id="steperr" class="run-strip" data-tone="error" role="alert" hidden></div>
 <form id="f" novalidate autocomplete="off">
 
-<!-- 1 Pathway -->
-<section class="run-step" id="st-pathway" data-st="pathway">
-  <h2 tabindex="-1"><span class="n"></span> <span>What do you need from this run?</span></h2>
+<!-- 1 Documents -->
+<section class="run-step" id="st-documents" data-st="documents">
+  <h2 tabindex="-1"><span>Which documents does the issuer have?</span></h2>
+  <p class="stepline"></p>
+  <p class="lead">Pick the issuer's folder, or add files. Each file goes to the start service, which reads it as the run will (offline, no model) and lists what it recognises. The questions that follow are limited by what these documents support.</p>
+  <div class="f" id="docf">
+    <div class="dl">
+      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Choose folder<input type="file" id="pick-folder" webkitdirectory multiple aria-label="Choose the issuer folder"></span>
+      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Add files<input type="file" id="pick-files" multiple aria-label="Add files to the issuer's documents"></span>
+    </div>
+  </div>
+  <div id="docstatus" class="help" role="status" aria-live="polite"></div>
+  <div id="upload-errors" class="run-strip" data-tone="error" role="alert" hidden></div>
+  <div id="docresult" class="docres"></div>
+</section>
+
+<!-- 2 Pathway (the Purpose step) -->
+<section class="run-step" id="st-pathway" data-st="pathway" hidden>
+  <h2 tabindex="-1"><span>What do you need from this run?</span></h2>
   <p class="stepline"></p>
   <p class="lead">Your answer picks the pathway: the modules the run will use, in order. Then choose how much you want to be asked. Every level runs the same modules by the same method; a level only changes which questions you answer and which take their defaults.</p>
   <p class="legend-req"><span class="req">*</span> Required. Your answers are kept in this browser until you start the run; the documents go to the start service on this machine.</p>
@@ -353,25 +370,9 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <div class="run-strip" data-tone="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">A run cannot be corrected once it starts</span><p class="strip-text">If the context changes, every module runs again: a resumed run refuses changed context. The cheapest fix is the right pathway now.</p></div></div>
 </section>
 
-<!-- 2 Documents -->
-<section class="run-step" id="st-documents" data-st="documents" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Which documents does the issuer have?</span></h2>
-  <p class="stepline"></p>
-  <p class="lead">Pick the issuer's folder, or add files. Each file goes to the start service, which reads it as the run will (offline, no model) and lists what it recognises. The questions that follow are limited by what these documents support.</p>
-  <div class="f" id="docf">
-    <div class="dl">
-      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Choose folder<input type="file" id="pick-folder" webkitdirectory multiple aria-label="Choose the issuer folder"></span>
-      <span class="secondary-action sm file-action"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Add files<input type="file" id="pick-files" multiple aria-label="Add files to the issuer's documents"></span>
-    </div>
-  </div>
-  <div id="docstatus" class="help" role="status" aria-live="polite"></div>
-  <div id="upload-errors" class="run-strip" data-tone="error" role="alert" hidden></div>
-  <div id="docresult" class="docres"></div>
-</section>
-
 <!-- 3 Issuer and dates -->
 <section class="run-step" id="st-issuer" data-st="issuer" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Who is the issuer, and as of when?</span></h2>
+  <h2 tabindex="-1"><span>Who is the issuer, and as of when?</span></h2>
   <p class="stepline"></p>
   <p class="lead">Each module's answer must name the issuer, one of its other names or its ID. Source readiness stops the run when it cannot tell whose files these are. The as-of date is the day the analysis stands on: evidence published after it counts as not yet available.</p>
   <div class="grid">
@@ -412,7 +413,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
 <!-- 4 Legal -->
 <section class="run-step" id="st-legal" data-st="legal" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Which file is the governing agreement?</span></h2>
+  <h2 tabindex="-1"><span>Which file is the governing agreement?</span></h2>
   <p class="stepline"></p>
   <p class="lead">An agreement is something you point to, not something you declare. Choose the uploaded file that is the credit agreement or indenture, or say there is none. The service's reading of that file is kept: where you and the reading disagree, the run is told so and the disagreement is listed as a limit.</p>
   <div class="chk" data-chk="legal">
@@ -424,7 +425,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
 <!-- 5 Market -->
 <section class="run-step" id="st-market" data-st="market" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Deal terms, quotes and ratings</span></h2>
+  <h2 tabindex="-1"><span>Deal terms, quotes and ratings</span></h2>
   <p class="stepline"></p>
   <p class="lead">Market inputs the filings do not hold. Each part says which module in this run reads it, and what it does without it.</p>
   <div class="block" id="b-deal">
@@ -452,7 +453,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
 <!-- 6 Valuation -->
 <section class="run-step" id="st-valuation" data-st="valuation" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Peers and valuation</span></h2>
+  <h2 tabindex="-1"><span>Peers and valuation</span></h2>
   <p class="stepline"></p>
   <p class="lead" id="vallead"></p>
   <fieldset id="psf"><legend>Where do peer figures come from?</legend><div data-cards="peer_source" data-class="two"></div></fieldset>
@@ -498,7 +499,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
 <!-- 7 Assumptions and questions -->
 <section class="run-step" id="st-assumptions" data-st="assumptions" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Assumptions and questions</span></h2>
+  <h2 tabindex="-1"><span>Assumptions and questions</span></h2>
   <p class="stepline"></p>
   <p class="lead" id="asmlead"></p>
   <div class="block" id="b-questions">
@@ -513,7 +514,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 
 <!-- 8 Review -->
 <section class="run-step" id="st-review" data-st="review" hidden>
-  <h2 tabindex="-1"><span class="n"></span> <span>Summary and start</span></h2>
+  <h2 tabindex="-1"><span>Summary and start</span></h2>
   <p class="stepline"></p>
   <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
   <div id="rv-state" role="status" aria-live="polite"></div>
@@ -531,7 +532,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 </section>
 </form>
 <div class="step-actions">
-  <button type="button" class="secondary-action" id="back"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back</button>
+  <button type="button" class="secondary-action" id="back"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span id="back-t">Back</span></button>
   <span id="nextlive" class="live" role="status" aria-live="polite"></span>
   <button type="button" class="primary-action" id="next"><span id="next-t">Next</span><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
 </div>
@@ -553,6 +554,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 </section>
 </div></main>
 
+<p class="readiness-pill" id="panel-pill" hidden>Run readiness · appears once a purpose is chosen</p>
 <details class="inspector" id="panel">
   <summary><span>Run readiness</span> <span id="pn-sum"></span></summary>
   <div class="inspector-bar">
@@ -1323,17 +1325,24 @@ function readiness(o) {
 }
 
 /* ======================================================================= Stages */
-const STAGES = ['pathway', 'documents', 'issuer', 'legal', 'market', 'valuation', 'assumptions', 'review'];
-const SHORT = {pathway:'Pathway', documents:'Documents', issuer:'Issuer and dates', legal:'Legal', market:'Market', valuation:'Valuation', assumptions:'Assumptions', review:'Summary and start'};
+// The groups: the page's eight sections, in the order they are asked. A step shows the groups of the step map that the run needs.
+const STAGES = ['documents', 'pathway', 'issuer', 'legal', 'market', 'valuation', 'assumptions', 'review'];
+const SHORT = {pathway:'Purpose', documents:'Documents', issuer:'Issuer and dates', legal:'Legal', market:'Market', valuation:'Valuation', assumptions:'Assumptions', review:'Start'};
+const STEPS = {documents: ['documents'], purpose: ['pathway'], confirm: ['issuer', 'legal'], more: ['market', 'valuation', 'assumptions'], start: ['review']};
+const STEP_IDS = Object.keys(STEPS);
+const STEP_NAME = {documents:'Documents', purpose:'Purpose', confirm:'Confirm', more:'More context', start:'Start'};
+const NEXT_LABEL = {purpose:'Choose the purpose', confirm:'Confirm the details', more:'More context', start:'Review and start'};
+const FIRST_STEP = STEP_IDS[0];
+const stepOf = group => STEP_IDS.find(s => STEPS[s].includes(group));
 const BLOCK_USES = {deal:['CP-3'], quote:['CP-3','CP-3D'], rating:['CP-2H'], cp3mode:['CP-3'], cp6:['CP-6']};
 // How much is asked: Basic the first four stages, Standard adds market, valuation and questions, Advanced everything.
 const RANK = {basic:0, standard:1, advanced:2};
-const LEVEL_NOTE = {basic:'Pathway, documents, issuer and the legal file. Everything else takes its default.',
+const LEVEL_NOTE = {basic:'Documents, the purpose, the issuer and the legal file. Everything else takes its default.',
   standard:'Adds market inputs, peers and module settings, and your research questions. Pinned assumptions, valuation basis and your own multiple take their defaults.',
   advanced:'Everything, including pinned assumptions, the valuation basis, deal terms, guarantors, aliases, the sponsor, which modules run and how many turns each may take.'};
 let LEVEL = 'basic';
-let cur = 'pathway', tried = {}, loadedNotes = false;
-const visited = new Set(['pathway']);
+let cur = FIRST_STEP, curGroup = '', tried = {}, loadedNotes = false; // cur is a step; curGroup is the group a button asked for
+const visited = new Set([FIRST_STEP]);
 function marketBlocks(o) {
   const has = m => runOf(o.run.pathway).includes(m);
   return {deal: o.run.run_type === 'primary' || has('CP-3') || o.deal_terms.length > 0,
@@ -1342,13 +1351,13 @@ function marketBlocks(o) {
 }
 const asmShown = o => Object.keys(ASM_MODULE).filter(k => runOf(o.run.pathway).includes(ASM_MODULE[k]) || o.assumptions[k]);
 const valuationNeeded = o => ['CP-1C', 'CP-4C'].some(m => runOf(o.run.pathway).includes(m));
-// The stages this run needs at this level. A stage the level does not ask is left out, unless it holds an
-// answer or a problem (so nothing loaded or chosen is ever hidden) or it is the stage on screen.
+// The groups this run needs at this level. A group the level does not ask is left out, unless it holds an
+// answer or a problem (so nothing loaded or chosen is ever hidden) or it is the group a button asked for.
 function seqFor(o) {
   const errIn = st => errs.some(e => e.st === st), mb = marketBlocks(o), v = o.valuation, mo = o.module_options || {};
   const has = m => runOf(o.run.pathway).includes(m), lvl = RANK[LEVEL];
   return STAGES.filter(st => {
-    if (st === cur || errIn(st)) return true;
+    if (st === curGroup || errIn(st)) return true;
     switch (st) {
       case 'legal': return readiness(o).counted.some(x => x.go === 'legal') || has('CP-4') || has('CP-2A') || has('CP-4C') || o.attachments.legal_documents !== 'none' || !!getC('legalfile');
       case 'market': return o.run.run_type === 'primary' || o.deal_terms.length + o.quotes.length + o.ratings.length > 0 || (lvl >= 1 && (mb.deal || mb.quote || mb.rating));
@@ -1359,22 +1368,29 @@ function seqFor(o) {
     }
   });
 }
-const stepBad = st => errs.some(e => e.st === st);
-function optionalStage(st, o) {
-  if (st === 'market') return o.run.run_type !== 'primary';
-  if (st === 'valuation') return !['issuer_trading', 'user_multiple'].includes(o.valuation.basis);
-  return st === 'assumptions';
+// The steps the shown groups make, and the groups of a step that are shown.
+const stepsFor = gs => STEP_IDS.filter(s => STEPS[s].some(g => gs.includes(g)));
+const groupsOf = (step, gs) => STEPS[step].filter(g => gs.includes(g));
+const groupBad = g => errs.some(e => e.st === g);
+const stepBad = step => STEPS[step].some(groupBad);
+function optionalGroup(g, o) {
+  if (g === 'market') return o.run.run_type !== 'primary';
+  if (g === 'valuation') return !['issuer_trading', 'user_multiple'].includes(o.valuation.basis);
+  return g === 'assumptions';
 }
-function entered(st, o) {
+function enteredGroup(g, o) {
   return {market: o.deal_terms.length + o.quotes.length + o.ratings.length > 0, valuation: o.valuation.peers.length + o.valuation.precedents.length > 0 || !!o.module_options,
-    assumptions: Object.values(o.assumptions).some(Boolean) || o.research_questions.length > 0}[st] || false;
+    assumptions: Object.values(o.assumptions).some(Boolean) || o.research_questions.length > 0}[g] || false;
 }
-function stepState(st, sq, o) {
+// A step is optional when every group it shows is; it is entered when any of them holds an answer.
+const optionalStep = (step, gs, o) => groupsOf(step, gs).every(g => optionalGroup(g, o));
+const enteredStep = (step, gs, o) => groupsOf(step, gs).some(g => enteredGroup(g, o));
+function stepState(st, sq, o, gs) {
   if (st === cur) return {word:'Current', locked:false};
   if (sq.slice(0, sq.indexOf(st)).some(stepBad)) return {word:'Locked', locked:true};
-  if (st === 'review') return {word:'Ready', locked:false};
+  if (st === 'start') return {word:'Ready', locked:false};
   if (stepBad(st)) return {word: visited.has(st) ? 'Needs attention' : 'To do', locked:false};
-  if (!visited.has(st)) return {word: optionalStage(st, o) ? 'Optional' : 'To do', locked:false};
+  if (!visited.has(st)) return {word: optionalStep(st, gs, o) ? 'Optional' : 'To do', locked:false};
   return {word:'Done', locked:false};
 }
 function stepLine(st, o) {
@@ -1390,7 +1406,7 @@ function stepLine(st, o) {
     default: return 'Nothing to fill in: read, accept each limit, approve, submit once';
   }
 }
-function renderSteps(sq, o) {
+function renderSteps(sq, o, gs) {
   const ol = $('stepper');
   document.querySelectorAll('section.run-step').forEach(x => { x.hidden = true; });
   if (ol.dataset.seq !== sq.join(',')) {
@@ -1405,56 +1421,59 @@ function renderSteps(sq, o) {
     });
   }
   sq.forEach((st, i) => {
-    const s = stepState(st, sq, o), b = ol.children[i].firstChild;
+    const s = stepState(st, sq, o, gs), b = ol.children[i].firstChild;
     b.className = s.word.toLowerCase().replace(/ /g, '-');
     if (st === cur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
     if (s.locked) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
-    b.children[0].textContent = SHORT[st];
+    b.children[0].textContent = STEP_NAME[st];
     b.children[1].textContent = s.word === 'Current' ? 'In progress' : s.word;
-    const sec = $('st-' + st);
-    sec.hidden = st !== cur;
-    sec.querySelector('.n').textContent = i + 1;
-    sec.querySelector('.stepline').textContent = stepLine(st, o);
   });
+  gs.forEach(g => { $('st-' + g).querySelector('.stepline').textContent = stepLine(g, o); });
+  groupsOf(cur, gs).forEach(g => { $('st-' + g).hidden = false; });
   const pos = sq.indexOf(cur) + 1;
-  $('stepsum-t').textContent = `Stage ${pos} of ${sq.length} · ${SHORT[cur]}`;
+  $('stepsum-t').textContent = `Step ${pos} of ${sq.length} · ${STEP_NAME[cur]}`;
   $('prog-b').style.width = (pos / sq.length * 100) + '%';
 }
-function renderNav(sq, o) {
+function renderNav(sq, o, gs) {
   const i = sq.indexOf(cur), nx = $('next');
   $('back').hidden = i === 0;
-  nx.hidden = cur === 'review';
-  $('nextlive').hidden = cur === 'review';
-  $('next-t').textContent = sq[i + 1] === 'review' ? 'Summary and start' : optionalStage(cur, o) && !entered(cur, o) ? 'Skip' : 'Next';
-  const mine = errs.filter(e => e.st === cur);
+  $('back-t').textContent = i > 0 ? STEP_NAME[sq[i - 1]] : 'Back';
+  nx.hidden = cur === 'start';
+  $('nextlive').hidden = cur === 'start';
+  $('next-t').textContent = sq[i + 1] !== 'start' && optionalStep(cur, gs, o) && !enteredStep(cur, gs, o) ? 'Skip' : NEXT_LABEL[sq[i + 1]] || 'Next';
+  const mine = errs.filter(e => STEPS[cur].includes(e.st));
   const req = mine.filter(e => /^(required|choose|add |say whether|tick)/.test(e.short)).length, oth = mine.length - req;
-  const nw = warns.filter(w => w.st === cur).length;
+  const nw = warns.filter(w => STEPS[cur].includes(w.st)).length;
   const text = !mine.length ? (nw ? `Ready · ${nw} note${nw > 1 ? 's' : ''} to read` : 'Ready') : [req && `${req} required answer${req > 1 ? 's' : ''} left`, oth && `${oth} to correct`].filter(Boolean).join(', ');
   if ($('nextlive').textContent !== text) $('nextlive').textContent = text;
 }
-function gotoStep(st) {
-  cur = st; visited.add(st);
+// x is a step or a group. A group opens its step and takes the focus; it stays on screen even where the level does not ask it.
+function gotoStep(x) {
+  const group = STAGES.includes(x) ? x : '';
+  cur = group ? stepOf(group) : x; curGroup = group;
+  visited.add(cur);
   update();
-  $('st-' + st).querySelector('h2').focus();
+  $('st-' + (group || STEPS[cur].find(g => !$('st-' + g).hidden) || STEPS[cur][0])).querySelector('h2').focus();
   $('canvas').scrollTop = 0;
   window.scrollTo(0, 0);
 }
 function goNext() {
-  const o = update(), sq = seqFor(o);
+  const o = update(), sq = stepsFor(seqFor(o));
   if (stepBad(cur)) {
-    tried[cur] = true;
+    STEPS[cur].forEach(g => { tried[g] = true; });
     update();
-    const first = errs.find(e => e.st === cur);
+    const first = errs.find(e => STEPS[cur].includes(e.st));
     if (first) go(first.el.id);
     return;
   }
-  tried[cur] = true;
+  STEPS[cur].forEach(g => { tried[g] = true; });
   gotoStep(sq[sq.indexOf(cur) + 1]);
 }
-function goBack() { const sq = seqFor(update()); gotoStep(sq[sq.indexOf(cur) - 1]); }
+function goBack() { const sq = stepsFor(seqFor(update())); gotoStep(sq[sq.indexOf(cur) - 1]); }
 function go(id) {
   const el = $(id);
   if (!el) return;
+  if (!STEPS[cur].includes(stOf(el))) gotoStep(stOf(el)); // an error in a step not on screen: open it first
   let d = el.closest('details');
   while (d) { d.open = true; d = d.parentElement.closest('details'); }
   el.scrollIntoView({block:'center'});
@@ -1499,8 +1518,8 @@ function showMessages() {
     p.lastChild.append(w.short.charAt(0).toUpperCase() === w.short.charAt(0) ? w.short : nameOf(w.el) + ' ' + w.short);
     attach(w.el, p, false);
   });
-  const mine = errs.filter(e => e.st === cur), box = $('steperr');
-  box.hidden = !(tried[cur] && mine.length);
+  const mine = errs.filter(e => STEPS[cur].includes(e.st)), box = $('steperr');
+  box.hidden = !(STEPS[cur].some(g => tried[g]) && mine.length);
   const key = box.hidden ? '' : cur + '|' + mine.map(e => e.el.id + e.msg).join('|');
   if (key !== box._key) {
     box._key = key;
@@ -1591,7 +1610,7 @@ function tally(R) {
 }
 function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
 function renderPanel(o, R) {
-  setHTML($('scope'), esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`));
+  setHTML($('scope'), visited.has('purpose') ? esc(`${PATHS[o.run.pathway].label} · ${RUN_LABEL[o.run.run_type] || ''} · ${R.mods.length} modules`) : '');
   setHTML($('pn-run'), `${R.mods.length} modules, in the order they run. Updates as you answer.`);
   setHTML($('pn-tally'), tally(R));
   setHTML($('pn-runrow'), R.run.length ? `<div class="runrow"><b>Whole run</b><ul>${R.run.map(x => `<li>${esc(named(x.reason))}</li>`).join('')}</ul></div>` : '');
@@ -1699,7 +1718,7 @@ async function requestSummary(key) {
 function syncSummary() {
   const key = summaryKey();
   if (SUMMARY && SUMMARY.key !== key) { SUMMARY = null; RENDERED = null; $('approve').checked = false; }
-  if (cur === 'review' && !SUMMARY && !SUMMARY_BUSY && SUB && !errs.length) requestSummary(key);
+  if (cur === 'start' && !SUMMARY && !SUMMARY_BUSY && SUB && !errs.length) requestSummary(key);
 }
 const summaryOk = () => !!(SUMMARY && !SUMMARY.error && SUMMARY.digest);
 const tickBoxes = () => [...document.querySelectorAll('#rv-ready [data-tick]')];
@@ -1846,7 +1865,7 @@ function renderReview(sq, o) {
     ed.setAttribute('aria-label', 'Edit ' + SHORT[st]);
     dt.appendChild(ed);
     const lines = summaryLines(st, o).filter(Boolean);
-    if (stepBad(st)) { const p = document.createElement('p'); p.className = 'err'; p.innerHTML = icon('circle-alert') + '<span>Needs attention</span>'; dd.appendChild(p); }
+    if (groupBad(st)) { const p = document.createElement('p'); p.className = 'err'; p.innerHTML = icon('circle-alert') + '<span>Needs attention</span>'; dd.appendChild(p); }
     if (!lines.length) { const p = document.createElement('p'); p.className = 'nil'; p.textContent = 'Nothing entered (optional)'; dd.appendChild(p); }
     else { const ul = document.createElement('ul'); lines.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }); dd.appendChild(ul); }
     warns.filter(w => w.st === st).forEach(w => { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = icon('triangle-alert') + '<span></span>'; p.lastChild.textContent = w.msg; dd.appendChild(p); });
@@ -1883,7 +1902,7 @@ async function submitRun() {
 }
 /* ----- The run's progress (GET /api/runs/<id>), every 10 seconds until the run has ended */
 let pollTimer = 0;
-const FORM_PARTS = () => [$('f'), document.querySelector('.stagebar'), document.querySelector('.step-actions'), $('panel'), $('steperr'), $('loadmsg')];
+const FORM_PARTS = () => [$('f'), document.querySelector('.stagebar'), document.querySelector('.step-actions'), $('panel'), $('panel-pill'), $('steperr'), $('loadmsg')];
 function showProgress() {
   FORM_PARTS().forEach(el => { el.hidden = true; });
   $('run-progress').hidden = false;
@@ -2529,17 +2548,19 @@ function update() {
   const o = build();
   advise(o);
   const sq = seqFor(o);
-  if (!sq.includes(cur)) cur = 'pathway';
+  const steps = stepsFor(sq);
+  if (!steps.includes(cur)) { cur = FIRST_STEP; curGroup = ''; }
   applyTags(o);
   showMessages();
-  renderSteps(sq, o);
-  renderNav(sq, o);
+  renderSteps(steps, o, sq);
+  renderNav(steps, o, sq);
   const R = readiness(o);
   renderPanel(o, R);
-  $('panel').hidden = cur === 'review';
+  $('panel').hidden = cur === 'start' || cur === FIRST_STEP;
+  $('panel-pill').hidden = cur !== FIRST_STEP;
   syncSummary();
   if (RENDERED && RENDERED === SUMMARY && RENDERED_KEY !== pageKey(o)) { RENDERED = null; $('approve').checked = false; } // a page rule changed: rebuild, untick, unapprove
-  if (cur === 'review') renderReview(sq, o);
+  if (cur === 'start') renderReview(sq, o);
   syncApproval();
   renderMarks();
   save(o);
@@ -2678,7 +2699,7 @@ function resetAll() {
   for (const k in ROWS) $(ROWS[k].box).innerHTML = '';
   document.querySelectorAll('[data-touched]').forEach(e => delete e.dataset.touched);
   $('moreid').open = false;
-  visited.clear(); visited.add('pathway'); tried = {}; cur = 'pathway'; loadedNotes = false;
+  visited.clear(); visited.add(FIRST_STEP); tried = {}; cur = FIRST_STEP; curGroup = ''; loadedNotes = false;
   rtTouched = basisTouched = idTouched = cutTouched = newestTouched = false;
   SKIPPED.clear();
   renderModules(runOf(getV($('st-pathway'), 'pathway')));
@@ -2779,7 +2800,7 @@ function startAgain() {
   CARRIED.run = ''; CARRIED.files = new Set(); CARRIED.fields = new Set(); CARRIED.locked = false; LOCKED_ID = '';
   renderFailed(); renderDocs(); renderFileSelects(); say('');
   forget();
-  gotoStep('pathway'); loadMsg('Started again.', false);
+  gotoStep(FIRST_STEP); loadMsg('Started again.', false);
 }
 $('reset').addEventListener('click', () => {
   if (!window.confirm(RUN ? 'Leave this run and start a new one?' : 'Clear every answer and start again?')) return;

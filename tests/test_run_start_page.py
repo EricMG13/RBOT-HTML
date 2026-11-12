@@ -228,58 +228,175 @@ def page_with_launcher(
         yield start
 
 
-def test_basic_shows_five_stages_and_standard_and_advanced_add_theirs(page):
+def test_the_steps_each_pathway_shows_at_each_level(page):
+    # Expected sequences are written out from the stage map (group table) and the step map
+    # documents / purpose / confirm (issuer, legal) / more (market, valuation, assumptions) / start.
     seen = page.run("""
     const out = {};
+    for (const pathway of ['credit_snapshot', 'earnings_update', 'relative_value',
+        'covenant_refinancing', 'distressed_restructuring', 'portfolio_decision',
+        'short_snapshot']) {
+      pick('data-k="pathway"', pathway);
+      out[pathway] = {};
+      for (const l of ['basic', 'standard', 'advanced']) { level(l); out[pathway][l] = stages(); }
+    }
     pick('data-k="pathway"', 'credit_snapshot');
-    level('basic'); out.basic = stages();
-    level('standard'); out.standard = stages();
-    level('advanced'); out.advanced = stages();
-    out.subset = {advanced: !document.getElementById('adv-run').hidden};
+    level('advanced'); out.subset = {advanced: !document.getElementById('adv-run').hidden};
     level('basic'); out.subset.basic = !document.getElementById('adv-run').hidden;
-    pick('data-k="pathway"', 'relative_value');
-    level('basic'); out.rvBasic = stages();
-    level('standard'); out.rvStandard = stages();
-    pick('data-k="pathway"', 'covenant_refinancing');
-    level('standard'); out.covStandard = stages();
-    level('advanced'); out.covAdvanced = stages();
     return out;
     """)
-    five = ["pathway", "documents", "issuer", "legal", "review"]
-    assert seen["basic"] == five
+    four = ["documents", "purpose", "confirm", "start"]
+    five = ["documents", "purpose", "confirm", "more", "start"]
     # CP-DR is in every pathway (owner, 2026-11-11): its research questions are asked from Standard.
-    assert seen["standard"] == [
-        "pathway",
-        "documents",
-        "issuer",
-        "legal",
-        "market",
-        "valuation",
-        "assumptions",
-        "review",
-    ]
-    assert seen["advanced"] == seen["standard"]
+    expected = {
+        "credit_snapshot": {"basic": four, "standard": five, "advanced": five},
+        "earnings_update": {"basic": four, "standard": five, "advanced": five},
+        "relative_value": {"basic": four, "standard": five, "advanced": five},
+        "covenant_refinancing": {"basic": four, "standard": five, "advanced": five},
+        "distressed_restructuring": {"basic": four, "standard": five, "advanced": five},
+        "portfolio_decision": {"basic": four, "standard": five, "advanced": five},
+        "short_snapshot": {"basic": four, "standard": four, "advanced": four},
+    }
+    for pathway, levels in expected.items():
+        assert seen[pathway] == levels, pathway
     assert seen["subset"] == {"advanced": True, "basic": False}  # module subset and turns
-    # Research questions come from Standard; pinned assumptions from Advanced.
-    assert seen["rvBasic"] == ["pathway", "documents", "issuer", "review"]
-    assert seen["rvStandard"] == [
-        "pathway",
-        "documents",
-        "issuer",
-        "market",
-        "valuation",
-        "assumptions",
-        "review",
-    ]
-    assert seen["covStandard"] == [*five[:-1], "assumptions", "review"]  # CP-DR: research questions
-    assert seen["covAdvanced"] == [
-        "pathway",
-        "documents",
-        "issuer",
-        "legal",
-        "assumptions",
-        "review",
-    ]
+
+
+def test_more_context_shows_at_basic_for_a_primary_run_only(page):
+    seen = page.run("""
+    pick('data-k="pathway"', 'relative_value');
+    level('basic');
+    pick('data-k="run_type"', 'secondary'); const secondary = stages();
+    pick('data-k="run_type"', 'primary'); const primary = stages();
+    gotoStep('more');
+    return {secondary, primary, groups: ['market', 'valuation', 'assumptions']
+      .filter(g => !$('st-' + g).hidden), cur};
+    """)
+    assert seen["secondary"] == ["documents", "purpose", "confirm", "start"]
+    assert seen["primary"] == ["documents", "purpose", "confirm", "more", "start"]
+    assert seen["cur"] == "more" and seen["groups"] == ["market"]  # a primary run needs a facility
+
+
+def test_purpose_and_the_later_steps_are_locked_until_a_file_is_read(page):
+    seen = page.run(f"""
+    const states = () => Object.fromEntries([...document.querySelectorAll('#stepper button')]
+      .map(b => [b.dataset.step, b.getAttribute('aria-disabled') === 'true']));
+    const out = {{before: states(),
+      current: document.querySelector('#stepper [aria-current]').dataset.step}};
+    document.querySelector('#stepper [data-step="purpose"]').click();
+    out.clicked = cur;
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    out.after = states();
+    document.querySelector('#stepper [data-step="purpose"]').click();
+    out.opened = cur;
+    return out;
+    """)
+    assert seen["current"] == "documents" and seen["clicked"] == "documents"
+    assert seen["before"] == {"documents": False, "purpose": True, "confirm": True, "start": True}
+    # Confirm opens; Start stays locked while the issuer's required answers are missing.
+    assert seen["after"] == {"documents": False, "purpose": False, "confirm": False, "start": True}
+    assert seen["opened"] == "purpose"
+
+
+def test_an_error_in_the_legal_group_marks_confirm_and_its_link_opens_it(page):
+    seen = page.run(f"""
+    await issuer('credit_snapshot', [file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
+    gotoStep('confirm');
+    choose('legal-file', 'credit-agreement.txt'); pick('data-k="legal_documents"', 'executed');
+    gotoStep('purpose');
+    // vis() resets an executed answer whose file was cleared, so no real edit leaves this error
+    // standing; the rule is still the page's, so hold the reset off to see how a step shows it.
+    setRadio = () => {{}};
+    $('legal-file').value = '';
+    update();
+    const out = {{cur, legalOnScreen: !$('st-legal').hidden, errs: errs.map(e => e.st)}};
+    out.states = Object.fromEntries([...document.querySelectorAll('#stepper button')]
+      .map(b => [b.dataset.step,
+        [b.querySelector('.sstate').textContent, b.getAttribute('aria-disabled')]]));
+    document.querySelector('#stepper [data-step="confirm"]').click();
+    out.confirm = {{cur, legal: !$('st-legal').hidden, issuer: !$('st-issuer').hidden}};
+    $('next').click();
+    const link = document.querySelector('#steperr [data-go]');
+    out.link = link && [link.textContent, link.dataset.go === errs[0].el.id, errs[0].el.dataset.k];
+    return out;
+    """)
+    assert seen["cur"] == "purpose" and seen["legalOnScreen"] is False
+    assert seen["errs"] == ["legal"]
+    assert seen["states"]["confirm"][0] == "Needs attention"
+    assert seen["states"]["start"] == ["Locked", "true"]
+    assert seen["confirm"] == {"cur": "confirm", "legal": True, "issuer": True}
+    assert seen["link"][1:] == [True, "legal_documents"]
+    assert "choose the uploaded file" in seen["link"][0]
+
+
+def test_an_error_link_to_a_step_not_on_screen_opens_it_and_focuses_the_field(page):
+    seen = page.run(f"""
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    gotoStep('purpose');
+    const field = $('i-issuer_name');
+    const out = {{errs: errs.some(e => e.el === field), before: cur}};
+    go(field.id);
+    out.after = {{cur, focus: document.activeElement.id, confirm: !$('st-issuer').hidden}};
+    return out;
+    """)
+    assert seen["errs"] is True and seen["before"] == "purpose"
+    assert seen["after"] == {"cur": "confirm", "focus": "i-issuer_name", "confirm": True}
+
+
+def test_the_first_screen_is_documents_with_the_pill_and_purpose_shows_the_panel(page):
+    seen = page.run(f"""
+    const state = () => ({{cur, panel: !$('panel').hidden, pill: !$('panel-pill').hidden,
+      scope: $('scope').textContent, pillText: $('panel-pill').textContent,
+      first: [...document.querySelectorAll('section.run-step')].find(x => !x.hidden).dataset.st}});
+    const out = {{documents: state()}};
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    out.read = state();
+    gotoStep('purpose'); out.purpose = state();
+    gotoStep('start'); out.start = state();
+    return out;
+    """)
+    assert seen["documents"]["first"] == "documents" and seen["documents"]["cur"] == "documents"
+    assert seen["documents"]["panel"] is False and seen["documents"]["pill"] is True
+    assert seen["documents"]["pillText"] == "Run readiness · appears once a purpose is chosen"
+    assert seen["documents"]["scope"] == "" and seen["read"]["scope"] == ""
+    assert seen["purpose"]["panel"] is True and seen["purpose"]["pill"] is False
+    assert "Credit Snapshot" in seen["purpose"]["scope"] and "modules" in seen["purpose"]["scope"]
+    assert seen["start"]["panel"] is False and seen["start"]["pill"] is False
+
+
+def test_a_group_or_its_step_opens_the_same_groups(page):
+    seen = page.run("""
+    pick('data-k="pathway"', 'credit_snapshot');
+    const on = () => [...document.querySelectorAll('section.run-step')].filter(x => !x.hidden)
+      .map(x => x.dataset.st);
+    const focus = () => document.activeElement.closest('section').dataset.st;
+    gotoStep('legal'); const byGroup = {cur, on: on(), focus: focus()};
+    gotoStep('purpose');
+    gotoStep('confirm'); const byStep = {cur, on: on(), focus: focus()};
+    return {byGroup, byStep};
+    """)
+    assert seen["byGroup"] == {"cur": "confirm", "on": ["issuer", "legal"], "focus": "legal"}
+    assert seen["byStep"] == {"cur": "confirm", "on": ["issuer", "legal"], "focus": "issuer"}
+
+
+def test_the_step_names_and_buttons_name_the_next_and_previous_step(page):
+    seen = page.run(f"""
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    const out = {{names: [...document.querySelectorAll('#stepper .nm')].map(x => x.textContent),
+      sum: $('stepsum-t').textContent, back: $('back').hidden, next: $('next-t').textContent}};
+    gotoStep('purpose');
+    out.purpose = [$('stepsum-t').textContent, $('back-t').textContent, $('next-t').textContent];
+    gotoStep('confirm'); out.confirm = [$('back-t').textContent, $('next-t').textContent];
+    gotoStep('start'); out.start = [$('back-t').textContent, $('next').hidden];
+    out.label = document.querySelector('.stagebar').getAttribute('aria-label');
+    return out;
+    """)
+    assert seen["names"] == ["Documents", "Purpose", "Confirm", "Start"]
+    assert seen["sum"] == "Step 1 of 4 · Documents" and seen["back"] is True
+    assert seen["next"] == "Choose the purpose"
+    assert seen["purpose"] == ["Step 2 of 4 · Purpose", "Documents", "Confirm the details"]
+    assert seen["confirm"] == ["Purpose", "Review and start"]
+    assert seen["start"] == ["Confirm", True] and seen["label"] == "Steps"
 
 
 def test_executed_cannot_be_chosen_until_an_uploaded_file_is_selected(page):
@@ -378,7 +495,8 @@ def test_an_empty_file_is_the_launchers_refusal_and_blocks_the_later_stages(page
     assert "blank.txt" in seen["refusal"] and seen["blocked"]
     assert seen["rows"] == 0  # No reading while the folder is refused.
     states = {step: text for step, text in seen["sq"]}
-    assert "Locked" in states["issuer"]
+    assert "Locked" in states["purpose"] and "Locked" in states["confirm"]
+    assert "Locked" not in states["documents"]
 
 
 def test_the_three_levels_build_the_same_context_for_the_same_answers(page):
@@ -460,14 +578,15 @@ def test_a_reload_keeps_the_answers_and_the_uploaded_files(page):
     return {rows: rows().map(r => r[0]), level: LEVEL, name: build().identity.issuer_name,
       asOf: build().run.as_of, legalFile: document.getElementById('legal-file').value,
       legal: build().attachments.legal_documents, newest: document.getElementById('d-newest').value,
-      stages: stages()};
+      stages: stages(), cur};
     """)
     assert second["rows"] == ["annual.txt", "credit-agreement.txt"]
     assert second["level"] == "standard" and second["name"] == "Acme Corp"
     assert second["asOf"] == "2026-10-31"
     assert (second["legalFile"], second["legal"]) == ("credit-agreement.txt", "executed")
     assert second["newest"] == "2025-12-31"
-    assert "market" in second["stages"]
+    assert "more" in second["stages"]  # Standard asks for More context
+    assert second["cur"] == "documents"  # a reload lands on the first step, with the answers back
 
 
 def test_removing_a_document_deletes_it_from_the_service_and_keeps_the_answers(page):
@@ -632,9 +751,11 @@ def test_a_limit_that_points_to_the_legal_stage_offers_the_stage(page):
     pick('data-k="pathway"', 'relative_value');
     await uploadFiles([file('credit-agreement.txt', {json.dumps(AGREEMENT)})]);
     const go = readiness(build()).counted.filter(x => x.go === 'legal').length;
-    return {{stages: stages(), go}};"""
+    gotoStep('confirm');
+    return {{stages: stages(), go, legal: !$('st-legal').hidden}};"""
     )
-    assert seen["go"] == 1 and "legal" in seen["stages"]
+    assert seen["go"] == 1 and seen["stages"] == ["documents", "purpose", "confirm", "start"]
+    assert seen["legal"] is True  # the legal group is shown, inside Confirm
 
 
 def test_a_stage_holding_an_answer_is_shown_at_every_level(page):
@@ -657,7 +778,7 @@ def test_a_stage_holding_an_answer_is_shown_at_every_level(page):
     return {stages: stages(), rows: build().quotes.length, errs: errs.map(e => e.st)};
     """)
     assert seen["rows"] == 1 and "market" not in seen["errs"]
-    assert "market" in seen["stages"]
+    assert "more" in seen["stages"]
 
 
 def _records(page):
@@ -826,7 +947,9 @@ def test_basic_lists_its_defaults_and_offers_answer_this_now(page):
     const out = {{S, before, defaults: document.getElementById('rv-defaults').textContent,
       now: button ? [button.dataset.now, button.textContent] : null}};
     button.click();
-    out.after = {{cur, level: LEVEL, stages: stages()}};
+    out.after = {{cur, level: LEVEL, stages: stages(),
+      shown: ['market', 'valuation', 'assumptions'].filter(g => !$('st-' + g).hidden),
+      focus: document.activeElement.closest('section').dataset.st}};
     level('standard');
     gotoStep('review'); await summarised();
     out.standard = document.getElementById('rv-defaults').textContent;
@@ -835,10 +958,19 @@ def test_basic_lists_its_defaults_and_offers_answer_this_now(page):
     """)
     quotes = [i for i in seen["S"]["items"] if i["id"].endswith(":cp3-no-quotes-no-talk")]
     assert quotes and quotes[0]["outcome"] == "gap"  # the fix is in the Market stage
-    assert "market" not in seen["before"]  # which Basic does not ask
+    assert seen["before"] == [
+        "documents",
+        "purpose",
+        "confirm",
+        "start",
+    ]  # Basic asks no More context
     assert seen["now"] == ["market", "Answer this now"]
-    assert seen["after"]["cur"] == "market" and seen["after"]["level"] == "basic"
-    assert "market" in seen["after"]["stages"]
+    assert seen["after"]["cur"] == "more" and seen["after"]["level"] == "basic"
+    assert seen["after"]["stages"] == ["documents", "purpose", "confirm", "more", "start"]
+    assert seen["after"]["shown"] == [
+        "market"
+    ]  # only the group asked for, though Basic does not ask it
+    assert seen["after"]["focus"] == "market"
     for text in ("Peer figures", "Valuation basis", "Automatic", "Quotes", "Ratings", "None"):
         assert text in seen["defaults"], text
     assert "Deep Debate" in seen["defaults"] and "Off" in seen["defaults"]
@@ -965,7 +1097,7 @@ def test_a_refused_digest_returns_to_the_review_with_the_services_text(page):
     """)
     assert "changed after approval" in seen["refusal"]
     assert seen["gate"]["approved"] is False and seen["gate"]["submit"] is True
-    assert seen["hidden"] is True and seen["stage"] == "review"
+    assert seen["hidden"] is True and seen["stage"] == "start"
     assert "run-start/run" not in seen["storage"]
     assert _records(page) == []
 
@@ -1582,7 +1714,7 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
     )
     with urllib.request.urlopen(request, timeout=20) as reply:
         assert reply.status == 200
-        assert "<h1>Run context</h1>" in reply.read().decode("utf-8")
+        assert "<h1>Start a run</h1>" in reply.read().decode("utf-8")
     with urllib.request.urlopen(page.base + "/library/icons/plus.svg", timeout=20) as reply:
         assert reply.status == 200
 
@@ -1590,6 +1722,7 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
 def test_model_and_effort_are_chosen_at_advanced_only_and_default_everywhere_else(page):
     seen = page.run("""
     const sent = () => { const a = answers(); return [a.model, a.effort]; };
+    gotoStep('purpose');  // the Purpose step holds the controls; the first screen is Documents
     const shown = () => ['modelf', 'effortf'].map(id => $(id).offsetParent !== null);
     const out = {basicShown: shown(), basicDefault: sent()};
     level('advanced');
@@ -1656,7 +1789,7 @@ def test_the_claude_refusal_maps_to_the_pathway_stage_and_the_review_offers_the_
     return out;
     """)
     assert seen["stage"] == "pathway"
-    assert seen["goto"] == [["pathway", "Go to Pathway"]]
+    assert seen["goto"] == [["pathway", "Go to Purpose"]]
 
 
 def test_a_draft_saved_at_advanced_restores_the_model_and_effort_and_a_bad_one_the_defaults(page):
@@ -1749,9 +1882,12 @@ def test_from_locks_the_issuer_id_and_carries_the_documents(page_from):
       return {id: $('i-issuer_id').value, locked: $('i-issuer_id').readOnly,
               name: $('i-issuer_name').value,
               rows: rows(), asOf: $('d-as_of').value, run: CARRIED.run,
-              files: [...CARRIED.files], button: !$('unlock-issuer').hidden};""",
+              files: [...CARRIED.files], button: !$('unlock-issuer').hidden,
+              cur, first: [...document.querySelectorAll('section.run-step')]
+                .filter(x => !x.hidden).map(x => x.dataset.st)};""",
         path=f"/?from={run_id}",
     )
+    assert got["cur"] == "documents" and got["first"] == ["documents"]  # lands on the first step
     assert got["id"] == "acme" and got["locked"] is True and got["run"] == run_id
     assert got["name"] == "Acme Corp" and got["button"] is True
     assert got["files"] == ["a.txt"]
