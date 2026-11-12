@@ -527,20 +527,40 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .recovery-group .chart-label small{display:block;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);overflow-wrap:anywhere}
 .recovery-group a.col{color:inherit;text-decoration:none}.recovery-group a.col:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 /* Calendar lanes (package 5): existing tokens only; the span is a ruled band, the day a filled point. */
-.event-lanes .lane-row{display:grid;grid-template-columns:minmax(110px,170px) minmax(0,1fr);gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--rule)}
+.event-lanes{--lane-name:170px}
+.event-lanes .lane-row,.lane-axis,.lane-overlay{display:grid;grid-template-columns:var(--lane-name) minmax(0,1fr);gap:12px}
+.event-lanes .lane-row{align-items:center;padding:8px 0;border-bottom:1px solid var(--rule)}
 .lane-name{font-weight:600;overflow-wrap:anywhere}
 .lane-track{position:relative;display:block;height:28px;margin:0 8px;background:var(--quiet);border-radius:var(--radius-inline)}
-.lane-event{position:absolute;top:6px;height:16px;border-radius:var(--radius-inline)}
-.lane-event.point{width:12px;margin-left:-6px;border-radius:50%;background:var(--blue)}
-.lane-event.span{min-width:4px;background:var(--selection);box-shadow:inset 0 0 0 1px var(--navy)}
+.lane-event{position:absolute;z-index:1;height:16px;border-radius:var(--radius-inline)}
+.lane-no{font:600 11px/1 'Red Hat Mono',monospace;white-space:nowrap}
+.lane-event.span .lane-no{padding:2px 3px;background:var(--selection);border-radius:var(--radius-inline)}
+.lane-plot .lane-gap,.lane-plot .drawing-caption{position:relative;z-index:2;background:white}
+.lane-event.point{display:flex;align-items:center;justify-content:center;width:16px;margin-left:-8px;border-radius:50%;background:var(--blue);color:white}
+.lane-event.span{display:flex;align-items:center;min-width:4px;background:var(--selection);box-shadow:inset 0 0 0 1px var(--navy);color:var(--navy)}
 .lane-event:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 .lane-gap{color:var(--muted)}.lane-gap small{display:block}
-.lane-axis{display:flex;justify-content:space-between;margin:0 8px 0 182px;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
+.lane-plot{position:relative}
+.lane-scale{position:relative;display:block;height:38px;margin:0 8px;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
+.lane-tick-label{position:absolute;top:0;transform:translateX(-50%);line-height:14px;white-space:nowrap}
+.lane-tick{position:absolute;top:16px;height:6px;border-left:1px solid var(--muted)}
+.lane-asof-label{position:absolute;top:24px;line-height:14px;white-space:nowrap;padding-left:5px;color:var(--navy);font-weight:600}
+.lane-asof-label.end{transform:translateX(-100%);padding:0 5px 0 0}
+.lane-overlay{position:absolute;inset:0;pointer-events:none}
+.lane-overlay>span{position:relative;display:block;margin:0 8px}
+.lane-grid{position:absolute;top:38px;bottom:0;border-left:1px solid var(--rule)}
+.lane-asof{position:absolute;top:22px;bottom:0;border-left:2px solid var(--navy)}
+.lane-keys{margin:14px 0 0;font-size:var(--fs-compact)}
+.lane-range{margin:0 0 6px;color:var(--muted);font-size:var(--fs-label)}
+.lane-key-name{font-weight:600;margin:10px 0 2px}
+.lane-key{margin:0;padding-left:28px;column-width:320px;column-gap:24px}
+.lane-key li{break-inside:avoid;padding:1px 0}
+.lane-key-date{font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
 .event-table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:18px;font-size:var(--fs-compact)}
 .event-table caption{text-align:left;font-weight:600;padding-bottom:6px}
 .event-table th,.event-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
-@media(max-width:720px){.event-lanes .lane-row{grid-template-columns:1fr}.lane-axis{margin-left:8px}}
-.lane-event.scenario{border:2px dashed var(--navy);background:var(--quiet);box-shadow:none}
+@media(max-width:720px){.event-lanes .lane-row{grid-template-columns:1fr}.lane-axis{grid-template-columns:1fr}.lane-axis>span:first-child,.lane-overlay{display:none}}
+.lane-event.scenario{border:2px dashed var(--navy);background:var(--quiet);box-shadow:none;color:var(--navy)}
 /* Maps (package 6): existing tokens only; no amber or red. Edge type is a word and a line style, a module's state a word and a shape. */
 .map-card{margin:14px 0}.map-card h2,.map-card h3,.map-card h4{margin:0 0 8px}
 .map-scroll{max-width:100%;overflow-x:auto;background:var(--quiet);border:1px solid var(--rule);border-radius:var(--radius-inline);padding:8px}

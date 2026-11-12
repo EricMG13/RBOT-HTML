@@ -66,4 +66,58 @@ function eventPlace(span, axis) {
   return {left: percent(span.from - axis.start), width: percent(span.to - span.from)};
 }
 
-if (typeof module !== 'undefined') module.exports = {eventTable, eventOrder, orderEvents, eventSpan, eventAxis, eventPlace};
+// Where a UTC day sits on the axis, in the same percent as eventPlace.
+const eventLeft = (day, axis) => eventPlace({from: day, to: day}, axis).left;
+
+// Axis ticks as {day, left, label}. An axis shorter than a year has a tick at each 1st of a month ("Jan 2025" carries its year; the first tick does too);
+// a longer one a tick at each 1 January. Past 12 years only every Nth year (a round N) is labelled; past 40 years only a labelled year has a tick.
+function eventTicks(axis) {
+  if (!axis) return [];
+  const first = new Date(axis.start * DAY_MS), last = new Date(axis.end * DAY_MS);
+  const ticks = [];
+  if (axis.end - axis.start < 365) {
+    for (let at = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1)); at <= last; at = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1))) {
+      const day = at.getTime() / DAY_MS;
+      if (day < axis.start) continue;
+      const month = EVENT_MONTHS[at.getUTCMonth()], name = month[0].toUpperCase() + month.slice(1);
+      ticks.push({day, left: eventLeft(day, axis), label: !ticks.length || at.getUTCMonth() === 0 ? `${name} ${at.getUTCFullYear()}` : name});
+    }
+    return ticks;
+  }
+  const years = [];
+  for (let year = first.getUTCFullYear(); year <= last.getUTCFullYear(); year++) if (utcDay(year, 1, 1) >= axis.start && utcDay(year, 1, 1) <= axis.end) years.push(year);
+  const every = [1, 2, 5, 10, 20, 25, 50, 100].find(n => Math.ceil(years.length / n) <= 12) ?? 100;
+  for (const year of years) {
+    const labelled = year % every === 0 || every === 1;
+    if (labelled || years.length <= 40) ticks.push({day: utcDay(year, 1, 1), left: eventLeft(utcDay(year, 1, 1), axis), label: labelled ? String(year) : null});
+  }
+  return ticks;
+}
+
+// Percent on the axis of an ISO as-of date, or null when it is not a date or lies outside the axis (the ends count as inside).
+function eventAsOf(axis, iso) {
+  const found = axis && /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+  if (!found) return null;
+  const span = eventSpan(iso, 'day');
+  return span && span.from >= axis.start && span.from <= axis.end ? eventLeft(span.from, axis) : null;
+}
+
+// Rows for the drawn items ({span, left, width} as eventPlace gives them), parallel to the input. Nothing is moved sideways: an item whose marker would overlap one already
+// drawn goes up a row instead. Spans are placed first (longest first), so a lone span keeps the baseline and a point over a span sits above it; points follow in date order.
+// A marker is `markPx` wide at least; `trackPx` is the lane width the percentages are read against.
+function eventStack(items, trackPx = 1032, markPx = 16) {
+  const px = percent => percent * trackPx / 100;
+  const room = item => item.span.point ? [px(item.left) - markPx / 2, px(item.left) + markPx / 2] : [px(item.left), px(item.left) + Math.max(px(item.width), markPx)];
+  const order = items.map((item, index) => index).sort((a, b) => (items[a].span.point - items[b].span.point) || (items[a].span.from - items[b].span.from) || (items[b].span.to - items[a].span.to) || a - b);
+  const rows = [], taken = [];
+  for (const index of order) {
+    const [from, to] = room(items[index]);
+    let row = 0;
+    while ((taken[row] || []).some(([start, end]) => from < end && start < to)) row++;
+    (taken[row] ||= []).push([from, to]);
+    rows[index] = row;
+  }
+  return rows;
+}
+
+if (typeof module !== 'undefined') module.exports = {eventTable, eventOrder, orderEvents, eventSpan, eventAxis, eventPlace, eventTicks, eventAsOf, eventStack};

@@ -911,9 +911,9 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const win = { location: more.location, CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
   const eventTimeline = realEventTimeline(esc, rich);
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
   return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -2329,7 +2329,7 @@ const withLanes = d => {
   d[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 312, gap: 'the handoff states no dated event' }];
   return d;
 };
-const markers = html => [...html.matchAll(/class="lane-event (point|span)(?: scenario)?"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?"/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
+const markers = html => [...html.matchAll(/class="lane-event (point|span)(?: scenario)?"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?[;"]/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
 
 test('calendar lanes: one lane per module that supplied events, placed on one axis at each date precision', () => {
   const html = runPage(withLanes).eventLanesView(RUN);
@@ -2351,7 +2351,7 @@ test('calendar lanes: every event is a keyboard-reachable link naming its lane, 
   const marker = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]);
   assert.equal(marker.length, 4);
   assert.ok(marker.every(m => /href="[^"]+"/.test(m) && m.includes('data-evidence=') && m.includes('aria-label=')));
-  assert.ok(marker[1].includes('aria-label="Financing: Call window, 2025-06 (month). View source"') && marker[1].includes(`data-evidence="${outId('CP-1')}:304"`));
+  assert.ok(marker[1].includes('aria-label="Event 3: Financing: Call window, 2025-06 (month). View source"') && marker[1].includes(`data-evidence="${outId('CP-1')}:304"`));
   assert.ok(html.indexOf('class="lane-row"') < html.indexOf('<table class="event-table">'));
   const rows = [...html.split('<tbody>')[1].matchAll(/<tr>(.*?)<\/tr>/gs)].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
   assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Lane', 'Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance']);
@@ -2390,6 +2390,65 @@ test('calendar lanes: a module filter draws only that module lane, and the Sourc
   assert.ok(strip(only).includes('Sources') && !strip(only).includes('Financing'));
   const text = read('views.js');
   assert.ok(text.includes("if(module==='W-Evidence')return evidenceView(context);") && !/if\(module==='W-Evidence'\)return[^\n]*eventLanesView/.test(text), 'the Evidence page is the four lists, no lanes');
+});
+
+// ---- Timeline drawing (2026-11-12 ruling, decision 6): year ticks, an as-of line, stacked points, a numbered key. Every value is synthetic.
+const withDense = d => {
+  d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [
+    laneRow(403, '2022-03-01', 'day', '—', 'First filing', 'Historical — filed'), laneRow(404, '2024-11', 'month', '—', 'Consent window'),
+    laneRow(405, '2024-10-16', 'day', '—', 'Notice issued', 'Historical — filed'), laneRow(406, '2024-10-18', 'day', '—', 'Notice repeated', 'Historical — filed'), laneRow(407, '2025-02-10', 'day', '—', 'Maturity')])])],
+  events: [{ lane: 'Sources', table: 402, gap: null }] });
+  return d;
+};
+const denseHtml = asOf => runPage(withDense, [], m => m, { runFields: { asOf } }).eventLanesView(RUN, { only: outId('CP-0'), compact: true });
+const styleOf = (html, label) => /style="([^"]*)"/.exec([...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]).find(m => m.includes(label)))[1];
+
+test('timeline: a tick at each 1 January on the axis, labelled by year', () => {
+  const axis = denseHtml('2024-09-30').split('class="lane-axis"')[1].split('<div role="group"')[0];
+  // Hand-computed: the axis is 2022-03-01 to 2025-02-10, 1077 days; 1 January 2023, 2024 and 2025 fall 306, 671 and 1037 days in.
+  assert.deepEqual([...axis.matchAll(/class="lane-tick" style="left:([\d.]+)%"/g)].map(m => Number(m[1])), [28.41, 62.3, 96.29]);
+  assert.deepEqual([...axis.matchAll(/class="lane-tick-label"[^>]*>(\d{4})</g)].map(m => m[1]), ['2023', '2024', '2025']);
+});
+
+test('timeline: the as-of date is a labelled line inside the axis (ends included) and is absent outside it', () => {
+  const inside = denseHtml('2024-09-30');
+  assert.equal(countOf(inside, /class="lane-asof" style="left:87\.65%"/g), 1, 'hand-computed: 30 September 2024 is day 944 of 1077');
+  assert.ok(strip(inside).includes('As of 30 September 2024'));
+  assert.ok(/class="lane-asof" style="left:0%"/.test(denseHtml('2022-03-01')) && /class="lane-asof" style="left:100%"/.test(denseHtml('2025-02-10')), 'inclusive at both ends');
+  for (const outside of ['2022-02-28', '2025-02-11', null]) assert.ok(!denseHtml(outside).includes('lane-asof') && !strip(denseHtml(outside)).includes('As of'), String(outside));
+});
+
+test('timeline: two points closer than a marker are stacked at their own x; a far point and a month span stay on the baseline at full length', () => {
+  const html = denseHtml('2024-09-30');
+  const issued = styleOf(html, 'Notice issued'), repeated = styleOf(html, 'Notice repeated');
+  assert.ok(issued.startsWith('left:89.14%') && repeated.startsWith('left:89.32%'), 'x is the stated day, not moved');
+  assert.ok(/bottom:4px/.test(issued) && /bottom:24px/.test(repeated), 'the later date sits one row up');
+  assert.ok(/bottom:4px/.test(styleOf(html, 'First filing')) && /bottom:4px/.test(styleOf(html, 'Maturity')));
+  assert.ok(/^left:90\.62%;width:2\.69%;bottom:4px/.test(styleOf(html, 'Consent window')), 'a month is drawn over its whole length on the baseline');
+  assert.ok(html.includes('class="lane-track" style="height:48px"'), 'the lane grows to hold two rows');
+});
+
+test('timeline: each marker shows a number and names it; the key lists date and description in date order under the lanes', () => {
+  const html = denseHtml('2024-09-30'), tags = [...html.matchAll(/<a class="lane-event[^>]*>.*?<\/a>/g)].map(m => m[0]);
+  const numberOf = label => /<span class="lane-no">(\d+)<\/span>/.exec(tags.find(t => t.includes(label)))[1];
+  assert.deepEqual(['First filing', 'Notice issued', 'Notice repeated', 'Consent window', 'Maturity'].map(numberOf), ['1', '2', '3', '4', '5']);
+  assert.ok(tags.find(t => t.includes('Notice issued')).includes('aria-label="Event 2: Sources: Notice issued, 2024-10-16 (day). View source"'));
+  const key = html.split('<ol class="lane-key"')[1].split('</ol>')[0];
+  assert.deepEqual([...key.matchAll(/<li>(.*?)<\/li>/g)].map(m => strip(m[1]).replace(/\s+/g, ' ').trim()), ['2022-03-01 First filing', '2024-10-16 Notice issued', '2024-10-18 Notice repeated', '2024-11 Consent window', '2025-02-10 Maturity']);
+  assert.ok(html.indexOf('class="lane-key"') > html.indexOf('class="lane-row"'), 'the key follows the lanes');
+});
+
+test('timeline: the key numbers run across lanes and a lane with many events still lists every one', () => {
+  const many = d => {
+    d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Security', 3, 400, 'consumed', [table(402, LANE_HEAD, Array.from({ length: 14 }, (_, i) => laneRow(403 + i, `2024-05-${String(i + 1).padStart(2, '0')}`, 'day', '—', `Item ${i + 1}`)))])], events: [{ lane: 'Security', table: 402, gap: null }] });
+    return withLanes(d);
+  };
+  const html = runPage(many).eventLanesView(RUN);
+  assert.equal(countOf(html, /<span class="lane-no">/g), 18);
+  const keys = html.split('<p class="lane-key-name">').slice(1);
+  assert.deepEqual(keys.map(k => /^([^<]*)</.exec(k)[1]), ['Security', 'Financing']);
+  assert.deepEqual(keys.map(k => /<ol class="lane-key" start="(\d+)"/.exec(k)[1]), ['1', '15']);
+  assert.deepEqual(keys.map(k => countOf(k, /<li>/g)), [14, 4]);
 });
 
 // ---- Package 6 views (2026-11-10): node/edge maps and the run status map. Every value is synthetic.
