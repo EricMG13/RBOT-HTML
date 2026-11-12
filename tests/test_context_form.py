@@ -313,3 +313,31 @@ def test_the_redesigned_markup_keeps_every_sentence_of_the_step_logic_commit() -
     assert set(before) - CHANGED_BY_RULINGS <= page.nodes, sorted(
         set(before) - CHANGED_BY_RULINGS - page.nodes
     )
+
+
+def _rule(selector: str) -> str:
+    """The declarations of the stylesheet's rule for exactly ``selector``."""
+    found = re.search(rf"(?:^|\}}|\n){re.escape(selector)}\{{([^}}]*)\}}", FORM)
+    assert found is not None, f"the stylesheet has no rule for {selector}"
+    return found[1]
+
+
+def test_the_documents_zone_is_a_one_and_a_half_pixel_dashed_border() -> None:
+    """Chrome snaps 1.5px to 1px at 1x, so the browser probe cannot tell the two apart."""
+    assert "border:1.5px dashed #b9bfd0" in _rule(".dropzone")
+
+
+def test_the_canvas_leaves_no_bottom_padding_and_the_last_element_keeps_its_own_space() -> None:
+    assert "padding:28px 32px 0;" in _rule("#canvas") + ";"
+    assert "padding:28px 32px;" not in _rule("#canvas") + ";"
+    assert "padding-bottom:28px" in _rule(".canvas-in")
+
+
+def test_what_submit_does_is_the_one_new_heading_and_holds_the_submit_controls() -> None:
+    card = re.search(r'<aside class="rv-card" id="rv-card"[^>]*>(.*?)</aside>', FORM, re.DOTALL)
+    assert card is not None
+    body = card[1]
+    assert re.search(r"<h3[^>]*>What Submit does</h3>", body)
+    for ident in ("approve", "rv-submit-error", "submit", "submitnote", "rv-facts"):
+        assert f'id="{ident}"' in body, ident
+    assert FORM.count("What Submit does") == 1

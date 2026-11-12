@@ -2860,7 +2860,8 @@ def test_more_context_stays_on_screen_while_it_is_the_step_being_edited(page):
 REPORT_FILE = f"await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);"
 BOX = """
 const box = el => { const r = el.getBoundingClientRect();
-  return {left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width}; };
+  return {left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width,
+    height: r.height}; };
 """
 
 
@@ -3129,3 +3130,306 @@ def test_no_text_is_drawn_in_the_failing_grey(page):
     """
     )
     assert seen == []
+
+
+# ---- The redesign's look (Task 3): Start and the run screen --------------------------------------
+
+REVIEW = (
+    BOX
+    + f"""
+await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+const S = await review();
+"""
+)
+
+
+def test_start_is_the_answers_and_a_360px_card_that_holds_approval_and_submit(page):
+    seen = page.run(
+        REVIEW
+        + """
+    const sec = $('st-review'), card = $('rv-card'), cs = getComputedStyle(card);
+    const canvas = $('canvas');
+    const font = el => { const s = getComputedStyle(el);
+      return [s.fontWeight, s.fontSize, s.lineHeight].join(' '); };
+    const limited = ['gap', 'limited', 'will_refuse'];
+    const out = {S, items: S.items.filter(i => limited.includes(i.outcome)).length,
+      cols: getComputedStyle(sec).gridTemplateColumns, gap: getComputedStyle(sec).columnGap,
+      card: box(card), ready: box($('rv-ready')), steps: box($('rv-steps')),
+      inside: ['approve', 'rv-submit-error', 'submit', 'submitnote', 'rv-facts']
+        .map(id => card.contains($(id))),
+      outside: ['rv-state', 'rv-ready', 'rv-defaults', 'rv-steps'].map(id => !card.contains($(id))),
+      pos: cs.position, top: cs.top, align: cs.alignSelf, pad: cs.padding, radius: cs.borderRadius,
+      bg: cs.backgroundColor,
+      border: [cs.borderTopWidth, cs.borderTopStyle, cs.borderTopColor].join(' '),
+      h3: card.querySelector('h3').textContent, lead: font(card.querySelector('.lead')),
+      leadText: card.querySelector('.lead').textContent.slice(0, 29),
+      submit: {h: box($('submit')).height, w: box($('submit')).width, font: font($('submit'))},
+      note: font($('submitnote')), next: getComputedStyle($('next')).display,
+      back: box($('back')).width > 0,
+      rule: getComputedStyle($('approve').closest('.rv-go')).borderTopWidth};
+    out.scrolls = canvas.scrollHeight > canvas.clientHeight;
+    canvas.scrollTop = 300;
+    await settle(100);
+    out.stuck = [box(card).top, box(canvas).top];
+    return out;
+    """,
+        size="1440,900",
+    )
+    assert seen["cols"].endswith(" 360px") and seen["gap"] == "40px"
+    card = seen["card"]
+    assert card["width"] == 360 and card["left"] > seen["ready"]["right"]
+    assert card["left"] > seen["steps"]["right"]
+    assert all(seen["inside"]) and all(seen["outside"])
+    assert seen["pos"] == "sticky" and seen["top"] == "0px" and seen["align"] == "start"
+    assert seen["pad"] == "20px 22px" and seen["radius"] == "12px"
+    assert seen["bg"] == "rgb(248, 249, 251)" and seen["border"] == "1px solid rgb(228, 230, 236)"
+    assert seen["h3"] == "What Submit does"
+    assert seen["leadText"] == "This is the run you are about"
+    assert seen["lead"] == "400 13px 19px"
+    assert seen["submit"] == {"h": 44, "w": 314, "font": "600 15px 20px"}
+    assert seen["note"] == "400 12px 18px"
+    assert seen["rule"] == "1px"
+    assert seen["next"] == "none" and seen["back"] is True
+    # Stuck 28px under the scroller's top edge: the offset is measured inside its padding.
+    assert seen["scrolls"] is True and seen["stuck"][0] - seen["stuck"][1] == 28
+
+
+def test_start_keeps_the_approval_gate_and_each_limit_is_a_labelled_tick(page):
+    seen = page.run(
+        REVIEW
+        + """
+    const boxes = [...document.querySelectorAll('#rv-ready input[type=checkbox]')];
+    const labels = [...document.querySelectorAll('#rv-ready label')];
+    const byText = text => labels.filter(l => l.textContent.trim() === text).map(l => l.control);
+    const first = labels[0], fs = getComputedStyle(first);
+    const cs = getComputedStyle(first.querySelector('input'));
+    const out = {S, boxes: boxes.length, ticks: ticks().length, labels: labels.length,
+      reachable: byText('I accept this limit.').length + byText('I have checked this.').length,
+      linked: labels.every(l => l.control && l.control.type === 'checkbox' &&
+        l.control.dataset.tick),
+      tick: [fs.padding, fs.borderTopWidth, fs.borderTopColor, fs.borderRadius, fs.fontWeight,
+        fs.fontSize,
+        fs.lineHeight, cs.width, cs.height],
+      start: gate()};
+    ticks().slice(1).forEach(t => { t.checked = true; change(t); });
+    out.partial = gate();
+    ticks()[0].checked = true; change(ticks()[0]);
+    out.ticked = gate();
+    approve();
+    out.approved = gate();
+    return out;
+    """,
+        size="1440,900",
+    )
+    need = [i for i in seen["S"]["items"] if i["outcome"] in LIMITS]
+    # The same count as the table-era test: one tick per item that needs one, plus CP-2A and CP-2G.
+    assert seen["boxes"] == seen["ticks"] == seen["labels"] == len(need) + 2
+    assert seen["reachable"] == seen["boxes"] and seen["linked"] is True
+    assert seen["tick"] == [
+        "4px 10px 4px 6px",
+        "1px",
+        "rgb(242, 213, 138)",
+        "8px",
+        "500",
+        "13px",
+        "18px",
+        "14px",
+        "14px",
+    ]
+    assert seen["start"] == {"approve": True, "approved": False, "submit": True}
+    assert seen["partial"]["approve"] is True
+    assert seen["ticked"] == {"approve": False, "approved": False, "submit": True}
+    assert seen["approved"] == {"approve": False, "approved": True, "submit": False}
+
+
+def test_start_draws_each_module_as_a_dot_row_and_each_group_as_an_answer_row(page):
+    seen = page.run(
+        REVIEW
+        + """
+    const tr = document.querySelector('#rv-ready tr[data-module="CP-4"]');
+    const dot = getComputedStyle(tr, '::before');
+    const answers = [...document.querySelectorAll('#rv-steps .rv-row')];
+    const edits = [...document.querySelectorAll('#rv-steps button')];
+    const first = answers[0];
+    return {S, trCols: getComputedStyle(tr).gridTemplateColumns.split(' ').slice(0, 2),
+      dot: [dot.width, dot.height, dot.borderRadius], pad: getComputedStyle(tr).padding,
+      name: getComputedStyle(tr.querySelector('.mod-name')).fontWeight + ' ' +
+        getComputedStyle(tr.querySelector('.mod-name')).fontSize,
+      stateBelow: box(tr.cells[1]).top >= box(tr.cells[0]).bottom - 1 &&
+        Math.abs(box(tr.cells[1]).left - box(tr.cells[0]).left) < 1,
+      whyRight: box(tr.cells[2]).left > box(tr.cells[0]).right,
+      rows: answers.map(r => r.querySelector('.nm').textContent),
+      edits: edits.map(b => [b.textContent, b.getAttribute('aria-label')]),
+      rowCols: getComputedStyle(first).gridTemplateColumns.split(' ').filter((_, i) => i !== 1),
+      editRight: Math.abs(box(edits[0]).right - box(first).right) < 1,
+      lines: first.querySelector('.ln').textContent.length > 0};
+    """,
+        size="1440,900",
+    )
+    assert seen["trCols"] == ["10px", "200px"]
+    assert seen["dot"] == ["8px", "8px", "50%"] and seen["pad"] == "11px 0px"
+    assert seen["name"] == "600 14px"
+    assert seen["stateBelow"] is True and seen["whyRight"] is True
+    groups = [r.split(". ", 1)[1] for r in seen["rows"]]
+    assert groups == ["Documents", "Purpose", "Issuer and dates", "Legal"]
+    assert [e[0] for e in seen["edits"]] == ["Edit"] * 4
+    assert [e[1] for e in seen["edits"]] == [f"Edit {g}" for g in groups]
+    assert seen["rowCols"][0] == "200px" and seen["rowCols"][1].endswith("px")
+    assert seen["editRight"] is True and seen["lines"] is True
+
+
+def test_start_is_one_column_with_the_card_last_at_1000px(page):
+    seen = page.run(
+        REVIEW
+        + """
+    const sec = $('st-review');
+    return {cols: getComputedStyle(sec).gridTemplateColumns.split(' ').length,
+      display: getComputedStyle(sec).display, card: box($('rv-card')), steps: box($('rv-steps')),
+      main: box($('canvas')), position: getComputedStyle($('rv-card')).position};
+    """,
+        size="1000,900",
+    )
+    assert seen["card"]["top"] >= seen["steps"]["bottom"]
+    assert seen["card"]["left"] < seen["steps"]["right"]
+    assert seen["position"] != "sticky" or seen["cols"] == 1
+
+
+RUN_SCREEN = (
+    BOX
+    + f"""
+await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+await review();
+tickAll(); approve();
+$('submit').click();
+for (let i = 0; i < 200 && ($('run-progress').hidden || !$('run-state').textContent); i++)
+  await settle(50);
+clearTimeout(pollTimer);
+const show = (status, modules) => {{
+  renderRun({{status, stalled: false, reason: '', library_report: '', modules}});
+}};
+"""
+)
+
+
+def test_the_run_screen_has_a_status_pill_a_card_and_two_columns_of_modules(page):
+    seen = page.run(
+        RUN_SCREEN
+        + """
+    const pill = $('run-pill'), look = status => {
+      show(status, [['CP-0', 'done'], ['CP-1', 'running']]);
+      const s = getComputedStyle(pill);
+      return [pill.textContent, $('run-state').textContent, s.backgroundColor, s.color, s.height,
+        s.borderRadius];
+    };
+    const out = {running: look('running'), finished: look('finished'), failed: look('failed'),
+      capped: look('capped'), queued: look('queued')};
+    show('running', [['CP-0', 'done'], ['CP-1', 'running'], ['CP-2A', 'waiting'],
+      ['Report', 'waiting']]);
+    const items = [...document.querySelectorAll('#run-modules>li')];
+    const row = items[0].firstElementChild;
+    const rs = getComputedStyle(row), card = $('run-card');
+    const title = document.querySelector('#run-progress h2');
+    Object.assign(out, {
+      checks: items.map(li => li.querySelectorAll('.ring svg').length),
+      states: items.map(li => li.dataset.state || li.firstElementChild.dataset.state),
+      ring: [box(items[0].querySelector('.ring')).width,
+        box(items[1].querySelector('.ring')).width],
+      rowCols: rs.gridTemplateColumns.split(' ').slice(0, 1), rowPad: rs.padding,
+      list: getComputedStyle($('run-modules')).gridTemplateColumns.split(' ').length,
+      first: box(items[0]), second: box(items[1]), card: box(card), mods: box($('run-modules')),
+      inCard: ['run-id', 'run-state', 'run-reason', 'run-from-note', 'run-error', 'run-report']
+        .map(id => card.contains($(id))),
+      title: [title.textContent, getComputedStyle(title).fontWeight,
+        getComputedStyle(title).fontSize,
+        getComputedStyle(title).lineHeight],
+      head: ['run-activity', 'run-again', 'another']
+        .map(id => $('run-progress').querySelector('.rp-head').contains($(id))),
+      hiddenHead: getComputedStyle(document.querySelector('.page-head')).display,
+      cols: getComputedStyle($('run-progress').querySelector('.rp-main')).gridTemplateColumns,
+      gap: getComputedStyle($('run-progress').querySelector('.rp-main')).columnGap,
+      lead: $('run-progress').querySelector('.lead').textContent});
+    return out;
+    """,
+        size="1440,900",
+    )
+    assert seen["running"][:2] == ["running", "running"]
+    assert seen["queued"][:2] == ["queued", "queued"]
+    assert seen["running"][2:] == ["rgb(238, 240, 255)", "rgb(0, 18, 179)", "24px", "999px"]
+    assert seen["queued"][2:4] == ["rgb(238, 240, 255)", "rgb(0, 18, 179)"]
+    assert seen["finished"][2:] == ["rgb(233, 245, 238)", "rgb(14, 122, 70)", "24px", "999px"]
+    for status in ("failed", "capped"):
+        assert seen[status][:2] == [status, status]
+        assert seen[status][2:] == ["rgb(254, 243, 242)", "rgb(179, 38, 30)", "24px", "999px"]
+    assert seen["checks"] == [1, 0, 0, 0]
+    assert seen["states"] == ["done", "running", "waiting", "waiting"]
+    assert seen["ring"] == [18, 18] and seen["rowCols"] == ["18px"]
+    assert seen["rowPad"] == "10px 0px"
+    assert seen["list"] == 2 and seen["second"]["left"] > seen["first"]["right"]
+    assert seen["cols"].endswith(" 360px") and seen["gap"] == "40px"
+    assert seen["card"]["width"] == 360 and seen["card"]["left"] > seen["mods"]["right"]
+    assert all(seen["inCard"]) and all(seen["head"])
+    assert seen["title"] == ["Run started", "600", "24px", "32px"]
+    assert seen["hiddenHead"] == "none"
+    assert seen["lead"] == "This run was submitted once. It is not repeated by reloading this page."
+
+
+def test_the_run_screen_and_start_do_not_scroll_sideways_at_375px(page):
+    seen = page.run(
+        """
+    const measure = async () => {
+      window.resizeTo(375, 812); await settle(300);
+      await issuer('credit_snapshot', [file('annual.txt', REPORT_JS)]);
+      await review();
+      const out = {inner: innerWidth, start: document.documentElement.scrollWidth,
+        startCols: getComputedStyle($('st-review')).display};
+      tickAll(); approve();
+      $('submit').click();
+      for (let i = 0; i < 200 && ($('run-progress').hidden || !$('run-state').textContent); i++)
+        await settle(50);
+      clearTimeout(pollTimer);
+      renderRun({status: 'running', stalled: false, reason: '', library_report: '',
+        modules: [['CP-0', 'done'], ['CP-1', 'running'], ['CP-2A', 'waiting'],
+          ['Report', 'waiting']]});
+      out.run = document.documentElement.scrollWidth;
+      out.list = getComputedStyle($('run-modules')).gridTemplateColumns.split(' ').length;
+      out.main = getComputedStyle(document.querySelector('#run-progress .rp-main'))
+        .gridTemplateColumns.split(' ').length;
+      return out;
+    };
+    if (window.opener) { window.opener.NARROW = await measure(); return {popup: true}; }
+    window.open(location.href, 'narrow', 'popup,width=375,height=812');
+    for (let i = 0; i < 400 && !window.NARROW; i++) await settle(100);
+    return window.NARROW;
+    """.replace("REPORT_JS", json.dumps(REPORT))
+    )
+    assert seen["inner"] == 375 and seen["start"] == 375 and seen["run"] == 375
+    assert seen["list"] == 1 and seen["main"] == 1
+
+
+def test_the_stepper_keeps_a_separator_with_the_step_before_it_when_it_wraps(page):
+    seen = page.run(
+        BOX
+        + REPORT_FILE
+        + """
+    pick('data-k="pathway"', 'credit_snapshot'); level('standard');
+    // Visiting Confirm and More context with their answers missing marks them "Needs attention",
+    // which widens them: five steps then need two lines.
+    gotoStep('confirm'); gotoStep('more'); gotoStep('purpose');
+    const lis = [...document.querySelectorAll('#stepper li')];
+    const tops = lis.map(li => Math.round(box(li).top));
+    const leaders = lis.filter((li, i) => i === 0 || tops[i] !== tops[i - 1]);
+    return {n: lis.length, lines: new Set(tops).size, wide: innerWidth, high: innerHeight,
+      leaders: leaders.map(li => li.firstElementChild.tagName),
+      seps: lis.map(li => li.querySelectorAll('.sep').length),
+      sepAfter: lis.map(li => !!li.querySelector('.sep') &&
+        li.querySelector('.sep').previousElementSibling === li.querySelector('button')),
+      ariaHidden: [...document.querySelectorAll('#stepper .sep')]
+        .every(s => s.getAttribute('aria-hidden') === 'true')};
+    """,
+        size="1280,800",
+    )
+    assert seen["n"] == 5 and seen["wide"] == 1280
+    assert seen["lines"] == 2  # the premise: five steps wrap at this size
+    assert seen["leaders"] == ["BUTTON", "BUTTON"]  # no line begins with a "›"
+    assert seen["seps"] == [1, 1, 1, 1, 0]  # four separators, each after the step before it
+    assert seen["sepAfter"] == [True, True, True, True, False] and seen["ariaHidden"] is True

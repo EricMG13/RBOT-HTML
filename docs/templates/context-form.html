@@ -53,9 +53,10 @@ svg.i{width:16px;height:16px;flex:none}
 .scope{margin-top:10px;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary)}
 .scope:empty{display:none}
 .page-actions{display:flex;gap:12px;flex:none;align-items:center}
-#canvas{flex:1;min-width:0;min-height:0;overflow:auto;padding:28px 32px}
+#canvas{flex:1;min-width:0;min-height:0;overflow:auto;padding:28px 32px 0}
 #canvas:focus{outline:none}
-.canvas-in{max-width:860px}
+.canvas-in{max-width:860px;padding-bottom:28px}
+.canvas-in:has(#st-review:not([hidden])),.canvas-in:has(.run-progress:not([hidden])){max-width:none}
 
 /* The stepper: numbered circles and names in one row (the mock-up), under the title. */
 .stepper{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0;list-style:none}
@@ -80,11 +81,34 @@ svg.i{width:16px;height:16px;flex:none}
 .stepsum .prog{height:4px;margin-top:8px;background:var(--border-secondary);border-radius:2px}
 .stepsum .prog span{display:block;height:100%;background:var(--blue);border-radius:2px}
 
-/* The module list of a started run keeps the progress-bar stages (screen.css .run-stages); Task 3 restyles it. */
-.run-stages{display:grid;grid-template-columns:repeat(var(--n,8),minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
-.run-stages .nm{display:block}
-.run-stages .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
-.run-stages .done{border-top-color:var(--blue);color:var(--text-secondary)}
+/* The run screen (after Submit, or a submission that is gone): the card's header is replaced by a status pill,
+   the title, one sentence and the buttons; the modules in two columns and a card of facts beside them. */
+.workbench:has(.run-progress:not([hidden])) .page-head{display:none}
+.rp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.rp-title{min-width:0}
+.rp-title .lead{margin:6px 0 0;font-size:var(--fs-control);line-height:20px}
+.rp-actions{display:flex;flex-wrap:wrap;gap:12px;flex:none;align-items:center}
+.pill{display:flex;align-items:center;gap:8px;width:fit-content;height:24px;margin-bottom:8px;padding:0 10px;border-radius:999px;background:var(--blue-50);color:var(--blue-700);font:600 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
+.pill::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill:empty{display:none}
+.pill[data-tone=done]{background:var(--green-bg);color:var(--green)}
+.pill[data-tone=bad]{background:var(--red-bg);color:var(--red)}
+.rp-main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:40px;margin-top:28px}
+.rp-main>*{min-width:0}
+.run-progress h3.sub{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.run-mods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px;margin:6px 0 0;padding:0;list-style:none}
+.run-mods li{border-bottom:1px solid #eef0f5}
+.run-mods .mod{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0}
+.run-mods .ring{display:grid;place-items:center;width:18px;height:18px;border:1.5px solid var(--gray-300);border-radius:50%;color:#fff}
+.run-mods .ring svg{width:12px;height:12px}
+.run-mods .done .ring{border-color:var(--blue);background:var(--blue)}
+.run-mods [aria-current] .ring{border-color:var(--blue)}
+.run-mods .nm{min-width:0;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
+.run-mods .sstate{font:500 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-tertiary)}
+.rp-card{align-self:start;padding:20px 22px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50)}
+.rp-card .rv-facts{margin-top:0}
+.rp-card #run-from-note{margin-bottom:12px;font-size:var(--fs-body);line-height:19px;color:var(--text-secondary)}
+.rp-card #run-report{margin-top:14px;font-size:var(--fs-body);line-height:19px}
 
 /* Buttons, as screen.css. */
 .primary-action,.secondary-action,.tertiary-action{position:relative;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-control);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
@@ -104,14 +128,11 @@ svg.i{width:16px;height:16px;flex:none}
 
 /* Stage content. */
 .run-step>h2{display:flex;align-items:baseline;gap:10px;font:600 22px/30px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
-.run-progress>h2{display:flex;align-items:baseline;gap:10px;font:600 18px/28px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.run-progress h2{font:600 24px/32px 'Red Hat Display',system-ui,sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
 .run-step>h2:focus{outline:0}.run-step>h2:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
-.run-progress>h2:focus{outline:0}
-.run-stages .mod{display:block;padding:10px 0 0;border-top:4px solid var(--border-secondary);font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-quaternary)}
-.run-stages .mod .sstate{display:block;font:400 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
-.run-stages.modules{--n:4;row-gap:16px}
-.rv-tick{display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:var(--fs-compact);line-height:18px;color:var(--text-secondary)}
-.rv-tick input{margin:2px 0 0;flex:none;accent-color:var(--blue)}
+.run-progress h2:focus{outline:0}
+.rv-tick{display:flex;align-items:center;gap:6px;width:fit-content;max-width:100%;margin-top:8px;padding:4px 10px 4px 6px;border:1px solid var(--amber-border);border-radius:var(--radius-control);background:var(--amber-bg);font:500 var(--fs-body)/18px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary);cursor:pointer}
+.rv-tick input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--blue)}
 .rv-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 24px;margin:10px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
 .rv-facts dt{font-weight:600;color:var(--text-primary)}.rv-facts dd{margin:0;overflow-wrap:anywhere}
 .run-step:not([hidden])~.run-step:not([hidden]){margin-top:28px;padding-top:24px;border-top:1px solid var(--border-secondary)}
@@ -327,13 +348,43 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .why-list li{margin:6px 0;padding-left:10px;border-left:2px solid var(--border-secondary)}
 .note-foot{margin-top:14px;font-size:var(--fs-compact);line-height:17px;color:var(--text-quaternary)}
 
-/* Review. */
-.review-summary{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:0 24px;margin:10px 0 0}
-.review-summary dt,.review-summary dd{padding:10px 0;border-top:1px solid var(--border-secondary)}
-.review-summary dt{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
-.review-summary dt .text-button{display:block;font-size:var(--fs-compact);font-weight:600}
-.review-summary dd{margin:0;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary);overflow-wrap:anywhere}
-.review-summary dd ul{margin:0;padding-left:16px}
+/* Review (Start): the answers on the left, a card of what Submit does on the right that stays in view. */
+#st-review{display:grid;grid-template-columns:minmax(0,1fr) 360px;column-gap:40px;align-content:start}
+#st-review>*{grid-column:1;min-width:0}
+#st-review>.rv-card{grid-column:2;grid-row:1/span 12;align-self:start;position:sticky;top:0;padding:20px 22px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50)}
+.rv-card h3{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
+.rv-card .lead{max-width:none;margin:8px 0 0;font-size:var(--fs-body);line-height:19px}
+.rv-card .rv-facts{margin-top:14px;gap:8px 16px;line-height:19px}
+.rv-go{margin-top:16px;padding-top:16px;border-top:1px solid var(--border-secondary)}
+.rv-go .start-confirm{margin-top:0}
+.rv-go .primary-action{width:100%;height:44px;justify-content:center;margin-top:12px;font:600 15px/20px 'Red Hat Text',system-ui,sans-serif}
+#submitnote{display:block;margin-top:8px;font-size:var(--fs-compact);line-height:18px}
+.rv-list{margin-top:10px;border-top:1px solid var(--border-secondary)}
+.rv-list table,.rv-list tbody{display:block}
+.rv-list thead{display:block;position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.rv-list tr{display:grid;grid-template-columns:10px 200px minmax(0,1fr);grid-template-areas:"dot nm why" "dot st why";grid-template-rows:auto 1fr;gap:0 12px;padding:11px 0;border-bottom:1px solid #eef0f5;--sd:var(--text-quaternary);font-size:var(--fs-body);line-height:20px}
+.rv-list tr::before{content:'';grid-area:dot;width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--sd)}
+.rv-list tr[data-outcome=ready]{--sd:var(--green)}
+.rv-list tr[data-outcome=limited],.rv-list tr[data-outcome=gap]{--sd:var(--amber)}
+.rv-list tr[data-outcome=will_refuse]{--sd:var(--red)}
+.rv-list tr[data-outcome=information]{--sd:var(--blue)}
+.rv-list tr[data-outcome=check]::before{background:transparent;border:1.5px dashed var(--text-quaternary)}
+.rv-list td{display:block;padding:0;border:0;color:var(--text-secondary);overflow-wrap:anywhere}
+.rv-list td:nth-child(1){grid-area:nm}
+.rv-list td:nth-child(2){grid-area:st}
+.rv-list td:nth-child(3){grid-area:why}
+.rv-list td p{margin:0}.rv-list td p+p{margin-top:10px}
+.rv-list .mod-name{font-size:var(--fs-control)}
+.rv-list .badge{height:auto;padding:0;border:0;background:none;font:500 var(--fs-compact)/18px 'Red Hat Text',system-ui,sans-serif}
+.rv-list .badge i{display:none}
+.rv-list .badge.ready{color:var(--green)}
+.rv-list .badge.information{color:var(--blue-700)}
+.review-summary{margin:10px 0 0;border-top:1px solid var(--border-secondary)}
+.rv-row{display:grid;grid-template-columns:200px minmax(0,1fr) auto;gap:12px;padding:11px 0;border-bottom:1px solid #eef0f5;font-size:var(--fs-body);line-height:20px;color:var(--text-secondary)}
+.rv-row dt{font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-primary)}
+.rv-row dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.rv-row .ed{align-self:start}
+.rv-row ul{margin:0;padding-left:16px}
 .review-summary .nil{color:var(--text-quaternary)}
 .review-summary .note,.review-summary .err{margin-top:4px}
 .run-step h3.sub{margin-top:28px;font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
@@ -344,7 +395,8 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .dl .muted{font-size:var(--fs-control)}
 
 /* Narrow widths: the page scrolls, as the library does below 720px. */
-@media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 300px}.prow{grid-template-columns:20px minmax(0,1fr)}.prow .imp{grid-column:2}}
+@media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 300px}.prow{grid-template-columns:20px minmax(0,1fr)}.prow .imp{grid-column:2}
+  #st-review{display:block}#st-review>.rv-card{position:static;margin-top:28px}.rp-main{grid-template-columns:minmax(0,1fr)}.rp-card{margin-top:0}}
 @media(max-width:960px){
   body{overflow:auto}
   .app{height:auto;min-height:100dvh}
@@ -368,9 +420,10 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   .step-actions{padding:12px 15px 16px}
   .readiness-pill{margin:0 15px 10px}
   .inspector>summary{padding:12px 15px}
-  .review-summary{grid-template-columns:minmax(0,1fr)}.review-summary dd{border-top:0;padding-top:0}
+  .rv-row{grid-template-columns:minmax(0,1fr) auto}.rv-row .ln{grid-column:1/-1}.rv-row .ed{grid-column:2;grid-row:1}
+  .rp-head{display:block}.rp-actions{margin-top:12px}
 }
-@media(max-width:700px){.pair{grid-template-columns:minmax(0,1fr);gap:0}.pair>*+*{margin-top:24px}}
+@media(max-width:700px){.run-mods{grid-template-columns:minmax(0,1fr)}.pair{grid-template-columns:minmax(0,1fr);gap:0}.pair>*+*{margin-top:24px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(forced-colors:active){.badge,.primary-action,.secondary-action,.tertiary-action,.card,.prow,.seg{border:1px solid}.stepper [aria-current]{outline:2px solid;outline-offset:2px}}
 @media print{.rail,.page-actions,.step-actions,.inspector>summary,.stagebar,.readiness-pill{display:none}.app{margin:0;height:auto;padding:0}.workbench{display:block;box-shadow:none;overflow:visible}.left{display:block}#canvas{overflow:visible}}
@@ -592,9 +645,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 <section class="run-step" id="st-review" data-st="review" hidden>
   <h2 tabindex="-1"><span>Summary and start</span></h2>
   <p class="stepline"></p>
-  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
   <div id="rv-state" role="status" aria-live="polite"></div>
-  <dl class="rv-facts" id="rv-facts"></dl>
   <h3 class="sub">What each module is expected to do</h3>
   <div id="rv-ready"></div>
   <h3 class="sub">Inputs left at their defaults</h3>
@@ -602,26 +653,49 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <div id="rv-carried" hidden><h3 class="sub">Carried over from an earlier run</h3><div id="rv-carried-body"></div></div>
   <h3 class="sub">Your answers</h3>
   <dl class="review-summary" id="rv-steps"></dl>
-  <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
-  <p class="err" id="rv-submit-error" role="alert" hidden></p>
-  <div class="dl"><button type="button" class="primary-action" id="submit" disabled>Submit and start the run</button><span id="submitnote" class="muted"></span></div>
+  <aside class="rv-card" id="rv-card" aria-labelledby="rv-card-h">
+    <h3 id="rv-card-h">What Submit does</h3>
+  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+    <dl class="rv-facts" id="rv-facts"></dl>
+    <div class="rv-go">
+      <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
+      <p class="err" id="rv-submit-error" role="alert" hidden></p>
+      <button type="button" class="primary-action" id="submit" disabled>Submit and start the run</button>
+      <span id="submitnote" class="muted"></span>
+    </div>
+  </aside>
 </section>
 </form>
 <section class="run-progress" id="run-progress" hidden aria-live="polite">
-  <h2 tabindex="-1">Run started</h2>
-  <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
-  <p id="run-from-note" hidden></p>
-  <dl class="rv-facts"><dt>Run</dt><dd id="run-id"></dd><dt>State</dt><dd id="run-state"></dd><dt>Why</dt><dd id="run-reason"></dd></dl>
-  <h3 class="sub">Modules</h3>
-  <ol class="run-stages modules" id="run-modules"></ol>
-  <p class="err" id="run-error" hidden></p>
-  <p id="run-report" hidden>Report: <a id="run-report-link" href="/library/"></a></p>
-  <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="run-again" hidden>Start again from this run</button><button type="button" class="tertiary-action" id="another">Start another run</button></div>
+  <div class="rp-head">
+    <div class="rp-title">
+      <span class="pill" id="run-pill"></span>
+      <h2 tabindex="-1">Run started</h2>
+      <p class="lead">This run was submitted once. It is not repeated by reloading this page.</p>
+    </div>
+    <div class="rp-actions"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="run-again" hidden>Start again from this run</button><button type="button" class="tertiary-action" id="another">Start another run</button></div>
+  </div>
+  <div class="rp-main">
+    <div>
+      <h3 class="sub">Modules</h3>
+      <ol class="run-mods" id="run-modules"></ol>
+    </div>
+    <div class="rp-card" id="run-card">
+      <p id="run-from-note" hidden></p>
+      <dl class="rv-facts"><dt>Run</dt><dd id="run-id"></dd><dt>State</dt><dd id="run-state"></dd><dt>Why</dt><dd id="run-reason"></dd></dl>
+      <p class="err" id="run-error" hidden></p>
+      <p id="run-report" hidden>Report: <a id="run-report-link" href="/library/"></a></p>
+    </div>
+  </div>
 </section>
 <section class="run-progress" id="submission-gone" hidden>
-  <h2 tabindex="-1">Submission</h2>
-  <p class="lead">This submission is no longer open. If you submitted it, its run is in Run activity.</p>
-  <div class="dl"><a class="secondary-action" id="gone-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="new-submission">Start a new submission</button></div>
+  <div class="rp-head">
+    <div class="rp-title">
+      <h2 tabindex="-1">Submission</h2>
+      <p class="lead">This submission is no longer open. If you submitted it, its run is in Run activity.</p>
+    </div>
+    <div class="rp-actions"><a class="secondary-action" id="gone-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="new-submission">Start a new submission</button></div>
+  </div>
 </section>
 </div></main>
 
@@ -1495,8 +1569,9 @@ function renderSteps(sq, o, gs) {
       const li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.dataset.step = st;
       b.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="sstate"></span>';
-      if (ol.children.length) li.innerHTML = '<span class="sep" aria-hidden="true">\u203a</span>';
-      li.appendChild(b); ol.appendChild(li);
+      li.appendChild(b);
+      if (st !== sq[sq.length - 1]) li.insertAdjacentHTML('beforeend', '<span class="sep" aria-hidden="true">\u203a</span>');
+      ol.appendChild(li);
     });
   }
   sq.forEach((st, i) => {
@@ -1861,18 +1936,19 @@ function itemRow(item, sq) {
 function readyTable(sq, own = []) {
   const all = [...SUMMARY.items, ...own];
   const scopes = [...new Set(all.map(i => i.scope))], order = [...(scopes.includes('run') ? ['run'] : []), ...SUMMARY.modules, ...scopes.filter(x => x !== 'run' && !SUMMARY.modules.includes(x))];
-  const body = h('tbody');
+  const body = h('tbody', {role: 'rowgroup'});
   order.forEach(id => {
     const items = all.filter(i => i.scope === id), outcome = worst(items.map(i => known(i.outcome)));
     const name = id === 'run' ? h('span', {className: 'mod-name', textContent: 'Whole run'}) : h('span', {}, h('span', {className: 'mod-name', textContent: mname(id)}));
-    const state = h('td'); state.innerHTML = badgeFor(outcome);
-    const why = h('td', {}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
-    const tr = h('tr', {}, h('td', {}, name), state, why);
+    const state = h('td', {role: 'cell'}); state.innerHTML = badgeFor(outcome);
+    const why = h('td', {role: 'cell'}, ...(items.length ? items.map(i => itemRow(i, sq)) : [h('span', {className: 'muted', textContent: 'Nothing missing.'})]));
+    const tr = h('tr', {role: 'row'}, h('td', {role: 'cell'}, name), state, why);
     tr.dataset.module = id; tr.dataset.outcome = outcome;
     body.append(tr);
   });
-  const table = h('table', {innerHTML: '<colgroup><col style="width:28%"><col style="width:132px"><col></colgroup><thead><tr><th scope="col">Module</th><th scope="col">Expected</th><th scope="col">Why, and what fixes it</th></tr></thead>'}, body);
-  return h('div', {className: 'table-scroll'}, table);
+  // Drawn as dot rows, so the table's roles are stated: a grid-displayed table loses them in some browsers.
+  const table = h('table', {role: 'table', innerHTML: '<thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Module</th><th scope="col" role="columnheader">Expected</th><th scope="col" role="columnheader">Why, and what fixes it</th></tr></thead>'}, body);
+  return h('div', {className: 'rv-list'}, table);
 }
 // Mirrors WEB_SEARCH_CASE_KINDS in model/handoff.py, the one rule the launcher applies: a public or
 // a private case searches the web, a synthetic one does not. The research module is TOLD to use
@@ -1939,17 +2015,19 @@ function renderReview(sq, o) {
   const box = $('rv-steps');
   box.innerHTML = '';
   sq.filter(st => st !== 'review').forEach((st, i) => {
-    const dt = document.createElement('dt'), dd = document.createElement('dd'), ed = document.createElement('button');
+    const row = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd'), act = document.createElement('dd'), ed = document.createElement('button');
+    row.className = 'rv-row'; dt.className = 'nm'; dd.className = 'ln'; act.className = 'ed';
     dt.textContent = (i + 1) + '. ' + SHORT[st];
     ed.type = 'button'; ed.className = 'text-button'; ed.dataset.goto = st; ed.textContent = 'Edit';
     ed.setAttribute('aria-label', 'Edit ' + SHORT[st]);
-    dt.appendChild(ed);
+    act.appendChild(ed);
     const lines = summaryLines(st, o).filter(Boolean);
     if (groupBad(st)) { const p = document.createElement('p'); p.className = 'err'; p.innerHTML = icon('circle-alert') + '<span>Needs attention</span>'; dd.appendChild(p); }
     if (!lines.length) { const p = document.createElement('p'); p.className = 'nil'; p.textContent = 'Nothing entered (optional)'; dd.appendChild(p); }
     else { const ul = document.createElement('ul'); lines.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }); dd.appendChild(ul); }
     warns.filter(w => w.st === st).forEach(w => { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = icon('triangle-alert') + '<span></span>'; p.lastChild.textContent = w.msg; dd.appendChild(p); });
-    box.append(dt, dd);
+    row.append(dt, dd, act);
+    box.append(row);
   });
   const err = $('rv-submit-error');
   err.hidden = !SUBMIT_ERROR;
@@ -2005,12 +2083,17 @@ function renderRun(r) {
   }
   $('run-again').hidden = !RESTARTABLE.includes(r.status);
   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
+  const pill = $('run-pill');
+  pill.textContent = $('run-state').textContent;
+  pill.dataset.tone = r.status === 'finished' ? 'done' : RESTARTABLE.includes(r.status) ? 'bad' : '';
   $('run-reason').textContent = named(r.reason) || 'none given';
   const list = $('run-modules');
   list.textContent = '';
-  list.style.setProperty('--n', 4);
   r.modules.forEach(([module, state]) => {
-    const box = h('div', {className: 'mod' + (state === 'done' ? ' done' : '')}, h('span', {className: 'nm', textContent: mname(module)}), h('span', {className: 'sstate', textContent: state}));
+    const ring = h('span', {className: 'ring'});
+    ring.setAttribute('aria-hidden', 'true');
+    if (state === 'done') ring.innerHTML = CHECK;
+    const box = h('div', {className: 'mod' + (state === 'done' ? ' done' : '')}, ring, h('span', {className: 'nm', textContent: mname(module)}), h('span', {className: 'sstate', textContent: state}));
     box.dataset.module = module; box.dataset.state = state;
     if (state === 'running') box.setAttribute('aria-current', 'step');
     list.append(h('li', {}, box));
