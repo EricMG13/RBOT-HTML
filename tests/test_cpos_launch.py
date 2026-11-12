@@ -4721,3 +4721,54 @@ def test_a_claude_launch_says_search_is_off_and_holds_no_search_fee(tmp_path, ca
     out = capsys.readouterr().out
     assert "Web:      off: web search is offered on GPT Sol only" in out
     assert "CP-DR searches the web" not in out
+
+
+STANDING = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"  # sol and opus configs
+
+
+@pytest.mark.parametrize(
+    ("config", "asked"),
+    [
+        ("opus-medium", 64000),
+        ("opus-high", 64000),
+        ("sol-medium", 32000),
+        ("sol-high", 32000),
+    ],
+)
+def test_the_launch_asks_anthropic_for_room_after_its_thinking(
+    tmp_path, monkeypatch, config, asked
+):
+    # A real run (tdg-proof-snapshot-opus-001, CP-4) lost its write_handoff call: Anthropic spends
+    # thinking tokens out of the output limit, so 7,431 thinking plus the handoff did not fit in
+    # 32,000 and the stream stopped on max_tokens inside the tool call. Anthropic configs ask for
+    # 64,000; every other config keeps 32,000.
+    seen = {}
+    for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.setenv(key, "not-a-real-key")
+
+    def capture(*args, **kwargs):
+        seen.update(kwargs)
+        raise RuntimeError("stop before any provider call")
+
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", capture)
+    argv = launch(tmp_path, "--live", "--ruling", str(STANDING))
+    argv[argv.index("--config") + 1] = config
+    main(argv)
+    assert seen["max_output_tokens"] == asked
+
+
+def test_the_offline_hold_follows_the_larger_anthropic_output_limit(tmp_path, monkeypatch):
+    # Opus output costs USD 20 per million tokens, so the 32,000 extra output tokens add exactly
+    # 32,000 x 20 / 1,000,000 = USD 0.64 to the hold; the input part does not move.
+    context, folder = context_file(tmp_path), issuer_folder(tmp_path)
+
+    def hold(config: str, out: str) -> Decimal:
+        return prepare(
+            context, folder, tmp_path / out, config=config, cap="50", modules=("CP-4",)
+        ).hold
+
+    now = hold("opus-medium", "now")
+    sol = hold("sol-medium", "sol")
+    monkeypatch.setattr(cpos_launch, "output_limit", lambda config: 32000)
+    assert now - hold("opus-medium", "old") == Decimal("0.64")
+    assert hold("sol-medium", "sol-old") == sol
