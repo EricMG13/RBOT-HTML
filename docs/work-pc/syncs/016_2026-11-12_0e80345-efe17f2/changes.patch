@@ -1,0 +1,205 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 69420db..22905fc 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,10 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Every pathway asks CP-1 for the chart tables (branch `claude/cp1-tables-all-pathways`, base 0e80345, owner "Yes, all pathways")
++Scope: `cpos_launch._owner_tables` adds, for CP-1, the four `### Chart data:` tables its report routes do not already ask (instructions and checker); no report section. Offline, canned provider. Tests written by hand: all seven pathways' CP-1 instructions carry each heading once with its exact header, the checker accepts the complete canned answer and refuses each dropped table; a pack built from the canned CP-1 answer of relative_value, distressed_restructuring, portfolio_decision and short_snapshot states the five measures and a maturity profile. Probes `wb_pack_measures_by_pathway.py` 1 -> 0; `wb_cap_presets.py`, `wb_cp8_hold_sizes.py`, `wb_presets_order.py` exit 0 (short_snapshot hold 0.97 -> 0.99 on Opus configs). Gates: CI fast-tests command 2693 passed exit 0 (node changes/reader/static/calendar tests exit 0); browser subset 151 passed exit 0; quality gate 0 findings exit 0.
++Not verified: a real model writing the four tables on those pathways; the Changes tab of a real run of those pathways; CP-1 output cost beyond the offline hold.
++
+ ## 2026-11-12 — Changes seam round 3: one reader of CP-8's registers (branch `claude/changes-seams-r3`, base c9f84e1)
+ Scope: `changes_check.page_verdicts` derives the measure verdicts, module rows and ledger counts; `update_library.changes_data` carries them as `run.changes.verdicts` (null without a pack, or with a note or problem; an unreadable CP-8 output is a stated problem); `changes.js` only displays them (no register parsed for a verdict); a fact row that looks like a pack label (NFKC, alphanumerics, casefold) is refused. Offline. Expected verdicts are hand-written in `tests/fixtures/changes-seam/rows.json` (`page` per case; new cases: hidden-character label, `\x85`, `\x1f`, two Same definition rows, no closing pipe), read by `test_changes.py`, `test_update_library.py` (checker and library agree) and `changes.test.cjs`. Gates: CI fast tests exit 0 (node 18 changes tests; pytest 2683 passed), browser subset 151 passed exit 0, quality gate exit 0. Reviewer probes that call the deleted page functions (`wbr1_seam`, `wbr2_seam`, `rc_store_path`, `wb_*`, `t5_*` expecting the page to read a pack's `yes` or a table) break or pass vacuously by design.
+ Not verified: any real model output; the Changes tab against the September VMO2 reference; old handoffs against K9/K10 (known limit in the ruling).
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index d97b9cf..db5e71d 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -231,10 +231,7 @@ the run folder name on both sides (the pack names its prior by folder). (3) A re
+ making no comparison reaches the library verbatim. (4) The published scope no longer says CP-8's handoff is
+ delivered whole when CP-8 was not produced.
+ 
+-Known limits, recorded (owner decision pending on the first): four pathways (relative_value,
+-distressed_restructuring, portfolio_decision, short_snapshot) never ask CP-1 for the chart tables the pack
+-reads (`cpos_launch.py` layout rule), so their pack states no measure and their Changes tab says so; the
+-layout rule is unchanged. L4: `find_prior` accepts any listed run folder name, including one the launcher
++Known limits, recorded: the chart-tables limit (the whole-branch review's finding) is closed by the amendment of 2026-11-12 below. L4: `find_prior` accepts any listed run folder name, including one the launcher
+ refuses at launch (a space, a leading underscore, non-ASCII); that fails closed with no spend. L5: the
+ forecast inputs block can vouch for a Key figure when only CP-0, CP-1, CP-MODEL and CP-L10 run.
+ 
+@@ -254,3 +251,16 @@ without its closing pipe, or a second table, stays visible as text although it c
+ handoffs are re-read only through the checker's per-row rules; their passages are not re-checked against
+ K9 and K10. (3) A malformed issuer register counts as having no rows, so a measure the pack marks `yes`
+ still shows the pack's difference.
++
++## Amendment 2026-11-12: every pathway asks CP-1 for the chart tables (owner: "Yes, all pathways")
++
++Asked whether all pathways should ask CP-1 for the chart tables the Changes tab needs, the owner answered
++"Yes, all pathways". Until then CP-1 was asked for the four `### Chart data:` tables (leverage, interest cover,
++liquidity, debt maturities) only where the pathway's report had the chart blocks: credit_snapshot asked for
++all four, earnings_update lacked debt maturities, covenant_refinancing had only debt maturities, and
++relative_value, distressed_restructuring, portfolio_decision and short_snapshot had none, so their pack
++stated no measure. Now `cpos_launch._owner_tables` asks CP-1, on every pathway, for each of the four tables
++its report routes do not already carry, as owner tables (header, plain-number and unit checks identical to
++the routed ones; the checker refuses a handoff without them). No report section is added: those tables are
++read by the library and the pack, not delivered. CP-1's output grows on those pathways; the USD 20 cap check
++admits every preset (largest single hold unchanged; short_snapshot's hold rises from 0.97 to 0.99 on the Opus configs).
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 0402288..f375cf0 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -553,6 +553,21 @@ class OwnerTable:
+         return self.events or self.edges
+ 
+ 
++def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTable, ...]:
++    """The tables a module is asked for beside its report routes. CP-1 is on every pathway asked
++    for all four chart tables CP-8's pack reads (owner, 2026-11-12, "Yes, all pathways"): those
++    its report's chart blocks do not already route are asked as owner tables, with no new
++    report section."""
++    tables = OWNER_TABLES.get(module, ())
++    if module != "CP-1":
++        return tables
++    routed = {r.heading for r in routes}
++    chart = tuple(
++        OwnerTable(h, cols, unit) for h, cols, unit in CHART_TABLES.values() if h not in routed
++    )
++    return (*chart, *tables)
++
++
+ DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
+ 
+ 
+@@ -1752,7 +1767,7 @@ def _instructions(
+     # is written once, as the passage, or the section would repeat and delivery would refuse it.
+     named = [r.heading for r in asked if r.heading in READER_HEADINGS]
+     asked = [r for r in asked if r.heading not in named]
+-    selectors = "\n".join(_selector(r) for r in (*asked, *OWNER_TABLES.get(module, ())))
++    selectors = "\n".join(_selector(r) for r in (*asked, *_owner_tables(module, routes)))
+     if named:
+         selectors += (
+             f"\n- {', '.join(f'`### {h}`' for h in named)}: the reader passage of that name is "
+@@ -2252,7 +2267,7 @@ def checker(layout: MarkdownLayout) -> Check:
+         for route in routes:
+             if route.kind == "chart":
+                 issues += chart_issues(text, route)
+-        for owned in OWNER_TABLES.get(task.module_id, ()):
++        for owned in _owner_tables(task.module_id, routes):
+             issues += chart_issues(text, owned)
+         return (*issues, *_forecast_issues(task, text))
+ 
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index e938b04..2c311dc 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -21,7 +21,9 @@ from test_cpos_launch import (
+     ROOT,
+     RULING,
+     context_file,
++    answer,
+     covenant_answer,
++    good_task,
+     issuer_folder,
+     prepare_routes,
+     provider,
+@@ -636,6 +638,39 @@ def _prior():
+     )
+ 
+ 
++@pytest.mark.parametrize(
++    "pathway",
++    [
++        *("relative_value", "distressed_restructuring", "portfolio_decision", "short_snapshot"),
++        *("earnings_update", "covenant_refinancing"),
++    ],
++)
++def test_a_pack_built_from_the_cp1_handoff_of_each_formerly_unasked_pathway_states_measures(
++    tmp_path, pathway
++):
++    """Owner, 2026-11-12: these four pathways now ask CP-1 for the chart tables (M3). The canned
++    CP-1 answer is the launcher test's, written from the checker's own table headers."""
++    prepared, _, context = good_task(tmp_path, "CP-1", pathway)
++    raw = answer(context, list(prepared.plan.layout.routes))
++    pack = build_pack(
++        _prior().model_copy(update={"pathway": pathway}),
++        {"CP-1": raw},
++        {"CP-1": raw},
++        as_of=AS_OF,
++        pathway=pathway,
++    )
++    found = measures_of(pack)
++    assert {"leverage", "net_leverage", "coverage", "cash", "undrawn"} <= set(found)
++    assert found["leverage"]["current"]["value"] == "3.60"
++    assert found["net_leverage"]["current"]["value"] == "3.25"
++    assert found["coverage"]["current"]["value"] == "3.40"
++    assert (found["cash"]["current"]["value"], found["undrawn"]["current"]["value"]) == (
++        "275",
++        "400",
++    )
++    assert "maturity_profile" in pack, pack["omitted"]
++
++
+ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
+     prior = handoff(
+         "CP-1",
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index c955b9d..cd1232d 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -462,6 +462,11 @@ def answer(context: dict, plan_routes: list) -> str:
+             lines += ["| Item | Value |", "| --- | --- |", "| Observed | 1 |", ""]
+         else:
+             lines += ["A located finding.", ""]
++    if context["module_id"] == "CP-1":  # Every pathway asks CP-1 for all four chart tables.
++        routed = {r.heading for r in own}
++        for heading, table in CHART_TABLES.items():
++            if heading not in routed:
++                lines += [f"### {heading}", "", table, ""]
+     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
+         lines += [f"### {heading}", "", table, ""]
+     for heading in ("Calculations", "Gaps", "Next module"):
+@@ -1914,6 +1919,42 @@ def test_checker_refuses_each_broken_chart_table(tmp_path, old, new, complaint):
+     assert any(complaint in issue for issue in issues), issues
+ 
+ 
++def _header(*columns: str) -> str:
++    return (
++        "`| " + " | ".join(("Period", *columns, "Reporting unit", "Basis and limitation")) + " |`"
++    )
++
++
++CHART_HEADERS = {
++    "Chart data: leverage": _header("Total debt / EBITDA", "Net debt / EBITDA"),
++    "Chart data: interest cover": _header("EBITDA / cash interest"),
++    "Chart data: liquidity": _header("Cash", "Undrawn committed facilities"),
++    "Chart data: debt maturities": _header("Debt maturing"),
++}
++
++
++@pytest.mark.parametrize(
++    "pathway",
++    [
++        *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
++        *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
++    ],
++)
++def test_every_pathway_asks_cp1_for_the_four_chart_tables_and_requires_them(tmp_path, pathway):
++    """Owner, 2026-11-12, "Yes, all pathways": CP-8's pack reads these tables on each one."""
++    prepared, task, context = good_task(tmp_path, "CP-1", pathway)
++    text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
++    for heading, header in CHART_HEADERS.items():
++        assert text.count(f"`### {heading}`") == 1, heading
++        assert header in text, heading
++    raw = answer(context, list(prepared.plan.layout.routes))
++    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
++    for heading in CHART_HEADERS:
++        cut = raw.replace(f"### {heading}", "### Dropped")
++        issues = _checked_handoff(task, cut.encode(), checker(prepared.layout))
++        assert any(heading in issue for issue in issues), (heading, issues)
++
++
+ def test_the_instructions_give_the_exact_chart_table_header(tmp_path):
+     prepared, *_ = good_task(tmp_path, "CP-1", "credit_snapshot")
+     text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
