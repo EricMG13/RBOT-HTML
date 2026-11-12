@@ -8,6 +8,7 @@ from deploy_workflow.prose_checks import (
     DATA_MODULES,
     READER_HEADINGS,
     figure_issues,
+    key_figures_issues,
     limitation_items,
     prose_issues,
     reader_passages,
@@ -788,3 +789,111 @@ def test_check_4_a_pair_over_80_characters_quotes_each_bracket_with_20_character
     long = "a" * 90
     issues = [i for i in prose_issues(bottom(f"The view [{long}] holds.")) if "check 4" in i]
     assert [i.split('"')[1] for i in issues] == [f"The view [{'a' * 20}", f"{'a' * 20}] holds."]
+
+
+@pytest.mark.parametrize(
+    ("passage", "detail"),
+    [
+        ("EBITDA was USD 4,173 million.", "| EBITDA | 4173 | USD million |"),
+        ("EBITDA was USD 4173 million.", "| EBITDA | 4,173 | USD million |"),
+        ("Debt was USD 1,291.27 million.", "| Debt | 1291.27 |"),
+        ("Debt was USD 1291.27 million.", "| Debt | 1,291.27 |"),
+        ("Debt was USD 1,234,567 million.", "| Debt | 1234567 |"),
+    ],
+)
+def test_a_thousands_separator_does_not_change_a_figure(passage: str, detail: str) -> None:
+    assert fidelity(passage, detail) == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "detail", "quoted"),
+    [
+        ("Debt was USD 4,173 million.", "| Debt | 4173 thousand |", "4,173 million"),
+        ("Debt was -4,173.", "| Debt | 4173 |", "-4,173"),
+        ("Debt was 5.89x.", "| Debt | 5.8905x |", "5.89x"),
+        ("Debt was USD 4,173 million.", "| Debt | 4,174 |", "4,173 million"),
+        ("Debt was 4,173.", "| Debt | 73 |", "4,173"),
+    ],
+)
+def test_a_figure_with_a_separator_is_still_refused_when_it_differs(
+    passage: str, detail: str, quoted: str
+) -> None:
+    (issue,) = fidelity(passage, detail)
+    assert f'"{quoted}"' in issue
+
+
+def test_a_comma_that_is_not_a_thousands_separator_still_splits_the_number() -> None:
+    assert [i.split('"')[1] for i in fidelity("Cover was 1,25.", "| Cover | 125 |")] == ["1", "25"]
+    held = "| Year | Stores |\n| --- | --- |\n| 2024 | 437 |"
+    assert fidelity("Cover was 437 in 2024, 437.", held) == ()
+
+
+def annotated(cell: str) -> str:
+    return f"| Measure | Value |\n| --- | --- |\n| Row | {cell} |"
+
+
+@pytest.mark.parametrize(
+    ("passage", "cell"),
+    [
+        ("Margin was 51.6%.", "3,395 (51.6%)"),
+        ("Leverage was 5.89x.", "5.8905x (5.89x)"),
+        ("Margin was 45.05%.", "0.45052 (45.05%)"),
+    ],
+)
+def test_a_bracketed_figure_after_a_figure_is_an_annotation_not_a_negative(
+    passage: str, cell: str
+) -> None:
+    assert fidelity(passage, annotated(cell)) == ()
+
+
+@pytest.mark.parametrize(
+    ("passage", "cell"),
+    [
+        ("Margin was (51.6%).", "3,395 (51.6%)"),
+        ("Margin was -51.6%.", "3,395 (51.6%)"),
+        ("Margin was 51.6%.", "3,395 | (51.6%)"),
+    ],
+)
+def test_an_annotation_is_a_positive_figure_and_only_one_after_a_figure(
+    passage: str, cell: str
+) -> None:
+    assert len(fidelity(passage, annotated(cell))) >= 1
+
+
+def test_an_annotation_that_is_itself_negative_keeps_its_minus() -> None:
+    assert fidelity("Margin was -5.2%.", annotated("100 (-5.2%)")) == ()
+    assert len(fidelity("Margin was 5.2%.", annotated("100 (-5.2%)"))) == 0
+
+
+@pytest.mark.parametrize(
+    ("passage", "cell"),
+    [
+        ("Margin was 12.3%.", "(12.3)%"),
+        ("Net debt change was 120.", "(120)"),
+        ("There was a loss of 45.", "a loss of (45)"),
+    ],
+)
+def test_a_bracketed_figure_standing_alone_or_after_words_stays_a_negative(
+    passage: str, cell: str
+) -> None:
+    (issue,) = fidelity(passage, annotated(cell))
+    assert "does not match the handoff" in issue
+
+
+CP1_CHART = "### Chart data\n\n| Period | Cash |\n| --- | --- |\n| 2024-09-30 | 6261 |\n"
+
+
+def key_figures(value: str, cp1: str = CP1_CHART) -> tuple[str, ...]:
+    table = (
+        "| Measure | Value | Period | Source |\n| --- | --- | --- | --- |\n"
+        f"| Cash | {value} | 2024 | CP-1 |"
+    )
+    return key_figures_issues(f"## Findings\n\n### Key figures\n\n{table}\n", cp1)
+
+
+def test_a_key_figure_with_a_thousands_separator_is_the_figure_cp1_states_plainly() -> None:
+    assert key_figures("USD 6,261 million") == ()
+    assert key_figures("6261", "| Cash | USD 6,261 million |") == ()
+    assert key_figures("USD 6,261 million", "| Cash | 6,261 |") == ()
+    assert len(key_figures("USD 6,262 million")) == 1
+    assert len(key_figures("USD 6,261 thousand", "| Cash | 6261 million |")) == 1

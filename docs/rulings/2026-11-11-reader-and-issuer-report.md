@@ -248,6 +248,22 @@ mechanically before it is checked (the count is recorded in the run record; the 
 retained response is unchanged), and check 9 refuses any other shape within the same retry and cost
 cap. The fidelity check stays outside the numbered list, so "ninth" is correct.
 
+Amendment 2026-11-12 (fidelity check and CP-L10 Key figures; owner: "Yes, fix those"; two defects
+that refused correct handoffs in paid runs `tdg-proof-short-001`, `tdg-reader-format-001`,
+`tdg-proof-snapshot-opus-001`):
+1. **A comma is a thousands separator only.** A comma followed by exactly three digits, repeated, is a
+   separator; two figures are the same number when their digits agree once separators are removed
+   (`USD 4,173 million` matches a table's `4173`, and the reverse; `1,291.27` matches `1291.27`).
+   `2024, 437` is two numbers and `1,25` is `1` and `25`. Sign, unit, scale and decimal places as
+   written are unchanged (`5.89` is not `5.8905`), and a number still matches only as a whole number.
+   A refusal quotes the figure as the passage wrote it.
+2. **A bracketed figure after a figure is a note, not a negative.** A parenthesised figure that
+   directly follows another figure (its optional unit and spaces or tabs, then the opening
+   parenthesis) in the same cell or phrase is read as written inside the parentheses:
+   `3,395 (51.6%)` holds `3,395` and `51.6%`; `100 (-5.2%)` holds `100` and `-5.2%`. A parenthesised
+   figure alone in a cell, after words, or after another cell stays an accounting negative
+   (`(12.3)%`, `| Net debt change | (120) |`, `a loss of (45)`). The same reading applies to a passage.
+
 Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
 judgement-first wording, and whether a limitation truly changes a conclusion. These are judged
 by reading one real run per change against the VMO2 reference, recorded in `VERIFICATION.md`.

@@ -871,8 +871,11 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
 # check: it is not one of the eight prose checks. A number as the reader sees it is the longest
 # run of digits at that place (3.14 is read whole, never as 3.1; a malformed 1.2.3 or 12,5 is
 # still read, as 1.2 and 3, or 12 and 5), with the sign it was written with (a leading minus, or
-# parentheses) and the unit or scale beside it. On the passage side dates and period labels
-# are masked as in check 8. A held currency code is not compared with the passage's (old behaviour).
+# parentheses) and the unit or scale beside it. A comma between digit groups of three is a
+# thousands separator (4,173 is 4173); a parenthesised figure directly after another figure
+# (`3,395 (51.6%)`) is a note on it, read as written inside the parentheses, not a negative. On
+# the passage side dates and period labels are masked as in check 8. A held currency code is not
+# compared with the passage's (old behaviour).
 CODE = re.compile(r"\bCP-[A-Z0-9]+\b|\bT\d+[A-Z]?\.\d+\b|\b[0-9A-Fa-f]{16,}\b")
 _NUMBER_UNIT = (
     r"%|x\b|\s?pp\b|\s?bps\b|\s?bp\b|\s?per ?cent\b"
@@ -928,16 +931,28 @@ def _figures(text: str, passage: bool = False) -> list[_Figure]:
         masked = PERIOD_WORD.sub(
             lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), masked)
         )
-    return [
-        _Figure(
-            found["n"].rstrip("0").rstrip(".") if "." in found["n"] else found["n"],
-            bool(found["minus"] or (found["open"] and found["close"])),
-            bool(found["open"] and found["close"] and not found["minus"]),
-            _unit(found["u1"] or found["u2"]),
-            found[0].strip(),
+    figures: list[_Figure] = []
+    previous_end: int | None = None
+    for found in NUMBER.finditer(masked):
+        bracketed = bool(found["open"] and found["close"] and not found["minus"])
+        # A bracketed figure right after another figure (and its unit) annotates it: 3,395 (51.6%).
+        annotation = (
+            bracketed
+            and previous_end is not None
+            and masked[previous_end : found.start()].strip(" \t") == ""
         )
-        for found in NUMBER.finditer(masked)
-    ]
+        previous_end = found.end()
+        number = found["n"].replace(",", "")  # a comma in a figure is a thousands separator
+        figures.append(
+            _Figure(
+                number.rstrip("0").rstrip(".") if "." in number else number,
+                bool(found["minus"] or (bracketed and not annotation)),
+                bracketed and not annotation,
+                _unit(found["u1"] or found["u2"]),
+                found[0].strip(),
+            )
+        )
+    return figures
 
 
 def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
