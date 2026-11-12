@@ -14,7 +14,7 @@
   --rb-neu: #474A4F;  --rb-neu-tint: #F4F4F5;  --rb-neu-navy: #C7CBE0;
   /* chart */
   /* fills (bars, areas, swatches) and lines/text (strokes, labels): bright fills never carry thin marks */
-  --rb-ch-1: #001AFF; --rb-ch-2: #1EFF8F; --rb-ch-3: #EAFF00;
+  --rb-ch-1: #001AFF; /* issuer */ --rb-ch-2: #1EFF8F; --rb-ch-3: #EAFF00;
   --rb-ch-4: #A29AFF; --rb-ch-5: #256A80;
   --rb-ch-1-ln: #001AFF; --rb-ch-2-ln: #0F8048; --rb-ch-3-ln: #758000;
   --rb-ch-4-ln: #514D80; --rb-ch-5-ln: #256A80;
