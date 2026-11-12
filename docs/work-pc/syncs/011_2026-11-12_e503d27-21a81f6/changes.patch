@@ -1,0 +1,2546 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 32c62d8..17aff4d 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,55 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Run start page: effort (Fast / Balanced / High) and model (GPT Sol / Claude Opus)
++
++Scope: offline, macOS; no provider was called and no run was started. Owner instruction recorded as
++the 2026-11-12 amendment in `docs/rulings/2026-11-11-run-start-submit.md` (configs sol-medium,
++sol-high, opus-medium, opus-high; USD 20 cap unchanged).
++- Effort map: `BALANCED_HIGH_MODULES` (CP-1A, CP-1D, CP-2, CP-2A, CP-3, CP-3C, CP-4, CP-4C, CP-6);
++  basis per module in `runs/tdg-mixed-effort-comparison.md`. Twelve of twenty assignments are
++  inferred from module type, not measured.
++- Engine: config `opus-high` (claude-opus-5-5, effort high, opus-medium price object);
++  `cpos_launch --balanced`. Service: answers carry `model` and `effort`, defaults gpt/balanced,
++  other values only at Advanced; six (model, effort) pairs map to the four configs; start-up
++  requires the ruling to name all four; Claude refused without the Anthropic key. Page:
++  two Advanced-only radio groups and a "Model and effort" summary row.
++- Passed: quality gate 0 findings (42 files); 1,787 tests across the page, launcher, handoff loop,
++  run start, inbox, packaging and `tests/model` files. Four failures, none from this change: the
++  three in `tests/known-failures.txt`, and `test_upload_to_filed_report_with_the_real_launcher`,
++  which fails identically on a clean `38d23de` checkout (empty `record.report`) and is not listed.
++- Reviews: task reviews of engine, service and page, and a security review of the paid-launch
++  gating (five invariants, seven saved probes), no High. One Medium fixed with a failing test
++  first (the Claude-unavailable refusal now links to Pathway); Low test gaps closed in the same round.
++- Page seen in a browser at desktop and 375 px (no horizontal overflow); controls appear only at
++  Advanced with Balanced and GPT Sol selected. Not a reader check: no report page changed.
++- Open, not fixed: a queued Claude run started after a restart without the Anthropic key fails
++  as "launcher exited 2" and counts toward the daily limit (nothing is spent); a pre-change
++  sealed-but-unmoved submission fails with a misleading reason; on the CLI a ruling naming
++  sol-medium also admits `--balanced` / `--high-modules`; AGENTS.md names
++  `tests/nightly-known-failures.txt` but the file is `tests/known-failures.txt`.
++- Not verified: any live call (Opus at high effort, Balanced on either model, Claude from the
++  page); the summary and Submit against a running service by hand; Windows; the full suite;
++  confidence-review and rewrite-tournament on this change.
++
++## 2026-11-12 — Per-module effort (`--high-modules`) and one mixed-effort TDG live run
++
++Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md`;
++one paid run on gpt-6.1-sol. Not a current credit view; one run per setting.
++- Code: `HandoffExecutor(effort_by_module=...)`, passed by `run_live_handoffs` and `cpos_launch
++  --high-modules`. `tests/test_handoff_loop.py` and `tests/test_cpos_launch.py` passed (472, 1 skipped);
++  quality gate 0 findings; task review passed with three Low test gaps open (pass-through to
++  `run_live_handoffs`, seed digest, multi-turn). confidence-review and rewrite-tournament not run.
++- Live: `runs/cpos-tdg-sol-mixed-cp2-001` (main checkout), high on CP-0, CP-1A, CP-1D, CP-2, CP-2A.
++  `live/calls.jsonl` records high on CP-0, CP-1A, CP-1D and medium on CP-1, CP-1B, CP-DR, CP-1C.
++  Six modules accepted; stopped at CP-1D (three drafts refused: "Invalid Markdown table header",
++  which names no table; the fault was a 7-column header over an 8-column separator). USD 3.46.
++  CP-2, CP-2A, CP-2E did not run; no report was published.
++- Comparison with the saved all-medium runs: `runs/tdg-mixed-effort-comparison.md` (handoffs read
++  by a separate reviewer, tabled figures checked against the 10-K). High: clear gain on CP-1D
++  (unaccepted draft), none on CP-0, inconclusive on CP-1A; the medium modules needed no more.
++- Not verified: CP-2 onward under mixed effort; a same-code all-medium control (instructions
++  changed after both baselines); the full test suite.
+ ## 2026-11-12 — CP-2G facility schedule (branch `claude/cash-flow-model-comparison-498459`)
+ 
+ Owner waiver 2026-11-12: the 800-line PR limit is waived for this branch's pull request (about 1,290
+@@ -917,57 +966,3 @@ with the query removed. So "Open report" (row, selected run, deliverables list)
+   inbox-built library; a run with a published forecast model or without a report ("Open primary
+   handoff"); the Windows package; Safari and Firefox.
+ 
+-## 2026-11-10 — Design pass on the run report and library (branch `claude/impeccable-report-library-595877`)
+-
+-Scope: `/impeccable` critique, harden, layout and polish on `apps/issuer-library/credit_os/web/`
+-(page parts only; no Python under `src/` or `apps/issuer-library/*.py` changed). What changed and
+-the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `origin/main` c145b16.
+-- Real-data check: the four retained TDG runs built into a scratch folder through a link to `runs/`
+-  (nothing written under `runs/` or the checkout's `library/`; no model call). Word-level diff of the
+-  drawn page text against the `origin/main` page parts on `cpos-tdg-sol-medium-all-001` (Overview,
+-  CP-1, CP-6), `cpos-tdg-sol-high-001` (Overview) and the library table: the only differences are
+-  coverage labels (module names to codes), three repeated chart legends and three repeated
+-  "Missing values have no bar" notes removed, and four run ids added to library rows. CP-6: none.
+-- Measured in headless Chrome from disk at 1440 and 1280: no horizontal overflow on the four
+-  routes; library table 922px in a 922px box at 1280 (was 964px); run-report tables are not scroll
+-  boxes and their headers stick at 0px; heading levels have no skip on Overview, CP-1, CP-6; long
+-  unbroken, RTL, CJK and emoji text injected into every bottom line, finding and limitation does not
+-  widen the page at 1280 or 500px; the Overview prints as 15 pages and CP-1 as 8.
+-- Driven in the app's browser pane at 1440: library row to run, outline click and Tab+Enter to a
+-  part (route, scroll, current entry, focus ring), count of citations without a page to the
+-  inspector and Esc back to the count, a chart chip to the inspector, the Reference route.
+-- Gates, all exit 0: `node --test` on `static.test.cjs` and `calendar.test.cjs` (104 pass);
+-  `uv run pytest tests/test_library_page_browser.py tests/test_update_library.py
+-  tests/test_library_index.py tests/test_credit_os_store.py` (94 passed, browser tests included);
+-  `uv run python tools/quality_gate.py --base origin/main`.
+-- Reviews: critique by two independent agents; confidence review fixed three findings (a
+-  half-retagged chart heading, the catalogue opening on a no-output module, print without
+-  background fills); rewrite tournament run inline (one hoist applied, the rest held).
+-- Detector after the pass (1280): no skipped-heading or line-length finding on the four routes;
+-  the remaining tiny-text findings are the committed 11px label size and nested-cards is the app frame.
+-- Basis clamp (owner, 2026-11-10, after the PR opened): the library's ratio basis shows three lines
+-  per row. Probe at 1440 and 1280: 12 of 12 basis cells clamped, each cell's title equals its full
+-  text, rows 145–161px, table 922px in 922px at 1280. Node 105 pass; the three library pytest files
+-  70 passed.
+-- Second hardening pass (CSS only, `/impeccable harden`): headless Chrome probes on the built TDG
+-  library. Six routes × seven widths (1440–500px), inspector open and closed: no page or canvas
+-  overflow. Hostile text (240-character unbroken words, long URLs, Arabic/Japanese/emoji) in handoff
+-  fields and library rows at 1280 and 500px: none after the fix (before: band +1,194px, library
+-  table 7,802px in 922px). Edge states (malformed and unknown run-part routes, nothing established,
+-  no reader summaries, 400 findings, no outputs, 404 library rows in 50ms): no script errors.
+-  Library and run report printed to PDF and read. 106 node tests, 94 pytest (library set, browser
+-  included), quality gate exit 0. Known: on portrait A4 the printed library table runs 8px past
+-  its card edge (nine columns of whole words); nothing is cut. Module tables with hostile cell text
+-  scroll sideways in their own box, as before.
+-- Library simplification (owner: one item per column; `/impeccable` distill): ten single-value
+-  columns, issuer rail replaced by an Issuer select, filters as a toolbar. Headless Chrome on the
+-  built TDG library: rows 41px at 1440 and 1280 (one 31-character run id wraps at 1280); six routes
+-  × six widths without overflow; hostile text contained at 1280 and 500px; a flow probe with a
+-  synthetic second issuer covered `?issuer=zzz` in the address, the select, Reset, Any run, sort,
+-  row selection and the panel heading, with no script error. Printed to PDF and read (the run id
+-  column wraps to several lines on portrait A4). 106 node tests; 103 pytest (library set, browser
+-  included). Superseded by this: the basis clamp and its focus rule above.
+-- Not verified: a real print dialog and printers; Safari and Firefox; a screen reader; Windows
+-  forced colours (rule written, not rendered); touch input; the inbox-built library with Run
+-  activity; runs without charts or with a committee band; whether a keyboard-only reader finds
+-  the full basis (it is in the selected-run panel, not on focus).
+diff --git a/docs/rulings/2026-11-11-run-start-submit.md b/docs/rulings/2026-11-11-run-start-submit.md
+index 0fde708..cf7ab1c 100644
+--- a/docs/rulings/2026-11-11-run-start-submit.md
++++ b/docs/rulings/2026-11-11-run-start-submit.md
+@@ -3,16 +3,29 @@
+ lifts: live-provider-pause
+ by: user
+ date: 2026-11-11
+-configs: sol-medium, web-search
++configs: sol-medium, sol-high, opus-medium, opus-high, web-search
+ 
+ The user was asked: "The explicit paid action would become 'Submit after an approved summary',
+ at the same USD 20 cap", and said: "2. Approved". On the service: "one users CLI will provide for
+ all other users".
+ 
+ Scope: live launches started by `deploy_workflow.run_start` from a submission whose summary the
+-analyst approved, USD 20 per run folder, on sol-medium only. The provider key comes from the
++analyst approved, USD 20 per run folder, on the configurations listed above (amended below). The provider key comes from the
+ service's environment only; no credential file is read. Replaces 2026-11-09-inbox-automation.md.
+ 
++Amendment, 2026-11-12 (user): "within run start lanuncher, set claude GPT mixed effort to default
++(balanced). only within advanced, allow switching between Fast (all medium), balanced and High
++(all high). but also model selection between Claude opus and GPT Sol".
++
++The original ruling covered sol-medium only. From this amendment a run started from the page uses
++GPT Sol (gpt-6.1-sol) or Claude Opus (claude-opus-5-5) at one of three efforts: Fast (every module
++medium), Balanced (the default: high on the modules the effort map names, medium on the rest) or
++High (every module high). Model and effort can differ from the defaults (GPT Sol, Balanced) only
++at the Advanced level. The USD 20 cap per run folder and the Submit-on-an-approved-summary action
++are unchanged. Effort map and its evidence: `runs/tdg-mixed-effort-comparison.md`. Web search
++(next amendment) is OpenAI's hosted search, so it applies to GPT Sol runs only; a Claude Opus run
++does not search the web.
++
+ Amendment 2026-11-12 (web search for CP-DR on the run page): asked "Web search for CP-DR on the run
+ page ... Recommended: amend the ruling to add web search (USD 0.01 a search, up to USD 0.16 held per
+ call; only public names leave the machine)", the user said "1. approved". The `configs:` line now
+diff --git a/docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md b/docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md
+new file mode 100644
+index 0000000..269a699
+--- /dev/null
++++ b/docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md
+@@ -0,0 +1,29 @@
++# One TDG live run to CP-2 with mixed GPT effort, compared with the saved all-medium runs
++
++lifts: live-provider-pause
++by: user
++date: 2026-11-12
++configs: sol-medium
++
++The user instructed "review modules to assess medium or high and use GPT medium and high live
++testing and compare vs saved all-medium runs. up to cp-2", then clarified "gpt mixed medium and
++high live testing and compare that with existing results for just medium".
++
++Scope: one CP-OS launch of the ten modules up to and including CP-2 in the pathway order (CP-0,
++CP-1, CP-1A, CP-1B, CP-1C, CP-1D, CP-DR, CP-2, CP-2A, CP-2E) on OpenAI gpt-6.1-sol, configuration
++sol-medium, with `--high-modules CP-0 CP-1A CP-1D CP-2 CP-2A` (high effort on those five, medium
++on the rest; the same model and price table). Sources: the retained historical TDG FY2024 public
++files (`~/Documents/Final-workflow-PY/data/public-corpus/v1/TDG`, read only). Context: a copy of
++the 2026-11-10 baseline's context (`attachments.legal_documents: none`). Cap USD 14 for the run
++folder, including the USD 5.73 per-call hold. CP-DR does not search the web. Run directory:
++`runs/cpos-tdg-sol-mixed-cp2-001` in the main checkout.
++
++Comparison: the same modules in the saved all-medium runs
++`/private/tmp/claude-501/rbot-live7/runs/tdg-all-001` (2026-11-10, primary) and
++`runs/cpos-tdg-sol-medium-all-001` (2026-11-09), which are not modified. Module instructions have
++changed since both baselines (reader-voice ruling of 2026-11-11), so differences are not
++attributable to effort alone.
++
++The provider key comes from the launching environment only; no credential file is read. It proves
++this dated case only; automated checks cover handoff structure and anchors, not analytical
++accuracy. Outputs are candidates until reviewed.
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index ef8e98c..ae1250d 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -345,6 +345,12 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+     <p class="help">By default every module of the pathway runs. A module you leave out does not run, and the modules a chosen module depends on are added.</p>
+     <fieldset><legend>Modules to run</legend><div id="modbox"></div></fieldset>
+     <div class="grid"><div class="f"><label for="turns">Turns per module</label><input type="text" id="turns" data-c="turns" value="32" inputmode="numeric" aria-describedby="turns-h"><p class="help" id="turns-h">A whole number from 1 to 64. The default is 32.</p></div></div>
++    <fieldset id="effortf" aria-describedby="effort-h"><legend>Effort</legend>
++      <div class="seg" role="radiogroup" aria-label="Effort"><label><input type="radio" name="effort" data-c="effort" value="fast">Fast</label><label><input type="radio" name="effort" data-c="effort" value="balanced" checked>Balanced</label><label><input type="radio" name="effort" data-c="effort" value="high">High</label></div>
++      <p class="help" id="effort-h">Fast runs every module at medium effort. Balanced uses high effort on the judgement modules (business context, earnings quality, credit synthesis, downside, relative value, refinancing, covenants, restructuring, committee challenge) and medium on the rest. High runs every module at high effort and costs the most.</p></fieldset>
++    <fieldset id="modelf" aria-describedby="model-h"><legend>Model</legend>
++      <div class="seg" role="radiogroup" aria-label="Model"><label><input type="radio" name="model" data-c="model" value="gpt" checked>GPT Sol</label><label><input type="radio" name="model" data-c="model" value="claude">Claude Opus</label></div>
++      <p class="help" id="model-h">Claude Opus is available only where the service has it set up.</p></fieldset>
+   </div>
+   <div class="run-strip" data-tone="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div><span class="strip-title">A run cannot be corrected once it starts</span><p class="strip-text">If the context changes, every module runs again: a resumed run refuses changed context. The cheapest fix is the right pathway now.</p></div></div>
+ </section>
+@@ -511,7 +517,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
+ <section class="run-step" id="st-review" data-st="review" hidden>
+   <h2 tabindex="-1"><span class="n"></span> <span>Summary and start</span></h2>
+   <p class="stepline"></p>
+-  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, unless the case is synthetic, the research module's web searches go to OpenAI's search: it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
++  <p class="lead">This is the run you are about to start, as the launcher itself forecasts it from your documents and answers. It uses the paid model (USD 20 cap). Pages of the documents you uploaded that modules read are sent to OpenAI, and, on a GPT Sol run unless the case is synthetic, the research module's web searches go to OpenAI's search (a Claude run does not search the web): it is told to search with public names only, and the queries it actually sent are kept in the run record. For a private case the issuer's name and the questions it researches go to that search. Read it, accept each limit, approve, then submit once. Any change to an answer or a document needs a new summary.</p>
+   <div id="rv-state" role="status" aria-live="polite"></div>
+   <dl class="rv-facts" id="rv-facts"></dl>
+   <h3 class="sub">What each module is expected to do</h3>
+@@ -1106,6 +1112,13 @@ function turnsValue(check) {
+   if (check) record(errs, el, `enter a whole number from 1 to ${MAX_TURNS}.`);
+   return NaN;
+ }
++// The model and effort the service accepts; only the Advanced level may choose, every other level sends the defaults.
++const MODELS = {gpt: 'GPT Sol', claude: 'Claude Opus'}, EFFORTS = {fast: 'Fast', balanced: 'Balanced', high: 'High'};
++function modelEffort() {
++  if (LEVEL !== 'advanced') return {model: 'gpt', effort: 'balanced'};
++  const model = getC('model'), effort = getC('effort');
++  return {model: model in MODELS ? model : 'gpt', effort: effort in EFFORTS ? effort : 'balanced'};
++}
+ // One pinned-assumption block: null when the module chooses, otherwise the values plus rationale.
+ function asm(key, spec, extra, check) {
+   const sc = $('as-' + key);
+@@ -1214,7 +1227,7 @@ const RULES = [
+   // want to in the context file." The research module searches the web only when the run's ruling lists
+   // web-search (owners/cpos.py WEB_SEARCH_GRANT); without it, in live run tdg-all-001, it came back
+   // Blocked and the peer benchmark had no peers. The standing ruling lists it from 2026-11-12.
+-  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web for public peers unless the case is synthetic: the standing ruling for runs from this page lists web-search (2026-11-12). It is told to use public names only, its searches go to OpenAI\'s search, and the queries it sent are kept in the run record. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
++  {s:'CP-DR', o:'information', c:() => true, r:'The research module searches the web for public peers unless the case is synthetic or the run uses Claude (web search is offered on GPT Sol only): the standing ruling for runs from this page lists web-search (2026-11-12). It is told to use public names only, its searches go to OpenAI\'s search, and the queries it sent are kept in the run record. Nothing you must add: the research module supplies the peers by default, and your own are optional.'},
+   {s:'CP-1C', k:'cp1c-no-peer-source', o:'gap', c:f => f.o.valuation.peer_source in PEER_GAP, r:f => PEER_GAP[f.o.valuation.peer_source], fix:'Choose "Research finds public peers", the default; or, for your own set, "I\'ll give peer figures".', go:'valuation'},
+   {s:'CP-1C', o:'gap', c:f => f.o.valuation.basis === 'auto' && f.o.valuation.peer_source === 'user_comps' && f.peersIn < MIN_ADMITTED && f.precIn < MIN_ADMITTED,
+     r:f => `Automatic basis: ${f.peersIn} peer${f.peersIn === 1 ? '' : 's'} admitted (needs ${MIN_ADMITTED}, at most ${PEER_MONTHS} months old) and ${f.precIn} precedent${f.precIn === 1 ? '' : 's'} (needs ${MIN_ADMITTED}, at most ${PRECEDENT_MONTHS} months old): no multiple is selected.`, fix:'Add peers or precedents, or choose another basis.', go:'valuation'},
+@@ -1646,7 +1659,7 @@ const STAGE_OF_RULE = {
+ function errorStage(text) {
+   if (/submitted_by/.test(text)) return 'pathway';
+   if (/\b(files?|documents?|sources?|folder)\b/i.test(text)) return 'documents';
+-  if (/\b(modules?|turns|level)\b/i.test(text)) return 'pathway';
++  if (/\b(modules?|turns|level|model|effort|Claude Opus)\b/i.test(text)) return 'pathway';
+   return '';
+ }
+ let SUMMARY = null;        // {key, answers, error, digest, modules, items, documents, ignored, omitted} for the answers and files held
+@@ -1762,7 +1775,11 @@ function readyTable(sq, own = []) {
+ // a private case searches the web, a synthetic one does not. The research module is TOLD to use
+ // public names only; the queries it sent are kept in the run record and checked afterwards.
+ const SEARCH_KINDS = ['public', 'private'];
+-function webSearchNote(kind) {
++// Web search is OpenAI's hosted tool: a Claude run has none (HandoffExecutor refuses it), so the
++// launcher runs it with search off and the page must not say otherwise.
++const webSearches = (kind, model) => SEARCH_KINDS.includes(kind) && model !== 'claude';
++function webSearchNote(kind, model) {
++  if (model === 'claude' && kind !== 'synthetic') return 'Web search is offered on GPT Sol only: this Claude run does not search the web and reads only the supplied files.';
+   const told = ' It is told to search with public names only, and the queries it actually sent are kept in the run record.';
+   if (kind === 'synthetic') return 'This is a synthetic case: the research module does not search the web and reads only the supplied files.';
+   if (kind === 'private') return "This is a private case: the research module will search the web, and the issuer's name and the questions it researches go to OpenAI's search." + told;
+@@ -1774,11 +1791,13 @@ function renderFacts(o) {
+     const dates = [['As-of', o.run.as_of], ['Cutoff', o.run.cutoff], ['Current period', o.run.current_period], ['Prior period', o.run.prior_period]].filter(x => x[1]).map(x => x[0] + ' ' + x[1]).join(', ');
+     rows.push(['Pathway', PATHS[o.run.pathway].label], ['Issuer', o.identity.issuer_name + (o.identity.issuer_id ? ' (' + o.identity.issuer_id + ')' : '')], ['Dates', dates],
+       ['Files', SUMMARY.documents.length + ' read' + (SUMMARY.ignored.length ? ', ' + SUMMARY.ignored.length + ' not read' : '')],
+-      ['Model', 'sol-medium'], ['Cap', 'USD 20 for this run'],
+-      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', SEARCH_KINDS.includes(o.run.case_kind) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : 'No: a synthetic case reads only its files']] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
++      ['Cap', 'USD 20 for this run'],
++      ...(SUMMARY.modules.includes('CP-DR') ? [['Web search', webSearches(o.run.case_kind, (SUMMARY.answers || {}).model) ? 'Yes: the research module searches the web' + (o.run.case_kind === 'private' ? "; the issuer's name and what it researches go to OpenAI's search" : '') : (o.run.case_kind !== 'synthetic' ? 'No: web search is offered on GPT Sol only, so this Claude run reads only its files' : 'No: a synthetic case reads only its files')]] : []), ['Report sections not filled', SUMMARY.omitted.length ? SUMMARY.omitted.join(', ') : 'none']);
+     // What was sent, whatever the level now is: a setting made at Advanced still binds the run at Basic.
+     const sent = SUMMARY.answers || {}, left = runOf(o.run.pathway).filter(m => Array.isArray(sent.modules) && sent.modules.length && !sent.modules.includes(m));
+     if (sent.max_turns !== DEFAULT_TURNS) rows.push(['Turns per module', `${sent.max_turns} (the default is ${DEFAULT_TURNS})`]);
++    const me = `${MODELS[sent.model] || sent.model}, ${EFFORTS[sent.effort] || sent.effort}`;
++    rows.push(['Model and effort', sent.model === 'gpt' && sent.effort === 'balanced' ? me + ' (the default)' : me]);
+     if (left.length) rows.push(['Modules left out', left.map(m => `${mname(m)} (${m})`).join(', ')]);
+   }
+   box.textContent = '';
+@@ -2082,7 +2101,7 @@ function renderModules(order) {
+ // What the service takes at /summary (run_start/submissions.py Answers).
+ function answers() {
+   const o = build(), order = runOf(o.run.pathway), kept = order.filter(m => !SKIPPED.has(m));
+-  return {context: o, modules: kept.length === order.length ? [] : kept, max_turns: turnsValue(false), level: LEVEL, submitted_by: getC('submitter')};
++  return {context: o, modules: kept.length === order.length ? [] : kept, max_turns: turnsValue(false), ...modelEffort(), level: LEVEL, submitted_by: getC('submitter')};
+ }
+ 
+ /* ======================================================================= Keeping the answers (localStorage) */
+@@ -2098,7 +2117,7 @@ function storeFailed(err) {
+ const fileChoices = () => Object.fromEntries(Object.keys(FILE_SELECTS).map(c => [c, getC(c)]));
+ function save(o) {
+   if (!SERVED || !kept) return;
+-  const extra = {submitter: getC('submitter'), turns: getC('turns'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
++  const extra = {submitter: getC('submitter'), turns: getC('turns'), model: getC('model'), effort: getC('effort'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
+   if (CARRIED.run) extra.carried = {run: CARRIED.run, files: [...CARRIED.files], fields: [...CARRIED.fields], locked: CARRIED.locked};
+   try { localStorage.setItem(STORE, JSON.stringify({v: 1, id: SUB, level: LEVEL, context: o, files: fileChoices(), extra})); }
+   catch (err) { storeFailed(err); }
+@@ -2343,6 +2362,8 @@ async function restore() {
+       applyRowKeys();
+       if (typeof x.submitter === 'string') $('submitter').value = x.submitter;
+       if (typeof x.turns === 'string') $('turns').value = x.turns;
++      for (const c of ['model', 'effort']) cEls(c).forEach(r => { r.checked = r.value === x[c]; });
++      for (const c of ['model', 'effort']) if (!getC(c)) cEls(c).forEach(r => { r.checked = r.defaultChecked; });
+       if (Array.isArray(x.skipped)) x.skipped.forEach(m => SKIPPED.add(String(m)));
+       newestTouched = x.newestTouched === true;
+       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();
+@@ -2465,7 +2486,7 @@ function vis() {
+   $('cp3f').hidden = !(has('CP-3') || getV(sv, 'cp3_mode'));
+   $('cp6f').hidden = !(has('CP-6') || getV(sv, 'cp6_deep_debate'));
+   $('research-src').hidden = !has('CP-DR');
+-  $('research-src-text').textContent = webSearchNote(getV(si, 'case_kind')) + " Add peers' filings to the documents if you want them used.";
++  $('research-src-text').textContent = webSearchNote(getV(si, 'case_kind'), modelEffort().model) + " Add peers' filings to the documents if you want them used.";
+   $('b-modes').hidden = $('cp3f').hidden && $('cp6f').hidden && !has('CP-DR');
+   document.querySelectorAll('[data-uses="cp3mode"],[data-uses="cp6"]').forEach(u => setHTML(u, usesList(BLOCK_USES[u.dataset.uses].filter(has))));
+ 
+diff --git a/runs/tdg-mixed-effort-comparison.md b/runs/tdg-mixed-effort-comparison.md
+new file mode 100644
+index 0000000..35ae760
+--- /dev/null
++++ b/runs/tdg-mixed-effort-comparison.md
+@@ -0,0 +1,100 @@
++# TDG FY2024 (as of 2024-09-30): gpt-6.1-sol mixed medium/high vs all-medium, to CP-2
++
++Ruling: `docs/rulings/2026-11-12-tdg-mixed-effort-to-cp2.md`. Historical case; not a current credit view.
++
++## Runs
++
++| Side | Run | Modules | Charged USD |
++| --- | --- | --- | --- |
++| Mixed | main checkout `runs/cpos-tdg-sol-mixed-cp2-001` (2026-11-12) | 10 requested; 6 accepted; stopped at CP-1D | 3.46 |
++| Medium A (primary) | `/private/tmp/claude-501/rbot-live7/runs/tdg-all-001` (2026-11-10) | 20 requested | 4.32 for the same ten |
++| Medium B | main checkout `runs/cpos-tdg-sol-medium-all-001` (2026-11-09) | 20 requested; CP-1B, CP-1C, CP-1D, CP-2A Blocked | 3.13 for the same ten |
++
++Mixed: high effort on CP-0, CP-1A, CP-1D, CP-2, CP-2A; medium on CP-1, CP-1B, CP-1C, CP-DR, CP-2E
++(`--high-modules`, recorded per call in `live/calls.jsonl`). CP-2, CP-2A and CP-2E never ran.
++
++Stop: CP-1D's draft had one table (draft line 229) with a 7-column header over an 8-column
++separator. The checker's message, "Invalid Markdown table header", names no table or line; the
++model changed other tables on each of three attempts. Not an effort effect.
++
++Not like for like: module instructions changed after both baselines (reader-voice ruling,
++2026-11-11; files 15-112% larger); mixed requested 10 modules, A requested 20 (A's CP-0 covers
++more); mixed routes each module only its registered producers' handoffs, so CP-1A had no CP-1
++handoff and fed none of CP-1B, CP-1C, CP-DR, CP-1D. One run per setting.
++
++## Cost and size per module
++
++| Module | Effort (mixed) | Mixed: USD / reasoning tokens / words | Medium A |
++| --- | --- | --- | --- |
++| CP-0 | high | 0.45 / 1,654 / 5,946 | 0.30 / 332 / 4,440 |
++| CP-1 | medium | 0.51 / 1,886 / 8,826 | 0.34 / 885 / 9,162 |
++| CP-1A | high | 0.45 / 3,588 / 8,920 | 0.29 / 412 / 6,939 |
++| CP-1B | medium | 0.58 / 1,709 / 10,093 | 0.52 / 2,810 / 9,425 |
++| CP-DR | medium | 0.25 / 949 / 4,729 | 0.33 / 1,409 / 5,215 |
++| CP-1C | medium | 0.27 / 516 / 5,211 | 0.35 / 650 / 5,146 |
++| CP-1D | high | 0.94 / 7,145 / not accepted | 0.53 / 1,894 / 8,603 |
++
++High modules cost 1.5-1.8x their medium baseline; medium modules moved 0.75-1.5x with no direction.
++
++## Analysis quality (independent read of the handoffs, figures checked against the 10-K)
++
++- CP-0 (high): no gain. Medium A found two real documentary conflicts (Amendment No. 17 title,
++  revolver rate wording) that mixed missed; mixed added comparable caveats (pro forma vs reported
++  liquidity, guarantor date, preliminary purchase accounting). Medium B also missed A's conflicts,
++  so this is within run-to-run noise.
++- CP-1A (high): modest gain, confounded. New verified points: debt prepayment is last in the stated
++  excess-cash priority order (10-K p.54); government "fair and reasonable" pricing reviews; the
++  USD 2,020m vs 2,038m dividend reconciliation. Most of its extra quantification exists because it
++  had no CP-1 handoff, and its output reached no downstream module in this run.
++- CP-1D (high, unaccepted draft): clear gain in substance. It ties USD 204m of the USD 360m
++  add-backs to specific non-cash entries and gives a supported-only EBITDA of USD 4,017m (6.24x);
++  medium A withheld a figure and rejected all refinancing costs on recurrence alone. One error:
++  it omits the USD 3m Amendment No. 14 write-off (supported refinancing 52, not 49). Never
++  accepted or consumed, so no end-to-end benefit is shown.
++- Medium controls (CP-1, CP-1B, CP-1C, CP-DR): every checked figure matches across runs; same
++  conclusions; status labels and headline basis vary. None shows a need for more than medium:
++  CP-1C and CP-DR are limited by missing evidence, not reasoning.
++
++All tabled figures on both sides agree with the 10-K except the USD 3m omission above.
++
++## Verdict
++
++High effort is supported for CP-1D (judgement on add-backs) and not for CP-0. CP-1A is
++inconclusive. CP-1, CP-1B, CP-1C and CP-DR are adequate at medium. CP-2 and CP-2A were not tested
++in this run; the 2026-11-09 comparison (main checkout `runs/tdg-effort-comparison.md`) remains the
++only CP-2 evidence.
++
++Not verified: CP-2, CP-2A, CP-2E under the mixed setting; a second sample of any setting; a
++same-code all-medium control; CP-1B, CP-1C and CP-DR were read in part; whether a resumed CP-1D
++would pass once the table is fixed.
++
++## Effort map (Balanced), owner instruction 2026-11-12
++
++Rule drawn from the findings: high effort pays where a module weighs evidence and reaches a
++judgement; it does not pay where a module inventories, extracts, calculates or is limited by
++missing evidence. `BALANCED_HIGH_MODULES` in `src/deploy_workflow/owners/cpos_launch.py`.
++
++| Module | Balanced effort | Basis |
++| --- | --- | --- |
++| CP-0 source readiness | medium | Measured: gain on 2026-11-09, none on 2026-11-12; within noise |
++| CP-1 financial foundation | medium | Measured twice: figures identical, no gain |
++| CP-1A business and transaction | high | Measured twice: verified extra issuer points each time; modest |
++| CP-1B earnings delta | medium | Measured: adequate |
++| CP-1C peer benchmark | medium | Measured: limited by missing peers, not reasoning |
++| CP-1D earnings quality | high | Measured: clear gain (unaccepted draft) |
++| CP-DR deep research | medium | Measured: limited by missing evidence |
++| CP-2 credit synthesis | high | Measured 2026-11-09: largest gain |
++| CP-2A downside pathway | high | Inferred (judgement); untested |
++| CP-2D liquidity bridge | medium | Inferred (calculation); untested |
++| CP-2E macro, FX, hedging | medium | Inferred (calculation); untested |
++| CP-2G forward model | medium | Inferred (calculation); untested |
++| CP-2H rating migration | medium | Inferred (mapping); untested |
++| CP-3 relative value | high | Inferred (judgement); untested |
++| CP-3C refinancing risk | high | Inferred (judgement); untested |
++| CP-3D market-implied risk | medium | Inferred (evidence-limited); untested |
++| CP-4 legal and covenants | high | Inferred (interpretation); untested |
++| CP-4C restructuring | high | Inferred (judgement); untested |
++| CP-5 evidence trace | medium | Inferred (mechanical check); untested |
++| CP-6 committee challenge | high | Inferred (judgement); untested |
++
++Nine of twenty modules run high. Twelve of the twenty rows rest on inference, not a run.
+diff --git a/src/deploy_workflow/inbox/runs.py b/src/deploy_workflow/inbox/runs.py
+index a49f932..09a7902 100644
+--- a/src/deploy_workflow/inbox/runs.py
++++ b/src/deploy_workflow/inbox/runs.py
+@@ -25,6 +25,19 @@ Status = Literal["queued", "running", "finished", "failed", "capped", "rejected"
+ _REGISTRY = "issuers.json"
+ DEFAULT_MAX_TURNS = 32
+ _TURNS = (1, 64)  # the range submissions.validated accepts
++MODELS = ("gpt", "claude")
++EFFORTS = ("fast", "balanced", "high")
++# The only launches the service makes: (model, effort) -> (launcher --config, --balanced or not).
++# Every config named here must be named by the standing ruling; start-up checks all of them.
++_LAUNCHES: dict[tuple[str, str], tuple[str, bool]] = {
++    ("gpt", "fast"): ("sol-medium", False),
++    ("gpt", "balanced"): ("sol-medium", True),
++    ("gpt", "high"): ("sol-high", False),
++    ("claude", "fast"): ("opus-medium", False),
++    ("claude", "balanced"): ("opus-medium", True),
++    ("claude", "high"): ("opus-high", False),
++}
++LAUNCH_CONFIGS = tuple(dict.fromkeys(config for config, _ in _LAUNCHES.values()))
+ 
+ 
+ @dataclass
+@@ -49,6 +62,9 @@ class Record:
+     modules: tuple[str, ...] = ()  # () = the pathway's modules
+     max_turns: int = DEFAULT_MAX_TURNS
+     level: str = ""
++    # Records written before the model and effort choice ran all-medium on GPT Sol.
++    model: str = "gpt"
++    effort: str = "fast"
+     submitted_by: str = ""
+     digest: str = ""  # the approved digest of the submitted files; the move is checked against it
+ 
+@@ -141,9 +157,29 @@ def alive(pid: int) -> bool:
+     return True
+ 
+ 
++def launch_options(model: str, effort: str) -> tuple[str, bool]:
++    """The launcher ``--config`` and whether ``--balanced`` follows it, for a model and effort."""
++    try:
++        return _LAUNCHES[model, effort]
++    except (KeyError, TypeError):
++        raise ValueError(f"no launch for model {model!r} at effort {effort!r}") from None
++
++
++def config_for(model: str, effort: str) -> str:
++    """The configuration a run of this model and effort launches with."""
++    return launch_options(model, effort)[0]
++
++
+ def _check_options(record: Record) -> None:
+-    """``ValueError`` unless the record's modules are method names and its turns a whole number
+-    in range: a hand-edited record must not put an option of its own into the launcher's argv."""
++    """``ValueError`` unless the record's modules are method names, its turns a whole number in
++    range and its model and effort known: a hand-edited record must not put an option of its own
++    into the launcher's argv."""
++    for field, allowed in (("model", MODELS), ("effort", EFFORTS)):
++        value = getattr(record, field)
++        if not isinstance(value, str) or value not in allowed:
++            raise ValueError(
++                f"run {record.id}: {field} {value!r} is not one of {', '.join(allowed)}"
++            )
+     for name in record.modules:
+         if not isinstance(name, str) or name not in METHODS:
+             raise ValueError(f"run {record.id}: {name!r} is not a module")
+@@ -158,16 +194,17 @@ def command(  # noqa: PLR0913 - the signature the scheduler calls
+     context: Path,
+     *,
+     launcher: Sequence[str],
+-    config: str,
+     cap: Decimal,
+     ruling: Path | None,
+ ) -> list[str]:
+     _check_options(record)
++    config, balanced = launch_options(record.model, record.effort)
+     argv = [
+         *launcher,
+         "--context", str(context),
+         "--sources", str(layout.drops / record.id),
+         "--config", config,
++        *(["--balanced"] if balanced else []),
+         "--cap", str(cap),
+         "--out", str(layout.runs / record.id),
+         "--no-library",
+@@ -187,14 +224,11 @@ def start(  # noqa: PLR0913 - the signature the scheduler calls
+     context: Path,
+     *,
+     launcher: Sequence[str],
+-    config: str,
+     cap: Decimal,
+     ruling: Path,
+ ) -> subprocess.Popen[bytes]:
+     """Start the paid run as a child; stdout and stderr append to logs/<id>.log."""
+-    argv = command(
+-        layout, record, context, launcher=launcher, config=config, cap=cap, ruling=ruling
+-    )
++    argv = command(layout, record, context, launcher=launcher, cap=cap, ruling=ruling)
+     env = child_environment()
+     env[PID_FILE_VARIABLE] = str(pid_file(layout, record.id))
+     child: subprocess.Popen[bytes] | None = None
+diff --git a/src/deploy_workflow/inbox/scheduler.py b/src/deploy_workflow/inbox/scheduler.py
+index c6d9558..a608232 100644
+--- a/src/deploy_workflow/inbox/scheduler.py
++++ b/src/deploy_workflow/inbox/scheduler.py
+@@ -62,7 +62,6 @@ MAX_QUEUED = 30
+ @dataclass(frozen=True)
+ class Settings:
+     root: Path
+-    config: str = "sol-medium"
+     cap: Decimal = Decimal(20)
+     max_running: int = 3
+     max_per_day: int = 30
+@@ -103,7 +102,7 @@ class Scheduler:
+     ) -> None:
+         self.settings, self.clock, self.now = settings, clock, now
+         self.layout = layout.ensure_layout(settings.root)
+-        startup.check_launchable(settings.config, settings.ruling, settings.cap)
++        startup.check_launchable(settings.ruling, settings.cap)
+         self._lock: IO[str] | None = startup.take_lock(self.layout)
+         self._logger = startup.open_log(self.layout, __name__)  # only the lock holder logs
+         self.lock = threading.Lock()  # held by step() and submit(): a submit never splits a poll
+@@ -229,6 +228,8 @@ class Scheduler:
+                     "modules": list(record.modules),
+                     "max_turns": record.max_turns,
+                     "level": record.level,
++                    "model": record.model,
++                    "effort": record.effort,
+                     "submitted_by": record.submitted_by,
+                 }
+             )
+@@ -249,6 +250,7 @@ class Scheduler:
+         by the next poll against the digest the record keeps."""
+         with self.lock:
+             answers = submissions.validated(answers)
++            submissions.require_provider_key(answers)
+             if not isinstance(sid, str) or not _SID.fullmatch(sid):
+                 raise submissions.Refused("unknown submission")
+             for record in self._records.values():
+@@ -298,6 +300,8 @@ class Scheduler:
+             modules=tuple(answers["modules"]),
+             max_turns=answers["max_turns"],
+             level=answers["level"],
++            model=answers["model"],
++            effort=answers["effort"],
+             submitted_by=answers["submitted_by"],
+             digest=current,
+         )
+@@ -534,7 +538,6 @@ class Scheduler:
+                 record,
+                 context,
+                 launcher=self.settings.launcher,
+-                config=self.settings.config,
+                 cap=self.settings.cap,
+                 ruling=startup.STANDING_RULING,
+             )
+@@ -555,7 +558,6 @@ class Scheduler:
+                 running,
+                 context,
+                 launcher=self.settings.launcher,
+-                config=self.settings.config,
+                 cap=self.settings.cap,
+                 ruling=startup.STANDING_RULING,  # start-up proved settings.ruling is this file
+             )
+diff --git a/src/deploy_workflow/inbox/startup.py b/src/deploy_workflow/inbox/startup.py
+index 629af83..3ca7d6c 100644
+--- a/src/deploy_workflow/inbox/startup.py
++++ b/src/deploy_workflow/inbox/startup.py
+@@ -10,6 +10,7 @@ from decimal import Decimal
+ from pathlib import Path
+ from typing import IO
+ 
++from deploy_workflow.inbox import runs
+ from deploy_workflow.inbox.layout import Layout
+ from deploy_workflow.model.adapter import (
+     COPILOT_RUNTIME_VARIABLE,
+@@ -39,6 +40,8 @@ class StartupRefused(ValueError):
+ PACKAGE_LOGGER = "deploy_workflow.inbox"
+ # USD per run the standing ruling allows (docs/rulings/2026-11-11-run-start-submit.md; AGENTS.md).
+ RULED_RUN_CAP = Decimal(20)
++# The one provider whose key start-up does not require: no key only makes its submissions refusable.
++OPTIONAL_KEY_PROVIDER = "anthropic"
+ 
+ 
+ class _RootHandler(logging.FileHandler):
+@@ -78,7 +81,12 @@ def close_log(layout: Layout) -> None:
+             handler.close()
+ 
+ 
+-def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
++def check_launchable(ruling: Path, cap: Decimal) -> None:
++    """Refuse start-up unless every launch the service can make is allowed by the standing ruling.
++
++    All four configs of ``runs.LAUNCH_CONFIGS`` must be known and named by the ruling. The OpenAI
++    key is required; the Anthropic key is optional (without it a Claude submission is refused, see
++    ``submissions.require_provider_key``)."""
+     if cap.is_nan() or cap > RULED_RUN_CAP:
+         raise StartupRefused(
+             f"cap {cap} is above USD {RULED_RUN_CAP} per run, the limit of the standing ruling "
+@@ -88,19 +96,20 @@ def check_launchable(config_id: str, ruling: Path, cap: Decimal) -> None:
+         raise StartupRefused(
+             f"the service runs only under its standing ruling {STANDING_RULING}, not {ruling}"
+         )
+-    config = CONFIGS.get(config_id)
+-    if config is None:
+-        raise StartupRefused(f"unknown config {config_id!r}")
+-    try:
+-        check_ruling(config_id, ruling)
+-    except (LivePauseInForce, ValueError, OSError) as error:
+-        raise StartupRefused(f"live runs are not allowed: {error}") from error
+-    key = KEY_VARIABLES[config.provider]
+-    if not os.environ.get(key):
+-        raise StartupRefused(f"{key} is not set in the launching environment")
+-    runtime = Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, ""))
+-    if config.provider == "copilot" and not runtime.is_file():
+-        raise StartupRefused(f"{COPILOT_RUNTIME_VARIABLE} must name an existing file")
++    for config_id in runs.LAUNCH_CONFIGS:
++        config = CONFIGS.get(config_id)
++        if config is None:
++            raise StartupRefused(f"unknown config {config_id!r}")
++        try:
++            check_ruling(config_id, ruling)
++        except (LivePauseInForce, ValueError, OSError) as error:
++            raise StartupRefused(f"live runs are not allowed: {error}") from error
++        key = KEY_VARIABLES[config.provider]
++        if config.provider != OPTIONAL_KEY_PROVIDER and not os.environ.get(key):
++            raise StartupRefused(f"{key} is not set in the launching environment")
++        runtime = Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, ""))
++        if config.provider == "copilot" and not runtime.is_file():
++            raise StartupRefused(f"{COPILOT_RUNTIME_VARIABLE} must name an existing file")
+ 
+ 
+ def take_lock(layout: Layout) -> IO[str]:
+diff --git a/src/deploy_workflow/model/handoff.py b/src/deploy_workflow/model/handoff.py
+index 6a7f2ef..2d1a2f0 100644
+--- a/src/deploy_workflow/model/handoff.py
++++ b/src/deploy_workflow/model/handoff.py
+@@ -20,6 +20,7 @@ from datetime import UTC, datetime
+ from decimal import Decimal, DecimalException, localcontext
+ from functools import partial
+ from pathlib import Path, PurePath
++from types import MappingProxyType
+ from typing import TYPE_CHECKING, Any
+ from urllib.parse import unquote
+ from uuid import uuid4
+@@ -54,6 +55,7 @@ from deploy_workflow.model.record import CallLog, CallRecord, arguments_sha256
+ from deploy_workflow.model.redact import Redactor
+ from deploy_workflow.model.reply_classes import ADAPTER_ERROR
+ from deploy_workflow.model.turn import (
++    MODEL_EFFORTS,
+     Message,
+     ToolSpec,
+     Turn,
+@@ -639,6 +641,7 @@ class HandoffExecutor:
+         max_output_tokens: int = 16000,
+         events: Path | None = None,
+         web_search: bool = False,
++        effort_by_module: Mapping[str, str] | None = None,
+     ) -> None:
+         if (
+             adapter.config_id not in CONFIGS
+@@ -650,6 +653,14 @@ class HandoffExecutor:
+         if web_search and self.config.provider != "openai":
+             raise ValueError(f"web search is offered on OpenAI only, not {adapter.config_id}")
+         self.web_search = web_search
++        efforts = dict(effort_by_module or {})
++        known = {m.module_id for m in modules()}
++        allowed = MODEL_EFFORTS[self.config.model]
++        if bad := sorted(set(efforts) - known) or sorted(
++            f"{k}={v}" for k, v in efforts.items() if v not in allowed
++        ):
++            raise ValueError(f"effort_by_module refused for {self.config.model}: {bad}")
++        self.effort_by_module: Mapping[str, str] = MappingProxyType(efforts)
+         self._query_check: tuple[Mapping[str, str], str] | None = None
+         self.directory, self.adapter, self.check = directory, adapter, check
+         self.events = events
+@@ -667,11 +678,15 @@ class HandoffExecutor:
+                     "max_output_tokens": max_output_tokens,
+                     "execution": "live-provider" if adapter.ruling is not None else "offline",
+                     **({"web_search": WEB_SEARCH_MODULE} if web_search else {}),
++                    **({"effort_by_module": efforts} if efforts else {}),
+                     **({"auth": auth} if (auth := getattr(adapter, "auth", None)) else {}),
+                 }
+             ).encode(),
+         )
+ 
++    def _effort(self, task: HandoffTask) -> str:
++        return self.effort_by_module.get(task.module_id, self.config.effort)
++
+     def __call__(self, task: HandoffTask) -> bytes:
+         from deploy_workflow.run_pathway import _single_writer
+ 
+@@ -734,9 +749,10 @@ class HandoffExecutor:
+             },
+         }
+         history = [Message("system", system), Message("user", dump_json(context))]
++        effort = self._effort(task)
+         seed = redacted_request(
+             self.redactor,
+-            TurnRequest(tuple(history), tools, self.max_output_tokens, self.config.effort),
++            TurnRequest(tuple(history), tools, self.max_output_tokens, effort),
+         )
+         encoded = dump_json(asdict(seed)).encode()
+         digest = hashlib.sha256(encoded).hexdigest()
+@@ -760,7 +776,7 @@ class HandoffExecutor:
+         for index in range(self.max_turns):
+             request = redacted_request(
+                 self.redactor,
+-                TurnRequest(tuple(history), tools, self.max_output_tokens, self.config.effort),
++                TurnRequest(tuple(history), tools, self.max_output_tokens, effort),
+             )
+             returned = self._turn(task, folder, digest, index, request)
+             history.append(
+@@ -938,7 +954,7 @@ class HandoffExecutor:
+                 provider=self.config.provider,
+                 requested_model=self.config.model,
+                 reported_model=None if turn is None else turn.reported_model,
+-                requested_effort=self.config.effort,
++                requested_effort=self._effort(task),
+                 invocation_digest=digest,
+                 request_id=None if turn is None else turn.request_id,
+                 http_status=reply.http_status,
+diff --git a/src/deploy_workflow/model/pricing.py b/src/deploy_workflow/model/pricing.py
+index f2c263c..aa218b2 100644
+--- a/src/deploy_workflow/model/pricing.py
++++ b/src/deploy_workflow/model/pricing.py
+@@ -156,18 +156,20 @@ _SOL = ModelPrice(
+     max_context_tokens=1_050_000,
+     reservation_context_tokens=1_050_000,
+ )
++_OPUS = ModelPrice(
++    input=Decimal(4),
++    cached_read=Decimal("0.20"),
++    cache_write=Decimal(8),  # reserve at the 1 h rate
++    cache_write_5m=Decimal(5),
++    cache_write_1h=Decimal(8),
++    output=Decimal(20),
++)
+ PRICES: Mapping[str, ModelPrice] = MappingProxyType(
+     {
+         "sol-medium": _SOL,
+         "sol-high": _SOL,
+-        "opus-medium": ModelPrice(
+-            input=Decimal(4),
+-            cached_read=Decimal("0.20"),
+-            cache_write=Decimal(8),  # reserve at the 1 h rate
+-            cache_write_5m=Decimal(5),
+-            cache_write_1h=Decimal(8),
+-            output=Decimal(20),
+-        ),
++        "opus-medium": _OPUS,
++        "opus-high": _OPUS,  # Anthropic prices effort high as medium
+         "deepseek-max": ModelPrice(
+             input=Decimal("0.45"),  # highest listed endpoint
+             cached_read=Decimal("0.009"),
+diff --git a/src/deploy_workflow/model/turn.py b/src/deploy_workflow/model/turn.py
+index ad3221e..4408793 100644
+--- a/src/deploy_workflow/model/turn.py
++++ b/src/deploy_workflow/model/turn.py
+@@ -17,7 +17,8 @@ PROVIDERS: tuple[Provider, ...] = get_args(Provider)  # the one provider list
+ Role = Literal["system", "user", "assistant", "tool"]
+ StopReason = Literal["end", "tool_use", "max_tokens", "other"]
+ 
+-# The four spec §7.1 configurations, plus the two copilot configurations, which CP-OS selects
++# The four spec §7.1 configurations, opus-high (same model and price), plus the two copilot
++# configurations, which CP-OS selects
+ # explicitly and which are priced only from the runtime's reported usage. pricing.PRICES asserts
+ # its keys and providers against this.
+ CONFIG_PROVIDERS: Mapping[str, Provider] = MappingProxyType(
+@@ -25,6 +26,7 @@ CONFIG_PROVIDERS: Mapping[str, Provider] = MappingProxyType(
+         "sol-medium": "openai",
+         "sol-high": "openai",
+         "opus-medium": "anthropic",
++        "opus-high": "anthropic",
+         "deepseek-max": "openrouter",
+         "copilot-sol-medium": "copilot",
+         "copilot-opus-medium": "copilot",
+@@ -37,6 +39,7 @@ CONFIG_MODELS: Mapping[str, str] = MappingProxyType(
+         "sol-medium": "gpt-6.1-sol",
+         "sol-high": "gpt-6.1-sol",
+         "opus-medium": "claude-opus-5-5",
++        "opus-high": "claude-opus-5-5",
+         "deepseek-max": "deepseek/deepseek-v4.1-flash-1017",
+         "copilot-sol-medium": "gpt-6.1-sol",
+         "copilot-opus-medium": "claude-opus-5.5",
+@@ -46,7 +49,7 @@ CONFIG_MODELS: Mapping[str, str] = MappingProxyType(
+ # Spec §7.1 uses per model (controller ruling). Any other (model, effort) pair is refused.
+ MODEL_EFFORTS: Mapping[str, frozenset[str]] = {
+     "gpt-6.1-sol": frozenset({"medium", "high"}),
+-    "claude-opus-5-5": frozenset({"medium"}),
++    "claude-opus-5-5": frozenset({"medium", "high"}),
+     "claude-opus-5.5": frozenset({"medium"}),
+     "deepseek/deepseek-v4.1-flash-1017": frozenset({"max"}),
+ }
+diff --git a/src/deploy_workflow/model_testing/configs.py b/src/deploy_workflow/model_testing/configs.py
+index 722ef77..39e6563 100644
+--- a/src/deploy_workflow/model_testing/configs.py
++++ b/src/deploy_workflow/model_testing/configs.py
+@@ -45,6 +45,8 @@ CONFIGS: Mapping[str, ModelConfig] = MappingProxyType(
+         "opus-medium": ModelConfig(
+             "opus-medium", "anthropic", "claude-opus-5-5", "medium", frozenset({"comparison"})
+         ),
++        # no model-testing stage plans it; selected by CP-OS / the run start page (owner 2026-11-12)
++        "opus-high": ModelConfig("opus-high", "anthropic", "claude-opus-5-5", "high", frozenset()),
+         "deepseek-max": ModelConfig(
+             "deepseek-max",
+             "openrouter",
+diff --git a/src/deploy_workflow/owners/cpos.py b/src/deploy_workflow/owners/cpos.py
+index 68b8cd3..4c7169a 100644
+--- a/src/deploy_workflow/owners/cpos.py
++++ b/src/deploy_workflow/owners/cpos.py
+@@ -599,6 +599,16 @@ def web_search_ruled(ruling: Path | None, rulings_root: Path | None = None) -> b
+     return True
+ 
+ 
++def web_search_run(config: str, ruling: Path | None, rulings_root: Path | None = None) -> bool:
++    """Whether a run of ``config`` searches the web: the ruling lists it and the provider is OpenAI.
++
++    Search is OpenAI's hosted tool (``HandoffExecutor`` refuses it elsewhere), so a Claude run under
++    the same ruling runs with search off rather than stopping."""
++    from deploy_workflow.model_testing.configs import CONFIGS
++
++    return CONFIGS[config].provider == "openai" and web_search_ruled(ruling, rulings_root)
++
++
+ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes every run option
+     manifest: Path,
+     directory: Path,
+@@ -611,6 +621,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
+     on_handoff: Callable[[HandoffTask, bytes], None] | None = None,
+     config: str = "sol-medium",
+     rulings_root: Path | None = None,
++    effort_by_module: Mapping[str, str] | None = None,
+ ) -> Path:
+     """Explicit paid entry point; callers supply an evidence/instruction checker.
+ 
+@@ -638,7 +649,8 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
+             max_turns=max_turns,
+             max_output_tokens=max_output_tokens,
+             events=directory,
+-            web_search=web_search_ruled(ruling, rulings_root),
++            web_search=web_search_run(config, ruling, rulings_root),
++            effort_by_module=effort_by_module,
+         )
+         result = run_handoffs(
+             manifest,
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index 365bbfc..8dfc6c9 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -64,6 +64,7 @@ from deploy_workflow.model.handoff import (
+     web_search_offered,
+ )
+ from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
++from deploy_workflow.model.turn import MODEL_EFFORTS
+ from deploy_workflow.model_testing.configs import CONFIGS
+ from deploy_workflow.owners import cp2g, cpos_forecast
+ from deploy_workflow.owners.cpos import (
+@@ -72,6 +73,7 @@ from deploy_workflow.owners.cpos import (
+     HandoffTask,
+     run_live_handoffs,
+     web_search_ruled,
++    web_search_run,
+     with_notes,
+ )
+ from deploy_workflow.prose_checks import (
+@@ -1991,11 +1993,13 @@ def _cap(text: str) -> Decimal:
+     return value
+ 
+ 
+-def _web_line(prepared: Prepared, ruling: Path | None) -> tuple[str, ...]:
++def _web_line(prepared: Prepared, config: str, ruling: Path | None) -> tuple[str, ...]:
+     """Whether the research module searches the web, when it runs."""
+     if "CP-DR" not in prepared.ordered:
+         return ()
+     kind = prepared.plan.run.case_kind
++    if web_search_ruled(ruling) and CONFIGS[config].provider != "openai":
++        return ("Web:      off: web search is offered on GPT Sol only, not on this config",)
+     if web_search_ruled(ruling) and kind not in WEB_SEARCH_CASE_KINDS:
+         return (f"Web:      off: {kind} case",)
+     if web_search_ruled(ruling):
+@@ -2019,11 +2023,45 @@ def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> s
+             f"Report:   {', '.join(prepared.layout.blocks)}",
+             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
+             f"Manifest: {prepared.manifest}",
+-            *_web_line(prepared, ruling),
++            *_web_line(prepared, config, ruling),
+         )
+     )
+ 
+ 
++# Evidence: runs/tdg-mixed-effort-comparison.md. CP-1D and CP-2 measured gains, CP-1A modest; the
++# rest (CP-2A, CP-3, CP-3C, CP-4, CP-4C, CP-6) are inferred judgement modules and untested.
++# CP-0, CP-1, CP-1B, CP-1C, CP-DR measured adequate at medium; CP-2D, CP-2E, CP-2G, CP-2H, CP-3D
++# and CP-5 stay at medium, untested.
++BALANCED_HIGH_MODULES = (
++    "CP-1A",
++    "CP-1D",
++    "CP-2",
++    "CP-2A",
++    "CP-3",
++    "CP-3C",
++    "CP-4",
++    "CP-4C",
++    "CP-6",
++)
++
++
++def _high_efforts(
++    config: str,
++    modules: Sequence[str],
++    ordered: Sequence[str] | None = None,
++    flag: str = "--high-modules",
++) -> dict[str, str]:
++    """The per-module effort map for ``flag``; refuses what the model cannot run."""
++    selected = CONFIGS[config]
++    if "high" not in MODEL_EFFORTS[selected.model] or selected.effort == "high":
++        raise LaunchRefused(
++            f"{flag} needs a config whose model allows high and runs another effort, not {config}"
++        )
++    if ordered is not None and (stray := [m for m in modules if m not in ordered]):
++        raise LaunchRefused(f"--high-modules names modules outside this run: {', '.join(stray)}")
++    return {m: "high" for m in modules}
++
++
+ def _parser() -> argparse.ArgumentParser:
+     parser = argparse.ArgumentParser(
+         prog="python -m deploy_workflow.owners.cpos_launch",
+@@ -2038,6 +2076,18 @@ def _parser() -> argparse.ArgumentParser:
+     parser.add_argument("--out", type=Path, help="run folder; default runs/<run id>")
+     parser.add_argument("--live", action="store_true", help="make paid provider calls")
+     parser.add_argument("--ruling", type=Path, help="docs/rulings/<file>.md naming this config")
++    parser.add_argument(
++        "--high-modules",
++        nargs="+",
++        default=(),
++        metavar="MODULE",
++        help="send these modules at high effort; the rest keep the config's effort",
++    )
++    parser.add_argument(
++        "--balanced",
++        action="store_true",
++        help="send high effort to the balanced effort map's modules in this run",
++    )
+     parser.add_argument(
+         "--no-library",
+         action="store_true",
+@@ -2124,6 +2174,14 @@ def main(argv: Sequence[str] | None = None) -> int:
+         copilot_live = args.live and CONFIGS[args.config].provider == "copilot"
+         if copilot_live and not Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, "")).is_file():
+             raise LaunchRefused(f"--live needs {COPILOT_RUNTIME_VARIABLE} to name an existing file")
++        if args.balanced and args.high_modules:
++            raise LaunchRefused("--balanced and --high-modules cannot be combined")
++        if args.balanced or args.high_modules:
++            _high_efforts(
++                args.config,
++                args.high_modules,
++                flag="--balanced" if args.balanced else "--high-modules",
++            )
+         prepared = prepare(
+             args.context,
+             args.sources,
+@@ -2131,12 +2189,28 @@ def main(argv: Sequence[str] | None = None) -> int:
+             config=args.config,
+             cap=args.cap,
+             modules=args.modules,
+-            web_search=web_search_ruled(args.ruling),
++            web_search=web_search_run(args.config, args.ruling),
++        )
++        efforts = (
++            _high_efforts(
++                args.config,
++                [m for m in BALANCED_HIGH_MODULES if m in prepared.ordered],
++                flag="--balanced",
++            )
++            if args.balanced
++            else _high_efforts(args.config, args.high_modules, prepared.ordered)
++            if args.high_modules
++            else {}
+         )
+     except (ValueError, OSError, LivePauseInForce) as error:
+         print(error, file=sys.stderr)
+         return 2
+     print(_readiness(prepared, args.config, args.ruling), flush=True)
++    if efforts:
++        print(
++            f"Effort:   high for {', '.join(efforts)}; {CONFIGS[args.config].effort} otherwise",
++            flush=True,
++        )
+     if not args.live:
+         print("No provider was called. Add --live --ruling <file> to start the paid run.")
+         return 0
+@@ -2150,6 +2224,7 @@ def main(argv: Sequence[str] | None = None) -> int:
+             max_output_tokens=MAX_OUTPUT_TOKENS,
+             on_handoff=lambda task, _: print(f"Accepted: {task.module_id}", flush=True),
+             config=args.config,
++            effort_by_module=efforts,
+         )
+     except (ValueError, RuntimeError) as error:
+         print(
+diff --git a/src/deploy_workflow/run_start/service.py b/src/deploy_workflow/run_start/service.py
+index 486933d..17c8cd2 100644
+--- a/src/deploy_workflow/run_start/service.py
++++ b/src/deploy_workflow/run_start/service.py
+@@ -41,10 +41,13 @@ failure is 500 ``{"error": "the service failed; see its log"}`` (its cause goes
+     200 ``{"documents": [...], "ignored": [...], "error": ""}``: what the launcher makes of each
+     uploaded file offline. ``error`` is a sentence when the files cannot be read.
+ ``POST /api/submissions/<id>/summary``
+-    Body: the answers object ``{"context", "modules", "max_turns", "level", "submitted_by"}``.
+-    200 ``{"error": "", "digest", "modules", "items", "documents", "ignored", "omitted"}``, the
+-    launcher's own forecast and the digest to approve; or 200 ``{"error": "<sentence>"}`` with no
+-    digest when the answers or files are refused. Only the latest digest issued is accepted.
++    Body: the answers object ``{"context", "modules", "max_turns", "level", "submitted_by",
++    "model", "effort"}``. ``model`` is "gpt" or "claude", ``effort`` "fast", "balanced" or "high";
++    other than "gpt" and "balanced" only at the "advanced" level.
++    200 ``{"error": "", "digest", "modules", "items", "documents", "ignored", "omitted", "model",
++    "effort"}``, the launcher's own forecast and the digest to approve; or 200
++    ``{"error": "<sentence>"}`` with no digest when the answers or files are refused (Claude Opus
++    without an Anthropic key on the service included). Only the latest digest issued is accepted.
+ ``POST /api/submissions/<id>/submit``
+     Body: ``{"answers": <the answers object>, "digest": "<digest of the latest summary>"}``.
+     200 ``{"run": "<run id>", "status": "queued"}``. Repeating it returns the same run. 400 when
+@@ -432,9 +435,7 @@ class Handler(BaseHTTPRequestHandler):
+ 
+     def _summary(self, sid: str, answers: Any) -> dict[str, Any]:
+         settings = self._service.scheduler.settings
+-        return submissions.summary(
+-            self._layout, sid, answers, config=settings.config, cap=settings.cap
+-        )
++        return submissions.summary(self._layout, sid, answers, cap=settings.cap)
+ 
+     def _submit(self, sid: str, body: Any) -> None:
+         if not isinstance(body, dict) or not isinstance(body.get("digest"), str):
+diff --git a/src/deploy_workflow/run_start/submissions.py b/src/deploy_workflow/run_start/submissions.py
+index bf63951..0b539bc 100644
+--- a/src/deploy_workflow/run_start/submissions.py
++++ b/src/deploy_workflow/run_start/submissions.py
+@@ -27,8 +27,10 @@ from typing import Any, BinaryIO, TypedDict
+ from deploy_workflow.context import load_context
+ from deploy_workflow.inbox.filing import safe_name
+ from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
++from deploy_workflow.inbox.runs import EFFORTS, MODELS, config_for
+ from deploy_workflow.inbox.startup import STANDING_RULING
+-from deploy_workflow.owners.cpos import web_search_ruled
++from deploy_workflow.model.adapter import KEY_VARIABLES
++from deploy_workflow.owners.cpos import web_search_run
+ from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
+ from deploy_workflow.platform_io import regular_open
+ 
+@@ -51,7 +53,10 @@ _MODULE_NAME_AT_MOST = 12
+ _TURNS = (1, 64)
+ _LEVELS = ("basic", "standard", "advanced")
+ _SUBMITTER_AT_MOST = 80
+-_KEYS = {"context", "modules", "max_turns", "level", "submitted_by"}
++_KEYS = {"context", "modules", "max_turns", "level", "submitted_by", "model", "effort"}
++DEFAULT_MODEL, DEFAULT_EFFORT = "gpt", "balanced"  # the only pair below the Advanced level
++_ADVANCED = "advanced"
++_CLAUDE_UNAVAILABLE = "Claude Opus is not available on this service"
+ _CHANGED = "the documents changed while the summary was being made; open the summary again"
+ 
+ log = logging.getLogger(__name__)
+@@ -76,6 +81,8 @@ class Answers(TypedDict):
+     max_turns: int  # 32 unless Advanced changes it
+     level: str  # "basic" | "standard" | "advanced"
+     submitted_by: str
++    model: str  # "gpt" | "claude"; anything but "gpt" needs Advanced
++    effort: str  # "fast" | "balanced" | "high"; anything but "balanced" needs Advanced
+ 
+ 
+ def validated(answers: object) -> Answers:
+@@ -94,12 +101,28 @@ def validated(answers: object) -> Answers:
+         raise Refused(f"max_turns is a whole number from {_TURNS[0]} to {_TURNS[1]}")
+     if answers["level"] not in _LEVELS:
+         raise Refused(f"level is one of {', '.join(_LEVELS)}")
++    if answers["model"] not in MODELS:  # a list or None is not hashable-safe: compare as text
++        raise Refused(f"model is one of {', '.join(MODELS)}")
++    if answers["effort"] not in EFFORTS:
++        raise Refused(f"effort is one of {', '.join(EFFORTS)}")
++    chosen = (answers["model"], answers["effort"]) != (DEFAULT_MODEL, DEFAULT_EFFORT)
++    if chosen and answers["level"] != _ADVANCED:
++        raise Refused("the model and effort can be changed only at the Advanced level")
+     by = answers["submitted_by"]
+     if not isinstance(by, str) or len(by) > _SUBMITTER_AT_MOST:
+         raise Refused(f"submitted_by is text of at most {_SUBMITTER_AT_MOST} characters")
+     return answers  # type: ignore[return-value]
+ 
+ 
++def require_provider_key(answers: Answers) -> None:
++    """``Refused`` when the answers pick Claude and this service's environment has no Anthropic key.
++
++    Only presence is read; the key's value is never returned, logged or shown. Start-up requires
++    the OpenAI key but not this one, so its absence only makes Claude submissions refusable."""
++    if answers["model"] == "claude" and not os.environ.get(KEY_VARIABLES["anthropic"]):
++        raise Refused(_CLAUDE_UNAVAILABLE)
++
++
+ def _open_folders(layout: Layout) -> list[Path]:
+     """The unsubmitted submissions: an id folder that has ``files`` and no ``sealed`` folder.
+ 
+@@ -555,13 +578,16 @@ def _digest(root: Path, answers: Answers) -> str:
+         "files": files,
+         "modules": list(answers["modules"]),
+         "max_turns": answers["max_turns"],
++        "model": answers["model"],
++        "effort": answers["effort"],
+     }
+     text = json.dumps(covered, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+     return hashlib.sha256(text.encode("ascii")).hexdigest()
+ 
+ 
+ def digest(layout: Layout, sid: str, answers: Answers) -> str:
+-    """SHA-256 over the context, each stored file's name and hash, the modules and the turns.
++    """SHA-256 over the context, each stored file's name and hash, the modules, the turns, the model
++    and the effort.
+ 
+     ``level`` and ``submitted_by`` are not covered: they change what the page shows, not the run."""
+     answers = validated(answers)
+@@ -630,18 +656,18 @@ def _record_issued(layout: Layout, sid: str, value: str) -> None:
+             temp.unlink(missing_ok=True)
+ 
+ 
+-def summary(
+-    layout: Layout, sid: str, answers: Answers, *, config: str, cap: Decimal
+-) -> dict[str, Any]:
++def summary(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict[str, Any]:
+     """The launcher's own forecast for these files and answers, with the digest to approve.
+ 
++    The forecast is for the config the answers' model and effort launch with (``runs.config_for``).
++
+     The digest it returns is the one approval this service will accept for the submission: it is
+     recorded in ``uploads/<id>/issued``, replaced by each later summary and removed when a summary
+     returns an error. The context is written to a temporary folder and the run folder is another
+     one; both are under the state folder, never in the files, and both are removed. A refusal
+     comes back as ``error`` with no digest, and so does a change to the documents while the
+     forecast was being made."""
+-    result = _summarise(layout, sid, answers, config=config, cap=cap)
++    result = _summarise(layout, sid, answers, cap=cap)
+     digest_issued = result.get("digest", "")
+     try:
+         _record_issued(layout, sid, digest_issued)
+@@ -653,11 +679,11 @@ def summary(
+     return result
+ 
+ 
+-def _summarise(
+-    layout: Layout, sid: str, answers: Answers, *, config: str, cap: Decimal
+-) -> dict[str, Any]:
++def _summarise(layout: Layout, sid: str, answers: Answers, *, cap: Decimal) -> dict[str, Any]:
+     try:
+         answers = validated(answers)
++        require_provider_key(answers)
++        config = config_for(answers["model"], answers["effort"])
+     except Refused as refusal:
+         return {"error": str(refusal)}
+     files = files_folder(layout, sid)
+@@ -689,7 +715,7 @@ def _summarise(
+                         config=config,
+                         cap=cap,
+                         modules=answers["modules"] or None,
+-                        web_search=web_search_ruled(STANDING_RULING),
++                        web_search=web_search_run(config, STANDING_RULING),
+                     )
+                     after = _digest(files, answers)
+                 except OSError as error:  # a file went away while it was being read: it changed
+@@ -707,6 +733,8 @@ def _summarise(
+                 "documents": list(prepared.documents),
+                 "ignored": list(prepared.ignored),
+                 "omitted": list(prepared.omitted),
++                "model": answers["model"],
++                "effort": answers["effort"],
+             }
+         finally:
+             _remove(work)
+diff --git a/tests/fixtures/fake_launcher.py b/tests/fixtures/fake_launcher.py
+index de88213..ae9a7a6 100644
+--- a/tests/fixtures/fake_launcher.py
++++ b/tests/fixtures/fake_launcher.py
+@@ -25,6 +25,7 @@ def main() -> int:
+     parser.add_argument("--config", choices=tuple(CONFIGS), required=True)
+     parser.add_argument("--modules", nargs="+")
+     parser.add_argument("--live", action="store_true")
++    parser.add_argument("--balanced", action="store_true")
+     parser.add_argument("--no-library", action="store_true")
+     args = parser.parse_args()
+     plan = json.loads(os.environ.get("FAKE_PLAN", "{}"))
+diff --git a/tests/fixtures/real_shape_launcher.py b/tests/fixtures/real_shape_launcher.py
+index 2bd2e95..f620c9e 100644
+--- a/tests/fixtures/real_shape_launcher.py
++++ b/tests/fixtures/real_shape_launcher.py
+@@ -34,6 +34,7 @@ def main() -> int:
+     for flag in ("--context", "--sources", "--config", "--cap", "--out", "--ruling"):
+         parser.add_argument(flag)
+     parser.add_argument("--live", action="store_true")
++    parser.add_argument("--balanced", action="store_true")
+     parser.add_argument("--no-library", action="store_true")
+     args = parser.parse_args()
+     if not args.no_library:
+diff --git a/tests/inbox_fixtures.py b/tests/inbox_fixtures.py
+index 5340d92..44db6bc 100644
+--- a/tests/inbox_fixtures.py
++++ b/tests/inbox_fixtures.py
+@@ -131,6 +131,8 @@ def submit_run(
+             "modules": [],
+             "max_turns": 32,
+             "level": "basic",
++            "model": "gpt",
++            "effort": "balanced",
+             "submitted_by": "analyst",
+         }
+     )
+@@ -138,7 +140,7 @@ def submit_run(
+     sid = submissions.new(lay)
+     text = payload or f"Net sales were 100 for {issuer}.".encode()
+     (submissions.files_folder(lay, sid) / "a.txt").write_bytes(text)
+-    got = submissions.summary(lay, sid, answers, config=w.settings.config, cap=w.settings.cap)
++    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
+     assert got["error"] == "", got["error"]
+     return w.submit(sid, answers, str(got["digest"]))
+ 
+diff --git a/tests/model/test_budget.py b/tests/model/test_budget.py
+index 0c9afcc..f06c273 100644
+--- a/tests/model/test_budget.py
++++ b/tests/model/test_budget.py
+@@ -375,7 +375,7 @@ def test_cap_comparison_is_exact(tmp_path: Path) -> None:
+ def test_reserve_refuses_an_unpriced_config(tmp_path: Path) -> None:
+     b = Budget(D("1"), tmp_path)
+     with pytest.raises(NoPrice):
+-        b.reserve("a", D("0.1"), config_id="opus-high")
++        b.reserve("a", D("0.1"), config_id="opus-max")
+     assert not (_marker_dir(tmp_path) / "a").exists()
+ 
+ 
+diff --git a/tests/model/test_live_limits.py b/tests/model/test_live_limits.py
+index b67dbc8..56e2332 100644
+--- a/tests/model/test_live_limits.py
++++ b/tests/model/test_live_limits.py
+@@ -44,7 +44,10 @@ def test_the_output_cap_is_within_every_documented_maximum_and_the_providers_cap
+ 
+ # The key (cases/pilot-fixes/limits.json) predates the Copilot pair and is not edited; it names
+ # the four direct-provider configurations, and the Copilot rows are asserted separately below.
+-KEYED_CONFIGS = sorted(c for c, p in CONFIG_PROVIDERS.items() if p != "copilot")
++# opus-high (owner 2026-11-12) reuses opus-medium's price object, so it is checked against that row.
++KEYED_CONFIGS = sorted(
++    c for c, p in CONFIG_PROVIDERS.items() if p != "copilot" and c != "opus-high"
++)
+ 
+ 
+ @pytest.mark.parametrize("config", KEYED_CONFIGS)
+@@ -54,6 +57,11 @@ def test_the_output_reservation_per_call_is_the_keys(config: str) -> None:
+     assert got == expected
+ 
+ 
++def test_opus_high_reserves_what_the_keys_opus_medium_row_does() -> None:
++    expected = Decimal(_key()["reservation_output_usd_per_call"]["opus-medium"])
++    assert reservation_usd(price_of("opus-high"), 0, run_pathway.MAX_OUTPUT_TOKENS) == expected
++
++
+ def test_the_bytes_per_token_lower_bounds_are_the_keys() -> None:
+     expected = {p: Decimal(v) for p, v in _key()["bytes_per_token_lower_bound"].items()}
+     bounds = dict(run_pathway.BYTES_PER_TOKEN_LOWER_BOUND)
+diff --git a/tests/model/test_pricing.py b/tests/model/test_pricing.py
+index 1843c7b..4baca5b 100644
+--- a/tests/model/test_pricing.py
++++ b/tests/model/test_pricing.py
+@@ -84,16 +84,18 @@ def test_reservation_equals_exact_fraction(i: int, w: int, o: int, n_in: int, n_
+     assert Fraction(got) == expected
+ 
+ 
+-def test_table_is_the_six_configs_dated() -> None:
++def test_table_is_the_seven_configs_dated() -> None:
+     assert set(PRICES) == set(CONFIG_PROVIDERS)
+     assert set(PRICES) == {
+         "sol-medium",
+         "sol-high",
+         "opus-medium",
++        "opus-high",
+         "deepseek-max",
+         "copilot-sol-medium",
+         "copilot-opus-medium",
+     }
++    assert PRICES["opus-high"] is PRICES["opus-medium"]
+     assert pricing_module.PRICES_AS_OF.isoformat() == "2026-10-31"
+     assert pricing_module.COPILOT_PRICES_AS_OF.isoformat() == "2026-11-06"
+     sol = PRICES["sol-medium"]
+@@ -177,9 +179,9 @@ def test_copilot_live_charge_is_billed_only() -> None:
+ 
+ def test_unlisted_config_has_no_price() -> None:
+     with pytest.raises(NoPrice):
+-        price_of("opus-high")
++        price_of("opus-max")
+     with pytest.raises(NoPrice):
+-        price_usage("opus-high", Usage(input_tokens=1, output_tokens=1))
++        price_usage("opus-max", Usage(input_tokens=1, output_tokens=1))
+ 
+ 
+ def test_sol_over_272k_input_is_refused() -> None:
+diff --git a/tests/model/test_providers.py b/tests/model/test_providers.py
+index 2b529a5..fe3f6f1 100644
+--- a/tests/model/test_providers.py
++++ b/tests/model/test_providers.py
+@@ -274,13 +274,20 @@ def test_unknown_effort_refused() -> None:
+ 
+ @pytest.mark.parametrize(
+     ("spec", "effort"),
+-    [(SOL, "max"), (OPUS, "high"), (DEEPSEEK, "medium")],
++    [(SOL, "max"), (OPUS, "xhigh"), (DEEPSEEK, "medium")],
+ )
+ def test_effort_outside_the_section_7_1_uses_refused(spec: ModelSpec, effort: str) -> None:
+     with pytest.raises(UnknownEffort):
+         build(spec, _request(effort=effort), KEY)
+ 
+ 
++def test_opus_high_is_admitted_and_sent_as_output_config_effort() -> None:
++    spec = ModelSpec("opus-high", "anthropic", "claude-opus-5-5", "high")
++    assert json.loads(build(spec, _request(effort="high"), KEY).body)["output_config"] == {
++        "effort": "high"
++    }
++
++
+ def test_sol_high_is_admitted() -> None:
+     build(SOL, _request(effort="high"), KEY)
+ 
+diff --git a/tests/model/test_turn.py b/tests/model/test_turn.py
+index 3448edd..5b57cc4 100644
+--- a/tests/model/test_turn.py
++++ b/tests/model/test_turn.py
+@@ -41,6 +41,7 @@ def test_config_providers_are_the_section_7_1_ids_and_the_copilot_pair() -> None
+         "sol-medium": "openai",
+         "sol-high": "openai",
+         "opus-medium": "anthropic",
++        "opus-high": "anthropic",
+         "deepseek-max": "openrouter",
+         "copilot-sol-medium": "copilot",
+         "copilot-opus-medium": "copilot",
+@@ -119,6 +120,7 @@ def test_config_models_cover_the_same_ids() -> None:
+         "sol-medium": "gpt-6.1-sol",
+         "sol-high": "gpt-6.1-sol",
+         "opus-medium": "claude-opus-5-5",
++        "opus-high": "claude-opus-5-5",
+         "deepseek-max": "deepseek/deepseek-v4.1-flash-1017",
+         "copilot-sol-medium": "gpt-6.1-sol",
+         "copilot-opus-medium": "claude-opus-5.5",
+@@ -179,7 +181,7 @@ def test_only_assistant_message_carries_provider_blocks() -> None:
+     [
+         ("sol-medium", "openai", "gpt-6.1-sol-mini", "medium"),
+         ("sol-medium", "openai", "gpt-6.1-sol", "max"),
+-        ("opus-medium", "anthropic", "claude-opus-5-5", "high"),
++        ("opus-medium", "anthropic", "claude-opus-5-5", "xhigh"),
+         ("sol-medium", "openai", "claude-opus-5-5", "medium"),
+         ("x", "openrouter", "mistralai/some-model", "high"),
+     ],
+@@ -193,6 +195,7 @@ def test_spec_refuses_pair_outside_the_section_7_1_table(
+ 
+ def test_spec_accepts_the_section_7_1_pairs() -> None:
+     ModelSpec("sol-high", "openai", "gpt-6.1-sol", "high")
++    ModelSpec("opus-high", "anthropic", "claude-opus-5-5", "high")
+     ModelSpec("deepseek-max", "openrouter", "deepseek/deepseek-v4.1-flash-1017", "max")
+ 
+ 
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 02107c7..479e42a 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -4231,6 +4231,120 @@ def test_checker_rejects_a_reader_number_the_handoff_does_not_hold(tmp_path):
+     assert not any("Prose check 9" in i for i in issues)
+ 
+ 
++def test_high_modules_outside_the_run_are_refused(tmp_path, capsys):
++    assert main([*launch(tmp_path), "--modules", "CP-4", "--high-modules", "CP-1A"]) == 2
++    assert "CP-1A" in capsys.readouterr().err
++
++
++def test_high_modules_are_refused_when_the_config_already_runs_high(tmp_path, capsys):
++    argv = [*launch(tmp_path), "--high-modules", "CP-4"]
++    argv[argv.index("sol-medium")] = "sol-high"
++    assert main(argv) == 2
++    assert "--high-modules" in capsys.readouterr().err
++    assert not (tmp_path / "out").exists()
++
++
++def test_balanced_and_high_modules_together_are_refused_before_any_folder(tmp_path, capsys):
++    argv = [*launch(tmp_path), "--balanced", "--high-modules", "CP-4"]
++    assert main(argv) == 2
++    assert "--balanced" in capsys.readouterr().err
++    assert not (tmp_path / "out").exists()
++
++
++def test_balanced_is_refused_when_the_config_already_runs_high(tmp_path, capsys):
++    argv = [*launch(tmp_path), "--balanced"]
++    argv[argv.index("sol-medium")] = "sol-high"
++    assert main(argv) == 2
++    assert "--balanced needs a config whose model allows high" in capsys.readouterr().err
++    assert not (tmp_path / "out").exists()
++
++
++def test_balanced_is_refused_when_the_model_lacks_high(tmp_path, capsys):
++    argv = [*launch(tmp_path), "--balanced"]
++    argv[argv.index("sol-medium")] = "deepseek-max"
++    assert main(argv) == 2
++    err = capsys.readouterr().err
++    assert "--balanced needs a config whose model allows high" in err
++    assert "--high-modules" not in err
++    assert not (tmp_path / "out").exists()
++
++
++def test_balanced_sends_high_to_the_balanced_modules_in_the_run_only(tmp_path, capsys):
++    assert main([*launch(tmp_path), "--balanced", "--modules", "CP-4"]) == 0
++    out = capsys.readouterr().out
++    assert "Effort:   high for CP-4; medium otherwise" in out
++
++
++def test_balanced_with_no_balanced_module_in_the_run_prints_no_effort_line(tmp_path, capsys):
++    assert main([*launch(tmp_path), "--balanced", "--modules", "CP-1"]) == 0
++    assert "Effort:" not in capsys.readouterr().out
++
++
++@pytest.mark.parametrize(
++    ("flags", "expected"),
++    [
++        (("--high-modules", "CP-4"), {"CP-4": "high"}),
++        (
++            ("--balanced",),
++            {"CP-1A": "high", "CP-2": "high", "CP-2A": "high", "CP-3C": "high", "CP-4": "high"},
++        ),
++        ((), {}),
++    ],
++)
++def test_an_accepted_run_hands_its_effort_map_to_run_live_handoffs(
++    tmp_path, monkeypatch, copilot_ruling, flags, expected
++):
++    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_" + "Z" * 36)
++    runtime = tmp_path / "copilot-runtime"
++    runtime.write_text("#!/bin/sh\n")
++    monkeypatch.setenv("COPILOT_CLI_PATH", str(runtime))
++    seen = {}
++
++    def fake_run(manifest, directory, **kwargs):
++        seen.update(kwargs)
++        return directory / "delivery.json"
++
++    monkeypatch.setattr(cpos_launch, "run_live_handoffs", fake_run)
++    argv = copilot_argv(
++        tmp_path, "copilot-sol-medium", "--live", "--ruling", str(copilot_ruling), *flags
++    )
++    assert main(argv) == 0
++    assert seen["effort_by_module"] == expected
++
++
++def test_run_live_handoffs_hands_the_effort_map_to_the_executor(tmp_path, monkeypatch):
++    from deploy_workflow.model import handoff
++    from deploy_workflow.owners import cpos
++
++    seen = {}
++
++    class Stop(Exception):
++        pass
++
++    def executor(*args, **kwargs):
++        seen.update(kwargs)
++        raise Stop
++
++    monkeypatch.setattr(handoff, "HandoffExecutor", executor)
++    monkeypatch.setattr(cpos, "live_adapter_for", lambda *a, **k: object())
++    prepare(
++        context_file(tmp_path),
++        issuer_folder(tmp_path),
++        tmp_path / "out",
++        config="sol-medium",
++        cap="50",
++    )
++    with pytest.raises(Stop):
++        cpos.run_live_handoffs(
++            tmp_path / "out/workflow.json",
++            tmp_path / "live",
++            ruling=RULING,
++            check=lambda *_: (),
++            effort_by_module={"CP-4": "high"},
++        )
++    assert seen["effort_by_module"] == {"CP-4": "high"}
++
++
+ def test_the_service_standing_ruling_lists_web_search_so_runs_from_the_page_search():
+     from deploy_workflow.inbox.startup import STANDING_RULING
+     from deploy_workflow.owners.cpos import web_search_ruled
+@@ -4258,3 +4372,72 @@ def test_cp2g_is_told_how_to_state_facilities(tmp_path):
+     ):
+         assert word in head
+     assert "`facilities`" not in texts["CP-1"]
++
++
++def test_web_search_is_ruled_for_openai_configs_only(monkeypatch):
++    # The standing ruling lists web-search and both providers' configs; search is OpenAI's tool.
++    from deploy_workflow.owners.cpos import web_search_run
++
++    assert web_search_run("sol-medium", STANDING) is True
++    assert web_search_run("opus-medium", STANDING) is False
++    assert web_search_run("opus-high", STANDING) is False
++    assert web_search_run("sol-medium", RULING) is False  # this ruling lists no web-search
++    assert web_search_run("sol-medium", None) is False
++
++
++def test_a_claude_run_under_a_ruling_that_lists_web_search_runs_with_search_off(
++    tmp_path, monkeypatch
++):
++    from deploy_workflow.model import handoff
++    from deploy_workflow.owners import cpos
++
++    seen: dict[str, object] = {}
++
++    class Stop(Exception):
++        pass
++
++    def recording(*args, **kwargs):
++        seen["web_search"] = kwargs["web_search"]
++        raise Stop
++
++    monkeypatch.setattr(handoff, "HandoffExecutor", recording)
++    monkeypatch.setattr(cpos, "live_adapter_for", lambda *args: object())
++    monkeypatch.setattr(cpos, "_release", lambda adapter: None)
++    prepared = prepare(
++        context_file(tmp_path),
++        issuer_folder(tmp_path),
++        tmp_path / "out",
++        config="opus-medium",
++        cap="50",
++        modules=("CP-DR",),
++    )
++    for config, searching in (("opus-medium", False), ("sol-medium", True)):
++        with pytest.raises(Stop):
++            cpos.run_live_handoffs(
++                prepared.manifest,
++                tmp_path / config,
++                ruling=STANDING,
++                check=lambda *_: (),
++                config=config,
++                environ={},
++            )
++        assert seen["web_search"] is searching
++
++
++def test_a_claude_launch_says_search_is_off_and_holds_no_search_fee(tmp_path, capsys):
++    argv = launch(tmp_path, "--modules", "CP-DR", "--ruling", str(STANDING))
++    argv[argv.index("sol-medium")] = "opus-medium"
++    with_case_kind(tmp_path / "context.json", "public")
++    plain = prepare(
++        tmp_path / "context.json",
++        tmp_path / "issuer",
++        tmp_path / "probe",
++        config="opus-medium",
++        cap="50",
++        modules=("CP-DR",),
++    )
++    argv[argv.index("--cap") + 1] = str(plain.hold + Decimal("0.05"))  # a 0.16 fee would not fit
++    assert main(argv) == 0
++    out = capsys.readouterr().out
++    assert "Web:      off: web search is offered on GPT Sol only" in out
++    assert "CP-DR searches the web" not in out
+diff --git a/tests/test_handoff_loop.py b/tests/test_handoff_loop.py
+index b1b5d39..2ed0365 100644
+--- a/tests/test_handoff_loop.py
++++ b/tests/test_handoff_loop.py
+@@ -741,3 +741,72 @@ def test_a_sent_reply_that_cannot_be_read_is_charged_every_search_it_could_have_
+             loop(research)
+         spent[name] = loop.budget.spent
+     assert spent["on"] - spent["off"] == Decimal("0.16")  # 16 searches at USD 0.01, not counted
++
++
++# ---------------------------------------------------------------- per-module effort
++
++
++def test_effort_by_module_reaches_requests_call_log_and_loop_json(tmp_path: Path) -> None:
++    one = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
++    other = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
++    high_dir, mid_dir = tmp_path / "high", tmp_path / "mid"
++    high_dir.mkdir(), mid_dir.mkdir()
++    efforts = {"CP-1A": "high"}
++    HandoffExecutor(
++        high_dir, adapter=one, cap_usd=Decimal(10), check=check, effort_by_module=efforts
++    )(replace(task(), module_id="CP-1A"))
++    HandoffExecutor(
++        mid_dir, adapter=other, cap_usd=Decimal(10), check=check, effort_by_module=efforts
++    )(task())
++    assert [r.effort for r in one.requests] == ["high"]
++    assert [r.effort for r in other.requests] == ["medium"]
++    assert record(high_dir)["requested_effort"] == "high"
++    assert record(mid_dir)["requested_effort"] == "medium"
++    assert json.loads((high_dir / "loop.json").read_text())["effort_by_module"] == {"CP-1A": "high"}
++
++
++def test_loop_json_omits_an_empty_effort_map(tmp_path: Path) -> None:
++    HandoffExecutor(tmp_path, adapter=Adapter(), cap_usd=Decimal(10), check=check)
++    assert "effort_by_module" not in json.loads((tmp_path / "loop.json").read_text())
++
++
++@pytest.mark.parametrize("efforts", [{"CP-NOPE": "high"}, {"CP-1A": "max"}])
++def test_effort_by_module_refuses_unknown_modules_and_disallowed_efforts(
++    tmp_path: Path, efforts: dict[str, str]
++) -> None:
++    with pytest.raises(ValueError, match="effort_by_module"):
++        HandoffExecutor(
++            tmp_path, adapter=Adapter(), cap_usd=Decimal(10), check=check, effort_by_module=efforts
++        )
++
++
++def test_each_modules_invocation_seed_carries_its_own_effort(tmp_path: Path) -> None:
++    efforts = {"CP-1A": "high"}
++    for module, name in (("CP-1A", "high"), ("CP-2", "mid")):
++        folder = tmp_path / name
++        folder.mkdir()
++        adapter = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
++        HandoffExecutor(
++            folder, adapter=adapter, cap_usd=Decimal(10), check=check, effort_by_module=efforts
++        )(replace(task(), module_id=module))
++    seeds = {
++        name: json.loads(next((tmp_path / name / "modules").glob("*/invocation.json")).read_text())
++        for name in ("high", "mid")
++    }
++    assert seeds["high"]["effort"] == "high"
++    assert seeds["mid"]["effort"] == "medium"
++
++
++def test_every_turn_of_a_module_carries_its_effort(tmp_path: Path) -> None:
++    adapter = Adapter(
++        turn(ToolCall("r", "read_pages", {"source_id": "S1.txt", "first": 1, "last": 1})),
++        turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})),
++    )
++    HandoffExecutor(
++        tmp_path,
++        adapter=adapter,
++        cap_usd=Decimal(10),
++        check=check,
++        effort_by_module={"CP-2": "high"},
++    )(task())
++    assert [r.effort for r in adapter.requests] == ["high", "high"]
+diff --git a/tests/test_inbox_activity.py b/tests/test_inbox_activity.py
+index 8704b21..dc8beb2 100644
+--- a/tests/test_inbox_activity.py
++++ b/tests/test_inbox_activity.py
+@@ -101,6 +101,15 @@ def test_snapshot_marks_a_silent_run_as_stalled(layout):
+     assert late["runs"][0]["stalled"] is True and "stalled" not in soon["runs"][0]
+ 
+ 
++def test_snapshot_entry_carries_the_model_and_effort(layout):
++    record = Record("m1", "credit_snapshot", "acme", "queued", "t", model="claude", effort="high")
++    plain = Record("m2", "credit_snapshot", "acme", "queued", "t")
++    data = snapshot(layout, [record, plain], cap=Decimal(20), now=datetime(2026, 11, 9, tzinfo=UTC))
++    by_id = {r["id"]: r for r in data["runs"]}
++    assert (by_id["m1"]["model"], by_id["m1"]["effort"]) == ("claude", "high")
++    assert (by_id["m2"]["model"], by_id["m2"]["effort"]) == ("gpt", "fast")
++
++
+ def test_snapshot_orders_runs_and_reads_each_run_folder(layout):
+     now = datetime(2026, 11, 9, 12, 0, 0, tzinfo=UTC)
+     records = [
+diff --git a/tests/test_inbox_runs.py b/tests/test_inbox_runs.py
+index b86492b..3fc6f9f 100644
+--- a/tests/test_inbox_runs.py
++++ b/tests/test_inbox_runs.py
+@@ -84,7 +84,6 @@ def test_command_for_prepare_and_live(layout):
+         record,
+         Path("c.json"),
+         launcher=["py", "-m", "x"],
+-        config="sol-medium",
+         cap=Decimal(20),
+         ruling=None,
+     )
+@@ -109,7 +108,6 @@ def test_command_for_prepare_and_live(layout):
+         record,
+         Path("c.json"),
+         launcher=["py"],
+-        config="sol-medium",
+         cap=Decimal(20),
+         ruling=Path("r.md"),
+     )
+@@ -158,7 +156,7 @@ def test_start_runs_the_plan_and_logs(layout, fake_env, monkeypatch):
+             "exit": 0,
+         }
+     )
+-    process = start(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP, ruling=RULING)
++    process = start(layout, RECORD, CTX, launcher=FAKE, cap=CAP, ruling=RULING)
+     assert process.wait(timeout=60) == 0
+     assert outcome(layout, RECORD, 0) == ("finished", "")
+     assert (layout.runs / "id1" / "deliveries" / "d1" / "delivery.json").is_file()
+@@ -166,7 +164,7 @@ def test_start_runs_the_plan_and_logs(layout, fake_env, monkeypatch):
+ 
+ 
+ def _live(layout, **kw):
+-    return start(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP, **kw)
++    return start(layout, RECORD, CTX, launcher=FAKE, cap=CAP, **kw)
+ 
+ 
+ def test_child_environment_adds_the_source_folder_and_utf8_and_keeps_the_key(monkeypatch):
+@@ -322,7 +320,7 @@ def test_start_gives_the_child_a_pid_file_beside_the_record_and_load_all_ignores
+     monkeypatch.setenv("REAL_SHAPE_HOLD", str(tmp_path / "never"))  # stays alive; killed below
+     expected = layout.state / "id1.pid"
+     process = start(
+-        layout, RECORD, CTX, launcher=[sys.executable, real_shape], config="sol-medium",
++        layout, RECORD, CTX, launcher=[sys.executable, real_shape],
+         cap=CAP, ruling=RULING,
+     )  # fmt: skip
+     try:
+@@ -351,7 +349,7 @@ def test_the_pid_file_variable_is_in_the_child_environment_only_through_start(
+ 
+     monkeypatch.setattr(subprocess, "Popen", spy)
+     fake_env({})
+-    start(layout, RECORD, CTX, launcher=FAKE, config="sol-medium", cap=CAP, ruling=RULING).wait()
++    start(layout, RECORD, CTX, launcher=FAKE, cap=CAP, ruling=RULING).wait()
+     assert captured["DEPLOY_WORKFLOW_PID_FILE"] == str(layout.state / "id1.pid")
+ 
+ 
+@@ -395,7 +393,7 @@ def test_a_log_handle_that_fails_to_close_does_not_lose_the_started_launcher(
+ def test_a_launcher_that_cannot_be_started_still_raises(layout):
+     with pytest.raises(OSError):
+         start(
+-            layout, RECORD, CTX, launcher=["/no/such/launcher"], config="sol-medium", cap=CAP,
++            layout, RECORD, CTX, launcher=["/no/such/launcher"], cap=CAP,
+             ruling=RULING,
+         )  # fmt: skip
+ 
+@@ -432,7 +430,6 @@ def test_command_refuses_a_record_whose_modules_or_turns_could_inject_an_option(
+             record,
+             Path("c.json"),
+             launcher=["py"],
+-            config="sol-medium",
+             cap=Decimal(20),
+             ruling=None,
+         )
+@@ -448,8 +445,53 @@ def test_command_takes_every_method_name_and_the_turn_limits(layout):
+             record,
+             Path("c.json"),
+             launcher=["py"],
+-            config="sol-medium",
+             cap=Decimal(20),
+             ruling=None,
+         )
+         assert argv[argv.index("--modules") + 1 :][: len(METHODS)] == list(METHODS)
++
++
++_LAUNCH = [
++    ("gpt", "fast", ["--config", "sol-medium", "--cap"]),
++    ("gpt", "balanced", ["--config", "sol-medium", "--balanced", "--cap"]),
++    ("gpt", "high", ["--config", "sol-high", "--cap"]),
++    ("claude", "fast", ["--config", "opus-medium", "--cap"]),
++    ("claude", "balanced", ["--config", "opus-medium", "--balanced", "--cap"]),
++    ("claude", "high", ["--config", "opus-high", "--cap"]),
++]
++
++
++@pytest.mark.parametrize(("model", "effort", "fragment"), _LAUNCH)
++def test_the_records_model_and_effort_choose_the_launch_config(layout, model, effort, fragment):
++    record = Record("id1", "credit_snapshot", "acme", "queued", "t", model=model, effort=effort)
++    argv = command(layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=None)
++    at = argv.index("--config")
++    assert argv[at : at + len(fragment)] == fragment
++
++
++def test_a_record_written_before_model_and_effort_loads_as_gpt_fast(layout):
++    old = {"id": "old1", "pathway": "p", "folder": "a", "status": "queued", "claimed_at": "t"}
++    (layout.state / "old1.json").write_text(json.dumps(old), encoding="utf-8")
++    (record,) = load_all(layout)
++    assert (record.model, record.effort) == ("gpt", "fast")
++    argv = command(layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=None)
++    at = argv.index("--config")
++    assert argv[at : at + 3] == ["--config", "sol-medium", "--cap"]
++
++
++@pytest.mark.parametrize(
++    "change",
++    [
++        {"model": "gemini"},
++        {"model": ""},
++        {"model": 1},
++        {"effort": "max"},
++        {"effort": "medium"},
++        {"effort": None},
++        {"model": "sol-high"},
++    ],
++)
++def test_command_refuses_a_record_with_an_unknown_model_or_effort(layout, change):
++    record = Record("id1", "credit_snapshot", "acme", "queued", "t", **change)
++    with pytest.raises(ValueError):
++        command(layout, record, Path("c.json"), launcher=["py"], cap=Decimal(20), ruling=None)
+diff --git a/tests/test_inbox_scheduler.py b/tests/test_inbox_scheduler.py
+index 294f114..8023957 100644
+--- a/tests/test_inbox_scheduler.py
++++ b/tests/test_inbox_scheduler.py
+@@ -8,6 +8,7 @@ from __future__ import annotations
+ 
+ import gc
+ import json
++import re
+ import logging
+ import os
+ import shutil
+@@ -42,6 +43,7 @@ from inbox_fixtures import (
+ 
+ from deploy_workflow.inbox import activity
+ from deploy_workflow.inbox import scheduler as scheduler_module
++from deploy_workflow.inbox import startup as startup_module
+ from deploy_workflow.inbox.layout import Layout, ensure_layout
+ from deploy_workflow.inbox.runs import Record, alive, load_all
+ from deploy_workflow.inbox.scheduler import Scheduler, Settings, StartupRefused
+@@ -50,6 +52,7 @@ from deploy_workflow.model.adapter import KEY_VARIABLES
+ from deploy_workflow.model_testing.configs import CONFIGS
+ from deploy_workflow.owners import cpos_launch
+ from deploy_workflow.owners.cpos_launch import update_library_at
++from deploy_workflow.run_start import submissions
+ 
+ pytest_plugins = ["inbox_fixtures"]
+ 
+@@ -126,10 +129,12 @@ def test_a_submission_is_run_by_the_real_launcher_and_listed(root, tmp_path, mon
+             "modules": [],
+             "max_turns": 32,
+             "level": "basic",
++            "model": "gpt",
++            "effort": "balanced",
+             "submitted_by": "analyst",
+         }
+     )
+-    got = submissions.summary(lay, sid, answers, config=w.settings.config, cap=w.settings.cap)
++    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
+     assert got["error"] == "", got["error"]
+     w.submit(sid, answers, str(got["digest"]))
+     pump(w, lambda: status(root) not in ([], ["queued"], ["running"]), limit=120)
+@@ -371,7 +376,7 @@ def test_a_ruling_other_than_the_standing_one_is_refused_at_start_up(root, tmp_p
+     monkeypatch.setenv(KEY_VARIABLES[CONFIGS["sol-high"].provider], "test-key-not-real")
+     sol_high = REPO / "docs/rulings/2026-11-09-tdg-sol-high-test.md"
+     with pytest.raises(StartupRefused, match="2026-11-11-run-start-submit"):
+-        Scheduler(settings(root, config="sol-high", ruling=sol_high))
++        Scheduler(settings(root, ruling=sol_high))
+     other = tmp_path / "2026-11-09-tdg-sol-high-test.md"
+     other.write_text("sol-medium", encoding="utf-8")
+     with pytest.raises(StartupRefused, match="2026-11-11-run-start-submit"):
+@@ -402,6 +407,140 @@ def test_every_launch_is_under_the_standing_ruling_even_if_a_symlink_is_repointe
+     assert launched == [STANDING_RULING]
+ 
+ 
++def _ruling_without(tmp_path: Path, config: str, monkeypatch: pytest.MonkeyPatch) -> Path:
++    """A copy of the standing ruling that does not name ``config``, made the standing one."""
++    rulings = tmp_path / "rulings"
++    rulings.mkdir()
++    lines = STANDING_RULING.read_text(encoding="utf-8").splitlines()
++    kept = [
++        "configs: " + ", ".join(t for t in re.split(r"[\s,]+", line[8:].strip()) if t != config)
++        if line.startswith("configs:")
++        else line
++        for line in lines
++    ]
++    copy = rulings / STANDING_RULING.name
++    copy.write_text("\n".join(kept) + "\n", encoding="utf-8")
++    monkeypatch.setattr("deploy_workflow.model.adapter.LIVE_RULINGS_ROOT", rulings)
++    monkeypatch.setattr(startup_module, "STANDING_RULING", copy)
++    return copy
++
++
++@pytest.mark.parametrize("missing", ["sol-medium", "sol-high", "opus-medium", "opus-high"])
++def test_start_up_is_refused_when_the_ruling_lacks_one_of_the_four_configs(
++    root, tmp_path, monkeypatch, missing
++):
++    copy = _ruling_without(tmp_path, missing, monkeypatch)
++    with pytest.raises(StartupRefused, match=f"does not list '{missing}'"):
++        Scheduler(settings(root, ruling=copy))
++
++
++def test_start_up_needs_the_openai_key_but_not_the_anthropic_key(root, monkeypatch):
++    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
++    Scheduler(settings(root)).close()
++    monkeypatch.delenv("OPENAI_API_KEY")
++    with pytest.raises(StartupRefused, match="OPENAI_API_KEY is not set"):
++        Scheduler(settings(root))
++
++
++def _submit_advanced(w: Scheduler, root: Path, model: str, effort: str) -> Record:
++    body = json.loads(json.dumps(CONTEXT))
++    body["run"]["as_of"] = "2026-11-09"
++    answers = submissions.validated(
++        {
++            "context": body,
++            "modules": [],
++            "max_turns": 32,
++            "level": "advanced",
++            "model": model,
++            "effort": effort,
++            "submitted_by": "analyst",
++        }
++    )
++    lay = Layout(root)
++    sid = submissions.new(lay)
++    (submissions.files_folder(lay, sid) / "a.txt").write_bytes(b"Net sales were 100.")
++    got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
++    assert got["error"] == "", got["error"]
++    return w.submit(sid, answers, str(got["digest"]))
++
++
++@pytest.mark.parametrize(
++    ("model", "effort", "fragment"),
++    [
++        ("gpt", "fast", ["--config", "sol-medium", "--cap"]),
++        ("gpt", "balanced", ["--config", "sol-medium", "--balanced", "--cap"]),
++        ("gpt", "high", ["--config", "sol-high", "--cap"]),
++        ("claude", "fast", ["--config", "opus-medium", "--cap"]),
++        ("claude", "balanced", ["--config", "opus-medium", "--balanced", "--cap"]),
++        ("claude", "high", ["--config", "opus-high", "--cap"]),
++    ],
++)
++def test_a_submitted_model_and_effort_are_stored_and_launched(
++    root, monkeypatch, model, effort, fragment
++):
++    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
++    argvs: list[list[str]] = []
++    real_command = scheduler_module.runs.command
++
++    def recording(*args: Any, **kwargs: Any) -> list[str]:
++        argv = real_command(*args, **kwargs)
++        argvs.append(argv)
++        return argv
++
++    monkeypatch.setattr(scheduler_module.runs, "command", recording)
++    monkeypatch.setattr(
++        scheduler_module.runs,
++        "start",
++        lambda *_a, **_k: subprocess.Popen([sys.executable, "-c", "pass"]),
++    )
++    w = Scheduler(settings(root))
++    try:
++        record = _submit_advanced(w, root, model, effort)
++        assert (record.model, record.effort) == (model, effort)
++        assert (load_all(layout(root))[0].model, load_all(layout(root))[0].effort) == (
++            model,
++            effort,
++        )
++        pump(w, lambda: bool(argvs))
++    finally:
++        w.close()
++    at = argvs[0].index("--config")
++    assert argvs[0][at : at + len(fragment)] == fragment
++
++
++def test_a_default_submission_stores_gpt_balanced(root):
++    w = Scheduler(settings(root))
++    try:
++        record = submit_run(w, root)
++    finally:
++        w.close()
++    assert (record.model, record.effort) == ("gpt", "balanced")
++
++
++def test_submit_refuses_claude_without_the_anthropic_key(root, monkeypatch):
++    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
++    w = Scheduler(settings(root))
++    try:
++        body = json.loads(json.dumps(CONTEXT))
++        body["run"]["as_of"] = "2026-11-09"
++        answers = submissions.validated(
++            {
++                "context": body, "modules": [], "max_turns": 32, "level": "advanced",
++                "model": "claude", "effort": "high", "submitted_by": "analyst",
++            }
++        )  # fmt: skip
++        lay = Layout(root)
++        sid = submissions.new(lay)
++        (submissions.files_folder(lay, sid) / "a.txt").write_bytes(b"Net sales were 100.")
++        got = submissions.summary(lay, sid, answers, cap=w.settings.cap)
++        monkeypatch.delenv("ANTHROPIC_API_KEY")
++        with pytest.raises(submissions.Refused, match="Claude Opus is not available"):
++            w.submit(sid, answers, str(got["digest"]))
++        assert load_all(layout(root)) == []
++    finally:
++        w.close()
++
++
+ def _log(root: Path) -> str:
+     log = root / "_engine/logs/watcher.log"
+     return log.read_text(encoding="utf-8") if log.is_file() else ""
+diff --git a/tests/test_run_start_page.py b/tests/test_run_start_page.py
+index a5471cb..6dc0a4a 100644
+--- a/tests/test_run_start_page.py
++++ b/tests/test_run_start_page.py
+@@ -517,7 +517,15 @@ def test_the_pathway_stage_takes_the_name_and_the_answers_object_is_the_services
+     return {keys: Object.keys(a).sort(), by: a.submitted_by, level: a.level, turns: a.max_turns,
+       modules: a.modules, context: a.context.schema};
+     """)
+-    assert seen["keys"] == ["context", "level", "max_turns", "modules", "submitted_by"]
++    assert seen["keys"] == [
++        "context",
++        "effort",
++        "level",
++        "max_turns",
++        "model",
++        "modules",
++        "submitted_by",
++    ]
+     assert (seen["by"], seen["level"], seen["turns"], seen["modules"]) == ("Dana", "basic", 32, [])
+     assert seen["context"] == "context/1"
+ 
+@@ -683,7 +691,7 @@ def test_the_review_shows_the_services_forecast_per_module(page):
+         assert item["reason"] in seen["ready"]
+     assert by_module["CP-4"]["outcome"] == "will_refuse"  # legal documents: none, on CP-4
+     assert ["legal", "Go to Legal"] in seen["goto"]
+-    for text in ("sol-medium", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
++    for text in ("GPT Sol, Balanced (the default)", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
+         assert text in seen["facts"], text
+     for section in summary["omitted"]:
+         assert section in seen["facts"]
+@@ -1539,6 +1547,99 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
+         assert reply.status == 200
+ 
+ 
++def test_model_and_effort_are_chosen_at_advanced_only_and_default_everywhere_else(page):
++    seen = page.run("""
++    const sent = () => { const a = answers(); return [a.model, a.effort]; };
++    const shown = () => ['modelf', 'effortf'].map(id => $(id).offsetParent !== null);
++    const out = {basicShown: shown(), basicDefault: sent()};
++    level('advanced');
++    out.advShown = shown();
++    out.advDefault = sent();
++    pick('data-c="model"', 'claude'); pick('data-c="effort"', 'high');
++    out.advChosen = sent();
++    level('standard'); out.standard = sent(); out.standardShown = shown();
++    level('basic'); out.basic = sent();
++    level('advanced'); out.back = sent();
++    out.names = [$('modelf').querySelector('[role=radiogroup]').getAttribute('aria-label'),
++      $('effortf').querySelector('[role=radiogroup]').getAttribute('aria-label')];
++    return out;
++    """)
++    assert seen["basicShown"] == [False, False] and seen["standardShown"] == [False, False]
++    assert seen["advShown"] == [True, True]
++    assert seen["basicDefault"] == seen["advDefault"] == ["gpt", "balanced"]
++    assert seen["advChosen"] == seen["back"] == ["claude", "high"]
++    assert seen["standard"] == seen["basic"] == ["gpt", "balanced"]
++    assert seen["names"] == ["Model", "Effort"]
++
++
++@pytest.mark.parametrize(
++    ("choice", "row"),
++    [
++        ("", "Model and effortGPT Sol, Balanced (the default)"),
++        (
++            "pick('data-c=\"model\"', 'claude'); pick('data-c=\"effort\"', 'high');",
++            "Model and effortClaude Opus, High",
++        ),
++    ],
++)
++def test_the_review_always_shows_the_model_and_effort_sent(page, choice, row):
++    seen = page.run(f"""
++    level('advanced');
++    {choice}
++    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
++    await review();
++    const advanced = $('rv-facts').textContent;
++    level('basic');
++    await review();
++    return {{advanced, basic: $('rv-facts').textContent}};
++    """)
++    assert row in seen["advanced"], seen["advanced"]
++    # Back at Basic the page sends the defaults, and the summary shows what is sent.
++    assert "Model and effortGPT Sol, Balanced (the default)" in seen["basic"], seen["basic"]
++
++
++# _CLAUDE_UNAVAILABLE in run_start/submissions.py
++CLAUDE_REFUSAL = "Claude Opus is not available on this service"
++
++
++def test_the_claude_refusal_maps_to_the_pathway_stage_and_the_review_offers_the_button(page):
++    seen = page.run(f"""
++    const text = {json.dumps(CLAUDE_REFUSAL)};
++    const out = {{stage: errorStage(text)}};
++    await issuer('credit_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
++    await review();
++    SUMMARY = {{key: 'k', answers: {{}}, error: text, digest: '', modules: [], documents: [],
++      ignored: [], omitted: [], items: []}};
++    renderState();
++    out.goto = [...document.querySelectorAll('#rv-state [data-goto]')]
++      .map(b => [b.dataset.goto, b.textContent]);
++    return out;
++    """)
++    assert seen["stage"] == "pathway"
++    assert seen["goto"] == [["pathway", "Go to Pathway"]]
++
++
++def test_a_draft_saved_at_advanced_restores_the_model_and_effort_and_a_bad_one_the_defaults(page):
++    page.run("""
++    await uploadFiles([file('annual.txt', 'x')]);
++    level('advanced');
++    pick('data-c="model"', 'claude'); pick('data-c="effort"', 'high');
++    return {};
++    """)
++    kept = page.run("""
++    return {level: LEVEL, sent: [getC('model'), getC('effort')]};
++    """)
++    assert kept == {"level": "advanced", "sent": ["claude", "high"]}
++    page.run("""
++    const saved = JSON.parse(localStorage.getItem('run-start/1'));
++    saved.extra.model = 'unknown'; delete saved.extra.effort;
++    localStorage.setItem('run-start/1', JSON.stringify(saved));
++    return {};
++    """)
++    bad = page.run("return {sent: [getC('model'), getC('effort')]};")
++    assert bad == {"sent": ["gpt", "balanced"]}
++
++
+ # ---- starting from an earlier run of the same issuer (/?from=<run id>) --------------------------
+ 
+ 
+@@ -2397,3 +2498,17 @@ def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypa
+     assert "could not be listed" in got["msg"] and "link.txt" in got["msg"]
+     assert str(root) not in got["msg"]
+     assert got["files"] == [] and got["rows"] == []
++
++
++def test_the_research_text_for_claude_says_it_does_not_search(page):
++    seen = page.run("""
++    pick('data-k="pathway"', 'relative_value');
++    level('advanced'); pick('data-c="model"', 'claude');
++    update();
++    return {text: document.querySelector('#research-src .strip-text').textContent};
++    """)
++    assert seen["text"] == (
++        "Web search is offered on GPT Sol only: this Claude run does not search the web and "
++        "reads only the supplied files. "
++        "Add peers' filings to the documents if you want them used."
++    )
+diff --git a/tests/test_run_start_scheduler.py b/tests/test_run_start_scheduler.py
+index 02f47e1..09eb63b 100644
+--- a/tests/test_run_start_scheduler.py
++++ b/tests/test_run_start_scheduler.py
+@@ -40,6 +40,8 @@ def answers_for(**change: Any) -> Answers:
+         "modules": [],
+         "max_turns": 32,
+         "level": "basic",
++        "model": "gpt",
++        "effort": "balanced",
+         "submitted_by": "analyst",
+     }
+     base.update(change)
+@@ -55,9 +57,7 @@ def upload(root: Path, payload: bytes = b"Net sales were 100.") -> str:
+ 
+ def approved(root: Path, sid: str, answers: Answers) -> str:
+     """The digest the service issues for these answers: only ``summary`` can make one."""
+-    got = submissions.summary(
+-        layout(root), sid, answers, config=settings(root).config, cap=settings(root).cap
+-    )
++    got = submissions.summary(layout(root), sid, answers, cap=settings(root).cap)
+     assert got["error"] == "", got["error"]
+     return str(got["digest"])
+ 
+@@ -179,7 +179,6 @@ def test_modules_and_turns_reach_the_launcher_command(root):
+         record,
+         Path("c.json"),
+         launcher=("L",),
+-        config="sol-medium",
+         cap=Decimal(20),
+         ruling=None,
+     )
+@@ -192,7 +191,6 @@ def test_modules_and_turns_reach_the_launcher_command(root):
+         Record("r2", PATHWAY, "Acme", "queued", "t"),
+         Path("c.json"),
+         launcher=("L",),
+-        config="sol-medium",
+         cap=Decimal(20),
+         ruling=None,
+     )
+diff --git a/tests/test_run_start_service.py b/tests/test_run_start_service.py
+index a704e58..374620a 100644
+--- a/tests/test_run_start_service.py
++++ b/tests/test_run_start_service.py
+@@ -48,6 +48,8 @@ def answers_for(**change: Any) -> dict[str, Any]:
+         "modules": [],
+         "max_turns": 32,
+         "level": "basic",
++        "model": "gpt",
++        "effort": "balanced",
+         "submitted_by": "analyst",
+     }
+     base.update(change)
+diff --git a/tests/test_run_start_submissions.py b/tests/test_run_start_submissions.py
+index 195a997..ff73147 100644
+--- a/tests/test_run_start_submissions.py
++++ b/tests/test_run_start_submissions.py
+@@ -50,6 +50,8 @@ def answers_for(tmp_path: Path, **change: object) -> Answers:
+         "modules": [],
+         "max_turns": 32,
+         "level": "basic",
++        "model": "gpt",
++        "effort": "balanced",
+         "submitted_by": "analyst",
+     }
+     base.update(change)
+@@ -233,7 +235,7 @@ def test_a_file_can_be_removed_and_a_bad_name_is_refused(layout):
+ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
+     sid, source = upload_issuer(layout, tmp_path)
+     answers = answers_for(tmp_path)
+-    s = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
++    s = summary(layout, sid, answers, cap=Decimal(20))
+     ref = tmp_path / "ref"
+     ref.mkdir()
+     expected = prepare(context_file(tmp_path), source, ref / "out", config="sol-medium", cap="20")
+@@ -245,6 +247,17 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
+     assert s["digest"] == digest(layout, sid, answers)
+ 
+ 
++def test_the_summary_carries_the_model_and_effort_it_was_made_for(layout, tmp_path):
++    sid, _ = upload_issuer(layout, tmp_path)
++    default = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
++    high = summary(
++        layout, sid, answers_for(tmp_path, level="advanced", effort="high"), cap=Decimal(20)
++    )
++    assert default["error"] == "" and high["error"] == "", (default.get("error"), high.get("error"))
++    assert (default["model"], default["effort"]) == ("gpt", "balanced")
++    assert (high["model"], high["effort"]) == ("gpt", "high")
++
++
+ def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
+     layout, tmp_path, monkeypatch
+ ):
+@@ -256,11 +269,24 @@ def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
+         return prepare(*args, **kwargs)
+ 
+     monkeypatch.setattr(submissions, "prepare", watching)
+-    assert (
+-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
+-        == ""
+-    )
+-    assert seen == [True]  # the standing ruling lists web-search
++    assert summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"] == ""
++    assert seen == [True]  # the standing ruling lists web-search and GPT Sol is OpenAI
++
++
++def test_a_claude_summary_checks_the_cap_with_web_search_off(layout, tmp_path, monkeypatch):
++    # The ruling lists web-search, but search is OpenAI's hosted tool: a Claude run has none.
++    monkeypatch.setenv("ANTHROPIC_API_KEY", "present")
++    sid, _ = upload_issuer(layout, tmp_path)
++    seen = []
++
++    def watching(*args, **kwargs):
++        seen.append((kwargs["config"], kwargs["web_search"]))
++        return prepare(*args, **kwargs)
++
++    monkeypatch.setattr(submissions, "prepare", watching)
++    answers = answers_for(tmp_path, level="advanced", model="claude")
++    assert summary(layout, sid, answers, cap=Decimal(20))["error"] == ""
++    assert seen == [("opus-medium", False)]
+ 
+ 
+ def test_the_summary_is_for_the_module_list_the_digest_covers(layout, tmp_path):
+@@ -269,7 +295,6 @@ def test_the_summary_is_for_the_module_list_the_digest_covers(layout, tmp_path):
+         layout,
+         sid,
+         answers_for(tmp_path, modules=["CP-0", "CP-1"]),
+-        config="sol-medium",
+         cap=Decimal(20),
+     )
+     assert s["error"] == ""
+@@ -280,10 +305,10 @@ def test_a_refused_context_or_folder_comes_back_as_the_error_with_no_digest(layo
+     sid, _ = upload_issuer(layout, tmp_path)
+     bad = answers_for(tmp_path)
+     bad["context"] = {"schema": "nonsense"}
+-    s = summary(layout, sid, bad, config="sol-medium", cap=Decimal(20))
++    s = summary(layout, sid, bad, cap=Decimal(20))
+     assert s["error"] and "digest" not in s
+     empty = new(layout)
+-    s = summary(layout, empty, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++    s = summary(layout, empty, answers_for(tmp_path), cap=Decimal(20))
+     assert s["error"] and "digest" not in s
+ 
+ 
+@@ -315,13 +340,10 @@ def test_the_digest_changes_with_a_file_the_context_the_modules_or_the_turns_onl
+ def test_the_summary_leaves_no_run_folder_and_no_temporary_file(layout, tmp_path):
+     sid, _ = upload_issuer(layout, tmp_path)
+     before = sorted(p.relative_to(layout.root).as_posix() for p in layout.root.rglob("*"))
+-    assert (
+-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
+-        == ""
+-    )
++    assert summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"] == ""
+     bad = answers_for(tmp_path)
+     bad["context"] = {}
+-    assert summary(layout, sid, bad, config="sol-medium", cap=Decimal(20))["error"]
++    assert summary(layout, sid, bad, cap=Decimal(20))["error"]
+     after = sorted(p.relative_to(layout.root).as_posix() for p in layout.root.rglob("*"))
+     assert after == before
+ 
+@@ -352,7 +374,7 @@ def test_a_file_landing_while_the_summary_is_made_gives_no_digest(layout, tmp_pa
+         return out
+ 
+     monkeypatch.setattr(submissions, "prepare", racing)
+-    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+     assert "digest" not in got
+     assert got["error"] == (
+         "the documents changed while the summary was being made; open the summary again"
+@@ -380,7 +402,7 @@ def test_a_file_landing_while_the_summary_is_made_gives_no_digest(layout, tmp_pa
+ def test_hostile_answers_are_refusals_not_exceptions(layout, tmp_path, change):
+     sid, _ = upload_issuer(layout, tmp_path)
+     answers = answers_for(tmp_path, **change)
+-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
++    got = summary(layout, sid, answers, cap=Decimal(20))
+     assert got["error"] and "digest" not in got
+     if change != {"modules": ["NOPE"]}:  # a well-formed name the launcher refuses, not the shape
+         with pytest.raises(Refused):
+@@ -388,12 +410,14 @@ def test_hostile_answers_are_refusals_not_exceptions(layout, tmp_path, change):
+     assert list(layout.state.iterdir()) == []
+ 
+ 
+-def test_answers_need_exactly_the_five_keys(layout, tmp_path):
++def test_answers_need_exactly_the_seven_keys(layout, tmp_path):
+     sid, _ = upload_issuer(layout, tmp_path)
+     answers = answers_for(tmp_path)
+     extra = {**answers, "more": 1}
+     missing = {k: v for k, v in answers.items() if k != "level"}
+-    for bad in (extra, missing, "x", None):
++    no_model = {k: v for k, v in answers.items() if k != "model"}
++    no_effort = {k: v for k, v in answers.items() if k != "effort"}
++    for bad in (extra, missing, no_model, no_effort, "x", None):
+         with pytest.raises(Refused):
+             digest(layout, sid, bad)  # type: ignore[arg-type]
+ 
+@@ -404,7 +428,7 @@ def test_a_lone_surrogate_in_the_context_is_a_refusal(layout, tmp_path):
+     answers["context"]["identity"]["issuer_name"] = "\ud800"
+     with pytest.raises(Refused):
+         submissions.context_bytes(answers)
+-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
++    got = summary(layout, sid, answers, cap=Decimal(20))
+     assert got["error"] and "digest" not in got
+     with pytest.raises(Refused):
+         digest(layout, sid, answers)
+@@ -467,7 +491,7 @@ def test_summaries_run_one_at_a_time(layout, tmp_path, monkeypatch):
+         threading.Thread(
+             target=summary,
+             args=(layout, sid, answers),
+-            kwargs={"config": "sol-medium", "cap": Decimal(20)},
++            kwargs={"cap": Decimal(20)},
+         )
+         for _ in range(4)
+     ]
+@@ -488,7 +512,7 @@ def test_a_failed_summary_cleanup_is_logged_and_the_result_stands(
+     sid, _ = upload_issuer(layout, tmp_path)
+     monkeypatch.setattr(submissions.shutil, "rmtree", _failing_rmtree)
+     with caplog.at_level(logging.WARNING, logger=submissions.log.name):
+-        got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++        got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+     assert got["error"] == "" and got["digest"]
+     left = [p for p in layout.state.iterdir() if p.name.startswith("summary-")]
+     assert len(left) == 1
+@@ -525,7 +549,7 @@ def test_seal_freezes_the_uploads_and_unseal_restores_them(layout, tmp_path):
+     assert submissions.seal(layout, sid) == sealed  # again: the same folder
+     assert digest(layout, sid, answers) == before
+     assert reading(layout, sid)["documents"]
+-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
++    got = summary(layout, sid, answers, cap=Decimal(20))
+     assert got["error"] == "" and got["digest"] == before
+     for call in (
+         lambda: put(layout, sid, "new.txt"),
+@@ -707,24 +731,22 @@ def test_the_sweep_leaves_a_submission_with_an_upload_in_flight(layout):
+ def test_a_summary_records_the_digest_it_returns_and_an_error_clears_it(layout, tmp_path):
+     sid, _ = upload_issuer(layout, tmp_path)
+     assert submissions.issued(layout, sid) == ""
+-    first = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++    first = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+     assert first["error"] == ""
+     assert submissions.issued(layout, sid) == first["digest"]
+-    second = summary(
+-        layout, sid, answers_for(tmp_path, max_turns=8), config="sol-medium", cap=Decimal(20)
+-    )
++    second = summary(layout, sid, answers_for(tmp_path, max_turns=8), cap=Decimal(20))
+     assert second["digest"] != first["digest"]
+     assert submissions.issued(layout, sid) == second["digest"]  # replaced, not appended
+     bad = answers_for(tmp_path)
+     bad["context"] = {"schema": "nonsense"}
+-    assert summary(layout, sid, bad, config="sol-medium", cap=Decimal(20))["error"]
++    assert summary(layout, sid, bad, cap=Decimal(20))["error"]
+     assert submissions.issued(layout, sid) == ""
+     assert not (layout.uploads / sid / "issued").exists()
+ 
+ 
+ def test_an_issued_digest_is_not_part_of_the_files_and_survives_the_seal(layout, tmp_path):
+     sid, _ = upload_issuer(layout, tmp_path)
+-    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+     assert "issued" not in os.listdir(files_folder(layout, sid))
+     submissions.seal(layout, sid)
+     assert submissions.issued(layout, sid) == got["digest"]
+@@ -781,7 +803,7 @@ def test_a_sealed_or_files_link_is_an_unknown_submission(layout, tmp_path):
+         lambda: submissions.seal(layout, sid),
+         lambda: digest(layout, sid, answers_for(tmp_path)),
+         lambda: reading(layout, sid),
+-        lambda: summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20)),
++        lambda: summary(layout, sid, answers_for(tmp_path), cap=Decimal(20)),
+     ):
+         with pytest.raises(Refused, match="unknown submission"):
+             call()
+@@ -821,7 +843,7 @@ def test_a_file_that_vanishes_while_the_summary_reads_it_is_the_changed_error(
+         raise FileNotFoundError(2, "gone")
+ 
+     monkeypatch.setattr(submissions, "prepare", vanishing)
+-    got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++    got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+     assert got == {"error": submissions._CHANGED}
+     assert submissions.issued(layout, sid) == ""
+ 
+@@ -849,7 +871,7 @@ def test_a_summary_racing_the_removal_of_its_folder_is_refused_not_an_oserror(
+     monkeypatch.setattr(submissions, "_summarise", summarise)
+     monkeypatch.setattr(submissions, "_folder", folder)
+     with pytest.raises(Refused, match="unknown submission"):
+-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++        summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+ 
+ 
+ def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change(
+@@ -861,7 +883,7 @@ def test_an_oserror_while_the_summary_reads_is_logged_not_passed_off_as_a_change
+     victim.chmod(0)
+     try:
+         with caplog.at_level(logging.WARNING, logger=submissions.__name__):
+-            got = summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))
++            got = summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))
+     finally:
+         victim.chmod(0o600)
+     assert got == {"error": submissions._CHANGED}
+@@ -893,9 +915,7 @@ def test_the_servers_path_is_not_in_a_reading_or_summary_error(layout, tmp_path)
+     put(layout, sid, "a.bin", b"\x00\x01 not a document")
+     root = str(files_folder(layout, sid))
+     seen = [reading(layout, sid)["error"]]
+-    seen.append(
+-        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
+-    )
++    seen.append(summary(layout, sid, answers_for(tmp_path), cap=Decimal(20))["error"])
+     assert all(seen), seen
+     for text in seen:
+         assert root not in text and str(layout.uploads) not in text
+@@ -928,11 +948,96 @@ def test_an_issuer_id_over_the_limit_is_refused_by_the_summary(layout, tmp_path)
+     sid, _ = upload_issuer(layout, tmp_path)
+     answers = answers_for(tmp_path)
+     answers["context"]["identity"]["issuer_id"] = "a" * 41
+-    got = summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))
++    got = summary(layout, sid, answers, cap=Decimal(20))
+     assert got["error"] == "issuer_id is 41 characters; use at most 40"
+     assert "digest" not in got
+     answers["context"]["identity"]["issuer_id"] = "a" * 40
+-    assert summary(layout, sid, answers, config="sol-medium", cap=Decimal(20))["error"] == ""
++    assert summary(layout, sid, answers, cap=Decimal(20))["error"] == ""
++
++
++@pytest.mark.parametrize("model", ["gpt", "claude"])
++@pytest.mark.parametrize("effort", ["fast", "balanced", "high"])
++def test_advanced_accepts_every_model_and_effort(tmp_path, model, effort):
++    answers = answers_for(tmp_path, level="advanced", model=model, effort=effort)
++    assert submissions.validated(answers)["model"] == model
++    assert submissions.validated(answers)["effort"] == effort
++
++
++@pytest.mark.parametrize("level", ["basic", "standard"])
++def test_the_default_model_and_effort_are_accepted_below_advanced(tmp_path, level):
++    answers = answers_for(tmp_path, level=level, model="gpt", effort="balanced")
++    assert submissions.validated(answers) == answers
++
++
++@pytest.mark.parametrize("level", ["basic", "standard"])
++@pytest.mark.parametrize(
++    "change",
++    [
++        {"model": "claude"},
++        {"effort": "fast"},
++        {"effort": "high"},
++        {"model": "claude", "effort": "high"},
++    ],
++)
++def test_a_model_or_effort_other_than_the_default_needs_advanced(tmp_path, level, change):
++    with pytest.raises(Refused, match="can be changed only at the Advanced level"):
++        submissions.validated(answers_for(tmp_path, level=level, **change))
++
++
++@pytest.mark.parametrize(
++    "change",
++    [
++        {"model": "gemini"},
++        {"model": ""},
++        {"model": None},
++        {"model": ["gpt"]},
++        {"effort": "medium"},
++        {"effort": "max"},
++        {"effort": 3},
++        {"effort": None},
++    ],
++)
++def test_an_unknown_model_or_effort_is_refused_even_at_advanced(tmp_path, change):
++    with pytest.raises(Refused, match=r"model is one of gpt, claude|effort is one of fast"):
++        submissions.validated(answers_for(tmp_path, level="advanced", **change))
++
++
++def test_a_claude_submission_is_refused_without_an_anthropic_key(layout, tmp_path, monkeypatch):
++    sid, _ = upload_issuer(layout, tmp_path)
++    answers = answers_for(tmp_path, level="advanced", model="claude", effort="high")
++    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
++    got = summary(layout, sid, answers, cap=Decimal(20))
++    assert got["error"] == "Claude Opus is not available on this service"
++    assert "digest" not in got
++    with pytest.raises(Refused, match="Claude Opus is not available on this service"):
++        submissions.require_provider_key(answers)
++    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
++    with pytest.raises(Refused, match="not available"):
++        submissions.require_provider_key(answers)
++
++
++def test_a_claude_submission_is_accepted_with_an_anthropic_key_and_no_key_is_shown(
++    layout, tmp_path, monkeypatch
++):
++    sid, _ = upload_issuer(layout, tmp_path)
++    answers = answers_for(tmp_path, level="advanced", model="claude", effort="fast")
++    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
++    got = summary(layout, sid, answers, cap=Decimal(20))
++    assert got["error"] == "" and got["digest"]
++    assert "test-key-not-real" not in json.dumps(got)
++    submissions.require_provider_key(answers)
++
++
++def test_a_gpt_submission_needs_no_anthropic_key(tmp_path, monkeypatch):
++    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
++    submissions.require_provider_key(answers_for(tmp_path))
++
++
++def test_the_digest_covers_the_model_and_effort(layout, tmp_path):
++    sid, _ = upload_issuer(layout, tmp_path)
++    base = digest(layout, sid, answers_for(tmp_path, level="advanced"))
++    assert base != digest(layout, sid, answers_for(tmp_path, level="advanced", effort="high"))
++    assert base != digest(layout, sid, answers_for(tmp_path, level="advanced", model="claude"))
+ 
+ 
+ def _source(tmp_path: Path, **files: bytes) -> Path:

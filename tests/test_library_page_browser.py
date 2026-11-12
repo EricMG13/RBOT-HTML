@@ -714,7 +714,6 @@ def test_no_module_code_reaches_a_reader_from_a_new_format_run(tmp_path):
         assert any(k.startswith(where) and MEMO in k for k in seen["kept"]), (where, seen["kept"])
 
 
-
 def line_of(tmp_path: Path, heading: str) -> int:
     handoff = next(tmp_path.glob("runs/run-a/deliveries/*/CP-1.md"))
     return handoff.read_text().splitlines().index(heading) + 1

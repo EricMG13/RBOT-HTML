@@ -741,3 +741,72 @@ def test_a_sent_reply_that_cannot_be_read_is_charged_every_search_it_could_have_
             loop(research)
         spent[name] = loop.budget.spent
     assert spent["on"] - spent["off"] == Decimal("0.16")  # 16 searches at USD 0.01, not counted
+
+
+# ---------------------------------------------------------------- per-module effort
+
+
+def test_effort_by_module_reaches_requests_call_log_and_loop_json(tmp_path: Path) -> None:
+    one = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
+    other = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
+    high_dir, mid_dir = tmp_path / "high", tmp_path / "mid"
+    high_dir.mkdir(), mid_dir.mkdir()
+    efforts = {"CP-1A": "high"}
+    HandoffExecutor(
+        high_dir, adapter=one, cap_usd=Decimal(10), check=check, effort_by_module=efforts
+    )(replace(task(), module_id="CP-1A"))
+    HandoffExecutor(
+        mid_dir, adapter=other, cap_usd=Decimal(10), check=check, effort_by_module=efforts
+    )(task())
+    assert [r.effort for r in one.requests] == ["high"]
+    assert [r.effort for r in other.requests] == ["medium"]
+    assert record(high_dir)["requested_effort"] == "high"
+    assert record(mid_dir)["requested_effort"] == "medium"
+    assert json.loads((high_dir / "loop.json").read_text())["effort_by_module"] == {"CP-1A": "high"}
+
+
+def test_loop_json_omits_an_empty_effort_map(tmp_path: Path) -> None:
+    HandoffExecutor(tmp_path, adapter=Adapter(), cap_usd=Decimal(10), check=check)
+    assert "effort_by_module" not in json.loads((tmp_path / "loop.json").read_text())
+
+
+@pytest.mark.parametrize("efforts", [{"CP-NOPE": "high"}, {"CP-1A": "max"}])
+def test_effort_by_module_refuses_unknown_modules_and_disallowed_efforts(
+    tmp_path: Path, efforts: dict[str, str]
+) -> None:
+    with pytest.raises(ValueError, match="effort_by_module"):
+        HandoffExecutor(
+            tmp_path, adapter=Adapter(), cap_usd=Decimal(10), check=check, effort_by_module=efforts
+        )
+
+
+def test_each_modules_invocation_seed_carries_its_own_effort(tmp_path: Path) -> None:
+    efforts = {"CP-1A": "high"}
+    for module, name in (("CP-1A", "high"), ("CP-2", "mid")):
+        folder = tmp_path / name
+        folder.mkdir()
+        adapter = Adapter(turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})))
+        HandoffExecutor(
+            folder, adapter=adapter, cap_usd=Decimal(10), check=check, effort_by_module=efforts
+        )(replace(task(), module_id=module))
+    seeds = {
+        name: json.loads(next((tmp_path / name / "modules").glob("*/invocation.json")).read_text())
+        for name in ("high", "mid")
+    }
+    assert seeds["high"]["effort"] == "high"
+    assert seeds["mid"]["effort"] == "medium"
+
+
+def test_every_turn_of_a_module_carries_its_effort(tmp_path: Path) -> None:
+    adapter = Adapter(
+        turn(ToolCall("r", "read_pages", {"source_id": "S1.txt", "first": 1, "last": 1})),
+        turn(ToolCall("w", "write_handoff", {"markdown": GOOD.decode()})),
+    )
+    HandoffExecutor(
+        tmp_path,
+        adapter=adapter,
+        cap_usd=Decimal(10),
+        check=check,
+        effort_by_module={"CP-2": "high"},
+    )(task())
+    assert [r.effort for r in adapter.requests] == ["high", "high"]

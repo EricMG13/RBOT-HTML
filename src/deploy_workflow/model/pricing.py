@@ -156,18 +156,20 @@ _SOL = ModelPrice(
     max_context_tokens=1_050_000,
     reservation_context_tokens=1_050_000,
 )
+_OPUS = ModelPrice(
+    input=Decimal(4),
+    cached_read=Decimal("0.20"),
+    cache_write=Decimal(8),  # reserve at the 1 h rate
+    cache_write_5m=Decimal(5),
+    cache_write_1h=Decimal(8),
+    output=Decimal(20),
+)
 PRICES: Mapping[str, ModelPrice] = MappingProxyType(
     {
         "sol-medium": _SOL,
         "sol-high": _SOL,
-        "opus-medium": ModelPrice(
-            input=Decimal(4),
-            cached_read=Decimal("0.20"),
-            cache_write=Decimal(8),  # reserve at the 1 h rate
-            cache_write_5m=Decimal(5),
-            cache_write_1h=Decimal(8),
-            output=Decimal(20),
-        ),
+        "opus-medium": _OPUS,
+        "opus-high": _OPUS,  # Anthropic prices effort high as medium
         "deepseek-max": ModelPrice(
             input=Decimal("0.45"),  # highest listed endpoint
             cached_read=Decimal("0.009"),

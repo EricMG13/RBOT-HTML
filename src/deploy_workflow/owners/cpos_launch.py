@@ -64,6 +64,7 @@ from deploy_workflow.model.handoff import (
     web_search_offered,
 )
 from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
+from deploy_workflow.model.turn import MODEL_EFFORTS
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cp2g, cpos_forecast
 from deploy_workflow.owners.cpos import (
@@ -72,6 +73,7 @@ from deploy_workflow.owners.cpos import (
     HandoffTask,
     run_live_handoffs,
     web_search_ruled,
+    web_search_run,
     with_notes,
 )
 from deploy_workflow.prose_checks import (
@@ -1491,6 +1493,26 @@ FORECAST_BLOCK = (
     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
     "only the drivers that differ from base, in the same driver form (every other driver is "
     "inherited from base), or null when you set no such case. "
+    "`facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate "
+    "terms, otherwise write null. Each row is "
+    '`{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", '
+    '"annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, '
+    "`spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must "
+    'print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states '
+    "`fixed_rate_pct` and null for the other rate fields; a floating-rate facility states "
+    "`spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for "
+    "each forecast year as three decimal fractions "
+    '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
+    "must be between 0% and 30% in every year. The facilities' "
+    "scheduled repayments over the three years must not exceed base debt. "
+    "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
+    "YYYY-MM-DD or null. A row's `balance` is its drawn principal. At most 40 rows; names are "
+    "unique ignoring case; balances may total at most 1.25 times base debt; `fixed_rate_pct` is "
+    "at most 30, `spread_pct` at most 20 and `floor_pct` at most 10; `reference_rate` values have "
+    "at most four decimal places. When `facilities` is stated Python computes cash interest on "
+    "those facilities and scheduled repayment from it; debt not in a row bears interest at your "
+    "`interest_rate` driver and is not repaid; the `debt_repayment` driver is not used, so do "
+    "not vary it in `upside_drivers` or `downside_drivers`. "
     "`years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
     "`scope_limits` is a list of text limits. Set `schema_version` to "
@@ -1949,6 +1971,11 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
         if "gives no forecast drivers" not in str(error):
+            if "facilit" in str(error) or "scheduled repayments" in str(error):
+                fallback = "write `facilities` as null and keep the drivers."
+                return (
+                    f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",
+                )
             fix = "Correct the block; if you cannot, set every driver's values to "
             return (
                 f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
@@ -1966,11 +1993,13 @@ def _cap(text: str) -> Decimal:
     return value
 
 
-def _web_line(prepared: Prepared, ruling: Path | None) -> tuple[str, ...]:
+def _web_line(prepared: Prepared, config: str, ruling: Path | None) -> tuple[str, ...]:
     """Whether the research module searches the web, when it runs."""
     if "CP-DR" not in prepared.ordered:
         return ()
     kind = prepared.plan.run.case_kind
+    if web_search_ruled(ruling) and CONFIGS[config].provider != "openai":
+        return ("Web:      off: web search is offered on GPT Sol only, not on this config",)
     if web_search_ruled(ruling) and kind not in WEB_SEARCH_CASE_KINDS:
         return (f"Web:      off: {kind} case",)
     if web_search_ruled(ruling):
@@ -1994,9 +2023,43 @@ def _readiness(prepared: Prepared, config: str, ruling: Path | None = None) -> s
             f"Report:   {', '.join(prepared.layout.blocks)}",
             f"Omitted:  {', '.join(prepared.omitted) or 'none'}",
             f"Manifest: {prepared.manifest}",
-            *_web_line(prepared, ruling),
+            *_web_line(prepared, config, ruling),
         )
     )
+
+
+# Evidence: runs/tdg-mixed-effort-comparison.md. CP-1D and CP-2 measured gains, CP-1A modest; the
+# rest (CP-2A, CP-3, CP-3C, CP-4, CP-4C, CP-6) are inferred judgement modules and untested.
+# CP-0, CP-1, CP-1B, CP-1C, CP-DR measured adequate at medium; CP-2D, CP-2E, CP-2G, CP-2H, CP-3D
+# and CP-5 stay at medium, untested.
+BALANCED_HIGH_MODULES = (
+    "CP-1A",
+    "CP-1D",
+    "CP-2",
+    "CP-2A",
+    "CP-3",
+    "CP-3C",
+    "CP-4",
+    "CP-4C",
+    "CP-6",
+)
+
+
+def _high_efforts(
+    config: str,
+    modules: Sequence[str],
+    ordered: Sequence[str] | None = None,
+    flag: str = "--high-modules",
+) -> dict[str, str]:
+    """The per-module effort map for ``flag``; refuses what the model cannot run."""
+    selected = CONFIGS[config]
+    if "high" not in MODEL_EFFORTS[selected.model] or selected.effort == "high":
+        raise LaunchRefused(
+            f"{flag} needs a config whose model allows high and runs another effort, not {config}"
+        )
+    if ordered is not None and (stray := [m for m in modules if m not in ordered]):
+        raise LaunchRefused(f"--high-modules names modules outside this run: {', '.join(stray)}")
+    return {m: "high" for m in modules}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -2013,6 +2076,18 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, help="run folder; default runs/<run id>")
     parser.add_argument("--live", action="store_true", help="make paid provider calls")
     parser.add_argument("--ruling", type=Path, help="docs/rulings/<file>.md naming this config")
+    parser.add_argument(
+        "--high-modules",
+        nargs="+",
+        default=(),
+        metavar="MODULE",
+        help="send these modules at high effort; the rest keep the config's effort",
+    )
+    parser.add_argument(
+        "--balanced",
+        action="store_true",
+        help="send high effort to the balanced effort map's modules in this run",
+    )
     parser.add_argument(
         "--no-library",
         action="store_true",
@@ -2099,6 +2174,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         copilot_live = args.live and CONFIGS[args.config].provider == "copilot"
         if copilot_live and not Path(os.environ.get(COPILOT_RUNTIME_VARIABLE, "")).is_file():
             raise LaunchRefused(f"--live needs {COPILOT_RUNTIME_VARIABLE} to name an existing file")
+        if args.balanced and args.high_modules:
+            raise LaunchRefused("--balanced and --high-modules cannot be combined")
+        if args.balanced or args.high_modules:
+            _high_efforts(
+                args.config,
+                args.high_modules,
+                flag="--balanced" if args.balanced else "--high-modules",
+            )
         prepared = prepare(
             args.context,
             args.sources,
@@ -2106,12 +2189,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             config=args.config,
             cap=args.cap,
             modules=args.modules,
-            web_search=web_search_ruled(args.ruling),
+            web_search=web_search_run(args.config, args.ruling),
+        )
+        efforts = (
+            _high_efforts(
+                args.config,
+                [m for m in BALANCED_HIGH_MODULES if m in prepared.ordered],
+                flag="--balanced",
+            )
+            if args.balanced
+            else _high_efforts(args.config, args.high_modules, prepared.ordered)
+            if args.high_modules
+            else {}
         )
     except (ValueError, OSError, LivePauseInForce) as error:
         print(error, file=sys.stderr)
         return 2
     print(_readiness(prepared, args.config, args.ruling), flush=True)
+    if efforts:
+        print(
+            f"Effort:   high for {', '.join(efforts)}; {CONFIGS[args.config].effort} otherwise",
+            flush=True,
+        )
     if not args.live:
         print("No provider was called. Add --live --ruling <file> to start the paid run.")
         return 0
@@ -2125,6 +2224,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_output_tokens=MAX_OUTPUT_TOKENS,
             on_handoff=lambda task, _: print(f"Accepted: {task.module_id}", flush=True),
             config=args.config,
+            effort_by_module=efforts,
         )
     except (ValueError, RuntimeError) as error:
         print(

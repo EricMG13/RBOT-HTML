@@ -599,6 +599,16 @@ def web_search_ruled(ruling: Path | None, rulings_root: Path | None = None) -> b
     return True
 
 
+def web_search_run(config: str, ruling: Path | None, rulings_root: Path | None = None) -> bool:
+    """Whether a run of ``config`` searches the web: the ruling lists it and the provider is OpenAI.
+
+    Search is OpenAI's hosted tool (``HandoffExecutor`` refuses it elsewhere), so a Claude run under
+    the same ruling runs with search off rather than stopping."""
+    from deploy_workflow.model_testing.configs import CONFIGS
+
+    return CONFIGS[config].provider == "openai" and web_search_ruled(ruling, rulings_root)
+
+
 def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes every run option
     manifest: Path,
     directory: Path,
@@ -611,6 +621,7 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     on_handoff: Callable[[HandoffTask, bytes], None] | None = None,
     config: str = "sol-medium",
     rulings_root: Path | None = None,
+    effort_by_module: Mapping[str, str] | None = None,
 ) -> Path:
     """Explicit paid entry point; callers supply an evidence/instruction checker.
 
@@ -638,7 +649,8 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             max_turns=max_turns,
             max_output_tokens=max_output_tokens,
             events=directory,
-            web_search=web_search_ruled(ruling, rulings_root),
+            web_search=web_search_run(config, ruling, rulings_root),
+            effort_by_module=effort_by_module,
         )
         result = run_handoffs(
             manifest,

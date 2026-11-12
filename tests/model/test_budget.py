@@ -375,7 +375,7 @@ def test_cap_comparison_is_exact(tmp_path: Path) -> None:
 def test_reserve_refuses_an_unpriced_config(tmp_path: Path) -> None:
     b = Budget(D("1"), tmp_path)
     with pytest.raises(NoPrice):
-        b.reserve("a", D("0.1"), config_id="opus-high")
+        b.reserve("a", D("0.1"), config_id="opus-max")
     assert not (_marker_dir(tmp_path) / "a").exists()
 
 

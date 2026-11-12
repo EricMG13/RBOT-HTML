@@ -44,7 +44,10 @@ def test_the_output_cap_is_within_every_documented_maximum_and_the_providers_cap
 
 # The key (cases/pilot-fixes/limits.json) predates the Copilot pair and is not edited; it names
 # the four direct-provider configurations, and the Copilot rows are asserted separately below.
-KEYED_CONFIGS = sorted(c for c, p in CONFIG_PROVIDERS.items() if p != "copilot")
+# opus-high (owner 2026-11-12) reuses opus-medium's price object, so it is checked against that row.
+KEYED_CONFIGS = sorted(
+    c for c, p in CONFIG_PROVIDERS.items() if p != "copilot" and c != "opus-high"
+)
 
 
 @pytest.mark.parametrize("config", KEYED_CONFIGS)
@@ -52,6 +55,11 @@ def test_the_output_reservation_per_call_is_the_keys(config: str) -> None:
     expected = Decimal(_key()["reservation_output_usd_per_call"][config])
     got = reservation_usd(price_of(config), 0, run_pathway.MAX_OUTPUT_TOKENS)
     assert got == expected
+
+
+def test_opus_high_reserves_what_the_keys_opus_medium_row_does() -> None:
+    expected = Decimal(_key()["reservation_output_usd_per_call"]["opus-medium"])
+    assert reservation_usd(price_of("opus-high"), 0, run_pathway.MAX_OUTPUT_TOKENS) == expected
 
 
 def test_the_bytes_per_token_lower_bounds_are_the_keys() -> None:

@@ -45,6 +45,8 @@ CONFIGS: Mapping[str, ModelConfig] = MappingProxyType(
         "opus-medium": ModelConfig(
             "opus-medium", "anthropic", "claude-opus-5-5", "medium", frozenset({"comparison"})
         ),
+        # no model-testing stage plans it; selected by CP-OS / the run start page (owner 2026-11-12)
+        "opus-high": ModelConfig("opus-high", "anthropic", "claude-opus-5-5", "high", frozenset()),
         "deepseek-max": ModelConfig(
             "deepseek-max",
             "openrouter",
