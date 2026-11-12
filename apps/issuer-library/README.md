@@ -131,8 +131,9 @@ document is marked "carried over from run <id>" and removable; a file the analys
 carried name is theirs and is not marked. Not carried, and not marked: the as-of and cutoff dates
 and periods, the submitter (the analyst's own name is kept), and the answers that depend on a chosen
 file (the agreement, bridge, portfolio and prior-case files). A subset naming a module the pathway
-lacks is not carried at all. When the earlier run has no usable stored answers, only the issuer name
-and ID are carried and nothing the analyst typed is cleared. "This is a different issuer" drops the
+lacks is not carried at all. When the earlier run has no usable stored answers, the only answers carried
+are the issuer name and ID (its documents are still carried when its folder exists) and nothing the
+analyst typed is cleared. "This is a different issuer" drops the
 carry (the level and the analyst's own uploads stay). If the browser still holds a submitted run,
 the link shows that run's progress with "Run <from> has not been started from yet: this page is
 showing run <stored id>." and "Start another run" then starts from `<from>`; when the stored run has

@@ -77,8 +77,9 @@ name only. An unknown run ID is refused.
 - Dates default from the newest document, as on a blank start.
 - The locked ID has an "this is a different issuer" control that unlocks it and clears the
   carried-over files and answers. The level stays; a file the analyst uploaded stays.
-- When the earlier run's answers cannot be used (no source folder, or unreadable), only the issuer
-  name and ID are carried: the level, module subset, turns and anything the analyst typed stay.
+- When the earlier run's answers cannot be used (no source folder, or unreadable), the only answers
+  carried are the issuer name and ID: the level, module subset, turns and anything the analyst typed
+  stay. Its documents are still carried when the source folder exists.
 - Each carried-over answer is marked "from run <id>" beside its input. The summary lists them in
   one block, the way it lists defaulted inputs, so approval covers them.
 - The file questions are not carried over because `context/1` records no per-file choice (staged
