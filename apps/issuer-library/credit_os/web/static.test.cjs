@@ -1321,7 +1321,7 @@ test('navigator (decision 5): the open entry has aria-current="page" and its On 
   assert.equal(countOf(html, /<nav class="section-outline" aria-label="On this page">/g), 1);
   const entry = /<li><a [^>]*aria-current="page"[^>]*>.*?<\/a><nav class="section-outline".*?<\/nav><\/li>/s.exec(html)[0];
   assert.ok(entry.includes('Credit view'));
-  assert.deepEqual([...entry.matchAll(/class="section-item" href="[^"]*"[^>]*>([^<]*)<\/a>/g)].map(m => m[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Request', 'Sources', 'Calculations', 'Gaps', 'Next module']);
+  assert.deepEqual([...entry.matchAll(/class="section-item" href="[^"]*"[^>]*>([^<]*)<\/a>/g)].map(m => m[1].replace('&amp;', '&')), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Sources', 'Calculations', 'Gaps', 'Evidence & audit']);
 });
 
 test('navigator (decision 5): search filters the same flat list by name, code and section titles', () => {
@@ -1345,7 +1345,7 @@ test('navigator (decision 5): the Cash flow model entry (code CP-MODEL) is prese
 
 test('module page (H1): the four reader passages come first under their headings, then the other sections in handoff order', () => {
   const page = fixturePage(), id = outId('CP-2'), parts = page.reportParts(id);
-  assert.deepEqual(parts.map(p => p[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Request', 'Sources', 'Calculations', 'Gaps', 'Next module']);
+  assert.deepEqual(parts.map(p => p[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Sources', 'Calculations', 'Gaps', 'Evidence & audit']);
   const html = page.moduleReport(id);
   const at = marker => html.indexOf(marker);
   assert.ok(at('id="bottom-line"') > 0 && at('id="bottom-line"') < at('id="key-findings"') && at('id="key-findings"') < at('id="contrary-evidence"') && at('id="contrary-evidence"') < at('id="limitations"'));
@@ -1378,7 +1378,8 @@ test('module page (H1, decision 7): passage text exactly as written, the Basis l
 
 test('module page (H1): the other sections are kept exact, tables with their Source column, in handoff order', () => {
   const html = fixturePage().moduleReport(outId('CP-2'));
-  const order = ['Credit view for Northbridge Synthetic Group (nbg), as of 2025-03-31. SYNTHETIC FIXTURE.', 'Debt, cash and maturity profile.', 'Net debt to EBITDA', 'No peer set supplied', 'CP-2D assesses liquidity against the maturities.'].map(t => html.indexOf(t));
+  // A1 (decision 2): Request moves from the head of the body to the Evidence & audit fold at its end, before Next module.
+  const order = ['Debt, cash and maturity profile.', 'Net debt to EBITDA', 'No peer set supplied', 'Credit view for Northbridge Synthetic Group (nbg), as of 2025-03-31. SYNTHETIC FIXTURE.', 'CP-2D assesses liquidity against the maturities.'].map(t => html.indexOf(t));
   assert.ok(order.every(i => i > 0) && order.every((i, k) => k === 0 || i > order[k - 1]), `handoff order ${order}`);
   assert.ok(html.includes('Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331') && html.includes('<th scope="col">Source</th>'));
 });
@@ -2729,4 +2730,91 @@ test('the earlier-format band keeps its words and is not navy; a finding is one 
   assert.ok(article.includes('<h4>Leverage rose.</h4>') && article.includes('<span class="conf">Confidence High</span>') && article.includes('class="basis-link"'), article);
   const css = read('screen.css'), redesign = css.slice(css.indexOf('/* Redesign pass 1'));
   assert.ok(/\.band\{[^}]*background:none/.test(redesign) && !/\.band\{[^}]*navy/.test(redesign));
+});
+
+// ---- Task A1 (ruling 2026-11-12, decisions 1 and 2): a drawing is shown once, routing text sits in an audit fold, a chart with no numbers has a card.
+const a1Sections = (extra = []) => [
+  sec('Front matter', 2, 90, 'audit', [text(91, 'title: Credit view\nfilename: CP-1-credit.md\nstatus: draft')]),
+  ...passageSections({ bottom: 'Cash is up.', key: ['Leverage rose.'], limits: ['Synthetic.'] }),
+  sec('Request', 2, 30, 'audit', [text(31, 'Assess the credit.')]),
+  sec('Chart data: leverage', 3, 40, 'consumed', [chartTable(42, [[43, 'FY2024', '6.57', 'x', 'K']]), text(44, 'Leverage is the highest in five years.')]),
+  sec('Chart data: cover', 3, 50, 'consumed', [chartTable(52, [[53, 'FY2024', '2.1', 'x', 'K']])]),
+  sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures'), laneRow(304, '2025-06', 'month', '2025-05-01', 'Call window')]), text(305, 'Both dates are scheduled.')]),
+  sec('Map: credit-risk transmission', 3, 400, 'consumed', [table(402, MAP_HEAD, [edgeRow(403, 'Driver', 'drives', 'Documentary Fact', 'Outcome')]), text(404, 'The driver is the only one stated.')]),
+  sec('Sources', 2, 60, 'audit', [text(62, 'K.')]),
+  sec('Next module', 2, 70, 'audit', [text(71, 'Pass to Liquidity.')]),
+  ...extra,
+];
+const a1Set = { charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }, { title: 'Cover', unit: 'x', table: 52, columns: [1] }], events: [{ lane: 'Financing', table: 302, gap: null }], maps: [{ name: 'credit-risk transmission', table: 402, gap: null }] };
+const a1Page = (sections = a1Sections(), set = a1Set) => runPage(() => { const d = overviewData({ 'CP-1': sections }); Object.assign(d[outId('CP-1')], set); return d; }, [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+const a1Id = outId('CP-1');
+
+test('module page (A1, decision 1 and 2): the outline lists no Chart data, Map, Events, Request, Next module or Front matter entry and ends with Evidence & audit', () => {
+  const parts = a1Page().reportParts(a1Id);
+  assert.deepEqual(parts.map(p => p[1]), ['Module', 'Bottom line', 'Key findings', 'Limitations', 'Charts', 'Timeline', 'Maps', 'Sources', 'Evidence & audit']);
+  assert.equal(parts.at(-1)[0], 'audit');
+});
+
+test('module page (A1): the body has no "Chart data:" heading, and every chart is a card with its Table form', () => {
+  const html = a1Page().moduleReport(a1Id), charts = /<section class="part" id="charts">.*?<\/section>/s.exec(html)[0];
+  assert.ok(!html.includes('Chart data:') && !html.includes('Map: ') && !html.includes('Events: '), 'no drawing section is printed again');
+  assert.equal(countOf(charts, /<div class="panel-card"/g), 2);
+  assert.equal(countOf(charts, /<summary>Table form<\/summary>/g), 2);
+});
+
+test('module page (A1): each chart card, map card and timeline lane carries its section anchor, so s-<line> routes stay', () => {
+  const page = a1Page(), html = page.moduleReport(a1Id);
+  for (const line of [40, 50]) assert.ok(html.includes(`<div class="panel-card" id="s-${line}">`), `chart ${line}`);
+  assert.ok(html.includes('<div class="map-card" id="s-400">') && html.includes('<div class="lane-row" id="s-300">'));
+  const anchors = page.drawnAnchors(a1Id);
+  for (const line of [30, 40, 50, 60, 70, 90, 300, 400]) assert.ok(anchors.has(`s-${line}`), `s-${line}`);
+});
+
+test('module page (A1): prose written under a drawing\'s table is its caption', () => {
+  const html = a1Page().moduleReport(a1Id), within = (from, to, needle) => html.slice(html.indexOf(from), html.indexOf(to)).includes(needle);
+  assert.ok(within('<div class="panel-card" id="s-40">', '<div class="panel-card" id="s-50">', 'Leverage is the highest in five years.'));
+  assert.ok(!within('<div class="panel-card" id="s-50">', 'id="s-300"', 'Leverage is the highest'));
+  assert.ok(html.slice(html.indexOf('<div class="lane-row" id="s-300">')).includes('Both dates are scheduled.'));
+  assert.ok(html.slice(html.indexOf('<div class="map-card" id="s-400">')).includes('The driver is the only one stated.'));
+});
+
+test('module page (A1): a chart with no numbers is a card saying Not established for this run with its reason, in table-line order', () => {
+  const sections = a1Sections([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x', 'K']])])]);
+  const page = a1Page(sections, { ...a1Set, chartGaps: [{ title: 'Covenant headroom', table: 37 }].map(g => ({ ...g, gap: 'no covenant is stated' })) });
+  const html = page.moduleReport(a1Id), charts = /<section class="part" id="charts">.*?<\/section>/s.exec(html)[0];
+  const order = [...charts.matchAll(/<div class="panel-card" id="s-(\d+)">/g)].map(m => m[1]);
+  assert.deepEqual(order, ['35', '40', '50'], 'the gap card sits where its table is');
+  const card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(charts)[0];
+  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && strip(card).includes('no covenant is stated') && !card.includes('Not supplied'));
+  assert.ok(!html.includes('Chart data:'));
+});
+
+test('module page (A1): a drawing the store could not draw keeps its section in the body', () => {
+  const html = a1Page(a1Sections(), { ...a1Set, charts: [a1Set.charts[0]] }).moduleReport(a1Id);
+  assert.ok(html.includes('Chart data: cover'), 'no card, no gap entry: the section is still printed');
+  assert.ok(!html.includes('Chart data: leverage'));
+});
+
+test('module page (A1): the compact timeline has a Table form fold of its events', () => {
+  const html = a1Page().moduleReport(a1Id), timeline = /<section class="part" id="timeline">.*?<\/section>/s.exec(html)[0];
+  assert.ok(/<details class="chart-table"><summary>Table form<\/summary>.*<table class="event-table">/s.test(timeline));
+  assert.ok(timeline.includes('Note matures') && timeline.includes('Call window'));
+});
+
+test('module page (A1): the audit fold holds Front matter as lines without a filename line, then Request and Next module', () => {
+  const html = a1Page().moduleReport(a1Id), fold = /<details class="fold" id="audit">.*?<\/details>/s.exec(html)[0], text = strip(fold);
+  assert.ok(fold.includes('<li>title: Credit view</li>') && fold.includes('<li>status: draft</li>'), fold);
+  assert.ok(!text.includes('filename') && !text.includes('CP-1-credit.md'));
+  assert.ok(text.indexOf('Credit view') < text.indexOf('Assess the credit.') && text.indexOf('Assess the credit.') < text.indexOf('Pass to Liquidity.'));
+  assert.ok(!html.replace(fold, '').includes('Assess the credit.') && !html.replace(fold, '').includes('Pass to Liquidity.'), 'routing text is only in the fold');
+  assert.ok(html.replace(fold, '').includes('<h3>Sources</h3>') || html.replace(fold, '').includes('>Sources<'), 'Sources stays on the page body');
+});
+
+test('module page (A1): an earlier-format page draws its charts, maps and lanes as before, without anchors, captions, gap cards or a timeline table form', () => {
+  const sections = [sec('Reader summary', 3, 10, 'consumed', []), sec('Chart data: leverage', 3, 40, 'consumed', [chartTable(42, [[43, 'FY2024', '6.57', 'x', 'K']]), text(44, 'Prose.')]), sec('Map: credit-risk transmission', 3, 400, 'consumed', [table(402, MAP_HEAD, [edgeRow(403, 'Driver', 'drives', 'Documentary Fact', 'Outcome')])]), sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures')])])];
+  const page = a1Page(sections, { ...a1Set, charts: [a1Set.charts[0]], chartGaps: [{ title: 'Gap', table: 9, gap: 'x' }], summary: { bottomLine: 'Cash up.', confidence: 'Medium', limitation: 'x', line: 13, findings: [] } });
+  const html = page.moduleReport(a1Id);
+  assert.ok(!html.includes('id="s-40"') && !html.includes('<div class="map-card" id=') && !html.includes('<div class="lane-row" id='));
+  assert.ok(!html.includes('Not established for this run') && !html.includes('<summary>Table form</summary><div class="table-card"><table class="event-table"'));
+  assert.ok(!/<section class="part" id="timeline">.*<summary>Table form<\/summary>.*<table class="event-table">/s.test(html));
 });

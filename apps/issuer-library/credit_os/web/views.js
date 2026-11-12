@@ -82,7 +82,7 @@ function installDestinations() {
     const sections=[];
     const audit=[];
     for(const s of out.sections.filter(s=>s.blocks.length)) {
-      if(/^(Request|Calculations|Next module)/.test(s.heading)) {audit.push('='+s.heading);continue;}
+      if((isNewFormat(out.sections)?/^(Request|Next module)/:/^(Request|Calculations|Next module)/).test(s.heading)) {audit.push('='+s.heading);continue;}
       sections.push(['s'+s.line,title(s.heading),['='+s.heading]]);
     }
         const first=out.summary?out.sections.find(s=>s.heading==='Reader summary'):out.firstHeading&&out.sections.find(s=>s.heading.startsWith(out.firstHeading));
@@ -412,7 +412,10 @@ const headingView=(heading,tag,cls='')=>`<${tag}${cls?` class="${cls}"`:''}>${ri
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
-const drawnAnchors=id=>new Set((isNewFormat(data[id].sections)?newFormatRest(id):DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where))).map(section=>`s-${section.line}`));
+const drawnAnchors=id=>{
+  const {rest,audit,drawings}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),audit:[],drawings:[]};
+  return new Set([...rest,...audit,...drawings].map(section=>`s-${section.line}`));
+};
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
 function chipView(chip,rowModule) {
@@ -578,9 +581,41 @@ const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrar
 // The reading style each passage is drawn in (screen.css, `.reading-*`): the headline, the findings list, prose, the limitations list.
 const PASSAGE_STYLES={bottom:'headline',key:'findings',contrary:'prose',limits:'limits'};
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
-const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
+// Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
+// (its numbers are the drawing's Table form, its prose the caption). `## Request`, `## Next module`, front matter and what sits under them are `audit`. The rest is the page body.
+// A drawing section the store could not draw has no drawing, so it stays in the body. The sections are told apart by name, not by placement: Sources is placed audit and stays.
+const AUDIT_HEADINGS=['Request','Next module','Front matter'];
+function newFormatSplit(id) {
+  const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
+  const split={rest:[],audit:[],drawings:[]};
+  let parent='';
+  for(const section of data[id].sections) {
+    if(section.level<=2)parent=section.level===2?section.heading:'';
+    if(held.has(section)||!section.blocks.length)continue;
+    if(CHART_HEADING.test(section.heading)&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
+    else split[AUDIT_HEADINGS.includes(parent)?'audit':'rest'].push(section);
+  }
+  return split;
+}
+// The section that holds a drawing's table. On a new-format page it gives the drawing its route (s-<line>) and its caption: the section's prose, in order.
+const drawingSection=(id,table)=>isNewFormat(data[id].sections)?data[id].sections.find(section=>section.blocks.some(block=>block.type==='table'&&block.line===table)):undefined;
+const drawingAnchor=(id,table)=>{const section=drawingSection(id,table);return section?` id="s-${section.line}"`:'';};
+function drawingCaption(id,table) {
+  const section=drawingSection(id,table);
+  return section?.blocks.some(block=>block.type==='text')?`<div class="drawing-caption">${sectionBodyHtml(section,bodyContext(id,false))}</div>`:'';
+}
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
 const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
+// A new-format page's cards: a chart with no numbers (store `chartGaps`) is a card saying why, in table-line order with the charts; each card has its section route and caption.
+function newFormatChartCards(id) {
+  const charts=data[id].charts||[],last=lastPeriodChart(charts);
+  const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,true,at===last)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
+  const lastChart=cards.findLastIndex(card=>!card.gap);
+  return cards.map((card,at)=>{
+    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4></div><p class="lane-gap">${NOT_ESTABLISHED}<small>${esc(card.gap.gap)}</small></p>`:cardTitle(card.html);
+    return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}${at===lastChart?LEGEND:''}</div>`;
+  }).join('');
+}
 // An output with Events lanes draws them; an earlier-format one that has an event table and no lane draws that table as a timeline.
 function reportTimeline(id) {
   const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
@@ -593,6 +628,9 @@ const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
 // What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
 const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,caption:heading=>plain(heading).replace(METHOD_CODE,'')});
 const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
+// Front matter is drawn as its stated lines. Its `filename` line names the handoff with a module code, and the download carries the file, so it is not drawn.
+const frontMatter=section=>section.level===2&&section.heading==='Front matter';
+const frontMatterView=section=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}<ul class="front-matter">${section.blocks.filter(block=>block.type==='text').flatMap(block=>block.text.split('\n')).map(line=>line.trim()).filter(line=>line&&!/^filename\s*:/i.test(line)).map(line=>`<li>${esc(line)}</li>`).join('')}</ul></div>`;
 function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections);
   const parts=[['head','Module',reportHead(id)]];
@@ -603,11 +641,13 @@ function newFormatParts(id) {
     parts.push([anchor,passages[key].heading,`<section class="part reading-${PASSAGE_STYLES[key]}" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]),key==='bottom'?'sr-only':'')}${passageHtml(passages[key],id)}</section>`]);
     heading='';
   }
-  const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
+  const charts=newFormatChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
   if(charts)parts.push(['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]);
   if(timeline)parts.push(['timeline','Timeline',timeline]);
   if(maps)parts.push(['maps','Maps',maps]);
-  for(const section of newFormatRest(id))parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
+  const {rest,audit}=newFormatSplit(id);
+  for(const section of rest)parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
+  if(audit.length)parts.push(['audit','Evidence & audit',fold('audit','Evidence & audit',plural(audit.length,'section'),audit.map(section=>frontMatter(section)?frontMatterView(section):newFormatSection(id,section)).join(''))]);
   return parts;
 }
 const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
@@ -699,15 +739,17 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
     const [date,precision,,event]=row.cells,at=eventPlace(span,axis);
     return `<a class="lane-event ${span.point?'point':'span'}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="left:${at.left}%${span.point?'':`;width:${at.width}%`}"></a>`;
   };
-  const rows=lanes.map(lane=>`<div class="lane-row"><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track">${lane.events.filter(e=>e.span).map(e=>marker(lane,e)).join('')}</span>`}</div>`).join('');
+  const own=Boolean(only)&&isNewFormat(data[only].sections); // a new-format module page: each lane is its section's route and caption, its events a Table form
+  const rows=lanes.map(lane=>`<div class="lane-row"${own?drawingAnchor(lane.id,lane.table):''}><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track">${lane.events.filter(e=>e.span).map(e=>marker(lane,e)).join('')}</span>`}</div>${own?drawingCaption(lane.id,lane.table):''}`).join('');
   const day=n=>new Date(n*86400000).toISOString().slice(0,10);
   const body=lanes.flatMap(lane=>lane.events.map(({row})=>{
     const [date,precision,published,event,status,source,relevance]=row.cells;
     return `<tr><td>${esc(lane.lane)}</td><td>${esc(date)}</td><td>${esc(precision)}</td><td>${esc(published)}</td><td><a class="event-link" ${link(lane,row)}>${rich(event)}</a></td><td>${rich(status)}</td><td>${rich(source)}</td><td>${rich(relevance)}</td></tr>`;
   })).join('');
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
+  const eventTableHtml=`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
-  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${!compact&&body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${body?(compact?own?`<details class="chart-table"><summary>Table form</summary>${eventTableHtml}</details>`:'':eventTableHtml):''}</div>`;
 }
 // ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.
@@ -754,10 +796,11 @@ function mapDiagram(id,map,rows) {
 function mapsView(id,tag='h2',keep=()=>true) {
   return (data[id]?.maps||[]).filter(keep).map(map=>{
     const title=`<${tag}>${esc(map.name[0].toUpperCase()+map.name.slice(1))}</${tag}>`;
-    if(map.gap!==null)return `<div class="map-card">${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p></div>`;
+    const own=drawingAnchor(id,map.table);
+    if(map.gap!==null)return `<div class="map-card"${own}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${drawingCaption(id,map.table)}</div>`;
     const rows=fixtureTable(id,map.table).rows,link=row=>`<a class="event-link" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}">${rich(row.cells[1])}</a>`;
     const body=rows.map(row=>`<tr><td>${rich(row.cells[0])}</td><td>${link(row)}</td><td>${esc(row.cells[2])}</td><td>${rich(row.cells[3])}</td><td>${rich(row.cells[4])}</td></tr>`).join('');
-    return `<div class="map-card">${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+    return `<div class="map-card"${own}>${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>${drawingCaption(id,map.table)}</div>`;
   }).join('');
 }
 // Maps on a module page.
