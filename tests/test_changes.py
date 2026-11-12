@@ -2199,10 +2199,13 @@ def test_the_checker_accepts_a_measure_row_only_in_the_form_the_tab_reads(case):
     leverage = next(r for r in REGISTERS.splitlines() if r.startswith("| Total debt / EBITDA"))
     old = {"leverage": leverage, "cash": CASH_ROW}[case["measure"]]
     quiet = "| Credit view (CP-2) | Unchanged | None | No change. |"
-    text = REGISTERS.replace(old, _seam_row(case["cells"]), 1).replace(
+    rows = "\n".join(_seam_row(r) for r in [case["cells"], *case.get("extra_rows", [])])
+    text = REGISTERS.replace(old, rows, 1).replace(
         "| Credit view (CP-2) | Strengthened | New period | Leverage fell. |", quiet, 1
     )
-    assert (cp8_issues(text, PACK) == ()) is case["accepted"]
+    found = cp8_issues(text, PACK)
+    assert (found == ()) is case["accepted"]
+    assert any(case["refusal"] in i for i in found) if "refusal" in case else True
 
 
 @pytest.mark.parametrize("case", SEAM["module_cells"], ids=lambda c: c["name"])

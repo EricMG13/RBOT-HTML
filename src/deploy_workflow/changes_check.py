@@ -162,8 +162,9 @@ def _section(lines: list[str], title: str) -> tuple[list[str], list[list[str]]] 
 
 
 def _plain(text: str) -> str:
-    """A cell as the Changes tab reads it (changes.js `bare`): without bold or code marks."""
-    return text.replace("**", "").replace("`", "").strip()
+    """A cell as the Changes tab reads it (changes.js `bare`): without bold or code marks, with
+    every run of white space (a non-breaking space too) one space."""
+    return " ".join(text.replace("**", "").replace("`", "").split())
 
 
 def _says(row: Sequence[str], word: str) -> bool:
@@ -315,7 +316,7 @@ def _value_cell_issues(
 def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any]) -> list[str]:
     """The row's statement on whether the two values share a definition; a row that says
     `Not comparable` draws no trend."""
-    text = " ".join(row).lower()
+    text = " ".join(_plain(cell) for cell in row).lower()
     issues = []
     for word in (SAME, NOT_COMPARABLE):
         if measure["comparable"] != "no" and word in text and not _says(row, word):
@@ -415,6 +416,7 @@ def _issuer_issues(
     if not rows:
         return [f"`### {ISSUER}` needs a row; if nothing changed, one `{NO_CHANGE}` row."]
     labels = {m["label"]: m for m in pack["measures"]}
+    named: set[str] = set()
     for row in rows:
         name, cause = row[0], row[3]
         if name.strip().strip("*") == NO_CHANGE:
@@ -422,6 +424,14 @@ def _issuer_issues(
                 issues.append(f"The `{NO_CHANGE}` row's Cause is `None`.")
             continue
         measure = labels.get(_plain(name))
+        if measure is not None:
+            if measure["key"] in named:
+                issues.append(
+                    f"Issuer register, {name!r}: a second row for this pack measure; write one "
+                    "row per measure."
+                )
+                continue
+            named.add(measure["key"])
         flagged = measure is not None and _flagged(measure)
         causes = (*ISSUER_CAUSES, *(SAME_PERIOD_CAUSES if flagged else ()))
         if cause not in causes:

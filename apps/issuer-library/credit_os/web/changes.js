@@ -48,7 +48,7 @@ function cp8Parts(sections) {
 
 const column = (table, name) => (table ? table.headers.findIndex(header => header.trim() === name) : -1);
 const cell = (row, index) => (index >= 0 && row ? String(row.cells[index] ?? '') : '');
-const bare = text => String(text).replace(/\*\*|`/g, '').trim();
+const bare = text => String(text).replace(/\*\*|`/g, '').replace(/\s+/g, ' ').trim();
 
 // A value with its unit as the pack states them: `x` and `%` follow the figure, any other unit follows after a space.
 const withUnit = (value, unit) => (unit == null || unit === '' ? String(value) : /^[x%]$/.test(unit) ? `${value}${unit}` : `${value} ${unit}`);

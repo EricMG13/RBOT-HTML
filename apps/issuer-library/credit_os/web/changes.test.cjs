@@ -255,7 +255,7 @@ const SEAM = JSON.parse(require('node:fs').readFileSync(require('node:path').joi
 test('a row the checker accepts is read by the tab to the verdict the shared fixture states', () => {
   for (const c of SEAM.measure_rows.filter(r => r.accepted)) {
     const m = SEAM.measures[c.measure];
-    const verdict = measureVerdict(m, table(ISSUER_HEAD, c.cells));
+    const verdict = measureVerdict(m, table(ISSUER_HEAD, c.cells, ...(c.extra_rows || [])));
     assert.equal(verdict.kind, c.verdict, c.name);
     assert.equal(differenceText(m, verdict), c.difference, c.name);
   }

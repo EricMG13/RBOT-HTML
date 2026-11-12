@@ -64,17 +64,19 @@ accepted, the run is delivered without it.
    (`fell by 0.60x` for -0.60); do not write a sign after a word of direction. Where the pack gives
    no difference, write none. A value the pack states as null is missing, not zero: write that it is
    not stated.
-   - A row that names a pack measure uses the measure's label exactly as the pack gives it. A fact
+   - A row that names a pack measure uses the measure's label exactly as the pack gives it, and
+     there is one row per pack measure. A fact
      row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
      earlier run's under Earlier and the current run's under Current, but never a pack measure's
      value or a difference; a difference belongs to its measure's own row.
    - `comparable: yes`: the definitions match; report the values and the difference.
    - `comparable: no` (a unit differs, or a run does not state the value): the pack gives no
-     difference. Say the row is `Not comparable` or the value is not stated, give the values the pack
+     difference. Say the row is `Not comparable` (the Effect cell begins with those words) or the value is not stated, give the values the pack
      does hold, and write no difference and no trend.
    - `comparable: judge`: the pack gives the difference and both definition texts. Read both and
      write in that row exactly one of `Same definition` or `Not comparable`, with the reason in
-     the last cell. With `Same definition` report the values and the difference. With
+     the last cell: begin the Effect cell with exactly one of them, then the reason
+     (`Not comparable: the EBITDA basis changed.`); the words elsewhere in a cell are refused. With `Same definition` report the values and the difference. With
      `Not comparable` give both values with their periods, never print the difference and draw no
      trend from the two (no "rose", "fell", "weakened", "improved"). A difference of a measure
      whose row says `Not comparable` is written nowhere in the handoff, in no passage, register or
@@ -85,7 +87,7 @@ accepted, the run is delivered without it.
      the method changed (cause `Method change`). Decide which before writing the row. When a
      definition text points to another row (`identical definition`, a calculation ID), read the row
      or calculation it points to in that run's CP-1 handoff first. The row says `Not comparable`,
-     or says `Same definition` with the cause `Correction` or `Method change`; the causes
+     or says `Same definition` with the cause `Correction` or `Method change`, in the first words of the Effect cell; the causes
      `New period` and `New source` are refused for it. `Same definition` followed by a sentence
      that contradicts it ("but the EBITDA basis changed") is an error: say `Not comparable`. Such a
      difference is written only in the register rows. A passage may give the two values and say the

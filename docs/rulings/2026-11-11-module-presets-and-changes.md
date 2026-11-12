@@ -226,7 +226,7 @@ comparable`) starts a cell of the issuer row (the word elsewhere in the row is r
 the pack marks `no`), the issuer row's label is the pack's label exactly (bold or code marks aside), and the
 Module cell of the analysis register ends with the code in brackets, as `Credit view (CP-2)`.
 `tests/fixtures/changes-seam/rows.json` is read by a Python test and a node test with the same expected
-verdicts. When the tab cannot read a verdict it shows no difference and no line. (2) Over time compares
+verdicts. A measure the pack marks `no`, and a row that begins with `Not comparable`, shows both values and no difference and no line. A `judge` measure with no verdict word shows no difference ("Comparability not judged"). A `yes` measure with no verdict word shows its difference and its line, as the pack states it. (2) Over time compares
 the run folder name on both sides (the pack names its prior by folder). (3) A reason the run records for
 making no comparison reaches the library verbatim. (4) The published scope no longer says CP-8's handoff is
 delivered whole when CP-8 was not produced.
