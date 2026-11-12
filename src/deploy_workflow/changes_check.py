@@ -829,7 +829,7 @@ _MONTH = (
     r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
 )
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
-_YEAR = r"\d{4}\b(?![.,]\d)"
+_YEAR = r"(?:19|20)\d{2}\b(?![.,]\d)"
 # A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
 # and month with no year is read as a number.
 _DATE = re.compile(
@@ -869,7 +869,34 @@ _TENS = {
         ("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"), 2
     )
 }
-_WORD_RUN = re.compile(r"[A-Za-z]+(?:[\s-]+[A-Za-z]+)*")
+_HYPHENS = "-\u2010-\u2015"
+_WORD_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
+_ORDINALS = frozenset(
+    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halves", "quarter")
+)
+
+
+def _ordinal(word: str) -> bool:
+    """Whether `word` is an ordinal or fraction word: `first`, `fourth`, `thirtieth`, `thirds`."""
+    word = word.removesuffix("s")
+    if word in _ORDINALS:
+        return True
+    if word.endswith("ieth"):
+        return word[:-4] + "y" in _TENS
+    return word.endswith("th") and word[:-2] in {*_UNITS, *_TENS, "hundred", "thousand"}
+
+
+def _part_of_fraction(words: Sequence[str], i: int, j: int) -> bool:
+    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction: it follows or
+    precedes `point`, an ordinal word ends it (`thirty-first`, `one hundred and first`), or
+    `and a half` / `and a quarter` follows."""
+    return (
+        words[max(i - 1, 0) : i] == ["point"]
+        or words[j : j + 1] == ["point"]
+        or (j < len(words) and _ordinal(words[j]))
+        or (words[j : j + 1] == ["and"] and j + 1 < len(words) and _ordinal(words[j + 1]))
+        or words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
+    )
 
 
 def _starts_list_item(lines: Sequence[str], i: int) -> bool:
@@ -920,18 +947,18 @@ def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
 
 def _spelled(line: str) -> list[Decimal]:
     """The whole numbers from two up that the line writes in English words, any case, hyphenated or
-    spaced. Not read: `one` alone, ordinals, fractions, `a hundred`, `a dozen`, and a number that a
-    decimal point continues."""
+    spaced (any Unicode hyphen). Not read: `one` alone, `a hundred`, `a dozen`, and a part of a
+    decimal, fraction or ordinal."""
     found: list[Decimal] = []
     for run in _WORD_RUN.finditer(line):
-        words = re.split(r"[\s-]+", run[0].lower())
+        words = re.split(rf"[{_HYPHENS}\s]+", run[0].lower())
         i = 0
         while i < len(words):
             value, j = _spelled_number(words, i)
             if j == i:
                 i += 1
                 continue
-            if value >= 2 and words[j : j + 1] != ["point"]:
+            if value >= 2 and not _part_of_fraction(words, i, j):
                 found.append(Decimal(value))
             i = j
     return found

@@ -3177,3 +3177,48 @@ def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
     elsewhere = net.replace("Net debt |", "Refinancing |")
     found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
     assert any("80" in i and "difference" in i for i in found), found
+
+
+def _cash_pack(change: str, cash: str):
+    pack = _ndpack()
+    pack["net_debt_change"] |= {"change_in_cash": change, "current_cash": cash}
+    return pack
+
+
+@pytest.mark.parametrize(
+    ("sentence", "pack", "size"),
+    [
+        ("On 30 June 4370 US$m was drawn.", None, "4370"),
+        ("At March 12 4370 US$m of debt matured.", None, "4370"),
+        ("At 30 June 1006 US$m of cash was used.", _cash_pack("-1006", "-96"), "1006"),
+        ("March 12 1006 is the cash change.", _cash_pack("-1006", "-96"), "1006"),
+        ("It was due on 31 December 2100 US$m.", None, "2100"),
+    ],
+)
+def test_a_four_digit_figure_after_a_yearless_date_is_still_read(sentence, pack, size):
+    found = _says(sentence, pack)
+    assert any(size in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    ("sentence", "pack"),
+    [
+        ("Cash is zero point five of the facility.", _cash_pack("-5", "905")),
+        ("Cash is point five of the facility.", _cash_pack("-5", "905")),
+        ("Two thirds of the debt is fixed.", _cash_pack("-2", "908")),
+        ("Two-thirds of the debt is fixed.", _cash_pack("-2", "908")),
+        ("Two and a half turns of leverage.", _cash_pack("-2", "908")),
+        ("The twenty-first covenant test.", _cash_pack("-20", "890")),
+        ("The thirty-first covenant test.", None),
+        ("The one hundred and first covenant test.", _cash_pack("-100", "810")),
+        ("Three quarters of the debt is fixed.", _cash_pack("-3", "907")),
+    ],
+)
+def test_a_decimal_fraction_or_ordinal_in_words_is_not_read_in_part(sentence, pack):
+    assert _says(sentence, pack) == ()
+
+
+@pytest.mark.parametrize("hyphen", ["‐", "‑", "‒", "–", "—", "―"])
+def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
+    found = _says(f"Cash fell by thirty{hyphen}five.", _cash_pack("-35", "875"))
+    assert any("figure 35" in i for i in found), found

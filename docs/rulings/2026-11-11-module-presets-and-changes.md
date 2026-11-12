@@ -400,3 +400,10 @@ legitimate bare count (or a spelled one) equal to a withheld size is refused, si
 from a size; decimals, fractions, ordinals (`thirtieth`), `a hundred` and `a dozen` in words are not read. The two
 tests that pinned the old limits (a size in words accepted; `- First point.` then `80. ...` accepted) now assert the
 new rulings; no other expectation and no `rows.json` case changed.
+
+Amendment, 2026-11-12 (reviewer findings M1, Low A, Low B). A date's year is `(?:19|20)\d{2}` only, as `_EXEMPT` has it, so
+a figure such as `4370` or `1006` straight after a yearless `30 June` is read again. A spelled number is not read when it
+directly follows or precedes `point`, or is directly followed (space or hyphen) by an ordinal or fraction word (`first`,
+`thirty-first`, `thirds`, `quarters`, `-th`/`-ieth` forms, also after `and`: `one hundred and first`) or by `and a half` /
+`and a quarter`. U+2010 to U+2015 count as a hyphen inside a spelled number. Remaining limits: a spelled size broken across
+lines (`one hundred` / `and ten`) is not read; a legitimate count equal to a withheld size is refused.
