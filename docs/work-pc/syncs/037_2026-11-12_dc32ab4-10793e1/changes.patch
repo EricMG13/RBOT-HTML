@@ -1,0 +1,232 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 1c330b5..5548f0d 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,11 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — CP-8 checker: a currency code glued to digits, more currency and scale forms, bond names (branch `claude/cp8-checker-currency`, owner "complete 1")
++Scope: offline, synthetic plus read-only reading of 974 retained `.md` handoffs; no provider. C1 `EUR437m`, `USD2010` read as figures; C2 `C$`/`A$`/`R$` prefixes, `mln`/`bln`, `'000`, 18 more currency codes (`_CODES` 22 to 40) around a year-shaped number; C3 `2029s` is a bond name, a year. Tests first: 29 of the new cases failed on the unchanged checker, all pass after; `counts_code_glued.py` flipped 1 to 0.
++Corpus (both `counts` modes, token level, old vs new): 1,559 token diffs, 59 files with different held sizes; every one is K-a (`USD`/`EUR` glued to digits, 502 tokens new in each mode: `USD710 million`, `EUR1,000m`, `USD35/share`, all real money; the old reading kept only the fragment `000` of `USD1,000m`, 270 and 265 fragments gone) or K-c (`EUR 2029s, 480bp`, 10 tokens gone, held 2029 lost). K-b (a year-shaped number with a C2 form) 0 tokens, K-d (`mln`/`bln` after a small number) 0 tokens. `gaps_real_run.py` output byte-identical before and after; every other probe exits as on main (three recorded limits unchanged).
++Not verified: a real model; `30 C$m` (a small number after a one-letter-prefixed sign is still no unit); a code standing alone before digits that is really a name (`COP26`: 26 is read as a figure; none in the corpus).
++
+ ## 2026-11-12 — Module output review changes: sources resolve, each drawing shown once, reader vocabulary checked everywhere (branch `claude/modules-page-sources-charts`, ruling `2026-11-12-module-output-review-changes.md`)
+ Scope: offline only. No provider or model call was made. Decisions 7 to 11 (launcher text, checker, confidence score, post-balance-sheet table) are proven by tests and hand-written handoffs only, not by a model run. Display changes were checked on a copy of the retained real run `tdg-proof-snapshot-opus-002` (TDG, as of 2024-09-30, credit snapshot): one run, 1440 px, headless Chrome.
+ Library:
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index 9d4cd0f..ddcfcc5 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -460,3 +460,4 @@ customers`, and `2010 millions`, which the round-2 test had listed as a figure a
+ so `mypy --strict` reports no error in the file. Recorded limit: a unit directly followed by a hyphenated word or a
+ superscript footnote mark (`2010 US$m-equivalent`, `2010 USD million-plus`, `2010 US$m¹`) is not read as a unit, so that
+ year-shaped number stays a year.
++Amendment, 2026-11-12 (owner: "complete 1"; controller rulings C1 to C3). (C1) Digits directly after a currency code of `_CODES`, when the code follows no letter, digit or dot, are a figure carrying that currency (`EUR437m`, `USD2010m`, `USD437`); `XEUR437`, `ABC123`, `FY2024`, `USD-denominated` read as before. A 19xx/20xx number so placed is a figure. (C2) A currency sign may carry a one- to three-letter prefix (`C$`, `A$`, `R$`, `HK$`) in the year rules; `mln` and `bln` are scales wherever `mn` and `bn` are, and `'000` (also `’000`) is a scale after a currency (`2010 C$m`, `2010 USD mln`, `2010 USD '000`, `2010 mln` are figures); `_UNITED` takes `mln` and `bln` so `30 mln` is a figure and no count. `_CODES` now holds the 40 codes USD EUR GBP JPY CHF CAD AUD NZD SEK NOK DKK PLN CZK HUF TRY ZAR BRL MXN CNY CNH HKD SGD INR KRW TWD THB IDR MYR PHP SAR AED QAR KWD ILS EGP NGN CLP COP PEN ARS (it held 22 before). A currency after a year still belongs to the next number (`2024 SAR 5,000` reads 5,000). (C3) A 19xx/20xx number directly followed by `s` and then no letter or digit (`EUR 2029s, 480bp`, `the 2031s`) is a bond or decade name, a year in every reading; `2029 s` and `2029secured` are unchanged. Limits that remain: a small number after a one-letter-prefixed sign (`30 C$m`) is not read as carrying a unit; a code before digits that is really a name (`COP26` after a space) is read as a currency amount.
+diff --git a/src/deploy_workflow/changes_check.py b/src/deploy_workflow/changes_check.py
+index d7acf0a..57c9d8e 100644
+--- a/src/deploy_workflow/changes_check.py
++++ b/src/deploy_workflow/changes_check.py
+@@ -95,9 +95,20 @@ _MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in
+ _REF = re.compile(r"\b[EC]\d+\b")
+ _REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
+ _HEADING = re.compile(r"#{1,6}\s")
++# A year is a figure beside a currency only for a currency code (`USD 1913`), never another
++# capitalised word (`AND 2023`).
++_CODES = (
++    "USD|EUR|GBP|JPY|CHF|CAD|AUD|NZD|SEK|NOK|DKK|PLN|CZK|HUF|TRY|ZAR|BRL|MXN|CNY|CNH|HKD|SGD|INR"
++    "|KRW|TWD|THB|IDR|MYR|PHP|SAR|AED|QAR|KWD|ILS|EGP|NGN|CLP|COP|PEN|ARS"
++)
+ # A comma is part of a number only as a thousands separator (`1,234`): a 19xx/20xx number before any
+-# other comma is a bare year (`In 2024, the issuer`), read alone.
+-_FIGURE = re.compile(r"(?<![\w.])(?:(?:19|20)\d{2}(?=,(?!\d{3}(?!\d)))|\d[\d,]*(?:\.\d+)?)")
++# other comma is a bare year (`In 2024, the issuer`), read alone. A number starts after no letter,
++# digit or dot, or directly after a currency code that itself follows none of them (`EUR437m`;
++# `XEUR437`, `ABC123` are identifiers).
++_FIGURE = re.compile(
++    rf"(?:(?<![\w.])|(?<=(?<![\w.])(?:{_CODES})))"
++    r"(?:(?:19|20)\d{2}(?=,(?!\d{3}(?!\d)))|\d[\d,]*(?:\.\d+)?)"
++)
+ _MONTH = (
+     r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
+     r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
+@@ -111,27 +122,29 @@ _EXEMPT = re.compile(
+     r"|\d{4}-\d{2}(?:-\d{2}|(?!\d))|\b(?:FY|CY)\d{2,4}E?\b|\b[QH][1-4]\b|\bLTM\b|\b(?:[1-9]|1[0-2])M\b"
+ )
+ _YEAR_TOKEN = re.compile(r"(?:19|20)\d{2}")
+-# A year is a figure beside a currency only for a currency code (`USD 1913`), never another
+-# capitalised word (`AND 2023`).
+-_CODES = "USD|EUR|GBP|CHF|JPY|CAD|AUD|NZD|SEK|NOK|DKK|CNY|HKD|SGD|ZAR|INR|BRL|MXN|PLN|CZK|HUF|TRY"
+ # A unit ends its word: no letter, digit or `&` after it, and no hyphen or slash and a letter
+ # (`m&a`, `k-shaped`, `m/m`, `millionaires` are words, not units).
+ _END = r"(?![\w&]|[-\u2010-\u2015/][A-Za-z])"
+-_SCALE_WORD = rf"(?:(?i:million|billion|thousand)|mn|bn|[mk]){_END}"
++_SCALE_WORD = rf"(?:(?i:million|billion|thousand)|mn|bn|mln|bln|[mk]){_END}"
+ # After a currency code or sign a scale may be of any case or plural (`US$M`, `USD mn`).
+-_CURRENCY_SCALE = rf"(?i:millions?|billions?|thousands?|mn|bn|tn|mm|m|k|b){_END}"
++_CURRENCY_SCALE = (
++    rf"(?i:millions?|billions?|thousands?|mn|bn|mln|bln|tn|mm|['\u2019]000|m|k|b){_END}"
++)
+ # The one unit that makes a 19xx/20xx number a figure, directly after it: `%`, `x`, `bp(s)`, `pp`,
+ # `percent` or a scale (`2010m`, `1913 million`), or a currency code or sign carrying a scale
+ # (`2010 USDm`, `2010 US$ millions`). A currency alone (`2024 USD strengthened`) or a plural scale
+ # word alone (`2024 millions of customers`) is none.
+ _YEAR_UNIT = re.compile(
+     rf"\s*(?:%|(?:x|bps?|pp|(?i:percent)){_END}|{_SCALE_WORD}"
+-    rf"|(?:{_CODES}|[A-Z]{{2,3}}[$€£¥]|[$€£¥])\s*{_CURRENCY_SCALE})"
++    rf"|(?:{_CODES}|[A-Z]{{1,3}}[$€£¥]|[$€£¥])\s*{_CURRENCY_SCALE})"
+ )
++# A 19xx/20xx number directly followed by `s` and no letter or digit is a bond or decade name (`EUR
++# 2029s, 480bp`, `the 1990s`), a year in every reading.
++_BOND_NAME = re.compile(r"s(?![^\W_])")
+ _YEAR_BEFORE = re.compile(rf"(?:[$€£¥]|\b(?:{_CODES})) ?$")
+ # Any unit or currency after a number below 100 makes it a figure, not a count (`30m`, `30 USD`).
+ _UNITED = re.compile(
+-    r"\s*(?:%|x\b|bps?\b|pp\b|[mk]\b|mn\b|bn\b|(?i:million|billion|thousand|percent)"
++    r"\s*(?:%|x\b|bps?\b|pp\b|[mk]\b|mn\b|bn\b|mln\b|bln\b|(?i:million|billion|thousand|percent)"
+     r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b|[A-Z]{3}\b)"
+ )
+ _CURRENCY = re.compile(r"(?:[$€£¥]|\b[A-Z]{3}) ?$")
+@@ -176,7 +189,7 @@ def _is_year(masked: str, match: re.Match[str], *, header: bool) -> bool:
+     (`header`) it is always a year. A bare year is always one."""
+     if not _YEAR_TOKEN.fullmatch(match[0]):
+         return False
+-    if header:
++    if header or _BOND_NAME.match(masked, match.end()):
+         return True
+     if _YEAR_BEFORE.search(masked[max(0, match.start() - 4) : match.start()]):
+         return False
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index e488fc8..cfe70e5 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -3731,3 +3731,129 @@ def test_no_module_level_name_in_the_checker_is_assigned_twice():
+         if isinstance(target, ast.Name)
+     ]
+     assert sorted({name for name in names if names.count(name) > 1}) == []
++
++
++@pytest.mark.parametrize(
++    ("text", "counts", "expected"),
++    [
++        ("Drawn EUR437m.", True, ["437"]),
++        ("Cash fell by USD2010m.", True, ["2010"]),
++        ("Cash was USD2010.", True, ["2010"]),
++        ("Drawn USD437.", True, ["437"]),
++        ("Drawn USD5.", False, ["5"]),
++        ("Drawn (EUR437m) and GBP12m.", True, ["437", "12"]),
++        ("Drawn XEUR437.", True, []),
++        ("Ref ABC123 only.", True, []),
++        ("Ref foo.USD437 only.", True, []),
++        ("See Q3 and H1 and FY2024 and CP-2 results.", False, []),
++        ("A USD-denominated bond.", True, []),
++        ("A EUR-denominated bond of EUR437m.", True, ["437"]),
++    ],
++)
++def test_digits_glued_to_a_currency_code_are_a_figure(text, counts, expected):
++    from deploy_workflow.changes_check import _figures
++
++    assert [str(f.size) for f in _figures(text, counts=counts)] == expected
++
++
++@pytest.mark.parametrize(
++    "text",
++    [
++        "2010 C$m",
++        "C$2010m",
++        "2010 A$m",
++        "2010 R$m",
++        "2010 S$m",
++        "2010 HK$ million",
++        "2010 NZ$m",
++        "2010 SAR m",
++        "SAR 2010",
++        "2010 USD mln",
++        "2010 USD bln",
++        "2010 USD '000",
++        "2010 USD ’000",
++        "2010 mln",
++        "2010 bln",
++        "HK$1913 million",
++        "In 2024 SAR 2010 total",
++        "2010 PHP m",
++        "2010 AED m",
++    ],
++)
++def test_more_currency_and_scale_forms_make_a_year_shaped_number_a_figure(text):
++    from deploy_workflow.changes_check import _figures
++
++    sizes = [str(f.size) for f in _figures(text)]
++    assert any(t in sizes for t in _YEARISH.findall(text)), (text, sizes)
++
++
++@pytest.mark.parametrize(
++    "text",
++    [
++        "In 2024 C$ strengthened",
++        "In 2024 mln-dollar deals",
++        "In 2024 bln-dollar deals",
++        "2024 AND 2023",
++        "In 2024 SAR strengthened",
++        "In 2024 mlnx rose",
++        "In 2024 USD '000s of customers",
++        "In 2024 HK$ fell",
++    ],
++)
++def test_a_year_beside_a_currency_or_scale_lookalike_stays_a_year(text):
++    from deploy_workflow.changes_check import _figures
++
++    sizes = [str(f.size) for f in _figures(text)]
++    assert not [t for t in _YEARISH.findall(text) if t in sizes], (text, sizes)
++
++
++def test_a_currency_after_a_year_belongs_to_the_next_number():
++    from deploy_workflow.changes_check import _figures
++
++    assert [str(f.size) for f in _figures("2024 SAR 5,000")] == ["5000"]
++
++
++def test_a_small_number_with_mln_or_bln_is_a_figure_not_a_count():
++    from deploy_workflow.changes_check import _figures
++
++    assert [str(f.size) for f in _figures("up 30 mln and 7 bln", counts=False)] == ["30", "7"]
++    assert _figures("30 mlnx", counts=False) == []
++
++
++@pytest.mark.parametrize(
++    ("text", "expected"),
++    [
++        ("EUR 2029s, 480bp", ["480"]),
++        ("USD2029s and 7%", ["7"]),
++        ("the 2031s fell 5%", ["5"]),
++        ("the EUR 2031s", []),
++        ("EUR 2029s", []),
++        ("$2029s, 100bp", ["100"]),
++        ("EUR 2029 s", ["2029"]),
++        ("EUR 2029secured", ["2029"]),
++        ("EUR 2029", ["2029"]),
++        ("EUR 2029sx", ["2029"]),
++    ],
++)
++def test_a_year_number_followed_by_s_is_a_bond_name_also_after_a_currency(text, expected):
++    from deploy_workflow.changes_check import _figures
++
++    assert [str(f.size) for f in _figures(text)] == expected
++
++
++def test_a_bond_name_is_not_held_evidence():
++    from deploy_workflow.changes_check import _held_sizes
++
++    assert _held_sizes(["Notes: EUR 2029s, 480bp."]) == frozenset({Decimal(480)})
++
++
++def test_the_currency_code_list_holds_the_fixed_set():
++    from deploy_workflow.changes_check import _CODES
++
++    wanted = [
++        "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK",
++        "DKK", "PLN", "CZK", "HUF", "TRY", "ZAR", "BRL", "MXN", "CNY", "CNH",
++        "HKD", "SGD", "INR", "KRW", "TWD", "THB", "IDR", "MYR", "PHP", "SAR",
++        "AED", "QAR", "KWD", "ILS", "EGP", "NGN", "CLP", "COP", "PEN", "ARS",
++    ]  # fmt: skip
++    assert sorted(_CODES.split("|")) == sorted(wanted)

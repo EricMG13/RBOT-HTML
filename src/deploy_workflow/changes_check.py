@@ -95,9 +95,20 @@ _MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in 
 _REF = re.compile(r"\b[EC]\d+\b")
 _REF_ANY_CASE = re.compile(r"\b[EC]\d+\b", re.IGNORECASE)
 _HEADING = re.compile(r"#{1,6}\s")
+# A year is a figure beside a currency only for a currency code (`USD 1913`), never another
+# capitalised word (`AND 2023`).
+_CODES = (
+    "USD|EUR|GBP|JPY|CHF|CAD|AUD|NZD|SEK|NOK|DKK|PLN|CZK|HUF|TRY|ZAR|BRL|MXN|CNY|CNH|HKD|SGD|INR"
+    "|KRW|TWD|THB|IDR|MYR|PHP|SAR|AED|QAR|KWD|ILS|EGP|NGN|CLP|COP|PEN|ARS"
+)
 # A comma is part of a number only as a thousands separator (`1,234`): a 19xx/20xx number before any
-# other comma is a bare year (`In 2024, the issuer`), read alone.
-_FIGURE = re.compile(r"(?<![\w.])(?:(?:19|20)\d{2}(?=,(?!\d{3}(?!\d)))|\d[\d,]*(?:\.\d+)?)")
+# other comma is a bare year (`In 2024, the issuer`), read alone. A number starts after no letter,
+# digit or dot, or directly after a currency code that itself follows none of them (`EUR437m`;
+# `XEUR437`, `ABC123` are identifiers).
+_FIGURE = re.compile(
+    rf"(?:(?<![\w.])|(?<=(?<![\w.])(?:{_CODES})))"
+    r"(?:(?:19|20)\d{2}(?=,(?!\d{3}(?!\d)))|\d[\d,]*(?:\.\d+)?)"
+)
 _MONTH = (
     r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
     r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
@@ -111,27 +122,29 @@ _EXEMPT = re.compile(
     r"|\d{4}-\d{2}(?:-\d{2}|(?!\d))|\b(?:FY|CY)\d{2,4}E?\b|\b[QH][1-4]\b|\bLTM\b|\b(?:[1-9]|1[0-2])M\b"
 )
 _YEAR_TOKEN = re.compile(r"(?:19|20)\d{2}")
-# A year is a figure beside a currency only for a currency code (`USD 1913`), never another
-# capitalised word (`AND 2023`).
-_CODES = "USD|EUR|GBP|CHF|JPY|CAD|AUD|NZD|SEK|NOK|DKK|CNY|HKD|SGD|ZAR|INR|BRL|MXN|PLN|CZK|HUF|TRY"
 # A unit ends its word: no letter, digit or `&` after it, and no hyphen or slash and a letter
 # (`m&a`, `k-shaped`, `m/m`, `millionaires` are words, not units).
 _END = r"(?![\w&]|[-\u2010-\u2015/][A-Za-z])"
-_SCALE_WORD = rf"(?:(?i:million|billion|thousand)|mn|bn|[mk]){_END}"
+_SCALE_WORD = rf"(?:(?i:million|billion|thousand)|mn|bn|mln|bln|[mk]){_END}"
 # After a currency code or sign a scale may be of any case or plural (`US$M`, `USD mn`).
-_CURRENCY_SCALE = rf"(?i:millions?|billions?|thousands?|mn|bn|tn|mm|m|k|b){_END}"
+_CURRENCY_SCALE = (
+    rf"(?i:millions?|billions?|thousands?|mn|bn|mln|bln|tn|mm|['\u2019]000|m|k|b){_END}"
+)
 # The one unit that makes a 19xx/20xx number a figure, directly after it: `%`, `x`, `bp(s)`, `pp`,
 # `percent` or a scale (`2010m`, `1913 million`), or a currency code or sign carrying a scale
 # (`2010 USDm`, `2010 US$ millions`). A currency alone (`2024 USD strengthened`) or a plural scale
 # word alone (`2024 millions of customers`) is none.
 _YEAR_UNIT = re.compile(
     rf"\s*(?:%|(?:x|bps?|pp|(?i:percent)){_END}|{_SCALE_WORD}"
-    rf"|(?:{_CODES}|[A-Z]{{2,3}}[$€£¥]|[$€£¥])\s*{_CURRENCY_SCALE})"
+    rf"|(?:{_CODES}|[A-Z]{{1,3}}[$€£¥]|[$€£¥])\s*{_CURRENCY_SCALE})"
 )
+# A 19xx/20xx number directly followed by `s` and no letter or digit is a bond or decade name (`EUR
+# 2029s, 480bp`, `the 1990s`), a year in every reading.
+_BOND_NAME = re.compile(r"s(?![^\W_])")
 _YEAR_BEFORE = re.compile(rf"(?:[$€£¥]|\b(?:{_CODES})) ?$")
 # Any unit or currency after a number below 100 makes it a figure, not a count (`30m`, `30 USD`).
 _UNITED = re.compile(
-    r"\s*(?:%|x\b|bps?\b|pp\b|[mk]\b|mn\b|bn\b|(?i:million|billion|thousand|percent)"
+    r"\s*(?:%|x\b|bps?\b|pp\b|[mk]\b|mn\b|bn\b|mln\b|bln\b|(?i:million|billion|thousand|percent)"
     r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b|[A-Z]{3}\b)"
 )
 _CURRENCY = re.compile(r"(?:[$€£¥]|\b[A-Z]{3}) ?$")
@@ -176,7 +189,7 @@ def _is_year(masked: str, match: re.Match[str], *, header: bool) -> bool:
     (`header`) it is always a year. A bare year is always one."""
     if not _YEAR_TOKEN.fullmatch(match[0]):
         return False
-    if header:
+    if header or _BOND_NAME.match(masked, match.end()):
         return True
     if _YEAR_BEFORE.search(masked[max(0, match.start() - 4) : match.start()]):
         return False
