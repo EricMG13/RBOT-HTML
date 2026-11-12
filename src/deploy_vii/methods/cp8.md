@@ -13,9 +13,11 @@ accepted, the run is delivered without it.
 
 ## What you are given
 
-- Source `changes.json` (schema `cpos-changes/2`): the comparison pack, computed by Python before
+- Source `changes.json` (schema `cpos-changes/3`): the comparison pack, computed by Python before
   you were called. It holds
-  - the earlier run's identity and format, and any change in its methods since;
+  - the earlier run's identity and format, and any change in its methods since; and, for each run,
+    `selection`: `preset` when its modules were the pathway's own, `explicit` for a chosen subset,
+    null when not recorded;
   - each measure either run states (`leverage`, `net_leverage`, `coverage`, `cash`, `undrawn`, and
     `free_cash_flow`, `gross_debt`, `net_debt` where a run states them in a row of that exact
     label): the earlier and the current value with unit, period and definition text, the
@@ -47,7 +49,10 @@ accepted, the run is delivered without it.
    `New source`, `Method change`, `Correction`, `Presentation`, `Unresolved`. Use `Unresolved`
    when the evidence given does not say which; say what is missing. Issuer rows use `New period`,
    `New source` or `Unresolved`; a measure the pack states for the same period with a non-zero
-   difference uses `Correction` or `Method change`, or says `Not comparable` (rule 3). Use
+   difference uses `Correction` or `Method change`, or says `Not comparable` (rule 3). A measure
+   whose pack difference is zero, and that you do not say `Not comparable`, has changed in
+   nothing: its Cause is `None`, and `Unresolved` is refused for it (`None` is refused for a measure
+   with a non-zero difference). Use
    `Method change` when the pack says the earlier run's methods have since changed, or a module's method evidently differs; `Correction` when the
    current handoff states that it repairs an earlier error.
 2. **Presentation is not a finding.** A run in the earlier format, or with different headings,
@@ -121,7 +126,8 @@ cell is the pack's label, exactly) or a fact the handoffs show changed (a new fa
 refinancing, a disposal, a rating action, a change in guidance). For a measure, Earlier and Current
 hold the pack's values with their units and periods; for a fact, plain words. Cause is one of
 `New period`, `New source`, `Unresolved`; for a same-period measure with a non-zero difference,
-`Correction` or `Method change` (rule 3). If nothing material changed, write one row whose first
+`Correction` or `Method change` (rule 3); for a measure whose pack difference is zero, `None`.
+If nothing material changed, write one row whose first
 cell is `No material change`, Earlier and Current `—`, Cause `None`, and say why in the last cell.
 
 ### What changed: the analysis
@@ -135,7 +141,11 @@ by the code in brackets, for example `Liquidity (CP-2D)`. Status is one of `Unch
 now and not before, `Not run this time` one that ran before and not now, and the rest compare the
 earlier and current bottom line as the credit view of that module. Cause is one of the six
 causes, or `None` for an `Unchanged` row that differs in nothing. `Presentation` goes only with
-`Unchanged`. Why is one sentence.
+`Unchanged`. A `New` or `Not run this time` module: when the pack's `prior.selection` and
+`current.selection` are both `preset`, the pathway's module set changed between the runs, so the
+Cause is `Method change` and the Why says that (the pathway's module set changed between the runs;
+the words "the pack does not say" are refused there); when either run's selection is `explicit` or
+null, the Cause is `Unresolved` and the Why says what is missing. Why is one sentence.
 
 ### Limitations ledger
 
@@ -150,6 +160,17 @@ Status is one of `Closed`, `Remaining`, `New`, `No longer stated`, and follows t
 earlier and a current ref is `Remaining`; only a current ref is `New`; only an earlier ref is
 `Closed` (with the evidence, per rule 5) or `No longer stated`. What closed it is the evidence for
 `Closed`, and `—` for the others.
+
+### Basis lines
+
+The Basis line of a reader passage follows the instructions' item forms, with these two additions,
+which replace the file names in `## Sources` for CP-8's own sources: the comparison pack is written
+exactly `Run comparison`, and a handoff of the earlier run is written
+`<plain module name> (<code>), earlier run`, for example
+`Financial data foundation (CP-1), earlier run`. A handoff of this run keeps the instructions' form
+`<plain module name> (<code>)`. Never write `changes.json` or any `prior/...` name in a Basis line,
+and never a page number for a handoff; they stay in `## Sources`, whose file names and hashes are
+unchanged. The checker refuses a Basis item that breaks these forms.
 
 Keep the words plain. Module codes (for example `CP-2D`) are written only in the tables' Module
 and What closed it cells, limitation refs (`E1`, `C2`) only in the two ref columns, and neither in

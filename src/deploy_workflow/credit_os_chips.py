@@ -44,6 +44,9 @@ BASIS = "Basis: "
 BASIS_FILE = re.compile(r"(?P<file>.+), pages? (?P<a>\d+)(?:\s*[-–]\s*(?P<b>\d+))?")
 BASIS_MODULE = re.compile(r".+ \((?P<module>CP-[0-9A-Z]+)\)")
 BASIS_CALCULATION = re.compile(r"calculation \S+")
+# CP-8's two extra items: the comparison pack, and an earlier run's handoff. Neither names a page
+# or a handoff of this run, so there is nothing to open.
+BASIS_EARLIER_RUN = re.compile(r"Run comparison|.+ \(CP-[0-9A-Z]+\), earlier run")
 
 
 class Locator(TypedDict):
@@ -183,6 +186,8 @@ def basis_locators(line: str, files: dict[str, str | None]) -> list[Locator]:
     for item in (i.strip() for i in line.removeprefix(BASIS).removesuffix(".").split("; ")):
         if BASIS_CALCULATION.fullmatch(item):
             continue  # the library reads calculations from ## Calculations
+        if BASIS_EARLIER_RUN.fullmatch(item):
+            continue  # CP-8's comparison pack or an earlier run's handoff: nothing to quote
         if module := BASIS_MODULE.fullmatch(item):
             result.append(locator("upstream", module=module["module"]))
         elif item in files:

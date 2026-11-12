@@ -485,7 +485,10 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
                 # ones before CP-8 is called; it is also published as the delivery's changes.json.
                 try:
                     pack = pack_builder(
-                        request.prior, request.run.as_of.isoformat(), request.run.pathway
+                        request.prior,
+                        request.run.as_of.isoformat(),
+                        request.run.pathway,
+                        request.selection,
                     )(sources, supplied)
                 except (ValueError, ArithmeticError) as error:
                     # The one fail-open of CP-8 (see below): a handoff text the pack cannot read.
