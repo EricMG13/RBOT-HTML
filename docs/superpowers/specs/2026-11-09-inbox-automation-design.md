@@ -164,6 +164,7 @@ The time prefix keeps two rejected drops with the same name apart.
   completed with a verified report on the current methodology. **Known behaviour:** after a
   method update, older runs leave the library list. Their reports stay in `issuers/`, and the
   page says how many filed reports are not listed and why.
+Amended 2026-11-11: a run whose methods have since changed is listed and marked 'Earlier methods' (docs/rulings/2026-11-11-reader-and-issuer-report.md).
 - **Run activity** shows, from `activity.js`:
   - **Running:** issuer, pathway, drop folder, start time, each module's state (from
     `events.jsonl`), spend against the cap, and the files read.

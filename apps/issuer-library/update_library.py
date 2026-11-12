@@ -137,6 +137,14 @@ def run_records(workspace: Path, store: dict[str, Any]) -> None:
             run["record"] = record
 
 
+def method_changes(store: dict[str, Any], library: Library) -> None:
+    """Carry each listed run's ``method_changes`` (methods that changed since it ran) to its store
+    run, as ``methodChanges``; empty when none."""
+    changed = {run["id"]: run["method_changes"] for run in library.runs}
+    for run in store["runs"].values():
+        run["methodChanges"] = list(changed[run["folder"]])
+
+
 def checked_bytes(path: Path, digest: str, label: str) -> bytes:
     """The bytes of a run file, refused when they no longer have the hash the store holds."""
     try:
@@ -197,6 +205,7 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
     cat = catalogue(workspace, library)
     store = workspace_store(workspace, cat)
     run_records(workspace, store)
+    method_changes(store, library)
     handoff_zips(folder, workspace, store)
     # Run activity, as data: the folders left out and why, and every issue the build recorded
     # (the store's list already holds the catalogue's; each is kept once, in order).
@@ -277,9 +286,10 @@ def main(argv: list[str] | None = None) -> int:
         library = update_library(args.workspace)
     except Refused as error:
         raise SystemExit(str(error)) from error
-    print(f"Listed {len(library.runs)} run(s) on the current methodology.")
+    print(f"Listed {len(library.runs)} run(s).")
     for run in library.runs:
-        print(f"  {run['id']}: {run['issuer_name']}, as of {run['as_of']}")
+        earlier = " (earlier methods)" if run["method_changes"] else ""
+        print(f"  {run['id']}: {run['issuer_name']}, as of {run['as_of']}{earlier}")
     if library.excluded:
         print(f"Not shown: {len(library.excluded)} run folder(s).")
         for name, reason in library.excluded:

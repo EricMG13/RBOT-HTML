@@ -4,6 +4,15 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Runs on earlier methods are listed and marked (branch `claude/list-earlier-method-runs`)
+
+Scope: offline, macOS; synthetic fixtures only (`tests/library_fixtures.py`, the fake launcher run). No
+model call, no run folder under `runs/` read or changed. Owner decision 2026-11-11: a run whose module
+methods changed since it ran is listed with `method_changes` and shown as "Earlier methods" (Report history
+status, run label; Run record lists the changes). Other refusals are unchanged. Real TDG runs were not
+rebuilt here.
+- Gates: `uv run pytest tests/test_library_index.py tests/test_update_library.py tests/test_credit_os_catalogue.py -q` 90 passed, exit 0; `node --test` static, reader, calendar 257 pass, exit 0; `uv run python tools/quality_gate.py` 0 findings, exit 0.
+
 ## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
 
 Owner waiver 2026-11-11: the 800-line PR limit is waived for #47 (5,969 changed lines).
