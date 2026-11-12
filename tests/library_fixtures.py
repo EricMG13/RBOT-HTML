@@ -10,6 +10,8 @@ from pathlib import Path
 METHOD = {
     "CP-0": "=== methods/cp0.md sha256 {h} ===\n# CP-0 method\nRead the sources.",
     "CP-1": "=== prompts/CP-1.md sha256 {h} ===\n# CP-1 method\nBuild the foundation.",
+    "CP-2": "=== methods/cp2.md sha256 {h} ===\n# CP-2 method\nAssess the credit.",
+    "CP-8": "=== methods/cp8.md sha256 {h} ===\n# CP-8 method\nSay what changed.",
 }
 
 
@@ -87,6 +89,7 @@ class RunSpec:
     first_call: str | None = None  # Every call's started_at, when a test orders runs by it.
     selection: str | None = "preset"  # workflow.json `selection`; None: an older run without it
     case_kind: str = "public"
+    cp8: str | None = None  # The whole CP-8 handoff, when the run has that module.
 
 
 def make_run(workspace: Path, folder: str, **changes) -> Path:
@@ -126,6 +129,8 @@ def make_run(workspace: Path, folder: str, **changes) -> Path:
             confidence=spec.cp0_confidence if module == "CP-0" else "Medium",
             finding=spec.cp1_finding if module == "CP-1" else FINDING_ROW,
         )
+        if module == "CP-8" and spec.cp8 is not None:
+            answer = spec.cp8
         if module == "CP-0":
             answer += spec.cp0_extra
         if module == "CP-1":
@@ -351,3 +356,25 @@ ALIAS_CITED = """
 | Bracketed | -11 | Annual p.71 prints it. |
 | Listed | 1 | Annual pages 71, 72 and Annual filing pp.71–72. |
 """
+
+
+FIRST_RUN_RECORD = "changes: first run of this pathway"
+
+
+def with_changes(
+    run_dir: Path, pack: bytes | None = None, note: str | None = None, first: bool = False
+) -> None:
+    """Make a current-kind delivery (see without_report) carry CP-8's comparison pack as
+    `changes.json` (the bytes given, listed in the receipt and hashed in the completion record)
+    and/or the manifest's `changes_note` (why CP-8 was planned and not produced)."""
+    if pack is not None:
+        (delivered,) = (run_dir / "deliveries").iterdir()
+        receipt = json.loads((delivered / "delivery.json").read_text())
+        receipt["files"]["changes.json"] = put(delivered / "changes.json", pack)
+        raw = json.dumps(receipt).encode()
+        (delivered / "delivery.json").write_bytes(raw)
+        rewrite_completion(run_dir, lambda record: record.update(delivery_sha256=sha(raw)))
+    if first:
+        rewrite_completion(run_dir, lambda record: record.update(changes=FIRST_RUN_RECORD))
+    if note is not None:
+        rewrite_manifest(run_dir, lambda manifest: manifest.update(changes_note=note))

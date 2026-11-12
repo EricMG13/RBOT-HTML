@@ -22,10 +22,10 @@ test('the rail is Start a run, Issuer library, Run activity, Search: no Reports 
   assert.ok(!/Reports|W-Reports/.test(html));
 });
 
-test('the issuer tabs are Report, Overview, Modules, Forecast, Evidence; no Calendar or Reports tab and no report frame or adapter remains (decisions 1, 12)', () => {
+test('the issuer tabs are Report, Overview, Changes, Modules, Forecast, Evidence; no Calendar or Reports tab and no report frame or adapter remains (decisions 1, 12)', () => {
   const views = read('views.js');
   const tabs = views.slice(views.indexOf("querySelector('.workspace-tabs').innerHTML=["), views.indexOf(".map(([id,label,img])"));
-  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)','[^']+'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Modules', 'Forecast', 'Evidence']);
+  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)','[^']+'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
   for (const name of fs.readdirSync(__dirname).filter(f => /\.(js|css|html)$/.test(f))) {
     const text = read(name);
     for (const gone of ['report-adapter', 'report-preview', 'report-workspace', 'report-content', 'cancelReportFrame', 'isReportRoute', 'reportList', 'reportView', 'reportManifest', 'runReports', 'calendarSections']) {
@@ -96,7 +96,7 @@ test('installDestinations keys are exactly the library and issuer pages plus Run
   assert.ok(start >= 0, 'destinations table not found');
   const end = text.indexOf('};', start);
   const keys = [...text.slice(start, end).matchAll(/^\s*'([^']+)':\[/gm)].map(m => m[1]);
-  assert.deepEqual(keys, ['W-Library', 'W-Report', 'W-Overview', 'W-Evidence', 'W-Forecast', 'CP-OS']);
+  assert.deepEqual(keys, ['W-Library', 'W-Report', 'W-Overview', 'W-Changes', 'W-Evidence', 'W-Forecast', 'CP-OS']);
   const row = text.slice(text.indexOf("'CP-OS':["), end);
   assert.deepEqual([...row.matchAll(/\['([^']+)','[^']*',\[\]\]/g)].map(m => m[1]), ['activity']);
 });

@@ -416,6 +416,26 @@ def module_entries(
     return entries
 
 
+CHANGES_PACK = "changes.json"  # `deploy_workflow.changes.PACK_NAME`, which imports this module
+
+
+def changes_record(delivered: Mapping[str, Any], completion: Mapping[str, Any]) -> dict[str, Any]:
+    """What the verified delivery says about CP-8's comparison: the pack it publishes (path inside
+    the run folder and hash; None when it holds none) and the reason CP-8 was planned and not
+    produced (`changes_note`; None otherwise). Neither: a first run of the pathway."""
+    digest = delivered["files"].get(CHANGES_PACK)
+    note = delivered["manifest"].get("changes_note")
+    # The run's own record that the approval named no earlier run (`changes: first run of this
+    # pathway`, deploy_workflow.changes.describe); a run that records nothing is not a first run.
+    return {
+        "first_run": completion.get("changes") == "changes: first run of this pathway",
+        "pack": {"path": f"{delivered['folder']}/{CHANGES_PACK}", "sha256": digest}
+        if isinstance(digest, str)
+        else None,
+        "note": note if isinstance(note, str) else None,
+    }
+
+
 def admit_run(
     folder: Path,
     page_dir: Path,
@@ -460,6 +480,7 @@ def admit_run(
         "delivery_sha256": delivered["delivery_sha256"],
         "execution": execution_record(folder),
         "method_changes": method_changes,
+        "changes": changes_record(delivered, completion),
     }
     if deliveries is not None:  # Only a run that is listed is kept.
         deliveries[folder.name] = delivered

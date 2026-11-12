@@ -36,6 +36,7 @@ if str(HERE) not in sys.path:
 from credit_os.store import UnreadableFile, regular_chunks, workspace_store
 
 from deploy_vii.registry import plan
+from deploy_workflow.changes import DEFAULT_LEAD, LEAD_MODULE, PACK_SCHEMA
 from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.credit_os_chips import chips
 from deploy_workflow.library_index import (
@@ -145,6 +146,45 @@ def method_changes(store: dict[str, Any], library: Library) -> None:
         run["methodChanges"] = list(changed[run["folder"]])
 
 
+def pack_of(workspace: Path, run: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """CP-8's comparison pack as the delivery publishes it, or why it cannot be read. A pack that
+    is listed and unreadable is a problem the run states, never a first run."""
+    pin = run["changes"]["pack"]
+    if pin is None:
+        return None, None
+    path = pin["path"]
+    try:
+        value = json.loads(read_pinned(workspace / "runs" / run["id"], path, pin["sha256"]))
+    except Refused as error:
+        return None, f"{path} could not be read ({error})"
+    except ValueError:
+        return None, f"{path} is not valid JSON"
+    if not isinstance(value, dict):
+        return None, f"{path} is not a JSON object"
+    if value.get("schema") != PACK_SCHEMA:
+        return None, f"{path} has schema {value.get('schema')!r}, not {PACK_SCHEMA!r}"
+    return value, None
+
+
+def changes_data(workspace: Path, store: dict[str, Any], library: Library) -> None:
+    """Carry each listed run's comparison to its store run, as ``changes``: the lead module of its
+    pathway, the pack CP-8 was given (unchanged), the recorded reason CP-8 was not produced, and
+    the problem when the published pack cannot be read (also named in the build's issues)."""
+    listed = {run["id"]: run for run in library.runs}
+    for run in store["runs"].values():
+        record = listed[run["folder"]]
+        pack, problem = pack_of(workspace, record)
+        if problem:
+            store["issues"].append(f"{record['id']}: {problem}")
+        run["changes"] = {
+            "lead": LEAD_MODULE.get(record["pathway"], DEFAULT_LEAD),
+            "first_run": record["changes"]["first_run"],
+            "pack": pack,
+            "note": record["changes"]["note"],
+            "problem": problem,
+        }
+
+
 def checked_bytes(path: Path, digest: str, label: str) -> bytes:
     """The bytes of a run file, refused when they no longer have the hash the store holds."""
     try:
@@ -206,6 +246,7 @@ def build_into(folder: Path, workspace: Path, library: Library) -> None:
     store = workspace_store(workspace, cat)
     run_records(workspace, store)
     method_changes(store, library)
+    changes_data(workspace, store, library)
     handoff_zips(folder, workspace, store)
     # Run activity, as data: the folders left out and why, and every issue the build recorded
     # (the store's list already holds the catalogue's; each is kept once, in order).
