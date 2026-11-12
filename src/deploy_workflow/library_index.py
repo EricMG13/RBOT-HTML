@@ -1,7 +1,7 @@
 """Which runs the Issuer Library lists, and what it shows for each. Reads files only.
 
-A run folder under ``runs/`` is listed when CP-OS completed it and every module in it ran on the
-current methodology:
+A run folder under ``runs/`` is listed when CP-OS completed it and every module in it was answered
+in this run:
 
 - completed: a ``completed-<sha256>.json`` record named by its own hash, of the launcher's report
   kind, names a ``delivery-<sha256>.json`` manifest named by its own hash. One folder under
@@ -11,11 +11,13 @@ current methodology:
   manifest names still have their hashes, and the manifest, the delivery's ``view.json`` and
   ``workflow.json`` name the same run. Nothing is rebuilt: a renderer change since the run does
   not unlist it.
-- current methodology: each module was answered in this run (not replayed from another run, not
+- answered here: each module was answered in this run (not replayed from another run, not
   synthetic). The request record beside its accepted answer still has the fingerprint CP-OS named
-  its folder by (``cpos.request_fingerprint``), so it holds the instructions actually sent, and
-  their method block is exactly the one the launcher sends that module today
-  (``cpos_launch.method_text``): no section changed, added or dropped.
+  its folder by (``cpos.request_fingerprint``), so it holds the instructions actually sent.
+- methods: the method block sent is compared with the one the launcher sends that module today
+  (``cpos_launch.method_text``). A run whose block differs (a section changed, added or dropped)
+  is still listed and marked: its record carries ``method_changes``, one ``"<module>: <detail>"``
+  per module, empty for a run on today's methods (owner, 2026-11-11).
 
 Every other run folder is left out with its reason. Nothing here runs analysis, calls a provider
 or writes a file.
@@ -286,11 +288,13 @@ def check_methodology(
     execution: Mapping[str, Any],
     identity: Mapping[str, str],
     method: tuple[MethodText, MethodHeadings],
-) -> None:
-    """Refuse unless every module was answered here on exactly the method it would be sent today."""
+) -> list[str]:
+    """Refuse unless every module was answered here and has a current method. Returns what changed
+    in the method block of a module since it was sent ("<module>: <detail>"); empty when none."""
     from deploy_workflow.owners.cpos_launch import METHOD_MARK
 
     method_text, method_headings = method
+    changes: list[str] = []
     for module, pin in delivered["handoffs"].items():
         how = execution.get(module)
         if how not in ANSWERED:
@@ -303,7 +307,8 @@ def check_methodology(
         _, mark, block = text.partition(METHOD_MARK)
         if not mark or block != current + "\n":
             detail = method_difference(block, module, method_headings)
-            raise Refused(f"{module}: not on the current methodology ({detail})")
+            changes.append(f"{module}: {detail}")
+    return changes
 
 
 def reader_summary(text: str) -> dict[str, Any] | None:
@@ -432,7 +437,7 @@ def admit_run(
     same_identity(delivered["manifest"].get("run"), identity, "the delivery manifest")
     same_identity(delivered["view"].get("run"), identity, "the delivered report")
     execution = completion["module_execution"]
-    check_methodology(folder, delivered, execution, identity, method)
+    method_changes = check_methodology(folder, delivered, execution, identity, method)
     requested = run.get("requested_modules")
     cap = completion.get("provider_cap_usd")
     record = {
@@ -454,6 +459,7 @@ def admit_run(
         else None,
         "delivery_sha256": delivered["delivery_sha256"],
         "execution": execution_record(folder),
+        "method_changes": method_changes,
     }
     if deliveries is not None:  # Only a run that is listed is kept.
         deliveries[folder.name] = delivered

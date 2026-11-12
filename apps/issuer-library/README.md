@@ -66,7 +66,8 @@ the launcher's reading disagrees with are Limited for the whole run.
   submissions, and uploads of at most 50 MiB a file, 500 files and 512 MiB in total.
 - **Key and ruling:** the provider key comes only from the environment of the account that runs
   the service. Every live launch passes the standing ruling `2026-11-11-run-start-submit.md`: in
-  the package at `engine\docs\rulings`, from a checkout at `docs\rulings`.
+  the package at `engine\docs\rulings`, from a checkout at `docs\rulings`. The ruling lists `web-search`, so runs from the page search the web for CP-DR (queries use
+  public names only and go to OpenAI's search; the USD 20 cap counts the fees).
 - **One service, one machine:** it holds an operating-system file lock on `_engine\watcher.lock`
   (the name is kept so an old folder watcher and the service exclude each other) while it runs. A
   second one on the same root is refused with exit code 2 ("another run page service (or an old
@@ -107,11 +108,14 @@ hold:
   the manifest, the delivered `view.json` and `workflow.json` name the same run. The report is not
   rebuilt, so a later renderer change does not unlist a run. The library shows a run from its
   handoffs and presents no delivered report (ruling 2026-11-11, decisions 1 to 3).
-- **On the current methodology:** every module was answered in this run (not reused from another
-  run, not synthetic). The request record beside its accepted answer still has the fingerprint
-  CP-OS named its folder by (`cpos.request_fingerprint`), so it holds the instructions actually
-  sent, and their method block is exactly what the launcher sends that module today
-  (`cpos_launch.method_text`): no section changed, added or dropped.
+- **Methods:** every module was answered in this run (not reused from another run, not
+  synthetic). The request record beside its accepted answer still has the fingerprint CP-OS named
+  its folder by (`cpos.request_fingerprint`), so it holds the instructions actually sent. Their
+  method block is compared with what the launcher sends that module today
+  (`cpos_launch.method_text`). A run whose methods have since changed (a section changed, added
+  or dropped) is still listed and marked "Earlier methods"; Evidence's Run record names each
+  change (owner, 2026-11-11). A module with no current method is not assumed current: the run is
+  left out.
 
 Every other folder is left out, with its reason in the command output and in a collapsed list at
 the end of the page; a linked folder is reported and not followed. Each listed run shows its

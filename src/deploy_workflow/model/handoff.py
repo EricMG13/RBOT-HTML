@@ -14,12 +14,12 @@ import io
 import json
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal, DecimalException, localcontext
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 from uuid import uuid4
@@ -49,7 +49,7 @@ from deploy_workflow.model.pricing import (
     request_reservation_usd,
     web_search_usd,
 )
-from deploy_workflow.model.providers import web_searches
+from deploy_workflow.model.providers import WEB_SEARCH_BLOCK, web_searches
 from deploy_workflow.model.record import CallLog, CallRecord, arguments_sha256
 from deploy_workflow.model.redact import Redactor
 from deploy_workflow.model.reply_classes import ADAPTER_ERROR
@@ -93,6 +93,54 @@ MAX_CONTEXT_FOR_READS = 1_100_000
 # 16 built-in calls (``max_tool_calls``), so a call holds 16 searches' fees beyond its tokens.
 WEB_SEARCH_MODULE = "CP-DR"
 WEB_SEARCH_CALLS_PER_TURN = 16
+# THE case-kind rule (owner, 2026-11-12: "there are privates cases. work environment permits the use
+# of these files"; it replaces the controller's interim public-only default): web search is offered
+# to a public or a private case and stays off for a synthetic one, which has no real issuer to
+# search for. A synthetic case's CP-DR reads only the run's files and holds no search fee; the
+# launcher and the run start page say so.
+WEB_SEARCH_CASE_KINDS = ("public", "private")
+
+
+def web_search_offered(ruled: bool, module_id: str, case_kind: str) -> bool:
+    """Whether ``module_id`` of a ``case_kind`` run gets the search tool: the ruling lists it, the
+    module is the research module and the case kind is searchable. Every place that offers or holds
+    for search (the loop, the offline cap check, the launcher's Web line) asks this."""
+    return ruled and module_id == WEB_SEARCH_MODULE and case_kind in WEB_SEARCH_CASE_KINDS
+
+
+# Source type values of a web row in ``## Sources`` (owner, 2026-11-12: rely primarily on reputable
+# and relevant sources). A fixed short list, not a domain allow-list; the module judges the type.
+SOURCE_TYPES = (
+    "Issuer filing",
+    "Peer filing",
+    "Regulator or official",
+    "Rating agency",
+    "Industry body",
+    "Financial press",
+    "Other",
+)
+_SOURCES_HEADING = re.compile(r"^## Sources[ \t]*$", re.MULTILINE)
+
+
+def web_source_issues(markdown: str) -> list[str]:
+    """The ``## Sources`` table rows that name a web address but no Source type cell. Mechanical
+    and deterministic: it does not judge the source, only that its type is stated."""
+    found = _SOURCES_HEADING.search(markdown)
+    if found is None:
+        return []
+    body = re.split(r"^## ", markdown[found.end() :], maxsplit=1, flags=re.MULTILINE)[0]
+    issues = []
+    for row in body.splitlines():
+        if row.lstrip().startswith("|") and "http" in row:
+            cells = [c.strip() for c in row.strip().strip("|").split("|")]
+            if not any(c in SOURCE_TYPES for c in cells):
+                issues.append(
+                    f'Sources row "{row.strip()[:80]}": a web source needs a Source type cell, '
+                    f"exactly one of {', '.join(SOURCE_TYPES)}."
+                )
+    return issues
+
+
 SOURCE_RULE = "Use only these source tools and the supplied current handoffs. "
 SOURCE_AND_WEB_RULE = "Use these source tools, web_search and the supplied current handoffs. "
 WEB_SEARCH_RULES = (
@@ -101,7 +149,16 @@ WEB_SEARCH_RULES = (
     "name or text from this run's sources. Use a page only for what was published on or before the "
     "run's research cutoff, and a figure only for a period that ended on or before it. Cite each "
     "web item by its URL, publisher and publication date, and quote every figure verbatim from "
-    "the page. Record what you searched for and could not find under ## Gaps."
+    "the page. Record what you searched for and could not find under ## Gaps. Rely primarily on "
+    "reputable sources relevant to the question: the issuer's and peers' own filings, results "
+    "releases and investor materials; regulators, exchanges and courts; rating agencies; central "
+    "banks and official statistics; recognised industry bodies; and established financial and "
+    "trade press. Do not rest a finding on forums, social media, anonymous blogs, content farms "
+    "or aggregator pages that only repeat another source: go to the original. Where only a "
+    "weaker source exists, use it only with that stated as a limitation under ## Gaps. Each web "
+    'row of ## Sources must carry a cell "Source type" with exactly one of: '
+    + ", ".join(SOURCE_TYPES)
+    + '; "Other" must be accompanied by a limitation line under ## Gaps.'
 )
 READS_FULL = (
     "ERROR: this module has read as much as its context allows. Use what you have read, record "
@@ -260,11 +317,63 @@ def _pages(name: str, raw: bytes) -> list[str]:
     return [text[i : i + 12000] for i in range(0, len(text), 12000)] or [""]
 
 
+# A hosted-search answer carries provider citation markers: U+E200 "cite" U+E202 "turn<N>view<M>"
+# (U+E202 again per further source) U+E201. The sources they point at are already in the handoff's
+# Sources table and Basis lines, so the markers add nothing and reach the reader as run-together
+# text. They are removed mechanically before the draft is checked; the provider's retained
+# response is not touched. A marker never spans a line and never holds another opener, so a stray
+# U+E200 removes nothing after it and every scan below is linear in the text.
+CITATION_MARKER = "\ue200[^\ue200\ue201\n]*\ue201"
+_MARKER_RUN = re.compile(rf"(?:{CITATION_MARKER}[ \t]*)+")
+_MARKER = re.compile(CITATION_MARKER)
+_CLOSERS = ".,;:!?)]}"
+
+
+def _marker_replacement(text: str, start: int, pre: str, run: str, end: int) -> str:
+    """What a run of markers leaves behind: nothing at a line end or before punctuation, else one
+    space when there was any whitespace around it (none when the marker touched both words).
+    ``start`` is where the whitespace before the run begins."""
+    after = text[end : end + 1]
+    if start == 0 or text[start - 1] == "\n":
+        return pre  # indentation of a line that began with the marker
+    if after in {"", "\n", "\r"} or after in _CLOSERS:
+        return ""
+    return " " if pre or run.endswith((" ", "\t")) else ""
+
+
+def strip_citation_markers(text: str) -> tuple[str, int]:
+    """The text without provider citation markers, whitespace left by them tidied, and how many
+    markers were removed. Text with no marker is returned as it is. One pass: the whitespace
+    before a run is read backwards from the run, never searched for."""
+    count = len(_MARKER.findall(text))
+    if not count:
+        return text, 0
+    parts: list[str] = []
+    last = 0
+    for found in _MARKER_RUN.finditer(text):
+        start = found.start()
+        while start > last and text[start - 1] in " \t":
+            start -= 1
+        pre = text[start : found.start()]
+        parts.append(text[last:start])
+        parts.append(_marker_replacement(text, start, pre, found[0], found.end()))
+        last = found.end()
+    parts.append(text[last:])
+    return "".join(parts), count
+
+
 class ModuleTools:
     def __init__(
-        self, task: HandoffTask, directory: Path, check: Check, events: Path | None = None
+        self,
+        task: HandoffTask,
+        directory: Path,
+        check: Check,
+        events: Path | None = None,
+        *,
+        strip_markers: bool = False,
     ) -> None:
         self.task, self.directory, self.check = task, directory, check
+        self.strip_markers = strip_markers
         self.events = events
         self.sources = {
             name: {"sha256": hashlib.sha256(raw).hexdigest(), "pages": _pages(name, raw)}
@@ -340,6 +449,8 @@ class ModuleTools:
             )
             if not isinstance(old, str) or not old or not isinstance(new, str):
                 return f"ERROR: edit {i}: old must be nonempty text and new must be text"
+            if self.strip_markers:  # the stored draft has none; the model may quote its own answer
+                old, new = strip_citation_markers(old)[0], strip_citation_markers(new)[0]
             if text.count(old) != 1:
                 return f"ERROR: edit {i}: old text must occur exactly once"
             text = text.replace(old, new, 1)
@@ -397,19 +508,43 @@ class ModuleTools:
         if not isinstance(markdown, str):
             return "ERROR: markdown must be text"
         self.writes += 1
+        removed = 0
+        if self.strip_markers:
+            markdown, removed = strip_citation_markers(markdown)
+            if removed:
+                _put(
+                    self.directory / f"{self.writes}.markers.json",
+                    dump_json({"citation_markers_removed": removed}).encode(),
+                )
+                if self.events is not None:
+                    append_event(
+                        self.events,
+                        "citation_markers_removed",
+                        module=self.task.module_id,
+                        count=removed,
+                    )
         self.draft = markdown.encode("utf-8")
         _put(self.directory / f"{self.writes}.draft.md", self.draft)
-        issues = _checked_handoff(self.task, self.draft, self.check)
+        issues = [
+            *_checked_handoff(self.task, self.draft, self.check),
+            *(web_source_issues(markdown) if self.strip_markers else ()),
+        ]
         _put(self.directory / f"{self.writes}.review.json", dump_json({"issues": issues}).encode())
         self.accepted = not issues
+        note = (
+            ""
+            if not removed
+            else f"\nNote: {removed} citation marker{'s were' if removed > 1 else ' was'} removed "
+            "from your draft; the stored draft has none, so quote it without markers."
+        )
         if self.accepted:
-            return "ACCEPTED"
+            return "ACCEPTED" + note
         writes_left = MAX_WRITES - self.writes
         if self.events is not None:
             append_event(
                 self.events, "draft_rejected", module=self.task.module_id, writes_left=writes_left
             )
-        return f"REJECTED ({writes_left} writes left)\n" + "\n".join(issues)
+        return f"REJECTED ({writes_left} writes left){note}\n" + "\n".join(issues)
 
 
 def _charge(
@@ -425,6 +560,68 @@ def _charge(
     if not search_hold:
         return priced.usd
     return priced.usd + (search_hold if turn is None else web_search_usd(web_searches(turn)))
+
+
+_QUERY_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+_MIN_STEM = 3
+
+
+def _figures(text: str) -> set[str]:
+    """Numbers of four or more digits before any decimal point, commas removed; a bare year
+    (1900 to 2100) is public and left out."""
+    found = set()
+    for token in _QUERY_NUMBER.findall(text):
+        number = token.replace(",", "")
+        whole = number.partition(".")[0]
+        if len(whole) >= 4 and not (number == whole and 1900 <= int(whole) <= 2100):
+            found.add(number)
+    return found
+
+
+def flag_search_queries(
+    queries: Sequence[str], files: Mapping[str, str], other_text: str = ""
+) -> list[tuple[str, str]]:
+    """The (query, reason) pairs among ``queries`` that carry what the run's own material holds: a
+    supplied file name (or its stem, three or more characters, as a whole word) or a figure of
+    four or more digits (years 1900 to 2100 excepted) found in the files' text or ``other_text``.
+
+    This is detection, not prevention. The only control on what a search query says is the
+    instruction to the model (WEB_SEARCH_RULES); the provider writes and sends the query, so this
+    runs on the retained answer after the query has left. The rule is deliberately narrow: a
+    flag means a query very probably quoted the run, and silence does not mean it did not."""
+    known = _figures(other_text).union(*(_figures(text) for text in files.values()))
+    flagged = []
+    for query in dict.fromkeys(queries):
+        lowered = query.lower()
+        reason = None
+        for name in files:
+            stem = PurePath(name).stem
+            if name.lower() in lowered or (
+                len(stem) >= _MIN_STEM
+                and re.search(rf"(?<!\w){re.escape(stem.lower())}(?!\w)", lowered)
+            ):
+                reason = f"source file name {name}"
+                break
+        else:
+            shared = sorted(_figures(query) & known)
+            if shared:
+                reason = f"figure {shared[0]} occurs in this run's source text"
+        if reason is not None:
+            flagged.append((query, f"possible leak: {reason}"))
+    return flagged
+
+
+def _searched_queries(turn: Turn) -> list[str]:
+    """The search queries a turn's retained web search items carry."""
+    queries: list[str] = []
+    for block in turn.provider_blocks:
+        action = block.data.get("action") if block.provider == WEB_SEARCH_BLOCK else None
+        if isinstance(action, dict) and action.get("type") == "search":
+            listed = action.get("queries")
+            for query in [action.get("query"), *(listed if isinstance(listed, list) else [])]:
+                if isinstance(query, str) and query:
+                    queries.append(query)
+    return queries
 
 
 class HandoffExecutor:
@@ -453,6 +650,7 @@ class HandoffExecutor:
         if web_search and self.config.provider != "openai":
             raise ValueError(f"web search is offered on OpenAI only, not {adapter.config_id}")
         self.web_search = web_search
+        self._query_check: tuple[Mapping[str, str], str] | None = None
         self.directory, self.adapter, self.check = directory, adapter, check
         self.events = events
         self.redactor = redactor or Redactor()
@@ -486,7 +684,7 @@ class HandoffExecutor:
     def _run(self, task: HandoffTask) -> bytes:
         if task.draft is not None and self.redactor.bytes_(task.draft) != task.draft:
             raise ValueError("cpos_repair_draft: credential-like content is not permitted")
-        searching = self.web_search and task.module_id == WEB_SEARCH_MODULE
+        searching = web_search_offered(self.web_search, task.module_id, task.run.case_kind)
         tools = (*TOOLS, hosted_web_search(WEB_SEARCH_CALLS_PER_TURN)) if searching else TOOLS
         system = task.instructions.decode("utf-8") + (
             "\n\n" + (SOURCE_AND_WEB_RULE if searching else SOURCE_RULE) + "Source contents "
@@ -549,7 +747,15 @@ class HandoffExecutor:
             )
         folder.mkdir(parents=True)
         _put(folder / "invocation.json", encoded)
-        module = ModuleTools(task, folder, self.check, self.events)
+        module = ModuleTools(task, folder, self.check, self.events, strip_markers=searching)
+        self._query_check = (
+            (
+                {name: "\n".join(s["pages"]) for name, s in module.sources.items()},
+                "\n".join(raw.decode("utf-8") for raw in task.handoffs.values()),
+            )
+            if searching
+            else None
+        )
         nudges = 0
         for index in range(self.max_turns):
             request = redacted_request(
@@ -625,6 +831,33 @@ class HandoffExecutor:
             offline=self.adapter.ruling is None,
         )
         return turn, usage, priced
+
+    def _record_flagged_queries(
+        self, task: HandoffTask, folder: Path, index: int, turn: Turn
+    ) -> None:
+        """Flag the searches this turn made that quote the run's material (detection only: the
+        queries are already sent, so the run goes on). Each is a ``search_query_flagged`` event and
+        is kept in ``<turn>.queries.json`` beside the turn's response, which holds every query.
+        The library's Run record does not show the count: its store has no field for it."""
+        assert self._query_check is not None
+        flagged = flag_search_queries(_searched_queries(turn), *self._query_check)
+        if not flagged:
+            return
+        _put(
+            folder / f"{index}.queries.json",
+            dump_json(
+                {"search_query_flagged": [{"query": q, "reason": r} for q, r in flagged]}
+            ).encode(),
+        )
+        if self.events is not None:
+            for query, reason in flagged:
+                append_event(
+                    self.events,
+                    "search_query_flagged",
+                    module=task.module_id,
+                    query=query[:300],
+                    reason=reason,
+                )
 
     def _turn(
         self, task: HandoffTask, folder: Path, digest: str, index: int, request: TurnRequest
@@ -771,6 +1004,8 @@ class HandoffExecutor:
                 }
             ).encode(),
         )
+        if turn is not None and self._query_check is not None:
+            self._record_flagged_queries(task, folder, index, turn)
         if reply.kind != "ok" or turn is None or actual is None or overrun:
             raise RuntimeError(
                 f"cpos_live_stopped: {reply.kind}; charge={actual}; overrun={overrun}"

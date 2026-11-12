@@ -27,6 +27,8 @@ from typing import Any, BinaryIO, TypedDict
 from deploy_workflow.context import load_context
 from deploy_workflow.inbox.filing import safe_name
 from deploy_workflow.inbox.layout import MAX_ISSUER_ID, Layout
+from deploy_workflow.inbox.startup import STANDING_RULING
+from deploy_workflow.owners.cpos import web_search_ruled
 from deploy_workflow.owners.cpos_launch import LaunchRefused, prepare, read_documents
 from deploy_workflow.platform_io import regular_open
 
@@ -687,6 +689,7 @@ def _summarise(
                         config=config,
                         cap=cap,
                         modules=answers["modules"] or None,
+                        web_search=web_search_ruled(STANDING_RULING),
                     )
                     after = _digest(files, answers)
                 except OSError as error:  # a file went away while it was being read: it changed
