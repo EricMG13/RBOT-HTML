@@ -21,7 +21,9 @@ from test_cpos_launch import (
     ROOT,
     RULING,
     context_file,
+    answer,
     covenant_answer,
+    good_task,
     issuer_folder,
     prepare_routes,
     provider,
@@ -634,6 +636,39 @@ def _prior():
         started_at=None,
         modules=("CP-1",),
     )
+
+
+@pytest.mark.parametrize(
+    "pathway",
+    [
+        *("relative_value", "distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        *("earnings_update", "covenant_refinancing"),
+    ],
+)
+def test_a_pack_built_from_the_cp1_handoff_of_each_formerly_unasked_pathway_states_measures(
+    tmp_path, pathway
+):
+    """Owner, 2026-11-12: these four pathways now ask CP-1 for the chart tables (M3). The canned
+    CP-1 answer is the launcher test's, written from the checker's own table headers."""
+    prepared, _, context = good_task(tmp_path, "CP-1", pathway)
+    raw = answer(context, list(prepared.plan.layout.routes))
+    pack = build_pack(
+        _prior().model_copy(update={"pathway": pathway}),
+        {"CP-1": raw},
+        {"CP-1": raw},
+        as_of=AS_OF,
+        pathway=pathway,
+    )
+    found = measures_of(pack)
+    assert {"leverage", "net_leverage", "coverage", "cash", "undrawn"} <= set(found)
+    assert found["leverage"]["current"]["value"] == "3.60"
+    assert found["net_leverage"]["current"]["value"] == "3.25"
+    assert found["coverage"]["current"]["value"] == "3.40"
+    assert (found["cash"]["current"]["value"], found["undrawn"]["current"]["value"]) == (
+        "275",
+        "400",
+    )
+    assert "maturity_profile" in pack, pack["omitted"]
 
 
 def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
