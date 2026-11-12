@@ -305,7 +305,9 @@ function parseRoute() {
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
   // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
-  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null};
+  // The Forecast page draws its chart index after the models: that one name scrolls to it and selects no model.
+  const part=module==='W-Forecast'&&requestedSection==='run-charts'?requestedSection:null;
+  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
@@ -543,6 +545,7 @@ function renderRoute() {
     if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
+    if(next.part)scrollToPart(next.part);
     showNavigator(false);
     // Search hits drive moves between analytical modules, so the query is kept there and dropped elsewhere.
     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';

@@ -1271,7 +1271,7 @@ function overviewCharts(entries,context) {
     return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
   }).filter(html=>/class="(panel-card|map-card)"/.test(html));
   // The link goes to the chart index on this run's Forecast page: the index is a section of that page, reached by its route (it has no route of its own).
-  const index=`<a class="chart-index-link" href="${routeHref('W-Forecast',navigationSections('W-Forecast',context)[0][0],null,context)}">Chart index</a>`;
+  const index=`<a class="chart-index-link" href="${routeHref('W-Forecast','run-charts',null,context)}">Chart index</a>`;
   return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${index}${html.join('')}</section>`:'';
 }
 // Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.

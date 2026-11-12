@@ -1960,3 +1960,47 @@ def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):
         check=True,
     )
     assert screenshot.stat().st_size > 0
+
+
+CHART_INDEX_LINK_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  for (let i = 0; i < 200 && !document.querySelector('.chart-index-link'); i++) await sleep(50);
+  const content = document.getElementById('content');
+  const link = document.querySelector('.chart-index-link');
+  const tabOf = () => [...document.querySelectorAll('.workspace-tabs a')]
+    .find(a => a.textContent.trim() === 'Forecast')?.getAttribute('href');
+  const seen = {href: link.getAttribute('href'), tabBefore: tabOf()};
+  link.click();
+  for (let i = 0; i < 200 && !document.getElementById('run-charts'); i++) await sleep(50);
+  await sleep(400);
+  const index = document.getElementById('run-charts');
+  seen.hash = location.hash;
+  seen.heading = document.getElementById('section-nav').textContent;
+  seen.indexShown = Boolean(index);
+  seen.offset = index
+    ? index.getBoundingClientRect().top - content.getBoundingClientRect().top : null;
+  seen.atEnd = content.scrollTop + content.clientHeight >= content.scrollHeight - 1;
+  seen.scrollTop = content.scrollTop;
+  seen.tabAfter = tabOf();
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_overviews_chart_index_link_lands_on_the_chart_index(tmp_path):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    route = f"#W-Overview?c={NEW_FORMAT_RUN}"
+    seen = read_probe(page, route, 1280, CHART_INDEX_LINK_PROBE)
+    assert seen["href"].startswith("#W-Forecast") and f"c={NEW_FORMAT_RUN}" in seen["href"]
+    assert seen["hash"].startswith("#W-Forecast") and "Forecast" in seen["heading"]
+    assert seen["indexShown"] is True
+    # The index is drawn after the whole Forecast page: it is at the top of the canvas, or the
+    # canvas is scrolled as far as it goes.
+    assert -1 <= seen["offset"] <= 20 or seen["atEnd"], seen
+    assert seen["scrollTop"] > 0, seen
+    # The Forecast tab keeps the link it had.
+    assert seen["tabBefore"] and seen["tabAfter"] == seen["tabBefore"], seen
