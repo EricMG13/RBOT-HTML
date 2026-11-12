@@ -2930,8 +2930,8 @@ def test_a_named_cp2g_operand_that_is_not_its_cell_is_sent_back_for_repair():
     (issue,) = cpos_launch._forecast_issues(task, forecast_block(base=base))
     assert issue == (
         "Forecast inputs: CP-2G: base capex: no table cell of CP-1 is at row `Capex`, period "
-        "`FY2025`. Correct the row, period or amount of capex; if you cannot, state capex as "
-        "missing: amount null, no row or period, and the reason."
+        "`FY2025`. Correct the row, period, column or amount of capex; if you cannot, state "
+        "capex as missing: amount null, no row, period or column, and the reason."
     )
 
 
@@ -3160,7 +3160,7 @@ def test_an_invalid_or_missing_inputs_block_is_sent_back_for_repair_naming_why(
     issues = cp2g_check(tmp_path, block)
     assert any(f"Forecast inputs: CP-2G: {reason}" in i for i in issues), issues
     ending = (
-        "as missing: amount null, no row or period, and the reason."
+        "as missing: amount null, no row, period or column, and the reason."
         if "base " in reason
         else ("[null, null, null] and say why in scope_limits.")
     )
@@ -4977,7 +4977,7 @@ def test_a_row_or_period_that_is_blank_once_plain_is_refused_as_unnamed(name, wh
 
 
 # --- the whole-branch review's fixes: the repair line, bounded cell lists, the surviving mutants --
-OPERAND_END = "as missing: amount null, no row or period, and the reason."
+OPERAND_END = "as missing: amount null, no row, period or column, and the reason."
 FACILITY_END = "write `facilities` as null and keep the drivers."
 BLOCK_END = "[null, null, null] and say why in scope_limits."
 
@@ -5013,7 +5013,9 @@ def test_the_repair_line_of_a_refused_operand_is_chosen_by_the_refusal_not_the_q
     block = forecast_block(base=_named_base(**{key: _operand(amount, row)}))
     (issue,) = _repair_issues(block, cp1)
     assert issue.endswith(OPERAND_END)
-    assert f"Correct the row, period or amount of {key}; if you cannot, state {key} " in issue
+    assert (
+        f"Correct the row, period, column or amount of {key}; if you cannot, state {key} " in issue
+    )
 
 
 def test_an_operand_refusal_quoting_the_liquidity_chart_header_gets_the_operand_line():
@@ -5289,3 +5291,74 @@ def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allow
         assert old in raw
         raw = raw.replace(old, new)
     assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+# --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`
+COLUMN_SENTENCE = (
+    "In a table with one row per period (CP-1's `Chart data:` tables and `Net debt data`), name "
+    'the row by its period exactly as printed ("row": "FY2024") and the measure by its exact '
+    'column header as `column` ("column": "Cash"), and leave out `period`.'
+)
+INTEREST_SENTENCE = (
+    "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
+    "expense you may name that cell and must say in `scope_limits` that interest is interest "
+    "expense, not cash paid."
+)
+BALANCE_SENTENCE = (
+    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
+    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
+    "in the row label or the Source, not in the cell."
+)
+
+
+def _built_instruction(tmp_path, module, modules):
+    prepared = prepare(
+        context_file(tmp_path, "covenant_refinancing"),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
+        modules=modules,
+    )
+    return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+
+
+def test_the_cp2g_instruction_sent_states_the_column_key_and_what_interest_is(tmp_path):
+    text = _built_instruction(tmp_path, "CP-2G", ("CP-1", "CP-2G"))
+    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+
+
+def test_the_layer1_forecast_instruction_sent_states_the_column_key_and_what_interest_is(
+    tmp_path,
+):
+    text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
+    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+
+
+def test_the_period_table_instruction_sent_says_how_to_print_a_balance(tmp_path):
+    for modules in (("CP-1", "CP-2G"), ("CP-1", "CP-MODEL")):
+        (tmp_path / modules[1]).mkdir()
+        text = _built_instruction(tmp_path / modules[1], "CP-1", modules)
+        assert BALANCE_SENTENCE in text
+
+
+COLUMN_CP1 = (
+    "| Base | FY2025 |\n| --- | --- |\n"
+    + "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items() if k != "cash")
+    + "\n\n| Period | Cash |\n| --- | --- |\n| FY2025 | 100 |\n"
+)
+
+
+def test_a_column_refusal_gets_the_row_period_column_or_amount_repair_line():
+    base = _named_base(cash={"amount": "101", "reason": None, "row": "FY2025", "column": "Cash"})
+    (issue,) = _repair_issues(forecast_block(base=base), COLUMN_CP1)
+    assert "column `Cash`" in issue
+    assert "Correct the row, period, column or amount of cash; if you cannot, state cash " in issue
+    assert issue.endswith("as missing: amount null, no row, period or column, and the reason.")
+
+
+def test_an_operand_naming_both_period_and_column_gets_its_own_repair_line():
+    both = _operand("100", "FY2025", "FY2025") | {"column": "Cash"}
+    (issue,) = _repair_issues(forecast_block(base=_named_base(cash=both)), COLUMN_CP1)
+    assert issue.endswith("State either `period` or `column` for cash, not both.")
+    assert "set every driver" not in issue
