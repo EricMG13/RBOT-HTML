@@ -1013,6 +1013,28 @@ test('Overview lead: an unblocked earlier-format CP-6 has no Bottom line, so the
   assert.ok(!html.includes('Old reader summary text.'));
 });
 
+test('Overview lead on a short snapshot: CP-L10 leads with its Bottom line then Key findings, written by the module and linked (amendment 2026-11-11 to H5)', () => {
+  const html = overviewPage({
+    'CP-0': FIXTURE['CP-0'],
+    'CP-1': FIXTURE['CP-1'],
+    'CP-L10': passageSections({ bottom: 'Creditors are covered, but only just.', key: ['- Cover is thin.'] }),
+  }, { names: { ...FIXTURE_NAMES, 'CP-L10': 'Short credit snapshot' } }).runReport(RUN);
+  const lead = readText(part(html, 'overview-lead'));
+  assert.ok(lead.includes('Creditors are covered, but only just.') && lead.includes('Cover is thin.'));
+  assert.ok(/Written by <a class="text-action" href="#CP-L10\/[^"]*">Short credit snapshot/.test(html));
+  assert.ok(!part(html, 'overview-bottom-lines').includes('data-module="CP-L10"'), 'the lead is not repeated');
+});
+
+test('Overview lead: CP-2 still leads over CP-L10 when both ran, and a blocked CP-L10 leaves no lead', () => {
+  const both = overviewPage({
+    'CP-2': passageSections({ bottom: 'Credit view: refinancing risk.', key: ['- Leverage is moderate.'] }),
+    'CP-L10': passageSections({ bottom: 'Short view.', key: ['- Short finding.'] }),
+  }).runReport(RUN);
+  assert.ok(readText(part(both, 'overview-lead')).includes('Credit view: refinancing risk.') && !readText(part(both, 'overview-lead')).includes('Short view.'));
+  const blockedHtml = overviewPage({ 'CP-L10': passageSections({ bottom: 'Not assessable: CP-1 stated no figure.' }) }).runReport(RUN);
+  assert.equal(readText(part(blockedHtml, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
+});
+
 test('Overview lead: neither CP-6 nor CP-2 usable gives the one sentence; both blocked is the same', () => {
   const none = overviewPage({ 'CP-0': FIXTURE['CP-0'], 'CP-1': FIXTURE['CP-1'] }).runReport(RUN);
   assert.equal(readText(part(none, 'overview-lead')), 'Credit viewNo credit view module completed in this run.');
@@ -2475,6 +2497,11 @@ test('run label: the run\'s date, pathway and code, the Earlier format badge onl
   assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run B');
   assert.equal(strip(page.runLabel('W-Overview', 'run-c').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: Not recorded · Not recorded · Run C');
   assert.ok(page.runLabel('CP-1', 'run-b').includes('href="#W-Report/history?c=run-b"'));
+});
+
+test('run label: a short snapshot run is labelled Short credit snapshot, not the id as words', () => {
+  const page = runPage(d => d, [], m => m, { ...HIST, runFields: { ...synthetic, pathway: 'short_snapshot', run: 'Run S', asOf: '2025-12-31' } });
+  assert.ok(strip(page.runLabel('W-Overview', RUN)).startsWith('Showing run: 31 December 2025 · Short credit snapshot · Run S'));
 });
 
 test('run label: no run picker or file pop-over remains, no run chosen draws nothing, and the bar is hidden on the history page itself', () => {

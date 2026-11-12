@@ -304,6 +304,8 @@ test('earlierBasis moves a citation written straight after sentence punctuation'
 test('pathwayTitle reads the id as words, first word capitalised; no id is null', () => {
   assert.equal(pathwayTitle('credit_snapshot'), 'Credit snapshot');
   assert.equal(pathwayTitle('full-credit_review'), 'Full credit review');
+  assert.equal(pathwayTitle('short_snapshot'), 'Short credit snapshot');
+  assert.equal(pathwayTitle('constructor'), 'Constructor');
   assert.equal(pathwayTitle(null), null);
   assert.equal(pathwayTitle(''), null);
 });

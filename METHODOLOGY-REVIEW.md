@@ -729,6 +729,15 @@ earlier run is named at approval and bound into the digest; and CP-8 is optional
 not accepted within its bounds, or the pack cannot be built or its call does not fit the cap, the run
 delivers without it and records why.
 
+**CP-L10 method revision, 2026-11-12 (owner, decision M6: "cp-10 - re-write to be short version of credit
+shot"; "3. approved").** `src/deploy_vii/methods/cpl10.md` is rewritten: CP-L10 is now the one page of the
+Short Credit Snapshot pathway (`short_snapshot`: CP-0, CP-1, CP-L10; no CP-DR, CP-2E, CP-MODEL or CP-2G),
+a prose module whose Key figures table copies CP-1's figures and calculates nothing. This supersedes the
+two-quarter change-screen (TL10.1 to TL10.5) description in the CP-L10 rows above for CP-OS runs; those
+rows describe the Python screen owner, which CP-OS does not run and which is unchanged. The L20 to L40
+aliases are not produced. Selected source revision: this project's cpl10.md at the commit that records this
+note. Detail: `docs/rulings/2026-11-11-module-presets-and-changes.md`, amendment 2026-11-12 (M6).
+
 **CP-DR source guidance, 2026-11-12 (owner: "focus primarily using reputable and relevant
 sources").** CP-DR's web-search instruction (`WEB_SEARCH_RULES` in `src/deploy_workflow/model/handoff.py`)
 now tells the module to rely primarily on the issuer's and peers' own filings and releases,
