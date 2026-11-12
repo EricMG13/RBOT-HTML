@@ -4,6 +4,21 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-11 — Starting a run from an earlier run: notice, start again, library link (branch `claude/initiating-runs-existing-issuers-4a8739`)
+
+Scope: offline, macOS, headless Chrome against the run start service over a fake launcher (no provider
+called, no paid run). Task 4 of the plan: the existing-issuer notice on the start page, "Start again from
+this run" on a failed, capped, rejected or interrupted run's progress view, "Start a run" on the library's
+Report history (only when the library is served over http), and a carried module subset naming a module
+the pathway lacks is no longer applied silently (it is dropped whole and the load message names the modules).
+- `uv run pytest tests/test_run_start_page.py tests/test_library_page_browser.py -q --deselect tests/test_run_start_page.py::test_upload_to_filed_report_with_the_real_launcher`: exit 0, 117 passed, none skipped (Chrome ran).
+  `test_upload_to_filed_report_with_the_real_launcher` fails on the base already and is not part of this change.
+- `uv run python tools/quality_gate.py`: exit 0.
+- Fidelity: the notice text, the button, the start-again state and the link href are asserted in the DOM
+  Chrome builds; the library link was read from a local static server over http and from disk (absent).
+- Reader check: not done in this task; pending. No real run was read against the September VMO2 reference.
+- CP-8 summary lines (plan Step 7) were not built: the CP-8 redesign has not merged.
+
 ## 2026-11-11 — Issuer library presentation to the reader ruling (branch `claude/library-layout-637b87`)
 
 Owner waiver 2026-11-11: the 800-line PR limit is waived for #47 (5,969 changed lines).

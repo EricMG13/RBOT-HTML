@@ -1135,3 +1135,56 @@ def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_r
     # Each handoff and instruction link stays inside library/, where the served page can open it.
     assert 'href="downloads/run-a/CP-0.md" download' in dom
     assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom
+
+
+def _history_dom_over_http(root: Path, route: str) -> str:
+    """The DOM Chrome builds for a page of the library when a local web server serves it."""
+    import functools
+    import http.server
+    import threading
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, format, *args):  # the request log is noise here
+            return
+
+    handler = functools.partial(Quiet, directory=str(root))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        done = subprocess.run(
+            [
+                chrome(),
+                "--headless=new",
+                "--disable-gpu",
+                "--window-size=1280,900",
+                "--virtual-time-budget=10000",
+                "--dump-dom",
+                f"http://127.0.0.1:{server.server_address[1]}/library/index.html{route}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+    return html.unescape(done.stdout)
+
+
+def test_report_history_links_start_a_run_to_the_latest_run_when_served(tmp_path):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    dom = _history_dom_over_http(tmp_path, "#W-Report/history?c=run-a")
+    link = re.search(r'<a class="start-run" href="([^"]*)">([^<]*)</a>', dom)
+    assert link is not None, dom[:1500]
+    assert link[1] == "/?from=run-a" and link[2] == "Start a run"
+    assert dom.index("start-run") < dom.index('<table class="history-table">')
+
+
+def test_report_history_has_no_start_link_from_a_file(tmp_path):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
+    assert console == [] and '<table class="history-table">' in dom
+    assert "start-run" not in dom and ">Start a run</a>" not in dom

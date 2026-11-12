@@ -119,6 +119,18 @@ evidence date, pathway, model and effort, exact recorded spend (unknown charges 
 zeroed), its scope statement, and each module's reader summary quoted from the handoff. "Latest"
 is per issuer by evidence date; runs sharing that date are all marked and counted.
 
+## Starting a run from Report history
+
+When the library is served by the run start service, an issuer's Report history has a "Start a run"
+link above its table. It opens the start page from the latest run listed (`/?from=<run id>`): the
+issuer ID is locked to that run's, its documents are copied into the new submission, and its answers,
+module subset and turns per module fill the form, each marked "from run <id>". The as-of and cutoff
+dates and the submitter are not carried, nor is an executed-agreement answer that depends on a file;
+the analyst sets them, and chooses "this is a different issuer" to drop the carry. A subset naming a
+module the pathway lacks is not carried at all. The link is absent when the library is opened from
+disk. The start page also says when a typed issuer ID already has runs, and a failed, capped,
+rejected or interrupted run's progress view offers "Start again from this run".
+
 ## Windows package
 
 `python apps/issuer-library/packaging/build.py` makes `artifacts/issuer-library/Issuer-Library-<arch>.zip`

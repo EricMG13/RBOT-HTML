@@ -1899,3 +1899,180 @@ def test_from_is_not_used_and_says_so_when_a_saved_record_is_restored(page):
     )
     assert got["run"] == ""
     assert "Run 20990101-000000-01 was not used: your earlier answers are back." in got["msg"]
+
+
+# ---- the existing-issuer notice, start again, and a subset naming a module the pathway lacks ----
+
+
+NOTICE = """
+  const waitNotice = async () => {
+    for (let i = 0; i < 100 && $('issuer-exists').hidden; i++) await settle(50);
+    return {hidden: $('issuer-exists').hidden, text: $('issuer-exists-text').textContent};
+  };
+"""
+
+
+def test_typing_an_existing_issuer_id_shows_the_notice_and_offers_the_carry(page_from):
+    page, run_id = page_from
+    got = page.run(
+        NOTICE
+        + """
+      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
+      const id = $('i-issuer_id').value;
+      const notice = await waitNotice();
+      const button = $('issuer-exists').querySelector('button');
+      const label = button.textContent;
+      button.click();
+      for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
+      for (let i = 0; i < 100 && !rows().length; i++) await settle(50);
+      return {id, notice, label, locked: $('i-issuer_id').readOnly, run: CARRIED.run,
+              rows: rows(), shown: !$('issuer-exists').hidden};""",
+    )
+    assert got["id"] == "acme"
+    assert got["notice"] == {
+        "hidden": False,
+        "text": "This issuer exists: 1 runs, latest as-of 2026-11-09",
+    }
+    assert got["label"] == "carry over from its latest run"
+    assert got["locked"] is True and got["run"] == run_id and got["shown"] is False
+    assert any("a.txt" in r[0] for r in got["rows"])
+
+
+def test_an_unknown_issuer_id_shows_no_notice(page_from):
+    page, _ = page_from
+    got = page.run(
+        """
+      type('i-issuer_name', 'Nobody Ltd');
+      await settle(1500);
+      return {hidden: $('issuer-exists').hidden, id: $('i-issuer_id').value};"""
+    )
+    assert got == {"hidden": True, "id": "nobody-ltd"}
+
+
+def test_a_different_typed_name_is_named_against_the_filed_one(page_from):
+    page, _ = page_from
+    got = page.run(
+        NOTICE
+        + """
+      type('i-issuer_name', 'Acme Holdings');
+      type('i-issuer_id', 'acme');
+      return await waitNotice();"""
+    )
+    assert got["hidden"] is False
+    assert got["text"].startswith("This issuer exists: 1 runs, latest as-of 2026-11-09")
+    assert 'filed as "Acme Corp"' in got["text"]
+
+
+def test_a_failed_lookup_shows_nothing_and_does_not_block(page_from):
+    page, _ = page_from
+    got = page.run(
+        """
+      const real = window.fetch;
+      window.fetch = url => String(url).startsWith('/api/issuers/')
+        ? Promise.resolve(new Response('{"error":"busy"}', {status: 500})) : real(url);
+      type('i-issuer_name', 'Acme Corp'); type('i-issuer_id', 'acme');
+      await settle(1500);
+      window.fetch = real;
+      return {hidden: $('issuer-exists').hidden, id: build().identity.issuer_id};"""
+    )
+    assert got == {"hidden": True, "id": "acme"}
+    assert any("issuer lookup" in line for line in page.console)
+
+
+@contextmanager
+def _submitted(root, tmp_path, monkeypatch, fake_env, plan_until):
+    """The page served over a scheduler; one run is submitted through the page and pumped to the
+    state in ``plan_until`` (the fake launcher's plan, a test of the run records or None)."""
+    plan, until = plan_until
+    chrome()
+    monkeypatch.setattr(startup, "FORM", FORM)
+    fake_env(plan)
+    with _serving(root, tmp_path) as (served, watcher):
+        served.run(f"""
+        await issuer('credit_snapshot', [file('a.txt', {json.dumps(REPORT)})]);
+        await review();
+        tickAll(); approve();
+        document.getElementById('submit').click();
+        for (let i = 0; i < 200 && $('run-progress').hidden; i++) await settle(50);
+        return {{}};""")
+        if until is not None:
+            pump(watcher, lambda: until(runs.load_all(layout(root))), limit=30)
+        yield served
+
+
+AGAIN = """
+  const over = /^(failed|capped|rejected|interrupted|finished)/;
+  for (let i = 0; i < 100 && !over.test($('run-state').textContent); i++) await settle(50);
+  const again = $('run-again');
+"""
+
+
+def test_a_failed_run_offers_start_again_from_this_run(root, tmp_path, monkeypatch, fake_env):
+    ended = lambda rs: all(r.status not in ("queued", "running") for r in rs) and rs
+    with _submitted(root, tmp_path, monkeypatch, fake_env, ({"exit": 1}, ended)) as page:
+        [record] = runs.load_all(layout(root))
+        assert record.status == "failed"
+        got = page.run(
+            AGAIN
+            + """
+          const out = {state: $('run-state').textContent, shown: !again.hidden,
+                       text: again.textContent, id: $('run-id').textContent};
+          again.click();
+          for (let i = 0; i < 100 && !CARRIED.locked; i++) await settle(50);
+          out.progress = $('run-progress').hidden;
+          out.locked = $('i-issuer_id').readOnly;
+          out.run = CARRIED.run;
+          out.issuer = $('i-issuer_id').value;
+          return out;"""
+        )
+        assert got["shown"] is True and got["text"] == "Start again from this run"
+        assert got["progress"] is True and got["locked"] is True
+        assert got["run"] == record.id == got["id"]
+
+
+def test_a_finished_run_does_not_offer_start_again(root, tmp_path, monkeypatch, fake_env):
+    done = lambda rs: all(r.status == "finished" for r in rs) and rs
+    with _submitted(root, tmp_path, monkeypatch, fake_env, ({"events": DELIVERED}, done)) as page:
+        got = page.run(AGAIN + "return {state: $('run-state').textContent, hidden: again.hidden};")
+        assert got == {"state": "finished", "hidden": True}
+
+
+def test_a_queued_run_does_not_offer_start_again(root, tmp_path, monkeypatch, fake_env):
+    with _submitted(root, tmp_path, monkeypatch, fake_env, ({"sleep": 30}, None)) as page:
+        got = page.run("await settle(500); return {hidden: $('run-again').hidden};")
+        assert got == {"hidden": True}
+
+
+@pytest.fixture
+def page_from_unknown_module(root, tmp_path, monkeypatch, fake_env):
+    from dataclasses import replace
+
+    def edit(folder: Path) -> None:
+        lay = layout(root)
+        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
+        runs.save(lay, replace(record, modules=("CP-0", "CP-ZZ"), max_turns=16))
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
+        yield got
+
+
+def test_a_carried_subset_naming_a_module_the_pathway_lacks_is_not_applied(
+    page_from_unknown_module,
+):
+    page, run_id = page_from_unknown_module
+    got = page.run(
+        """
+      const sent = answers();
+      await review();
+      return {modules: sent.modules, turns: sent.max_turns, text: $('rv-carried').textContent,
+              msg: $('loadmsg').textContent,
+              ticked: [...document.querySelectorAll('[data-c="mod"]')]
+                .filter(x => x.checked).length,
+              all: document.querySelectorAll('[data-c="mod"]').length};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["modules"] == [] and got["ticked"] == got["all"] > 0
+    assert "Module subset" not in got["text"] and "Turns per module" in got["text"]
+    assert (
+        "The earlier run's module subset was not carried: CP-ZZ not in this pathway." in got["msg"]
+    )

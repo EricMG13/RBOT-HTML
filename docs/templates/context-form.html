@@ -372,7 +372,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <p class="lead">Each module's answer must name the issuer, one of its other names or its ID. Source readiness stops the run when it cannot tell whose files these are. The as-of date is the day the analysis stands on: evidence published after it counts as not yet available.</p>
   <div class="grid">
     <div class="f"><label for="i-issuer_name">Issuer (company name)</label><input type="text" id="i-issuer_name" placeholder="e.g. Northbridge Group" data-k="issuer_name" aria-describedby="i-issuer_name-h"><p class="help" id="i-issuer_name-h">The name the filings use for the group.</p></div>
-    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><button type="button" class="text-button" id="unlock-issuer" hidden>this is a different issuer</button><p class="help" id="i-issuer_id-h">Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.</p></div>
+    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><button type="button" class="text-button" id="unlock-issuer" hidden>this is a different issuer</button><div id="issuer-exists" class="help" hidden><span id="issuer-exists-text"></span> <button type="button" class="text-button" id="issuer-carry">carry over from its latest run</button></div><p class="help" id="i-issuer_id-h">Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.</p></div>
     <div class="f wide" data-min="advanced"><label for="i-aliases">Other names in the filings</label><textarea id="i-aliases" rows="2" placeholder="e.g. Northbridge&#10;NBG" data-k="aliases" aria-describedby="i-aliases-h"></textarea><p class="help" id="i-aliases-h">One per line: the legal name if it differs, a short name, the ticker.</p></div>
   </div>
   <fieldset id="classf"><legend>Issue classification</legend><div data-cards="issue_classification" data-class="two"></div><p class="help">By the debt this run analyses; for split-rated or unrated issuers, use your firm's convention.</p></fieldset>
@@ -539,7 +539,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <ol class="run-stages modules" id="run-modules"></ol>
   <p class="err" id="run-error" hidden></p>
   <p id="run-report" hidden>Report: <a id="run-report-link" href="/library/"></a></p>
-  <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="another">Start another run</button></div>
+  <div class="dl"><a class="secondary-action" id="run-activity" href="/library/#CP-OS/activity">Run activity</a><button type="button" class="tertiary-action" id="run-again" hidden>Start again from this run</button><button type="button" class="tertiary-action" id="another">Start another run</button></div>
 </section>
 <section class="run-progress" id="submission-gone" hidden>
   <h2 tabindex="-1">Submission</h2>
@@ -1858,6 +1858,7 @@ function showProgress() {
   $('run-progress').querySelector('h2').focus();
   pollRun();
 }
+const RESTARTABLE = ['failed', 'capped', 'rejected', 'interrupted'];
 function renderRun(r) {
   // The library's own copy of a finished run's report (the filed copy under issuers/ is not served).
   const copy = typeof r.library_report === 'string' ? r.library_report : '';
@@ -1869,6 +1870,7 @@ function renderRun(r) {
     $('run-report-link').href = '/library/' + path.split('/').map(encodeURIComponent).join('/') + (cut < 0 ? '' : copy.slice(cut));
     $('run-report-link').textContent = r.issuer_name ? r.issuer_name + ': report' : 'Open the report';
   }
+  $('run-again').hidden = !RESTARTABLE.includes(r.status);
   $('run-state').textContent = r.status + (r.stalled ? ' (no news from it for an hour)' : '');
   $('run-reason').textContent = r.reason || 'none given';
   const list = $('run-modules');
@@ -2194,14 +2196,20 @@ async function startFrom(runId) {
   CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|pathway' && k !== '|legal_documents'));
   applyRowKeys();
   // The earlier run's module subset and turns: a subset run started again stays a subset.
+  // A subset naming a module this pathway lacks is not applied at all (a partial subset would run other modules than the earlier run's).
+  const notes = [];
   if (Array.isArray(got.modules) && got.modules.length) {
-    runOf(getV($('st-pathway'), 'pathway')).filter(m => !got.modules.includes(m)).forEach(m => SKIPPED.add(m));
-    CARRIED.fields.add('@modules');
+    const inPathway = runOf(getV($('st-pathway'), 'pathway')), unknown = got.modules.filter(m => !inPathway.includes(m));
+    if (unknown.length) notes.push(`The earlier run's module subset was not carried: ${unknown.join(', ')} not in this pathway.`);
+    else {
+      inPathway.filter(m => !got.modules.includes(m)).forEach(m => SKIPPED.add(m));
+      CARRIED.fields.add('@modules');
+    }
   }
   if (Number.isInteger(got.max_turns) && got.max_turns !== DEFAULT_TURNS) { $('turns').value = String(got.max_turns); CARRIED.fields.add('@turns'); }
   const files = CARRIED.files.size;
   loadMsg(!isObj(ctx) && !files && !problems.length ? `No documents or answers were kept for run ${runId}. Only the issuer name and ID are carried over.`
-    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (isObj(ctx) && !bad ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : ''), problems.length > 0);
+    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (isObj(ctx) && !bad ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : '') + (notes.length ? ' ' + notes.join(' ') : ''), problems.length > 0);
   update();
   return true;
 }
@@ -2217,6 +2225,35 @@ async function unlockIssuer() {
   update();
 }
 $('unlock-issuer').addEventListener('click', unlockIssuer);
+// An issuer ID the service already holds a run for: say so and offer the carry. The lookup never blocks the form.
+let LOOKED = '', LOOK_SEQ = 0, LATEST_RUN = '';
+async function lookIssuer() {
+  const id = $('i-issuer_id').value, box = $('issuer-exists');
+  if (CARRIED.locked || !SERVED || !/^[a-z0-9-]{1,40}$/.test(id)) { LOOKED = ''; LOOK_SEQ++; box.hidden = true; return; }
+  if (id === LOOKED) return;
+  LOOKED = id;
+  const seq = ++LOOK_SEQ;
+  let got;
+  try { got = await call('GET', `/api/issuers/${id}`); }
+  catch (err) {
+    if (seq === LOOK_SEQ) box.hidden = true;
+    console.warn('issuer lookup failed: ' + err.message);
+    return;
+  }
+  if (seq !== LOOK_SEQ) return; // the ID changed while the answer was on its way
+  LATEST_RUN = isObj(got) && typeof got.latest_run === 'string' && /^[0-9A-Za-z._-]{1,80}$/.test(got.latest_run) ? got.latest_run : '';
+  box.hidden = !LATEST_RUN;
+  if (!LATEST_RUN) return;
+  const n = Number.isInteger(got.runs) ? got.runs : 0, asOf = txt(got.latest_as_of), filed = txt(got.issuer_name);
+  const typed = $('i-issuer_name').value.trim();
+  $('issuer-exists-text').textContent = `This issuer exists: ${n} runs` + (asOf ? `, latest as-of ${asOf}` : '') + (filed && filed !== typed ? ` (filed as "${filed}")` : '');
+}
+$('issuer-carry').addEventListener('click', () => { if (LATEST_RUN) startFrom(LATEST_RUN); });
+$('run-again').addEventListener('click', async () => {
+  const id = RUN; // startAgain clears the stored run
+  startAgain();
+  await startFrom(id);
+});
 async function restore() {
   let saved = null, run = null;
   if (SERVED) {
@@ -2332,6 +2369,7 @@ function vis() {
   else if (!idTouched) $('i-issuer_id').value = slug($('i-issuer_name').value);
   $('i-issuer_id').readOnly = CARRIED.locked;
   $('unlock-issuer').hidden = !CARRIED.locked;
+  lookIssuer();
   // The cutoff is written, never left blank: the code reads blank as the as-of date, but the modules read
   // the raw file and reported "information cutoff not supplied" as an ambiguity (TDG all-modules run).
   if (!cutTouched) $('d-cutoff').value = getV(si, 'as_of');
