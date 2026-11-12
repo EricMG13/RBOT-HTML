@@ -1,0 +1,811 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index b3eb3b0..78d0301 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -12,6 +12,14 @@ Read against the September VMO2 reference: three of the screenshots only (Eviden
+ Found, for the owner (none fixed here): (1) Cash, liquidity, net debt and net leverage are n.a. in every column although CP-1 prints FY2024 cash 10.879 and June 2025 cash 175.509 and undrawn 618.5: those CP-1 tables have one row per period and a measure as column header, which the cell check cannot name (the limit recorded for the gross-debt table). (2) LTM closing debt is n.a. for the same reason (CP-1 prints 1,534.356). (3) The Quarter, Prior LTM and Pro forma columns are wholly n.a.; with the Profitability block (n.a./n.m. throughout) about half the grid is empty. (4) The row "Cash interest" shows CP-1's net interest expense, which CP-1 says is not cash interest. (5) Three footnotes are another issuer's wording: "EBITDA As Defined", "refinancing costs", "securitization" (`store.py` near line 1369); LTH has none of these. (6) The limitations list says "column headers not read as periods: LTM Q2 2025" while the LTM column is filled. (7) The model picker shows a 64-character hash and "relationship not recorded".
+ Not verified: GPT Sol or Claude Opus on the new instructions; a block at `scale` 1000; a refusal and its repair line on a real answer; the other 57 reference screenshots; every grid cell against the record; Overview, Changes, Modules and Evidence pages of this run; any other issuer. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 Forecast tab entry (run tdg-forecast-005).
+ 
++## 2026-11-12 — Two CP-8 checker gaps closed (branch `claude/cp8-checker-gaps`, owner "Yes, fix both")
++Scope: offline, synthetic; no provider. (A) K9 refuses a withheld difference written without a unit (`Cash fell by 30.`), in passages, `## Gaps`, Why and ledger cells; same exemptions; K10 counts unchanged. (B) `Same definition` / `Not comparable` are read from the start of the Effect cell only (`_says`), checker and `page_verdicts` alike; the words starting another cell are refused naming it; a pack `no` measure still accepts `Not comparable` in any cell. Tests first (26 failed before); five seam fixture cases added, none changed. Probes whycell_unitless, whycell_probe, ndsame_why, ndsame_k9, netdebt2_attacks, realfix_check, seam3_verdicts exit 0.
++Fix round 1 (reviewer findings): a line-start number is a list marker only on a line that really begins a list item (first line, or after a blank line, heading or list item), never in a table cell; K10 and the unit-bearing K9 reading read the line as before, so a wrapped `110.` / `437.` is refused again. A day beside a month name (`30 September 2024`) is no size for the bare-number K9 reading; `September 30, 2024` still refused (predates the branch: `_FIGURE` reads `30,`). The verdict words doubled in another cell and the Effect cell are refused. Ten new test cases failed first; probes gaps_linestart, gaps_dates (one case still fails, as noted), gaps_misplaced_with_effect run.
++Not verified: a real model; a bare count equal to a withheld size is refused and a size in words is not read (recorded in the presets ruling).
++Limits fixed (owner "Fix the limits first", L1-L4): a number after a bullet line is a marker only if `1`; a day beside a month is a date only with a four-digit year, and a complete date is blanked before both readings; whole numbers in English words (2 to 999,999) are read in the bare K9 reading. 22 new test cases failed on the unchanged checker; two tests that pinned the old limits now assert the rulings.
++Not verified (limits): decimals, fractions, ordinals, `a hundred`, `a dozen` in words; a real model.
++Fix round 2: a year is 19xx/20xx only (a figure after a yearless date is read again); a decimal, fraction or ordinal in words is not read in part; U+2010-U+2015 hyphens join a spelled number. 20 new test cases failed first; probes gaps3_year_not_year, gaps3_words_limits (line-break case remains) run.
++
+ ## 2026-11-12 — A withheld difference is refused in the analysis register's Why and the ledger (branch `claude/cp8-why-cell-withheld`, owner "fine, PR and merge")
+ Scope: offline, synthetic; no provider. K9's register exemption narrowed to the Effect cell of the measure's own issuer row (`Same definition` with `Correction` or `Method change`); the analysis Why, ledger, fact rows and other measures' rows refuse a withheld size (pack `no`, said `Not comparable`, same-period flagged, same-period net debt change incl. cash), as before in passages. Same functions, per-line exemption. 295 tests in `tests/test_changes.py` pass, none changed or weakened; 9 new cases failed on the old code first. CI fast-tests: exit 0, 3000 passed; node set: exit 0, 298 passed; `tools/quality_gate.py`: exit 0, 0 findings; reviewer probes ndsame_why, ndsame_k9, ndsame_flag, netdebt2_attacks, seam3_verdicts, realfix_check (real accepted-then-corrected handoff), t4r4_same_period: all exit 0.
+ Not verified: a real model writing a Why cell; a collision of a withheld size with another measure's stated value is still refused (as in passages).
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index 6016987..5e85c2a 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -369,3 +369,46 @@ measure is of one period with two values and its row says `Same definition` with
+ it, naming the figure and the word "difference"; the net debt change's cash, which has no issuer row, is printed
+ nowhere. A size equal to a value of the measure itself stays accepted. Same functions (`_withheld_sizes`), per-line
+ exemption (`_may_print`). `cp8.md` states the rule.
++
++Amendment, 2026-11-12 (owner: asked "Fix the two remaining checker gaps in one small follow-up?", the owner
++answered "Yes, fix both"). (A) K9 also refuses a withheld difference written without a unit: a whole number below 100
++is a count everywhere but here, and for the withheld-difference rule only a bare number equal in magnitude to a
++withheld size is refused, on the same lines and with the same exemptions (the measure's own issuer row under its
++condition; a size equal to one of the measure's own values). Counts under K10 are unchanged; for the bare-number reading only, module codes, the number of a line that really
++begins a list item (the first line, or after a blank line, a heading or a list item; never a table cell or a line that
++continues a paragraph) and a one- or two-digit day beside a month name are not read as numbers. Limits, recorded: a legitimate bare count equal to a withheld size ("30
++limitations" while a difference of 30 is withheld) is refused and must be reworded (the message names the figure, the
++measure and the word "difference"); a size written in words ("thirty") was not read (closed by the amendment
++below). (B) The verdict words `Same
++definition` and `Not comparable` are read from the start of the Effect cell only, by the checker and by
++`page_verdicts` alike (`_says`); the same words starting another cell of the measure's row are refused, naming the
++cell, not ignored. Unchanged: for a measure the pack marks `no`, `Not comparable` is accepted anywhere in its row.
++The shared fixture `tests/fixtures/changes-seam/rows.json` gains five cases; no existing case changed.
++
++Amendment, 2026-11-12 (owner: "Fix the limits first"; controller rulings L1 to L4). (L1) After a bulleted item line a
++leading number is a list marker only if it is `1` (CommonMark: a list not starting at 1 cannot interrupt a
++paragraph), so a hard-wrapped `- Cash fell by` / `30. The rest holds.` is read as a figure; after a blank line, a
++heading, the first line or a numbered item the earlier rule stands. (L2) A day beside a month name is a date only when
++a four-digit year completes it (`30 September 2024`, `30th Sep 2024`, `September 30 2024`, `Sep 30, 2024`); a day and
++month with no year is a number, so "The period ends 30 September." with 30 withheld is refused (accepted cost: reword).
++(L3) A complete date is blanked from the line before both readings (the raw K9/K10 reading and the bare reading);
++`_FIGURE` is unchanged, so `September 30, 2024` no longer reads `30,`, and an unheld figure on a line that also holds a
++date is still refused by K10. (L4) In the bare-number K9 reading only, whole numbers from two to 999,999 in English
++words (`thirty`, `one hundred and sixty-three`, `two thousand five`; hyphenated or spaced, any case) are read as the
++number they spell, with the same exemptions and message; `one` alone is never read. Remaining limits, recorded: a
++legitimate bare count (or a spelled one) equal to a withheld size is refused, since the checker cannot tell a count
++from a size; decimals, fractions, ordinals (`thirtieth`), `a hundred` and `a dozen` in words are not read. The two
++tests that pinned the old limits (a size in words accepted; `- First point.` then `80. ...` accepted) now assert the
++new rulings; no other expectation and no `rows.json` case changed.
++
++Amendment, 2026-11-12 (reviewer findings M1, Low A, Low B). A date's year is `(?:19|20)\d{2}` only, as `_EXEMPT` has it, so
++a figure such as `4370` or `1006` straight after a yearless `30 June` is read again. A spelled number is not read when it
++directly follows or precedes `point`, or is directly followed (space or hyphen) by an ordinal or fraction word (`first`,
++`thirty-first`, `thirds`, `quarters`, `-th`/`-ieth` forms, also after `and`: `one hundred and first`) or by `and a half` /
++`and a quarter`. U+2010 to U+2015 count as a hyphen inside a spelled number. Remaining limits: a spelled size broken across
++lines (`one hundred` / `and ten`) is not read; a legitimate count equal to a withheld size is refused.
++Narrowed (controller rulings, same day): `and` plus an ordinal exempts only a number containing `hundred` or `thousand`;
++an ordinal or fraction word hyphen-joined to a following word (`second-lien`, `quarter-on-quarter`) is not an ordinal;
++`point` exempts a number only inside number-word `point` number-word (`zero point five`), so `At that point thirty`,
++`a thirty-point swing` and a bare `point five` are read (accepted false refusal); `and a half` / `and a quarter` exempt
++only when not followed by `of`; `two halves` is not read. When in doubt the number is read.
+diff --git a/src/deploy_vii/methods/cp8.md b/src/deploy_vii/methods/cp8.md
+index 56e507d..7910bf8 100644
+--- a/src/deploy_vii/methods/cp8.md
++++ b/src/deploy_vii/methods/cp8.md
+@@ -103,7 +103,13 @@ accepted, the run is delivered without it.
+      passages, `## Gaps`, fact rows, the analysis register's Why cells and the ledger's cells. The
+      one place a withheld difference may be printed is the Effect cell of that same measure's issuer
+      row, said `Same definition` with the cause `Correction` or `Method change`; the net debt
+-     change's cash has no such row, so its difference is printed nowhere.
++     change's cash has no such row, so its difference is printed nowhere. A withheld difference
++     is refused without its unit too: a bare number (`Cash fell by 30.`) equal to a withheld size
++     is refused wherever the sized one is, so write a count that happens to equal it another way
++     (a size written in words, `thirty`, is refused as well; the repair names the figure and the measure). The verdict words
++     `Same definition` and `Not comparable` are read from the start of the Effect cell only; the
++     same words starting any other cell of the row are refused, naming the cell (a `Not comparable`
++     for a measure the pack marks `comparable: no` is accepted in any cell of its row).
+ 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
+    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
+    for a module's. If you think a module's change of view is unexplained, say so and mark the row
+diff --git a/src/deploy_workflow/changes_check.py b/src/deploy_workflow/changes_check.py
+index 4802a16..2f990d6 100644
+--- a/src/deploy_workflow/changes_check.py
++++ b/src/deploy_workflow/changes_check.py
+@@ -187,10 +187,24 @@ def _plain(text: str) -> str:
+     return " ".join(text.replace("**", "").replace("`", "").split())
+ 
+ 
++EFFECT = 4  # the column of an issuer row that holds the verdict (`Effect on the credit view`)
++
++
+ def _says(row: Sequence[str], word: str) -> bool:
+-    """Whether a cell of the row starts with the verdict word; the word anywhere else in a cell is
+-    no verdict."""
+-    return any(_plain(cell).lower().startswith(word) for cell in row)
++    """Whether the Effect cell of an issuer row starts with the verdict word; the word anywhere else
++    in that cell, or at the start of another cell (`_misplaced`), is no verdict."""
++    return len(row) > EFFECT and _plain(row[EFFECT]).lower().startswith(word)
++
++
++def _misplaced(where: str, row: Sequence[str], word: str) -> list[str]:
++    """A verdict word at the start of a cell of the row other than the Effect cell: refused, naming
++    the cell, never silently read as the verdict."""
++    return [
++        f"{where}: `{word}` starts the {COLUMNS[ISSUER][i]} cell, where it is no verdict; write it "
++        "first in the Effect cell."
++        for i, cell in enumerate(row)
++        if i != EFFECT and _plain(cell).lower().startswith(word)
++    ]
+ 
+ 
+ def _signed(value: Any) -> Decimal | None:
+@@ -380,11 +394,10 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
+     text = " ".join(_plain(cell) for cell in row).lower()
+     issues = []
+     for word in (SAME, NOT_COMPARABLE):
+-        if measure["comparable"] != "no" and word in text and not _says(row, word):
+-            issues.append(
+-                f"{where}: `{word}` is a verdict only at the start of a cell; write it first in "
+-                "the Effect cell."
+-            )
++        if measure["comparable"] == "no" or word not in text:
++            continue
++        elsewhere = f"{where}: `{word}` is a verdict only at the start of the Effect cell."
++        issues += _misplaced(where, row, word) or ([] if _says(row, word) else [elsewhere])
+     if measure["comparable"] == "judge":
+         said = [word for word in (SAME, NOT_COMPARABLE) if word in text]
+         if len(said) != 1:
+@@ -397,7 +410,7 @@ def _definition_issues(where: str, row: Sequence[str], measure: Mapping[str, Any
+             f"{where}: the pack marks this measure not comparable ({measure['reason']}); say "
+             '"not comparable" and give no difference.'
+         )
+-    if NOT_COMPARABLE in text and _TREND.search(row[4]):
++    if NOT_COMPARABLE in text and _TREND.search(row[EFFECT]):
+         issues.append(f"{where}: a `Not comparable` row draws no trend from the two values.")
+     return issues
+ 
+@@ -807,6 +820,189 @@ def _may_print(
+     return frozenset()
+ 
+ 
++_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
++_BULLET_ITEM = re.compile(r"\s*[-*+]\s")
++_LIST_NUMBER = re.compile(r"^\s*\d+[.)](?=\s)")
++_FIRST_NUMBER = re.compile(r"\s*1[.)]\s")
++_MONTH = (
++    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
++    r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?"
++)
++_DAY = r"\d{1,2}(?:st|nd|rd|th)?\b"
++_YEAR = r"(?:19|20)\d{2}\b(?![.,]\d)"
++# A date is complete only with its four-digit year: `30 September 2024`, `September 30, 2024`. A day
++# and month with no year is read as a number.
++_DATE = re.compile(
++    rf"(?<![\w.,])(?:{_DAY}\s+{_MONTH},?\s+{_YEAR}|\b{_MONTH}\s+{_DAY},?\s+{_YEAR})",
++    re.IGNORECASE,
++)
++_UNITS = {
++    word: n
++    for n, word in enumerate(
++        (
++            "one",
++            "two",
++            "three",
++            "four",
++            "five",
++            "six",
++            "seven",
++            "eight",
++            "nine",
++            "ten",
++            "eleven",
++            "twelve",
++            "thirteen",
++            "fourteen",
++            "fifteen",
++            "sixteen",
++            "seventeen",
++            "eighteen",
++            "nineteen",
++        ),
++        1,
++    )
++}
++_TENS = {
++    word: 10 * n
++    for n, word in enumerate(
++        ("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"), 2
++    )
++}
++_HYPHENS = "-\u2010-\u2015"
++_WORD_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
++_ORDINALS = frozenset(
++    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halve", "quarter")
++)
++
++
++def _ordinal(word: str) -> bool:
++    """Whether `word` is an ordinal or fraction word: `first`, `fourth`, `thirtieth`, `thirds`."""
++    word = word.removesuffix("s")
++    if word in _ORDINALS:
++        return True
++    if word.endswith("ieth"):
++        return word[:-4] + "y" in _TENS
++    return word.endswith("th") and word[:-2] in {*_UNITS, *_TENS, "hundred", "thousand"}
++
++
++def _number_word(word: str) -> bool:
++    return word in _UNITS or word in _TENS or word in ("zero", "hundred", "thousand")
++
++
++def _decimal(words: Sequence[str], i: int, j: int) -> bool:
++    """Whether the number in `words[i:j]` sits in `number-word point number-word` on either side."""
++    after = words[j : j + 2]
++    before = words[max(i - 2, 0) : i]
++    return (len(after) == 2 and after[0] == "point" and _number_word(after[1])) or (
++        len(before) == 2 and before[1] == "point" and _number_word(before[0])
++    )
++
++
++def _part_of_fraction(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
++    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction. `joined[k]`
++    says `words[k]` is hyphen-joined to the next word. Not read: a decimal (`zero point five`,
++    both sides); an ordinal word ending it (`thirty-first`) unless it is joined on to a further
++    word (`second-lien`); `and` plus an ordinal only after `hundred` or `thousand` (`one hundred
++    and first`); `and a half` / `and a quarter` not followed by `of`."""
++
++    def ends(k: int) -> bool:
++        return k < len(words) and _ordinal(words[k]) and not joined[k]
++
++    big = "hundred" in words[i:j] or "thousand" in words[i:j]
++    return (
++        _decimal(words, i, j)
++        or ends(j)
++        or (big and words[j : j + 1] == ["and"] and ends(j + 1))
++        or (
++            words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
++            and words[j + 3 : j + 4] != ["of"]
++        )
++    )
++
++
++def _starts_list_item(lines: Sequence[str], i: int) -> bool:
++    """Whether line `i` can begin a list item: the first line of the passage, or one after a blank
++    line, a heading or a list item. A line that continues a paragraph cannot, and after a bulleted
++    item only `1.` can (CommonMark: a list not starting at 1 cannot interrupt a paragraph)."""
++    if i == 0:
++        return True
++    before = lines[i - 1]
++    if _BULLET_ITEM.match(before):
++        return bool(_FIRST_NUMBER.match(lines[i]))
++    return not before.strip() or bool(_HEADING.match(before) or _LIST_ITEM.match(before))
++
++
++def _group(words: Sequence[str], i: int) -> tuple[int, int]:
++    """(value, next index) of the words from `i` that spell a number below 1,000: `[N hundred]
++    [and] [tens [unit] | 1-19]`. Value 0 and the same index when none."""
++    start, value = i, 0
++    if i + 1 < len(words) and words[i] in _UNITS and words[i + 1] == "hundred":
++        value, i = _UNITS[words[i]] * 100, i + 2
++        if (
++            i + 1 < len(words)
++            and words[i] == "and"
++            and (words[i + 1] in _UNITS or words[i + 1] in _TENS)
++        ):
++            i += 1
++    if i < len(words) and words[i] in _TENS:
++        value, i = value + _TENS[words[i]], i + 1
++        if i < len(words) and words[i] in _UNITS and _UNITS[words[i]] < 10:
++            value, i = value + _UNITS[words[i]], i + 1
++    elif i < len(words) and words[i] in _UNITS:
++        value, i = value + _UNITS[words[i]], i + 1
++    return (value, i) if i > start else (0, start)
++
++
++def _spelled_number(words: Sequence[str], i: int) -> tuple[int, int]:
++    """(value, next index) of the whole number in English words that starts at `i`, up to 999,999
++    (`two thousand five`); value 0 and the same index when none starts there."""
++    value, j = _group(words, i)
++    if j < len(words) and words[j] == "thousand" and value:
++        value, j = value * 1000, j + 1
++        if j + 1 < len(words) and words[j] == "and" and _group(words, j + 1)[0]:
++            j += 1
++        rest, j = _group(words, j)
++        value += rest
++    return (value, j) if j > i else (0, i)
++
++
++def _spelled(line: str) -> list[Decimal]:
++    """The whole numbers from two up that the line writes in English words, any case, hyphenated or
++    spaced (any Unicode hyphen). Not read: `one` alone, `a hundred`, `a dozen`, and a part of a
++    decimal, fraction or ordinal."""
++    found: list[Decimal] = []
++    for run in _WORD_RUN.finditer(line):
++        words = re.findall(r"[a-z]+", run[0].lower())
++        joined = [
++            bool(re.search(rf"[{_HYPHENS}]", g)) for g in re.findall(r"[^a-z]+", run[0].lower())
++        ]
++        joined.append(False)
++        i = 0
++        while i < len(words):
++            value, j = _spelled_number(words, i)
++            if j == i:
++                i += 1
++                continue
++            if value >= 2 and not _part_of_fraction(words, joined, i, j):
++                found.append(Decimal(value))
++            i = j
++    return found
++
++
++def _bare(line: str, *, listed: bool) -> str:
++    """The line as the bare-number reading of the withheld-difference rule (K9) takes it: module
++    codes blanked and a leading list number blanked when `listed` (the line begins a list item,
++    never a table cell). Complete dates are blanked by the caller, for both readings."""
++    if listed:
++        line = _LIST_NUMBER.sub(_blanks, line)
++    return _MODULE.sub(_blanks, line)
++
++
++def _blanks(match: re.Match[str]) -> str:
++    return " " * len(match[0])
++
++
+ def _passage_issues(
+     lines: list[str],
+     pack: Mapping[str, Any],
+@@ -831,7 +1027,7 @@ def _passage_issues(
+     kept = _withheld_sizes(pack, said_nc)
+     in_issuer, h2 = False, ""
+     issues: list[str] = []
+-    for line in lines:
++    for i, line in enumerate(lines):
+         if _HEADING.match(line):
+             in_issuer = line.strip() == f"### {ISSUER}"
+             if line.startswith("## "):
+@@ -849,14 +1045,20 @@ def _passage_issues(
+         )
+         if h2 in NOT_PASSAGES:
+             continue
+-        for size in dict.fromkeys(f.size for f in _figures(line, counts=False)):
++        line = _DATE.sub(_blanks, line)
++        figures = [f.size for f in _figures(line, counts=False)]
++        listed = not row and _starts_list_item(lines, i)
++        bare_line = _bare(line, listed=listed)
++        bare = [f.size for f in _figures(bare_line)] + _spelled(bare_line)
++        for size in dict.fromkeys([*figures, *bare]):
+             if size in sizes:
+                 issues.append(
+                     f"A passage: the figure {size} is the difference of {sizes[size]}, which "
+                     "this handoff withholds (not comparable, or one period with two values); a "
+-                    "difference of it is not printed here."
++                    "difference of it is not printed here, with a unit or without one. A count "
++                    f"that happens to equal it ({size}) is refused too: reword it."
+                 )
+-            elif size not in allowed:
++            elif size in figures and size not in allowed:
+                 issues.append(_not_held("A passage", size))
+     return issues
+ 
+@@ -947,7 +1149,7 @@ def _page_measure(measure: Mapping[str, Any], found: list[list[str]]) -> dict[st
+         return _verdict("not_comparable", "Not comparable", measure.get("reason"))
+     for said_not in found:
+         if _says(said_not, NOT_COMPARABLE):
+-            return _verdict("not_comparable", "Not comparable", said_not[4])
++            return _verdict("not_comparable", "Not comparable", said_not[EFFECT])
+     row = found[0] if found else None
+     flagged = _flagged(measure)
+     where = measure["label"]
+diff --git a/tests/fixtures/changes-seam/rows.json b/tests/fixtures/changes-seam/rows.json
+index 7476e82..74526ce 100644
+--- a/tests/fixtures/changes-seam/rows.json
++++ b/tests/fixtures/changes-seam/rows.json
+@@ -20,7 +20,12 @@
+     {"name": "a next-line control after the label", "measure": "cash", "cells": ["Cash\u0085", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m", "page": "comparable"},
+     {"name": "a unit separator control after the label", "measure": "cash", "cells": ["Cash\u001f", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m", "page": "comparable"},
+     {"name": "two rows for one measure that both say Same definition", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."], "extra_rows": [["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition: cash fell by 50 US$m."]], "accepted": false, "refusal": "a second row for this pack measure", "page": "unjudged"},
+-    {"name": "a row without its closing pipe, then a row saying Not comparable", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition."], "unclosed": true, "extra_rows": [["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "Unresolved", "Not comparable: the definition changed."]], "accepted": true, "verdict": "not_comparable", "difference": null, "page": "not_comparable"}
++    {"name": "a row without its closing pipe, then a row saying Not comparable", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Same definition."], "unclosed": true, "extra_rows": [["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "Unresolved", "Not comparable: the definition changed."]], "accepted": true, "verdict": "not_comparable", "difference": null, "page": "not_comparable"},
++    {"name": "Same definition at the start of the Cause cell, not the Effect cell", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "Same definition", "Cash fell by 50 US$m."], "accepted": false, "refusal": "Cause cell", "page": "unjudged"},
++    {"name": "Same definition at the start of the Earlier cell, not the Effect cell", "measure": "cash", "cells": ["Cash", "Same definition: 300 US$m (FY2023)", "250 US$m (FY2024)", "New period", "Cash fell by 50 US$m."], "accepted": false, "refusal": "Earlier cell", "page": "unjudged"},
++    {"name": "Not comparable at the start of the Cause cell, not the Effect cell", "measure": "leverage", "cells": ["Total debt / EBITDA", "4.20x (FY2023)", "3.60x (FY2024)", "Not comparable", "Leverage fell by 0.60x."], "accepted": false, "refusal": "Cause cell", "page": "unjudged"},
++    {"name": "Not comparable at the start of the Earlier cell, not the Effect cell", "measure": "leverage", "cells": ["Total debt / EBITDA", "Not comparable: 4.20x (FY2023)", "3.60x (FY2024)", "Unresolved", "Leverage fell by 0.60x."], "accepted": false, "refusal": "Earlier cell", "page": "unjudged"},
++    {"name": "Same definition at the start of the Effect cell, the other cells plain", "measure": "cash", "cells": ["Cash", "300 US$m (FY2023)", "250 US$m (FY2024)", "Unresolved", "Same definition."], "accepted": true, "verdict": "comparable", "difference": "-50 US$m", "page": "comparable"}
+   ],
+   "module_cells": [
+     {"name": "name and code in brackets", "cell": "Credit view (CP-2)", "accepted": true, "status": "Strengthened"},
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index ffb7781..752ed99 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -2851,3 +2851,410 @@ def test_a_register_cell_stating_values_or_a_quotable_difference_is_still_accept
+     pack, handoff, sentence, cell
+ ):
+     assert cp8_issues(_in_cell(handoff, cell, sentence), pack) == ()
++
++
++# --- a withheld difference without a unit is refused too (owner, 2026-11-12: "Yes, fix both") ---
++# A whole number below 100 without a unit is a count everywhere but here: for the withheld-
++# difference rule only, a bare number equal in magnitude to a withheld size is refused (same
++# lines, same exemptions as with a unit). Expectations hand-written. Recorded limits: a bare count
++# equal to a withheld size ("30 limitations" while a difference of 30 is withheld) is refused, and
++# a size written in words ("thirty") is not read.
++
++NC_CASH = (
++    "| Cash | 300 US$m (FY2023) | 250 US$m (FY2024) | Unresolved "
++    "| Not comparable: the definition changed. |"
++)
++GAPS = "\n## Gaps\n\n{}\n"
++
++
++def _cash_pack(mark):
++    cash = {**PACK["measures"][1], "comparable": mark}
++    return {**PACK, "measures": [PACK["measures"][0], cash, *PACK["measures"][2:]]}
++
++
++def _cash_nc_text(**kw):
++    return with_row(LEVERAGE_ROW, **kw).replace(CASH_ROW, NC_CASH)
++
++
++def _lever_text(**kw):
++    return with_row(LEVERAGE_ROW, **kw)
++
++
++def _nc_text(**kw):
++    return with_row(NC_ROW, **kw)
++
++
++BARE_KINDS = {
++    "pack marks no": (_cash_pack("no"), _cash_nc_text, "Cash fell by 50."),
++    "said Not comparable": (PACK, _cash_nc_text, "Cash fell by 50."),
++    "same period flagged": (PACK2, _nc_text, "Leverage fell by 0.56."),
++    "net debt, cash": (_ndpack(), _lever_text, "Cash fell by 30."),
++    "net debt, net debt": (_ndpack(), _lever_text, "Net debt is 80 lower."),
++}
++
++
++def _bare_places(build, sentence):
++    return {
++        "passage": build(passage=sentence + "\n\n"),
++        "gaps": build(gaps=GAPS.format(sentence)),
++        "why": _in_cell(build(), WHY_CELL, sentence),
++        "ledger": _in_cell(build(), LEDGER_CELL, sentence),
++    }
++
++
++@pytest.mark.parametrize("kind", list(BARE_KINDS))
++@pytest.mark.parametrize("place", ["passage", "gaps", "why", "ledger"])
++def test_a_withheld_difference_without_a_unit_is_refused_wherever_one_with_a_unit_is(kind, place):
++    pack, build, sentence = BARE_KINDS[kind]
++    assert cp8_issues(build(), pack) == ()
++    found = cp8_issues(_bare_places(build, sentence)[place], pack)
++    assert any("difference" in i and "reword" in i for i in found), found
++
++
++@pytest.mark.parametrize("sentence", ["Cash moved -30.", "Cash fell by -30.", "Cash fell by 30 ."])
++def test_a_signed_or_spaced_bare_withheld_difference_is_refused(sentence):
++    found = cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack())
++    assert any("30" in i and "difference" in i for i in found), found
++
++
++def test_the_refusal_names_the_figure_and_the_measure():
++    found = cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30.\n\n"), _ndpack())
++    assert any("figure 30" in i and "difference of Cash" in i for i in found), found
++
++
++def test_a_bare_decimal_withheld_difference_is_refused():
++    found = cp8_issues(with_row(LEVERAGE_ROW, "Leverage fell by 0.56.\n\n"), PACK2)
++    assert any("0.56" in i and "difference" in i for i in found), found
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "The three facilities are secured.",
++        "Twelve of 12 modules ran.",
++        "The pack lists 7 limitations.",
++    ],
++)
++def test_a_bare_count_that_equals_no_withheld_size_is_accepted(sentence):
++    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
++
++
++def test_a_bare_count_equal_to_a_withheld_size_is_refused():  # recorded limit
++    found = cp8_issues(with_row(LEVERAGE_ROW, "The handoff states 30 limitations.\n\n"), _ndpack())
++    assert any("30" in i and "reword" in i for i in found), found
++
++
++def test_a_module_code_or_list_number_is_no_bare_count():
++    pack = _ndpack()
++    pack["net_debt_change"] |= {"change_in_cash": "-2", "current_cash": "908"}
++    text = with_row(LEVERAGE_ROW, "1. The credit view (CP-2) ran.\n\n")
++    assert cp8_issues(text, pack) == ()
++
++
++def test_a_bare_withheld_difference_is_accepted_in_its_own_issuer_row():
++    row = same_period_row("Same definition; leverage is 0.56 lower after the correction.")
++    assert cp8_issues(with_row(row.replace("Unresolved", "Correction")), PACK2) == ()
++    net = (
++        "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
++        "| Same definition; net debt is 80 lower after the correction. |"
++    )
++    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
++    elsewhere = net.replace("Net debt |", "Refinancing |")
++    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
++    assert any("80" in i and "difference" in i for i in found), found
++
++
++def test_a_bare_size_equal_to_the_measures_own_value_is_accepted():
++    pack = _ndpack()
++    pack["net_debt_change"] |= {"prior_cash": "60", "current_cash": "30", "change_in_cash": "-30"}
++    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash is 60 earlier and 30 now.\n\n"), pack) == ()
++
++
++def test_a_zero_difference_withholds_nothing():
++    said = "Net debt is 6,190 in both runs; 0 changed.\n\n"
++    assert cp8_issues(with_row(LEVERAGE_ROW, said), _zero_pack()) == ()
++
++
++def test_a_bare_count_is_still_no_figure_of_a_held_line():
++    # K10 is untouched: an unheld whole number below 100 is still a count.
++    said = "Seven covenants are tested.\n\nThere are 77 of them.\n\n"
++    assert cp8_issues(with_row(LEVERAGE_ROW, said), PACK) == ()
++
++
++# --- fix round 1: a line-start number is a list marker only on a real list item ---------------
++
++
++@pytest.mark.parametrize(
++    ("passage", "size"),
++    [
++        ("Gross debt changed by a total of\n110. The rest holds.\n\n", "110"),
++        ("Gross debt changed by a total of\n110) in all.\n\n", "110"),
++        ("Cash fell by\n30. The rest holds.\n\n", "30"),
++        ("Liquidity is about\n437. That is new.\n\n", "437"),
++    ],
++)
++def test_a_number_starting_a_continuation_line_is_a_figure(passage, size):
++    found = cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack())
++    assert any(size in i for i in found), found
++
++
++def test_a_number_starting_a_fact_rows_effect_cell_is_a_figure():
++    row = "| Refinancing | — | — | New source | 80. Net debt is lower. |"
++    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + row), _ndpack())
++    assert any("80" in i and "difference" in i for i in found), found
++
++
++@pytest.mark.parametrize(
++    "passage",
++    [
++        "80. Net debt is the largest item.\n\n",
++        "Findings follow.\n\n80. Net debt is the largest item.\n\n",
++        "1. First point.\n80. Net debt is the largest item.\n\n",
++    ],
++)
++def test_a_real_list_item_number_equal_to_a_withheld_size_is_accepted(passage):
++    assert cp8_issues(with_row(LEVERAGE_ROW, passage), _ndpack()) == ()
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "The period ends 30 September 2024.",
++        "The period ends 30th Sep 2024.",
++        "The period ends September 30 2024.",
++        "The period ends Sep 30 2024.",
++    ],
++)
++def test_a_day_of_month_equal_to_a_withheld_size_is_no_size(sentence):
++    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()) == ()
++
++
++def test_a_number_near_but_not_beside_a_month_is_still_a_size():
++    said = "Cash fell by 30 in September.\n\n"
++    found = cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack())
++    assert any("30" in i and "difference" in i for i in found), found
++
++
++def test_the_verdict_words_doubled_in_another_cell_and_the_effect_cell_are_refused():
++    row = (
++        "| Total debt / EBITDA | Not comparable: 6.57x (FY2023) | 6.01x (FY2023) | Unresolved "
++        "| Not comparable: EBITDA basis differs. |"
++    )
++    found = cp8_issues(with_row(row), PACK2)
++    assert any("Earlier cell" in i and "not comparable" in i for i in found), found
++
++
++# --- the withheld-size limits: wrapped bullets, dates need a year, numbers in words ---------------
++
++
++def _says(passage, pack=None):
++    return cp8_issues(with_row(LEVERAGE_ROW, passage + "\n\n"), pack or _ndpack())
++
++
++@pytest.mark.parametrize(
++    "passage",
++    [
++        "- Cash fell by\n30. The rest holds.",
++        "  - Cash fell by\n  30. The rest holds.",
++        "* Cash fell by\n30) The rest holds.",
++        "- First point.\n80. Net debt is the largest item.",
++    ],
++)
++def test_a_number_wrapped_onto_a_line_after_a_bullet_is_a_figure(passage):
++    assert any("figure " in i for i in _says(passage))
++
++
++@pytest.mark.parametrize(
++    "passage",
++    [
++        "- item\n1. first sub-item",
++        "Findings.\n\n30. A numbered item.",
++        "1. First.\n30. A numbered item.",
++    ],
++)
++def test_a_list_marker_after_a_bullet_one_or_elsewhere_is_no_figure(passage):
++    assert _says(passage) == ()
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "Cash fell by 30 March-to-September.",
++        "Cash fell by 30 Mar-to-Sep.",
++        "Cash fell by 30 March quarter on March quarter.",
++        "Cash fell by 30 May be restated.",
++        "The period ends 30 September.",
++    ],
++)
++def test_a_day_beside_a_month_without_a_year_is_a_number(sentence):
++    assert any("figure 30" in i for i in _says(sentence))
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "The period ends 30 September 2024.",
++        "The period ends 30th Sep 2024.",
++        "The period ends September 30 2024.",
++        "The period ends Sep 30, 2024.",
++        "The period ends September 30, 2024.",
++        "The period ends 30 September, 2024.",
++    ],
++)
++def test_a_day_of_a_complete_date_is_no_size(sentence):
++    assert _says(sentence) == ()
++
++
++def test_a_full_date_on_a_line_hides_no_other_figure():
++    found = _says("September 30, 2024 US$m 437 is held nowhere.")
++    assert any("437" in i and "held in neither" in i for i in found), found
++    assert _says("September 30, 2024 US$m 7,100 is the gross debt.") == ()
++    found = _says("On 30 September 2024 cash fell by 30 US$m.")
++    assert any("figure 30" in i for i in found), found
++
++
++def _cash_163_pack():
++    pack = _ndpack()
++    pack["net_debt_change"] |= {"change_in_cash": "-163", "current_cash": "747"}
++    return pack
++
++
++@pytest.mark.parametrize(
++    ("sentence", "pack"),
++    [
++        ("Cash fell by thirty.", None),
++        ("Cash fell by THIRTY.", None),
++        ("Net debt is eighty lower.", None),
++        ("Gross debt changed by one hundred and ten.", None),
++        ("Gross debt changed by One Hundred Ten.", None),
++        ("Cash fell by one hundred and sixty-three.", _cash_163_pack()),
++        ("Cash fell by one hundred sixty three.", _cash_163_pack()),
++        ("Cash fell by one hundred sixty-three.", _cash_163_pack()),
++    ],
++)
++def test_a_withheld_size_written_in_words_is_refused(sentence, pack):
++    found = _says(sentence, pack)
++    assert any("difference" in i and "reword" in i for i in found), found
++
++
++def test_a_large_withheld_size_in_words_is_refused():
++    pack = _ndpack()
++    pack["net_debt_change"] |= {"change_in_cash": "-2005", "current_cash": "-1095"}
++    for sentence in ("Cash fell by two thousand five.", "Cash fell by two thousand and five."):
++        assert any("figure 2005" in i for i in _says(sentence, pack)), sentence
++    pack["net_debt_change"] |= {"change_in_cash": "-250000", "current_cash": "-249090"}
++    assert any("figure 250000" in i for i in _says("It fell by two hundred fifty thousand.", pack))
++
++
++@pytest.mark.parametrize(
++    "sentence",
++    [
++        "Cash fell by forty.",
++        "Cash fell by thirty-one.",
++        "The one covenant is tested.",
++        "The thirtieth covenant is tested.",
++        "A hundred covenants and a dozen facilities.",
++        "Cash fell by thirty point five.",
++        "Cash fell by twenty and forty.",
++    ],
++)
++def test_a_number_in_words_that_is_no_withheld_size_is_accepted(sentence):
++    assert _says(sentence) == ()
++
++
++def test_the_word_one_is_never_read_as_a_size():
++    pack = _ndpack()
++    pack["net_debt_change"] |= {"change_in_cash": "-1", "current_cash": "909"}
++    assert _says("One facility matured, and no one asked.", pack) == ()
++
++
++def test_a_size_in_words_is_accepted_in_its_own_issuer_row():
++    net = (
++        "| Net debt | 6190 US$m (FY2024) | 6110 US$m (FY2024) | Correction "
++        "| Same definition; net debt is eighty lower after the correction. |"
++    )
++    assert cp8_issues(with_row(LEVERAGE_ROW + "\n" + net), _ndpack()) == ()
++    elsewhere = net.replace("Net debt |", "Refinancing |")
++    found = cp8_issues(with_row(LEVERAGE_ROW + "\n" + elsewhere), _ndpack())
++    assert any("80" in i and "difference" in i for i in found), found
++
++
++def _cash_pack(change: str, cash: str):
++    pack = _ndpack()
++    pack["net_debt_change"] |= {"change_in_cash": change, "current_cash": cash}
++    return pack
++
++
++@pytest.mark.parametrize(
++    ("sentence", "pack", "size"),
++    [
++        ("On 30 June 4370 US$m was drawn.", None, "4370"),
++        ("At March 12 4370 US$m of debt matured.", None, "4370"),
++        ("At 30 June 1006 US$m of cash was used.", _cash_pack("-1006", "-96"), "1006"),
++        ("March 12 1006 is the cash change.", _cash_pack("-1006", "-96"), "1006"),
++        ("It was due on 31 December 2100 US$m.", None, "2100"),
++    ],
++)
++def test_a_four_digit_figure_after_a_yearless_date_is_still_read(sentence, pack, size):
++    found = _says(sentence, pack)
++    assert any(size in i for i in found), found
++
++
++@pytest.mark.parametrize(
++    ("sentence", "pack"),
++    [
++        ("Cash is zero point five of the facility.", _cash_pack("-5", "905")),
++        ("Two thirds of the debt is fixed.", _cash_pack("-2", "908")),
++        ("Two-thirds of the debt is fixed.", _cash_pack("-2", "908")),
++        ("Two and a half turns of leverage.", _cash_pack("-2", "908")),
++        ("The twenty-first covenant test.", _cash_pack("-20", "890")),
++        ("The thirty-first covenant test.", None),
++        ("The one hundred and first covenant test.", _cash_pack("-100", "810")),
++        ("Three quarters of the debt is fixed.", _cash_pack("-3", "907")),
++    ],
++)
++def test_a_decimal_fraction_or_ordinal_in_words_is_not_read_in_part(sentence, pack):
++    assert _says(sentence, pack) == ()
++
++
++@pytest.mark.parametrize(
++    ("sentence", "pack", "size"),
++    [
++        ("Cash fell by thirty and second-lien debt was repaid.", None, "30"),
++        ("Cash fell by thirty and first-lien leverage rose.", None, "30"),
++        ("Cash fell by thirty and half the facility was drawn.", None, "30"),
++        (
++            "Gross debt fell by one hundred and ten and a quarter of the notes were repaid.",
++            None,
++            "110",
++        ),
++        ("Cash fell by thirty quarter-on-quarter.", None, "30"),
++        ("Cash fell by thirty second-lien loans.", None, "30"),
++        ("At that point thirty was drawn from cash.", None, "30"),
++        ("Cash showed a thirty-point swing.", None, "30"),
++        ("Cash is point five of the facility.", _cash_pack("-5", "905"), "5"),
++    ],
++)
++def test_a_spelled_size_beside_an_ordinal_looking_word_is_still_read(sentence, pack, size):
++    found = _says(sentence, pack)
++    assert any(f"figure {size} is the difference" in i for i in found), found
++
++
++@pytest.mark.parametrize(
++    ("sentence", "pack"),
++    [
++        ("The thirty-first covenant test.", None),
++        ("Two thirds of the debt is fixed.", _cash_pack("-2", "908")),
++        ("Two halves of the debt are fixed.", _cash_pack("-2", "908")),
++        ("The one hundred and first covenant test.", _cash_pack("-100", "810")),
++        ("Cash is zero point five of the facility.", _cash_pack("-5", "905")),
++    ],
++)
++def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack):
++    assert _says(sentence, pack) == ()
++
++
++@pytest.mark.parametrize("hyphen", ["‐", "‑", "‒", "–", "—", "―"])
++def test_a_unicode_hyphen_does_not_split_a_spelled_size(hyphen):
++    found = _says(f"Cash fell by thirty{hyphen}five.", _cash_pack("-35", "875"))
++    assert any("figure 35" in i for i in found), found
