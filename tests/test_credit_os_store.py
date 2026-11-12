@@ -1574,3 +1574,79 @@ def test_cases_beyond_the_cell_budget_end_in_the_limit_problem():
     files = cases("REFERENCE", "UPSIDE", "DOWNSIDE_DRIVERS", "DOWNSIDE", years=20)
     grid, problem = store.read_cashflow(files, None, budget=1000)
     assert grid is None and problem[0] == "limit"
+
+
+def test_the_cells_charged_to_the_page_budget_are_both_grids_cells():
+    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE", years=3)
+    grid = store.read_cashflow(files, None)[0]
+    assert grid["other"] is not None
+    main = len(grid["rows"]) * len(grid["columns"])
+    other = len(grid["other"]["rows"]) * len(grid["other"]["columns"])
+    assert other > 0
+    assert store.grid_cells(grid) == main + other
+
+
+def test_a_budget_one_short_of_two_models_with_other_grids_refuses_the_second():
+    files = cases("REFERENCE", "UPSIDE", "DOWNSIDE", years=3)
+    first = store.read_cashflow(files, None)[0]
+    cells = len(first["rows"]) * (len(first["columns"]) + len(first["other"]["columns"]))
+    budget = 2 * cells - 1
+    built, _ = store.read_cashflow(files, None, budget)
+    assert built is not None
+    second, problem = store.read_cashflow(files, None, budget - store.grid_cells(built))
+    assert second is None and problem[0] == "limit"
+    exact, _ = store.read_cashflow(files, None, budget + 1 - store.grid_cells(built))
+    assert exact is not None
+
+
+def downside_of(outputs):
+    exact = {"outputs": outputs, "scope_limits": []}
+    files = {
+        **FILES,
+        "forecast_exact.json": json.dumps(exact).encode(),
+        "calculation.json": WITHOUT_HISTORY,
+    }
+    return store.read_cashflow(files, None)[0]
+
+
+def three_years(revenue):
+    return {"years": [forecast_year(2025 + n, revenue, "300") for n in range(3)]}
+
+
+def test_an_empty_shock_leaves_the_cp2g_downside_as_the_downside_case():
+    grid = downside_of(
+        {
+            "REFERENCE": three_years("1000"),
+            "DOWNSIDE_DRIVERS": three_years("900"),
+            "DOWNSIDE": {"years": []},
+        }
+    )
+    assert [c["label"] for c in grid["columns"] if c["group"] == "Downside case"] == [
+        "FY2025E",
+        "FY2026E",
+        "FY2027E",
+    ]
+    assert grid["other"] is None
+    assert grid["notes"][-1] == store.DOWNSIDE_NOTES["DOWNSIDE_DRIVERS"]
+
+
+def test_every_downside_empty_gives_the_placeholder_and_its_note():
+    grid = downside_of(
+        {
+            "REFERENCE": three_years("1000"),
+            "DOWNSIDE_DRIVERS": {"years": []},
+            "DOWNSIDE": {"years": []},
+        }
+    )
+    assert (grid["columns"][-1]["group"], grid["columns"][-1]["label"]) == (
+        "Downside case",
+        "Downside",
+    )
+    assert all(r["cells"][-1]["reason"] == store.NO_DOWNSIDE for r in grid["rows"])
+    assert grid["other"] is None
+    assert grid["notes"][-1] == store.DOWNSIDE_NOTES[None]
+
+
+def test_an_empty_case_opens_no_group_in_the_other_grid():
+    grid = downside_of({"REFERENCE": three_years("1000"), "UPSIDE": {"years": []}})
+    assert grid["other"] is None

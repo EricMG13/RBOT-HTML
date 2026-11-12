@@ -1896,16 +1896,30 @@ NO_DOWNSIDE = "no downside case was computed in this run"
 def main_cases(cases: Forecast, keys: list[str]) -> tuple[Forecast, Forecast, str]:
     """(main, other, note): the main grid's Base case and one Downside case, the other cases.
 
+    A case with no years is not computed: it is never the Downside and opens no group.
     The Downside case is the CP-2A shock (DOWNSIDE) when computed, else CP-2G's own downside
     drivers; it is shown as "Downside case". `keys` are the cases' keys in step with `cases`.
     """
-    named = dict(zip(keys, cases, strict=True))
+    named = {key: case for key, case in zip(keys, cases, strict=True) if case[1]}  # computed only
     chosen = next((key for key in ("DOWNSIDE", "DOWNSIDE_DRIVERS") if key in named), None)
     main: Forecast = [named["REFERENCE"]] if "REFERENCE" in named else []
     if chosen is not None:
         main.append((DOWNSIDE_CASE, named[chosen][1]))
     other = [case for key, case in named.items() if key not in ("REFERENCE", chosen)]
     return main, other, DOWNSIDE_NOTES[chosen]
+
+
+def cell_count(rows: int, columns: int) -> int:
+    """The cells of a grid of `rows` x `columns`: the one count the budget is charged by."""
+    return rows * columns
+
+
+def grid_cells(grid: dict[str, Any]) -> int:
+    """The cells a model's Forecast grid holds, main and other cases together."""
+    held = cell_count(len(grid["rows"]), len(grid["columns"]))
+    if grid["other"] is not None:
+        held += cell_count(len(grid["other"]["rows"]), len(grid["other"]["columns"]))
+    return held
 
 
 def fiscal_inputs(record: Any) -> Fiscal:
@@ -2702,7 +2716,7 @@ def cashflow_of(
         columns.append(no_downside_column())
     main_count = len(columns)
     forecast_columns(columns, other, fiscal_index)  # priors read the main grid's history
-    if len(layout) * len(columns) > budget:
+    if cell_count(len(layout), len(columns)) > budget:
         raise CashflowBudget(
             "the cash flow model is not shown; the workspace's cash flow models exceed "
             f"{CASHFLOW_CELL_BUDGET:,} cells"
@@ -3113,7 +3127,7 @@ def catalogue_models(
             continue
         grid = model["cashflow"]
         if grid is not None:
-            cells += len(grid["rows"]) * len(grid["columns"])
+            cells += grid_cells(grid)
         built[position] = model
     return [built[position] for position in sorted(built)], issues
 
