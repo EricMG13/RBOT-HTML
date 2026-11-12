@@ -106,7 +106,11 @@ PRESET_ANSWER_KEY = {
         "CP-0 CP-1 CP-1A CP-1C CP-DR CP-2 CP-2A CP-2E CP-2G CP-2H CP-4 CP-4C CP-5"
     ),
     "portfolio_decision": "CP-0 CP-1 CP-MODEL CP-DR CP-2 CP-2E CP-3 CP-5 CP-6",
+    # Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page; it gets
+    # no CP-DR, CP-2E, CP-MODEL or CP-2G.
+    "short_snapshot": "CP-0 CP-1 CP-L10",
 }
+SHORT_SNAPSHOT = ("CP-0", "CP-1", "CP-L10")
 
 
 def context_file(tmp_path: Path, pathway: str = "covenant_refinancing") -> Path:
@@ -747,7 +751,7 @@ def test_explicit_modules_narrow_the_run_and_keep_dependencies(tmp_path):
     assert "liquidity-runway" in prepared.omitted
 
 
-@pytest.mark.parametrize("module", ["CP-MEMO", "CP-OS", "CP-L10", "NOPE"])
+@pytest.mark.parametrize("module", ["CP-MEMO", "CP-OS", "NOPE"])
 def test_modules_without_a_launchable_method_are_refused(tmp_path, capsys, module):
     assert main([*launch(tmp_path), "--modules", module]) == 2
     assert module in capsys.readouterr().err
@@ -970,6 +974,120 @@ def prepare_routes(
             modules=modules,
         ).plan.layout.routes
     )
+
+
+KEY_FIGURES = (
+    "| Measure | Value | Period | Source |\n| --- | --- | --- | --- |\n"
+    "| Interest cover | 3.1x | FY2024 | Canonical data foundation (CP-1) |\n"
+    "| Refinancing due | USD 1,250 million | FY2024 | Canonical data foundation (CP-1) |"
+)
+
+
+def short_snapshot_answer(context: dict, routes: list) -> str:
+    """CP-L10's answer in the new format, hand-written: the four reader passages, a Key figures
+    table whose Source column names CP-1, and no calculation. CP-0 and CP-1 answer as usual."""
+    if context["module_id"] != "CP-L10":
+        return answer(context, routes)
+    lines = ["# CP-L10", "", "## Request", f"{ISSUER} as of {AS_OF}.", "", "## Sources", ""]
+    lines += [f"- {n} {h}" for n, h in context["sources"].items()]
+    lines += [f"- {n} {h['sha256']}" for n, h in context["handoffs"].items()]
+    lines += [
+        *("", "## Findings", "", "### Bottom line", ""),
+        (
+            "Creditors are covered today but only just: cover is thin at 3.1x, so the near-term "
+            "refinancing decides the view."
+        ),
+        "Basis: annual.txt, page 2",
+        *("", "### Key findings", ""),
+        "Cover is thin at 3.1x, which leaves little room for a weaker year.",
+        "Basis: annual.txt, page 2",
+        *("", "### Contrary evidence and what would change the view", ""),
+        "Nothing supplied contradicts the view; a USD 1,250 million refinancing would.",
+        *("", "### Limitations", ""),
+        "- Only the financial statements were read, so the business view is not tested here.",
+        *("", "### Key figures", "", KEY_FIGURES),
+        *("", "## Calculations", "", "None.", "", "## Gaps", "", "None.", "", "## Next module"),
+        *("", "None.", ""),
+    ]
+    return "\n".join(lines)
+
+
+def test_short_snapshot_plans_exactly_cp0_cp1_and_cp_l10_in_order(tmp_path):
+    """Owner, 2026-11-11: its own pathway of CP-0, CP-1 and one CP-L10 page; no CP-DR, CP-2E,
+    CP-MODEL or CP-2G (the others' exception). The expected order is written by hand."""
+    prepared, _ = all_instructions(tmp_path, "short_snapshot")
+    assert tuple(prepared.plan.instructions) == SHORT_SNAPSHOT
+    assert prepared.plan.run.requested_modules == ("CP-0", "CP-1", "CP-L10")
+    assert prepared.ordered == SHORT_SNAPSHOT
+    assert {r.module_id for r in prepared.plan.layout.routes} == {"CP-L10"}
+    assert prepared.layout.title.endswith("Short Credit Snapshot")
+
+
+def test_the_other_presets_do_not_gain_cp_l10():
+    from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+
+    assert all("CP-L10" not in m for p, m in PRESETS.items() if p != "short_snapshot")
+
+
+def test_cp_l10_is_a_prose_module_sent_the_reader_passages_and_its_own_method(tmp_path):
+    _, texts = all_instructions(tmp_path, "short_snapshot")
+    head, _, method = texts["CP-L10"].partition(cpos_launch.METHOD_MARK)
+    method = " ".join(method.split())
+    assert "### Key findings" in head and "### Contrary evidence" in head
+    assert "### Key figures" in head
+    assert "short version of the credit snapshot" in method
+    assert "copied exactly from the CP-1 handoff" in method
+    assert "financial change screen" not in method.lower()
+
+
+def test_a_short_snapshot_runs_end_to_end_to_a_verified_delivery(tmp_path, provider, capsys):
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+        ).plan.layout.routes
+    )
+    provider.answer = lambda context: short_snapshot_answer(context, routes)
+    assert main(argv) == 0
+    out = tmp_path / "out"
+    assert tuple(c[0] for c in provider.calls) == SHORT_SNAPSHOT
+    receipt = next((out / "deliveries").glob("*/delivery.json"))
+    assert verify_delivery(next(out.glob("delivery-*.json")), receipt.parent) == receipt
+    assert "Short Credit Snapshot" in json.loads(receipt.read_text())["scope"]
+
+
+def short_snapshot_issues(tmp_path, change):
+    prepared, task, context = good_task(tmp_path, "CP-L10", "short_snapshot")
+    raw = change(short_snapshot_answer(context, list(prepared.plan.layout.routes)))
+    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
+
+
+def test_the_checker_accepts_a_good_short_snapshot(tmp_path):
+    assert short_snapshot_issues(tmp_path, lambda raw: raw) == ()
+
+
+@pytest.mark.parametrize(
+    ("change", "complaint"),
+    [
+        # Check 8 (figures in a reader passage are held in a table): 4.5x is in no table.
+        (lambda raw: raw.replace("cover is thin at 3.1x, so", "cover is thin at 4.5x, so"), "4.5"),
+        # Check 1: the Bottom line must lead.
+        (lambda raw: raw.replace("### Bottom line", "### Summary"), "Prose check 1"),
+        # Check 2: a module code in a sentence.
+        (lambda raw: raw.replace("little room", "little room per CP-1"), "Prose check 2"),
+        # The report selector: the Key figures table is required.
+        (lambda raw: raw.replace("### Key figures", "### Figures"), "Key figures"),
+    ],
+)
+def test_the_checker_refuses_a_short_snapshot_that_breaks_the_reader_checks(
+    tmp_path, change, complaint
+):
+    issues = short_snapshot_issues(tmp_path, change)
+    assert any(complaint in i for i in issues), issues
 
 
 @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))
@@ -3058,6 +3176,44 @@ def test_the_forecast_tab_shows_the_model_only_for_the_run_that_published_one(
 
 
 UNFILLED = re.compile(r"\b(undefined|NaN|null|\[object Object\])\b")
+
+
+@pytest.mark.browser
+def test_a_short_snapshot_run_is_listed_with_its_label_and_cp_l10_leads_the_overview(
+    tmp_path, provider, capsys
+):
+    """Owner, 2026-11-11: CP-2 and CP-6 do not run in a short snapshot, so CP-L10 leads (H5)."""
+    from test_library_page_browser import visit
+
+    argv = launch(tmp_path, "--live", "--ruling", str(RULING), pathway="short_snapshot")
+    argv[argv.index("--out") + 1] = str(tmp_path / "runs" / RUN_ID)
+    routes = list(
+        prepare(
+            tmp_path / "context.json",
+            tmp_path / "issuer",
+            tmp_path / "preview",
+            config="sol-medium",
+            cap="50",
+        ).plan.layout.routes
+    )
+    provider.answer = lambda context: short_snapshot_answer(context, routes)
+    assert main(argv) == 0
+    assert "Library not updated" not in capsys.readouterr().err
+    text = (tmp_path / "library/data.js").read_text(encoding="utf-8")
+    data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
+    assert data["workspace"]["runs"][RUN_ID]["pathway"] == "short_snapshot"
+    index = tmp_path / "library/index.html"
+    dom, console = visit(index, f"#W-Overview?c={RUN_ID}")
+    assert console == []
+    shown = re.sub(r"(?s)<(script|style)\b.*?</\1>|<[^>]+>|\s+", " ", dom)
+    assert "Short credit snapshot" in shown  # the run label names the pathway as words
+    lead = re.search(r'(?s)<section class="overview-part" id="overview-lead">.*?</section>', dom)
+    assert lead is not None
+    lead_text = re.sub(r"<[^>]+>|\s+", " ", lead[0])
+    assert "Creditors are covered today but only just" in lead_text
+    assert "Cover is thin at 3.1x" in lead_text
+    assert 'href="#CP-L10/' in lead[0]  # written by CP-L10
+    assert UNFILLED.search(shown) is None, UNFILLED.findall(shown)
 
 
 @pytest.mark.browser

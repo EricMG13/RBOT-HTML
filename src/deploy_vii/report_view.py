@@ -616,11 +616,17 @@ _PRESETS: tuple[tuple[PathwayId, str, str, tuple[str, ...]], ...] = (
             "what-changed",
         ),
     ),
+    (
+        "short_snapshot",
+        "Short Credit Snapshot",
+        "What is the credit view on one page, and what would change it?",
+        ("key-figures",),
+    ),
 )
 
 
 def pathways() -> tuple[Pathway, ...]:
-    """The six Pathway presets in Front Page order (FP 01 to FP 06)."""
+    """The Pathway presets in Front Page order (FP 01 to FP 06, then the Short Credit Snapshot)."""
     return tuple(
         Pathway(
             id=pathway_id,
@@ -1390,6 +1396,11 @@ def _strip_note(block_id: str) -> str:
     )
 
 
+# The Short Credit Snapshot's one block (owner, 2026-11-11): CP-L10's Key figures table. Its prose
+# is the Overview lead (H5), not a block.
+_SHORT_SNAPSHOT: Mapping[str, _Spec] = MappingProxyType(
+    {"key-figures": _Spec("Key figures", "CP-L10", "dense", ("CP-L10",))}
+)
 _COMPOSITIONS: tuple[Mapping[str, _Spec], ...] = (
     _CREDIT_SNAPSHOT,
     _EARNINGS_UPDATE,
@@ -1397,6 +1408,7 @@ _COMPOSITIONS: tuple[Mapping[str, _Spec], ...] = (
     _RELATIVE_VALUE,
     _DISTRESSED,
     _EARNINGS_QUALITY,
+    _SHORT_SNAPSHOT,
 )
 
 

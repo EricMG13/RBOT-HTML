@@ -1171,7 +1171,8 @@ function runGroups(context) {
 const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
 // ---- The Overview (ruling H5): selection and ordering of the handoffs' own passages, text unchanged. Nothing is written, counted or
 // judged here; a passage the handoff lacks is named as missing, never replaced by other text (H7).
-const LEAD_MODULES=['CP-6','CP-2'];
+// CP-L10 leads only a short snapshot (amendment 2026-11-11 to H5): CP-2 and CP-6 do not run in it.
+const LEAD_MODULES=['CP-6','CP-2','CP-L10'];
 const NO_LEAD='No credit view module completed in this run.';
 const EARLIER_NO_LEAD='This run is in the earlier format: its handoffs carry no reader passages for Overview to select.';
 // The one place a handoff paragraph is drawn (Overview and, later, the module page), so figures can become clickable in one function.

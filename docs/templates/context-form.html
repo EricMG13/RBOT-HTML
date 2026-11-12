@@ -583,7 +583,8 @@ const PATHWAYS = {
   relative_value: ['CP-0','CP-1','CP-MODEL','CP-1C','CP-DR','CP-2','CP-2D','CP-2E','CP-3','CP-3C','CP-3D','CP-5'],
   covenant_refinancing: ['CP-0','CP-1','CP-MODEL','CP-1A','CP-DR','CP-2','CP-2A','CP-2D','CP-2E','CP-2G','CP-4','CP-3C','CP-5'],
   distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-1C','CP-DR','CP-2','CP-2A','CP-2E','CP-2G','CP-2H','CP-4','CP-4C','CP-5'],
-  portfolio_decision: ['CP-0','CP-1','CP-MODEL','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6']
+  portfolio_decision: ['CP-0','CP-1','CP-MODEL','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6'],
+  short_snapshot: ['CP-0','CP-1','CP-L10']
 };
 // What CP-OS runs for an inbox drop, in order: deploy_vii.registry.plan over cpos_launch.pathway_modules
 // (CP-MODEL and CP-8 have their own routes; required producers such as CP-1A are added). Owner,
@@ -595,11 +596,12 @@ const RUN_ORDER = {
   relative_value: ['CP-0','CP-1','CP-1A','CP-3D','CP-DR','CP-1C','CP-2','CP-2E','CP-2D','CP-3C','CP-3','CP-5'],
   covenant_refinancing: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-2','CP-2A','CP-2E','CP-2D','CP-2G','CP-3C','CP-5'],
   distressed_restructuring: ['CP-0','CP-1','CP-1A','CP-DR','CP-4','CP-1C','CP-2','CP-2A','CP-2E','CP-2G','CP-2H','CP-4C','CP-5'],
-  portfolio_decision: ['CP-0','CP-1','CP-1A','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6']
+  portfolio_decision: ['CP-0','CP-1','CP-1A','CP-DR','CP-2','CP-2E','CP-3','CP-5','CP-6'],
+  short_snapshot: ['CP-0','CP-1','CP-L10']
 };
 // Consumer -> producer -> b (a refusal blocks it) | r (it restricts): deploy_vii.registry.edge_rule, as
 // run_expectations.edges_for returns it for the orders above. Only producers in the run count.
-const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"}};
+const EDGES = {"CP-1":{"CP-0":"b"},"CP-2E":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r"},"CP-2A":{"CP-0":"b","CP-1":"b","CP-2":"r"},"CP-2":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-DR":"r","CP-1C":"r"},"CP-DR":{"CP-0":"b","CP-1":"b"},"CP-4":{"CP-0":"b","CP-1":"r","CP-1A":"r"},"CP-3":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2G":"r","CP-4":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r"},"CP-2G":{"CP-0":"b","CP-1":"b","CP-2A":"b","CP-2D":"r"},"CP-6":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2":"b","CP-2A":"r","CP-2E":"r","CP-3":"b","CP-4":"r","CP-5":"b"},"CP-1A":{"CP-0":"b"},"CP-5":{"CP-0":"b","CP-1":"r","CP-1A":"r","CP-2":"r","CP-2A":"r","CP-2E":"r","CP-2G":"r","CP-3":"r","CP-4":"r","CP-DR":"r","CP-1B":"r","CP-1D":"r","CP-1C":"r","CP-2D":"r","CP-3C":"r","CP-3D":"r","CP-2H":"r","CP-4C":"r"},"CP-1D":{"CP-0":"b","CP-1":"b","CP-1B":"r"},"CP-1B":{"CP-0":"b","CP-1":"b"},"CP-3C":{"CP-0":"b","CP-1":"b","CP-1A":"r","CP-2D":"b","CP-3D":"r","CP-2A":"r","CP-4":"r"},"CP-2D":{"CP-0":"b","CP-1":"b","CP-2":"b"},"CP-1C":{"CP-0":"b","CP-1":"b","CP-DR":"r"},"CP-3D":{"CP-0":"b"},"CP-2H":{"CP-0":"b","CP-1":"b","CP-2G":"b"},"CP-4C":{"CP-0":"b","CP-1":"b","CP-1C":"r","CP-2A":"b","CP-2G":"b","CP-4":"b"},"CP-L10":{"CP-0":"b","CP-1":"b"}};
 // Reader names: the module groups of apps/issuer-library/credit_os/web/screen.js.
 const MODULES = {
   'CP-0': ['Source readiness', 'Classifies every file and checks your declarations against them.'],
@@ -608,6 +610,7 @@ const MODULES = {
   'CP-1A': ['Business & governance', 'Business model, transactions and governance.'],
   'CP-1B': ['Earnings changes', 'Compares the current period with the prior one.'],
   'CP-1C': ['Peer benchmark', 'Benchmarks the issuer against peers and forms a valuation multiple.'],
+  'CP-L10': ['Short credit snapshot', 'One page: the credit view, its key figures, the contrary evidence and what is not known.'],
   'CP-1D': ['Earnings quality', 'Tests EBITDA add-backs against the management bridge.'],
   'CP-2': ['Fundamental credit', 'The credit view: leverage, coverage and cash flow.'],
   'CP-2A': ['Downside', 'The stress path and the distress gate.'],
@@ -632,7 +635,8 @@ const PATHS = {
   relative_value: {label:'Relative Value', q:'Is this instrument cheap or rich?', needs:'Observed quotes.'},
   covenant_refinancing: {label:'Covenant & Refinancing', q:'What do the documents allow, and can it refinance?', needs:'The executed credit agreement or indenture.'},
   distressed_restructuring: {label:'Distressed & Restructuring', q:'How bad can it get, and who recovers what?', needs:'Executed documents, ratings and a fiscal-year base period.'},
-  portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'}
+  portfolio_decision: {label:'Portfolio Decision', q:'Does it fit the fund?', needs:'The portfolio workbook and quotes.'},
+  short_snapshot: {label:'Short Credit Snapshot', q:'The credit view on one page', needs:'Filings with financial statements. No legal documents or quotes.'}
 };
 const RUN_LABEL = {primary:'New issue', secondary:'Trading', research:'No market view', earnings:'Earnings update'};
 // Fonts: the service's library route when the page is served; this repository's when it is opened
@@ -2394,7 +2398,7 @@ $('new-submission').addEventListener('click', () => {
 
 /* ======================================================================= Visibility */
 let rtTouched = false, basisTouched = false, idTouched = false, cutTouched = false;
-const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research'};
+const PATH_DEFAULT_RUN = {credit_snapshot:'research', earnings_update:'earnings', relative_value:'secondary', covenant_refinancing:'research', distressed_restructuring:'research', portfolio_decision:'research', short_snapshot:'research'};
 function slug(s) {
   let x = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (x.length > MAX_ISSUER_ID) { x = x.slice(0, MAX_ISSUER_ID); const cut = x.lastIndexOf('-'); if (cut > 10) x = x.slice(0, cut); }

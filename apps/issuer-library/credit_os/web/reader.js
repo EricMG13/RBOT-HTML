@@ -401,7 +401,9 @@ function historyRows(runs) {
 }
 
 // The pathway id as words: "credit_snapshot" is "Credit snapshot"; no id is null (the caller says "Not recorded").
+const PATHWAY_TITLES = {short_snapshot: 'Short credit snapshot'};
 function pathwayTitle(id) {
+  if (Object.hasOwn(PATHWAY_TITLES, String(id))) return PATHWAY_TITLES[id];
   const words = String(id || '').split(/[_\s-]+/).filter(word => word !== '').map(word => word.toLowerCase());
   return words.length ? words.join(' ').replace(/^./, first => first.toUpperCase()) : null;
 }

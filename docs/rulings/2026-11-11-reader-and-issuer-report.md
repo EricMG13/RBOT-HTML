@@ -185,6 +185,12 @@ In this order, selection and ordering only, text unchanged:
 5. **Nearest dates**: the next five dated items on or after the run's as-of date, from the
    timelines of the modules that own them.
 
+Amendment 2026-11-12 (owner approved 2026-11-11, "3. approved"): on a Short Credit Snapshot run
+(pathway `short_snapshot`: CP-0, CP-1 and CP-L10) CP-L10 is the lead, after CP-6 and CP-2, which do not
+run in that pathway: its `### Bottom line` and `### Key findings` lead the Overview and are not repeated
+in the bottom lines. Nothing else in H5 changes; CP-L10's `### Key figures` table is a report block, not
+Overview content.
+
 ### H6. Mechanical prose checks (decision 11)
 
 The checker runs these on the reader passages of every handoff. Excluded from "sentence text":

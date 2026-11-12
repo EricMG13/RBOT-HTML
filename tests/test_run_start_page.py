@@ -702,6 +702,30 @@ def test_the_review_shows_the_services_forecast_per_module(page):
     assert "confirmed when the summary is made" not in seen["ready"]
 
 
+def test_the_page_offers_the_short_snapshot_and_the_service_reviews_its_three_modules(page):
+    """Owner, 2026-11-11 ("3. approved"): its own pathway of CP-0, CP-1 and one CP-L10 page."""
+    seen = page.run(f"""
+    const cards = [...document.querySelectorAll('#pathcards input[data-k="pathway"]')].map(e => ({{
+      value: e.value, text: e.closest('label').textContent}}));
+    await issuer('short_snapshot', [file('annual.txt', {json.dumps(REPORT)})]);
+    const S = await review();
+    return {{cards, S, shown: [...document.querySelectorAll('#rv-ready [data-module]')]
+      .map(r => r.dataset.module).filter(id => id !== 'run'),
+      facts: document.getElementById('rv-facts').textContent}};
+    """)
+    card = next(c for c in seen["cards"] if c["value"] == "short_snapshot")
+    assert "Short Credit Snapshot" in card["text"]
+    names = "Source readiness, Financial foundation, Short credit snapshot"
+    assert f"3 modules: {names}" in card["text"]
+    assert len(seen["cards"]) == 7
+    summary = seen["S"]
+    assert summary["error"] == "" and summary["digest"]
+    assert summary["modules"] == ["CP-0", "CP-1", "CP-L10"]
+    assert seen["shown"] == ["CP-0", "CP-1", "CP-L10"]
+    assert "Short Credit Snapshot" in seen["facts"]
+    assert "CP-DR" not in summary["modules"] and "CP-2E" not in summary["modules"]
+
+
 def test_the_services_outcome_replaces_the_confirmed_when_the_summary_is_made_check(page):
     seen = page.run(f"""
     await issuer('earnings_update', [file('annual.txt', {json.dumps(REPORT)}),

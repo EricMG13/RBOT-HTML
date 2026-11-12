@@ -40,6 +40,7 @@ PathwayId = Literal[
     "covenant_refinancing",
     "distressed_restructuring",
     "portfolio_decision",
+    "short_snapshot",
 ]
 # Requested module set per Pathway (decision 0009). Required producers are added when a view
 # or plan is built (registry.dependencies), so these list the modules the Front Page asks for.
@@ -66,6 +67,8 @@ _PRESETS: dict[PathwayId, tuple[str, ...]] = {
     "portfolio_decision": (
         *("CP-0", "CP-1", "CP-MODEL", "CP-DR", "CP-2", "CP-2E", "CP-3", "CP-5", "CP-6"),
     ),
+    # Owner, 2026-11-11: its own pathway, one page; no CP-DR, CP-2E, CP-MODEL or CP-2G.
+    "short_snapshot": ("CP-0", "CP-1", "CP-L10"),
 }
 PATHWAY_MODULES: Mapping[PathwayId, tuple[str, ...]] = MappingProxyType(_PRESETS)
 

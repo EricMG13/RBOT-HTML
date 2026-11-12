@@ -189,3 +189,24 @@ reader-figure check apply as to every prose module. The module's display name, o
 library, is "Changes since the last run".
 
 Not decided here: charts and visuals for the Changes section (T5).
+
+## Amendment 2026-11-12: M6 built (Short Credit Snapshot)
+
+Owner approved 2026-11-11 ("3. approved"). Pathway id `short_snapshot`, label "Short Credit Snapshot",
+modules CP-0, CP-1 and CP-L10 and nothing else (no CP-DR, CP-2E, CP-MODEL, CP-2G or CP-2). CP-8 is not
+excluded: it runs last when an earlier run of the same issuer and `short_snapshot` pathway exists, as for
+any pathway, and an older run without a recorded selection counts as a base only if it delivered CP-L10.
+It is selectable on the run start page and context form and is one of the library's pathways; the six
+other presets are unchanged.
+
+**CP-L10 is rewritten** (`src/deploy_vii/methods/cpl10.md`), replacing the two-quarter change screen
+(TL10.1 to TL10.5), whose Python owner is not run by CP-OS. It is a prose module: the four reader
+passages, then `### Key figures`, exactly one table `Measure | Value | Period | Source` whose every figure
+is copied exactly from CP-1's handoff (CP-L10 calculates nothing new; a figure CP-1 does not state is
+`Not supplied: <reason>`, never zero), then the usual `## Sources`. It is one page: about 350 words of prose
+and six to ten rows. CP-L10 owns one report block, `key-figures`. The launcher applies the same checks as
+for any prose module (the nine prose checks and the fidelity check: a figure in a reader passage must be in
+a table of the handoff with the same sign, unit and scale). No check ties a Key figures cell to CP-1's
+handoff: that rests on the method, the reader's check of a real run and the fidelity check's own scope.
+CP-L10 leads the Overview of a short snapshot (amendment to H5 in
+`2026-11-11-reader-and-issuer-report.md`). The library names the pathway "Short credit snapshot".

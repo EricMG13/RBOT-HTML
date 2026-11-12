@@ -143,6 +143,8 @@ _SELECTED: dict[str, tuple[str, ...]] = {
         _SKILLS + "cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md",
     ),
     "CP-1D": (_SKILLS + "cp-1d-earnings-quality/SKILL.md",),
+    # Owner, 2026-11-11: the Short Credit Snapshot's one page, read from CP-1's handoff alone.
+    "CP-L10": (_VII + "cpl10.md",),
     "CP-2": (_VII + "cp2.md",),
     "CP-2A": (
         _SKILLS + "cp-2a-downside-pathway/SKILL.md",

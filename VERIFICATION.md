@@ -4,6 +4,10 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Short Credit Snapshot pathway (branch `claude/short-snapshot`, stacked on `claude/changes-section`, decision M6)
+Scope: `short_snapshot` = CP-0, CP-1, CP-L10 (hand-written preset key); CP-L10 method rewritten as a one-page prose module with a Key figures table; CP-L10 leads the Overview; offline, canned provider, no paid call. Tests written by hand: the preset, the order, the other presets without CP-L10, an end-to-end canned run to a verified delivery, four refused variants (a passage figure in no table, no Bottom line, a module code in a sentence, no Key figures table), node tests (lead, label), browser tests (run start page card and the service's three-module review; the library lists the run as "Short credit snapshot" with CP-L10 as lead). Gates, exit 0 each: CI fast list 2,274 passed; node 271 passed; browser gate 148 passed; quality gate 0 findings.
+Not verified: that a Key figures cell equals CP-1's handoff (no check ties them; the method and a reader do); a real CP-L10 answer from a model; a reader check against the VMO2 reference; an earlier-format or CP-8-compared short snapshot in the library; Chrome only. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 library-links entry.
+
 ## 2026-11-12 — Changes tab in the issuer library (branch `claude/changes-section`, stacked on PR #55, decision M8)
 Scope: `changes.js` renders the pack and CP-8's handoff; the store carries `run.changes`; offline. CI fast list 2,265 passed; node 268; browser gate 147 passed; quality gate 0; answer keys are literals from the pack and handoff.
 Not verified: a real CP-8 run in the tab; a CP-8 refusal's pack (the delivery omits it); dark mode (none); a reader check against the VMO2 reference.
@@ -972,28 +976,3 @@ proves its dated case and route only; outputs are unreviewed candidates.
 - Not verified: the Forecast tab with a published model (no retained or new run has one); a
   refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
   Windows; analytical accuracy of either run.
-
-## 2026-11-10 — Library links to the report and to retained sources (branch `claude/library-open-report-link`)
-
-Cause: the page matched a catalogue deliverable to the store's report by a server address ending
-`&embedded=1` and linked only root-absolute paths; the static build writes `reports/…` and `../…`
-with the query removed. So "Open report" (row, selected run, deliverables list) was plain text and
-"Open retained source" never appeared. Present since the web assets were copied (`5249e4e`).
-
-- Fix in `views.js`: match by the one address the build writes; `libraryPath` accepts only those two
-  relative forms and refuses a scheme, a root, a backslash, a query, an empty or dot segment and
-  percent-encoded dots or slashes.
-- Tests written first and seen failing: the browser test on a fixture library (row and selected-run
-  links to `#W-Reports/<delivery>?c=run-a`, source link to the retained `CP-1.md`) and a node test
-  of the path guard (4 accepted, 31 refused forms). 107 node tests; 107 pytest (library set,
-  browser included); quality gate exit 0.
-- Real library rebuilt from this branch over the four TDG runs, headless Chrome: each row's
-  deliverable opens its own report in the app; the two file links in the selected-run panel exist
-  on disk; no script error. The row link is regular weight so rows stay 41px at 1440 and 1280.
-- End-to-end walk on merged `main` before the fix (same build): library → run id → Overview → 20 of
-  20 module pages → chip → evidence inspector; Reports, Evidence, Calendar, Run activity render;
-  75 of 76 file links exist (`../activity.js` is written only by the inbox watcher).
-- Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
-  inbox-built library; a run with a published forecast model or without a report ("Open primary
-  handoff"); the Windows package; Safari and Firefox.
-
