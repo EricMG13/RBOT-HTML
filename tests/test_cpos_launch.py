@@ -2889,7 +2889,7 @@ MUST_NAME = (
         ({"amount": "1000", "reason": None, "row": "revenue"}, MUST_NAME),
         (
             {"amount": None, "reason": "unknown", "row": "revenue", "period": "FY2025"},
-            "CP-2G: base revenue states no amount, so it names no row or period",
+            "CP-2G: base revenue states no amount, so it names no row, period or column",
         ),
     ],
 )

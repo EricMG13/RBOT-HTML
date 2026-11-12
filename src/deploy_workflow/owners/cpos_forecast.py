@@ -276,7 +276,7 @@ def _layer1_problem(text: str, key: str, operand: Operand, amount: str | None) -
         return (
             None
             if operand.row is None and operand.period is None and operand.column is None
-            else (f"base {key} states no amount, so it names no row or period")
+            else (f"base {key} states no amount, so it names no row, period or column")
         )
     row, period = operand.row or "", operand.header
     if not _plain(row) or not _plain(period):
@@ -329,7 +329,9 @@ def _units_named(text: str) -> frozenset[str]:
     )
 
 
-def _unit_cells(text: str, label: str, period: str) -> list[list[tuple[str, str]]]:
+def _unit_cells(
+    text: str, label: str, period: str, kind: str = "period"
+) -> list[list[tuple[str, str]]]:
     """For each row labelled `label` under a column headed `period`, in any table of the
     handoff: the `(what, text)` of every cell that may state the row's unit: the row's other
     cells (never the amount cell), the named column's header and the table's first header cell."""
@@ -339,7 +341,7 @@ def _unit_cells(text: str, label: str, period: str) -> list[list[tuple[str, str]
         for column in (i for i, h in enumerate(header) if i > 0 and _plain(h) == _plain(period)):
             for row in (r for r in rows if len(r) > column and _plain(r[0]) == _plain(label)):
                 groups.append(
-                    [("period header", header[column]), ("first header cell", header[0])]
+                    [(f"{kind} header", header[column]), ("first header cell", header[0])]
                     + [
                         (_plain(header[i]) if i < len(header) else "unit", cell)
                         for i, cell in enumerate(row)
@@ -355,7 +357,8 @@ def _unit_problem(text: str, key: str, operand: Operand, scale: int) -> str | No
     them names the block's."""
     block, other = ("thousands", "millions") if scale == 1000 else ("millions", "thousands")
     issues = []
-    for group in _unit_cells(text, operand.row or "", operand.header):
+    kind = "column" if operand.column is not None else "period"
+    for group in _unit_cells(text, operand.row or "", operand.header, kind):
         named = [(what, cell, _units_named(cell)) for what, cell in group]
         if not any(block in units for *_, units in named):
             issues += [(what, cell) for what, cell, units in named if other in units]

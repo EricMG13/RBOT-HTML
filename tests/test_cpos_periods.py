@@ -1492,8 +1492,6 @@ def test_column_names_the_cash_and_undrawn_cells_of_a_period_row_table():  # (a)
         assert D(cell(record, "FY2024", key)["amount"]) == D(figure)
     base = json.loads(files["forecast_exact.json"])["base"]
     assert D(base["cash"]["amount"]) == D("100") and D(base["undrawn"]["amount"]) == D("50")
-    # after E1 the YTD and LTM stocks stay n.a.: they are E2's
-    assert cell(record, "YTD", "closing_cash")["amount"] is None
 
 
 def test_the_flows_of_the_fixture_are_the_hand_key():
@@ -1508,8 +1506,12 @@ def test_the_flows_of_the_fixture_are_the_hand_key():
 
 def test_column_with_period_is_refused():  # (b)
     both = {"amount": "100", "reason": None, "row": "FY2024", "column": "Cash", "period": "FY2024"}
-    with pytest.raises(ValueError, match="column"):
+    with pytest.raises(ValueError) as caught:
         model_files(E1_CP1.encode(), _e1_block(base=_e1_base(cash=both)).encode())
+    assert str(caught.value) == (
+        "CP-2G: forecast inputs: base.cash: Value error, "
+        "an operand names the `period` header or the `column` header, not both"
+    )
 
 
 MUST_NAME_E1 = (
@@ -1576,3 +1578,133 @@ def test_at_scale_1000_the_unit_guard_reads_the_named_cells_row():  # (g)
     _, scaled = _e1_record(fixed, _e1_block(1000))
     _, millions = _e1_record()
     assert scaled == millions
+
+
+# --- Task E2: an `LTM Qn YYYY` label is a balance date for stocks -------------------------------
+def _near(record, column, key, want):
+    return abs(Fraction(cell(record, column, key)["amount"]) - want) < Fraction(1, 10**12)
+
+
+def test_a_dated_ltm_label_gives_the_stocks_to_the_ytd_and_ltm_columns():  # hand key, after E2
+    _, record = _e1_record()
+    for column in ("YTD", "LTM"):
+        for key, figure in {
+            "closing_cash": "120",
+            "undrawn": "60",
+            "liquidity": "180",
+            "closing_debt": "590",
+            "net_debt": "470",
+        }.items():
+            assert D(cell(record, column, key)["amount"]) == D(figure), (column, key)
+    for key in ("closing_cash", "undrawn", "liquidity", "closing_debt", "net_debt"):
+        assert cell(record, "PYTD", key)["amount"] is None
+    assert _near(record, "LTM", "total_leverage", Fraction(590, 320))
+    assert _near(record, "LTM", "net_leverage", Fraction(470, 320))
+    assert cell(record, "YTD", "total_leverage") == {"amount": None, "reason": PART_YEAR}
+    assert D(cell(record, "FY2024", "closing_cash")["amount"]) == D(100)
+
+
+def test_an_ltm_label_dated_to_another_day_gives_no_stock_and_says_both_dates():  # RF3
+    cp1 = E1_CP1.replace(
+        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |", "| LTM Q2 2025 | 2024-06-01 | 2025-05-31 |"
+    )
+    _, record = _e1_record(cp1)
+    reason = "CP-1 dates LTM Q2 2025 to 2025-05-31, not the 2025-06-30 the year to date ends"
+    for column in ("YTD", "LTM"):
+        for key in ("closing_cash", "undrawn", "closing_debt"):
+            assert cell(record, column, key) == {"amount": None, "reason": reason}, (column, key)
+
+
+def test_an_ltm_label_the_period_table_does_not_date_gives_no_stock():
+    cp1 = E1_CP1.replace("| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |\n", "")
+    _, record = _e1_record(cp1)
+    reason = "CP-1's period table does not date LTM Q2 2025"
+    for column in ("YTD", "LTM"):
+        for key in ("closing_cash", "undrawn", "closing_debt"):
+            assert cell(record, column, key) == {"amount": None, "reason": reason}, (column, key)
+
+
+def test_a_flow_under_an_ltm_label_is_never_read():
+    cp1 = E1_CP1.replace("| 1040 |", "| 9999 |").replace("| 35 |", "| 9999 |")
+    _, record = _e1_record(cp1)
+    assert D(cell(record, "LTM", "revenue")["amount"]) == D(1040)
+    assert D(cell(record, "LTM", "interest")["amount"]) == D(35)
+
+
+def test_a_real_period_header_balance_stands_and_a_different_label_figure_makes_it_n_a():
+    agree = E1_CP1.replace(
+        "Not applicable (balance date) | Not applicable (balance date)", "590 | 580"
+    )
+    _, record = _e1_record(agree)
+    assert D(cell(record, "YTD", "closing_debt")["amount"]) == D(590)
+    assert D(cell(record, "LTM", "closing_debt")["amount"]) == D(590)
+    differ = E1_CP1.replace(
+        "Not applicable (balance date) | Not applicable (balance date)", "585 | 580"
+    )
+    _, record = _e1_record(differ)
+    reason = "CP-1 prints different figures for this line in H1 2025"
+    for column in ("YTD", "LTM"):
+        assert cell(record, column, "closing_debt") == {"amount": None, "reason": reason}
+
+
+def test_a_real_period_balance_stands_when_the_label_is_dated_elsewhere():
+    cp1 = E1_CP1.replace(
+        "Not applicable (balance date) | Not applicable (balance date)", "590 | 580"
+    ).replace(
+        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |", "| LTM Q2 2025 | 2024-06-01 | 2025-05-31 |"
+    )
+    _, record = _e1_record(cp1)
+    assert D(cell(record, "YTD", "closing_debt")["amount"]) == D(590)
+
+
+FISCAL_CP1 = """### Periods
+| Period | Start | End |
+| --- | --- | --- |
+| FY2024 | 2024-01-01 | 2024-12-31 |
+| LTM Q4 2024 | 2024-01-01 | {end} |
+
+| Line, USD million | FY2023 | FY2024 | LTM Q4 2024 |
+| --- | --- | --- | --- |
+| Total revenue | 900 | 1000 | 1000 |
+| Total debt | 550 | n.a. | 600 |
+"""
+
+
+def _fiscal_record(end):
+    tables = cpos_forecast._tables(FISCAL_CP1.format(end=end))
+    ops = replace(OPERANDS, revenue=cp2g.Val(D(1000), None), debt=cp2g.Val(D(550), None))
+    named = {"revenue": ("Total revenue", "FY2024"), "debt": ("Total debt", "FY2023")}
+    return history(tables, ops, named=named)
+
+
+def test_a_fiscal_year_anchor_reads_the_label_only_at_the_fiscal_years_end():
+    record = _fiscal_record("2024-12-31")
+    assert D(cell(record, "LTM", "closing_debt")["amount"]) == D(600)
+    assert cell(record, "YTD", "closing_debt")["amount"] is None
+    record = _fiscal_record("2025-01-31")
+    assert cell(record, "LTM", "closing_debt") == {
+        "amount": None,
+        "reason": "CP-1 dates LTM Q4 2024 to 2025-01-31, not the 2024-12-31 the fiscal year ends",
+    }
+
+
+def test_row_labels_of_a_table_read_by_column_are_listed_apart_from_column_headers():
+    _, record = _e1_record()
+    limits = record["limits"]
+    assert "CP-1 row labels not read as periods: LTM Q2 2025." in limits
+    assert not any("column headers" in x and "Cash" in x for x in limits)
+
+
+def test_a_column_form_unit_refusal_says_column_header_and_the_no_amount_refusal_names_column():
+    cp1 = _e1_cp1(1000, unit="n.a.", first="USD thousands").replace(
+        "| Period | Cash | Undrawn |", "| Period | Cash (US$m) | Undrawn |"
+    )
+    cash = {"amount": "100000", "reason": None, **_by_column("FY2024", "Cash (US$m)")}
+    with pytest.raises(ValueError, match="states its column header as `Cash \\(US\\$m\\)`"):
+        model_files(cp1.encode(), _e1_block(1000, base=_e1_base(1000, cash=cash)).encode())
+    operand = {"amount": None, "reason": "x", **_by_column("FY2024", "Cash")}
+    with pytest.raises(ValueError) as caught:
+        model_files(E1_CP1.encode(), _e1_block(base=_e1_base(cash=operand)).encode())
+    assert str(caught.value) == (
+        "CP-2G: base cash states no amount, so it names no row, period or column"
+    )
