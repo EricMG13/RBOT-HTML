@@ -4,6 +4,23 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Web search from the run page; leaked citation markers (branch `claude/web-search-run-page`, decisions M1, M4)
+
+(a) Paid test, this dated case only (TDG FY2024, ruling `2026-11-11-cpdr-web-search-live-test.md`, run `tdg-cpdr-web-001`): CP-0, CP-1, CP-DR and CP-1C accepted, charged USD 3.39131650. CP-DR located HEICO and
+Howmet figures and CP-1C read them. Defect: the delivered CP-DR handoff held 54 provider citation markers
+(U+E200 `cite` U+E202 `turn..view..` U+E201) in reader prose, which the eight prose checks did not catch.
+Fix: markers are removed from a searching module's answer before the check (count in `<n>.markers.json` and a
+`citation_markers_removed` event; provider response unchanged), plus prose check 9 for any other shape
+(reader-ruling amendment). On that handoff the removal leaves 0 markers and adds no double space or
+space before a comma or full stop. Not verified: `store:false` behaviour was not separately inspected, peer
+figures were not checked against the cited pages, analytical accuracy.
+(b) This change, offline (no provider call): the standing run-start ruling lists `web-search`; `prepare`'s
+cap check holds the CP-DR search fee (USD 0.16) as the live loop does; the summary passes it; the page's
+approval summary says what goes to OpenAI; READMEs updated. Tests: `test_citation_markers.py`, the
+`prepare` and ruling tests in `test_cpos_launch.py`, `test_context_form.py`, `test_run_start_submissions.py`.
+`test_inbox_scheduler.py::test_a_submission_is_run_by_the_real_launcher_and_listed` fails identically on the base
+`claude/forecast-layer1` (canned answers; stops at the checker) and was left alone.
+
 ## 2026-11-11 — Forecast from layer 1 (branch `claude/forecast-layer1`, decision M3)
 
 CP-MODEL (preset or `--modules`) means "publish the forecast"; it makes no model call. Without CP-2G,

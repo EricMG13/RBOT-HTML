@@ -56,8 +56,13 @@ from deploy_workflow.model.adapter import (
     check_ruling,
 )
 from deploy_workflow.model.budget import Budget
-from deploy_workflow.model.handoff import Check, _pages
-from deploy_workflow.model.pricing import price_of, request_reservation_usd
+from deploy_workflow.model.handoff import (
+    WEB_SEARCH_CALLS_PER_TURN,
+    WEB_SEARCH_MODULE,
+    Check,
+    _pages,
+)
+from deploy_workflow.model.pricing import price_of, request_reservation_usd, web_search_usd
 from deploy_workflow.model_testing.configs import CONFIGS
 from deploy_workflow.owners import cp2g, cpos_forecast
 from deploy_workflow.owners.cpos import (
@@ -1736,8 +1741,13 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
     config: str,
     cap: Decimal | str,
     modules: Sequence[str] | None = None,
+    web_search: bool = False,
 ) -> Prepared:
-    """Check everything and write the manifest and instructions; a refusal writes nothing."""
+    """Check everything and write the manifest and instructions; a refusal writes nothing.
+
+    ``web_search`` is whether the run's ruling lists ``web-search``: the research module's calls
+    then hold the search fee too, as the live loop holds it, so the cap is checked against the
+    same hold."""
     context_path = Path(context).expanduser().resolve()
     folder = Path(sources).expanduser().resolve()
     raw_context = context_path.read_bytes()
@@ -1822,8 +1832,14 @@ def prepare(  # noqa: PLR0913 - one keyword per run setting
         provider_cap_usd=Decimal(cap),
     )
     # The loop's own bound for the first call of the largest module; later calls hold more.
-    hold = request_reservation_usd(
-        price_of(config), max(map(len, texts.values())) + 4096, MAX_OUTPUT_TOKENS
+    hold = max(
+        request_reservation_usd(price_of(config), len(text) + 4096, MAX_OUTPUT_TOKENS)
+        + (
+            web_search_usd(WEB_SEARCH_CALLS_PER_TURN)
+            if web_search and module == WEB_SEARCH_MODULE
+            else 0
+        )
+        for module, text in texts.items()
     )
     if request.provider_cap_usd < hold:
         raise LaunchRefused(f"--cap {cap}: one {config} call holds up to USD {hold:.2f}")
@@ -2084,6 +2100,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config=args.config,
             cap=args.cap,
             modules=args.modules,
+            web_search=web_search_ruled(args.ruling),
         )
     except (ValueError, OSError, LivePauseInForce) as error:
         print(error, file=sys.stderr)

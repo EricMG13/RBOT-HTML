@@ -940,7 +940,8 @@ def test_the_research_text_is_fixed(page):
     return {text: document.querySelector('#research-src .strip-text').textContent};
     """)
     assert seen["text"] == (
-        "Research works from the supplied files only. "
+        "Research searches the web for public peers as well as reading the supplied files; "
+        "its web queries use public names only and go to OpenAI's search. "
         "Add peers' filings to the documents if you want them used."
     )
 

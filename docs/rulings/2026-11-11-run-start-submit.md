@@ -3,7 +3,7 @@
 lifts: live-provider-pause
 by: user
 date: 2026-11-11
-configs: sol-medium
+configs: sol-medium, web-search
 
 The user was asked: "The explicit paid action would become 'Submit after an approved summary',
 at the same USD 20 cap", and said: "2. Approved". On the service: "one users CLI will provide for

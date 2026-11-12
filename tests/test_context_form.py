@@ -226,3 +226,13 @@ def test_the_rail_links_to_the_library_the_service_serves() -> None:
     assert 'href="/library/#W-Library/cases"' in FORM
     assert 'href="/library/#CP-OS/activity"' in FORM
     assert "data-pathway" not in FORM and "dataset.pathway" not in FORM  # No fixed-pathway copy.
+
+
+def test_the_summary_tells_the_analyst_what_goes_to_openai_before_submit() -> None:
+    lead = re.search(r'<p class="lead">(This is the run you are about to start.*?)</p>', FORM)
+    assert lead is not None
+    text = lead[1]
+    assert "Pages of the documents you uploaded that modules read are sent to OpenAI" in text
+    assert "web queries (public names only) go to OpenAI's search" in text
+    assert text.index("OpenAI") < FORM.index('id="approve"')
+    assert "supplied files only" not in FORM

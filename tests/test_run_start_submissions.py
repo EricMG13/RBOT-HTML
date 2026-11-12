@@ -244,6 +244,24 @@ def test_the_summary_is_the_launchers_forecast(layout, tmp_path):
     assert s["digest"] == digest(layout, sid, answers)
 
 
+def test_the_summary_checks_the_cap_as_the_standing_ruling_will_run_it(
+    layout, tmp_path, monkeypatch
+):
+    sid, _ = upload_issuer(layout, tmp_path)
+    seen = []
+
+    def watching(*args, **kwargs):
+        seen.append(kwargs["web_search"])
+        return prepare(*args, **kwargs)
+
+    monkeypatch.setattr(submissions, "prepare", watching)
+    assert (
+        summary(layout, sid, answers_for(tmp_path), config="sol-medium", cap=Decimal(20))["error"]
+        == ""
+    )
+    assert seen == [True]  # the standing ruling lists web-search
+
+
 def test_the_summary_is_for_the_module_list_the_digest_covers(layout, tmp_path):
     sid, _ = upload_issuer(layout, tmp_path)
     s = summary(

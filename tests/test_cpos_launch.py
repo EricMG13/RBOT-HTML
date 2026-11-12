@@ -778,6 +778,50 @@ def test_cap_too_small_for_one_call_is_refused_offline(tmp_path, capsys):
     assert not (tmp_path / "out").exists()
 
 
+def test_the_offline_cap_check_holds_the_research_modules_search_fee_when_it_will_search(tmp_path):
+    # The live loop holds USD 0.16 more for each CP-DR call when the ruling lists web-search
+    # (16 calls at USD 0.01; tests/test_handoff_loop.py). The offline check holds the same.
+    context, folder = context_file(tmp_path), issuer_folder(tmp_path)
+
+    def hold(cap: str, out: str, **extra: bool) -> Decimal:
+        return prepare(
+            context,
+            folder,
+            tmp_path / out,
+            config="sol-medium",
+            cap=cap,
+            modules=("CP-DR",),
+            **extra,
+        ).hold
+
+    plain = hold("50", "a")
+    assert hold("50", "b", web_search=True) - plain == Decimal("0.16")
+    between = str(plain + Decimal("0.05"))  # fits one call without search, not with it
+    hold(between, "c")
+    with pytest.raises(LaunchRefused, match="--cap"):
+        hold(between, "d", web_search=True)
+
+
+def test_a_ruling_that_lists_web_search_makes_the_command_line_check_the_search_hold(
+    tmp_path, capsys
+):
+    base = launch(tmp_path, "--modules", "CP-DR")
+    plain = prepare(
+        tmp_path / "context.json",
+        tmp_path / "issuer",
+        tmp_path / "probe",
+        config="sol-medium",
+        cap="50",
+        modules=("CP-DR",),
+    )
+    base[base.index("--cap") + 1] = str(plain.hold + Decimal("0.05"))
+    standing = ROOT / "docs/rulings/2026-11-11-run-start-submit.md"
+    assert main([*base, "--ruling", str(RULING)]) == 0  # no web-search in this ruling
+    base[base.index("--out") + 1] = str(tmp_path / "out2")
+    assert main([*base, "--ruling", str(standing)]) == 2
+    assert "--cap" in capsys.readouterr().err
+
+
 def test_cap_is_sized_for_the_largest_module_not_the_smallest(tmp_path, capsys):
     # claude-opus-5-5 holds about USD 1.5 for CP-3's 105 KB instructions, USD 0.7 for CP-2's 6 KB.
     argv = launch(tmp_path, pathway="credit_snapshot")
@@ -4066,3 +4110,11 @@ def test_checker_rejects_a_reader_number_the_handoff_does_not_hold(tmp_path):
     issues = _checked_handoff(task, wrong.encode(), checker(prepared.layout))
     assert any(i.startswith("Fidelity check, line ") and '"9.87x"' in i for i in issues)
     assert not any("Prose check 9" in i for i in issues)
+
+
+def test_the_service_standing_ruling_lists_web_search_so_runs_from_the_page_search():
+    from deploy_workflow.inbox.startup import STANDING_RULING
+    from deploy_workflow.owners.cpos import web_search_ruled
+
+    assert web_search_ruled(STANDING_RULING)
+    assert not web_search_ruled(RULING)  # a ruling that lists only the config does not
