@@ -1375,8 +1375,33 @@ CASHFLOW_NOTES = (
         "years only."
     ),
 )
-FISCAL_ONLY_RATIOS = "Ratios are shown for fiscal years only."
-TWELVE_MONTH_RATIOS = "Leverage is shown for twelve-month periods only."
+# On the history path the notes name no issuer's wording: CP-1's labelled periods and the forecast
+# inputs block (which names the Financial foundation lines) decide what each line is.
+HISTORY_NOTES = (
+    CASHFLOW_NOTES[2],
+    (
+        "Adj EBITDA is the earnings line the forecast inputs name in Financial foundation; in the "
+        "forecast it is the model's earnings on that basis, not issuer guidance."
+    ),
+    (
+        "Leverage is closing debt, as the forecast inputs name it in Financial foundation, over "
+        "Adj EBITDA. Leverage is shown for twelve-month periods only."
+    ),
+    (
+        "Historical interest is the Financial foundation line the forecast inputs name, which may "
+        "be interest expense rather than cash paid; forecast interest is opening debt times the "
+        "interest-rate driver."
+    ),
+    CASHFLOW_NOTES[3],
+)
+# Row labels on the history path, by row key.
+HISTORY_LABELS = {
+    "adj": "Adj EBITDA (as named in Financial foundation)",
+    "ltm-adj": "LTM Adj EBITDA",
+    "interest": "Interest",
+    "closing-debt": "Closing debt",
+    "coverage": "Interest coverage (Adj EBITDA / interest)",
+}
 LTM_NOTE = (
     "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise the last "
     "fiscal year plus the year to date less the prior year to date."
@@ -2703,7 +2728,7 @@ def listed_add_backs(tables: dict[str, Table | None]) -> list[str]:
     return list(labels)
 
 
-def cashflow_rows(tables: dict[str, Table | None]) -> list[RowSpec]:
+def cashflow_rows(tables: dict[str, Table | None], with_history: bool = False) -> list[RowSpec]:
     """The grid's rows in presentation order: units, the fixed head, add-backs, the fixed tail."""
     rows: list[RowSpec] = []
     for unit in listed_labels(tables):
@@ -2741,15 +2766,16 @@ def cashflow_rows(tables: dict[str, Table | None]) -> list[RowSpec]:
                 None,
             )
         )
-    return rows + list(TAIL_ROWS)
+    tail = [
+        spec._replace(label=HISTORY_LABELS.get(spec.key, spec.label)) if with_history else spec
+        for spec in TAIL_ROWS
+    ]
+    return rows + tail
 
 
 def cashflow_notes(year_to_date: bool, with_history: bool) -> list[str]:
     if with_history:  # CP-1's labelled periods replace the Q1 and pro forma notes
-        rest = [
-            note.replace(FISCAL_ONLY_RATIOS, TWELVE_MONTH_RATIOS) for note in CASHFLOW_NOTES[2:]
-        ]
-        return [LTM_NOTE, *rest]
+        return [LTM_NOTE, *HISTORY_NOTES]
     return [note for note in CASHFLOW_NOTES if year_to_date or note != Q1_NOTE]
 
 
@@ -2808,7 +2834,9 @@ def cashflow_of(
     income = tables["income"]
     periods = sorted({key[1:] for key in income["periods"] if key[0] == "q"}) if income else []
     capped(periods, "quarter columns", QUARTER_COLUMN_LIMIT, CASHFLOW_FILES[3])
-    layout = [RowSpec._make(spec) for spec in cashflow_rows(tables)]  # a plain 7-tuple row works
+    layout = [
+        RowSpec._make(spec) for spec in cashflow_rows(tables, history is not None)
+    ]  # a plain 7-tuple row works
     if history is None:
         columns = quarter_columns(periods, ends)
         fiscal_index = fiscal_columns(columns, fiscal)

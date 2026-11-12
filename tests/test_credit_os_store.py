@@ -1505,6 +1505,126 @@ def test_a_model_without_a_history_record_is_laid_out_as_before():
     assert "Pro forma: no pro forma period is recorded in the handoffs." in grid["notes"]
 
 
+COMMON_LABELS = [
+    "Revenue",
+    "Revenue YoY growth",
+    "COGS (cost of sales)",
+    "Gross profit",
+    "Gross profit margin",
+    "Opex (selling and administrative, amortization of intangibles)",
+    "EBIT (income from operations)",
+    "D&A (depreciation and amortization)",
+    "EBITDA (EBIT + D&A)",
+    "Issuer EBITDA (reported)",
+]
+MIDDLE_LABELS = [
+    "Adj EBITDA margin",
+    "Adj EBITDA YoY growth",
+]
+AFTER_INTEREST = [
+    "Cash taxes",
+    "Cash taxes and working capital, combined",
+    "Model cash from operations",
+    "Capital expenditure (outflow)",
+    "Cash proxy (not issuer free cash flow)",
+    "Distributions",
+    "Debt repayment",
+    "Opening cash",
+    "Closing cash",
+    "Undrawn facility",
+    "Accessible liquidity",
+    "Opening debt",
+]
+CREDIT_LABELS = [
+    "Net debt (all modelled cash deducted)",
+    "Senior secured leverage (secured debt / Adj EBITDA)",
+    "Total leverage (debt / Adj EBITDA)",
+    "Net leverage (net debt / Adj EBITDA)",
+]
+BASE_NOTE = (
+    "Base case is the model's reference case: a conditional illustration, not an "
+    "evidence-supported central issuer forecast."
+)
+NM_NOTE = "n.m. \u2014 not modelled: the calculation record does not project this line."
+DOWNSIDE_NOTE = "Downside case: no downside case was computed in this run."
+
+
+def test_the_history_page_labels_and_notes_carry_no_other_issuers_wording():
+    grid = store.read_cashflow(FILES, None)[0]
+    assert [row["label"] for row in grid["rows"]] == [
+        *COMMON_LABELS,
+        "Adj EBITDA (as named in Financial foundation)",
+        *MIDDLE_LABELS,
+        "LTM Adj EBITDA",
+        "Interest",
+        *AFTER_INTEREST,
+        "Closing debt",
+        *CREDIT_LABELS,
+        "Interest coverage (Adj EBITDA / interest)",
+        "Cash proxy / closing debt",
+    ]
+    assert grid["notes"] == [
+        (
+            "LTM is the last fiscal year when that is the latest period CP-1 labels; otherwise "
+            "the last fiscal year plus the year to date less the prior year to date."
+        ),
+        BASE_NOTE,
+        (
+            "Adj EBITDA is the earnings line the forecast inputs name in Financial foundation; "
+            "in the forecast it is the model's earnings on that basis, not issuer guidance."
+        ),
+        (
+            "Leverage is closing debt, as the forecast inputs name it in Financial foundation, "
+            "over Adj EBITDA. Leverage is shown for twelve-month periods only."
+        ),
+        (
+            "Historical interest is the Financial foundation line the forecast inputs name, "
+            "which may be interest expense rather than cash paid; forecast interest is opening "
+            "debt times the interest-rate driver."
+        ),
+        NM_NOTE,
+        DOWNSIDE_NOTE,
+    ]
+    text = " ".join(grid["notes"])
+    assert not any(word in text for word in ("As Defined", "securitization", "refinancing"))
+
+
+def test_a_model_without_a_history_record_keeps_its_labels_and_notes_exactly():
+    files = {**FILES, "calculation.json": WITHOUT_HISTORY}
+    grid = store.read_cashflow(files, None)[0]
+    assert [row["label"] for row in grid["rows"]] == [
+        *COMMON_LABELS,
+        "Adj EBITDA (EBITDA As Defined)",
+        *MIDDLE_LABELS,
+        "LTM Adj EBITDA (As Defined)",
+        "Cash interest",
+        *AFTER_INTEREST,
+        "Closing debt (carrying value)",
+        *CREDIT_LABELS,
+        "Interest coverage (Adj EBITDA / cash interest)",
+        "Cash proxy / closing debt",
+    ]
+    assert grid["notes"] == [
+        "Pro forma: no pro forma period is recorded in the handoffs.",
+        BASE_NOTE,
+        NM_NOTE,
+        (
+            "EBITDA (EBIT + D&A) differs from the issuer's reported EBITDA, which also deducts "
+            "refinancing costs and includes other income or expense."
+        ),
+        (
+            "Adj EBITDA is the issuer's EBITDA As Defined, a non-GAAP measure; in the forecast "
+            "it is the model's earnings on that basis, not issuer guidance."
+        ),
+        (
+            "Leverage uses carrying debt including securitization; senior secured debt is the "
+            "term loans, secured notes and securitization at carrying value. Ratios are shown "
+            "for fiscal years only."
+        ),
+        DOWNSIDE_NOTE,
+    ]
+
+
 def damaged_column(**changes):
     column = history_column(("FY2024", "FY", "FY2024", None), ("1", "1"))
     return {"columns": [{**column, **changes}]}
