@@ -1225,6 +1225,24 @@ test('Overview key charts: charts of a module the catalogue places on Overview a
   assert.deepEqual(headings(html).map(h => h[0]), ['overview-lead', 'overview-bottom-lines', 'overview-limitations', 'overview-charts', 'overview-dates']);
 });
 
+test('Overview wraps its parts in two columns: lead, bottom lines and limitations in the main column, charts and dates in the aside', () => {
+  const html = runPage(withBridge, [], m => m, OVERVIEW_CP1).runReport(RUN);
+  const main = /<div class="overview-main">(.*?)<\/div><aside class="overview-aside" aria-label="Charts and dates">(.*)<\/aside>$/s.exec(html);
+  assert.ok(main, 'main column then aside, nothing outside them');
+  assert.deepEqual(headings(main[1]).map(h => h[0]), ['overview-lead', 'overview-bottom-lines', 'overview-limitations']);
+  assert.deepEqual(headings(main[2]).map(h => h[0]), ['overview-charts', 'overview-dates']);
+  // Key charts link to the chart index on this run's Forecast page; a run with no placed chart draws neither the section nor the link.
+  assert.ok(part(html, 'overview-charts').startsWith('<section class="overview-part" id="overview-charts"><h2>Key charts</h2><a class="chart-index-link" href="#W-Forecast/'));
+  assert.deepEqual([...main[2].matchAll(/<a class="chart-index-link" href="([^"]+)">([^<]*)<\/a>/g)].map(m => [m[1].replace(/\/[^?]*/, '/'), m[2]]), [['#W-Forecast/?c=run-a', 'Chart index']]);
+  assert.ok(!runPage(d => d).runReport(RUN).includes('Chart index'));
+});
+
+test('Overview with no module output returns the missing state with no two-column wrapper', () => {
+  const html = runPage(() => ({})).runReport(RUN);
+  assert.ok(html.startsWith('<div class="missing-state">'));
+  assert.ok(!html.includes('overview-main') && !html.includes('overview-aside'));
+});
+
 test('Overview key charts: none placed, a placement without Overview, or a blocked module leaves the section out', () => {
   assert.ok(!runPage(d => d).runReport(RUN).includes('overview-charts'), 'no visuals row at all');
   assert.ok(!runPage(d => d, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Model; Files' }] }).runReport(RUN).includes('overview-charts'));

@@ -1364,6 +1364,13 @@ def synthetic_workspace(workspace: Path, edit=lambda text: text) -> Path:
     return workspace / "library/index.html"
 
 
+def with_chart_and_event(text: str) -> str:
+    """The synthetic CP-2 handoff with one placed chart and dated events, before its last part."""
+    marker = "\n## Next module"
+    assert marker in text
+    return text.replace(marker, MATURITIES + EVENTS + marker, 1)
+
+
 def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
     seen = read_module_page(nine_part_library(tmp_path), "#CP-1/head?c=run-a")
     # Head: the group is the eyebrow with the name, tools kept, the Handoff link quiet.
@@ -1449,7 +1456,7 @@ def test_a_module_page_with_no_bottom_line_draws_its_name_as_the_headline(tmp_pa
 
 @pytest.mark.parametrize("width", [1440, 1280])
 def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(tmp_path, width):
-    page = synthetic_workspace(tmp_path)
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
     seen = read_module_page(page, f"#CP-2?c={NEW_FORMAT_RUN}", width)
     head = seen["head"]
     assert (head["h2"], head["size"], head["transform"]) == (
@@ -1466,6 +1473,7 @@ def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(t
     assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 23, 229)")
     assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
     assert seen["prose"]["width"] <= 660
+    assert seen["cards"], "the new-format module page draws at least one chart card"
     assert all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
     assert seen["fits"] is True
     # Limitations: grey dot list.
@@ -1564,3 +1572,103 @@ def test_the_run_header_keeps_the_phone_layout_at_600px(tmp_path):
     assert console == []
     seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     assert (seen["padL"], seen["padT"], seen["scopeBelowTitle"]) == ("15px", "12px", True)
+
+
+OVERVIEW_LAYOUT_PROBE = (
+    Path(__file__).with_name("browser_probe_overview_layout.js").read_text(encoding="utf-8")
+)
+OVERVIEW_ORDER = [
+    "overview-lead",
+    "overview-bottom-lines",
+    "overview-limitations",
+    "overview-charts",
+    "overview-dates",
+]
+# What the Overview drew for the synthetic new-format run before the two-column layout (BASE
+# 60233d2): the text of each Bottom line by module entry and of each Nearest dates row, in order.
+BASE_NEW_FORMAT_ENTRIES = [
+    (
+        "Source readinessThe two documents read are enough for a credit snapshot, "
+        "but no covenant package was read, so creditor protections cannot be "
+        "confirmed from the file set."
+    ),
+    (
+        "Financial foundationThe canonical data set holds the debt, cash, earnings "
+        "and maturity figures the later modules rely on, each tied to a page of the "
+        "two documents read."
+    ),
+    (
+        "Business & governanceNorthbridge is a single-segment services group whose "
+        "creditors depend on one operating company, so debt service rests on that "
+        "company's cash generation. Basis"
+    ),
+    (
+        "Liquidity Not assessableNot assessable: the documents read give no monthly "
+        "cash forecast and no revolver drawing terms, so cash cover of the "
+        "maturities cannot be tested."
+    ),
+]
+BASE_NEW_FORMAT_DATES = [
+    "2025-03-31Annual report reference dateBusiness & governance",
+    "2025-03-31Synthetic noteFundamental credit",
+    "2025-05-15First quarter resultsBusiness & governance",
+    "2025-06-30Revolver commitment step-downBusiness & governance",
+    "2025-06Synthetic callFundamental credit",
+]
+
+
+def read_overview(page: Path, route: str, width: int) -> dict:
+    (page.parent / "probe.js").write_text(OVERVIEW_LAYOUT_PROBE, encoding="utf-8")
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    dom, console = visit(page, route, width)
+    assert console == []
+    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+
+
+@pytest.mark.parametrize("width", [1440, 1280, 1200])
+def test_the_new_format_overview_takes_the_two_column_layout(tmp_path, width):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    seen = read_overview(page, f"#W-Overview?c={NEW_FORMAT_RUN}", width)
+    assert seen["fits"] is True
+    assert seen["ids"] == OVERVIEW_ORDER
+    assert seen["inMain"] == OVERVIEW_ORDER[:3] and seen["inAside"] == OVERVIEW_ORDER[3:]
+    assert seen["asideLabel"] == "Charts and dates"
+    main, aside = seen["mainBox"], seen["asideBox"]
+    if width == 1440:
+        assert abs(aside["width"] - 400) <= 1 and aside["left"] >= main["right"]
+    if width == 1200:
+        assert aside["top"] >= main["bottom"]
+    if width == 1280:
+        assert aside["top"] >= main["bottom"], "the aside is under the main column"
+    # The lead: the eyebrow is Credit view with the writing module, the passage the headline.
+    lead = seen["lead"]
+    assert lead["h2"] == {"text": "Credit view", "size": "12px", "transform": "uppercase"}
+    assert lead["h3Class"] == "sr-only" and lead["firstSize"] == "22px"
+    assert lead["firstText"].startswith("Creditors are exposed to refinancing risk")
+    assert "Written by Fundamental credit" in lead["text"]
+    # Bottom line by module: a row (module left, text right), the text as BASE drew it.
+    assert seen["entryColumns"].startswith("210px")
+    assert seen["entries"] == BASE_NEW_FORMAT_ENTRIES
+    # Nearest dates: the same table, header cells kept but hidden, one grid row per date.
+    dates = seen["dates"]
+    assert dates["caption"] is True and dates["cols"] == 3 and dates["theadHeight"] <= 1
+    assert dates["rowDisplay"] == "grid" and dates["rows"] == BASE_NEW_FORMAT_DATES
+    # Key charts: the link to the chart index on this run's Forecast page; cards fit the column.
+    assert seen["charts"]["href"].startswith("#W-Forecast")
+    assert seen["charts"]["cards"]
+    if width == 1440:
+        assert all(w <= 400 for w in seen["charts"]["cards"]), seen["charts"]["cards"]
+
+
+def test_the_earlier_format_overview_has_its_sentence_and_no_chart_index_link(tmp_path):
+    make_run(tmp_path, "run-a", as_of="2025-03-31", cp1_extra=EVENTS)
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    seen = read_overview(page, "#W-Overview?c=run-a", 1440)
+    assert seen["fits"] is True and seen["hasMain"] and seen["hasAside"]
+    assert seen["ids"] == [*OVERVIEW_ORDER[:3], "overview-dates"]
+    assert EARLIER_LEAD in seen["lead"]["text"] and seen["lead"]["h2"]["text"] == "Credit view"
+    assert seen["lead"]["h2"]["transform"] == "uppercase"
+    assert seen["chartIndexLinks"] == 0 and "charts" not in seen
+    assert abs(seen["asideBox"]["width"] - 400) <= 1
+    assert seen["dates"]["rowDisplay"] == "grid" and seen["dates"]["theadHeight"] <= 1

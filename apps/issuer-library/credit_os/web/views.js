@@ -1220,8 +1220,8 @@ const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>
 function overviewLead(entries,earlier) {
   const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
   if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
-  const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}`:'';
-  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}${key}</section>`};
+  const key=lead.passages.key?`<div class="reading-findings"><h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}</div>`:'';
+  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><div class="reading-headline"><h3 class="sr-only">Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}</div>${key}</section>`};
 }
 function overviewBottomLines(entries,lead) {
   const rows=entries.filter(entry=>entry!==lead).map(entry=>{
@@ -1241,10 +1241,10 @@ function overviewLimitations(entries) {
     const ref=`${entry.id}:${block.line}`,{html}=paragraphView(block.text,ref,{chips:bodyContext(entry.id,false).chips(ref)});
     items.push(`<li class="limit-item">${html}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
   }
-  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<ul class="passage-list">${items.join('')}</ul>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
+  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<div class="reading-limits"><ul class="passage-list">${items.join('')}</ul></div>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
 }
 // The drawn charts and maps of the modules the visuals catalogue places on Overview (PLACEMENT); a blocked module draws none. Lanes are the dates section.
-function overviewCharts(entries) {
+function overviewCharts(entries,context) {
   let noted=false;
   const html=entries.filter(entry=>entry.out).map(({id,out})=>{
     if(!placed('chart','Overview',out))return '';
@@ -1253,7 +1253,9 @@ function overviewCharts(entries) {
     noted=noted||lastPeriodChart(charts)>=0;
     return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
   }).filter(html=>/class="(panel-card|map-card)"/.test(html));
-  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${html.join('')}</section>`:'';
+  // The link goes to the chart index on this run's Forecast page: the index is a section of that page, reached by its route (it has no route of its own).
+  const index=`<a class="chart-index-link" href="${routeHref('W-Forecast',navigationSections('W-Forecast',context)[0][0],null,context)}">Chart index</a>`;
+  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${index}${html.join('')}</section>`:'';
 }
 // Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.
 // A period-dated item (month, quarter or year) is sorted by its period end and shown with that date text as written. The sentence when none is drawn names its cause.
@@ -1276,7 +1278,8 @@ function runReport(context) {
   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
   if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
   const {lead,html}=overviewLead(entries,earlierFormat(contexts[context]));
-  return html+overviewBottomLines(entries,lead)+overviewLimitations(entries)+overviewCharts(entries)+overviewDates(context);
+  // Two columns at wide windows (screen.css): the reading in the main column, the charts and dates in the aside; the document order is the part order.
+  return `<div class="overview-main">${html+overviewBottomLines(entries,lead)+overviewLimitations(entries)}</div><aside class="overview-aside" aria-label="Charts and dates">${overviewCharts(entries,context)+overviewDates(context)}</aside>`;
 }
 // Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
 // library does not show and the build's issues are on the library page.
