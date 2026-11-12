@@ -4,6 +4,13 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Forecast inputs name cells of period-row tables; `LTM Qn YYYY` is a balance date (branch `claude/forecast-reader-findings`; findings 1, 2, 6 and the instruction side of 4 of the LTH reader check)
+Plan: `docs/superpowers/plans/2026-11-12-forecast-reader-findings.md`, Tasks E1-E4, rulings R1-R6. An operand may name its cell in a table with one row per period as `row` (the period) and `column` (the measure's header); `column` with `period` is refused and partial naming stays refused. The history record reads such tables, and reads a label `LTM Qn YYYY` (row label or column header) as the balance at that label's End for debt, cash and undrawn only, and only when CP-1's period table dates the label to the day the year to date (or the fiscal year) ends; it is never read for a flow. A period row whose `Reporting unit` differs from the named row's is n.a. with the reason, never converted. The limit that listed the LTM header as unread now says what is and is not read. Instructions: the `column` form, `interest` defined as cash interest (interest expense may be named if `scope_limits` says so), balances printed as plain numbers under their period, the LTM label dated in the period table; repair lines name `column`. A block that uses no new key publishes byte-identical files, except the one limit line where CP-1 carries an LTM label.
+Scope: offline. Synthetic fixture with a hand answer key (plan lines 43-87); 459 recorded calls replayed before and after (429 identical, 24 differ only where CP-1 holds an LTM label, 6 only in two refusal texts); the real LTH CP-1 of run `20261112-164724-01` read with a HAND-NAMED block (no model ran): FY2024 cash 10.879 and net debt 1,544.718; YTD and LTM cash 175.509, debt 1,534.356, net debt 1,358.847; LTM leverage equals CP-1's own C3 and C4; with the run's block unchanged only one limit line differs. No provider called: no model has yet used `column`.
+Commands: pytest (cpos launch, facilities, periods, scale, store, handoff loop) exit 0; quality gate 0 findings, exit 0. Reviews: task reviews (mx-precise), two adversarial reviews (mx-adversary: no flow leaked, no balance in a column ending another day; one Medium on mixed units, fixed), whole-branch review with confidence review and rewrite tournament (mx-architect), two fix waves. Hand-picked mutants 34/40 killed, then the four untested ones (M03, M06, M19, M35) killed by new tests; M10 and M11 survive singly.
+Known, for the owner: an operand with no base amount cannot name a history-only cell, so LTH's June 2025 undrawn 618.5 and LTM liquidity stay n.a. (R3); the delivered LTH run does not change, cash and debt balances appear only when a model names them by `column` or CP-1 prints plain balances (`1,534.356 at 2025-06-30` is not read); a scale-1000 issuer cannot name the US$m chart tables; nothing checks that a stock is named at the base period (R6); two tables that state one balance in different units and disagree publish the same-unit figure unflagged (CP-1's validation refuses such a handoff); a currency difference between rows is not detected; re-delivering a run whose CP-1 has an LTM label gives a new delivery id; the branch is about 1,400 changed lines against the 800-line limit.
+Not verified: any model response to the new instructions; a paid run; the Forecast page's rendering of the new reasons and limits; the layer-1 `column` path through a delivery; the weekly and live suites; mutation testing beyond the hand-picked mutants. Moved to the archive to keep this file under 1,000 lines: the 2026-11-10 Library and report screens entry.
+
 ## 2026-11-12 — Forecast page: neutral labels and notes, lines with no figure folded, readable model picker (branch `claude/forecast-reader-findings-page`; findings 3, 4, 5, 7 of the LTH reader check)
 Plan: `docs/superpowers/plans/2026-11-12-forecast-reader-findings.md`, Tasks P1-P3. On a delivery with a history record the rows read `Adj EBITDA (as named in Financial foundation)`, `LTM Adj EBITDA`, `Closing debt`, `Interest`, `Interest coverage (Adj EBITDA / interest)`, and the notes that named EBITDA As Defined, securitization and refinancing costs are replaced by three issuer-neutral notes. A line with no figure in any column of any case moves, with its cells and reasons, into a closed list `Lines with no figure in this run (N)`; the seven column groups stay. The model picker reads `<run date> · <pathway> · <run id>`, not the delivery hash; a recorded predecessor is named by its label. Controller correction to the plan's wording: the interest note ends at "rather than cash paid" (the plan's second clause was false when facilities are stated).
 Scope: offline; presentation only. Store and node tests with hand-named expectations; the base commit's grid compared with the tip's cell for cell on six inputs, the real LTH delivery included (equal apart from the new `empty` flag); every table row of the real page byte-identical to before, in the main table or the fold; `Why cells show n.a.` unchanged (117 lines).
@@ -965,29 +972,3 @@ Offline only; no provider call.
   here. Gates for market data (CP-3, CP-3D), executed legal documents (CP-4), rating reports (CP-2H)
   and distress (CP-4C) are unchanged and untested with such files. The skills' scripts and three
   `.xlsx` placeholders were not copied. Output-side loss of analysis was checked for CP-2G only.
-
-## 2026-11-10 — Library and report screens: reader value against production detail (branch `claude/forecast-publication-screens`)
-
-Scope: the static library page only (`apps/issuer-library/credit_os/web/`), on
-`claude/forecast-publication` (PR 19) merged with `claude/period-charts` (PR 20). One agent, no
-sub-agents, no provider call. Record and dispositions: `docs/design/2026-11-10-screens-pass.md`.
-
-- Change: production detail leaves the reading path (SHA-256 ids as link text, file names and line
-  numbers in heads and bands, handoff word counts, "file hashes checked at build", a citation count
-  on every Overview finding, five empty metric cards, a Completeness filter no run can match). It
-  stays in a title, the evidence inspector or one "Built from" disclosure. Reports and the report
-  selector name their run; the acceptance state sits beside Open report; "run" replaces "case";
-  a missing figure reads `n.a.`; a sorted column shows its direction.
-- Adversarial design review (breaker, newcomer, truster): BLOCK before the fixes (D1), CONCERNS
-  after them; D1 to D8 fixed, D9 to D14 left with the owner (design doc table).
-- Tests: twelve static tests changed or added and seen failing against the unchanged screens
-  (`git archive` of HEAD). `node --test` static + calendar 116 pass, 0 fail; CI fast pytest list
-  1441 passed, 7 deselected; `tests/test_library_page_browser.py` 20 passed; quality gate 0
-  findings, exit 0.
-- Looked at: headless Chrome at 1440 and 1280 over `file://`, and the built-in browser over a
-  local server, on a library rebuilt from the four retained TDG runs: library, Overview, module
-  matrix, CP-1 charts, reports list, report reader. No console error from the page (the one 404
-  is the optional `activity.js`, absent without a live run).
-- Not verified: phone and tablet widths; Windows and Edge; a library with many issuers or with an
-  accepted report (fixture only); a live run's activity view; the delivered report's own layout
-  inside the frame, which belongs to the delivery renderer; no independent review of this pass.

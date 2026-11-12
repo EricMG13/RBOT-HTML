@@ -2864,7 +2864,10 @@ def test_a_cp2g_block_may_name_the_row_and_period_of_every_base_operand():
     assert inputs.downside_shock is not None  # still CP-2G's block: the shock and cases stay
 
 
-MUST_NAME = "CP-2G: base revenue must name the `row` label and `period` header it was read from"
+MUST_NAME = (
+    "CP-2G: base revenue must name the `row` label and either the `period` header or the "
+    "`column` header it was read from"
+)
 
 
 @pytest.mark.parametrize(
@@ -2886,7 +2889,7 @@ MUST_NAME = "CP-2G: base revenue must name the `row` label and `period` header i
         ({"amount": "1000", "reason": None, "row": "revenue"}, MUST_NAME),
         (
             {"amount": None, "reason": "unknown", "row": "revenue", "period": "FY2025"},
-            "CP-2G: base revenue states no amount, so it names no row or period",
+            "CP-2G: base revenue states no amount, so it names no row, period or column",
         ),
     ],
 )
@@ -2902,7 +2905,8 @@ def test_a_cp2g_block_naming_some_operands_is_refused_at_the_first_one_missing()
         _named_cp2g(_cp1_doc(TWO_YEARS), **unnamed)
     assert (
         str(caught.value)
-        == "CP-2G: base taxes must name the `row` label and `period` header it was read from"
+        == "CP-2G: base taxes must name the `row` label and either the `period` header or the "
+        "`column` header it was read from"
     )
 
 
@@ -2926,8 +2930,8 @@ def test_a_named_cp2g_operand_that_is_not_its_cell_is_sent_back_for_repair():
     (issue,) = cpos_launch._forecast_issues(task, forecast_block(base=base))
     assert issue == (
         "Forecast inputs: CP-2G: base capex: no table cell of CP-1 is at row `Capex`, period "
-        "`FY2025`. Correct the row, period or amount of capex; if you cannot, state capex as "
-        "missing: amount null, no row or period, and the reason."
+        "`FY2025`. Correct the row, period, column or amount of capex; if you cannot, state "
+        "capex as missing: amount null, no row, period or column, and the reason."
     )
 
 
@@ -3156,7 +3160,7 @@ def test_an_invalid_or_missing_inputs_block_is_sent_back_for_repair_naming_why(
     issues = cp2g_check(tmp_path, block)
     assert any(f"Forecast inputs: CP-2G: {reason}" in i for i in issues), issues
     ending = (
-        "as missing: amount null, no row or period, and the reason."
+        "as missing: amount null, no row, period or column, and the reason."
         if "base " in reason
         else ("[null, null, null] and say why in scope_limits.")
     )
@@ -3326,7 +3330,10 @@ def test_the_cp2g_instruction_asks_for_the_row_and_period_of_every_base_operand(
         "exact first-cell text",
         "exact header text",
         "of one of the CP-1 handoff's tables",
-        "Name both for every operand that has an amount",
+        (
+            "Name the cell of every operand that has an amount: `row` and `period`, or in a table "
+            "with one row per period"
+        ),
         "positive magnitude",
         "with its sign reversed",
         "is not a cell",
@@ -4973,7 +4980,7 @@ def test_a_row_or_period_that_is_blank_once_plain_is_refused_as_unnamed(name, wh
 
 
 # --- the whole-branch review's fixes: the repair line, bounded cell lists, the surviving mutants --
-OPERAND_END = "as missing: amount null, no row or period, and the reason."
+OPERAND_END = "as missing: amount null, no row, period or column, and the reason."
 FACILITY_END = "write `facilities` as null and keep the drivers."
 BLOCK_END = "[null, null, null] and say why in scope_limits."
 
@@ -5009,7 +5016,9 @@ def test_the_repair_line_of_a_refused_operand_is_chosen_by_the_refusal_not_the_q
     block = forecast_block(base=_named_base(**{key: _operand(amount, row)}))
     (issue,) = _repair_issues(block, cp1)
     assert issue.endswith(OPERAND_END)
-    assert f"Correct the row, period or amount of {key}; if you cannot, state {key} " in issue
+    assert (
+        f"Correct the row, period, column or amount of {key}; if you cannot, state {key} " in issue
+    )
 
 
 def test_an_operand_refusal_quoting_the_liquidity_chart_header_gets_the_operand_line():
@@ -5285,3 +5294,96 @@ def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allow
         assert old in raw
         raw = raw.replace(old, new)
     assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+# --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`
+COLUMN_SENTENCE = (
+    "`row` and `column`, the row being the period exactly as printed and the column the "
+    'measure\'s exact header (`{"amount": "<decimal>", "reason": null, "row": "FY2024", '
+    '"column": "Cash"}`); leave out `period` there.'
+)
+INTEREST_SENTENCE = (
+    "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
+    "expense you may name that cell and must say in `scope_limits` that interest is interest "
+    "expense, not cash paid."
+)
+BALANCE_SENTENCE = (
+    "Print a balance (debt, cash, undrawn facilities) at a period's end under that period's "
+    "column as a plain number: the `H1 2025` column holds the 30 June 2025 balance. Put the date "
+    "in the row label or the Source, not in the cell."
+)
+
+
+def _built_instruction(tmp_path, module, modules):
+    prepared = prepare(
+        context_file(tmp_path, "covenant_refinancing"),
+        issuer_folder(tmp_path),
+        tmp_path / "out",
+        config="sol-medium",
+        cap="50",
+        modules=modules,
+    )
+    return (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+
+
+def test_the_cp2g_instruction_sent_states_the_column_key_and_what_interest_is(tmp_path):
+    text = _built_instruction(tmp_path, "CP-2G", ("CP-1", "CP-2G"))
+    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+
+
+def test_the_layer1_forecast_instruction_sent_states_the_column_key_and_what_interest_is(
+    tmp_path,
+):
+    text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
+    assert COLUMN_SENTENCE in text and INTEREST_SENTENCE in text
+
+
+def test_the_period_table_instruction_sent_says_how_to_print_a_balance(tmp_path):
+    for modules in (("CP-1", "CP-2G"), ("CP-1", "CP-MODEL")):
+        (tmp_path / modules[1]).mkdir()
+        text = _built_instruction(tmp_path / modules[1], "CP-1", modules)
+        assert BALANCE_SENTENCE in text
+
+
+COLUMN_CP1 = (
+    "| Base | FY2025 |\n| --- | --- |\n"
+    + "\n".join(f"| {k} | {printed(k, v)} |" for k, v in BASE.items() if k != "cash")
+    + "\n\n| Period | Cash |\n| --- | --- |\n| FY2025 | 100 |\n"
+)
+
+
+def test_a_column_refusal_gets_the_row_period_column_or_amount_repair_line():
+    base = _named_base(cash={"amount": "101", "reason": None, "row": "FY2025", "column": "Cash"})
+    (issue,) = _repair_issues(forecast_block(base=base), COLUMN_CP1)
+    assert "column `Cash`" in issue
+    assert "Correct the row, period, column or amount of cash; if you cannot, state cash " in issue
+    assert issue.endswith("as missing: amount null, no row, period or column, and the reason.")
+
+
+def test_an_operand_naming_both_period_and_column_gets_its_own_repair_line():
+    both = _operand("100", "FY2025", "FY2025") | {"column": "Cash"}
+    (issue,) = _repair_issues(forecast_block(base=_named_base(cash=both)), COLUMN_CP1)
+    assert issue.endswith("State either `period` or `column` for cash, not both.")
+    assert "set every driver" not in issue
+
+
+def test_several_operands_naming_both_period_and_column_are_all_named_in_the_repair_line():
+    both = _operand("100", "FY2025", "FY2025") | {"column": "Cash"}
+    base = _named_base(
+        cash=both, undrawn=_operand("50", "FY2025", "FY2025") | {"column": "Undrawn"}
+    )
+    (issue,) = _repair_issues(forecast_block(base=base), COLUMN_CP1)
+    assert issue.endswith("State either `period` or `column` for cash and undrawn, not both.")
+
+
+def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-branch review L3, L4
+    table = cpos_launch.PERIOD_TABLE_BLOCK
+    assert "to date a balance printed under an `LTM Qn YYYY` label; add no figure to it." in table
+    assert "give that exact label a row in this table with its Start and End dates." in table
+    assert "only to check" not in table and "change no other table" not in table
+    shown = "history only for a line named under such a header, or in a row labelled with one."
+    for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
+        assert shown in block
+        assert "Those tables are in US$ million: at `scale` 1000 do not name them" in block
+    assert "(your `Chart data:` tables and `Net debt data`)" in cpos_launch.LAYER1_FORECAST_BLOCK
+    assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
