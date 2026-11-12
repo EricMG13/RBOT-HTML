@@ -382,11 +382,12 @@ _SCALE_REFUSAL = "`scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thou
 def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
     """`(name, holder, key)` of every amount slot the document's shape allows: the base operands,
     the dividends and debt repayment drivers of the base and the two cases, and each facility's
-    balance and annual amortisation. Ratios, shares, rates and dates are never slots."""
+    balance and annual amortisation. A slot the model left out is no slot: the schema refuses the
+    missing key with its usual message. Ratios, shares, rates and dates are never slots."""
     base = document.get("base")
     if isinstance(base, dict):
         for key, operand in base.items():
-            if isinstance(operand, dict):
+            if isinstance(operand, dict) and "amount" in operand:
                 yield f"base {key}", operand, "amount"
     for case in ("base_drivers", "upside_drivers", "downside_drivers"):
         group = document.get(case)
@@ -400,7 +401,8 @@ def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
     facilities = document.get("facilities")
     for number, facility in enumerate(facilities if isinstance(facilities, list) else (), 1):
         for field in ("balance", "annual_amortisation") if isinstance(facility, dict) else ():
-            yield f"facility {number} {field}", facility, field
+            if field in facility:
+                yield f"facility {number} {field}", facility, field
 
 
 def _to_millions(document: dict[str, Any], source: str) -> dict[str, str]:

@@ -2,6 +2,7 @@
 
 import json
 import re
+from decimal import Decimal
 from fractions import Fraction
 
 import pytest
@@ -535,3 +536,50 @@ def test_a_block_without_scale_is_not_checked_for_the_widened_rule():  # widened
 )
 def test_the_words_that_name_a_unit(text, named):
     assert cpos_forecast._units_named(text) == named
+
+
+def _in_millions(text):
+    return None if text is None else format(Decimal(text).scaleb(-3), "f")
+
+
+def _shapes(thousands):
+    """Malformed forms of one block, stated in USD thousands or in the same USD millions."""
+    unit = (lambda text: text) if thousands else _in_millions
+    base = {k: {**v, "amount": unit(v["amount"])} for k, v in K2_BASE.items()}
+    paths = {**K2_PATHS, "debt_repayment": (unit("22873"),) * 3}
+    plain = [{**f, "balance": unit(f["balance"])} for f in FAC]
+    plain[0]["annual_amortisation"] = unit("10000")
+
+    def fac(**missing):
+        return [{k: v for k, v in plain[0].items() if k not in missing}, plain[1]]
+
+    def drivers_with(values):
+        group = drivers(paths)
+        group["dividends"] = {**group["dividends"], "values": values}
+        return group
+
+    shapes = {
+        "operand without amount key": {
+            "base": {**base, "cash": {"reason": None, "row": "Cash", "period": "H1 2025"}}
+        },
+        "facility without balance key": {"facilities": fac(balance=1)},
+        "facility without annual_amortisation key": {"facilities": fac(annual_amortisation=1)},
+        "base that is not an object": {"base": ["175509.5"]},
+        "operand that is a string": {"base": {**base, "cash": "175509.5"}},
+        "facilities that is not a list": {"facilities": "Term Loan"},
+        "facility that is a string": {"facilities": ["Term Loan", plain[1]]},
+        "driver values that is not a list": {"base_drivers": drivers_with("0")},
+        "driver values holding numbers": {"base_drivers": drivers_with([0, 0, 0])},
+        "driver values holding objects": {"base_drivers": drivers_with([{}, "0", "0"])},
+    }
+    whole = {"base": base, "base_drivers": drivers(paths), "facilities": plain}
+    return {name: {**whole, **changes} for name, changes in shapes.items()}
+
+
+@pytest.mark.parametrize("shape", list(_shapes(True)))
+def test_a_malformed_block_at_scale_1000_is_the_schemas_refusal_as_without_scale(shape):
+    with pytest.raises(ValueError) as without:
+        parse(forecast_block(**_shapes(False)[shape]), CP1_K2)
+    with pytest.raises(ValueError) as with_scale:
+        parse(forecast_block(scale=1000, **_shapes(True)[shape]), CP1_K2)
+    assert str(with_scale.value) == str(without.value)
