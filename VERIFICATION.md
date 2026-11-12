@@ -4,6 +4,14 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Forecast page main period columns, PR 2 (branch `claude/forecast-period-columns-2`, stacked on `-1b`)
+Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md`, Tasks 7-10. For a model whose `calculation.json` carries a `history` record the library's Forecast grid shows Quarter, Year to date (YTD, PYTD), Fiscal year, Last twelve months (LTM, Prior LTM), Pro forma, Base case and one Downside case (the stress shock when computed, else CP-2G's own downside drivers, else an unavailable column), and the other cases in a closed second grid. The store validates the record whole (kinds, prior pairs, dates, bounds) and shows nothing from a malformed one. Growth is refused across periods whose lengths differ by more than 7 days and on a fiscal year that is not twelve months; the first forecast year grows on the forecast's base year. A model without `history` keeps its layout except the case names, the second grid, the downside note and the placeholder.
+Scope: offline, synthetic. Hand-written history records and answer keys in `tests/test_credit_os_store.py`; the browser test injects the real `store.read_cashflow` output of a two-key hand-written record into a built library (not a model published by `update_library`). Fidelity was checked at the store through the real producer against the plan's answer key (probe `arch2_answer_key_on_the_grid.py`, 119 cells), not on the page. Retained CP-1 header forms were checked in PR 1. No provider called. No retained run has a forecast inputs block with drivers, so no real run's Forecast page was read and no published model without a history was read in a browser.
+Reader check: NOT done on a real run; it is pending the owner's paid run and the reading against the September VMO2 reference. The synthetic page was read at 1280 px by the controller only: seven groups in the owner's order; an unavailable column reads n.a. with its reason in the cell's label, distinguishable from a zero; at 1280 px the Downside case is off screen to the right (the grid scrolls inside its region); n.a. reasons sit in tooltips and a closed list; order inside groups is old-to-new for quarters and fiscal years, current-then-prior for YTD and LTM (ruling 2).
+Commands: store, launch, periods, facilities and library pytest 1060 passed, 1 skipped, exit 0; browser pytest 43 passed, 1 skipped, exit 0; node 278 pass, exit 0; quality gate against 1b 0 findings, exit 0. Reviews: task reviews (mx-precise), adversarial review of the store changes with one re-review (mx-adversary; 6,000 generated records raise nothing; 144 no-history grids match the base), whole-branch review with confidence review and rewrite tournament (mx-architect; hand-picked mutants 19/19 killed). Probes stale by ruling: `adv4_notes_and_reasons.py`, `adv4_budget_and_work.py`, `adv4_producer_roundtrip.py`, `task7_no_history_unchanged.py`, `task8_hostile_and_placeholder.py` (superseded by `adv5_*` and `task9_*`).
+Known, for the owner: the PR is about 1186 changed lines against the 800-line limit (a split on commits exists but no part ships alone); `scope_limits` and odd numeral forms in `checked_entries` predate the branch; growth on a negative prior shows a percentage (before this branch); "Why cells show n.a." lists the main grid only.
+Not verified: a real run's Forecast page and the reader check on it; the page rendered from a published model; a no-history model in a browser; widths other than 1280 px, print, screen reader, touch; the weekly and live suites; mutation testing beyond the hand-picked mutants, none in `views.js`.
+
 ## 2026-11-12 — Forecast history record, PR 1 of the period columns (branches `claude/forecast-period-columns-1a` and `-1b`)
 Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md` (rulings 1-16). `cpos_periods` reads the period columns CP-1 prints, ties each of the forecast's base lines to one base period, and builds quarters, YTD, PYTD, fiscal years, LTM, prior LTM and PF with exact Decimal arithmetic and a date check against CP-1's `Period | Start | End` table; `model_files` publishes it as `history` in `calculation.json` only when the delivery request asks (new CP-OS runs do; an earlier delivery re-derives byte for byte). CP-1 is asked for the period table whenever a forecast is wanted. Nothing on the page changes: the library does not read `history` until PR 2.
 Scope: offline. Synthetic fixtures with hand-computed answer keys (`tests/test_cpos_periods.py`); six retained CP-1 handoffs read only for header forms (every statement-table period header is read; date-headed balance columns, `FY2024, annual definition`, `Rolling reported periods to 2024-12-28` and metric-specific headers are not, by rule); one retained live forecast run's CP-1 and CP-2G (`tdg-forecast-002`, read only) on which revenue, EBITDA, interest, taxes, capex and cash are located from the FY2024 base and fcf, debt and undrawn are not (their rows sit under a header that is not a period). No provider called and no model response: no CP-1 has yet printed the period table.
@@ -965,32 +973,3 @@ chips are unchanged; a value that is text still prints n.a. with the text in its
   a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
   charts print whole.
 - Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.
-
-## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
-
-Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
-the repository (`/private/tmp/claude-501/rbot-live`, `…/rbot-live2`); `main` at `9aec393`. Each
-proves its dated case and route only; outputs are unreviewed candidates.
-
-- Inbox (`deploy_workflow.inbox.watcher`, `--cap 10 --settle-seconds 10 --poll-seconds 5`): a
-  copied folder dropped into `inbox/earnings_update/` at 08:56:09Z was claimed at 08:56:21Z, ran
-  CP-0, CP-1, CP-1B, CP-1D and CP-5 live (39 calls, 3 drafts rejected and repaired), delivered at
-  09:10:39Z and was filed as `issuers/TransDigm Group Incorporated (tdg)/2024-09-30
-  earnings_update.html`. Recorded spend USD 1.0761. Watcher-built library in headless Chrome: one
-  row; the run id opens Overview; 5 of 5 module pages render; "Open report" opens the report in
-  the app; Run activity shows the run finished, its spend and a link to the filed report that
-  exists on disk; no script error.
-- Forecast (`cpos_launch --modules CP-0 CP-1 CP-2A CP-2G --cap 10`): four modules accepted,
-  delivered in 17 minutes, USD 1.1979. The forecast model was **not published**: CP-2G's inputs
-  block now validates (the 2026-11-09 failure is gone) but the handoff declares a blocked
-  forecast with every driver null ("the forecast horizon is not locked and required invocation
-  and upstream acceptance validation cannot be completed through the supplied tools"). The library
-  lists the run, 4 of 4 module pages and the report render, and Forecast reads "No forecast model
-  was published from this run's files".
-- A run without a report cannot be produced by a run: `library_index` lists only runs with a
-  verified delivered report, and `credit_os_catalogue.run_record` always writes `handoff_href`
-  empty, so "Open primary handoff" never draws in this build. "Handoffs only" appears only if a
-  listed delivery fails cataloguing.
-- Not verified: the Forecast tab with a published model (no retained or new run has one); a
-  refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
-  Windows; analytical accuracy of either run.
