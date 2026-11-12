@@ -1,0 +1,1523 @@
+diff --git a/.github/workflows/checks.yml b/.github/workflows/checks.yml
+index 0b97401..74a3936 100644
+--- a/.github/workflows/checks.yml
++++ b/.github/workflows/checks.yml
+@@ -39,7 +39,7 @@ jobs:
+             tests/test_library_index.py tests/test_update_library.py \
+             tests/test_issuer_library_packaging.py tests/test_reader_summary.py \
+             tests/test_credit_os_catalogue.py tests/test_credit_os_store.py \
+-            tests/test_cpos_launch.py tests/model \
++            tests/test_cpos_launch.py tests/test_cpos_facilities.py tests/model \
+             tests/test_credit_os_chips.py tests/test_quality_gate.py tests/test_work_pc_delta.py \
+             tests/test_inbox_activity.py tests/test_inbox_filing.py \
+             tests/test_inbox_layout.py tests/test_inbox_runs.py tests/test_inbox_scheduler.py \
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 5a698fc..32c62d8 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,29 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — CP-2G facility schedule (branch `claude/cash-flow-model-comparison-498459`)
++
++Owner waiver 2026-11-12: the 800-line PR limit is waived for this branch's pull request (about 1,290
++changed lines: plan document about 340, tests about 520; the whole-branch review found no sensible split).
++
++Scope: CP-2G facility schedule: offline synthetic tests only; no provider called, no model response
++retained; a live CP-2G run that states `facilities` has not been done; the Forecast page was not
++exercised with the new `forecast_exact.json` keys.
++- `uv run pytest tests/test_cpos_facilities.py -q`: exit 0, 55 passed (the answer key puts the debt outside the stated facilities at the analyst's rate: 37.5, 34.8, 30.6).
++- `uv run pytest tests/test_cpos_launch.py -q -k "forecast or told_how"`: exit 0, 24 passed; the whole
++  file: 507 passed, 1 skipped (the paid live test).
++- `uv run python tools/quality_gate.py`: exit 0, 0 findings.
++- Independent checks: the output for a block without facilities is byte-identical to origin/main 36b6d8f
++  (sha256 e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089 over the five model files);
++  the arithmetic matched an independent Fraction calculation over 74 accepted seeded random blocks
++  (11 with debt outside the stated facilities, per-case rates included; reviewer's probe, not in the suite); the
++  adversarial review found and fixed two Medium defects (negative total debt from repayments above
++  base debt; unbounded floating all-in rate). Three boundary tests each kill their mutant (`0 <= rate`
++  to `0 < rate`; `unallocated < 0` to `<= 0`; `due < start` to `<=`).
++- Known limits: debt outside the stated facilities bears interest at the analyst's assumed rate, not a sourced one; with base debt
++  missing no unit check runs on facility balances; the printed-in-CP-1 check for rate terms accepts
++  any matching percent anywhere in CP-1.
++
+ ## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
+ 
+ Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
+@@ -948,39 +971,3 @@ the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `orig
+   forced colours (rule written, not rendered); touch input; the inbox-built library with Run
+   activity; runs without charts or with a committee band; whether a keyboard-only reader finds
+   the full basis (it is in the selected-run panel, not on focus).
+-
+-## 2026-11-10 — Refactoring and optimisation sweep (branch `claude/refactor-optimisation-sweep-01c49e`, tip `dc90974`)
+-
+-Scope: synthetic tests, scratch harnesses and a scratch copy of four retained runs on macOS. No
+-provider was called and nothing ran on Windows. Report with all measurements and the open rows:
+-`docs/sweeps/2026-11-10/REPORT.md`.
+-- Fixed test-first: `state.declared` was `None` for every real handoff (now Blocked 11, Requires
+-  More Work 2 on `cpos-tdg-sol-medium-all-001`); the watcher accepted a cap above the ruling's
+-  USD 20; an overflowing source-text page number stopped the build; a drive-relative source name
+-  was accepted.
+-- Measured: watcher step at 200 ended runs 801.6 ms to 2.4 ms (16,200 file opens to 0); library
+-  rebuild of four runs 0.777 s to 0.576 s, bytes read 185.4 MB to 65.7 MB, built library identical
+-  (build time masked).
+-- Gates on `dc90974`, exit 0: the quality gate (0 findings in 19 files); the `checks.yml` pytest
+-  command plus the chips and inbox tests (1,392 passed, 7 deselected); node page logic (97 pass).
+-- Reviews: per task and whole branch; one Medium (a "failed" run with a live launcher kept its
+-  empty activity entry) fixed in `f28523a` and re-reviewed.
+-- Not verified: Windows; a live watcher or provider path; the browser tests and the page's
+-  rendering of the declared statuses; the full suite; ten open or decision rows listed in the report.
+-- Follow-up (branch `claude/sweep-followup-ruling-rebuild`, tip `e74f2b4`; owner, 2026-11-10): the
+-  two decision rows are ruled and fixed test-first. The watcher starts and launches only under its
+-  standing ruling; a library-rebuild error of any `Exception` type is logged, shown on the page and
+-  retried instead of stopping the watcher. Exit 0 on `e74f2b4`: the quality gate; the same pytest
+-  command (1,412 passed, 7 deselected). Review found the first ruling test passed without the
+-  guard; it is now a cause test (fails with the check removed). The packaged layout was checked by
+-  building the package into a temporary folder on macOS, not on Windows.
+-- Outstanding items and a review of `main` (branch `claude/sweep-outstanding-items`, base
+-  `b2ae395`; owner, 2026-11-10; written without sub-agents): the seven open rows are fixed
+-  test-first (F2, F4, F5, F6, F7, D4, B1) and B3 is accepted and pinned. The review added four
+-  fixes: a page range in handoff text hung the library build; one malformed line in a run folder
+-  ended the watcher; `--poll-seconds 0` and like settings were accepted; the PR check ran no inbox
+-  or chips test. Exit 0 on the branch: the quality gate; the PR check's pytest command with those
+-  tests added (1,437 passed, 7 deselected); node page logic (107 pass). The library built from the
+-  four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
+-  inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
+-  sub-agents), only the author's adversarial pass.
+diff --git a/docs/superpowers/plans/2026-11-12-cp2g-facility-schedule.md b/docs/superpowers/plans/2026-11-12-cp2g-facility-schedule.md
+new file mode 100644
+index 0000000..b9fad04
+--- /dev/null
++++ b/docs/superpowers/plans/2026-11-12-cp2g-facility-schedule.md
+@@ -0,0 +1,313 @@
++# CP-2G Facility Schedule Implementation Plan
++
++> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
++
++**Goal:** When the CP-2G handoff states the issuer's debt facilities, Python computes forecast cash interest and scheduled repayment per facility instead of from one analyst rate and one analyst repayment figure.
++
++**Architecture:** The CP-2G forecast inputs block (`cpos-forecast-inputs/1`) gains an optional `facilities` list. A new pure module turns it into a per-year `(interest, repayment)` schedule; `cp2g.forecast` takes that schedule in place of the `interest_rate` and `debt_repayment` drivers. A block without `facilities` computes exactly as today, byte for byte.
++
++**Tech Stack:** Python, `decimal` (38-digit half-even, existing `cp2g` contexts), pydantic `Contract`, pytest. No new dependency.
++
++**Spec:** This document's Design section. Method source: caos-databricks `dfff264c`, `caos/calculators/credit_model/projection.py` (`facility_rate`, `_schedule`, `_interest`), adapted. No CP-CF request contract, rate deck or reconciliation is taken.
++
++## Design
++
++### Why the facilities are stated by CP-2G, not CP-1
++
++On the active CP-OS path CP-1 is free Markdown. Retained runs (`~/Documents/FinalWorkflow-Live/runs/web-*/CP-1.md`, read only) print facility balances in a table but put coupons, margins, floors and amortisation in prose, under headings that differ run to run. There is no machine-readable facility register to read. CP-1 is not changed. CP-2G, which already reads CP-1 and already restates the ten base operands, restates the facility rows; Python checks each balance and each rate term is printed in CP-1, as it already does for base operands (`cpos_forecast._printed`).
++
++### The `facilities` field
++
++Optional; absent or `null` means today's behaviour. Each row:
++
++| Field | Form | Check |
++| --- | --- | --- |
++| `name` | text, 1 to 120 characters, unique in the list | |
++| `balance` | `^[0-9]{1,6}(\.[0-9]{1,4})?$`, USD millions | printed in CP-1 |
++| `fixed_rate_pct` | percent as CP-1 prints it, `^[0-9]{1,2}(\.[0-9]{1,4})?$`, at most 30, or null | printed in CP-1 |
++| `spread_pct` | same form, at most 20, or null | printed in CP-1 |
++| `floor_pct` | same form, at most 10, or null | printed in CP-1 |
++| `reference_rate` | three decimal fractions (`cp2g.GROWTH_PATTERN`), one per forecast year, or null. The analyst's assumption for the reference rate | none: an assumption |
++| `annual_amortisation` | amount form, USD millions a year, or null (not stated: none) | none: often derived from a percent of principal |
++| `maturity` | `YYYY-MM-DD` or null | |
++
++A row states either `fixed_rate_pct` alone, or `reference_rate` with `spread_pct` (and optionally `floor_pct`); anything else is refused.
++
++### Arithmetic
++
++For facility *i* in forecast year *t* (t = 0, 1, 2), all exact Decimal:
++
++- rate: fixed `fixed_rate_pct / 100`; floating `max(reference_rate[t], floor_pct / 100) + spread_pct / 100` (no floor: the reference rate itself).
++- `interest[i][t] = opening[i][t] * rate[i][t]`
++- `repaid[i][t] = min(annual_amortisation, opening[i][t])` (null amortisation: 0)
++- `opening[i][t+1] = opening[i][t] - repaid[i][t]`; `opening[i][0] = balance`
++- year totals: `interest[t] = sum_i interest[i][t]`, `repayment[t] = sum_i repaid[i][t]`
++
++In `cp2g._year`, with a schedule: cash interest is `interest[t] * (1 + k)` (k the downside rate increase, 0 otherwise), missing with the opening debt's reason when the opening debt is missing; repayment is `repayment[t]`. Everything else in `_year` is unchanged, so total debt still closes at opening debt less repayment.
++
++### Rulings carried in this plan
++
++1. With `facilities` stated, the `interest_rate` and `debt_repayment` drivers are not used in any case. `base_drivers` still states them (schema unchanged). An `upside_drivers` or `downside_drivers` case that names either is refused. A scope limit says so. (Alternative not taken: treat `debt_repayment` as voluntary prepayment on top of the schedule.)
++2. Base debt not in a facility row (`base debt - sum of balances`) bears no interest and is not repaid; its amount is published as `unallocated_debt` and named in a scope limit. Missing base debt: `unallocated_debt` is missing with the base debt's reason.
++3. A facility whose `maturity` falls on or before the third forecast year's end keeps its balance (assumed refinanced), named with its year in a scope limit.
++4. Sum of balances above 1.25 times a known base debt is refused: a unit or currency slip (CP-1 in thousands), not a carrying-value difference.
++6. Rebased onto main `36b6d8f` (2026-11-12): CP-1 may now write a layer-1 forecast block (`parse(..., source="CP-1")`). Facilities are CP-2G's only: a CP-1 block that states `facilities` is refused, as it already is for a shock or cases. CP-1's instruction (`LAYER1_FORECAST_BLOCK`) is not changed.
++5. No presentation change: `cp2g.Year` keeps its fields, so `apps/issuer-library/credit_os/store.py` and the Forecast page read the same keys. New detail appears only in `forecast_exact.json` and `scope_limits`.
++
++### Rulings added in review (2026-11-12, adversarial review of Task 3)
++
++7. Scheduled repayments over the three years above a known base debt are refused (`CP-2G: scheduled repayments total {sum}, more than base debt {debt}`), so total debt never closes below zero. Facility balances above base debt (within ruling 4) are named: `Stated facility balances exceed base debt by {amount}; interest is computed on the stated balances.`
++8. A floating facility's all-in rate, `max(reference_rate[t], floor) + spread`, must be from 0 to 0.30 in every forecast year.
++9. Rate terms must be printed in CP-1 as a percent (the value followed by `%`); the refusal reads `CP-2G: facility {name} {field} {value}% is not printed in CP-1`.
++10. Maturity limits read `{name} matures in FY{year} and is assumed refinanced; no repayment at maturity is modelled.` and, before the forecast, `{name} has a stated maturity of {YYYY-MM-DD}, before the forecast; it is assumed refinanced and no repayment at maturity is modelled.` These replace the text in ruling 3 and Task 3.
++11. Facility names carry no leading or trailing whitespace and are unique ignoring case.
++
++### Rulings added at the whole-branch review (2026-11-12)
++
++12. Supersedes rulings 1 and 2 in part: debt outside the stated facilities (base debt less facility balances, when positive) bears interest at the analyst's `interest_rate` driver of the case and is not repaid. Missing is never zero: publishing interest on part of the debt as the whole was a credit-positive bias. `interest_rate` may therefore vary by case; only `debt_repayment` is unused and refused in a case. Answer key with facilities A and B on base debt 600 at 0.06: interest 37.5, 34.8, 30.6; downside 41.25, 38.28, 33.66. The limit texts in Task 3 are replaced by those in the code (`FACILITY_LIMIT` and the remainder line).
++13. A refused facility row may be repaired by writing `facilities` as null; the retry text says so.
++14. `tests/test_cpos_facilities.py` runs in the PR check.
++
++## Global Constraints
++
++- Excel is input only; no workbook output.
++- Missing is never zero: every value is known, missing with its reason, or not applicable.
++- All sums and products run in `cp2g`'s 38-digit half-even context with the Inexact trap.
++- Expected values in tests are independent of production code: the hand-computed figures below, or `Fraction` arithmetic written in the test.
++- No provider call, no credential file. A live CP-2G run is a separate owner action, not part of this plan.
++- Never change predecessor repositories or retained run directories.
++- One verification record: `VERIFICATION.md`, under 1,000 lines.
++- Every task report ends with a `Not verified:` line. No stub or fake value standing in for real behaviour; no catch-all that hides a failure.
++- Per task run only the named tests (each under 300 seconds). Before completion: `uv run python tools/quality_gate.py`, then confidence-review and rewrite-tournament (post-edit) once on the branch diff.
++
++## Review Focus
++
++1. CP-1 prints thousands, CP-2G states millions (or the reverse): refused by ruling 4, not forecast a thousand times out. Test in Task 3.
++2. A block without `facilities`: `forecast_exact.json` is byte-identical to today's. Test in Task 3.
++3. A rate written `9.5` where CP-1 prints `9.500`: refused, naming the facility and the term. Test in Task 3.
++4. Base debt missing with facilities stated: no exception; interest and debt are missing with the base debt's reason. Test in Task 2.
++5. A case override naming `interest_rate` while facilities are stated: refused, not silently ignored. Test in Task 3.
++
++## File Structure
++
++| File | Responsibility |
++| --- | --- |
++| `src/deploy_workflow/owners/cpos_facilities.py` (new) | `Facility` contract and the pure `schedule` |
++| `src/deploy_workflow/owners/cp2g.py` | `_year` and `forecast` accept a schedule |
++| `src/deploy_workflow/owners/cpos_forecast.py` | `facilities` field, printed checks, wiring, published detail |
++| `src/deploy_workflow/owners/cpos_launch.py` | `FORECAST_BLOCK` instruction text |
++| `src/deploy_vii/methods/cp2g.md` | Method note |
++| `tests/test_cpos_facilities.py` (new) | Tasks 1 to 3 |
++| `tests/test_cpos_launch.py` | Instruction text assertion (Task 4) |
++
++### Answer key (hand-computed; do not edit)
++
++Facilities: **A** fixed 6.00%, balance 400, amortisation 20. **B** floating, reference rate (0.04, 0.03, 0.005), floor 1.00%, spread 3.00%, balance 150, amortisation null. Base debt 600.
++
++| Year | A opening | A interest | B rate | B interest | Interest | Repayment | Closing debt |
++| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
++| 1 | 400 | 24 | 0.07 | 10.5 | 34.5 | 20 | 580 |
++| 2 | 380 | 22.8 | 0.06 | 9 | 31.8 | 20 | 560 |
++| 3 | 360 | 21.6 | 0.04 | 6 | 27.6 | 20 | 540 |
++
++Unallocated debt 50. Downside with rate increase 0.10: interest 37.95, 34.98, 30.36. Cap case: balance 30, amortisation 20 repays 20, 10, 0.
++
++---
++
++### Task 1: Facility contract and schedule
++
++**Files:**
++- Create: `src/deploy_workflow/owners/cpos_facilities.py`
++- Test: `tests/test_cpos_facilities.py`
++
++**Interfaces:**
++- Consumes: `deploy_vii.contracts.Contract`; `cp2g.GROWTH_PATTERN`, `cp2g.AMOUNT_PATTERN`, `cp2g._EXACT`.
++- Produces:
++  - `class Facility(Contract)` with the eight fields in the Design table (`reference_rate: tuple[str, str, str] | None`).
++  - `@dataclass(frozen=True) class FacilityYear: opening: Decimal; rate: Decimal; interest: Decimal; repaid: Decimal; closing: Decimal`
++  - `@dataclass(frozen=True) class Schedule: rows: tuple[tuple[FacilityYear, FacilityYear, FacilityYear], ...]` (one triple per facility, input order) with `def totals(self) -> tuple[tuple[Decimal, Decimal], tuple[Decimal, Decimal], tuple[Decimal, Decimal]]` returning `(interest, repayment)` per year.
++  - `def schedule(facilities: Sequence[Facility]) -> Schedule`
++
++- [ ] **Step 1: Write the failing tests**
++
++```python
++A = {"name": "Notes", "balance": "400", "fixed_rate_pct": "6.00", "spread_pct": None,
++     "floor_pct": None, "reference_rate": None, "annual_amortisation": "20", "maturity": None}
++B = {"name": "Term loan", "balance": "150", "fixed_rate_pct": None, "spread_pct": "3.00",
++     "floor_pct": "1.00", "reference_rate": ["0.04", "0.03", "0.005"],
++     "annual_amortisation": None, "maturity": None}
++
++def test_schedule_matches_the_answer_key():
++    s = schedule([Facility(**A), Facility(**B)])
++    assert s.totals() == ((D("34.5"), D("20")), (D("31.8"), D("20")), (D("27.6"), D("20")))
++    assert [y.rate for y in s.rows[1]] == [D("0.07"), D("0.06"), D("0.04")]
++    assert [y.closing for y in s.rows[0]] == [D("380"), D("360"), D("340")]
++
++def test_amortisation_never_takes_a_balance_below_zero():
++    s = schedule([Facility(**{**A, "balance": "30"})])
++    assert [y.repaid for y in s.rows[0]] == [D("20"), D("10"), D("0")]
++
++@pytest.mark.parametrize("change", [
++    {"fixed_rate_pct": None},                                   # no rate at all
++    {"spread_pct": "3.00"},                                     # fixed and floating together
++    {"fixed_rate_pct": None, "spread_pct": "3.00"},             # spread without a reference rate
++    {"fixed_rate_pct": "31"}, {"fixed_rate_pct": "6.00001"}, {"balance": "-1"}, {"name": ""},
++])
++def test_a_row_that_is_not_one_rate_form_is_refused(change):
++    with pytest.raises(ValidationError):
++        Facility(**{**A, **change})
++```
++
++Compare Decimals by value (`==`), with `D = Decimal`.
++
++- [ ] **Step 2: Run** `uv run pytest tests/test_cpos_facilities.py -q` — expected: fails on import.
++- [ ] **Step 3: Implement `Facility` and `schedule`** per the Design's Arithmetic section, inside `localcontext(cp2g._EXACT)`. The rate-form rule and the 30 / 20 / 10 ceilings are one `model_validator`.
++- [ ] **Step 4: Run** the same command — expected: all pass.
++- [ ] **Step 5: Commit** `feat(cp2g): facility schedule from stated terms`
++
++### Task 2: The engine takes a schedule
++
++**Files:**
++- Modify: `src/deploy_workflow/owners/cp2g.py:497-556` (`_year`, `forecast`)
++- Test: `tests/test_cpos_facilities.py`
++
++**Interfaces:**
++- Consumes: `Schedule.totals()` from Task 1.
++- Produces: `forecast(*, operands, drivers, shock, schedule: tuple[tuple[Decimal, Decimal], ...] | None = None) -> CaseForecast`. `_year` gains a last parameter `scheduled: tuple[Decimal, Decimal] | None`. With `None`, both behave exactly as now.
++
++- [ ] **Step 1: Write the failing tests** using `tests/test_cpos_launch.py`'s `BASE` and `PATHS` values to build `Operands` and `Drivers`:
++
++```python
++TOTALS = ((D("34.5"), D("20")), (D("31.8"), D("20")), (D("27.6"), D("20")))
++
++def test_scheduled_interest_and_repayment_replace_the_two_drivers():
++    years = cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=TOTALS).years
++    assert [y.interest.amount for y in years] == [D("34.5"), D("31.8"), D("27.6")]
++    assert [y.closing_debt.amount for y in years] == [D("580"), D("560"), D("540")]
++
++def test_the_downside_rate_increase_scales_scheduled_interest():
++    years = cp2g.forecast(operands=OPERANDS, drivers=DRIVERS,
++                          shock=(D("0"), D("0.10")), schedule=TOTALS).years
++    assert [y.interest.amount for y in years] == [D("37.95"), D("34.98"), D("30.36")]
++
++def test_no_schedule_is_todays_forecast():
++    assert cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=None) == \
++           cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None)
++
++def test_missing_base_debt_stays_missing_with_its_reason():      # Review Focus 4
++    ops = replace(OPERANDS, debt=cp2g.Val(None, "why"))
++    y = cp2g.forecast(operands=ops, drivers=DRIVERS, shock=None, schedule=TOTALS).years[0]
++    assert (y.interest.amount, y.interest.reason) == (None, "why")
++    assert y.closing_debt.amount is None
++```
++
++Also assert year 1 free cash flow against a `Fraction` computed in the test from `BASE`, `PATHS` and interest 34.5 (the pattern of `key_case` in `tests/test_cpos_launch.py`).
++
++- [ ] **Step 2: Run** `uv run pytest tests/test_cpos_facilities.py -q` — expected: the four new tests fail (`unexpected keyword argument 'schedule'`).
++- [ ] **Step 3: Implement.** In `_year`, when `scheduled` is given: `interest = _apply(lambda d: scheduled[0] * (1 + k), debt)` and `rep = scheduled[1]`. `forecast` passes `schedule[t]`.
++- [ ] **Step 4: Run** `uv run pytest tests/test_cpos_facilities.py tests/test_cpos_launch.py -q -k "forecast or facilit"` — expected: all pass.
++- [ ] **Step 5: Commit** `feat(cp2g): forecast accepts a facility schedule`
++
++### Task 3: The inputs block states facilities
++
++**Files:**
++- Modify: `src/deploy_workflow/owners/cpos_forecast.py` (`ForecastInputs`, `parse`, `model_files`)
++- Test: `tests/test_cpos_facilities.py`
++
++**Interfaces:**
++- Consumes: `Facility`, `schedule`, `Schedule` (Task 1); `cp2g.forecast(..., schedule=)` (Task 2).
++- Produces: `ForecastInputs.facilities: tuple[Facility, ...] | None = None` (1 to 40 rows when stated). `forecast_exact.json` gains, only when facilities are stated: `facilities` (the rows as stated), `facility_schedule` (per facility `name` and three years of `opening`, `rate`, `interest`, `repaid`, `closing` as plain decimal strings), `unallocated_debt` (`{"amount", "reason"}`), and three appended `scope_limits`.
++
++Scope limit texts (exact; `{…}` filled, amounts as plain decimal strings):
++
++- `Cash interest and scheduled repayment are computed from the facility terms the CP-2G handoff stated; the interest_rate and debt_repayment drivers are not used.`
++- `Debt of {amount} is not in a stated facility; it bears no interest and is not repaid in this forecast.` (omitted when the amount is 0; when base debt is missing: `Base debt is missing, so debt outside the stated facilities is not known.`)
++- `{name} matures in FY{year} and is assumed refinanced; its balance is held.` (one per such facility)
++
++Refusals (`ValueError`, exact text):
++
++- `CP-2G: facility {name} {field} {value} is not printed in CP-1` (`field` one of `balance`, `fixed_rate_pct`, `spread_pct`, `floor_pct`)
++- `CP-2G: facility balances total {sum}, more than 1.25 times base debt {debt}; check the unit`
++- `CP-2G: {case} states {driver}, which is not used when facilities are stated` (`case` is `upside_drivers` or `downside_drivers`)
++- `CP-1: a layer-1 forecast states no facilities` (a block parsed with `source="CP-1"`; extend the existing shock-and-cases refusal's condition, keeping its own text for those)
++- duplicate names: a pydantic issue through the existing `shape_issues` path.
++
++- [ ] **Step 1: Write the failing tests** with `forecast_block` and `BASE` imported from `tests/test_cpos_launch.py`, CP-1 text `" ".join(BASE.values()) + " 400 150 6.00 3.00 1.00"` (call `model_files(cp1, handoff)` with the default `source="CP-2G"`):
++
++```python
++def test_a_block_with_facilities_publishes_the_answer_key():
++    exact = json.loads(model_files(CP1, block(facilities=[A, B]))["forecast_exact.json"])
++    ref = exact["outputs"]["REFERENCE"]["years"]
++    assert [D(y["interest"]["amount"]) for y in ref] == [D("34.5"), D("31.8"), D("27.6")]
++    assert [D(y["closing_debt"]["amount"]) for y in ref] == [D("580"), D("560"), D("540")]
++    assert D(exact["unallocated_debt"]["amount"]) == D("50")
++    assert D(exact["facility_schedule"][1]["years"][2]["rate"]) == D("0.04")
++    assert "Debt of 50 is not in a stated facility; it bears no interest and is not repaid in this forecast." in exact["scope_limits"]
++
++def test_a_block_without_facilities_is_byte_identical():          # Review Focus 2
++    assert model_files(CP1, block()) == model_files(CP1, block(facilities=None))
++    assert b"facilit" not in model_files(CP1, block())["forecast_exact.json"]
++
++@pytest.mark.parametrize("rows, cp1, message", [
++    ([{**A, "fixed_rate_pct": "6.0"}], CP1_TEXT, "facility Notes fixed_rate_pct 6.0 is not printed in CP-1"),   # Focus 3
++    ([{**A, "balance": "400000"}], CP1_TEXT + " 400000", "more than 1.25 times base debt 600; check the unit"),  # Focus 1
++])
++def test_refusals(rows, cp1, message): ...
++
++def test_a_case_override_of_an_unused_driver_is_refused():        # Review Focus 5
++    # downside_drivers names interest_rate, facilities stated
++    ... match="downside_drivers states interest_rate, which is not used when facilities are stated"
++
++def test_cp1s_layer1_block_states_no_facilities():
++    # layer1_block(facilities=[A]) from tests/test_cpos_launch.py, parsed with source="CP-1"
++    ... match="CP-1: a layer-1 forecast states no facilities"
++
++def test_a_maturity_inside_the_forecast_is_named():
++    # A with maturity inside the second forecast year (years run 2025-04-01 to 2028-03-31)
++    ... "Notes matures in FY2026 and is assumed refinanced; its balance is held." in scope_limits
++```
++
++Published amounts are compared as `Decimal` (the existing `_cell` writes `format(amount, "f")`, which may keep trailing zeros). In scope-limit text, amounts are written normalised without an exponent (`50`, not `50.00`).
++
++- [ ] **Step 2: Run** `uv run pytest tests/test_cpos_facilities.py -q` — expected: new tests fail (`facilities` is an extra field or absent from output).
++- [ ] **Step 3: Implement.** `parse` runs the printed and 1.25 checks after the base-operand check. `model_files` builds the schedule once and passes `schedule.totals()` to every case's `cp2g.forecast`. The three new keys and limits are written only when facilities are stated (the existing `_stated` pattern).
++- [ ] **Step 4: Run** `uv run pytest tests/test_cpos_facilities.py -q` and `uv run pytest tests/test_cpos_launch.py -q -k forecast` — expected: all pass.
++- [ ] **Step 5: Commit** `feat(cp2g): forecast inputs block states facilities`
++
++### Task 4: Instruction text, method note, verification record, gates
++
++**Files:**
++- Modify: `src/deploy_workflow/owners/cpos_launch.py:1473` (`FORECAST_BLOCK` only; `LAYER1_FORECAST_BLOCK` is not touched)
++- Modify: `src/deploy_vii/methods/cp2g.md` (Method bullet on interest and debt; the "New borrowing, refinancing, maturities" and "Interest on average balance" rows)
++- Modify: `VERIFICATION.md`
++- Test: `tests/test_cpos_launch.py` (next to the other `all_instructions` assertions)
++
++**Interfaces:**
++- Consumes: the field names and forms of Task 1 and the rulings above.
++
++- [ ] **Step 1: Write the failing test**
++
++```python
++def test_cp2g_is_told_how_to_state_facilities(tmp_path):
++    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
++    head = texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
++    for word in ("`facilities`", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate",
++                 "annual_amortisation", "maturity", "exactly as CP-1 prints", "% sign", '"0.04"'):
++        assert word in head
++    assert "`facilities`" not in texts["CP-1"]
++```
++
++- [ ] **Step 2: Run** `uv run pytest tests/test_cpos_launch.py -q -k told_how_to_state_facilities` — expected: fails.
++- [ ] **Step 3: Add this sentence group to `FORECAST_BLOCK`, after the `upside_drivers` sentence** (exact copy):
++
++> `facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate terms, otherwise write null. Each row is `{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", "annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, `spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states `fixed_rate_pct` and null for the other rate fields; a floating-rate facility states `spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for each forecast year as three decimal fractions (4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread must be between 0% and 30% in every year. Facility names are unique. The facilities' scheduled repayments over the three years must not exceed base debt. `annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is YYYY-MM-DD or null. When `facilities` is stated Python computes cash interest and scheduled repayment from it and does not use the `interest_rate` and `debt_repayment` drivers, so do not vary those two in `upside_drivers` or `downside_drivers`.
++
++- [ ] **Step 4: Update `methods/cp2g.md`**: the Method bullet says interest and repayment come from stated facilities when present (analyst rate and repayment otherwise); the maturities row says a maturity inside the forecast is held and named; no other row changes.
++- [ ] **Step 5: Run** `uv run pytest tests/test_cpos_launch.py -q -k "instruction or forecast or told"` and `uv run python tools/quality_gate.py` — expected: pass, exit 0.
++- [ ] **Step 6: Record in `VERIFICATION.md`** (986 lines now; trim its oldest entries so the file ends under 1,000) one entry: scope "offline synthetic tests of the facility schedule; no provider called, no model response; a live CP-2G run with `facilities` is not yet done", the commands run and their exit codes.
++- [ ] **Step 7: Commit** `docs(cp2g): facility schedule instructions and record`
++
++## After the tasks
++
++- Whole-branch: confidence-review and rewrite-tournament (post-edit, `cp2g._year`, `cpos_facilities.schedule`, `cpos_forecast.model_files`) once on the branch diff.
++- Not in this plan, owner's call: one paid CP-2G run on an issuer whose CP-1 prints facility terms, read against its handoff, to show a real model fills `facilities` correctly. Until then the change is proven on synthetic inputs only.
+diff --git a/src/deploy_vii/methods/cp2g.md b/src/deploy_vii/methods/cp2g.md
+index e91a74c..692fad2 100644
+--- a/src/deploy_vii/methods/cp2g.md
++++ b/src/deploy_vii/methods/cp2g.md
+@@ -9,7 +9,7 @@ Moved from the draft at Stage 2 (`docs/CP2G-OWNER-LEASE.md` Files). The r14 CP-2
+ ## Method
+ 
+ - Base period: the one CP-1 T4.10 column, the LTM Q4 column of the run's base year (LTM Q4 25 when the run has no context); forecast years the three fiscal years after the base year (annual, three years, one fiscal year of source).
+-- Base case: revenue grows by the analyst rate; EBITDA is revenue x margin; cash interest is the analyst rate x opening debt; cash taxes and working capital are one share of revenue; capital expenditure is a share of revenue; free cash flow is EBITDA less those outflows; debt falls by the analyst's repayment; cash moves by free cash flow less distributions and repayment and is never floored (negative cash is an unfunded requirement, not a plug).
++- Base case: revenue grows by the analyst rate; EBITDA is revenue x margin; cash interest is the analyst rate x opening debt, or, when the handoff states facilities, each facility's balance times its fixed coupon or its floored reference rate plus spread, with debt outside the stated facilities bearing interest at the analyst rate; cash taxes and working capital are one share of revenue; capital expenditure is a share of revenue; free cash flow is EBITDA less those outflows; debt falls by the analyst's repayment, or, when facilities are stated, by their stated annual amortisation; cash moves by free cash flow less distributions and repayment and is never floored (negative cash is an unfunded requirement, not a plug).
+ - Downside: CP-2A's settled scenario shock (EBITDA decline, interest increase) applied to every forecast year on the base path; every other driver is held.
+ - Break tests: CP-2A's settled levels re-tested along the path (free cash flow at or below zero, coverage floor, and the analyst-mapped leverage and coverage watch levels), plus the analyst's minimum liquidity. The first year a test is met is a fiscal year, "Not reached by" the third forecast year (FY2028 when the run has no context), or missing with the root reason.
+ - Zero, missing, not applicable and blocked are distinct everywhere; a ratio with a non-positive denominator is missing, not zero.
+@@ -21,7 +21,7 @@ Moved from the draft at Stage 2 (`docs/CP2G-OWNER-LEASE.md` Files). The r14 CP-2
+ | Upside case | The base and downside cases are the two the CP-MODEL consumer needs; the pack has one fiscal year | No upside path or probability weighting; probability weighting is a prohibited conclusion |
+ | Quarterly path | One fiscal year of source; annual granularity | Intra-year troughs are not seen; own limitation "no quarterly path" |
+ | Perimeter split (finance company, borrower, guarantor) | Perimeters unavailable in the pack | Consolidated group only |
+-| New borrowing, refinancing, maturities | Not modelled; debt moves only by the analyst's repayments (see the observation below) | Own limitation "New borrowing is not modelled"; the maturity wall and funding gap belong to CP-2D and CP-3C |
++| New borrowing, refinancing, maturities | New borrowing is not modelled; a stated maturity inside the forecast is assumed refinanced and named in a scope limit; debt moves only by the analyst's or the facilities' scheduled repayments (see the observation below) | Own limitation "New borrowing is not modelled"; the maturity wall and funding gap belong to CP-2D and CP-3C |
+ | Interest on average balance | Interest is the rate on the opening balance (no circularity) | Interest is slightly overstated when debt falls during a year |
+ | Tax shield | Cash taxes and working capital are modelled together as one share of revenue | Taxes do not move with interest |
+ | Working-capital cycle | Same combined share | No days-based cycle |
+diff --git a/src/deploy_workflow/owners/cp2g.py b/src/deploy_workflow/owners/cp2g.py
+index 00b42dc..f0bb6b7 100644
+--- a/src/deploy_workflow/owners/cp2g.py
++++ b/src/deploy_workflow/owners/cp2g.py
+@@ -495,21 +495,28 @@ class CaseForecast:
+ 
+ 
+ def _year(
+-    opening: tuple[Val, Val, Val],
++    opening: tuple[Val, Val, Val, Val],
+     drivers: Drivers,
+     t: int,
+     shock: tuple[Decimal, Decimal] | None,
+-    undrawn: Val,
++    scheduled: tuple[Decimal, Decimal] | None = None,
+ ) -> Year:
+-    """One forecast year from the prior revenue, closing debt and closing cash."""
+-    revenue, debt, cash = opening
++    """One forecast year from the prior revenue, closing debt, closing cash and the (held) undrawn
++    facilities. `scheduled` is the
++    facility schedule's (interest, repayment): it replaces the interest-rate and repayment drivers
++    (interest still scales by the shock's rate increase and is missing with the debt)."""
++    revenue, debt, cash, undrawn = opening
+     g, m = drivers.revenue_growth[t], drivers.ebitda_margin[t]
+     c, w = drivers.capex_pct_revenue[t], drivers.tax_wc_pct_revenue[t]
+     rate, div, rep = drivers.interest_rate[t], drivers.dividends[t], drivers.debt_repayment[t]
+     s, k = (Decimal(0), Decimal(0)) if shock is None else shock  # the base case: no shock (exact)
+     rev = _apply(lambda r: r * (1 + g), revenue)
+     ebitda = _apply(lambda r: r * m * (1 - s), rev)
+-    interest = _apply(lambda d: d * (rate * (1 + k)), debt)
++    if scheduled is None:
++        interest = _apply(lambda d: d * (rate * (1 + k)), debt)
++    else:
++        interest = _apply(lambda d: scheduled[0] * (1 + k), debt)
++        rep = scheduled[1]
+     tax_wc = _apply(lambda r: r * w, rev)
+     capex = _apply(lambda r: r * c, rev)
+     cfo = _apply(lambda e, i, x: e - i - x, ebitda, interest, tax_wc)
+@@ -542,17 +549,25 @@ def _year(
+ 
+ 
+ def forecast(
+-    *, operands: Operands, drivers: Drivers, shock: tuple[Decimal, Decimal] | None
++    *,
++    operands: Operands,
++    drivers: Drivers,
++    shock: tuple[Decimal, Decimal] | None,
++    schedule: tuple[tuple[Decimal, Decimal], ...] | None = None,
+ ) -> CaseForecast:
+     """One case's three years. `shock` is None (base) or CP-2A's (decline, increase), applied
+-    to every year: EBITDA x (1 - decline), rate x (1 + increase), everything else held."""
+-    opening = (operands.revenue, operands.debt, operands.cash)
++    to every year: EBITDA x (1 - decline), rate x (1 + increase), everything else held.
++    `schedule` (three (interest, repayment) pairs) replaces the interest-rate and repayment
++    drivers."""
++    if schedule is not None and len(schedule) != 3:
++        raise ValueError("a schedule states exactly three (interest, repayment) pairs")
++    opening = (operands.revenue, operands.debt, operands.cash, operands.undrawn)
+     years: list[Year] = []
+     with _exact_digits("the base case forecast" if shock is None else "the downside case forecast"):
+         for t in range(3):
+-            y = _year(opening, drivers, t, shock, operands.undrawn)
++            y = _year(opening, drivers, t, shock, None if schedule is None else schedule[t])
+             years.append(y)
+-            opening = (y.revenue, y.closing_debt, y.closing_cash)
++            opening = (y.revenue, y.closing_debt, y.closing_cash, y.undrawn)
+     return CaseForecast(years=(years[0], years[1], years[2]))
+ 
+ 
+diff --git a/src/deploy_workflow/owners/cpos_facilities.py b/src/deploy_workflow/owners/cpos_facilities.py
+new file mode 100644
+index 0000000..1021ab5
+--- /dev/null
++++ b/src/deploy_workflow/owners/cpos_facilities.py
+@@ -0,0 +1,121 @@
++"""CP-2G facility schedule: stated debt-facility terms to a three-year interest and repayment plan.
++
++Pure arithmetic in `cp2g`'s exact context. A facility states either a fixed rate, or a reference
++rate (one fraction per forecast year) with a spread and an optional floor. Missing is never zero:
++a null amortisation means the facility is not repaid, and every other term is required by its form.
++"""
++
++from collections.abc import Sequence
++from dataclasses import dataclass
++from datetime import date
++from decimal import Decimal, localcontext
++from typing import Annotated
++
++from pydantic import Field, model_validator
++
++from deploy_vii.contracts import Contract
++from deploy_workflow.owners import cp2g
++
++PERCENT_PATTERN = r"^[0-9]{1,2}(\.[0-9]{1,4})?$"
++Percent = Annotated[str, Field(pattern=PERCENT_PATTERN)]
++_CEILINGS = (("fixed_rate_pct", 30), ("spread_pct", 20), ("floor_pct", 10))
++
++
++class Facility(Contract):
++    name: Annotated[str, Field(min_length=1, max_length=120)]
++    balance: cp2g.Amount
++    fixed_rate_pct: Percent | None
++    spread_pct: Percent | None
++    floor_pct: Percent | None
++    # lax: a Python caller passes the JSON array as a list; the Contract's strict mode wants a tuple
++    reference_rate: (
++        Annotated[tuple[cp2g.Growth, cp2g.Growth, cp2g.Growth], Field(strict=False)] | None
++    )
++    annual_amortisation: cp2g.Amount | None
++    maturity: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] | None
++
++    @model_validator(mode="after")
++    def _one_rate_form(self) -> "Facility":
++        for field, ceiling in _CEILINGS:
++            value = getattr(self, field)
++            if value is not None and Decimal(value) > ceiling:
++                raise ValueError(f"{field} {value} is above {ceiling}")
++        floating = (self.reference_rate, self.spread_pct)
++        if self.fixed_rate_pct is not None:
++            if any(term is not None for term in (*floating, self.floor_pct)):
++                raise ValueError("a facility states a fixed rate or a floating one, not both")
++        elif self.reference_rate is None or self.spread_pct is None:
++            raise ValueError("a facility states a fixed rate, or a reference rate with a spread")
++        if self.maturity is not None:
++            try:
++                date.fromisoformat(self.maturity)
++            except ValueError:
++                raise ValueError(f"maturity {self.maturity} is not a calendar date") from None
++        if self.name != self.name.strip():
++            raise ValueError("facility name must not start or end with whitespace")
++        if self.reference_rate is not None:
++            for year in range(3):
++                with localcontext(cp2g._EXACT):
++                    rate = _rate(self, year)
++                if not 0 <= rate <= Decimal("0.30"):
++                    raise ValueError(
++                        f"all-in rate {format(rate, 'f')} in forecast year {year + 1} is outside "
++                        "0 to 0.30; reference_rate is a decimal fraction (0.04 is 4%)"
++                    )
++        return self
++
++
++@dataclass(frozen=True)
++class FacilityYear:
++    opening: Decimal
++    rate: Decimal
++    interest: Decimal
++    repaid: Decimal
++    closing: Decimal
++
++
++@dataclass(frozen=True)
++class Schedule:
++    rows: tuple[tuple[FacilityYear, FacilityYear, FacilityYear], ...]
++
++    def totals(
++        self,
++    ) -> tuple[tuple[Decimal, Decimal], tuple[Decimal, Decimal], tuple[Decimal, Decimal]]:
++        """(interest, repayment) for each forecast year, summed over the facilities."""
++        with localcontext(cp2g._EXACT):
++            sums = [
++                (
++                    sum((row[t].interest for row in self.rows), Decimal(0)),
++                    sum((row[t].repaid for row in self.rows), Decimal(0)),
++                )
++                for t in range(3)
++            ]
++        return sums[0], sums[1], sums[2]
++
++
++def _rate(facility: Facility, year: int) -> Decimal:
++    if facility.fixed_rate_pct is not None:
++        return Decimal(facility.fixed_rate_pct) / 100
++    assert facility.reference_rate is not None and facility.spread_pct is not None
++    reference = Decimal(facility.reference_rate[year])
++    if facility.floor_pct is not None:
++        reference = max(reference, Decimal(facility.floor_pct) / 100)
++    return reference + Decimal(facility.spread_pct) / 100
++
++
++def _years(facility: Facility) -> tuple[FacilityYear, FacilityYear, FacilityYear]:
++    amortisation = Decimal(facility.annual_amortisation or 0)
++    opening = Decimal(facility.balance)
++    years: list[FacilityYear] = []
++    for t in range(3):
++        rate = _rate(facility, t)
++        repaid = min(amortisation, opening)
++        years.append(FacilityYear(opening, rate, opening * rate, repaid, opening - repaid))
++        opening -= repaid
++    return years[0], years[1], years[2]
++
++
++def schedule(facilities: Sequence[Facility]) -> Schedule:
++    """One three-year triple per facility, in input order."""
++    with localcontext(cp2g._EXACT):
++        return Schedule(tuple(_years(f) for f in facilities))
+diff --git a/src/deploy_workflow/owners/cpos_forecast.py b/src/deploy_workflow/owners/cpos_forecast.py
+index 107f476..5eec10e 100644
+--- a/src/deploy_workflow/owners/cpos_forecast.py
++++ b/src/deploy_workflow/owners/cpos_forecast.py
+@@ -13,7 +13,7 @@ import json
+ import re
+ from dataclasses import fields
+ from datetime import date, timedelta
+-from decimal import Decimal
++from decimal import Decimal, localcontext
+ from typing import Annotated
+ 
+ from pydantic import Field, ValidationError, model_validator
+@@ -22,6 +22,7 @@ from deploy_vii.contracts import Contract
+ from deploy_vii.live.schema import exact_json, json_object
+ from deploy_vii.readiness import shape_issues
+ from deploy_workflow.owners import cp2g
++from deploy_workflow.owners.cpos_facilities import Facility, Schedule, schedule
+ from deploy_workflow.prose_checks import FORECAST_HEADING, reader_passages
+ 
+ HEADING = FORECAST_HEADING
+@@ -98,6 +99,7 @@ class ForecastInputs(Contract):
+     upside_drivers: CaseDrivers | None = None
+     downside_drivers: CaseDrivers | None = None
+     years: tuple[Span, Span, Span]
++    facilities: Annotated[tuple[Facility, ...], Field(min_length=1, max_length=40)] | None = None
+     scope_limits: tuple[str, ...]
+ 
+     @model_validator(mode="after")
+@@ -114,6 +116,10 @@ class ForecastInputs(Contract):
+             for a, b in zip(self.years, self.years[1:], strict=False)
+         ):
+             raise ValueError("each year must start the day after the previous one ends")
++        if self.facilities is not None and len({f.name.casefold() for f in self.facilities}) < len(
++            self.facilities
++        ):
++            raise ValueError("facility names must be unique")
+         return self
+ 
+ 
+@@ -142,6 +148,12 @@ def _printed(text: str, amount: str) -> bool:
+     )
+ 
+ 
++def _printed_percent(text: str, value: str) -> bool:
++    """Whether CP-1 prints the rate term as stated, as a percent: `6.00%` or `6.00 %`, the number
++    not the tail of a longer one."""
++    return re.search(rf"(?<![0-9.,]){re.escape(value)} ?%", text) is not None
++
++
+ _CELL = re.compile(r"(?:\+|(?P<minus>[-\u2212]))?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
+ _BRACKET = re.compile(r"\((?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\)")
+ 
+@@ -298,6 +310,8 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
+         inputs.downside_shock or inputs.upside_drivers or inputs.downside_drivers
+     ):
+         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
++    if source == "CP-1" and inputs.facilities:
++        raise ValueError("CP-1: a layer-1 forecast states no facilities")
+     for key, operand in inputs.base.items():
+         if source == "CP-2G":
+             if operand.row is not None or operand.period is not None:
+@@ -306,9 +320,59 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
+                 raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
+         elif (problem := _layer1_problem(cp1_text, key, operand)) is not None:
+             raise ValueError(f"{source}: {problem}")
++    if inputs.facilities:
++        _check_facilities(inputs, inputs.facilities, cp1_text)
+     return inputs
+ 
+ 
++def _check_facilities(
++    inputs: ForecastInputs, facilities: tuple[Facility, ...], cp1_text: str
++) -> None:
++    """Each stated term is printed in CP-1, the balances fit the base debt, and no case names a
++    driver the schedule replaces."""
++    for facility in facilities:
++        if not _printed(cp1_text, facility.balance):
++            raise ValueError(
++                f"CP-2G: facility {facility.name} balance {facility.balance} is not printed in CP-1"
++            )
++        for field in ("fixed_rate_pct", "spread_pct", "floor_pct"):
++            value = getattr(facility, field)
++            if value is not None and not _printed_percent(cp1_text, value):
++                raise ValueError(
++                    f"CP-2G: facility {facility.name} {field} {value}% is not printed in CP-1"
++                )
++    debt = inputs.base["debt"].amount
++    if debt is not None:
++        with localcontext(cp2g._EXACT):
++            total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
++            too_much = total > Decimal("1.25") * Decimal(debt)
++            repaid = sum((r for _, r in schedule(facilities).totals()), Decimal(0))
++            over_debt = repaid > Decimal(debt)
++        if too_much:
++            raise ValueError(
++                f"CP-2G: facility balances total {format(total, 'f')}, more than 1.25 times base "
++                f"debt {debt}; check the unit"
++            )
++        if over_debt:
++            raise ValueError(
++                f"CP-2G: scheduled repayments total {_plain_amount(repaid)}, more than base debt "
++                f"{_plain_amount(Decimal(debt))}"
++            )
++    for name in ("upside_drivers", "downside_drivers"):
++        case: CaseDrivers | None = getattr(inputs, name)
++        if case is not None and case.debt_repayment is not None:
++            raise ValueError(
++                f"CP-2G: {name} states debt_repayment, which is not used when facilities are stated"
++            )
++
++
++_FACILITY_YEAR = ("opening", "rate", "interest", "repaid", "closing")
++FACILITY_LIMIT = (
++    "Cash interest on the stated facilities and scheduled repayment are computed from the "
++    "facility terms the CP-2G handoff stated; the analyst's repayment assumption is not used."
++)
++
++
+ def _cell(value: cp2g.Val) -> dict[str, str | None]:
+     amount = None if value.amount is None else format(value.amount, "f")
+     return {"amount": amount, "reason": value.reason}
+@@ -318,6 +382,70 @@ def _stated(key: str, case: CaseDrivers | None) -> dict[str, object]:
+     return {} if case is None else {key: case.model_dump(mode="json", exclude_none=True)}
+ 
+ 
++def _plain_amount(amount: Decimal) -> str:
++    return format(amount.normalize(), "f")
++
++
++def _facility_detail(
++    inputs: ForecastInputs, facilities: tuple[Facility, ...], plan: Schedule
++) -> tuple[dict[str, object], list[str]]:
++    """The published facility keys and the three appended scope limits."""
++    per_facility = [
++        {
++            "name": facility.name,
++            "years": [
++                {"year": span.year, **{k: format(getattr(y, k), "f") for k in _FACILITY_YEAR}}
++                for span, y in zip(inputs.years, row, strict=True)
++            ],
++        }
++        for facility, row in zip(facilities, plan.rows, strict=True)
++    ]
++    debt = inputs.base["debt"]
++    with localcontext(cp2g._EXACT):
++        unallocated = (
++            None
++            if debt.amount is None
++            else Decimal(debt.amount) - sum((Decimal(f.balance) for f in facilities), Decimal(0))
++        )
++    limits = [FACILITY_LIMIT]
++    if unallocated is None:
++        limits.append("Base debt is missing, so debt outside the stated facilities is not known.")
++    elif unallocated > 0:
++        limits.append(
++            f"Debt of {_plain_amount(unallocated)} is not in a stated facility; it bears interest "
++            "at the analyst's assumed rate and is not repaid in this forecast."
++        )
++    elif unallocated < 0:
++        limits.append(
++            f"Stated facility balances exceed base debt by {_plain_amount(-unallocated)}; "
++            "interest is computed on the stated balances."
++        )
++    spans = [(date.fromisoformat(s.start), date.fromisoformat(s.end), s.year) for s in inputs.years]
++    for facility in facilities:
++        if facility.maturity is None:
++            continue
++        due = date.fromisoformat(facility.maturity)
++        if due < spans[0][0]:
++            limits.append(
++                f"{facility.name} has a stated maturity of {facility.maturity}, before the "
++                "forecast; it is assumed refinanced and no repayment at maturity is modelled."
++            )
++        elif due <= spans[2][1]:
++            year = next(y for start, end, y in spans if start <= due <= end)
++            limits.append(
++                f"{facility.name} matures in FY{year} and is assumed refinanced; "
++                "no repayment at maturity is modelled."
++            )
++    return {
++        "facilities": [f.model_dump(mode="json") for f in facilities],
++        "facility_schedule": per_facility,
++        "unallocated_debt": {
++            "amount": None if unallocated is None else format(unallocated, "f"),
++            "reason": debt.reason if unallocated is None else None,
++        },
++    }, limits
++
++
+ def _sha(raw: bytes) -> str:
+     return hashlib.sha256(raw).hexdigest()
+ 
+@@ -326,6 +454,30 @@ def _json(document: object) -> bytes:
+     return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+ 
+ 
++def _unallocated(debt: Decimal | None, facilities: tuple[Facility, ...] | None) -> Decimal | None:
++    """Base debt not in a stated facility, when known and positive; else None."""
++    if debt is None or facilities is None:
++        return None
++    with localcontext(cp2g._EXACT):
++        rest = Decimal(debt) - sum((Decimal(f.balance) for f in facilities), Decimal(0))
++    return rest if rest > 0 else None
++
++
++def _with_remainder(
++    totals: tuple[tuple[Decimal, Decimal], ...] | None,
++    remainder: Decimal | None,
++    rate: cp2g.Triple,
++) -> tuple[tuple[Decimal, Decimal], ...] | None:
++    """The schedule's pairs with the unallocated debt's interest at the case's own rate added;
++    it is not repaid."""
++    if totals is None or remainder is None:
++        return totals
++    with localcontext(cp2g._EXACT):
++        return tuple(
++            (i + remainder * r, repaid) for (i, repaid), r in zip(totals, rate, strict=True)
++        )
++
++
+ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
+     """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
+     forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
+@@ -349,10 +501,19 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str,
+     if inputs.downside_shock is not None:
+         shock = inputs.downside_shock
+         cases["DOWNSIDE"] = (base, (Decimal(shock.ebitda_decline), Decimal(shock.rate_increase)))
++    facilities = inputs.facilities
++    plan = None if facilities is None else schedule(facilities)
++    totals = None if plan is None else plan.totals()
++    remainder = _unallocated(operands.debt.amount, facilities)
+     outputs = {}
+     for case, (submitted, shock_pair) in cases.items():
+         drivers = cp2g.Drivers.from_submission(submitted)
+-        result = cp2g.forecast(operands=operands, drivers=drivers, shock=shock_pair)
++        result = cp2g.forecast(
++            operands=operands,
++            drivers=drivers,
++            shock=shock_pair,
++            schedule=_with_remainder(totals, remainder, drivers.interest_rate),
++        )
+         outputs[case] = {
+             "years": [
+                 {
+@@ -364,6 +525,11 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str,
+                 for span, year in zip(inputs.years, result.years, strict=True)
+             ]
+         }
++    detail, limits = (
++        ({}, [])
++        if facilities is None or plan is None
++        else _facility_detail(inputs, facilities, plan)
++    )
+     exact = _json(
+         {
+             "schema_version": "cpos-forecast-exact/1",
+@@ -381,7 +547,12 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str,
+             **_stated("upside_drivers", inputs.upside_drivers),
+             **_stated("downside_drivers", inputs.downside_drivers),
+             "outputs": outputs,
+-            "scope_limits": [LIMIT if source == "CP-2G" else LAYER1_LIMIT, *inputs.scope_limits],
++            **detail,
++            "scope_limits": [
++                LIMIT if source == "CP-2G" else LAYER1_LIMIT,
++                *inputs.scope_limits,
++                *limits,
++            ],
+         }
+     )
+     calculation = _json(
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index a29498f..365bbfc 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -1491,6 +1491,26 @@ FORECAST_BLOCK = (
+     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
+     "only the drivers that differ from base, in the same driver form (every other driver is "
+     "inherited from base), or null when you set no such case. "
++    "`facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate "
++    "terms, otherwise write null. Each row is "
++    '`{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", '
++    '"annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, '
++    "`spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must "
++    'print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states '
++    "`fixed_rate_pct` and null for the other rate fields; a floating-rate facility states "
++    "`spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for "
++    "each forecast year as three decimal fractions "
++    '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
++    "must be between 0% and 30% in every year. The facilities' "
++    "scheduled repayments over the three years must not exceed base debt. "
++    "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
++    "YYYY-MM-DD or null. A row's `balance` is its drawn principal. At most 40 rows; names are "
++    "unique ignoring case; balances may total at most 1.25 times base debt; `fixed_rate_pct` is "
++    "at most 30, `spread_pct` at most 20 and `floor_pct` at most 10; `reference_rate` values have "
++    "at most four decimal places. When `facilities` is stated Python computes cash interest on "
++    "those facilities and scheduled repayment from it; debt not in a row bears interest at your "
++    "`interest_rate` driver and is not repaid; the `debt_repayment` driver is not used, so do "
++    "not vary it in `upside_drivers` or `downside_drivers`. "
+     "`years` is three consecutive fiscal years, each "
+     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
+     "`scope_limits` is a list of text limits. Set `schema_version` to "
+@@ -1949,6 +1969,11 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
+         cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
+     except ValueError as error:
+         if "gives no forecast drivers" not in str(error):
++            if "facilit" in str(error) or "scheduled repayments" in str(error):
++                fallback = "write `facilities` as null and keep the drivers."
++                return (
++                    f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",
++                )
+             fix = "Correct the block; if you cannot, set every driver's values to "
+             return (
+                 f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
+diff --git a/tests/test_cpos_facilities.py b/tests/test_cpos_facilities.py
+new file mode 100644
+index 0000000..6f6077f
+--- /dev/null
++++ b/tests/test_cpos_facilities.py
+@@ -0,0 +1,502 @@
++"""CP-2G facility schedule: stated terms to interest and repayment (hand-computed answer key)."""
++
++import json
++from dataclasses import replace
++from decimal import Decimal
++from fractions import Fraction
++
++import pytest
++from pydantic import ValidationError
++
++from deploy_workflow.owners import cp2g
++from deploy_workflow.owners.cpos_facilities import Facility, schedule
++
++D = Decimal
++A = {
++    "name": "Notes",
++    "balance": "400",
++    "fixed_rate_pct": "6.00",
++    "spread_pct": None,
++    "floor_pct": None,
++    "reference_rate": None,
++    "annual_amortisation": "20",
++    "maturity": None,
++}
++B = {
++    "name": "Term loan",
++    "balance": "150",
++    "fixed_rate_pct": None,
++    "spread_pct": "3.00",
++    "floor_pct": "1.00",
++    "reference_rate": ["0.04", "0.03", "0.005"],
++    "annual_amortisation": None,
++    "maturity": None,
++}
++
++
++def test_schedule_matches_the_answer_key():
++    s = schedule([Facility(**A), Facility(**B)])
++    assert s.totals() == ((D("34.5"), D("20")), (D("31.8"), D("20")), (D("27.6"), D("20")))
++    assert [y.rate for y in s.rows[1]] == [D("0.07"), D("0.06"), D("0.04")]
++    assert [y.closing for y in s.rows[0]] == [D("380"), D("360"), D("340")]
++
++
++def test_amortisation_never_takes_a_balance_below_zero():
++    s = schedule([Facility(**{**A, "balance": "30"})])
++    assert [y.repaid for y in s.rows[0]] == [D("20"), D("10"), D("0")]
++
++
++@pytest.mark.parametrize(
++    "change",
++    [
++        {"fixed_rate_pct": None},  # no rate at all
++        {"spread_pct": "3.00"},  # fixed and floating together
++        {"fixed_rate_pct": None, "spread_pct": "3.00"},  # spread without a reference rate
++        {"fixed_rate_pct": "31"},
++        {"fixed_rate_pct": "6.00001"},
++        {"balance": "-1"},
++        {"name": ""},
++        {"floor_pct": "1.00"},  # floor without a spread
++        {"fixed_rate_pct": None, "spread_pct": "21", "reference_rate": ["0.04", "0.03", "0.005"]},
++        {
++            "fixed_rate_pct": None,
++            "spread_pct": "3",
++            "floor_pct": "11",
++            "reference_rate": ["0.04", "0.03", "0.005"],
++        },
++        {"maturity": "2030-13-01"},
++    ],
++)
++def test_a_row_that_is_not_one_rate_form_is_refused(change):
++    with pytest.raises(ValidationError):
++        Facility(**{**A, **change})
++
++
++# --- the engine takes a schedule (Task 2) ------------------------------------------------------
++# Copied from tests/test_cpos_launch.py (BASE, PATHS): tests is not a package, so not importable.
++_BASE = {
++    "revenue": "1000",
++    "ebitda": "300",
++    "interest": "36",
++    "taxes": "20",
++    "wc": "10",
++    "capex": "40",
++    "fcf": "194",
++    "debt": "600",
++    "cash": "100",
++    "undrawn": "50",
++}
++_PATHS = {
++    "revenue_growth": ("0.05", "0.04", "0.03"),
++    "ebitda_margin": ("0.30", "0.31", "0.32"),
++    "capex_pct_revenue": ("0.04", "0.04", "0.04"),
++    "tax_wc_pct_revenue": ("0.10", "0.10", "0.10"),
++    "interest_rate": ("0.06", "0.06", "0.06"),
++    "dividends": ("20", "20", "20"),
++    "debt_repayment": ("50", "50", "50"),
++}
++OPERANDS = cp2g.Operands(**{k: cp2g.Val(D(v), None) for k, v in _BASE.items()})
++DRIVERS = cp2g.Drivers(**{k: tuple(D(x) for x in v) for k, v in _PATHS.items()})
++TOTALS = ((D("34.5"), D("20")), (D("31.8"), D("20")), (D("27.6"), D("20")))
++
++
++def test_scheduled_interest_and_repayment_replace_the_two_drivers():
++    years = cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=TOTALS).years
++    assert [y.interest.amount for y in years] == [D("34.5"), D("31.8"), D("27.6")]
++    assert [y.closing_debt.amount for y in years] == [D("580"), D("560"), D("540")]
++
++
++def test_scheduled_year_one_free_cash_flow_and_cash():
++    y = cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=TOTALS).years[0]
++    revenue = Fraction(1000) * (1 + Fraction("0.05"))
++    fcf = (
++        revenue * Fraction("0.30")
++        - Fraction("34.5")
++        - revenue * Fraction("0.10")
++        - revenue * Fraction("0.04")
++    )
++    assert Fraction(y.fcf.amount) == fcf
++    assert Fraction(y.closing_cash.amount) == 100 + fcf - 20 - 20
++
++
++def test_the_downside_rate_increase_scales_scheduled_interest():
++    years = cp2g.forecast(
++        operands=OPERANDS, drivers=DRIVERS, shock=(D("0"), D("0.10")), schedule=TOTALS
++    ).years
++    assert [y.interest.amount for y in years] == [D("37.95"), D("34.98"), D("30.36")]
++
++
++def test_no_schedule_uses_the_two_drivers():
++    year = cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=None).years[0]
++    assert year.interest.amount == D("36")  # 600 x 0.06
++    assert year.closing_debt.amount == D("550")  # 600 - 50
++
++
++def test_missing_base_debt_stays_missing_with_its_reason():
++    ops = replace(OPERANDS, debt=cp2g.Val(None, "why"))
++    y = cp2g.forecast(operands=ops, drivers=DRIVERS, shock=None, schedule=TOTALS).years[0]
++    assert (y.interest.amount, y.interest.reason) == (None, "why")
++    assert y.closing_debt.amount is None
++
++
++# --- the inputs block states facilities (Task 3) ------------------------------------------------
++# A local builder modelled on forecast_block in tests/test_cpos_launch.py (not importable).
++_CP1 = " ".join(_BASE.values()) + " 400 150 6.00% 3.00% 1.00%"
++
++
++def _block(**changes) -> bytes:
++    inputs = {
++        "schema_version": "cpos-forecast-inputs/1",
++        "base": {k: {"amount": v, "reason": None} for k, v in _BASE.items()},
++        "base_drivers": {
++            name: {
++                "values": list(v),
++                "category": "Analyst Interpretation",
++                "rationale": "Synthetic.",
++                "limitation": None,
++            }
++            for name, v in _PATHS.items()
++        },
++        "downside_shock": {"ebitda_decline": "0.20", "rate_increase": "0.10"},
++        "years": [
++            {"year": 2025 + i, "start": f"{2025 + i}-04-01", "end": f"{2026 + i}-03-31"}
++            for i in range(3)
++        ],
++        "scope_limits": ["Synthetic; not analytical review."],
++        **changes,
++    }
++    return (
++        f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(inputs)}\n```\n".encode()
++    )
++
++
++def _exact(cp1: str = _CP1, **changes) -> dict:
++    from deploy_workflow.owners.cpos_forecast import model_files
++
++    return json.loads(model_files(cp1.encode(), _block(**changes))["forecast_exact.json"])
++
++
++def _refusal(cp1: str = _CP1, source: str = "CP-2G", **changes) -> str:
++    from deploy_workflow.owners import cpos_forecast
++
++    with pytest.raises(ValueError) as caught:
++        cpos_forecast.parse(_block(**changes).decode(), cp1, source)
++    return str(caught.value)
++
++
++def test_a_block_with_facilities_publishes_the_answer_key():
++    exact = _exact(facilities=[A, B])
++    ref = exact["outputs"]["REFERENCE"]["years"]
++    # 50 of base debt is outside the facilities and bears the analyst's 6%: 3 on top of 34.5 etc.
++    assert [D(y["interest"]["amount"]) for y in ref] == [D("37.5"), D("34.8"), D("30.6")]
++    assert [D(y["closing_debt"]["amount"]) for y in ref] == [D("580"), D("560"), D("540")]
++    assert D(exact["unallocated_debt"]["amount"]) == D("50")
++    assert exact["unallocated_debt"]["reason"] is None
++    assert D(exact["facility_schedule"][1]["years"][2]["rate"]) == D("0.04")
++    assert exact["facility_schedule"][1]["years"][2]["year"] == 2027
++    assert [f["name"] for f in exact["facility_schedule"]] == ["Notes", "Term loan"]
++    assert exact["facilities"][0]["balance"] == "400"
++    limits = exact["scope_limits"]
++    assert limits[1] == "Synthetic; not analytical review."
++    assert limits[2] == (
++        "Cash interest on the stated facilities and scheduled repayment are computed from the "
++        "facility terms the CP-2G handoff stated; the analyst's repayment assumption is not used."
++    )
++    assert limits[3] == (
++        "Debt of 50 is not in a stated facility; it bears interest at the analyst's assumed rate "
++        "and is not repaid in this forecast."
++    )
++
++
++def _interest(exact: dict, case: str) -> list[Decimal]:
++    return [D(y["interest"]["amount"]) for y in exact["outputs"][case]["years"]]
++
++
++def test_debt_outside_the_facilities_bears_the_analyst_rate_in_every_case():
++    exact = _exact(
++        facilities=[A, B],
++        downside_drivers={"interest_rate": {**_driver("interest_rate"), "values": ["0.08"] * 3}},
++    )
++    assert _interest(exact, "REFERENCE") == [D("37.5"), D("34.8"), D("30.6")]
++    assert _interest(exact, "DOWNSIDE") == [D("41.25"), D("38.28"), D("33.66")]
++    assert _interest(exact, "DOWNSIDE_DRIVERS") == [D("38.5"), D("35.8"), D("31.6")]
++
++
++def test_no_remainder_adds_no_interest():
++    # hand-computed on opening balances: 400 at 6% + 200 at 7%/6%/4%, A amortising 20 a year
++    rows = [A, {**B, "balance": "200"}]
++    exact = _exact(_CP1 + " 200", facilities=rows)
++    assert _interest(exact, "REFERENCE") == [D("38"), D("34.8"), D("29.6")]
++
++
++def test_balances_above_base_debt_add_no_remainder_interest():
++    rows = [{**A, "balance": "500"}, {**B, "balance": "150"}]
++    exact = _exact(_CP1 + " 500", facilities=rows)
++    # 500 at 6% (480, 460 after amortisation) + 150 at 7%/6%/4%
++    assert _interest(exact, "REFERENCE") == [D("40.5"), D("37.8"), D("33.6")]
++
++
++def test_a_block_without_facilities_publishes_no_facility_key():
++    # The handoff text differs (null vs absent), so its hash in `consumed` does; all else is equal.
++    from deploy_workflow.owners.cpos_forecast import model_files
++
++    cp1 = _CP1.encode()
++    plain = json.loads(model_files(cp1, _block())["forecast_exact.json"])
++    nulled = json.loads(model_files(cp1, _block(facilities=None))["forecast_exact.json"])
++    plain["consumed"] = nulled["consumed"] = None
++    assert plain == nulled
++    assert b"facilit" not in model_files(cp1, _block())["forecast_exact.json"]
++    assert plain["scope_limits"][1:] == ["Synthetic; not analytical review."]
++
++
++def test_missing_base_debt_says_so():
++    base = {k: {"amount": v, "reason": None} for k, v in _BASE.items()}
++    base["debt"] = {"amount": None, "reason": "CP-1 gives no debt"}
++    exact = _exact(base=base, facilities=[A])
++    assert exact["unallocated_debt"] == {"amount": None, "reason": "CP-1 gives no debt"}
++    assert (
++        "Base debt is missing, so debt outside the stated facilities is not known."
++        in exact["scope_limits"]
++    )
++
++
++@pytest.mark.parametrize(
++    "rows, cp1, message",
++    [
++        (
++            [{**A, "fixed_rate_pct": "6.0"}],
++            _CP1,
++            "CP-2G: facility Notes fixed_rate_pct 6.0% is not printed in CP-1",
++        ),
++        (
++            [{**A, "balance": "999"}],
++            _CP1,
++            "CP-2G: facility Notes balance 999 is not printed in CP-1",
++        ),
++        (
++            [B, {**B, "name": "T2", "floor_pct": "2.50"}],
++            _CP1,
++            "CP-2G: facility T2 floor_pct 2.50% is not printed in CP-1",
++        ),
++        (
++            [{**A, "balance": "400000"}],
++            _CP1 + " 400000",
++            (
++                "CP-2G: facility balances total 400000, more than 1.25 times base debt 600; "
++                "check the unit"
++            ),
++        ),
++    ],
++)
++def test_refusals(rows, cp1, message):
++    assert _refusal(cp1, facilities=rows) == message
++
++
++def test_the_balance_check_is_one_and_a_quarter_inclusive():
++    exact = _exact(_CP1 + " 750", facilities=[{**A, "balance": "750"}])
++    assert D(exact["unallocated_debt"]["amount"]) == D("-150")
++    assert "more than 1.25 times" in _refusal(_CP1 + " 751", facilities=[{**A, "balance": "751"}])
++
++
++@pytest.mark.parametrize("case", ["upside_drivers", "downside_drivers"])
++def test_a_case_override_of_debt_repayment_is_refused(case):
++    override = {"debt_repayment": {**_driver("debt_repayment")}}
++    message = _refusal(facilities=[A], **{case: override})
++    assert message == (
++        f"CP-2G: {case} states debt_repayment, which is not used when facilities are stated"
++    )
++
++
++@pytest.mark.parametrize("case", ["upside_drivers", "downside_drivers"])
++def test_a_case_override_of_interest_rate_is_accepted_with_facilities(case):
++    assert _exact(facilities=[A], **{case: {"interest_rate": _driver("interest_rate")}})
++
++
++def _driver(name: str) -> dict:
++    return {
++        "values": list(_PATHS[name]),
++        "category": "Analyst Interpretation",
++        "rationale": "Synthetic.",
++        "limitation": None,
++    }
++
++
++def test_a_case_override_of_another_driver_is_allowed_with_facilities():
++    exact = _exact(facilities=[A], upside_drivers={"dividends": _driver("dividends")})
++    assert "UPSIDE" in exact["outputs"]
++
++
++def test_cp1s_layer1_block_states_no_facilities():
++    message = _refusal(source="CP-1", downside_shock=None, facilities=[A])
++    assert message == "CP-1: a layer-1 forecast states no facilities"
++
++
++def test_duplicate_names_are_refused():
++    assert "facility names must be unique" in _refusal(facilities=[A, {**B, "name": "Notes"}])
++
++
++def test_a_facility_name_is_trimmed_and_unique_ignoring_case_and_edges():
++    for name in (" Notes", "Notes ", "   "):
++        with pytest.raises(ValidationError, match="must not start or end with whitespace"):
++            Facility(**{**A, "name": name})
++    assert "facility names must be unique" in _refusal(facilities=[B, {**B, "name": "TERM LOAN"}])
++
++
++@pytest.mark.parametrize(
++    "rows, bound",
++    [
++        ([], "facilities: Tuple should have at least 1 item"),
++        ([{**A, "name": f"F{i}"} for i in range(41)], "facilities: Tuple should have at most 40"),
++    ],
++)
++def test_one_to_forty_facilities(rows, bound):
++    assert bound in _refusal(facilities=rows)
++
++
++MATURES_2026 = (
++    "Notes matures in FY2026 and is assumed refinanced; no repayment at maturity is modelled."
++)
++
++
++def test_a_maturity_inside_the_forecast_is_named():
++    limits = _exact(facilities=[{**A, "maturity": "2026-09-30"}])["scope_limits"]
++    assert MATURES_2026 in limits
++
++
++def test_a_maturity_before_the_forecast_is_named_in_the_first_year_and_a_late_one_is_not():
++    rows = [
++        {**A, "maturity": "2020-01-01"},
++        {**B, "maturity": "2028-03-31"},
++    ]
++    limits = _exact(facilities=rows)["scope_limits"]
++    assert (
++        "Notes has a stated maturity of 2020-01-01, before the forecast; it is assumed "
++        "refinanced and no repayment at maturity is modelled." in limits
++    )
++    assert (
++        "Term loan matures in FY2027 and is assumed refinanced; "
++        "no repayment at maturity is modelled." in limits
++    )
++    after = _exact(facilities=[{**A, "maturity": "2028-04-01"}])["scope_limits"]
++    assert not any("matures in" in s for s in after)
++
++
++def test_a_maturity_is_a_dated_form_only():
++    with pytest.raises(ValidationError):
++        Facility(**{**A, "maturity": "20300101"})
++
++
++def test_a_maturity_that_is_not_a_calendar_date_names_the_field():
++    with pytest.raises(ValidationError, match="maturity 2030-13-01 is not a calendar date"):
++        Facility(**{**A, "maturity": "2030-13-01"})
++
++
++# --- fix round 1 --------------------------------------------------------------------------------
++def test_scheduled_repayments_above_base_debt_are_refused():
++    row = {**A, "balance": "700", "annual_amortisation": "300"}
++    message = _refusal(_CP1 + " 700", facilities=[row])
++    assert message == "CP-2G: scheduled repayments total 700, more than base debt 600"
++
++
++def test_scheduled_repayments_equal_to_base_debt_are_accepted():
++    row = {**A, "balance": "700", "annual_amortisation": "200"}
++    exact = _exact(_CP1 + " 700", facilities=[row])
++    assert D(exact["unallocated_debt"]["amount"]) == D("-100")
++
++
++def test_balances_above_base_debt_name_the_excess_in_a_scope_limit():
++    rows = [{**A, "balance": "500"}, {**B, "balance": "150"}]
++    exact = _exact(_CP1 + " 500", facilities=rows)
++    assert D(exact["unallocated_debt"]["amount"]) == D("-50")
++    limits = exact["scope_limits"]
++    assert limits[3] == (
++        "Stated facility balances exceed base debt by 50; interest is computed on the stated "
++        "balances."
++    )
++
++
++@pytest.mark.parametrize(
++    "reference, year, rate",
++    [(["1", "1", "1"], 1, "1.03"), (["0.04", "0.5", "0.04"], 2, "0.53")],
++)
++def test_a_floating_all_in_rate_above_thirty_percent_is_refused(reference, year, rate):
++    with pytest.raises(ValidationError) as caught:
++        Facility(**{**B, "floor_pct": None, "reference_rate": reference})
++    assert (
++        f"all-in rate {rate} in forecast year {year} is outside 0 to 0.30; reference_rate is a "
++        "decimal fraction (0.04 is 4%)"
++    ) in str(caught.value)
++
++
++def test_a_negative_all_in_rate_is_refused_and_a_negative_reference_rate_above_zero_is_not():
++    with pytest.raises(ValidationError, match="all-in rate -0.47 in forecast year 1 is outside"):
++        Facility(**{**B, "floor_pct": None, "reference_rate": ["-0.5", "-0.5", "-0.5"]})
++    ok = Facility(**{**B, "floor_pct": None, "reference_rate": ["-0.01", "0", "0.27"]})
++    assert [y.rate for y in schedule([ok]).rows[0]] == [D("0.02"), D("0.03"), D("0.30")]
++
++
++def test_a_rate_term_is_a_printed_percent():
++    # "6.00" appears in CP-1 only as part of 16.00 and as a bare number: neither is a percent
++    for cp1 in (_CP1.replace("6.00%", "16.00%"), _CP1.replace("6.00%", "6.00")):
++        assert "fixed_rate_pct 6.00% is not printed" in _refusal(cp1, facilities=[A])
++    spaced = _CP1.replace("6.00%", "6.00 %")
++    assert _exact(spaced, facilities=[A])["facilities"][0]["fixed_rate_pct"] == "6.00"
++
++
++def test_forecast_states_exactly_three_schedule_pairs():
++    with pytest.raises(ValueError, match="exactly three"):
++        cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=TOTALS[:2])
++
++
++def test_a_block_without_facilities_is_byte_identical_to_main():
++    import hashlib
++
++    from deploy_workflow.owners.cpos_forecast import model_files
++
++    doc = {
++        "schema_version": "cpos-forecast-inputs/1",
++        "base": {k: {"amount": v, "reason": None} for k, v in _BASE.items()},
++        "base_drivers": {n: _driver(n) for n in _PATHS},
++        "downside_shock": {"ebitda_decline": "0.20", "rate_increase": "0.10"},
++        "upside_drivers": {
++            "revenue_growth": {**_driver("revenue_growth"), "values": ["0.07", "0.06", "0.05"]}
++        },
++        "years": [
++            {"year": 2025 + i, "start": f"{2025 + i}-04-01", "end": f"{2026 + i}-03-31"}
++            for i in range(3)
++        ],
++        "scope_limits": ["Synthetic; not analytical review."],
++    }
++    handoff = f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(doc)}\n```\n"
++    files = model_files(" ".join(_BASE.values()).encode(), handoff.encode())
++    digest = hashlib.sha256()
++    for name in sorted(files):
++        digest.update(name.encode())
++        digest.update(files[name])
++    assert digest.hexdigest() == "e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089"
++
++
++# --- boundaries carried from review -------------------------------------------------------------
++def test_a_floating_all_in_rate_of_exactly_zero_and_of_exactly_thirty_percent_is_accepted():
++    zero = Facility(**{**B, "floor_pct": None, "reference_rate": ["-0.03", "-0.03", "-0.03"]})
++    assert [y.rate for y in schedule([zero]).rows[0]] == [D("0")] * 3
++    top = Facility(**{**B, "floor_pct": None, "reference_rate": ["0.27", "0.27", "0.27"]})
++    assert [y.rate for y in schedule([top]).rows[0]] == [D("0.30")] * 3
++
++
++def test_balances_equal_to_base_debt_state_zero_unallocated_and_no_limit_either_way():
++    rows = [{**A, "balance": "450"}, {**B, "balance": "150"}]
++    exact = _exact(_CP1 + " 450", facilities=rows)
++    assert D(exact["unallocated_debt"]["amount"]) == 0
++    assert exact["unallocated_debt"]["reason"] is None
++    assert not any("is not in a stated facility" in s for s in exact["scope_limits"])
++    assert not any("exceed base debt" in s for s in exact["scope_limits"])
++
++
++def test_a_maturity_on_the_first_forecast_years_start_is_inside_the_forecast():
++    limits = _exact(facilities=[{**A, "maturity": "2025-04-01"}])["scope_limits"]
++    assert (
++        "Notes matures in FY2025 and is assumed refinanced; no repayment at maturity is modelled."
++        in limits
++    )
++    assert not any("before the forecast" in s for s in limits)
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index e60f1af..02107c7 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -5,6 +5,7 @@ import hashlib
+ import json
+ import os
+ import re
++import types
+ import typing
+ from decimal import Decimal
+ from fractions import Fraction
+@@ -3215,6 +3216,39 @@ def test_checker_asks_for_repair_of_an_over_precise_driver(tmp_path):
+     assert any("ebitda_margin" in i and "Forecast inputs" in i for i in issues), issues
+ 
+ 
++FACILITY_ROW = {
++    "name": "Notes",
++    "balance": "400",  # CP-1 here prints no 400, so the row is refused
++    "fixed_rate_pct": "6.00",
++    "spread_pct": None,
++    "floor_pct": None,
++    "reference_rate": None,
++    "annual_amortisation": None,
++    "maturity": None,
++}
++
++
++def test_a_facility_refusal_is_told_it_may_write_facilities_as_null(tmp_path):
++    """A row that cannot be corrected must not cost the whole forecast: the repair line offers
++    dropping `facilities`, not only nulling every driver."""
++    (issue,) = cp2g_check(tmp_path, forecast_block(facilities=[FACILITY_ROW]))
++    assert issue == (
++        "Forecast inputs: CP-2G: facility Notes balance 400 is not printed in CP-1. "
++        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
++    )
++
++
++def test_a_scheduled_repayment_refusal_is_told_the_same():
++    cp1 = (" ".join(BASE.values()) + " 700 6.00%").encode()
++    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1})
++    row = {**FACILITY_ROW, "balance": "700", "annual_amortisation": "300"}
++    (issue,) = cpos_launch._forecast_issues(task, forecast_block(facilities=[row]))
++    assert issue == (
++        "Forecast inputs: CP-2G: scheduled repayments total 700, more than base debt 600. "
++        "Correct the facilities; if you cannot, write `facilities` as null and keep the drivers."
++    )
++
++
+ def test_checker_accepts_a_valid_or_declined_forecast_block(tmp_path):
+     assert cp2g_check(tmp_path, forecast_block()) == ()
+     (tmp_path / "declined").mkdir()
+@@ -4203,3 +4237,24 @@ def test_the_service_standing_ruling_lists_web_search_so_runs_from_the_page_sear
+ 
+     assert web_search_ruled(STANDING_RULING)
+     assert not web_search_ruled(RULING)  # a ruling that lists only the config does not
++
++
++def test_cp2g_is_told_how_to_state_facilities(tmp_path):
++    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A", "CP-2G"))
++    head = texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
++    for word in (
++        "`facilities`",
++        "1.25 times base debt",
++        "drawn principal",
++        "fixed_rate_pct",
++        "spread_pct",
++        "floor_pct",
++        "reference_rate",
++        "annual_amortisation",
++        "maturity",
++        "exactly as CP-1 prints",
++        "% sign",
++        '"0.04"',
++    ):
++        assert word in head
++    assert "`facilities`" not in texts["CP-1"]

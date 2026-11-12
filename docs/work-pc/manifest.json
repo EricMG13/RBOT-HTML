@@ -1,6 +1,6 @@
 {
  "files": {
-  ".github/workflows/checks.yml": "0b97401c89f7bb92a16e0a427de045323a3c96c3",
+  ".github/workflows/checks.yml": "74a3936efb699c5ccc2078b53a3ca235711d1899",
   ".github/workflows/weekly-tests.yml": "43163285e75f4c6e36a313c7c1e9ac4ea8ee68a4",
   ".github/workflows/work-pc-pack.yml": "9fad1851a8feadfa0dc69354ba275a678fdf525f",
   ".gitignore": "5e33b5af7feb9685d7fc01602561d901bbf5ace9",
@@ -10,7 +10,7 @@
   "AGENTS.md": "b40d0a489b5e271f328aee71d77b20715a05a6a5",
   "METHODOLOGY-REVIEW.md": "88a2f6a19f95acb4acad28fed869c02b231fb58d",
   "README.md": "15f460cf9e333c5e6235fbfdb4a15dc67846c623",
-  "VERIFICATION.md": "5a698fc496aa6892909f944988ed339d11147344",
+  "VERIFICATION.md": "32c62d85ff2f7319f89c5fd05dd142d782ce3e75",
   "apps/issuer-library/README.md": "3ec5b57313e02c2a53109afdaef38bfd5ae16fdb",
   "apps/issuer-library/credit_os/SOURCE.md": "416f41db22c1c0a9b4ec88c8887ab43c0ce06edb",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -317,6 +317,7 @@
   "docs/superpowers/plans/2026-11-09-run-report-phase-a.md": "e14db66cf8ed101308c221119e2775446d0beef9",
   "docs/superpowers/plans/2026-11-11-existing-issuer-run-start.md": "76ccb1c2f041c03af7eaf72acc0bddc0a1bc4257",
   "docs/superpowers/plans/2026-11-11-staged-run-start.md": "0825955b651f5dbef7204703a7fe5003044d06be",
+  "docs/superpowers/plans/2026-11-12-cp2g-facility-schedule.md": "b9fad045bb8899d6771a8be74b61a232e9ad4304",
   "docs/superpowers/specs/2026-11-09-credit-os-static-pages.md": "77bbbd2f16b4de75843448c2cc9fa18cab754ed3",
   "docs/superpowers/specs/2026-11-09-inbox-automation-design.md": "0aff0a0854069e7f2d29f8686aa46e4276408a91",
   "docs/superpowers/specs/2026-11-11-existing-issuer-run-start-design.md": "f09eb467a448c79bce9fce48b927428074c99723",
@@ -434,7 +435,7 @@
   "src/deploy_vii/methods/cp2a.md": "50a56e58c2899cfce7ed729a81b03644df2fb5f0",
   "src/deploy_vii/methods/cp2d.md": "2d56d6371ea752e95dbd8e35062401b058702f37",
   "src/deploy_vii/methods/cp2e.md": "6aba0b8db46ec1c37dfa4330864a080e092615b8",
-  "src/deploy_vii/methods/cp2g.md": "e91a74cbf35196e9fa7ffb8a1645e8cf995ea3b8",
+  "src/deploy_vii/methods/cp2g.md": "692fad204d7e60e40fffc5742416e39dc4167020",
   "src/deploy_vii/methods/cp2h.md": "3e1d60e65328c838121dab62d1f53638087acf50",
   "src/deploy_vii/methods/cp3.md": "4dc09b7f29370a2e9fff4842da72f26d201da5d4",
   "src/deploy_vii/methods/cp3c.md": "d992e0ecc2378b3b7cd299803ecffbbe11b15f80",
@@ -546,7 +547,7 @@
   "src/deploy_workflow/owners/cp2a.py": "f3bd64369ede58460352caf43c3be2f35c509771",
   "src/deploy_workflow/owners/cp2d.py": "a997ba4153d3891ef9f363d6236680fcb702e954",
   "src/deploy_workflow/owners/cp2e.py": "51cfa1c20a00d3284c9474420df668be1b1cd79c",
-  "src/deploy_workflow/owners/cp2g.py": "00b42dc1c0a2a0303b1277e4edd6824f0e7686ed",
+  "src/deploy_workflow/owners/cp2g.py": "f0bb6b747d2741686fbac98b68c6b5d733839146",
   "src/deploy_workflow/owners/cp2h.py": "17c3cd3f93d9957e9cebb2ea71d6d6523ae14b6d",
   "src/deploy_workflow/owners/cp3.py": "005a3575fea610eccc4fcddd5ff13cb2d2c1d2f8",
   "src/deploy_workflow/owners/cp3c.py": "030a3f3b178a4fa475586cdb76cb545f6237e22d",
@@ -559,8 +560,9 @@
   "src/deploy_workflow/owners/cpdr.py": "d9a2b5a1c7607030a079375e902867cdf1664437",
   "src/deploy_workflow/owners/cpl10.py": "8fc0a8bd44296a8fa4011af3a856929f77d3c7af",
   "src/deploy_workflow/owners/cpos.py": "68b8cd3069fd836de274f24dc9fe04784a6cf7ea",
-  "src/deploy_workflow/owners/cpos_forecast.py": "107f47603c337d2fc3ee047756eb1c1964dc9604",
-  "src/deploy_workflow/owners/cpos_launch.py": "a29498fe11270a3c9a2ce2c21cbb07b40dc7ce9b",
+  "src/deploy_workflow/owners/cpos_facilities.py": "1021ab5d5159d455510e0b6e4f9176b955535213",
+  "src/deploy_workflow/owners/cpos_forecast.py": "5eec10e324e27933ca1fd818f01a887e8e2e1459",
+  "src/deploy_workflow/owners/cpos_launch.py": "365bbfcb90211442852448c112cb3641dfe52a21",
   "src/deploy_workflow/owners/period_basis.py": "3ad044a082522a772b705df6e2bb6a4d6696245d",
   "src/deploy_workflow/owners/pins.py": "8f9159becf0a7590999338f4a09796fe63578007",
   "src/deploy_workflow/owners/valuation_basis.py": "4b28215278d7d6bb512faf7e01fe63eee7e384a1",
@@ -725,7 +727,8 @@
   "tests/test_context_form.py": "cb7ac45b8cd79b523fafecb5bf3f633fc5a645fa",
   "tests/test_context_module_options.py": "aedb040133a4f68ec9c06fd3273d610af82393b2",
   "tests/test_cp8_comparison.py": "aba944f58c8321c4a75783d243b288721ad661af",
-  "tests/test_cpos_launch.py": "e60f1af7574420a72740cf955837c6c50c6fe6ca",
+  "tests/test_cpos_facilities.py": "6f6077ffe4d350c35fed934dcf35b5fbcb49e246",
+  "tests/test_cpos_launch.py": "02107c723140b56d689884c4965ea0188491f071",
   "tests/test_credit_os_catalogue.py": "947b0ab9dc3f128acd2d2a76d566db546fcda1eb",
   "tests/test_credit_os_chips.py": "ee6fc382cc2d2c9039a66bb73ca829b0620bc9e2",
   "tests/test_credit_os_store.py": "83a977eaa81fd6a691cba12602bc42922c7ab5bd",
@@ -757,6 +760,6 @@
   "tools/work_pc_delta.py": "d51d308e63de38dbc4284157b978feeea8038557",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "188cb225aadfad5ca522c292984ed0c002498d18",
- "head_date": "2026-11-12T01:32:07Z"
+ "head": "e503d273393cf8e56cf9704f8a7ddc284a28e2e2",
+ "head_date": "2026-11-12T02:55:28Z"
 }
