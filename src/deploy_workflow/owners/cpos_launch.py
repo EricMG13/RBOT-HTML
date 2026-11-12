@@ -616,12 +616,16 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
             )
         for other, shown in cash_of:
             stated = _decimal(shown)
-            if cash is not None and stated is not None and same_period(period, other):
-                if cash != stated:
-                    issues.append(
-                        f"`{heading}` {period}: cash {row[2]} is not the Cash {shown} stated "
-                        f"for {other} in `{liquidity}`; state one figure."
-                    )
+            if (
+                cash is not None
+                and stated is not None
+                and same_period(period, other)
+                and cash != stated
+            ):
+                issues.append(
+                    f"`{heading}` {period}: cash {row[2]} is not the Cash {shown} stated "
+                    f"for {other} in `{liquidity}`; state one figure."
+                )
     return tuple(issues)
 
 

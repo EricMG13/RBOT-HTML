@@ -332,10 +332,13 @@ table on every pathway, with the mechanisms that already exist and no new layout
   that is the definition text the pack carries for comparability. Cash is the liquidity table's figure; net debt is
   gross debt less cash, worked with `calculate`, listed in `## Calculations`.
 - The checker adds two rules, named in the instructions: with all three figures stated a row must satisfy net debt =
-  gross debt - cash exactly (in Decimal), and a stated cash must equal the liquidity table's for the same period.
+  gross debt - cash exactly (in Decimal), and a stated cash must equal the Cash of every liquidity row that `same_period`
+  (changes.py) calls the same period (`FY2024` and `FY2024 / 2024-09-30` are one period; `2024-09-30` and
+  `FY2024` are not).
   A missing table or a wrong header is refused as for the other tables.
-- The pack reads `gross_debt` and `net_debt` from this table with the period-row reader that reads the chart
-  tables (`CHART_MEASURES`); the exact-label row rule of #66 now reads only `free_cash_flow`. A run without the
+- The pack reads `gross_debt`, `net_debt` and, for the net debt change, the table's own Cash column, all from
+  one run's latest row of this table, with the period-row reader that reads the chart tables (the liquidity
+  table is not read for the change); the exact-label row rule of #66 now reads only `free_cash_flow`. A run without the
   table (every earlier run) states no gross or net debt: the net debt change is left out and `omitted` names
   the run ("gross debt cannot be compared (the earlier run does not state it)"). Older runs stay usable as a CP-8
   base and render as before. The pack computes nothing new.
