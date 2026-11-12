@@ -640,7 +640,10 @@ def _prior():
 
 @pytest.mark.parametrize(
     "pathway",
-    ["relative_value", "distressed_restructuring", "portfolio_decision", "short_snapshot"],
+    [
+        *("relative_value", "distressed_restructuring", "portfolio_decision", "short_snapshot"),
+        *("earnings_update", "covenant_refinancing"),
+    ],
 )
 def test_a_pack_built_from_the_cp1_handoff_of_each_formerly_unasked_pathway_states_measures(
     tmp_path, pathway
