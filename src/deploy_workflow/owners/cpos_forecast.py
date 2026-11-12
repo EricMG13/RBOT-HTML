@@ -11,10 +11,11 @@ ValueError; the caller decides what that means (the run fails open, see cpos.run
 import hashlib
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import fields
 from datetime import date, timedelta
 from decimal import Decimal, Inexact, localcontext
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, ValidationError, model_validator
 
@@ -100,6 +101,7 @@ class ForecastInputs(Contract):
     downside_drivers: CaseDrivers | None = None
     years: tuple[Span, Span, Span]
     facilities: Annotated[tuple[Facility, ...], Field(min_length=1, max_length=40)] | None = None
+    scale: Literal[1, 1000] | None = None
     scope_limits: tuple[str, ...]
 
     @model_validator(mode="after")
@@ -247,10 +249,11 @@ def _agrees(key: str, cell: Decimal, amount: Decimal) -> bool:
         return abs(cell) == amount if key in cp2g.OUTFLOWS else cell == amount
 
 
-def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
+def _layer1_problem(text: str, key: str, operand: Operand, amount: str | None) -> str | None:
     """Why the operand is not the cell it names, or None when it is. Both sources use it: CP-1's
-    layer-1 block always, a CP-2G block when it names any cell."""
-    if operand.amount is None:
+    layer-1 block always, a CP-2G block when it names any cell. `amount` is the amount as the
+    block states it (at scale 1000, in thousands, as CP-1 prints it)."""
+    if amount is None:
         return (
             None
             if operand.row is None and operand.period is None
@@ -263,9 +266,7 @@ def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
     found = _cells(text, row, period)
     if not found:
         return f"base {key}: no table cell of CP-1 is at {where}"
-    not_the_cell = (
-        f"base {key} {operand.amount} is not CP-1's cell at {where} ({_cut(min(found), 77)})"
-    )
+    not_the_cell = f"base {key} {amount} is not CP-1's cell at {where} ({_cut(min(found), 77)})"
     try:
         values = {_signed(cell) for cell in found}
     except Inexact:
@@ -277,7 +278,7 @@ def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
         return f"base {key}: {where} is not one number in CP-1 ({count})"
     (value,) = values
     try:
-        agrees = value is not None and _agrees(key, value, Decimal(operand.amount))
+        agrees = value is not None and _agrees(key, value, Decimal(amount))
     except Inexact:
         agrees = False
     return None if agrees else not_the_cell
@@ -305,6 +306,78 @@ def _declined(document: dict[str, object], source: str) -> None:
     )
 
 
+_AMOUNT_DRIVERS = ("dividends", "debt_repayment")
+_THOUSANDS = re.compile(r"-?[0-9]{1,9}(\.[0-9])?")
+_SCALE_REFUSAL = "`scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)"
+
+
+def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
+    """`(name, holder, key)` of every amount slot the document's shape allows: the base operands,
+    the dividends and debt repayment drivers of the base and the two cases, and each facility's
+    balance and annual amortisation. Ratios, shares, rates and dates are never slots."""
+    base = document.get("base")
+    if isinstance(base, dict):
+        for key, operand in base.items():
+            if isinstance(operand, dict):
+                yield f"base {key}", operand, "amount"
+    for case in ("base_drivers", "upside_drivers", "downside_drivers"):
+        group = document.get(case)
+        if not isinstance(group, dict):
+            continue
+        for name in _AMOUNT_DRIVERS:
+            driver = group.get(name)
+            values = driver.get("values") if isinstance(driver, dict) else None
+            for i in range(len(values) if isinstance(values, list) else 0):
+                yield f"{case} {name} year {i + 1}", values, i
+    facilities = document.get("facilities")
+    for number, facility in enumerate(facilities if isinstance(facilities, list) else (), 1):
+        for field in ("balance", "annual_amortisation") if isinstance(facility, dict) else ():
+            yield f"facility {number} {field}", facility, field
+
+
+def _to_millions(document: dict[str, Any], source: str) -> dict[str, str]:
+    """At `scale` 1000 the block states USD thousands as CP-1 prints them: each amount text is
+    replaced, in place, by its exact USD millions value, and the stated texts are returned by
+    slot name. Anything else changes nothing. A scale that is not 1 or 1000, and an amount that is
+    not at most nine digits and one decimal place, are refused, never rounded."""
+    scale = document.get("scale")
+    if scale is None:
+        return {}
+    if scale not in (1, 1000):
+        raise ValueError(f"{source}: {_SCALE_REFUSAL}")
+    stated: dict[str, str] = {}
+    if scale == 1:
+        return stated
+    for name, holder, key in _slots(document):
+        text = holder[key]
+        if not isinstance(text, str):
+            continue  # null stays null; any other type is the schema's to refuse
+        if _THOUSANDS.fullmatch(text) is None:
+            raise ValueError(
+                f"{source}: {name} {_cut(text, 40)} is not an amount in thousands as CP-1 prints "
+                "it (scale 1000): at most nine digits and one decimal place, no separators"
+            )
+        stated[name] = text
+        with localcontext(cp2g._EXACT):
+            holder[key] = format(cp2g._exact(Decimal(text).scaleb(-3)), "f")
+    return stated
+
+
+def _check_base(inputs: ForecastInputs, cp1_text: str, source: str, stated: dict[str, str]) -> None:
+    """Each base amount, as the block states it, is the cell it names (a named block, or the
+    layer-1 block) or is printed somewhere in CP-1."""
+    named = source == "CP-1" or any(
+        operand.row is not None or operand.period is not None for operand in inputs.base.values()
+    )
+    for key, operand in inputs.base.items():
+        amount = stated.get(f"base {key}", operand.amount)
+        if named:
+            if (problem := _layer1_problem(cp1_text, key, operand, amount)) is not None:
+                raise ValueError(f"{source}: {problem}")
+        elif amount is not None and not _printed(cp1_text, amount):
+            raise ValueError(f"{source}: base {key} {amount} is not printed in CP-1")
+
+
 def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInputs:
     """The validated inputs block; ValueError names the first thing wrong with it. `source` is
     the module that wrote the block: CP-2G, or CP-1 for a layer-1 forecast (base operands and
@@ -315,6 +388,7 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
     if document is None:
         raise ValueError(f"{source}: the forecast inputs block is not a bounded JSON object")
     _declined(document, source)
+    stated = _to_millions(document, source)
     try:
         inputs = ForecastInputs.model_validate_json(exact_json(document))
     except ValidationError as error:
@@ -330,29 +404,22 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
     if source == "CP-1" and inputs.facilities:
         raise ValueError("CP-1: a layer-1 forecast states no facilities")
-    named = source == "CP-1" or any(
-        operand.row is not None or operand.period is not None for operand in inputs.base.values()
-    )
-    for key, operand in inputs.base.items():
-        if named:
-            if (problem := _layer1_problem(cp1_text, key, operand)) is not None:
-                raise ValueError(f"{source}: {problem}")
-        elif operand.amount is not None and not _printed(cp1_text, operand.amount):
-            raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
+    _check_base(inputs, cp1_text, source, stated)
     if inputs.facilities:
-        _check_facilities(inputs, inputs.facilities, cp1_text)
+        _check_facilities(inputs, inputs.facilities, cp1_text, stated)
     return inputs
 
 
 def _check_facilities(
-    inputs: ForecastInputs, facilities: tuple[Facility, ...], cp1_text: str
+    inputs: ForecastInputs, facilities: tuple[Facility, ...], cp1_text: str, stated: dict[str, str]
 ) -> None:
     """Each stated term is printed in CP-1, the balances fit the base debt, and no case names a
     driver the schedule replaces."""
-    for facility in facilities:
-        if not _printed(cp1_text, facility.balance):
+    for number, facility in enumerate(facilities, 1):
+        balance = stated.get(f"facility {number} balance", facility.balance)
+        if not _printed(cp1_text, balance):
             raise ValueError(
-                f"CP-2G: facility {facility.name} balance {facility.balance} is not printed in CP-1"
+                f"CP-2G: facility {facility.name} balance {balance} is not printed in CP-1"
             )
         for field in ("fixed_rate_pct", "spread_pct", "floor_pct"):
             value = getattr(facility, field)
@@ -361,6 +428,7 @@ def _check_facilities(
                     f"CP-2G: facility {facility.name} {field} {value}% is not printed in CP-1"
                 )
     debt = inputs.base["debt"].amount
+    divided = ", in USD millions after dividing by scale 1000" if inputs.scale == 1000 else ""
     if debt is not None:
         with localcontext(cp2g._EXACT):
             total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
@@ -370,12 +438,12 @@ def _check_facilities(
         if too_much:
             raise ValueError(
                 f"CP-2G: facility balances total {format(total, 'f')}, more than 1.25 times base "
-                f"debt {debt}; check the unit"
+                f"debt {debt}{divided}; check the unit"
             )
         if over_debt:
             raise ValueError(
                 f"CP-2G: scheduled repayments total {_plain_amount(repaid)}, more than base debt "
-                f"{_plain_amount(Decimal(debt))}"
+                f"{_plain_amount(Decimal(debt))}{divided}"
             )
     for name in ("upside_drivers", "downside_drivers"):
         case: CaseDrivers | None = getattr(inputs, name)
