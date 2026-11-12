@@ -1,21 +1,24 @@
 :root {
   /* brand: structure and action, never a verdict */
-  --rb-navy: #000533;        --rb-blue: #0017E5;
-  --rb-blue-hover: #0012B8;  --rb-logo-field: #001AFF;
+  --rb-navy: #000533;        --rb-blue: #001AFF;
+  --rb-blue-hover: #0012B2;  --rb-logo-field: #001AFF;
   /* neutrals */
-  --rb-ground: #EEF0F5;  --rb-panel: #FFFFFF;  --rb-head: #F6F7FA;
-  --rb-rule: #DDE1EA;    --rb-rule-soft: #EEF0F5;  --rb-select: #E7ECFF;
-  --rb-ink: #000533;     --rb-ink-2: #4A5068;  --rb-ink-3: #9AA0B4;
+  --rb-ground: #F4F4F5;  --rb-panel: #FFFFFF;  --rb-head: #FAFAFB;
+  --rb-rule: #E8E9EB;    --rb-rule-soft: #F4F4F5;  --rb-select: #E5E8FF;
+  --rb-ink: #000533;     --rb-ink-2: #383B3F;  --rb-ink-3: #63676E;
   --rb-on-navy: #FFFFFF; --rb-on-navy-2: #C7CBE0;
   /* signal: meaning for the creditor; never alone */
-  --rb-pos: #0E7A46;  --rb-pos-tint: #DCF5E7;  --rb-pos-navy: #7EE2A8;
-  --rb-caut: #8A5300; --rb-caut-tint: #FFF1C7; --rb-caut-navy: #FFD166;
-  --rb-neg: #B3261E;  --rb-neg-tint: #FBE0DD;  --rb-neg-navy: #FFB4B0;
-  --rb-neu: #4A5068;  --rb-neu-tint: #EEF0F5;  --rb-neu-navy: #C7CBE0;
+  --rb-pos: #0F8048;  --rb-pos-tint: #E8FFF4;  --rb-pos-navy: #7EE2A8;
+  --rb-caut: #806300; --rb-caut-tint: #FFF4CC; --rb-caut-navy: #FFD166;
+  --rb-neg: #8E413E;  --rb-neg-tint: #FDF0F0;  --rb-neg-navy: #FFB4B0;
+  --rb-neu: #474A4F;  --rb-neu-tint: #F4F4F5;  --rb-neu-navy: #C7CBE0;
   /* chart */
-  --rb-ch-1: #0017E5; /* issuer */   --rb-ch-2: #C4410C; /* comparison */
-  --rb-ch-3: #000533; --rb-ch-4: #4A5068; --rb-ch-5: #9AA0B4;
-  --rb-ch-grid: #DDE1EA; --rb-ch-track: #EEF0F5; --rb-ch-hatch: 45deg 2/6px;
+  /* fills (bars, areas, swatches) and lines/text (strokes, labels): bright fills never carry thin marks */
+  --rb-ch-1: #001AFF; --rb-ch-2: #1EFF8F; --rb-ch-3: #EAFF00;
+  --rb-ch-4: #A29AFF; --rb-ch-5: #256A80;
+  --rb-ch-1-ln: #001AFF; --rb-ch-2-ln: #0F8048; --rb-ch-3-ln: #758000;
+  --rb-ch-4-ln: #514D80; --rb-ch-5-ln: #256A80;
+  --rb-ch-grid: #E8E9EB; --rb-ch-track: #F4F4F5; --rb-ch-hatch: 45deg 2/6px;
   /* type */
   --rb-font-display: 'Red Hat Display', system-ui, sans-serif;
   --rb-font-text: 'Red Hat Text', system-ui, sans-serif;
