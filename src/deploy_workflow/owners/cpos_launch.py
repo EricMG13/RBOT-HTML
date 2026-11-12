@@ -1615,11 +1615,11 @@ FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. "
     "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
     "read the amount from, and `period` the exact header text of that table's column (for "
-    'example `"row": "Net sales", "period": "FY2024"`). Name both for every operand that has an '
-    "amount. "
-    "In a table with one row per period (CP-1's `Chart data:` tables and `Net debt data`), name "
-    'the row by its period exactly as printed ("row": "FY2024") and the measure by its exact '
-    'column header as `column` ("column": "Cash"), and leave out `period`. '
+    'example `"row": "Net sales", "period": "FY2024"`). Name the cell of every operand that has '
+    "an amount: `row` and `period`, or in a table with one row per period (CP-1's `Chart data:` "
+    "tables and `Net debt data`) `row` and `column`, the row being the period exactly as printed "
+    'and the column the measure\'s exact header (`{"amount": "<decimal>", "reason": null, '
+    '"row": "FY2024", "column": "Cash"}`); leave out `period` there. '
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
     "expense, not cash paid. "
@@ -1729,9 +1729,11 @@ LAYER1_FORECAST_BLOCK = (
     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
     "your own tables that you read the amount from, and `period` the exact header text of that "
     'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). '
-    "In a table with one row per period (CP-1's `Chart data:` tables and `Net debt data`), name "
-    'the row by its period exactly as printed ("row": "FY2024") and the measure by its exact '
-    'column header as `column` ("column": "Cash"), and leave out `period`. '
+    "Name the cell of every operand that has an amount: `row` and `period`, or in a table with "
+    "one row per period (CP-1's `Chart data:` tables and `Net debt data`) `row` and `column`, "
+    "the row being the period exactly as printed and the column the measure's exact header "
+    '(`{"amount": "<decimal>", "reason": null, "row": "FY2024", "column": "Cash"}`); leave out '
+    "`period` there. "
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
     "expense, not cash paid. "
@@ -2455,6 +2457,10 @@ _BOTH_KEYS = re.compile(
     r"^[\w-]+: forecast inputs: (?:\d+ problems; first: )?base\.(\w+): Value error, an operand "
     r"names the `period` header or the `column` header, not both"
 )
+_BOTH_KEY_OPERAND = re.compile(
+    r"base\.(\w+): Value error, an operand names the `period` header or the `column` header, "
+    r"not both"
+)
 _UNNAMED_AT_SCALE = re.compile(r"^[\w-]+: a block at scale 1000 must name the row and period")
 
 
@@ -2479,10 +2485,12 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
             return ()  # declining stays the method's call
         both = _BOTH_KEYS.match(message)
         if both:
-            advice = f"State either `period` or `column` for {both.group(1)}, not both."
+            names = list(dict.fromkeys(_BOTH_KEY_OPERAND.findall(message)))
+            who = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+            advice = f"State either `period` or `column` for {who}, not both."
             return (f"Forecast inputs: {error}. {advice}",)
         if _UNNAMED_AT_SCALE.match(message):
-            fix = "Name the row and period of each base operand; if you cannot, "
+            fix = "Name the row and the period or column of each base operand; if you cannot, "
             advice = (
                 f"{fix}set every driver's values to [null, null, null] and say why in scope_limits."
             )

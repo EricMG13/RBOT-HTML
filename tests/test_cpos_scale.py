@@ -267,8 +267,9 @@ def test_the_unnamed_scale_1000_refusal_gets_its_own_repair_line():
     task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": CP1_K.encode()})
     (issue,) = cpos_launch._forecast_issues(task, block_k(base=base))
     assert issue == (
-        f"Forecast inputs: {UNNAMED}. Name the row and period of each base operand; if you "
-        "cannot, set every driver's values to [null, null, null] and say why in scope_limits."
+        f"Forecast inputs: {UNNAMED}. Name the row and the period or column of each base operand; "
+        "if you cannot, set every driver's values to [null, null, null] and say why in "
+        "scope_limits."
     )
 
 

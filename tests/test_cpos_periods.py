@@ -1753,3 +1753,83 @@ def test_an_ltm_that_was_not_built_keeps_the_old_line():
     assert limits[0] == NOT_BUILT
     assert "CP-1 column headers not read as periods: LTM Q2 2025." in limits
     assert not any("own LTM" in x for x in limits)
+
+
+# --- fix round 1: a period row printed in another unit is never published as the named row's ----
+_LTM_IN_THOUSANDS = E1_CP1.replace(
+    "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |",
+    "| LTM Q2 2025 | 120000 | 60000 | US$ thousands | 30 June 2025. |",
+).replace(
+    "| LTM Q2 2025 | 590 | 120 | 470 | US$m |",
+    "| LTM Q2 2025 | 590000 | 120000 | 470000 | US$ thousands |",
+)
+_H1_IN_THOUSANDS = E1_CP1.replace(
+    "| LTM Q2 2025 | 120 | 60 | US$m | 30 June 2025. |",
+    "| H1 2025 | 120000 | 60000 | US$ thousands | 30 June 2025. |",
+).replace(
+    "| LTM Q2 2025 | 590 | 120 | 470 | US$m |",
+    "| H1 2025 | 590000 | 120000 | 470000 | US$ thousands |",
+)
+_UNIT_DEBT = _e1_base(
+    debt={"amount": "600", "reason": None, "row": "FY2024", "column": "Gross debt"}
+)
+
+
+def test_an_ltm_label_row_in_another_unit_gives_no_stock_and_says_so():
+    _, record = _e1_record(_LTM_IN_THOUSANDS, _e1_block(base=_UNIT_DEBT))
+    reason = "CP-1 states LTM Q2 2025 in another unit (US$ thousands)"
+    for column in ("YTD", "LTM"):
+        for key in ("closing_cash", "undrawn", "closing_debt"):
+            assert cell(record, column, key) == {"amount": None, "reason": reason}, (column, key)
+    assert D(cell(record, "FY2024", "closing_cash")["amount"]) == D(100)
+
+
+def test_a_period_row_in_another_unit_gives_no_figure_for_that_period():
+    _, record = _e1_record(_H1_IN_THOUSANDS, _e1_block(base=_UNIT_DEBT))
+    reason = "CP-1 states H1 2025 in another unit (US$ thousands)"
+    for key in ("closing_cash", "undrawn", "closing_debt"):
+        assert cell(record, "YTD", key) == {"amount": None, "reason": reason}, key
+
+
+def test_period_rows_in_the_same_unit_are_read_as_before():
+    _, record = _e1_record(E1_CP1, _e1_block(base=_UNIT_DEBT))
+    for column in ("YTD", "LTM"):
+        assert D(cell(record, column, "closing_cash")["amount"]) == D(120)
+        assert D(cell(record, column, "undrawn")["amount"]) == D(60)
+        assert D(cell(record, column, "closing_debt")["amount"]) == D(590)
+
+
+def test_an_ltm_label_with_two_figures_names_the_label_in_the_reason():
+    cp1 = E1_CP1.replace("| LTM Q2 2025 | 590 | 120 | 470 |", "| LTM Q2 2025 | 590 | 121 | 469 |")
+    _, record = _e1_record(cp1)
+    reason = "CP-1 prints different figures for this line in LTM Q2 2025"
+    for column in ("YTD", "LTM"):
+        assert cell(record, column, "closing_cash") == {"amount": None, "reason": reason}
+
+
+def test_a_ytd_period_dated_twice_gives_a_cell_reason_without_a_full_stop():
+    cp1 = E1_CP1.replace(
+        "| H1 2025 | 2025-01-01 | 2025-06-30 |",
+        "| H1 2025 | 2025-01-01 | 2025-06-30 |\n| H1 2025 | 2025-01-01 | 2025-06-29 |",
+    )
+    _, record = _e1_record(cp1)
+    reason = "CP-1's period table dates H1 2025 more than once, differently"
+    for key in ("closing_cash", "undrawn", "closing_debt"):
+        assert cell(record, "YTD", key) == {"amount": None, "reason": reason}, key
+
+
+def test_an_ltm_label_dated_twice_gives_a_cell_reason_without_a_full_stop():
+    cp1 = E1_CP1.replace(
+        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |",
+        "| LTM Q2 2025 | 2024-07-01 | 2025-06-30 |\n| LTM Q2 2025 | 2024-07-01 | 2025-06-29 |",
+    )
+    _, record = _e1_record(cp1)
+    reason = "CP-1's period table dates LTM Q2 2025 more than once, differently"
+    assert cell(record, "LTM", "closing_cash") == {"amount": None, "reason": reason}
+
+
+def test_an_ltm_whose_date_check_failed_does_not_say_it_is_built():
+    cp1 = E1_CP1.replace("| H1 2025 | 2025-01-01 |", "| H1 2025 | 2025-02-01 |")
+    _, record = _e1_record(cp1)
+    assert not any(x.startswith("CP-1's own") for x in record["limits"])
+    assert any("LTM Q2 2025" in x and "not read as periods" in x for x in record["limits"])

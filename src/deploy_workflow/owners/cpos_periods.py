@@ -12,7 +12,7 @@ from decimal import Decimal, Inexact, localcontext
 from typing import NamedTuple
 
 from deploy_workflow.owners import cp2g
-from deploy_workflow.owners.cpos_forecast import _agrees, _cut, _plain, _signed
+from deploy_workflow.owners.cpos_forecast import _agrees, _cut, _plain, _signed, _units_named
 
 Period = tuple[str, int, int]
 """`(kind, fiscal year, quarters to date)`; kind is `QUARTER`, `YTD` or `FY`."""
@@ -56,6 +56,7 @@ _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 DATED_TWICE = (
     "CP-1's period table dates {label} more than once, differently; it is treated as undated."
 )
+DATED_TWICE_CELL = "CP-1's period table dates {label} more than once, differently"
 
 
 def _date(cell: str) -> date | None:
@@ -152,6 +153,9 @@ class Line:
     unread: tuple[str, ...] = ()
     unread_rows: tuple[str, ...] = ()
     balances: dict[str, set[Decimal]] = field(default_factory=dict)
+    balance_gaps: dict[str, str] = field(
+        default_factory=dict
+    )  # an `LTM Qn YYYY` row in another unit
 
 
 @dataclass(frozen=True)
@@ -360,22 +364,53 @@ def _named_base(named: Mapping[str, tuple[str, str]]) -> Period | None:
     return max(periods, key=lambda p: (p[1], p[2]), default=None)
 
 
-def _transposed(tables: list[list[list[str]]], column: str) -> list[list[list[str]]]:
+IN_OTHER_UNIT = "CP-1 states {label} in another unit ({unit})"
+
+
+def _other_unit(row: list[str], index: int, named: frozenset[str]) -> str | None:
+    """The cell of a period row, other than its amount cell at `index`, that names a unit the
+    named row does not; None when the row names none or shares one (a row that names no unit is
+    read, as the unit guard reads the named row that names none)."""
+    for i, cell in enumerate(row):
+        units = _units_named(cell) if i != index else frozenset()
+        if units and named and units.isdisjoint(named):
+            return cell
+    return None
+
+
+def _transposed(
+    tables: list[list[list[str]]], column: str, target: Period
+) -> tuple[list[list[list[str]]], dict[str, str]]:
     """The tables that hold `column` as a header (not the first), each as a two-row measure table:
     the header is the first header cell then the row labels, the one row is `column` then its cells,
-    so a table with one row per period reads as a table with the periods as headers."""
+    so a table with one row per period reads as a table with the periods as headers. A period row
+    whose own cells name a unit that the `target` period's row does not is left blank (never
+    converted); the second result gives, for each such row label, the reason."""
     found = []
+    other: dict[str, str] = {}
     for table in tables:
         header, rows = (table[0], table[1:]) if table else ([], [])
         for index in (i for i, name in enumerate(header) if i > 0 and _plain(name) == column):
             kept = [row for row in rows if row and len(row) > index]
-            found.append(
-                [
-                    [header[0], *(row[0] for row in kept)],
-                    [header[index], *(row[index] for row in kept)],
-                ]
+            named = frozenset().union(
+                *(
+                    _units_named(cell)
+                    for row in kept
+                    if period_of(row[0]) == target
+                    for i, cell in enumerate(row)
+                    if i != index
+                )
             )
-    return found
+            cells = []
+            for row in kept:
+                unit = _other_unit(row, index, named)
+                if unit is not None:
+                    other[_plain(row[0])] = IN_OTHER_UNIT.format(
+                        label=_cut(_plain(row[0]), 40), unit=_cut(_plain(unit), 40)
+                    )
+                cells.append("" if unit is not None else row[index])
+            found.append([[header[0], *(row[0] for row in kept)], [header[index], *cells]])
+    return found, other
 
 
 def _named_line(
@@ -393,8 +428,20 @@ def _named_line(
         target = period_of(name[0])
         if target is None:
             return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[0]))))
-        line = _line(_transposed(tables, _plain(name[1])), key, amount, _plain(name[1]), target)
-        return replace(line, unread=(), unread_rows=line.unread)  # its headers are row labels
+        read, other = _transposed(tables, _plain(name[1]), target)
+        line = _line(read, key, amount, _plain(name[1]), target)
+        gaps = {
+            p: other[label]
+            for label in other
+            if (p := period_of(label)) in line.gaps and p not in line.values
+        }
+        return replace(  # its headers are row labels
+            line,
+            unread=(),
+            unread_rows=line.unread,
+            gaps={**line.gaps, **gaps},
+            balance_gaps={n: r for n, r in other.items() if period_of(n) is None},
+        )
     target = period_of(name[1])
     if target is None:
         return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[1]))))
@@ -480,6 +527,7 @@ class _Context:
     dates: Dates
     no_anchor: str = NO_ANCHOR
     labels: LtmDates = field(default_factory=dict)
+    twice: tuple[str, ...] = ()
 
 
 def _anchor_of(found: dict[str, Line]) -> _Anchor | None:
@@ -672,13 +720,12 @@ def _label_problem(ctx: _Context, label: str, period: Period) -> str | None:
     """Why the `LTM Qn YYYY` label is not the balance date of the column (its End is the End of
     the dates of `period`, the year to date or the fiscal year), or None."""
     spans = ctx.labels.get(label)
-    if not spans:
-        return LABEL_NOT_DATED.format(label=label)
-    if len(spans) > 1:
-        return DATED_TWICE.format(label=label)
+    if not spans or len(spans) > 1:
+        return (DATED_TWICE_CELL if spans else LABEL_NOT_DATED).format(label=label)
     span = ctx.dates.get(period)
     if span is None:
-        return LABEL_NOT_DATED.format(label=period_label(period))
+        twice = period_label(period) in ctx.twice
+        return (DATED_TWICE_CELL if twice else LABEL_NOT_DATED).format(label=period_label(period))
     ((_, end),) = spans
     if end != span[1]:
         return LABEL_OTHER_DAY.format(
@@ -697,7 +744,8 @@ def _balance(ctx: _Context, line: Line, real: cp2g.Val, period: Period) -> cp2g.
     label = f"LTM Q{period[2]} {period[1]}"
     printed = line.balances.get(label)
     if line.reason is not None or not printed:
-        return real
+        gap = None if line.reason is not None else line.balance_gaps.get(label)
+        return cp2g.Val(None, gap) if gap and real.amount is None else real
     different = cp2g.Val(None, DIFFERENT.format(period=period_label(period)))
     if real == different:
         return real
@@ -705,7 +753,7 @@ def _balance(ctx: _Context, line: Line, real: cp2g.Val, period: Period) -> cp2g.
     if problem is not None:
         return real if real.amount is not None else cp2g.Val(None, problem)
     if len(printed) > 1:
-        return different
+        return cp2g.Val(None, DIFFERENT.format(period=label))
     (figure,) = printed
     if real.amount is None:
         return cp2g._known(figure)
@@ -857,7 +905,7 @@ def _interim(
     return (
         [*columns, *_twelve_months(label, ltm_values, ltm_check, prior_values, prior_check)],
         _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
-        (label, own) if ltm_built else None,
+        (label, own) if ltm_built and (ltm_check is None or ltm_check.reason is None) else None,
     )
 
 
@@ -1005,7 +1053,7 @@ def history(
         and NOT_NAMED in (found["revenue"].reason, found["ebitda"].reason)
     )
     ctx = _Context(
-        found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR, labels
+        found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR, labels, twice
     )
     (ytd, pytd, ltm, prior), first, own = _four(ctx)
     pf = _why(_column("PF", "PF", "PF LTM", None, _blanket(NO_PF)), NO_PF)

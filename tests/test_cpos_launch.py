@@ -3330,7 +3330,10 @@ def test_the_cp2g_instruction_asks_for_the_row_and_period_of_every_base_operand(
         "exact first-cell text",
         "exact header text",
         "of one of the CP-1 handoff's tables",
-        "Name both for every operand that has an amount",
+        (
+            "Name the cell of every operand that has an amount: `row` and `period`, or in a table "
+            "with one row per period"
+        ),
         "positive magnitude",
         "with its sign reversed",
         "is not a cell",
@@ -5295,9 +5298,9 @@ def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allow
 
 # --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`
 COLUMN_SENTENCE = (
-    "In a table with one row per period (CP-1's `Chart data:` tables and `Net debt data`), name "
-    'the row by its period exactly as printed ("row": "FY2024") and the measure by its exact '
-    'column header as `column` ("column": "Cash"), and leave out `period`.'
+    "`row` and `column`, the row being the period exactly as printed and the column the "
+    'measure\'s exact header (`{"amount": "<decimal>", "reason": null, "row": "FY2024", '
+    '"column": "Cash"}`); leave out `period` there.'
 )
 INTEREST_SENTENCE = (
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
@@ -5362,3 +5365,12 @@ def test_an_operand_naming_both_period_and_column_gets_its_own_repair_line():
     (issue,) = _repair_issues(forecast_block(base=_named_base(cash=both)), COLUMN_CP1)
     assert issue.endswith("State either `period` or `column` for cash, not both.")
     assert "set every driver" not in issue
+
+
+def test_several_operands_naming_both_period_and_column_are_all_named_in_the_repair_line():
+    both = _operand("100", "FY2025", "FY2025") | {"column": "Cash"}
+    base = _named_base(
+        cash=both, undrawn=_operand("50", "FY2025", "FY2025") | {"column": "Undrawn"}
+    )
+    (issue,) = _repair_issues(forecast_block(base=base), COLUMN_CP1)
+    assert issue.endswith("State either `period` or `column` for cash and undrawn, not both.")
