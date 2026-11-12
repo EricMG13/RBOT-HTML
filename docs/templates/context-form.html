@@ -2095,10 +2095,31 @@ function restoreCarried(c) {
   CARRIED.run = c.run; CARRIED.files = new Set(strings(c.files)); CARRIED.fields = new Set(strings(c.fields)); CARRIED.locked = c.locked === true;
 }
 // Which answer is it: a field's key is its scope (a row list, the market or multiple block, an assumption) and its data-k.
+// A list row's key holds its position, so a row the analyst adds is never one of the carried ones; the carried
+// fields of a row sit on the row itself (data-carried) and CARRIED.fields follows them (syncRowFields).
 const carryKey = el => {
-  const row = el.closest('[data-row]'), scope = row ? row.parentNode : el.closest('#im,#um,[id^="as-"]');
+  const row = el.closest('[data-row]');
+  if (row) return row.parentNode.id + '#' + [...row.parentNode.children].indexOf(row) + '|' + el.dataset.k;
+  const scope = el.closest('#im,#um,[id^="as-"]');
   return (scope && scope.id ? scope.id : '') + '|' + el.dataset.k;
 };
+const ROW_KEY = /^([^#|]+)#(\d+)\|(.+)$/;
+function applyRowKeys() {
+  for (const key of CARRIED.fields) {
+    const m = ROW_KEY.exec(key), box = m && $(m[1]), row = box && box.children[Number(m[2])];
+    if (!row) continue;
+    const have = (row.dataset.carried || '').split(' ').filter(Boolean);
+    if (!have.includes(m[3])) row.dataset.carried = have.concat(m[3]).join(' ');
+  }
+}
+function syncRowFields() {
+  for (const key of [...CARRIED.fields]) if (ROW_KEY.test(key)) CARRIED.fields.delete(key);
+  document.querySelectorAll('#f [data-row][data-carried]').forEach(row => {
+    const at = [...row.parentNode.children].indexOf(row);
+    row.dataset.carried.split(' ').filter(Boolean).forEach(k => CARRIED.fields.add(row.parentNode.id + '#' + at + '|' + k));
+  });
+}
+const SPECIAL_LABEL = {'@modules': 'Module subset', '@turns': 'Turns per module'};
 function fieldValues() {
   const m = new Map();
   document.querySelectorAll('#f [data-k]').forEach(e => {
@@ -2108,11 +2129,13 @@ function fieldValues() {
   return m;
 }
 function carriedLabel(key) {
+  if (key in SPECIAL_LABEL) return SPECIAL_LABEL[key];
   const el = [...document.querySelectorAll('#f [data-k]')].find(e => carryKey(e) === key);
   return el ? nameOf(el) : key;
 }
 // A mark after each carried answer; a radio or tick group gets one, after its fieldset.
 function renderMarks() {
+  syncRowFields();
   document.querySelectorAll('.from-run').forEach(m => m.remove());
   if (!CARRIED.run || !CARRIED.fields.size) return;
   const seen = new Set();
@@ -2163,14 +2186,19 @@ async function startFrom(runId) {
   else {
     if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
     $('i-issuer_name').value = txt(got.issuer_name);
-    $('i-issuer_id').value = txt(got.issuer_id);
-    idTouched = txt(got.issuer_id) !== slug(txt(got.issuer_name));
   }
   $('i-issuer_id').value = txt(got.issuer_id);
   LOCKED_ID = txt(got.issuer_id);
   $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
   const now = fieldValues();
   CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|pathway' && k !== '|legal_documents'));
+  applyRowKeys();
+  // The earlier run's module subset and turns: a subset run started again stays a subset.
+  if (Array.isArray(got.modules) && got.modules.length) {
+    runOf(getV($('st-pathway'), 'pathway')).filter(m => !got.modules.includes(m)).forEach(m => SKIPPED.add(m));
+    CARRIED.fields.add('@modules');
+  }
+  if (Number.isInteger(got.max_turns) && got.max_turns !== DEFAULT_TURNS) { $('turns').value = String(got.max_turns); CARRIED.fields.add('@turns'); }
   const files = CARRIED.files.size;
   loadMsg(!isObj(ctx) && !files && !problems.length ? `No documents or answers were kept for run ${runId}. Only the issuer name and ID are carried over.`
     : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (isObj(ctx) && !bad ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : ''), problems.length > 0);
@@ -2179,8 +2207,11 @@ async function startFrom(runId) {
 }
 // The ID is the earlier run's until the analyst says this is a different issuer: the carried documents and answers go.
 async function unlockIssuer() {
-  const names = [...CARRIED.files];
-  for (const name of names) await removeFile(name);
+  for (const name of [...CARRIED.files]) await removeFile(name);
+  if (CARRIED.files.size) { // a file the service would not delete is still in the submission: the ID stays locked
+    loadMsg(`Could not remove ${[...CARRIED.files].join(', ')} from this submission, so the issuer ID stays locked to run ${CARRIED.run}. Try again.`, true);
+    return;
+  }
   CARRIED.run = ''; CARRIED.files = new Set(); CARRIED.fields = new Set(); CARRIED.locked = false; LOCKED_ID = '';
   resetAll();
   update();
@@ -2218,12 +2249,13 @@ async function restore() {
       LOCKED_ID = CARRIED.locked ? txt(saved.context.identity.issuer_id) : '';
       renderDocs(); renderFileSelects();
       const notes = fill(saved.context, isObj(saved.files) ? saved.files : {}, true);
+      applyRowKeys();
       if (typeof x.submitter === 'string') $('submitter').value = x.submitter;
       if (typeof x.turns === 'string') $('turns').value = x.turns;
       if (Array.isArray(x.skipped)) x.skipped.forEach(m => SKIPPED.add(String(m)));
       newestTouched = x.newestTouched === true;
       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();
-      loadMsg('Your earlier answers are back.' + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
+      loadMsg((FROM ? `Run ${FROM} was not used: your earlier answers are back.` : 'Your earlier answers are back.') + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
       if (gone) showGone();
     } else if (FROM && !(isObj(saved) && saved.v === 1)) {
       await startFrom(FROM);
@@ -2284,6 +2316,7 @@ function vis() {
   $('levelnote').textContent = LEVEL_NOTE[LEVEL];
   $('adv-run').hidden = lvl < 2;
   renderModules(runOf(path));
+  document.querySelectorAll('[data-c="mod"]').forEach(x => { x.checked = !SKIPPED.has(x.value); });
   // A field the level does not ask is hidden only while it is empty: an answer is never hidden.
   document.querySelectorAll('[data-min]').forEach(e => {
     e.hidden = lvl < RANK[e.dataset.min] && ![...e.querySelectorAll('input,textarea,select')].some(x => x.value.trim() !== '');
@@ -2404,7 +2437,13 @@ function onField(e) {
   if (t.id === 'd-newest') newestTouched = true;
   if (t.dataset.k === 'run_type') rtTouched = true;
   if (t.dataset.k === 'basis' && t.type === 'radio') basisTouched = true;
-  if (t.dataset.k && CARRIED.run) CARRIED.fields.delete(carryKey(t));
+  if (t.dataset.k && CARRIED.run) {
+    CARRIED.fields.delete(carryKey(t));
+    const row = t.closest('[data-row]');
+    if (row && row.dataset.carried) row.dataset.carried = row.dataset.carried.split(' ').filter(k => k !== t.dataset.k).join(' ');
+  }
+  if (CARRIED.run && t.dataset.c === 'mod') CARRIED.fields.delete('@modules');
+  if (CARRIED.run && t.id === 'turns') CARRIED.fields.delete('@turns');
   if (t.id === 'i-issuer_id' && CARRIED.locked) t.value = LOCKED_ID;
   else if (t.id === 'i-issuer_id') { idTouched = t.value !== ''; if (!idTouched) t.value = slug($('i-issuer_name').value); }
   if (t.id === 'i-issuer_name' && !idTouched && !CARRIED.locked) $('i-issuer_id').value = slug(t.value);

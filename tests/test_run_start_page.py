@@ -1631,14 +1631,16 @@ def test_carried_answers_are_marked_and_an_edit_removes_the_mark(page_from):
         return n && n.classList.contains('from-run') ? n.textContent : ''; };
       const before = mark('i-issuer_name');
       const had = [...CARRIED.fields].some(k => k.endsWith('|issuer_name'));
-      const other = $('i-issuer_id').closest('.f') ? mark('d-as_of') : '';
+      const other = mark('d-as_of');
+      const marksBefore = document.querySelectorAll('.from-run').length;
       type('i-issuer_name', 'Acme Corporation');
       return {before, after: mark('i-issuer_name'), had, other,
               still: [...CARRIED.fields].some(k => k.endsWith('|issuer_name')),
-              marks: document.querySelectorAll('.from-run').length};""",
+              marksBefore, marks: document.querySelectorAll('.from-run').length};""",
         path=f"/?from={run_id}",
     )
     assert got["before"] == "from run " + run_id and got["had"] is True
+    assert got["marks"] == got["marksBefore"] - 1  # only the edited answer lost its mark
     assert got["after"] == "" and got["still"] is False
     assert got["other"] == ""  # the as-of date is never marked: it is not carried
 
@@ -1679,8 +1681,12 @@ def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
     assert "carried over from run " + run_id in " ".join(second["rows"][0])
     assert second["documents"] == 1 and second["marks"] >= 1
     # A reload with the same ?from= also restores the saved submission and carries nothing more.
-    third = page.run("return {rows: rows().length, run: CARRIED.run};", path=f"/?from={run_id}")
-    assert third == {"rows": 1, "run": run_id}
+    third = page.run(
+        "return {rows: rows().length, run: CARRIED.run, msg: $('loadmsg').textContent};",
+        path=f"/?from={run_id}",
+    )
+    assert (third["rows"], third["run"]) == (1, run_id)
+    assert f"Run {run_id} was not used: your earlier answers are back." in third["msg"]
 
 
 def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):
@@ -1732,3 +1738,164 @@ def test_the_review_hides_the_block_when_nothing_was_carried(page):
         " return {hidden: $('rv-carried').hidden};"
     )
     assert got["hidden"] is True
+
+
+def _edit_stored(root: Path, fn: Callable[[dict[str, Any]], None]) -> Callable[[Path], None]:
+    def edit(folder: Path) -> None:
+        stored = json.loads((folder / "context.json").read_text("utf-8"))
+        fn(stored)
+        (folder / "context.json").write_text(json.dumps(stored), encoding="utf-8")
+
+    return edit
+
+
+def _answers(stored: dict[str, Any]) -> None:
+    stored["research_questions"] = [{"text": "Is leverage falling?"}]
+    stored["assumptions"]["cp2d"] = {
+        "horizon_months": "18",
+        "minimum_cash_m": "50",
+        "rationale": "Covenant minimum liquidity.",
+    }
+
+
+@pytest.fixture
+def page_from_lists(root, tmp_path, monkeypatch, fake_env):
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, _edit_stored(root, _answers)) as got:
+        yield got
+
+
+@pytest.fixture
+def page_from_subset(root, tmp_path, monkeypatch, fake_env):
+    from dataclasses import replace
+
+    def edit(folder: Path) -> None:
+        lay = layout(root)
+        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
+        runs.save(lay, replace(record, modules=("CP-0", "CP-1"), max_turns=16))
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
+        yield got
+
+
+MARKED = """
+  const marked = el => {
+    const n = el.nextElementSibling;
+    return !!(n && n.classList.contains('from-run'));
+  };
+  const texts = () => [...$('rows-q').querySelectorAll('[data-k="text"]')];
+"""
+
+
+def test_a_list_row_is_marked_on_its_own_and_an_added_row_never_is(page_from_lists):
+    page, run_id = page_from_lists
+    got = page.run(
+        MARKED
+        + """
+      const first = texts()[0];
+      const out = {before: {count: texts().length, value: first.value, marked: marked(first)}};
+      addRow('q'); update();
+      out.addedMarked = marked(texts()[1]);
+      type_ = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', {bubbles: true})); };
+      type_(texts()[1], 'A new question');
+      out.carriedAfter = marked(texts()[0]);
+      out.labelKept = $('rv-carried').textContent;
+      await review();
+      out.review = $('rv-carried').textContent;
+      out.value = texts()[0].value;
+      // An assumption block field is marked, and an edit takes only its own mark.
+      const h = document.querySelector('#as-cp2d [data-k="horizon_months"]');
+      out.asm = marked(h);
+      type_(h, '24');
+      out.asmAfter = marked(h);
+      out.rationale = marked(document.querySelector('#as-cp2d [data-k="rationale"]'));
+      return out;""",
+        path=f"/?from={run_id}",
+    )
+    assert got["before"] == {"count": 1, "value": "Is leverage falling?", "marked": True}
+    assert got["addedMarked"] is False and got["carriedAfter"] is True
+    assert got["value"] == "Is leverage falling?"
+    assert "Is leverage falling?" not in got["review"]  # labels, not values
+    assert got["asm"] is True and got["asmAfter"] is False and got["rationale"] is True
+
+
+def test_list_row_marks_follow_their_row_after_a_removal_and_a_reload(page_from_lists):
+    page, run_id = page_from_lists
+    first = page.run(
+        MARKED
+        + """
+      addRow('q'); update();
+      texts()[1].value = 'mine'; texts()[1].dispatchEvent(new Event('input', {bubbles: true}));
+      return {marked: texts().map(marked)};""",
+        path=f"/?from={run_id}",
+    )
+    assert first["marked"] == [True, False]
+    second = page.run(
+        MARKED
+        + """
+      const out = {marked: texts().map(marked), values: texts().map(t => t.value)};
+      $('rows-q').querySelector('[data-remove]').click();
+      out.afterRemoval = texts().map(marked);
+      out.fields = [...CARRIED.fields].filter(k => k.startsWith('rows-q'));
+      return out;""",
+    )
+    assert second["marked"] == [True, False] and second["values"] == [
+        "Is leverage falling?",
+        "mine",
+    ]
+    assert second["afterRemoval"] == [False] and second["fields"] == []
+
+
+def test_the_earlier_runs_module_subset_and_turns_are_applied(page_from_subset):
+    page, run_id = page_from_subset
+    got = page.run(
+        """
+      const sent = answers();
+      await review();
+      return {modules: sent.modules, turns: sent.max_turns, text: $('rv-carried').textContent,
+              ticked: [...document.querySelectorAll('[data-c="mod"]')]
+                .filter(x => x.checked).map(x => x.value)};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["modules"] == ["CP-0", "CP-1"] and got["turns"] == 16
+    assert got["ticked"] == ["CP-0", "CP-1"]
+    assert "Module subset" in got["text"] and "Turns per module" in got["text"]
+    after = page.run(
+        """
+      const kept = answers();
+      $('unlock-issuer').click();
+      for (let i = 0; i < 100 && rows().length; i++) await settle(50);
+      const sent = answers();
+      return {kept: [kept.modules, kept.max_turns], modules: sent.modules,
+              turns: sent.max_turns};"""
+    )
+    assert after["kept"] == [["CP-0", "CP-1"], 16]  # the reload keeps them
+    assert after["modules"] == [] and after["turns"] == 32  # a different issuer starts clean
+
+
+def test_an_unlock_that_cannot_delete_a_file_keeps_the_lock(page_from):
+    page, run_id = page_from
+    got = page.run(
+        """
+      const real = window.fetch;
+      window.fetch = (url, init) => init && init.method === 'DELETE'
+        ? Promise.resolve(new Response(JSON.stringify({error: 'busy'}), {status: 500}))
+        : real(url, init);
+      $('unlock-issuer').click();
+      await settle(800);
+      window.fetch = real;
+      return {locked: $('i-issuer_id').readOnly, run: CARRIED.run, files: [...CARRIED.files],
+              rows: rows().length, msg: $('loadmsg').textContent};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["locked"] is True and got["run"] == run_id and got["files"] == ["a.txt"]
+    assert got["rows"] == 1 and "a.txt" in got["msg"] and "stays locked" in got["msg"]
+
+
+def test_from_is_not_used_and_says_so_when_a_saved_record_is_restored(page):
+    page.run("type('i-issuer_name', 'Acme Corp'); return {};")
+    got = page.run(
+        "return {msg: $('loadmsg').textContent, run: CARRIED.run};",
+        path="/?from=20990101-000000-01",
+    )
+    assert got["run"] == ""
+    assert "Run 20990101-000000-01 was not used: your earlier answers are back." in got["msg"]
