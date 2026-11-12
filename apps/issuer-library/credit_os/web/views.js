@@ -133,9 +133,19 @@ const modelRun=model=>Object.keys(contexts).find(key=>runModels(key).includes(mo
 const modelOwnRun=model=>Object.keys(contexts).find(key=>(contexts[key].folder===model.runId||contexts[key].folder===model.runFolder)&&runModels(key).includes(model))||modelRun(model);
 // Not superseded by another listed model; one that records a predecessor comes first, then the later folder name.
 const modelOrder=models=>[...models].sort((a,b)=>(models.some(m=>m.previous===a.id)-models.some(m=>m.previous===b.id))||((b.previous!=null)-(a.previous!=null))||byModelId(a,b));
+// The relationship a delivery records with another, or null when it records none.
 function modelRelationship(model,models) {
   const successor=models.find(m=>m.previous===model.id);
-  return model.previous?`supersedes ${model.previous}`:successor?`superseded by ${successor.id}`:'relationship not recorded';
+  return model.previous?`supersedes ${model.previous}`:successor?`superseded by ${successor.id}`:null;
+}
+// A delivery in the Model select reads "<run date> · <pathway> · <run id>" from its run, then its run folder, then its delivery id. Two deliveries that
+// read alike each add the first eight characters of the delivery id; a relationship is added only when one is recorded.
+function modelOptionLabels(models) {
+  const base=models.map(m=>{const ctx=contexts[modelOwnRun(m)];return ctx?`${runDate(ctx)} · ${runPathway(ctx)} · ${ctx.run}`:m.runFolder||m.id;});
+  return models.map((m,i)=>{
+    const alike=base.filter(text=>text===base[i]).length>1,relationship=modelRelationship(m,models);
+    return `${base[i]}${alike?` · ${m.id.slice(0,8)}`:''}${relationship==null?'':` · ${relationship}`}`;
+  });
 }
 // A frame has no error event for a page that never arrives, so a missing load within the timeout is the failure.
 const frameTimeout=()=>Number.isFinite(window.DESIGN_FRAME_TIMEOUT_MS)?window.DESIGN_FRAME_TIMEOUT_MS:6000;
@@ -994,7 +1004,8 @@ function forecastView(context,id) {
   if(!models.length)return forecastEmpty(context);
   const model=models.find(m=>m.id===id)||models[0];
   const acceptance=reportAcceptance(model);
-  const select=`<label for="model-select">Model</label><select id="model-select">${models.map(m=>`<option value="${esc(m.id)}" ${m.id===model.id?'selected':''}>${esc(`${m.id} · ${modelRelationship(m,models)}`)}</option>`).join('')}</select>`;
+  const optionLabels=modelOptionLabels(models);
+  const select=`<label for="model-select">Model</label><select id="model-select">${models.map((m,i)=>`<option value="${esc(m.id)}" ${m.id===model.id?'selected':''}>${esc(optionLabels[i])}</option>`).join('')}</select>`;
   const why=`<section class="forecast-why"><h2>Why this model was built</h2>${model.scope==null?'':`<p class="forecast-scope">${esc(model.scope)}</p>`}${model.inputContract==null?'':`<p class="forecast-input">${esc(`Input contract: ${model.inputContract}`)}</p>`}${model.revisionNote==null?'':`<p class="forecast-revision">${esc(`Revision note: ${model.revisionNote}`)}</p>`}</section>`;
   const forecast=model.sources.find(s=>s.role==='forecast'),register=model.register;
   // The link opens the module that wrote the forecast handoff: CP-2G's forward model, or CP-1 for a layer-1 forecast.

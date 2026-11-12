@@ -914,7 +914,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -2780,4 +2780,34 @@ test('Forecast: the fold has the other cases\' keyboard and focus styling', () =
   const css = read('screen.css');
   assert.ok(css.includes('.cashflow-other summary,.cashflow-empty summary{cursor:pointer;font-weight:600;'));
   assert.ok(read('views.js').includes('<details class="cashflow-empty"><summary>'));
+});
+
+const PICK_RUNS = { asOf: '2025-03-31', issuerKey: 'k1', pathway: 'credit_snapshot', run: 'Run A' };
+const pickPage = models => runPage(d => d, [], m => m, { runFields: PICK_RUNS, models });
+const pickModel = (id, extra = {}) => ({ id, issuerKey: 'k1', runId: RUN, runFolder: RUN, sources: [], ...extra });
+const HASH_1 = 'a1b2c3d4'.repeat(8), HASH_2 = 'e5f6a7b8'.repeat(8);
+
+test('model picker: one delivery reads run date, pathway and run id, with no hash', () => {
+  const models = [pickModel(HASH_1)];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A']);
+});
+
+test('model picker: two deliveries of one run differ by the first eight characters of the delivery id', () => {
+  const models = [pickModel(HASH_1), pickModel(HASH_2)];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · a1b2c3d4', '31 March 2025 · Credit snapshot · Run A · e5f6a7b8']);
+});
+
+test('model picker: the relationship is appended only when recorded', () => {
+  const models = [pickModel(HASH_1, { previous: HASH_2 }), pickModel(HASH_2)];
+  const [first, second] = pickPage(models).modelOptionLabels(models);
+  assert.equal(first, `31 March 2025 · Credit snapshot · Run A · a1b2c3d4 · supersedes ${HASH_2}`);
+  assert.equal(second, `31 March 2025 · Credit snapshot · Run A · e5f6a7b8 · superseded by ${HASH_1}`);
+  assert.ok(!pickPage([pickModel(HASH_1)]).modelOptionLabels([pickModel(HASH_1)])[0].includes('relationship'));
+});
+
+test('model picker: with no run context the run folder is named, then the delivery id', () => {
+  const orphan = pickModel(HASH_1, { issuerKey: 'other', runFolder: 'folder-x', runId: 'folder-x' });
+  assert.deepEqual(pickPage([orphan]).modelOptionLabels([orphan]), ['folder-x']);
+  const bare = pickModel(HASH_2, { issuerKey: 'other', runFolder: null, runId: null });
+  assert.deepEqual(pickPage([bare]).modelOptionLabels([bare]), [HASH_2]);
 });
