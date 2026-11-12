@@ -3390,3 +3390,48 @@ test('brand colours: the replaced colour values no longer appear in screen.css',
   const css = read('screen.css');
   for (const old of ['#0017e5', '#0e7a46', '#8a5300', '#b3261e', '#4a5068', '#3a4056', '#0b1030']) assert.ok(!css.includes(old), `${old} is still in screen.css`);
 });
+
+function cssRules(css) {
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
+}
+
+test('brand colours: a hatched stack segment on a bright fill draws its stripe in that series line value, not white', () => {
+  const rules = cssRules(read('screen.css'));
+  for (const [n, fill] of [[1, 2], [2, 3], [3, 4]]) {
+    for (const prefix of ['.stack-seg', '.stack-key', '.stack-legend']) {
+      const sel = prefix === '.stack-seg' ? `.stack-seg.series-${n}.hatch` : `${prefix} .series-${n}.hatch`;
+      const rule = rules.find((r) => r.selector.split(',').map((s) => s.trim()).includes(sel));
+      assert.ok(rule, `no hatch rule for ${sel}`);
+      assert.ok(rule.body.includes(`var(--series-${fill}-ln)`), `${sel} stripe is not --series-${fill}-ln`);
+      assert.ok(!/rgba?\(\s*255\s*,\s*255\s*,\s*255|#fff/i.test(rule.body), `${sel} draws a white stripe`);
+    }
+  }
+});
+
+test('brand colours: no legend or key swatch is filled with a bright series token, and the ledger states keep their tokens', () => {
+  const rules = cssRules(read('screen.css'));
+  for (const r of rules) {
+    if (!/\.(chart-legend|signal-key)\b/.test(r.selector) || !/\.series-\d/.test(r.selector)) continue;
+    assert.ok(!/(?:^|;)\s*background(?:-color)?\s*:\s*var\(--series-[234]\)/.test(r.body), `${r.selector} fills a swatch with a bright series token`);
+  }
+  const ledger = { 'ledger-closed': 'var(--green)', 'ledger-remaining': 'var(--navy)', 'ledger-new': 'var(--blue)', 'ledger-no-longer-stated': 'var(--amber)' };
+  for (const [cls, value] of Object.entries(ledger)) {
+    const rule = rules.find((r) => r.selector.split(',').map((s) => s.trim()).includes(`.${cls}`));
+    assert.ok(rule, `no rule for .${cls}`);
+    assert.match(rule.body, new RegExp(`(?:^|;)\\s*background\\s*:\\s*${value.replace(/[()]/g, '\\$&')}\\s*(?:;|$)`), `.${cls}`);
+  }
+});
+
+test('brand colours: the upside path, its points and its key use --series-4-ln; axis and gridline use the brand axis and grid', () => {
+  const rules = cssRules(read('screen.css'));
+  const last = (sel, prop) => {
+    let v = null;
+    for (const r of rules) if (r.selector.split(',').map((s) => s.trim()).includes(sel)) for (const m of r.body.matchAll(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'g'))) v = m[1].trim();
+    return v;
+  };
+  assert.equal(last('.path-2', 'stroke'), 'var(--series-4-ln)');
+  assert.equal(last('.point-2', 'fill'), 'var(--series-4-ln)');
+  assert.equal(last('.path-key-2', 'background'), 'var(--series-4-ln)');
+  assert.equal(last('.axis', 'stroke'), 'var(--navy)');
+  assert.equal(last('.gridline', 'stroke'), 'var(--gray-200)');
+});
