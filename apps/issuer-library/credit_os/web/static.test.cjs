@@ -446,7 +446,7 @@ test('(g) a leading method code is dropped from a displayed heading and kept now
   assert.ok(html.includes('<h4>Research brief</h4>'));
   assert.ok(!/<h4 title=/.test(html), 'no title keeps the id');
   assert.ok(html.includes('<h4>Net debt — bridge</h4>'));
-  assert.equal(report().METHOD_CODE.source, '^([A-Z][A-Z0-9]*\\.[A-Z]?\\d+|[a-z0-9]+(\\.[a-z0-9_]+)+)\\s+—\\s+');
+  assert.equal(report().METHOD_CODE.source, '^(?:[A-Z][A-Z0-9]*\\.[A-Z]?\\d+(?:\\s+—\\s+|\\s+(?=[A-Z]))|[a-z0-9]+(?:\\.[a-z0-9_]+)+\\s+—\\s+)');
   // The code goes from Limits, Reference and Calculations headings too, and stays in the audit list (the handoff's own section names).
   const coded = [sec('C.1 — Gap list', 2, 100, 'limits', [text(101, 'g')]), ref('T4.D1 — Register', 110, [table(111, ['A', 'B'], [[112, 'x', 'y']])]), sec('T2F.2 — Trace', 3, 120, 'calculations', [text(121, 'c')]), sec('T3D.1 — Source map', 3, 130, 'audit', [text(131, 'a')])];
   const r = report({ sections: coded }, [['gap', 'C.1 — Gap list', ['C.1']], ['reg', 'T4.D1 — Register', ['T4.D1']], ['trace', 'T2F.2 — Trace', ['T2F.2']], ['map', 'T3D.1 — Source map', ['T3D.1']]]);
@@ -2139,6 +2139,28 @@ test('names, not codes: a step id becomes the step\'s own title, a range keeps i
   assert.ok(nullChip.includes('>Financial foundation · D1 · D3<'), 'a chip with no module names the row\'s own');
 });
 
+test('names, not codes: a step heading with no dash, a prefixed register id and a gap cell read as their own words', () => {
+  const page = runPage(d => {
+    d[outId('CP-1')].sections.push(ref('Steps', 80, [table(81, ['Step', 'Name'], [[82, 'T2.12', 'Gaps ledger'], [83, 'T2.13 Open items', '']])]), sec('T2.14 Ratings view', 3, 90, 'reference', [text(91, 'x')]));
+    return d;
+  }), id = outId('CP-1'), name = text => page.namedText(text, id);
+  assert.equal(name('T2.12'), 'Gaps ledger');
+  assert.equal(name('See T2.13'), 'See “Open items”', 'a dashless step row gives its title');
+  assert.equal(name('T2.14'), 'Ratings view', 'a dashless step heading gives its title');
+  assert.equal(name('T9.9 stands'), 'a method step stands', 'a lowercase word after a dashless id is prose');
+  assert.equal(report().METHOD_CODE.test('T2.12 Gaps ledger') && 'T2.12 Gaps ledger'.replace(report().METHOD_CODE, ''), 'Gaps ledger');
+  assert.equal('T2.12 — Gaps ledger'.replace(report().METHOD_CODE, ''), 'Gaps ledger');
+  assert.equal('T9.9 stands'.replace(report().METHOD_CODE, ''), 'T9.9 stands');
+  assert.equal('T2E.3.r01 Row'.replace(report().METHOD_CODE, ''), 'T2E.3.r01 Row');
+  page.current.module = 'CP-6';
+  assert.equal(name('CP-6-MON-001 and CP-6A-DP-005'), 'MON-001 and DP-005', 'own page: the register id alone, an alias counts as the module');
+  assert.equal(name('Gap CP-6-GAP-005'), 'Gap 5');
+  page.current.module = 'CP-1';
+  assert.equal(name('CP-6-MON-001 and CP-6A-DP-005'), 'Committee decision MON-001 and Committee decision DP-005');
+  assert.equal(name('Gap CP-6-GAP-005'), 'Committee decision gap 5');
+  assert.equal(name('CP-2R-MON-001'), 'unnamed module MON-001');
+});
+
 test('names, not codes: a table column of bare step ids is not drawn; a heading or caption loses its leading id and keeps no title', () => {
   const steps = ref('T4.11 — Cumulative gaps', 20, [table(22, ['Step', 'Name', 'Mixed'], [[23, 'T4.1', 'Peer universe', 'T4.1'], [24, 'T4.2', 'Peer metrics', 'n.a.']])]);
   const html = report({ sections: [steps] }, [['reg', 'T4.11 — Cumulative gaps', ['T4.11']]]).reportReference(OUT);
@@ -2173,6 +2195,7 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
   assert.equal(nameCodesIn(['Source readiness', ' (CP-0)'])[1].data, '', 'a parenthesised code after the module name in the node before is dropped');
   assert.ok(screen.includes('Retained fields from this historical run, with module codes and method step ids shown as names.') && !screen.includes('exact retained fields'));
   assert.ok(/function nameCodes[^]*?nameCodes\(\$\('search-results'\),null,false\)/.test(screen), 'search hits borrow no step title');
+  assert.ok(screen.includes("tables.map(s=>[id,plain(s.heading.replace(METHOD_CODE,'')),s.heading])"), 'a search hit label loses the heading\'s leading step id');
   assert.ok(/updateLibrary\([^]*?nameCodes\(\$\(id\)\)/.test(read('views.js')), 'a redrawn library is named');
   assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;if\(!keepsCodes\(current\)\)nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
 });

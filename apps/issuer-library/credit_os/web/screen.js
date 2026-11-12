@@ -256,7 +256,7 @@ function renderSearch(query) {
   const figures=outputs.flatMap(id=>{
     const tables=data[id].sections.filter(s=>s.blocks.some(b=>b.type==='table')),visual=data[id].visual;
     const plotted=visual&&tables.find(s=>s.blocks.some(b=>b.line===visual.table));
-    return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading),s.heading])];
+    return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading.replace(METHOD_CODE,'')),s.heading])];
   }).filter(([id,label])=>has(label,data[id].module));
   const files=[
     ...outputs.filter(id=>has(data[id].source,data[id].label)).map(id=>hit('Source',code(id),handoffLabel(data[id].source),href(id,modules[id].first))),

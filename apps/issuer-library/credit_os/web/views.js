@@ -23,13 +23,14 @@ function handoffLabel(file) {
   const found=/(?:^|[/-])(CP-[A-Z0-9]+)(-[a-z0-9]+)?\.md$/.exec(file);
   return found?handoffName(found[1],found[2]):file;
 }
-// A module code, its gap id, its handoff file (…CP-0-a.md) or its runbook file (CP-4_RUNBOOK.md).
-const MODULE_REF=/\bCP-(?<owner>[A-Z0-9]+)-GAP-0*(?<gap>\d+)\b|\bCP-(?<book>[A-Z0-9]+)_RUNBOOK\.md\b|\b(?<file>CP-[A-Z0-9]+)(?<suffix>-[a-z0-9]+)?\.md\b|\bCP-[A-Z0-9]+\b/g;
+// A module code, its register id (CP-2A-GAP-005, CP-3B-MON-001), its handoff file (…CP-0-a.md) or its runbook file (CP-4_RUNBOOK.md).
+const MODULE_REF=/\bCP-(?<owner>[A-Z0-9]+)-(?<reg>[A-Z]+)-(?<zeros>0*)(?<num>\d+)\b|\bCP-(?<book>[A-Z0-9]+)_RUNBOOK\.md\b|\b(?<file>CP-[A-Z0-9]+)(?<suffix>-[a-z0-9]+)?\.md\b|\bCP-[A-Z0-9]+\b/g;
 // A step id carries its dot and has the METHOD_CODE shape: T4.10, T1D.1, T4.D1, T2G.* (a family), T2E.3.r01 (a sub-row). A bare T2 is ordinary text.
+const DASH='(?:\\s+—\\s+|\\s+(?=[A-Z]))'; // a real heading is "T2.12 Gaps ledger" or "T2.12 — Gaps ledger"; with no dash a capital must follow
 const STEP='T\\d+[A-Z]?\\.(?:[A-Z]?\\d+|\\*)(?:\\.[a-z]+\\d+)?',ID=`\\b${STEP}(?![A-Za-z0-9])`;
 const STEP_ID=new RegExp(`^${STEP}$`),STEP_ANY=new RegExp(ID,'g'),STEP_LEAD=new RegExp(`^\\s*${ID}\\s+—\\s+`);
 const STEP_RUN=new RegExp(`${ID}(?:\\s*(?:,\\s*and|[–/,;]|and|through)\\s*${ID})*`,'g');
-const STEP_HEADING=new RegExp(`^(${STEP})\\s+—\\s+(.+)$`),STEP_ROW=new RegExp(`^(${STEP})(?:\\s+—\\s+(.+))?$`);
+const STEP_HEADING=new RegExp(`^(${STEP})${DASH}(.+)$`),STEP_ROW=new RegExp(`^(${STEP})(?:${DASH}(.+))?$`);
 // A step's title is the one its own output gives it: a heading "T1D.1 — Add-Back Register", or a step-table row ["T4.1","Peer universe",…]. A longer second cell is a description, not a title.
 const stepTitleCache=new Map();
 function stepTitles(output) {
@@ -67,12 +68,14 @@ function namedText(text,output=current?.output,lead='') {
   const ev=contexts[data[output]?.run??current?.context]?.evidence||{};
   const file=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name).filter(Boolean).sort((a,b)=>b.length-a.length).find(name=>text.includes(name));
   if(file!==undefined){const at=text.indexOf(file);return namedText(text.slice(0,at),output,lead)+file+namedText(text.slice(at+file.length),output);}
-  return stepText(dropRepeat(text,lead).replace(MODULE_REF,(code,...rest)=>{
-    const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
+  return stepText(dropRepeat(text,lead).replace(/\bGap (?=CP-[A-Z0-9]+-GAP-)/g,'').replace(MODULE_REF,(code,...rest)=>{
+    const {owner,reg,zeros,num,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
     if(book!==undefined)return `${name(`CP-${book}`)} runbook`;
     if(file!==undefined)return handoffName(file,suffix);
     if(owner===undefined)return name(code);
-    return [`CP-${owner}`,aliases[`CP-${owner}`]].includes(current?.module)?`Gap ${gap}`:`${name(`CP-${owner}`)} gap ${gap}`;
+    const own=[`CP-${owner}`,aliases[`CP-${owner}`]].includes(current?.module);
+    if(reg==='GAP')return own?`Gap ${num}`:`${name(`CP-${owner}`)} gap ${num}`;
+    return own?`${reg}-${zeros}${num}`:`${name(`CP-${owner}`)} ${reg}-${zeros}${num}`;
   }),output);
 }
 function installDestinations() {
@@ -406,7 +409,7 @@ function readerCharts(id,section) {
 const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['analysis','Analysis'],['limits','Limits & monitoring'],['reference','Statements and registers'],['calculations','Calculations'],['audit','Evidence & audit']];
 const HANDOFF_TEXT=['handoff-text','Full handoff text'];
 // A leading method code (R36) is dropped from a displayed heading or caption.
-const METHOD_CODE=/^([A-Z][A-Z0-9]*\.[A-Z]?\d+|[a-z0-9]+(\.[a-z0-9_]+)+)\s+—\s+/;
+const METHOD_CODE=/^(?:[A-Z][A-Z0-9]*\.[A-Z]?\d+(?:\s+—\s+|\s+(?=[A-Z]))|[a-z0-9]+(?:\.[a-z0-9_]+)+\s+—\s+)/;
 const headingView=(heading,tag,cls='')=>`<${tag}${cls?` class="${cls}"`:''}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
 // The sections the store placed here that have something to draw, in handoff order.
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
