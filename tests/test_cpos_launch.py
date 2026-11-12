@@ -1776,6 +1776,31 @@ def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
     assert "Stress design" not in texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
 
 
+def test_cp1_is_asked_for_the_period_table_whenever_a_forecast_is_wanted(tmp_path):
+    # A forecast is wanted with CP-2G, or with CP-MODEL (the layer-1 path, no CP-2G).
+    for modules in (("CP-0", "CP-1", "CP-2A", "CP-2G"), ("CP-0", "CP-1", "CP-2A", "CP-MODEL")):
+        folder = tmp_path / "-".join(modules)
+        folder.mkdir()
+        _, texts = all_instructions(folder, modules=modules)
+        head = texts["CP-1"].partition(cpos_launch.METHOD_MARK)[0]
+        for words in (
+            "`| Period | Start | End |`",
+            "YYYY-MM-DD",
+            "exactly as you print it",
+            "`9M 2025`",
+            "add no figure",
+        ):
+            assert words in head
+        assert all(
+            "| Period | Start | End |" not in text for name, text in texts.items() if name != "CP-1"
+        )
+
+
+def test_cp1_is_not_asked_for_the_period_table_when_no_forecast_is_wanted(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A"))
+    assert all("| Period | Start | End |" not in text for text in texts.values())
+
+
 def test_the_presets_are_the_owners_answer_key():
     from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
 
@@ -2976,7 +3001,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
 
 
 def test_model_publish_failure_keeps_the_delivery(tmp_path, provider, capsys, monkeypatch):
-    def refuse(cp1, handoff, source="CP-2G"):
+    def refuse(cp1, handoff, source="CP-2G", *, history=False):
         raise ValueError("synthetic failure")
 
     monkeypatch.setattr(cpos_forecast, "model_files", refuse)
@@ -3034,6 +3059,15 @@ def test_without_a_shock_only_the_reference_case_is_published(tmp_path, provider
     assert list(json.loads((folder / "forecast_exact.json").read_text())["outputs"]) == [
         "REFERENCE"
     ]
+
+
+def test_a_new_forecast_run_publishes_the_history_record(tmp_path, provider, capsys):
+    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
+    assert code == 0, seen.err
+    (folder,) = (out / "deliveries").iterdir()
+    assert "history" in json.loads((folder / "calculation.json").read_text())
+    (request,) = out.glob("delivery-*.json")
+    assert json.loads(request.read_text())["history"] is True
 
 
 def test_the_forecast_request_does_not_change_the_identity_of_other_plans(
@@ -3189,11 +3223,8 @@ def test_the_library_lists_the_published_forecast_as_a_model(tmp_path, provider,
     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
     (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
     grid = model["cashflow"]
-    assert [c["label"] for c in grid["columns"]] == ["FY2025E", "FY2026E", "FY2027E"] * 2
-    assert [c["group"] for c in grid["columns"]][::3] == [
-        "Base case (reference illustration)",
-        "Downside stress (shock on base drivers)",
-    ]
+    assert [c["label"] for c in grid["columns"]][-6:] == ["FY2025E", "FY2026E", "FY2027E"] * 2
+    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
 
 
 def test_the_library_shows_every_computed_case_in_order(tmp_path, provider, capsys):
@@ -3203,17 +3234,16 @@ def test_the_library_shows_every_computed_case_in_order(tmp_path, provider, caps
     data = json.loads(text.removeprefix("window.CREDIT_OS_DATA=").rstrip().removesuffix(";"))
     (model,) = (m for m in data["workspace"]["models"] if m["cashflow"] is not None)
     grid = model["cashflow"]
-    assert [c["group"] for c in grid["columns"]][::3] == [
-        "Base case (reference illustration)",
+    assert [c["group"] for c in grid["columns"]][-6::3] == ["Base case", "Downside case"]
+    assert [c["group"] for c in grid["other"]["columns"]][::3] == [
         "Upside",
         "Downside (CP-2G drivers)",
-        "Downside stress (shock on base drivers)",
     ]
     revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
-    assert [c["exact"] for c in revenue["cells"][3:6]] == ["1100", "1210", "1331"]
-    assert [c["exact"] for c in revenue["cells"][6:9]] == ["1000", "1000", "1000"]
-    revenue = next(r for r in grid["rows"] if r["label"] == "Revenue")
-    assert [c["exact"] for c in revenue["cells"][:3]] == ["1050", "1092", "1124.76"]
+    other = next(r for r in grid["other"]["rows"] if r["label"] == "Revenue")
+    assert [c["exact"] for c in other["cells"][:3]] == ["1100", "1210", "1331"]
+    assert [c["exact"] for c in other["cells"][3:6]] == ["1000", "1000", "1000"]
+    assert [c["exact"] for c in revenue["cells"][-6:-3]] == ["1050", "1092", "1124.76"]
     assert grid["limits"][0].startswith("Every figure is Python's arithmetic")
 
 

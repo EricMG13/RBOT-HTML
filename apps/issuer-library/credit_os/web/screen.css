@@ -296,6 +296,7 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
 .cashflow .col-sub{display:block}
 .cashflow-notes,.cashflow-na ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:var(--fs-label)}
 .cashflow-na{margin-top:10px;font-size:var(--fs-label);color:var(--muted)}.cashflow-na summary{cursor:pointer;font-weight:600;color:var(--text-secondary)}.cashflow-na ul{margin-top:6px}
+.cashflow-other{margin-top:10px}.cashflow-other summary{cursor:pointer;font-weight:600;font-size:var(--fs-label);color:var(--text-secondary)}.cashflow-other .table-scroll{margin-top:8px}
 .cashflow tr.total-row>th,.cashflow tr.total-row>td{font-weight:600;border-top:1px solid var(--rule)}
 .forecast-attempts{margin:8px 0 0;color:var(--muted);font-size:var(--fs-label)}
 /* The acceptance badge and its qualification wrap as one unit; the report-tools span rules (block, full width at 720px) must not stretch them. */

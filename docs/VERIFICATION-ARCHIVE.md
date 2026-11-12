@@ -2,6 +2,35 @@
 
 Entries moved verbatim from VERIFICATION.md when older than two days.
 
+## 2026-11-10 — Short live test: an inbox drop and the forecast modules (ruling `2026-11-10-short-live-test.md`)
+
+Scope: two live runs on sol-medium over the retained TDG FY2024 public files, both written outside
+the repository (`/private/tmp/claude-501/rbot-live`, `…/rbot-live2`); `main` at `9aec393`. Each
+proves its dated case and route only; outputs are unreviewed candidates.
+
+- Inbox (`deploy_workflow.inbox.watcher`, `--cap 10 --settle-seconds 10 --poll-seconds 5`): a
+  copied folder dropped into `inbox/earnings_update/` at 08:56:09Z was claimed at 08:56:21Z, ran
+  CP-0, CP-1, CP-1B, CP-1D and CP-5 live (39 calls, 3 drafts rejected and repaired), delivered at
+  09:10:39Z and was filed as `issuers/TransDigm Group Incorporated (tdg)/2024-09-30
+  earnings_update.html`. Recorded spend USD 1.0761. Watcher-built library in headless Chrome: one
+  row; the run id opens Overview; 5 of 5 module pages render; "Open report" opens the report in
+  the app; Run activity shows the run finished, its spend and a link to the filed report that
+  exists on disk; no script error.
+- Forecast (`cpos_launch --modules CP-0 CP-1 CP-2A CP-2G --cap 10`): four modules accepted,
+  delivered in 17 minutes, USD 1.1979. The forecast model was **not published**: CP-2G's inputs
+  block now validates (the 2026-11-09 failure is gone) but the handoff declares a blocked
+  forecast with every driver null ("the forecast horizon is not locked and required invocation
+  and upstream acceptance validation cannot be completed through the supplied tools"). The library
+  lists the run, 4 of 4 module pages and the report render, and Forecast reads "No forecast model
+  was published from this run's files".
+- A run without a report cannot be produced by a run: `library_index` lists only runs with a
+  verified delivered report, and `credit_os_catalogue.run_record` always writes `handoff_href`
+  empty, so "Open primary handoff" never draws in this build. "Handoffs only" appears only if a
+  listed delivery fails cataloguing.
+- Not verified: the Forecast tab with a published model (no retained or new run has one); a
+  refused drop, the queue limits and a restart of the watcher (covered by tests, not run live);
+  Windows; analytical accuracy of either run.
+
 ## 2026-11-09 — TDG live runs on sol-high, compared with medium
 
 Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
@@ -235,3 +264,21 @@ with the query removed. So "Open report" (row, selected run, deliverables list) 
 - Not verified: the inbox watcher, a live model run and delivery (no provider run started); an
   inbox-built library; a run with a published forecast model or without a report ("Open primary
   handoff"); the Windows package; Safari and Firefox.
+
+## 2026-11-10 — Reader charts over time (branch `claude/period-charts`)
+
+Owner: "Charts with periods should be transposed, with period on the x axis". Every reader chart is a
+`Chart data:` table whose first column is Period (`store.py` `_chart_table`), so `readerChart` now
+draws columns over periods: periods along the x axis in table order, one column per series from a
+zero baseline (a raised baseline when a value is negative), the exact value on each column, the
+series named once in a legend, and each period's chips under its label. Values, periods, labels and
+chips are unchanged; a value that is text still prints n.a. with the text in its title.
+
+- Tests written first and seen failing (two in `static.test.cjs`); one older test updated for the
+  new value markup. 109 node tests; `tests/test_library_page_browser.py` 20 passed; quality gate 0.
+- Built TDG library in headless Chrome, CP-1 Key numbers (Leverage, Interest cover, Liquidity, Debt
+  maturities): fits at 1440, 1280, 1024, 768 and 500px and with the inspector open; no value label
+  outside its card; no two value labels overlap; chips stay under their own period. Below about 96px
+  a period the chart scrolls sideways in its own box (Debt maturities at 500px). Printed to PDF:
+  charts print whole.
+- Not verified: a chart with a negative value in real data (fixture only); Safari, Firefox.

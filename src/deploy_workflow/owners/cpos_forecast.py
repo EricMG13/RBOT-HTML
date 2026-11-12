@@ -478,7 +478,9 @@ def _with_remainder(
         )
 
 
-def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
+def model_files(
+    cp1: bytes, handoff: bytes, source: str = "CP-2G", *, history: bool = False
+) -> dict[str, bytes]:
     """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
     forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
     inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"), source)
@@ -555,11 +557,36 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, 
             ],
         }
     )
+    # Imported here: cpos_periods imports this module's helpers at module level.
+    from deploy_workflow.owners.cpos_periods import history as period_history
+
+    named = (
+        {
+            key: (o.row, o.period)
+            for key, o in inputs.base.items()
+            if o.amount is not None and o.row is not None and o.period is not None
+        }
+        if source == "CP-1"
+        else None
+    )
     calculation = _json(
         {
             "schema_version": "cpos-model/1",
             "annual_periods": [],
             "values": {},
+            # Written only when asked, so a delivery made before it re-derives byte for byte.
+            **(
+                {
+                    "history": period_history(
+                        _tables(cp1.decode("utf-8")),
+                        operands,
+                        named=named,
+                        forecast_year=inputs.years[0].year,
+                    )
+                }
+                if history
+                else {}
+            ),
             "forecast_exact_file": "forecast_exact.json",
             "forecast_exact_sha256": _sha(exact),
         }

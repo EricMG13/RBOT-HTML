@@ -1,0 +1,332 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 22905fc..901f6e8 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,12 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Forecast history record, PR 1 of the period columns (branches `claude/forecast-period-columns-1a` and `-1b`)
++Plan: `docs/superpowers/plans/2026-11-12-forecast-period-columns.md` (rulings 1-16). `cpos_periods` reads the period columns CP-1 prints, ties each of the forecast's base lines to one base period, and builds quarters, YTD, PYTD, fiscal years, LTM, prior LTM and PF with exact Decimal arithmetic and a date check against CP-1's `Period | Start | End` table; `model_files` publishes it as `history` in `calculation.json` only when the delivery request asks (new CP-OS runs do; an earlier delivery re-derives byte for byte). CP-1 is asked for the period table whenever a forecast is wanted. Nothing on the page changes: the library does not read `history` until PR 2.
++Scope: offline. Synthetic fixtures with hand-computed answer keys (`tests/test_cpos_periods.py`); six retained CP-1 handoffs read only for header forms (every statement-table period header is read; date-headed balance columns, `FY2024, annual definition`, `Rolling reported periods to 2024-12-28` and metric-specific headers are not, by rule); one retained live forecast run's CP-1 and CP-2G (`tdg-forecast-002`, read only) on which revenue, EBITDA, interest, taxes, capex and cash are located from the FY2024 base and fcf, debt and undrawn are not (their rows sit under a header that is not a period). No provider called and no model response: no CP-1 has yet printed the period table.
++Commands: on 1b after the rebase onto 92d0a17, PR-check pytest list 2828 passed, 113 deselected, exit 0; quality gate 0 findings, exit 0 (against 1a and against main); node 278 pass, exit 0. On 1a, `tests/test_cpos_periods.py`, `test_cpos_facilities.py` and `test_cpos_launch.py` 726 passed, 1 skipped, exit 0; quality gate 0 findings, exit 0. Reviews: task reviews (mx-precise), adversarial review of `cpos_periods` with two re-reviews (mx-adversary; an 8,000-case generated-input run raises nothing and leaves no value without an amount or a reason), whole-branch review with confidence review and rewrite tournament (mx-architect), one fix wave and its re-review.
++Known and accepted, for the owner: a line is located by its base amount, so if the right row sits under a header that is not a period and one other row prints the identical amount in the base period, that row's figures are published (probe `adv2_right_row_unheaded.py`); naming each operand's row and period in the CP-2G block removes this. A forecast whose base is not under one period header gets no history. Split at the owner's choice: 1a is the module and its tests (about 2,190 code lines, over the 800-line limit, waived by the owner on 2026-11-12), 1b the wiring (about 170). `cpos_forecast._tables` has a slow heading pattern on hostile input (before this branch).
++Not verified: any real model response to the period-table instruction; the layer-1 path on a real handoff; a real earlier forecast delivery re-deriving from its manifest; the Forecast page (PR 2) and its reader check against the September VMO2 reference; browser, live and weekly suites; mutation testing.
+ ## 2026-11-12 — Every pathway asks CP-1 for the chart tables (branch `claude/cp1-tables-all-pathways`, base 0e80345, owner "Yes, all pathways")
+ Scope: `cpos_launch._owner_tables` adds, for CP-1, the four `### Chart data:` tables its report routes do not already ask (instructions and checker); no report section. Offline, canned provider. Tests written by hand: all seven pathways' CP-1 instructions carry each heading once with its exact header, the checker accepts the complete canned answer and refuses each dropped table; a pack built from the canned CP-1 answer of relative_value, distressed_restructuring, portfolio_decision and short_snapshot states the five measures and a maturity profile. Probes `wb_pack_measures_by_pathway.py` 1 -> 0; `wb_cap_presets.py`, `wb_cp8_hold_sizes.py`, `wb_presets_order.py` exit 0 (short_snapshot hold 0.97 -> 0.99 on Opus configs). Gates: CI fast-tests command 2693 passed exit 0 (node changes/reader/static/calendar tests exit 0); browser subset 151 passed exit 0; quality gate 0 findings exit 0.
+ Not verified: a real model writing the four tables on those pathways; the Changes tab of a real run of those pathways; CP-1 output cost beyond the offline hold.
+diff --git a/src/deploy_workflow/handoff_delivery.py b/src/deploy_workflow/handoff_delivery.py
+index 177ef62..457f7d7 100644
+--- a/src/deploy_workflow/handoff_delivery.py
++++ b/src/deploy_workflow/handoff_delivery.py
+@@ -149,6 +149,9 @@ class DeliveryRequest(Contract):
+     handoffs: dict[str, HandoffInput]
+     model: ModelDelivery | None = None
+     forecast: bool = Field(default=False, exclude_if=lambda v: not v)
++    # Written only when true, so a forecast delivery made before the history record existed
++    # re-derives byte for byte from its request.
++    history: bool = Field(default=False, exclude_if=lambda v: not v)
+     layout: MarkdownLayout | None = None
+     # CP-8's comparison pack (`deploy_workflow.changes`), published unchanged as `changes.json`.
+     changes: HandoffInput | None = Field(default=None, exclude_if=lambda v: v is None)
+diff --git a/src/deploy_workflow/markdown_delivery.py b/src/deploy_workflow/markdown_delivery.py
+index d8919c5..0b356b0 100644
+--- a/src/deploy_workflow/markdown_delivery.py
++++ b/src/deploy_workflow/markdown_delivery.py
+@@ -922,7 +922,9 @@ def markdown_files(  # noqa: C901, PLR0912, PLR0915 - pre-existing complexity
+         if "CP-1" not in request.handoffs:
+             raise ValueError("markdown_forecast: a CP-1 handoff is required")
+         origin = "CP-2G" if "CP-2G" in request.handoffs else "CP-1"
+-        files.update(model_files(files["CP-1.md"], files[f"{origin}.md"], origin))
++        files.update(
++            model_files(files["CP-1.md"], files[f"{origin}.md"], origin, history=request.history)
++        )
+     entries: dict[str, list[Binding]] = {m.module_id: [] for m in module_views}
+     used: set[tuple[str, str]] = set()
+     source_of: dict[tuple[str, str], str] = {}  # typed chart copy -> its source table
+diff --git a/src/deploy_workflow/owners/cpos.py b/src/deploy_workflow/owners/cpos.py
+index d45c68e..53a26c9 100644
+--- a/src/deploy_workflow/owners/cpos.py
++++ b/src/deploy_workflow/owners/cpos.py
+@@ -552,7 +552,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
+         if forecast:
+             try:
+                 source = "CP-2G" if "CP-2G" in handoffs else "CP-1"
+-                cpos_forecast.model_files(handoffs["CP-1"], handoffs[source], source)
++                cpos_forecast.model_files(handoffs["CP-1"], handoffs[source], source, history=True)
+             except ValueError as error:
+                 # Fail-open, by design and only for ValueError (the inputs block is missing or
+                 # invalid): the report is complete without the forecast, so the run still
+@@ -573,6 +573,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
+             },
+             layout=layout,
+             forecast=forecast,
++            history=forecast,  # a new run publishes the history record with its forecast
+             changes=changes,
+             changes_note=changes_note if not_produced is not None else None,
+             module_execution=_module_execution(ordered, retained, request)
+diff --git a/src/deploy_workflow/owners/cpos_forecast.py b/src/deploy_workflow/owners/cpos_forecast.py
+index 5eec10e..a8d0f3c 100644
+--- a/src/deploy_workflow/owners/cpos_forecast.py
++++ b/src/deploy_workflow/owners/cpos_forecast.py
+@@ -478,7 +478,9 @@ def _with_remainder(
+         )
+ 
+ 
+-def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str, bytes]:
++def model_files(
++    cp1: bytes, handoff: bytes, source: str = "CP-2G", *, history: bool = False
++) -> dict[str, bytes]:
+     """The five files `credit_os/store.py` reads for a model, from the CP-1 handoff and the
+     forecast source's (CP-2G's, or CP-1's own for a layer-1 forecast: then `handoff` is `cp1`)."""
+     inputs = parse(handoff.decode("utf-8"), cp1.decode("utf-8"), source)
+@@ -555,11 +557,36 @@ def model_files(cp1: bytes, handoff: bytes, source: str = "CP-2G") -> dict[str,
+             ],
+         }
+     )
++    # Imported here: cpos_periods imports this module's helpers at module level.
++    from deploy_workflow.owners.cpos_periods import history as period_history
++
++    named = (
++        {
++            key: (o.row, o.period)
++            for key, o in inputs.base.items()
++            if o.amount is not None and o.row is not None and o.period is not None
++        }
++        if source == "CP-1"
++        else None
++    )
+     calculation = _json(
+         {
+             "schema_version": "cpos-model/1",
+             "annual_periods": [],
+             "values": {},
++            # Written only when asked, so a delivery made before it re-derives byte for byte.
++            **(
++                {
++                    "history": period_history(
++                        _tables(cp1.decode("utf-8")),
++                        operands,
++                        named=named,
++                        forecast_year=inputs.years[0].year,
++                    )
++                }
++                if history
++                else {}
++            ),
+             "forecast_exact_file": "forecast_exact.json",
+             "forecast_exact_sha256": _sha(exact),
+         }
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index f375cf0..05f7f26 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -1582,6 +1582,18 @@ FORECAST_BLOCK = (
+     "an input to a mechanical forecast, not a finding. Leave a driver's values null, as "
+     "`Insufficient Information`, only when no stated figure can anchor it.\n\n"
+ )
++# Goes into CP-1's instructions whenever a forecast is wanted, with or without CP-2G: the period
++# table lets Python date-check the last twelve months. CP-1 states no new figure in it.
++PERIOD_TABLE_BLOCK = (
++    "Period table: inside `## Findings`, print one table whose header is exactly "
++    "`| Period | Start | End |`, with one row for every period column header you use in your "
++    "financial tables. `Period` is that header's text exactly as you print it (for example "
++    "`9M 2025` or `FY2024`); `Start` and `End` are the period's first and last day as "
++    "YYYY-MM-DD. Head period columns as `FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`, the year "
++    "being the fiscal year the period belongs to. Python uses this table only to check that the "
++    "fiscal year, the year to date and the prior year to date make twelve months; add no figure "
++    "to it and change no other table.\n\n"
++)
+ # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
+ # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
+ # FORECAST_BLOCK, so cpos_forecast has one code path; the model still computes nothing.
+@@ -2102,6 +2114,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
+     )
+     for module, block, wanted in (
+         ("CP-2G", FORECAST_BLOCK, forecast),
++        ("CP-1", PERIOD_TABLE_BLOCK, forecast),
+         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
+         ("CP-2A", STRESS_BLOCK, True),
+         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index cd1232d..2376685 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -1776,6 +1776,31 @@ def test_cp2a_is_told_which_method_governs_the_stress_sizes(tmp_path):
+     assert "Stress design" not in texts["CP-2G"].partition(cpos_launch.METHOD_MARK)[0]
+ 
+ 
++def test_cp1_is_asked_for_the_period_table_whenever_a_forecast_is_wanted(tmp_path):
++    # A forecast is wanted with CP-2G, or with CP-MODEL (the layer-1 path, no CP-2G).
++    for modules in (("CP-0", "CP-1", "CP-2A", "CP-2G"), ("CP-0", "CP-1", "CP-2A", "CP-MODEL")):
++        folder = tmp_path / "-".join(modules)
++        folder.mkdir()
++        _, texts = all_instructions(folder, modules=modules)
++        head = texts["CP-1"].partition(cpos_launch.METHOD_MARK)[0]
++        for words in (
++            "`| Period | Start | End |`",
++            "YYYY-MM-DD",
++            "exactly as you print it",
++            "`9M 2025`",
++            "add no figure",
++        ):
++            assert words in head
++        assert all(
++            "| Period | Start | End |" not in text for name, text in texts.items() if name != "CP-1"
++        )
++
++
++def test_cp1_is_not_asked_for_the_period_table_when_no_forecast_is_wanted(tmp_path):
++    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A"))
++    assert all("| Period | Start | End |" not in text for text in texts.values())
++
++
+ def test_the_presets_are_the_owners_answer_key():
+     from deploy_vii.contracts import PATHWAY_MODULES as PRESETS
+ 
+@@ -2976,7 +3001,7 @@ def test_no_cp2g_publishes_no_model(tmp_path, provider, capsys):
+ 
+ 
+ def test_model_publish_failure_keeps_the_delivery(tmp_path, provider, capsys, monkeypatch):
+-    def refuse(cp1, handoff, source="CP-2G"):
++    def refuse(cp1, handoff, source="CP-2G", *, history=False):
+         raise ValueError("synthetic failure")
+ 
+     monkeypatch.setattr(cpos_forecast, "model_files", refuse)
+@@ -3036,6 +3061,15 @@ def test_without_a_shock_only_the_reference_case_is_published(tmp_path, provider
+     ]
+ 
+ 
++def test_a_new_forecast_run_publishes_the_history_record(tmp_path, provider, capsys):
++    code, out, seen = forecast_run(tmp_path, provider, capsys, forecast_block())
++    assert code == 0, seen.err
++    (folder,) = (out / "deliveries").iterdir()
++    assert "history" in json.loads((folder / "calculation.json").read_text())
++    (request,) = out.glob("delivery-*.json")
++    assert json.loads(request.read_text())["history"] is True
++
++
+ def test_the_forecast_request_does_not_change_the_identity_of_other_plans(
+     tmp_path, provider, capsys
+ ):
+diff --git a/tests/test_cpos_periods.py b/tests/test_cpos_periods.py
+index ae84560..809f535 100644
+--- a/tests/test_cpos_periods.py
++++ b/tests/test_cpos_periods.py
+@@ -787,6 +787,19 @@ def test_the_dated_more_than_once_limit_follows_the_operand_reasons():
+     assert limits[2].startswith("CP-1's period table dates FY2024 more than once")
+ 
+ 
++def test_history_is_published_only_when_asked():
++    default = model_files(CP1.encode(), forecast_block().encode())
++    asked = model_files(CP1.encode(), forecast_block().encode(), history=True)
++    assert "history" not in json.loads(default["calculation.json"])
++    assert default == model_files(CP1.encode(), forecast_block().encode(), history=False)
++    assert "history" in json.loads(asked["calculation.json"])
++    for name in ("annual.md", "forecast.md", "forecast_exact.json", "quarter.md"):
++        assert asked[name] == default[name]
++    without = json.loads(asked["calculation.json"])
++    del without["history"]
++    assert without == json.loads(default["calculation.json"])
++
++
+ PRIOR_LTM_CP1 = """| Reported label | Q3 2025 | Q3 2024 revised | 9M 2025 | 9M 2024 | 9M 2023 \
+ | FY2024 | FY2023 | Locator |
+ | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+@@ -818,6 +831,32 @@ def test_the_prior_ltm_built_without_dates_is_flagged_and_a_checked_one_is_not()
+     assert flag not in checked["limits"]
+ 
+ 
++def test_model_files_publishes_the_history_record():
++    files = model_files(CP1.encode(), forecast_block().encode(), history=True)
++    record = json.loads(files["calculation.json"])["history"]
++    ltm = next(c for c in record["columns"] if c["id"] == "LTM")
++    assert D(ltm["values"]["revenue"]["amount"]) == D("1060")
++    assert json.loads(files["calculation.json"])["annual_periods"] == []
++
++
++def test_a_cp1_without_tables_still_publishes_the_forecast():
++    files = model_files(" ".join(BASE.values()).encode(), forecast_block().encode(), history=True)
++    record = json.loads(files["calculation.json"])["history"]
++    assert [c["kind"] for c in record["columns"]] == [
++        "QUARTER",
++        "YTD",
++        "PYTD",
++        "FY",
++        "LTM",
++        "PRIOR_LTM",
++        "PF",
++    ]
++    assert all(
++        v["amount"] is None and v["reason"] for c in record["columns"] for v in c["values"].values()
++    )
++    assert "REFERENCE" in json.loads(files["forecast_exact.json"])["outputs"]
++
++
+ def test_the_forecast_figures_do_not_change():
+     with_tables = model_files(CP1.encode(), forecast_block().encode())
+     without = model_files(" ".join(BASE.values()).encode(), forecast_block().encode())
+@@ -827,6 +866,14 @@ def test_the_forecast_figures_do_not_change():
+     )
+ 
+ 
++def test_a_cell_too_long_to_read_exactly_does_not_end_the_forecast():
++    long = "| Other | (" + "1" * 40 + ") |"
++    cp1 = CP1 + "\n| Item | FY2024 |\n| --- | --- |\n" + long + "\n"
++    files = model_files(cp1.encode(), forecast_block().encode(), history=True)
++    record = json.loads(files["calculation.json"])["history"]
++    assert D(cell(record, "LTM", "revenue")["amount"]) == D("1060")
++
++
+ BIG = "1000.000000000000000000000000000000000001"
+ 
+ 
+@@ -1007,6 +1054,25 @@ def test_layer_one_names_a_period_that_is_not_one():
+     )
+ 
+ 
++def test_model_files_reads_a_layer_one_forecast_through_its_named_rows():
++    # The CP-1 handoff is its own forecast source: the base operands name row and period.
++    base = {
++        k: {"amount": v, "reason": None, "row": NAMED[k][0], "period": NAMED[k][1]}
++        for k, v in BASE.items()
++    }
++    block = json.loads(forecast_block(base=base).split("```json\n")[1].split("\n```")[0])
++    block["downside_shock"] = None  # a layer-1 forecast states no shock
++    text = (
++        CP1
++        + "\n### Forecast inputs (machine-readable)\n\n```json\n"
++        + json.dumps(block)
++        + "\n```\n"
++    )
++    files = model_files(text.encode(), text.encode(), "CP-1", history=True)
++    record = json.loads(files["calculation.json"])["history"]
++    assert D(cell(record, "LTM", "revenue")["amount"]) == D("1060")
++
++
+ # --- ruling 2: a row's sign comes from its base cell --------------------------------------------
+ def test_a_net_refund_in_one_period_keeps_its_sign():  # adv_outflow_refund_sign
+     cp1 = CP1.replace("| Income taxes paid | (15) | (14) |", "| Income taxes paid | (15) | 8 |")
+@@ -1060,6 +1126,22 @@ def test_a_transition_year_has_no_full_year_ratios():  # adv_short_fiscal_year_r
+ 
+ 
+ # --- ruling 6: a numeral of more than 38 digits is not a figure ---------------------------------
++def test_an_ebitda_cell_of_a_million_digits_is_not_a_figure_and_nothing_raises():
++    tiny = "0." + "0" * 999_999 + "1"
++    cp1 = (
++        CP1
++        + "\n"
++        + _md(
++            ["Reported label", "FY2024", "FY2022"],
++            [["EBITDA", "300", tiny], ["Total debt", "600", "600"]],
++        )
++    )
++    record = _hist(cp1)
++    assert cell(record, "FY2022", "total_leverage")["amount"] is None
++    files = model_files(cp1.encode(), forecast_block().encode(), history=True)
++    assert json.loads(files["calculation.json"])["history"]["columns"][-1]["id"] == "PF"
++
++
+ # --- ruling 7: handoff text is bounded ----------------------------------------------------------
+ def test_a_header_quoted_in_a_reason_is_cut_to_80_characters():
+     cp1 = CP1.replace("| Metric | FY2024 |", "| Metric | " + "x" * 200 + " 2024 |")
