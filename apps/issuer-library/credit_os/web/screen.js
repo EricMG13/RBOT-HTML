@@ -297,7 +297,11 @@ function parseRoute() {
   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
   // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
   const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
-  const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===first)||sections[0];
+  // The Forecast page draws its chart index after the models: that one name scrolls to it. It draws the model the Forecast tab
+  // would open (the remembered section while it is a section of this run, else the first) and leaves what is remembered alone.
+  const part=module==='W-Forecast'&&requestedSection==='run-charts'?requestedSection:null;
+  const remembered=part&&lastSection.get(context+':W-Forecast');
+  const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===remembered)||sections.find(s=>s[0]===first)||sections[0];
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
   const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
@@ -305,8 +309,6 @@ function parseRoute() {
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
   // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
-  // The Forecast page draws its chart index after the models: that one name scrolls to it and selects no model.
-  const part=module==='W-Forecast'&&requestedSection==='run-charts'?requestedSection:null;
   return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
@@ -559,7 +561,7 @@ function renderRoute() {
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
-  }
+  } else if(next.part)scrollToPart(next.part);
   if(partMove) {
     scrollToPart(next.section);
     renderNavigator(next.module);

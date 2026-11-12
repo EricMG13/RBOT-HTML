@@ -2668,8 +2668,12 @@ test('the start-run link is a primary action with a plus icon, drawn only when t
   // Report history no longer draws it: the header carries it on every run tab.
   assert.ok(!served.historyView(RUN).includes('start-run'));
   const chrome = read('views.js').slice(read('views.js').indexOf('function updateWorkspaceChrome'));
-  assert.ok(chrome.includes('startRunLink(current.context)'), 'the run header draws it');
-  assert.ok(chrome.includes('startRun?`<div class="issuer-side">'), 'the side group exists only with the link');
+  // The header's link markup is what startRunLink returns: it is assigned from the call, drawn through that variable in the
+  // side group, and nowhere written out by hand in the chrome.
+  assert.ok(chrome.includes("const startRun=isHome?'':startRunLink(current.context)"), 'startRun is startRunLink(current.context)');
+  assert.ok(chrome.includes('startRun?`<div class="issuer-side">${scope}${startRun}</div>`:scope'), 'the side group draws ${startRun} and exists only with the link');
+  assert.ok(!chrome.includes('start-run'), 'no hand-written link in the header');
+  assert.ok(!chrome.includes('/?from='), 'no hand-written target in the header');
 });
 
 // ---- The module page (redesign pass 1, task 2). Expected text is written by hand.

@@ -2039,3 +2039,102 @@ def test_the_overviews_chart_index_link_lands_on_the_chart_index(tmp_path):
     assert seen["scrollTop"] > 0, seen
     # The Forecast tab keeps the link it had.
     assert seen["tabBefore"] and seen["tabAfter"] == seen["tabBefore"], seen
+
+
+def two_model_workspace(workspace: Path) -> Path:
+    """The synthetic new-format run (with its Chart index link) listing two forecast models."""
+    page = synthetic_workspace(workspace, with_chart_and_event)
+    data_js = page.parent / "data.js"
+    prefix = "window.CREDIT_OS_DATA="
+    data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
+    run = data["workspace"]["runs"][NEW_FORMAT_RUN]
+    data["workspace"]["models"] = [
+        {
+            "id": model_id,
+            "issuerKey": run["issuerKey"],
+            "mode": "accepted",
+            "qualification": "unrun",
+            "runId": None,
+            "runFolder": NEW_FORMAT_RUN,
+            "scope": None,
+            "inputContract": None,
+            "revisionNote": None,
+            "previous": None,
+            "href": f"../models/{model_id}.html?embedded=1",
+            "download": f"../models/{model_id}.html?download=1",
+            "files": [],
+            "sources": [],
+            "register": None,
+            "cashflow": None,
+        }
+        for model_id in ("model-a", "model-b")
+    ]
+    data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
+    return page
+
+
+CHART_INDEX_TWO_MODELS_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const run = %s;
+  const content = document.getElementById('content');
+  const tab = () => [...document.querySelectorAll('.workspace-tabs a')]
+    .find(a => a.textContent.trim() === 'Forecast')?.getAttribute('href');
+  const to = async hash => { location.hash = hash; await sleep(500); };
+  const state = () => {
+    const index = document.getElementById('run-charts');
+    return {
+      hash: location.hash,
+      model: document.getElementById('model-select')?.value ?? null,
+      tab: tab(),
+      scrollTop: content.scrollTop,
+      offset: index
+        ? index.getBoundingClientRect().top - content.getBoundingClientRect().top : null,
+      atEnd: content.scrollTop + content.clientHeight >= content.scrollHeight - 1,
+    };
+  };
+  const seen = {};
+  await to('#W-Forecast?c=' + run);
+  const options = [...document.querySelectorAll('#model-select option')].map(o => o.value);
+  seen.options = options;
+  const second = options[1];
+  await to('#W-Forecast/' + second + '?c=' + run);
+  seen.remembered = second;
+  await to('#W-Overview?c=' + run);
+  seen.tabBefore = tab();
+  document.querySelector('.chart-index-link').click();
+  await sleep(600);
+  seen.afterLink = state();
+  // R-2: back to the top, away to the Forecast tab, then to the index route again.
+  content.scrollTop = 0;
+  await to(tab().slice(0));
+  seen.onTab = state();
+  await to(seen.afterLink.hash);
+  seen.again = state();
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_chart_index_route_keeps_the_chosen_forecast_model_and_scrolls_on_every_visit(tmp_path):
+    page = two_model_workspace(tmp_path)
+    probe = CHART_INDEX_TWO_MODELS_PROBE % json.dumps(NEW_FORMAT_RUN)
+    seen = read_probe(page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1280, probe)
+    assert len(seen["options"]) == 2 and seen["remembered"] != seen["options"][0], seen
+    after = seen["afterLink"]
+    # R-1: the link draws the model the reader chose, lands on the index and leaves the tab alone.
+    assert after["hash"].startswith("#W-Forecast/run-charts"), seen
+    assert after["model"] == seen["remembered"], seen
+    assert after["tab"] == seen["tabBefore"], seen
+    assert seen["tabBefore"].startswith("#W-Forecast/" + seen["remembered"]), seen
+    assert -1 <= after["offset"] <= 20 or after["atEnd"], seen
+    assert after["scrollTop"] > 0, seen
+    # R-2: back to the same route from another Forecast route scrolls to the index again.
+    assert seen["onTab"]["scrollTop"] == 0 and seen["onTab"]["hash"] == seen["tabBefore"], seen
+    again = seen["again"]
+    assert again["hash"] == after["hash"] and again["model"] == seen["remembered"], seen
+    assert -1 <= again["offset"] <= 20 or again["atEnd"], seen
+    assert again["scrollTop"] > 0, seen
