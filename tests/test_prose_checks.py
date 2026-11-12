@@ -532,3 +532,18 @@ def test_a_minus_held_figure_may_be_narrated_as_its_magnitude() -> None:
 def test_a_padded_decimal_matches_its_trimmed_form() -> None:
     assert fidelity("Leverage is 4.1x.", "| Leverage | 4.10x |") == ()
     assert len(fidelity("Leverage is 4.1x.", "| Leverage | 4.15x |")) == 1
+
+
+FORECAST_BLOCK_DOC = (
+    "### Forecast inputs (machine-readable)\n\n```json\n"
+    '{"base_drivers": {"ebitda_margin": {"rationale": "FY2025 margin was 31.7%, carried forward"}}}'
+    "\n```\n"
+)
+
+
+def test_the_forecast_inputs_block_holds_no_reader_figure() -> None:
+    """The block's own rationale text is not a table: it cannot hold what a passage states."""
+    text = bottom("The EBITDA margin was 31.7% last year.", FORECAST_BLOCK_DOC + CALCULATIONS)
+    assert len(figure_issues(text)) == 1
+    held = bottom("The EBITDA margin was 31.7% last year.", CALCULATIONS.replace("3.1x", "31.7%"))
+    assert figure_issues(held) == ()

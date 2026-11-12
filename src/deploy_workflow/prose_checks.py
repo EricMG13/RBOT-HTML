@@ -771,11 +771,30 @@ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
     )
 
 
+FORECAST_HEADING = "### Forecast inputs (machine-readable)"
+
+
+def _forecast_block_lines(text: str) -> set[int]:
+    """Line numbers of the forecast inputs block (its heading to the next heading). Its rationale
+    and limit text is the module's input to a calculation, not a table, so it holds no figure."""
+    lines: set[int] = set()
+    inside = False
+    for number, line in enumerate(text.splitlines(), 1):
+        if line.strip() == FORECAST_HEADING:
+            inside = True
+        elif inside and re.match(r"#{1,6}\s", line):
+            inside = False
+        if inside:
+            lines.add(number)
+    return lines
+
+
 def figure_issues(text: str) -> tuple[str, ...]:
     """Every figure of a reader passage not held, with its sign, unit and scale, in the handoff
     outside the reader passages. Sentence text only, as in the prose checks."""
     passages = _pooled(_findings_sections(text) or [])
     inside = {number for body in passages.values() for number, _ in body}
+    inside |= _forecast_block_lines(text)
     held = _figures(
         "\n".join(line for number, line in enumerate(text.splitlines(), 1) if number not in inside)
     )

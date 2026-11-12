@@ -17,7 +17,15 @@ and pass now. `uv run pytest tests/test_cpos_launch.py tests/test_handoff_loop.p
 tests/test_credit_os_store.py -q -m "not live and not browser"` 666 passed, exit 0; `uv run python
 tools/quality_gate.py` 0 findings, exit 0. Changed expectations: `--modules CP-MODEL` is no longer refused;
 earnings_update's report scope now names the run-rate forecast; the publish-failure stub takes a source
-argument. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
+argument.
+Fix round 1 (reviewer probes `m3_layer1_operand.py`, `m3_block_vouches_reader.py`, both exit 0 now): a CP-1
+operand must be a cell of a CP-1 table row whose first cell is the operand's name, same sign (prose, Basis
+lines, Sources, dates, other JSON copies and other rows no longer count; the layer-1 instruction asks for
+those rows, outflows as positive magnitudes); the forecast block no longer vouches for a reader figure in
+`figure_issues` (both sources); the library link names the module it opens. CP-2G's operand check is
+unchanged and keeps its known weakness (any matching number in CP-1's text), reported separately.
+Known limits: driver values are not checked against their anchors (the rationale is free text); runs
+interrupted before this change refuse to resume. Not verified: a real model writing the layer-1 block; the library on a layer-1 model beyond the
 store tests; `tests/test_financial_workflow.py`.
 
 ## 2026-11-11 — Pathway presets: CP-DR and CP-2E everywhere (branch `claude/module-presets`)
@@ -980,13 +988,3 @@ proof of any pathway or issuer.
   refused replace, folder permissions after the move, `Start watcher.cmd`, Edge over `file://`);
   one measured live run (whether USD 20 covers a pathway on `sol-medium` is unmeasured); the full
   test suite (weekly job).
-
-## 2026-11-09 — TDG live runs on sol-high, compared with medium
-
-Scope: historical TDG FY2024 (as of 2024-09-30), ruling `docs/rulings/2026-11-09-tdg-sol-high-test.md`.
-Sources were read from Final-workflow-PY `data/public-corpus/v1/TDG` (not modified).
-- `runs/cpos-tdg-sol-high-001` (CP-0, CP-1, CP-1A): accepted, USD 1.38, 41 calls, no repairs.
-- `runs/cpos-tdg-sol-high-cp2-001` (CP-0 to CP-2): accepted, USD 1.63, no repairs; report published.
-- Comparison with the retained medium runs is in `runs/tdg-effort-comparison.md`; only automated
-  checks plus a spot check of the tabled figures against the 10-K were applied, not an analytical review.
-

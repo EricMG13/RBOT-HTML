@@ -2322,6 +2322,54 @@ def layer1_block(**changes) -> str:
     return forecast_block(downside_shock=None, **changes)
 
 
+def _cp1_text(findings: str = "", revenue_row: bool = True, tail: str = "") -> str:
+    rows = "\n".join(f"| {k} | {v} |" for k, v in BASE.items() if k != "revenue")
+    rows += "\n| revenue | 1000 |" if revenue_row else ""
+    return (
+        "# CP-1\n\n## Findings\n\n### Bottom line\n\nText.\n\n"
+        f"{findings}\n| Base | USD m |\n| --- | --- |\n{rows}\n\n"
+        f"{layer1_block()}\n## Calculations\n\nNone.\n{tail}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "revenue"),
+    [
+        (_cp1_text(revenue_row=False), "1000"),
+        (_cp1_text("Basis: revenue 1,234 per annual report", revenue_row=False), "1234"),
+        (_cp1_text(revenue_row=False, tail="\n## Sources\n\n- report.pdf page 1234\n"), "1234"),
+        (_cp1_text("As of 2025-03-31.", revenue_row=False), "2025"),
+        (_cp1_text(revenue_row=False), "300"),
+        (_cp1_text(), "-1000"),
+        (
+            _cp1_text(
+                '#### Forecast inputs (draft)\n\n```json\n{"base": {"revenue": 1234}}\n```\n',
+                revenue_row=False,
+            ),
+            "1234",
+        ),
+    ],
+    ids=["block-only", "basis", "sources", "date", "other-row", "sign", "json-copy"],
+)
+def test_a_layer1_operand_must_be_a_cell_of_its_own_row_in_cp1s_tables(text, revenue):
+    base = {
+        k: {"amount": revenue if k == "revenue" else v, "reason": None} for k, v in BASE.items()
+    }
+    block = layer1_block(base=base)
+    full = text.replace(layer1_block(), block)
+    with pytest.raises(ValueError, match="is not printed in CP-1's tables"):
+        cpos_forecast.parse(full, full, "CP-1")
+
+
+def test_a_layer1_operand_in_its_own_row_is_accepted_with_thousands_commas():
+    text = _cp1_text().replace("| revenue | 1000 |", "| Revenue | USD 1,000 |")
+    cpos_forecast.parse(text, text, "CP-1")
+
+
+def test_the_layer1_instruction_names_the_row_label_of_each_operand():
+    assert "first cell" in cpos_launch.LAYER1_FORECAST_BLOCK
+
+
 def test_cp_model_without_cp2g_publishes_a_model_from_cp1s_block(tmp_path, provider, capsys):
     modules = ("CP-1", "CP-MODEL")
     code, out, seen = forecast_run(

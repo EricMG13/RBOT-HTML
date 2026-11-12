@@ -224,6 +224,8 @@ test('the library page lists the folders not shown and the build issues closed, 
 test('Forecast for a run with no CP-2G output says no model was published', () => {
   const views = read('views.js');
   assert.ok(views.includes('if(!models.length)return forecastEmpty(context);'));
+  assert.ok(views.includes("data[forecast.output].module==='CP-2G'?'the full forward credit model output':`the ${data[forecast.output].module} output the forecast was built from`"), 'the link names the module it opens');
+  assert.ok(views.includes('>Open ${fullName}${icon'), 'the label is not fixed text');
   assert.ok(views.includes('No forecast model was published from this run’s files'));
 });
 

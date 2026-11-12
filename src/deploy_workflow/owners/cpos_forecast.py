@@ -22,8 +22,9 @@ from deploy_vii.contracts import Contract
 from deploy_vii.live.schema import exact_json, json_object
 from deploy_vii.readiness import shape_issues
 from deploy_workflow.owners import cp2g
+from deploy_workflow.prose_checks import FORECAST_HEADING
 
-HEADING = "### Forecast inputs (machine-readable)"
+HEADING = FORECAST_HEADING
 SCHEMA_VERSION = "cpos-forecast-inputs/1"
 LIMIT = (
     "Every figure is Python's arithmetic over inputs the CP-2G handoff stated; the inputs, not "
@@ -151,6 +152,25 @@ def _printed(text: str, amount: str) -> bool:
     )
 
 
+_AMOUNT = re.compile(r"(?<![0-9.,])-?[0-9][0-9,]*(?:\.[0-9]+)?(?![0-9]|[.,][0-9])")
+
+
+def _in_row(text: str, key: str, amount: str) -> bool:
+    """Whether a Markdown table row of the text has `key` as its first cell and a later cell
+    holding the amount as a whole number token, same sign, thousands commas allowed. Only table
+    rows count: not prose, Basis lines, dates, sources or JSON."""
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            continue
+        first, *rest = (c.strip().strip("*`").strip().lower() for c in stripped[1:-1].split("|"))
+        if first == key and any(
+            token.replace(",", "") == amount for cell in rest for token in _AMOUNT.findall(cell)
+        ):
+            return True
+    return False
+
+
 def _declined(document: dict[str, object], source: str) -> None:
     """A block whose every driver has all-null values is the method declining to forecast."""
     drivers = document.get("base_drivers")
@@ -196,9 +216,17 @@ def parse(source_text: str, cp1_text: str, source: str = "CP-2G") -> ForecastInp
         inputs.downside_shock or inputs.upside_drivers or inputs.downside_drivers
     ):
         raise ValueError("CP-1: a layer-1 forecast states no shock and no cases")
-    printed = _without_block(cp1_text) if source == "CP-1" else cp1_text
+    cp1_only = source == "CP-1"
+    printed = _without_block(cp1_text) if cp1_only else cp1_text
     for key, operand in inputs.base.items():
-        if operand.amount is not None and not _printed(printed, operand.amount):
+        if operand.amount is None:
+            continue
+        if cp1_only and not _in_row(printed, key, operand.amount):
+            raise ValueError(
+                f"{source}: base {key} {operand.amount} is not printed in CP-1's tables, in a "
+                f"row whose first cell is `{key}`, with that sign"
+            )
+        if not cp1_only and not _printed(printed, operand.amount):
             raise ValueError(f"{source}: base {key} {operand.amount} is not printed in CP-1")
     return inputs
 
