@@ -412,13 +412,29 @@ test('tableView: the wrapper is a focusable named region so a wide table can be 
   assert.ok(html.startsWith('<div class="table-card" role="region" tabindex="0" aria-label="Debt &quot;stack&quot;">'), html);
 });
 
-test('sectionBodyHtml: a fenced block is one pre/code of its escaped inner text, no figure buttons, no Basis', () => {
+test('sectionBodyHtml: a fenced block is one pre/code of its escaped inner text, no figure buttons, no Basis when it has no chips', () => {
   const text = '```json\n{"a": "<b>", "amount": -158,\n\n  "n": 1,250}\n```';
   const section = {heading: 'Forecast inputs', blocks: [{type: 'text', line: 5, text}]};
-  const html = sectionBodyHtml(section, {id: 'o', tables: true, chips: () => 3, caption: h => h});
+  const html = sectionBodyHtml(section, {id: 'o', tables: true, chips: () => 0, caption: h => h});
   assert.equal(html, '<pre class="passage-code"><code>{&quot;a&quot;: &quot;&lt;b&gt;&quot;, &quot;amount&quot;: -158,\n\n  &quot;n&quot;: 1,250}</code></pre>');
   const bare = sectionBodyHtml({heading: 'x', blocks: [{type: 'text', line: 1, text: '```\nplain\n```'}]}, {id: 'o', tables: true, chips: () => 0, caption: h => h});
   assert.equal(bare, '<pre class="passage-code"><code>plain</code></pre>');
+});
+
+test('sectionBodyHtml: a fenced block that carries chips gets one quiet Basis button after the pre, still no figure buttons inside', () => {
+  const section = {heading: 'Forecast inputs', blocks: [{type: 'text', line: 99, text: '```json\n{"a": -158}\n```'}]};
+  const html = sectionBodyHtml(section, {id: 'o', tables: true, chips: key => (key === 'o:99' ? 1 : 0), caption: h => h});
+  assert.ok(html.startsWith('<pre class="passage-code"><code>'), html);
+  assert.equal((html.match(/data-paragraph="o:99"/g) || []).length, 1, html);
+  assert.ok(html.indexOf('</pre>') < html.indexOf('basis-link') && !html.slice(0, html.indexOf('</pre>')).includes('<button'), html);
+});
+
+test('figureSpans: a sign before a currency symbol, an en dash minus after a currency code and a no-break space keep the sign and currency', () => {
+  assert.deepEqual(figures('a loss of -$5 million'), ['-$5 million']);
+  assert.deepEqual(figures('USD \u2013158 million'), ['USD \u2013158 million']);
+  assert.deepEqual(figures('USD\u00a0-158 million'), ['USD\u00a0-158 million']);
+  assert.deepEqual(figures('Leverage rose \u2013 4.5x at close'), ['4.5x']);
+  assert.deepEqual(figures('Sites: - 12 sites closed'), []);
 });
 
 test('calculationRow: the row of the Calculations table whose ID column equals the id, headers and cells as written', () => {

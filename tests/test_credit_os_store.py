@@ -2002,3 +2002,19 @@ def test_a_fenced_block_is_one_text_block_with_its_blank_lines_and_markers():
     assert blocks[1]["text"] == fence
     assert (blocks[1]["line"], blocks[1]["end"]) == (4, 11)
     assert blocks[2]["text"] == "After."
+
+
+def test_an_unclosed_fence_does_not_run_past_the_next_heading():
+    text = "## S\n```\nx\n\n## T\nPara.\n\n```json\n{}\n```\n"
+    sections = store.parse_source(text)
+    assert [s["heading"] for s in sections] == ["S", "T"]
+    assert [b["text"] for b in sections[0]["blocks"]] == ["```\nx"]
+    assert sections[1]["blocks"][0]["text"] == "Para."
+    assert sections[1]["blocks"][1]["text"] == "```json\n{}\n```"
+
+
+def test_a_fence_right_after_a_paragraph_line_is_its_own_block():
+    fence = '```json\n{"a": 1,\n\n"b": 2}\n```'
+    blocks = store.parse_source(f"## S\nIntro line.\n{fence}\nAfter.\n")[0]["blocks"]
+    assert [b["text"] for b in blocks] == ["Intro line.", fence, "After."]
+    assert (blocks[1]["line"], blocks[1]["end"]) == (3, 7)

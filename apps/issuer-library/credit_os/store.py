@@ -300,10 +300,14 @@ def table_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
 def text_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
     """The paragraph starting at `lines[i]`, up to a blank line or the next structure.
     A line opening with three backticks starts a fenced block: one block up to its closing
-    fence, blank lines and structure markers inside it kept. An unclosed fence is a paragraph."""
+    fence, blank lines and structure markers inside it kept. A fence closes only before the next
+    `## ` or `### ` heading line; otherwise it is unclosed and is a paragraph. A fence line ends
+    the paragraph before it."""
     start = i + 1
     if lines[i].startswith("```"):
-        close = next((n for n in range(i + 1, len(lines)) if lines[n].rstrip() == "```"), None)
+        heads = (n for n in range(i + 1, len(lines)) if lines[n].startswith(("## ", "### ")))
+        stop = next(heads, len(lines))
+        close = next((n for n in range(i + 1, stop) if lines[n].rstrip() == "```"), None)
         if close is not None:
             return {
                 "type": "text",
@@ -316,7 +320,7 @@ def text_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
     while (
         i < len(lines)
         and lines[i].strip()
-        and not lines[i].startswith(("#", "|", "- ", "<!-- table-id:"))
+        and not lines[i].startswith(("#", "|", "- ", "<!-- table-id:", "```"))
         and not re.match(r"\d+\. ", lines[i])
     ):
         parts.append(lines[i])

@@ -216,12 +216,15 @@ function figureSpans(text) {
     const unit = symbolic || scale || other;
     if (!unit && /^[A-Za-z]/.test(rest)) continue;
     // A minus sign joins the figure only when it stands alone before the digits (after a space, an opening bracket, a currency symbol or the
-    // text start), so a range or a label (10-12, FY2023-24, 5.50%-6.00%) is never signed.
-    const signed = (before === '-' || before === '\u2212') && /^(?:[\s($\u20ac\u00a3\u00a5]|$)/.test(text[start - 2] || '');
-    const at = signed ? start - 1 : start, lead = text[at - 1] || '';
+    // text start), so a range or a label (10-12, FY2023-24, 5.50%-6.00%) is never signed. An en dash counts only right after a currency code or symbol.
+    const minus = c => c === '-' || c === '\u2212', alone = c => /^(?:[\s($\u20ac\u00a3\u00a5]|$)/.test(c || ''), gap = c => c === ' ' || c === '\u00a0';
+    const dashed = before === '\u2013' && (SYMBOLS.includes(text[start - 2]) || (gap(text[start - 2]) && CURRENCY_BEFORE.test(text.slice(0, start - 2))));
+    const at = (minus(before) && alone(text[start - 2])) || dashed ? start - 1 : start, lead = text[at - 1] || '';
     let from = at;
-    if (SYMBOLS.includes(lead)) from = at - 1;
-    else if (lead === ' ' && CURRENCY_BEFORE.test(text.slice(0, at - 1))) from = at - 4;
+    if (SYMBOLS.includes(lead)) {
+      from = at - 1;
+      if (at === start && minus(text[from - 1]) && alone(text[from - 2])) from--;
+    } else if (gap(lead) && CURRENCY_BEFORE.test(text.slice(0, at - 1))) from = at - 4;
     const prefixed = from !== at;
     const plain = !m[0].includes(',') && !m[0].includes('.');
     if (!prefixed && !symbolic && !scale && plain) {
@@ -385,7 +388,8 @@ function sectionBodyHtml(section, ctx) {
   for (const block of section.blocks) {
     if (block.type === 'text' && block.text.startsWith('```')) {
       close();
-      html += fencedBlockHtml(block.text);
+      const key = `${ctx.id}:${block.line}`;
+      html += fencedBlockHtml(block.text) + (ctx.chips(key) ? basisButton(key, [], 'Basis for this block') : '');
       continue;
     }
     if (block.type === 'table') {
