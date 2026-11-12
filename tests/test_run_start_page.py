@@ -3303,8 +3303,8 @@ def test_start_keeps_the_approval_gate_and_each_limit_is_a_labelled_tick(page):
         "500",
         "13px",
         "18px",
-        "14px",
-        "14px",
+        "16px",
+        "16px",
     ]
     assert seen["start"] == {"approve": True, "approved": False, "submit": True}
     assert seen["partial"]["approve"] is True
@@ -3429,12 +3429,12 @@ def test_the_run_screen_has_a_status_pill_a_card_and_two_columns_of_modules(page
     )
     assert seen["running"][:2] == ["running", "running"]
     assert seen["queued"][:2] == ["queued", "queued"]
-    assert seen["running"][2:] == ["rgb(229, 232, 255)", "rgb(0, 18, 178)", "24px", "999px"]
+    assert seen["running"][2:] == ["rgb(229, 232, 255)", "rgb(0, 18, 178)", "24px", "6px"]
     assert seen["queued"][2:4] == ["rgb(229, 232, 255)", "rgb(0, 18, 178)"]
-    assert seen["finished"][2:] == ["rgb(232, 255, 244)", "rgb(15, 128, 72)", "24px", "999px"]
+    assert seen["finished"][2:] == ["rgb(232, 255, 244)", "rgb(15, 128, 72)", "24px", "6px"]
     for status in ("failed", "capped"):
         assert seen[status][:2] == [status, status]
-        assert seen[status][2:] == ["rgb(253, 240, 240)", "rgb(142, 65, 62)", "24px", "999px"]
+        assert seen[status][2:] == ["rgb(253, 240, 240)", "rgb(142, 65, 62)", "24px", "6px"]
     assert seen["checks"] == [1, 0, 0, 0]
     assert seen["states"] == ["done", "running", "waiting", "waiting"]
     assert seen["ring"] == [18, 18] and seen["rowCols"] == ["18px"]
@@ -3655,3 +3655,23 @@ def test_your_answers_rows_carry_no_number(page):
     """
     )
     assert seen["rows"] and not any(re.match(r"\d", r) for r in seen["rows"]), seen
+
+
+def test_the_primary_button_and_a_state_badge_have_the_component_reference_box(page):
+    seen = page.run(
+        REPORT_FILE
+        + """
+    gotoStep('purpose');
+    const shown = [...document.querySelectorAll('.step-actions .primary-action')]
+      .find(b => b.getBoundingClientRect().height > 0);
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="badge limited"><i></i>limited</span>';
+    $('pn-tally').appendChild(li);
+    const b = getComputedStyle(shown), g = getComputedStyle(li.firstChild);
+    return {button: [b.height, b.borderTopLeftRadius, b.fontWeight],
+      badge: [g.height, g.borderTopLeftRadius]};
+    """,
+        size="1440,900",
+    )
+    assert seen["button"] == ["40px", "8px", "600"], seen
+    assert seen["badge"][1] == "6px", seen

@@ -354,3 +354,18 @@ def test_the_page_has_no_skip_label_and_says_steps_not_stages_in_the_errors_sent
 )
 def test_the_replaced_brand_colours_are_gone_from_the_form(old: str) -> None:
     assert old not in FORM.lower()
+
+
+def test_the_component_look_takes_the_reference_box_values() -> None:
+    """Static checks on the stylesheet: the values are the component reference's (8px controls,
+    40px inputs, 6px state badges, 24px stepper markers), written as literals."""
+    assert "--radius-control:8px" in FORM
+    buttons = _rule(".primary-action,.secondary-action,.tertiary-action")
+    assert "border-radius:var(--radius-control)" in buttons and "font:600 " in buttons
+    assert "height:40px" in buttons
+    field = _rule(".f input[type=text],.f input[type=date],.f select,.f textarea")
+    assert "height:40px" in field and "border-radius:var(--radius-control)" in field
+    assert "border-radius:6px" in _rule(".badge")
+    assert "border-radius:6px" in _rule(".pill")
+    dot = _rule(".stepper .dot")
+    assert "width:24px" in dot and "height:24px" in dot and "border:1.5px solid" in dot

@@ -2178,3 +2178,59 @@ def test_a_chart_route_scrolls_its_card_into_view_and_no_chart_data_text_is_draw
     assert seen["outline"][-1] == "Evidence & audit"
     hidden = ("Chart data", "Events", "Request", "Next module")
     assert not any(entry.startswith(hidden) for entry in seen["outline"])
+
+
+COMPONENT_PROBE = """
+(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  for (let i = 0; i < 100 && !document.querySelector('.badge'); i++) await sleep(50);
+  await sleep(300);
+  const button = document.querySelector('.primary-action');
+  const badge = document.querySelector('.badge');
+  const b = button && getComputedStyle(button), g = badge && getComputedStyle(badge);
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify({
+    button: b && [b.height, b.borderTopLeftRadius, b.fontWeight],
+    badge: g && [g.borderTopLeftRadius],
+    scrollWidth: document.documentElement.scrollWidth, inner: innerWidth});
+  document.body.appendChild(out);
+})();
+"""
+
+
+def test_the_primary_button_and_a_state_badge_have_the_component_reference_box(tmp_path):
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    seen = read_served_probe(
+        tmp_path / "library/index.html", "#W-Report/history?c=run-a", 1440, COMPONENT_PROBE
+    )
+    assert seen["button"] == ["40px", "8px", "600"], seen
+    assert seen["badge"] == ["6px"], seen
+
+
+def test_the_library_home_does_not_scroll_sideways_at_375px(tmp_path):
+    # Chrome will not open a window under 500px, so the library opens in a 375px frame, where
+    # its own media queries see 375px, and the framed page posts its measures to the wrapper.
+    make_run(tmp_path, "run-a", as_of="2024-12-31")
+    update_library.update_library(tmp_path)
+    page = tmp_path / "library/index.html"
+    (page.parent / "probe.js").write_text(
+        COMPONENT_PROBE.replace(
+            "document.body.appendChild(out);",
+            "parent.postMessage(out.textContent, '*');",
+        ),
+        encoding="utf-8",
+    )
+    page.write_text(page.read_text().replace("</body>", '<script src="probe.js"></script></body>'))
+    wrapper = page.parent / "wrap.html"
+    wrapper.write_text(
+        '<iframe src="index.html" width="375" height="800"></iframe><pre id="probe"></pre>'
+        "<script>addEventListener('message', e => "
+        "{ document.getElementById('probe').textContent = e.data; });</script>",
+        encoding="utf-8",
+    )
+    dom, console = visit(wrapper, "", 1000)
+    assert console == []
+    seen = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
+    assert seen["inner"] == 375 and seen["scrollWidth"] <= 375, seen

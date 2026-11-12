@@ -3435,3 +3435,32 @@ test('brand colours: the upside path, its points and its key use --series-4-ln; 
   assert.equal(last('.axis', 'stroke'), 'var(--navy)');
   assert.equal(last('.gridline', 'stroke'), 'var(--gray-200)');
 });
+
+test('component look: buttons, text inputs, state badges and the current tab take the component reference box values', () => {
+  const css = read('screen.css');
+  const rules = cssRules(css);
+  const body = (sel) => {
+    const r = rules.find((x) => x.selector.split(',').map((s) => s.trim()).join(',') === sel);
+    assert.ok(r, `no rule for ${sel}`);
+    return r.body;
+  };
+  assert.match(css, /--radius-control:8px/);
+  // Primary and secondary buttons: 8px radius (the control token), weight 600, 40px high.
+  const buttons = body('.primary-action,.secondary-action,.tertiary-action');
+  assert.match(buttons, /border-radius:var\(--radius-control\)/);
+  assert.match(buttons, /font:600 /);
+  assert.match(buttons, /height:40px/);
+  // Text inputs: 40px high, 8px radius.
+  for (const sel of ['.library-search input,.library-filters select,.library-filters input', '.run-field input,.run-field select']) {
+    const b = body(sel);
+    assert.match(b, /height:40px/, sel);
+    assert.match(b, /border-radius:var\(--radius-control\)/, sel);
+  }
+  // State badges and grades: 6px radius.
+  for (const sel of ['.badge', '.grade']) assert.match(body(sel), /border-radius:6px/, sel);
+  // The current tab: 2px underline in --blue, text in --text-primary.
+  assert.match(body('.workspace-tabs>a'), /border-bottom:2px solid transparent/);
+  const current = body('.workspace-tabs>a[aria-current]');
+  assert.match(current, /border-color:var\(--blue\)/);
+  assert.match(current, /color:var\(--text-primary\)/);
+});
