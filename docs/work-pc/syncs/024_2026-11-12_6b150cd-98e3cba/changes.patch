@@ -1,0 +1,2132 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 1ba86cc..d841d33 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,42 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — Redesign pass 1: run header, Modules, inspector and Overview (branch `claude/redesign-modules-overview`, stacked on PR 62)
++
++Scope: offline, macOS, headless Chrome; no provider called. Presentation only, from the Claude Design
++redesign: the run header (back link, meta line, "Start a run on this issuer" over http), text-only tabs,
++the strip, 250px navigator, the module page (bottom line as headline, findings list, fold rows; charts
++stay open), the inspector as cards, and the Overview in two columns. What was built, what was not adopted
++and the cross-check against earlier decisions: `docs/design/2026-11-12-redesign-pass-1.md`.
++- On 13d258b: `node --test` reader, static, calendar, changes: exit 0, 295 passed. `uv run pytest
++  tests/test_library_page_browser.py tests/test_library_changes_browser.py tests/test_model_shell_browser.py
++  -m browser -q`: exit 0, 95 passed, 1 skipped (a screenshot helper). `uv run pytest tests/test_context_form.py
++  tests/test_run_start_page.py tests/test_library_reader_refs.py tests/test_library_index.py
++  tests/test_update_library.py -q`: exit 0, 252 passed. `uv run python tools/quality_gate.py`: exit 0, 0 findings.
++- Fidelity: a scratch library built from the four listed TDG runs (all earlier format), every in-app route
++  crawled from `file://` before the change (fe3dd7d) and after (13d258b) with folds, audit items and the
++  inspector opened; every word on each of 252 routes (710 page and inspector states) compared by count.
++  Nothing is missing except the header's "Change run" link and its duplicate run-code chip, removed on
++  purpose. The same comparison reported 249 drops before those two were allowed, so it does detect a
++  removed string. No module code on those routes (252 routes, 0 hits).
++- Reader check, scope: one real run (`cpos-tdg-sol-medium-all-001`) read at 1440 on the Liquidity and
++  Financial foundation pages and the Overview, against two of the September VMO2 screenshots. The module
++  page reads judgement first (bottom line, confidence and main limitation, findings with creditor impact,
++  analysis, limits, registers folded), the reference's order; no source reference sits in a narrative
++  sentence. The Overview of this earlier-format run says "No bottom line in this handoff." for every module
++  (unchanged by this pass; owner question). Main's Forecast period-columns grid was read under the new
++  header at 1280 on its synthetic four-case model only.
++- Reviews: three task reviews, a whole-branch review (approve with fixes, Lows only), a review of the fix
++  batch (one High: without the start link the "As of" block broke over four lines; fixed and re-reviewed),
++  and a re-review of the chart index route (one Medium: it opened the first forecast model, not the chosen
++  one; fixed and re-reviewed). Each finding's probe ran before and after.
++- Not verified: no real run is new format, so new-format pages and the Overview's lead, key charts and
++  nearest dates rest on synthetic fixtures. "Start a run on this issuer" was not clicked through to a
++  running start service. Forecast with a published model and the inspector on Changes, Forecast and
++  Evidence were not rendered. Safari, Firefox, real browser zoom, print against the previous layout,
++  screen readers and Windows not run. The header is 73px taller at 1440×900. This branch is 1,535 changed
++  lines of code and tests against the 800-line convention, waived by the owner on 2026-11-12 (PR 67).
++
+ ## 2026-11-12 — No module code on screen (branch `claude/redesign-review-adaptation-892369`, owner ruling 2026-11-12)
+ 
+ Scope: offline, macOS, headless Chrome; no provider called. Display only: the issuer library and the
+diff --git a/apps/issuer-library/README.md b/apps/issuer-library/README.md
+index c8f14ff..c9cd875 100644
+--- a/apps/issuer-library/README.md
++++ b/apps/issuer-library/README.md
+@@ -125,10 +125,11 @@ evidence date, pathway, model and effort, exact recorded spend (unknown charges
+ zeroed), its scope statement, and each module's reader summary quoted from the handoff. "Latest"
+ is per issuer by evidence date; runs sharing that date are all marked and counted.
+ 
+-## Starting a run from Report history
++## Starting a run on an issuer
+ 
+-When the library is served over http, an issuer's Report history has a "Start a run" link above its
+-table; it works only when that server is the run start service. It opens the start page from the latest
++When the library is served over http, the issuer header on every run tab (Report, Overview, Changes,
++Modules, Forecast, Evidence) has a "Start a run on this issuer" link at the right of its title row; it
++works only when that server is the run start service. It opens the start page from the latest
+ run listed (`/?from=<run id>`): the issuer ID is locked to that run's, its documents are copied into
+ the new submission, and its pathway, answers, module subset and turns per module fill the form. Each
+ carried-over answer, the pathway, the module box and the turns input carries a "from run <id>" mark
+diff --git a/apps/issuer-library/credit_os/web/screen.css b/apps/issuer-library/credit_os/web/screen.css
+index 5350cbc..7b11083 100644
+--- a/apps/issuer-library/credit_os/web/screen.css
++++ b/apps/issuer-library/credit_os/web/screen.css
+@@ -155,17 +155,16 @@ main{min-width:0;min-height:0;display:flex;flex-direction:column}#module-head{pa
+ .issuer-title{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-width:0;flex:1 1 auto}
+ .issuer h1{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 24px/32px 'Red Hat Display',sans-serif;letter-spacing:-.02em;color:var(--text-primary)}
+ .issuer-meta{display:flex;align-items:center;gap:12px;font-size:var(--fs-control);line-height:20px}
+-.issuer-meta .code,.forecast-built .code{font:500 var(--fs-compact)/18px 'Red Hat Mono',monospace;color:var(--text-secondary);background:var(--gray-50);border:1px solid var(--border-secondary);border-radius:999px;padding:1px 8px}
+-.issuer-meta a{display:inline-flex;align-items:center;min-height:32px;white-space:nowrap;font-weight:600;color:var(--blue-700);text-decoration:none}.issuer-meta a:hover{text-decoration:underline;text-underline-offset:3px}
++.forecast-built .code{font:500 var(--fs-compact)/18px 'Red Hat Mono',monospace;color:var(--text-secondary);background:var(--gray-50);border:1px solid var(--border-secondary);border-radius:999px;padding:1px 8px}
++
+ .scope{display:flex;align-items:center;gap:6px;max-width:45%;font-size:var(--fs-control);line-height:20px;color:var(--text-secondary);text-align:right}
+ .scope img{width:16px;height:16px;flex:none;opacity:.6}.scope strong{font-weight:600}
+ .workspace-tabs{display:flex;gap:20px;padding:0 18px;background:#fff;border-bottom:1px solid var(--border-secondary)}
+ .workspace-tabs>a{display:flex;align-items:center;gap:8px;flex:none;height:36px;margin-bottom:-1px;padding:0 2px;font:600 var(--fs-control)/20px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-decoration:none;border-bottom:2px solid transparent}
+-.workspace-tabs img{width:16px;height:16px;opacity:.55}
+ .workspace-tabs>a:hover{color:var(--text-secondary);border-color:var(--gray-300)}
+-.workspace-tabs>a[aria-current]{color:var(--blue-700);border-color:var(--blue)}.workspace-tabs>a[aria-current] img{opacity:1}
++.workspace-tabs>a[aria-current]{color:var(--blue-700);border-color:var(--blue)}
+ .workspace-tabs>a:focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--radius-control) var(--radius-control) 0 0}
+-@media(max-width:720px){.issuer{display:block;padding:12px 15px}.issuer h1{font-size:22px;line-height:30px;white-space:normal}.scope{max-width:none;margin-top:8px;text-align:left}.workspace-tabs{gap:16px;padding:0 15px;overflow-x:auto;scrollbar-width:none}.workspace-tabs img{display:none}}
++@media(max-width:720px){.issuer{display:block;padding:12px 15px}.issuer h1{font-size:22px;line-height:30px;white-space:normal}.scope{max-width:none;margin-top:8px;text-align:left}.workspace-tabs{gap:16px;padding:0 15px;overflow-x:auto;scrollbar-width:none}}
+ /* Content tables and labels, after Untitled UI React (MIT): a bordered card, grey header row, row rules and no stripes; labels reuse .badge. */
+ .table-scroll{max-width:100%;max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--border-secondary);border-radius:var(--radius-card);box-shadow:var(--shadow-xs)}
+ .table-scroll:focus-visible{outline:none;box-shadow:var(--ring)}
+@@ -340,8 +339,6 @@ th .source-link:hover{color:var(--blue-700);text-decoration:underline;text-under
+ .btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff;font-size:var(--fs-compact);font-weight:600;color:var(--navy);text-decoration:none}
+ .btn img{width:14px;height:14px;opacity:.7}
+ .btn:hover{background:var(--quiet)}
+-.badge.on-navy{background:transparent;border-color:rgba(255,255,255,.4);color:#fff}
+-.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:var(--fs-label);font-weight:600;border:1px solid var(--rule);background:var(--quiet);color:var(--muted)}
+ .band{margin-top:20px;background:var(--navy);color:#fff;border-radius:var(--radius-card);padding:18px 22px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,300px);gap:10px 28px}
+ .band p{margin:0;font-size:15px;line-height:1.55;font-weight:500;text-wrap:pretty}
+ .band dl{margin:0;font-size:var(--fs-compact);line-height:1.5}
+@@ -425,9 +422,7 @@ article.finding:first-of-type{border-top:0;padding-top:4px}
+ article.finding h4{margin:0;font:600 var(--fs-control)/1.45 'Red Hat Text',sans-serif;color:var(--navy);text-wrap:pretty}
+ article.finding .impact{margin:6px 0 0;color:#3a4056;text-wrap:pretty}
+ article.finding .impact b{font-weight:600;color:var(--muted);font-size:var(--fs-label);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
+-article.finding aside{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding-top:2px}
+ article.finding .conf{font-size:var(--fs-label);color:var(--muted)}
+-article.finding .conf .pill{margin-left:6px}
+ .limits{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+ .limits>div{padding:14px 16px;border:1px solid var(--rule);border-radius:var(--radius-card);background:var(--quiet);min-width:0}
+ .limits h4{margin:0 0 6px;font:600 var(--fs-compact)/1.3 'Red Hat Text',sans-serif;color:#3a4056}
+@@ -461,7 +456,7 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
+ .section-outline ol{list-style:none;margin:0;padding:0}
+ @media(max-width:900px){.band{grid-template-columns:minmax(0,1fr)}article.finding{grid-template-columns:minmax(0,1fr)}.limits,.audit-list{grid-template-columns:1fr}}
+ /* Overview: the handoffs' own passages, selected and ordered; the page adds no sentence. */
+-.overview-part{margin-top:28px;max-width:110ch;min-width:0}.overview-part:first-child{margin-top:8px}.overview-part>h2{font-size:19px;padding-bottom:6px;border-bottom:1px solid var(--rule)}.overview-part h3{font-size:16px;line-height:1.3;margin:14px 0 6px}.overview-part h3 .text-action{font-size:inherit;margin:0}
++.overview-part{margin-top:28px;max-width:110ch;min-width:0}.overview-part:first-child{margin-top:8px}.overview-part>h2{padding-bottom:6px;border-bottom:1px solid var(--rule)}.overview-part h3{font-size:16px;line-height:1.3;margin:14px 0 6px}.overview-part h3 .text-action{font-size:inherit;margin:0}
+ .passage-text,.passage-list{margin:6px 0;line-height:1.5;text-wrap:pretty}.passage-list{padding-left:20px}.passage-list li{margin:6px 0}
+ .basis{display:block}.limit-module{display:block;font-size:var(--fs-label)}.lead-source{margin:4px 0;color:var(--muted);font-size:var(--fs-compact)}
+ .bottom-entry{padding:8px 0;border-bottom:1px solid var(--rule)}.bottom-entry:last-child{border-bottom:0}.bottom-entry h3{margin-top:6px}
+@@ -603,3 +598,204 @@ td .basis-link{margin-left:6px}
+ .ledger-legend i{width:12px;height:12px;border-radius:2px}
+ .trend-list{list-style:none;padding:0;margin:8px 0 16px;display:grid;gap:6px}.trend-list li{display:grid;grid-template-columns:minmax(150px,1fr) 160px minmax(0,2fr);gap:12px;align-items:center;font-size:var(--fs-compact)}.trend-list li>.muted:nth-child(2){grid-column:2/-1}.trend line{stroke:var(--muted);stroke-width:1.5}.trend circle{fill:var(--blue)}
+ @media(max-width:720px){.change-module>summary{grid-template-columns:1fr auto}.change-then,.change-now{grid-column:1/-1}.change-pair{grid-template-columns:1fr}.trend-list li{grid-template-columns:1fr}.trend-list li>.muted:nth-child(2){grid-column:auto}}
++/* Redesign pass 1 (2026-11-12): run chrome, workbench columns and the Modules navigator, after the Claude Design screens L3 and L4. Layout and type only; widths hold from 1301px, 1300px and below use 220px and 300px, 1050px and 720px keep the rules above. */
++:root{--dot-quiet:#8a90a3}
++@media(min-width:721px){.issuer.run-header{display:block;padding:18px 28px 0}}
++.issuer-back{display:inline-flex;align-items:center;gap:4px;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--blue);text-decoration:none}
++.issuer-back:hover{text-decoration:underline;text-underline-offset:3px}
++.issuer-back svg{flex:none}
++.issuer-row{align-items:flex-start;gap:16px;padding-bottom:12px}
++@media(min-width:721px){.issuer-row{display:flex;justify-content:space-between}.issuer-row.has-start-link{flex-wrap:wrap}.issuer-row.has-start-link .issuer-title{flex:1 1 320px}}
++@media(min-width:721px){.issuer-side{display:flex;flex:none;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 16px;margin:4px 0 0 auto}}
++.issuer-side .scope{max-width:none;white-space:nowrap}
++@media(max-width:720px){.issuer-side .start-run{display:flex;justify-content:center;margin-top:12px}}
++.issuer-row .issuer-title{display:block}
++.issuer-row h1{margin-top:8px}
++.issuer-row .scope{margin-top:8px}
++.issuer-row .issuer-meta{display:block;margin:0;font:400 14px/20px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
++@media(min-width:721px){
++.workspace-tabs{gap:0;padding:0 16px;border-bottom-color:var(--gray-200)}
++.workspace-tabs>a{height:auto;padding:10px 12px 12px;font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-tertiary)}
++.workspace-tabs>a:hover{color:var(--text-primary)}
++.workspace-tabs>a[aria-current]{color:var(--blue-700);border-color:var(--blue)}
++.context-bar{padding:10px 28px;background:var(--quiet);border-bottom-color:var(--gray-200);font-size:13px;line-height:18px}
++}
++.context-bar .context-run strong{font-weight:600;color:var(--text-primary)}
++.context-bar .code{font:500 13px/18px 'Red Hat Mono',monospace;text-transform:none;color:var(--text-secondary);background:none;border:0;padding:0}
++.context-bar>.text-action{margin-left:auto;font-size:13px;line-height:18px;gap:4px}
++.context-bar .context-revision{flex:1 0 100%}
++@media(min-width:1301px){
++.workbench:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:250px minmax(0,1fr)}
++.workbench.has-evidence:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:250px minmax(0,1fr) 340px}
++.workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:250px minmax(0,1fr)}
++.workbench.tools-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 340px}
++.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:250px minmax(0,1fr) 340px}
++.workbench.overview-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 340px}
++}
++@media(min-width:1051px) and (max-width:1300px){
++.workbench:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:220px minmax(0,1fr)}
++.workbench.has-evidence:not(.library-workspace,.overview-workspace,.tools-workspace){grid-template-columns:220px minmax(0,1fr) 300px}
++.workbench.tools-workspace:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr)}
++.workbench.tools-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 300px}
++.workbench.tools-workspace.has-evidence:has(.navigator.mobile-open){grid-template-columns:220px minmax(0,1fr) 300px}
++.workbench.overview-workspace.has-evidence{grid-template-columns:minmax(0,1fr) 300px}
++}
++.navigator{padding:16px 12px}
++.navigator-head{top:-16px}
++.navigator .search{height:36px;padding:0 10px;border-color:var(--gray-300);border-radius:8px}
++.navigator .search input{font-size:13px}
++.nav-group{border-top:0;padding:16px 0 0}
++.nav-heading{font:600 11px/16px 'Red Hat Text',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--text-quaternary);padding:0 10px 6px}
++.module-item{padding:7px 10px;border-radius:7px;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++.module-item .module-label{font:inherit}
++.module-item.selected{background:var(--blue-50);color:var(--blue-700);font-weight:600}
++.section-outline{margin:2px 0 8px 14px;padding-left:10px;border-left:1px solid var(--gray-200)}
++.section-item{padding:3px 8px;border-radius:5px;font:400 12px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++.section-item[aria-current]{background:var(--blue-50);color:var(--blue-700);font-weight:600}
++@media(min-width:1051px){.workbench.tools-workspace :is(#content,#module-head,.mobile-modules){padding-left:28px;padding-right:28px}}
++/* Redesign pass 1, module page and evidence inspector (task 2). Reading styles are classes (`.kicker`, `.reading-headline`, `.reading-prose`, `.reading-findings`, `.reading-limits`) so the Overview can use the same ones. */
++@media(min-width:1301px){.workbench:not(.library-workspace,.overview-workspace,.tools-workspace) #content{padding:26px 32px}}
++.kicker,.module-head .head-group,.module-head.has-bottom-line h2{font:600 12px/16px 'Red Hat Text',sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--text-quaternary)}
++.module-head{justify-content:space-between;gap:8px 16px}
++.module-head .head-title{display:flex;flex-wrap:wrap;align-items:baseline;flex:1 0 auto;max-width:100%;min-width:0}
++.module-head.has-bottom-line .head-group::after{content:"·";margin:0 8px}
++.module-head.has-bottom-line h2{margin:0}
++.module-head:not(.has-bottom-line) .head-title{display:block}
++.module-head:not(.has-bottom-line) .head-group{display:block}
++.module-head:not(.has-bottom-line) h2{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;letter-spacing:-.01em;color:var(--text-primary)}
++.module-head .head-tools{margin-left:auto;gap:8px 12px}
++.module-head .btn,.module-head .btn:hover{height:auto;padding:0;border:0;background:none;border-radius:0;color:var(--blue);font:600 13px/18px 'Red Hat Text',sans-serif}
++.module-head .btn:hover{text-decoration:underline;text-underline-offset:3px}
++.band{margin-top:8px;display:block;background:none;color:var(--text-primary);border-radius:0;padding:0}
++.band>p,.reading-headline .passage-text,.reading-headline .passage-list li{margin:8px 0 0;max-width:44ch;font:700 22px/30px 'Red Hat Display',sans-serif;color:var(--text-primary);text-wrap:pretty}
++.reading-headline .passage-list{list-style:none;margin:0;padding:0}
++.band dl{margin:14px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++.band dt{display:inline;font-weight:600;color:var(--text-secondary)}
++.band dd{display:inline;margin:0 0 0 6px;color:var(--text-secondary)}
++.band .row{margin-top:2px}
++.band .src{margin-top:14px;font-size:13px;line-height:18px;color:var(--text-quaternary)}
++.band-link{color:var(--text-quaternary);font:400 13px/18px 'Red Hat Text',sans-serif;text-decoration:none}
++.band-link:hover,.band-link:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
++section.part{margin-top:0}
++section.part>:is(h3,h4):not(.sr-only),section.part>.analysis-section:only-child>:is(h3,h4):first-child,.overview-part>h2:not(.kicker),#overview-lead .reading-findings>h3{margin:26px 0 10px;font:700 15px/22px 'Red Hat Display',sans-serif;color:var(--text-primary)}
++.analysis-text,.reading-prose .passage-text,#overview-lead>.intro{margin:10px 0 0;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++:is(h3,h4,h5,h6)+.analysis-text,.reading-prose>:is(h3,h4)+.passage-text{margin-top:14px}
++.reading-prose .passage-list{max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif}
++:is(section.part,.overview-part) .figure{font:500 .92em 'Red Hat Mono',monospace;text-decoration:underline dotted;text-underline-offset:3px}
++:is(section.part,.overview-part) .figure[aria-pressed=true]{background:var(--blue-50);border-radius:3px;padding:0 2px}
++:is(section.part,.overview-part) .basis-link{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-decoration:none}
++:is(section.part,.overview-part) .basis-link:is(:hover,:focus-visible){color:var(--blue);text-decoration:underline;text-underline-offset:3px}
++.reading-findings .passage-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:12px}
++.reading-findings .passage-list li{position:relative;margin:0;padding-left:18px;max-width:66ch;font:400 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++.reading-findings .passage-list li::before,section.part article.finding::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
++section.part article.finding,section.part article.finding:first-of-type{position:relative;display:block;margin:14px 0 0;padding:0 0 0 18px;border:0;max-width:66ch}
++section.part article.finding h4{margin:0;font:600 15px/24px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++section.part article.finding .impact{margin:2px 0 0;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++section.part article.finding .impact b{margin-right:6px;font:inherit;font-weight:600;text-transform:none;letter-spacing:0;color:inherit}
++section.part article.finding .finding-line{margin:4px 0 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
++section.part article.finding .conf{margin-right:10px;font:inherit;color:inherit}
++.reading-limits .passage-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
++.reading-limits .passage-list li,.reading-limits .passage-text,section.part .limits p{position:relative;margin:0;padding-left:16px;max-width:70ch;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++.reading-limits .passage-text{margin-top:8px}
++.reading-limits .passage-list li::before,.reading-limits .passage-text::before,section.part .limits p::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--dot-quiet)}
++section.part .limits{display:block}
++section.part .limits>div{padding:0;border:0;background:none;margin-top:12px}
++section.part .limits p+p{margin-top:8px}
++section.part .limits h4{margin:0;font:600 14px/21px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++:not(details.fold,details.audit)+details.fold,:not(details.fold,details.audit)+details.audit{margin-top:30px}
++details.fold,details.audit{margin-top:8px;padding:0;border:1px solid var(--gray-200);border-radius:10px}
++details.fold details.fold{margin:8px 14px 14px}
++details.fold>summary,details.audit>summary{display:flex;align-items:center;gap:8px;padding:12px 14px;font:600 14px/20px 'Red Hat Text',sans-serif;letter-spacing:0;color:var(--text-primary)}
++details.fold>summary img,details.audit>summary img{flex:none}
++details:is(.fold,.audit)>summary .fold-title{margin:0;font:inherit;color:var(--text-primary)}
++details:is(.fold,.audit)>summary .fold-detail{margin:0 0 0 auto;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary);text-align:right}
++details.fold[open]>:not(summary),details.audit[open]>:not(summary){margin-left:14px;margin-right:14px}
++details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14px}
++@media(min-width:1051px){
++.inspector-body{padding:20px 22px}
++.evidence-fields{display:grid;gap:10px;border-top:0}
++.evidence-fields>div{padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff}
++.evidence-fields h4{margin:0 0 4px;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++.evidence-fields>div>div{font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++}
++.inspector-body>*+*{margin-top:18px}
++.inspector-body>.sr-only+*{margin-top:0}
++.inspector-body>h2.kicker{margin:0}
++.inspector-body>.inspector-figure{margin:0}
++.inspector-figure .kicker{display:block}
++.inspector-figure strong{display:block;margin-top:4px;font:500 22px/28px 'Red Hat Mono',monospace;color:var(--text-primary);overflow-wrap:anywhere}
++.inspector-body>h3:not(.citations-heading){margin:8px 0 0}
++@media(min-width:1051px){.inspector-body>.evidence-context{margin:4px 0 0}}
++.inspector-body>.evidence-context{font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++.inspector-body>.classification{margin:10px 0 0}
++.evidence-basis>h3,.basis>h3,.source-location>h3,.inspector-body>.citations-heading{margin:0;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++.inspector-body>.citations-heading{margin-top:18px}
++.inspector-card,.basis>.basis-items,.inspector-body>.chip-source{margin:6px 0 0;padding:12px 14px;border:1px solid var(--gray-200);border-radius:10px;background:#fff;font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++.inspector-body>.citations-heading+.chip-source{margin-top:6px}
++.inspector-body>.chip-source+.chip-source{margin-top:10px}
++.basis>.basis-items{list-style:none}
++.basis-items>li+li{margin-top:8px}
++.basis-items .chip-source{margin:6px 0 0;padding:8px 0 0;border:0;background:none}
++.chip-source>h3{margin:0;font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--text-primary);overflow-wrap:anywhere}
++.chip-source .excerpt{margin-top:8px;padding:0 0 0 10px;border:0;border-left:2px solid var(--gray-300);border-radius:0;background:none;font:italic 400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++.source-location .inspector-card p{margin:0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++.source-location .inspector-card p:first-child{font-weight:600;color:var(--text-primary)}
++.source-location .inspector-card a{margin-top:8px;font-size:13px}
++.source-location .inspector-card .small{margin-top:8px;color:var(--text-quaternary)}
++/* Redesign pass 1, Overview (task 3). Two columns from 1301px, one column below; the row grids hold from 721px, so 720px and below keep today's block layout. Reading styles are the module page's classes. */
++.overview-main,.overview-aside{min-width:0}
++.overview-part{margin-top:30px}
++.overview-part:first-child{margin-top:8px}
++.overview-aside>.overview-part:first-child{margin-top:30px}
++.overview-part>h2:not(.kicker){margin:0;padding:0;border:0}
++#overview-lead>:is(h2,.lead-source){display:inline;margin:0;padding:0;border:0}
++#overview-lead>.lead-source::before{content:"·";margin:0 8px}
++#overview-lead .lead-source a{color:inherit;text-decoration:none}
++#overview-lead .lead-source a:hover,#overview-lead .lead-source a:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
++#overview-lead>.intro{margin:8px 0 0}
++#overview-lead .reading-headline .passage-text,#overview-lead .reading-headline .passage-list li{max-width:46ch}
++#overview-lead .reading-findings>h3{margin-bottom:0}
++#overview-bottom-lines .bottom-entry>h3{margin:0}
++#overview-bottom-lines>.bottom-entry:first-of-type{margin-top:10px;border-top:1px solid var(--gray-200)}
++#overview-bottom-lines .bottom-entry{padding:12px 0;border-bottom:1px solid var(--ground)}
++#overview-bottom-lines .bottom-entry>h3{font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-primary)}
++#overview-bottom-lines .bottom-entry>h3 a{color:inherit;text-decoration:none}
++#overview-bottom-lines .bottom-entry>h3 a:hover,#overview-bottom-lines .bottom-entry>h3 a:focus-visible{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
++#overview-bottom-lines .bottom-entry :is(.passage-text,.passage-list,.intro){margin:0;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++#overview-bottom-lines .bottom-entry .passage-text+.passage-text{margin-top:8px}
++@media(min-width:721px){
++#overview-bottom-lines .bottom-entry{display:grid;grid-template-columns:210px minmax(0,1fr);column-gap:20px;align-items:start}
++#overview-bottom-lines .bottom-entry>h3{grid-column:1;grid-row:1}
++#overview-bottom-lines .bottom-entry>:not(h3){grid-column:2}
++}
++#overview-limitations .reading-limits .passage-list{margin:10px 0 0;gap:10px;max-width:70ch}
++#overview-limitations .reading-limits li .limit-module{display:inline;margin-left:6px;font:inherit;color:var(--text-quaternary)}
++#overview-limitations .reading-limits li .limit-module a{color:inherit;font-weight:400}
++#overview-limitations>.intro,#overview-dates>.intro{margin:10px 0 0;font:400 14px/21px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++#overview-charts{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline}
++#overview-charts>:not(h2,.chart-index-link){grid-column:1/-1;min-width:0}
++.chart-index-link{font:600 13px/18px 'Red Hat Text',sans-serif;color:var(--blue);text-decoration:none}
++.chart-index-link:hover,.chart-index-link:focus-visible{text-decoration:underline;text-underline-offset:3px}
++.overview-charts{margin-top:0}
++.overview-charts :is(.panel-card,.map-card){margin:10px 0 0;padding:14px 16px;border:1px solid var(--gray-200);border-radius:10px;overflow-x:auto;max-width:100%}
++#overview-dates .table-scroll{position:relative;margin-top:10px;border:0;border-top:1px solid var(--gray-200);border-radius:0;box-shadow:none;background:none}
++#overview-dates .dates-table caption{padding:8px 0;font:400 13px/18px 'Red Hat Text',sans-serif;color:var(--text-quaternary)}
++@media(min-width:721px){
++#overview-dates .dates-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
++#overview-dates .dates-table thead th{position:static}
++#overview-dates .dates-table tbody tr{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:12px;padding:9px 0;border-bottom:1px solid var(--ground)}
++#overview-dates .dates-table tbody tr:hover>*{background:none}
++#overview-dates .dates-table tbody :is(th,td){padding:0;border:0;font:400 13px/19px 'Red Hat Text',sans-serif;color:var(--text-secondary)}
++#overview-dates .dates-table tbody th{grid-column:1;grid-row:1/span 2;font:500 13px/19px 'Red Hat Mono',monospace;color:var(--text-primary)}
++#overview-dates .dates-table tbody td:nth-of-type(1){grid-column:2;grid-row:1}
++#overview-dates .dates-table tbody td:nth-of-type(2){grid-column:2;grid-row:2;color:var(--text-quaternary)}
++#overview-dates .dates-table tbody td:nth-of-type(2) a{color:inherit;font-weight:400}
++}
++@media(min-width:1301px){
++#content:has(>.overview-main){display:grid;grid-template-columns:minmax(0,1fr) 400px;column-gap:40px;align-items:start;padding:26px 28px 24px}
++.overview-aside{display:grid;gap:22px}
++.overview-aside>.overview-part{margin-top:0}
++.overview-aside>.overview-part:first-child{margin-top:8px}
++.workbench.overview-workspace #module-head{padding-left:28px}
++}
++@media screen{.overview-aside .column-chart .periods{grid-template-columns:repeat(var(--periods),minmax(140px,1fr))}}
+diff --git a/apps/issuer-library/credit_os/web/screen.js b/apps/issuer-library/credit_os/web/screen.js
+index 37f4430..404a5bd 100644
+--- a/apps/issuer-library/credit_os/web/screen.js
++++ b/apps/issuer-library/credit_os/web/screen.js
+@@ -297,7 +297,11 @@ function parseRoute() {
+   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
+   // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
+   const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
+-  const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===first)||sections[0];
++  // The Forecast page draws its chart index after the models: that one name scrolls to it. It draws the model the Forecast tab
++  // would open (the remembered section while it is a section of this run, else the first) and leaves what is remembered alone.
++  const part=module==='W-Forecast'&&requestedSection==='run-charts'?requestedSection:null;
++  const remembered=part&&lastSection.get(context+':W-Forecast');
++  const selected=anchored?[requestedSection,plain(data[output].sections.find(s=>`s-${s.line}`===requestedSection).heading.replace(METHOD_CODE,'')),[]]:sections.find(s=>s[0]===requestedSection)||sections.find(s=>s[0]===remembered)||sections.find(s=>s[0]===first)||sections[0];
+   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
+   const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
+   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
+@@ -305,7 +309,7 @@ function parseRoute() {
+   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
+   // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
+   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
+-  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null};
++  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part};
+ }
+ function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
+ // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
+@@ -336,32 +340,36 @@ function basisItemHtml(item,deps,used) {
+   if(item.kind==='source') item.chips.forEach(c=>used.add(c));
+   return inspectorItemHtml(item,deps);
+ }
+-// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the figure, the Basis items
++// The figure an `f<n>` control opened the inspector from, drawn first in the inspector (the large value under its eyebrow); none for a paragraph's or a chip's control.
++function inspectorFigure(item,output,mode) {
++  if(typeof mode!=='string'||!mode.startsWith('f')||item.text===undefined)return '';
++  const span=figureSpans(paragraphBody(item.text,!isNewFormat(output.sections)).body)[Number(mode.slice(1))];
++  return span?`<p class="inspector-figure"><span class="kicker">Figure</span> <strong>${esc(span.text)}</strong></p>`:'';
++}
++// The inspector part for a paragraph's Basis control (`p`) or one of its figures (`f<n>`), or for a table row's control: the Basis items
+ // in words with the chips each resolved to, then every other chip the build holds for the key. An earlier-format paragraph shows its citations as written.
+ function paragraphBasisHtml(key,item,output,mode,chips) {
+   chips=uniqueChips(chips);
+   const earlier=!isNewFormat(output.sections),used=new Set();
+-  let figure='',items='';
++  let items='';
+   if(item.text!==undefined) {
+-    const {body}=paragraphBody(item.text,earlier);
+-    const span=mode.startsWith('f')?figureSpans(body)[Number(mode.slice(1))]:null;
+-    figure=span?`<p class="inspector-figure">Figure <strong>${esc(span.text)}</strong></p>`:'';
+     // reader.js draws the list (the same code the node tests read): an upstream-handoff item shows its written name; nameCodes names the rest, citations of an earlier-format page included.
+     const deps={chipSection:c=>chipSection(c,output),moduleHref,icon};
+     const ev=contexts[output.run]?.evidence||{},files=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name);
+     items=inspectorBasisBlock(item.text,earlier,{sections:output.sections,chips,files,ran:code=>defaultOutput(code,output.run)},it=>basisItemHtml(it,deps,used));
+   }
+   const rest=chips.filter(c=>!used.has(c));
+-  return `${figure}${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
++  return `${items}${rest.length?`<h3 class="citations-heading">${items?'Other citations':'Citations'}</h3>${rest.map(c=>chipSection(c,output)).join('')}`:''}`;
+ }
+ function showInspector(key,chipIndex=null) {
+   const item=evidence.get(key), output=data[item.output], keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[];
+   const paragraph=typeof chipIndex==='string'&&chipIndex!=='gaps';
+   const chipHtml=paragraph?paragraphBasisHtml(key,item,output,chipIndex,keyChips):chipIndex==='gaps'?keyChips.filter(unresolvedGap).map(c=>chipSection(c,output)).join(''):chipIndex===null?'':chipSection(keyChips[chipIndex],output);
+   // A paragraph shows its wording without its Basis line or citations; they are listed below it.
++  const figure=paragraph?inspectorFigure(item,output,chipIndex):'';
+   const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
+   $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
+-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2>Evidence inspector</h2><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><h3>${esc(item.title)}</h3><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p>${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
++  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
+   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
+   document.querySelectorAll('.chip').forEach(el=>{
+@@ -539,6 +547,7 @@ function renderRoute() {
+     if(!keepsCodes(next)){nameCodes($('module-head'));nameCodes($('content'));}
+     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
+     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
++    if(next.part)scrollToPart(next.part);
+     showNavigator(false);
+     // Search hits drive moves between analytical modules, so the query is kept there and dropped elsewhere.
+     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';
+@@ -552,7 +561,7 @@ function renderRoute() {
+       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
+       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
+     }
+-  }
++  } else if(next.part)scrollToPart(next.part);
+   if(partMove) {
+     scrollToPart(next.section);
+     renderNavigator(next.module);
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index a84a0e6..4860693 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -24,8 +24,8 @@ test('the rail is Start a run, Issuer library, Run activity, Search: no Reports
+ 
+ test('the issuer tabs are Report, Overview, Changes, Modules, Forecast, Evidence; no Calendar or Reports tab and no report frame or adapter remains (decisions 1, 12)', () => {
+   const views = read('views.js');
+-  const tabs = views.slice(views.indexOf("querySelector('.workspace-tabs').innerHTML=["), views.indexOf(".map(([id,label,img])"));
+-  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)','[^']+'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
++  const tabs = views.slice(views.indexOf("querySelector('.workspace-tabs').innerHTML=["), views.indexOf(".map(([id,label])"));
++  assert.deepEqual([...tabs.matchAll(/\[(?:'[^']+'|moduleId),'([^']+)'\]/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
+   for (const name of fs.readdirSync(__dirname).filter(f => /\.(js|css|html)$/.test(f))) {
+     const text = read(name);
+     for (const gone of ['report-adapter', 'report-preview', 'report-workspace', 'report-content', 'cancelReportFrame', 'isReportRoute', 'reportList', 'reportView', 'reportManifest', 'runReports', 'calendarSections']) {
+@@ -283,6 +283,7 @@ test('the navigator names every module in catalog.json', () => {
+ const OUT = 'run-a/deliveries/d1/CP-1.md';
+ // The workspace's module names, as the fixtures use them.
+ const NAMES = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance', 'CP-6': 'Committee decision' };
++const GROUPS = [['Business and evidence', [['CP-0', 'Source readiness'], ['CP-1A', 'Business & governance']]], ['Financial performance', [['CP-1', 'Financial foundation']]], ['Other modules', [['CP-6', 'Unnamed module']]]];
+ const table = (line, headers, rows) => ({ type: 'table', line, headers, rows: rows.map(([n, ...cells]) => ({ line: n, cells })) });
+ const text = (line, body) => ({ type: 'text', line, text: body });
+ // `where` is the placement the store would give the section (Task 1); report() turns it into the output's parallel `placement` list.
+@@ -351,10 +352,10 @@ function report(overrides = {}, modSections = null) {
+   }
+   const win = { CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
+   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
+-  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTable', 'eventTimeline'];
++  const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTable', 'eventTimeline'];
+   const reader = require('./reader.js');
+-  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem, ...['chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => reader[name]), require('./calendar.js').eventTable, realEventTimeline(esc, rich)];
+-  return new Function(...names, `${src}; return {moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE, moduleTitle, handoffLabel};`)(...args);
++  const args = [win, data, modules, { 'run-a': { folder: 'run-a', modules: { 'CP-1': { outputs: [OUT], default: OUT } } } }, {}, NAMES, GROUPS, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: 'run-a', section: 'head', module: 'CP-1' }, id => !id.startsWith('W-'), sectionData, new Map(), { 'CP-6A': 'CP-6' }, reader.isNewFormat, reader.readerPassages, reader.blocked, reader.splitBasis, reader.basisItem, ...['chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => reader[name]), require('./calendar.js').eventTable, realEventTimeline(esc, rich)];
++  return new Function(...names, `${src}; return {fold, moduleReport, reportParts, reportAnalysis, reportReference, reportCalculations, reportHead, chipsMarkup, chipView, keyNumbers, reportLimits, reportAudit, reportBand, outlineMarkup, navigationSections, drawnAnchors, availability, unavailableView, REPORT_PARTS, METHOD_CODE, moduleTitle, handoffLabel};`)(...args);
+ }
+ const strip = html => html.replace(/<[^>]+>/g, '');
+ // screen.js eventTimeline as written, with the page's helpers stood in (the source footer is a plain marker).
+@@ -362,7 +363,8 @@ function realEventTimeline(esc, rich) {
+   const screen = read('screen.js'), calendar = require('./calendar.js');
+   return new Function('esc', 'rich', 'eventOrder', 'orderEvents', 'sourceFooter', `${screen.slice(screen.indexOf('function eventTimeline('), screen.indexOf('function businessVisual('))}; return eventTimeline;`)(esc, rich, calendar.eventOrder, calendar.orderEvents, key => `<small class="footer">${esc(key)}</small>`);
+ }
+-const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1]);
++// The summary as a reader reads it: the title, then the detail the row draws at its right. The row holds the two as two spans with one space between; this joins them with " · ", the form the callers' expected texts use.
++const summaryOf = (html, id) => strip(new RegExp(`<details[^>]*id="${id}"[^>]*><summary>(.*?)</summary>`).exec(html)[1].replace('</span> <span class="fold-detail">', ' · '));
+ const NINE = ['head', 'bottom-line', 'numbers', 'findings', 'analysis', 'limits', 'reference', 'calculations', 'audit'];
+ const NINE_RE = /\bid="(head|bottom-line|numbers|findings|analysis|limits|reference|calculations|audit)"/g;
+ const anchorsOf = (html, re = NINE_RE) => [...html.matchAll(re)].map(m => m[1]);
+@@ -553,7 +555,7 @@ test('every chart row holds its exact value and a chip set', () => {
+ test('findings are articles with impact, confidence and chips', () => {
+   const html = report().moduleReport(OUT);
+   assert.equal(html.match(/<article class="finding">/g).length, 2);
+-  assert.ok(html.includes('<b>Creditor impact</b>Higher gross leverage.') && html.includes('<span class="pill">High</span>'));
++  assert.ok(html.includes('<b>Creditor impact</b>Higher gross leverage.') && html.includes('<span class="conf">Confidence High</span>') && !html.includes('class="pill"'));
+ });
+ 
+ test('limits come from the limits-placed sections with chips and their line ids; audit lists the rest by line', () => {
+@@ -758,7 +760,7 @@ test('the audit summary gives the store\'s section count; the head carries no fi
+   const html = report({ sections }).moduleReport(OUT);
+   assert.equal(sections.length, 12);
+   assert.ok(!/class="module-head".*?<\/h2><div class="sub">(?:(?!<\/div>).)*(?:CP-1\.md|sections)/s.test(html));
+-  assert.ok(html.includes('<span>12 sections · unchanged from the handoff</span>'));
++  assert.ok(html.includes('<span class="fold-detail">12 sections · unchanged from the handoff</span>'));
+   assert.ok(!/\b(?:10|11) sections\b/.test(html));
+ });
+ 
+@@ -906,13 +908,13 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
+   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
+   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
+   const contexts = { [RUN]: { folder: RUN, record: more.record, ...more.runFields, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
+-  const win = { CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
++  const win = { location: more.location, CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
+   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
+   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
+   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
+   const eventTimeline = realEventTimeline(esc, rich);
+   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
+-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, drawnAnchors, defaultOutput, firstSection};`)(...args);
++  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection};`)(...args);
+ }
+ const countOf = (html, re) => (html.match(re) || []).length;
+ 
+@@ -962,7 +964,7 @@ const withFixtureLanes = d => {
+ };
+ const fixturePage = (more = {}) => runPage(d => withFixtureLanes(overviewData(FIXTURE)), [], m => m, { record: steps(Object.keys(FIXTURE)), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES, ...more });
+ const part = (html, id) => new RegExp(`<section class="overview-part" id="${id}">.*?</section>`, 's').exec(html)?.[0];
+-const headings = html => [...html.matchAll(/<section class="overview-part" id="([^"]+)"><h2>([^<]*)<\/h2>/g)].map(m => [m[1], m[2]]);
++const headings = html => [...html.matchAll(/<section class="overview-part" id="([^"]+)"><h2(?: class="kicker")?>([^<]*)<\/h2>/g)].map(m => [m[1], m[2]]);
+ const bottomEntry = (html, code) => new RegExp(`<div class="bottom-entry" data-module="${code}">.*?</div>`, 's').exec(html)?.[0];
+ const chartsOf = (html, code) => new RegExp(`<div class="overview-charts" data-module="${code}">.*?(?=<div class="overview-charts"|</section>)`, 's').exec(html)?.[0];
+ const CP2_BOTTOM = 'Creditors are exposed to refinancing risk rather than to weak earnings: net debt of USD 1,390 million is 4.2x earnings, and the next maturities fall inside two years.';
+@@ -1223,6 +1225,24 @@ test('Overview key charts: charts of a module the catalogue places on Overview a
+   assert.deepEqual(headings(html).map(h => h[0]), ['overview-lead', 'overview-bottom-lines', 'overview-limitations', 'overview-charts', 'overview-dates']);
+ });
+ 
++test('Overview wraps its parts in two columns: lead, bottom lines and limitations in the main column, charts and dates in the aside', () => {
++  const html = runPage(withBridge, [], m => m, OVERVIEW_CP1).runReport(RUN);
++  const main = /<div class="overview-main">(.*?)<\/div><aside class="overview-aside" aria-label="Charts and dates">(.*)<\/aside>$/s.exec(html);
++  assert.ok(main, 'main column then aside, nothing outside them');
++  assert.deepEqual(headings(main[1]).map(h => h[0]), ['overview-lead', 'overview-bottom-lines', 'overview-limitations']);
++  assert.deepEqual(headings(main[2]).map(h => h[0]), ['overview-charts', 'overview-dates']);
++  // Key charts link to the chart index on this run's Forecast page; a run with no placed chart draws neither the section nor the link.
++  assert.ok(part(html, 'overview-charts').startsWith('<section class="overview-part" id="overview-charts"><h2>Key charts</h2><a class="chart-index-link" href="#W-Forecast/'));
++  assert.deepEqual([...main[2].matchAll(/<a class="chart-index-link" href="([^"]+)">([^<]*)<\/a>/g)].map(m => [m[1].replace(/\/[^?]*/, '/'), m[2]]), [['#W-Forecast/?c=run-a', 'Chart index']]);
++  assert.ok(!runPage(d => d).runReport(RUN).includes('Chart index'));
++});
++
++test('Overview with no module output returns the missing state with no two-column wrapper', () => {
++  const html = runPage(() => ({})).runReport(RUN);
++  assert.ok(html.startsWith('<div class="missing-state">'));
++  assert.ok(!html.includes('overview-main') && !html.includes('overview-aside'));
++});
++
+ test('Overview key charts: none placed, a placement without Overview, or a blocked module leaves the section out', () => {
+   assert.ok(!runPage(d => d).runReport(RUN).includes('overview-charts'), 'no visuals row at all');
+   assert.ok(!runPage(d => d, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Model; Files' }] }).runReport(RUN).includes('overview-charts'));
+@@ -2023,7 +2043,7 @@ test('library filters: Reset shows only while something is filtered or sorted; C
+ test('screens pass: one word for a run, in-app actions carry no out-arrow, and the styles the markup needs exist', () => {
+   const views = read('views.js'), css = read('screen.css'), screen = read('screen.js');
+   assert.ok(!/Change case|another case|for this case|other cases/.test(views));
+-  assert.ok(views.includes('>Change run</a>') && !views.includes('View source ↗'));
++  assert.ok(views.includes('</svg>Issuer library</a>') && !views.includes('Change run') && !views.includes('View source ↗'));
+   for (const sel of ['.metric-absent{', '.library-table td.run-id{white-space:nowrap']) assert.ok(css.includes(sel), sel);
+   // Never assessed is a fact, not an alert: the completeness note no longer uses the amber of states that need action.
+   const box = css.slice(css.lastIndexOf('.completion-box{'));
+@@ -2581,3 +2601,132 @@ test('package 7: the new rules use only existing tokens, no amber or red', () =>
+   for (const rule of css) assert.ok(!/amber|--red|\bred\b(?! Hat)|#[0-9a-f]{3,8}\b|badge-attention/i.test(rule), rule);
+ });
+ 
++
++// ---- The run header's meta line (redesign pass 1): ticker, sector and the run count, each only when the catalogue holds it. Expected text written by hand.
++test('the meta line under the issuer title joins ticker, sector and run count with a dot, and leaves out what the catalogue does not hold', () => {
++  const all = runPage(d => d, [], m => m, { catalogue: [zedRun()] });
++  assert.equal(all.issuerMeta(RUN), 'ZED · Telecoms · 1 run');
++  const none = runPage(d => d, [], m => m, { catalogue: [zedRun({ issuer: '', sector: '' })] });
++  assert.equal(none.issuerMeta(RUN), '1 run');
++  const sectorOnly = runPage(d => d, [], m => m, { catalogue: [zedRun({ issuer: '' })] });
++  assert.equal(sectorOnly.issuerMeta(RUN), 'Telecoms · 1 run');
++  // Two catalogue runs of the same issuer are counted; a run of another issuer is not.
++  const held = (folder, issuerKey) => ({ folder, issuerKey, modules: {} });
++  const three = runPage(d => d, [], m => m, {
++    runFields: { issuerKey: 'zed' },
++    contexts: { 'run-b': held('run-b', 'zed'), 'run-c': held('run-c', 'other') },
++    catalogue: [zedRun(), zedRun({ id: 'run-b' }), zedRun({ id: 'run-c', issuer: 'OTH' })],
++  });
++  assert.equal(three.issuerMeta(RUN), 'ZED · Telecoms · 2 runs');
++  // No catalogue row for the run: nothing is guessed, no line.
++  assert.equal(runPage(d => d, [], m => m, { catalogue: [] }).issuerMeta(RUN), '');
++});
++
++test('the run count in the meta line is the number of rows Report history lists, whatever the catalogue holds', () => {
++  const held = (folder, issuerKey) => ({ folder, issuerKey, asOf: '2025-01-01', modules: {} });
++  // The catalogue holds three runs of the issuer, the library's contexts hold two: Report history lists two.
++  const fewer = runPage(d => d, [], m => m, {
++    runFields: { issuerKey: 'zed' }, contexts: { 'run-b': held('run-b', 'zed') },
++    catalogue: [zedRun(), zedRun({ id: 'run-b' }), zedRun({ id: 'run-c' })],
++  });
++  assert.equal(fewer.issuerMeta(RUN), 'ZED · Telecoms · 2 runs');
++  assert.equal(histRows(fewer.historyView(RUN)).length, 2);
++  // The catalogue holds one run, the contexts three: three.
++  const more = runPage(d => d, [], m => m, {
++    runFields: { issuerKey: 'zed' }, contexts: { 'run-b': held('run-b', 'zed'), 'run-c': held('run-c', 'zed') },
++    catalogue: [zedRun()],
++  });
++  assert.equal(more.issuerMeta(RUN), 'ZED · Telecoms · 3 runs');
++  assert.equal(histRows(more.historyView(RUN)).length, 3);
++});
++
++// ---- "Start a run on this issuer" in the run header: the target is the latest run Report history lists, URL-encoded; drawn only over http.
++test('the start-run target is the latest run of the issuer by Report history order, its folder URL-encoded', () => {
++  const held = (folder, asOf, issuerKey = 'zed') => ({ folder, issuerKey, asOf, modules: {} });
++  const page = runPage(d => d, [], m => m, {
++    runFields: { issuerKey: 'zed', asOf: '2025-01-01' },
++    contexts: { 'run b/2': held('run b/2', '2025-06-30'), 'run-c': held('run-c', '2026-01-31', 'other') },
++    catalogue: [zedRun()],
++  });
++  // The latest as-of date of the issuer's runs is 'run b/2' (the other issuer's later run is not the issuer's).
++  assert.equal(page.startRunHref(RUN), '/?from=run%20b%2F2');
++  // The first row Report history draws is that same run.
++  assert.ok(histRows(page.historyView(RUN))[0].cells[0].includes('c=run+b%2F2'), histRows(page.historyView(RUN))[0].cells[0]); // the route's own query encoding
++  // With one run, that run.
++  assert.equal(runPage(d => d, [], m => m, { catalogue: [zedRun()] }).startRunHref(RUN), '/?from=run-a');
++  // No such run in the library: no target.
++  assert.equal(page.startRunHref('missing'), '');
++});
++
++test('the start-run link is a primary action with a plus icon, drawn only when the library is served over http and the issuer has a run', () => {
++  const served = runPage(d => d, [], m => m, { location: { protocol: 'http:' } });
++  assert.equal(served.startRunLink(RUN), '<a class="start-run primary-action" href="/?from=run-a"><img src="icons/plus.svg">Start a run on this issuer</a>');
++  assert.equal(runPage(d => d, [], m => m, { location: { protocol: 'https:' } }).startRunLink(RUN), served.startRunLink(RUN));
++  assert.equal(runPage(d => d, [], m => m, { location: { protocol: 'file:' } }).startRunLink(RUN), '');
++  assert.equal(runPage(d => d, [], m => m).startRunLink(RUN), '', 'no location: not served');
++  assert.equal(served.startRunLink('missing'), '', 'no run, no link');
++  // Report history no longer draws it: the header carries it on every run tab.
++  assert.ok(!served.historyView(RUN).includes('start-run'));
++  const chrome = read('views.js').slice(read('views.js').indexOf('function updateWorkspaceChrome'));
++  // The header's link markup is what startRunLink returns: it is assigned from the call, drawn through that variable in the
++  // side group, and nowhere written out by hand in the chrome.
++  assert.ok(chrome.includes("const startRun=isHome?'':startRunLink(current.context)"), 'startRun is startRunLink(current.context)');
++  assert.ok(chrome.includes('startRun?`<div class="issuer-side">${scope}${startRun}</div>`:scope'), 'the side group draws ${startRun} and exists only with the link');
++  assert.ok(!chrome.includes('start-run'), 'no hand-written link in the header');
++  assert.ok(!chrome.includes('/?from='), 'no hand-written target in the header');
++});
++
++// ---- The module page (redesign pass 1, task 2). Expected text is written by hand.
++test('a fold draws its title and its detail as two spans, the detail at the right', () => {
++  const r = report();
++  const row = r.fold('reference', 'Statements and registers', '3 tables · 40 rows', '<p>body</p>');
++  // The caller's title and detail are the two halves of the old summary text "Statements and registers · 3 tables · 40 rows".
++  assert.ok(row.includes('<span class="fold-title">Statements and registers</span> <span class="fold-detail">3 tables · 40 rows</span></summary>'), row);
++  // The summary's accessible name reads title, one space, detail.
++  assert.equal(strip(row.match(/<summary>(.*?)<\/summary>/)[1]), 'Statements and registers 3 tables · 40 rows');
++  assert.match(strip(r.reportAudit(OUT).match(/<summary>(.*?)<\/summary>/)[1]), /^Evidence &amp; audit \d+ sections · unchanged from the handoff$/);
++  assert.ok(row.startsWith('<details class="fold" id="reference">') && row.endsWith('<p>body</p></details>'));
++  const plainRow = r.fold('handoff-text', 'Full handoff text', '', '');
++  assert.ok(plainRow.includes('<span class="fold-title">Full handoff text</span></summary>') && !plainRow.includes('fold-detail'), plainRow);
++  // The audit row has the same two parts: its title, then the detail it always had.
++  const audit = r.reportAudit(OUT);
++  assert.ok(audit.includes('<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">10 sections · unchanged from the handoff</span></summary>'), audit); // the fixture's ten sections, counted by hand
++});
++
++test('the head names the reading group, and says whether the page has a bottom line', () => {
++  const withLine = report().reportHead(OUT);
++  assert.ok(/<div class="module-head has-bottom-line" id="head">/.test(withLine), withLine);
++  assert.ok(withLine.includes('<span class="head-group">Financial performance</span><h2>Financial foundation</h2>'), withLine);
++  const none = report({ summary: null, call: null }).reportHead(OUT);
++  assert.ok(!none.includes('has-bottom-line') && none.includes('<span class="head-group">Financial performance</span><h2>'), none);
++  const call = report({ summary: null, call: { text: 'A call.', line: 9 } }).reportHead(OUT);
++  assert.ok(call.includes('has-bottom-line'), call);
++  // The tools keep today's controls.
++  assert.ok(withLine.includes('class="head-tools"') && withLine.includes('Candidate · not accepted') && /<a class="btn" href="\.\.\/runs\/run-a\/deliveries\/d1\/CP-1\.md" download>/.test(withLine));
++  // A module no reading group names is gathered under the runtime group "Other modules".
++  const unnamed = report({ module: 'CP-6' }).reportHead(OUT);
++  assert.ok(unnamed.includes('<span class="head-group">Other modules</span><h2>Committee decision</h2>'), unnamed);
++});
++
++test('a new-format page has a bottom line when the Bottom line passage exists; a Not assessable module shows its badge in the head tools', () => {
++  const text = (body, line) => ({ type: 'text', line, end: line, text: body });
++  const sec = (heading, level, line, ...blocks) => ({ heading, level, line, blocks, where: 'view' });
++  const sections = bottom => [sec('CP-1 handoff', 1, 1), sec('Request', 2, 2, text('x', 3)), sec('Findings', 2, 5), sec('Bottom line', 3, 6, text(bottom, 7)), sec('Key findings', 3, 9, text('- one', 10))];
++  const blockedHead = report({ sections: sections('Not assessable: no cash forecast.'), summary: null }).reportHead(OUT);
++  assert.ok(/<div class="head-tools"><span class="badge badge-gray">Not assessable<\/span>/.test(blockedHead) && blockedHead.includes('has-bottom-line'), blockedHead);
++  const ordinary = report({ sections: sections('Leverage is moderate.'), summary: null }).reportHead(OUT);
++  assert.ok(!ordinary.includes('Not assessable') && ordinary.includes('has-bottom-line'), ordinary);
++  const noPassage = report({ sections: sections('x').filter(s => s.heading !== 'Bottom line'), summary: null }).reportHead(OUT);
++  assert.ok(!noPassage.includes('has-bottom-line'), noPassage);
++});
++
++test('the earlier-format band keeps its words and is not navy; a finding is one item with its confidence as text and a Basis control', () => {
++  const r = report();
++  const band = r.reportBand(OUT);
++  assert.ok(band.includes('<dt>Confidence</dt><dd>Medium</dd>') && band.includes('<dt>Main limitation</dt>') && band.includes('Quoted from the handoff') && band.includes('View source'));
++  assert.ok(band.includes('<span class="badge badge-gray">Quoted from the handoff</span>') && !band.includes('on-navy'));
++  const article = r.moduleReport(OUT).match(/<article class="finding">.*?<\/article>/s)[0];
++  assert.ok(article.includes('<h4>Leverage rose.</h4>') && article.includes('<span class="conf">Confidence High</span>') && article.includes('class="basis-link"'), article);
++  const css = read('screen.css'), redesign = css.slice(css.indexOf('/* Redesign pass 1'));
++  assert.ok(/\.band\{[^}]*background:none/.test(redesign) && !/\.band\{[^}]*navy/.test(redesign));
++});
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 7998cbb..6dc9be0 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -407,7 +407,7 @@ const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','
+ const HANDOFF_TEXT=['handoff-text','Full handoff text'];
+ // A leading method code (R36) is dropped from a displayed heading or caption.
+ const METHOD_CODE=/^([A-Z][A-Z0-9]*\.[A-Z]?\d+|[a-z0-9]+(\.[a-z0-9_]+)+)\s+—\s+/;
+-const headingView=(heading,tag)=>`<${tag}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
++const headingView=(heading,tag,cls='')=>`<${tag}${cls?` class="${cls}"`:''}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
+ // The sections the store placed here that have something to draw, in handoff order.
+ const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
+ const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
+@@ -484,13 +484,16 @@ function reportHead(id) {
+   const acceptance=runAcceptanceText(context);
+   const declared=declaredBadge(out.state.declared);
+   const notAssessable=isNewFormat(out.sections)&&blocked(out.sections,out.state)?badge('gray','Not assessable'):'';
+-  return `<div class="module-head" id="head"><div><h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
++  const group=groups.find(([,items])=>items.some(item=>item[0]===module))?.[0];
++  // A bottom line: the earlier format's Reader summary or call; the new format's Bottom line passage. With one, the name is the eyebrow and the bottom line the headline.
++  const hasBottom=isNewFormat(out.sections)?Boolean(readerPassages(out.sections).bottom):Boolean(out.summary||out.call);
++  return `<div class="module-head${hasBottom?' has-bottom-line':''}" id="head"><div class="head-title">${group?`<span class="head-group">${esc(group)}</span>`:''}<h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+ }
+ function reportBand(id) {
+   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
+   if(!quoted)return '';
+   const facts=summary?`<dl><span class="row"><dt>Confidence</dt><dd>${esc(summary.confidence)}</dd></span><span class="row"><dt>Main limitation</dt><dd>${rich(summary.limitation)}</dd></span></dl>`:'';
+-  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge on-navy">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${handoffLabel(source)}, line ${quoted.line}`)}">View source</button></div></div>`;
++  return `<div class="band" id="bottom-line"><p>${rich(quoted.text.replace(/\n/g,' '))}</p>${facts}<div class="src"><span class="badge badge-gray">Quoted from the handoff</span><button type="button" class="band-link" data-evidence="${esc(`${id}:${quoted.line}`)}" title="${esc(`${handoffLabel(source)}, line ${quoted.line}`)}">View source</button></div></div>`;
+ }
+ // One chip-dot legend per set of charts, under the last card.
+ // A card sits under a module's h3, so its chart title is an h4 there. ponytail: retagged here, where cards are made; chartIntro writes the h2 for a chart that stands alone, and threading a level through every chart kind would touch eight call sites.
+@@ -506,7 +509,7 @@ function reportNumbers(id) {
+ // Finding rows are the store's: summary.findings, the Reader summary's second table (null summary, none).
+ const findingRows=id=>data[id].summary?.findings??[];
+ function findingArticle(id,row) {
+-  return `<article class="finding"><div><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p></div><aside><span class="conf">Confidence<span class="pill">${esc(plain(row.confidence))}</span></span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</aside></article>`;
++  return `<article class="finding"><h4>${rich(row.finding)}</h4><p class="impact"><b>Creditor impact</b>${rich(row.impact)}</p><p class="finding-line"><span class="conf">Confidence ${esc(plain(row.confidence))}</span>${basisButton(`${id}:${row.line}`,[],`Basis for finding: ${plain(row.finding)}`)}</p></article>`;
+ }
+ function reportFindings(id) {
+   const articles=findingRows(id).map(row=>findingArticle(id,row));
+@@ -528,16 +531,19 @@ function reportAnalysis(id) {
+   return sections.length?`<section class="part" id="analysis"><h3>Analysis</h3>${readingSections(id,sections)}</section>`:'';
+ }
+ // A closed part: nothing is cut, it opens to the whole sections (a hash route or a chip into it opens it, screen.js).
+-const fold=(anchor,summary,body)=>`<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}${esc(summary)}</summary>${body}</details>`;
++// The summary is a row: its title, then a detail (it may be empty) drawn at the right.
++function fold(anchor,title,detail,body) {
++  return `<details class="fold" id="${anchor}"><summary>${icon('chevron-right')}<span class="fold-title">${esc(title)}</span>${detail?` <span class="fold-detail">${esc(detail)}</span>`:''}</summary>${body}</details>`;
++}
+ function reportReference(id) {
+   const sections=drawn(id,'reference');
+   if(!sections.length)return '';
+   const tables=sections.flatMap(section=>section.blocks).filter(block=>block.type==='table');
+-  return fold('reference',`Statements and registers · ${plural(tables.length,'table')} · ${plural(tables.reduce((n,block)=>n+block.rows.length,0),'row')}`,readingSections(id,sections));
++  return fold('reference','Statements and registers',`${plural(tables.length,'table')} · ${plural(tables.reduce((n,block)=>n+block.rows.length,0),'row')}`,readingSections(id,sections));
+ }
+ function reportCalculations(id) {
+   const sections=drawn(id,'calculations');
+-  return sections.length?fold('calculations',`Calculations · ${data[id].words.calculations} words`,readingSections(id,sections)):'';
++  return sections.length?fold('calculations','Calculations',`${data[id].words.calculations} words`,readingSections(id,sections)):'';
+ }
+ function reportLimits(id) {
+   const row=(key,label,html)=>`<p>${html} ${basisButton(key,[],`Basis for row: ${plain(label)}`)}</p>`;
+@@ -549,7 +555,7 @@ function reportLimits(id) {
+ function reportAudit(id) {
+   const out=data[id],kept=['audit','consumed'];
+   const listed=modules[id].sections.filter(([sectionId])=>sectionId==='audit'||sectionData(id,sectionId).some(section=>kept.includes(out.placement[out.sections.indexOf(section)])));
+-  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}Evidence &amp; audit<span>${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
++  return `<details class="audit" id="audit"><summary>${icon('chevron-right')}<span class="fold-title">Evidence &amp; audit</span> <span class="fold-detail">${plural(out.sections.length,'section')} · unchanged from the handoff</span></summary><ul class="audit-list">${listed.map(([sectionId,label])=>{
+     const first=sectionData(id,sectionId)[0];
+     return `<li><button type="button" class="audit-open" data-audit="${esc(sectionId)}" aria-expanded="false" aria-controls="audit-${esc(sectionId)}">${esc(label)}${first?`<span>L${first.line}</span>`:''}</button><div class="audit-body" id="audit-${esc(sectionId)}" hidden></div></li>`;
+   }).join('')}</ul></details>`;
+@@ -561,7 +567,7 @@ function reportParts(id) {
+   const analysis=reportAnalysis(id),reference=reportReference(id),calculations=reportCalculations(id),limits=reportLimits(id);
+   const {view,reference:referenceWords,calculations:calculationWords}=out.words;
+   const parts=[['head',reportHead(id)],['bottom-line',reportBand(id)]];
+-  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text',`Full handoff text · ${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
++  if(folded)parts.push(['findings',reportFindings(id)],['limits',limits],['maps',reportMaps(id)],['timeline',reportTimeline(id)],[HANDOFF_TEXT[0],analysis+reference+calculations?fold('handoff-text','Full handoff text',`${view+referenceWords+calculationWords} words`,analysis+reference+calculations):'']);
+   else parts.push(['numbers',reportNumbers(id)],['findings',reportFindings(id)],['analysis',analysis],['limits',limits],['reference',reference],['calculations',calculations],['maps',reportMaps(id)],['timeline',reportTimeline(id)]);
+   parts.push(['audit',reportAudit(id)]);
+   return parts.filter(([,html])=>html).map(([anchor,html])=>[anchor,anchor===HANDOFF_TEXT[0]?HANDOFF_TEXT[1]:label(anchor),html]);
+@@ -569,6 +575,8 @@ function reportParts(id) {
+ // ---- The module page of a new-format handoff (ruling H1, H4): the reader passages first, each under its own heading and drawn by the one paragraph
+ // renderer (passageHtml); then the module's charts, maps and timeline; then every other section of the handoff, unchanged, in handoff order.
+ const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrary-evidence',limits:'limitations'};
++// The reading style each passage is drawn in (screen.css, `.reading-*`): the headline, the findings list, prose, the limitations list.
++const PASSAGE_STYLES={bottom:'headline',key:'findings',contrary:'prose',limits:'limits'};
+ const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
+ const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
+ // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
+@@ -589,9 +597,10 @@ function newFormatParts(id) {
+   const out=data[id],passages=readerPassages(out.sections);
+   const parts=[['head','Module',reportHead(id)]];
+   const findings=out.sections.find(section=>section.level===2&&section.heading==='Findings');
+-  let heading=findings&&!findings.blocks.length?`<h3>${rich(findings.heading)}</h3>`:'';
++  // The bottom line is the page's headline: its heading, and the Findings heading above it, stay in the page for headings and screen readers (sr-only).
++  let heading=findings&&!findings.blocks.length?`<h3${passages.bottom?' class="sr-only"':''}>${rich(findings.heading)}</h3>`:'';
+   for(const [key,anchor] of Object.entries(PASSAGE_ANCHORS))if(passages[key]) {
+-    parts.push([anchor,passages[key].heading,`<section class="part" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]))}${passageHtml(passages[key],id)}</section>`]);
++    parts.push([anchor,passages[key].heading,`<section class="part reading-${PASSAGE_STYLES[key]}" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]),key==='bottom'?'sr-only':'')}${passageHtml(passages[key],id)}</section>`]);
+     heading='';
+   }
+   const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
+@@ -806,6 +815,28 @@ const EARLIER_METHODS_BADGE='<span class="badge badge-gray earlier-methods">Earl
+ const earlierMethods=run=>(run.methodChanges||[]).length>0;
+ const runDate=run=>run.asOf?displayDate(run.asOf):'Not recorded';
+ const runPathway=run=>pathwayTitle(run.pathway)||'Not recorded';
++// The header's meta line under the issuer title: the ticker and sector the catalogue holds for this run and the number of the issuer's runs it holds (the runs
++// the store joins to the same issuer, this one included). A part the catalogue lacks is left out; with none the line is not drawn.
++function issuerMeta(context) {
++  const ctx=contexts[context],row=catalogueRuns().find(run=>run.id===ctx?.folder);
++  if(!row)return '';
++  return [row.issuer,row.sector,plural(issuerRuns(context).length,'run')].filter(Boolean).join(' · ');
++}
++// The runs of the context's issuer as Report history lists them, latest as-of date first: the count in the meta line, the rows of the history and the run a new run starts from all read this.
++function issuerRuns(context) {
++  const ctx=contexts[context];
++  return ctx?historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey))):[];
++}
++// The start page opened on the issuer's latest run (decision of PR 52); '' when the issuer has no run in the library.
++function startRunHref(context) {
++  const latest=issuerRuns(context)[0];
++  return latest?'/?from='+encodeURIComponent(latest.folder):'';
++}
++// "Start a run on this issuer", for the run header on every run tab. Only a library served over http has the start page.
++function startRunLink(context) {
++  const href=startRunHref(context);
++  return servedOverHttp()&&href?`<a class="start-run primary-action" href="${esc(href)}">${icon('plus')}Start a run on this issuer</a>`:'';
++}
+ // "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
+ function runLabel(module,context) {
+   const ctx=contexts[context];
+@@ -817,8 +848,7 @@ function runLabel(module,context) {
+ // ---- Report history (decision 4): one row per run of the issuer, latest as-of date first. Each row opens that run's Overview.
+ const SOURCE_NOT_RECORDED='Not recorded';
+ function historyView(context) {
+-  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key]));
+-  const runs=historyRows(Object.values(contexts).filter(run=>run===ctx||sameIssuer(run.issuerKey,ctx.issuerKey)));
++  const ctx=contexts[context],keyOf=new Map(Object.entries(contexts).map(([key,run])=>[run,key])),runs=issuerRuns(context);
+   const row=run=>{
+     const key=keyOf.get(run),codes=runModuleCodes(run),label=`${runDate(run)}, ${runPathway(run)}, ${run.run}`;
+     const notAssessable=codes.filter(code=>{const id=run.modules[code].default;return id&&blocked(data[id].sections,data[id].state);}).length;
+@@ -826,8 +856,7 @@ function historyView(context) {
+     const status=`Completed${notAssessable?` · ${notAssessable} not assessable`:''}`;
+     return `<tr${key===context?' aria-current="true" class="selected-run"':''}><th scope="row"><a href="${esc(routeHref('W-Overview','overview',null,key))}" aria-label="${esc(`Open run: ${label}`)}">${esc(runDate(run))}</a><small class="code">${esc(run.run)}</small>${key===context?' <span class="badge badge-gray">Showing</span>':''}</th><td>${esc(runPathway(run))}</td><td>${modulesRun}</td><td>${esc(status)}${earlierFormat(run)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(run)?` ${EARLIER_METHODS_BADGE}`:''}</td></tr>`;
+   };
+-  const first=runs[0],start=servedOverHttp()&&first?`<p><a class="start-run" href="${esc('/?from='+encodeURIComponent(first.folder))}">Start a run</a></p>`:'';
+-  return `${start}<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
++  return `<div class="table-scroll" role="region" aria-label="Report history" tabindex="0"><table class="history-table"><caption>Runs of ${esc(ctx.issuer||ctx.title)}, latest as-of date first</caption><thead><tr>${['Date','Pathway','Modules run','Status'].map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${runs.map(row).join('')}</tbody></table></div>`;
+ }
+ function forecastSections(context) {
+   const models=runModels(context);
+@@ -1207,9 +1236,9 @@ const notAssessable=entry=>Boolean(entry.out)&&blocked(entry.out.sections,entry.
+ const NOT_ASSESSABLE_BADGE='<span class="badge badge-gray">Not assessable</span>';
+ function overviewLead(entries,earlier) {
+   const lead=LEAD_MODULES.map(code=>entries.find(entry=>entry.module===code)).find(entry=>entry?.passages?.bottom&&!notAssessable(entry));
+-  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
+-  const key=lead.passages.key?`<h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}`:'';
+-  return {lead,html:`<section class="overview-part" id="overview-lead"><h2>Credit view</h2><p class="lead-source">Written by ${moduleLink(lead.module)}</p><h3>Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}${key}</section>`};
++  if(!lead)return {lead:null,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="intro">${earlier?EARLIER_NO_LEAD:NO_LEAD}</p></section>`};
++  const key=lead.passages.key?`<div class="reading-findings"><h3>Key findings</h3>${passageHtml(lead.passages.key,lead.id,false)}</div>`:'';
++  return {lead,html:`<section class="overview-part" id="overview-lead"><h2 class="kicker">Credit view</h2><p class="lead-source kicker">Written by ${moduleLink(lead.module)}</p><div class="reading-headline"><h3 class="sr-only">Bottom line</h3>${passageHtml(lead.passages.bottom,lead.id,false)}</div>${key}</section>`};
+ }
+ function overviewBottomLines(entries,lead) {
+   const rows=entries.filter(entry=>entry!==lead).map(entry=>{
+@@ -1229,10 +1258,10 @@ function overviewLimitations(entries) {
+     const ref=`${entry.id}:${block.line}`,{html}=paragraphView(block.text,ref,{chips:bodyContext(entry.id,false).chips(ref)});
+     items.push(`<li class="limit-item">${html}<small class="limit-module">${moduleLink(entry.module)}</small></li>`);
+   }
+-  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<ul class="passage-list">${items.join('')}</ul>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
++  return `<section class="overview-part" id="overview-limitations"><h2>Limitations</h2>${items.length?`<div class="reading-limits"><ul class="passage-list">${items.join('')}</ul></div>`:'<p class="intro">No handoff in this run states limitations.</p>'}</section>`;
+ }
+ // The drawn charts and maps of the modules the visuals catalogue places on Overview (PLACEMENT); a blocked module draws none. Lanes are the dates section.
+-function overviewCharts(entries) {
++function overviewCharts(entries,context) {
+   let noted=false;
+   const html=entries.filter(entry=>entry.out).map(({id,out})=>{
+     if(!placed('chart','Overview',out))return '';
+@@ -1241,7 +1270,9 @@ function overviewCharts(entries) {
+     noted=noted||lastPeriodChart(charts)>=0;
+     return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
+   }).filter(html=>/class="(panel-card|map-card)"/.test(html));
+-  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${html.join('')}</section>`:'';
++  // The link goes to the chart index on this run's Forecast page: the index is a section of that page, reached by its route (it has no route of its own).
++  const index=`<a class="chart-index-link" href="${routeHref('W-Forecast','run-charts',null,context)}">Chart index</a>`;
++  return html.length?`<section class="overview-part" id="overview-charts"><h2>Key charts</h2>${index}${html.join('')}</section>`:'';
+ }
+ // Nearest dates: the next five items in all (reader.js nearestDates), day-dated and period-dated in one nearest-first list, from every module's event lanes.
+ // A period-dated item (month, quarter or year) is sorted by its period end and shown with that date text as written. The sentence when none is drawn names its cause.
+@@ -1264,7 +1295,8 @@ function runReport(context) {
+   // A run that holds no module output has nothing to select from: it says so and keeps the way to its sources.
+   if(!entries.length)return `<div class="missing-state"><h2>No module output retained for this run</h2><p>The Overview is selected from module handoffs, and this run holds none.</p></div><p class="run-inventory"><a class="text-action" href="${routeHref('W-Evidence','sources',null,context)}">Evidence${icon('arrow-right')}</a></p>`;
+   const {lead,html}=overviewLead(entries,earlierFormat(contexts[context]));
+-  return html+overviewBottomLines(entries,lead)+overviewLimitations(entries)+overviewCharts(entries)+overviewDates(context);
++  // Two columns at wide windows (screen.css): the reading in the main column, the charts and dates in the aside; the document order is the part order.
++  return `<div class="overview-main">${html+overviewBottomLines(entries,lead)+overviewLimitations(entries)}</div><aside class="overview-aside" aria-label="Charts and dates">${overviewCharts(entries,context)+overviewDates(context)}</aside>`;
+ }
+ // Run activity (ruling decision 10): only what is in progress and the queue. A finished run is reached from the library; the folders the
+ // library does not show and the build's issues are on the library page.
+@@ -1389,13 +1421,16 @@ function updateWorkspaceChrome(module) {
+   const ctx=contexts[current.context],isHome=!ctx||appDestinations.has(module);
+   const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first),period=current.output?data[current.output].period:ctx?.period;
+   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
+-  document.querySelector('.issuer').innerHTML=`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${isHome?'':`<div class="issuer-meta"><span class="code">${esc(ctx.run)}</span><a href="#W-Library/cases">Change run</a></div>`}</div>${isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`}`;
++  const header=document.querySelector('.issuer'),meta=isHome?'':issuerMeta(current.context);
++  header.classList.toggle('run-header',!isHome);
++  const startRun=isHome?'':startRunLink(current.context),scope=isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`;
++  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row${startRun?' has-start-link':''}"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}</div>${startRun?`<div class="issuer-side">${scope}${startRun}</div>`:scope}</div>`;
+   document.querySelector('.workspace-tabs').hidden=isHome;
+   $('context-bar').hidden=isHome||module==='W-Report';
+   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
+-  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report','files'],['W-Overview','Overview','layout-grid'],['W-Changes','Changes','git-compare'],[moduleId,'Modules','layers'],['W-Forecast','Forecast','chart-no-axes-combined'],['W-Evidence','Evidence','folder-open']].map(([id,label,img])=>{
++  if(!isHome)document.querySelector('.workspace-tabs').innerHTML=[['W-Report','Report'],['W-Overview','Overview'],['W-Changes','Changes'],[moduleId,'Modules'],['W-Forecast','Forecast'],['W-Evidence','Evidence']].map(([id,label])=>{
+     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
+-    return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${icon(img)}${label}</a>`;
++    return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${label}</a>`;
+   }).join('');
+   $('workbench').classList.toggle('library-workspace',isHome);
+   // The Overview is a page of selected passages: no module navigator beside it and no Browse modules button above it.
+diff --git a/docs/design/2026-11-12-redesign-pass-1.md b/docs/design/2026-11-12-redesign-pass-1.md
+new file mode 100644
+index 0000000..94c60e6
+--- /dev/null
++++ b/docs/design/2026-11-12-redesign-pass-1.md
+@@ -0,0 +1,117 @@
++# Redesign pass 1: run header, Modules and Overview (2026-11-12)
++
++Owner: "general look and layout is better than current, but based older codebase … consider what can
++be adapted, repurposed, conflicts (especially when they are not better than current rules, such as no
++visible CP-IDs, charts must always be visible within modules)", then "Yes, start" on the Modules and
++Overview layout, "refresh design for new PRs", and "cross check with decisions made in prior PRs not
++reflected in the design. for example, starting a new run on an issuer from their report page".
++
++Source: the Claude Design project "RBOT first-run experience redesign" (screens L1-L6 of the issuer
++library, R0-R5 of run start), drawn against an older copy of this code. Its colours, fonts, radii and
++shadow already matched `screen.css`, so it is applied as layout and type. Branch
++`claude/redesign-modules-overview`, stacked on `claude/redesign-review-adaptation-892369` (PR 62).
++
++## Built in this pass
++
++| Screen part | Now |
++| --- | --- |
++| Run header (every run tab) | Back link "Issuer library"; issuer name; a meta line (the catalogue's short name · sector · N runs); "As of"; over http, "Start a run on this issuer" (the issuer's latest run, PR 52's target). The run code and "Change run" left the header. |
++| Tabs | Text only; the six labels and their order unchanged. |
++| Strip | Showing run, evidence date, pathway, run code as stored, format badges; "All runs of this issuer" at the right. |
++| Columns | Navigator 250px, inspector 340px (220px and 300px at 1300px and below; unchanged at 1050px and below). |
++| Navigator | Uppercase group headings, lighter entries, the open entry's outline under it. Seven groups, names only. |
++| Module page | Group and module name as the eyebrow; the bottom line as the headline (earlier format: with Confidence, Main limitation, "Quoted from the handoff", View source; no navy band); findings as a list; prose at 15px/24px, 66ch; registers, calculations and the audit list as bordered fold rows. Charts stay open on the page. |
++| Inspector | A figure's value leads; each block is a titled card; quotes are set as quotes. |
++| Overview | Two columns from 1301px: the credit view, bottom line by module and limitations at the left; key charts (with a link to the chart index) and nearest dates at the right. Same passages, same order. |
++| Report history, Changes, Forecast, Evidence | Body edges aligned with the header. Report history's own "Start a run" link moved to the header. The Overview's "Chart index" link opens Forecast at the index, on the model last chosen. Nothing else. |
++
++## Not adopted from the mock-up, and why
++
++| Mock-up | Kept instead | Why |
++| --- | --- | --- |
++| Module codes in the navigator, eyebrows and handoff rows | Names only | Owner ruling, 2026-11-12 |
++| Charts in a closed fold on a module page | Charts open on the page | Owner rule |
++| Four navigator groups, an eight-part outline | Seven groups, the page's own part list | Decision 5; the mock-up predates Key numbers, Timeline, Maps |
++| No Changes tab | Six tabs | M5, M8 |
++| Tabs on the title row on Modules | One header on every tab | One chrome; costs 73px of height at 1440×900 |
++| "Change run" in the strip | "All runs of this issuer" | It says what it opens |
++| Lightest grey text (`#8a90a3`) | `--text-quaternary` | Contrast; the grey is used for dots only |
++| Base / Management / Stress switch on Forecast | Main's period-columns grid | Forecast period columns plan, rulings 1-4, 11 |
++
++## Controller rulings in this pass (cost if wrong: a restyle)
++
++1. The module's `h2` stays its name; with a bottom line it is drawn as the eyebrow, without one as the
++   headline.
++2. "Bottom line" headings of a new-format passage and of the Overview lead stay in the page, visually
++   hidden; the headline is that passage.
++3. Overview keeps "Written by <module>" as written, in the eyebrow.
++4. Nearest dates stays a table (caption, header cells) drawn as rows; Chrome's accessibility tree
++   still reports table, rows and cells.
++5. The meta line's first part is the catalogue's `issuer` field, the value the library home shows,
++   even where the catalogue fell back to the upper-cased issuer id.
++6. A fold summary's accessible name is "<title> <detail>" without the " · ".
++7. The source page stays inline after the file name in the inspector.
++
++Line limit: this branch is over 800 changed lines, most of them tests; the owner waived the limit for
++PR 67 on 2026-11-12.
++
++## Open, for the owner
++
++- Library home: issuer rows (mock-up L1) against "one item per column, no per-issuer run count"
++  (owner, 2026-11-10); D9, D14.
++- Run date ("Ran on") against "Dates refer to evidence, not execution" (D12).
++- Run start: the mock-up's Documents → Purpose → Confirm → Start against "Stage 1 is pathway
++  selection"; "From file" issuer name and currency against "no second classifier".
++- Earlier-format runs: the Overview prints "No bottom line in this handoff." for every module although
++  each module page shows the handoff's summary bottom line (H7).
++- The comparison module is not excluded from Overview in code (M5 says it is not shown there); read
++  from code, not reproduced.
++
++## Earlier decisions against the redesign (cross-check, 2026-11-12)
++
++Read by a read-only agent at f3ae3a1 from `AGENTS.md`, `docs/rulings`, `docs/design`,
++`docs/superpowers`, the library README, `VERIFICATION.md` (from 2026-11-10, to line 340) and PRs 47,
++48, 52, 56. Code was read, not run. "Mock-up" is the Claude Design file; "Built" is this branch.
++
++| # | Decision | Source | Mock-up | Built | Action |
++|---|---|---|---|---|---|
++| 1 | Start a run from an issuer, served over http, carrying its latest run | PR 52; existing-issuer spec §4 | Header button on every tab | Was Report history only | Header link, same gate and target (done in this branch) |
++| 2 | Rail: Start a run, Issuer library, Run activity, Search | Decision 12; PR 47 | Start a run last | Kept | Keep |
++| 3 | A "Start a run" button on the library home | PR 52 gate | L1 blue button | Not in scope | If built: link `/`, shown only over http |
++| 4 | "Start again from this run" for failed, capped, rejected or interrupted runs | Existing-issuer spec §4 | Silent | Run start not in scope | Keep |
++| 5 | Existing-issuer notice and "from run" marks; dates never carried | PR 52 | Silent | Not in scope | Keep |
++| 6 | Paid action is Submit on an approved summary, USD 20 cap | Run-start-submit ruling | "What Submit does" | Not in scope | Keep the text |
++| 7 | Model and effort only at Advanced; Balanced by default | 2026-11-12 amendment | Silent | Not in scope | Keep |
++| 8 | Web search statement for private cases before Submit | 2026-11-12 amendment | Silent | Not in scope | Keep |
++| 9 | Stage 1 is pathway selection; levels Basic / Standard / Advanced | Staged run start spec §3 | Documents first | Not in scope | Owner's call |
++| 10 | No second classifier; only period ends are prefilled | Staged run start spec §4 | "From file" name and currency | Not in scope | Prefill only what the launcher reads |
++| 11 | The summary names the run the comparison uses ("Changes" row) | M5 amendment | Silent | Not in scope | Keep |
++| 12 | Report history: one row per run, as-of first, then start time | Decision 4 | Adds "Ran on" | Kept | Keep the order and "N not assessable" |
++| 13 | Earlier format and Earlier methods badges | H7; PR 48 | On L1 and L2 | Kept in history and strip | Add to library rows when built |
++| 14 | Run date shown (D12) | Screens pass D12, open | "Ran on" | Not in scope | Owner's call |
++| 15 | Distinguish runs of one issuer (D9) | Screens pass D9, open | Issuer rows | Not in scope | Owner's call |
++| 16 | Acceptance state beside the actions (D3, D13) | Screens pass | Silent | Kept in the module head | Keep |
++| 17 | Short Credit Snapshot pathway and its labels | M6 | Silent | Kept | Keep |
++| 18 | Six tabs including Changes; the comparison runs last; a first run says so | M5, M8; PR 56 | No Changes tab | Kept | Keep six tabs |
++| 19 | The comparison module is not on Overview | M5 | n.a. | Not enforced in code (predates) | Owner |
++| 20 | Overview: lead module order, bottom lines, limitations once, key charts, five nearest dates | H5 | Reflects | Kept, two columns, same order | Keep |
++| 21 | Earlier-format Overview selects only reader passages | H7 | Silent | Kept ("No bottom line in this handoff.") | Owner question |
++| 22 | Module page: passages, then charts, timeline, maps, then the rest; analysis open | H1, H4 | Folds charts and registers | Kept, charts inline | Do not fold charts |
++| 23 | Navigator flat, always open, seven groups, names only | Decision 5 | Codes, four groups | Kept | Keep |
++| 24 | No module code or step id on screen | 2026-11-12 amendment; PR 25 | Codes on L4, L5, L6 | Kept | Keep |
++| 25 | A figure opens the inspector: file, page, quote, calculation; quiet Basis | Decision 7; H3 | Reflects | Kept, as cards | Keep |
++| 26 | Key charts repeated on Overview; chart index on Forecast | Decision 3; PR 39 | Reflects | Overview's "Chart index" link opens Forecast at its top | Link to the index itself |
++| 27 | Forecast grid: seven column groups, Base and one Downside, other cases closed, `n.a.` with reason | Forecast period columns plan, rulings 1-4, 11 | Base / Management / Stress switch | Not in scope | Keep the grid, not the switch |
++| 28 | Forecast: model selector, Download original HTML, assumption register, Built from | PRs 5-7, 21 | Silent | Not in scope | Keep |
++| 29 | Evidence: four lists; files listed only; Supplied, not used; Download all; Run record closed | Decisions 9, 10 | Reflects, with codes | Kept | Keep; no codes |
++| 30 | Document date "Not recorded"; no changed-source notice without a hash comparison | PR 47; screens pass | Shows dates and an amber notice | Not in scope | Do not draw data the run lacks |
++| 31 | Run activity shows only runs in progress and queued | Decision 10 | Reflects | Kept | Keep |
++| 32 | Library home: one row per run, one item per column, no per-issuer run count, filters, selected-run panel | Owner 2026-11-10 (impeccable pass) | Issuer rows with a Runs count | Not in scope | Owner's call |
++| 33 | Selected-run panel beside the table (D14) | Screens pass D14, open | No panel | Not in scope | Owner |
++| 34 | `n.a.` not a dash; "run" not "case" | Screens pass | Silent | Kept | Keep |
++| 35 | No page scroll at 1280 and 1440; tables scroll in their own box | D4; impeccable pass | Silent | Kept | Keep |
++| 36 | Reader check against the VMO2 reference, recorded | AGENTS.md | n.a. | Done in this entry's verification | — |
++
++Not verified: PR bodies other than 47, 48, 52 and 56; `2026-11-10-context-form-proposal.md`,
++`2026-11-09-run-page-content-review.md`, the facility schedule plan and the static pages spec;
++`VERIFICATION.md` below line 340. A decision recorded only there may be missing.
+diff --git a/tests/browser_probe_chip_overlap.js b/tests/browser_probe_chip_overlap.js
+new file mode 100644
+index 0000000..72bbbc6
+--- /dev/null
++++ b/tests/browser_probe_chip_overlap.js
+@@ -0,0 +1,16 @@
++(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('#overview-charts .chip-count'); i++) await sleep(50);
++  await sleep(300);
++  const chips = [...document.querySelectorAll('.overview-aside .chip-count')].map(el => el.getBoundingClientRect());
++  const crossing = [];
++  chips.forEach((a, i) => chips.slice(i + 1).forEach((b, j) => {
++    if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) crossing.push([i, i + 1 + j]);
++  }));
++  const chart = document.querySelector('.overview-aside .column-chart');
++  const seen = {chips: chips.length, crossing, fits: document.documentElement.scrollWidth <= innerWidth,
++    chartScrolls: chart.scrollWidth > chart.clientWidth, chartInsideAside: chart.getBoundingClientRect().right <=
++      document.querySelector('.overview-aside').getBoundingClientRect().right + 1};
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_chrome.js b/tests/browser_probe_chrome.js
+new file mode 100644
+index 0000000..c6dc450
+--- /dev/null
++++ b/tests/browser_probe_chrome.js
+@@ -0,0 +1,31 @@
++(async () => {
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++  for (let i = 0; i < 200 && !document.querySelector('#findings .basis-link'); i++) await sleep(50);
++  const de = document.documentElement, style = el => getComputedStyle(el), box = el => el.getBoundingClientRect();
++  const header = document.querySelector('header.issuer'), bar = document.getElementById('context-bar');
++  const back = header.querySelector('a'), h1 = header.querySelector('h1'), code = bar.querySelector('.code');
++  const all = bar.querySelector('a[href^="#W-Report/history"]');
++  const item = document.querySelector('.module-item[aria-current]'), heading = document.querySelector('.nav-heading');
++  const seen = {
++    width: innerWidth,
++    back: back ? { text: back.textContent.trim(), href: back.getAttribute('href') } : null,
++    headerText: header.textContent, headerCodes: header.querySelectorAll('.code').length,
++    h1Size: style(h1).fontSize, meta: header.querySelector('.issuer-meta')?.textContent ?? null,
++    tabs: [...document.querySelectorAll('.workspace-tabs a')].map(a => ({ text: a.textContent.trim(), art: a.querySelectorAll('img,svg').length })),
++    navWidth: box(document.getElementById('navigator')).width,
++    headingTransform: style(heading).textTransform, headingSize: style(heading).fontSize,
++    itemBackground: style(item).backgroundColor, itemWeight: style(item).fontWeight,
++    allGap: box(bar).right - box(all).right, allText: all.textContent,
++    codeTransform: style(code).textTransform, codeText: code.textContent,
++    fits: de.scrollWidth <= innerWidth,
++  };
++  const chip = document.querySelector('#findings .basis-link');
++  chip.click();
++  await sleep(400);
++  seen.inspectorWidth = box(document.getElementById('inspector')).width;
++  seen.fitsOpen = de.scrollWidth <= innerWidth;
++  const out = document.createElement('pre');
++  out.id = 'probe';
++  out.textContent = JSON.stringify(seen);
++  document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_content_padding.js b/tests/browser_probe_content_padding.js
+new file mode 100644
+index 0000000..91aad7a
+--- /dev/null
++++ b/tests/browser_probe_content_padding.js
+@@ -0,0 +1,8 @@
++(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('#content *'); i++) await sleep(50);
++  await sleep(300);
++  const cs = getComputedStyle(document.getElementById('content'));
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify({left: cs.paddingLeft, right: cs.paddingRight}); document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_edges.js b/tests/browser_probe_edges.js
+new file mode 100644
+index 0000000..31d295e
+--- /dev/null
++++ b/tests/browser_probe_edges.js
+@@ -0,0 +1,22 @@
++(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
++  await sleep(400);
++  const firstText = root => { const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode: n =>
++      n.textContent.trim() && n.parentElement.getBoundingClientRect().width ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT});
++    const node = w.nextNode(); if (!node) return null; const r = document.createRange(); r.selectNodeContents(node);
++    return r.getBoundingClientRect().left; };
++  const inner = (el, side) => { const cs = getComputedStyle(el), b = el.getBoundingClientRect();
++    return side === 'left' ? b.left + parseFloat(cs.paddingLeft) : b.right - parseFloat(cs.paddingRight); };
++  const header = document.querySelector('header.issuer'), h1 = header.querySelector('h1');
++  const seen = {h1Left: h1.getBoundingClientRect().left, headerRight: inner(header, 'right'),
++    content: {left: firstText(document.getElementById('content')), right: inner(document.getElementById('content'), 'right')}};
++  const head = document.getElementById('module-head');
++  if (head.textContent.trim()) seen.head = {left: firstText(head), right: inner(head, 'right')};
++  const browse = document.querySelector('.mobile-modules');
++  if (browse && browse.getBoundingClientRect().width) { const bs = getComputedStyle(browse);
++    seen.browse = {left: inner(browse, 'left'), paddingLeft: bs.paddingLeft, paddingRight: bs.paddingRight}; }
++  seen.fits = document.documentElement.scrollWidth <= innerWidth;
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_field_card.js b/tests/browser_probe_field_card.js
+new file mode 100644
+index 0000000..7dc86e2
+--- /dev/null
++++ b/tests/browser_probe_field_card.js
+@@ -0,0 +1,13 @@
++(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('#content .basis-link'); i++) await sleep(50);
++  document.querySelector('#content .basis-link:not([data-figure])').click();
++  await sleep(400);
++  const card = document.querySelector('.inspector-body .evidence-fields > div'), cs = getComputedStyle(card);
++  const body = document.querySelector('.inspector-body'), bs = getComputedStyle(body);
++  const seen = {padding: cs.padding, borderLeft: cs.borderLeftWidth, columns: cs.gridTemplateColumns.split(' ')[0],
++    valueWidth: card.querySelector(':scope > div').getBoundingClientRect().width,
++    bodyContent: body.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight)};
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_header_scope.js b/tests/browser_probe_header_scope.js
+new file mode 100644
+index 0000000..4f2a45d
+--- /dev/null
++++ b/tests/browser_probe_header_scope.js
+@@ -0,0 +1,24 @@
++(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
++  await sleep(300);
++  const de = document.documentElement, box = el => el.getBoundingClientRect();
++  const header = document.querySelector('header.issuer'), h1 = header.querySelector('h1');
++  const scope = header.querySelector('.scope'), icon = scope.querySelector('img,svg'), text = scope.querySelector('strong');
++  const link = header.querySelector('a.start-run');
++  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
++  const s = box(scope), t = box(h1);
++  const seen = {
++    headerHeight: box(header).height, scopeHeight: s.height, sideCount: header.querySelectorAll('.issuer-side').length,
++    iconGap: box(text).left - box(icon).right, scopeOverlapsTitle: hit(s, t),
++    fits: de.scrollWidth <= innerWidth,
++  };
++  if (link) {
++    const a = box(link);
++    Object.assign(seen, {
++      sameRow: Math.abs((s.top + s.bottom) / 2 - (a.top + a.bottom) / 2), linkOverlapsTitle: hit(a, t),
++    });
++  }
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_module_page.js b/tests/browser_probe_module_page.js
+new file mode 100644
+index 0000000..bdb1e7a
+--- /dev/null
++++ b/tests/browser_probe_module_page.js
+@@ -0,0 +1,50 @@
++(async () => {
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++  for (let i = 0; i < 200 && !document.querySelector('#head'); i++) await sleep(50);
++  const de = document.documentElement, style = el => getComputedStyle(el), box = el => el.getBoundingClientRect();
++  const font = el => el ? { size: style(el).fontSize, line: style(el).lineHeight, color: style(el).color, weight: style(el).fontWeight, width: box(el).width } : null;
++  const text = el => el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
++  const seen = { width: innerWidth };
++  const head = document.getElementById('head'), h2 = head?.querySelector('h2');
++  if (head) {
++    const link = head.querySelector('a[download]');
++    seen.head = { h2: text(h2), size: style(h2).fontSize, transform: style(h2).textTransform, text: text(head), cls: head.className, download: link ? { href: link.getAttribute('href'), icon: link.querySelectorAll('svg,img').length, border: style(link).borderTopWidth } : null,
++      tools: text(head.querySelector('.head-tools')), toolsRight: box(head.querySelector('.head-tools')).right, headRight: box(head).right };
++  }
++  const bl = document.getElementById('bottom-line');
++  if (bl) {
++    const first = bl.querySelector('p, li');
++    seen.bottom = { text: text(bl), bg: style(bl).backgroundColor, first: font(first), firstText: text(first), ps: [...bl.querySelectorAll('p, li')].map(p => ({ size: style(p).fontSize, text: text(p) })),
++      headings: [...bl.querySelectorAll('h3, h4, h5, h6')].map(h => ({ cls: h.className, text: text(h), srOnly: box(h).bottom <= 0 || box(h).width <= 1 })), band: bl.classList.contains('band'),
++      lines: [...bl.querySelectorAll('dl .row')].map(r => ({ text: text(r), size: style(r).fontSize, line: style(r).lineHeight, color: style(r).color, label: style(r.querySelector('dt')).fontWeight })),
++      badge: text(bl.querySelector('.badge')), badgeClass: bl.querySelector('.badge')?.className, link: text(bl.querySelector('.band-link')), linkBorder: bl.querySelector('.band-link') ? style(bl.querySelector('.band-link')).borderTopWidth : null };
++  }
++  const prose = document.querySelector('#content .analysis-text, #contrary-evidence .passage-text');
++  seen.prose = font(prose);
++  const kf = document.querySelector('#key-findings li');
++  if (kf) { const dot = getComputedStyle(kf, '::before'); seen.keyItem = { size: style(kf).fontSize, dotWidth: dot.width, dotBg: dot.backgroundColor, list: style(kf.parentElement).listStyleType }; }
++  const lim = document.querySelector('#limitations li, #limitations .passage-text, #limits p');
++  if (lim) { const dot = getComputedStyle(lim, '::before'); seen.limit = { size: style(lim).fontSize, line: style(lim).lineHeight, color: style(lim).color, dotWidth: dot.width, dotBg: dot.backgroundColor }; }
++  seen.cards = [...document.querySelectorAll('#content .panel-card')].map(c => ({ closed: c.closest('details:not([open])') !== null, height: box(c).height }));
++  seen.folds = [...document.querySelectorAll('details.fold > summary, details.audit > summary')].map(s => ({ id: s.parentElement.id, display: style(s).display, radius: style(s.parentElement).borderTopLeftRadius, children: [...s.children].filter(c => c.tagName !== 'svg' && c.tagName !== 'IMG').map(text), text: text(s), border: style(s.parentElement).borderTopWidth }));
++  seen.findings = [...document.querySelectorAll('article.finding')].map(a => ({ text: text(a), pills: a.querySelectorAll('.pill').length, basis: [...a.querySelectorAll('.basis-link')].map(b => ({ ...b.dataset })), cls: a.className }));
++  const f0 = document.querySelector('article.finding');
++  if (f0) { const h = f0.querySelector('h4'); seen.finding0 = { size: style(h).fontSize, line: style(h).lineHeight, weight: style(h).fontWeight, impact: font(f0.querySelector('.impact')), dotWidth: getComputedStyle(f0, '::before').width, dotBg: getComputedStyle(f0, '::before').backgroundColor, border: style(f0).borderTopWidth, impactLabelWeight: style(f0.querySelector('.impact b')).fontWeight }; }
++  seen.fits = de.scrollWidth <= innerWidth;
++  const inspector = document.getElementById('inspector');
++  const read = () => {
++    const fig = inspector.querySelector('.inspector-figure strong'), ctx = inspector.querySelector('.evidence-context'), card = inspector.querySelector('.evidence-fields > div');
++    return { text: text(inspector), figure: fig ? { size: style(fig).fontSize, text: text(fig), before: !!(ctx.compareDocumentPosition(fig) & Node.DOCUMENT_POSITION_PRECEDING) } : null, hasFigure: !!inspector.querySelector('.inspector-figure'),
++      context: ctx ? { size: style(ctx).fontSize, color: style(ctx).color } : null, card: card ? style(card).borderTopLeftRadius : null,
++      h2: { text: text(inspector.querySelector('h2')), srOnly: box(inspector.querySelector('h2')).bottom <= 0 || box(inspector.querySelector('h2')).width <= 1 }, links: [...inspector.querySelectorAll('a')].map(a => a.getAttribute('href')), fits: de.scrollWidth <= innerWidth,
++      excerptQuote: inspector.querySelector('.excerpt') ? { style: style(inspector.querySelector('.excerpt')).fontStyle, left: style(inspector.querySelector('.excerpt')).borderLeftWidth } : null };
++  };
++  const figure = document.querySelector('#content [data-paragraph][data-figure]');
++  if (figure) { figure.click(); await sleep(300); seen.fromFigure = read(); document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(200); }
++  const chip = document.querySelector('#content .basis-link:not([data-figure]), #content .chip');
++  if (chip) { chip.click(); await sleep(300); seen.fromChip = read(); }
++  const out = document.createElement('pre');
++  out.id = 'probe';
++  out.textContent = JSON.stringify(seen);
++  document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_overview_layout.js b/tests/browser_probe_overview_layout.js
+new file mode 100644
+index 0000000..ebb9eec
+--- /dev/null
++++ b/tests/browser_probe_overview_layout.js
+@@ -0,0 +1,67 @@
++(async () => {
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++  for (let i = 0; i < 200 && !document.querySelector('#overview-lead'); i++) await sleep(50);
++  await sleep(300);
++  const $ = selector => document.querySelector(selector);
++  const box = element => element.getBoundingClientRect();
++  const style = (element, name) => getComputedStyle(element)[name];
++  const de = document.documentElement;
++  const main = $('.overview-main'), aside = $('.overview-aside');
++  const seen = {
++    hasMain: main !== null, hasAside: aside !== null,
++    ids: [...document.querySelectorAll('#content [id^="overview-"]')].map(part => part.id),
++    fits: de.scrollWidth <= window.innerWidth,
++    viewport: window.innerWidth,
++  };
++  if (main && aside) {
++    const m = box(main), a = box(aside);
++    const pageH2 = $('#module-head h2');
++    seen.pageH2Left = pageH2 && box(pageH2).left;
++    seen.mainBox = { left: m.left, right: m.right, top: m.top, bottom: m.bottom };
++    seen.asideBox = { left: a.left, right: a.right, top: a.top, bottom: a.bottom, width: a.width };
++    seen.inMain = [...main.querySelectorAll('[id^="overview-"]')].map(part => part.id);
++    seen.inAside = [...aside.querySelectorAll('[id^="overview-"]')].map(part => part.id);
++    seen.asideLabel = aside.getAttribute('aria-label');
++  }
++  const lead = $('#overview-lead');
++  if (lead) {
++    const h2 = lead.querySelector('h2'), h3 = [...lead.querySelectorAll('h3')].find(h => h.textContent === 'Bottom line');
++    const first = lead.querySelector('.reading-headline p, .reading-headline li, p.intro');
++    seen.lead = {
++      text: lead.textContent,
++      h2: h2 && { text: h2.textContent, size: style(h2, 'fontSize'), transform: style(h2, 'textTransform') },
++      h3Class: h3 ? h3.className : null,
++      firstSize: first ? style(first, 'fontSize') : null,
++      firstText: first ? first.textContent : null,
++    };
++  }
++  const entry = $('.bottom-entry');
++  seen.entries = [...document.querySelectorAll('.bottom-entry')].map(row => row.textContent);
++  if (entry) seen.entryColumns = style(entry, 'gridTemplateColumns');
++  seen.limits = [...document.querySelectorAll('#overview-limitations li')].map(li => li.textContent);
++  const table = $('#overview-dates table.dates-table');
++  if (table) {
++    const thead = table.querySelector('thead'), row = table.querySelector('tbody tr');
++    seen.dates = {
++      caption: table.querySelector('caption') !== null,
++      cols: table.querySelectorAll('th[scope="col"]').length,
++      theadHeight: box(thead).height, theadDisplay: style(thead, 'display'),
++      rowDisplay: row && style(row, 'display'),
++      rowColumns: row && style(row, 'gridTemplateColumns'),
++      rows: [...table.querySelectorAll('tbody tr')].map(r => r.textContent.trim()),
++    };
++  }
++  const charts = $('#overview-charts');
++  if (charts) {
++    const link = [...charts.querySelectorAll('a')].find(a => a.textContent === 'Chart index');
++    seen.charts = {
++      href: link ? link.getAttribute('href') : null,
++      cards: [...charts.querySelectorAll('.panel-card')].map(card => box(card).width),
++    };
++  }
++  seen.chartIndexLinks = [...document.querySelectorAll('#content a')].filter(a => a.textContent === 'Chart index').length;
++  const out = document.createElement('pre');
++  out.id = 'probe';
++  out.textContent = JSON.stringify(seen);
++  document.body.append(out);
++})();
+diff --git a/tests/browser_probe_overview_style.js b/tests/browser_probe_overview_style.js
+new file mode 100644
+index 0000000..1b37484
+--- /dev/null
++++ b/tests/browser_probe_overview_style.js
+@@ -0,0 +1,9 @@
++(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector(PROBE.figure); i++) await sleep(50);
++  const style = sel => { const cs = getComputedStyle(document.querySelector(sel));
++    return {family: cs.fontFamily, size: cs.fontSize, weight: cs.fontWeight, color: cs.color, decoration: cs.textDecorationStyle}; };
++  const seen = {figure: style(PROBE.figure), basis: style(PROBE.basis)};
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();
+diff --git a/tests/browser_probe_start_run.js b/tests/browser_probe_start_run.js
+new file mode 100644
+index 0000000..22e690f
+--- /dev/null
++++ b/tests/browser_probe_start_run.js
+@@ -0,0 +1,26 @@
++(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
++  await sleep(300);
++  const de = document.documentElement, box = el => el.getBoundingClientRect();
++  const header = document.querySelector('header.issuer'), h1 = header.querySelector('h1');
++  const links = [...header.querySelectorAll('a.start-run')], link = links[0];
++  const seen = {
++    inHeader: links.length, inDocument: document.querySelectorAll('a.start-run').length,
++    inContent: document.querySelectorAll('#content a.start-run').length,
++    inAnyFormOfTheClass: document.documentElement.outerHTML.includes('start-run'),
++    historyTable: document.querySelectorAll('#content .history-table').length,
++    fits: de.scrollWidth <= innerWidth, scrollWidth: de.scrollWidth, innerWidth,
++  };
++  if (link) {
++    const a = box(link), t = box(h1), row = box(header.querySelector('.issuer-row'));
++    Object.assign(seen, {
++      text: link.textContent.trim(), href: link.getAttribute('href'), cls: link.className,
++      icons: link.querySelectorAll('img').length,
++      overlapsTitle: a.left < t.right && t.left < a.right && a.top < t.bottom && t.top < a.bottom,
++      belowTitle: a.top >= t.bottom - 1, linkWidth: a.width, rowWidth: row.width, linkRight: a.right, rowRight: row.right,
++    });
++  }
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();
+diff --git a/tests/test_library_page_browser.py b/tests/test_library_page_browser.py
+index 00cc3ca..8cca662 100644
+--- a/tests/test_library_page_browser.py
++++ b/tests/test_library_page_browser.py
+@@ -1229,7 +1229,7 @@ def test_evidence_keeps_file_names_as_stored_and_says_when_no_supplied_file_is_r
+     assert 'href="downloads/run-a/instructions/CP-0.md" download' in dom
+ 
+ 
+-def _history_dom_over_http(root: Path, route: str) -> str:
++def served_dom(root: Path, route: str, width: int = 1280) -> str:
+     """The DOM Chrome builds for a page of the library when a local web server serves it."""
+     import functools
+     import http.server
+@@ -1248,7 +1248,7 @@ def _history_dom_over_http(root: Path, route: str) -> str:
+                 chrome(),
+                 "--headless=new",
+                 "--disable-gpu",
+-                "--window-size=1280,900",
++                f"--window-size={width},900",
+                 "--virtual-time-budget=10000",
+                 "--dump-dom",
+                 f"http://127.0.0.1:{server.server_address[1]}/library/index.html{route}",
+@@ -1264,22 +1264,614 @@ def _history_dom_over_http(root: Path, route: str) -> str:
+     return html.unescape(done.stdout)
+ 
+ 
+-def test_report_history_links_start_a_run_to_the_latest_run_when_served(tmp_path):
++START_RUN_PROBE = Path(__file__).with_name("browser_probe_start_run.js").read_text(encoding="utf-8")
++RUN_ROUTES = ["#W-Report/history?c=run-a", "#W-Overview?c=run-a", "#CP-1/head?c=run-a"]
++
++
++@pytest.mark.parametrize("width", [1440, 600])
++@pytest.mark.parametrize("route", RUN_ROUTES)
++def test_the_run_header_starts_a_run_on_this_issuer_when_served(tmp_path, route, width):
++    make_run(tmp_path, "run-a", as_of="2024-12-31")
++    update_library.update_library(tmp_path)
++    seen = read_served_probe(tmp_path / "library/index.html", route, width, START_RUN_PROBE)
++    # One link, in the header (not in the page body), the one the history page used to draw.
++    assert (seen["inHeader"], seen["inDocument"], seen["inContent"]) == (1, 1, 0)
++    assert seen["text"] == "Start a run on this issuer" and seen["href"] == "/?from=run-a"
++    assert seen["cls"] == "start-run primary-action" and seen["icons"] == 1
++    # It never overlaps the title and the page does not scroll sideways.
++    assert seen["overlapsTitle"] is False and seen["fits"] is True, seen
++    if width == 600:
++        # On a phone it is a full row under the title.
++        assert seen["belowTitle"] is True and abs(seen["linkWidth"] - seen["rowWidth"]) <= 1, seen
++
++
++@pytest.mark.parametrize("route", RUN_ROUTES)
++def test_the_run_header_has_no_start_link_from_a_file(tmp_path, route):
+     make_run(tmp_path, "run-a", as_of="2024-12-31")
+     update_library.update_library(tmp_path)
+-    dom = _history_dom_over_http(tmp_path, "#W-Report/history?c=run-a")
+-    link = re.search(r'<a class="start-run" href="([^"]*)">([^<]*)</a>', dom)
+-    assert link is not None, dom[:1500]
+-    assert link[1] == "/?from=run-a" and link[2] == "Start a run"
+-    assert dom.index("start-run") < dom.index('<table class="history-table">')
++    seen = read_probe(tmp_path / "library/index.html", route, 1280, START_RUN_PROBE)
++    assert seen["inAnyFormOfTheClass"] is False and seen["inDocument"] == 0 and seen["fits"] is True
++    if route.startswith("#W-Report/history"):
++        # `#content .history-table`: the table is still drawn without the link.
++        assert seen["historyTable"] == 1, seen
++
++
++SCOPE_PROBE = Path(__file__).with_name("browser_probe_header_scope.js").read_text(encoding="utf-8")
++# The run header's height at commit 1f1691c (no start link, no `.issuer-side`) for this file's
++# fixture (`make_run(..., as_of="2024-12-31")`, route #CP-1/head?c=run-a), measured by running
++# this test's probe on `git archive 1f1691c`: 113.140625px at both widths.
++BASE_HEADER_HEIGHT = {1440: 113.14, 1280: 113.14}
+ 
+ 
+-def test_report_history_has_no_start_link_from_a_file(tmp_path):
++@pytest.mark.parametrize("width", [1440, 1280])
++def test_the_run_header_is_unchanged_from_a_file_and_as_of_stays_on_one_line(tmp_path, width):
+     make_run(tmp_path, "run-a", as_of="2024-12-31")
+     update_library.update_library(tmp_path)
+-    dom, console = visit(tmp_path / "library/index.html", "#W-Report/history?c=run-a")
+-    assert console == [] and '<table class="history-table">' in dom
+-    assert "start-run" not in dom and ">Start a run</a>" not in dom
++    seen = read_probe(tmp_path / "library/index.html", "#CP-1/head?c=run-a", width, SCOPE_PROBE)
++    assert seen["sideCount"] == 0, seen
++    assert seen["scopeHeight"] <= 24, seen
++    assert abs(seen["headerHeight"] - BASE_HEADER_HEIGHT[width]) <= 0.5, seen
++
++
++@pytest.mark.parametrize("width", [1440, 1280])
++def test_the_run_header_keeps_as_of_on_one_line_beside_the_start_link_when_served(tmp_path, width):
++    make_run(tmp_path, "run-a", as_of="2024-12-31")
++    update_library.update_library(tmp_path)
++    seen = read_served_probe(
++        tmp_path / "library/index.html", "#CP-1/head?c=run-a", width, SCOPE_PROBE
++    )
++    assert seen["scopeHeight"] <= 24, seen  # one line
++    assert seen["iconGap"] <= 12, seen  # the calendar icon sits against the text
++    assert seen["scopeOverlapsTitle"] is False and seen["linkOverlapsTitle"] is False, seen
++    assert seen["fits"] is True, seen
++    if width == 1440:
++        assert seen["sameRow"] <= 12, seen  # the block and the link share a row
++
++
++def inject_probe(page: Path, script: str, config=None) -> None:
++    """Add `script` to the built page; it reads `window.PROBE` (the `config`) and writes its JSON
++    to <pre id="probe">."""
++    (page.parent / "probe-config.js").write_text(
++        "window.PROBE=" + json.dumps(config or {}) + ";", encoding="utf-8"
++    )
++    (page.parent / "probe.js").write_text(script, encoding="utf-8")
++    tags = '<script src="probe-config.js"></script><script src="probe.js"></script>'
++    page.write_text(page.read_text().replace("</body>", tags + "</body>"))
++
++
++def probe_json(dom: str) -> dict:
++    return json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
++
++
++def read_probe(page: Path, route: str, width: int, script: str, config=None) -> dict:
++    """Load `route` of the built page at `width` from disk with `script` injected; the console
++    must be clean. Returns the JSON the script wrote."""
++    inject_probe(page, script, config)
++    dom, console = visit(page, route, width)
++    assert console == []
++    return probe_json(dom)
++
++
++def read_served_probe(page: Path, route: str, width: int, script: str) -> dict:
++    """The same over a local web server (the library is then "served over http")."""
++    inject_probe(page, script)
++    return probe_json(served_dom(page.parent.parent, route, width))
++
++
++CHROME_PROBE = Path(__file__).with_name("browser_probe_chrome.js").read_text(encoding="utf-8")
++
++
++@pytest.mark.parametrize("width", [1440, 1280])
++def test_the_run_chrome_navigator_and_columns_take_the_redesign_measures(tmp_path, width):
++    seen = read_probe(report_library(tmp_path), "#CP-1/head?c=run-a", width, CHROME_PROBE)
++    assert seen["width"] == width
++    # The header: the way back to the library, the title at 24px, no run chip or Change run.
++    assert seen["back"] == {"text": "Issuer library", "href": "#W-Library/cases"}
++    assert "Change run" not in seen["headerText"] and seen["headerCodes"] == 0
++    assert seen["h1Size"] == "24px"
++    # The fixture issuer has a ticker (the catalogue's issuer field), no sector, and one run.
++    assert seen["meta"] == "NBG · 1 run"
++    # The tabs are text only, in the same six names and order as before.
++    assert [t["text"] for t in seen["tabs"]] == [
++        "Report",
++        "Overview",
++        "Changes",
++        "Modules",
++        "Forecast",
++        "Evidence",
++    ]
++    assert [t["art"] for t in seen["tabs"]] == [0] * 6
++    # The navigator: 250px (220px at 1280), uppercase 11px group headings, the open entry in blue.
++    assert abs(seen["navWidth"] - (250 if width == 1440 else 220)) <= 1
++    assert (seen["headingTransform"], seen["headingSize"]) == ("uppercase", "11px")
++    assert (seen["itemBackground"], seen["itemWeight"]) == ("rgb(238, 240, 255)", "600")
++    # The strip: the link to every run of the issuer at the right edge; the run code as stored.
++    assert seen["allText"] == "All runs of this issuer" and 0 <= seen["allGap"] <= 30
++    assert seen["codeTransform"] == "none" and seen["codeText"] == "RUN-A"
++    assert seen["fits"] is True and seen["fitsOpen"] is True
++    # The inspector: 340px at 1440, 300px at 1280.
++    assert abs(seen["inspectorWidth"] - (340 if width == 1440 else 300)) <= 1
++
++
++MODULE_PAGE_PROBE = (
++    Path(__file__).with_name("browser_probe_module_page.js").read_text(encoding="utf-8")
++)
++INK = "rgb(11, 16, 48)"  # --text-primary
++NEW_FORMAT_RUN = "synthetic-nbg-new-format-001"
++
++
++def read_module_page(page: Path, route: str, width: int = 1440) -> dict:
++    return read_probe(page, route, width, MODULE_PAGE_PROBE)
++
++
++def synthetic_workspace(workspace: Path, edit=lambda text: text) -> Path:
++    """The synthetic new-format run, built by the real entry points; `edit` may change the CP-2
++    handoff first."""
++    fixtures = ROOT / "apps/issuer-library/fixtures"
++    handoffs = workspace / "handoffs-in"
++    shutil.copytree(fixtures / "synthetic-new-format", handoffs)
++    cp2 = handoffs / "SYNTHETIC-CP-2.md"
++    cp2.write_text(edit(cp2.read_text(encoding="utf-8")), encoding="utf-8")
++    spec = importlib.util.spec_from_file_location(
++        "build_synthetic_run", fixtures / "build_synthetic_run.py"
++    )
++    builder = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(builder)
++    builder.SOURCE_DIR = handoffs
++    builder.build(workspace, builder.DEFAULT_FOLDER)
++    subprocess.run(
++        [
++            sys.executable,
++            str(ROOT / "apps/issuer-library/update_library.py"),
++            "--workspace",
++            str(workspace),
++        ],
++        check=True,
++        capture_output=True,
++    )
++    return workspace / "library/index.html"
++
++
++def with_chart_and_event(text: str) -> str:
++    """The synthetic CP-2 handoff with one placed chart and dated events, before its last part."""
++    marker = "\n## Next module"
++    assert marker in text
++    return text.replace(marker, MATURITIES + EVENTS + marker, 1)
++
++
++def test_the_earlier_format_module_page_takes_the_redesign_layout(tmp_path):
++    seen = read_module_page(nine_part_library(tmp_path), "#CP-1/head?c=run-a")
++    delivery = next((tmp_path / "runs/run-a/deliveries").iterdir()).name
++    # Head: the group is the eyebrow with the name, tools kept, the Handoff link quiet.
++    head = seen["head"]
++    assert head["h2"] == "Financial foundation"
++    assert (head["size"], head["transform"]) == ("12px", "uppercase")
++    assert "Financial performance" in head["text"] and "has-bottom-line" in head["cls"]
++    assert head["download"]["href"].endswith("CP-1.md") and head["download"]["icon"] == 1
++    assert head["download"]["border"] == "0px"
++    assert head["toolsRight"] <= head["headRight"]
++    # Bottom line: the quoted text is the headline, no navy band.
++    bottom = seen["bottom"]
++    assert bottom["firstText"] == "Financial foundation bottom line."
++    assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
++    assert bottom["bg"] in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)")
++    for word in ("Confidence", "Main limitation", "Quoted from the handoff", "View source"):
++        assert word in bottom["text"], word
++    for line in bottom["lines"]:
++        assert (line["size"], line["line"], line["color"], line["label"]) == (
++            "13px",
++            "18px",
++            "rgb(58, 64, 86)",
++            "600",
++        )
++    assert bottom["badgeClass"] == "badge badge-gray" and bottom["linkBorder"] == "0px"
++    # Prose, charts, folds.
++    assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
++    assert seen["prose"]["width"] <= 660
++    assert seen["cards"] and all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
++    folds = {f["id"]: f for f in seen["folds"]}
++    assert set(folds) == {"reference", "calculations", "audit"}
++    for fold in folds.values():
++        assert (fold["display"], fold["radius"]) == ("flex", "10px"), fold
++    assert folds["reference"]["children"] == ["Statements and registers", "3 tables · 8 rows"]
++    assert folds["calculations"]["children"] == ["Calculations", "11 words"]
++    assert folds["audit"]["children"][0] == "Evidence & audit"
++    assert folds["audit"]["text"].endswith("14 sections · unchanged from the handoff")
++    # The finding: one item, no pill, the same Basis control.
++    [finding] = seen["findings"]
++    assert finding["pills"] == 0
++    for word in (
++        "Interest was paid in cash.",
++        "Creditor impact",
++        "K, page:123 says “Cash paid during the period”.",
++        "Confidence High",
++    ):
++        assert word in finding["text"], word
++    # The Basis control carries the same data-* attributes as before the redesign (commit 4b88927).
++    assert finding["basis"] == [
++        {
++            "paragraph": (f"run-a/deliveries/{delivery}/CP-1.md:16"),
++            "basis": "[]",
++        }
++    ]
++    lead = seen["finding0"]
++    assert (lead["size"], lead["line"], lead["weight"]) == ("15px", "24px", "600")
++    assert (lead["dotWidth"], lead["dotBg"], lead["border"]) == ("6px", "rgb(0, 23, 229)", "0px")
++    assert (lead["impact"]["size"], lead["impact"]["line"]) == ("14px", "21px")
++    # Limits: grey dot, 14px/21px secondary.
++    limit = seen["limit"]
++    assert (limit["size"], limit["line"], limit["color"], limit["dotWidth"]) == (
++        "14px",
++        "21px",
++        "rgb(58, 64, 86)",
++        "6px",
++    )
++    assert seen["fits"] is True
++
++
++def test_a_module_page_with_no_bottom_line_draws_its_name_as_the_headline(tmp_path):
++    run = make_run(
++        tmp_path,
++        "run-a",
++        as_of="2024-12-31",
++        modules=("CP-0", "CP-1", "CP-8"),
++        cp8=(
++            "# CP-8 handoff\n\n## Request\nChanges.\n\n"
++            "## Findings\n\nA note.\n\n## Sources\n- fixture\n"
++        ),
++    )
++    assert run.is_dir()
++    update_library.update_library(tmp_path)
++    seen = read_module_page(tmp_path / "library/index.html", "#CP-8/head?c=run-a")
++    head = seen["head"]
++    assert "bottom" not in seen and "has-bottom-line" not in head["cls"]
++    assert (head["size"], head["transform"]) == ("22px", "none")
++    assert "Decision and review" in head["text"] and head["h2"] == "Changes since the last run"
++
++
++@pytest.mark.parametrize("width", [1440, 1280])
++def test_the_new_format_module_page_and_its_inspector_take_the_redesign_layout(tmp_path, width):
++    page = synthetic_workspace(tmp_path, with_chart_and_event)
++    seen = read_module_page(page, f"#CP-2?c={NEW_FORMAT_RUN}", width)
++    head = seen["head"]
++    assert (head["h2"], head["size"], head["transform"]) == (
++        "Fundamental credit",
++        "12px",
++        "uppercase",
++    )
++    bottom = seen["bottom"]
++    [hidden] = [h for h in bottom["headings"] if h["text"] == "Bottom line"]
++    assert "sr-only" in hidden["cls"] and hidden["srOnly"] is True
++    assert bottom["firstText"].startswith("Creditors are exposed to refinancing risk")
++    assert (bottom["first"]["size"], bottom["first"]["color"]) == ("22px", INK)
++    assert seen["keyItem"]["size"] == "15px"
++    assert (seen["keyItem"]["dotWidth"], seen["keyItem"]["dotBg"]) == ("6px", "rgb(0, 23, 229)")
++    assert (seen["prose"]["size"], seen["prose"]["line"]) == ("15px", "24px")
++    assert seen["prose"]["width"] <= 660
++    assert seen["cards"], "the new-format module page draws at least one chart card"
++    assert all(not c["closed"] and c["height"] > 40 for c in seen["cards"])
++    assert seen["fits"] is True
++    # Limitations: grey dot list.
++    assert (seen["limit"]["dotWidth"], seen["limit"]["size"]) == ("6px", "14px")
++    # The inspector opened from a figure: the figure leads, large, before the context line.
++    fig = seen["fromFigure"]
++    assert fig["figure"]["size"] == "22px" and fig["figure"]["before"] is True
++    assert fig["figure"]["text"] == "USD 1,390 million" and fig["h2"]["srOnly"] is True
++    assert fig["card"] == "10px" and fig["fits"] is True
++    assert fig["context"]["size"] == "13px" and fig["context"]["color"] == "rgb(58, 64, 86)"
++    for literal in (
++        "Back to analysis",
++        "Esc",
++        "Evidence inspector",
++        "Fundamental credit · Line 17",
++        "Bottom line",
++        "Not classified",
++        "Paragraph",
++        (
++            "Creditors are exposed to refinancing risk rather than to weak earnings: "
++            "net debt of USD 1,390 million is 4.2x earnings, and the next maturities "
++            "fall inside two years."
++        ),
++        "Figure",
++        "USD 1,390 million",
++        "Basis",
++        "NBG_2025-03-31_annual-report.pdf, page 41",
++        "Calculation K1",
++        "Net debt to EBITDA",
++        "Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331",
++        "4.2x",
++        "Other citations",
++        "Citation gap · NBG_2025-03-31_annual-report.pdf p.41 · not in inventory",
++        "the Basis file is not in the Source readiness inventory",
++        "Source location",
++        "Download retained handoff",
++        "Fundamental credit handoff",
++        "Northbridge Synthetic Group · SYNTHETIC-NBG-NEW-FORMAT-001 · saved output",
++        "Reading boundary",
++        "The library does not authenticate the underlying PDFs.",
++    ):
++        assert literal in fig["text"], literal
++    assert len(fig["links"]) == 1 and fig["links"][0].endswith("CP-2.md")
++    # Opened from a Basis control: no figure; the eyebrow is the drawn "Evidence inspector".
++    chip = seen["fromChip"]
++    assert chip["hasFigure"] is False and chip["h2"]["srOnly"] is False
++    assert chip["card"] == "10px" and chip["fits"] is True
++    for literal in (
++        "Back to analysis",
++        "Esc",
++        "Evidence inspector",
++        "Fundamental credit · Line 26",
++        "Key findings",
++        (
++            "Liquidity support rests on an undrawn revolver that steps down, "
++            "which narrows the cushion over time."
++        ),
++        "NBG_2024-12-31_Q4-results.pdf, page 7",
++        "Citation gap · NBG_2024-12-31_Q4-results.pdf p.7 · not in inventory",
++        "Source location",
++        "Download retained handoff",
++        "Reading boundary",
++    ):
++        assert literal in chip["text"], literal
++
++
++def test_a_two_paragraph_bottom_line_draws_both_in_the_headline_style(tmp_path):
++    second = "A second paragraph: the covenant package is untested.\n"
++
++    def edit(text: str) -> str:
++        marker = "\n### Key findings"
++        assert marker in text
++        return text.replace(marker, "\n" + second + marker, 1)
++
++    seen = read_module_page(synthetic_workspace(tmp_path, edit), f"#CP-2?c={NEW_FORMAT_RUN}")
++    paragraphs = seen["bottom"]["ps"]
++    assert len(paragraphs) == 2 and paragraphs[1]["text"] == second.strip()
++    assert [p["size"] for p in paragraphs] == ["22px", "22px"]
++
++
++NARROW_HEADER_PROBE = """(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('header.issuer h1'); i++) await sleep(50);
++  await sleep(200);
++  const header = document.querySelector('header.issuer');
++  const h1 = header.querySelector('h1'), scope = header.querySelector('.scope');
++  const cs = getComputedStyle(header);
++  const seen = {padL: cs.paddingLeft, padT: cs.paddingTop,
++    scopeBelowTitle: scope.getBoundingClientRect().top >= h1.getBoundingClientRect().bottom - 1};
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();"""
++
++
++def test_the_run_header_keeps_the_phone_layout_at_600px(tmp_path):
++    seen = read_probe(report_library(tmp_path), "#CP-1/head?c=run-a", 600, NARROW_HEADER_PROBE)
++    assert (seen["padL"], seen["padT"], seen["scopeBelowTitle"]) == ("15px", "12px", True)
++
++
++INSPECTOR_PADDING_PROBE = """(async () => {
++  const sleep = ms => new Promise(r => setTimeout(r, ms));
++  for (let i = 0; i < 200 && !document.querySelector('#content .basis-link'); i++) await sleep(50);
++  document.querySelector('#content .basis-link:not([data-figure])').click();
++  await sleep(300);
++  const body = document.querySelector('.inspector-body');
++  const ctx = body.querySelector('.evidence-context');
++  const seen = {padding: getComputedStyle(body).padding,
++    contextBottom: getComputedStyle(ctx).marginBottom};
++  const out = document.createElement('pre'); out.id = 'probe';
++  out.textContent = JSON.stringify(seen); document.body.appendChild(out);
++})();"""
++
++
++@pytest.mark.parametrize(
++    ("width", "padding", "context_bottom"),
++    [(1000, "24px", "14px"), (600, "18px 15px", None)],
++)
++def test_the_inspector_keeps_its_small_screen_padding(tmp_path, width, padding, context_bottom):
++    page = synthetic_workspace(tmp_path, with_chart_and_event)
++    seen = read_probe(page, f"#CP-2?c={NEW_FORMAT_RUN}", width, INSPECTOR_PADDING_PROBE)
++    assert seen["padding"] == padding
++    if context_bottom:
++        assert seen["contextBottom"] == context_bottom
++
++
++FIELD_CARD_PROBE = (
++    Path(__file__).with_name("browser_probe_field_card.js").read_text(encoding="utf-8")
++)
++
++
++@pytest.mark.parametrize(
++    ("width", "route"),
++    [(1000, "#W-Overview?c={}"), (760, "#W-Overview?c={}"), (1000, "#CP-2?c={}")],
++)
++def test_the_inspector_field_card_keeps_its_small_screen_look(tmp_path, width, route):
++    """At 1050px and below the inspector's fields are rows as before the redesign (padding 12px 0,
++    no card border, a 160px label column); the card is for wider windows."""
++    page = synthetic_workspace(tmp_path, with_chart_and_event)
++    seen = read_probe(page, route.format(NEW_FORMAT_RUN), width, FIELD_CARD_PROBE)
++    assert (seen["padding"], seen["borderLeft"], seen["columns"]) == ("12px 0px", "0px", "160px")
++    # The value column is what is left of the body after the 160px label column and the 18px gap:
++    # the card adds no padding or border of its own (measured at fe3dd7d: 54px and 474px at 1000px).
++    assert abs(seen["valueWidth"] - (seen["bodyContent"] - 160 - 18)) <= 1, seen
++
++
++OVERVIEW_STYLE_PROBE = (
++    Path(__file__).with_name("browser_probe_overview_style.js").read_text(encoding="utf-8")
++)
++
++
++def test_the_overview_draws_figure_links_and_basis_controls_like_the_module_page(tmp_path):
++    page = synthetic_workspace(tmp_path, with_chart_and_event)
++    where = {
++        "module": ("CP-2", "#key-findings"),
++        "overview": ("W-Overview", "#overview-lead .reading-findings"),
++    }
++    read = {
++        name: read_probe(
++            page,
++            f"#{route}?c={NEW_FORMAT_RUN}",
++            1440,
++            OVERVIEW_STYLE_PROBE,
++            {"figure": f"{scope} .figure", "basis": f"{scope} .basis-link:not(.figure)"},
++        )
++        for name, (route, scope) in where.items()
++    }
++    for name, seen in read.items():
++        assert "Red Hat Mono" in seen["figure"]["family"], (name, seen)
++        assert seen["basis"]["size"] == "13px", (name, seen)
++    assert read["overview"] == read["module"]
++
++
++EDGES_PROBE = Path(__file__).with_name("browser_probe_edges.js").read_text(encoding="utf-8")
++
++
++@pytest.mark.parametrize(
++    "route",
++    [
++        "#W-Report/history?c=run-a",
++        "#W-Changes/changes?c=run-a",
++        "#W-Forecast/none?c=run-a",
++        "#W-Evidence/sources?c=run-a",
++    ],
++)
++def test_the_body_of_a_run_tools_page_shares_both_edges_with_the_header(tmp_path, route):
++    make_run(tmp_path, "run-a", as_of="2024-12-31")
++    update_library.update_library(tmp_path)
++    seen = read_probe(tmp_path / "library/index.html", route, 1440, EDGES_PROBE)
++    assert seen["fits"] is True
++    for part in ("content", "head", "browse"):
++        if part in seen:
++            assert abs(seen[part]["left"] - seen["h1Left"]) <= 1, (part, seen)
++    for part in ("content", "head"):
++        if part in seen:
++            assert abs(seen[part]["right"] - seen["headerRight"]) <= 1, (part, seen)
++    # The Browse modules button is as wide as its label: its padding is the 28px, both sides.
++    assert (seen["browse"]["paddingLeft"], seen["browse"]["paddingRight"]) == ("28px", "28px"), seen
++    assert "content" in seen, seen
++
++
++PADDING_PROBE = (
++    Path(__file__).with_name("browser_probe_content_padding.js").read_text(encoding="utf-8")
++)
++
++
++@pytest.mark.parametrize(
++    ("route", "side"), [("#W-Library/cases", "18px"), ("#CP-OS/activity", "18px")]
++)
++def test_the_library_home_and_run_activity_keep_their_content_padding(tmp_path, route, side):
++    make_run(tmp_path, "run-a", as_of="2024-12-31")
++    update_library.update_library(tmp_path)
++    seen = read_probe(tmp_path / "library/index.html", route, 1440, PADDING_PROBE)
++    assert (seen["left"], seen["right"]) == (side, side)
++
++
++CHIP_OVERLAP_PROBE = (
++    Path(__file__).with_name("browser_probe_chip_overlap.js").read_text(encoding="utf-8")
++)
++
++
++def test_chart_periods_in_the_overview_aside_do_not_draw_their_labels_over_each_other(tmp_path):
++    page = synthetic_workspace(tmp_path, with_chart_and_event)
++    seen = read_probe(page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1440, CHIP_OVERLAP_PROBE)
++    assert seen["chips"] >= 2, "the fixture chart draws a citation label per period"
++    assert seen["crossing"] == [] and seen["fits"] is True, seen
++    # The three periods no longer fit the 400px aside, so the chart scrolls in its own box.
++    assert seen["chartScrolls"] is True and seen["chartInsideAside"] is True, seen
++
++
++OVERVIEW_LAYOUT_PROBE = (
++    Path(__file__).with_name("browser_probe_overview_layout.js").read_text(encoding="utf-8")
++)
++OVERVIEW_ORDER = [
++    "overview-lead",
++    "overview-bottom-lines",
++    "overview-limitations",
++    "overview-charts",
++    "overview-dates",
++]
++# What the Overview drew for the synthetic new-format run before the two-column layout (BASE
++# 60233d2): the text of each Bottom line by module entry and of each Nearest dates row, in order.
++BASE_NEW_FORMAT_ENTRIES = [
++    (
++        "Source readinessThe two documents read are enough for a credit snapshot, "
++        "but no covenant package was read, so creditor protections cannot be "
++        "confirmed from the file set."
++    ),
++    (
++        "Financial foundationThe canonical data set holds the debt, cash, earnings "
++        "and maturity figures the later modules rely on, each tied to a page of the "
++        "two documents read."
++    ),
++    (
++        "Business & governanceNorthbridge is a single-segment services group whose "
++        "creditors depend on one operating company, so debt service rests on that "
++        "company's cash generation. Basis"
++    ),
++    (
++        "Liquidity Not assessableNot assessable: the documents read give no monthly "
++        "cash forecast and no revolver drawing terms, so cash cover of the "
++        "maturities cannot be tested."
++    ),
++]
++BASE_NEW_FORMAT_DATES = [
++    "2025-03-31Annual report reference dateBusiness & governance",
++    "2025-03-31Synthetic noteFundamental credit",
++    "2025-05-15First quarter resultsBusiness & governance",
++    "2025-06-30Revolver commitment step-downBusiness & governance",
++    "2025-06Synthetic callFundamental credit",
++]
++
++
++def read_overview(page: Path, route: str, width: int) -> dict:
++    return read_probe(page, route, width, OVERVIEW_LAYOUT_PROBE)
++
++
++@pytest.mark.parametrize(("width", "stacked"), [(1440, False), (1280, True), (1200, True)])
++def test_the_new_format_overview_takes_the_two_column_layout(tmp_path, width, stacked):
++    page = synthetic_workspace(tmp_path, with_chart_and_event)
++    seen = read_overview(page, f"#W-Overview?c={NEW_FORMAT_RUN}", width)
++    assert seen["fits"] is True
++    assert seen["ids"] == OVERVIEW_ORDER
++    assert seen["inMain"] == OVERVIEW_ORDER[:3] and seen["inAside"] == OVERVIEW_ORDER[3:]
++    assert seen["asideLabel"] == "Charts and dates"
++    main, aside = seen["mainBox"], seen["asideBox"]
++    if width == 1440:
++        assert abs(aside["width"] - 400) <= 1 and aside["left"] >= main["right"]
++        # The page heading starts where the grid does.
++        assert abs(seen["pageH2Left"] - main["left"]) <= 1, (seen["pageH2Left"], main["left"])
++    if stacked:
++        assert aside["top"] >= main["bottom"], "the aside is under the main column"
++    # The lead: the eyebrow is Credit view with the writing module, the passage the headline.
++    lead = seen["lead"]
++    assert lead["h2"] == {"text": "Credit view", "size": "12px", "transform": "uppercase"}
++    assert lead["h3Class"] == "sr-only" and lead["firstSize"] == "22px"
++    assert lead["firstText"].startswith("Creditors are exposed to refinancing risk")
++    assert "Written by Fundamental credit" in lead["text"]
++    # Bottom line by module: a row (module left, text right), the text as BASE drew it.
++    assert seen["entryColumns"].startswith("210px")
++    assert seen["entries"] == BASE_NEW_FORMAT_ENTRIES
++    # Nearest dates: the same table, header cells kept but hidden, one grid row per date.
++    dates = seen["dates"]
++    assert dates["caption"] is True and dates["cols"] == 3 and dates["theadHeight"] <= 1
++    assert dates["rowDisplay"] == "grid" and dates["rows"] == BASE_NEW_FORMAT_DATES
++    # Key charts: the link to the chart index on this run's Forecast page; cards fit the column.
++    assert seen["charts"]["href"].startswith("#W-Forecast")
++    assert seen["charts"]["cards"]
++    if width == 1440:
++        assert all(w <= 400 for w in seen["charts"]["cards"]), seen["charts"]["cards"]
++
++
++def test_the_earlier_format_overview_has_its_sentence_and_no_chart_index_link(tmp_path):
++    make_run(tmp_path, "run-a", as_of="2025-03-31", cp1_extra=EVENTS)
++    update_library.update_library(tmp_path)
++    page = tmp_path / "library/index.html"
++    seen = read_overview(page, "#W-Overview?c=run-a", 1440)
++    assert seen["fits"] is True and seen["hasMain"] and seen["hasAside"]
++    assert seen["ids"] == [*OVERVIEW_ORDER[:3], "overview-dates"]
++    assert EARLIER_LEAD in seen["lead"]["text"] and seen["lead"]["h2"]["text"] == "Credit view"
++    assert seen["lead"]["h2"]["transform"] == "uppercase"
++    assert seen["chartIndexLinks"] == 0 and "charts" not in seen
++    assert abs(seen["asideBox"]["width"] - 400) <= 1
++    assert seen["dates"]["rowDisplay"] == "grid" and seen["dates"]["theadHeight"] <= 1
+ 
+ 
+ FORECAST_CASES_PROBE = Path(__file__).with_name("browser_probe_forecast_cases.js")
+@@ -1403,3 +1995,146 @@ def test_other_forecast_cases_screenshot_for_the_reader_check(tmp_path):
+         check=True,
+     )
+     assert screenshot.stat().st_size > 0
++
++
++CHART_INDEX_LINK_PROBE = """
++(async () => {
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++  for (let i = 0; i < 200 && !document.querySelector('.chart-index-link'); i++) await sleep(50);
++  const content = document.getElementById('content');
++  const link = document.querySelector('.chart-index-link');
++  const tabOf = () => [...document.querySelectorAll('.workspace-tabs a')]
++    .find(a => a.textContent.trim() === 'Forecast')?.getAttribute('href');
++  const seen = {href: link.getAttribute('href'), tabBefore: tabOf()};
++  link.click();
++  for (let i = 0; i < 200 && !document.getElementById('run-charts'); i++) await sleep(50);
++  await sleep(400);
++  const index = document.getElementById('run-charts');
++  seen.hash = location.hash;
++  seen.heading = document.getElementById('section-nav').textContent;
++  seen.indexShown = Boolean(index);
++  seen.offset = index
++    ? index.getBoundingClientRect().top - content.getBoundingClientRect().top : null;
++  seen.atEnd = content.scrollTop + content.clientHeight >= content.scrollHeight - 1;
++  seen.scrollTop = content.scrollTop;
++  seen.tabAfter = tabOf();
++  const out = document.createElement('pre');
++  out.id = 'probe';
++  out.textContent = JSON.stringify(seen);
++  document.body.appendChild(out);
++})();
++"""
++
++
++def test_the_overviews_chart_index_link_lands_on_the_chart_index(tmp_path):
++    page = synthetic_workspace(tmp_path, with_chart_and_event)
++    route = f"#W-Overview?c={NEW_FORMAT_RUN}"
++    seen = read_probe(page, route, 1280, CHART_INDEX_LINK_PROBE)
++    assert seen["href"].startswith("#W-Forecast") and f"c={NEW_FORMAT_RUN}" in seen["href"]
++    assert seen["hash"].startswith("#W-Forecast") and "Forecast" in seen["heading"]
++    assert seen["indexShown"] is True
++    # The index is drawn after the whole Forecast page: it is at the top of the canvas, or the
++    # canvas is scrolled as far as it goes.
++    assert -1 <= seen["offset"] <= 20 or seen["atEnd"], seen
++    assert seen["scrollTop"] > 0, seen
++    # The Forecast tab keeps the link it had.
++    assert seen["tabBefore"] and seen["tabAfter"] == seen["tabBefore"], seen
++
++
++def two_model_workspace(workspace: Path) -> Path:
++    """The synthetic new-format run (with its Chart index link) listing two forecast models."""
++    page = synthetic_workspace(workspace, with_chart_and_event)
++    data_js = page.parent / "data.js"
++    prefix = "window.CREDIT_OS_DATA="
++    data = json.loads(data_js.read_text(encoding="utf-8").removeprefix(prefix).rstrip().rstrip(";"))
++    run = data["workspace"]["runs"][NEW_FORMAT_RUN]
++    data["workspace"]["models"] = [
++        {
++            "id": model_id,
++            "issuerKey": run["issuerKey"],
++            "mode": "accepted",
++            "qualification": "unrun",
++            "runId": None,
++            "runFolder": NEW_FORMAT_RUN,
++            "scope": None,
++            "inputContract": None,
++            "revisionNote": None,
++            "previous": None,
++            "href": f"../models/{model_id}.html?embedded=1",
++            "download": f"../models/{model_id}.html?download=1",
++            "files": [],
++            "sources": [],
++            "register": None,
++            "cashflow": None,
++        }
++        for model_id in ("model-a", "model-b")
++    ]
++    data_js.write_text(prefix + update_library.embedded_json(data) + ";\n", encoding="utf-8")
++    return page
++
++
++CHART_INDEX_TWO_MODELS_PROBE = """
++(async () => {
++  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++  const run = %s;
++  const content = document.getElementById('content');
++  const tab = () => [...document.querySelectorAll('.workspace-tabs a')]
++    .find(a => a.textContent.trim() === 'Forecast')?.getAttribute('href');
++  const to = async hash => { location.hash = hash; await sleep(500); };
++  const state = () => {
++    const index = document.getElementById('run-charts');
++    return {
++      hash: location.hash,
++      model: document.getElementById('model-select')?.value ?? null,
++      tab: tab(),
++      scrollTop: content.scrollTop,
++      offset: index
++        ? index.getBoundingClientRect().top - content.getBoundingClientRect().top : null,
++      atEnd: content.scrollTop + content.clientHeight >= content.scrollHeight - 1,
++    };
++  };
++  const seen = {};
++  await to('#W-Forecast?c=' + run);
++  const options = [...document.querySelectorAll('#model-select option')].map(o => o.value);
++  seen.options = options;
++  const second = options[1];
++  await to('#W-Forecast/' + second + '?c=' + run);
++  seen.remembered = second;
++  await to('#W-Overview?c=' + run);
++  seen.tabBefore = tab();
++  document.querySelector('.chart-index-link').click();
++  await sleep(600);
++  seen.afterLink = state();
++  // R-2: back to the top, away to the Forecast tab, then to the index route again.
++  content.scrollTop = 0;
++  await to(tab().slice(0));
++  seen.onTab = state();
++  await to(seen.afterLink.hash);
++  seen.again = state();
++  const out = document.createElement('pre');
++  out.id = 'probe';
++  out.textContent = JSON.stringify(seen);
++  document.body.appendChild(out);
++})();
++"""
++
++
++def test_the_chart_index_route_keeps_the_chosen_forecast_model_and_scrolls_on_every_visit(tmp_path):
++    page = two_model_workspace(tmp_path)
++    probe = CHART_INDEX_TWO_MODELS_PROBE % json.dumps(NEW_FORMAT_RUN)
++    seen = read_probe(page, f"#W-Overview?c={NEW_FORMAT_RUN}", 1280, probe)
++    assert len(seen["options"]) == 2 and seen["remembered"] != seen["options"][0], seen
++    after = seen["afterLink"]
++    # R-1: the link draws the model the reader chose, lands on the index and leaves the tab alone.
++    assert after["hash"].startswith("#W-Forecast/run-charts"), seen
++    assert after["model"] == seen["remembered"], seen
++    assert after["tab"] == seen["tabBefore"], seen
++    assert seen["tabBefore"].startswith("#W-Forecast/" + seen["remembered"]), seen
++    assert -1 <= after["offset"] <= 20 or after["atEnd"], seen
++    assert after["scrollTop"] > 0, seen
++    # R-2: back to the same route from another Forecast route scrolls to the index again.
++    assert seen["onTab"]["scrollTop"] == 0 and seen["onTab"]["hash"] == seen["tabBefore"], seen
++    again = seen["again"]
++    assert again["hash"] == after["hash"] and again["model"] == seen["remembered"], seen
++    assert -1 <= again["offset"] <= 20 or again["atEnd"], seen
++    assert again["scrollTop"] > 0, seen
