@@ -100,7 +100,7 @@ and any other fault of CP-8's call (a provider stop, an overrun, an interrupted 
 still stops the run. A relaunch of such a run folder leaves the delivery as it is, makes no new call and
 says so.
 
-**`changes.json` (schema `cpos-changes/2`, computed by Python before CP-8 is called, given to CP-8 as the
+**`changes.json` (schema `cpos-changes/3`, computed by Python before CP-8 is called, given to CP-8 as the
 source `changes.json`, published unchanged in the delivery).** Every number is a decimal string; missing is
 null, never zero.
 - `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text]}`; `current`:
@@ -264,3 +264,55 @@ its report routes do not already carry, as owner tables (header, plain-number an
 the routed ones; the checker refuses a handoff without them). No report section is added: those tables are
 read by the library and the pack, not delivered. CP-1's output grows on those pathways; the USD 20 cap check
 admits every preset (largest single hold unchanged; short_snapshot's hold rises from 0.97 to 0.99 on the Opus configs).
+
+## Amendment 2026-11-12: four defects found by reading the first real CP-8 run (branch `claude/changes-real-run-fixes`)
+
+The first real CP-8 (`tdg-proof-snapshot-opus-002`, credit_snapshot on opus-medium, compared with
+`tdg-reader-format-001`; recorded in `2026-11-12-credit-snapshot-claude-rerun.md`) was accepted, and reading
+it showed four defects. Controller rulings, each implemented with a failing test first:
+
+- **D1, pipeline file names in reader passages.** CP-8's Basis lines read `Basis: changes.json; prior/CP-1.md,
+  page 4`. In CP-8's reader passages a Basis item for the comparison pack is exactly `Run comparison`, and for
+  a handoff of the earlier run `<plain module name> (<code>), earlier run`, for example `Financial data
+  foundation (CP-1), earlier run`; no page number for a handoff. `changes_check` refuses `changes.json`, a
+  `prior/` name, a page on a handoff, and `Run comparison` with anything after it, in a CP-8 Basis line only;
+  the library's Basis reader (`credit_os_chips.basis_locators`) reads the two forms as items with nothing to
+  open instead of a "Basis item not recognised" gap. `## Sources` still lists the real file names and hashes.
+  The method (`cp8.md`, "Basis lines") states the forms.
+- **D2, an unchanged measure read as a problem.** Every measure with a zero difference carried the cause
+  `Unresolved`. An issuer row for a measure whose pack difference is zero, and that is not said `Not
+  comparable`, now has the cause `None` and `Unresolved` is refused for it; `None` stays refused for a
+  non-zero difference. The library prints CP-8's register verbatim, so `None` shows as written;
+  `page_verdicts` does not read the cause of a zero-difference row.
+- **D3, "gross debt is not stated in either run".** Both CP-1 handoffs do state gross debt (current: USD 25,068
+  million at 2024-09-30), but under labels the pack's exact row rule does not read: the earlier run writes
+  `Gross financial debt including finance leases and securitization` with its unit only in a `Unit and quantity
+  / status` column text (`USD million; ...`); the current run writes `Total debt (gross, incl.
+  securitization), USD m` with the unit after a comma, not in brackets. The rule reads a row labelled exactly
+  `Gross debt` or `Total debt` (also `Net debt`, `Free cash flow`) with the unit in brackets after the label
+  or in a `Reporting unit` column; the two layouts differ from each other and neither fits, so no exact rule
+  reads both and none was added. The reason the pack gives is now true: "gross debt is not read from either
+  run's CP-1 (the comparison reads only a table row labelled exactly ...)". Even when read, the two runs'
+  basis texts differ, so the pack would mark gross debt `judge` and the net debt change would still be left out
+  (it needs `yes`). To be read, CP-1 would state gross debt, net debt and cash each as one row labelled
+  exactly `Gross debt`, `Net debt` and (cash from its liquidity chart table), with `(US$m)` or a `Reporting
+  unit` column, and the same basis text in both runs. CP-1's layout is unchanged here.
+- **D4, new modules marked `Unresolved`.** The pack (schema now `cpos-changes/3`; the library reads `/2` and
+  `/3`) states each run's `selection` (`preset`, `explicit` or null) in `prior` and `current`; a prior run's
+  selection is read from its manifest. When a module is `New` or `Not run this time` and both selections are
+  `preset` (the prior's may also be null: a run whose manifest predates the field was accepted as a base only
+  because it ran the pathway's lead module, so it is a whole-pathway run; the pack states null as recorded),
+  the pathway's module set changed between the runs: the cause must be `Method change`, and the words "the
+  pack does not say" are refused. With either run an explicit subset, or a pack of the `/2` shape (no
+  `selection` key), nothing is required and the cause is `Unresolved` as before. The real earlier run
+  (`tdg-reader-format-001`) records no selection: the first version of this rule skipped it (the real CP-8
+  was refused 6 times, its four New rows accepted); with it, 14 times (4 D2, 8 D4, 2 D1).
+
+The CP-8 instruction text itself states the Basis forms (`cpos_launch.CP8_BLOCK`, one place; the real draft
+had followed the general rule that lists only file names), and the library reads the two CP-8 forms only in
+a CP-8 handoff, exactly (`Run comparison`; a plain name with a registered module code, `, earlier run`).
+
+Known limits, recorded, not in this change: pack values print as the handoffs state them (`6261 US$m`, a date in
+one run and `FY2024` in the other); CP-DR's web guidance is unproven on Claude; a CP-8 `## Gaps` row may still
+say the pack does not say why the earlier run selected fewer modules (the checker reads registers, not gaps);
+Free cash flow and net debt are not read from the real CP-1s for the same label reason as gross debt.

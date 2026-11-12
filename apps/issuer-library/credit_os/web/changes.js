@@ -1,7 +1,7 @@
 'use strict';
 // Pure rendering of the Changes tab (docs/rulings/2026-11-11-module-presets-and-changes.md, decision M8): no DOM, no store, no globals written.
 // Browser: one global, ChangesView (reader.js is loaded first; nothing else leaks into the page's scope). Node: module.exports.
-// Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2) or CP-8's
+// Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2 or /3) or CP-8's
 // handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. This page reads no register for a
 // verdict: the library's build derives them once, with CP-8's checker (`changes.verdicts`: measures, modules, ledger), and the page displays them.
 // A measure that is not comparable, is not judged, or has no verdict shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is

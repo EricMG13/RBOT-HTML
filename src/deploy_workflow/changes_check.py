@@ -1,5 +1,5 @@
 """The check of CP-8's handoff against its comparison pack (`deploy_workflow.changes`, schema
-`cpos-changes/2`). Pure: no I/O, no provider.
+`cpos-changes/3`). Pure: no I/O, no provider.
 
 CP-8 explains and never calculates (owner, 2026-11-11). The check reads no sentence for its
 meaning: it tests structure, lists and numbers only. Beside the prose checks every handoff meets,
@@ -9,8 +9,8 @@ it refuses, naming the line, a CP-8 handoff in which:
   `### Limitations ledger`) is missing, repeated, has other columns, or has no table (K1);
 - a Status or Cause is not from its fixed list, an issuer row has an analysis-only cause (but
   `Correction` and `Method change` on a measure of one period with two values), a `Presentation`
-  cause is not on an `Unchanged` row, or a `None` cause is not on `Unchanged` or on the single
-  `No material change` row (K2);
+  cause is not on an `Unchanged` row, or a `None` cause is not on `Unchanged`, on the single
+  `No material change` row or on a measure row of zero difference (K2);
 - a module of the pack has no analysis row, has two, or the row's Status contradicts the pack (K3);
 - the ledger names a ref the pack does not hold, holds a ref in the wrong column, holds a pack ref
   in no row or in more than one, has a Status that contradicts its refs (an `E` and a `C` ref:
@@ -25,6 +25,17 @@ it refuses, naming the line, a CP-8 handoff in which:
 - a measure the two runs state for one period with different values is given the cause
   `New period` or `New source`, or is neither `Not comparable` nor `Same definition` with the
   cause `Correction` or `Method change` (K7);
+- a measure the pack gives a difference of zero, and that the row does not say `Not comparable`,
+  has a Cause other than `None`: nothing changed, so `Unresolved` is refused for it (K2);
+- a `New` or `Not run this time` module, when the pack says both runs' modules were the pathway's
+  preset (`current.selection` is `preset` and `prior.selection` is `preset` or null: a prior run
+  with no recorded selection was accepted as a base only because it ran the pathway's lead
+  module, so it is a whole-pathway run), has a Cause other than `Method change` or a Why that
+  says the pack does not say (K12); with either run `explicit`, or a pack of the earlier shape
+  (no `selection` key), nothing is required;
+- a `Basis: ` line names `changes.json` or a `prior/` file, gives a page for an earlier-run
+  handoff, or writes the two forms CP-8 may add in another way: `Run comparison` for the comparison
+  pack and `<plain module name> (<code>), earlier run` for an earlier run's handoff (K13);
 - a difference printed anywhere (a figure after `by`, or after a direction word) is not a pack
   difference, or its direction word contradicts the pack's sign, or it carries a sign after a
   direction word (K8);
@@ -50,7 +61,7 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
-from deploy_workflow.changes import decimal, number
+from deploy_workflow.changes import PACK_NAME, PRIOR_PREFIX, decimal, number
 
 ISSUER = "What changed: the issuer"
 ANALYSIS = "What changed: the analysis"
@@ -70,6 +81,12 @@ SAME_PERIOD_CAUSES = ("Correction", "Method change")
 COUNT_BELOW = 100  # a whole number below this, without a unit, is a count
 SAME = "same definition"
 NOT_COMPARABLE = "not comparable"
+COMPARISON = "Run comparison"  # CP-8's Basis item for the comparison pack; an earlier handoff is
+# `<plain module name> (<code>), earlier run`
+_HANDOFF_PAGE = re.compile(
+    r"\(CP-[A-Z0-9]+\).*(?:\bpages?\b|\bpp?\.\s*\d)", re.IGNORECASE
+)  # any page locator on a handoff item
+_DOES_NOT_SAY = re.compile(r"\bthe\s+pack\s+does\s+not\s+say\b", re.IGNORECASE)
 _MODULE = re.compile(r"\bCP-[A-Z0-9]+\b")
 _MODULE_CELL = re.compile(r"\((CP-[A-Z0-9]+)\)$")  # the code ends the cell, in brackets
 _REF = re.compile(r"\b[EC]\d+\b")
@@ -189,6 +206,12 @@ def _measure_values(measure: Mapping[str, Any]) -> set[Decimal]:
             *(_signed((measure[side] or {}).get("value")) for side in ("prior", "current")),
         ]
     )
+
+
+def _unchanged(measure: Mapping[str, Any]) -> bool:
+    """The pack gives this measure a difference of zero: nothing changed between the runs."""
+    difference = _signed(measure["difference"])
+    return difference is not None and difference == 0
 
 
 def _flagged(measure: Mapping[str, Any]) -> bool:
@@ -474,8 +497,16 @@ def _issuer_issues(
             )
             continue
         flagged = measure is not None and _flagged(measure)
+        unchanged = measure is not None and _unchanged(measure) and not _says(row, NOT_COMPARABLE)
         causes = (*ISSUER_CAUSES, *(SAME_PERIOD_CAUSES if flagged else ()))
-        if cause not in causes:
+        if unchanged:
+            if cause != "None":
+                issues.append(
+                    f"Issuer register, {name!r}: Cause {cause!r} is not `None`; the pack's "
+                    "difference is zero, so nothing changed (`Unresolved` is for a change whose "
+                    "cause is not known)."
+                )
+        elif cause not in causes:
             issues.append(
                 f"Issuer register, {name!r}: Cause {cause!r} is not one of "
                 + ", ".join(f"`{c}`" for c in causes)
@@ -490,11 +521,38 @@ def _issuer_issues(
     return issues
 
 
+def _preset_issues(code: str, cause: str, why: str) -> list[str]:
+    """A module that ran in one run only, between two runs of the pathway's own module set: the
+    pathway's module set changed, so the cause is known (`Method change`) and the pack is not
+    said to lack it."""
+    issues = []
+    if cause != "Method change":
+        issues.append(
+            f"Analysis register, {code}: both runs used the pathway's own modules, so the "
+            f"pathway's module set changed between them: the Cause is `Method change`, "
+            f"not {cause!r}."
+        )
+    if _DOES_NOT_SAY.search(why):
+        issues.append(
+            f"Analysis register, {code}: both runs used the pathway's own modules, so the words "
+            "`the pack does not say` are refused: say that the pathway's module set changed "
+            "between the runs."
+        )
+    return issues
+
+
 def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str]:
     issues = []
     ran = {m["module"]: (m["ran_prior"], m["ran_current"]) for m in pack["modules"]}
     seen = {code: len(found) for code, found in _rows_by_module(rows).items() if code in ran}
-    for module, status, cause, _ in rows:
+    prior, current = pack.get("prior") or {}, pack.get("current") or {}
+    # An absent `selection` key is a pack of the earlier shape; a null is a run that predates it.
+    both_preset = (
+        "selection" in prior
+        and current.get("selection") == "preset"
+        and prior["selection"] in ("preset", None)
+    )
+    for module, status, cause, why in rows:
         code = _module_code(module)
         if code is None or code not in ran:
             issues.append(
@@ -519,6 +577,8 @@ def _analysis_issues(rows: list[list[str]], pack: Mapping[str, Any]) -> list[str
                 f"Analysis register, {code}: the module did not run in both runs, so its Status "
                 "is `New` or `Not run this time`."
             )
+        if both_preset and status in ("New", "Not run this time"):
+            issues += _preset_issues(code, cause, why)
         if cause not in (*CAUSES, "None"):
             issues.append(f"Analysis register, {code}: Cause {cause!r} is not one of {CAUSES}.")
         elif cause == "Presentation" and status != "Unchanged":
@@ -742,6 +802,34 @@ def _passage_issues(
     return issues
 
 
+def _basis_issues(lines: Sequence[str]) -> list[str]:
+    """CP-8's Basis items: the comparison pack is `Run comparison`, an earlier run's handoff is
+    `<plain module name> (<code>), earlier run`; no pipeline file name and no page of a handoff."""
+    issues = []
+    for line in lines:
+        text = line.strip()
+        if not text.startswith("Basis: "):
+            continue
+        for item in (i.strip() for i in text.removeprefix("Basis: ").removesuffix(".").split("; ")):
+            if PACK_NAME in item or PRIOR_PREFIX in item:
+                issues.append(
+                    f"Basis item {item!r} names a pipeline file; write the comparison pack as "
+                    f"`{COMPARISON}` and an earlier run's handoff as `<plain module name> "
+                    "(<code>), earlier run`."
+                )
+            elif item.startswith(COMPARISON) and item != COMPARISON:
+                issues.append(
+                    f"Basis item {item!r}: the comparison pack is exactly `{COMPARISON}`."
+                )
+            elif _HANDOFF_PAGE.search(item):
+                issues.append(
+                    f"Basis item {item!r} gives a page for a handoff; a handoff is "
+                    "`<plain module name> (<code>)`, or `<plain module name> (<code>), earlier "
+                    "run` for the earlier run, with no page."
+                )
+    return issues
+
+
 def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> tuple[str, ...]:
     """Every failure of the CP-8 handoff `text` against its comparison pack (none: accepted).
     `held` is the texts CP-8 was sent beside the pack: this run's handoffs and the earlier run's."""
@@ -770,6 +858,7 @@ def cp8_issues(text: str, pack: Mapping[str, Any], held: Sequence[str] = ()) -> 
         for key, found in _rows_by_measure(issuer, pack).items()
         if any(_says(row, NOT_COMPARABLE) for row in found)
     )
+    issues += _basis_issues(lines)
     issues += _outside_ref_issues(lines, pack)
     issues += _passage_issues(lines, pack, said_nc, sizes)
     return tuple(dict.fromkeys(issues))
