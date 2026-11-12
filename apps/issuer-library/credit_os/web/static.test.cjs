@@ -2626,6 +2626,42 @@ test('maps: a map wider than its card is a keyboard-reachable scroll region that
   assert.ok(/\.map-scroll\{[^}]*overflow-x:auto/.test(read('screen.css')));
 });
 
+const svgOf = html => /<svg.*?<\/svg>/s.exec(html)[0];
+const widthOf = rowsFor => Number(/<svg[^>]*width="(\d+)"/.exec(mapHtml(rowsFor))[1]);
+const chainOf = (n, type) => [...Array(n)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', type, `Layer ${i + 1}`));
+
+test('maps: the column gap follows the longest edge label, never under 120, so short-label maps stay compact', () => {
+  // 4 layers, label "Fact" (4*6.6 = 26.4px) + 20 margin fits in the 120 minimum: 2*12 pad + 4*(150 box + 120 gap) - 120 = 984, the width before labels had their own room.
+  assert.equal(widthOf(chainOf(3, 'Fact')), 984);
+  // "Analyst Interpretation" is 22 characters, 22*6.6 = 145.2px; + 20 margin, rounded up = 166 gap: 24 + 4*(150+166) - 166 = 1122.
+  assert.equal(widthOf(chainOf(3, 'Analyst Interpretation')), 1122);
+});
+
+test('maps: a node word wider than a line breaks across lines before any ellipsis; the bridge keeps its ellipsis', () => {
+  const name = 'https://example.invalid/a/very/long/path/name.html';
+  const lines = nodeLines(svgOf(mapHtml([edgeRow(900, name, 'drives', 'Documentary Fact', 'Synthetic outcome')])), name);
+  assert.equal(lines.join(''), name, 'every character is shown');
+  assert.ok(lines.length === 3 && lines.every(line => line.length <= 20 && !line.includes('\u2026')), lines.join('|'));
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'views.js'), 'utf8');
+  const axisLines = new Function(src.slice(src.indexOf('const AXIS_CHAR'), src.indexOf('function bridgeChart')) + ';return axisLines;')();
+  assert.deepEqual(axisLines('averyveryverylongunbrokenword', 100), ['averyveryv\u2026']);
+});
+
+test('maps: with many parallel edges every label still gets a clear spot, and the drawing grows to hold them', () => {
+  const rows = [...Array(8)].map((_, i) => edgeRow(900 + i, 'A', 'drives', 'Analyst Interpretation', 'B'));
+  const svg = svgOf(mapHtml(rows)), height = Number(/<svg[^>]*height="(\d+)"/.exec(svg)[1]);
+  const labels = [...svg.matchAll(/<text class="map-edge-label" x="([\d.-]+)" y="([\d.-]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: +m[1], y: +m[2], w: m[3].length * 6.6 }));
+  assert.equal(labels.length, 8);
+  for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) assert.ok(Math.abs(labels[i].x - labels[j].x) >= (labels[i].w + labels[j].w) / 2 || Math.abs(labels[i].y - labels[j].y) >= 12, `labels ${i}, ${j} overlap`);
+  assert.ok(Math.max(...labels.map(l => l.y)) + 4 <= height, 'every label is inside the drawing');
+});
+
+test('maps: the region label has no stray punctuation', () => {
+  const label = /<div class="map-scroll" role="region" aria-label="([^"]*)"/.exec(mapHtml(chainOf(1, 'Fact')))[1];
+  assert.ok(!/[.;]\s*;|\.;/.test(label), label);
+  assert.ok(/edges\. The edge table follows; scroll horizontally/.test(label), label);
+});
+
 // ---- Package 7 views (2026-11-10): the chart index, the report manifest and the run/file context bar. Every value is synthetic.
 const withIndex = d => {
   withLanes(d);

@@ -206,9 +206,12 @@ function comparisonChart(module,v,selection=0,chips=false,note=true) {
 // Labels start at AXIS_Y and drop 1.2em a line (up to 14px type on a narrow screen), so the viewBox runs to AXIS_BOTTOM to hold three lines and their descenders
 // at either size. A wide bridge is drawn at no less than WIDE_SCALE of its viewBox, whatever its container: a narrow card scrolls it sideways.
 const AXIS_CHAR=8.4,AXIS_LINES=3,WIDE_STEPS=7,WIDE_STEP=142,AXIS_Y=226,BRIDGE_HEIGHT=282,WIDE_SCALE=.75;
-function axisLines(label,step,char=AXIS_CHAR) {
+function axisLines(label,step,char=AXIS_CHAR,hard=false) {
   const room=Math.max(4,Math.floor((step-6)/char)),lines=[];
-  for(const word of label.split(' ').filter(Boolean)){
+  for(const long of label.split(' ').filter(Boolean)){
+    // `hard` (map nodes): a word wider than a line breaks across lines, whole, before any ellipsis; the bridge cuts it with an ellipsis.
+    let word=long;
+    while(hard&&word.length>room){lines.push(word.slice(0,room));word=word.slice(room);}
     const w=word.length>room?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
     if(last>=0&&lines[last].length+1+w.length<=room&&!lines[last].endsWith('\u2026'))lines[last]+=` ${w}`;
     else lines.push(w);
@@ -816,13 +819,15 @@ function mapLayers(edges,nodes=[]) {
   names.forEach(depth);
   return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
 }
-const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:54,gx:170,gy:22,pad:12},MAP_CHAR=6.6,MAP_T=Array.from({length:39},(_,i)=>(i+1)/40).sort((a,b)=>Math.abs(a-.5)-Math.abs(b-.5)),LABEL_CHAR=6.6,LABEL_STEP=15;
+const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:54,gx:120,gy:22,pad:12},MAP_CHAR=6.6,MAP_T=Array.from({length:39},(_,i)=>(i+1)/40).sort((a,b)=>Math.abs(a-.5)-Math.abs(b-.5)),LABEL_CHAR=6.6,LABEL_STEP=15,LABEL_MARGIN=20,LABEL_STEPS=12;
 function mapDiagram(id,map,rows) {
-  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gx,gy,pad}=BOX;
+  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gy,pad}=BOX;
+  // The column gap holds the longest label of an edge drawn between columns (a cut edge's label sits below the nodes), never under BOX.gx, so a map of short labels stays compact.
+  const gx=Math.max(BOX.gx,Math.ceil(Math.max(0,...edges.filter((_,i)=>!cut[i]).map(e=>e.type.length*LABEL_CHAR))+LABEL_MARGIN));
   const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
   for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
   const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
-  const width=pad*2+filled.length*(w+gx)-gx,loops=cut.filter(Boolean).length,height=pad*2+Math.max(...filled)*(h+gy)-gy+(loops?46:0);
+  const width=pad*2+filled.length*(w+gx)-gx,loops=cut.filter(Boolean).length,base=pad*2+Math.max(...filled)*(h+gy)-gy+(loops?46:0);
   const path=({from,to},back)=>{
     const a=at(from),b=at(to),mid=(a.x+b.x+w)/2;
     if(!back)return {d:`M${a.x+w} ${a.y+h/2}C${mid} ${a.y+h/2} ${mid} ${b.y+h/2} ${b.x} ${b.y+h/2}`,c:[[a.x+w,a.y+h/2],[mid,a.y+h/2],[mid,b.y+h/2],[b.x,b.y+h/2]]};
@@ -830,23 +835,32 @@ function mapDiagram(id,map,rows) {
     return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,c:[[x1,a.y+h],[x1,low],[x2,low],[x2,b.y+h]]};
   };
   const bezier=(c,t)=>[0,1].map(k=>(1-t)**3*c[0][k]+3*(1-t)**2*t*c[1][k]+3*(1-t)*t*t*c[2][k]+t**3*c[3][k]);
-  const boxes=names.map(name=>({...at(name),w,h})),placed=[];
-  // A label is a box of its text's width set on its own line, at the line's midpoint unless that overlaps a placed label or a node; it then slides along the line, then up and down by whole steps, to the nearest clear spot.
+  const boxes=names.map(name=>({...at(name),w,h})),placed=[],paths=edges.map((edge,i)=>path(edge,cut[i]));
+  const near=paths.map(p=>Array.from({length:61},(_,k)=>bezier(p.c,k/60)));
+  const gap=(pts,x,y)=>Math.min(...pts.map(([px,py])=>Math.hypot(px-x,py-y)));
+  // A label is a box of its text's width set on its own line. It tries the line's midpoint, then slides along its own line (t), and only then moves up or down by whole steps,
+  // to the first clear spot (no placed label, no node) that is not nearer another edge than its own. Room is made, not borrowed: a spot below the drawing grows its height.
   const clear=(x,y,lw)=>placed.every(o=>Math.abs(o.x-x)>=(o.w+lw)/2||Math.abs(o.y-y)>=LABEL_STEP-1)&&boxes.every(b=>x+lw/2<=b.x-2||x-lw/2>=b.x+b.w+2||y+3<=b.y-2||y-9>=b.y+b.h+2);
-  const spot=(c,lw)=>{
-    for(const dy of [0,-1,1,-2,2,-3,3])for(const t of MAP_T){const [x,y]=bezier(c,t),at=y-4+dy*LABEL_STEP;if(at>=10&&at<=height-4&&clear(x,at,lw))return {x,y:at};}
+  const spot=(i,lw)=>{
+    const c=paths[i].c,steps=[0];for(let k=1;k<=LABEL_STEPS;k++)steps.push(-k,k);
+    for(const own of [true,false])for(const dy of steps)for(const t of MAP_T){
+      const [x,y]=bezier(c,t),at=y-4+dy*LABEL_STEP;
+      if(at>=10&&clear(x,at,lw)&&(!own||near.every((pts,k)=>k===i||gap(pts,x,at-4)>=gap(near[i],x,at-4))))return {x,y:at};
+    }
+    // ponytail: LABEL_STEPS (12 steps, 180px) is the bound; past it the label sits at the line's midpoint, over its neighbours, rather than grow the drawing without end.
     const [x,y]=bezier(c,.5);return {x,y:y-4};
   };
   const drawn=edges.map((edge,i)=>{
-    const p=path(edge,cut[i]),dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length],lw=edge.type.length*LABEL_CHAR,q=spot(p.c,lw);
+    const p=paths[i],dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length],lw=edge.type.length*LABEL_CHAR,q=spot(i,lw);
     placed.push({...q,w:lw});
     return `<path class="map-edge${cut[i]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${id.replace(/\W/g,'-')}-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${Math.round(q.x*10)/10}" y="${Math.round(q.y*10)/10}" text-anchor="middle">${esc(edge.type)}</text>`;
   }).join('');
-  const nodes=names.map(name=>{const p=at(name),lines=axisLines(name,w-10,MAP_CHAR);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+4-7*(lines.length-1)}">${lines.map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
-  const label=`${map.name}: ${names.length} nodes, ${edges.length} edges. The edge table follows.`;
+  const height=Math.ceil(Math.max(base,...placed.map(o=>o.y+6)));
+  const nodes=names.map(name=>{const p=at(name),lines=axisLines(name,w-10,MAP_CHAR,true);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+4-7*(lines.length-1)}">${lines.map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
+  const label=`${map.name}: ${names.length} nodes, ${edges.length} edges`;
   const marker=`<defs><marker id="map-arrow-${id.replace(/\W/g,'-')}-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
   const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
-  return `<div class="map-scroll" role="region" aria-label="${esc(label)}; scroll horizontally if the drawing is wider than its card" tabindex="0"><svg role="img" aria-label="${esc(label)}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${marker}${drawn}${nodes}</svg></div>${note}`;
+  return `<div class="map-scroll" role="region" aria-label="${esc(label)}. The edge table follows; scroll horizontally if the drawing is wider than its card" tabindex="0"><svg role="img" aria-label="${esc(label)}. The edge table follows." width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${marker}${drawn}${nodes}</svg></div>${note}`;
 }
 // A map with only a stated gap is drawn as its reason, never as an empty diagram.
 // `own` is the module page's: the map card carries its section route and caption there; the Overview draws the card alone.
