@@ -22,11 +22,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from inbox_fixtures import settings
+from inbox_fixtures import DELIVERED, layout, pump, settings, submit_run
 from test_library_page_browser import chrome
 
 from deploy_workflow import run_expectations as RE
-from deploy_workflow.inbox import startup
+from deploy_workflow.inbox import runs, startup
 from deploy_workflow.inbox.scheduler import Scheduler
 from deploy_workflow.owners.cpos_launch import (
     update_library_at,
@@ -133,7 +133,7 @@ class Page:
     console: list[str]
     root: Path | None = None  # the shared folder, for tests that read the service's records
 
-    def run(self, body: str) -> dict[str, Any]:
+    def run(self, body: str, path: str = "/") -> dict[str, Any]:
         text = FORM.read_text(encoding="utf-8")
         probe = WRAP.replace("BODY", PRELUDE + body)
         patched = self.folder / "form.html"
@@ -150,7 +150,7 @@ class Page:
                 f"--user-data-dir={self.profile}",
                 "--virtual-time-budget=20000",
                 "--dump-dom",
-                self.base + "/",
+                self.base + path,
             ],
             capture_output=True,
             text=True,
@@ -1523,3 +1523,212 @@ def test_a_served_library_offers_the_start_page_and_the_link_opens_it(page):
         assert "<h1>Run context</h1>" in reply.read().decode("utf-8")
     with urllib.request.urlopen(page.base + "/library/icons/plus.svg", timeout=20) as reply:
         assert reply.status == 200
+
+
+# ---- starting from an earlier run of the same issuer (/?from=<run id>) --------------------------
+
+
+@contextmanager
+def _earlier_run(
+    root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_env: Callable[[dict[str, Any]], None],
+    edit: Callable[[Path], None] | None = None,
+) -> Iterator[tuple[Page, str]]:
+    """The page served over a scheduler whose one earlier run, for issuer ``acme``, has finished
+    (fake launcher, no provider). ``edit`` may change the run's stored folder before the load."""
+    chrome()
+    monkeypatch.setattr(startup, "FORM", FORM)
+    fake_env({"events": DELIVERED})
+    with _serving(root, tmp_path) as (served, watcher):
+        record = submit_run(watcher, root, "acme")
+        lay = layout(root)
+        pump(
+            watcher,
+            lambda: all(r.status == "finished" for r in runs.load_all(lay)),
+            limit=30,
+        )
+        if edit is not None:
+            edit(lay.drops / record.id)
+        yield served, record.id
+
+
+@pytest.fixture
+def page_from(root, tmp_path, monkeypatch, fake_env):
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env) as got:
+        yield got
+
+
+@pytest.fixture
+def page_from_executed(root, tmp_path, monkeypatch, fake_env):
+    def edit(folder: Path) -> None:
+        stored = json.loads((folder / "context.json").read_text("utf-8"))
+        stored["attachments"]["legal_documents"] = "executed"
+        (folder / "context.json").write_text(json.dumps(stored), encoding="utf-8")
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as got:
+        yield got
+
+
+@pytest.fixture
+def page_from_bare(root, tmp_path, monkeypatch, fake_env):
+    import shutil
+
+    with _earlier_run(
+        root, tmp_path, monkeypatch, fake_env, lambda folder: shutil.rmtree(folder)
+    ) as got:
+        yield got
+
+
+def test_from_locks_the_issuer_id_and_carries_the_documents(page_from):
+    page, run_id = page_from
+    got = page.run(
+        """
+      return {id: $('i-issuer_id').value, locked: $('i-issuer_id').readOnly,
+              name: $('i-issuer_name').value,
+              rows: rows(), asOf: $('d-as_of').value, run: CARRIED.run,
+              files: [...CARRIED.files], button: !$('unlock-issuer').hidden};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["id"] == "acme" and got["locked"] is True and got["run"] == run_id
+    assert got["name"] == "Acme Corp" and got["button"] is True
+    assert got["files"] == ["a.txt"]
+    assert any(
+        "a.txt" in r[0] and "carried over from run " + run_id in " ".join(r) for r in got["rows"]
+    )
+    assert got["asOf"] != "2026-11-09"  # the earlier run's as-of date is not carried
+
+
+def test_a_run_started_from_another_cannot_build_a_different_issuer_id(page_from):
+    page, run_id = page_from
+    got = page.run(
+        """
+      type('i-issuer_id', 'other');
+      const typed = build().identity.issuer_id;
+      type('i-issuer_name', 'Another Name');
+      const renamed = build().identity.issuer_id;
+      const sub = SUB;
+      $('unlock-issuer').click();
+      for (let i = 0; i < 100 && rows().length; i++) await settle(50);
+      const reading = await (await fetch(`/api/submissions/${sub}/reading`)).json();
+      return {typed, renamed, locked: $('i-issuer_id').readOnly, rows: rows(), run: CARRIED.run,
+              fields: CARRIED.fields.size, documents: reading.documents.length,
+              ignored: reading.ignored.length, hidden: $('unlock-issuer').hidden};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["typed"] == "acme" and got["renamed"] == "acme"
+    assert got["locked"] is False and got["rows"] == [] and got["run"] == ""
+    assert got["fields"] == 0 and got["hidden"] is True
+    assert got["documents"] == 0 and got["ignored"] == 0
+
+
+def test_carried_answers_are_marked_and_an_edit_removes_the_mark(page_from):
+    page, run_id = page_from
+    got = page.run(
+        """
+      const mark = id => { const n = $(id).nextElementSibling;
+        return n && n.classList.contains('from-run') ? n.textContent : ''; };
+      const before = mark('i-issuer_name');
+      const had = [...CARRIED.fields].some(k => k.endsWith('|issuer_name'));
+      const other = $('i-issuer_id').closest('.f') ? mark('d-as_of') : '';
+      type('i-issuer_name', 'Acme Corporation');
+      return {before, after: mark('i-issuer_name'), had, other,
+              still: [...CARRIED.fields].some(k => k.endsWith('|issuer_name')),
+              marks: document.querySelectorAll('.from-run').length};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["before"] == "from run " + run_id and got["had"] is True
+    assert got["after"] == "" and got["still"] is False
+    assert got["other"] == ""  # the as-of date is never marked: it is not carried
+
+
+def test_an_executed_agreement_is_not_carried_as_a_file_choice(page_from_executed):
+    page, run_id = page_from_executed
+    got = page.run(
+        """
+      const out = {answer: build().attachments.legal_documents,
+                   disabled: radio('executed').disabled,
+                   marked: [...CARRIED.fields].some(k => k.endsWith('|legal_documents'))};
+      choose('legal-file', 'a.txt');
+      out.after = {answer: build().attachments.legal_documents,
+                   disabled: radio('executed').disabled};
+      return out;""",
+        path=f"/?from={run_id}",
+    )
+    assert got["answer"] == "none" and got["disabled"] is True and got["marked"] is False
+    assert got["after"] == {"answer": "executed", "disabled": False}
+
+
+def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
+    page, run_id = page_from
+    first = page.run("return {rows: rows().length, run: CARRIED.run};", path=f"/?from={run_id}")
+    assert first == {"rows": 1, "run": run_id}
+    second = page.run(
+        """
+      const sub = SUB;
+      const reading = await (await fetch(`/api/submissions/${sub}/reading`)).json();
+      return {locked: $('i-issuer_id').readOnly, id: $('i-issuer_id').value,
+              rows: rows(), run: CARRIED.run, files: [...CARRIED.files],
+              documents: reading.documents.length,
+              marks: document.querySelectorAll('.from-run').length,
+              asOf: $('d-as_of').value};""",
+    )
+    assert second["locked"] is True and second["id"] == "acme" and second["run"] == run_id
+    assert len(second["rows"]) == 1 and second["files"] == ["a.txt"]
+    assert "carried over from run " + run_id in " ".join(second["rows"][0])
+    assert second["documents"] == 1 and second["marks"] >= 1
+    # A reload with the same ?from= also restores the saved submission and carries nothing more.
+    third = page.run("return {rows: rows().length, run: CARRIED.run};", path=f"/?from={run_id}")
+    assert third == {"rows": 1, "run": run_id}
+
+
+def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):
+    page, run_id = page_from_bare
+    got = page.run(
+        """
+      return {id: $('i-issuer_id').value, name: $('i-issuer_name').value,
+              locked: $('i-issuer_id').readOnly, rows: rows(), run: CARRIED.run,
+              msg: $('loadmsg').textContent};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["id"] == "acme" and got["name"] == "Acme Corp" and got["locked"] is True
+    assert got["rows"] == [] and got["run"] == run_id
+    assert "No documents or answers were kept for run" in got["msg"]
+
+
+def test_from_an_unknown_run_starts_blank_and_says_so(page):
+    got = page.run(
+        """
+      return {id: $('i-issuer_id').value, locked: $('i-issuer_id').readOnly, run: CARRIED.run,
+              msg: $('loadmsg').textContent, hidden: $('unlock-issuer').hidden};""",
+        path="/?from=20990101-000000-01",
+    )
+    assert got["id"] == "" and got["locked"] is False and got["run"] == ""
+    assert got["hidden"] is True
+    assert "Run 20990101-000000-01 was not found" in got["msg"]
+
+
+def test_the_review_lists_what_was_carried_over(page_from):
+    page, run_id = page_from
+    got = page.run(
+        """
+      await review();
+      const box = $('rv-carried');
+      return {hidden: box.hidden, text: box.textContent,
+              labels: [...CARRIED.fields].map(k => carriedLabel(k))};""",
+        path=f"/?from={run_id}",
+    )
+    assert got["hidden"] is False and run_id in got["text"]
+    assert "1 document" in got["text"]
+    assert "Issuer (company name)" in got["labels"]
+    for label in got["labels"]:
+        assert label in got["text"]
+
+
+def test_the_review_hides_the_block_when_nothing_was_carried(page):
+    got = page.run(
+        "await issuer('credit_snapshot', [file('a.txt', 'x')]); await review();"
+        " return {hidden: $('rv-carried').hidden};"
+    )
+    assert got["hidden"] is True

@@ -107,6 +107,7 @@ svg.i{width:16px;height:16px;flex:none}
 details.block>summary{cursor:pointer;font:600 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);min-height:28px}
 .uses{margin:2px 0 0;font-size:var(--fs-compact);line-height:18px;color:var(--text-quaternary)}
 .uses b{font-weight:600;color:var(--text-tertiary)}
+.from-run{display:block;margin-top:2px;font-size:var(--fs-compact);color:var(--text-tertiary)}
 .help{max-width:62ch;margin:6px 0 0;font-size:var(--fs-body);line-height:20px;color:var(--text-tertiary)}
 fieldset{border:0;margin:24px 0 0;padding:0;min-width:0}
 legend{padding:0;margin-bottom:10px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary)}
@@ -371,7 +372,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <p class="lead">Each module's answer must name the issuer, one of its other names or its ID. Source readiness stops the run when it cannot tell whose files these are. The as-of date is the day the analysis stands on: evidence published after it counts as not yet available.</p>
   <div class="grid">
     <div class="f"><label for="i-issuer_name">Issuer (company name)</label><input type="text" id="i-issuer_name" placeholder="e.g. Northbridge Group" data-k="issuer_name" aria-describedby="i-issuer_name-h"><p class="help" id="i-issuer_name-h">The name the filings use for the group.</p></div>
-    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><p class="help" id="i-issuer_id-h">Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.</p></div>
+    <div class="f"><label for="i-issuer_id">Issuer ID</label><input type="text" id="i-issuer_id" placeholder="e.g. northbridge-group" data-k="issuer_id" maxlength="60" aria-describedby="i-issuer_id-h"><button type="button" class="text-button" id="unlock-issuer" hidden>this is a different issuer</button><p class="help" id="i-issuer_id-h">Filled from the name: lowercase letters, digits and hyphens, at most 40 characters. Use the same ID for every run on this issuer; the library files runs by it.</p></div>
     <div class="f wide" data-min="advanced"><label for="i-aliases">Other names in the filings</label><textarea id="i-aliases" rows="2" placeholder="e.g. Northbridge&#10;NBG" data-k="aliases" aria-describedby="i-aliases-h"></textarea><p class="help" id="i-aliases-h">One per line: the legal name if it differs, a short name, the ticker.</p></div>
   </div>
   <fieldset id="classf"><legend>Issue classification</legend><div data-cards="issue_classification" data-class="two"></div><p class="help">By the debt this run analyses; for split-rated or unrated issuers, use your firm's convention.</p></fieldset>
@@ -517,6 +518,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   <div id="rv-ready"></div>
   <h3 class="sub">Inputs left at their defaults</h3>
   <div id="rv-defaults"></div>
+  <div id="rv-carried" hidden><h3 class="sub">Carried over from an earlier run</h3><div id="rv-carried-body"></div></div>
   <h3 class="sub">Your answers</h3>
   <dl class="review-summary" id="rv-steps"></dl>
   <label class="start-confirm"><input type="checkbox" id="approve" disabled><span>Approve: I have read this summary and want this run started.</span></label>
@@ -1800,6 +1802,7 @@ function renderReview(sq, o) {
   const list = defaultedInputs(o);
   if (list.length) defaults.append(h('ul', {}, ...list.map(([label, value, isDefault]) => h('li', {textContent: `${label}: ${value}` + (isDefault ? ' (default)' : ' (your answer)')}))));
   else defaults.append(h('p', {className: 'muted', textContent: 'None: this level asks for every input.'}));
+  renderCarried();
   const box = $('rv-steps');
   box.innerHTML = '';
   sq.filter(st => st !== 'review').forEach((st, i) => {
@@ -1906,6 +1909,10 @@ const FAILED = [];         // [{name, text}] files the service refused, or answe
 const SKIPPED = new Set(); // modules left out at Advanced
 const FILE_SELECTS = {legalfile:'legal-file', bridgefile:'f-bridge', portfoliofile:'f-portfolio', priorfile:'f-prior'};
 let newestTouched = false;
+// Starting from an earlier run of the issuer (?from=<run id>): which files and answers came from it, and
+// whether the issuer ID is locked to that run's. LOCKED_ID is the locked value; it is not saved (the saved answers hold it).
+const CARRIED = {run: '', files: new Set(), fields: new Set(), locked: false};
+let LOCKED_ID = '';
 const say = text => { $('docstatus').textContent = text; };
 // An HTML filing's text is pinned by the launcher as <name>.jsonl: the analyst knows the file as <name>.
 const docName = source => /\.html?\.jsonl$/i.test(source) ? source.slice(0, -'.jsonl'.length) : source;
@@ -1967,7 +1974,7 @@ async function refreshReading() {
   update();
 }
 async function removeFile(name) {
-  try { await call('DELETE', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`); failed(name, ''); say(`Removed ${name}.`); }
+  try { await call('DELETE', `/api/submissions/${SUB}/files?name=${encodeURIComponent(name)}`); failed(name, ''); CARRIED.files.delete(name); say(`Removed ${name}.`); }
   catch (err) { failed(name, err.message); say(`Could not remove ${name}.`); }
   renderFailed();
   await refreshReading();
@@ -1978,6 +1985,7 @@ function whyIgnored(name) {
   if (parts.some(p => p.startsWith('_') || p.startsWith('~$'))) return 'The name starts with _ or ~$.';
   return ext ? `${ext} files are not read: save it as PDF (or XLSX for a table).` : 'A file with no type is not read.';
 }
+const carriedNote = name => CARRIED.files.has(name) ? 'carried over from run ' + CARRIED.run + '. ' : '';
 function renderDocs() {
   const box = $('docresult');
   box.textContent = '';
@@ -1996,14 +2004,14 @@ function renderDocs() {
     cell(tr, name);
     const kind = d.kind === 'unrecognised' ? 'Not recognised' : (KIND_LABEL[d.kind] || d.kind) + (d.period_end ? ' · period ends ' + d.period_end : '') + (d.executed === true ? ' · executed' : d.executed === false ? ' · draft' : '');
     cell(tr, kind).className = d.kind === 'unrecognised' ? 'maybe' : 'ok';
-    remove(cell(tr, d.signal || ''), name);
+    remove(cell(tr, carriedNote(name) + (d.signal || '')), name);
     body.appendChild(tr);
   });
   READING.ignored.forEach(name => {
     const tr = document.createElement('tr');
     cell(tr, name);
     cell(tr, 'Will not be read').className = 'no';
-    remove(cell(tr, whyIgnored(name)), name);
+    remove(cell(tr, carriedNote(name) + whyIgnored(name)), name);
     body.appendChild(tr);
   });
   table.appendChild(body);
@@ -2071,6 +2079,7 @@ const fileChoices = () => Object.fromEntries(Object.keys(FILE_SELECTS).map(c => 
 function save(o) {
   if (!SERVED || !kept) return;
   const extra = {submitter: getC('submitter'), turns: getC('turns'), newest: getC('newest'), newestTouched, skipped: [...SKIPPED]};
+  if (CARRIED.run) extra.carried = {run: CARRIED.run, files: [...CARRIED.files], fields: [...CARRIED.fields], locked: CARRIED.locked};
   try { localStorage.setItem(STORE, JSON.stringify({v: 1, id: SUB, level: LEVEL, context: o, files: fileChoices(), extra})); }
   catch (err) { storeFailed(err); }
 }
@@ -2078,6 +2087,105 @@ function forget() {
   if (!SERVED) return;
   try { localStorage.removeItem(STORE); } catch (err) { storeFailed(err); }
 }
+const fromParam = new URLSearchParams(location.search).get('from');
+const FROM = fromParam !== null && /^[0-9A-Za-z._-]{1,80}$/.test(fromParam) ? fromParam : '';
+function restoreCarried(c) {
+  if (!isObj(c) || typeof c.run !== 'string' || !/^[0-9A-Za-z._-]{1,80}$/.test(c.run)) return;
+  const strings = a => Array.isArray(a) ? a.filter(v => typeof v === 'string') : [];
+  CARRIED.run = c.run; CARRIED.files = new Set(strings(c.files)); CARRIED.fields = new Set(strings(c.fields)); CARRIED.locked = c.locked === true;
+}
+// Which answer is it: a field's key is its scope (a row list, the market or multiple block, an assumption) and its data-k.
+const carryKey = el => {
+  const row = el.closest('[data-row]'), scope = row ? row.parentNode : el.closest('#im,#um,[id^="as-"]');
+  return (scope && scope.id ? scope.id : '') + '|' + el.dataset.k;
+};
+function fieldValues() {
+  const m = new Map();
+  document.querySelectorAll('#f [data-k]').forEach(e => {
+    const v = e.type === 'radio' || e.type === 'checkbox' ? (e.checked ? e.value : '') : e.value.trim();
+    if (v) m.set(carryKey(e), (m.get(carryKey(e)) || '') + '\u0001' + v);
+  });
+  return m;
+}
+function carriedLabel(key) {
+  const el = [...document.querySelectorAll('#f [data-k]')].find(e => carryKey(e) === key);
+  return el ? nameOf(el) : key;
+}
+// A mark after each carried answer; a radio or tick group gets one, after its fieldset.
+function renderMarks() {
+  document.querySelectorAll('.from-run').forEach(m => m.remove());
+  if (!CARRIED.run || !CARRIED.fields.size) return;
+  const seen = new Set();
+  document.querySelectorAll('#f [data-k]').forEach(e => {
+    if (!CARRIED.fields.has(carryKey(e))) return;
+    const group = e.type === 'radio' || e.type === 'checkbox';
+    const anchor = group ? (e.closest('fieldset') || e.closest('.chk') || e) : e;
+    if (group && seen.has(anchor)) return;
+    seen.add(anchor);
+    anchor.after(h('small', {className: 'from-run', textContent: 'from run ' + CARRIED.run}));
+  });
+}
+function renderCarried() {
+  const box = $('rv-carried'), body = $('rv-carried-body');
+  box.hidden = !CARRIED.run;
+  body.textContent = '';
+  if (!CARRIED.run) return;
+  const labels = [...new Set([...CARRIED.fields].map(carriedLabel))];
+  const n = CARRIED.files.size;
+  body.append(h('p', {textContent: `Run ${CARRIED.run}: ${n} document${n === 1 ? '' : 's'} carried over` + (labels.length ? ', and these answers:' : '.')}));
+  if (labels.length) body.append(h('ul', {}, ...labels.map(l => h('li', {textContent: l}))));
+}
+// Starts the form from an earlier run of the issuer: its documents are copied into a new submission by the
+// service and its answers fill the form, except the dates and the submitter. Returns whether the run was found.
+async function startFrom(runId) {
+  let got;
+  try { got = await call('GET', `/api/runs/${runId}/inputs`); }
+  catch (err) {
+    loadMsg(err.status === 404 ? `Run ${runId} was not found. This is a blank start.` : `Run ${runId} could not be read (${err.message}). This is a blank start.`, true);
+    return false;
+  }
+  const problems = [];
+  CARRIED.run = runId; CARRIED.locked = true; CARRIED.files = new Set(); CARRIED.fields = new Set();
+  if (Array.isArray(got.files) && got.files.length) {
+    try {
+      SUB = (await call('POST', '/api/submissions')).id;
+      const moved = await call('POST', `/api/submissions/${SUB}/carry`, JSON.stringify({run: runId}));
+      CARRIED.files = new Set(moved.carried);
+    } catch (err) { problems.push('The documents could not be carried over (' + err.message + ').'); }
+  }
+  await refreshReading();
+  if (typeof got.level === 'string' && got.level in RANK) LEVEL = got.level;
+  resetAll();
+  const base = fieldValues();
+  const ctx = got.context;
+  const bad = isObj(ctx) ? shapeProblem(ctx) : 'none';
+  if (isObj(ctx) && !bad) fill(ctx, {}, true);
+  else {
+    if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
+    $('i-issuer_name').value = txt(got.issuer_name);
+    $('i-issuer_id').value = txt(got.issuer_id);
+    idTouched = txt(got.issuer_id) !== slug(txt(got.issuer_name));
+  }
+  $('i-issuer_id').value = txt(got.issuer_id);
+  LOCKED_ID = txt(got.issuer_id);
+  $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
+  const now = fieldValues();
+  CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|pathway' && k !== '|legal_documents'));
+  const files = CARRIED.files.size;
+  loadMsg(!isObj(ctx) && !files && !problems.length ? `No documents or answers were kept for run ${runId}. Only the issuer name and ID are carried over.`
+    : `Started from run ${runId}: ${files} document${files === 1 ? '' : 's'}` + (isObj(ctx) && !bad ? ' and its answers' : '') + ' carried over. The dates and the submitter are not.' + (problems.length ? ' ' + problems.join(' ') : ''), problems.length > 0);
+  update();
+  return true;
+}
+// The ID is the earlier run's until the analyst says this is a different issuer: the carried documents and answers go.
+async function unlockIssuer() {
+  const names = [...CARRIED.files];
+  for (const name of names) await removeFile(name);
+  CARRIED.run = ''; CARRIED.files = new Set(); CARRIED.fields = new Set(); CARRIED.locked = false; LOCKED_ID = '';
+  resetAll();
+  update();
+}
+$('unlock-issuer').addEventListener('click', unlockIssuer);
 async function restore() {
   let saved = null, run = null;
   if (SERVED) {
@@ -2105,8 +2213,10 @@ async function restore() {
           else lost = ' The documents you uploaded are no longer held (' + err.message + '): choose them again.';
         }
       }
-      renderDocs(); renderFileSelects();
       const x = isObj(saved.extra) ? saved.extra : {};
+      restoreCarried(x.carried);
+      LOCKED_ID = CARRIED.locked ? txt(saved.context.identity.issuer_id) : '';
+      renderDocs(); renderFileSelects();
       const notes = fill(saved.context, isObj(saved.files) ? saved.files : {}, true);
       if (typeof x.submitter === 'string') $('submitter').value = x.submitter;
       if (typeof x.turns === 'string') $('turns').value = x.turns;
@@ -2115,6 +2225,8 @@ async function restore() {
       if (newestTouched && typeof x.newest === 'string') $('d-newest').value = x.newest; else syncNewest();
       loadMsg('Your earlier answers are back.' + lost + (notes.length ? ' ' + notes.length + ' note(s): ' + notes.join('; ') + '.' : ''), !!lost);
       if (gone) showGone();
+    } else if (FROM && !(isObj(saved) && saved.v === 1)) {
+      await startFrom(FROM);
     }
   } finally {
     kept = $('submission-gone').hidden; // nothing is saved over the old record until a new submission is chosen
@@ -2183,7 +2295,10 @@ function vis() {
   $('rtnote').textContent = path === 'earnings_update' ? 'An Earnings Update always compares two reported periods, so the market situation is fixed.' : 'Earnings update is available with the Earnings Update pathway only.';
   const rt = getV(si, 'run_type');
 
-  if (!idTouched) $('i-issuer_id').value = slug($('i-issuer_name').value);
+  if (CARRIED.locked) $('i-issuer_id').value = LOCKED_ID;
+  else if (!idTouched) $('i-issuer_id').value = slug($('i-issuer_name').value);
+  $('i-issuer_id').readOnly = CARRIED.locked;
+  $('unlock-issuer').hidden = !CARRIED.locked;
   // The cutoff is written, never left blank: the code reads blank as the as-of date, but the modules read
   // the raw file and reported "information cutoff not supplied" as an ambiguity (TDG all-modules run).
   if (!cutTouched) $('d-cutoff').value = getV(si, 'as_of');
@@ -2275,6 +2390,7 @@ function update() {
   if (RENDERED && RENDERED === SUMMARY && RENDERED_KEY !== pageKey(o)) { RENDERED = null; $('approve').checked = false; } // a page rule changed: rebuild, untick, unapprove
   if (cur === 'review') renderReview(sq, o);
   syncApproval();
+  renderMarks();
   save(o);
   return o;
 }
@@ -2288,8 +2404,10 @@ function onField(e) {
   if (t.id === 'd-newest') newestTouched = true;
   if (t.dataset.k === 'run_type') rtTouched = true;
   if (t.dataset.k === 'basis' && t.type === 'radio') basisTouched = true;
-  if (t.id === 'i-issuer_id') { idTouched = t.value !== ''; if (!idTouched) t.value = slug($('i-issuer_name').value); }
-  if (t.id === 'i-issuer_name' && !idTouched) $('i-issuer_id').value = slug(t.value);
+  if (t.dataset.k && CARRIED.run) CARRIED.fields.delete(carryKey(t));
+  if (t.id === 'i-issuer_id' && CARRIED.locked) t.value = LOCKED_ID;
+  else if (t.id === 'i-issuer_id') { idTouched = t.value !== ''; if (!idTouched) t.value = slug($('i-issuer_name').value); }
+  if (t.id === 'i-issuer_name' && !idTouched && !CARRIED.locked) $('i-issuer_id').value = slug(t.value);
   if (t.id === 'd-cutoff') cutTouched = t.value !== '' && t.value !== getV($('st-issuer'), 'as_of');
   update();
 }
@@ -2500,6 +2618,7 @@ function startAgain() {
   $('run-progress').hidden = true;
   resetAll();
   SUB = ''; READING = null; FAILED.length = 0; LEVEL = 'basic';
+  CARRIED.run = ''; CARRIED.files = new Set(); CARRIED.fields = new Set(); CARRIED.locked = false; LOCKED_ID = '';
   renderFailed(); renderDocs(); renderFileSelects(); say('');
   forget();
   gotoStep('pathway'); loadMsg('Started again.', false);
