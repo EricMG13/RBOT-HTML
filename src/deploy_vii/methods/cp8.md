@@ -45,9 +45,10 @@ accepted, the run is delivered without it.
    brought new facts) or the analysis changed (a method change, a correction, or presentation).
    Every row you write carries exactly one cause, from this fixed list: `New period`,
    `New source`, `Method change`, `Correction`, `Presentation`, `Unresolved`. Use `Unresolved`
-   when the evidence given does not say which; say what is missing. Issuer rows use only
-   `New period`, `New source` or `Unresolved`. Use `Method change` when the pack says the earlier
-   run's methods have since changed, or a module's method evidently differs; `Correction` when the
+   when the evidence given does not say which; say what is missing. Issuer rows use `New period`,
+   `New source` or `Unresolved`; a measure the pack states for the same period with a non-zero
+   difference uses `Correction` or `Method change`, or says `Not comparable` (rule 3). Use
+   `Method change` when the pack says the earlier run's methods have since changed, or a module's method evidently differs; `Correction` when the
    current handoff states that it repairs an earlier error.
 2. **Presentation is not a finding.** A run in the earlier format, or with different headings,
    passage order, units written differently or sources named differently, has not changed in
@@ -55,16 +56,18 @@ accepted, the run is delivered without it.
    whose only difference is presentation is `Unchanged`, cause `Presentation`.
 3. **Never calculate.** Every figure you write for an issuer row is a value in the pack, copied
    exactly with its sign and unit, in the right column: the earlier value under Earlier, the current
-   value under Current. In the reader passages every figure is a value of the measure its sentence
-   names (a difference only where rule 3 allows), or one your own register rows print; a percentage
-   change or a move the pack does not hold is not written. A difference you write anywhere in the handoff (in a reader passage, a
-   register or the gaps) is a difference the pack gives, with the direction the pack's sign says
+   value under Current. Every other figure you write (passages, register cells, `## Gaps`) is copied
+   exactly from the pack or from a handoff of either run: no rounding (USD 6,261 million, not
+   USD 6.3 billion), no percentage or move you work out, and a threshold only if a handoff states
+   it. A passage figure is also printed in your registers or `## Gaps`. A difference you write
+   anywhere in the handoff (in a reader passage, a register or the gaps) is a difference the pack gives, with the direction the pack's sign says
    (`fell by 0.60x` for -0.60); do not write a sign after a word of direction. Where the pack gives
    no difference, write none. A value the pack states as null is missing, not zero: write that it is
    not stated.
-   - A row that names a pack measure uses the measure's label exactly as the pack gives it. A row
-     whose Earlier or Current cell holds a figure must name a pack measure; a row about a fact with
-     no figure (a refinancing, a rating action, a change in guidance) is free text.
+   - A row that names a pack measure uses the measure's label exactly as the pack gives it. A fact
+     row (a refinancing, a new facility, a rating action) may give amounts a handoff states, the
+     earlier run's under Earlier and the current run's under Current, but never a pack measure's
+     value; that is the measure's own row.
    - `comparable: yes`: the definitions match; report the values and the difference.
    - `comparable: no` (a unit differs, or a run does not state the value): the pack gives no
      difference. Say the row is `Not comparable` or the value is not stated, give the values the pack
@@ -85,8 +88,8 @@ accepted, the run is delivered without it.
      or says `Same definition` with the cause `Correction` or `Method change`; the causes
      `New period` and `New source` are refused for it. `Same definition` followed by a sentence
      that contradicts it ("but the EBITDA basis changed") is an error: say `Not comparable`. Such a
-     difference is written in the register row only. A passage may give the two values, but draws no
-     movement for the measure unless its sentence names the correction or the method change.
+     difference is written only in the register rows. A passage may give the two values and say the
+     analysis changed; it never says the issuer's measure moved.
 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
    for a module's. If you think a module's change of view is unexplained, say so and mark the row
@@ -115,7 +118,8 @@ One row per material change in the issuer's business or credit profile: a pack m
 cell is the pack's label, exactly) or a fact the handoffs show changed (a new facility, a
 refinancing, a disposal, a rating action, a change in guidance). For a measure, Earlier and Current
 hold the pack's values with their units and periods; for a fact, plain words. Cause is one of
-`New period`, `New source`, `Unresolved`. If nothing material changed, write one row whose first
+`New period`, `New source`, `Unresolved`; for a same-period measure with a non-zero difference,
+`Correction` or `Method change` (rule 3). If nothing material changed, write one row whose first
 cell is `No material change`, Earlier and Current `—`, Cause `None`, and say why in the last cell.
 
 ### What changed: the analysis

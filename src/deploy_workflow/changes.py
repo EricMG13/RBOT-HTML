@@ -505,11 +505,25 @@ def _clause(who: str, why: str | None) -> str:
     return f"the {who} run {why or 'does not state it'}"
 
 
-def _period_name(period: str) -> str:
-    """A period for comparison: its fiscal year when it names one (`FY2024 / 2024-09-30` is
-    `FY2024`), else the text, in lower case."""
-    year = re.search(r"\bFY(\d{4})\b", period, re.IGNORECASE)
-    return f"fy{year[1]}" if year else " ".join(period.casefold().split())
+_PERIOD = re.compile(r"FY(\d{4})(?: / (\d{4}-\d{2}-\d{2}))?")
+
+
+def same_period(a: str, b: str) -> bool:
+    """Whether two periods are one. A period is `FY2024`, `FY2024 / 2024-09-30` or `2024-09-30`
+    (what `period_order` and `chart_row` let through); any other text stands for itself in the date
+    place. If both sides have one, they are the same only if equal; otherwise only the same fiscal
+    year is the same period."""
+
+    def split(period: str) -> tuple[str | None, str | None]:
+        found = _PERIOD.fullmatch(period.strip())
+        if found:
+            return found[1], found[2]
+        return None, period.strip()
+
+    (year_a, date_a), (year_b, date_b) = split(a), split(b)
+    if date_a and date_b:
+        return date_a == date_b
+    return year_a is not None and year_a == year_b
 
 
 def _compare(
@@ -523,12 +537,12 @@ def _compare(
     if stated is None:
         raise ValueError(f"measure {key} is stated in neither run")
     comparable, reason, difference = "no", None, None
-    same_period = (
+    one_period = (
         prior is not None
         and current is not None
         and prior.period is not None
         and current.period is not None
-        and _period_name(prior.period) == _period_name(current.period)
+        and same_period(prior.period, current.period)
     )
     if prior is None or current is None:
         reason = _clause(*(("earlier", prior_why) if prior is None else ("current", current_why)))
@@ -556,7 +570,7 @@ def _compare(
         "prior": None if prior is None else prior.record(),
         "current": None if current is None else current.record(),
         "difference": difference,
-        "same_period": same_period,
+        "same_period": one_period,
     }
 
 

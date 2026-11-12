@@ -2198,7 +2198,12 @@ def checker(layout: MarkdownLayout) -> Check:
         issues += prose_issues(text, {m: v.decode("utf-8") for m, v in task.accepted.items()})
         issues += figure_issues(text)
         if task.module_id == "CP-8":
-            issues += cp8_issues(text, json.loads(task.sources[PACK_NAME]))
+            sent = [*task.handoffs.values()] + [
+                raw for name, raw in task.sources.items() if name.startswith(PRIOR_PREFIX)
+            ]
+            issues += cp8_issues(
+                text, json.loads(task.sources[PACK_NAME]), [item.decode("utf-8") for item in sent]
+            )
         routes = tuple(r for r in layout.routes if r.module_id == task.module_id)
         try:
             if routes:

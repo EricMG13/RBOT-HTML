@@ -3,6 +3,7 @@ Python computes, and the check of its handoff. Synthetic and hand-written: every
 below was written from the fixtures by hand, not computed by the code under test. A fake provider
 proves wiring only, not analytical quality."""
 
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -1167,8 +1168,8 @@ def test_a_complete_cp8_handoff_is_accepted():
         ),  # the month exemption is for periods of 1M to 12M only
         (
             "Leverage fell by 0.60x.",
-            "Leverage fell by 0.60x; debt was 300 US$m.",
-            "300",
+            "Leverage fell by 0.60x; debt was 333 US$m.",
+            "333",
         ),  # a value of another measure is not this row's
         # A definition the pack leaves to CP-8's judgement: one of the two words is required.
         ("Same definition: cash fell by 50 US$m.", "Cash fell by 50 US$m.", "Same definition"),
@@ -1228,7 +1229,7 @@ def test_a_fact_row_without_figures_is_free_text_and_one_with_a_figure_names_a_m
     again = REGISTERS.replace(
         "\n### What changed: the analysis", figured + "\n### What changed: the analysis", 1
     )
-    assert any("name a pack measure" in i for i in cp8_issues(again, PACK))
+    assert any("500" in i for i in cp8_issues(again, PACK))  # not held in the pack or a handoff
 
 
 def test_a_measure_the_pack_cannot_compare_is_stated_as_not_stated_or_not_comparable():
@@ -1444,8 +1445,6 @@ def test_a_measure_of_one_period_with_two_values_is_a_definition_or_a_correction
     "passage",
     [
         "Leverage fell by 0.56x.",  # the difference of a not-comparable row
-        "Leverage fell from 6.57x to 6.01x.",  # no difference printed, but a movement
-        "Leverage improved.",
     ],
 )
 def test_a_not_comparable_or_same_period_difference_never_reaches_a_reader_passage(passage):
@@ -1459,7 +1458,6 @@ def test_a_correction_may_be_described_by_a_sentence_that_names_it():
     row = same_period_row("Same definition; the earlier run misstated EBITDA.", "Correction")
     said = "Leverage fell from 6.57x to 6.01x after the correction of EBITDA.\n\n"
     assert cp8_issues(with_row(row, said), PACK2) == ()
-    assert cp8_issues(with_row(row, "Leverage fell from 6.57x to 6.01x.\n\n"), PACK2)
 
 
 def test_a_not_comparable_difference_is_printed_nowhere_not_in_the_gaps_either():
@@ -1481,7 +1479,7 @@ def test_a_not_comparable_difference_is_printed_nowhere_not_in_the_gaps_either()
         "Leverage is 400 US$m.",
     ],
 )
-def test_every_figure_of_a_reader_passage_is_a_pack_value_of_a_measure_it_names(sentence):
+def test_every_figure_of_a_reader_passage_is_held_in_the_pack_or_either_runs_handoffs(sentence):
     text = REGISTERS.replace(
         "## Findings\n\n", f"## Findings\n\n### Bottom line\n\n{sentence}\n\n", 1
     )
@@ -1925,3 +1923,241 @@ def test_the_canned_launcher_delivers_the_pack_and_an_accepted_cp8_handoff(tmp_p
     handoff = (receipt.parent / "CP-8.md").read_text()
     assert "| Total debt / EBITDA | 4.20x (FY2023) | 3.60x (FY2024) | New period |" in handoff
     assert "### Limitations ledger" in handoff
+
+
+# --- round 3: mechanical invariants only; a period is the same by date or fiscal year -------------
+
+
+@pytest.mark.parametrize(
+    ("prior", "current", "expected"),
+    [
+        ("FY2024", "FY2024", True),
+        ("FY2024 / 2024-09-30", "FY2024", True),
+        ("FY2024", "FY2024 / 2024-09-30", True),
+        ("FY2024 / 2024-09-30", "2024-09-30", True),
+        ("2024-09-30", "2024-09-30", True),
+        ("FY2024 / 2024-09-30", "FY2024 / 2024-12-31", False),
+        ("2024-09-30", "2024-12-28", False),
+        ("FY2024", "2024-09-30", False),
+        ("FY2023", "FY2024", False),
+        ("H1 FY2024", "FY2024", False),
+        ("LTM Q3 FY2024", "FY2024", False),
+        ("Q1 FY2024", "FY2024 / 2024-09-30", False),
+        ("FY2024 pro forma", "FY2024", False),
+        ("FY2024 restated", "FY2024", False),
+    ],
+)
+def test_a_period_is_the_same_only_on_the_same_date_or_fiscal_year(prior, current, expected):
+    from deploy_workflow.changes import same_period
+
+    assert same_period(prior, current) is expected
+
+
+def test_two_period_ends_of_one_fiscal_year_are_not_the_same_period_in_the_pack():
+    early = leverage("| FY2024 / 2024-09-30 | 6.57 | 4.93 | x | Gross debt over EBITDA 3,813. |")
+    now = leverage("| FY2024 / 2024-12-31 | 6.01 | 4.51 | x | Gross debt over EBITDA 3,813. |")
+    found = measures_of(
+        pair_pack(handoff("CP-1", "x", tables=early), handoff("CP-1", "x", tables=now))
+    )
+    assert found["leverage"]["same_period"] is False
+
+
+def _held_measure(key, label, values, definition=None, unit="x"):
+    prior, current, difference = values
+    side = {"label": label, "unit": unit, "definition": definition}
+    return {
+        "key": key,
+        "label": label,
+        "unit": unit,
+        "comparable": "judge",
+        "reason": "the definition text differs; CP-8 judges",
+        "prior": {**side, "value": prior, "period": "FY2024"},
+        "current": {**side, "value": current, "period": "FY2024"},
+        "difference": difference,
+        "same_period": True,
+    }
+
+
+# The real pair (a TDG run in the earlier format against one in the current format, both FY2024),
+# copied by hand: leverage 6.57 -> 6.01 and coverage 3.29 -> 3.60 are one period with two values.
+REAL = {
+    "measures": [
+        _held_measure("leverage", "Total debt / EBITDA", ("6.57", "6.01", "-0.56")),
+        _held_measure(
+            "coverage",
+            "EBITDA / cash interest",
+            ("3.29", "3.60", "0.31"),
+            "EBITDA 3,813 / cash interest paid, net 1,158.",
+        ),
+        _held_measure("cash", "Cash", ("6261", "6261", "0"), unit="US$m"),
+        _held_measure(
+            "undrawn",
+            "Undrawn committed facilities",
+            ("843", "843", "0"),
+            "Revolving borrowings available after 67 of letters of credit.",
+            "US$m",
+        ),
+    ],
+    "maturity_profile": {
+        "unit": "US$m",
+        "rows": [
+            {"period": p, "prior": v, "current": v, "difference": "0"}
+            for p, v in (
+                ("FY2025", "93"),
+                ("FY2026", "92"),
+                ("FY2027", "92"),
+                ("FY2028", "6637"),
+                ("FY2029", "4768"),
+                ("Thereafter", "12637"),
+            )
+        ],
+    },
+    "modules": [{"module": "CP-2", "ran_prior": True, "ran_current": True}],
+    "limitations": {
+        "earlier": [{"ref": "E1", "module": "CP-2", "text": "Segment data is not supplied."}],
+        "current": [{"ref": "C1", "module": "CP-2", "text": "Segment data are not supplied."}],
+    },
+}
+REAL_CURRENT = "# CP-1\n\nNew senior secured term loan of USD 3,000 million; test below 7.0x.\n"
+REAL_PRIOR = "# CP-1\n\nThe earlier run listed 20 limitations.\n"
+REAL_REGISTERS = """## Findings
+
+### Key findings
+
+@@SENTENCE@@
+
+### What changed: the issuer
+
+| Measure or fact | Earlier | Current | Cause | Effect on the credit view |
+| --- | --- | --- | --- | --- |
+| Total debt / EBITDA | 6.57x | 6.01x | Unresolved | Not comparable. |
+| EBITDA / cash interest | 3.29x | 3.60x | Unresolved | Not comparable. |
+| Cash | 6,261 US$m | 6,261 US$m | Unresolved | Same definition. |
+| Undrawn committed facilities | 843 US$m | 843 US$m | Unresolved | Same definition. |
+@@FACT@@
+
+### What changed: the analysis
+
+| Module | Status | Cause | Why |
+| --- | --- | --- | --- |
+| Credit view (CP-2) | Unchanged | Presentation | @@WHY@@ |
+
+### Limitations ledger
+
+| Earlier ref | Current ref | Limitation | Status | What closed it |
+| --- | --- | --- | --- | --- |
+| E1 | C1 | Segment data is missing. | Remaining | — |
+
+## Calculations
+@@GAPS@@"""
+
+
+def real_text(sentence="Nothing changed.", fact="", why="The format differs.", gaps=""):
+    text = REAL_REGISTERS.replace("@@SENTENCE@@", sentence).replace("@@FACT@@", fact)
+    return text.replace("@@WHY@@", why).replace("@@GAPS@@", gaps)
+
+
+REAL_HELD = (REAL_CURRENT, REAL_PRIOR)
+ORDINARY_SENTENCES = [
+    (
+        "The credit picture is about the same since the earlier run: cash is unchanged at USD "
+        "6,261 million and undrawn facilities at USD 843 million."
+    ),
+    (
+        "The change is the analysis's, not the issuer's: both runs read the same FY2024 accounts "
+        "as of 2024-09-30."
+    ),
+    (
+        "Maturities are unchanged, with USD 6,637 million due in FY2028 and USD 4,768 million in "
+        "FY2029."
+    ),
+    "Nothing falls due before 2028 beyond about USD 93 million a year.",
+    "The current run adds USD 3,000 million of new secured debt raised after the year end.",
+    "Eight modules ran in both runs and 12 ran only now.",
+    "The earlier run listed 20 limitations; the current run lists 11.",
+    "Leverage is 6.01x on EBITDA as defined against 6.57x on reported EBITDA, not comparable.",
+    "A covenant test below 7.0x would change the view.",
+    "Interest of USD 1,158 million is covered by EBITDA of USD 3,813 million.",
+    "Undrawn facilities of USD 843 million are after USD 67 million of letters of credit.",
+    "The 2027 notes and 2029 notes are unchanged in amount.",
+]
+
+
+def test_the_real_pair_mini_pack_with_valid_registers_is_accepted():
+    assert cp8_issues(real_text(), REAL, REAL_HELD) == ()
+
+
+@pytest.mark.parametrize("sentence", ORDINARY_SENTENCES)
+def test_ordinary_sentences_about_the_real_pair(sentence):
+    assert cp8_issues(real_text(sentence), REAL, REAL_HELD) == ()
+
+
+def test_a_rounded_figure_is_refused_and_a_figure_nobody_holds_is_refused():
+    rounded = "Cash was unchanged over 12 months at USD 6.3 billion."
+    assert any("6.3" in i for i in cp8_issues(real_text(rounded), REAL, REAL_HELD))
+    new_debt = ORDINARY_SENTENCES[4]
+    assert any("3000" in i for i in cp8_issues(real_text(new_debt), REAL, ()))
+    threshold = ORDINARY_SENTENCES[8]
+    assert any("7.0" in i for i in cp8_issues(real_text(threshold), REAL, (REAL_PRIOR,)))
+
+
+@pytest.mark.parametrize(
+    ("where", "text", "fragment"),
+    [
+        ("sentence", "Leverage is 0.56 turns lower.", "difference"),
+        ("sentence", "Leverage: −0.56x.", "difference"),
+        ("sentence", "Leverage is 6.01x now. That is a fall of 0.56x.", "difference"),
+        ("sentence", "Coverage rose by 0.31x.", "difference"),
+        ("gaps", "Leverage differs by 0.56x between the runs.", "difference"),
+        ("sentence", "Leverage is about 0.6x lower.", "0.6"),
+        ("why", "Coverage is now 0.47x better.", "0.47"),
+        ("gaps", "The headroom is USD 412 million.", "412"),
+    ],
+)
+def test_a_withheld_difference_or_unheld_figure_is_refused(where, text, fragment):
+    fields = {
+        "sentence": {"sentence": text},
+        "gaps": {"gaps": f"\n## Gaps\n\n{text}\n"},
+        "why": {"why": text},
+    }[where]
+    found = cp8_issues(real_text(**fields), REAL, REAL_HELD)
+    assert any(fragment in issue for issue in found), found
+
+
+FACT_LOAN = "| New term loan | — | USD 3,000 million | New source | Adds secured debt. |\n"
+
+
+def test_a_fact_row_may_carry_a_held_amount_and_never_a_pack_measures_value():
+    assert cp8_issues(real_text(fact=FACT_LOAN), REAL, REAL_HELD) == ()
+    assert any("3000" in i for i in cp8_issues(real_text(fact=FACT_LOAN), REAL, ()))
+    leverage_row = "| Gross leverage | 6.57x | 6.01x | New source | Moved. |\n"
+    found = cp8_issues(real_text(fact=leverage_row), REAL, REAL_HELD)
+    assert any("name a pack measure by its exact label" in i for i in found), found
+
+
+def test_the_checks_of_both_layers_agree_on_a_sentence_and_the_fact_row_that_holds_its_figure():
+    from deploy_workflow.prose_checks import figure_issues
+
+    text = real_text(ORDINARY_SENTENCES[4], fact=FACT_LOAN)
+    assert figure_issues(text) + cp8_issues(text, REAL, REAL_HELD) == ()
+
+
+def test_the_launch_checker_gives_cp8_both_runs_handoffs_to_hold_figures(tmp_path):
+    from test_cpos_launch import good_task
+
+    from deploy_workflow.owners.cpos_launch import checker
+
+    prepared, task, _ = good_task(tmp_path, "CP-8")
+    sentence = "The current run adds USD 3,000 million; a covenant test below 7.0x would change it."
+    text = real_text(sentence).encode()
+    sources = {**task.sources, "changes.json": json.dumps(REAL).encode()}
+    check = checker(prepared.layout)
+
+    def refused(handoffs, extra):
+        fresh = dataclasses.replace(task, handoffs=handoffs, sources={**sources, **extra})
+        said = " ".join(check(fresh, text))
+        return {n for n in ("3000", "7.0") if f"the figure {n} is held in neither" in said}
+
+    assert refused({"CP-1": b"# upstream"}, {}) == {"3000", "7.0"}
+    assert refused({"CP-1": b"# up", "CP-2": b"Term loan USD 3,000 million."}, {}) == {"7.0"}
+    assert refused({"CP-1": b"# up"}, {"prior/CP-2.md": b"Covenant below 7.0x."}) == {"3000"}
