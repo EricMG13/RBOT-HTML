@@ -277,12 +277,12 @@ test('screen.js passes the run\'s supplied file names, so a "; " file name is no
   assert.ok(html.includes('Other citations') && html.includes('final.pdf p.4'), 'the final.pdf chip is listed apart, not taken by the item');
 });
 
-test('an earlier-format citation keeps class basis, so the page\'s name rewriting leaves [CP-1 T3] as written', () => {
+test('an earlier-format citation keeps class basis (styling); the page\'s name rewriting now reads inside it (no module code is shown)', () => {
   const html = inspectorBasisBlock('Leverage is 5.2x [CP-1 T3].', true, {sections: [], chips: [], ran: () => false}, () => '');
   assert.match(html, /^<div class="basis">/);
   assert.ok(html.includes('<li>[CP-1 T3]</li>'));
   const screen = fs.readFileSync(path.join(__dirname, 'screen.js'), 'utf8');
-  assert.ok(screen.includes("parent.closest('.ref,.excerpt,.basis,.module-code')"), 'nameCodes skips .basis');
+  assert.ok(screen.includes("parent.closest('.ref,.excerpt')") && !screen.includes("'.ref,.excerpt,.basis"), 'nameCodes reads a Basis block: only register references and source excerpts stay as written');
 });
 
 
@@ -452,6 +452,13 @@ test('the inspector draws every Basis item of the CP-2 bottom line in the handof
   ]));
 });
 
+test('R5: an upstream-handoff Basis item shows its written name only, linked or not run; its link target is unchanged', () => {
+  const {inspectorItemHtml, inspectorItem} = require('./reader.js'), deps = {moduleHref: code => `#/${code}`, icon: n => `<img src="${n}">`};
+  const item = ran => inspectorItem('Liquidity (CP-2D)', {sections: [], chips: [], ran: () => ran});
+  assert.equal(inspectorItemHtml(item(true), deps), '<li><a class="text-action" href="#/CP-2D">Liquidity<img src="arrow-right"></a></li>');
+  assert.equal(inspectorItemHtml(item(false), deps), '<li>Liquidity<span class="small"> · Not run in this run</span></li>');
+});
+
 test('the inspector draws two sources, then a page range and an upstream module, for the CP-2 key findings', () => {
   assert.equal(inspectorDrawnFor(22, 23), basisList([
     '<li><strong>NBG_2024-12-31_Q4-results.pdf</strong></li>',
@@ -459,7 +466,7 @@ test('the inspector draws two sources, then a page range and an upstream module,
   ]));
   assert.equal(inspectorDrawnFor(24, 25), basisList([
     '<li><strong>NBG_2025-03-31_annual-report.pdf</strong>, pages 43–45</li>',
-    '<li><a class="text-action" href="#/CP-1">Financial foundation (CP-1)<img src="arrow-right"></a></li>',
+    '<li><a class="text-action" href="#/CP-1">Financial foundation<img src="arrow-right"></a></li>',
   ]));
 });
 

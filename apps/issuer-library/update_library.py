@@ -36,7 +36,7 @@ if str(HERE) not in sys.path:
 from credit_os.store import UnreadableFile, regular_chunks, workspace_store
 
 from deploy_vii.registry import plan
-from deploy_workflow.changes import DEFAULT_LEAD, LEAD_MODULE, PACK_SCHEMA
+from deploy_workflow.changes import DEFAULT_LEAD, LEAD_MODULE, PACK_SCHEMAS
 from deploy_workflow.changes_check import page_verdicts
 from deploy_workflow.credit_os_catalogue import catalogue
 from deploy_workflow.credit_os_chips import chips
@@ -162,8 +162,8 @@ def pack_of(workspace: Path, run: dict[str, Any]) -> tuple[dict[str, Any] | None
         return None, f"{path} is not valid JSON"
     if not isinstance(value, dict):
         return None, f"{path} is not a JSON object"
-    if value.get("schema") != PACK_SCHEMA:
-        return None, f"{path} has schema {value.get('schema')!r}, not {PACK_SCHEMA!r}"
+    if value.get("schema") not in PACK_SCHEMAS:
+        return None, f"{path} has schema {value.get('schema')!r}, not one of {PACK_SCHEMAS!r}"
     return value, None
 
 

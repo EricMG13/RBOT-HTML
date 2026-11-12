@@ -487,6 +487,27 @@ def test_cp8s_instructions_carry_the_method_and_the_earlier_run(tmp_path):
     assert not any("changes.json" in t for t in others)
 
 
+def test_cp8s_instructions_state_its_basis_forms_and_no_other_module_does(tmp_path):
+    workspace = tmp_path / "ws"
+    make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
+    context, folder = snapshot_context(tmp_path)
+    prepared = prepare(context, folder, workspace / "runs/cur", config="sol-medium", cap="50")
+    texts = {
+        m: (workspace / "runs/cur" / spec.path).read_text()
+        for m, spec in prepared.plan.instructions.items()
+    }
+    forms = (
+        "`<plain module name> (<code>)` for a handoff of this run",
+        "`<plain module name> (<code>), earlier run`",
+        "`Run comparison`",
+        "never named in a Basis line",
+    )
+    assert all(f in texts["CP-8"] for f in forms)
+    for module, text in texts.items():
+        if module != "CP-8":
+            assert not any(f in text for f in forms) and "Run comparison" not in text
+
+
 def test_a_resume_keeps_its_pins_when_a_newer_run_has_appeared(tmp_path):
     workspace = tmp_path / "ws"
     make_run(workspace, PRIOR_ID, as_of="2024-12-31", pathway=PATHWAY)
@@ -588,12 +609,21 @@ def maturities(*rows: str) -> str:
     )
 
 
-def balance(debt: str, net: str, fcf: str, period: str, label: str = "Total debt") -> str:
+def balance(fcf: str, period: str) -> str:
     return (
-        f"### Reported balance sheet\n\n| Line item | FY2022 | {period} | Reporting unit |\n"
+        f"### Reported cash flow\n\n| Line item | FY2022 | {period} | Reporting unit |\n"
         "| --- | --- | --- | --- |\n"
-        f"| {label} | 1 | {debt} | US$m |\n| Net debt | 1 | {net} | US$m |\n"
         f"| Free cash flow | 1 | {fcf} | US$m |\n\n"
+    )
+
+
+def netdebt(gross: str, cash: str, net: str, period: str, basis: str = "Gross debt: loans.") -> str:
+    """CP-1's net debt table (owner, 2026-11-12): hand-written cells, no arithmetic here."""
+    return (
+        "### Net debt data\n\n"
+        "| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |\n"
+        f"| --- | --- | --- | --- | --- | --- |\n| {period} | {gross} | {cash} | {net} | US$m "
+        f"| {basis} |\n\n"
     )
 
 
@@ -603,9 +633,9 @@ MEASURE_KEYS = [
     "coverage",
     "cash",
     "undrawn",
-    "free_cash_flow",
     "gross_debt",
     "net_debt",
+    "free_cash_flow",
 ]
 
 
@@ -681,7 +711,8 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
         )
         + liquidity("| FY2023 | 300 | 450 | US$m | Cash excluding restricted cash. |")
         + maturities("| FY2026 | 500 | US$m | Schedule. |", "| FY2027 | 100 | US$m | Schedule. |")
-        + balance("2,100", "1,800", "60", "FY2023"),
+        + balance("60", "FY2023")
+        + netdebt("2,100", "300", "1,800", "FY2023", "Gross debt: loans and finance leases."),
     )
     current = handoff(
         "CP-1",
@@ -696,11 +727,12 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
             "| FY2027 | Not supplied: the schedule ends | US$m | Schedule. |",
             "| FY2028 | 1,250 | US$m | Schedule. |",
         )
-        + balance("2,000", "1,750", "70", "FY2024", label="Gross debt"),
+        + balance("70", "FY2024")
+        + netdebt("2,000", "250", "1,750", "FY2024", "Gross debt: loans only."),
     )
     pack = pair_pack(prior, current)
     found = measures_of(pack)
-    assert pack["schema"] == "cpos-changes/2"
+    assert pack["schema"] == "cpos-changes/3"
     assert [m["key"] for m in pack["measures"]] == MEASURE_KEYS
     # Same definition text ("Reported."): Python's difference, 3.60 - 4.20.
     assert found["leverage"]["comparable"] == "yes"
@@ -732,8 +764,9 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
     assert found["cash"]["prior"]["definition"] == "Cash excluding restricted cash."
     assert found["cash"]["current"]["definition"] == "Cash on another basis."
     assert (found["undrawn"]["comparable"], found["undrawn"]["difference"]) == ("judge", "-50")
-    # Rows read from CP-1's tables when they state a unit: free cash flow (no definition text in
-    # either run, so the same), and a label that differs (a judgement, the difference stands).
+    # Free cash flow is a row read from CP-1's tables when it states a unit (no definition text in
+    # either run, so the same); gross and net debt come from the net debt table, whose basis text
+    # differs here (a judgement, the difference stands).
     assert (found["free_cash_flow"]["comparable"], found["free_cash_flow"]["difference"]) == (
         "yes",
         "10",
@@ -746,7 +779,7 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
         "1,800",
         "1,750",
     )
-    assert (found["net_debt"]["comparable"], found["net_debt"]["difference"]) == ("yes", "-50")
+    assert (found["net_debt"]["comparable"], found["net_debt"]["difference"]) == ("judge", "-50")
     assert found["net_debt"]["unit"] == "US$m"
     # The net debt change is left out with its reason; the maturity profile is built.
     assert "net_debt_change" not in pack
@@ -765,19 +798,21 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
 
 
 def bridge_pack(
-    prior_net: str = "1,800", current_net: str = "1,750", cash_basis: str = "Cash."
+    prior_net: str = "1,800", current_net: str = "1,750", prior_basis: str = "Gross debt: loans."
 ) -> dict:
     prior = handoff(
         "CP-1",
         "Earlier.",
-        tables=liquidity(f"| FY2023 | 300 | 450 | US$m | {cash_basis} |")
-        + balance("2,100", prior_net, "60", "FY2023"),
+        tables=liquidity("| FY2023 | 300 | 450 | US$m | Cash. |")
+        + balance("60", "FY2023")
+        + netdebt("2,100", "300", prior_net, "FY2023", prior_basis),
     )
     current = handoff(
         "CP-1",
         "Now.",
         tables=liquidity("| FY2024 | 250 | 400 | US$m | Cash. |")
-        + balance("2,000", current_net, "70", "FY2024"),
+        + balance("70", "FY2024")
+        + netdebt("2,000", "250", current_net, "FY2024"),
     )
     return pair_pack(prior, current)
 
@@ -796,6 +831,13 @@ def test_the_net_debt_change_is_built_when_both_runs_state_it_under_one_definiti
             "raises it; a two-point identity of the stated balances, not an analysis of what "
             "drove the change"
         ),
+        "same_period": False,
+        "prior_period": "FY2023",
+        "current_period": "FY2024",
+        "prior_gross_debt": "2100",
+        "prior_cash": "300",
+        "current_gross_debt": "2000",
+        "current_cash": "250",
     }
     assert "net_debt_bridge" not in pack
     assert pack["omitted"] == {
@@ -808,8 +850,8 @@ def test_the_net_debt_change_is_built_when_both_runs_state_it_under_one_definiti
     [
         ({"current_net": "1,700"}, "a run's net debt is not its gross debt less its cash"),
         (
-            {"cash_basis": "Cash excluding restricted cash."},
-            "cash is not comparable under one definition (judge)",
+            {"prior_basis": "Gross debt: loans and leases."},
+            "gross debt is not comparable under one definition (judge)",
         ),
     ],
 )
@@ -846,18 +888,20 @@ def test_the_pack_lists_every_module_and_limitation_of_either_run():
         "CP-2E": handoff("CP-2E", "Macro view."),
     }
     pack = build_pack(_prior(), prior, current, as_of="2025-03-31", pathway="credit_snapshot")
-    assert pack["schema"] == "cpos-changes/2"
+    assert pack["schema"] == "cpos-changes/3"
     assert pack["prior"] == {
         "run": "p",
         "as_of": "2024-12-31",
         "pathway": "credit_snapshot",
         "format": "current",
         "methods_changed": [],
+        "selection": None,
     }
     assert pack["current"] == {
         "as_of": "2025-03-31",
         "pathway": "credit_snapshot",
         "format": "current",
+        "selection": None,
     }
     assert pack["modules"] == [
         {
@@ -933,10 +977,9 @@ def test_an_ambiguous_or_unitless_row_is_not_a_measure():
     twice = handoff(
         "CP-1",
         "x",
-        tables=balance("2,100", "1,800", "60", "FY2023")
-        + balance("2,200", "1,900", "70", "FY2023"),
+        tables=balance("60", "FY2023") + balance("70", "FY2023"),
     )
-    assert "net_debt" not in observations(twice)  # two rows of one label: not guessed
+    assert "free_cash_flow" not in observations(twice)  # two rows of one label: not guessed
     unitless = "## Findings\n\n| Line item | FY2023 |\n| --- | --- |\n| Net debt | 1,800 |\n"
     assert observations(unitless) == {}
 
@@ -1024,11 +1067,10 @@ def test_an_ambiguous_row_says_so_rather_than_that_the_run_does_not_state_it():
     twice = handoff(
         "CP-1",
         "x",
-        tables=balance("2,100", "1,800", "60", "FY2023")
-        + balance("2,200", "1,900", "70", "FY2023"),
+        tables=balance("60", "FY2023") + balance("70", "FY2023"),
     )
-    once = handoff("CP-1", "x", tables=balance("2,000", "1,750", "70", "FY2024"))
-    found = measures_of(pair_pack(twice, once))["net_debt"]
+    once = handoff("CP-1", "x", tables=balance("70", "FY2024"))
+    found = measures_of(pair_pack(twice, once))["free_cash_flow"]
     assert found["comparable"] == "no"
     assert found["reason"] == "the earlier run states it in more than one row"
     assert found["prior"] is None
@@ -1886,7 +1928,7 @@ def test_a_pack_that_cannot_be_built_delivers_without_cp8(tmp_path, capsys, monk
     """The pack builder is made to fail as it does on a handoff text it cannot read."""
     _, out, argv = run_with_prior(tmp_path)
 
-    def builder(prior, as_of, pathway):
+    def builder(prior, as_of, pathway, selection):
         def build(sources, handoffs):
             raise ValueError("a handoff is not readable")
 
@@ -2069,8 +2111,8 @@ REAL_REGISTERS = """## Findings
 | --- | --- | --- | --- | --- |
 | Total debt / EBITDA | 6.57x | 6.01x | Unresolved | Not comparable. |
 | EBITDA / cash interest | 3.29x | 3.60x | Unresolved | Not comparable. |
-| Cash | 6,261 US$m | 6,261 US$m | Unresolved | Same definition. |
-| Undrawn committed facilities | 843 US$m | 843 US$m | Unresolved | Same definition. |
+| Cash | 6,261 US$m | 6,261 US$m | None | Same definition. |
+| Undrawn committed facilities | 843 US$m | 843 US$m | None | Same definition. |
 @@FACT@@
 
 ### What changed: the analysis
@@ -2288,3 +2330,419 @@ def test_the_page_reads_the_ledger_counts_and_a_missing_register_as_nothing():
 def test_the_checker_accepts_a_module_cell_only_in_the_form_the_tab_reads(case):
     text = REGISTERS.replace("| Credit view (CP-2) |", f"| {case['cell']} |", 1)
     assert (cp8_issues(text, PACK) == ()) is case["accepted"]
+
+
+# --- the first real CP-8 run (tdg-proof-snapshot-opus-002): four defects read from its output -----
+# Expected texts below are copied by hand from that run's accepted CP-8 handoff and CP-1 handoffs.
+
+REAL_BASIS = "Basis: changes.json; prior/CP-1.md, page 4"  # the real handoff's Basis line
+EARLIER_BASIS = (
+    "Basis: Run comparison; Financial data foundation (CP-1), earlier run; Downside pathway (CP-2A)"
+)
+
+
+def _with_basis(basis: str) -> str:
+    passage = f"### Bottom line\n\nAbout the same.\n{basis}\n\n"
+    return with_row(LEVERAGE_ROW, passage=passage)
+
+
+def test_cp8s_basis_line_accepts_the_comparison_and_an_earlier_run_handoff_by_name():
+    assert cp8_issues(_with_basis(EARLIER_BASIS), PACK) == ()
+    assert cp8_issues(_with_basis("Basis: Run comparison."), PACK) == ()  # the optional full stop
+
+
+@pytest.mark.parametrize(
+    ("basis", "fragment"),
+    [
+        (REAL_BASIS, "changes.json"),
+        ("Basis: Run comparison; changes.json", "changes.json"),
+        ("Basis: prior/CP-1.md", "prior/"),
+        ("Basis: Financial data foundation (CP-1), prior/CP-1.md", "prior/"),
+        ("Basis: Financial data foundation (CP-1), earlier run, page 4", "page"),
+        ("Basis: Financial data foundation (CP-1), earlier run, pages 4–5", "page"),
+        ("Basis: Financial data foundation (CP-1), p. 4", "page"),
+        ("Basis: Financial data foundation (CP-1), pp. 4-5", "page"),
+    ],
+)
+def test_cp8s_basis_line_refuses_pipeline_file_names_and_a_page_of_a_handoff(basis, fragment):
+    found = cp8_issues(_with_basis(basis), PACK)
+    assert any("Basis" in i and fragment in i for i in found), found
+
+
+def test_the_library_reads_the_two_cp8_basis_forms_in_a_cp8_handoff_only_and_exactly():
+    from deploy_workflow.credit_os_chips import basis_locators
+
+    line = "Basis: Run comparison; Financial data foundation (CP-1), earlier run"
+    assert basis_locators(line, {}, "CP-8") == []
+    for module in (None, "CP-2"):  # no other module has an earlier run or a comparison pack
+        assert len(basis_locators(line, {}, module)) == 2
+    for item in (
+        "annual-report.pdf, page 4 (CP-1), earlier run",
+        "Run comparison, page 4",
+        "Financial data foundation (CP-99), earlier run",  # no such module
+        "Financial data foundation (CP-1), earlier run, page 4",
+    ):
+        (gap,) = basis_locators(f"Basis: {item}", {"annual-report.pdf": "k"}, "CP-8")
+        assert gap["kind"] == "gap", item
+
+
+ZERO = {**PACK["measures"][0]}
+ZERO.update(
+    comparable="judge",
+    prior={**LEVERAGE_PRIOR, "value": "6.01", "period": "FY2024", "definition": "Gross."},
+    current={**LEVERAGE_PRIOR, "value": "6.01", "period": "FY2024", "definition": "Gross, again."},
+    difference="0.00",
+    same_period=True,
+)
+PACK_ZERO = {**PACK, "measures": [ZERO, *PACK["measures"][1:]]}
+ZERO_EFFECT = (
+    "Same definition: difference 0.00x at the same date, so the leverage view is unchanged."
+)
+
+
+def zero_issues(cause: str, effect: str = ZERO_EFFECT) -> tuple[str, ...]:
+    row = f"| Total debt / EBITDA | 6.01x (FY2024) | 6.01x (FY2024) | {cause} | {effect} |"
+    return cp8_issues(REGISTERS.replace(LEVERAGE_ROW, row), PACK_ZERO)
+
+
+def test_an_unchanged_measure_has_cause_none_and_unresolved_is_refused_for_it():
+    assert zero_issues("None") == ()
+    found = zero_issues("Unresolved")  # what the real handoff wrote
+    assert any("`None`" in i and "Total debt / EBITDA" in i for i in found), found
+    assert any("Cause 'New period'" in i for i in zero_issues("New period"))
+
+
+def test_a_zero_difference_said_not_comparable_may_keep_unresolved():
+    assert zero_issues("Unresolved", "Not comparable: the definition of gross debt differs.") == ()
+
+
+def test_none_stays_refused_for_a_measure_with_a_difference():
+    row = LEVERAGE_ROW.replace("New period", "None")
+    found = cp8_issues(REGISTERS.replace(LEVERAGE_ROW, row), PACK)
+    assert any("Cause 'None'" in i for i in found), found
+
+
+PRESET_PACK = {**PACK, "prior": {"selection": "preset"}, "current": {"selection": "preset"}}
+CHANGED_SET = "The pathway's module set changed between the runs."
+REAL_WHY = "It ran only this time, and the pack does not say why the earlier run did not select it."
+
+
+def module_issues(pack: dict, cause_a: str, why_a: str, cause_b: str, why_b: str):
+    text = REGISTERS.replace(
+        "| Research (CP-DR) | Not run this time | Method change | The research module was not "
+        "selected. |",
+        f"| Research (CP-DR) | Not run this time | {cause_a} | {why_a} |",
+    ).replace(
+        "| Macro (CP-2E) | New | New source | The module was added. |",
+        f"| Macro (CP-2E) | New | {cause_b} | {why_b} |",
+    )
+    return cp8_issues(text, pack)
+
+
+def test_modules_that_appear_or_go_between_two_preset_runs_are_a_method_change():
+    ok = "Method change"
+    assert module_issues(PRESET_PACK, ok, CHANGED_SET, ok, CHANGED_SET) == ()
+    for cause in ("Unresolved", "New source", "New period"):
+        found = module_issues(PRESET_PACK, ok, CHANGED_SET, cause, CHANGED_SET)
+        assert any("CP-2E" in i and "`Method change`" in i for i in found), (cause, found)
+        found = module_issues(PRESET_PACK, cause, CHANGED_SET, ok, CHANGED_SET)
+        assert any("CP-DR" in i and "`Method change`" in i for i in found), (cause, found)
+
+
+def test_the_phrase_the_pack_does_not_say_is_refused_between_two_preset_runs():
+    found = module_issues(PRESET_PACK, "Method change", CHANGED_SET, "Method change", REAL_WHY)
+    assert any("CP-2E" in i and "does not say" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    "pack",
+    [
+        {**PACK, "prior": {"selection": "preset"}, "current": {"selection": "explicit"}},
+        {**PACK, "prior": {"selection": None}, "current": {"selection": "explicit"}},
+        PACK,  # a pack of the earlier shape records no selection
+    ],
+)
+def test_where_a_run_was_not_a_preset_the_cause_stays_unresolved(pack):
+    assert module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY) == ()
+
+
+def test_a_prior_with_no_recorded_selection_counts_as_a_preset_run():
+    """tdg-reader-format-001's manifest has no `selection` key; it was a base because it ran the
+    pathway's lead module. The pack states null as recorded; the rule still fires."""
+    pack = {**PACK, "prior": {"selection": None}, "current": {"selection": "preset"}}
+    found = module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY)
+    assert any("CP-DR" in i and "`Method change`" in i for i in found), found
+    assert any("CP-2E" in i and "does not say" in i for i in found), found
+    assert module_issues(pack, "Method change", CHANGED_SET, "Method change", CHANGED_SET) == ()
+
+
+def test_a_prior_without_a_recorded_selection_is_stated_null_in_the_pack(tmp_path):
+    make_run(tmp_path, "old", as_of="2024-12-31", selection=None, modules=("CP-0", "CP-1", "CP-2"))
+    found = find_prior(
+        tmp_path,
+        folder="cur",
+        issuer_id="nbg",
+        **ME,
+        pathway="credit_snapshot",
+        as_of="2025-03-31",
+        method=method(),
+    )
+    assert found is not None and found[0].selection is None
+    pack = build_pack(
+        found[0],
+        {"CP-1": "x"},
+        {"CP-1": "x"},
+        as_of="2025-03-31",
+        pathway="credit_snapshot",
+        selection="preset",
+    )
+    assert pack["prior"]["selection"] is None  # null stays null: no value is invented
+
+
+def test_the_pack_states_both_selections_and_the_schema_says_so():
+    prior = _prior().model_copy(update={"selection": "preset"})
+    pack = build_pack(
+        prior,
+        {"CP-1": "x"},
+        {"CP-1": "x"},
+        as_of="2025-03-31",
+        pathway="credit_snapshot",
+        selection="preset",
+    )
+    assert pack["schema"] == "cpos-changes/3"
+    assert pack["prior"]["selection"] == "preset"
+    assert pack["current"]["selection"] == "preset"
+    unknown = build_pack(
+        _prior(), {"CP-1": "x"}, {"CP-1": "x"}, as_of="2025-03-31", pathway="credit_snapshot"
+    )
+    assert (unknown["prior"]["selection"], unknown["current"]["selection"]) == (None, None)
+
+
+def test_a_found_prior_run_carries_the_selection_its_manifest_recorded(tmp_path):
+    make_run(tmp_path, "full", as_of="2024-12-31", selection="preset")
+    found = find_prior(
+        tmp_path,
+        folder="cur",
+        issuer_id="nbg",
+        **ME,
+        pathway="credit_snapshot",
+        as_of="2025-03-31",
+        method=method(),
+    )
+    assert found is not None and found[0].selection == "preset"
+
+
+# D3. The two real CP-1 handoffs state gross debt, in two layouts no exact rule reads together.
+REAL_PRIOR_DEBT = (
+    "| Statement label / metric | FY2024 | FY2023 | Unit and quantity / status | Source |\n"
+    "|---|---:|---:|---|---|\n"
+    "| Gross financial debt including finance leases and securitization | 25068 | 19913 "
+    "| USD million; calculated C01; principal, not net carrying value | f.jsonl, pages 144–145 |\n"
+    "| Net financial debt | 18807 | 16441 | USD million; calculated C02; gross debt less "
+    "reported cash, no dividend adjustment | f.jsonl, page 120 |\n"
+)
+REAL_CURRENT_DEBT = (
+    "| Metric | FY2024 | FY2023 | Definition / identity | Source |\n"
+    "|---|---|---|---|---|\n"
+    "| Total debt (gross, incl. securitization), USD m | 25,068 | 19,913 "
+    "| Calculations C01, C03 | calculation C01 |\n"
+    "| Net debt (reported balance sheet), USD m | 18,807 | 16,441 "
+    "| Calculations C02, C04 | calculation C02 |\n"
+)
+
+
+def test_the_net_debt_change_reason_says_what_the_comparison_reads_not_that_debt_is_unstated():
+    pack = pair_pack(
+        handoff("CP-1", "Earlier.", tables=REAL_PRIOR_DEBT),
+        handoff("CP-1", "Now.", tables=REAL_CURRENT_DEBT),
+    )
+    assert "net_debt_change" not in pack
+    assert pack["omitted"]["net_debt_change"] == (
+        "gross debt is not read from either run's CP-1 (the comparison reads the Gross debt "
+        'column of the CP-1 "Net debt data" table)'
+    )
+
+
+def test_a_pack_from_two_runs_with_the_net_debt_table_states_the_hand_computed_change():
+    """Hand-computed: 2,100 - 300 = 1,800 and 2,000 - 250 = 1,750; gross fell 100, cash fell 50."""
+    pack = bridge_pack()
+    assert pack["net_debt_change"]["prior_net_debt"] == "1800"
+    assert pack["net_debt_change"]["change_in_gross_debt"] == "-100"
+    assert pack["net_debt_change"]["change_in_cash"] == "-50"
+    assert pack["net_debt_change"]["current_net_debt"] == "1750"
+    found = measures_of(pack)
+    assert (found["gross_debt"]["comparable"], found["net_debt"]["comparable"]) == ("yes", "yes")
+
+
+@pytest.mark.parametrize(("lacking", "run"), [("prior", "earlier"), ("current", "current")])
+def test_a_run_without_the_net_debt_table_leaves_the_change_out_and_names_that_run(lacking, run):
+    with_table = handoff(
+        "CP-1",
+        "x",
+        tables=liquidity("| FY2024 | 250 | 400 | US$m | Cash. |")
+        + netdebt("2,000", "250", "1,750", "FY2024"),
+    )
+    without = handoff("CP-1", "x", tables=liquidity("| FY2023 | 300 | 450 | US$m | Cash. |"))
+    prior, current = (without, with_table) if lacking == "prior" else (with_table, without)
+    pack = pair_pack(prior, current)
+    assert "net_debt_change" not in pack
+    assert pack["omitted"]["net_debt_change"] == (
+        f"gross debt cannot be compared (the {run} run does not state it)"
+    )
+
+
+def test_the_net_debt_change_takes_all_three_figures_from_the_net_debt_table_row_alone():
+    """Each run's liquidity table also states a later period; the change must not read it.
+    Hand-computed: 2,100 - 300 = 1,800 and 2,000 - 200 = 1,800; gross fell 100, cash fell 100."""
+    earlier = handoff(
+        "CP-1",
+        "Earlier.",
+        tables=liquidity(
+            "| FY2023 | 300 | 450 | US$m | Cash. |\n| FY2024 | 250 | 400 | US$m | Cash. |"
+        )
+        + netdebt("2,100", "300", "1,800", "FY2023"),
+    )
+    later = handoff(
+        "CP-1",
+        "Now.",
+        tables=liquidity("| FY2025 | 999 | 400 | US$m | Cash. |")
+        + netdebt("2,000", "200", "1,800", "FY2025"),
+    )
+    pack = pair_pack(earlier, later)
+    # Shown: both rows are internally consistent and the periods differ between the runs, which
+    # the pack states in each measure's period; the liquidity table's cash plays no part.
+    assert {k: v for k, v in pack["net_debt_change"].items() if k != "convention"} == {
+        "unit": "US$m",
+        "prior_net_debt": "1800",
+        "change_in_gross_debt": "-100",
+        "change_in_cash": "-100",
+        "current_net_debt": "1800",
+        "same_period": False,
+        "prior_period": "FY2023",
+        "current_period": "FY2025",
+        "prior_gross_debt": "2100",
+        "prior_cash": "300",
+        "current_gross_debt": "2000",
+        "current_cash": "200",
+    }
+    assert "net_debt_change" not in pack["omitted"]
+
+
+def test_a_net_debt_row_that_does_not_add_up_is_omitted_with_a_true_reason():
+    earlier = handoff("CP-1", "x", tables=netdebt("2,100", "300", "1,700", "FY2023"))
+    later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
+    pack = pair_pack(earlier, later)
+    assert (
+        pack["omitted"]["net_debt_change"] == "a run's net debt is not its gross debt less its cash"
+    )
+
+
+def test_a_net_debt_row_without_its_cash_is_omitted_naming_the_cash():
+    gap = "Not supplied: not read"
+    earlier = handoff("CP-1", "x", tables=netdebt("2,100", gap, "1,800", "FY2023"))
+    later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
+    pack = pair_pack(earlier, later)
+    assert pack["omitted"]["net_debt_change"] == "cash cannot be compared (a value is not stated)"
+
+
+# --- one period's net debt change (owner, 2026-11-12): the analysis changed, not the issuer ---
+
+
+def _bridge(prior_period, current_period, current=("2,000", "250", "1,750")):
+    prior = handoff("CP-1", "Earlier.", tables=netdebt("2,100", "300", "1,800", prior_period))
+    now = handoff("CP-1", "Now.", tables=netdebt(*current, current_period))
+    return pair_pack(prior, now)
+
+
+@pytest.mark.parametrize(
+    ("prior_period", "current_period", "flag"),
+    [
+        ("FY2024", "FY2024", True),
+        ("FY2024", "FY2024 / 2024-09-30", True),  # one period, written two ways
+        ("FY2023", "FY2024", False),
+    ],
+)
+def test_the_net_debt_change_says_whether_both_rows_are_one_period(
+    prior_period, current_period, flag
+):
+    change = _bridge(prior_period, current_period)["net_debt_change"]
+    assert change["same_period"] is flag
+    assert (change["prior_period"], change["current_period"]) == (prior_period, current_period)
+    # the stated balances of each row, read and not computed
+    assert (change["prior_gross_debt"], change["prior_cash"]) == ("2100", "300")
+    assert (change["current_gross_debt"], change["current_cash"]) == ("2000", "250")
+
+
+def test_equal_net_debt_rows_of_one_period_are_flagged_with_zero_differences():
+    change = _bridge("FY2024", "FY2024", ("2,100", "300", "1,800"))["net_debt_change"]
+    assert change["same_period"] is True
+    assert (change["change_in_gross_debt"], change["change_in_cash"]) == ("0", "0")
+
+
+def _nd_measure(key, label, values, difference, same_period=True):
+    prior, current = values
+    side = {**CASH_PRIOR, "label": label, "period": "FY2024"}
+    return {
+        "key": key,
+        "label": label,
+        "unit": "US$m",
+        "comparable": "yes",
+        "reason": None,
+        "prior": {**side, "value": prior},
+        "current": {**side, "value": current},
+        "difference": difference,
+        "same_period": same_period,
+    }
+
+
+def _ndpack(same_period=True, with_flag=True):
+    change = {
+        "unit": "US$m",
+        "prior_net_debt": "6190",
+        "change_in_gross_debt": "-110",
+        "change_in_cash": "-30",
+        "current_net_debt": "6110",
+        "convention": "net debt = gross debt - cash",
+    }
+    if with_flag:
+        change |= {
+            "same_period": same_period,
+            "prior_period": "FY2024",
+            "current_period": "FY2024",
+            "prior_gross_debt": "7100",
+            "prior_cash": "910",
+            "current_gross_debt": "6990",
+            "current_cash": "880",
+        }
+    return {
+        **PACK,
+        "measures": [
+            *PACK["measures"],
+            _nd_measure("gross_debt", "Gross debt", ("7100", "6990"), "-110", same_period),
+            _nd_measure("net_debt", "Net debt", ("6190", "6110"), "-80", same_period),
+        ],
+        "net_debt_change": change,
+    }
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Net debt fell by 80 US$m.",
+        "Gross debt fell by 110 US$m.",
+        "Cash fell by 30 US$m.",
+        "Cash is 30 US$m lower.",
+    ],
+)
+def test_a_same_period_net_debt_difference_is_printed_in_no_passage(sentence):
+    assert cp8_issues(with_row(LEVERAGE_ROW, sentence + "\n\n"), _ndpack()), "accepted"
+
+
+def test_the_two_values_of_a_same_period_net_debt_may_be_stated():
+    said = "Net debt is 6,190 US$m earlier and 6,110 US$m now; cash is 910 and 880 US$m.\n\n"
+    assert cp8_issues(with_row(LEVERAGE_ROW, said), _ndpack()) == ()
+
+
+@pytest.mark.parametrize("pack", [_ndpack(same_period=False), _ndpack(with_flag=False)])
+def test_a_net_debt_change_of_two_periods_or_without_the_flag_may_be_said_to_have_moved(pack):
+    assert cp8_issues(with_row(LEVERAGE_ROW, "Cash fell by 30 US$m.\n\n"), pack) == ()

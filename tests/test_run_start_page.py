@@ -38,6 +38,17 @@ pytestmark = pytest.mark.browser
 
 ROOT = Path(__file__).resolve().parents[1]
 FORM = ROOT / "docs/templates/context-form.html"
+# The page's own module names (its `MODULES` table), read from the file: the answer key for what an
+# analyst sees where a module code stood. The review names every module, never shows its code.
+NAMES = dict(
+    re.findall(r"^\s+'(CP-[A-Z0-9]+)': \['([^']+)'", FORM.read_text("utf-8"), re.MULTILINE)
+)
+
+
+def named(text: str) -> str:
+    return re.sub(r"\bCP-[A-Z0-9]+\b", lambda m: NAMES.get(m[0], "a module"), text)
+
+
 RESEARCH_MINIMAL = json.loads((ROOT / "cases/context/research-minimal.json").read_text("utf-8"))
 
 # Synthetic documents the launcher's own offline reading classifies by their cover lines.
@@ -688,7 +699,7 @@ def test_the_review_shows_the_services_forecast_per_module(page):
         want = min(own, key=ORDER.index) if own else "ready"
         assert by_module[module]["outcome"] == want, module
     for item in summary["items"]:  # every reason the service gave is shown
-        assert item["reason"] in seen["ready"]
+        assert named(item["reason"]) in seen["ready"]
     assert by_module["CP-4"]["outcome"] == "will_refuse"  # legal documents: none, on CP-4
     assert ["legal", "Go to Legal"] in seen["goto"]
     for text in ("GPT Sol, Balanced (the default)", "USD 20", "Acme Corp", "2026-10-31", "1 read"):
@@ -1211,7 +1222,7 @@ def test_the_review_needs_a_tick_for_an_as_of_date_before_the_newest_document(pa
     seen = _reviewed(page, _AS_OF_EARLY)
     row = seen["rows"]["run"]
     assert row["outcome"] == "limited" and "before your newest file" in row["text"]
-    assert "CP-1" in row["text"] and len(row["ticks"]) >= 1
+    assert NAMES["CP-1"] in row["text"] and len(row["ticks"]) >= 1
     assert row["ticks"][0] == "I accept this limit."
     _blocked_until_ticked(seen)
 
@@ -1223,7 +1234,7 @@ def test_the_review_needs_a_tick_for_an_executed_answer_on_a_file_that_is_no_agr
     assert "I have checked this." in cp4["ticks"]  # a check with a fix is ticked
     run = seen["rows"]["run"]  # the page's own limit, run level, naming the file and the modules
     assert run["outcome"] == "limited" and "memo.txt" in run["text"]
-    assert "CP-4" in run["text"] and "CP-2A" in run["text"] and len(run["ticks"]) >= 1
+    assert NAMES["CP-4"] in run["text"] and NAMES["CP-2A"] in run["text"] and len(run["ticks"]) >= 1
     _blocked_until_ticked(seen)
 
 
@@ -1455,7 +1466,8 @@ def test_the_review_shows_turns_and_left_out_modules_at_every_level_when_they_di
     for lvl in ("advanced", "standard", "basic"):
         text = seen[lvl]
         assert "Turns per module2 (the default is 32)" in text, (lvl, text)
-        assert "Modules left out" in text and f"({seen['left']})" in text, (lvl, text)
+        assert "Modules left out" in text and NAMES[seen["left"]] in text, (lvl, text)
+        assert seen["left"] not in text, (lvl, text)
 
 
 def _stale(page, setup: str, change: str):
@@ -2526,6 +2538,139 @@ def test_a_refused_listing_is_shown_and_carries_nothing(root, tmp_path, monkeypa
     assert "could not be listed" in got["msg"] and "link.txt" in got["msg"]
     assert str(root) not in got["msg"]
     assert got["files"] == [] and got["rows"] == []
+
+
+@pytest.mark.parametrize(
+    "pathway",
+    [
+        "credit_snapshot",
+        "earnings_update",
+        "relative_value",
+        "covenant_refinancing",
+        "distressed_restructuring",
+        "portfolio_decision",
+        "short_snapshot",
+    ],
+)
+def test_no_module_code_is_shown_on_any_stage_at_any_level_of_a_pathway(page, pathway):
+    """R7 (owner ruling 2026-11-12): every string the page renders (text, title, aria-label,
+    placeholder, alt) names a module by its `MODULES` name, never its code. Every stage of every
+    pathway at every level is visited with a row of each kind added and the review summarised; the
+    saved answer keys and option values stay the codes."""
+    seen = page.run(
+        """
+    const found = new Set(), code = /\\bCP-[A-Z0-9]+\\b/;
+    const scan = where => {
+      const walker = document.createTreeWalker(
+        document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const values = node.nodeType === 3
+          ? [node.parentElement.closest('script,style,#probe') ? '' : node.data]
+          : ['title', 'aria-label', 'placeholder', 'alt'].map(a => node.getAttribute(a) || '');
+        for (const value of values) if (code.test(value)) found.add(value.slice(0, 90));
+      }
+    };
+    const focusValues = new Set();
+    let tables = 0;
+    for (const pathway of ['PATHWAY']) {
+      for (const lv of ['advanced', 'standard', 'basic']) {
+        pick('data-k="pathway"', pathway);
+        level(lv);
+        if (lv === 'advanced') {
+          await issuer(pathway,
+            [file('annual.txt', REPORT_TEXT), file('prior.txt', PRIOR_TEXT)]);
+          type('d-current_period', 'fy-2025'); type('d-prior_period', 'fy-2024');
+          // The model and effort controls (Advanced only) and a module left out, so the review
+          // summarises "Model and effort" and "Modules left out".
+          pick('data-c="model"', 'claude'); pick('data-c="effort"', 'high');
+          const left = document.querySelector('[data-c="mod"]:checked');
+          left.checked = false; left.dispatchEvent(new Event('change', {bubbles: true}));
+          await review();
+          const facts = $('rv-facts').textContent;
+          if (!/Claude Opus, High/.test(facts) || !/Modules left out/.test(facts))
+            found.add('probe: model/effort/left-out rows missing');
+          document.querySelectorAll('[data-mod]').forEach(d => { d.open = true; });
+          scan(pathway + '/' + lv + '/review');
+          tables += document.querySelectorAll('#rv-ready tr[data-module]').length;
+        }
+        document.querySelectorAll('[data-add]').forEach(b => b.click());
+        for (const st of stages()) { gotoStep(st); scan(pathway + '/' + lv + '/' + st); }
+        document.querySelectorAll('select[data-k="focus_module"] option')
+          .forEach(o => focusValues.add(o.value));
+      }
+    }
+    return {tables, hits: [...found], keys: Object.keys(MODULES).sort(),
+      focus: [...focusValues].filter(Boolean).sort()};
+    """.replace("REPORT_TEXT", json.dumps(REPORT))
+        .replace("PRIOR_TEXT", json.dumps(REPORT.replace("2025", "2024")))
+        .replace("PATHWAY", pathway)
+    )
+    assert seen["tables"] > 0, "the review's readiness table was drawn and scanned"
+    assert not seen["hits"], "\n".join(seen["hits"])
+    assert seen["focus"] == seen["keys"], "a Focus module option keeps the code as its value"
+
+
+def test_a_service_refusal_naming_a_module_code_is_shown_with_the_modules_name(page):
+    """The summary error and the submit error are the service's own sentences; they name modules
+    by code, and the analyst reads the names. The stage lookup still reads the raw text."""
+    seen = page.run(
+        """
+    await issuer('credit_snapshot', [file('annual.txt', REPORT_TEXT)]);
+    const real = window.fetch;
+    const refuse = text => new Response(JSON.stringify({error: text}),
+      {status: 400, headers: {'Content-Type': 'application/json'}});
+    window.fetch = async (path, init) => {
+      if (String(path).endsWith('/summary'))
+        return refuse('--modules CP-0: fills no Credit Snapshot report section');
+      return real(path, init);
+    };
+    await review();
+    const summary = $('rv-state').textContent;
+    window.fetch = real;
+    SUMMARY = null; RENDERED = null;
+    await review();
+    tickAll(); approve();
+    window.fetch = async (path, init) => String(path).endsWith('/submit')
+      ? refuse('delivery_scope: CP-DR is outside the named scope') : real(path, init);
+    document.getElementById('submit').click();
+    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
+    return {summary, submit: $('rv-submit-error').textContent};
+    """.replace("REPORT_TEXT", json.dumps(REPORT))
+    )
+    assert "--modules Source readiness: fills no" in seen["summary"]
+    assert "delivery_scope: Research questions is outside the named scope" in seen["submit"]
+    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
+
+
+def test_a_short_snapshot_refusal_naming_module_codes_is_shown_with_the_modules_names(page):
+    """The Short Credit Snapshot's service refusals (a missing CP-1, a CP-L10 table) name modules by
+    code; the analyst reads the names, in the summary error and in the submit error."""
+    seen = page.run(
+        """
+    await issuer('short_snapshot', [file('annual.txt', REPORT_TEXT)]);
+    const real = window.fetch;
+    const refuse = text => new Response(JSON.stringify({error: text}),
+      {status: 400, headers: {'Content-Type': 'application/json'}});
+    window.fetch = async (path, init) => String(path).endsWith('/summary')
+      ? refuse('CP-L10 needs CP-1 in the run: missing CP-1') : real(path, init);
+    await review();
+    const summary = $('rv-state').textContent;
+    window.fetch = real;
+    SUMMARY = null; RENDERED = null;
+    await review();
+    tickAll(); approve();
+    window.fetch = async (path, init) => String(path).endsWith('/submit')
+      ? refuse('CP-L10: no Key figures table; CP-1 handoff missing') : real(path, init);
+    document.getElementById('submit').click();
+    for (let i = 0; i < 100 && !$('rv-submit-error').textContent; i++) await settle(50);
+    return {summary, submit: $('rv-submit-error').textContent};
+    """.replace("REPORT_TEXT", json.dumps(REPORT))
+    )
+    assert "Short credit snapshot needs Financial foundation in the run" in seen["summary"]
+    assert "missing Financial foundation" in seen["summary"]
+    assert "no Key figures table" in seen["submit"] and "Short credit snapshot" in seen["submit"]
+    assert not re.search(r"\bCP-[A-Z0-9]+\b", seen["summary"] + seen["submit"])
 
 
 def test_the_research_text_for_claude_says_it_does_not_search(page):

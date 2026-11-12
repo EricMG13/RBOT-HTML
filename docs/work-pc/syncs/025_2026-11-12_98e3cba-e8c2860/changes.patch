@@ -1,0 +1,740 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index d841d33..aab5696 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,12 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-12 — CP-1 states gross debt in `### Net debt data` so the net debt change can be shown (branch `claude/cp1-gross-debt-row`, base a639fb7, owner "Yes, add it")
++Scope: offline, synthetic. A `Gross debt` row cannot sit in an existing chart table (all four are period-row tables); controller ruling: a fifth period-row owner table on CP-1, all seven pathways (`Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation`, US$m, not a `Chart data:` heading so the library does not draw it). Checker: net debt = gross debt - cash exactly in Decimal when all three are stated, and, where the liquidity table has a row `same_period` calls the same period (`FY2024` and `FY2024 / 2024-09-30` are; `2024-09-30` and `FY2024` are not), a stated cash equal to that row's Cash. Pack: `gross_debt`, `net_debt` and the table's own Cash (not the liquidity table's) are read from the same latest row of that table, so the net debt change makes no cross-table read; the #66 exact-label row rule now reads only free cash flow. Hand-written expectations in `tests/test_cpos_launch.py` and `tests/test_changes.py` (2,100 - 300 = 1,800; 2,000 - 250 = 1,750). Method: `cp8.md` wording only (CP-1's method is unchanged: the instruction is the launcher's owner-table rule, so no CP-1 method revision); older runs show "methods changed" for CP-8 by hash.
++Compatibility: an older run (no table) is still a CP-8 base and renders; its net debt change is left out, `omitted` naming the run.
++Knock-on read in code: the library draws only `Chart data:` headings (this table is a reference section); `cpos_forecast` reads cells by row label and period header, so the table's period-labelled rows and measure headers cannot be named as an operand; CP-L10 Key figures only gain held figures; the report strip routes only chart blocks.
++Not verified: a real model writing this table; the library page with a real handoff carrying it; the VMO2 reader check (no presentation change was made to a delivered report).
++
+ ## 2026-11-12 — Redesign pass 1: run header, Modules, inspector and Overview (branch `claude/redesign-modules-overview`, stacked on PR 62)
+ 
+ Scope: offline, macOS, headless Chrome; no provider called. Presentation only, from the Claude Design
+diff --git a/docs/rulings/2026-11-11-module-presets-and-changes.md b/docs/rulings/2026-11-11-module-presets-and-changes.md
+index 06f7ff1..f3f862c 100644
+--- a/docs/rulings/2026-11-11-module-presets-and-changes.md
++++ b/docs/rulings/2026-11-11-module-presets-and-changes.md
+@@ -294,9 +294,7 @@ it showed four defects. Controller rulings, each implemented with a failing test
+   reads both and none was added. The reason the pack gives is now true: "gross debt is not read from either
+   run's CP-1 (the comparison reads only a table row labelled exactly ...)". Even when read, the two runs'
+   basis texts differ, so the pack would mark gross debt `judge` and the net debt change would still be left out
+-  (it needs `yes`). To be read, CP-1 would state gross debt, net debt and cash each as one row labelled
+-  exactly `Gross debt`, `Net debt` and (cash from its liquidity chart table), with `(US$m)` or a `Reporting
+-  unit` column, and the same basis text in both runs. CP-1's layout is unchanged here.
++  (it needs `yes`). What CP-1 states for it is set by the 2026-11-12 amendment below (`### Net debt data`).
+ - **D4, new modules marked `Unresolved`.** The pack (schema now `cpos-changes/3`; the library reads `/2` and
+   `/3`) states each run's `selection` (`preset`, `explicit` or null) in `prior` and `current`; a prior run's
+   selection is read from its manifest. When a module is `New` or `Not run this time` and both selections are
+@@ -316,3 +314,38 @@ Known limits, recorded, not in this change: pack values print as the handoffs st
+ one run and `FY2024` in the other); CP-DR's web guidance is unproven on Claude; a CP-8 `## Gaps` row may still
+ say the pack does not say why the earlier run selected fewer modules (the checker reads registers, not gaps);
+ Free cash flow and net debt are not read from the real CP-1s for the same label reason as gross debt.
++
++## Amendment, 2026-11-12 (owner: "Yes, add it"): CP-1 states gross debt in a table the pack reads
++
++Asked "Have CP-1 state gross debt in a fixed-label row so the net debt change can be shown?", the owner
++answered "Yes, add it". The `Gross debt` row cannot sit in an existing chart table: the four are period-row
++tables (`Period | <measures> | Reporting unit | Basis and limitation`, cash is a column), the pack's row reader
++needs periods across a header, and a gross debt column in the liquidity table would be drawn beside cash on one
++axis. The net debt change also needs net debt, not only gross debt. Controller ruling: a fifth small period-row
++table on every pathway, with the mechanisms that already exist and no new layout.
++
++- `### Net debt data` (not a `Chart data:` heading, so the library does not draw it, the report does not route it,
++  and the library lists it as a reference table under the CP-1 findings). Header `| Period | Gross debt | Cash |
++  Net debt | Reporting unit | Basis and limitation |`, US$m, one row per period stated (at least the latest
++  balance-sheet date); `Not supplied: <reason>` in a cell as in the other tables. Gross debt is the total debt
++  principal as the issuer reports it, and the Basis cell says what it includes (securitization, finance leases):
++  that is the definition text the pack carries for comparability. Cash is the liquidity table's figure; net debt is
++  gross debt less cash, worked with `calculate`, listed in `## Calculations`.
++- The checker adds two rules, named in the instructions: with all three figures stated a row must satisfy net debt =
++  gross debt - cash exactly (in Decimal), and a stated cash must equal the Cash of every liquidity row that `same_period`
++  (changes.py) calls the same period (`FY2024` and `FY2024 / 2024-09-30` are one period; `2024-09-30` and
++  `FY2024` are not).
++  A missing table or a wrong header is refused as for the other tables.
++- The pack reads `gross_debt`, `net_debt` and, for the net debt change, the table's own Cash column, all from
++  one run's latest row of this table, with the period-row reader that reads the chart tables (the liquidity
++  table is not read for the change); the exact-label row rule of #66 now reads only `free_cash_flow`. A run without the
++  table (every earlier run) states no gross or net debt: the net debt change is left out and `omitted` names
++  the run ("gross debt cannot be compared (the earlier run does not state it)"). Older runs stay usable as a CP-8
++  base and render as before. The pack computes nothing new.
++- Free cash flow is not part of this change. To be read it needs one row labelled exactly `Free cash flow` (or `FCF`)
++  with its unit in brackets or a `Reporting unit` column, in a table with periods across a header, and the same
++  basis text in both runs.
++- Recorded, no code: the library tab shows the net debt change's cash movement without its periods beside the
++  liquidity measure.
++- Recorded, no code (predates this branch, owner item): a same-period restatement with the same basis still yields a
++  net debt change with no flag.
+diff --git a/src/deploy_vii/methods/cp8.md b/src/deploy_vii/methods/cp8.md
+index d30bfca..8bbaa97 100644
+--- a/src/deploy_vii/methods/cp8.md
++++ b/src/deploy_vii/methods/cp8.md
+@@ -19,8 +19,8 @@ accepted, the run is delivered without it.
+     `selection`: `preset` when its modules were the pathway's own, `explicit` for a chosen subset,
+     null when not recorded;
+   - each measure either run states (`leverage`, `net_leverage`, `coverage`, `cash`, `undrawn`, and
+-    `free_cash_flow`, `gross_debt`, `net_debt` where a run states them in a row of that exact
+-    label): the earlier and the current value with unit, period and definition text, the
++    `gross_debt` and `net_debt` from CP-1's `Net debt data` table, and `free_cash_flow` where a
++    run states it in a row of that exact label): the earlier and the current value with unit, period and definition text, the
+     `difference` (current minus earlier, computed whenever both values are stated in one unit),
+     and `comparable`: `yes`, `no` or `judge` (see rule 3), and `same_period`: true when both runs state
+     the measure for the same period (computed by Python). A definition text that says `identical
+diff --git a/src/deploy_workflow/changes.py b/src/deploy_workflow/changes.py
+index 2b142af..6f90777 100644
+--- a/src/deploy_workflow/changes.py
++++ b/src/deploy_workflow/changes.py
+@@ -47,9 +47,9 @@ a decimal string; missing is null, never zero):
+   of the definition; page and locator numbers are not.
+ - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
+   current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
+-  unit (gross and net debt are read only from a CP-1 table row labelled exactly as `ROW_MEASURES`
+-  says, the unit in brackets after the label or in a `Reporting unit` column; a row labelled
+-  otherwise is not read, and `omitted` says so), each under the same definition ("yes"), and each
++  unit (gross and net debt are read only from the Gross debt and Net debt columns of CP-1's
++  `### Net debt data` table; a run without that table does not state them, and `omitted` says
++  which run), each under the same definition ("yes"), and each
+   run's net debt is its gross debt less its cash. A two-point identity of stated balances; it does
+   not say what drove the change. An increase in cash reduces net debt.
+ - `maturity_profile`: `{unit, rows: [{period, prior, current, difference}]}` from the CP-1
+@@ -82,7 +82,7 @@ from typing import Any, Literal
+ from pydantic import Field
+ 
+ from deploy_vii.contracts import Contract, Identifier
+-from deploy_workflow.credit_os_catalogue import chart_row, period_order
++from deploy_workflow.credit_os_catalogue import CHART_PREFIX, chart_row, period_order
+ from deploy_workflow.library_index import (
+     MethodHeadings,
+     MethodText,
+@@ -112,20 +112,24 @@ FIRST_RUN = "first run of this pathway"
+ DELIVERED_WHOLE = " The changes since the last run are CP-8's handoff, delivered whole."
+ NO_LIMITATION = re.compile(r"no limitation changes\b", re.IGNORECASE)
+ NOT_SUPPLIED = "Not supplied"
+-# (key, CP-1 chart table, value column): the five measures the library already quotes.
++NET_DEBT_TABLE = "Net debt data"  # CP-1's period-row table of gross debt, cash and net debt
++# (key, CP-1 period-row table, value column): the five measures the library already quotes, then
++# gross and net debt from the net debt table (owner, 2026-11-12, "Yes, add it"). The tables are
++# `### Chart data: <name>`, except the net debt table, which the library does not draw.
+ CHART_MEASURES = (
+     ("leverage", "leverage", "Total debt / EBITDA"),
+     ("net_leverage", "leverage", "Net debt / EBITDA"),
+     ("coverage", "interest cover", "EBITDA / cash interest"),
+     ("cash", "liquidity", "Cash"),
+     ("undrawn", "liquidity", "Undrawn committed facilities"),
++    ("gross_debt", NET_DEBT_TABLE, "Gross debt"),
++    ("net_debt", NET_DEBT_TABLE, "Net debt"),
+ )
+ # (key, row labels): read from the one CP-1 table row of that label, only when it states its unit.
+-ROW_MEASURES = (
+-    ("free_cash_flow", ("free cash flow", "fcf")),
+-    ("gross_debt", ("gross debt", "total debt")),
+-    ("net_debt", ("net debt",)),
+-)
++ROW_MEASURES = (("free_cash_flow", ("free cash flow", "fcf")),)
++# The net debt table's own Cash column: the cash of the net debt change, read from the same row as
++# gross and net debt. It is not a measure of the pack (the liquidity table's `cash` is).
++NET_DEBT_CASH = ("net_debt_cash", NET_DEBT_TABLE, "Cash")
+ MATURITIES = "debt maturities"
+ NET_DEBT_CONVENTION = (
+     "net debt = gross debt - cash: an increase in cash reduces net debt, a decrease raises it; "
+@@ -389,6 +393,10 @@ Reading = Observation | str | None
+ POINTER = re.compile(r"\b(?:identical|same)\s+(?:definition|measure|basis)\b", re.IGNORECASE)
+ 
+ 
++def _heading(chart: str) -> str:
++    return chart if chart == NET_DEBT_TABLE else f"Chart data: {chart}"
++
++
+ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> str | None:
+     """The definition a basis cell points to, or None. A basis that says `identical definition` or
+     `same measure` points to the basis of the table's row for the period before; that is followed,
+@@ -396,7 +404,7 @@ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> st
+     is another section of the handoff, and the text is then left as written."""
+     if text is None or POINTER.search(text) is None:
+         return None
+-    start = lines.index(f"### Chart data: {chart}")
++    start = lines.index(f"### {_heading(chart)}")
+     rows: list[tuple[tuple[int, ...], str]] = []
+     header: list[str] = []
+     for line in lines[start + 1 :]:
+@@ -422,7 +430,7 @@ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> st
+ 
+ def _chart_observation(lines: list[str], chart: str, column: str) -> Reading:
+     try:
+-        found = chart_row(lines, chart)
++        found = chart_row(lines, chart, prefix="" if chart == NET_DEBT_TABLE else CHART_PREFIX)
+     except ValueError:  # Periods that cannot be ordered: never guess which row is the latest.
+         return "has periods in its table that cannot be ordered"
+     if found is None or column not in found[0]:
+@@ -482,6 +490,7 @@ def _read(text: str) -> tuple[dict[str, Observation], dict[str, str]]:
+         key: _chart_observation(lines, chart, column) for key, chart, column in CHART_MEASURES
+     }
+     found.update({key: _row_observation(text, labels) for key, labels in ROW_MEASURES})
++    found[NET_DEBT_CASH[0]] = _chart_observation(lines, NET_DEBT_CASH[1], NET_DEBT_CASH[2])
+     seen = {key: item for key, item in found.items() if isinstance(item, Observation)}
+     return seen, {key: item for key, item in found.items() if isinstance(item, str)}
+ 
+@@ -591,19 +600,12 @@ def _compare(
+     }
+ 
+ 
+-def _exactly(labels: Sequence[str]) -> str:
+-    quoted = " or ".join(f'"{label.capitalize()}"' for label in labels)
+-    return (
+-        f"the comparison reads only a table row labelled exactly {quoted}, with its unit in "
+-        "brackets after the label or in a Reporting unit column"
+-    )
+-
+-
+ # What the pack reads each net debt input from, for the reason it leaves the change out.
+ _READS = {
+-    "gross_debt": _exactly(dict(ROW_MEASURES)["gross_debt"]),
+-    "net_debt": _exactly(dict(ROW_MEASURES)["net_debt"]),
+-    "cash": "the comparison reads the Cash column of the CP-1 liquidity chart table",
++    "gross_debt": f'the comparison reads the Gross debt column of the CP-1 "{NET_DEBT_TABLE}" '
++    "table",
++    "net_debt": f'the comparison reads the Net debt column of the CP-1 "{NET_DEBT_TABLE}" table',
++    "net_debt_cash": f'the comparison reads the Cash column of the CP-1 "{NET_DEBT_TABLE}" table',
+ }
+ 
+ 
+@@ -612,8 +614,8 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
+     both runs in one unit under the same definition, and each run's net debt to be its gross debt
+     less its cash."""
+     pairs = {}
+-    for key in ("gross_debt", "net_debt", "cash"):
+-        name = key.replace("_", " ")
++    for key in ("gross_debt", "net_debt", "net_debt_cash"):
++        name = "cash" if key == "net_debt_cash" else key.replace("_", " ")
+         measure = by_key.get(key)
+         if measure is None:
+             return None, f"{name} is not read from either run's CP-1 ({_READS[key]})"
+@@ -622,14 +624,14 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
+         if measure["comparable"] != "yes":
+             return None, f"{name} is not comparable under one definition ({measure['comparable']})"
+         pairs[key] = (decimal(measure["prior"]["value"]), decimal(measure["current"]["value"]))
+-    (pg, cg), (pn, cn), (pc, cc) = pairs["gross_debt"], pairs["net_debt"], pairs["cash"]
++    (pg, cg), (pn, cn), (pc, cc) = pairs["gross_debt"], pairs["net_debt"], pairs["net_debt_cash"]
+     if pn != pg - pc or cn != cg - cc:
+         return None, "a run's net debt is not its gross debt less its cash"
+     units = {" ".join(by_key[k]["unit"].split()) for k in pairs}
+     if len(units) != 1:
+         return None, "debt and cash are in different units"
+     return {
+-        "unit": str(by_key["cash"]["unit"]),
++        "unit": str(by_key["net_debt_cash"]["unit"]),
+         "prior_net_debt": format(pn, "f"),
+         "change_in_gross_debt": format(cg - pg, "f"),
+         "change_in_cash": format(cc - pc, "f"),
+@@ -771,7 +773,21 @@ def build_pack(  # noqa: PLR0913 - the two runs' texts and the current run's ide
+         },
+         "measures": measures,
+     }
+-    change, why = _net_debt_change({m["key"]: m for m in measures})
++    cash_key = NET_DEBT_CASH[0]
++    cash = (
++        [
++            _compare(
++                cash_key,
++                seen_before.get(cash_key),
++                seen_now.get(cash_key),
++                unread_before.get(cash_key),
++                unread_now.get(cash_key),
++            )
++        ]
++        if cash_key in seen_before or cash_key in seen_now
++        else []
++    )
++    change, why = _net_debt_change({m["key"]: m for m in (*measures, *cash)})
+     if change is None:
+         omitted["net_debt_change"] = why
+     else:
+diff --git a/src/deploy_workflow/credit_os_catalogue.py b/src/deploy_workflow/credit_os_catalogue.py
+index ecde711..0d3ff92 100644
+--- a/src/deploy_workflow/credit_os_catalogue.py
++++ b/src/deploy_workflow/credit_os_catalogue.py
+@@ -83,12 +83,18 @@ def period_order(cell: str) -> tuple[int, ...] | None:
+     return (2, day.year, day.month, day.day)
+ 
+ 
+-def chart_row(lines: list[str], chart: str) -> tuple[dict[str, str], int] | None:
+-    """The latest-period row of ``### Chart data: <chart>`` as {column: cell}, with its 1-based
+-    line. The latest is chosen by the Period value, whatever the row order. None when the table
+-    is absent; ValueError when its periods cannot be ordered (never a guess)."""
++CHART_PREFIX = "Chart data: "
++
++
++def chart_row(
++    lines: list[str], chart: str, prefix: str = CHART_PREFIX
++) -> tuple[dict[str, str], int] | None:
++    """The latest-period row of ``### <prefix><chart>`` (``Chart data: <chart>``) as {column:
++    cell}, with its 1-based line. The latest is chosen by the Period value, whatever the row
++    order. None when the table is absent; ValueError when its periods cannot be ordered (never a
++    guess)."""
+     try:
+-        start = lines.index(f"### Chart data: {chart}")
++        start = lines.index(f"### {prefix}{chart}")
+     except ValueError:
+         return None
+     table: list[int] = []
+diff --git a/src/deploy_workflow/owners/cpos_launch.py b/src/deploy_workflow/owners/cpos_launch.py
+index e26a824..7f3d316 100644
+--- a/src/deploy_workflow/owners/cpos_launch.py
++++ b/src/deploy_workflow/owners/cpos_launch.py
+@@ -42,6 +42,7 @@ from deploy_workflow.changes import (
+     describe_run,
+     find_prior,
+     prior_sources,
++    same_period,
+     workspace_of,
+ )
+ from deploy_workflow.changes_check import cp8_issues
+@@ -569,11 +570,71 @@ class OwnerTable:
+         return self.events or self.edges
+ 
+ 
++NET_DEBT_HEADING = "Net debt data"  # not a `Chart data:` heading: the library does not draw it
++NET_DEBT = OwnerTable(
++    NET_DEBT_HEADING,
++    ("Gross debt", "Cash", "Net debt"),
++    "US$m",
++    rules=(
++        "Gross debt is the total debt principal as the issuer reports it, and the Basis and "
++        "limitation cell says what gross debt includes (for example securitization, finance "
++        "leases). Cash is the same figure as the Cash column of the `Chart data: liquidity` table "
++        "for that period. Net debt is gross debt less cash, worked with `calculate` and listed in "
++        "`## Calculations`. Write one row per period you state, at least the latest balance-sheet "
++        "date. A row whose three figures are all stated is refused if net debt differs from gross "
++        "debt less cash by any amount, and a row is refused if its cash differs from the "
++        "liquidity table's for the same period; a figure you cannot state is "
++        "`Not supplied: <reason>`."
++    ),
++)
++
++
++def _decimal(cell: str) -> Decimal | None:
++    return Decimal(cell.replace(",", "")) if PLAIN_NUMBER.fullmatch(cell) else None
++
++
++def _net_debt_issues(text: str) -> tuple[str, ...]:
++    """Each stated row of the net debt table holds net debt = gross debt - cash exactly, and its
++    cash is the liquidity table's for the same period. A figure that is not stated is not checked;
++    the table's own shape is `chart_issues`'s."""
++    heading, liquidity = f"### {NET_DEBT_HEADING}", "### Chart data: liquidity"
++    lines = text.splitlines()
++    rows = _stated_rows(text, heading) if heading in lines else []
++    if not rows or rows[0] != _chart_header(NET_DEBT):
++        return ()
++    liquid = _stated_rows(text, liquidity) if liquidity in lines else []
++    cash_of = [(row[0], row[1]) for row in liquid[2:] if len(row) == 5 and liquid[0][1] == "Cash"]
++    issues = []
++    for row in rows[2:]:
++        if len(row) != len(rows[0]):
++            continue
++        period, gross, cash, net = (row[0], *(_decimal(c) for c in row[1:4]))
++        if gross is not None and cash is not None and net is not None and net != gross - cash:
++            issues.append(
++                f"`{heading}` {period}: net debt {row[3]} is not gross debt {row[1]} less cash "
++                f"{row[2]}; correct the row, nothing is filled in for you."
++            )
++        for other, shown in cash_of:
++            stated = _decimal(shown)
++            if (
++                cash is not None
++                and stated is not None
++                and same_period(period, other)
++                and cash != stated
++            ):
++                issues.append(
++                    f"`{heading}` {period}: cash {row[2]} is not the Cash {shown} stated "
++                    f"for {other} in `{liquidity}`; correct whichever is wrong, and let this row's "
++                    "Period carry the balance-sheet date so it matches one liquidity row."
++                )
++    return tuple(issues)
++
++
+ def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTable, ...]:
+     """The tables a module is asked for beside its report routes. CP-1 is on every pathway asked
+     for all four chart tables CP-8's pack reads (owner, 2026-11-12, "Yes, all pathways"): those
+     its report's chart blocks do not already route are asked as owner tables, with no new
+-    report section."""
++    report section. It is also asked for the net debt table (owner, 2026-11-12, "Yes, add it")."""
+     tables = OWNER_TABLES.get(module, ())
+     if module != "CP-1":
+         return tables
+@@ -581,7 +642,7 @@ def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTa
+     chart = tuple(
+         OwnerTable(h, cols, unit) for h, cols, unit in CHART_TABLES.values() if h not in routed
+     )
+-    return (*chart, *tables)
++    return (*chart, NET_DEBT, *tables)
+ 
+ 
+ DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
+@@ -2250,6 +2311,13 @@ def without_for(ordered: Sequence[str], items: Sequence[Item]) -> dict[str, list
+     return result
+ 
+ 
++def _owned_issues(module: str, routes: Sequence[MarkdownRoute], text: str) -> list[str]:
++    """The tables a module is asked for beside its report routes, checked; for CP-1 also the net
++    debt table's arithmetic."""
++    issues = [i for owned in _owner_tables(module, routes) for i in chart_issues(text, owned)]
++    return [*issues, *_net_debt_issues(text)] if module == "CP-1" else issues
++
++
+ def checker(layout: MarkdownLayout) -> Check:
+     """Anchors and report selectors for one module's answer, so a defect is repaired inside the
+     module's loop rather than found at delivery after every module was paid for."""
+@@ -2301,8 +2369,7 @@ def checker(layout: MarkdownLayout) -> Check:
+         for route in routes:
+             if route.kind == "chart":
+                 issues += chart_issues(text, route)
+-        for owned in _owner_tables(task.module_id, routes):
+-            issues += chart_issues(text, owned)
++        issues += _owned_issues(task.module_id, routes, text)
+         return (*issues, *_forecast_issues(task, text))
+ 
+     return check
+diff --git a/tests/test_changes.py b/tests/test_changes.py
+index f662fec..9abb88e 100644
+--- a/tests/test_changes.py
++++ b/tests/test_changes.py
+@@ -609,24 +609,33 @@ def maturities(*rows: str) -> str:
+     )
+ 
+ 
+-def balance(debt: str, net: str, fcf: str, period: str, label: str = "Total debt") -> str:
++def balance(fcf: str, period: str) -> str:
+     return (
+-        f"### Reported balance sheet\n\n| Line item | FY2022 | {period} | Reporting unit |\n"
++        f"### Reported cash flow\n\n| Line item | FY2022 | {period} | Reporting unit |\n"
+         "| --- | --- | --- | --- |\n"
+-        f"| {label} | 1 | {debt} | US$m |\n| Net debt | 1 | {net} | US$m |\n"
+         f"| Free cash flow | 1 | {fcf} | US$m |\n\n"
+     )
+ 
+ 
++def netdebt(gross: str, cash: str, net: str, period: str, basis: str = "Gross debt: loans.") -> str:
++    """CP-1's net debt table (owner, 2026-11-12): hand-written cells, no arithmetic here."""
++    return (
++        "### Net debt data\n\n"
++        "| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |\n"
++        f"| --- | --- | --- | --- | --- | --- |\n| {period} | {gross} | {cash} | {net} | US$m "
++        f"| {basis} |\n\n"
++    )
++
++
+ MEASURE_KEYS = [
+     "leverage",
+     "net_leverage",
+     "coverage",
+     "cash",
+     "undrawn",
+-    "free_cash_flow",
+     "gross_debt",
+     "net_debt",
++    "free_cash_flow",
+ ]
+ 
+ 
+@@ -702,7 +711,8 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
+         )
+         + liquidity("| FY2023 | 300 | 450 | US$m | Cash excluding restricted cash. |")
+         + maturities("| FY2026 | 500 | US$m | Schedule. |", "| FY2027 | 100 | US$m | Schedule. |")
+-        + balance("2,100", "1,800", "60", "FY2023"),
++        + balance("60", "FY2023")
++        + netdebt("2,100", "300", "1,800", "FY2023", "Gross debt: loans and finance leases."),
+     )
+     current = handoff(
+         "CP-1",
+@@ -717,7 +727,8 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
+             "| FY2027 | Not supplied: the schedule ends | US$m | Schedule. |",
+             "| FY2028 | 1,250 | US$m | Schedule. |",
+         )
+-        + balance("2,000", "1,750", "70", "FY2024", label="Gross debt"),
++        + balance("70", "FY2024")
++        + netdebt("2,000", "250", "1,750", "FY2024", "Gross debt: loans only."),
+     )
+     pack = pair_pack(prior, current)
+     found = measures_of(pack)
+@@ -753,8 +764,9 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
+     assert found["cash"]["prior"]["definition"] == "Cash excluding restricted cash."
+     assert found["cash"]["current"]["definition"] == "Cash on another basis."
+     assert (found["undrawn"]["comparable"], found["undrawn"]["difference"]) == ("judge", "-50")
+-    # Rows read from CP-1's tables when they state a unit: free cash flow (no definition text in
+-    # either run, so the same), and a label that differs (a judgement, the difference stands).
++    # Free cash flow is a row read from CP-1's tables when it states a unit (no definition text in
++    # either run, so the same); gross and net debt come from the net debt table, whose basis text
++    # differs here (a judgement, the difference stands).
+     assert (found["free_cash_flow"]["comparable"], found["free_cash_flow"]["difference"]) == (
+         "yes",
+         "10",
+@@ -767,7 +779,7 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
+         "1,800",
+         "1,750",
+     )
+-    assert (found["net_debt"]["comparable"], found["net_debt"]["difference"]) == ("yes", "-50")
++    assert (found["net_debt"]["comparable"], found["net_debt"]["difference"]) == ("judge", "-50")
+     assert found["net_debt"]["unit"] == "US$m"
+     # The net debt change is left out with its reason; the maturity profile is built.
+     assert "net_debt_change" not in pack
+@@ -786,19 +798,21 @@ def test_the_pack_computes_differences_and_marks_what_cannot_be_compared():
+ 
+ 
+ def bridge_pack(
+-    prior_net: str = "1,800", current_net: str = "1,750", cash_basis: str = "Cash."
++    prior_net: str = "1,800", current_net: str = "1,750", prior_basis: str = "Gross debt: loans."
+ ) -> dict:
+     prior = handoff(
+         "CP-1",
+         "Earlier.",
+-        tables=liquidity(f"| FY2023 | 300 | 450 | US$m | {cash_basis} |")
+-        + balance("2,100", prior_net, "60", "FY2023"),
++        tables=liquidity("| FY2023 | 300 | 450 | US$m | Cash. |")
++        + balance("60", "FY2023")
++        + netdebt("2,100", "300", prior_net, "FY2023", prior_basis),
+     )
+     current = handoff(
+         "CP-1",
+         "Now.",
+         tables=liquidity("| FY2024 | 250 | 400 | US$m | Cash. |")
+-        + balance("2,000", current_net, "70", "FY2024"),
++        + balance("70", "FY2024")
++        + netdebt("2,000", "250", current_net, "FY2024"),
+     )
+     return pair_pack(prior, current)
+ 
+@@ -829,8 +843,8 @@ def test_the_net_debt_change_is_built_when_both_runs_state_it_under_one_definiti
+     [
+         ({"current_net": "1,700"}, "a run's net debt is not its gross debt less its cash"),
+         (
+-            {"cash_basis": "Cash excluding restricted cash."},
+-            "cash is not comparable under one definition (judge)",
++            {"prior_basis": "Gross debt: loans and leases."},
++            "gross debt is not comparable under one definition (judge)",
+         ),
+     ],
+ )
+@@ -956,10 +970,9 @@ def test_an_ambiguous_or_unitless_row_is_not_a_measure():
+     twice = handoff(
+         "CP-1",
+         "x",
+-        tables=balance("2,100", "1,800", "60", "FY2023")
+-        + balance("2,200", "1,900", "70", "FY2023"),
++        tables=balance("60", "FY2023") + balance("70", "FY2023"),
+     )
+-    assert "net_debt" not in observations(twice)  # two rows of one label: not guessed
++    assert "free_cash_flow" not in observations(twice)  # two rows of one label: not guessed
+     unitless = "## Findings\n\n| Line item | FY2023 |\n| --- | --- |\n| Net debt | 1,800 |\n"
+     assert observations(unitless) == {}
+ 
+@@ -1047,11 +1060,10 @@ def test_an_ambiguous_row_says_so_rather_than_that_the_run_does_not_state_it():
+     twice = handoff(
+         "CP-1",
+         "x",
+-        tables=balance("2,100", "1,800", "60", "FY2023")
+-        + balance("2,200", "1,900", "70", "FY2023"),
++        tables=balance("60", "FY2023") + balance("70", "FY2023"),
+     )
+-    once = handoff("CP-1", "x", tables=balance("2,000", "1,750", "70", "FY2024"))
+-    found = measures_of(pair_pack(twice, once))["net_debt"]
++    once = handoff("CP-1", "x", tables=balance("70", "FY2024"))
++    found = measures_of(pair_pack(twice, once))["free_cash_flow"]
+     assert found["comparable"] == "no"
+     assert found["reason"] == "the earlier run states it in more than one row"
+     assert found["prior"] is None
+@@ -2539,7 +2551,81 @@ def test_the_net_debt_change_reason_says_what_the_comparison_reads_not_that_debt
+     )
+     assert "net_debt_change" not in pack
+     assert pack["omitted"]["net_debt_change"] == (
+-        "gross debt is not read from either run's CP-1 (the comparison reads only a table row "
+-        'labelled exactly "Gross debt" or "Total debt", with its unit in brackets after the '
+-        "label or in a Reporting unit column)"
++        "gross debt is not read from either run's CP-1 (the comparison reads the Gross debt "
++        'column of the CP-1 "Net debt data" table)'
++    )
++
++
++def test_a_pack_from_two_runs_with_the_net_debt_table_states_the_hand_computed_change():
++    """Hand-computed: 2,100 - 300 = 1,800 and 2,000 - 250 = 1,750; gross fell 100, cash fell 50."""
++    pack = bridge_pack()
++    assert pack["net_debt_change"]["prior_net_debt"] == "1800"
++    assert pack["net_debt_change"]["change_in_gross_debt"] == "-100"
++    assert pack["net_debt_change"]["change_in_cash"] == "-50"
++    assert pack["net_debt_change"]["current_net_debt"] == "1750"
++    found = measures_of(pack)
++    assert (found["gross_debt"]["comparable"], found["net_debt"]["comparable"]) == ("yes", "yes")
++
++
++@pytest.mark.parametrize(("lacking", "run"), [("prior", "earlier"), ("current", "current")])
++def test_a_run_without_the_net_debt_table_leaves_the_change_out_and_names_that_run(lacking, run):
++    with_table = handoff(
++        "CP-1",
++        "x",
++        tables=liquidity("| FY2024 | 250 | 400 | US$m | Cash. |")
++        + netdebt("2,000", "250", "1,750", "FY2024"),
++    )
++    without = handoff("CP-1", "x", tables=liquidity("| FY2023 | 300 | 450 | US$m | Cash. |"))
++    prior, current = (without, with_table) if lacking == "prior" else (with_table, without)
++    pack = pair_pack(prior, current)
++    assert "net_debt_change" not in pack
++    assert pack["omitted"]["net_debt_change"] == (
++        f"gross debt cannot be compared (the {run} run does not state it)"
+     )
++
++
++def test_the_net_debt_change_takes_all_three_figures_from_the_net_debt_table_row_alone():
++    """Each run's liquidity table also states a later period; the change must not read it.
++    Hand-computed: 2,100 - 300 = 1,800 and 2,000 - 200 = 1,800; gross fell 100, cash fell 100."""
++    earlier = handoff(
++        "CP-1",
++        "Earlier.",
++        tables=liquidity(
++            "| FY2023 | 300 | 450 | US$m | Cash. |\n| FY2024 | 250 | 400 | US$m | Cash. |"
++        )
++        + netdebt("2,100", "300", "1,800", "FY2023"),
++    )
++    later = handoff(
++        "CP-1",
++        "Now.",
++        tables=liquidity("| FY2025 | 999 | 400 | US$m | Cash. |")
++        + netdebt("2,000", "200", "1,800", "FY2025"),
++    )
++    pack = pair_pack(earlier, later)
++    # Shown: both rows are internally consistent and the periods differ between the runs, which
++    # the pack states in each measure's period; the liquidity table's cash plays no part.
++    assert {k: v for k, v in pack["net_debt_change"].items() if k != "convention"} == {
++        "unit": "US$m",
++        "prior_net_debt": "1800",
++        "change_in_gross_debt": "-100",
++        "change_in_cash": "-100",
++        "current_net_debt": "1800",
++    }
++    assert "net_debt_change" not in pack["omitted"]
++
++
++def test_a_net_debt_row_that_does_not_add_up_is_omitted_with_a_true_reason():
++    earlier = handoff("CP-1", "x", tables=netdebt("2,100", "300", "1,700", "FY2023"))
++    later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
++    pack = pair_pack(earlier, later)
++    assert (
++        pack["omitted"]["net_debt_change"] == "a run's net debt is not its gross debt less its cash"
++    )
++
++
++def test_a_net_debt_row_without_its_cash_is_omitted_naming_the_cash():
++    gap = "Not supplied: not read"
++    earlier = handoff("CP-1", "x", tables=netdebt("2,100", gap, "1,800", "FY2023"))
++    later = handoff("CP-1", "y", tables=netdebt("2,000", "250", "1,750", "FY2024"))
++    pack = pair_pack(earlier, later)
++    assert pack["omitted"]["net_debt_change"] == "cash cannot be compared (a value is not stated)"
+diff --git a/tests/test_cpos_launch.py b/tests/test_cpos_launch.py
+index 769afb7..16c57b4 100644
+--- a/tests/test_cpos_launch.py
++++ b/tests/test_cpos_launch.py
+@@ -153,6 +153,11 @@ CHART_TABLES = {
+ | FY2027 | Not supplied: the schedule stops here | US$m | Synthetic. |
+ | FY2028 | 1,250 | US$m | Synthetic. |""",
+ }
++NET_DEBT_TABLE = """\
++| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |
++| --- | --- | --- | --- | --- | --- |
++| FY2023 | 1500 | 300 | 1200 | US$m | Synthetic; gross debt includes finance leases. |
++| FY2024 | 1400 | 275 | 1125 | US$m | Synthetic; gross debt includes finance leases. |"""
+ NON_USD_TABLES = {
+     "Chart data: liquidity": """| Period | Cash | Undrawn committed facilities | Reporting unit | Basis and limitation |
+ | --- | --- | --- | --- | --- |
+@@ -467,6 +472,8 @@ def answer(context: dict, plan_routes: list) -> str:
+         for heading, table in CHART_TABLES.items():
+             if heading not in routed:
+                 lines += [f"### {heading}", "", table, ""]
++    if context["module_id"] == "CP-1":  # ... and the net debt table (owner, 2026-11-12).
++        lines += ["### Net debt data", "", NET_DEBT_TABLE, ""]
+     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
+         lines += [f"### {heading}", "", table, ""]
+     for heading in ("Calculations", "Gaps", "Next module"):
+@@ -4772,3 +4779,80 @@ def test_the_offline_hold_follows_the_larger_anthropic_output_limit(tmp_path, mo
+     monkeypatch.setattr(cpos_launch, "output_limit", lambda config: 32000)
+     assert now - hold("opus-medium", "old") == Decimal("0.64")
+     assert hold("sol-medium", "sol-old") == sol
++
++
++NET_DEBT_HEADER = (
++    "`| Period | Gross debt | Cash | Net debt | Reporting unit | Basis and limitation |`"
++)
++
++
++@pytest.mark.parametrize(
++    "pathway",
++    [
++        *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
++        *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
++    ],
++)
++def test_every_pathway_asks_cp1_for_the_net_debt_table_and_states_every_rule_the_checker_holds(
++    tmp_path, pathway
++):
++    """Owner, 2026-11-12, "Yes, add it": gross debt in a fixed-label place for CP-8's pack."""
++    prepared, task, context = good_task(tmp_path, "CP-1", pathway)
++    text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
++    assert text.count("`### Net debt data`") == 1
++    assert NET_DEBT_HEADER in text
++    for stated in (
++        "total debt principal as the issuer reports it",
++        "what gross debt includes",
++        "the same figure as the Cash column of the `Chart data: liquidity` table",
++        "Net debt is gross debt less cash, worked with `calculate`",
++        "is refused if net debt differs from gross debt less cash by any amount",
++        "refused if its cash differs from the liquidity table's for the same period",
++        "`## Calculations`",
++        "Not supplied: <reason>",
++    ):
++        assert stated in text, stated
++    raw = answer(context, list(prepared.plan.layout.routes))
++    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
++    cut = raw.replace("### Net debt data", "### Dropped")
++    issues = _checked_handoff(task, cut.encode(), checker(prepared.layout))
++    assert any("Net debt data" in issue for issue in issues), issues
++
++
++@pytest.mark.parametrize(
++    ("old", "new", "complaint"),
++    [
++        # 1500 - 300 = 1200: a net debt of 1199 is refused, naming the row.
++        ("| FY2023 | 1500 | 300 | 1200 |", "| FY2023 | 1500 | 300 | 1199 |", "FY2023"),
++        # Cash that differs from the liquidity table's 275 for FY2024 is refused.
++        ("| FY2024 | 1400 | 275 | 1125 |", "| FY2024 | 1400 | 270 | 1130 |", "liquidity"),
++        # `same_period` calls FY2024 and FY2024 / 2024-09-30 one period: the 270 is still refused.
++        (
++            "| FY2024 | 1400 | 275 | 1125 |",
++            "| FY2024 / 2024-09-30 | 1400 | 270 | 1130 |",
++            "liquidity",
++        ),
++        ("| Gross debt | Cash |", "| Total debt | Cash |", "Net debt data"),
++        ("| 1500 | 300 | 1200 | US$m |", "| 1500 | 300 | 1200 | EUR m |", "EUR m"),
++        ("| 1400 | 275 | 1125 |", "| 1,400.5 | 275 | 1125 |", "FY2024"),
++    ],
++)
++def test_checker_refuses_each_broken_net_debt_table(tmp_path, old, new, complaint):
++    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
++    raw = answer(context, list(prepared.plan.layout.routes))
++    assert old in raw
++    issues = _checked_handoff(task, raw.replace(old, new).encode(), checker(prepared.layout))
++    assert any(complaint in issue for issue in issues), issues
++
++
++def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allows(tmp_path):
++    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
++    raw = answer(context, list(prepared.plan.layout.routes))
++    gap = "Not supplied: the debt note was not read"
++    for old, new in (
++        ("| FY2023 | 1500 | 300 | 1200 |", f"| FY2023 | {gap} | 300 | {gap} |"),
++        ("| FY2024 | 1400 | 275 | 1125 |", f"| FY2024 | 1400 | {gap} | {gap} |"),
++    ):
++        assert old in raw
++        raw = raw.replace(old, new)
++    assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()

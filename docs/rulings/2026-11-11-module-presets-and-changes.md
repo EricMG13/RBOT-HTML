@@ -100,7 +100,7 @@ and any other fault of CP-8's call (a provider stop, an overrun, an interrupted 
 still stops the run. A relaunch of such a run folder leaves the delivery as it is, makes no new call and
 says so.
 
-**`changes.json` (schema `cpos-changes/2`, computed by Python before CP-8 is called, given to CP-8 as the
+**`changes.json` (schema `cpos-changes/3`, computed by Python before CP-8 is called, given to CP-8 as the
 source `changes.json`, published unchanged in the delivery).** Every number is a decimal string; missing is
 null, never zero.
 - `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text]}`; `current`:
@@ -264,3 +264,98 @@ its report routes do not already carry, as owner tables (header, plain-number an
 the routed ones; the checker refuses a handoff without them). No report section is added: those tables are
 read by the library and the pack, not delivered. CP-1's output grows on those pathways; the USD 20 cap check
 admits every preset (largest single hold unchanged; short_snapshot's hold rises from 0.97 to 0.99 on the Opus configs).
+
+## Amendment 2026-11-12: four defects found by reading the first real CP-8 run (branch `claude/changes-real-run-fixes`)
+
+The first real CP-8 (`tdg-proof-snapshot-opus-002`, credit_snapshot on opus-medium, compared with
+`tdg-reader-format-001`; recorded in `2026-11-12-credit-snapshot-claude-rerun.md`) was accepted, and reading
+it showed four defects. Controller rulings, each implemented with a failing test first:
+
+- **D1, pipeline file names in reader passages.** CP-8's Basis lines read `Basis: changes.json; prior/CP-1.md,
+  page 4`. In CP-8's reader passages a Basis item for the comparison pack is exactly `Run comparison`, and for
+  a handoff of the earlier run `<plain module name> (<code>), earlier run`, for example `Financial data
+  foundation (CP-1), earlier run`; no page number for a handoff. `changes_check` refuses `changes.json`, a
+  `prior/` name, a page on a handoff, and `Run comparison` with anything after it, in a CP-8 Basis line only;
+  the library's Basis reader (`credit_os_chips.basis_locators`) reads the two forms as items with nothing to
+  open instead of a "Basis item not recognised" gap. `## Sources` still lists the real file names and hashes.
+  The method (`cp8.md`, "Basis lines") states the forms.
+- **D2, an unchanged measure read as a problem.** Every measure with a zero difference carried the cause
+  `Unresolved`. An issuer row for a measure whose pack difference is zero, and that is not said `Not
+  comparable`, now has the cause `None` and `Unresolved` is refused for it; `None` stays refused for a
+  non-zero difference. The library prints CP-8's register verbatim, so `None` shows as written;
+  `page_verdicts` does not read the cause of a zero-difference row.
+- **D3, "gross debt is not stated in either run".** Both CP-1 handoffs do state gross debt (current: USD 25,068
+  million at 2024-09-30), but under labels the pack's exact row rule does not read: the earlier run writes
+  `Gross financial debt including finance leases and securitization` with its unit only in a `Unit and quantity
+  / status` column text (`USD million; ...`); the current run writes `Total debt (gross, incl.
+  securitization), USD m` with the unit after a comma, not in brackets. The rule reads a row labelled exactly
+  `Gross debt` or `Total debt` (also `Net debt`, `Free cash flow`) with the unit in brackets after the label
+  or in a `Reporting unit` column; the two layouts differ from each other and neither fits, so no exact rule
+  reads both and none was added. The reason the pack gives is now true: "gross debt is not read from either
+  run's CP-1 (the comparison reads only a table row labelled exactly ...)". Even when read, the two runs'
+  basis texts differ, so the pack would mark gross debt `judge` and the net debt change would still be left out
+  (it needs `yes`). What CP-1 states for it is set by the 2026-11-12 amendment below (`### Net debt data`).
+- **D4, new modules marked `Unresolved`.** The pack (schema now `cpos-changes/3`; the library reads `/2` and
+  `/3`) states each run's `selection` (`preset`, `explicit` or null) in `prior` and `current`; a prior run's
+  selection is read from its manifest. When a module is `New` or `Not run this time` and both selections are
+  `preset` (the prior's may also be null: a run whose manifest predates the field was accepted as a base only
+  because it ran the pathway's lead module, so it is a whole-pathway run; the pack states null as recorded),
+  the pathway's module set changed between the runs: the cause must be `Method change`, and the words "the
+  pack does not say" are refused. With either run an explicit subset, or a pack of the `/2` shape (no
+  `selection` key), nothing is required and the cause is `Unresolved` as before. The real earlier run
+  (`tdg-reader-format-001`) records no selection: the first version of this rule skipped it (the real CP-8
+  was refused 6 times, its four New rows accepted); with it, 14 times (4 D2, 8 D4, 2 D1).
+
+The CP-8 instruction text itself states the Basis forms (`cpos_launch.CP8_BLOCK`, one place; the real draft
+had followed the general rule that lists only file names), and the library reads the two CP-8 forms only in
+a CP-8 handoff, exactly (`Run comparison`; a plain name with a registered module code, `, earlier run`).
+
+Known limits, recorded, not in this change: pack values print as the handoffs state them (`6261 US$m`, a date in
+one run and `FY2024` in the other); CP-DR's web guidance is unproven on Claude; a CP-8 `## Gaps` row may still
+say the pack does not say why the earlier run selected fewer modules (the checker reads registers, not gaps);
+Free cash flow and net debt are not read from the real CP-1s for the same label reason as gross debt.
+
+## Amendment, 2026-11-12 (owner: "Yes, add it"): CP-1 states gross debt in a table the pack reads
+
+Asked "Have CP-1 state gross debt in a fixed-label row so the net debt change can be shown?", the owner
+answered "Yes, add it". The `Gross debt` row cannot sit in an existing chart table: the four are period-row
+tables (`Period | <measures> | Reporting unit | Basis and limitation`, cash is a column), the pack's row reader
+needs periods across a header, and a gross debt column in the liquidity table would be drawn beside cash on one
+axis. The net debt change also needs net debt, not only gross debt. Controller ruling: a fifth small period-row
+table on every pathway, with the mechanisms that already exist and no new layout.
+
+- `### Net debt data` (not a `Chart data:` heading, so the library does not draw it, the report does not route it,
+  and the library lists it as a reference table under the CP-1 findings). Header `| Period | Gross debt | Cash |
+  Net debt | Reporting unit | Basis and limitation |`, US$m, one row per period stated (at least the latest
+  balance-sheet date); `Not supplied: <reason>` in a cell as in the other tables. Gross debt is the total debt
+  principal as the issuer reports it, and the Basis cell says what it includes (securitization, finance leases):
+  that is the definition text the pack carries for comparability. Cash is the liquidity table's figure; net debt is
+  gross debt less cash, worked with `calculate`, listed in `## Calculations`.
+- The checker adds two rules, named in the instructions: with all three figures stated a row must satisfy net debt =
+  gross debt - cash exactly (in Decimal), and a stated cash must equal the Cash of every liquidity row that `same_period`
+  (changes.py) calls the same period (`FY2024` and `FY2024 / 2024-09-30` are one period; `2024-09-30` and
+  `FY2024` are not).
+  A missing table or a wrong header is refused as for the other tables.
+- The pack reads `gross_debt`, `net_debt` and, for the net debt change, the table's own Cash column, all from
+  one run's latest row of this table, with the period-row reader that reads the chart tables (the liquidity
+  table is not read for the change); the exact-label row rule of #66 now reads only `free_cash_flow`. A run without the
+  table (every earlier run) states no gross or net debt: the net debt change is left out and `omitted` names
+  the run ("gross debt cannot be compared (the earlier run does not state it)"). Older runs stay usable as a CP-8
+  base and render as before. The pack computes nothing new.
+- Free cash flow is not part of this change. To be read it needs one row labelled exactly `Free cash flow` (or `FCF`)
+  with its unit in brackets or a `Reporting unit` column, in a table with periods across a header, and the same
+  basis text in both runs.
+- Recorded, no code: the library tab shows the net debt change's cash movement without its periods beside the
+  liquidity measure. (Done 2026-11-12, see the amendment below.)
+
+Amendment, 2026-11-12 (owner: asked "Flag a same-period net debt restatement as the analysis changing, not the
+issuer?", the owner answered "Yes, fix it"). `net_debt_change` carries `same_period` (true when the gross debt, net
+debt and cash measures are), the two rows' periods and their stated gross debt and cash (`prior_period`,
+`current_period`, `prior_gross_debt`, `prior_cash`, `current_gross_debt`, `current_cash`); read, not computed. The
+schema stays `cpos-changes/3`: the keys are additive and a reader ignores keys it does not know; a pack without them
+renders and checks as before. The checker withholds the change's differences (gross debt, cash, net debt) from
+CP-8's checked lines by K9's own mechanism: gross debt and net debt are measures already; the cash difference is
+given to the same functions as a measure-shaped record, so the same exceptions apply. The tab, for a flagged change
+with a non-zero difference, shows both runs' balances with periods and "Both runs state net debt for the same date;
+the difference is between the two analyses, not a change in the issuer." with no change figure; it also prints the
+periods beside the change's cash movement. `cp8.md` states the rule.

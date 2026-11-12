@@ -1,7 +1,7 @@
 'use strict';
 // Pure rendering of the Changes tab (docs/rulings/2026-11-11-module-presets-and-changes.md, decision M8): no DOM, no store, no globals written.
 // Browser: one global, ChangesView (reader.js is loaded first; nothing else leaks into the page's scope). Node: module.exports.
-// Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2) or CP-8's
+// Delivery adds no analysis and computes nothing. Every figure shown is text the comparison pack (`changes.json`, schema cpos-changes/2 or /3) or CP-8's
 // handoff states, with its sign, unit and period: no rounding, no difference worked out here, no direction arrow. This page reads no register for a
 // verdict: the library's build derives them once, with CP-8's checker (`changes.verdicts`: measures, modules, ledger), and the page displays them.
 // A measure that is not comparable, is not judged, or has no verdict shows both values and no difference and no joining line. Chart positions are geometry only. All pack and handoff text is model output: it is
@@ -89,10 +89,20 @@ function measureTable(measures, verdicts) {
   return `<div class="table-scroll" role="region" aria-label="Measures, earlier and current" tabindex="0"><table class="history-table"><caption>Measures the pack states, earlier and current</caption><thead><tr><th scope="col">Measure</th><th scope="col">Earlier</th><th scope="col">Current</th><th scope="col">Change</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+// The net debt change. Rows of one period with two values (`same_period` true) and any non-zero difference are the analysis changing, not the issuer:
+// both runs' balances with their periods and no change figure, no direction. A pack without the flag (cpos-changes/2, /3 before it) renders as before.
+const SAME_DATE_NET_DEBT = 'Both runs state net debt for the same date; the difference is between the two analyses, not a change in the issuer.';
+const nonZero = value => value != null && Number(value) !== 0;
 function netDebtView(change) {
   if (!change) return '';
-  const unit = change.unit, rows = [['Earlier net debt', change.prior_net_debt], ['Change in gross debt', change.change_in_gross_debt], ['Change in cash', change.change_in_cash], ['Current net debt', change.current_net_debt]];
-  const item = ([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value == null ? NOT_STATED : withUnit(value, unit))}</dd></div>`;
+  const unit = change.unit, item = ([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value == null ? NOT_STATED : withUnit(value, unit))}</dd></div>`;
+  if (change.same_period === true && [change.change_in_gross_debt, change.change_in_cash].some(nonZero)) {
+    const run = (name, period, gross, cash, net) => [[`${name} gross debt (${period || NOT_STATED})`, gross], [`${name} cash (${period || NOT_STATED})`, cash], [`${name} net debt (${period || NOT_STATED})`, net]];
+    const both = [...run('Earlier', change.prior_period, change.prior_gross_debt, change.prior_cash, change.prior_net_debt), ...run('Current', change.current_period, change.current_gross_debt, change.current_cash, change.current_net_debt)];
+    return `<h3>Net debt, earlier and current</h3><dl class="net-debt-change">${both.map(item).join('')}</dl><p class="intro">${esc(SAME_DATE_NET_DEBT)}</p>`;
+  }
+  const span = change.prior_period && change.current_period ? ` (${change.prior_period} to ${change.current_period})` : '';
+  const rows = [['Earlier net debt', change.prior_net_debt], [`Change in gross debt${span}`, change.change_in_gross_debt], [`Change in cash${span}`, change.change_in_cash], ['Current net debt', change.current_net_debt]];
   return `<h3>Net debt change</h3><dl class="net-debt-change">${rows.map(item).join('')}</dl><p class="intro">${esc(change.convention || '')}</p>`;
 }
 
@@ -111,7 +121,7 @@ const omittedNote = omitted => {
   return lines.length ? `<p class="intro changes-omitted">${lines.map(esc).join(' ')}</p>` : '';
 };
 
-const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`CP-8's handoff has no ${caption.toLowerCase()} table.`)}</p>`);
+const verbatim = (caption, table) => (table ? ChangesReader.tableView(caption, table, {id: 'cp8', chips: () => 0}) : `<p class="empty">${esc(`The Changes handoff has no ${caption.toLowerCase()} table.`)}</p>`);
 
 function issuerPart(pack, parts, changes) {
   const measures = pack.measures || [];
@@ -122,7 +132,7 @@ function issuerPart(pack, parts, changes) {
 
 // ---- Part 1: CP-8's own words, verbatim; a Basis line is shown as the source line it is, never dropped.
 function passageView(section) {
-  if (!section) return `<p class="empty">${NOT_STATED} in CP-8's handoff.</p>`;
+  if (!section) return `<p class="empty">${NOT_STATED} in the Changes handoff.</p>`;
   let html = '', open = false;
   const close = () => { if (open) html += '</ul>'; open = false; };
   for (const block of section.blocks.filter(b => b.type === 'text')) {
@@ -146,11 +156,11 @@ function analysisPart(pack, parts, changes) {
   const modules = (changes && changes.verdicts && changes.verdicts.modules) || {};
   const rows = (pack.modules || []).map(m => {
     const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
-    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by CP-8`;
+    const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by Changes since the last run`;
     const side = (ran, text) => (text != null ? text : ran ? NOT_STATED : 'Did not run');
     const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line);
     const reason = row ? [row.cause, row.why].filter(Boolean) : [];
-    return `<details class="change-module"><summary><span class="change-name">${esc(m.title)} <span class="module-code">${esc(m.module)}</span></span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
+    return `<details class="change-module"><summary><span class="change-name">${esc(m.title)}</span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${esc(earlier)}</span><span class="change-now"><small>Current</small>${esc(current)}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${esc(earlier)}</p></section><section><h4>Current</h4><p>${esc(current)}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
   }).join('');
   return `<section class="run-section" id="changes-analysis"><h2>The analysis</h2><p class="intro">One row per module. A row opens the earlier and current bottom lines side by side.</p><div class="change-modules">${rows}</div></section>`;
 }
@@ -158,7 +168,7 @@ function analysisPart(pack, parts, changes) {
 // ---- Part 4: counts of each status as one bar (segment sizes are the counts, the build's: `changes.verdicts.ledger`, null when it could not read the ledger), the ledger itself beneath.
 function limitationsPart(parts, changes) {
   const table = parts.ledger, counts = changes && changes.verdicts ? changes.verdicts.ledger : null;
-  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in CP-8's handoff.</p></section>`;
+  if (!table) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2><p class="empty">${NOT_STATED} in the Changes handoff.</p></section>`;
   if (!counts) return `<section class="run-section" id="changes-limitations"><h2>Limitations</h2>${verbatim('Limitations ledger', table)}</section>`;
   const label = counts.map(([name, n]) => `${name} ${n}`).join(', ');
   const segments = counts.filter(([, n]) => n > 0).map(([name, n]) => `<i class="ledger-${esc(name.toLowerCase().replace(/\W+/g, '-'))}" style="flex-grow:${n}" title="${esc(`${name} ${n}`)}"></i>`).join('');
@@ -226,7 +236,7 @@ function changesHtml(input) {
   } else if (state === 'unreadable') {
     notice = `<div class="caution changes-unreadable" role="note"><strong>The comparison with the earlier run could not be read.</strong><p>${esc(changes.problem)}</p></div>`;
   } else if (!parts) {
-    notice = '<div class="caution changes-not-produced" role="note"><strong>CP-8’s explanation is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
+    notice = '<div class="caution changes-not-produced" role="note"><strong>The explanation of the changes is not held for this run.</strong><p>The comparison pack is shown without it.</p></div>';
   }
   const sections = [
     parts ? whatChangedPart(parts) : '',
