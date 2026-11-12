@@ -1583,6 +1583,31 @@ def test_a_reload_with_a_submission_the_service_no_longer_knows_does_not_say_upl
     assert seen["resaved"] == ""  # only now is the old record replaced
 
 
+def test_submission_gone_keeps_the_page_head_but_not_the_stepper(page):
+    page.run(f"""
+    await uploadFiles([file('annual.txt', {json.dumps(REPORT)})]);
+    type('i-issuer_name', 'Acme Corp');
+    const saved = JSON.parse(localStorage.getItem('run-start/1'));
+    saved.id = 'f'.repeat(32);
+    localStorage.setItem('run-start/1', JSON.stringify(saved));
+    return {{}};
+    """)
+    seen = page.run(
+        BOX
+        + """
+    const h1 = document.querySelector('.page-head h1');
+    const h2 = $('submission-gone').querySelector('h2');
+    return {shown: !$('submission-gone').hidden, h1: [h1.textContent, box(h1).height > 0],
+      reset: [$('reset').textContent, box($('reset')).height > 0],
+      stepper: getComputedStyle(document.querySelector('.stagebar')).display,
+      order: box(h1).bottom <= box(h2).top};
+    """
+    )
+    assert seen["shown"] is True
+    assert seen["h1"] == ["Start a run", True] and seen["reset"] == ["Start over", True]
+    assert seen["stepper"] == "none" and seen["order"] is True
+
+
 def test_the_review_shows_turns_and_left_out_modules_at_every_level_when_they_differ(page):
     seen = page.run(f"""
     level('advanced');
@@ -3170,7 +3195,7 @@ def test_start_is_the_answers_and_a_360px_card_that_holds_approval_and_submit(pa
     out.scrolls = canvas.scrollHeight > canvas.clientHeight;
     canvas.scrollTop = 300;
     await settle(100);
-    out.stuck = [box(card).top, box(canvas).top];
+    out.stuck = [box(card).bottom, box(canvas).bottom];
     return out;
     """,
         size="1440,900",
@@ -3180,7 +3205,9 @@ def test_start_is_the_answers_and_a_360px_card_that_holds_approval_and_submit(pa
     assert card["width"] == 360 and card["left"] > seen["ready"]["right"]
     assert card["left"] > seen["steps"]["right"]
     assert all(seen["inside"]) and all(seen["outside"])
-    assert seen["pos"] == "sticky" and seen["top"] == "0px" and seen["align"] == "start"
+    # The card sticks by its bottom: it is taller than the scrolling main, so a top stick would
+    # keep Approve and Submit below main's bottom edge (see the M1 test below).
+    assert seen["pos"] == "sticky" and seen["top"] == "auto" and seen["align"] == "end"
     assert seen["pad"] == "20px 22px" and seen["radius"] == "12px"
     assert seen["bg"] == "rgb(248, 249, 251)" and seen["border"] == "1px solid rgb(228, 230, 236)"
     assert seen["h3"] == "What Submit does"
@@ -3191,7 +3218,48 @@ def test_start_is_the_answers_and_a_360px_card_that_holds_approval_and_submit(pa
     assert seen["rule"] == "1px"
     assert seen["next"] == "none" and seen["back"] is True
     # Stuck 28px under the scroller's top edge: the offset is measured inside its padding.
-    assert seen["scrolls"] is True and seen["stuck"][0] - seen["stuck"][1] == 28
+    assert seen["scrolls"] is True
+    # Stuck to main's bottom edge (inside its padding), not cut off below it.
+    assert seen["stuck"][0] <= seen["stuck"][1]
+
+
+@pytest.mark.parametrize("size", ["1440,900", "1280,800"])
+def test_approve_and_submit_stay_in_view_while_the_card_is_taller_than_main(page, size):
+    seen = page.run(
+        REVIEW
+        + """
+    tickAll(); await settle(100);
+    const canvas = $('canvas'), card = $('rv-card');
+    const inMain = el => { const r = box(el), m = box(canvas);
+      return r.top >= m.top - .5 && r.bottom <= m.bottom + .5; };
+    const out = {modules: S.modules.length, taller: box(card).height > canvas.clientHeight,
+      mid: [], focus: []};
+    const end = canvas.scrollHeight - canvas.clientHeight;
+    for (const y of [Math.round(end / 4), Math.round(end / 2), Math.round(end * 3 / 4)]) {
+      canvas.scrollTop = y; await settle(80);
+      out.mid.push([canvas.scrollTop, inMain($('submit'))]);
+    }
+    for (const y of [0, Math.round(end / 2)]) {
+      canvas.scrollTop = y; await settle(50);
+      $('approve').focus(); await settle(100);
+      out.focus.push([document.activeElement.id, inMain($('approve'))]);
+    }
+    // The card is taller than main, so it cannot be whole in view at once; every part of it must
+    // still be reachable by scrolling: its title at the top, Approve and Submit at the end.
+    canvas.scrollTop = 0; await settle(80);
+    out.top = inMain(card.querySelector('h3'));
+    canvas.scrollTop = 1e6; await settle(100);
+    out.end = {submit: inMain($('submit')), approve: inMain($('approve')),
+      bottom: box(card).bottom <= box(canvas).bottom + .5};
+    return out;
+    """,
+        size=size,
+    )
+    assert seen["modules"] == 12 and seen["taller"] is True
+    assert all(visible and top > 0 for top, visible in seen["mid"]), seen["mid"]
+    assert seen["focus"] == [["approve", True]] * 2, seen["focus"]
+    assert seen["top"] is True
+    assert seen["end"] == {"submit": True, "approve": True, "bottom": True}, seen["end"]
 
 
 def test_start_keeps_the_approval_gate_and_each_limit_is_a_labelled_tick(page):
@@ -3291,7 +3359,7 @@ def test_start_is_one_column_with_the_card_last_at_1000px(page):
     )
     assert seen["card"]["top"] >= seen["steps"]["bottom"]
     assert seen["card"]["left"] < seen["steps"]["right"]
-    assert seen["position"] != "sticky" or seen["cols"] == 1
+    assert seen["position"] == "static" and seen["display"] == "block"
 
 
 RUN_SCREEN = (
@@ -3335,8 +3403,9 @@ def test_the_run_screen_has_a_status_pill_a_card_and_two_columns_of_modules(page
       ring: [box(items[0].querySelector('.ring')).width,
         box(items[1].querySelector('.ring')).width],
       rowCols: rs.gridTemplateColumns.split(' ').slice(0, 1), rowPad: rs.padding,
-      list: getComputedStyle($('run-modules')).gridTemplateColumns.split(' ').length,
-      first: box(items[0]), second: box(items[1]), card: box(card), mods: box($('run-modules')),
+      list: Number(getComputedStyle($('run-modules')).columnCount),
+      first: box(items[0]), second: box(items[1]), third: box(items[2]),
+      card: box(card), mods: box($('run-modules')),
       inCard: ['run-id', 'run-state', 'run-reason', 'run-from-note', 'run-error', 'run-report']
         .map(id => card.contains($(id))),
       title: [title.textContent, getComputedStyle(title).fontWeight,
@@ -3344,7 +3413,11 @@ def test_the_run_screen_has_a_status_pill_a_card_and_two_columns_of_modules(page
         getComputedStyle(title).lineHeight],
       head: ['run-activity', 'run-again', 'another']
         .map(id => $('run-progress').querySelector('.rp-head').contains($(id))),
-      hiddenHead: getComputedStyle(document.querySelector('.page-head')).display,
+      head1: [box(document.querySelector('.page-head h1')).height > 0,
+        document.querySelector('.page-head h1').textContent,
+        box($('reset')).height > 0, getComputedStyle(document.querySelector('.stagebar')).display,
+        box(document.querySelector('.page-head h1')).bottom <= box(title).top,
+        box($('reset')).bottom <= box($('run-pill')).top],
       cols: getComputedStyle($('run-progress').querySelector('.rp-main')).gridTemplateColumns,
       gap: getComputedStyle($('run-progress').querySelector('.rp-main')).columnGap,
       lead: $('run-progress').querySelector('.lead').textContent});
@@ -3364,12 +3437,15 @@ def test_the_run_screen_has_a_status_pill_a_card_and_two_columns_of_modules(page
     assert seen["states"] == ["done", "running", "waiting", "waiting"]
     assert seen["ring"] == [18, 18] and seen["rowCols"] == ["18px"]
     assert seen["rowPad"] == "10px 0px"
-    assert seen["list"] == 2 and seen["second"]["left"] > seen["first"]["right"]
+    # Two columns that read down: the second module sits under the first, not beside it.
+    assert seen["list"] == 2 and seen["second"]["top"] >= seen["first"]["bottom"] - 1
+    assert abs(seen["second"]["left"] - seen["first"]["left"]) < 1
+    assert seen["third"]["left"] > seen["first"]["right"]
     assert seen["cols"].endswith(" 360px") and seen["gap"] == "40px"
     assert seen["card"]["width"] == 360 and seen["card"]["left"] > seen["mods"]["right"]
     assert all(seen["inCard"]) and all(seen["head"])
     assert seen["title"] == ["Run started", "600", "24px", "32px"]
-    assert seen["hiddenHead"] == "none"
+    assert seen["head1"] == [True, "Start a run", True, "none", True, True]
     assert seen["lead"] == "This run was submitted once. It is not repeated by reloading this page."
 
 
@@ -3391,7 +3467,7 @@ def test_the_run_screen_and_start_do_not_scroll_sideways_at_375px(page):
         modules: [['CP-0', 'done'], ['CP-1', 'running'], ['CP-2A', 'waiting'],
           ['Report', 'waiting']]});
       out.run = document.documentElement.scrollWidth;
-      out.list = getComputedStyle($('run-modules')).gridTemplateColumns.split(' ').length;
+      out.list = Number(getComputedStyle($('run-modules')).columnCount);
       out.main = getComputedStyle(document.querySelector('#run-progress .rp-main'))
         .gridTemplateColumns.split(' ').length;
       return out;

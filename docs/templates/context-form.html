@@ -11,7 +11,7 @@
    build() is the normative rule set, plus the form-only rules marked in it. Adopted 2026-11-10 (owner:
    "Approved"); docs/design/2026-11-10-context-form-proposal.md holds the module review and the design.
    Styled in the Credit OS language of apps/issuer-library/credit_os/web/screen.css: its tokens, its
-   Untitled UI component foundation (MIT) and the New run patterns it keeps (.run-stages, .run-field,
+   Untitled UI component foundation (MIT) and the New run patterns it keeps (.run-field,
    .step-actions, .run-strip, .badge). tests/test_context_form.py keeps the copied tables to their sources. */
 /* @font-face rules are added by the script: see FONT_BASE. */
 
@@ -81,9 +81,9 @@ svg.i{width:16px;height:16px;flex:none}
 .stepsum .prog{height:4px;margin-top:8px;background:var(--border-secondary);border-radius:2px}
 .stepsum .prog span{display:block;height:100%;background:var(--blue);border-radius:2px}
 
-/* The run screen (after Submit, or a submission that is gone): the card's header is replaced by a status pill,
-   the title, one sentence and the buttons; the modules in two columns and a card of facts beside them. */
-.workbench:has(.run-progress:not([hidden])) .page-head{display:none}
+/* The run screen (after Submit, or a submission that is gone): the page head stays (the title and Start over; only the stepper goes);
+   a status pill, the title, one sentence and the buttons sit below it; the modules in two columns and a card of facts beside them. */
+.workbench:has(.run-progress:not([hidden])) .stagebar{display:none}
 .rp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
 .rp-title{min-width:0}
 .rp-title .lead{margin:6px 0 0;font-size:var(--fs-control);line-height:20px}
@@ -96,8 +96,8 @@ svg.i{width:16px;height:16px;flex:none}
 .rp-main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:40px;margin-top:28px}
 .rp-main>*{min-width:0}
 .run-progress h3.sub{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
-.run-mods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px;margin:6px 0 0;padding:0;list-style:none}
-.run-mods li{border-bottom:1px solid #eef0f5}
+.run-mods{display:block;columns:2;column-gap:32px;margin:6px 0 0;padding:0;list-style:none}
+.run-mods li{break-inside:avoid;border-bottom:1px solid #eef0f5}
 .run-mods .mod{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0}
 .run-mods .ring{display:grid;place-items:center;width:18px;height:18px;border:1.5px solid var(--gray-300);border-radius:50%;color:#fff}
 .run-mods .ring svg{width:12px;height:12px}
@@ -351,7 +351,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 /* Review (Start): the answers on the left, a card of what Submit does on the right that stays in view. */
 #st-review{display:grid;grid-template-columns:minmax(0,1fr) 360px;column-gap:40px;align-content:start}
 #st-review>*{grid-column:1;min-width:0}
-#st-review>.rv-card{grid-column:2;grid-row:1/span 12;align-self:start;position:sticky;top:0;padding:20px 22px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50)}
+#st-review>.rv-card{grid-column:2;grid-row:1/span 12;align-self:end;position:sticky;top:auto;bottom:0;padding:20px 22px;border:1px solid var(--border-secondary);border-radius:var(--radius-card);background:var(--gray-50)}
 .rv-card h3{font:600 15px/22px 'Red Hat Display',system-ui,sans-serif;color:var(--text-primary)}
 .rv-card .lead{max-width:none;margin:8px 0 0;font-size:var(--fs-body);line-height:19px}
 .rv-card .rv-facts{margin-top:14px;gap:8px 16px;line-height:19px}
@@ -392,11 +392,10 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
 .start-confirm{display:flex;align-items:flex-start;gap:10px;margin-top:20px;font:500 var(--fs-control)/20px 'Red Hat Text',system-ui,sans-serif;color:var(--text-secondary);cursor:pointer}
 .start-confirm input{width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
 .dl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px}
-.dl .muted{font-size:var(--fs-control)}
 
 /* Narrow widths: the page scrolls, as the library does below 720px. */
 @media(max-width:1100px){.workbench{grid-template-columns:minmax(0,1fr) 300px}.prow{grid-template-columns:20px minmax(0,1fr)}.prow .imp{grid-column:2}
-  #st-review{display:block}#st-review>.rv-card{position:static;margin-top:28px}.rp-main{grid-template-columns:minmax(0,1fr)}.rp-card{margin-top:0}}
+  #st-review{display:block}#st-review>.rv-card{position:static;margin-top:28px}.rp-main{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:960px){
   body{overflow:auto}
   .app{height:auto;min-height:100dvh}
@@ -423,7 +422,7 @@ fieldset[aria-invalid=true] .card{border-color:var(--red-border)}
   .rv-row{grid-template-columns:minmax(0,1fr) auto}.rv-row .ln{grid-column:1/-1}.rv-row .ed{grid-column:2;grid-row:1}
   .rp-head{display:block}.rp-actions{margin-top:12px}
 }
-@media(max-width:700px){.run-mods{grid-template-columns:minmax(0,1fr)}.pair{grid-template-columns:minmax(0,1fr);gap:0}.pair>*+*{margin-top:24px}}
+@media(max-width:700px){.run-mods{columns:1}.pair{grid-template-columns:minmax(0,1fr);gap:0}.pair>*+*{margin-top:24px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(forced-colors:active){.badge,.primary-action,.secondary-action,.tertiary-action,.card,.prow,.seg{border:1px solid}.stepper [aria-current]{outline:2px solid;outline-offset:2px}}
 @media print{.rail,.page-actions,.step-actions,.inspector>summary,.stagebar,.readiness-pill{display:none}.app{margin:0;height:auto;padding:0}.workbench{display:block;box-shadow:none;overflow:visible}.left{display:block}#canvas{overflow:visible}}
