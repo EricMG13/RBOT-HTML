@@ -872,7 +872,7 @@ _TENS = {
 _HYPHENS = "-\u2010-\u2015"
 _WORD_RUN = re.compile(rf"[A-Za-z]+(?:[{_HYPHENS}\s]+[A-Za-z]+)*")
 _ORDINALS = frozenset(
-    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halves", "quarter")
+    ("first", "second", "third", "fifth", "eighth", "ninth", "twelfth", "half", "halve", "quarter")
 )
 
 
@@ -886,16 +886,38 @@ def _ordinal(word: str) -> bool:
     return word.endswith("th") and word[:-2] in {*_UNITS, *_TENS, "hundred", "thousand"}
 
 
-def _part_of_fraction(words: Sequence[str], i: int, j: int) -> bool:
-    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction: it follows or
-    precedes `point`, an ordinal word ends it (`thirty-first`, `one hundred and first`), or
-    `and a half` / `and a quarter` follows."""
+def _number_word(word: str) -> bool:
+    return word in _UNITS or word in _TENS or word in ("zero", "hundred", "thousand")
+
+
+def _decimal(words: Sequence[str], i: int, j: int) -> bool:
+    """Whether the number in `words[i:j]` sits in `number-word point number-word` on either side."""
+    after = words[j : j + 2]
+    before = words[max(i - 2, 0) : i]
+    return (len(after) == 2 and after[0] == "point" and _number_word(after[1])) or (
+        len(before) == 2 and before[1] == "point" and _number_word(before[0])
+    )
+
+
+def _part_of_fraction(words: Sequence[str], joined: Sequence[bool], i: int, j: int) -> bool:
+    """Whether the number in `words[i:j]` is part of a decimal, ordinal or fraction. `joined[k]`
+    says `words[k]` is hyphen-joined to the next word. Not read: a decimal (`zero point five`,
+    both sides); an ordinal word ending it (`thirty-first`) unless it is joined on to a further
+    word (`second-lien`); `and` plus an ordinal only after `hundred` or `thousand` (`one hundred
+    and first`); `and a half` / `and a quarter` not followed by `of`."""
+
+    def ends(k: int) -> bool:
+        return k < len(words) and _ordinal(words[k]) and not joined[k]
+
+    big = "hundred" in words[i:j] or "thousand" in words[i:j]
     return (
-        words[max(i - 1, 0) : i] == ["point"]
-        or words[j : j + 1] == ["point"]
-        or (j < len(words) and _ordinal(words[j]))
-        or (words[j : j + 1] == ["and"] and j + 1 < len(words) and _ordinal(words[j + 1]))
-        or words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
+        _decimal(words, i, j)
+        or ends(j)
+        or (big and words[j : j + 1] == ["and"] and ends(j + 1))
+        or (
+            words[j : j + 3] in (["and", "a", "half"], ["and", "a", "quarter"])
+            and words[j + 3 : j + 4] != ["of"]
+        )
     )
 
 
@@ -951,14 +973,18 @@ def _spelled(line: str) -> list[Decimal]:
     decimal, fraction or ordinal."""
     found: list[Decimal] = []
     for run in _WORD_RUN.finditer(line):
-        words = re.split(rf"[{_HYPHENS}\s]+", run[0].lower())
+        words = re.findall(r"[a-z]+", run[0].lower())
+        joined = [
+            bool(re.search(rf"[{_HYPHENS}]", g)) for g in re.findall(r"[^a-z]+", run[0].lower())
+        ]
+        joined.append(False)
         i = 0
         while i < len(words):
             value, j = _spelled_number(words, i)
             if j == i:
                 i += 1
                 continue
-            if value >= 2 and not _part_of_fraction(words, i, j):
+            if value >= 2 and not _part_of_fraction(words, joined, i, j):
                 found.append(Decimal(value))
             i = j
     return found

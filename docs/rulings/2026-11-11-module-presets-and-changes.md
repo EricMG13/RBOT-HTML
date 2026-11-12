@@ -407,3 +407,8 @@ directly follows or precedes `point`, or is directly followed (space or hyphen) 
 `thirty-first`, `thirds`, `quarters`, `-th`/`-ieth` forms, also after `and`: `one hundred and first`) or by `and a half` /
 `and a quarter`. U+2010 to U+2015 count as a hyphen inside a spelled number. Remaining limits: a spelled size broken across
 lines (`one hundred` / `and ten`) is not read; a legitimate count equal to a withheld size is refused.
+Narrowed (controller rulings, same day): `and` plus an ordinal exempts only a number containing `hundred` or `thousand`;
+an ordinal or fraction word hyphen-joined to a following word (`second-lien`, `quarter-on-quarter`) is not an ordinal;
+`point` exempts a number only inside number-word `point` number-word (`zero point five`), so `At that point thirty`,
+`a thirty-point swing` and a bare `point five` are read (accepted false refusal); `and a half` / `and a quarter` exempt
+only when not followed by `of`; `two halves` is not read. When in doubt the number is read.

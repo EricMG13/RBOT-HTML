@@ -3204,7 +3204,6 @@ def test_a_four_digit_figure_after_a_yearless_date_is_still_read(sentence, pack,
     ("sentence", "pack"),
     [
         ("Cash is zero point five of the facility.", _cash_pack("-5", "905")),
-        ("Cash is point five of the facility.", _cash_pack("-5", "905")),
         ("Two thirds of the debt is fixed.", _cash_pack("-2", "908")),
         ("Two-thirds of the debt is fixed.", _cash_pack("-2", "908")),
         ("Two and a half turns of leverage.", _cash_pack("-2", "908")),
@@ -3215,6 +3214,43 @@ def test_a_four_digit_figure_after_a_yearless_date_is_still_read(sentence, pack,
     ],
 )
 def test_a_decimal_fraction_or_ordinal_in_words_is_not_read_in_part(sentence, pack):
+    assert _says(sentence, pack) == ()
+
+
+@pytest.mark.parametrize(
+    ("sentence", "pack", "size"),
+    [
+        ("Cash fell by thirty and second-lien debt was repaid.", None, "30"),
+        ("Cash fell by thirty and first-lien leverage rose.", None, "30"),
+        ("Cash fell by thirty and half the facility was drawn.", None, "30"),
+        (
+            "Gross debt fell by one hundred and ten and a quarter of the notes were repaid.",
+            None,
+            "110",
+        ),
+        ("Cash fell by thirty quarter-on-quarter.", None, "30"),
+        ("Cash fell by thirty second-lien loans.", None, "30"),
+        ("At that point thirty was drawn from cash.", None, "30"),
+        ("Cash showed a thirty-point swing.", None, "30"),
+        ("Cash is point five of the facility.", _cash_pack("-5", "905"), "5"),
+    ],
+)
+def test_a_spelled_size_beside_an_ordinal_looking_word_is_still_read(sentence, pack, size):
+    found = _says(sentence, pack)
+    assert any(f"figure {size} is the difference" in i for i in found), found
+
+
+@pytest.mark.parametrize(
+    ("sentence", "pack"),
+    [
+        ("The thirty-first covenant test.", None),
+        ("Two thirds of the debt is fixed.", _cash_pack("-2", "908")),
+        ("Two halves of the debt are fixed.", _cash_pack("-2", "908")),
+        ("The one hundred and first covenant test.", _cash_pack("-100", "810")),
+        ("Cash is zero point five of the facility.", _cash_pack("-5", "905")),
+    ],
+)
+def test_a_spelled_ordinal_fraction_or_decimal_is_still_not_read(sentence, pack):
     assert _says(sentence, pack) == ()
 
 
