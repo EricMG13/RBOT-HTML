@@ -294,9 +294,7 @@ it showed four defects. Controller rulings, each implemented with a failing test
   reads both and none was added. The reason the pack gives is now true: "gross debt is not read from either
   run's CP-1 (the comparison reads only a table row labelled exactly ...)". Even when read, the two runs'
   basis texts differ, so the pack would mark gross debt `judge` and the net debt change would still be left out
-  (it needs `yes`). To be read, CP-1 would state gross debt, net debt and cash each as one row labelled
-  exactly `Gross debt`, `Net debt` and (cash from its liquidity chart table), with `(US$m)` or a `Reporting
-  unit` column, and the same basis text in both runs. CP-1's layout is unchanged here.
+  (it needs `yes`). What CP-1 states for it is set by the 2026-11-12 amendment below (`### Net debt data`).
 - **D4, new modules marked `Unresolved`.** The pack (schema now `cpos-changes/3`; the library reads `/2` and
   `/3`) states each run's `selection` (`preset`, `explicit` or null) in `prior` and `current`; a prior run's
   selection is read from its manifest. When a module is `New` or `Not run this time` and both selections are
@@ -316,3 +314,38 @@ Known limits, recorded, not in this change: pack values print as the handoffs st
 one run and `FY2024` in the other); CP-DR's web guidance is unproven on Claude; a CP-8 `## Gaps` row may still
 say the pack does not say why the earlier run selected fewer modules (the checker reads registers, not gaps);
 Free cash flow and net debt are not read from the real CP-1s for the same label reason as gross debt.
+
+## Amendment, 2026-11-12 (owner: "Yes, add it"): CP-1 states gross debt in a table the pack reads
+
+Asked "Have CP-1 state gross debt in a fixed-label row so the net debt change can be shown?", the owner
+answered "Yes, add it". The `Gross debt` row cannot sit in an existing chart table: the four are period-row
+tables (`Period | <measures> | Reporting unit | Basis and limitation`, cash is a column), the pack's row reader
+needs periods across a header, and a gross debt column in the liquidity table would be drawn beside cash on one
+axis. The net debt change also needs net debt, not only gross debt. Controller ruling: a fifth small period-row
+table on every pathway, with the mechanisms that already exist and no new layout.
+
+- `### Net debt data` (not a `Chart data:` heading, so the library does not draw it, the report does not route it,
+  and the library lists it as a reference table under the CP-1 findings). Header `| Period | Gross debt | Cash |
+  Net debt | Reporting unit | Basis and limitation |`, US$m, one row per period stated (at least the latest
+  balance-sheet date); `Not supplied: <reason>` in a cell as in the other tables. Gross debt is the total debt
+  principal as the issuer reports it, and the Basis cell says what it includes (securitization, finance leases):
+  that is the definition text the pack carries for comparability. Cash is the liquidity table's figure; net debt is
+  gross debt less cash, worked with `calculate`, listed in `## Calculations`.
+- The checker adds two rules, named in the instructions: with all three figures stated a row must satisfy net debt =
+  gross debt - cash exactly (in Decimal), and a stated cash must equal the Cash of every liquidity row that `same_period`
+  (changes.py) calls the same period (`FY2024` and `FY2024 / 2024-09-30` are one period; `2024-09-30` and
+  `FY2024` are not).
+  A missing table or a wrong header is refused as for the other tables.
+- The pack reads `gross_debt`, `net_debt` and, for the net debt change, the table's own Cash column, all from
+  one run's latest row of this table, with the period-row reader that reads the chart tables (the liquidity
+  table is not read for the change); the exact-label row rule of #66 now reads only `free_cash_flow`. A run without the
+  table (every earlier run) states no gross or net debt: the net debt change is left out and `omitted` names
+  the run ("gross debt cannot be compared (the earlier run does not state it)"). Older runs stay usable as a CP-8
+  base and render as before. The pack computes nothing new.
+- Free cash flow is not part of this change. To be read it needs one row labelled exactly `Free cash flow` (or `FCF`)
+  with its unit in brackets or a `Reporting unit` column, in a table with periods across a header, and the same
+  basis text in both runs.
+- Recorded, no code: the library tab shows the net debt change's cash movement without its periods beside the
+  liquidity measure.
+- Recorded, no code (predates this branch, owner item): a same-period restatement with the same basis still yields a
+  net debt change with no flag.

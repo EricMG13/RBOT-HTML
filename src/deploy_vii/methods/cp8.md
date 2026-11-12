@@ -19,8 +19,8 @@ accepted, the run is delivered without it.
     `selection`: `preset` when its modules were the pathway's own, `explicit` for a chosen subset,
     null when not recorded;
   - each measure either run states (`leverage`, `net_leverage`, `coverage`, `cash`, `undrawn`, and
-    `free_cash_flow`, `gross_debt`, `net_debt` where a run states them in a row of that exact
-    label): the earlier and the current value with unit, period and definition text, the
+    `gross_debt` and `net_debt` from CP-1's `Net debt data` table, and `free_cash_flow` where a
+    run states it in a row of that exact label): the earlier and the current value with unit, period and definition text, the
     `difference` (current minus earlier, computed whenever both values are stated in one unit),
     and `comparable`: `yes`, `no` or `judge` (see rule 3), and `same_period`: true when both runs state
     the measure for the same period (computed by Python). A definition text that says `identical

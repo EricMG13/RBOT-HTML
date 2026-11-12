@@ -47,9 +47,9 @@ a decimal string; missing is null, never zero):
   of the definition; page and locator numbers are not.
 - `net_debt_change`: `{unit, prior_net_debt, change_in_gross_debt, change_in_cash,
   current_net_debt, convention}`, only when both runs state gross debt, net debt and cash in one
-  unit (gross and net debt are read only from a CP-1 table row labelled exactly as `ROW_MEASURES`
-  says, the unit in brackets after the label or in a `Reporting unit` column; a row labelled
-  otherwise is not read, and `omitted` says so), each under the same definition ("yes"), and each
+  unit (gross and net debt are read only from the Gross debt and Net debt columns of CP-1's
+  `### Net debt data` table; a run without that table does not state them, and `omitted` says
+  which run), each under the same definition ("yes"), and each
   run's net debt is its gross debt less its cash. A two-point identity of stated balances; it does
   not say what drove the change. An increase in cash reduces net debt.
 - `maturity_profile`: `{unit, rows: [{period, prior, current, difference}]}` from the CP-1
@@ -82,7 +82,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from deploy_vii.contracts import Contract, Identifier
-from deploy_workflow.credit_os_catalogue import chart_row, period_order
+from deploy_workflow.credit_os_catalogue import CHART_PREFIX, chart_row, period_order
 from deploy_workflow.library_index import (
     MethodHeadings,
     MethodText,
@@ -112,20 +112,24 @@ FIRST_RUN = "first run of this pathway"
 DELIVERED_WHOLE = " The changes since the last run are CP-8's handoff, delivered whole."
 NO_LIMITATION = re.compile(r"no limitation changes\b", re.IGNORECASE)
 NOT_SUPPLIED = "Not supplied"
-# (key, CP-1 chart table, value column): the five measures the library already quotes.
+NET_DEBT_TABLE = "Net debt data"  # CP-1's period-row table of gross debt, cash and net debt
+# (key, CP-1 period-row table, value column): the five measures the library already quotes, then
+# gross and net debt from the net debt table (owner, 2026-11-12, "Yes, add it"). The tables are
+# `### Chart data: <name>`, except the net debt table, which the library does not draw.
 CHART_MEASURES = (
     ("leverage", "leverage", "Total debt / EBITDA"),
     ("net_leverage", "leverage", "Net debt / EBITDA"),
     ("coverage", "interest cover", "EBITDA / cash interest"),
     ("cash", "liquidity", "Cash"),
     ("undrawn", "liquidity", "Undrawn committed facilities"),
+    ("gross_debt", NET_DEBT_TABLE, "Gross debt"),
+    ("net_debt", NET_DEBT_TABLE, "Net debt"),
 )
 # (key, row labels): read from the one CP-1 table row of that label, only when it states its unit.
-ROW_MEASURES = (
-    ("free_cash_flow", ("free cash flow", "fcf")),
-    ("gross_debt", ("gross debt", "total debt")),
-    ("net_debt", ("net debt",)),
-)
+ROW_MEASURES = (("free_cash_flow", ("free cash flow", "fcf")),)
+# The net debt table's own Cash column: the cash of the net debt change, read from the same row as
+# gross and net debt. It is not a measure of the pack (the liquidity table's `cash` is).
+NET_DEBT_CASH = ("net_debt_cash", NET_DEBT_TABLE, "Cash")
 MATURITIES = "debt maturities"
 NET_DEBT_CONVENTION = (
     "net debt = gross debt - cash: an increase in cash reduces net debt, a decrease raises it; "
@@ -389,6 +393,10 @@ Reading = Observation | str | None
 POINTER = re.compile(r"\b(?:identical|same)\s+(?:definition|measure|basis)\b", re.IGNORECASE)
 
 
+def _heading(chart: str) -> str:
+    return chart if chart == NET_DEBT_TABLE else f"Chart data: {chart}"
+
+
 def _followed(lines: list[str], chart: str, period: str, text: str | None) -> str | None:
     """The definition a basis cell points to, or None. A basis that says `identical definition` or
     `same measure` points to the basis of the table's row for the period before; that is followed,
@@ -396,7 +404,7 @@ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> st
     is another section of the handoff, and the text is then left as written."""
     if text is None or POINTER.search(text) is None:
         return None
-    start = lines.index(f"### Chart data: {chart}")
+    start = lines.index(f"### {_heading(chart)}")
     rows: list[tuple[tuple[int, ...], str]] = []
     header: list[str] = []
     for line in lines[start + 1 :]:
@@ -422,7 +430,7 @@ def _followed(lines: list[str], chart: str, period: str, text: str | None) -> st
 
 def _chart_observation(lines: list[str], chart: str, column: str) -> Reading:
     try:
-        found = chart_row(lines, chart)
+        found = chart_row(lines, chart, prefix="" if chart == NET_DEBT_TABLE else CHART_PREFIX)
     except ValueError:  # Periods that cannot be ordered: never guess which row is the latest.
         return "has periods in its table that cannot be ordered"
     if found is None or column not in found[0]:
@@ -482,6 +490,7 @@ def _read(text: str) -> tuple[dict[str, Observation], dict[str, str]]:
         key: _chart_observation(lines, chart, column) for key, chart, column in CHART_MEASURES
     }
     found.update({key: _row_observation(text, labels) for key, labels in ROW_MEASURES})
+    found[NET_DEBT_CASH[0]] = _chart_observation(lines, NET_DEBT_CASH[1], NET_DEBT_CASH[2])
     seen = {key: item for key, item in found.items() if isinstance(item, Observation)}
     return seen, {key: item for key, item in found.items() if isinstance(item, str)}
 
@@ -591,19 +600,12 @@ def _compare(
     }
 
 
-def _exactly(labels: Sequence[str]) -> str:
-    quoted = " or ".join(f'"{label.capitalize()}"' for label in labels)
-    return (
-        f"the comparison reads only a table row labelled exactly {quoted}, with its unit in "
-        "brackets after the label or in a Reporting unit column"
-    )
-
-
 # What the pack reads each net debt input from, for the reason it leaves the change out.
 _READS = {
-    "gross_debt": _exactly(dict(ROW_MEASURES)["gross_debt"]),
-    "net_debt": _exactly(dict(ROW_MEASURES)["net_debt"]),
-    "cash": "the comparison reads the Cash column of the CP-1 liquidity chart table",
+    "gross_debt": f'the comparison reads the Gross debt column of the CP-1 "{NET_DEBT_TABLE}" '
+    "table",
+    "net_debt": f'the comparison reads the Net debt column of the CP-1 "{NET_DEBT_TABLE}" table',
+    "net_debt_cash": f'the comparison reads the Cash column of the CP-1 "{NET_DEBT_TABLE}" table',
 }
 
 
@@ -612,8 +614,8 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
     both runs in one unit under the same definition, and each run's net debt to be its gross debt
     less its cash."""
     pairs = {}
-    for key in ("gross_debt", "net_debt", "cash"):
-        name = key.replace("_", " ")
+    for key in ("gross_debt", "net_debt", "net_debt_cash"):
+        name = "cash" if key == "net_debt_cash" else key.replace("_", " ")
         measure = by_key.get(key)
         if measure is None:
             return None, f"{name} is not read from either run's CP-1 ({_READS[key]})"
@@ -622,14 +624,14 @@ def _net_debt_change(by_key: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str,
         if measure["comparable"] != "yes":
             return None, f"{name} is not comparable under one definition ({measure['comparable']})"
         pairs[key] = (decimal(measure["prior"]["value"]), decimal(measure["current"]["value"]))
-    (pg, cg), (pn, cn), (pc, cc) = pairs["gross_debt"], pairs["net_debt"], pairs["cash"]
+    (pg, cg), (pn, cn), (pc, cc) = pairs["gross_debt"], pairs["net_debt"], pairs["net_debt_cash"]
     if pn != pg - pc or cn != cg - cc:
         return None, "a run's net debt is not its gross debt less its cash"
     units = {" ".join(by_key[k]["unit"].split()) for k in pairs}
     if len(units) != 1:
         return None, "debt and cash are in different units"
     return {
-        "unit": str(by_key["cash"]["unit"]),
+        "unit": str(by_key["net_debt_cash"]["unit"]),
         "prior_net_debt": format(pn, "f"),
         "change_in_gross_debt": format(cg - pg, "f"),
         "change_in_cash": format(cc - pc, "f"),
@@ -771,7 +773,21 @@ def build_pack(  # noqa: PLR0913 - the two runs' texts and the current run's ide
         },
         "measures": measures,
     }
-    change, why = _net_debt_change({m["key"]: m for m in measures})
+    cash_key = NET_DEBT_CASH[0]
+    cash = (
+        [
+            _compare(
+                cash_key,
+                seen_before.get(cash_key),
+                seen_now.get(cash_key),
+                unread_before.get(cash_key),
+                unread_now.get(cash_key),
+            )
+        ]
+        if cash_key in seen_before or cash_key in seen_now
+        else []
+    )
+    change, why = _net_debt_change({m["key"]: m for m in (*measures, *cash)})
     if change is None:
         omitted["net_debt_change"] = why
     else:
