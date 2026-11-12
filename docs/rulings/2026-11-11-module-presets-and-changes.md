@@ -451,3 +451,10 @@ million(s), billion(s), thousand(s), `mn`, `bn`, `m`, `k` (words case-insensitiv
 exemption (`YYYY-MM`, `YYYY-MM-DD`) matches only when its last two digits are not followed by another digit: `September 2024-437` reads 437, and `2025-2045` reads
 two years (the 45 once read from `2025-2045` was a fragment, not a figure). Limit: a two-digit number written directly after a year and a hyphen (`FY 2024-30 US$m`) is read as a year range and hides the 30. (L-B) A table separator row
 needs at least three dashes in every cell (colons allowed); no real separator row in the retained runs has fewer.
+
+Amendment, 2026-11-12 (fix round 3). One unit test decides whether a 19xx/20xx number is a year or a figure (`_YEAR_UNIT`),
+separate from the small-number test (`_UNITED`), so a boundary fixed for one no longer moves the other. A unit must end before a
+letter, a digit or `&`, and before a hyphen or slash followed by a letter (`2024 m&a`, `2024 k-shaped`, `2024 m/m` stay years). A
+plural scale word (`millions`) counts only after a currency (`2010 USD millions`); alone it is a year (`In 2024 millions of
+customers`, and `2010 millions`, which the round-2 test had listed as a figure and is moved). The duplicate `_UNITS` name is gone,
+so `mypy --strict` reports no error in the file.

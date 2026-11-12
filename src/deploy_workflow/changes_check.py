@@ -112,20 +112,28 @@ _EXEMPT = re.compile(
 )
 _YEAR_TOKEN = re.compile(r"(?:19|20)\d{2}")
 # A year is a figure beside a currency only for a currency code (`USD 1913`), never another
-# capitalised word (`AND 2023`); a code with a scale (`USDm`) counts after it too.
+# capitalised word (`AND 2023`).
 _CODES = "USD|EUR|GBP|CHF|JPY|CAD|AUD|NZD|SEK|NOK|DKK|CNY|HKD|SGD|ZAR|INR|BRL|MXN|PLN|CZK|HUF|TRY"
-_UNITS = r"(?i:millions?|billions?|thousands?)|mn\b|bn\b|[mk]\b"  # a scale after a figure
-_SCALE = (
-    rf"%|x\b|bps?\b|pp\b|{_UNITS}|(?i:percent)"
-    r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b"
-)
-_YEAR_AFTER = re.compile(
-    rf"\s*(?:{_SCALE}|(?:{_CODES}|[A-Z]{{2,3}}[$€£¥]|[$€£¥])\s*(?:{_UNITS})|[A-Z]{{3}}(?:m|bn|k)\b)"
+# A unit ends its word: no letter, digit or `&` after it, and no hyphen or slash and a letter
+# (`m&a`, `k-shaped`, `m/m`, `millionaires` are words, not units).
+_END = r"(?![\w&]|[-\u2010-\u2015/][A-Za-z])"
+_SCALE_WORD = rf"(?:(?i:million|billion|thousand)|mn|bn|[mk]){_END}"
+# After a currency code or sign a scale may be of any case or plural (`US$M`, `USD mn`).
+_CURRENCY_SCALE = rf"(?i:millions?|billions?|thousands?|mn|bn|tn|mm|m|k|b){_END}"
+# The one unit that makes a 19xx/20xx number a figure, directly after it: `%`, `x`, `bp(s)`, `pp`,
+# `percent` or a scale (`2010m`, `1913 million`), or a currency code or sign carrying a scale
+# (`2010 USDm`, `2010 US$ millions`). A currency alone (`2024 USD strengthened`) or a plural scale
+# word alone (`2024 millions of customers`) is none.
+_YEAR_UNIT = re.compile(
+    rf"\s*(?:%|(?:x|bps?|pp|(?i:percent)){_END}|{_SCALE_WORD}"
+    rf"|(?:{_CODES}|[A-Z]{{2,3}}[$€£¥]|[$€£¥])\s*{_CURRENCY_SCALE})"
 )
 _YEAR_BEFORE = re.compile(rf"(?:[$€£¥]|\b(?:{_CODES})) ?$")
-# A currency directly followed by a number belongs to that number (`2025 USD 30,199`).
-_CURRENCY_AFTER = re.compile(r"\s*(?:[A-Z]{2,3}[$€£¥]|[$€£¥]|[A-Z]{3})\s?\(?[-−]?\d")
-_UNITED = re.compile(rf"\s*(?:{_SCALE}|[A-Z]{{3}}\b)")
+# Any unit or currency after a number below 100 makes it a figure, not a count (`30m`, `30 USD`).
+_UNITED = re.compile(
+    r"\s*(?:%|x\b|bps?\b|pp\b|[mk]\b|mn\b|bn\b|(?i:million|billion|thousand|percent)"
+    r"|(?:[A-Z]{2,3})?[$€£¥]\w{0,2}\b|[A-Z]{3}\b)"
+)
 _CURRENCY = re.compile(r"(?:[$€£¥]|\b[A-Z]{3}) ?$")
 _NOT_EVIDENCE = frozenset({"", "-", "—", "–", "n/a", "none", "not stated"})
 _DASHES = frozenset({"", "-", "—", "–"})
@@ -163,8 +171,8 @@ class Figure:
 def _is_year(masked: str, match: re.Match[str], *, header: bool) -> bool:
     """Whether the number `match` of `masked` is a year and no figure. A 19xx/20xx number with no
     decimal part or thousands separator is a year, except when a currency stands before it (`USD
-    1913`), or a unit or scale after it (`2010m`, `1913 million`, `2010 US$m`, `2010 USDm`), unless
-    that currency belongs to the number that follows (`2025 USD 30,199`). In a table header row
+    1913`), or a unit (`_YEAR_UNIT`) directly after it (`2010m`, `1913 million`, `2010 USDm`); a
+    currency counts only when it carries a scale. In a table header row
     (`header`) it is always a year. A bare year is always one."""
     if not _YEAR_TOKEN.fullmatch(match[0]):
         return False
@@ -172,9 +180,7 @@ def _is_year(masked: str, match: re.Match[str], *, header: bool) -> bool:
         return True
     if _YEAR_BEFORE.search(masked[max(0, match.start() - 4) : match.start()]):
         return False
-    return bool(_CURRENCY_AFTER.match(masked, match.end())) or not _YEAR_AFTER.match(
-        masked, match.end()
-    )
+    return not _YEAR_UNIT.match(masked, match.end())
 
 
 def _figures(cell: str, *, counts: bool = True, header: bool = False) -> list[Figure]:

@@ -3502,7 +3502,6 @@ def test_a_code_after_a_year_with_no_scale_or_number_is_no_unit():
 @pytest.mark.parametrize(
     "text",
     [
-        "2010 millions",
         "2010 USD millions",
         "2010 USD mn",
         "2010 EUR billions",
@@ -3548,3 +3547,121 @@ def test_a_range_of_two_years_reads_no_figure_and_k10_accepts_it():
     text = "Finance lease obligations, 2025-2045 maturities"
     assert _figures(text) == []
     assert _hold(text) == ()
+
+
+_YEARISH = re.compile(r"(?<![\d,.])(?:19|20)\d{2}(?:\.\d+)?(?![\d,])")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2010 US$m",
+        "2010m",
+        "2010 million",
+        "2010 USDm",
+        "1913 million",
+        "2010.5 US$m",
+        "US$2010m",
+        "USD 2010",
+        "USD 1913",
+        "2010 USD millions",
+        "2010 USD mn",
+        "2010 EUR billions",
+        "2010 USD thousands",
+        "2010 US$ million",
+        "2010 US$ millions",
+        "2010 USD m",
+        "2010USD Millions",
+        "2010bn",
+        "2010x",
+        "2010%",
+        "2024 bn",
+        "2024 mn",
+        "2024 EUR m.",
+        "2024 thousand employees",
+        "2010 m",
+        "2024 x",
+        "2024 %",
+        "2024 percent",
+        "2024 bps",
+        "2010m-2011m",
+        "In 2024 k.",
+        "In 2024 $ millions were raised",
+        "In 2024 £ billions",
+        "2024 £bn",
+        "2010 US$M",
+        "2010 $MM",
+        "2010 €M",
+        "2010 US$BN",
+        "2010 $K",
+        "2010 USD M",
+        "2010 USDM",
+        "In 2024 USD mm",
+        "cash of US$1913 million and liquidity",
+        "FY2024 USD 2045 million; FY2023",
+        "CP-1's US$2038 million total",
+    ],
+)
+def test_a_19xx_20xx_number_with_a_unit_ending_its_word_is_a_figure(text):
+    from deploy_workflow.changes_check import _figures
+
+    sizes = [str(f.size) for f in _figures(text)]
+    assert any(t in sizes for t in _YEARISH.findall(text)), (text, sizes)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "In 2024 m&a activity rose.",
+        "The 2024 k-shaped recovery helped.",
+        "In 2024 millions of customers switched.",
+        "In 2024 USD millionaires bought bonds.",
+        "In 2024 € m-commerce grew.",
+        "In 2024 millions switched.",
+        "In 2024 thousands left.",
+        "In 2024 millions, not thousands, switched.",
+        "2010 millions",
+        "Cash was 2010 millions.",
+        "In 2024 million-dollar deals rose.",
+        "In 2024 m/m growth slowed.",
+        "In 2024 bn-dollar deals.",
+        "In 2024 x-ray use rose.",
+        "In 2024 percentages rose.",
+        "In 2024 USD billionaires",
+        "In 2024 $US rose",
+        "In 2024 €m-commerce grew.",
+        "In 2024 ABCm rose",
+        "In 2024 bps-style",
+        "In 2024 thousandths",
+        "2010 USD m&a",
+        "In 2024 USD M&A deals",
+        "In 2024 kWh fell",
+        "2024 US$ 5m",
+        "In 2024 USD strengthened against the euro.",
+        "2024 US$4,216 million",
+        "Cash was 2010 USD 31.",
+        "H1 2025 USD 30,199 thousand",
+        "In 2024, the issuer refinanced.",
+        "2024 M&A",
+        "2024 Mn",
+        "2024 management",
+        "2024 markets",
+        "FY2024 m",
+        "2024 USD mid-market",
+        "2025 OEM build rates",
+        "2024 AND 2023",
+        "2024 M",
+        "2024 K",
+    ],
+)
+def test_a_19xx_20xx_number_before_a_word_that_only_starts_like_a_unit_is_a_year(text):
+    from deploy_workflow.changes_check import _figures
+
+    sizes = [str(f.size) for f in _figures(text)]
+    assert not [t for t in _YEARISH.findall(text) if t in sizes], (text, sizes)
+
+
+def test_a_percent_hyphen_word_after_a_small_number_is_still_a_unit():
+    from deploy_workflow.changes_check import _figures
+
+    assert [str(f.size) for f in _figures("30 percent-owned", counts=False)] == ["30"]
