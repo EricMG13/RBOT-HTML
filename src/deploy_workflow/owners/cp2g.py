@@ -559,6 +559,8 @@ def forecast(
     to every year: EBITDA x (1 - decline), rate x (1 + increase), everything else held.
     `schedule` (three (interest, repayment) pairs) replaces the interest-rate and repayment
     drivers."""
+    if schedule is not None and len(schedule) != 3:
+        raise ValueError("a schedule states exactly three (interest, repayment) pairs")
     opening = (operands.revenue, operands.debt, operands.cash, operands.undrawn)
     years: list[Year] = []
     with _exact_digits("the base case forecast" if shock is None else "the downside case forecast"):

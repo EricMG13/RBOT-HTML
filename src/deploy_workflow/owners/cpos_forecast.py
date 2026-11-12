@@ -13,7 +13,7 @@ import json
 import re
 from dataclasses import fields
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Annotated
 
 from pydantic import Field, ValidationError, model_validator
@@ -116,7 +116,7 @@ class ForecastInputs(Contract):
             for a, b in zip(self.years, self.years[1:], strict=False)
         ):
             raise ValueError("each year must start the day after the previous one ends")
-        if self.facilities is not None and len({f.name for f in self.facilities}) < len(
+        if self.facilities is not None and len({f.name.casefold() for f in self.facilities}) < len(
             self.facilities
         ):
             raise ValueError("facility names must be unique")
@@ -146,6 +146,12 @@ def _printed(text: str, amount: str) -> bool:
     return any(
         re.search(rf"(?<![0-9.,]){re.escape(form)}(?![0-9]|[.,][0-9])", text) for form in forms
     )
+
+
+def _printed_percent(text: str, value: str) -> bool:
+    """Whether CP-1 prints the rate term as stated, as a percent: `6.00%` or `6.00 %`, the number
+    not the tail of a longer one."""
+    return re.search(rf"(?<![0-9.,]){re.escape(value)} ?%", text) is not None
 
 
 _CELL = re.compile(r"(?:\+|(?P<minus>[-\u2212]))?(?P<digits>[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)")
@@ -325,19 +331,33 @@ def _check_facilities(
     """Each stated term is printed in CP-1, the balances fit the base debt, and no case names a
     driver the schedule replaces."""
     for facility in facilities:
-        for field in ("balance", "fixed_rate_pct", "spread_pct", "floor_pct"):
+        if not _printed(cp1_text, facility.balance):
+            raise ValueError(
+                f"CP-2G: facility {facility.name} balance {facility.balance} is not printed in CP-1"
+            )
+        for field in ("fixed_rate_pct", "spread_pct", "floor_pct"):
             value = getattr(facility, field)
-            if value is not None and not _printed(cp1_text, value):
+            if value is not None and not _printed_percent(cp1_text, value):
                 raise ValueError(
-                    f"CP-2G: facility {facility.name} {field} {value} is not printed in CP-1"
+                    f"CP-2G: facility {facility.name} {field} {value}% is not printed in CP-1"
                 )
     debt = inputs.base["debt"].amount
-    total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
-    if debt is not None and total > Decimal("1.25") * Decimal(debt):
-        raise ValueError(
-            f"CP-2G: facility balances total {format(total, 'f')}, more than 1.25 times base debt "
-            f"{debt}; check the unit"
-        )
+    if debt is not None:
+        with localcontext(cp2g._EXACT):
+            total = sum((Decimal(f.balance) for f in facilities), Decimal(0))
+            too_much = total > Decimal("1.25") * Decimal(debt)
+            repaid = sum((r for _, r in schedule(facilities).totals()), Decimal(0))
+            over_debt = repaid > Decimal(debt)
+        if too_much:
+            raise ValueError(
+                f"CP-2G: facility balances total {format(total, 'f')}, more than 1.25 times base "
+                f"debt {debt}; check the unit"
+            )
+        if over_debt:
+            raise ValueError(
+                f"CP-2G: scheduled repayments total {_plain_amount(repaid)}, more than base debt "
+                f"{_plain_amount(Decimal(debt))}"
+            )
     for name in ("upside_drivers", "downside_drivers"):
         case: CaseDrivers | None = getattr(inputs, name)
         for driver in ("interest_rate", "debt_repayment"):
@@ -382,11 +402,12 @@ def _facility_detail(
         for facility, row in zip(facilities, plan.rows, strict=True)
     ]
     debt = inputs.base["debt"]
-    unallocated = (
-        None
-        if debt.amount is None
-        else Decimal(debt.amount) - sum((Decimal(f.balance) for f in facilities), Decimal(0))
-    )
+    with localcontext(cp2g._EXACT):
+        unallocated = (
+            None
+            if debt.amount is None
+            else Decimal(debt.amount) - sum((Decimal(f.balance) for f in facilities), Decimal(0))
+        )
     limits = [FACILITY_LIMIT]
     if unallocated is None:
         limits.append("Base debt is missing, so debt outside the stated facilities is not known.")
@@ -395,16 +416,26 @@ def _facility_detail(
             f"Debt of {_plain_amount(unallocated)} is not in a stated facility; it bears no "
             "interest and is not repaid in this forecast."
         )
+    elif unallocated < 0:
+        limits.append(
+            f"Stated facility balances exceed base debt by {_plain_amount(-unallocated)}; "
+            "interest is computed on the stated balances."
+        )
     spans = [(date.fromisoformat(s.start), date.fromisoformat(s.end), s.year) for s in inputs.years]
     for facility in facilities:
         if facility.maturity is None:
             continue
         due = date.fromisoformat(facility.maturity)
-        if due <= spans[2][1]:
-            year = next((y for start, end, y in spans if start <= due <= end), spans[0][2])
+        if due < spans[0][0]:
+            limits.append(
+                f"{facility.name} has a stated maturity of {facility.maturity}, before the "
+                "forecast; it is assumed refinanced and no repayment at maturity is modelled."
+            )
+        elif due <= spans[2][1]:
+            year = next(y for start, end, y in spans if start <= due <= end)
             limits.append(
                 f"{facility.name} matures in FY{year} and is assumed refinanced; "
-                "its balance is held."
+                "no repayment at maturity is modelled."
             )
     return {
         "facilities": [f.model_dump(mode="json") for f in facilities],

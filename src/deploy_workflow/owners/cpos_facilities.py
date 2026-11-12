@@ -48,6 +48,17 @@ class Facility(Contract):
             raise ValueError("a facility states a fixed rate, or a reference rate with a spread")
         if self.maturity is not None:
             date.fromisoformat(self.maturity)
+        if self.name != self.name.strip():
+            raise ValueError("facility name must not start or end with whitespace")
+        if self.reference_rate is not None:
+            for year in range(3):
+                with localcontext(cp2g._EXACT):
+                    rate = _rate(self, year)
+                if not 0 <= rate <= Decimal("0.30"):
+                    raise ValueError(
+                        f"all-in rate {format(rate, 'f')} in forecast year {year + 1} is outside "
+                        "0 to 0.30; reference_rate is a decimal fraction (0.04 is 4%)"
+                    )
         return self
 
 

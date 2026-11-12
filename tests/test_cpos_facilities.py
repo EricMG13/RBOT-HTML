@@ -141,7 +141,7 @@ def test_missing_base_debt_stays_missing_with_its_reason():
 
 # --- the inputs block states facilities (Task 3) ------------------------------------------------
 # A local builder modelled on forecast_block in tests/test_cpos_launch.py (not importable).
-_CP1 = " ".join(_BASE.values()) + " 400 150 6.00 3.00 1.00"
+_CP1 = " ".join(_BASE.values()) + " 400 150 6.00% 3.00% 1.00%"
 
 
 def _block(**changes) -> bytes:
@@ -248,7 +248,7 @@ def test_missing_base_debt_says_so():
         (
             [{**A, "fixed_rate_pct": "6.0"}],
             _CP1,
-            "CP-2G: facility Notes fixed_rate_pct 6.0 is not printed in CP-1",
+            "CP-2G: facility Notes fixed_rate_pct 6.0% is not printed in CP-1",
         ),
         (
             [{**A, "balance": "999"}],
@@ -258,7 +258,7 @@ def test_missing_base_debt_says_so():
         (
             [B, {**B, "name": "T2", "floor_pct": "2.50"}],
             _CP1,
-            "CP-2G: facility T2 floor_pct 2.50 is not printed in CP-1",
+            "CP-2G: facility T2 floor_pct 2.50% is not printed in CP-1",
         ),
         (
             [{**A, "balance": "400000"}],
@@ -311,14 +311,26 @@ def test_duplicate_names_are_refused():
     assert "facility names must be unique" in _refusal(facilities=[A, {**B, "name": "Notes"}])
 
 
+def test_a_facility_name_is_trimmed_and_unique_ignoring_case_and_edges():
+    for name in (" Notes", "Notes ", "   "):
+        with pytest.raises(ValidationError, match="must not start or end with whitespace"):
+            Facility(**{**A, "name": name})
+    assert "facility names must be unique" in _refusal(facilities=[B, {**B, "name": "TERM LOAN"}])
+
+
 @pytest.mark.parametrize("rows", [[], [{**A, "name": f"F{i}"} for i in range(41)]])
 def test_one_to_forty_facilities(rows):
     assert "forecast inputs" in _refusal(facilities=rows)
 
 
+MATURES_2026 = (
+    "Notes matures in FY2026 and is assumed refinanced; no repayment at maturity is modelled."
+)
+
+
 def test_a_maturity_inside_the_forecast_is_named():
     limits = _exact(facilities=[{**A, "maturity": "2026-09-30"}])["scope_limits"]
-    assert "Notes matures in FY2026 and is assumed refinanced; its balance is held." in limits
+    assert MATURES_2026 in limits
 
 
 def test_a_maturity_before_the_forecast_is_named_in_the_first_year_and_a_late_one_is_not():
@@ -327,8 +339,14 @@ def test_a_maturity_before_the_forecast_is_named_in_the_first_year_and_a_late_on
         {**B, "maturity": "2028-03-31"},
     ]
     limits = _exact(facilities=rows)["scope_limits"]
-    assert "Notes matures in FY2025 and is assumed refinanced; its balance is held." in limits
-    assert "Term loan matures in FY2027 and is assumed refinanced; its balance is held." in limits
+    assert (
+        "Notes has a stated maturity of 2020-01-01, before the forecast; it is assumed "
+        "refinanced and no repayment at maturity is modelled." in limits
+    )
+    assert (
+        "Term loan matures in FY2027 and is assumed refinanced; "
+        "no repayment at maturity is modelled." in limits
+    )
     after = _exact(facilities=[{**A, "maturity": "2028-04-01"}])["scope_limits"]
     assert not any("matures in" in s for s in after)
 
@@ -336,3 +354,86 @@ def test_a_maturity_before_the_forecast_is_named_in_the_first_year_and_a_late_on
 def test_a_maturity_is_a_dated_form_only():
     with pytest.raises(ValidationError):
         Facility(**{**A, "maturity": "20300101"})
+
+
+# --- fix round 1 --------------------------------------------------------------------------------
+def test_scheduled_repayments_above_base_debt_are_refused():
+    row = {**A, "balance": "700", "annual_amortisation": "300"}
+    message = _refusal(_CP1 + " 700", facilities=[row])
+    assert message == "CP-2G: scheduled repayments total 700, more than base debt 600"
+
+
+def test_scheduled_repayments_equal_to_base_debt_are_accepted():
+    row = {**A, "balance": "700", "annual_amortisation": "200"}
+    exact = _exact(_CP1 + " 700", facilities=[row])
+    assert D(exact["unallocated_debt"]["amount"]) == D("-100")
+
+
+def test_balances_above_base_debt_name_the_excess_in_a_scope_limit():
+    rows = [{**A, "balance": "500"}, {**B, "balance": "150"}]
+    limits = _exact(_CP1 + " 500", facilities=rows)["scope_limits"]
+    assert limits[3] == (
+        "Stated facility balances exceed base debt by 50; interest is computed on the stated "
+        "balances."
+    )
+
+
+@pytest.mark.parametrize(
+    "reference, year, rate",
+    [(["1", "1", "1"], 1, "1.03"), (["0.04", "0.5", "0.04"], 2, "0.53")],
+)
+def test_a_floating_all_in_rate_above_thirty_percent_is_refused(reference, year, rate):
+    with pytest.raises(ValidationError) as caught:
+        Facility(**{**B, "floor_pct": None, "reference_rate": reference})
+    assert (
+        f"all-in rate {rate} in forecast year {year} is outside 0 to 0.30; reference_rate is a "
+        "decimal fraction (0.04 is 4%)"
+    ) in str(caught.value)
+
+
+def test_a_negative_all_in_rate_is_refused_and_a_negative_reference_rate_above_zero_is_not():
+    with pytest.raises(ValidationError, match="all-in rate -0.47 in forecast year 1 is outside"):
+        Facility(**{**B, "floor_pct": None, "reference_rate": ["-0.5", "-0.5", "-0.5"]})
+    ok = Facility(**{**B, "floor_pct": None, "reference_rate": ["-0.01", "0", "0.27"]})
+    assert [y.rate for y in schedule([ok]).rows[0]] == [D("0.02"), D("0.03"), D("0.30")]
+
+
+def test_a_rate_term_is_a_printed_percent():
+    # "6.00" appears in CP-1 only as part of 16.00 and as a bare number: neither is a percent
+    for cp1 in (_CP1.replace("6.00%", "16.00%"), _CP1.replace("6.00%", "6.00")):
+        assert "fixed_rate_pct 6.00% is not printed" in _refusal(cp1, facilities=[A])
+    spaced = _CP1.replace("6.00%", "6.00 %")
+    assert _exact(spaced, facilities=[A])["facilities"][0]["fixed_rate_pct"] == "6.00"
+
+
+def test_forecast_states_exactly_three_schedule_pairs():
+    with pytest.raises(ValueError, match="exactly three"):
+        cp2g.forecast(operands=OPERANDS, drivers=DRIVERS, shock=None, schedule=TOTALS[:2])
+
+
+def test_a_block_without_facilities_is_byte_identical_to_main():
+    import hashlib
+
+    from deploy_workflow.owners.cpos_forecast import model_files
+
+    doc = {
+        "schema_version": "cpos-forecast-inputs/1",
+        "base": {k: {"amount": v, "reason": None} for k, v in _BASE.items()},
+        "base_drivers": {n: _driver(n) for n in _PATHS},
+        "downside_shock": {"ebitda_decline": "0.20", "rate_increase": "0.10"},
+        "upside_drivers": {
+            "revenue_growth": {**_driver("revenue_growth"), "values": ["0.07", "0.06", "0.05"]}
+        },
+        "years": [
+            {"year": 2025 + i, "start": f"{2025 + i}-04-01", "end": f"{2026 + i}-03-31"}
+            for i in range(3)
+        ],
+        "scope_limits": ["Synthetic; not analytical review."],
+    }
+    handoff = f"### Forecast inputs (machine-readable)\n\n```json\n{json.dumps(doc)}\n```\n"
+    files = model_files(" ".join(_BASE.values()).encode(), handoff.encode())
+    digest = hashlib.sha256()
+    for name in sorted(files):
+        digest.update(name.encode())
+        digest.update(files[name])
+    assert digest.hexdigest() == "e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089"
