@@ -382,6 +382,7 @@ class _Context:
     anchor: _Anchor | None
     printed: frozenset[Period]
     dates: Dates
+    no_anchor: str = NO_ANCHOR
 
 
 def _anchor_of(found: dict[str, Line]) -> _Anchor | None:
@@ -441,13 +442,13 @@ def _blanket(text: str) -> dict[str, cp2g.Val]:
     return {key: cp2g.Val(None, text) for key in _PUBLISHED}
 
 
-def _no_anchor_values(found: dict[str, Line]) -> dict[str, cp2g.Val]:
-    """Every value missing with NO_ANCHOR; a read value takes its own line's reason first."""
-    values = _blanket(NO_ANCHOR)
+def _no_anchor_values(found: dict[str, Line], reason: str = NO_ANCHOR) -> dict[str, cp2g.Val]:
+    """Every value missing with `reason` (no anchor); a read value takes its own line's first."""
+    values = _blanket(reason)
     for key in _PUBLISHED:
-        reason = found[_OPERAND_OF.get(key, key)].reason if key in _READ_PUBLISHED else None
-        if reason is not None:
-            values[key] = cp2g.Val(None, reason)
+        own = found[_OPERAND_OF.get(key, key)].reason if key in _READ_PUBLISHED else None
+        if own is not None:
+            values[key] = cp2g.Val(None, own)
     return values
 
 
@@ -550,12 +551,12 @@ def _group(ctx: _Context, kind: str, group: str, cap: int) -> tuple[list[Column]
     for period in periods:
         prior = (kind, period[1] - 1, period[2])
         if ctx.anchor is None:
-            values = _no_anchor_values(ctx.found)
+            values = _no_anchor_values(ctx.found, ctx.no_anchor)
         else:
             reads = {key: _read(ctx.found[key], period) for key in _READ}
             values = _derived(reads, part_year=kind == "QUARTER")
             values = _full_year(values, ctx.dates, period) if kind == "FY" else values
-        reason = NO_ANCHOR if ctx.anchor is None else None
+        reason = ctx.no_anchor if ctx.anchor is None else None
         column = _column(ids[period], kind, ids[period], ids.get(prior), values)
         columns.append(_why(_dated(column, ctx.dates.get(period)), reason))
     return columns, cut
@@ -563,7 +564,7 @@ def _group(ctx: _Context, kind: str, group: str, cap: int) -> tuple[list[Column]
 
 def _placeholder(ctx: _Context, kind: str, group: str) -> Column:
     if ctx.anchor is None:
-        reason, values = NO_ANCHOR, _no_anchor_values(ctx.found)
+        reason, values = ctx.no_anchor, _no_anchor_values(ctx.found, ctx.no_anchor)
     else:
         reason = NO_COLUMN.format(group=group.lower())
         values = _blanket(reason)
@@ -721,12 +722,12 @@ def _four(ctx: _Context) -> tuple[list[Column], list[str]]:
     """YTD, PYTD, LTM and Prior LTM, in that order, and the first limit line (what the LTM's date
     check found)."""
     if ctx.anchor is None:
-        values = _no_anchor_values(ctx.found)
+        values = _no_anchor_values(ctx.found, ctx.no_anchor)
         return [
-            _why(_column("YTD", "YTD", "YTD", "PYTD", values), NO_ANCHOR),
-            _why(_column("PYTD", "PYTD", "PYTD", None, values), NO_ANCHOR),
-            _why(_column("LTM", "LTM", "LTM", "PRIOR_LTM", values), NO_ANCHOR),
-            _why(_column("PRIOR_LTM", "PRIOR_LTM", "Prior LTM", None, values), NO_ANCHOR),
+            _why(_column("YTD", "YTD", "YTD", "PYTD", values), ctx.no_anchor),
+            _why(_column("PYTD", "PYTD", "PYTD", None, values), ctx.no_anchor),
+            _why(_column("LTM", "LTM", "LTM", "PRIOR_LTM", values), ctx.no_anchor),
+            _why(_column("PRIOR_LTM", "PRIOR_LTM", "Prior LTM", None, values), ctx.no_anchor),
         ], [NOT_BUILT]  # fmt: skip
     if ctx.anchor.fiscal:
         return _fiscal(ctx, ctx.anchor)
@@ -814,7 +815,14 @@ def history(
     located = [line for line in found.values() if line.reason is None]
     printed = frozenset(p for line in located for p in (*line.values, *line.gaps))
     dates, twice = period_dates(tables)
-    ctx = _Context(found, located, _anchor_of(found), printed, dates)
+    anchor = _anchor_of(found)
+    nothing_named = not any(key in (named or {}) for key in ("revenue", "ebitda"))
+    unnamed = (
+        anchor is None
+        and nothing_named
+        and NOT_NAMED in (found["revenue"].reason, found["ebitda"].reason)
+    )
+    ctx = _Context(found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR)
     (ytd, pytd, ltm, prior), first = _four(ctx)
     pf = _why(_column("PF", "PF", "PF LTM", None, _blanket(NO_PF)), NO_PF)
     quarters, quarter_cut = _group(ctx, "QUARTER", "Quarter", _MAX_QUARTERS)

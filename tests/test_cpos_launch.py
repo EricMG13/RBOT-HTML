@@ -4950,3 +4950,168 @@ def test_a_row_or_period_that_is_blank_once_plain_is_refused_as_unnamed(name, wh
     operand = _operand("1000") | {which: name}
     with pytest.raises(ValueError, match=re.escape(MUST_NAME)):
         _named_cp2g(_cp1_doc(TWO_YEARS), revenue=operand)
+
+
+# --- the whole-branch review's fixes: the repair line, bounded cell lists, the surviving mutants --
+OPERAND_END = "as missing: amount null, no row or period, and the reason."
+FACILITY_END = "write `facilities` as null and keep the drivers."
+BLOCK_END = "[null, null, null] and say why in scope_limits."
+
+
+def _repair_issues(block: str, cp1: str) -> tuple[str, ...]:
+    task = types.SimpleNamespace(module_id="CP-2G", handoffs={"CP-1": cp1.encode()})
+    return cpos_launch._forecast_issues(task, block)
+
+
+def _named_base(**changes):
+    base = {k: _operand(v, k) for k, v in BASE.items()}
+    return base | changes
+
+
+def _cp1_with_rows(rows: dict[str, str], extra: str = "") -> str:
+    body = "\n".join(f"| {rows.get(k, k)} | {printed(k, v)} |" for k, v in BASE.items())
+    return f"| Base | FY2025 |\n| --- | --- |\n{body}\n{extra}"
+
+
+@pytest.mark.parametrize(
+    ("key", "amount", "row"),
+    [
+        ("undrawn", "51", "Revolving credit facility"),  # CP-1's cell is 50
+        ("undrawn", "51", "Undrawn committed facilities"),
+        ("debt", "601", "Debt after scheduled repayments"),
+        ("revenue", "1001", "Guidance gives no forecast drivers"),
+    ],
+)
+def test_the_repair_line_of_a_refused_operand_is_chosen_by_the_refusal_not_the_quoted_row(
+    key, amount, row
+):
+    cp1 = _cp1_with_rows({key: row})
+    block = forecast_block(base=_named_base(**{key: _operand(amount, row)}))
+    (issue,) = _repair_issues(block, cp1)
+    assert issue.endswith(OPERAND_END)
+    assert f"Correct the row, period or amount of {key}; if you cannot, state {key} " in issue
+
+
+def test_an_operand_refusal_quoting_the_liquidity_chart_header_gets_the_operand_line():
+    chart = (
+        "\n| Period | Cash | Undrawn committed facilities | Reporting unit |\n"
+        "| --- | --- | --- | --- |\n| FY2025 | 100 | 50 | US$m |\n"
+    )
+    block = forecast_block(
+        base=_named_base(undrawn=_operand("51", "FY2025", "Undrawn committed facilities"))
+    )
+    (issue,) = _repair_issues(block, _cp1_with_rows({}, chart))
+    assert issue.endswith(OPERAND_END) and "amount of undrawn;" in issue
+
+
+def test_a_facilities_refusal_keeps_the_facilities_line():
+    notes = [
+        {"name": "Notes", "balance": "400", "fixed_rate_pct": "6.00", "spread_pct": None,
+         "floor_pct": None, "reference_rate": None, "annual_amortisation": None,
+         "maturity": None}
+    ]  # fmt: skip
+    block = forecast_block(base=_named_base(), facilities=notes)
+    (issue,) = _repair_issues(block, _cp1_with_rows({}))
+    assert issue.endswith(FACILITY_END) and issue.count("Correct the facilities;") == 1
+
+
+def test_a_block_refused_for_another_reason_keeps_the_null_every_driver_line():
+    (issue,) = _repair_issues(forecast_block(base=_named_base(), years=[1]), _cp1_with_rows({}))
+    assert issue.endswith(BLOCK_END)
+
+
+def test_a_declined_block_is_accepted_without_an_issue():
+    drivers = {name: {"values": [None, None, None], "reason": "no basis"} for name in PATHS}
+    block = forecast_block(base=_named_base(), base_drivers=drivers)
+    assert _repair_issues(block, _cp1_with_rows({})) == ()
+
+
+def test_a_row_quoting_the_declined_message_is_still_refused_with_an_issue():
+    block = forecast_block(
+        base=_named_base(revenue=_operand("1000", "Guidance gives no forecast drivers"))
+    )
+    with pytest.raises(ValueError, match="gives no forecast drivers"):
+        cpos_forecast.parse(block, _cp1_with_rows({}))
+    assert len(_repair_issues(block, _cp1_with_rows({}))) == 1
+
+
+def test_the_not_one_number_refusal_lists_at_most_five_cells_and_the_true_count():
+    tables = "\n\n".join(
+        f"| T{i} | FY2025 |\n| --- | --- |\n| revenue | {1000 + i} |" for i in range(500)
+    )
+    doc = _cp1_doc(tables).replace("__BLOCK__", "")
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(doc)
+    shown = [str(1000 + i) for i in range(5)]
+    assert str(caught.value) == (
+        "CP-2G: base revenue: row `revenue`, period `FY2025` is not one number in CP-1 "
+        f"(500 cells: {shown} and 495 more)"
+    )
+    assert len(_repair_issues(forecast_block(base=_named_base()), doc)[0]) < 700
+
+
+def test_exactly_five_cells_are_all_listed():
+    tables = "\n\n".join(
+        f"| T{i} | FY2025 |\n| --- | --- |\n| revenue | {1000 + i} |" for i in range(5)
+    )
+    doc = _cp1_doc(tables).replace("__BLOCK__", "")
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(doc)
+    assert str(caught.value) == (
+        "CP-2G: base revenue: row `revenue`, period `FY2025` is not one number in CP-1 "
+        "(5 cells: ['1000', '1001', '1002', '1003', '1004'])"
+    )
+
+
+def test_the_cells_of_a_not_one_number_refusal_are_cut_like_every_other_quote():
+    a, b = "1" * 200 + " (a)", "2" * 200 + " (b)"
+    doc = _cp1_doc(
+        f"| Metric | FY2025 |\n| --- | --- |\n| revenue | {a} |\n\n"
+        f"| Other | FY2025 |\n| --- | --- |\n| revenue | {b} |"
+    )
+    with pytest.raises(ValueError) as caught:
+        _named_cp2g(doc)
+    assert str(caught.value) == (
+        "CP-2G: base revenue: row `revenue`, period `FY2025` is not one number in CP-1 "
+        f"(2 cells: {[a[:77] + '...', b[:77] + '...']})"
+    )
+
+
+@pytest.mark.parametrize("named", ["row", "period"])
+def test_a_block_that_states_only_rows_or_only_periods_is_a_named_block_and_is_refused(named):
+    # plan ruling A2: naming some operands but not all is refused; one name on every operand is
+    # naming, so the operand missing its other half is the first one named in the message
+    base = {k: {"amount": v, "reason": None, named: _operand(v, k)[named]} for k, v in BASE.items()}
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(forecast_block(base=base), _cp1_doc(TWO_YEARS).replace("__BLOCK__", ""))
+    assert str(caught.value) == MUST_NAME
+
+
+def test_a_layer1_block_that_names_nothing_is_refused_even_when_every_amount_is_printed():
+    plain = {k: {"amount": v, "reason": None} for k, v in BASE.items()}
+    full = _cp1_doc(TWO_YEARS).replace("__BLOCK__", layer1_block(base=plain))
+    with pytest.raises(ValueError) as caught:
+        cpos_forecast.parse(full, full, "CP-1")
+    assert str(caught.value) == MUST_NAME.replace("CP-2G", "CP-1", 1)
+
+
+@pytest.mark.parametrize(
+    ("key", "amount"), [("capex", "45"), ("wc", "-45"), ("interest", "45"), ("taxes", "45")]
+)
+def test_a_cell_of_more_than_38_digits_is_refused_with_a_value_error_and_sent_back(key, amount):
+    long = "45." + "0" * 40 + "1"
+    doc = _cp1_doc(f"| Metric | FY2025 |\n| --- | --- |\n| {key} | {long} |", key=key)
+    doc = doc.replace("__BLOCK__", "")
+    block = forecast_block(base=_named_base(**{key: _operand(amount, key)}))
+    with pytest.raises(ValueError) as caught:  # nothing but ValueError leaves parse
+        cpos_forecast.parse(block, doc)
+    assert str(caught.value).startswith(
+        f"CP-2G: base {key} {amount} is not CP-1's cell at row `{key}`, period `FY2025`"
+    )
+    assert len(_repair_issues(block, doc)) == 1
+
+
+def test_a_refusal_that_mentions_base_later_in_its_text_is_not_an_operand_refusal():
+    base = {k: v for k, v in _named_base().items() if k != "fcf"}
+    (issue,) = _repair_issues(forecast_block(base=base), _cp1_with_rows({}))
+    assert issue.endswith(BLOCK_END)

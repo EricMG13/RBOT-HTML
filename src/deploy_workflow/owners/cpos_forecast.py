@@ -272,7 +272,9 @@ def _layer1_problem(text: str, key: str, operand: Operand) -> str | None:
         return not_the_cell
     if len(found) > 1 and len(values) > 1 or None in values:
         shown = sorted(_cut(cell, 77) for cell in found)
-        return f"base {key}: {where} is not one number in CP-1 ({len(found)} cells: {shown})"
+        more = f" and {len(shown) - 5} more" if len(shown) > 5 else ""
+        count = f"{len(found)} cells: {shown[:5]}{more}"
+        return f"base {key}: {where} is not one number in CP-1 ({count})"
     (value,) = values
     try:
         agrees = value is not None and _agrees(key, value, Decimal(operand.amount))

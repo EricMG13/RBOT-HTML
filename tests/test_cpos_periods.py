@@ -432,14 +432,17 @@ def test_a_quarter_without_its_year_to_date_period_is_not_summed():
 
 def test_no_base_line_under_a_period_header_gives_every_column_its_reason():
     ops = replace(OPERANDS, undrawn=cp2g.Val(None, "CP-1 states no facility"))
-    record = history([[["Metric", "Note"], ["Net sales", "1,000"]]], ops, named=None)
+    named = {"revenue": ("Net sales", "Note"), "ebitda": ("Adjusted EBITDA", "Note")}
+    record = history([[["Metric", "Note"], ["Net sales", "1,000"]]], ops, named=named)
     assert [c["id"] for c in record["columns"]] == [
         "Quarter", "YTD", "PYTD", "Fiscal year", "LTM", "PRIOR_LTM", "PF",
     ]  # fmt: skip
     for column in record["columns"][:-1]:
         assert column["reason"] == NO_ANCHOR
         assert cell(record, column["id"], "fcf") == {"amount": None, "reason": NO_ANCHOR}
-        assert cell(record, column["id"], "revenue")["reason"] == NOT_NAMED
+        assert cell(record, column["id"], "revenue")["reason"] == NOT_UNDER_A_PERIOD.format(
+            header="Note"
+        )
         assert cell(record, column["id"], "undrawn")["reason"] == "CP-1 states no facility"
     assert record["columns"][-1]["reason"] == NO_PF
 
@@ -1276,7 +1279,7 @@ def test_unnamed_operands_have_no_history_and_one_reason():
         "Quarter", "YTD", "PYTD", "Fiscal year", "LTM", "PRIOR_LTM", "PF",
     ]  # fmt: skip
     assert cell(record, "LTM", "revenue") == {"amount": None, "reason": NOT_NAMED}
-    assert cell(record, "LTM", "fcf") == {"amount": None, "reason": NO_ANCHOR}
+    assert cell(record, "LTM", "fcf") == {"amount": None, "reason": NOT_NAMED}
     assert record["limits"][0] == NOT_BUILT and f"revenue: {NOT_NAMED}" in record["limits"]
 
 
@@ -1338,3 +1341,33 @@ def test_a_blank_row_or_period_name_names_no_line_even_beside_an_unlabeled_row(b
     ]
     assert line.reason == cpos_periods.NOT_NAMED
     assert line.values == {}
+
+
+# --- the whole-branch review's fixes ----------------------------------------
+def test_a_source_naming_no_revenue_or_ebitda_row_gives_every_column_that_reason():
+    record = history(TABLES, OPERANDS, named=None)
+    assert [c["id"] for c in record["columns"]] == [
+        "Quarter", "YTD", "PYTD", "Fiscal year", "LTM", "PRIOR_LTM", "PF",
+    ]  # fmt: skip
+    for column in record["columns"][:-1]:
+        assert column["reason"] == NOT_NAMED
+        assert cell(record, column["id"], "fcf") == {"amount": None, "reason": NOT_NAMED}
+    assert record["columns"][-1]["reason"] == NO_PF
+
+
+def test_the_unread_headers_limit_lists_the_headers_of_located_lines_only():
+    cp1 = (
+        _md(["Metric", "FY2024", "FY2023"], [["Net sales", "1,000", "940"]])
+        + "\n"
+        + _md(
+            ["Other", "FY2024", "Year ended 2023-12-31"],
+            [["Cash paid for interest", "0", "n.a."]],
+        )
+    )
+    ops = replace(OPERANDS, revenue=cp2g.Val(D(1000), None), interest=cp2g.Val(D(0), None))
+    named = {
+        "revenue": ("Net sales", "FY2024"),
+        "interest": ("Cash paid for interest", "FY2024"),
+    }
+    record = history(cpos_forecast._tables(cp1), ops, named=named)
+    assert [x for x in record["limits"] if "not read as periods" in x] == []
