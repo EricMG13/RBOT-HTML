@@ -117,6 +117,22 @@ NOT_ANALYTICAL = frozenset({"CP-MODEL", "CP-8"})  # In the presets; each has its
 FIRST_PAGES = 3  # Pages of each source kept for the offline document guess (page 1 is the cover).
 Cover = tuple[str, tuple[str, ...]]  # A source's file name and its first pages.
 MAX_OUTPUT_TOKENS = 32000  # What the retained live campaigns ran with.
+# Anthropic spends thinking tokens out of the same limit: in tdg-proof-snapshot-opus-001 CP-4's
+# 7,431 thinking tokens plus its handoff did not fit in 32,000, the turn stopped on max_tokens
+# inside write_handoff and the module was lost. Documented model maximum 128,000
+# (cases/pilot-fixes/limits.json); handoff.py bounds a request at 64,000.
+ANTHROPIC_MAX_OUTPUT_TOKENS = 64000
+
+
+def output_limit(config: str) -> int:
+    """The output limit a launch asks of `config`; the per-call hold is priced from it too.
+    The Copilot Anthropic config is not covered: its hold already uses the model maximum."""
+    return (
+        ANTHROPIC_MAX_OUTPUT_TOKENS
+        if CONFIGS[config].provider == "anthropic"
+        else MAX_OUTPUT_TOKENS
+    )
+
 
 _SKILLS = "docs/reuse/selected-methods/skills/"
 _VII = "src/deploy_vii/methods/"
@@ -1855,7 +1871,7 @@ def _cp8_hold(  # noqa: PLR0913 - the sizes of CP-8's first request
         hold = request_reservation_usd(
             price_of(config),
             -(-size // BYTES_PER_TOKEN_BOUND) + REQUEST_OVERHEAD,
-            MAX_OUTPUT_TOKENS,
+            output_limit(config),
         )
     except ContextTooLong as error:
         problem = f"{words} is over the model's context ({error})"
@@ -2154,7 +2170,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
     )
     # The loop's own bound for the first call of the largest module; later calls hold more.
     hold = max(
-        request_reservation_usd(price_of(config), len(text) + 4096, MAX_OUTPUT_TOKENS)
+        request_reservation_usd(price_of(config), len(text) + 4096, output_limit(config))
         + (
             web_search_usd(WEB_SEARCH_CALLS_PER_TURN)
             if web_search_offered(web_search, module, settings.run.case_kind)
@@ -2549,7 +2565,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ruling=args.ruling,
             check=checker(prepared.layout),
             max_turns=args.max_turns,
-            max_output_tokens=MAX_OUTPUT_TOKENS,
+            max_output_tokens=output_limit(args.config),
             on_handoff=lambda task, _: print(f"Accepted: {task.module_id}", flush=True),
             config=args.config,
             effort_by_module=efforts,
