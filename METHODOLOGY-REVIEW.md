@@ -747,3 +747,16 @@ media, anonymous blogs, content farms or aggregators (it goes to the original); 
 weaker source as a limitation under `## Gaps`. Each web row of `## Sources` carries a `Source type`
 cell from a fixed list, and a web row without one is refused (no domain list). This is a project
 addition to the Deploy V research method, which supplied no web search; no paid run has used it.
+
+**Reader vocabulary, script-free handoffs and Python-computed confidence, 2026-11-12 (owner: review of the
+module output; ruling `docs/rulings/2026-11-12-module-output-review-changes.md`, decisions 7 to 11).** The
+method texts (`METHODS`, everything after "Selected method, verbatim:") are unchanged, so this change
+marks no run "Earlier methods". The launcher's shared text, which sits before the method block, now
+overrides these steps in the selected methods: helper-script steps; the module-stated confidence score,
+band and `qa_status`; registers written as text (they are tables); the bracket tag outside tables. It
+adds: reader vocabulary in every section the Modules page shows; Sources columns (file, description,
+document date); plain module names; one qualification sentence after a chart table; map node and edge
+text of at most 60 characters; a bottom line of at most 45 words in the first sentence and 180 in all;
+a `### Confidence inputs` table, from which Python computes the score by the method's own formula in
+`CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`; and Financial foundation's `### Post-balance-sheet
+adjustments`. Selected source revision: the ruling above. Limit: offline proof only until a paid run.

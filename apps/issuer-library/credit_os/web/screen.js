@@ -256,7 +256,7 @@ function renderSearch(query) {
   const figures=outputs.flatMap(id=>{
     const tables=data[id].sections.filter(s=>s.blocks.some(b=>b.type==='table')),visual=data[id].visual;
     const plotted=visual&&tables.find(s=>s.blocks.some(b=>b.line===visual.table));
-    return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading),s.heading])];
+    return [...(plotted?[[id,visual.title,plotted.heading]]:[]),...tables.map(s=>[id,plain(s.heading.replace(METHOD_CODE,'')),s.heading])];
   }).filter(([id,label])=>has(label,data[id].module));
   const files=[
     ...outputs.filter(id=>has(data[id].source,data[id].label)).map(id=>hit('Source',code(id),handoffLabel(data[id].source),href(id,modules[id].first))),
@@ -305,7 +305,7 @@ function parseRoute() {
   const e=params.get('e'),key=e&&(e.includes(':')?e:`${output}:${e}`),item=evidence.get(key);
   const permitted=item&&item.run===context&&(item.output===output||module==='W-Overview');
   const file=output&&output!==defaultOutput(module,context)?data[output].source:null;
-  // A chip index names one of the key's chips, and `gaps` its citations without a page; one that is not there opens the row alone.
+  // A chip index names one of the key's chips, and `gaps` its unresolved citations; one that is not there opens the row alone.
   const keyChips=window.CREDIT_OS_DATA?.chips?.[key]||[],requestedChip=params.get('chip')??'';
   // `p` opens a paragraph's or row's Basis; `f<n>` its n-th figure (reader.js paragraphView).
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;

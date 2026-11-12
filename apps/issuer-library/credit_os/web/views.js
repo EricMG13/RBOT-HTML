@@ -23,13 +23,14 @@ function handoffLabel(file) {
   const found=/(?:^|[/-])(CP-[A-Z0-9]+)(-[a-z0-9]+)?\.md$/.exec(file);
   return found?handoffName(found[1],found[2]):file;
 }
-// A module code, its gap id, its handoff file (…CP-0-a.md) or its runbook file (CP-4_RUNBOOK.md).
-const MODULE_REF=/\bCP-(?<owner>[A-Z0-9]+)-GAP-0*(?<gap>\d+)\b|\bCP-(?<book>[A-Z0-9]+)_RUNBOOK\.md\b|\b(?<file>CP-[A-Z0-9]+)(?<suffix>-[a-z0-9]+)?\.md\b|\bCP-[A-Z0-9]+\b/g;
+// A module code, its register id (CP-2A-GAP-005, CP-3B-MON-001), its handoff file (…CP-0-a.md) or its runbook file (CP-4_RUNBOOK.md).
+const MODULE_REF=/\bCP-(?<owner>[A-Z0-9]+)-(?<reg>[A-Z]+)-(?<zeros>0*)(?<num>\d+)\b|\bCP-(?<book>[A-Z0-9]+)_RUNBOOK\.md\b|\b(?<file>CP-[A-Z0-9]+)(?<suffix>-[a-z0-9]+)?\.md\b|\bCP-[A-Z0-9]+\b/g;
 // A step id carries its dot and has the METHOD_CODE shape: T4.10, T1D.1, T4.D1, T2G.* (a family), T2E.3.r01 (a sub-row). A bare T2 is ordinary text.
+const DASH='(?:\\s+—\\s+|\\s+(?=[A-Z]))'; // a real heading is "T2.12 Gaps ledger" or "T2.12 — Gaps ledger"; with no dash a capital must follow
 const STEP='T\\d+[A-Z]?\\.(?:[A-Z]?\\d+|\\*)(?:\\.[a-z]+\\d+)?',ID=`\\b${STEP}(?![A-Za-z0-9])`;
 const STEP_ID=new RegExp(`^${STEP}$`),STEP_ANY=new RegExp(ID,'g'),STEP_LEAD=new RegExp(`^\\s*${ID}\\s+—\\s+`);
 const STEP_RUN=new RegExp(`${ID}(?:\\s*(?:,\\s*and|[–/,;]|and|through)\\s*${ID})*`,'g');
-const STEP_HEADING=new RegExp(`^(${STEP})\\s+—\\s+(.+)$`),STEP_ROW=new RegExp(`^(${STEP})(?:\\s+—\\s+(.+))?$`);
+const STEP_HEADING=new RegExp(`^(${STEP})${DASH}(.+)$`),STEP_ROW=new RegExp(`^(${STEP})(?:${DASH}(.+))?$`);
 // A step's title is the one its own output gives it: a heading "T1D.1 — Add-Back Register", or a step-table row ["T4.1","Peer universe",…]. A longer second cell is a description, not a title.
 const stepTitleCache=new Map();
 function stepTitles(output) {
@@ -67,12 +68,14 @@ function namedText(text,output=current?.output,lead='') {
   const ev=contexts[data[output]?.run??current?.context]?.evidence||{};
   const file=[...(ev.sources||[]),...(ev.unused||[]),...(ev.unrecorded||[])].map(f=>f.name).filter(Boolean).sort((a,b)=>b.length-a.length).find(name=>text.includes(name));
   if(file!==undefined){const at=text.indexOf(file);return namedText(text.slice(0,at),output,lead)+file+namedText(text.slice(at+file.length),output);}
-  return stepText(dropRepeat(text,lead).replace(MODULE_REF,(code,...rest)=>{
-    const {owner,gap,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
+  return stepText(dropRepeat(text,lead).replace(/\bGap (?=CP-[A-Z0-9]+-GAP-)/g,'').replace(MODULE_REF,(code,...rest)=>{
+    const {owner,reg,zeros,num,book,file,suffix}=rest.at(-1),name=id=>moduleLabel(id)??'unnamed module';
     if(book!==undefined)return `${name(`CP-${book}`)} runbook`;
     if(file!==undefined)return handoffName(file,suffix);
     if(owner===undefined)return name(code);
-    return [`CP-${owner}`,aliases[`CP-${owner}`]].includes(current?.module)?`Gap ${gap}`:`${name(`CP-${owner}`)} gap ${gap}`;
+    const own=[`CP-${owner}`,aliases[`CP-${owner}`]].includes(current?.module);
+    if(reg==='GAP')return own?`Gap ${num}`:`${name(`CP-${owner}`)} gap ${num}`;
+    return own?`${reg}-${zeros}${num}`:`${name(`CP-${owner}`)} ${reg}-${zeros}${num}`;
   }),output);
 }
 function installDestinations() {
@@ -82,7 +85,7 @@ function installDestinations() {
     const sections=[];
     const audit=[];
     for(const s of out.sections.filter(s=>s.blocks.length)) {
-      if(/^(Request|Calculations|Next module)/.test(s.heading)) {audit.push('='+s.heading);continue;}
+      if((isNewFormat(out.sections)?/^(Request|Next module)/:/^(Request|Calculations|Next module)/).test(s.heading)) {audit.push('='+s.heading);continue;}
       sections.push(['s'+s.line,title(s.heading),['='+s.heading]]);
     }
         const first=out.summary?out.sections.find(s=>s.heading==='Reader summary'):out.firstHeading&&out.sections.find(s=>s.heading.startsWith(out.firstHeading));
@@ -206,12 +209,29 @@ function comparisonChart(module,v,selection=0,chips=false,note=true) {
     return chips?`<div class="chart-row" role="group"><button class="chart-open" data-evidence="${esc(key)}">${cells}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}">${cells}</button>`;
   }).join('')}</div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}`;
 }
-// A label of two or more words breaks at the space nearest its middle (ties: the earlier one).
-function axisLines(label) {
-  const spaces=[...label.matchAll(/ /g)].map(m=>m.index);
-  if(!spaces.length)return [label];
-  const at=spaces.reduce((best,i)=>Math.abs(i-label.length/2)<Math.abs(best-label.length/2)?i:best);
-  return [label.slice(0,at),label.slice(at+1)];
+// A step label wraps word-wise to what one step can hold (the 14px monospace axis label advances 8.4 viewBox units a character, less a gap
+// between neighbours), in at most three lines. A word is cut only when it alone is wider than a line; the ellipsis marks a cut word or text
+// left after the third line (the last line then drops whole words to make room for it). The title and key carry the full text.
+// A map node reuses it with its own character advance (12px proportional type, MAP_CHAR).
+// Labels start at AXIS_Y and drop 1.2em a line (up to 14px type on a narrow screen), so the viewBox runs to AXIS_BOTTOM to hold three lines and their descenders
+// at either size. A wide bridge is drawn at no less than WIDE_SCALE of its viewBox, whatever its container: a narrow card scrolls it sideways.
+const AXIS_CHAR=8.4,AXIS_LINES=3,WIDE_STEPS=7,WIDE_STEP=142,AXIS_Y=226,BRIDGE_HEIGHT=282,WIDE_SCALE=.75;
+function axisLines(label,step,char=AXIS_CHAR,hard=false,most=AXIS_LINES) {
+  const room=Math.max(4,Math.floor((step-6)/char)),lines=[];
+  for(const long of label.split(' ').filter(Boolean)){
+    // `hard` (map nodes): a word wider than a line breaks across lines, whole, before any ellipsis; the bridge cuts it with an ellipsis; 'keep' (map edge labels) leaves it whole on its own line.
+    let word=long;
+    while(hard===true&&word.length>room){lines.push(word.slice(0,room));word=word.slice(room);}
+    const w=word.length>room&&hard!=='keep'?`${word.slice(0,room-1)}\u2026`:word,last=lines.length-1;
+    if(last>=0&&lines[last].length+1+w.length<=room&&!lines[last].endsWith('\u2026'))lines[last]+=` ${w}`;
+    else lines.push(w);
+  }
+  if(lines.length<=most)return lines.length?lines:[label];
+  const kept=lines.slice(0,most),end=kept[most-1].split(' ');
+  while(end.length>1&&end.join(' ').length+1>room)end.pop();
+  const tail=end.join(' ');
+  kept[most-1]=tail.endsWith('\u2026')?tail:tail.length+1>room&&hard!=='keep'?`${tail.slice(0,room-1)}\u2026`:`${tail}\u2026`;
+  return kept;
 }
 function bridgeChart(module,v) {
   const table=fixtureTable(module,v.table),rows=(v.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
@@ -231,8 +251,8 @@ function bridgeChart(module,v) {
   }
   // The scale covers every running start and end, so a position that dips below zero (repay before refinancing) stays inside the frame; the axis is the zero rule.
   const high=Math.max(0,...points.map(p=>Math.max(p.start,p.end)))*1.16,low=Math.min(0,...points.map(p=>Math.min(p.start,p.end)));
-  const width=660,height=210,step=width/points.length,y=n=>height-(n-low)/((high-low)||1)*height;
-  return `${chartIntro(module,v)}<div class="vector-chart"><svg viewBox="-5 -12 680 270" role="group" aria-label="${esc(v.title)}. Select a movement to inspect its source."><line x1="0" y1="${y(0)}" x2="660" y2="${y(0)}" class="axis"/>${points.map((p,i)=>`<a class="plot-point" href="${evidenceHref(module,p.row.line)}" data-evidence="${esc(`${module}:${p.row.line}`)}" aria-label="${esc(p.label||plain(p.row.cells[0]))}, ${esc(p.display??p.row.cells[v.amount])} ${esc(v.unit)}. View source"><title>${esc(p.label||plain(p.row.cells[0]))}: ${esc(p.display??p.row.cells[v.amount])}</title><rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="232" text-anchor="middle">${axisLines(p.label||plain(p.row.cells[0])).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}</a>`).join('')}</svg></div><div class="bridge-key">${points.map((p,i)=>`<span>${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}</span>`).join('')}</div>`;
+  const wide=points.length>=WIDE_STEPS,width=wide?points.length*WIDE_STEP:660,height=210,step=width/points.length,y=n=>height-(n-low)/((high-low)||1)*height;
+  return `${chartIntro(module,v)}<div class="vector-chart${wide?' bridge-wide':''}"${wide?` role="region" tabindex="0" aria-label="${esc(v.title)}; scroll horizontally for every step"`:''}><svg${wide?` style="min-width:${Math.round((width+20)*WIDE_SCALE)}px"`:''} viewBox="-5 -12 ${width+20} ${BRIDGE_HEIGHT}" role="group" aria-label="${esc(v.title)}. Select a movement to inspect its source."><line x1="0" y1="${y(0)}" x2="${width}" y2="${y(0)}" class="axis"/>${points.map((p,i)=>`<a class="plot-point" href="${evidenceHref(module,p.row.line)}" data-evidence="${esc(`${module}:${p.row.line}`)}" aria-label="${esc(p.label||plain(p.row.cells[0]))}, ${esc(p.display??p.row.cells[v.amount])} ${esc(v.unit)}. View source"><title>${esc(p.label||plain(p.row.cells[0]))}: ${esc(p.display??p.row.cells[v.amount])}</title><rect class="${p.total?'total':p.amount<0?'outflow':'movement'}" x="${i*step+10}" y="${y(Math.max(p.start,p.end))}" width="${step-20}" height="${Math.max(1,Math.abs(y(p.end)-y(p.start)))}"/><text x="${i*step+step/2}" y="${y(Math.max(p.start,p.end))-8}" text-anchor="middle">${esc(p.display??p.row.cells[v.amount])}</text><text class="axis-label" x="${i*step+step/2}" y="${AXIS_Y}" text-anchor="middle">${axisLines(p.label||plain(p.row.cells[0]),step).map((line,at)=>`<tspan x="${i*step+step/2}" dy="${at?'1.2em':0}">${esc(line)}</tspan>`).join('')}</text>${i<points.length-1?`<line class="connector" x1="${i*step+step-10}" y1="${y(p.end)}" x2="${(i+1)*step+10}" y2="${y(p.end)}"/>`:''}</a>`).join('')}</svg></div><div class="bridge-key">${points.map((p,i)=>`<span>${sourceLink(`${module}:${p.row.line}`,p.label||plain(p.row.cells[0]))}${classTag(evidence.get(`${module}:${p.row.line}`),'row-classification')}</span>`).join('')}</div>`;
 }
 function pathChart(module,v) {
   const table=fixtureTable(module,v.table),series=['Reference','Downside','Upside'];
@@ -271,6 +291,8 @@ function chartTableForm(id,chart) {
   const table=fixtureTable(id,chart.table),columns=table.headers.map((_,c)=>c);
   return `<details class="chart-table"><summary>Table form</summary>${sourceTable(id,chart.title,table,columns.map(c=>numericColumn(table,c)),columns,table.rows)}</div></details>`;
 }
+// A drawing that states none (a chart, lane or map the store holds as a gap) keeps its section's table as the same fold: every cell as the module wrote it, a Source button per row.
+const gapTableForm=(id,title,table)=>chartTableForm(id,{title,table});
 // ---- Structure views (a "Chart data:" row table that is not by period or step): drawn from the stated numbers only. A value that is
 // not a number is n.a. with its stated reason as the title; it is never a zero position. Nothing is computed for display: headroom and
 // cumulative leverage are shown as stated, and the geometry uses the stated numbers.
@@ -286,11 +308,26 @@ function structureOpen(id,row,inner,label,chips) {
   const key=`${id}:${row.line}`,button=`<button class="chart-open" data-evidence="${esc(key)}" aria-label="${esc(`${label}. View source`)}">${inner}</button>`;
   return chips?`${button}${chipsMarkup(key)}`:button;
 }
+// A facility's series is its ranking and security together: one per distinct pair in order of first appearance. A row with no stated ranking, or a
+// Secured value that is neither Yes nor No, is neutral and the legend says which of the two is not stated.
+const stackRank=(row,v)=>{const rank=String(row.cells[v.rank]??'').trim();return !rank||/^Not supplied:/.test(rank)?'':rank;};
+function stackPair(row,v) {
+  const rank=stackRank(row,v),secured=String(row.cells[v.secured]??'').trim().toLowerCase();
+  return !rank||!['yes','no'].includes(secured)?null:{rank,secured:secured==='yes'};
+}
+// Four fills, then the same four with a hatch: eight styles that differ by more than colour. A ninth distinct pair repeats the first style; the legend
+// and each facility's own line state the ranking and security in words, so nothing rests on the swatch alone.
+const stackClass=i=>`series-${i%4}${i%8>=4?' hatch':''}`;
 function stackChart(id,v,chips=false) {
   const table=fixtureTable(id,v.table),amounts=table.rows.map(r=>chartNumber(r.cells[v.amount])),total=amounts.reduce((sum,n)=>sum+(n>0?n:0),0);
-  const bar=table.rows.map((row,i)=>amounts[i]>0?`<a class="stack-seg series-${i%4}" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${row.cells[v.label]}, ${row.cells[v.amount]} ${v.unit}. View source`)}" title="${esc(row.cells[v.label])}: ${esc(row.cells[v.amount])}"></a>`:'').join('');
-  const key=table.rows.map((row,i)=>`<li><i class="swatch series-${i%4}"></i><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(row.cells[v.amount])} · Cumulative leverage ${stated(row.cells[v.leverage],'x')}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
-  return `${chartIntro(id,v)}<div class="stack-bar" role="group" aria-label="${esc(v.title)} in stated rank order. Select a facility to inspect its source.">${bar}</div>${amounts.includes(null)?'<p class="matrix-note">A facility with no stated amount has no segment.</p>':''}<ol class="stack-key">${key}</ol>`;
+  const pairs=table.rows.map(r=>stackPair(r,v)),names=[];
+  for(const p of pairs)if(p&&!names.includes(`${p.rank}|${p.secured}`))names.push(`${p.rank}|${p.secured}`);
+  const series=pairs.map(p=>p?stackClass(names.indexOf(`${p.rank}|${p.secured}`)):'stack-neutral');
+  const unstated=[...new Set(pairs.flatMap((p,i)=>{const rank=stackRank(table.rows[i],v);return p?[]:[rank?`Rank ${esc(rank)} \u00b7 security not stated`:'Ranking not stated'];}))];
+  const legend=[...names.map((n,i)=>{const[rank,secured]=n.split('|');return `<span><i class="${stackClass(i)}"></i>Rank ${esc(rank)} \u00b7 ${secured==='true'?'secured':'unsecured'}</span>`;}),...unstated.map(t=>`<span><i class="stack-neutral"></i>${t}</span>`)].join('');
+  const bar=table.rows.map((row,i)=>amounts[i]>0?`<a class="stack-seg ${series[i]}" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${row.cells[v.label]}, ${row.cells[v.amount]} ${v.unit}. View source`)}" title="${esc(row.cells[v.label])}: ${esc(row.cells[v.amount])}"></a>`:'').join('');
+  const key=table.rows.map((row,i)=>`<li><i class="swatch ${series[i]}"></i><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(row.cells[v.amount])} · Cumulative leverage ${stated(row.cells[v.leverage],'x')}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
+  return `${chartIntro(id,v)}<div class="chart-legend stack-legend">${legend}</div><div class="stack-bar" role="group" aria-label="${esc(v.title)} in stated rank order. Select a facility to inspect its source.">${bar}</div>${amounts.includes(null)?'<p class="matrix-note">A facility with no stated amount has no segment.</p>':''}<ol class="stack-key">${key}</ol>`;
 }
 function bulletChart(id,v,chips=false) {
   const table=fixtureTable(id,v.table);
@@ -416,13 +453,16 @@ function readerCharts(id,section) {
 const REPORT_PARTS=[['head','Module'],['bottom-line','Bottom line'],['numbers','Key numbers'],['findings','Findings'],['analysis','Analysis'],['limits','Limits & monitoring'],['reference','Statements and registers'],['calculations','Calculations'],['audit','Evidence & audit']];
 const HANDOFF_TEXT=['handoff-text','Full handoff text'];
 // A leading method code (R36) is dropped from a displayed heading or caption.
-const METHOD_CODE=/^([A-Z][A-Z0-9]*\.[A-Z]?\d+|[a-z0-9]+(\.[a-z0-9_]+)+)\s+—\s+/;
+const METHOD_CODE=/^(?:[A-Z][A-Z0-9]*\.[A-Z]?\d+(?:\s+—\s+|\s+(?=[A-Z]))|[a-z0-9]+(?:\.[a-z0-9_]+)+\s+—\s+)/;
 const headingView=(heading,tag,cls='')=>`<${tag}${cls?` class="${cls}"`:''}>${rich(heading.replace(METHOD_CODE,''))}</${tag}>`;
 // The sections the store placed here that have something to draw, in handoff order.
 const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement[i]===where&&section.blocks.length);
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
-const drawnAnchors=id=>new Set((isNewFormat(data[id].sections)?newFormatRest(id):DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where))).map(section=>`s-${section.line}`));
+const drawnAnchors=id=>{
+  const {rest,audit,drawings}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),audit:[],drawings:[]};
+  return new Set([...rest,...audit,...drawings].map(section=>`s-${section.line}`));
+};
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
 function chipView(chip,rowModule) {
@@ -441,11 +481,11 @@ function chipView(chip,rowModule) {
 const chipSet=chips=>chips.length?`<span class="chips">${chips.join('')}</span>`:'';
 // A gap chip that is not a plain "Not supplied" is a citation with no page: it is counted, not drawn.
 const unresolvedGap=chip=>chip.kind==='gap'&&chip.label!=='Not supplied';
-const gapCount=n=>`${n} citation${n===1?'':'s'} without a page`;
-// The "handoff row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
+const gapCount=n=>`${n} unresolved citation${n===1?'':'s'}`;
+// The "Row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
 function chipsMarkup(key,counted=true) {
   const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
-  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" title="Handoff row, line ${item.line}" aria-label="Handoff row, line ${item.line}">Handoff<span class="dot row"></span></button>`:'';
+  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" title="Table row, line ${item.line}" aria-label="Table row, line ${item.line}">Row<span class="dot row"></span></button>`:'';
   const gaps=found.filter(unresolvedGap).length;
   const count=counted&&gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
   return chipSet([row,...found.map((chip,index)=>{
@@ -482,12 +522,14 @@ function keyNumbers(id) {
 }
 // The front matter's committee_status, verbatim; none declared draws nothing. The title says whose word it is.
 const declaredBadge=declared=>declared==null?'':`<span class="badge badge-gray" title="Status the module declares in its handoff">${esc(declared)}</span>`;
-const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div>';
+const LEGEND='<div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> this table row · <i class="dot up"></i> another module · <i class="dot gap"></i> gap</span></div>';
 // No catalogue field says "accepted"; a run shows a checklist only when one is recorded (none is today), and that is not acceptance.
 function runAcceptanceText(context) {
   const record=window.DESIGN_CATALOGUE.real.find(r=>r.id===contexts[context].folder);
   return record?.checklist?'Acceptance checklist recorded':'Candidate · not accepted';
 }
+// The score Python computed from the module's confidence inputs table (the store's `confidence`), or why there is none; an output with no such table draws nothing.
+const confidenceText=c=>!c?'':`<span class="output-meta" title="Computed from the inputs the module states">${c.missing!=null?`Confidence not computed: ${esc(c.missing)}`:`Confidence ${esc(c.value)} · ${esc(c.band)}`}</span>`;
 function reportHead(id) {
   const out=data[id],{module,run:context}=out;
   const {meta,flag}=headTools(module,context,id);
@@ -497,7 +539,7 @@ function reportHead(id) {
   const group=groups.find(([,items])=>items.some(item=>item[0]===module))?.[0];
   // A bottom line: the earlier format's Reader summary or call; the new format's Bottom line passage. With one, the name is the eyebrow and the bottom line the headline.
   const hasBottom=isNewFormat(out.sections)?Boolean(readerPassages(out.sections).bottom):Boolean(out.summary||out.call);
-  return `<div class="module-head${hasBottom?' has-bottom-line':''}" id="head"><div class="head-title">${group?`<span class="head-group">${esc(group)}</span>`:''}<h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
+  return `<div class="module-head${hasBottom?' has-bottom-line':''}" id="head"><div class="head-title">${group?`<span class="head-group">${esc(group)}</span>`:''}<h2>${esc(moduleNames[module])}</h2></div><div class="head-tools">${notAssessable}<span class="badge badge-gray">${acceptance}</span>${declared}${meta}${flag}${confidenceText(out.confidence)}<a class="btn" href="${esc(out.href)}" download>${icon('download')}Handoff</a></div></div>`;
 }
 function reportBand(id) {
   const {summary,call,source}=data[id],quoted=summary?{text:summary.bottomLine,line:summary.line}:call;
@@ -588,9 +630,41 @@ const PASSAGE_ANCHORS={bottom:'bottom-line',key:'key-findings',contrary:'contrar
 // The reading style each passage is drawn in (screen.css, `.reading-*`): the headline, the findings list, prose, the limitations list.
 const PASSAGE_STYLES={bottom:'headline',key:'findings',contrary:'prose',limits:'limits'};
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
-const newFormatRest=id=>{const held=new Set(passageSections(id));return data[id].sections.filter(section=>!held.has(section)&&section.blocks.length);};
+// Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
+// (its numbers are the drawing's Table form, its prose the caption). `## Request`, `## Next module`, front matter and what sits under them are `audit`. The rest is the page body.
+// A drawing section the store could not draw has no drawing, so it stays in the body. The sections are told apart by name, not by placement: Sources is placed audit and stays.
+const AUDIT_HEADINGS=['Request','Next module','Front matter'];
+function newFormatSplit(id) {
+  const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
+  const split={rest:[],audit:[],drawings:[]};
+  let parent='';
+  for(const section of data[id].sections) {
+    if(section.level<=2)parent=section.level===2&&(section.heading!=='Front matter'||section===data[id].sections[0])?section.heading:'';
+    if(held.has(section)||!section.blocks.length)continue;
+    if(CHART_HEADING.test(section.heading)&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
+    else split[AUDIT_HEADINGS.includes(parent)?'audit':'rest'].push(section);
+  }
+  return split;
+}
+// The section that holds a drawing's table. On a new-format page it gives the drawing its route (s-<line>) and its caption: the section's prose, in order.
+const drawingSection=(id,table)=>isNewFormat(data[id].sections)?data[id].sections.find(section=>section.blocks.some(block=>block.type==='table'&&block.line===table)):undefined;
+const drawingAnchor=(id,table)=>{const section=drawingSection(id,table);return section?` id="s-${section.line}"`:'';};
+function drawingCaption(id,table) {
+  const section=drawingSection(id,table);
+  return section?.blocks.some(block=>block.type==='text')?`<div class="drawing-caption">${sectionBodyHtml(section,bodyContext(id,false))}</div>`:'';
+}
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
 const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
+// A new-format page's cards: a chart with no numbers (store `chartGaps`) is a card saying why, in table-line order with the charts; each card has its section route and caption.
+function newFormatChartCards(id) {
+  const charts=data[id].charts||[],last=lastPeriodChart(charts);
+  const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,true,at===last)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
+  const lastChart=cards.findLastIndex(card=>!card.gap);
+  return cards.map((card,at)=>{
+    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4></div><p class="lane-gap">${NOT_ESTABLISHED}<small>${esc(card.gap.gap)}</small></p>${gapTableForm(id,card.gap.title,card.table)}`:cardTitle(card.html);
+    return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}${at===lastChart?LEGEND:''}</div>`;
+  }).join('');
+}
 // An output with Events lanes draws them; an earlier-format one that has an event table and no lane draws that table as a timeline.
 function reportTimeline(id) {
   const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
@@ -601,8 +675,11 @@ function reportTimeline(id) {
 // The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
 const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
 // What a paragraph's drawing needs of the page: its output, the chips the build holds for a key, and the table caption without a method code.
-const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,caption:heading=>plain(heading).replace(METHOD_CODE,'')});
+const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
 const newFormatSection=(id,section)=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,bodyContext(id,true))}</div>`;
+// Front matter is drawn as its stated lines. Its `filename` line names the handoff with a module code, and the download carries the file, so it is not drawn.
+const frontMatter=(section,sections)=>section===sections[0]&&section.level===2&&section.heading==='Front matter';
+const frontMatterView=section=>`<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}<ul class="front-matter">${section.blocks.filter(block=>block.type==='text').flatMap(block=>block.text.split('\n')).map(line=>line.trim()).filter(line=>line&&!/^filename\s*:/i.test(line)).map(line=>`<li>${esc(line)}</li>`).join('')}</ul></div>`;
 function newFormatParts(id) {
   const out=data[id],passages=readerPassages(out.sections);
   const parts=[['head','Module',reportHead(id)]];
@@ -613,11 +690,13 @@ function newFormatParts(id) {
     parts.push([anchor,passages[key].heading,`<section class="part reading-${PASSAGE_STYLES[key]}" id="${anchor}">${heading}${headingView(passages[key].heading,newFormatTag(passages[key]),key==='bottom'?'sr-only':'')}${passageHtml(passages[key],id)}</section>`]);
     heading='';
   }
-  const charts=reportChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
+  const charts=newFormatChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
   if(charts)parts.push(['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]);
   if(timeline)parts.push(['timeline','Timeline',timeline]);
   if(maps)parts.push(['maps','Maps',maps]);
-  for(const section of newFormatRest(id))parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
+  const {rest,audit}=newFormatSplit(id);
+  for(const section of rest)parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${newFormatSection(id,section)}</section>`]);
+  if(audit.length)parts.push(['audit','Evidence & audit',fold('audit','Evidence & audit',plural(audit.length,'section'),audit.map(section=>frontMatter(section,data[id].sections)?frontMatterView(section):newFormatSection(id,section)).join(''))]);
   return parts;
 }
 const moduleReport=id=>reportParts(id).map(part=>part[2]).join('');
@@ -698,26 +777,42 @@ const onOverview=out=>{const code=aliases[out.module]??out.module;return window.
 // A lane is not drawn on the Overview: its dated rows feed the Overview's nearest dates (overviewDates), which is what 'Overview' means for a lane.
 const PLACEMENT=[['chart','Overview',onOverview],['map','Overview',onOverview],['lane','Overview',()=>true]];
 const placed=(kind,where,out,name)=>PLACEMENT.some(([k,w,test])=>k===kind&&w===where&&test(out,name));
+const LANE_ROW=20,LANE_BASE=4; // a lane row is one marker (16 px) and its gap; the lane's floor is 28 px
 function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event lanes'}={}) {
   // `only` is one output's own lanes, whichever saved output it is; otherwise the run's lanes (each module's default output).
   const lanes=(only?(data[only]?.events||[]).map(lane=>({...lane,id:only})):eventLanes(context)).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
   if(!lanes.length)return '';
-  const scenario=row=>/^Scenario — /.test(row.cells[4]);
+  const scenario=row=>/^Scenario — /.test(row.cells[4]),day=n=>new Date(n*86400000).toISOString().slice(0,10);
   const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
   const link=(lane,row)=>`href="${evidenceHref(lane.id,row.line)}" data-evidence="${esc(`${lane.id}:${row.line}`)}"`;
-  const marker=(lane,{row,span})=>{
-    const [date,precision,,event]=row.cells,at=eventPlace(span,axis);
-    return `<a class="lane-event ${span.point?'point':'span'}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="left:${at.left}%${span.point?'':`;width:${at.width}%`}"></a>`;
+  // Each lane's drawn events get a number in date order, continuing across lanes (the key names them), and a level: a marker that would overlap one already drawn goes up, never sideways.
+  let count=0;
+  const drawn=lanes.map(lane=>{
+    const items=lane.events.filter(e=>e.span).map(e=>({...e,...eventPlace(e.span,axis)})),start=count+1;
+    [...items.keys()].sort((a,b)=>items[a].span.from-items[b].span.from||items[b].span.to-items[a].span.to||a-b).forEach(i=>{items[i].no=++count;items[i].chip=Math.max(16,7*String(count).length+4);}); // the chip grows with its digits (11 px mono, 7 px a digit and 4 px padding)
+    const levels=eventStack(items);
+    items.forEach((item,i)=>{item.level=levels[i];item.anchored=eventRoom(item)[2];}); // a thin span at the right end keeps its number inside the track: it is drawn from its right edge
+    return {lane,items,start,height:Math.max(28,2*LANE_BASE+(Math.max(-1,...levels)+1)*LANE_ROW)};
+  });
+  const marker=(lane,{row,span,left,width,no,level,anchored})=>{
+    const [date,precision,,event]=row.cells;
+    return `<a class="lane-event ${span.point?'point':'span'}${anchored?' anchored':''}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`Event ${no}: ${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="${anchored?`right:${Math.round((100-left-width)*100)/100}%`:`left:${left}%`}${span.point?'':`;width:${width}%`};bottom:${LANE_BASE+level*LANE_ROW}px"><span class="lane-no">${no}</span></a>`;
   };
-  const rows=lanes.map(lane=>`<div class="lane-row"><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track">${lane.events.filter(e=>e.span).map(e=>marker(lane,e)).join('')}</span>`}</div>`).join('');
-  const day=n=>new Date(n*86400000).toISOString().slice(0,10);
+  const own=Boolean(only)&&isNewFormat(data[only].sections); // a new-format module page: each lane is its section's route and caption, its events a Table form
+  const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"${own?drawingAnchor(lane.id,lane.table):''}><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>${own?drawingCaption(lane.id,lane.table)+(lane.gap!==null?gapTableForm(lane.id,lane.lane,lane.table):''):''}`).join('');
+  const key=drawn.filter(({items})=>items.length).map(({lane,items,start})=>`<p class="lane-key-name">${esc(lane.lane)}</p><ol class="lane-key" start="${start}">${[...items].sort((a,b)=>a.no-b.no).map(({row})=>`<li><span class="lane-key-date">${esc(row.cells[0])}</span> ${rich(row.cells[3])}${scenario(row)?' (Scenario event)':''}</li>`).join('')}</ol>`).join('');
+  const asOf=contexts[context]?.asOf,asOfAt=eventAsOf(axis,asOf);
+  const ticks=eventTicks(axis);
+  const scale=axis?`<span class="lane-scale">${asOfAt===null?'':`<span class="lane-asof-label${asOfAt>50?' end':''}" style="left:${asOfAt}%">As of ${esc(displayDate(asOf))}</span>`}${ticks.map(t=>`<span class="lane-tick" style="left:${t.left}%"></span>`).join('')}${ticks.filter(t=>t.label).map(t=>`<span class="lane-tick-label" style="left:${t.left}%">${esc(t.label)}</span>`).join('')}</span>`:'';
+  const overlay=axis?`<div class="lane-overlay" aria-hidden="true"><span></span><span>${ticks.map(t=>`<i class="lane-grid" style="left:${t.left}%"></i>`).join('')}${asOfAt===null?'':`<i class="lane-asof" style="left:${asOfAt}%"></i>`}</span></div>`:'';
   const body=lanes.flatMap(lane=>lane.events.map(({row})=>{
     const [date,precision,published,event,status,source,relevance]=row.cells;
     return `<tr><td>${esc(lane.lane)}</td><td>${esc(date)}</td><td>${esc(precision)}</td><td>${esc(published)}</td><td><a class="event-link" ${link(lane,row)}>${rich(event)}</a></td><td>${rich(status)}</td><td>${rich(source)}</td><td>${rich(relevance)}</td></tr>`;
   })).join('');
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
+  const eventTableHtml=`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
-  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}${axis?`<div class="lane-axis"><span>${day(axis.start)}</span><span>${day(axis.end)}</span></div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${!compact&&body?`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:''}</div>`;
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}<div class="lane-scroll" role="region" tabindex="0" aria-label="Event lanes; scroll horizontally on a narrow screen"><div class="lane-plot">${axis?`<div class="lane-axis"><span></span>${scale}</div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${overlay}</div></div>${key?`<div class="lane-keys" role="group" aria-label="Key to the numbered events"><p class="lane-range">Axis from ${day(axis.start)} to ${day(axis.end)}</p>${key}</div>`:''}${body?(compact?own?`<details class="chart-table"><summary>Table form</summary>${eventTableHtml}</details>`:'':eventTableHtml):''}</div>`;
 }
 // ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.
@@ -736,42 +831,68 @@ function mapLayers(edges,nodes=[]) {
   names.forEach(depth);
   return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
 }
-const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:46,gx:120,gy:22,pad:12};
+const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:54,gx:120,gy:22,pad:12},MAP_CHAR=6.6,MAP_T=Array.from({length:39},(_,i)=>(i+1)/40).sort((a,b)=>Math.abs(a-.5)-Math.abs(b-.5)),LABEL_CHAR=6.6,LABEL_STEP=15,LABEL_MARGIN=20,LABEL_STEPS=24,LABEL_WRAP=106,LABEL_LINES=2,LABEL_LINE=13;
 function mapDiagram(id,map,rows) {
-  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gx,gy,pad}=BOX;
+  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gy,pad}=BOX;
+  // The column gap holds the longest label of an edge drawn between columns (a cut edge's label sits below the nodes), never under BOX.gx, so a map of short labels stays compact.
+  // A label wraps on whole words to at most two lines (LABEL_WRAP holds 15 characters; one longer word keeps its own line), so the gap follows the longest line.
+  const wrap=edges.map(e=>axisLines(e.type,LABEL_WRAP,LABEL_CHAR,'keep',LABEL_LINES)),wide=wrap.map(ls=>Math.max(...ls.map(l=>l.length))*LABEL_CHAR);
+  const gx=Math.max(BOX.gx,Math.ceil(Math.max(0,...wide.filter((_,i)=>!cut[i]))+LABEL_MARGIN));
   const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
   for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
   const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
-  const width=pad*2+filled.length*(w+gx)-gx,loops=cut.filter(Boolean).length,height=pad*2+Math.max(...filled)*(h+gy)-gy+(loops?46:0);
+  const width=pad*2+filled.length*(w+gx)-gx,loops=cut.filter(Boolean).length,base=pad*2+Math.max(...filled)*(h+gy)-gy+(loops?46:0);
   const path=({from,to},back)=>{
     const a=at(from),b=at(to),mid=(a.x+b.x+w)/2;
-    if(!back)return {d:`M${a.x+w} ${a.y+h/2}C${mid} ${a.y+h/2} ${mid} ${b.y+h/2} ${b.x} ${b.y+h/2}`,x:mid,y:(a.y+b.y+h)/2-4};
+    if(!back)return {d:`M${a.x+w} ${a.y+h/2}C${mid} ${a.y+h/2} ${mid} ${b.y+h/2} ${b.x} ${b.y+h/2}`,c:[[a.x+w,a.y+h/2],[mid,a.y+h/2],[mid,b.y+h/2],[b.x,b.y+h/2]]};
     const low=Math.max(a.y,b.y)+h+34,x1=a.x+w/2+(from===to?-30:0),x2=b.x+w/2+(from===to?30:0);
-    return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,x:(x1+x2)/2,y:low-8};
+    return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,c:[[x1,a.y+h],[x1,low],[x2,low],[x2,b.y+h]]};
   };
-  const lines=name=>[name.slice(0,22),name.length>22?name.slice(22,44)+(name.length>44?'…':''):''].filter(Boolean);
-  const drawn=edges.map((edge,at)=>{
-    const p=path(edge,cut[at]),dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length];
-    return `<path class="map-edge${cut[at]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${p.x}" y="${p.y}" text-anchor="middle">${esc(edge.type)}</text>`;
+  const bezier=(c,t)=>[0,1].map(k=>(1-t)**3*c[0][k]+3*(1-t)**2*t*c[1][k]+3*(1-t)*t*t*c[2][k]+t**3*c[3][k]);
+  const boxes=names.map(name=>({...at(name),w,h})),placed=[],paths=edges.map((edge,i)=>path(edge,cut[i]));
+  const near=paths.map(p=>Array.from({length:61},(_,k)=>bezier(p.c,k/60)));
+  const gap=(pts,x,y)=>Math.min(...pts.map(([px,py])=>Math.hypot(px-x,py-y)));
+  // A label is a box: its longest line wide, 12px tall a line (13px apart), centred on its spot. It tries a spot on its own line, then moves up or down by whole steps,
+  // to the first clear spot (no placed label, no node) that is not nearer another edge than its own. Where another edge crosses its middle it tries nearer its source end
+  // (t .25) or its target end (t .75) first, alternating by edge, so crossing labels are not stacked at the shared middle. Room is made, not borrowed: a spot below the drawing grows its height.
+  const span=(y,n)=>[y-9-(n-1)*LABEL_LINE/2,y+3+(n-1)*LABEL_LINE/2];
+  const clear=(x,y,lw,n)=>{const [top,bot]=span(y,n);return placed.every(o=>Math.abs(o.x-x)>=(o.w+lw)/2||top>=o.bot+2||o.top>=bot+2)&&boxes.every(b=>x+lw/2<=b.x-2||x-lw/2>=b.x+b.w+2||bot<=b.y-2||top>=b.y+b.h+2);};
+  const spot=(i,lw,n)=>{
+    const c=paths[i].c,steps=[0];for(let k=1;k<=LABEL_STEPS;k++)steps.push(-k,k);
+    const [mx,my]=bezier(c,.5),crossed=near.some((pts,k)=>k!==i&&gap(pts,mx,my)<LABEL_STEP*2),pref=i%2?.75:.25,ts=crossed?[...MAP_T].sort((p,q)=>Math.abs(p-pref)-Math.abs(q-pref)):MAP_T;
+    for(const own of [true,false])for(const dy of steps)for(const t of ts){
+      const [x,y]=bezier(c,t),at=y-4+dy*LABEL_STEP;
+      if(at-(n-1)*LABEL_LINE/2>=10&&clear(x,at,lw,n)&&(!own||near.every((pts,k)=>k===i||gap(pts,x,at-4)>=gap(near[i],x,at-4))))return {x,y:at};
+    }
+    // ponytail: LABEL_STEPS (24 steps, 360px) is the bound; past it the label sits at the line's midpoint, over its neighbours, rather than grow the drawing without end.
+    const [x,y]=bezier(c,.5);return {x,y:y-4};
+  };
+  const drawn=edges.map((edge,i)=>{
+    const p=paths[i],dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length],lines=wrap[i],lw=wide[i],q=spot(i,lw,lines.length),[top,bot]=span(q.y,lines.length),y0=q.y-(lines.length-1)*LABEL_LINE/2;
+    placed.push({...q,w:lw,top,bot});
+    return `<path class="map-edge${cut[i]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${id.replace(/\W/g,'-')}-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${Math.round(q.x*10)/10}" y="${Math.round(y0*10)/10}" text-anchor="middle">${lines.map((line,k)=>`<tspan x="${Math.round(q.x*10)/10}" dy="${k?LABEL_LINE:0}">${esc(line)}</tspan>`).join('')}${lines.join(' ')===edge.type?'':`<title>${esc(edge.type)}</title>`}</text>`;
   }).join('');
-  const nodes=names.map(name=>{const p=at(name);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+(lines(name).length>1?-2:4)}">${lines(name).map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
-  const label=`${map.name}: ${names.length} nodes, ${edges.length} edges. The edge table follows.`;
-  const marker=`<defs><marker id="map-arrow-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
+  const height=Math.ceil(Math.max(base,...placed.map(o=>o.bot+3)));
+  const nodes=names.map(name=>{const p=at(name),lines=axisLines(name,w-10,MAP_CHAR,true);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+4-7*(lines.length-1)}">${lines.map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
+  const label=`${map.name}: ${names.length} nodes, ${edges.length} edges`;
+  const marker=`<defs><marker id="map-arrow-${id.replace(/\W/g,'-')}-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
   const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
-  return `<div class="map-scroll" role="region" aria-label="${esc(label)}" tabindex="0"><svg role="img" aria-label="${esc(label)}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${marker}${drawn}${nodes}</svg></div>${note}`;
+  return `<div class="map-scroll" role="region" aria-label="${esc(label)}. The edge table follows; scroll horizontally if the drawing is wider than its card" tabindex="0"><svg role="img" aria-label="${esc(label)}. The edge table follows." width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${marker}${drawn}${nodes}</svg></div>${note}`;
 }
 // A map with only a stated gap is drawn as its reason, never as an empty diagram.
-function mapsView(id,tag='h2',keep=()=>true) {
+// `own` is the module page's: the map card carries its section route and caption there; the Overview draws the card alone.
+function mapsView(id,tag='h2',keep=()=>true,own=false) {
   return (data[id]?.maps||[]).filter(keep).map(map=>{
     const title=`<${tag}>${esc(map.name[0].toUpperCase()+map.name.slice(1))}</${tag}>`;
-    if(map.gap!==null)return `<div class="map-card">${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p></div>`;
+    const anchor=own?drawingAnchor(id,map.table):'',caption=own?drawingCaption(id,map.table):'';
+    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${own&&isNewFormat(data[id].sections)?gapTableForm(id,map.name,map.table):''}${caption}</div>`;
     const rows=fixtureTable(id,map.table).rows,link=row=>`<a class="event-link" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}">${rich(row.cells[1])}</a>`;
     const body=rows.map(row=>`<tr><td>${rich(row.cells[0])}</td><td>${link(row)}</td><td>${esc(row.cells[2])}</td><td>${rich(row.cells[3])}</td><td>${rich(row.cells[4])}</td></tr>`).join('');
-    return `<div class="map-card">${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+    return `<div class="map-card"${anchor}>${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>${caption}</div>`;
   }).join('');
 }
 // Maps on a module page.
-const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4')}</section>`:'';
+const reportMaps=id=>data[id]?.maps?.length?`<section class="part" id="maps"><h3>Maps</h3>${mapsView(id,'h4',()=>true,true)}</section>`:'';
 // ---- Chart index (CP-MODEL-V02): one row per `Chart data:`, `Map:` or `Events:` table the run's handoffs hold, in the state the build gave it. It lists and links; nothing is drawn or recomputed here.
 const CHART_HEADING=/^(Chart data|Map|Events): /;
 const NOT_STATED='Not stated',NOT_ESTABLISHED='Not established for this run';

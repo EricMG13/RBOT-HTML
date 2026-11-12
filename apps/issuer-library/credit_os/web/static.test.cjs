@@ -446,7 +446,7 @@ test('(g) a leading method code is dropped from a displayed heading and kept now
   assert.ok(html.includes('<h4>Research brief</h4>'));
   assert.ok(!/<h4 title=/.test(html), 'no title keeps the id');
   assert.ok(html.includes('<h4>Net debt — bridge</h4>'));
-  assert.equal(report().METHOD_CODE.source, '^([A-Z][A-Z0-9]*\\.[A-Z]?\\d+|[a-z0-9]+(\\.[a-z0-9_]+)+)\\s+—\\s+');
+  assert.equal(report().METHOD_CODE.source, '^(?:[A-Z][A-Z0-9]*\\.[A-Z]?\\d+(?:\\s+—\\s+|\\s+(?=[A-Z]))|[a-z0-9]+(?:\\.[a-z0-9_]+)+\\s+—\\s+)');
   // The code goes from Limits, Reference and Calculations headings too, and stays in the audit list (the handoff's own section names).
   const coded = [sec('C.1 — Gap list', 2, 100, 'limits', [text(101, 'g')]), ref('T4.D1 — Register', 110, [table(111, ['A', 'B'], [[112, 'x', 'y']])]), sec('T2F.2 — Trace', 3, 120, 'calculations', [text(121, 'c')]), sec('T3D.1 — Source map', 3, 130, 'audit', [text(131, 'a')])];
   const r = report({ sections: coded }, [['gap', 'C.1 — Gap list', ['C.1']], ['reg', 'T4.D1 — Register', ['T4.D1']], ['trace', 'T2F.2 — Trace', ['T2F.2']], ['map', 'T3D.1 — Source map', ['T3D.1']]]);
@@ -477,6 +477,18 @@ test('(i) the declared status is a badge beside the acceptance badge; none decla
   assert.ok(!none.includes('Blocked'));
 });
 
+test('(i2) the head shows the confidence Python computed, or why there is none; no field draws nothing', () => {
+  const head = c => report({ confidence: c }).reportHead(OUT);
+  assert.ok(head({ value: 58, band: 'Low' }).includes('<span class="output-meta" title="Computed from the inputs the module states">Confidence 58 · Low</span>'));
+  assert.ok(head({ value: 0, band: 'Insufficient Information' }).includes('Confidence 0 · Insufficient Information'));
+  const missing = head({ missing: 'the table has no row for Source gate' });
+  assert.ok(missing.includes('<span class="output-meta" title="Computed from the inputs the module states">Confidence not computed: the table has no row for Source gate</span>'));
+  assert.ok(head({ missing: '<b>x</b>' }).includes('Confidence not computed: &lt;b&gt;x&lt;/b&gt;'));
+  assert.ok(!report().reportHead(OUT).includes('Confidence'));
+  assert.equal(report({ confidence: { value: 58, band: 'Low' } }).reportHead(OUT).match(/class="badge badge-gray"/g).length, 1);
+  noCode(head({ value: 58, band: 'Low' }));
+});
+
 test('(j) Analysis holds only the view sections, open, in handoff order, each with its line id', () => {
   const html = report().reportAnalysis(OUT);
   // Decisions 7 and 14, H7 (earlier format): no chip is printed in prose; a paragraph with no citation and no chip in the build has no Basis button.
@@ -497,7 +509,7 @@ test('chip labels and avatars follow the data, one chip per dict', () => {
   const { chipsMarkup } = report();
   const html = chipsMarkup(`${OUT}:16`);
   const chips = [...html.matchAll(/<button[^>]*class="chip[^"]*"[^>]*>.*?<\/button>/g)].map(m => m[0].replace(/<[^>]+>/g, '|').replace(/\|+/g, '|'));
-  assert.deepEqual(chips, ['|Handoff|', '|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|Financial foundation · D1 · D3|']);
+  assert.deepEqual(chips, ['|Row|', '|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|Financial foundation · D1 · D3|']);
   assert.ok(html.includes('data-chip="run-a/deliveries/d1/CP-1.md:16" data-index="3"') && html.includes('data-evidence="run-a/deliveries/d1/CP-1.md:16"'));
 });
 
@@ -507,7 +519,7 @@ test('Not supplied renders as a gap chip; other gaps fold into one count', () =>
   assert.equal(html.match(/class="chip gap"/g).length, 1);
   assert.equal(html.includes('no page<span') || html.includes('no key<span'), false);
   assert.equal(html.match(/class="chip-count"/g).length, 1);
-  assert.ok(html.includes(`data-gaps="${OUT}:52"`) && html.includes('>2 citations without a page</button>'));
+  assert.ok(html.includes(`data-gaps="${OUT}:52"`) && html.includes('>2 unresolved citations</button>'));
 });
 
 test('a key of only unresolved chips has no gap chip and one count; one reads in the singular', () => {
@@ -515,8 +527,8 @@ test('a key of only unresolved chips has no gap chip and one count; one reads in
   const two = chipsMarkup(`${OUT}:53`);
   assert.equal(two.includes('class="chip gap"'), false);
   assert.equal(two.match(/class="chip-count"/g).length, 1);
-  assert.ok(two.includes('>2 citations without a page</button>'));
-  assert.ok(chipsMarkup(`${OUT}:54`).includes('>1 citation without a page</button>'));
+  assert.ok(two.includes('>2 unresolved citations</button>'));
+  assert.ok(chipsMarkup(`${OUT}:54`).includes('>1 unresolved citation</button>'));
 });
 
 test('a quote found on the page marks the chip verified', () => {
@@ -782,7 +794,7 @@ test('a reference section renders whole inside Statements and registers, in orde
   assert.ok(at('Debt is <strong>mostly secured</strong>. Second line.') > at('Debt structure') && at('Term loan') > at('mostly secured') && at('Closing remark.') > at('Revolver'));
   assert.equal(html.match(/<tr><td>/g).length, 3); // the three register rows, none dropped
   assert.ok(html.includes('<span class="na" title="Not supplied">n.a.</span>') && html.includes('<span class="na" title="Empty in the handoff">n.a.</span>') && !html.includes('—'));
-  for (const line of [75, 77]) assert.ok(html.includes(`aria-label="Handoff row, line ${line}"`), line); // earlier-format table rows keep their chip column
+  for (const line of [75, 77]) assert.ok(html.includes(`aria-label="Table row, line ${line}"`), line); // earlier-format table rows keep their chip column
   assert.ok(!html.includes('data-paragraph='), 'no earlier-format paragraph here has a citation or a chip, so none has a Basis button');
   assert.ok(html.includes('class="table-card"') && !html.includes('K.'));
 });
@@ -911,9 +923,9 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const win = { location: more.location, CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
   const eventTimeline = realEventTimeline(esc, rich);
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
   return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
@@ -1321,7 +1333,7 @@ test('navigator (decision 5): the open entry has aria-current="page" and its On 
   assert.equal(countOf(html, /<nav class="section-outline" aria-label="On this page">/g), 1);
   const entry = /<li><a [^>]*aria-current="page"[^>]*>.*?<\/a><nav class="section-outline".*?<\/nav><\/li>/s.exec(html)[0];
   assert.ok(entry.includes('Credit view'));
-  assert.deepEqual([...entry.matchAll(/class="section-item" href="[^"]*"[^>]*>([^<]*)<\/a>/g)].map(m => m[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Request', 'Sources', 'Calculations', 'Gaps', 'Next module']);
+  assert.deepEqual([...entry.matchAll(/class="section-item" href="[^"]*"[^>]*>([^<]*)<\/a>/g)].map(m => m[1].replace('&amp;', '&')), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Sources', 'Calculations', 'Gaps', 'Evidence & audit']);
 });
 
 test('navigator (decision 5): search filters the same flat list by name, code and section titles', () => {
@@ -1345,7 +1357,7 @@ test('navigator (decision 5): the Cash flow model entry (code CP-MODEL) is prese
 
 test('module page (H1): the four reader passages come first under their headings, then the other sections in handoff order', () => {
   const page = fixturePage(), id = outId('CP-2'), parts = page.reportParts(id);
-  assert.deepEqual(parts.map(p => p[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Request', 'Sources', 'Calculations', 'Gaps', 'Next module']);
+  assert.deepEqual(parts.map(p => p[1]), ['Module', 'Bottom line', 'Key findings', 'Contrary evidence and what would change the view', 'Limitations', 'Sources', 'Calculations', 'Gaps', 'Evidence & audit']);
   const html = page.moduleReport(id);
   const at = marker => html.indexOf(marker);
   assert.ok(at('id="bottom-line"') > 0 && at('id="bottom-line"') < at('id="key-findings"') && at('id="key-findings"') < at('id="contrary-evidence"') && at('id="contrary-evidence"') < at('id="limitations"'));
@@ -1378,7 +1390,8 @@ test('module page (H1, decision 7): passage text exactly as written, the Basis l
 
 test('module page (H1): the other sections are kept exact, tables with their Source column, in handoff order', () => {
   const html = fixturePage().moduleReport(outId('CP-2'));
-  const order = ['Credit view for Northbridge Synthetic Group (nbg), as of 2025-03-31. SYNTHETIC FIXTURE.', 'Debt, cash and maturity profile.', 'Net debt to EBITDA', 'No peer set supplied', 'CP-2D assesses liquidity against the maturities.'].map(t => html.indexOf(t));
+  // A1 (decision 2): Request moves from the head of the body to the Evidence & audit fold at its end, before Next module.
+  const order = ['Debt, cash and maturity profile.', 'Net debt to EBITDA', 'No peer set supplied', 'Credit view for Northbridge Synthetic Group (nbg), as of 2025-03-31. SYNTHETIC FIXTURE.', 'CP-2D assesses liquidity against the maturities.'].map(t => html.indexOf(t));
   assert.ok(order.every(i => i > 0) && order.every((i, k) => k === 0 || i > order[k - 1]), `handoff order ${order}`);
   assert.ok(html.includes('Gross debt 1,700 less cash 310 gives net debt 1,390; divided by EBITDA 331') && html.includes('<th scope="col">Source</th>'));
 });
@@ -1614,7 +1627,7 @@ test('charts: one chip-dot legend per set of charts, under the last card', () =>
   assert.equal(runPage().chartCards(['<h2>own</h2>']).includes('<h2>own</h2>'), true);
   assert.ok(runPage().chartCards(['<div class="section-heading"><h2>Cost $1 &amp; $&</h2></div>']).includes('<h4>Cost $1 &amp; $&</h4>'));
   // A card's chart title is an h4 (it sits under a module's h3); the rest of the chart is untouched.
-  assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> handoff row · <i class="dot up"></i> upstream module · <i class="dot gap"></i> gap</span></div></div>');
+  assert.equal(runPage().chartCards(['<div class="section-heading"><h2>Leverage</h2><span>x</span></div><h2>kept</h2>']), '<div class="panel-card"><div class="section-heading"><h4>Leverage</h4><span>x</span></div><h2>kept</h2><div class="legend"><span>Chip dot: <i class="dot"></i> issuer page · <i class="dot row"></i> this table row · <i class="dot up"></i> another module · <i class="dot gap"></i> gap</span></div></div>');
 });
 
 test('screen.css: the run page tables (chart index, status map) run whole', () => {
@@ -1637,6 +1650,14 @@ test('module tables: a numeric column is .num, a number in a text column is .fig
   assert.equal(cellView('Reported GAAP; Annual page:121', false), '<td>Reported GAAP; Annual page:121</td>');
   const css = read('screen.css');
   assert.ok(css.includes(".table-card td{font-family:'Red Hat Text',sans-serif}.table-card td.fig{font-family:'Red Hat Mono',monospace"));
+});
+
+test('screen.css (decision 5): a module-page table box shows a scroll shadow, may wrap its headers and takes the keyboard; a fenced block keeps its lines', () => {
+  const css = read('screen.css');
+  const box = /\.analysis-section \.table-card\{background:([^}]*)\}/.exec(css);
+  assert.ok(box && /local/.test(box[1]) && /scroll/.test(box[1]), 'local covers over scroll shadows');
+  assert.ok(css.includes('.analysis-section .table-card:focus-visible{') && css.includes('.analysis-section .table-card thead th{white-space:normal'));
+  assert.ok(/\.passage-code\{[^}]*white-space:pre/.test(css));
 });
 
 test('library: a row is one item per column; what left the row is the cell title or the selected-run panel', () => {
@@ -1756,6 +1777,100 @@ test('reader charts: a step table is a waterfall of its stated amounts, each bar
   assert.ok(html.includes('<h2>Liquidity bridge</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
 });
 
+test('reader charts: nine long step labels wrap word-wise inside their step, at most three lines, an ellipsis where cut, the full text in the title', () => {
+  const names = ['Opening: FY2024 EBITDA', 'Acquisition transaction and integration-related expenses', 'Non-cash stock and deferred compensation expense', 'Refinancing costs', 'Other, net', 'Restructuring and impairment charges', 'Foreign currency translation effect', 'Share of equity-method investees', 'Closing: FY2024 EBITDA As Defined'];
+  const rows = names.map((n, i) => [63 + i, n, i === 0 ? '3813' : i === 8 ? String(3813 + 70 * 7) : '70', 'US$m', 'Synthetic.']);
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; });
+  const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
+  const labels = [...html.matchAll(/<text class="axis-label" x="([\d.]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: Number(m[1]), lines: [...m[2].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(t => t[1]) }));
+  assert.equal(labels.length, 9);
+  const CHAR = 14 * 0.6; // monospace advance of the 14px axis label, in viewBox units
+  const boxes = labels.map(l => [l.x - Math.max(...l.lines.map(t => t.length)) * CHAR / 2, l.x + Math.max(...l.lines.map(t => t.length)) * CHAR / 2]);
+  for (let i = 1; i < boxes.length; i++) assert.ok(boxes[i - 1][1] < boxes[i][0], `labels ${i - 1} and ${i} overprint: ${boxes[i - 1]} ${boxes[i]}`);
+  labels.forEach((l, i) => {
+    assert.ok(l.lines.length >= 1 && l.lines.length <= 3, l.lines.join('|'));
+    // Every word shown is a whole word of the label, or ends in an ellipsis; a label cut anywhere ends in one.
+    const words = names[i].split(' ');
+    for (const line of l.lines) for (const w of line.split(' ')) assert.ok(w.endsWith('\u2026') || words.includes(w), `${w} is cut without an ellipsis`);
+    const shown = l.lines.join(' ');
+    assert.equal(shown === names[i] || shown.endsWith('\u2026') || l.lines.some(t => t.includes('\u2026')), true);
+    assert.ok(html.includes(`<title>${names[i].replace(/&/g, '&amp;')}: `), 'the full step name is in the title');
+  });
+  assert.ok(labels[3].lines.join(' ') === 'Refinancing costs' || labels[3].lines.length <= 3);
+});
+
+test('reader charts: the real nine-step bridge labels break only between words, unless one word alone exceeds the line', () => {
+  const names = ['Net income (reported, US GAAP) FY2024', 'Interest expense-net', 'Income tax provision', 'Depreciation and amortization expense', 'Non-cash stock and deferred compensation expense', 'Acquisition transaction and integration-related expenses', 'Refinancing costs', 'Other, net', 'Issuer As Defined EBITDA'];
+  const rows = names.map((n, i) => [63 + i, n, i === 0 ? '1000' : i === 8 ? '1400' : '50', 'US$m', 'Synthetic.']);
+  const page = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; });
+  const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
+  const labels = [...html.matchAll(/<text class="axis-label" x="([\d.]+)"[^>]*>(.*?)<\/text>/g)].map(m => ({ x: Number(m[1]), lines: [...m[2].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(t => t[1]) }));
+  const step = Number(/<rect class="[^"]*" x="[\d.]+" y="[\d.]+" width="([\d.]+)"/.exec(html)[1]) + 20;
+  const room = Math.floor((step - 6) / 8.4);
+  assert.ok(html.includes('vector-chart bridge-wide'), 'a many-step bridge takes the card width');
+  labels.forEach((l, i) => {
+    const words = names[i].split(' ');
+    assert.ok(l.lines.length <= 3, l.lines.join('|'));
+    for (const w of l.lines.join(' ').split(' ')) {
+      const stem = w.replace(/\u2026$/, '');
+      if (words.includes(w)) continue;
+      assert.ok(w.endsWith('\u2026') && words.some(o => o.startsWith(stem) && (o.length > room || o === stem)), `${names[i]}: "${w}" is cut inside a word`);
+    }
+    if (words.every(w => w.length <= room) && l.lines.length < 3) assert.ok(!l.lines.join(' ').includes('\u2026'), l.lines.join('|'));
+  });
+  for (const n of [1, 2, 3, 6, 7]) assert.equal(labels[n].lines.join(' '), names[n], names[n]);
+  const boxes = labels.map(l => { const w = Math.max(...l.lines.map(t => t.length)) * 8.4; return [l.x - w / 2, l.x + w / 2]; });
+  for (let i = 1; i < boxes.length; i++) assert.ok(boxes[i - 1][1] < boxes[i][0], `labels ${i - 1} and ${i} overprint`);
+  assert.ok(Math.max(...boxes.flat()) <= Number(/viewBox="(-?[\d.]+) -?[\d.]+ ([\d.]+)/.exec(html)[2]), 'inside the viewBox');
+});
+
+test('reader charts: a bridge label of three lines stays inside the svg at both label sizes', () => {
+  const names = ['Net income (reported, US GAAP) FY2024', 'Depreciation and amortization expense', 'Non-cash stock and deferred compensation expense', 'Other, net'];
+  for (const count of [4, 9]) {
+    const rows = Array.from({ length: count }, (_, i) => [63 + i, names[i % 4] + (i > 3 ? ` ${i}` : ''), i === 0 ? '1000' : i === count - 1 ? String(1000 + 50 * (count - 2)) : '50', 'US$m', 'Synthetic.']);
+    const html = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; }).readerChart(outId('CP-1'), BRIDGE_CHART);
+    const [, , top, , height] = /viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/.exec(html).map(Number);
+    const bottom = top + height;
+    for (const [, y, body] of html.matchAll(/<text class="axis-label" x="[\d.]+" y="([\d.]+)"[^>]*>(.*?)<\/text>/g)) {
+      const lines = [...body.matchAll(/<tspan/g)].length;
+      for (const px of [11, 14]) assert.ok(Number(y) + (lines - 1) * 1.2 * px + 0.3 * px <= bottom, `${count} steps: ${lines} lines at ${px}px end at ${Number(y) + (lines - 1) * 1.2 * px + 0.3 * px}, past ${bottom}`);
+    }
+  }
+});
+
+test('reader charts: a wide bridge scrolls inside its card as a keyboard-reachable region and is never drawn smaller than before', () => {
+  const rows = Array.from({ length: 9 }, (_, i) => [63 + i, `Step ${i}`, i === 0 ? '1000' : i === 8 ? '1350' : '50', 'US$m', 'Synthetic.']);
+  const html = runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows)])); return d; }).readerChart(outId('CP-1'), BRIDGE_CHART);
+  assert.match(html, /<div class="vector-chart bridge-wide" role="region" tabindex="0" aria-label="[^"]*Liquidity bridge[^"]*scroll/);
+  const min = Number(/<svg [^>]*style="min-width:(\d+)px"/.exec(html)[1]), box = Number(/viewBox="-?[\d.]+ -?[\d.]+ ([\d.]+)/.exec(html)[1]);
+  // Before the wide geometry the 11px label was drawn at 368/680 of its size in the 400px overview aside.
+  assert.ok(min / box >= 0.7, `drawn at ${min / box} of its size at the narrowest`);
+  // A bridge that is not wide is not a scroll region.
+  assert.ok(!runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: liquidity bridge', 3, 60, 'consumed', [table(62, ['Step', 'Amount', 'Reporting unit', 'Basis and limitation'], rows.slice(0, 3).map((r, i) => i === 2 ? [r[0], r[1], '1050', r[3], r[4]] : r))])); return d; }).readerChart(outId('CP-1'), BRIDGE_CHART).includes('role="region"'));
+});
+
+test('reader charts: a bridge label never exceeds its line budget, a lone word of exactly the budget included', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'views.js'), 'utf8');
+  const axisLines = new Function(src.slice(src.indexOf('const AXIS_CHAR'), src.indexOf('function bridgeChart')) + ';return axisLines;')();
+  for (const step of [60, 80, 110, 142]) {
+    const room = Math.max(4, Math.floor((step - 6) / 8.4));
+    for (const label of ['alpha beta gamma delta', 'one two three ' + 'x'.repeat(room), 'one two three ' + 'x'.repeat(room + 3), 'a b ' + 'y'.repeat(room) + ' tail', 'Depreciation amortization and other items', ['a', 'b', 'c'].map(c => c.repeat(room)).join(' ') + ' tail']) for (const line of axisLines(label, step)) assert.ok(line.length <= room, `${step}: "${line}" in ${label}`);
+  }
+});
+
+test('structure views: five or more ranking and security pairs are told apart by a pattern and the legend swatch matches its segments', () => {
+  const html = stackOf([['1', 'Yes', '100'], ['2', 'Yes', '100'], ['3', 'No', '100'], ['4', 'No', '100'], ['5', 'No', '100'], ['1', 'Yes', '100']]);
+  const classes = [...html.matchAll(/<a class="stack-seg ([^"]*)"/g)].map(m => m[1]);
+  assert.equal(new Set(classes.slice(0, 5)).size, 5);
+  assert.equal(classes[5], classes[0]);
+  assert.ok(classes[4].includes('hatch') && !classes[0].includes('hatch'));
+  const swatches = [...html.matchAll(/<i class="([^"]*)"><\/i>Rank/g)].map(m => m[1]);
+  assert.deepEqual(swatches, classes.slice(0, 5));
+  assert.deepEqual([...html.matchAll(/<i class="swatch ([^"]*)"/g)].map(m => m[1]), classes);
+  const eight = stackOf(Array.from({ length: 8 }, (_, i) => [String(i + 1), 'Yes', '100']));
+  assert.equal(new Set([...eight.matchAll(/<a class="stack-seg ([^"]*)"/g)].map(m => m[1])).size, 8);
+});
+
 test('reader charts: every chart has its table form, the handoff table as written with its chips', () => {
   const page = runPage(withBridge);
   const html = page.readerChart(outId('CP-1'), BRIDGE_CHART);
@@ -1817,6 +1932,7 @@ const withStructure = d => {
 test('structure views: a debt stack is segments in stated rank order, widths from the stated amounts, leverage as stated', () => {
   const html = runPage(withStructure).readerChart(outId('CP-1'), STACK);
   const segments = [...html.matchAll(/<a class="stack-seg series-(\d)" href="[^"]*" data-evidence="[^"]*:(\d+)" style="width:([\d.]+)%"/g)].map(m => [m[1], m[2], m[3]]);
+  // Ranking 1 secured and ranking 2 unsecured are two pairs, so two series; the widths are unchanged.
   assert.deepEqual(segments, [['0', '93', '60'], ['1', '94', '40']]);
   const key = strip(/<ol class="stack-key">(.*?)<\/ol>/s.exec(html)[1]);
   assert.ok(key.indexOf('Term loan') < key.indexOf('Notes') && key.indexOf('Notes') < key.indexOf('Subordinated'));
@@ -1826,6 +1942,27 @@ test('structure views: a debt stack is segments in stated rank order, widths fro
   assert.ok(html.includes('<p class="matrix-note">A facility with no stated amount has no segment.</p>'));
   assert.ok(html.includes('<h2>Debt stack</h2><span>US$m</span>') && !/CP-\d/.test(strip(html)));
   assert.ok(html.includes('<details class="chart-table"><summary>Table form</summary>'));
+});
+
+const stackOf = rows => runPage(d => { d[outId('CP-1')].sections.push(sec('Chart data: debt stack', 3, 90, 'consumed', [table(92, ['Facility', 'Ranking', 'Secured', 'Amount', 'Cumulative leverage', ...TAIL], rows.map(([r, s, a], i) => [93 + i, `F${i}`, r, s, a, '1.0', 'US$m', 'Synthetic.']))])); d[outId('CP-1')].charts.push(STACK); return d; }).readerChart(outId('CP-1'), STACK);
+
+test('structure views: debt stack segments of equal ranking and security share a series, others differ, and a legend names each pair', () => {
+  const html = stackOf([['1', 'Yes', '100'], ['1', 'Yes', '200'], ['2', 'No', '300'], ['2', 'Yes', '50']]);
+  const classes = [...html.matchAll(/<a class="stack-seg series-(\d)"/g)].map(m => m[1]);
+  assert.equal(classes[0], classes[1]);
+  assert.equal(new Set(classes).size, 3);
+  const legend = strip(/<div class="chart-legend stack-legend">(.*?)<\/div>/s.exec(html)[1]);
+  assert.equal(legend, 'Rank 1 \u00b7 securedRank 2 \u00b7 unsecuredRank 2 \u00b7 secured');
+  // The per-facility swatches use the same classes as the segments.
+  assert.deepEqual([...html.matchAll(/<i class="swatch series-(\d)"/g)].map(m => m[1]), classes);
+});
+
+test('structure views: a debt stack row with no ranking or an unreadable Secured value keeps a neutral class and the legend says so', () => {
+  const html = stackOf([['1', 'Yes', '100'], ['Not supplied: not stated', 'Yes', '100'], ['2', 'Maybe', '100']]);
+  assert.equal(countOf(html, /<a class="stack-seg stack-neutral"/g), 2);
+  assert.equal(countOf(html, /<i class="swatch stack-neutral"/g), 2);
+  const legend = strip(/<div class="chart-legend stack-legend">(.*?)<\/div>/s.exec(html)[1]);
+  assert.equal(legend, 'Rank 1 \u00b7 securedRanking not statedRank 2 \u00b7 security not stated');
 });
 
 test('structure views: a bullet chart marks the stated threshold and current, the passing side and the stated headroom', () => {
@@ -2076,10 +2213,10 @@ test('names, not codes: module heads and the report head carry no module code in
   assert.equal(page.handoffLabel('K.pdf'), 'K.pdf');
 });
 
-test('names, not codes: chips name their module, the handoff chip reads Handoff, titles from handoff text are named', () => {
+test('names, not codes: chips name their module, the row chip reads Row, titles from handoff text are named', () => {
   const r = report(), html = r.chipsMarkup(`${OUT}:16`) + r.chipsMarkup(`${OUT}:777`);
   noCode(html);
-  assert.ok(html.includes('title="Handoff row, line 16" aria-label="Handoff row, line 16">Handoff<span class="dot row">'));
+  assert.ok(html.includes('title="Table row, line 16" aria-label="Table row, line 16">Row<span class="dot row">'));
   assert.ok(!html.includes('class="av cp"') && !html.includes('class="av q"'), 'no code avatar');
   assert.ok(html.includes('<span class="av ">K</span>p.123'), 'an issuer-page chip keeps its source avatar');
   assert.ok(html.includes('title="Annual PDF marked alternate in Source readiness"'));
@@ -2138,6 +2275,35 @@ test('names, not codes: a step id becomes the step\'s own title, a range keeps i
   assert.ok(nullChip.includes('>Financial foundation · D1 · D3<'), 'a chip with no module names the row\'s own');
 });
 
+test('names, not codes: a step heading with no dash, a prefixed register id and a gap cell read as their own words', () => {
+  const page = runPage(d => {
+    d[outId('CP-1')].sections.push(ref('Steps', 80, [table(81, ['Step', 'Name'], [[82, 'T2.12', 'Gaps ledger'], [83, 'T2.13 Open items', '']])]), sec('T2.14 Ratings view', 3, 90, 'reference', [text(91, 'x')]));
+    return d;
+  }), id = outId('CP-1'), name = text => page.namedText(text, id);
+  assert.equal(name('T2.12'), 'Gaps ledger');
+  assert.equal(name('See T2.13'), 'See “Open items”', 'a dashless step row gives its title');
+  assert.equal(name('T2.14'), 'Ratings view', 'a dashless step heading gives its title');
+  assert.equal(name('T9.9 stands'), 'a method step stands', 'a lowercase word after a dashless id is prose');
+  assert.equal(report().METHOD_CODE.test('T2.12 Gaps ledger') && 'T2.12 Gaps ledger'.replace(report().METHOD_CODE, ''), 'Gaps ledger');
+  assert.equal('T2.12 — Gaps ledger'.replace(report().METHOD_CODE, ''), 'Gaps ledger');
+  assert.equal('T9.9 stands'.replace(report().METHOD_CODE, ''), 'T9.9 stands');
+  assert.equal('T2E.3.r01 Row'.replace(report().METHOD_CODE, ''), 'T2E.3.r01 Row');
+  page.current.module = 'CP-6';
+  assert.equal(name('CP-6-MON-001 and CP-6A-DP-005'), 'MON-001 and DP-005', 'own page: the register id alone, an alias counts as the module');
+  assert.equal(name('Gap CP-6-GAP-005'), 'Gap 5');
+  page.current.module = 'CP-1';
+  assert.equal(name('CP-6-MON-001 and CP-6A-DP-005'), 'Committee decision MON-001 and Committee decision DP-005');
+  assert.equal(name('Gap CP-6-GAP-005'), 'Committee decision gap 5');
+  assert.equal(name('CP-2R-MON-001'), 'unnamed module MON-001');
+  // The real register ids at the start of a heading: METHOD_CODE leaves them (they are not step ids), and the naming shows them without the module code.
+  assert.equal('CP-3B-MON-001 Monitoring trigger'.replace(report().METHOD_CODE, ''), 'CP-3B-MON-001 Monitoring trigger');
+  page.current.module = 'CP-3B';
+  assert.equal(name('CP-3B-MON-001 Monitoring trigger'), 'MON-001 Monitoring trigger');
+  page.current.module = 'CP-2A';
+  assert.equal(name('CP-2A-DP-005 Decision point'), 'DP-005 Decision point');
+  assert.equal(name('CP-3B-MON-001 Monitoring trigger'), 'unnamed module MON-001 Monitoring trigger');
+});
+
 test('names, not codes: a table column of bare step ids is not drawn; a heading or caption loses its leading id and keeps no title', () => {
   const steps = ref('T4.11 — Cumulative gaps', 20, [table(22, ['Step', 'Name', 'Mixed'], [[23, 'T4.1', 'Peer universe', 'T4.1'], [24, 'T4.2', 'Peer metrics', 'n.a.']])]);
   const html = report({ sections: [steps] }, [['reg', 'T4.11 — Cumulative gaps', ['T4.11']]]).reportReference(OUT);
@@ -2172,6 +2338,7 @@ test('names, not codes: nameCodes names an audit section, the Evidence tab and a
   assert.equal(nameCodesIn(['Source readiness', ' (CP-0)'])[1].data, '', 'a parenthesised code after the module name in the node before is dropped');
   assert.ok(screen.includes('Retained fields from this historical run, with module codes and method step ids shown as names.') && !screen.includes('exact retained fields'));
   assert.ok(/function nameCodes[^]*?nameCodes\(\$\('search-results'\),null,false\)/.test(screen), 'search hits borrow no step title');
+  assert.ok(screen.includes("tables.map(s=>[id,plain(s.heading.replace(METHOD_CODE,'')),s.heading])"), 'a search hit label loses the heading\'s leading step id');
   assert.ok(/updateLibrary\([^]*?nameCodes\(\$\(id\)\)/.test(read('views.js')), 'a redrawn library is named');
   assert.ok(/function openAuditSection[^]*?body\.innerHTML=sectionView\([^;]*;if\(!keepsCodes\(current\)\)nameCodes\(body\);/.test(screen), 'an audit section is named when it is drawn');
 });
@@ -2228,7 +2395,7 @@ const withLanes = d => {
   d[outId('CP-6')].events = [{ lane: 'Decision and watch', table: 312, gap: 'the handoff states no dated event' }];
   return d;
 };
-const markers = html => [...html.matchAll(/class="lane-event (point|span)(?: scenario)?"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?"/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
+const markers = html => [...html.matchAll(/class="lane-event (point|span)(?: scenario)?"[^>]*style="left:([\d.]+)%(?:;width:([\d.]+)%)?[;"]/g)].map(m => [m[1], Number(m[2]), m[3] === undefined ? null : Number(m[3])]);
 
 test('calendar lanes: one lane per module that supplied events, placed on one axis at each date precision', () => {
   const html = runPage(withLanes).eventLanesView(RUN);
@@ -2250,7 +2417,7 @@ test('calendar lanes: every event is a keyboard-reachable link naming its lane, 
   const marker = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]);
   assert.equal(marker.length, 4);
   assert.ok(marker.every(m => /href="[^"]+"/.test(m) && m.includes('data-evidence=') && m.includes('aria-label=')));
-  assert.ok(marker[1].includes('aria-label="Financing: Call window, 2025-06 (month). View source"') && marker[1].includes(`data-evidence="${outId('CP-1')}:304"`));
+  assert.ok(marker[1].includes('aria-label="Event 3: Financing: Call window, 2025-06 (month). View source"') && marker[1].includes(`data-evidence="${outId('CP-1')}:304"`));
   assert.ok(html.indexOf('class="lane-row"') < html.indexOf('<table class="event-table">'));
   const rows = [...html.split('<tbody>')[1].matchAll(/<tr>(.*?)<\/tr>/gs)].map(m => [...m[1].matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gs)].map(c => strip(c[1])));
   assert.deepEqual([...html.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(m => m[1]), ['Lane', 'Event date', 'Date precision', 'Published', 'Event', 'Status', 'Source', 'Credit relevance']);
@@ -2291,6 +2458,66 @@ test('calendar lanes: a module filter draws only that module lane, and the Sourc
   assert.ok(text.includes("if(module==='W-Evidence')return evidenceView(context);") && !/if\(module==='W-Evidence'\)return[^\n]*eventLanesView/.test(text), 'the Evidence page is the four lists, no lanes');
 });
 
+// ---- Timeline drawing (2026-11-12 ruling, decision 6): year ticks, an as-of line, stacked points, a numbered key. Every value is synthetic.
+const withDense = d => {
+  d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [
+    laneRow(403, '2022-03-01', 'day', '—', 'First filing', 'Historical — filed'), laneRow(404, '2024-11', 'month', '—', 'Consent window'),
+    laneRow(405, '2024-10-16', 'day', '—', 'Notice issued', 'Historical — filed'), laneRow(406, '2024-10-18', 'day', '—', 'Notice repeated', 'Historical — filed'), laneRow(407, '2025-02-10', 'day', '—', 'Maturity')])])],
+  events: [{ lane: 'Sources', table: 402, gap: null }] });
+  return d;
+};
+const denseHtml = asOf => runPage(withDense, [], m => m, { runFields: { asOf } }).eventLanesView(RUN, { only: outId('CP-0'), compact: true });
+const styleOf = (html, label) => /style="([^"]*)"/.exec([...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]).find(m => m.includes(label)))[1];
+
+test('timeline: a tick at each 1 January on the axis, labelled by year', () => {
+  const axis = denseHtml('2024-09-30').split('class="lane-axis"')[1].split('<div role="group"')[0];
+  // Hand-computed: the axis is 2022-03-01 to 2025-02-10, 1077 days; 1 January 2023, 2024 and 2025 fall 306, 671 and 1037 days in.
+  assert.deepEqual([...axis.matchAll(/class="lane-tick" style="left:([\d.]+)%"/g)].map(m => Number(m[1])), [28.41, 62.3, 96.29]);
+  assert.deepEqual([...axis.matchAll(/class="lane-tick-label"[^>]*>(\d{4})</g)].map(m => m[1]), ['2023', '2024', '2025']);
+});
+
+test('timeline: the as-of date is a labelled line inside the axis (ends included) and is absent outside it', () => {
+  const inside = denseHtml('2024-09-30');
+  assert.equal(countOf(inside, /class="lane-asof" style="left:87\.65%"/g), 1, 'hand-computed: 30 September 2024 is day 944 of 1077');
+  assert.ok(strip(inside).includes('As of 30 September 2024'));
+  assert.ok(/class="lane-asof" style="left:0%"/.test(denseHtml('2022-03-01')) && /class="lane-asof" style="left:100%"/.test(denseHtml('2025-02-10')), 'inclusive at both ends');
+  for (const outside of ['2022-02-28', '2025-02-11', null]) assert.ok(!denseHtml(outside).includes('lane-asof') && !strip(denseHtml(outside)).includes('As of'), String(outside));
+});
+
+test('timeline: two points closer than a marker are stacked at their own x; a far point and a month span stay on the baseline at full length', () => {
+  const html = denseHtml('2024-09-30');
+  const issued = styleOf(html, 'Notice issued'), repeated = styleOf(html, 'Notice repeated');
+  assert.ok(issued.startsWith('left:89.14%') && repeated.startsWith('left:89.32%'), 'x is the stated day, not moved');
+  // Levels are computed on the 402 px narrowest track: the month span (364 to 380 px) holds the baseline, so the point at 358 px goes to row 1 and the one at 359 px to row 2.
+  assert.ok(/bottom:24px/.test(issued) && /bottom:44px/.test(repeated), 'each later date sits one row up');
+  assert.ok(/bottom:4px/.test(styleOf(html, 'First filing')) && /bottom:4px/.test(styleOf(html, 'Maturity')));
+  assert.ok(/^left:90\.62%;width:2\.69%;bottom:4px/.test(styleOf(html, 'Consent window')), 'a month is drawn over its whole length on the baseline');
+  assert.ok(html.includes('class="lane-track" style="height:68px"'), 'the lane grows to hold three rows');
+});
+
+test('timeline: each marker shows a number and names it; the key lists date and description in date order under the lanes', () => {
+  const html = denseHtml('2024-09-30'), tags = [...html.matchAll(/<a class="lane-event[^>]*>.*?<\/a>/g)].map(m => m[0]);
+  const numberOf = label => /<span class="lane-no">(\d+)<\/span>/.exec(tags.find(t => t.includes(label)))[1];
+  assert.deepEqual(['First filing', 'Notice issued', 'Notice repeated', 'Consent window', 'Maturity'].map(numberOf), ['1', '2', '3', '4', '5']);
+  assert.ok(tags.find(t => t.includes('Notice issued')).includes('aria-label="Event 2: Sources: Notice issued, 2024-10-16 (day). View source"'));
+  const key = html.split('<ol class="lane-key"')[1].split('</ol>')[0];
+  assert.deepEqual([...key.matchAll(/<li>(.*?)<\/li>/g)].map(m => strip(m[1]).replace(/\s+/g, ' ').trim()), ['2022-03-01 First filing', '2024-10-16 Notice issued', '2024-10-18 Notice repeated', '2024-11 Consent window', '2025-02-10 Maturity']);
+  assert.ok(html.indexOf('class="lane-key"') > html.indexOf('class="lane-row"'), 'the key follows the lanes');
+});
+
+test('timeline: the key numbers run across lanes and a lane with many events still lists every one', () => {
+  const many = d => {
+    d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Security', 3, 400, 'consumed', [table(402, LANE_HEAD, Array.from({ length: 14 }, (_, i) => laneRow(403 + i, `2024-05-${String(i + 1).padStart(2, '0')}`, 'day', '—', `Item ${i + 1}`)))])], events: [{ lane: 'Security', table: 402, gap: null }] });
+    return withLanes(d);
+  };
+  const html = runPage(many).eventLanesView(RUN);
+  assert.equal(countOf(html, /<span class="lane-no">/g), 18);
+  const keys = html.split('<p class="lane-key-name">').slice(1);
+  assert.deepEqual(keys.map(k => /^([^<]*)</.exec(k)[1]), ['Security', 'Financing']);
+  assert.deepEqual(keys.map(k => /<ol class="lane-key" start="(\d+)"/.exec(k)[1]), ['1', '15']);
+  assert.deepEqual(keys.map(k => countOf(k, /<li>/g)), [14, 4]);
+});
+
 // ---- Package 6 views (2026-11-10): node/edge maps and the run status map. Every value is synthetic.
 const MAP_HEAD = ['From', 'Relationship', 'Edge type', 'To', 'Evidence'];
 const edgeRow = (line, from, link, type, to) => [line, from, link, type, to, 'Synthetic p.1'];
@@ -2324,7 +2551,7 @@ test('maps: one SVG, a box per node, a word and a line style per edge type, and 
   const html = runPage(withMaps).mapsView(outId('CP-1'), 'h3');
   const svg = /<svg.*?<\/svg>/s.exec(html)[0];
   assert.equal(countOf(svg, /<g class="map-node"/g), 4, 'driver, mechanism, outcome and the long holding company: the loop adds no node');
-  for (const word of ['Documentary Fact', 'Management Language', 'Analyst Interpretation', 'Insufficient Information']) assert.ok(strip(svg).includes(word), word);
+  for (const word of ['Documentary Fact', 'Management Language', 'Analyst Interpretation', 'Insufficient Information']) assert.ok(labelsOf(svg).some(l => l.lines.join(' ') === word), word);
   const dashes = [...svg.matchAll(/<path class="map-edge[^"]*"[^>]*>/g)].map(m => /stroke-dasharray="([^"]*)"/.exec(m[0])?.[1] ?? '');
   assert.equal(dashes.length, 5);
   assert.ok(new Set(dashes).size >= 4, 'each edge type has its own line style');
@@ -2360,6 +2587,121 @@ test('maps: a wide map keeps its natural width and scrolls inside its card', () 
   const chain = [...Array(12)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', 'Documentary Fact', `Layer ${i + 1}`));
   const html = runPage(d => { const o = d[outId('CP-1')]; o.sections.push(sec('Map: credit-risk transmission', 3, 890, 'consumed', [table(892, MAP_HEAD, chain)])); o.maps = [{ name: 'credit-risk transmission', table: 892, gap: null }]; return d; }).mapsView(outId('CP-1'), 'h3');
   assert.ok(Number(/<svg[^>]*width="(\d+)"/.exec(html)[1]) > 1440, 'twelve layers are wider than the page');
+});
+
+const mapHtml = rowsFor => runPage(d => { const o = d[outId('CP-1')]; o.sections.push(sec('Map: credit-risk transmission', 3, 890, 'consumed', [table(892, MAP_HEAD, rowsFor)])); o.maps = [{ name: 'credit-risk transmission', table: 892, gap: null }]; return d; }).mapsView(outId('CP-1'), 'h3');
+const nodeLines = (svg, title) => { const g = [...svg.matchAll(/<g class="map-node"><title>(.*?)<\/title>.*?<\/g>/gs)].find(m => m[1] === title); return [...g[0].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(m => m[1]); };
+
+// An edge label is a text whose first baseline is its x, y, one tspan per line (13px apart); its box is its longest line wide (6.6px a character) and 12px tall a line.
+const labelsOf = svg => [...svg.matchAll(/<text class="map-edge-label" x="([\d.-]+)" y="([\d.-]+)"[^>]*>(.*?)<\/text>/g)].map(m => {
+  const lines = [...m[3].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map(t => t[1]);
+  return { x: +m[1], y: +m[2], lines, w: Math.max(...lines.map(l => l.length)) * 6.6, top: +m[2] - 9, bot: +m[2] + 13 * (lines.length - 1) + 3 };
+});
+const labelHit = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && a.top < b.bot && b.top < a.bot;
+
+test('maps: node text wraps on whole words and numbers, in at most three lines', () => {
+  const name = 'Net leverage 6.01x covenant headroom narrowing sharply';
+  const html = mapHtml([edgeRow(900, name, 'drives', 'Documentary Fact', 'Synthetic outcome')]);
+  const lines = nodeLines(/<svg.*?<\/svg>/s.exec(html)[0], name);
+  assert.ok(lines.length >= 2 && lines.length <= 3, lines.join('|'));
+  assert.equal(lines.join(' '), name, 'every word is whole and none is dropped');
+  assert.ok(lines.some(line => line.split(' ').includes('6.01x')), '6.01x stays whole');
+});
+
+test('maps: node text over three lines ends with an ellipsis and the whole text is in its title', () => {
+  const html = mapHtml([edgeRow(900, LONG, 'owns', 'Documentary Fact', 'Synthetic driver')]);
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0], lines = nodeLines(svg, LONG);
+  assert.equal(lines.length, 3);
+  assert.ok(lines[2].endsWith('\u2026') && !lines[0].includes('\u2026'), lines.join('|'));
+  for (const line of lines) assert.ok(line.replace('\u2026', '').split(' ').every(word => LONG.split(' ').includes(word)), `no word is cut: ${line}`);
+});
+
+test('maps: edge labels do not overlap one another or a node', () => {
+  const html = mapHtml([
+    edgeRow(901, 'Synthetic driver', 'drives', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(902, 'Synthetic driver', 'also hits', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(903, 'Synthetic mechanism', 'squeezes', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(904, 'Synthetic driver', 'feeds', 'Documentary Fact', 'Synthetic mechanism'),
+  ]);
+  const svg = /<svg.*?<\/svg>/s.exec(html)[0];
+  const labels = labelsOf(svg);
+  assert.equal(labels.length, 4);
+  for (let i = 0; i < labels.length; i++) for (let j = i + 1; j < labels.length; j++) assert.ok(!labelHit(labels[i], labels[j]), `labels ${i} and ${j}: ${JSON.stringify([labels[i], labels[j]])}`);
+  const boxes = [...svg.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.]+)" height="([\d.]+)"/g)].map(m => m.slice(1).map(Number));
+  for (const l of labels) for (const [x, y, w, h] of boxes) assert.ok(!(l.x + l.w / 2 > x && l.x - l.w / 2 < x + w && l.bot > y && l.top < y + h), `a label sits on a node: ${JSON.stringify(l)}`);
+});
+
+test('maps: a map wider than its card is a keyboard-reachable scroll region that says so, as the bridge and tables do', () => {
+  const chain = [...Array(6)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', 'Documentary Fact', `Layer ${i + 1}`));
+  const html = mapHtml(chain);
+  assert.ok(/<div class="map-scroll" role="region" aria-label="[^"]*scroll horizontally[^"]*" tabindex="0">/.test(html), 'the region names the scroll');
+  assert.ok(/scroll horizontally/.test(mapHtml([edgeRow(900, 'A', 'next', 'Documentary Fact', 'B')])), 'so does a short map, which may still scroll in a narrow card');
+  assert.ok(/\.map-scroll\{[^}]*overflow-x:auto/.test(read('screen.css')));
+});
+
+const svgOf = html => /<svg.*?<\/svg>/s.exec(html)[0];
+const widthOf = rowsFor => Number(/<svg[^>]*width="(\d+)"/.exec(mapHtml(rowsFor))[1]);
+const chainOf = (n, type) => [...Array(n)].map((_, i) => edgeRow(900 + i, `Layer ${i}`, 'next', type, `Layer ${i + 1}`));
+
+test('maps: the column gap follows the longest edge label, never under 120, so short-label maps stay compact', () => {
+  // 4 layers, label "Fact" (4*6.6 = 26.4px) + 20 margin fits in the 120 minimum: 2*12 pad + 4*(150 box + 120 gap) - 120 = 984, the width before labels had their own room.
+  assert.equal(widthOf(chainOf(3, 'Fact')), 984);
+  // A single word wider than a label line stays whole and widens the gap: "Interpretations-and-views" is 25 characters, 25*6.6 = 165px; + 20 margin = 185 gap: 24 + 4*(150+185) - 185 = 1179.
+  assert.equal(widthOf(chainOf(3, 'Interpretations-and-views')), 1179);
+});
+
+test('maps: an edge label wraps on whole words to two lines, so the gap follows the longest line, not the whole label', () => {
+  // Old expectation 1122 (one line of 22 characters, gap 166) is now 984: the longest line is "Interpretation" (14 characters, 92.4px) + 20 margin = 112.4, under the 120 minimum: 24 + 4*(150+120) - 120 = 984.
+  assert.equal(widthOf(chainOf(3, 'Analyst Interpretation')), 984);
+  const svg = svgOf(mapHtml(chainOf(3, 'Analyst Interpretation')));
+  assert.deepEqual(labelsOf(svg).map(l => l.lines), [...Array(3)].map(() => ['Analyst', 'Interpretation']), 'two tspans, whole words, nothing dropped');
+  assert.equal(countOf(svg, /<tspan[^>]*>Analyst<\/tspan>/g), 3);
+  // "Insufficient Information" (12 and 11 characters) and "Management Language" (19 characters, wraps) fit too.
+  assert.equal(widthOf(chainOf(3, 'Insufficient Information')), 984);
+  assert.equal(widthOf(chainOf(3, 'Management Language')), 984);
+  // More than two lines ends in an ellipsis; the edge table holds the whole text.
+  const three = labelsOf(svgOf(mapHtml(chainOf(1, 'one two three four five six seven'))))[0].lines;
+  assert.equal(three.length, 2);
+  assert.ok(three[1].endsWith('\u2026'), three.join('|'));
+});
+
+test('maps: a two-line label is placed by its real box: two of them into one target do not overlap or sit on a node', () => {
+  const svg = svgOf(mapHtml([
+    edgeRow(901, 'Synthetic driver', 'Analyst Interpretation', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(902, 'Synthetic mechanism', 'Management Language', 'Documentary Fact', 'Synthetic outcome'),
+    edgeRow(903, 'Synthetic driver', 'Analyst Interpretation', 'Documentary Fact', 'Synthetic mechanism'),
+  ]));
+  const labels = labelsOf(svg);
+  assert.equal(labels.length, 3);
+  assert.ok(labels.every(l => l.lines.length === 2));
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) assert.ok(!labelHit(labels[i], labels[j]), `labels ${i} and ${j}: ${JSON.stringify([labels[i], labels[j]])}`);
+  const boxes = [...svg.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.]+)" height="([\d.]+)"/g)].map(m => m.slice(1).map(Number));
+  for (const l of labels) for (const [x, y, w, h] of boxes) assert.ok(!(l.x + l.w / 2 > x && l.x - l.w / 2 < x + w && l.bot > y && l.top < y + h), `a label sits on a node: ${JSON.stringify(l)}`);
+});
+
+test('maps: a node word wider than a line breaks across lines before any ellipsis; the bridge keeps its ellipsis', () => {
+  const name = 'https://example.invalid/a/very/long/path/name.html';
+  const lines = nodeLines(svgOf(mapHtml([edgeRow(900, name, 'drives', 'Documentary Fact', 'Synthetic outcome')])), name);
+  assert.equal(lines.join(''), name, 'every character is shown');
+  assert.ok(lines.length === 3 && lines.every(line => line.length <= 20 && !line.includes('\u2026')), lines.join('|'));
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'views.js'), 'utf8');
+  const axisLines = new Function(src.slice(src.indexOf('const AXIS_CHAR'), src.indexOf('function bridgeChart')) + ';return axisLines;')();
+  assert.deepEqual(axisLines('averyveryverylongunbrokenword', 100), ['averyveryv\u2026']);
+});
+
+test('maps: with many parallel edges every label still gets a clear spot, and the drawing grows to hold them', () => {
+  const rows = [...Array(8)].map((_, i) => edgeRow(900 + i, 'A', 'drives', 'Analyst Interpretation', 'B'));
+  const svg = svgOf(mapHtml(rows)), height = Number(/<svg[^>]*height="(\d+)"/.exec(svg)[1]);
+  const labels = labelsOf(svg);
+  assert.equal(labels.length, 8);
+  for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) assert.ok(!labelHit(labels[i], labels[j]), `labels ${i}, ${j} overlap`);
+  assert.ok(Math.max(...labels.map(l => l.bot)) + 1 <= height, 'every label is inside the drawing');
+});
+
+test('maps: the region label has no stray punctuation', () => {
+  const label = /<div class="map-scroll" role="region" aria-label="([^"]*)"/.exec(mapHtml(chainOf(1, 'Fact')))[1];
+  assert.ok(!/[.;]\s*;|\.;/.test(label), label);
+  assert.ok(/edges\. The edge table follows; scroll horizontally/.test(label), label);
 });
 
 // ---- Package 7 views (2026-11-10): the chart index, the report manifest and the run/file context bar. Every value is synthetic.
@@ -2729,6 +3071,196 @@ test('the earlier-format band keeps its words and is not navy; a finding is one 
   assert.ok(article.includes('<h4>Leverage rose.</h4>') && article.includes('<span class="conf">Confidence High</span>') && article.includes('class="basis-link"'), article);
   const css = read('screen.css'), redesign = css.slice(css.indexOf('/* Redesign pass 1'));
   assert.ok(/\.band\{[^}]*background:none/.test(redesign) && !/\.band\{[^}]*navy/.test(redesign));
+});
+
+// ---- Task A1 (ruling 2026-11-12, decisions 1 and 2): a drawing is shown once, routing text sits in an audit fold, a chart with no numbers has a card.
+const a1Sections = (extra = []) => [
+  sec('Front matter', 2, 90, 'audit', [text(91, 'title: Credit view\nfilename: CP-1-credit.md\nstatus: draft')]),
+  ...passageSections({ bottom: 'Cash is up.', key: ['Leverage rose.'], limits: ['Synthetic.'] }),
+  sec('Request', 2, 30, 'audit', [text(31, 'Assess the credit.')]),
+  sec('Chart data: leverage', 3, 40, 'consumed', [chartTable(42, [[43, 'FY2024', '6.57', 'x', 'K']]), text(44, 'Leverage is the highest in five years.')]),
+  sec('Chart data: cover', 3, 50, 'consumed', [chartTable(52, [[53, 'FY2024', '2.1', 'x', 'K']])]),
+  sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures'), laneRow(304, '2025-06', 'month', '2025-05-01', 'Call window')]), text(305, 'Both dates are scheduled.')]),
+  sec('Map: credit-risk transmission', 3, 400, 'consumed', [table(402, MAP_HEAD, [edgeRow(403, 'Driver', 'drives', 'Documentary Fact', 'Outcome')]), text(404, 'The driver is the only one stated.')]),
+  sec('Sources', 2, 60, 'audit', [text(62, 'K.')]),
+  sec('Next module', 2, 70, 'audit', [text(71, 'Pass to Liquidity.')]),
+  ...extra,
+];
+const a1Set = { charts: [{ title: 'Leverage', unit: 'x', table: 42, columns: [1] }, { title: 'Cover', unit: 'x', table: 52, columns: [1] }], events: [{ lane: 'Financing', table: 302, gap: null }], maps: [{ name: 'credit-risk transmission', table: 402, gap: null }] };
+const a1Page = (sections = a1Sections(), set = a1Set) => runPage(() => { const d = overviewData({ 'CP-1': sections }); Object.assign(d[outId('CP-1')], set); return d; }, [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+const a1Id = outId('CP-1');
+
+test('module page (A1, decision 1 and 2): the outline lists no Chart data, Map, Events, Request, Next module or Front matter entry and ends with Evidence & audit', () => {
+  const parts = a1Page().reportParts(a1Id);
+  assert.deepEqual(parts.map(p => p[1]), ['Module', 'Bottom line', 'Key findings', 'Limitations', 'Charts', 'Timeline', 'Maps', 'Sources', 'Evidence & audit']);
+  assert.equal(parts.at(-1)[0], 'audit');
+});
+
+test('module page (A1): the body has no "Chart data:" heading, and every chart is a card with its Table form', () => {
+  const html = a1Page().moduleReport(a1Id), charts = /<section class="part" id="charts">.*?<\/section>/s.exec(html)[0];
+  assert.ok(!html.includes('Chart data:') && !html.includes('Map: ') && !html.includes('Events: '), 'no drawing section is printed again');
+  assert.equal(countOf(charts, /<div class="panel-card"/g), 2);
+  assert.equal(countOf(charts, /<summary>Table form<\/summary>/g), 2);
+});
+
+test('module page (A1): each chart card, map card and timeline lane carries its section anchor, so s-<line> routes stay', () => {
+  const page = a1Page(), html = page.moduleReport(a1Id);
+  for (const line of [40, 50]) assert.ok(html.includes(`<div class="panel-card" id="s-${line}">`), `chart ${line}`);
+  assert.ok(html.includes('<div class="map-card" id="s-400">') && html.includes('<div class="lane-row" id="s-300">'));
+  const anchors = page.drawnAnchors(a1Id);
+  for (const line of [30, 40, 50, 60, 70, 90, 300, 400]) assert.ok(anchors.has(`s-${line}`), `s-${line}`);
+});
+
+test('module page (A1): prose written under a drawing\'s table is its caption', () => {
+  const html = a1Page().moduleReport(a1Id), within = (from, to, needle) => html.slice(html.indexOf(from), html.indexOf(to)).includes(needle);
+  assert.ok(within('<div class="panel-card" id="s-40">', '<div class="panel-card" id="s-50">', 'Leverage is the highest in five years.'));
+  assert.ok(!within('<div class="panel-card" id="s-50">', 'id="s-300"', 'Leverage is the highest'));
+  assert.ok(html.slice(html.indexOf('<div class="lane-row" id="s-300">')).includes('Both dates are scheduled.'));
+  assert.ok(html.slice(html.indexOf('<div class="map-card" id="s-400">')).includes('The driver is the only one stated.'));
+});
+
+test('module page (A1): a chart with no numbers is a card saying Not established for this run with its reason, in table-line order', () => {
+  const sections = a1Sections([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x', 'K']])])]);
+  const page = a1Page(sections, { ...a1Set, chartGaps: [{ title: 'Covenant headroom', table: 37 }].map(g => ({ ...g, gap: 'no covenant is stated' })) });
+  const html = page.moduleReport(a1Id), charts = /<section class="part" id="charts">.*?<\/section>/s.exec(html)[0];
+  const order = [...charts.matchAll(/<div class="panel-card" id="s-(\d+)">/g)].map(m => m[1]);
+  assert.deepEqual(order, ['35', '40', '50'], 'the gap card sits where its table is');
+  const card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(charts)[0];
+  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && strip(card).includes('no covenant is stated') && !card.replace(/<details.*?<\/details>/s, '').includes('Not supplied'), 'the reason is shown without its prefix; the table as written is in the Table form fold (H1)');
+  assert.ok(!html.includes('Chart data:'));
+});
+
+test('module page (A1): a drawing the store could not draw keeps its section in the body', () => {
+  const html = a1Page(a1Sections(), { ...a1Set, charts: [a1Set.charts[0]] }).moduleReport(a1Id);
+  assert.ok(html.includes('Chart data: cover'), 'no card, no gap entry: the section is still printed');
+  assert.ok(!html.includes('Chart data: leverage'));
+});
+
+test('module page (A1): the compact timeline has a Table form fold of its events', () => {
+  const html = a1Page().moduleReport(a1Id), timeline = /<section class="part" id="timeline">.*?<\/section>/s.exec(html)[0];
+  assert.ok(/<details class="chart-table"><summary>Table form<\/summary>.*<table class="event-table">/s.test(timeline));
+  assert.ok(timeline.includes('Note matures') && timeline.includes('Call window'));
+});
+
+test('module page (A1): the audit fold holds Front matter as lines without a filename line, then Request and Next module', () => {
+  const html = a1Page().moduleReport(a1Id), fold = /<details class="fold" id="audit">.*?<\/details>/s.exec(html)[0], text = strip(fold);
+  assert.ok(fold.includes('<li>title: Credit view</li>') && fold.includes('<li>status: draft</li>'), fold);
+  assert.ok(!text.includes('filename') && !text.includes('CP-1-credit.md'));
+  assert.ok(text.indexOf('Credit view') < text.indexOf('Assess the credit.') && text.indexOf('Assess the credit.') < text.indexOf('Pass to Liquidity.'));
+  assert.ok(!html.replace(fold, '').includes('Assess the credit.') && !html.replace(fold, '').includes('Pass to Liquidity.'), 'routing text is only in the fold');
+  assert.ok(html.replace(fold, '').includes('<h3>Sources</h3>') || html.replace(fold, '').includes('>Sources<'), 'Sources stays on the page body');
+});
+
+test('module page (A1): an earlier-format page draws its charts, maps and lanes as before, without anchors, captions, gap cards or a timeline table form', () => {
+  const sections = [sec('Reader summary', 3, 10, 'consumed', []), sec('Chart data: leverage', 3, 40, 'consumed', [chartTable(42, [[43, 'FY2024', '6.57', 'x', 'K']]), text(44, 'Prose.')]), sec('Map: credit-risk transmission', 3, 400, 'consumed', [table(402, MAP_HEAD, [edgeRow(403, 'Driver', 'drives', 'Documentary Fact', 'Outcome')])]), sec('Events: Financing', 3, 300, 'consumed', [table(302, LANE_HEAD, [laneRow(303, '2025-03-31', 'day', '—', 'Note matures')])])];
+  const page = a1Page(sections, { ...a1Set, charts: [a1Set.charts[0]], chartGaps: [{ title: 'Gap', table: 9, gap: 'x' }], summary: { bottomLine: 'Cash up.', confidence: 'Medium', limitation: 'x', line: 13, findings: [] } });
+  const html = page.moduleReport(a1Id);
+  assert.ok(!html.includes('id="s-40"') && !html.includes('<div class="map-card" id=') && !html.includes('<div class="lane-row" id='));
+  assert.ok(!html.includes('Not established for this run') && !html.includes('<summary>Table form</summary><div class="table-card"><table class="event-table"'));
+  assert.ok(!/<section class="part" id="timeline">.*<summary>Table form<\/summary>.*<table class="event-table">/s.test(html));
+});
+
+test('Overview (A1 fix): a new-format run\'s Overview map cards, charts and lanes carry no s-<line> id and no drawing caption; the module page keeps both', () => {
+  const sections = a1Sections(), set = a1Set;
+  const page = runPage(() => { const d = overviewData({ 'CP-1': sections }); Object.assign(d[a1Id], set); return d; }, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Overview; Model' }], record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  const charts = part(page.runReport(RUN), 'overview-charts');
+  assert.ok(/<div class="map-card"/.test(charts) && charts.includes('class="panel-card"'), 'the Overview does draw the map and the charts');
+  assert.ok(!/ id="s-\d+"/.test(charts) && !charts.includes('drawing-caption') && !charts.includes('The driver is the only one stated.'), charts);
+  assert.ok(page.moduleReport(a1Id).includes('<div class="map-card" id="s-400">'));
+});
+
+test('module page (A1 fix): a later level-2 section named Front matter is ordinary body, with its table; only the first section is the block', () => {
+  const later = sec('Front matter', 2, 80, 'consumed', [text(81, 'A body paragraph.'), table(82, ['A', 'B'], [[83, 'x', 'y']])]);
+  const html = a1Page(a1Sections([later])).moduleReport(a1Id), fold = /<details class="fold" id="audit">.*?<\/details>/s.exec(html)[0];
+  assert.ok(!fold.includes('A body paragraph.') && html.replace(fold, '').includes('A body paragraph.'), 'the later section stays in the body');
+  assert.ok(html.replace(fold, '').includes('<table'), 'its table is drawn');
+  assert.ok(!html.includes('<ul class="front-matter"><li>A body paragraph.'), 'not drawn as front-matter lines');
+});
+
+test('Overview (A1 fix): two modules\' maps at the same table line draw no duplicate id (the arrow marker is keyed by its output)', () => {
+  const two = { 'CP-1': a1Sections(), 'CP-2': a1Sections() };
+  const page = runPage(() => { const d = overviewData(two); for (const code of ['CP-1', 'CP-2']) Object.assign(d[outId(code)], a1Set); return d; }, [], m => m, { visuals: [{ module: 'CP-1', placement: 'Overview' }, { module: 'CP-2', placement: 'Overview' }], record: steps(['CP-1', 'CP-2']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES });
+  const ids = [...part(page.runReport(RUN), 'overview-charts').matchAll(/ id="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(ids.some(i => i.startsWith('map-arrow-')) && new Set(ids).size === ids.length, ids.join(' '));
+});
+
+test('module page (decision 3): a Source cell is a button on the row chip that holds its file and page, with the written text', () => {
+  const FILE = 'NBG_2025-03-31_annual-report.pdf', key = line => `${outId('CP-1')}:${line}`;
+  const chips = { [key(23)]: [{ kind: 'upstream', module: 'CP-0', codes: ['D1'] }, { kind: 'issuer_page', source: FILE, file: FILE, page: 41, page_end: null }] };
+  const html = fixturePage({ chips }).moduleReport(outId('CP-1'));
+  assert.ok(html.includes(`<button type="button" class="source-cell" data-chip="${key(23)}" data-index="1">${FILE}, page 41</button>`));
+  assert.ok(html.includes(`${FILE}, page 41</td>`), 'a row with no chip keeps its Source text plain (line 24)');
+  assert.equal(countOf(html, /class="source-cell"/g), 1);
+});
+
+test('timeline: the lanes scroll sideways inside their own region below the width the stacking is computed for; a number chip grows with its digits', () => {
+  const html = denseHtml('2024-09-30');
+  assert.match(html, /<div class="lane-scroll" role="region" tabindex="0" aria-label="[^"]*scroll[^"]*"><div class="lane-plot">/);
+  const css = read('screen.css');
+  // 170 px name + 12 px gap + 2 x 8 px track margin + the track width eventStack assumes (EVENT_TRACK_MIN) = 600 px.
+  assert.match(css, /\.lane-scroll\{[^}]*overflow-x:auto/);
+  assert.match(css, /\.lane-scroll \.lane-plot\{[^}]*min-width:600px/);
+  assert.match(css, /\.lane-event\.point\{[^}]*min-width:16px/);
+  assert.ok(!/\.lane-event\.point\{[^}]*[^-]width:16px/.test(css), 'the disc is not fixed at 16 px');
+});
+
+test('timeline: a three-digit number is stacked against its wider chip', () => {
+  const many = d => {
+    d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, Array.from({ length: 101 }, (_, i) => laneRow(403 + i, `2024-${String(1 + Math.floor(i / 28)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}`, 'day', '—', `Item ${i + 1}`)))])], events: [{ lane: 'Sources', table: 402, gap: null }] });
+    return d;
+  };
+  const html = runPage(many, [], m => m).eventLanesView(RUN, { only: outId('CP-0'), compact: true });
+  assert.equal(countOf(html, /<span class="lane-no">/g), 101);
+  const dots = [...html.matchAll(/class="lane-event point"[^>]*style="left:([\d.]+)%;bottom:(\d+)px"><span class="lane-no">(\d+)<\/span>/g)].map(m => ({ left: Number(m[1]), bottom: m[2], chip: Math.max(16, Math.ceil(m[3].length * 7) + 4) }));
+  assert.equal(dots.length, 101);
+  for (let i = 0; i < dots.length; i++) for (let j = i + 1; j < dots.length; j++) {
+    if (dots[i].bottom === dots[j].bottom) assert.ok(Math.abs(dots[i].left - dots[j].left) * 4.02 >= (dots[i].chip + dots[j].chip) / 2, `markers ${i + 1} and ${j + 1} overlap at 402 px`);
+  }
+});
+
+test('timeline: a span too thin to hold its number at the right end is drawn from its right edge and marked anchored', () => {
+  const thin = d => {
+    d[outId('CP-0')] = runOutput('CP-0', { sections: [sec('Events: Sources', 3, 400, 'consumed', [table(402, LANE_HEAD, [laneRow(403, '1993', 'year', '—', 'Founded'), laneRow(404, '2024-Q4', 'quarter', '—', 'Last quarter')])])], events: [{ lane: 'Sources', table: 402, gap: null }] });
+    return d;
+  };
+  const html = runPage(thin, [], m => m).eventLanesView(RUN, { only: outId('CP-0'), compact: true });
+  const tag = [...html.matchAll(/<a class="lane-event[^>]*>/g)].map(m => m[0]).find(m => m.includes('Last quarter'));
+  assert.match(tag, /class="lane-event span anchored"/);
+  assert.match(tag, /style="right:0%;width:0\.\d+%;bottom:4px"/);
+});
+
+// ---- Whole-branch H1: a drawing whose table states none keeps its table as the Table form fold, every cell as written.
+const h1Page = (extra, set) => a1Page(a1Sections(extra), { ...a1Set, ...set });
+const foldOf = (html, from) => /<details class="chart-table">.*?<\/details>/s.exec(html.slice(html.indexOf(from)))[0];
+
+test('module page (H1): a chart card with no numbers keeps its table as a Table form fold, its unit and Basis cells as written', () => {
+  const page = h1Page([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x (net debt to EBITDA)', 'not established for this run and not a compliance opinion']])])], { chartGaps: [{ title: 'Covenant headroom', table: 37, gap: 'no covenant is stated; no test date is stated' }] });
+  const html = page.moduleReport(a1Id), card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(html)[0];
+  assert.ok(strip(card).replace(strip(foldOf(card, '<details')), '').includes('no covenant is stated; no test date is stated'), 'the visible reason lists every distinct reason');
+  const fold = foldOf(card, '<details');
+  assert.ok(fold.includes('<summary>Table form</summary>') && strip(fold).includes('x (net debt to EBITDA)') && strip(fold).includes('not established for this run and not a compliance opinion') && strip(fold).includes('Not supplied: no covenant is stated'), fold);
+});
+
+test('module page (H1): an events lane with no event keeps its table as a Table form fold, every cell as written', () => {
+  const row = [313, 'Not supplied: no legal event is settled here', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: these are undated triggers recorded in other lanes'];
+  const page = h1Page([sec('Events: Legal', 3, 310, 'consumed', [table(312, LANE_HEAD, [row]), text(314, 'Legal lane caption.')])], { events: [{ lane: 'Legal', table: 312, gap: 'no legal event is settled here' }] });
+  const html = page.moduleReport(a1Id), lane = /<div class="lane-row" id="s-310">.*?Legal lane caption\./s.exec(html)[0];
+  assert.ok(strip(lane).includes('no legal event is settled here') && strip(lane).includes('Legal lane caption.'));
+  const timeline = /<section class="part" id="timeline">.*?<\/section>/s.exec(html)[0];
+  assert.ok(strip(timeline).includes('these are undated triggers recorded in other lanes') && /<summary>Table form<\/summary>/.test(timeline), 'the gap lane row is in the Table form');
+});
+
+test('module page (H1): an earlier-format page whose map states none has no Table form fold; a new-format one has it', () => {
+  const early = /<section class="part" id="maps">.*?<\/section>/s.exec(runPage(withMaps).moduleReport(outId('CP-1')))[0];
+  assert.ok(early.includes('Not established for this run') && !early.includes('<summary>Table form</summary>'), 'earlier format is unchanged');
+  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, ...Array(5).fill('Not supplied: no edge is stated'), 'Not supplied: p']])])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
+  assert.ok(/<div class="map-card" id="s-410">.*?<summary>Table form<\/summary>/s.test(page.moduleReport(a1Id)));
+});
+
+test('module page (H1): a map with no edge keeps its table as a Table form fold, every cell as written', () => {
+  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, 'Not supplied: no edge is stated', 'Not supplied: x', 'Not supplied: x', 'Not supplied: x', 'no edge with applicable document and jurisdiction can be drawn', 'Not supplied: p']]), text(414, 'Map caption.')])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
+  const html = page.moduleReport(a1Id), card = /<div class="map-card" id="s-410">.*?Map caption\./s.exec(html)[0];
+  assert.ok(/<summary>Table form<\/summary>/.test(card) && strip(foldOf(card, '<details')).includes('no edge with applicable document and jurisdiction can be drawn'), card);
 });
 
 // ---- The Forecast page (reader check of 2026-11-12): lines with no figure fold away; the model picker names the run, not a hash.

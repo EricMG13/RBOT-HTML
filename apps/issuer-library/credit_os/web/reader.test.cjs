@@ -125,6 +125,14 @@ test('figureSpans keeps numbers that carry no unit as figures, and years out of 
   assert.deepEqual(figures('Margin 0.5% and 99%'), ['0.5%', '99%']);
 });
 
+test('figureSpans: a negative amount is one figure with its sign and currency; a range or a label is not signed', () => {
+  assert.deepEqual(figures('Free cash flow of USD -158 million and USD \u22122,505 million'), ['USD -158 million', 'USD \u22122,505 million']);
+  assert.deepEqual(figures('A loss of -3.5% and (-12 bps) and $-5 million, -2,505 and -7x'), ['-3.5%', '-12 bps', '$-5 million', '-2,505', '-7x']);
+  assert.deepEqual(figureSpans('USD -158 million'), [{start: 0, end: 16, text: 'USD -158 million'}]);
+  assert.deepEqual(figures('Spreads of 10-12 bps, 5.50%-6.00%, USD 150-200 million, pages 58-59, FY2023-24 and 2024-09-30'), ['12 bps', '5.50%', '6.00%', 'USD 150', '200 million']);
+  assert.deepEqual(figures('range 1,000-1,200'), ['1,000', '1,200']);
+});
+
 test('figureSpans of the synthetic CP-2 bottom line', () => {
   const line = fixture('CP-2').find(l => l.startsWith('Creditors are exposed'));
   assert.deepEqual(figures(line), ['USD 1,390 million', '4.2x']);
@@ -384,7 +392,7 @@ test('sectionBodyHtml: list items share one list, paragraphs stand alone, tables
   const ctx = {id: 'o', tables: true, chips: key => (key === 'o:11' ? 1 : 0), caption: heading => heading};
   const html = sectionBodyHtml(section, ctx);
   assert.ok(html.startsWith('<ul class="passage-list"><li>A <button type="button" class="figure" data-paragraph="o:2"'));
-  assert.ok(html.includes('</button></li><li>B</li></ul><p class="passage-text">Plain.</p><div class="table-card">'));
+  assert.ok(html.includes('</button></li><li>B</li></ul><p class="passage-text">Plain.</p><div class="table-card" role="region"'));
   assert.ok(html.includes('<thead><tr><th scope="col">Item</th><th scope="col">Source</th></tr></thead>'), 'the handoff\'s own columns, none added');
   assert.equal((html.match(/<th /g) || []).length, 2);
   assert.ok(html.includes('<td>Debt</td><td>X.pdf, page 3</td>') && html.includes('<td>Cash <button type="button" class="basis-link" data-paragraph="o:11"'));
@@ -397,6 +405,36 @@ test('tableView (H4): a missing cell is drawn as written, never "n.a."; a numeri
   assert.ok(html.includes('<td class="num">—</td>') && !html.includes('n.a.'));
   const blank = tableView('T', {headers: ['Item', 'Value'], rows: [{line: 1, cells: ['A', '']}, {line: 2, cells: ['B', 'Not supplied']}]}, {id: 'o', chips: () => 0});
   assert.ok(blank.includes('<td></td>') && blank.includes('<td>Not supplied</td>') && !blank.includes('n.a.'));
+});
+
+test('tableView: the wrapper is a focusable named region so a wide table can be scrolled from the keyboard', () => {
+  const html = tableView('Debt "stack"', {headers: ['Item', 'Value'], rows: [{line: 1, cells: ['A', '1']}]}, {id: 'o', chips: () => 0});
+  assert.ok(html.startsWith('<div class="table-card" role="region" tabindex="0" aria-label="Debt &quot;stack&quot;">'), html);
+});
+
+test('sectionBodyHtml: a fenced block is one pre/code of its escaped inner text, no figure buttons, no Basis when it has no chips', () => {
+  const text = '```json\n{"a": "<b>", "amount": -158,\n\n  "n": 1,250}\n```';
+  const section = {heading: 'Forecast inputs', blocks: [{type: 'text', line: 5, text}]};
+  const html = sectionBodyHtml(section, {id: 'o', tables: true, chips: () => 0, caption: h => h});
+  assert.equal(html, '<pre class="passage-code"><code>{&quot;a&quot;: &quot;&lt;b&gt;&quot;, &quot;amount&quot;: -158,\n\n  &quot;n&quot;: 1,250}</code></pre>');
+  const bare = sectionBodyHtml({heading: 'x', blocks: [{type: 'text', line: 1, text: '```\nplain\n```'}]}, {id: 'o', tables: true, chips: () => 0, caption: h => h});
+  assert.equal(bare, '<pre class="passage-code"><code>plain</code></pre>');
+});
+
+test('sectionBodyHtml: a fenced block that carries chips gets one quiet Basis button after the pre, still no figure buttons inside', () => {
+  const section = {heading: 'Forecast inputs', blocks: [{type: 'text', line: 99, text: '```json\n{"a": -158}\n```'}]};
+  const html = sectionBodyHtml(section, {id: 'o', tables: true, chips: key => (key === 'o:99' ? 1 : 0), caption: h => h});
+  assert.ok(html.startsWith('<pre class="passage-code"><code>'), html);
+  assert.equal((html.match(/data-paragraph="o:99"/g) || []).length, 1, html);
+  assert.ok(html.indexOf('</pre>') < html.indexOf('basis-link') && !html.slice(0, html.indexOf('</pre>')).includes('<button'), html);
+});
+
+test('figureSpans: a sign before a currency symbol, an en dash minus after a currency code and a no-break space keep the sign and currency', () => {
+  assert.deepEqual(figures('a loss of -$5 million'), ['-$5 million']);
+  assert.deepEqual(figures('USD \u2013158 million'), ['USD \u2013158 million']);
+  assert.deepEqual(figures('USD\u00a0-158 million'), ['USD\u00a0-158 million']);
+  assert.deepEqual(figures('Leverage rose \u2013 4.5x at close'), ['4.5x']);
+  assert.deepEqual(figures('Sites: - 12 sites closed'), []);
 });
 
 test('calculationRow: the row of the Calculations table whose ID column equals the id, headers and cells as written', () => {
@@ -498,4 +536,62 @@ test('uniqueChips: a chip the build holds twice is listed once, in first-seen or
   const b = {kind: 'issuer_page', file: 'A.pdf', page: 8, quote: 'x'};
   assert.deepEqual(uniqueChips([a, b, {...a}, {kind: 'gap', label: 'Citation gap'}, {kind: 'gap', label: 'Citation gap'}, {...b}]), [a, b, {kind: 'gap', label: 'Citation gap'}]);
   assert.deepEqual(uniqueChips([]), []);
+});
+
+// ---- Decision 3 (2026-11-12): source references resolve.
+test('basisItem: one locator per listed page; a range and a mixed list read; a singular marker lists one page only', () => {
+  const f = 'T_10-K.htm.jsonl';
+  assert.deepEqual(basisItem(`${f}, pages 71, 121`), {kind: 'source', file: f, spans: [{page: 71}, {page: 121}]});
+  assert.deepEqual(basisItem(`${f}, pages 55, 63, 71, 120–123`), {kind: 'source', file: f, spans: [{page: 55}, {page: 63}, {page: 71}, {page: 120, pageEnd: 123}]});
+  assert.deepEqual(basisItem(`${f}, pages 58–59`), {kind: 'source', file: f, page: 58, pageEnd: 59});
+  assert.deepEqual(basisItem(`${f}, page 71, 121`), {kind: 'text', text: `${f}, page 71, 121`});
+  assert.deepEqual(basisItem(`${f}, pages 71, and 121`), {kind: 'text', text: `${f}, pages 71, and 121`});
+});
+
+test('inspectorItems: a comma page list opens the chip of each listed page, and is drawn as the written pages', () => {
+  const f = 'T_10-K.htm.jsonl';
+  const chips = [71, 121, 5].map(page => ({kind: 'issuer_page', file: f, page}));
+  const [item] = inspectorItems(`Claim.\nBasis: ${f}, pages 71, 121`, {sections: [], chips, ran: () => false});
+  assert.deepEqual(item.chips.map(c => c.page), [71, 121]);
+  const html = require('./reader.js').inspectorItemHtml(item, {chipSection: c => `<i>${c.page}</i>`, moduleHref: () => '', icon: () => ''});
+  assert.equal(html, `<li><strong>${f}</strong>, pages 71, 121<i>71</i><i>121</i></li>`);
+});
+
+test('tableView: a Source cell is a button on its row chip, text unchanged; no matching chip leaves plain text', () => {
+  const f = 'T_10-K.htm.jsonl';
+  const chips = [{kind: 'upstream', module: 'CP-1'}, {kind: 'issuer_page', file: f, page: 71}, {kind: 'issuer_page', file: f, page: 121}, {kind: 'issuer_page', file: 'Other.pdf', page: 3}];
+  const block = {headers: ['Item', 'Source', 'Note'], rows: [
+    {line: 4, cells: ['A', `${f}, pages 71, 121`, `${f}, page 71`]},
+    {line: 5, cells: ['B', `${f}, page 121`, 'x']},
+    {line: 6, cells: ['C', `${f}, page 99`, 'x']},
+    {line: 7, cells: ['D', 'context', 'x']},
+    {line: 8, cells: ['E', `${f}, page 5; Other.pdf, page 3`, 'x']},
+  ]};
+  const html = tableView('T', block, {id: 'o', chips: () => 4, chipList: () => chips});
+  const cell = (line, text) => `<td><button type="button" class="source-cell" data-chip="o:${line}" data-index="`;
+  assert.ok(html.includes(`${cell(4)}1">${f}, pages 71, 121</button></td>`), 'first listed page with a chip');
+  assert.ok(html.includes(`${cell(5)}2">${f}, page 121</button></td>`));
+  assert.ok(html.includes(`<td>${f}, page 99</td>`) && html.includes('<td>context</td>'), 'no chip: plain text');
+  assert.ok(html.includes(`<td>${f}, page 5; <button type="button" class="source-cell" data-chip="o:8" data-index="3">Other.pdf, page 3</button></td>`), 'each item is its own button; an item with no chip is plain text; separators stay as written');
+  assert.ok(html.includes(`<td>${f}, page 71</td>`), 'only a column headed exactly Source');
+  assert.equal(tableView('T', block, {id: 'o', chips: () => 0}).includes('source-cell'), false, 'no chip list, no button');
+});
+
+test('tableView: a Source cell with a trailing full stop still gets its button; each item of a list opens its own chip', () => {
+  const f = 'T_10-K.htm.jsonl';
+  const chips = [{kind: 'issuer_page', file: f, page: 71}, {kind: 'issuer_page', file: 'B.pdf', page: 3}, {kind: 'issuer_page', file: 'A.pdf', page: 5}];
+  const block = {headers: ['Item', 'Source'], rows: [{line: 4, cells: ['X', `${f}, page 71.`]}, {line: 5, cells: ['Y', 'A.pdf, page 5; B.pdf, page 3']}]};
+  const html = tableView('T', block, {id: 'o', chips: () => 3, chipList: () => chips});
+  assert.ok(html.includes(`<button type="button" class="source-cell" data-chip="o:4" data-index="0">${f}, page 71.</button>`));
+  const b = html.slice(html.indexOf('o:5'));
+  assert.ok(b.includes('data-index="2">A.pdf, page 5</button>; <button type="button" class="source-cell" data-chip="o:5" data-index="1">B.pdf, page 3</button></td>'), 'A.pdf opens chip 2, B.pdf chip 1');
+});
+
+test('figureSpans (whole-branch L1): a text that starts with a number or a negative figure is drawn once, with no empty figure button', () => {
+  for (const t of ['45 days of cash', '1. Leverage rose to 4.5x.', '-5% margin.']) {
+    assert.ok(figureSpans(t).every(s => s.start >= 0), t);
+    const {html} = paragraphView(t, 'o:1', {chips: 1});
+    assert.equal(html.replace(/<button[^>]*basis-link[^>]*>.*?<\/button>/g, '').replace(/<[^>]+>/g, '').trim(), t);
+  }
+  assert.deepEqual(figureSpans('-5% margin.'), [{start: 0, end: 3, text: '-5%'}]);
 });

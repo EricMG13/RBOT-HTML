@@ -399,6 +399,12 @@ section.part>h3{font-size:16px;font-weight:700;margin:0 0 8px}
 .analysis-text .chips{margin-left:6px;vertical-align:middle}
 .analysis-section .table-card{max-width:100%;margin:8px 0 12px}
 .analysis-section .table-card td{vertical-align:top}
+/* A table wider than its box scrolls inside it: the edge that has more to scroll carries a soft shadow (local white covers hide it at the ends), and the box takes the keyboard. */
+.analysis-section .table-card{background:linear-gradient(to right,#fff 30%,rgba(255,255,255,0)) left center/40px 100% no-repeat local,linear-gradient(to left,#fff 30%,rgba(255,255,255,0)) right center/40px 100% no-repeat local,linear-gradient(to right,rgba(0,5,51,.22),rgba(0,5,51,0)) left center/14px 100% no-repeat scroll,linear-gradient(to left,rgba(0,5,51,.22),rgba(0,5,51,0)) right center/14px 100% no-repeat scroll #fff}
+.analysis-section .table-card:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.analysis-section .table-card thead th{white-space:normal;vertical-align:bottom}
+.passage-code{margin:8px 0 12px;padding:10px 14px;max-width:100%;overflow:auto;border:1px solid var(--rule);border-radius:var(--radius-card);background:var(--quiet);font:var(--fs-compact)/1.5 'Red Hat Mono',monospace;white-space:pre}
+.passage-code code{font:inherit}
 /* Chips: Untitled UI tag anatomy in the Credit OS tokens; the avatar names the source, the dot the kind. */
 .chips{display:inline-flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 4px;border:1px solid var(--rule);border-radius:var(--radius-inline);background:#fff;font:500 var(--fs-label)/1 'Red Hat Mono',monospace;color:#3a4056;white-space:nowrap;box-shadow:0 1px 2px rgba(0,5,51,.05)}
@@ -504,6 +510,7 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 @media print{.column-chart .periods{max-width:none}}
 /* Print: the canvas is the document. The app frame goes, nothing clips or scrolls, and a finding or a table row is not split across pages. Closed parts print closed. Fills print as drawn: the navy band and a filled coverage cell carry white text. */
 @media print{html,body{height:auto;min-height:0;overflow:visible;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rail,.skip,.sr-only,.navigator,.mobile-modules,.workspace-tabs,.inspector,#section-nav{display:none!important}.app{display:block;height:auto;margin:0;padding:0}.workbench,.workbench.has-evidence{display:block;overflow:visible;box-shadow:none;border-radius:0}main{display:block}#content{overflow:visible;padding:0}.table-scroll,.run-section .table-scroll{max-height:none;overflow:visible;box-shadow:none}.table-scroll thead th,.run-section .table-scroll thead th{position:static}.library-table{min-width:0}article.finding,tr,.chart-row{break-inside:avoid}h2,h3,h4{break-after:avoid}a{text-decoration:none}}
+.drawing-caption{margin:8px 0}.panel-card>.drawing-caption{margin:8px 16px}.front-matter{margin:0;padding-left:20px}.chart-table .event-table{margin-top:8px}
 .chart-table{margin:4px 0 14px}.chart-table>summary{cursor:pointer;font-size:var(--fs-label);font-weight:600;color:var(--blue)}.panel-card>.chart-table{margin-left:16px;margin-right:16px}
 .stack-bar{display:flex;height:34px;margin:12px 0 8px;background:var(--quiet);border-radius:var(--radius-inline);overflow:hidden}.stack-seg{display:block;min-width:2px;border-right:2px solid #fff;cursor:pointer}.stack-seg:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}.stack-key{list-style:none;margin:0 0 14px;padding:0}
 .stack-key li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--rule);min-width:0}.stack-key li>span{flex:1;min-width:0;overflow-wrap:anywhere}.stack-key small{display:block;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);margin-top:2px}.stack-key .swatch{flex:none;width:12px;height:12px;margin-top:4px;border-radius:2px}
@@ -520,20 +527,43 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .recovery-group .chart-label small{display:block;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted);overflow-wrap:anywhere}
 .recovery-group a.col{color:inherit;text-decoration:none}.recovery-group a.col:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 /* Calendar lanes (package 5): existing tokens only; the span is a ruled band, the day a filled point. */
-.event-lanes .lane-row{display:grid;grid-template-columns:minmax(110px,170px) minmax(0,1fr);gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--rule)}
+.event-lanes{--lane-name:170px}
+.event-lanes .lane-row,.lane-axis,.lane-overlay{display:grid;grid-template-columns:var(--lane-name) minmax(0,1fr);gap:12px}
+.event-lanes .lane-row{align-items:center;padding:8px 0;border-bottom:1px solid var(--rule)}
 .lane-name{font-weight:600;overflow-wrap:anywhere}
 .lane-track{position:relative;display:block;height:28px;margin:0 8px;background:var(--quiet);border-radius:var(--radius-inline)}
-.lane-event{position:absolute;top:6px;height:16px;border-radius:var(--radius-inline)}
-.lane-event.point{width:12px;margin-left:-6px;border-radius:50%;background:var(--blue)}
-.lane-event.span{min-width:4px;background:var(--selection);box-shadow:inset 0 0 0 1px var(--navy)}
+.lane-event{position:absolute;z-index:1;height:16px;border-radius:var(--radius-inline)}
+.lane-no{font:600 11px/1 'Red Hat Mono',monospace;white-space:nowrap}
+.lane-event.span .lane-no{padding:2px 3px;background:var(--selection);border-radius:var(--radius-inline)}
+.lane-plot .lane-gap,.lane-plot .drawing-caption{position:relative;z-index:2;background:white}
+.lane-event.point{display:flex;align-items:center;justify-content:center;min-width:16px;padding:0 2px;box-sizing:border-box;transform:translateX(-50%);border-radius:8px;background:var(--blue);color:white}
+.lane-event.span.anchored{justify-content:flex-end}
+.lane-event.span{display:flex;align-items:center;min-width:4px;background:var(--selection);box-shadow:inset 0 0 0 1px var(--navy);color:var(--navy)}
 .lane-event:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 .lane-gap{color:var(--muted)}.lane-gap small{display:block}
-.lane-axis{display:flex;justify-content:space-between;margin:0 8px 0 182px;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
+.lane-scroll{overflow-x:auto}
+.lane-scroll .lane-plot{min-width:600px}/* 170 name + 12 gap + 16 margins + 402 = EVENT_TRACK_MIN in calendar.js: eventStack levels hold at this track width, so the lanes scroll rather than shrink */
+.lane-plot{position:relative}
+.lane-scale{position:relative;display:block;height:38px;margin:0 8px;font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
+.lane-tick-label{position:absolute;top:0;transform:translateX(-50%);line-height:14px;white-space:nowrap}
+.lane-tick{position:absolute;top:16px;height:6px;border-left:1px solid var(--muted)}
+.lane-asof-label{position:absolute;top:24px;line-height:14px;white-space:nowrap;padding-left:5px;color:var(--navy);font-weight:600}
+.lane-asof-label.end{transform:translateX(-100%);padding:0 5px 0 0}
+.lane-overlay{position:absolute;inset:0;pointer-events:none}
+.lane-overlay>span{position:relative;display:block;margin:0 8px}
+.lane-grid{position:absolute;top:38px;bottom:0;border-left:1px solid var(--rule)}
+.lane-asof{position:absolute;top:22px;bottom:0;border-left:2px solid var(--navy)}
+.lane-keys{margin:14px 0 0;font-size:var(--fs-compact)}
+.lane-range{margin:0 0 6px;color:var(--muted);font-size:var(--fs-label)}
+.lane-key-name{font-weight:600;margin:10px 0 2px}
+.lane-key{margin:0;padding-left:28px;column-width:320px;column-gap:24px}
+.lane-key li{break-inside:avoid;padding:1px 0}
+.lane-key-date{font:var(--fs-label) 'Red Hat Mono',monospace;color:var(--muted)}
 .event-table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:18px;font-size:var(--fs-compact)}
 .event-table caption{text-align:left;font-weight:600;padding-bottom:6px}
 .event-table th,.event-table td{padding:6px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
-@media(max-width:720px){.event-lanes .lane-row{grid-template-columns:1fr}.lane-axis{margin-left:8px}}
-.lane-event.scenario{border:2px dashed var(--navy);background:var(--quiet);box-shadow:none}
+@media(max-width:720px){.event-lanes .lane-row{grid-template-columns:1fr}.lane-axis{grid-template-columns:1fr}.lane-axis>span:first-child,.lane-overlay{display:none}}
+.lane-event.scenario{border:2px dashed var(--navy);background:var(--quiet);box-shadow:none;color:var(--navy)}
 /* Maps (package 6): existing tokens only; no amber or red. Edge type is a word and a line style, a module's state a word and a shape. */
 .map-card{margin:14px 0}.map-card h2,.map-card h3,.map-card h4{margin:0 0 8px}
 .map-scroll{max-width:100%;overflow-x:auto;background:var(--quiet);border:1px solid var(--rule);border-radius:var(--radius-inline);padding:8px}
@@ -577,6 +607,8 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .basis-link{display:inline;padding:0;border:0;background:none;font:var(--fs-label) 'Red Hat Text',sans-serif;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
 .basis-link:hover{color:var(--blue)}
 td .basis-link{margin-left:6px}
+.source-cell{display:inline;padding:0;border:0;background:none;font:inherit;color:inherit;text-align:inherit;text-decoration:underline;text-decoration-color:var(--muted);text-underline-offset:3px;cursor:pointer}
+.source-cell:hover,.source-cell:focus-visible{color:var(--blue)}
 .inspector-figure{margin:10px 0 0}
 .basis-items{margin:6px 0;padding-left:18px}.basis-items>li{margin:6px 0}
 .calculation-row{margin:6px 0;display:grid;gap:4px}.calculation-row>div{display:grid;grid-template-columns:minmax(70px,auto) 1fr;gap:8px}.calculation-row dt{color:var(--muted);font-size:var(--fs-label)}.calculation-row dd{margin:0}
@@ -799,3 +831,12 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .workbench.overview-workspace #module-head{padding-left:28px}
 }
 @media screen{.overview-aside .column-chart .periods{grid-template-columns:repeat(var(--periods),minmax(140px,1fr))}}
+/* Debt stack: one series per ranking and security pair (blue, light slate, navy, grey; no amber or red here); an unstated ranking is neutral with an outline. */
+.stack-seg.series-1,.stack-key .series-1,.stack-legend .series-1{background:#7482a1}
+.stack-seg.series-2,.stack-key .series-2,.stack-legend .series-2{background:var(--navy)}
+.stack-seg.series-3,.stack-key .series-3,.stack-legend .series-3{background:var(--muted)}
+.stack-seg.stack-neutral,.stack-key .stack-neutral,.stack-legend .stack-neutral{background:var(--rule);box-shadow:inset 0 0 0 1px var(--muted)}
+.stack-legend i{height:12px;width:12px;border-radius:2px}
+.vector-chart.bridge-wide{max-width:none;overflow-x:auto}
+/* Eight styles for the debt stack: from the fifth distinct pair the same fill carries a hatch. */
+.stack-seg.hatch,.stack-key .hatch,.stack-legend .hatch{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.6) 0 3px,transparent 3px 6px)}

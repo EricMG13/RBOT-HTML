@@ -4,6 +4,39 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — Module output review changes: sources resolve, each drawing shown once, reader vocabulary checked everywhere (branch `claude/modules-page-sources-charts`, ruling `2026-11-12-module-output-review-changes.md`)
+Scope: offline only. No provider or model call was made. Decisions 7 to 11 (launcher text, checker, confidence score, post-balance-sheet table) are proven by tests and hand-written handoffs only, not by a model run. Display changes were checked on a copy of the retained real run `tdg-proof-snapshot-opus-002` (TDG, as of 2024-09-30, credit snapshot): one run, 1440 px, headless Chrome.
+Library:
+- A chart, map or timeline is shown once, as a drawing with a "Table form" fold; a drawing with no numbers gets a "Not established for this run" card (decision 1).
+- Request, Next module and front matter sit in an "Evidence & audit" fold; the front-matter `filename` line is not drawn (decision 2).
+- Figures, Basis links, table rows and `Source` cells open the inspector on the file and page; "Row" replaces "Handoff"; "unresolved citations" replaces "citations without a page" (decision 3).
+- Register ids lose their module code; no heading says "a method step"; a negative amount is one figure; a fenced block is drawn as a block; wide tables scroll from the keyboard (decisions 4, 5).
+- Drawings: bridge labels wrap, the debt stack has a ranking and security legend, the timeline has year ticks, an as-of line and a numbered key, map text wraps on words (decision 6).
+Method and checks (new runs only):
+- Reader vocabulary is checked in Findings, Calculations and Gaps; new check 10 refuses pipeline wording; the bottom line is at most 45 words in the first sentence and 180 in all (decisions 7, 8).
+- Modules state no confidence score, band or QA status and mention no helper scripts; a `### Confidence inputs` table is written and Python computes the score by the method's formula (decision 9).
+- Financial foundation writes `### Post-balance-sheet adjustments`; `## Sources` names file, description and date; modules use plain module names; chart tables carry one qualification sentence; map text is at most 60 characters (decisions 10, 11).
+Fidelity check (13 module pages of the run, before the branch vs after; every number token; three handoffs against their pages): no number, period, unit or source file name lost unexplained. One loss class was found: the "Not established" card dropped a stating row's other cells on Legal & covenants and Committee decision. Fixed in 188cb5f; re-checked: 8 of 8 statements back on the page. The compare script is `compare.py` in the session scratchpad (not in the repo).
+Reader check against the September VMO2 reference: Financial foundation, Business & governance, Fundamental credit. Verdict: pass with issues. Open issues (display or wording, none loses content):
+- Business & governance timeline: 8 of 11 events stacked at the right edge, markers on the as-of line.
+- Map labels at crossings and arrowheads are ambiguous (the edge table is unambiguous).
+- Bar labels are raw ("6585", "7940"); "1 unresolved citation" repeats six times on Debt maturities; the Sources table spends a column on sha256.
+- Figure buttons that open a file and page: 29 of 29, 42 of 42, 0 of 65 (Fundamental credit cites upstream modules only). Basis buttons that open a file and page: 62 of 111, 58 of 78, 0 of 58.
+Real-run numbers (they measure different things; each is from its own step):
+- Task A2 (chips): `issuer_page` chips 0 to 580 on the run. Whole-branch review, three retained runs: 116, 501 and 494 gap chips became page chips (1,111 in all), 0 regressions.
+- Task A3: "a method step" on the run 375 to 4 (4 left in CP-5 table cells, the no-title fallback). Task A4: sign-outside-figure 8 to 0.
+Gates at a816851 (all exit 0): node tests 363 passed; `uv run python tools/quality_gate.py --base a873f6f` 0 findings, 3165 lines in scope; PR-check pytest 3435 passed, 122 deselected; browser tests 83 passed, 1 skipped (a screenshot helper). Two one-line residual fixes followed (earlier-format map fold guard; "or cash" restored); gates re-run at the final code commit 02a06f6, all exit 0: node tests 364 passed; quality gate 0 findings, 3177 lines in scope; PR-check pytest 3435 passed; browser tests 83 passed, 1 skipped.
+Not verified: a paid run (whether a model obeys the new text; the refused-draft rate under the tighter checks); other runs and widths; earlier-format pages on a real run with maps; screen readers; the weekly slow suite.
+For the owner:
+- Bottom-line limits 45 and 180 words are the controller's values; 11 of 13 real bottom lines on the run exceed 180 words (184 to 286). Keep, raise or drop.
+- Check 10 refuses some ordinary wording ("canonical basis", "the pack mix", "upstream module prices"); narrow the list or accept retries.
+- The 60-character map limit as worded also shortens Relationship and Evidence, which are not drawn.
+- Decision 10 gaps: no pro forma cash column; cumulative rows with two events; the Amount sign convention chosen (4348 and -4348 are both accepted); the table is drawn only on Financial foundation.
+- PR size is 3,524 changed lines (whole-branch review) against the 800-line convention: one PR or split by commit range.
+- Longer shared text raised the per-call hold (opus-medium largest call 2.98 to 3.02 USD); an opus-medium run with `--cap 3` now refuses offline; the cap test moved 3 to 3.5.
+- The confidence score rests on the module's own stated inputs; nothing checks them. A score, band or QA status stated in front matter is refused; one stated in body text is not.
+- The bottom line is set in headline type (recorded redesign decision); labels at crossings stay ambiguous; "unnamed module" is shown for a code with no display name; the paid run that proves decisions 7 to 11 is not made.
+
 ## 2026-11-12 — Run start in four steps (branch `claude/redesign-run-start`)
 Plan and reports: `.superpowers/sdd/2026-11-12-redesign-run-start/`; record: `docs/design/2026-11-12-run-start-four-steps.md`.
 Scope: the page `docs/templates/context-form.html` only, tested by synthetic browser tests against a stubbed service. No provider run; no real run started.
@@ -942,44 +975,3 @@ analytical run was made with it.
   - Real issuer folders. The folder check guesses only from file names.
   - Whether the readiness forecast matches what the modules actually do in a live run. It ports
     `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.
-
-## 2026-11-10 — Module method gaps: what CP-OS sends against what each method needs (branch `claude/module-method-gaps`)
-
-Owner: "review all the modules for any missing items from methodology files", then "Fix all … Keep a
-copy of the methodology in the repo" and "Cp-1c is supposed to get that information from cp-dr by
-default". Comparison: each module's method text as sent, against the retained all-modules run
-(`runs/cpos-tdg-sol-medium-all-001`, 11 of its 15 skill modules Blocked) and the 2026-11-10 inbox run.
-Offline only; no provider call.
-
-- Acceptance and scripts (CP-1D, CP-3, CP-5 blocked for want of an acceptance receipt or script
-  output): every module's instructions now carry what only CP-2G had: CP-OS's check is the
-  acceptance, helper scripts are recorded as not run, nobody can be asked, and an entry value comes
-  from the context, the handoffs, then the method's safe default.
-- Companions: the methodology is copied read-only from `~/Documents/cp-os` at `b57a344` into
-  `docs/reuse/selected-methods/` (63 files added, manifest hashes checked). Each skill is sent the
-  files its SKILL calls mandatory or binding, and the Confidence Score section of `CANON_SHARED.md`.
-  CP-4's instructions grow from 88 KB to 191 KB and CP-3's from 104 KB to 165 KB; the read budget
-  already counts instructions, so reads shrink rather than the request growing.
-- CP-1B runs Deploy V's skill; the structured-runtime step it had needs a `read_inputs` view CP-OS
-  never gives (blocked on both runs).
-- Order: CP-2A and CP-2E now run after CP-2 (CP-2A had blocked with "CP-2 is Not supplied"), CP-2A
-  after CP-1B, CP-1C and CP-2 after CP-DR. Correction to the review note: CP-1D does not need CP-2;
-  CP-2 is its consumer.
-- CP-2A stress sizes: `cp2a.md` governs over the SKILL, so CP-2A states labelled, anchored
-  scenarios, one as an EBITDA-decline and rate-increase pair CP-2G can apply.
-- CP-DR as CP-1C's peer source: no pathway lists CP-DR, so the default (`cp_dr_public`) left CP-1C
-  with no producer. CP-DR now joins a pathway that has CP-1C; it is asked for the peer pack (TDR.4
-  to TDR.6) and CP-1C is told to read it. Run activity shows the added module once it starts.
-- Tests written first and seen failing (10); CI test set plus every registry-dependent test: 1,471
-  passed, 7 known failures deselected; quality gate exit 0. Offline prepare of all 20 modules on the
-  TDG files gives the order CP-0, CP-1, CP-1A, CP-1B, CP-DR, CP-1C, CP-1D, CP-2, CP-4, CP-2A, CP-2E,
-  CP-2D, CP-2G, CP-2H, CP-3D, CP-3C, CP-4C, CP-3, CP-5, CP-6.
-- Consequence: a run made before this change that includes any skill module is no longer "on the
-  current methodology", so the library stops listing it and names the changed files (checked:
-  `tdg-forecast-005` is reported "Not shown … CP-2A: not on the current methodology").
-- Not verified: any model behaviour. No live run was made, so whether the modules now proceed past
-  their old blocks is unproven. CP-DR has no web or research tool in this transport: its peer pack
-  can only use files in the run's folder, so CP-1C on public filings alone will still lack peers
-  here. Gates for market data (CP-3, CP-3D), executed legal documents (CP-4), rating reports (CP-2H)
-  and distress (CP-4C) are unchanged and untested with such files. The skills' scripts and three
-  `.xlsx` placeholders were not copied. Output-side loss of analysis was checked for CP-2G only.

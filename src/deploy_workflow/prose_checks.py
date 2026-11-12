@@ -1,4 +1,5 @@
-"""Mechanical prose checks (H6) for a handoff's reader passages.
+"""Mechanical prose checks (H6) for a handoff's reader passages and, for checks 2-5 and 10, the
+sentence text of every shown section (`## Findings`, `## Calculations`, `## Gaps`).
 
 Pure module: no I/O. The specification is `docs/rulings/2026-11-11-reader-and-issuer-report.md`
 (H1, H2, H3, H6); where this file and the ruling differ, the ruling wins.
@@ -62,6 +63,7 @@ class _Line(NamedTuple):
     number: int
     text: str
     bullet: bool
+    section: str = ""  # the heading of the section the line is in, for the issue text
 
 
 class _Visible(NamedTuple):
@@ -86,25 +88,52 @@ def _visible(lines: list[tuple[int, str]]) -> list[_Visible]:
     return out
 
 
-def _findings_sections(text: str) -> list[_Section] | None:
-    """Every H3 section under `## Findings`; None when there is no such H2."""
+def _sections(text: str, h2_titles: tuple[str, ...], lead_in: bool) -> tuple[list[_Section], bool]:
+    """Every H3 section under the H2s named, and whether `## Findings` was seen. With `lead_in`
+    the text between an H2 and its first H3 is a section too, titled as the H2."""
     sections: list[_Section] = []
-    found = in_findings = False
+    found = inside = False
     current: _Section | None = None
     for line in _visible(list(enumerate(text.splitlines(), 1))):
         heading = None if line.skipped else HEADING.fullmatch(line.text)
         if heading is not None and len(heading[1]) <= 3:
             current = None
             if len(heading[1]) <= 2:
-                in_findings = len(heading[1]) == 2 and heading[2] == "Findings"
-                found = found or in_findings
-            elif in_findings:
+                inside = len(heading[1]) == 2 and heading[2] in h2_titles
+                found = found or (inside and heading[2] == "Findings")
+                if inside and lead_in:
+                    current = _Section(heading[2], line.number, [])
+                    sections.append(current)
+            elif inside:
                 current = _Section(heading[2], line.number, [])
                 sections.append(current)
             continue
         if current is not None:
             current.body.append((line.number, line.raw))
+    return sections, found
+
+
+def _findings_sections(text: str) -> list[_Section] | None:
+    """Every H3 section under `## Findings`; None when there is no such H2."""
+    sections, found = _sections(text, ("Findings",), lead_in=False)
     return sections if found else None
+
+
+# Sections whose body is data for a drawing, a calendar or a calculation, not sentence text.
+DATA_SECTION_PREFIXES = ("chart data:", "map:", "events:", "forecast inputs", "confidence inputs")
+
+
+def _shown_sentence_lines(text: str) -> list[_Line]:
+    """Sentence text of everything the Modules page shows as prose: every section under
+    `## Findings`, `## Calculations` and `## Gaps` except the data sections."""
+    sections, _ = _sections(text, ("Findings", "Calculations", "Gaps"), lead_in=True)
+    return [
+        line._replace(section=section.title)
+        for section in sections
+        if not section.title.casefold().startswith(DATA_SECTION_PREFIXES)
+        for line in _sentence_lines(section.body)
+        if line.text.strip()
+    ]
 
 
 def _pooled(sections: list[_Section]) -> dict[str, list[tuple[int, str]]]:
@@ -212,20 +241,24 @@ def is_earlier_format(text: str) -> bool:
     return not sections or sections[0].title != "Bottom line"
 
 
+def _first_paragraph(section: _Section) -> list[_Line]:
+    paragraph: list[_Line] = []
+    for line in _sentence_lines(section.body):
+        if not line.text.strip():
+            if paragraph:
+                break
+            continue
+        paragraph.append(line)
+    return paragraph
+
+
 def bottom_line_text(text: str) -> str | None:
     """The first paragraph of `### Bottom line` as written, its Basis line dropped; None when
     the handoff has no such passage."""
     sections = _findings_sections(text)
     if not sections or sections[0].title != "Bottom line":
         return None
-    paragraph: list[str] = []
-    for line in _sentence_lines(sections[0].body):
-        if not line.text.strip():
-            if paragraph:
-                break
-            continue
-        paragraph.append(line.text)
-    return " ".join(paragraph) or None
+    return " ".join(line.text for line in _first_paragraph(sections[0])) or None
 
 
 def limitation_items(text: str) -> tuple[str, ...]:
@@ -235,6 +268,15 @@ def limitation_items(text: str) -> tuple[str, ...]:
 
 def _issue(check: int, name: str, line: int, offending: str, advice: str) -> str:
     return f'Prose check {check} ({name}), line {line}: "{offending}" — {advice}'
+
+
+def _issue_in(check: int, name: str, where: tuple[int, str], offending: str, advice: str) -> str:
+    """An issue that names the section (heading) the line is in, as well as the line."""
+    line, section = where
+    return (
+        f'Prose check {check} ({name}), line {line}: "{offending}" in section "{section}" '
+        f"— {advice}"
+    )
 
 
 def _check_bottom_line(sections: list[_Section] | None) -> list[str]:
@@ -273,7 +315,7 @@ def _check_bottom_line(sections: list[_Section] | None) -> list[str]:
         ]
     number, stripped = first_line
     if stripped[0].isalpha() or stripped[0] in PROSE_OPENERS or stripped.startswith("**"):
-        return []
+        return _check_bottom_line_length(sections[0])
     return [
         _issue(
             1,
@@ -283,6 +325,48 @@ def _check_bottom_line(sections: list[_Section] | None) -> list[str]:
             "start the bottom line with a prose sentence, not a table, list, fence or comment.",
         )
     ]
+
+
+BOTTOM_LINE_FIRST_SENTENCE_WORDS = 45  # Decision 8 of 2026-11-12.
+BOTTOM_LINE_WORDS = 180
+SENTENCE_END = re.compile(r"[.!?][\"')\]”’*`]*(?:\s|$)")
+
+
+def _check_bottom_line_length(section: _Section) -> list[str]:
+    """The first sentence is at most 45 words and the whole passage at most 180, words being
+    whitespace-separated. The sentence ends at the first `.`, `!` or `?` followed by a space or
+    the end of the paragraph, so `3.1x` does not end it and an abbreviation such as `Inc.` may,
+    which only shortens the sentence counted."""
+    name = "bottom line shape"
+    issues = []
+    paragraph = _first_paragraph(section)
+    first = " ".join(line.text for line in paragraph)
+    end = SENTENCE_END.search(first)
+    sentence = first[: end.end()] if end else first
+    if len(sentence.split()) > BOTTOM_LINE_FIRST_SENTENCE_WORDS:
+        issues.append(
+            _issue_in(
+                1,
+                name,
+                (paragraph[0].number, section.title),
+                " ".join(sentence.split()[:8]) + " ...",
+                f"the first sentence is {len(sentence.split())} words; state the view and its "
+                f"consequence for creditors in at most {BOTTOM_LINE_FIRST_SENTENCE_WORDS} words.",
+            )
+        )
+    total = sum(len(line.text.split()) for line in _sentence_lines(section.body))
+    if total > BOTTOM_LINE_WORDS:
+        issues.append(
+            _issue_in(
+                1,
+                name,
+                (section.line, section.title),
+                f"{total} words",
+                f"the whole Bottom line is at most {BOTTOM_LINE_WORDS} words; move detail to "
+                "Key findings.",
+            )
+        )
+    return issues
 
 
 SIMPLE_CHECKS = (
@@ -301,7 +385,9 @@ SIMPLE_CHECKS = (
     (
         4,
         "no bracket citation or chip",
-        re.compile(r".{0,20}[\[\]【】].{0,20}"),
+        # One issue per bracket pair, the bracketed text whole when it is at most 80 characters; a
+        # bracket with no partner (or a longer pair) is one issue per bracket character.
+        re.compile(r"\[[^\[\]]{0,80}\]|【[^【】]{0,80}】|[\[\]【】]"),
         "remove the brackets; put the source in the paragraph's Basis line.",
     ),
     (
@@ -313,9 +399,52 @@ SIMPLE_CHECKS = (
 )
 
 
-def _check_simple(lines: list[_Line]) -> list[str]:
+# Check 10 (decision 7 of 2026-11-12): wording that belongs to the pipeline, not to the reader.
+# The phrases are the ruling's list; `downstream` is refused only before module, owner, work,
+# analysis or use; a snake_case token has a lower-case letter either side of an underscore; a
+# CAPS_WITH_UNDERSCORE token is all capitals, digits and underscores with a letter in it. A file
+# name in a sentence is refused only when it is itself a snake_case token (source references
+# belong to a Basis line, a table or `## Sources`).
+PIPELINE_WORDING = re.compile(
+    r"(?i:\bhandoffs?\b|\bthis transport\b|\bthe pack\b|\bfact pack\b|\bsource pack\b"
+    r"|\bcanonical\b|\bre-anchor\w*|\bhelper scripts?\b|\bupstream modules?\b"
+    r"|\bdownstream (?:modules?|owners?|work|analys[ie]s|use)\b)"
+    r"|\w*[a-z]_[a-z]\w*"
+    r"|\b(?=[A-Z0-9_]*[A-Z])[A-Z0-9]+(?:_[A-Z0-9]+)+\b"
+)
+
+
+def _check_pipeline_wording(lines: list[_Line]) -> list[str]:
     return [
-        _issue(number, name, line.number, found[0].strip(), advice)
+        _issue_in(
+            10,
+            "no pipeline wording",
+            (line.number, line.section),
+            found[0],
+            "write for the reader, not for the pipeline: name the document (for example the 2024 "
+            "annual report), the module by its plain name or the analysis instead.",
+        )
+        for line in lines
+        for found in PIPELINE_WORDING.finditer(line.text)
+    ]
+
+
+def _quoted(number: int, text: str, found: re.Match[str]) -> str:
+    """What an issue quotes: the match, and for a bare bracket (check 4) 20 characters each side."""
+    if number == 4 and len(found[0]) == 1:
+        return text[max(0, found.start() - 20) : found.end() + 20].strip()
+    return found[0].strip()
+
+
+def _check_simple(lines: list[_Line]) -> list[str]:
+    """Checks 2-5. An issue in a reader passage keeps its short form (the passage is known from
+    the line); an issue in any other section names the section."""
+    return [
+        _issue(number, name, line.number, _quoted(number, line.text, found), advice)
+        if line.section in READER_HEADINGS
+        else _issue_in(
+            number, name, (line.number, line.section), _quoted(number, line.text, found), advice
+        )
         for number, name, pattern, advice in SIMPLE_CHECKS
         for line in lines
         for found in pattern.finditer(line.text)
@@ -713,22 +842,28 @@ def _check_provider_markers(text: str) -> list[str]:
 
 
 def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]:
-    """Every H6 failure in this handoff; `accepted` (module -> Markdown) feeds check 7 only."""
+    """Every H6 failure in this handoff; `accepted` (module -> Markdown) feeds check 7 only.
+    Checks 2-5 and 10 read the sentence text of every section the Modules page shows (decision 7
+    of 2026-11-12); checks 6 and 8 stay on the reader passages."""
     sections = _findings_sections(text)
-    lines = [
-        line
-        for body in _pooled(sections or []).values()
-        for line in _sentence_lines(body)
-        if line.text.strip()
-    ]
-    lines.sort(key=lambda line: line.number)
+    passages = sorted(
+        (
+            line
+            for body in _pooled(sections or []).values()
+            for line in _sentence_lines(body)
+            if line.text.strip()
+        ),
+        key=lambda line: line.number,
+    )
+    shown = _shown_sentence_lines(text)
     return tuple(
         _check_bottom_line(sections)
-        + _check_simple(lines)
-        + _check_register_ids(text, lines)
+        + _check_simple(shown)
+        + _check_register_ids(text, passages)
         + _check_limitation_repeats(text, accepted)
-        + _check_figures(lines)
+        + _check_figures(passages)
         + _check_provider_markers(text)
+        + _check_pipeline_wording(shown)
     )
 
 

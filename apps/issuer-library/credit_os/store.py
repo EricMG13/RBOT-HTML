@@ -19,6 +19,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple, NotRequired, TypedDict
 from urllib.parse import quote
 
+from deploy_workflow import confidence as confidence_score
+
 HERE = Path(__file__).resolve().parent
 REPO = next((p for p in (HERE, HERE.parent) if (p / "src").is_dir()), HERE.parents[2])
 OUTPUT_SKIP = re.compile(r"instructions|prompt|calculations|verification")
@@ -298,14 +300,36 @@ def table_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
 
 
 def text_block(lines: list[str], i: int) -> tuple[dict[str, Any], int]:
-    """The paragraph starting at `lines[i]`, up to a blank line or the next structure."""
+    """The paragraph starting at `lines[i]`, up to a blank line or the next structure.
+    A line opening with three backticks starts a fenced block: one block up to its closing
+    fence, blank lines and structure markers inside it kept. A fence closes only before the next
+    `## ` or `### ` heading line, unless a closing fence follows the heading and the later fence
+    lines pair up and none has an info string (a heading-looking line inside code); otherwise it
+    is unclosed and is a paragraph. A fence line ends the paragraph before it."""
     start = i + 1
+    if lines[i].startswith("```"):
+        heads = (n for n in range(i + 1, len(lines)) if lines[n].startswith(("## ", "### ")))
+        stop = next(heads, len(lines))
+        close = next((n for n in range(i + 1, len(lines)) if lines[n].rstrip() == "```"), None)
+        if close is not None and close > stop:
+            fences = [n for n in range(i + 1, len(lines)) if lines[n].startswith("```")]
+            inside = [n for n in fences if n < close]
+            after = [n for n in fences if n > close]
+            if inside or len(after) % 2:
+                close = None
+        if close is not None:
+            return {
+                "type": "text",
+                "line": start,
+                "end": close + 1,
+                "text": "\n".join(lines[i : close + 1]),
+            }, close + 1
     parts = [lines[i]]
     i += 1
     while (
         i < len(lines)
         and lines[i].strip()
-        and not lines[i].startswith(("#", "|", "- ", "<!-- table-id:"))
+        and not lines[i].startswith(("#", "|", "- ", "<!-- table-id:", "```"))
         and not re.match(r"\d+\. ", lines[i])
     ):
         parts.append(lines[i])
@@ -606,13 +630,19 @@ def _bridge_amounts(table: dict[str, Any]) -> list[decimal.Decimal] | None:
     """A step table's stated amounts when it is a bridge that reconciles, else None.
 
     Mirrors the launcher's check (cpos_launch.py `_bridge_issues`; the store imports the standard
-    library only): every Amount a plain signed number, and the opening plus the stated changes equal
-    to the closing. Each amount has at most the table's own decimals, so the sum is exact."""
+    library and `deploy_workflow.confidence` only): every Amount a plain signed number, and the
+    opening plus the stated changes equal to the closing. Each amount has at most the table's own
+    decimals, so the sum is exact."""
     cells = [row["cells"][1] for row in table["rows"]]
     if len(cells) < 2 or not all(PLAIN_AMOUNT.fullmatch(c) for c in cells):
         return None
     values = [decimal.Decimal(c.replace(",", "")) for c in cells]
     return values if sum(values[:-1], decimal.Decimal(0)) == values[-1] else None
+
+
+def _gap_reasons(cells: list[str]) -> str:
+    """Each distinct reason of `Not supplied: <reason>` cells, once, in the order stated."""
+    return "; ".join(dict.fromkeys(c.partition(":")[2].strip() for c in cells))
 
 
 def _chart_gap(section: dict[str, Any]) -> dict[str, Any] | None:
@@ -631,8 +661,7 @@ def _chart_gap(section: dict[str, Any]) -> dict[str, Any] | None:
     cells = [c for row in rows for c in (row[1:2] if step else row[:-2])]
     if not all(STATED_GAP.match(c) for c in cells):
         return None
-    reasons = list(dict.fromkeys(c.partition(":")[2].strip() for c in cells))
-    return {**_chart_head(section, table), "gap": "; ".join(reasons)}
+    return {**_chart_head(section, table), "gap": _gap_reasons(cells)}
 
 
 def _row_relations_ok(rows: list[dict[str, Any]], kind: str | None) -> bool:
@@ -802,7 +831,7 @@ def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:
     rows = [row["cells"] for row in tables[0]["rows"]]
     lane = {"lane": section["heading"].removeprefix(EVENT_PREFIX), "table": tables[0]["line"]}
     if all(STATED_GAP.match(c) for cells in rows for c in cells):
-        return {**lane, "gap": rows[0][0].partition(":")[2].strip()}
+        return {**lane, "gap": _gap_reasons([c for cells in rows for c in cells])}
     return {**lane, "gap": None} if all(_event_row_ok(cells) for cells in rows) else None
 
 
@@ -838,7 +867,7 @@ def _edge_map(section: dict[str, Any]) -> dict[str, Any] | None:
     rows = [row["cells"] for row in tables[0]["rows"]]
     drawn = {"name": name, "table": tables[0]["line"]}
     if rows and all(STATED_GAP.match(c) for cells in rows for c in cells):
-        return {**drawn, "gap": rows[0][0].partition(":")[2].strip()}
+        return {**drawn, "gap": _gap_reasons([c for cells in rows for c in cells])}
     stated = all(c and not STATED_GAP.match(c) for cells in rows for c in cells)
     stated = stated and all(cells[4] not in ("\u2014", "-", "\u2013") for cells in rows)
     legal = stated and all(cells[2] in MAP_EDGES[name] for cells in rows)
@@ -1038,6 +1067,16 @@ def handoff_files(run_dir: Path) -> dict[Path, Handoff]:
     return found
 
 
+def confidence_fields(raw: bytes) -> dict[str, Any]:
+    """`confidence` for an output whose handoff has a `### Confidence inputs` section: the score
+    Python computes from it, or why there is none. A handoff without the section (every earlier
+    run) gets no field at all. Lossy decoding only touches bytes that cannot be in the table."""
+    result = confidence_score.from_handoff(raw.decode("utf-8-sig", "replace"))
+    if isinstance(result, confidence_score.Refused):
+        return {} if result.absent else {"confidence": {"missing": result.shown}}
+    return {"confidence": {"value": result.value, "band": result.band}}
+
+
 class Handoffs:
     """Each distinct handoff parsed once, by digest, however many runs hold the same bytes."""
 
@@ -1118,6 +1157,7 @@ def collect_runs(
                 }
                 record.update(reader_fields(sections))
                 record.update(report_fields(sections, record["summary"]))
+                record.update(confidence_fields(read[path].raw))
                 if record["issue"]:
                     issues.append(f"{output_id}: {record['issue']}")
                 if problem:
@@ -3606,7 +3646,9 @@ def has_sources_section(sections: list[dict[str, Any]]) -> bool:
 def document_dates(sections: list[dict[str, Any]]) -> dict[str, str]:
     """The Document date a handoff's table records for a file: in a table with `Source` and
     `Document date` columns, the date cell of the row whose Source cell is exactly the file name,
-    copied as written. A blank cell records nothing; no date is parsed or read from a file name."""
+    copied as written. A blank cell, or one reading "not stated" (any case, surrounding space
+    ignored), records nothing, so a later module that saw the date supplies it; no date is parsed
+    or read from a file name."""
     found: dict[str, str] = {}
     for section in sections:
         for block in section["blocks"]:
@@ -3617,8 +3659,9 @@ def document_dates(sections: list[dict[str, Any]]) -> dict[str, str]:
                 continue
             name_at, date_at = heads.index("Source"), heads.index("Document date")
             for row in block["rows"]:
-                if row["cells"][date_at].strip():
-                    found.setdefault(row["cells"][name_at].strip(), row["cells"][date_at].strip())
+                date = row["cells"][date_at].strip()
+                if date and date.casefold() != "not stated":
+                    found.setdefault(row["cells"][name_at].strip(), date)
     return found
 
 

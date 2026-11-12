@@ -2138,3 +2138,43 @@ def test_the_chart_index_route_keeps_the_chosen_forecast_model_and_scrolls_on_ev
     assert again["hash"] == after["hash"] and again["model"] == seen["remembered"], seen
     assert -1 <= again["offset"] <= 20 or again["atEnd"], seen
     assert again["scrollTop"] > 0, seen
+
+
+# Ruling 2026-11-12, decision 1: a chart is shown once, as a card; its section route scrolls the
+# card into view.
+CHART_ROUTE_PROBE = """(async () => {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const content = document.getElementById('content'), seen = {};
+  const wanted = (location.hash.match(/\\/(s-\\d+)/) || [])[1];
+  for (let i = 0; i < 200 && !document.getElementById('charts'); i++) await sleep(50);
+  await sleep(300);
+  const target = document.getElementById(wanted), view = content.getBoundingClientRect();
+  const box = target && target.getBoundingClientRect();
+  seen.card = Boolean(target && target.classList.contains('panel-card'));
+  seen.inView = Boolean(
+    box && box.top >= view.top - 1 && box.top < view.bottom);
+  seen.chartData = content.innerText.includes('Chart data:');
+  seen.cards = document.querySelectorAll('#charts .panel-card').length;
+  seen.outline = [...document.querySelectorAll('.section-outline .section-item')]
+    .map(a => a.textContent.trim());
+  const out = document.createElement('pre');
+  out.id = 'probe';
+  out.textContent = JSON.stringify(seen);
+  document.body.append(out);
+})();"""
+
+
+def test_a_chart_route_scrolls_its_card_into_view_and_no_chart_data_text_is_drawn(tmp_path):
+    page = synthetic_workspace(tmp_path, with_chart_and_event)
+    [handoff] = [
+        f
+        for f in tmp_path.glob(f"runs/{NEW_FORMAT_RUN}/deliveries/**/*CP-2*.md")
+        if "### Chart data: debt maturities" in f.read_text(encoding="utf-8")
+    ]
+    line = handoff.read_text(encoding="utf-8").splitlines().index("### Chart data: debt maturities")
+    seen = read_probe(page, f"#CP-2/s-{line + 1}?c={NEW_FORMAT_RUN}", 1280, CHART_ROUTE_PROBE)
+    assert seen["card"] is True and seen["inView"] is True
+    assert seen["chartData"] is False and seen["cards"] >= 1
+    assert seen["outline"][-1] == "Evidence & audit"
+    hidden = ("Chart data", "Events", "Request", "Next module")
+    assert not any(entry.startswith(hidden) for entry in seen["outline"])

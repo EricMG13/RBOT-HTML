@@ -76,14 +76,18 @@ function splitBasis(text, known = []) {
   return {body: lines.slice(0, -1).join('\n'), items: items.filter(item => item !== '')};
 }
 
-const PAGES = /^(?:, page (\d+)|, pages (\d+)[–-](\d+))?$/;
+// One page or range, and a list of them (decision 3 of the 2026-11-12 ruling extends H3: `pages 71, 121`, `pages 55, 63, 120–123`).
+const SPAN = '\\d+(?:\\s*[–-]\\s*\\d+)?', PAGES = new RegExp(`^(?:, (pages?) (${SPAN}(?:, ${SPAN})*))?$`);
+const spansOf = text => [...text.matchAll(/(\d+)(?:\s*[–-]\s*(\d+))?/g)].map(m => (m[2] === undefined ? {page: Number(m[1])} : {page: Number(m[1]), pageEnd: Number(m[2])}));
+// A source item: `page`/`pageEnd` for one page or range, `spans` for a list (a singular marker lists one page only); null when the tail is no page list.
 function sourceItem(file, tail) {
   const pages = PAGES.exec(tail);
   if (!pages) return null;
   const out = {kind: 'source', file};
-  if (pages[1] !== undefined) out.page = Number(pages[1]);
-  if (pages[2] !== undefined) { out.page = Number(pages[2]); out.pageEnd = Number(pages[3]); }
-  return out;
+  if (pages[1] === undefined) return out;
+  const spans = spansOf(pages[2]);
+  if (spans.length === 1) return Object.assign(out, spans[0]);
+  return pages[1] === 'pages' ? Object.assign(out, {spans}) : null;
 }
 
 // H3 item forms. Anything else is kept as text, never dropped. `known` (optional) lists source file names: an item that is exactly a known name
@@ -100,7 +104,7 @@ function basisItem(item, known = []) {
       if (found) return found;
     }
   }
-  const source = /^(.+?\.[A-Za-z][A-Za-z0-9]{0,4})((?:, page \d+|, pages \d+[–-]\d+)?)$/.exec(item);
+  const source = /^(.+?\.[A-Za-z][A-Za-z0-9]{0,4})((?:, pages? .+)?)$/.exec(item);
   return (source && sourceItem(source[1], source[2])) || {kind: 'text', text: item};
 }
 
@@ -113,10 +117,12 @@ function knownFiles(ctx) {
 // (for `calculation <id>`), the chips the build holds for the paragraph's key, and whether a module code ran in this run. A source item takes the
 // issuer_page chips of its file (and page when it names one); a calculation item takes its `## Calculations` row (or null); a module item says
 // whether it ran; any other item is `text`, verbatim.
+// A source item names the chip's page when it names no page, the same page, or a page of its list.
+const pageHit = (item, chip) => (item.spans ? item.spans.some(s => s.page === chip.page) : item.page === undefined || chip.page === item.page);
 function inspectorItem(raw, ctx) {
   const item = basisItem(raw, knownFiles(ctx));
   const out = {...item, raw};
-  if (item.kind === 'source') out.chips = ctx.chips.filter(c => c.kind === 'issuer_page' && c.file === item.file && (item.page === undefined || c.page === item.page));
+  if (item.kind === 'source') out.chips = ctx.chips.filter(c => c.kind === 'issuer_page' && c.file === item.file && pageHit(item, c));
   else if (item.kind === 'calculation') out.row = calculationRow(ctx.sections, item.id);
   else if (item.kind === 'module') out.ran = Boolean(ctx.ran(item.code));
   return out;
@@ -133,8 +139,9 @@ function inspectorItems(text, ctx) {
   return splitBasis(text, knownFiles(ctx)).items.map(raw => inspectorItem(raw, ctx));
 }
 
-// The pages of a source item as words: "page 41", "pages 43–45", or nothing.
+// The pages of a source item as words: "page 41", "pages 43–45", "pages 71, 121", or nothing.
 function itemPages(item) {
+  if (item.spans) return `pages ${item.spans.map(s => (s.pageEnd === undefined ? s.page : `${s.page}–${s.pageEnd}`)).join(', ')}`;
   return item.pageEnd !== undefined ? `pages ${item.page}–${item.pageEnd}` : item.page !== undefined ? `page ${item.page}` : '';
 }
 
@@ -208,10 +215,17 @@ function figureSpans(text) {
     const symbolic = SYMBOLIC_UNIT.exec(rest), scale = SCALE_UNIT.exec(rest), other = OTHER_UNIT.exec(rest);
     const unit = symbolic || scale || other;
     if (!unit && /^[A-Za-z]/.test(rest)) continue;
-    let from = start;
-    if (SYMBOLS.includes(before)) from = start - 1;
-    else if (before === ' ' && CURRENCY_BEFORE.test(text.slice(0, start - 1))) from = start - 4;
-    const prefixed = from !== start;
+    // A minus sign joins the figure only when it stands alone before the digits (after a space, an opening bracket, a currency symbol or the
+    // text start), so a range or a label (10-12, FY2023-24, 5.50%-6.00%) is never signed. An en dash counts only right after a currency code or symbol.
+    const minus = c => c === '-' || c === '\u2212', alone = c => /^(?:[\s($\u20ac\u00a3\u00a5]|$)/.test(c || ''), gap = c => c === ' ' || c === '\u00a0';
+    const dashed = before === '\u2013' && (SYMBOLS.includes(text[start - 2]) || (gap(text[start - 2]) && CURRENCY_BEFORE.test(text.slice(0, start - 2))));
+    const at = (minus(before) && alone(text[start - 2])) || dashed ? start - 1 : start, lead = text[at - 1] || '';
+    let from = at;
+    if (lead && SYMBOLS.includes(lead)) {
+      from = at - 1;
+      if (at === start && minus(text[from - 1]) && alone(text[from - 2])) from--;
+    } else if (gap(lead) && CURRENCY_BEFORE.test(text.slice(0, at - 1))) from = at - 4;
+    const prefixed = from !== at;
     const plain = !m[0].includes(',') && !m[0].includes('.');
     if (!prefixed && !symbolic && !scale && plain) {
       const value = Number(m[0]);
@@ -325,23 +339,45 @@ function paragraphView(text, key, {earlier = false, chips = 0} = {}) {
   return {item, html};
 }
 
+// The index (among the row's chips) of the first source-page chip that one Source-cell item names: `<file>, page(s) <list>` (a full stop may end it)
+// whose file and a listed page a chip holds. -1 when none does; the item is then left as plain text.
+function sourceCellChip(item, chips) {
+  const m = new RegExp(`^(.+?), pages? (${SPAN}(?:, ${SPAN})*)\\.?$`).exec(plainText(item).trim());
+  if (!m) return -1;
+  const spans = spansOf(m[2]);
+  return chips.findIndex(c => c.kind === 'issuer_page' && c.file === m[1] && spans.some(s => c.page <= (s.pageEnd ?? s.page) && (c.page_end ?? c.page) >= s.page));
+}
+
 // A cell of a new-format table exactly as written: a missing, dash or "Not supplied" cell is drawn as it stands, never as "n.a." (H4).
-function writtenCell(cell, numeric, after = '') {
+// `open` is {key, chips} (a Source cell): each `; `-separated item that holds a row chip is its own button on that chip, text unchanged, the
+// separators and every other item as written.
+function writtenCell(cell, numeric, after = '', open = null) {
   const text = String(cell ?? '');
-  return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${richText(text)}${after}</td>`;
+  const button = item => { const at = sourceCellChip(item, open.chips); return at < 0 ? richText(item) : `<button type="button" class="source-cell" data-chip="${escapeHtml(open.key)}" data-index="${at}">${richText(item)}</button>`; };
+  const shown = open && open.chips.length ? text.split('; ').map(button).join('; ') : richText(text);
+  return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${shown}${after}</td>`;
 }
 
 // A table of a new-format handoff exactly as written: its own columns and cells, none of the app's. A row the build holds chips for carries a
-// quiet Basis button in its first cell, so the chips stay reachable. `ctx` is {id, chips(key)}; `caption` is the table's accessible name.
+// quiet Basis button in its first cell, so the chips stay reachable; each item of a cell of a column headed exactly `Source` becomes a button on the row chip that
+// holds its file and page. `ctx` is {id, chips(key), chipList(key)?}; `caption` is the table's accessible name.
 function tableView(caption, block, ctx) {
   const numeric = block.headers.map((_, c) => numericColumn(block, c));
   const head = block.headers.map((header, c) => `<th scope="col"${numeric[c] ? ' class="num"' : ''}>${escapeHtml(header)}</th>`).join('');
   const rows = block.rows.map(row => {
     const key = `${ctx.id}:${row.line}`;
     const control = ctx.chips(key) ? ` ${basisButton(key, [], `Basis for row: ${plainText(row.cells[0] ?? '')}`)}` : '';
-    return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '')).join('')}</tr>`;
+    const chips = ctx.chipList?.(key) || [];
+    return `<tr>${row.cells.map((cell, c) => writtenCell(cell, numeric[c], c === 0 ? control : '', block.headers[c] === 'Source' ? {key, chips} : null)).join('')}</tr>`;
   }).join('');
-  return `<div class="table-card"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="table-card" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table><caption class="sr-only">${escapeHtml(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// A fenced block as a block: its inner lines (the fence lines and the language word left out) escaped, line breaks kept, no figure buttons, no Basis.
+function fencedBlockHtml(text) {
+  const lines = text.split('\n');
+  const inner = lines.slice(1, lines.length > 1 && lines[lines.length - 1].trim() === '```' ? -1 : undefined);
+  return `<pre class="passage-code"><code>${escapeHtml(inner.join('\n'))}</code></pre>`;
 }
 
 // A new-format section's content: prose paragraphs (list items grouped in one list) and, when `ctx.tables`, its tables.
@@ -350,6 +386,12 @@ function sectionBodyHtml(section, ctx) {
   let html = '', open = false;
   const close = () => { if (open) html += '</ul>'; open = false; };
   for (const block of section.blocks) {
+    if (block.type === 'text' && block.text.startsWith('```')) {
+      close();
+      const key = `${ctx.id}:${block.line}`;
+      html += fencedBlockHtml(block.text) + (ctx.chips(key) ? basisButton(key, [], 'Basis for this block') : '');
+      continue;
+    }
     if (block.type === 'table') {
       if (!ctx.tables) continue;
       close();

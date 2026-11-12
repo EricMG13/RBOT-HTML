@@ -17,9 +17,9 @@ from credit_os import store
 MODULES = ("CP-0", "CP-1")
 
 
-def read_store(tmp_path: Path) -> dict:
+def read_store(tmp_path: Path, **changes) -> dict:
     """The store over one fixture run that the catalogue lists with its delivery as a report."""
-    run_dir = make_run(tmp_path, "run-a")
+    run_dir = make_run(tmp_path, "run-a", **changes)
     (delivery,) = (run_dir / "deliveries").iterdir()
     folder = f"runs/run-a/deliveries/{delivery.name}"
     (report,) = delivery.glob("report.html")
@@ -415,7 +415,9 @@ def test_launcher_and_store_accept_every_independently_written_owner_fixture():
         assert launcher.chart_issues(text, specs[heading]) == (), heading
         fields = synthetic_charts(text)
         assert fields["issue"] is None, heading
-        assert len(fields["charts"] + fields["maps"] + fields["events"]) == 1, heading
+        # The confidence inputs table is read for a score, never drawn (decision 9, 2026-11-12).
+        drawn = 0 if heading == "Confidence inputs" else 1
+        assert len(fields["charts"] + fields["maps"] + fields["events"]) == drawn, heading
     assert store.EVENT_HEADERS == list(launcher.EVENT_COLUMNS)
     assert store.EVENT_STATUS.pattern == launcher.EVENT_STATUS.pattern
     assert store.DIRECTIONS == launcher.DIRECTIONS
@@ -2165,3 +2167,134 @@ def test_the_page_budget_charges_both_grids_of_every_model(monkeypatch):
         monkeypatch.setattr(store, "CASHFLOW_CELL_BUDGET", budget)
         models, _ = store.catalogue_models(Path("."), catalogue, prior)
         assert [m["cashflow"] is not None for m in models] == [True, second_shown]
+
+
+def test_a_fenced_block_is_one_text_block_with_its_blank_lines_and_markers():
+    fence = '```json\n{"a": 1,\n\n- not a list\n# not a heading\n| not | a table |\n"b": -2}\n```'
+    blocks = store.parse_source(f"## Inputs\nBefore.\n\n{fence}\nAfter.\n")[0]["blocks"]
+    assert [b["type"] for b in blocks] == ["text", "text", "text"]
+    assert blocks[1]["text"] == fence
+    assert (blocks[1]["line"], blocks[1]["end"]) == (4, 11)
+    assert blocks[2]["text"] == "After."
+
+
+def test_an_unclosed_fence_does_not_run_past_the_next_heading():
+    text = "## S\n```\nx\n\n## T\nPara.\n\n```json\n{}\n```\n"
+    sections = store.parse_source(text)
+    assert [s["heading"] for s in sections] == ["S", "T"]
+    assert [b["text"] for b in sections[0]["blocks"]] == ["```\nx"]
+    assert sections[1]["blocks"][0]["text"] == "Para."
+    assert sections[1]["blocks"][1]["text"] == "```json\n{}\n```"
+
+
+def test_a_closed_fence_keeps_a_heading_looking_line_inside_the_block():
+    fence = "```yaml\na: 1\n## comment\nb: 2\n```"
+    sections = store.parse_source(f"## S\n{fence}\n\nProse one.\n\n```json\n{{}}\n```\nTail.\n")
+    assert [s["heading"] for s in sections] == ["S"]
+    assert [b["text"] for b in sections[0]["blocks"]] == [
+        fence,
+        "Prose one.",
+        "```json\n{}\n```",
+        "Tail.",
+    ]
+
+
+def test_an_unclosed_fence_before_a_heading_and_a_later_bare_pair_stays_unclosed():
+    text = "## S\n```\nx\n## T\n```\ncode\n```\n"
+    sections = store.parse_source(text)
+    assert [s["heading"] for s in sections] == ["S", "T"]
+    assert [b["text"] for b in sections[0]["blocks"]] == ["```\nx"]
+    assert [b["text"] for b in sections[1]["blocks"]] == ["```\ncode\n```"]
+
+
+def test_a_fence_right_after_a_paragraph_line_is_its_own_block():
+    fence = '```json\n{"a": 1,\n\n"b": 2}\n```'
+    blocks = store.parse_source(f"## S\nIntro line.\n{fence}\nAfter.\n")[0]["blocks"]
+    assert [b["text"] for b in blocks] == ["Intro line.", fence, "After."]
+    assert (blocks[1]["line"], blocks[1]["end"]) == (3, 7)
+
+
+def _dates_handoff(date: str) -> str:
+    return (
+        "## Findings\n\n### Bottom line\n\nx.\n\n## Sources\n\n"
+        "| Source | Document | Document date | sha256 | Use |\n|---|---|---|---|---|\n"
+        f"| a.pdf | Annual report | {date} | {'a' * 64} | Debt |\n"
+    )
+
+
+@pytest.mark.parametrize("cell", ["not stated", "Not stated", "  NOT STATED  ", ""])
+def test_document_dates_treats_not_stated_as_no_date(cell: str) -> None:
+    sections = store.sections_of(_dates_handoff(cell))
+    assert store.document_dates(sections) == {}
+
+
+def test_document_dates_keeps_a_real_date_and_a_later_module_supplies_it() -> None:
+    first = store.document_dates(store.sections_of(_dates_handoff("not stated")))
+    later = store.document_dates(store.sections_of(_dates_handoff("2024-11-12")))
+    merged: dict[str, str] = {}
+    for found in (first, later):
+        for name, date in found.items():
+            merged.setdefault(name, date)
+    assert merged == {"a.pdf": "2024-11-12"}
+
+
+# ---- Task C3 (2026-11-12, decision 9): the score Python computes from a module's inputs table.
+INPUTS = (
+    "\n### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n"
+    "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
+    "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
+    "| Insufficient Information | 0 |\n| Fields present | 95 |\n| Fields total | 100 |\n"
+    "| Source gate | pass |\n| CRITICAL | 0 |\n| MATERIAL | 0 |\n| MINOR | 1 |\n"
+)
+
+
+def test_an_output_without_the_inputs_section_has_no_confidence_field(tmp_path):
+    outputs = read_store(tmp_path)["outputs"].values()
+    assert outputs and all("confidence" not in o for o in outputs)
+
+
+def test_an_output_with_the_inputs_table_carries_the_computed_score(tmp_path):
+    result = read_store(tmp_path, cp0_extra=INPUTS)
+    by_module = {o["module"]: o for o in result["outputs"].values()}
+    assert by_module["CP-0"]["confidence"] == {"value": 89, "band": "High"}
+    assert all("confidence" not in o for m, o in by_module.items() if m != "CP-0")
+
+
+def test_an_output_with_a_wrong_inputs_table_says_why_there_is_no_score(tmp_path):
+    result = read_store(tmp_path, cp0_extra=INPUTS.replace("| Source gate | pass |\n", ""))
+    (cp0,) = (o for o in result["outputs"].values() if o["module"] == "CP-0")
+    assert list(cp0["confidence"]) == ["missing"]
+    assert cp0["confidence"]["missing"] == "the inputs table is missing rows"
+    for bad in ("#", "`", "|", "CP-", "Source gate"):
+        assert bad not in cp0["confidence"]["missing"]
+
+
+def test_a_blocked_modules_not_assessable_row_is_a_missing_field_with_the_fixed_sentence():
+    blocked = (
+        "## Findings\n\n### Bottom line\n\nNot assessable: no source file was read.\n\n"
+        "### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n"
+        "| Not assessable | Not supplied: blocked |\n"
+    )
+    assert store.confidence_fields(blocked.encode()) == {
+        "confidence": {"missing": "the module was blocked, so no score is computed"}
+    }
+    live = blocked.replace("Not assessable: no source", "The view is stable: no source")
+    assert store.confidence_fields(live.encode())["confidence"]["missing"] != (
+        "the module was blocked, so no score is computed"
+    )
+
+
+def test_a_huge_count_hides_no_other_run_output(tmp_path):
+    huge = INPUTS.replace("| Calculated | 2 |", "| Calculated | " + "9" * 400 + " |")
+    result = read_store(tmp_path, cp0_extra=huge)
+    (cp0,) = (o for o in result["outputs"].values() if o["module"] == "CP-0")
+    assert list(cp0["confidence"]) == ["missing"]
+    assert len(result["outputs"]) > 1
+
+
+def test_a_lane_or_map_of_only_not_supplied_lists_each_distinct_reason_once():
+    first, second = "Not supplied: no legal event is settled here", "Not supplied: undated triggers"
+    lane = lane_fields(f"| {first} |" + f" {first} |" * 5 + f" {second} |")
+    assert lane["events"][0]["gap"] == "no legal event is settled here; undated triggers"
+    edge = map_fields(f"| {first} |" + f" {first} |" * 3 + f" {second} |")
+    assert edge["maps"][0]["gap"] == "no legal event is settled here; undated triggers"

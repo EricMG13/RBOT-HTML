@@ -158,6 +158,22 @@ NET_DEBT_TABLE = """\
 | --- | --- | --- | --- | --- | --- |
 | FY2023 | 1500 | 300 | 1200 | US$m | Synthetic; gross debt includes finance leases. |
 | FY2024 | 1400 | 275 | 1125 | US$m | Synthetic; gross debt includes finance leases. |"""
+POST_BS_HEADER = (
+    "| Event | Date | Amount | Pro forma net debt | Pro forma net leverage | Reporting unit "
+    "| Basis and limitation |"
+)
+POST_BS_NONE = (
+    POST_BS_HEADER
+    + "\n| --- | --- | --- | --- | --- | --- | --- |\n"
+    + "| None found in the sources read | \u2014 | \u2014 | \u2014 | \u2014 | US$m "
+    "| Synthetic; the annual report and its notes were read. |"
+)
+POST_BS_EVENT = (
+    POST_BS_HEADER
+    + "\n| --- | --- | --- | --- | --- | --- | --- |\n"
+    + "| Notes issued after year end | 2024-11-05 | 500 | 1625 | 3.4 | US$m "
+    "| Synthetic; proceeds not yet applied. |"
+)
 NON_USD_TABLES = {
     "Chart data: liquidity": """| Period | Cash | Undrawn committed facilities | Reporting unit | Basis and limitation |
 | --- | --- | --- | --- | --- |
@@ -404,6 +420,19 @@ for _heading, (_module, _types, _) in MAPS.items():
     OWNER_TABLES.setdefault(_module, {})[_heading] = synthetic_table(
         EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
     )
+SCORED = ("CP-1B", "CP-1C", "CP-1D", "CP-2A", "CP-2D", "CP-2E", "CP-2G", "CP-2H", "CP-3")
+SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
+UNSCORED = ("CP-0", "CP-1", "CP-1A", "CP-L10", "CP-2", "CP-3C", "CP-8")
+CONFIDENCE_ROWS = (
+    "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
+    "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
+    "| Insufficient Information | 0 |\n| Fields present | 95 |\n| Fields total | 100 |\n"
+    "| Source gate | pass |\n| CRITICAL | 0 |\n| MATERIAL | 0 |\n| MINOR | 1 |"
+)
+for _module in SCORED:  # Every module whose method carries the score writes its inputs table.
+    OWNER_TABLES.setdefault(_module, {})["Confidence inputs"] = synthetic_table(
+        "| Input | Value |", *CONFIDENCE_ROWS.splitlines()
+    )
 OWNER_PATHWAY = {
     "CP-3": "portfolio_decision",
     "CP-DR": "relative_value",
@@ -474,6 +503,7 @@ def answer(context: dict, plan_routes: list) -> str:
                 lines += [f"### {heading}", "", table, ""]
     if context["module_id"] == "CP-1":  # ... and the net debt table (owner, 2026-11-12).
         lines += ["### Net debt data", "", NET_DEBT_TABLE, ""]
+        lines += ["### Post-balance-sheet adjustments", "", POST_BS_NONE, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]
     for heading in ("Calculations", "Gaps", "Next module"):
@@ -1439,7 +1469,8 @@ PROSE_BLOCK_START = (
     "read the source documents. After the analysis is finished, open `## Findings` with these "
     "four sections, each exactly once, in this order, before any other `## Findings` content:\n"
     "- `### Bottom line`: one or two paragraphs. The first sentence states this module's view "
-    "and its consequence for creditors. Start it with a word, not a figure or a symbol.\n"
+    "and its consequence for creditors, in at most 45 words. Start it with a word, not a figure "
+    "or a symbol. The whole Bottom line is at most 180 words.\n"
     "- `### Key findings`: one paragraph or one list item per finding, each starting with the "
     "judgement; give figures only where they move the view.\n"
     "- `### Contrary evidence and what would change the view`: prose giving the strongest "
@@ -1451,7 +1482,8 @@ DATA_BLOCK = (
     "Reader passage. The reader is a portfolio manager or credit committee member who has not "
     "read the source documents. Open `## Findings` with `### Bottom line`: one or two "
     "paragraphs whose first sentence states this module's view and its consequence for "
-    "creditors. If this module is blocked, its `### Bottom line` begins exactly "
+    "creditors, in at most 45 words; the whole Bottom line is at most 180 words. If this module "
+    "is blocked, its `### Bottom line` begins exactly "
     "`Not assessable: ` followed by why (the exact words that mark it blocked); a module that "
     'is not blocked must not use the words "not assessable" in its Bottom line. Your tables '
     "follow as the main content, unchanged and exact.\n\n"
@@ -1600,6 +1632,19 @@ def test_the_checker_rejects_a_module_code_in_a_key_finding(tmp_path):
     assert any(i.startswith("Prose check 2") and "CP-2D" in i for i in issues), issues
 
 
+def test_the_checker_rejects_pipeline_wording_after_the_reader_passages(tmp_path):
+    issues = prose_issues_of(
+        tmp_path,
+        "CP-4",
+        lambda raw: raw.replace(
+            "## Calculations", "## Calculations\n\nThe helper scripts were not run.", 1
+        ),
+    )
+    assert any(
+        i.startswith("Prose check 10") and 'in section "Calculations"' in i for i in issues
+    ), issues
+
+
 def test_the_checker_rejects_a_bare_figure(tmp_path):
     issues = prose_issues_of(
         tmp_path, "CP-4", lambda raw: raw.replace("cover is thin at 3.1x", "debt is 1,250")
@@ -1743,8 +1788,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
             "do not block for want of an acceptance receipt",
             "`prepare_invocation.py`",
             "`validate_handoff.py`",
-            "`confidence_score.py`",
-            "record each as not run",
+            "`completeness_check.py`",
+            "do each check or calculation yourself",
             "Nobody can answer a question during this run",
             "then the method's declared safe default",
             "block only the decision the method ties to it",
@@ -1752,6 +1797,108 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
             "Missing evidence still blocks exactly what the method says it blocks",
         ):
             assert phrase in head, (module, phrase)
+
+
+# sha256 of method_text(module) at commit 1b41e65, before decisions 7, 9 and 11 changed the shared
+# text (computed by calling method_text on that commit). The library marks a run "Earlier
+# methods" when the text after METHOD_MARK differs, so the shared-text change must leave every
+# one of these as it was. CP-8 alone changed on main after that commit (36a4c52, 184bfbb, 1e46c49:
+# src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
+METHOD_TEXT_SHA256_AT_1B41E65 = {
+    "CP-0": "ff1c92c296681a7dce3325f2ce588d7ff3af9a13c3a0aa8c21289642195873f7",
+    "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
+    "CP-1A": "6a85341f7ce9d89189027ccba0a88504873819f2a6d498df2814f991120cbd6e",
+    "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
+    "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
+    "CP-1D": "50cc8ec34ed140f22859fd384eb7f16d81acc3404728b0493f642d5ba4daf4b1",
+    "CP-2": "bef6d197f08b0b66ae137a209e056d553baf383b18dc40173c27fa734cff2de8",
+    "CP-2A": "a594a8e8c7427f063274fc48961fbe2603b3bc0e032ff345222579fe57ef4c50",
+    "CP-2D": "2f977243550b0c76f1cccf41d7d11e66061280e8743d2fe5454a9cacdf9b9d1a",
+    "CP-2E": "4d730920f241c7f7d762a7606890aa2f0b567e1b85372ab3ff659a462ab5d4a7",
+    "CP-2G": "6d15e5eee90a18410466fad2d60efb05740f7eb0972595ceae8116ba1f0db76f",
+    "CP-2H": "e98d0b0c5c84059ef7f10e595c270c4532cf29246c612bb0f108809010c3e3a8",
+    "CP-3": "144798da83e3aab842f8a2e187008a95ecc5c7b387f9e5bc1b31b92ffdf20f1c",
+    "CP-3C": "51efb56c61d6f8051d134efbfcdc76aa8eb2af3c3a7331b449c093d24279803e",
+    "CP-3D": "e43f2d5d73d7e15e24d53e302d84d8eca543e14848656dc3a3dc7fb85fde25f8",
+    "CP-4": "fb2e764ed645f3d65112aebe8db12feb215763ffdaca25e6d70a627250d1c6bc",
+    "CP-4C": "2e70ce4fd894deba7bc2a6234953689f898d73c0ac093336806d70fd16815d8e",
+    "CP-5": "a0b02519822dbd84ba928f026b0e3aa8a7a82ba71604059e9f7ceec9f395bb90",
+    "CP-6": "32fdd06787a47c6351924f1371b90a8b6937c11fbfcb04404eb6590de0ec3b0b",
+    "CP-8": "560e6026abc340b8240a2fb4397f43a52ccb9386c5810ae1cc3b74e063e45075",
+    "CP-DR": "54a57f559181087df17e476d271b71c67b00f38e87288f95c7831cbd3e3a056e",
+    "CP-L10": "527d90f10ce7c541cc15f2e702f73502199f6628335c95e66b64920e7cfba18d",
+}
+
+
+def test_the_method_block_is_byte_identical_so_no_past_run_is_marked_earlier_methods():
+    now = {m: hashlib.sha256(cpos_launch.method_text(m).encode()).hexdigest() for m in METHODS}
+    assert now == METHOD_TEXT_SHA256_AT_1B41E65
+
+
+def screen_module_names():
+    source = (ROOT / "apps/issuer-library/credit_os/web/screen.js").read_text()
+    groups = source.partition("const groups = [")[2].partition("\n];")[0]
+    return dict(re.findall(r"\['(CP-[0-9A-Z]+)','([^']+)'\]", groups))
+
+
+def test_module_names_equal_the_display_names_screen_js_shows():
+    assert cpos_launch.MODULE_NAMES == screen_module_names()
+    assert len(cpos_launch.MODULE_NAMES) >= 20
+
+
+def test_every_module_is_told_the_reader_vocabulary_names_sources_and_chart_notes(tmp_path):
+    """Owner decisions 7, 8, 9 and 11 of 2026-11-12: shared text before the method."""
+    _, texts = all_instructions(tmp_path, modules=tuple(m for m in METHODS if m != "CP-8"))
+    for module, text in texts.items():
+        head = text.partition(cpos_launch.METHOD_MARK)[0]
+        assert "record each as not run" not in head, module
+        for phrase in (
+            "Never mention the scripts, the tooling or anything that could not be run",
+            "Do not state a confidence score, a confidence band or a QA status",
+            (
+                "this overrides the method's `qa_status`, confidence score and band fields, its "
+                "Audit Summary score and its helper-script steps, so leave those fields and "
+                "steps out"
+            ),
+            (
+                "say in the Limitations passage or under `## Gaps`, in plain words, what could "
+                "not be established and why it matters, without naming the file, script or "
+                "module code"
+            ),
+            "a register written as bullets or prose follows the sentence rules",
+            "Basis lines and the chart, map, event and forecast input sections",
+            'write "not established" in plain words instead of the tag',
+            "In every sentence under `## Findings`, `## Calculations` and `## Gaps`",
+            (
+                '"handoff", "this transport", "the pack", "fact pack", "source pack", '
+                '"canonical", "re-anchor", "helper script", "upstream module"'
+            ),
+            "snake_case",
+            "Refer to another module only by its plain name from this list",
+            "Financial foundation; Earnings changes; Short credit snapshot",
+            "`Source | Document | Document date | sha256 | Use`",
+            "exact file name as supplied",
+            "not stated",
+            "Do not list the run settings",
+            "at most 45 words",
+            "at most 180 words",
+        ):
+            assert phrase in head, (module, phrase)
+        assert "with its exact name and sha256" not in head, module
+        assert ("one sentence stating the main qualification" in head) == (
+            "### Chart data:"
+            in text.partition(cpos_launch.METHOD_MARK)[0].partition(
+                "Report selectors, each exactly once"
+            )[2]
+        ), module
+        assert ("at most 60 characters" in head) == (
+            "### Map:" in head.partition("Report selectors, each exactly once")[2]
+        ), module
+    chart = [m for m, t in texts.items() if "one sentence stating the main qualification" in t]
+    assert {"CP-1", "CP-2D"} <= set(chart) and any(
+        "at most 60 characters" in t for t in texts.values()
+    )
+    assert all('"No qualification."' in texts[m] for m in chart)
 
 
 def test_modules_run_after_the_handoffs_their_methods_consume(tmp_path):
@@ -4636,7 +4783,7 @@ def test_instruction_states_the_reader_voice_rulings(tmp_path):
             "Every figure in a reader passage must also appear in the handoff's tables or "
             "`## Calculations` with the same sign, unit and scale."
         ),
-        "the `[Insufficient Information]` tag belongs in tables and registers only",
+        "the `[Insufficient Information]` tag belongs in tables only",
         "Never round an exact value",
         "basis points, percentage points, pp, times, notch(es), day(s), week(s)",
         "does not belong in a reader sentence",
@@ -5294,6 +5441,265 @@ def test_a_net_debt_row_with_a_stated_gap_is_accepted_in_the_form_the_rule_allow
         assert old in raw
         raw = raw.replace(old, new)
     assert _checked_handoff(task, raw.encode(), checker(prepared.layout)) == ()
+
+
+POST_BS_HEADING = "### Post-balance-sheet adjustments"
+POST_BS_SENTENCE = "state the pro forma figure beside it"
+
+
+@pytest.mark.parametrize(
+    "pathway",
+    [
+        *("credit_snapshot", "earnings_update", "relative_value", "covenant_refinancing"),
+        *("distressed_restructuring", "portfolio_decision", "short_snapshot"),
+    ],
+)
+def test_cp1_is_asked_for_the_post_balance_sheet_table_and_others_for_the_pro_forma_sentence(
+    tmp_path, pathway
+):
+    """Decision 10 of 2026-11-12: the table is CP-1's; a module quoting year-end figures states
+    the pro forma figure beside them; the chart and net debt table rules are unchanged."""
+    prepared, _task, _context = good_task(tmp_path, "CP-1", pathway)
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
+    assert text.count(f"`{POST_BS_HEADING}`") == 1
+    assert f"`{POST_BS_HEADER}`" in text
+    assert "None found in the sources read" in text
+    assert text.index(POST_BS_HEADING) < text.index(cpos_launch.METHOD_MARK)
+    assert NET_DEBT_HEADER in text  # the net debt table rule is unchanged
+    assert "Pro forma" not in text.split("`### Net debt data`")[1].split("`### ")[0]
+    for heading, columns, _unit in cpos_launch.CHART_TABLES.values():
+        assert "Pro forma" not in " ".join(columns), heading
+    assert not POST_BS_HEADING.startswith("### Chart data:")
+    others = [m for m in prepared.plan.instructions if m != "CP-1"]
+    assert others
+    for module in others:  # every other module carries the sentence and is not asked for the table
+        sent = (tmp_path / "out" / prepared.plan.instructions[module].path).read_text()
+        assert POST_BS_SENTENCE in sent, module
+        assert POST_BS_HEADING not in sent, module
+    assert POST_BS_SENTENCE in text
+
+
+def test_cp1_handoff_without_the_post_balance_sheet_section_is_refused_naming_it(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    cut = raw.replace(POST_BS_HEADING, "### Dropped")
+    issues = _checked_handoff(task, cut.encode(), checker(prepared.layout))
+    assert any("Post-balance-sheet adjustments" in issue for issue in issues), issues
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "complaint"),
+    [
+        ("| Event | Date |", "| Item | Date |", "Post-balance-sheet adjustments"),
+        ("| Pro forma net debt |", "| Net debt |", "Post-balance-sheet adjustments"),
+        ("| Amount | Pro forma", "| Pro forma", "Post-balance-sheet adjustments"),
+    ],
+)
+def test_checker_refuses_post_balance_sheet_table_with_wrong_columns(tmp_path, old, new, complaint):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert old in raw
+    issues = _checked_handoff(task, raw.replace(old, new, 1).encode(), checker(prepared.layout))
+    assert any(complaint in issue for issue in issues), issues
+
+
+def test_post_balance_sheet_table_accepts_one_event_row_and_refuses_a_malformed_one(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    event = raw.replace(POST_BS_NONE, POST_BS_EVENT)
+    assert event != raw
+    assert _checked_handoff(task, event.encode(), checker(prepared.layout)) == ()
+    bad_date = event.replace("2024-11-05", "5 November 2024")
+    issues = _checked_handoff(task, bad_date.encode(), checker(prepared.layout))
+    assert any("Date" in i and "YYYY-MM-DD" in i for i in issues), issues
+    bad_number = event.replace("| 1625 |", "| about 1,600m |")
+    issues = _checked_handoff(task, bad_number.encode(), checker(prepared.layout))
+    assert any("Pro forma net debt" in i for i in issues), issues
+
+
+PARTIAL_DATE_GAP = "Not supplied: the source states February 2025 only"
+
+
+def test_post_balance_sheet_instructions_state_the_date_form_and_the_pro_forma_gap_sentence(
+    tmp_path,
+):
+    """A source that gives only a month or quarter must not push the model to invent a day."""
+    prepared, _task, _context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    text = (tmp_path / "out" / prepared.plan.instructions["CP-1"].path).read_text()
+    assert "YYYY-MM-DD only when the source states the day" in text
+    assert "Not supplied: the source states <what it gives> only" in text
+    assert "month, quarter or year" in text
+    assert "<month or quarter>" not in text
+    assert "is unavailable; do not block the module for it" in text
+    assert "is unavailable, and do not block the module for it" not in text
+    assert "When Financial foundation does not state the pro forma figure" in text
+
+
+def test_the_reader_layer_says_registers_are_tables_and_their_content_exact():
+    passages = cpos_launch.PROSE_PASSAGES
+    assert "registers are written as tables, and all of its content is exact" in passages
+    assert "unchanged and exact" not in passages
+
+
+def test_post_balance_sheet_partial_date_refusal_names_the_not_supplied_form(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    event = raw.replace(POST_BS_NONE, POST_BS_EVENT)
+    partial = event.replace("2024-11-05", "February 2025")
+    issues = _checked_handoff(task, partial.encode(), checker(prepared.layout))
+    assert any(
+        "Date" in i and "Not supplied: the source states <what it gives> only" in i for i in issues
+    ), issues
+    stated = event.replace("2024-11-05", PARTIAL_DATE_GAP)
+    assert _checked_handoff(task, stated.encode(), checker(prepared.layout)) == ()
+
+
+def test_post_balance_sheet_none_row_needs_its_unit_and_basis(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    blank = raw.replace(
+        "| US$m | Synthetic; the annual report and its notes were read. |", "|  |  |"
+    )
+    issues = _checked_handoff(task, blank.encode(), checker(prepared.layout))
+    assert any("Post-balance-sheet adjustments" in i for i in issues), issues
+
+
+# ---- Task C3 (2026-11-12, decision 9): the confidence score is computed from a table of inputs.
+CONFIDENCE_TEXT = f"### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n{CONFIDENCE_ROWS}\n"
+
+
+def confidence_spec(module: str):
+    return next(t for t in cpos_launch.OWNER_TABLES[module] if t.heading == "Confidence inputs")
+
+
+def test_the_modules_whose_method_carries_the_score_are_the_ones_asked_for_the_table():
+    carrying = {m for m, paths in cpos_launch.METHODS.items() if cpos_launch._SCORE in paths}
+    assert carrying == set(SCORED)
+    for module in SCORED:
+        assert confidence_spec(module)
+    for module in UNSCORED:
+        assert all(
+            t.heading != "Confidence inputs" for t in cpos_launch.OWNER_TABLES.get(module, ())
+        )
+
+
+def test_the_table_is_asked_in_one_sentence_of_the_shared_text_and_only_of_scored_modules(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=tuple(m for m in METHODS if m != "CP-8"))
+    for module in SCORED:
+        head = texts[module].partition(cpos_launch.METHOD_MARK)[0]
+        assert "`### Confidence inputs`" in head, module
+        assert "computed from it" in head and "not sentence text" in head, module
+        assert "| Input | Value |" in head and "Source gate" in head, module
+    for module in set(UNSCORED) & set(texts):  # CP-8 is planned by CP-OS, not selected.
+        head = texts[module].partition(cpos_launch.METHOD_MARK)[0]
+        assert "Confidence inputs" not in head, module
+    # The existing rule that a module states no score still stands, for every module.
+    assert all("Do not state a confidence score" in t for t in texts.values())
+
+
+def test_a_scoring_modules_draft_without_a_well_formed_table_is_refused():
+    spec = confidence_spec("CP-2D")
+    assert cpos_launch.chart_issues(CONFIDENCE_TEXT, spec) == ()
+    assert cpos_launch.chart_issues("### Other\n\ntext\n", spec) == (
+        "Add `### Confidence inputs` inside ## Findings, with its table.",
+    )
+    no_gate = CONFIDENCE_TEXT.replace("| Source gate | pass |\n", "")
+    assert any("Source gate" in i for i in cpos_launch.chart_issues(no_gate, spec))
+    word = CONFIDENCE_TEXT.replace("| Calculated | 2 |", "| Calculated | two |")
+    assert any("Calculated" in i for i in cpos_launch.chart_issues(word, spec))
+    zero = CONFIDENCE_TEXT.replace("| Fields total | 100 |", "| Fields total | 0 |")
+    assert any("Fields total" in i for i in cpos_launch.chart_issues(zero, spec))
+    other = CONFIDENCE_TEXT.replace("| Input | Value |", "| Name | Amount |")
+    assert any("Input | Value" in i for i in cpos_launch.chart_issues(other, spec))
+    score = CONFIDENCE_TEXT.replace("| MINOR | 1 |", "| MINOR | 1 |\n| Score | 89 |")
+    assert any("Score" in i for i in cpos_launch.chart_issues(score, spec))
+
+
+# ---- Whole-branch wave (H2): a blocked scoring module obeys the blocked rule and is accepted.
+BLOCKED_BOTTOM = "## Findings\n\n### Bottom line\n\nNot assessable: no source file was read.\n\n"
+ONE_ROW = (
+    "### Confidence inputs\n\n| Input | Value |\n| --- | --- |\n"
+    "| Not assessable | Not supplied: blocked |\n"
+)
+
+
+def test_a_blocked_scoring_module_writes_one_not_assessable_row_and_is_accepted():
+    spec = confidence_spec("CP-2D")
+    assert cpos_launch.chart_issues(BLOCKED_BOTTOM + ONE_ROW, spec) == ()
+    assert cpos_launch.chart_issues(BLOCKED_BOTTOM + CONFIDENCE_TEXT, spec) == ()
+
+
+def test_a_module_that_is_not_blocked_is_refused_for_the_not_assessable_row():
+    spec = confidence_spec("CP-2D")
+    text = "## Findings\n\n### Bottom line\n\nThe view is stable.\n\n" + ONE_ROW
+    (issue,) = cpos_launch.chart_issues(text, spec)
+    assert "Not assessable" in issue and "not an input" in issue
+
+
+def test_the_confidence_text_says_what_a_blocked_module_writes_before_the_method(tmp_path):
+    _, texts = all_instructions(tmp_path, modules=("CP-3",))
+    head = texts["CP-3"].partition(cpos_launch.METHOD_MARK)[0]
+    assert (
+        "A blocked module writes one row in it instead, `| Not assessable | Not supplied: "
+        "<reason> |`, and no score is computed." in head
+    )
+
+
+# ---- Whole-branch wave (L7): a front-matter score, band or QA status the module states itself.
+@pytest.mark.parametrize(
+    "key", ["confidence_score: 62", "confidence_band: Medium", "qa_status: Passed"]
+)
+def test_a_front_matter_score_band_or_qa_status_is_refused(tmp_path, key):
+    front = f"---\nissuer_id: nbg\nmodule_id: CP-4\n{key}\n---\n\n"
+    issues = prose_issues_of(tmp_path, "CP-4", lambda raw: front + raw)
+    name = key.split(":")[0]
+    assert any(name in i and "front matter" in i for i in issues), issues
+
+
+def test_front_matter_without_those_keys_and_the_words_in_body_text_are_not_refused(tmp_path):
+    front = "---\nissuer_id: nbg\nmodule_id: CP-4\n---\n\n"
+    body = "\n\nThe qa_status: value is not stated.\n"
+    issues = prose_issues_of(tmp_path, "CP-4", lambda raw: front + raw + body)
+    assert not any("front matter" in i for i in issues), issues
+
+
+# ---- Whole-branch wave (L4): wording gaps in the shared and per-table text.
+def test_a_near_miss_none_row_is_refused_naming_the_exact_text(tmp_path):
+    prepared, task, context = good_task(tmp_path, "CP-1", "credit_snapshot")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    assert POST_BS_NONE in raw
+    for near in ("None found in the sources read.", "none found in the sources read"):
+        text = raw.replace("| None found in the sources read |", f"| {near} |")
+        assert text != raw
+        issues = _checked_handoff(task, text.encode(), checker(prepared.layout))
+        assert any("exactly `None found in the sources read`" in i for i in issues), (near, issues)
+
+
+def test_the_none_rule_names_the_tables_own_columns_and_the_sign_of_amount_is_stated(tmp_path):
+    spec = cpos_launch.POST_BS
+    rule = cpos_launch._none_rule(spec)
+    assert "whose Date, Amount, Pro forma net debt and Pro forma net leverage are each" in rule
+    assert "exactly `None found in the sources read` (no other punctuation or wording)" in rule
+    assert cpos_launch._and_list(("A", "B", "C")) == "A, B and C"
+    assert "without a sign when net debt rises and with a minus sign when it falls" in spec.rules
+    assert "cash effect" not in spec.rules
+    assert "net debt, net leverage or cash from Financial foundation" in cpos_launch.VOICE_RULES
+
+
+def test_the_shared_text_names_no_confidence_script_and_separates_the_score_from_claim_labels(
+    tmp_path,
+):
+    _, texts = all_instructions(tmp_path, modules=("CP-3",))
+    head = texts["CP-3"].partition(cpos_launch.METHOD_MARK)[0]
+    assert "confidence_score.py" not in head
+    assert "Python computes any score and band the report shows" in head
+    assert "a claim's own confidence label" in head
+    assert (
+        "list each issuer source it relied on in `## Sources`, naming the exact file and its "
+        "sha256;" in head
+    )
+    assert "as a table with the columns `Source | Document | Document date | sha256 | Use`" in head
+    assert "rejected unless it does all of this" in head
 
 
 # --- Task E4 (2026-11-12 findings 1, 2, 4): the sent texts name `column` and `interest`

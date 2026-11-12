@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {eventTable, eventOrder, orderEvents, eventSpan, eventAxis, eventPlace} = require('./calendar.js');
+const {eventTable, eventOrder, orderEvents, eventSpan, eventAxis, eventPlace, eventTicks, eventAsOf, eventStack, eventRoom, EVENT_TRACK_MIN} = require('./calendar.js');
 
 // Block shape is store.py table_block: {type, line, headers, rows: [{line, cells}]}.
 const table = (headers, rows) => ({type: 'table', line: 1, headers, rows: rows.map((cells, i) => ({line: i + 3, cells}))});
@@ -73,4 +73,104 @@ test('eventAxis runs from the earliest start to the latest end and eventPlace gi
   assert.deepEqual(eventPlace(spans[1], axis), {left: 16.99, width: 7.95});
   assert.deepEqual(eventPlace(spans[2], axis), {left: 75.62, width: 24.38});
   assert.deepEqual(eventAxis([spans[0]]), {start: days(2025, 3, 31), end: days(2025, 3, 31) + 1});
+});
+
+const day = (y, m, d) => eventSpan(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, 'day');
+const label = ticks => ticks.filter(t => t.label).map(t => t.label);
+
+test('eventTicks: a tick at each 1 January inside the axis, labelled by year; the percent is the eventPlace percent', () => {
+  const axis = eventAxis([day(2022, 6, 15), day(2025, 3, 1)]);
+  const ticks = eventTicks(axis);
+  assert.deepEqual(ticks.map(t => t.label), ['2023', '2024', '2025']);
+  // Hand-computed: the axis is 990 days wide; 2023-01-01 is 200 days in, 2024-01-01 is 565 and 2025-01-01 is 931.
+  assert.deepEqual(ticks.map(t => t.left), [20.2, 57.07, 94.04]);
+  assert.ok(ticks.every(t => t.left >= 0 && t.left <= 100));
+});
+
+test('eventTicks: an axis starting on 1 January has a tick at 0; over 12 years every Nth year is labelled, every year still has a tick up to 40 years', () => {
+  assert.equal(eventTicks(eventAxis([day(2024, 1, 1), day(2024, 12, 31)]))[0].left, 0);
+  const wide = eventTicks(eventAxis([day(1993, 1, 1), day(2024, 12, 31)]));
+  assert.equal(wide.length, 32, 'a tick per year for 32 years');
+  assert.deepEqual(label(wide), ['1995', '2000', '2005', '2010', '2015', '2020']);
+  const huge = eventTicks(eventAxis([day(1900, 1, 1), day(2024, 12, 31)]));
+  assert.equal(huge.length, label(huge).length, 'beyond 40 years a tick only at a labelled year');
+  assert.ok(label(huge).length <= 12);
+});
+
+test('eventTicks: an axis shorter than a year gets month ticks at each 1st; none when no 1st falls inside', () => {
+  const ticks = eventTicks(eventAxis([day(2024, 10, 16), day(2025, 2, 10)]));
+  assert.deepEqual(label(ticks), ['Nov 2024', 'Dec', 'Jan 2025', 'Feb']);
+  assert.deepEqual(eventTicks(eventAxis([day(2024, 10, 16), day(2024, 10, 18)])), []);
+  assert.deepEqual(eventTicks(null), []);
+});
+
+test('eventAsOf: the percent of the as-of date on the axis, inclusive at both ends; null outside or when not a date', () => {
+  const axis = eventAxis([day(2024, 1, 1), day(2024, 12, 31)]);
+  assert.equal(eventAsOf(axis, '2024-01-01'), 0);
+  assert.equal(eventAsOf(axis, '2024-12-31'), 100);
+  assert.equal(eventAsOf(axis, '2024-07-01'), eventPlace({from: day(2024, 7, 1).from, to: day(2024, 7, 1).from}, axis).left);
+  assert.equal(eventAsOf(axis, '2023-12-31'), null);
+  assert.equal(eventAsOf(axis, '2025-01-01'), null);
+  for (const bad of [null, undefined, '', '2024-13-01', '30 September 2024']) assert.equal(eventAsOf(axis, bad), null);
+  assert.equal(eventAsOf(null, '2024-01-01'), null);
+});
+
+test('eventStack: points closer than a marker stack in date order at their own x; points far apart share the baseline', () => {
+  const axis = eventAxis([day(2024, 1, 1), day(2024, 12, 31)]);
+  const items = [day(2024, 1, 1), day(2024, 1, 2), day(2024, 1, 3), day(2024, 7, 1), day(2024, 12, 31)].map(span => ({span, ...eventPlace(span, axis)}));
+  // On 1032 px, one day is 2.8 px: the first three are within one marker of each other.
+  assert.deepEqual(eventStack(items, 1032, 16), [0, 1, 2, 0, 0]);
+  assert.deepEqual(items.map(i => i.left), items.map(i => eventPlace(i.span, axis).left), 'x is not moved');
+  assert.deepEqual(eventStack(items, 1032, 2), [0, 0, 0, 0, 0], 'a marker narrower than the gap needs no stacking');
+});
+
+test('eventStack: a span keeps the baseline and a point over it stacks above it; two spans that overlap stack; spans that only touch do not', () => {
+  const axis = eventAxis([day(2024, 1, 1), day(2024, 12, 31)]);
+  const span = (date, precision) => ({span: eventSpan(date, precision), ...eventPlace(eventSpan(date, precision), axis)});
+  const year = span('2024', 'year'), june = span('2024-06', 'month'), may = span('2024-05', 'month');
+  const point = {span: day(2024, 6, 10), ...eventPlace(day(2024, 6, 10), axis)};
+  assert.deepEqual(eventStack([year, point], 1032, 16), [0, 1]);
+  assert.deepEqual(eventStack([may, june], 1032, 16), [0, 0], 'May ends where June starts');
+  assert.deepEqual(eventStack([year, june], 1032, 16), [0, 1]);
+  assert.deepEqual(eventStack([june, point], 1032, 16), [0, 1]);
+  assert.deepEqual(eventStack([], 1032, 16), []);
+});
+
+test('eventStack: by default levels hold at the narrowest track the lanes are drawn at, so no two same-level discs overlap at any wider track', () => {
+  // The CP-1A lane of tdg-proof-snapshot-opus-002 (the review probe's rows).
+  const rows = [['1993', 'year'], ['2022-01-27', 'day'], ['2023-11-28', 'day'], ['2024-02-27', 'day'], ['2024-04-22', 'day'], ['2024-05-21', 'day'], ['2024-06-04', 'day'], ['2024-06-06', 'day'], ['2024-07-31', 'day'], ['2024-09-19', 'day'], ['2024-Q4', 'quarter']];
+  const spans = rows.map(([d, p]) => eventSpan(d, p)), axis = eventAxis(spans);
+  const items = spans.map(span => ({span, ...eventPlace(span, axis)})), levels = eventStack(items);
+  assert.equal(EVENT_TRACK_MIN, 402);
+  for (const width of [EVENT_TRACK_MIN, 600, 834, 1032]) for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    if (!items[i].span.point || !items[j].span.point || levels[i] !== levels[j]) continue;
+    assert.ok(Math.abs(items[i].left - items[j].left) * width / 100 >= 16, `${rows[i][0]} and ${rows[j][0]} at ${width}px`);
+  }
+});
+
+test('eventStack: an item\'s own chip width (a three-digit number) is used for the overlap test', () => {
+  const axis = eventAxis([day(2024, 1, 1), day(2024, 12, 31)]);
+  const at = (d, chip) => ({span: d, ...eventPlace(d, axis), chip});
+  const a = day(2024, 6, 1), b = day(2024, 6, 6); // 5 days = 5.5 px on 402 px
+  assert.deepEqual(eventStack([at(a), at(b)], 402), [0, 1]);
+  const c = day(2024, 6, 1), d = day(2024, 6, 20); // 20.9 px apart: clear of 16 px, not of 25 px
+  assert.deepEqual(eventStack([at(c, 16), at(d, 16)], 402), [0, 0]);
+  assert.deepEqual(eventStack([at(c, 25), at(d, 25)], 402), [0, 1]);
+});
+
+test('eventTicks: a lone whole year behaves alike in a leap and a non-leap year', () => {
+  for (const year of [2024, 2025]) {
+    const ticks = eventTicks(eventAxis([eventSpan(String(year), 'year')]));
+    assert.deepEqual(ticks.map(t => [t.left, t.label]), [[0, String(year)]], String(year));
+  }
+});
+
+test('eventRoom: a thin span at the right end is anchored to its right edge so its number stays inside the track; elsewhere a span starts at its own left', () => {
+  const axis = eventAxis([day(1993, 1, 1), eventSpan('2024-Q4', 'quarter')]);
+  const q4 = eventSpan('2024-Q4', 'quarter'), at = span => ({span, ...eventPlace(span, axis), chip: 19});
+  const [from, to, anchored] = eventRoom(at(q4));
+  assert.ok(anchored && Math.abs(to - EVENT_TRACK_MIN) < 0.01 && to - from === 19, 'ends at the track end and is one chip long');
+  const early = eventRoom(at(eventSpan('1993-01', 'month')));
+  assert.deepEqual([early[0], early[2]], [0, false]);
+  assert.deepEqual(eventStack([at(q4), at(day(2024, 12, 20))]), [0, 1], 'a point under the anchored chip goes up');
 });
