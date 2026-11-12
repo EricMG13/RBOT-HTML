@@ -2265,10 +2265,8 @@ def checker(layout: MarkdownLayout) -> Check:
 def _key_figure_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     """CP-L10's Key figures against the CP-1 handoff it was sent; none sent is a refusal."""
     if "CP-1" not in task.handoffs:
-        return (
-            "Key figures cannot be checked against the financial foundation: "
-            "no CP-1 handoff was supplied.",
-        )
+        missing = "Key figures cannot be checked against the financial foundation: no CP-1 handoff."
+        return (missing,)
     return key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
 
 
