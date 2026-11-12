@@ -4,6 +4,29 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — CP-2G facility schedule (branch `claude/cash-flow-model-comparison-498459`)
+
+Owner waiver 2026-11-12: the 800-line PR limit is waived for this branch's pull request (about 1,290
+changed lines: plan document about 340, tests about 520; the whole-branch review found no sensible split).
+
+Scope: CP-2G facility schedule: offline synthetic tests only; no provider called, no model response
+retained; a live CP-2G run that states `facilities` has not been done; the Forecast page was not
+exercised with the new `forecast_exact.json` keys.
+- `uv run pytest tests/test_cpos_facilities.py -q`: exit 0, 55 passed (the answer key puts the debt outside the stated facilities at the analyst's rate: 37.5, 34.8, 30.6).
+- `uv run pytest tests/test_cpos_launch.py -q -k "forecast or told_how"`: exit 0, 24 passed; the whole
+  file: 507 passed, 1 skipped (the paid live test).
+- `uv run python tools/quality_gate.py`: exit 0, 0 findings.
+- Independent checks: the output for a block without facilities is byte-identical to origin/main 36b6d8f
+  (sha256 e5017389abc2c878a0b0bae323a50bcbadf35c3a08f676f277c1505b9d047089 over the five model files);
+  the arithmetic matched an independent Fraction calculation over 74 accepted seeded random blocks
+  (11 with debt outside the stated facilities, per-case rates included; reviewer's probe, not in the suite); the
+  adversarial review found and fixed two Medium defects (negative total debt from repayments above
+  base debt; unbounded floating all-in rate). Three boundary tests each kill their mutant (`0 <= rate`
+  to `0 < rate`; `unallocated < 0` to `<= 0`; `due < start` to `<=`).
+- Known limits: debt outside the stated facilities bears interest at the analyst's assumed rate, not a sourced one; with base debt
+  missing no unit check runs on facility balances; the printed-in-CP-1 check for rate terms accepts
+  any matching percent anywhere in CP-1.
+
 ## 2026-11-11 — Starting a run from an earlier run: the whole branch (branch `claude/initiating-runs-existing-issuers-4a8739`)
 
 Owner waiver 2026-11-12: the 800-line PR limit is waived for #52 (2,784 changed lines).
@@ -948,39 +971,3 @@ the two spec amendments: `docs/design/2026-11-10-impeccable-pass.md`. Base `orig
   forced colours (rule written, not rendered); touch input; the inbox-built library with Run
   activity; runs without charts or with a committee band; whether a keyboard-only reader finds
   the full basis (it is in the selected-run panel, not on focus).
-
-## 2026-11-10 — Refactoring and optimisation sweep (branch `claude/refactor-optimisation-sweep-01c49e`, tip `dc90974`)
-
-Scope: synthetic tests, scratch harnesses and a scratch copy of four retained runs on macOS. No
-provider was called and nothing ran on Windows. Report with all measurements and the open rows:
-`docs/sweeps/2026-11-10/REPORT.md`.
-- Fixed test-first: `state.declared` was `None` for every real handoff (now Blocked 11, Requires
-  More Work 2 on `cpos-tdg-sol-medium-all-001`); the watcher accepted a cap above the ruling's
-  USD 20; an overflowing source-text page number stopped the build; a drive-relative source name
-  was accepted.
-- Measured: watcher step at 200 ended runs 801.6 ms to 2.4 ms (16,200 file opens to 0); library
-  rebuild of four runs 0.777 s to 0.576 s, bytes read 185.4 MB to 65.7 MB, built library identical
-  (build time masked).
-- Gates on `dc90974`, exit 0: the quality gate (0 findings in 19 files); the `checks.yml` pytest
-  command plus the chips and inbox tests (1,392 passed, 7 deselected); node page logic (97 pass).
-- Reviews: per task and whole branch; one Medium (a "failed" run with a live launcher kept its
-  empty activity entry) fixed in `f28523a` and re-reviewed.
-- Not verified: Windows; a live watcher or provider path; the browser tests and the page's
-  rendering of the declared statuses; the full suite; ten open or decision rows listed in the report.
-- Follow-up (branch `claude/sweep-followup-ruling-rebuild`, tip `e74f2b4`; owner, 2026-11-10): the
-  two decision rows are ruled and fixed test-first. The watcher starts and launches only under its
-  standing ruling; a library-rebuild error of any `Exception` type is logged, shown on the page and
-  retried instead of stopping the watcher. Exit 0 on `e74f2b4`: the quality gate; the same pytest
-  command (1,412 passed, 7 deselected). Review found the first ruling test passed without the
-  guard; it is now a cause test (fails with the check removed). The packaged layout was checked by
-  building the package into a temporary folder on macOS, not on Windows.
-- Outstanding items and a review of `main` (branch `claude/sweep-outstanding-items`, base
-  `b2ae395`; owner, 2026-11-10; written without sub-agents): the seven open rows are fixed
-  test-first (F2, F4, F5, F6, F7, D4, B1) and B3 is accepted and pinned. The review added four
-  fixes: a page range in handoff text hung the library build; one malformed line in a run folder
-  ended the watcher; `--poll-seconds 0` and like settings were accepted; the PR check ran no inbox
-  or chips test. Exit 0 on the branch: the quality gate; the PR check's pytest command with those
-  tests added (1,437 passed, 7 deselected); node page logic (107 pass). The library built from the
-  four retained runs is byte-identical to `main`'s. Not verified: Windows; a live watcher; the
-  inbox tests on Linux before this PR's own check; no independent review (the owner ruled out
-  sub-agents), only the author's adversarial pass.

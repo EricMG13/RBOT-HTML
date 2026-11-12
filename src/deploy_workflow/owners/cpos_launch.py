@@ -1491,6 +1491,26 @@ FORECAST_BLOCK = (
     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
     "only the drivers that differ from base, in the same driver form (every other driver is "
     "inherited from base), or null when you set no such case. "
+    "`facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate "
+    "terms, otherwise write null. Each row is "
+    '`{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", '
+    '"annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, '
+    "`spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must "
+    'print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states '
+    "`fixed_rate_pct` and null for the other rate fields; a floating-rate facility states "
+    "`spread_pct`, `floor_pct` or null, and `reference_rate`, your assumed reference rate for "
+    "each forecast year as three decimal fractions "
+    '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
+    "must be between 0% and 30% in every year. The facilities' "
+    "scheduled repayments over the three years must not exceed base debt. "
+    "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
+    "YYYY-MM-DD or null. A row's `balance` is its drawn principal. At most 40 rows; names are "
+    "unique ignoring case; balances may total at most 1.25 times base debt; `fixed_rate_pct` is "
+    "at most 30, `spread_pct` at most 20 and `floor_pct` at most 10; `reference_rate` values have "
+    "at most four decimal places. When `facilities` is stated Python computes cash interest on "
+    "those facilities and scheduled repayment from it; debt not in a row bears interest at your "
+    "`interest_rate` driver and is not repaid; the `debt_repayment` driver is not used, so do "
+    "not vary it in `upside_drivers` or `downside_drivers`. "
     "`years` is three consecutive fiscal years, each "
     '`{"year": <int>, "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. '
     "`scope_limits` is a list of text limits. Set `schema_version` to "
@@ -1949,6 +1969,11 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
         if "gives no forecast drivers" not in str(error):
+            if "facilit" in str(error) or "scheduled repayments" in str(error):
+                fallback = "write `facilities` as null and keep the drivers."
+                return (
+                    f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",
+                )
             fix = "Correct the block; if you cannot, set every driver's values to "
             return (
                 f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
