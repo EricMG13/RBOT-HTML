@@ -860,7 +860,8 @@ def test_an_earlier_runs_inputs_are_read_and_its_files_carried(svc, fake_env):
     reading = svc.call("GET", f"/api/submissions/{sid}/reading").json()
     assert reading["error"] == "" and reading["documents"], reading
     assert [f["name"] for f in got.json()["files"]] == ["notes/a.txt"]
-    assert "notes/a.txt" in json.dumps(reading["documents"])
+    assert carried.json()["carried"] == ["notes/a.txt"]
+    assert [d["source"] for d in reading["documents"]] == [f["name"] for f in got.json()["files"]]
 
 
 def test_inputs_and_carry_for_an_unknown_run_are_404(svc):

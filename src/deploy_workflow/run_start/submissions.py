@@ -205,7 +205,17 @@ def _stored(root: Path, *, strict: bool = False) -> dict[str, int]:
     With ``strict`` a link anywhere under ``root`` is a ``Refused``: the launcher follows links and
     the digest does not, so a link would let bytes change without the digest changing."""
     found: dict[str, int] = {}
-    for here, dirs, names in os.walk(root, followlinks=False):
+
+    def unreadable(error: OSError) -> None:
+        # Only a folder that exists but cannot be read is refused; one that vanished (a seal
+        # renamed it) is left to the callers' own retry, as before.
+        if not isinstance(error, PermissionError):
+            return
+        shown = Path(error.filename).relative_to(root).as_posix() if error.filename else "a folder"
+        raise Refused(f"{shown!r} cannot be read")
+
+    walk = os.walk(root, followlinks=False, onerror=unreadable if strict else None)
+    for here, dirs, names in walk:
         linked = [d for d in dirs if (Path(here) / d).is_symlink()]
         if strict and linked:
             raise Refused(f"{linked[0]!r} is a link, not an uploaded file")
@@ -385,7 +395,9 @@ def open_regular(path: Path, size: int | None = None) -> _Carried:
     """Open ``path`` for reading; ``Refused`` unless it is a regular file with one link (and
     ``size`` bytes when given). The last part is not followed if it is a link."""
     try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        # O_NONBLOCK: opening a FIFO must not wait for a writer (fstat then refuses it).
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        fd = os.open(path, flags)
     except OSError as error:
         raise Refused(f"{path.name!r} cannot be read as a regular file") from error
     try:

@@ -1197,3 +1197,43 @@ def test_a_source_folder_that_is_itself_a_link_is_refused(layout, tmp_path):
     with pytest.raises(Refused):
         submissions.carry(layout, sid, linked)
     _nothing_secret_copied(layout, sid)
+
+
+def test_open_regular_does_not_wait_on_a_fifo(tmp_path):
+    fifo = tmp_path / "z.txt"
+    os.mkfifo(fifo)
+    outcome: list[str] = []
+
+    def attempt() -> None:
+        try:
+            submissions.open_regular(fifo)
+        except Refused:
+            outcome.append("refused")
+
+    worker = threading.Thread(target=attempt, daemon=True)
+    worker.start()
+    worker.join(5)
+    held = worker.is_alive()
+    if held:  # release the blocked open so the thread ends
+        os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))
+        worker.join(5)
+    assert not held and outcome == ["refused"]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any folder")
+def test_a_carry_from_a_folder_with_an_unreadable_subfolder_is_refused(layout, tmp_path):
+    src = tmp_path / "run"
+    (src / "q3").mkdir(parents=True)
+    (src / "a.txt").write_bytes(b"a")
+    (src / "q3" / "b.txt").write_bytes(b"b")
+    (src / "q3").chmod(0)
+    sid = new(layout)
+    try:
+        with pytest.raises(Refused, match="q3") as refused:
+            submissions.carry(layout, sid, src)
+        with pytest.raises(Refused, match="q3"):
+            submissions.listing(src)
+    finally:
+        (src / "q3").chmod(0o700)
+    assert str(tmp_path) not in str(refused.value)
+    assert not any(files_folder(layout, sid).iterdir())
