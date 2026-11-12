@@ -1595,19 +1595,48 @@ PEER_READER_BLOCK = (
     "want of peers only when those tables hold no usable peer, and say so.\n\n"
 )
 # Goes into CP-2G's instructions before METHOD_MARK, never into the method block.
+UNIT_RULE = (
+    "State `scale` in every block, as the statements print it (`1000` for thousands, `1` for "
+    "millions), and state every amount in the block in that one unit exactly as printed; an "
+    "amount printed in the other unit is stated as missing, with the reason, not converted. "
+)
 FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence. You state "
     "inputs only; Python computes every forecast figure, so put no forecast figure in the block. "
-    '`base` holds exactly these ten operands in USD millions, each `{"amount": "<decimal>", '
-    '"reason": null}` copied exactly as CP-1 prints it (outflows as positive magnitudes), or '
+    "`scale` is `1` when CP-1's statement tables print USD millions and `1000` when they print "
+    "USD thousands; every amount in this block is stated in that one unit, exactly as CP-1 "
+    "prints it, and Python divides by `scale`, so every published figure is USD millions. Do not "
+    "convert an amount yourself. "
+    + UNIT_RULE
+    + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", '
+    '"reason": null, "row": "<label>", "period": "<header>"}` or '
     '`{"amount": null, "reason": "<why CP-1 does not state it>"}`: '
-    f"{', '.join(cp2g.OPERAND_METRIC)}. `base_drivers` is the method's base-case driver "
+    f"{', '.join(cp2g.OPERAND_METRIC)}. "
+    "`row` is the exact first-cell text of the row of one of the CP-1 handoff's tables that you "
+    "read the amount from, and `period` the exact header text of that table's column (for "
+    'example `"row": "Net sales", "period": "FY2024"`). Name both for every operand that has an '
+    'amount. Copy the amount as that cell prints it (with `"scale": 1000` a cell printing '
+    '2,620,995 is `"2620995"`; at most nine digits and one decimal place); for interest, taxes '
+    "and capex "
+    "write the positive magnitude whatever sign the cell shows; for working capital write the "
+    "cell's value with its sign reversed (a cell printing (45), an investment, is 45; a cell "
+    "printing 45 or +45, a release, is -45). A figure in CP-1's prose, a basis line or its "
+    "sources is not a cell: an amount CP-1 prints in no table cell is stated as missing, with "
+    "the reason. An amount CP-1 prints only in the other unit (for example revolver availability "
+    "in USD millions where the statements are in thousands) is stated as missing, with the "
+    "reason; do not rescale it. Where CP-1 prints the amount under more than one column, name "
+    "a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): the "
+    "Forecast page shows history only for a line named under such a header. `base_drivers` is "
+    "the method's base-case driver "
     "submission (revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, "
     "interest_rate, dividends, debt_repayment; each with `values` for the three forecast years, "
     "`category`, `rationale` and `limitation`). Each driver's `values` are three decimal strings, "
     'one per forecast year (for example ["0.05", "0.04", "0.03"]), each rounded to at most four '
-    'decimal places (a ratio of 0.48022670 is written "0.4802"); `category` is exactly one of '
+    'decimal places (a ratio of 0.48022670 is written "0.4802"); the `dividends` and '
+    '`debt_repayment` values are amounts in the block\'s unit (with `"scale": 1000`, USD 20 '
+    'million is `"20000"`, at most one decimal place) and every other driver is a ratio and is '
+    "never scaled; `category` is exactly one of "
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
     "(for example a blocked dependency), still write the block, with every driver's `values` as "
     "`[null, null, null]`. `downside_shock` is "
@@ -1619,7 +1648,7 @@ FORECAST_BLOCK = (
     "`facilities` is optional: state it when CP-1 prints the debt facilities' balances and rate "
     "terms, otherwise write null. Each row is "
     '`{"name", "balance", "fixed_rate_pct", "spread_pct", "floor_pct", "reference_rate", '
-    '"annual_amortisation", "maturity"}`. `balance` is USD millions and `fixed_rate_pct`, '
+    '"annual_amortisation", "maturity"}`. `balance` is in the block\'s unit and `fixed_rate_pct`, '
     "`spread_pct` and `floor_pct` are percents, each copied exactly as CP-1 prints it; CP-1 must "
     'print each rate with its % sign (a 9.500% coupon is "9.500"). A fixed-rate facility states '
     "`fixed_rate_pct` and null for the other rate fields; a floating-rate facility states "
@@ -1628,8 +1657,9 @@ FORECAST_BLOCK = (
     '(4% is "0.04", not "4"); the reference rate (or the floor, when higher) plus the spread '
     "must be between 0% and 30% in every year. The facilities' "
     "scheduled repayments over the three years must not exceed base debt. "
-    "`annual_amortisation` is USD millions a year, or null when CP-1 states none; `maturity` is "
-    "YYYY-MM-DD or null. A row's `balance` is its drawn principal. At most 40 rows; names are "
+    "`annual_amortisation` is in the block's unit, a year, or null when CP-1 states none; "
+    "`maturity` is YYYY-MM-DD or null. A row's `balance` is its drawn principal. Leave out a "
+    "facility whose balance CP-1 prints only in the other unit. At most 40 rows; names are "
     "unique ignoring case; balances may total at most 1.25 times base debt; `fixed_rate_pct` is "
     "at most 30, `spread_pct` at most 20 and `floor_pct` at most 10; `reference_rate` values have "
     "at most four decimal places. When `facilities` is stated Python computes cash interest on "
@@ -1677,26 +1707,39 @@ PERIOD_TABLE_BLOCK = (
 LAYER1_FORECAST_BLOCK = (
     f"Forecast inputs: write `{cpos_forecast.HEADING}` inside `## Findings`, holding exactly "
     "one fenced json block and no other fence, after your tables. You state inputs only; Python "
-    "computes every forecast figure, so put no forecast figure in the block. `base` holds exactly "
-    'these ten operands in USD millions, each `{"amount": "<decimal>", "reason": null, "row": '
-    '"<label>", "period": "<header>"}` or '
+    "computes every forecast figure, so put no forecast figure in the block. `scale` is `1` when "
+    "your statement tables print USD millions and `1000` when they print USD thousands; every "
+    "amount in this block is stated in that one unit, exactly as your tables print it, and "
+    "Python divides by `scale`, so every published figure is USD millions. Do not convert an "
+    "amount yourself. "
+    + UNIT_RULE
+    + '`base` holds exactly these ten operands, each `{"amount": "<decimal>", "reason": null, '
+    '"row": "<label>", "period": "<header>"}` or '
     '`{"amount": null, "reason": "<why you do not state it>"}`: '
     f"{', '.join(cp2g.OPERAND_METRIC)}. `row` is the exact first-cell text of the row of one of "
     "your own tables that you read the amount from, and `period` the exact header text of that "
     'table\'s column (for example `"row": "Net sales", "period": "FY2024"`). Copy '
-    "the amount as that cell prints it, in millions; for interest, taxes and capex write the "
-    "positive magnitude whatever sign the cell shows; for working capital write the cell's value "
-    "with its sign reversed (a cell printing (45), an investment, is 45; a cell printing 45 or "
-    "+45, a release, is -45). Print your tables as "
+    'the amount as that cell prints it (with `"scale": 1000` a cell printing 2,620,995 is '
+    '`"2620995"`; at most nine digits and one decimal place); for interest, taxes and capex '
+    "write the positive magnitude whatever sign the cell shows; for working capital write the "
+    "cell's value with its sign reversed (a cell printing (45), an investment, is 45; a cell "
+    "printing 45 or +45, a release, is -45). Print your tables as "
     "you normally would; add nothing for this block. A figure in prose, a basis line or the "
-    "sources is not a cell. `base_drivers` is a run-rate base case and nothing more "
+    "sources is not a cell. An amount your tables print only in the other unit is stated as "
+    "missing, with the reason. Where your tables print the amount under more than one column, "
+    "name a column headed by a reporting period (`FY2024`, `Q3 2025`, `H1 2025` or `9M 2025`): "
+    "the Forecast page shows history only for a line named under such a header. "
+    "`base_drivers` is a run-rate base case and nothing more "
     "(revenue_growth, ebitda_margin, capex_pct_revenue, tax_wc_pct_revenue, interest_rate, "
     "dividends, debt_repayment; each with `values` for the three forecast years, `category`, "
     "`rationale` and `limitation`). Anchor every driver to a figure you state: carry the latest "
     "year's ratio forward, or use a scheduled maturity or a declared payment, and name the anchor "
     "in `rationale`. Add no analyst judgement beyond that run-rate. Each driver's `values` are "
     'three decimal strings, one per forecast year (for example ["0.05", "0.04", "0.03"]), each '
-    "rounded to at most four decimal places; `category` is exactly one of "
+    "rounded to at most four decimal places; the `dividends` and `debt_repayment` values are "
+    'amounts in the block\'s unit (with `"scale": 1000`, USD 20 million is `"20000"`, at '
+    "most one decimal place) and every other driver is a ratio and is never scaled; `category` "
+    "is exactly one of "
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. Leave a driver's values null, as "
     "`Insufficient Information`, when no stated figure can anchor it; when none can, set every "
     "driver's `values` to `[null, null, null]`. Set `downside_shock`, `upside_drivers` and "
@@ -2383,6 +2426,18 @@ def _key_figure_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     return key_figures_issues(text, task.handoffs["CP-1"].decode("utf-8"))
 
 
+# The refusals about a facility: the two `parse` raises itself (`_check_facilities`, `_to_millions`)
+# and a schema refusal whose own first path is `facilities` (or the unique-names rule, which the
+# schema reports at the root). A model-written key or quoted text that merely contains `facilit`
+# is not one.
+_FACILITY_REFUSAL = re.compile(
+    r"^[\w-]+: (?:facility |scheduled repayments total |\w+_drivers states debt_repayment"
+    r"|forecast inputs: (?:\d+ problems; first: )?"
+    r"(?:facilities[.:]|\(root\): Value error, facility names must be unique))"
+)
+_UNNAMED_AT_SCALE = re.compile(r"^[\w-]+: a block at scale 1000 must name the row and period")
+
+
 def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     """Live run tdg-forecast-004 (2026-11-10): a forecast block delivery cannot parse is sent
     back for repair here, not dropped after payment. Declining (all null) stays the method's call
@@ -2392,16 +2447,27 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
     try:
         cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
-        if "gives no forecast drivers" not in str(error):
-            if "facilit" in str(error) or "scheduled repayments" in str(error):
-                fallback = "write `facilities` as null and keep the drivers."
-                return (
-                    f"Forecast inputs: {error}. Correct the facilities; if you cannot, {fallback}",
-                )
-            fix = "Correct the block; if you cannot, set every driver's values to "
-            return (
-                f"Forecast inputs: {error}. {fix}[null, null, null] and say why in scope_limits.",
+        message = str(error)
+        operand = re.search(r"^[\w-]+: base (\w+)\b", message)
+        if operand:  # a wrong row label should not cost the forecast
+            name = operand.group(1)
+            fix = f"Correct the row, period or amount of {name}; if you cannot, state {name} "
+            missing = "as missing: amount null, no row or period, and the reason."
+            return (f"Forecast inputs: {error}. {fix}{missing}",)
+        if re.match(r"^[\w-]+: the handoff gives no forecast drivers", message):
+            return ()  # declining stays the method's call
+        if _UNNAMED_AT_SCALE.match(message):
+            fix = "Name the row and period of each base operand; if you cannot, "
+            advice = (
+                f"{fix}set every driver's values to [null, null, null] and say why in scope_limits."
             )
+        elif _FACILITY_REFUSAL.match(message):
+            fallback = "write `facilities` as null and keep the drivers."
+            advice = f"Correct the facilities; if you cannot, {fallback}"
+        else:
+            fix = "Correct the block; if you cannot, set every driver's values to "
+            advice = f"{fix}[null, null, null] and say why in scope_limits."
+        return (f"Forecast inputs: {error}. {advice}",)
     return ()
 
 
