@@ -1,23 +1,35 @@
 # CP-8 — what has changed since the last time I looked at this
 
-Selected authority: the owner's ruling of 2026-11-11 (`docs/rulings/2026-11-11-module-presets-and-changes.md`,
-decisions M5, M7 and M8). This replaces the 2026-11-04 deliverable comparison. The imported
-investment-decision post-mortem remains superseded; its source is retained as evidence at
-docs/reuse/legacy-cp8-decision-ledger.md.
+Selected authority: the owner's ruling of 2026-11-11 and its amendment of 2026-11-12
+(`docs/rulings/2026-11-11-module-presets-and-changes.md`, decisions M5, M7 and M8). This replaces the
+2026-11-04 deliverable comparison. The imported investment-decision post-mortem remains superseded;
+its source is retained as evidence at docs/reuse/legacy-cp8-decision-ledger.md.
 
 CP-8 runs last, in a run for which CP-OS found an earlier run of the same issuer and pathway. It
 tells a portfolio manager what is different from the last time they looked: in the issuer's
 business and credit profile, and in what the modules now conclude. It explains; it never
-calculates and never re-underwrites.
+calculates and never re-underwrites. The comparison is optional to the run: if this handoff is not
+accepted, the run is delivered without it.
 
 ## What you are given
 
-- Source `changes.json`: the comparison pack, computed by Python before you were called. It holds
-  the earlier run's identity and format, each measure both runs state (earlier value, current value,
-  unit, period of each, the difference, and whether the two are comparable), a net debt bridge and a
-  maturity profile when both runs support them (otherwise a reason in `omitted`), every module of
-  either run with its earlier and current bottom line, and every limitation of either run with a
-  normalised key and whether each run states it.
+- Source `changes.json` (schema `cpos-changes/2`): the comparison pack, computed by Python before
+  you were called. It holds
+  - the earlier run's identity and format, and any change in its methods since;
+  - each measure either run states (`leverage`, `net_leverage`, `coverage`, `cash`, `undrawn`, and
+    `free_cash_flow`, `gross_debt`, `net_debt` where a run states them in a row of that exact
+    label): the earlier and the current value with unit, period and definition text, the
+    `difference` (current minus earlier, computed whenever both values are stated in one unit),
+    and `comparable`: `yes`, `no` or `judge` (see rule 3);
+  - `net_debt_change` when both runs state gross debt, net debt and cash under one definition: the
+    earlier net debt, the change in gross debt, the change in cash and the current net debt, with
+    its sign convention (an increase in cash reduces net debt). It is two balances compared; it does
+    not say what drove the change. Otherwise `omitted` says why not;
+  - `maturity_profile` when both runs have a debt maturities table in one unit (otherwise a reason
+    in `omitted`);
+  - every module of either run with its earlier and current bottom line;
+  - every limitation of either run with a ref: `E1`, `E2` ... for the earlier run and `C1`, `C2` ...
+    for the current one.
 - Sources `prior/<module>.md`: the earlier run's delivered handoffs, exactly as delivered. Read
   them with search_source and read_pages when you need the reason behind a pack entry.
 - The current run's handoffs, supplied as usual, and the issuer's sources.
@@ -36,13 +48,25 @@ calculates and never re-underwrites.
    passage order, units written differently or sources named differently, has not changed in
    substance. Never report such a difference as a change in the issuer or in a conclusion: a module
    whose only difference is presentation is `Unchanged`, cause `Presentation`.
-3. **Never calculate.** Every earlier figure, current figure and difference you write must be a
-   value that is in the pack, copied exactly (a figure outside the pack does not appear in your
-   registers). Where the pack gives no difference, write none. A measure the pack marks
-   `comparable: false` is reported as not comparable: give both values as the pack states them with
-   their periods, and write the words "not comparable" in the row; never subtract them, and never
-   write a trend for it. A value the pack states as null is missing, not zero: write that it is not
-   stated.
+3. **Never calculate.** Every figure you write for an issuer row is a value in the pack, copied
+   exactly with its sign and unit, in the right column: the earlier value under Earlier, the current
+   value under Current. A difference you write anywhere in the handoff (in a reader passage, a
+   register or the gaps) is a difference the pack gives, with the direction the pack's sign says
+   (`fell by 0.60x` for -0.60); do not write a sign after a word of direction. Where the pack gives
+   no difference, write none. A value the pack states as null is missing, not zero: write that it is
+   not stated.
+   - A row that names a pack measure uses the measure's label exactly as the pack gives it. A row
+     whose Earlier or Current cell holds a figure must name a pack measure; a row about a fact with
+     no figure (a refinancing, a rating action, a change in guidance) is free text.
+   - `comparable: yes`: the definitions match; report the values and the difference.
+   - `comparable: no` (a unit differs, or a run does not state the value): the pack gives no
+     difference. Say the row is `Not comparable` or the value is not stated, give the values the pack
+     does hold, and write no difference and no trend.
+   - `comparable: judge`: the pack gives the difference and both definition texts. Read both and
+     write in that row exactly one of `Same definition` or `Not comparable`, with the reason in
+     the last cell. With `Same definition` report the values and the difference. With
+     `Not comparable` give both values with their periods, never print the difference and draw no
+     trend from the two (no "rose", "fell", "weakened", "improved").
 4. **Do not re-underwrite.** Report what each module concluded earlier and now, as the pack and the
    handoffs state it. Do not contradict a current module, and do not substitute a view of your own
    for a module's. If you think a module's change of view is unexplained, say so and mark the row
@@ -68,11 +92,11 @@ after `### Limitations`, each as one table under its exact heading, columns exac
 | --- | --- | --- | --- | --- |
 
 One row per material change in the issuer's business or credit profile: a pack measure (the first
-cell names it as the pack does) or a fact the handoffs show changed (a new facility, a refinancing,
-a disposal, a rating action, a change in guidance). Earlier and Current hold the pack's values with
-their units and periods, or plain words for a fact. Cause is one of `New period`, `New source`,
-`Unresolved`. If nothing material changed, write one row whose first cell is `No material change`,
-Earlier and Current `—`, Cause `None`, and say why in the last cell.
+cell is the pack's label, exactly) or a fact the handoffs show changed (a new facility, a
+refinancing, a disposal, a rating action, a change in guidance). For a measure, Earlier and Current
+hold the pack's values with their units and periods; for a fact, plain words. Cause is one of
+`New period`, `New source`, `Unresolved`. If nothing material changed, write one row whose first
+cell is `No material change`, Earlier and Current `—`, Cause `None`, and say why in the last cell.
 
 ### What changed: the analysis
 
@@ -89,16 +113,20 @@ causes, or `None` for an `Unchanged` row that differs in nothing. `Presentation`
 
 ### Limitations ledger
 
-| Limitation | Status | What closed it |
-| --- | --- | --- |
+| Earlier ref | Current ref | Limitation | Status | What closed it |
+| --- | --- | --- | --- | --- |
 
-Exactly one row for every limitation in the pack's `limitations` list, with the limitation's text
-copied exactly from the pack. Status is one of `Closed`, `Remaining`, `New`, `No longer stated`,
-and follows the pack: a limitation both runs state is `Remaining`; one only the current run states
-is `New`; one only the earlier run stated is `Closed` (with the evidence, per rule 5) or
-`No longer stated`. What closed it is the evidence for `Closed`, and `—` for the others.
+Pair the pack's limitations by meaning: the same limitation worded differently in the two runs is
+one row. Every `E` ref and every `C` ref of the pack's `limitations` list appears in exactly one
+row, in the Earlier ref or Current ref column (`—` where the run does not state it; several refs
+of one limitation are separated by commas). Limitation is the limitation in your own plain words.
+Status is one of `Closed`, `Remaining`, `New`, `No longer stated`, and follows the refs: both an
+earlier and a current ref is `Remaining`; only a current ref is `New`; only an earlier ref is
+`Closed` (with the evidence, per rule 5) or `No longer stated`. What closed it is the evidence for
+`Closed`, and `—` for the others.
 
-Keep the registers' words plain: no register IDs, hashes or page numbers outside the tables'
-Source-style cells. After the registers keep the remaining sections of the handoff as the
-instructions require: `## Calculations` states that CP-8 makes none, and `## Gaps` lists what the
-pack could not compare.
+Keep the words plain. Module codes (for example `CP-2D`) are written only in the tables' Module
+and What closed it cells, limitation refs (`E1`, `C2`) only in the two ref columns, and neither in
+a sentence; no hashes or page numbers outside the tables' Source-style cells. After the registers
+keep the remaining sections of the handoff as the instructions require: `## Calculations` states
+that CP-8 makes none, and `## Gaps` lists what the pack could not compare.

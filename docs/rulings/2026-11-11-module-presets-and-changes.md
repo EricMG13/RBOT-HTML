@@ -57,20 +57,52 @@ task and reads the data contract below.
 
 **Prior-run rule (one function, `deploy_workflow.changes.find_prior`).** Among the runs the issuer
 library lists (`library_index.admit_run`: completed, every module answered in its own run; earlier-format
-and earlier-methods runs included), those with the same issuer and pathway and an as-of date on or before
-this run's, excluding this run's own folder. The latest is chosen by (as-of date, first model-call start,
-folder name). None: CP-8 is not planned and the run records `changes: first run of this pathway`. A run
-folder outside a `runs` folder searches nothing and records `changes: not compared: ...`. Otherwise
-`prepare` plans CP-8 last (registry fan-in, as CP-5's) and copies the prior run's delivered handoffs, CP-8
-excluded, into `<run>/prior/<module>.md`, pinned as sources with their hashes. The prior run's folder is
-read, never written. A run folder that already holds `workflow.json` keeps the pins it records: a newer
-completed run cannot change the manifest and get the relaunch refused. The `prior/*` sources and the
-pack go to CP-8 only; no other module's request holds them. CP-8 is not in any preset and cannot be
-selected with `--modules`. Its call is one more call under the same cap and holds; the offline cap check
-sizes it with the rest. The run start summary passes the `_engine` folder as the workspace and returns
-`changes` (and CP-8 in `modules`); the approval page shows a "Changes" row.
+and earlier-methods runs included), a candidate has the same issuer ID (compared without regard to case),
+the same pathway, the same case kind, an issuer name equal after case and whitespace folding, and an as-of
+date on or before this run's, and is not this run's own folder. A candidate that fails the name or the case
+kind is never used and the reason is recorded once (`changes: ... (not used: <run>: <reason>)`). A run
+launched with an explicit module subset is not a comparison base: the manifest records
+`selection: "preset"|"explicit"` (omitted for a manifest that predates it, which stays byte-identical); an
+older run without it is a base only if it delivered its pathway's lead module (CP-2; CP-1B for an earnings
+update; CP-L10 for a short snapshot). Every delivered handoff of the chosen run is checked as readable UTF-8
+when it is pinned; an unreadable one means no CP-8 and the reason is recorded. The latest candidate is chosen
+by (as-of date, first model-call start, folder name). None: CP-8 is not planned and the run records
+`changes: first run of this pathway`. A run folder outside a `runs` folder searches nothing and records
+`changes: not compared: ...`. Otherwise `prepare` plans CP-8 last (registry fan-in, as CP-5's) and copies the
+prior run's delivered handoffs, CP-8 excluded, into `<run>/prior/<module>.md`, pinned as sources with their
+hashes. The prior run's folder is read, never written. A run folder that already holds `workflow.json` keeps
+the pins it records: a newer completed run cannot change the manifest and get the relaunch refused. The
+`prior/*` sources and the pack go to CP-8 only; no other module's request holds them. CP-8 is not in any
+preset and cannot be selected with `--modules`.
 
-**`changes.json` (schema `cpos-changes/1`, computed by Python before CP-8 is called, given to CP-8 as the
+**The approval binds the earlier run.** The run start summary names what CP-8 compares with (the run's id,
+as-of date and pathway, or "first run") and returns it with `changes` (and CP-8 in `modules`); the approval
+page shows a "Changes" row. That choice is folded into the digest the approval carries (`issued` keeps it
+beside the digest) and into the run record (`Record.prior`); the service starts the launcher with
+`--prior <run folder>` or `--prior none` and the launcher uses exactly that run. If the named run is no
+longer listed, or no longer passes the tests above, the run proceeds without CP-8 and records
+`changes: not compared: the earlier run named at approval is no longer available`. A launch from the command
+line without the flag searches as before. (The run page's "start from an earlier run", `?from=`, only copies
+documents and answers and carries no run id; it is not used for this.)
+
+**The cap and CP-8.** CP-8's call is one more call under the same cap and holds. The offline check sizes it on
+its real first request: the loop inlines this run's handoffs, which are not written yet, so the earlier run's
+handoff of the same module stands in for each (the mean of the earlier handoffs for a module that run lacks),
+plus the instructions and a fixed allowance; the note names the figure as an estimate. If that hold does not
+fit the cap, or the estimate is over the model's context, the run is planned without CP-8 and `prepare` says
+so (`changes: not compared: CP-8's first request ... over the cap ...; the run is planned without CP-8`); a
+resumed run folder is refused instead. (CP-5's offline hold is still sized on its instructions alone; that
+predates this work and is not changed here.)
+
+**CP-8 is optional to completion (the one fail-open).** If CP-8 is not accepted within its bounds, or its
+call does not fit the cap, or the pack cannot be built from the handoffs, the run delivers without CP-8 and
+records `changes: not produced \u2014 <reason>` in the completion record, a `changes_not_produced` run event,
+the delivery manifest's `changes_note` and stderr, and the delivery's scope says so. Another module's failure,
+and any other fault of CP-8's call (a provider stop, an overrun, an interrupted or already started call),
+still stops the run. A relaunch of such a run folder leaves the delivery as it is, makes no new call and
+says so.
+
+**`changes.json` (schema `cpos-changes/2`, computed by Python before CP-8 is called, given to CP-8 as the
 source `changes.json`, published unchanged in the delivery).** Every number is a decimal string; missing is
 null, never zero.
 - `prior`: `{run, as_of, pathway, format: "current"|"earlier", methods_changed: [text]}`; `current`:
@@ -78,35 +110,50 @@ null, never zero.
 - `measures`: `{key, label, unit, comparable, reason, prior, current, difference}`; `prior` and `current`
   are `{label, unit, value, period, definition}` or null when a run does not state the measure. Measures:
   `leverage`, `net_leverage`, `coverage`, `cash`, `undrawn` (the CP-1 chart-table rows the library
-  quotes) and `free_cash_flow`, `gross_debt`, `net_debt` (the one CP-1 table row of that label that states
-  its unit, in the label's brackets or a `Reporting unit` column). `comparable` is false when a run does
-  not state it or its label, unit or definition text (the table's "Basis and limitation", after
-  normalisation) differs; `difference` is current minus prior in Decimal, null unless comparable with both
-  values stated.
-- `net_debt_bridge` (`unit, prior_net_debt, change_in_gross_debt, change_in_cash, current_net_debt`) and
-  `maturity_profile` (`unit, rows[{period, prior, current, difference}]`) only when both runs support
-  them; otherwise `omitted` holds a reason for each.
+  quotes) and `free_cash_flow`, `gross_debt`, `net_debt` (the one CP-1 table row labelled `free cash flow` or `fcf`, `gross debt` or `total debt`, `net debt`,
+  that states its unit; no synonym table is added, and a row that is absent is omitted with that as the
+  reason). Python always computes `difference` (current minus prior, Decimal)
+  when both values are stated and the units are equal. `comparable` is `"no"` when the units differ or a
+  value or run is missing (no difference), `"yes"` when the label and the definition texts (the table's
+  "Basis and limitation") are equal once digits, page and locator words and punctuation are removed, and
+  otherwise `"judge"`: the difference is given, both definition texts are in the pack, and CP-8 writes for
+  that row either `Same definition` or `Not comparable` with a reason; with `Not comparable` it prints no
+  difference and draws no trend. The checker enforces this. Figures are read with a Unicode minus, a
+  bracketed negative and a trailing `x` or `%`.
+- `net_debt_change` (`unit, prior_net_debt, change_in_gross_debt, change_in_cash, current_net_debt,
+  convention`): only when both runs state gross debt, net debt and cash in one unit under one definition and
+  each run's net debt is its gross debt less its cash. An increase in cash reduces net debt. It compares two
+  balances; it does not say what drove the change. A bridge by drivers (cash generated, acquisitions,
+  distributions, new borrowing) is not built: it is valid only when the current run's reporting period
+  equals the gap between the two runs, and the handoffs do not say so. `maturity_profile` (`unit,
+  rows[{period, prior, current, difference}]`) from the table directly under CP-1's "Chart data: debt
+  maturities" heading, only when both runs have one in one unit. `omitted` holds a reason for each of the two
+  left out.
 - `modules`: every module of either run, CP-8 excluded: `{module, title, ran_prior, ran_current,
   prior_bottom_line, current_bottom_line}` (first paragraph of `### Bottom line`, Basis line dropped; an
   earlier-format handoff: the Reader summary's Bottom line cell; else null).
-- `limitations`: `{key, text, modules, prior, current}` per distinct normalised key (check 7's
-  normalisation) over both runs' `### Limitations` items (earlier format: the Reader summary's "Main
-  limitation"); a "No limitation changes ..." item is not a limitation.
+- `limitations`: `{earlier: [{ref, module, text}], current: [{ref, module, text}]}` over both runs'
+  `### Limitations` items (earlier format: the Reader summary's "Main limitation"; a "No limitation changes
+  ..." item is not a limitation). Refs are `E1`, `E2` ... (earlier) and `C1`, `C2` ... (current), in module
+  order then order in the handoff. CP-8 pairs them by meaning; Python does not.
 
 **Method and check.** `src/deploy_vii/methods/cp8.md` is rewritten (M8): reader passages, then
-`### What changed: the issuer`, `### What changed: the analysis` and `### Limitations ledger`. Two kinds of
-change are never mixed; every row has one cause from `New period, New source, Method change, Correction,
-Presentation, Unresolved` (issuer rows only the first, second and last; `Presentation` only with
-`Unchanged`); analysis status `Unchanged, Strengthened, Weakened, Reversed, New, Not run this time`; ledger
-status `Closed, Remaining, New, No longer stated` (M7). A removed limitation is `Closed` only when the row
-names a current-run module that shows what closed it, else `No longer stated`. CP-8 never calculates:
-`deploy_workflow.changes_check` refuses a handoff whose issuer-register figure is not a pack value (decimal,
-sign aside; a whole number below 100 in the Effect cell is a count unless it carries a unit), whose
-earlier or current cell differs from the pack's value for the measure it names, that gives a difference for
-a not-comparable measure, that lacks or doubles a module row or a pack limitation's row, whose statuses
-contradict the pack (the ledger status follows from which runs state the limitation), or that uses an
-unlisted status or cause. A refusal is a targeted repair inside the existing attempt cap. The nine prose
-checks and the reader-figure check apply as to every prose module.
+`### What changed: the issuer`, `### What changed: the analysis` and `### Limitations ledger` (columns
+`Earlier ref | Current ref | Limitation | Status | What closed it`). Two kinds of change are never mixed;
+every row has one cause from `New period, New source, Method change, Correction, Presentation,
+Unresolved` (issuer rows only the first, second and last; `Presentation` only with `Unchanged`); analysis
+status `Unchanged, Strengthened, Weakened, Reversed, New, Not run this time`; ledger status `Closed,
+Remaining, New, No longer stated` (M7). A removed limitation is `Closed` only when the row names a
+current-run module that shows what closed it, else `No longer stated`. CP-8 never calculates:
+`deploy_workflow.changes_check` refuses a handoff in which an issuer row whose Earlier or Current cell holds a
+figure does not name a pack measure by its exact label (a row without figures is a fact row), a row that does
+name one does not print that measure's value, sign and unit in the right column, a difference printed
+anywhere (reader passages and `## Gaps` included) is not a pack difference or is written in the wrong
+direction, a `judge` row says neither or both of `Same definition` and `Not comparable`, a `Not comparable`
+row prints the difference or a trend, a module has no row or two, a limitation ref is in no row or in more
+than one or in a sentence or a wrong column, a ledger status contradicts its refs, or a status or cause is
+unlisted. A refusal is a targeted repair inside the existing attempt cap. The nine prose checks and the
+reader-figure check apply as to every prose module. The module's display name, on the run page and in the
+library, is "Changes since the last run".
 
-Not decided here: charts and visuals for the Changes section (T5); CP-8's page name on the run page and in
-the library still reads "Deliverable comparison" until that task renames both together.
+Not decided here: charts and visuals for the Changes section (T5).

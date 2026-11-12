@@ -537,7 +537,7 @@
   },
   {
     "module_id": "CP-8",
-    "title": "Changes since the earlier run",
+    "title": "Changes since the last run",
     "aliases": [],
     "required": [
       "CP-0"

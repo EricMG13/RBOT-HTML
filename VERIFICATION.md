@@ -4,6 +4,28 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-12 — CP-8 fix round 1: comparable rule, ref ledger, optional to completion, approval binding (branch `claude/cp8-changes-r1`)
+
+Scope: engine, method and run start service, offline, no provider call. Pack schema `cpos-changes/2` (difference always
+computed for equal units; `comparable` yes/no/judge; `net_debt_change`; refs `E1`/`C1`); the checker reads the row a
+figure sits in and every printed difference; CP-8 not accepted, pack unbuildable or hold over the cap delivers without
+CP-8 (`changes: not produced`; relaunch leaves it); the approval names the earlier run and the digest binds it
+(`--prior`); prior = same ID (any case), name, pathway, case kind, preset run, readable; the offline hold sizes CP-8 on an
+estimated first request; display name "Changes since the last run". Answer keys are hand-written in `tests/test_changes.py`
+(`ME`, `CASH_ROW`, `PACK`, `REGISTERS`; the hold 5.73 from the price table). Changed expectations, by the ruling:
+`test_a_wrong_cp8_answer...` is now `test_a_cp8_that_is_not_accepted_loses_only_itself...` (exit 0, not 1); the summary's
+digest in `test_run_start_submissions.py` is `bound(digest, prior)`; the fake launchers accept `--prior`. Probes (reviewer's,
+unedited; `r1_` copies add `issuer_name`/`case_kind` to `find_prior`, the cash rows of `REGISTERS`, the worktree path):
+`t4_real_pair` 0, `t4_pack_edges` 0, `t4_checker_gaps` no ACCEPTED, `t4adv_identity`, `_nonutf8`, `_scope_text`,
+`_test_cp8_blocks_delivery`, `_test_approval_drift` no longer reproduce, `_mutation` kills the mutant (0). Results: the named
+fast set 1,400 passed, exit 0; `-m browser -k "run_start or context_form or library or inbox"` 138 passed, exit 0; node
+tests (calendar, reader, static) 257 passed; quality gate 0 findings, exit 0. Real pair (cpos-tdg-sol-medium-all-001 then
+tdg-reader-format-001): five measures, all `judge` (the basis texts differ in words), differences computed (cash 0,
+undrawn 0); `net_debt_change` omitted (gross debt is in neither run); 20 `E` and 11 `C` refs; `find_prior` picks
+cpos-tdg-sol-medium-all-001; CP-8's estimated first request 318,153 bytes, hold 5.73 (sol-medium) under a USD 20 cap.
+Not verified: any real model writing the ledger or judging a definition; whether the estimate matches a live first request;
+CP-5's offline hold is still sized on its instructions alone (predates this work); the library's Changes section.
+
 ## 2026-11-12 — CP-8 in the run: prior run, pins, comparison pack, check (branch `claude/cp8-changes`, decisions M5, M7, M8)
 
 Scope: engine and method only, offline, no provider call. Built: `deploy_workflow/changes.py` (prior-run rule,
