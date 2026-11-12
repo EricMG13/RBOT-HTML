@@ -552,7 +552,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
         if forecast:
             try:
                 source = "CP-2G" if "CP-2G" in handoffs else "CP-1"
-                cpos_forecast.model_files(handoffs["CP-1"], handoffs[source], source)
+                cpos_forecast.model_files(handoffs["CP-1"], handoffs[source], source, history=True)
             except ValueError as error:
                 # Fail-open, by design and only for ValueError (the inputs block is missing or
                 # invalid): the report is complete without the forecast, so the run still
@@ -573,6 +573,7 @@ def run_handoffs(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- legacy orchestrato
             },
             layout=layout,
             forecast=forecast,
+            history=forecast,  # a new run publishes the history record with its forecast
             changes=changes,
             changes_note=changes_note if not_produced is not None else None,
             module_execution=_module_execution(ordered, retained, request)

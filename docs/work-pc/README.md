@@ -12,37 +12,30 @@ it only re-checks those places.
 | `syncs/<NNN>_<date>_<base>-<head>/changes.patch` | The exact unified diff for the same range, for reading hunk by hunk. |
 | `syncs/<NNN>_<date>_<base>-<head>/SYNC.json` | `base` and `head` commits of that pack. |
 | `manifest.json` | The git blob hash of every file at the newest pack's `head`. |
+| `baselines/04e7221.json` | The same for `04e7221`, the version the work PC first adapted (first sync only). |
+| `WORK-PC-PROMPT.md` | The prompt for the work PC's assistant. |
 
 Packs chain: each starts at the `head` of the one before it. `NNN` numbers them in order.
 
 ## On the work PC, after downloading
 
-1. **Find the new packs.** Compare `docs/work-pc/syncs/` in the new download with the
-   same folder in the adapted copy. Every folder the adapted copy lacks is a pack
-   to process, oldest first. (If the adapted copy has no `docs/work-pc/`, process all.)
-2. **Confirm the packs cover the download.** Before changing anything in the
-   downloaded folder (for a GitHub ZIP, the `RBOT-HTML-main` folder inside it):
+Give the work PC's coding assistant the prompt in [`WORK-PC-PROMPT.md`](WORK-PC-PROMPT.md).
+It backs up the adapted copy, reads the new packs, and then runs:
 
-   ```
-   python tools/work_pc_delta.py check <downloaded folder>
-   ```
+```
+python tools/work_pc_delta.py check <download>                         # packs cover it?
+python tools/work_pc_delta.py plan --new <download> --adapted <copy>   # what to do per file
+```
 
-   "identical to the manifest" means the packs describe every change in it. A
-   `differs` line means the download is newer than the last pack: the packs miss that
-   file, so compare it in full or ask for a fresh pack.
-3. **Update packages first.** Apply the version table in each new `CHANGES.md`.
-4. **Re-adapt only the listed files**, at the `Where` lines. Read `changes.patch`
-   when the summary is not enough.
-5. **See where the copy was adapted.** Run the same check on the adapted copy:
+`plan` compares both folders with the manifest of the version the copy was adapted
+from (`<copy>/docs/work-pc/manifest.json`) and marks each file:
+`copy` (changed upstream only), `delete` (removed upstream only), `merge` (changed
+upstream and adapted here) or `keep` (adapted here only). The first sync has no
+manifest in the copy yet; pass `--base-manifest docs/work-pc/baselines/04e7221.json`
+(the visuals stack, PR #41, the version the work PC first adapted).
 
-   ```
-   python tools/work_pc_delta.py check <adapted copy>
-   ```
-
-   Its `differs`/`extra` lines are the work PC's own adaptations. A file in both that
-   list and a pack's file list needs the most care.
-
-`check` needs only Python 3.11 or later; git is not required.
+After the update, copying this folder into the adapted copy records the sync, so the
+next `plan` starts from it. `check` and `plan` need only Python 3.11 or later; no git.
 
 ## Making a pack
 
