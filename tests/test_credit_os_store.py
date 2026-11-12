@@ -1579,12 +1579,12 @@ def test_the_history_page_labels_and_notes_carry_no_other_issuers_wording():
         ),
         (
             "Historical interest is the Financial foundation line the forecast inputs name, "
-            "which may be interest expense rather than cash paid; forecast interest is opening "
-            "debt times the interest-rate driver."
+            "which may be interest expense rather than cash paid."
         ),
         NM_NOTE,
         DOWNSIDE_NOTE,
     ]
+    assert not any("interest-rate driver" in note for note in grid["notes"])
     text = " ".join(grid["notes"])
     assert not any(word in text for word in ("As Defined", "securitization", "refinancing"))
 

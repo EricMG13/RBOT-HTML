@@ -2800,8 +2800,8 @@ test('model picker: two deliveries of one run differ by the first eight characte
 test('model picker: the relationship is appended only when recorded', () => {
   const models = [pickModel(HASH_1, { previous: HASH_2 }), pickModel(HASH_2)];
   const [first, second] = pickPage(models).modelOptionLabels(models);
-  assert.equal(first, `31 March 2025 · Credit snapshot · Run A · a1b2c3d4 · supersedes ${HASH_2}`);
-  assert.equal(second, `31 March 2025 · Credit snapshot · Run A · e5f6a7b8 · superseded by ${HASH_1}`);
+  assert.equal(first, `31 March 2025 · Credit snapshot · Run A · a1b2c3d4 · supersedes 31 March 2025 · Credit snapshot · Run A · e5f6a7b8`);
+  assert.equal(second, `31 March 2025 · Credit snapshot · Run A · e5f6a7b8 · superseded by 31 March 2025 · Credit snapshot · Run A · a1b2c3d4`);
   assert.ok(!pickPage([pickModel(HASH_1)]).modelOptionLabels([pickModel(HASH_1)])[0].includes('relationship'));
 });
 
@@ -2810,4 +2810,19 @@ test('model picker: with no run context the run folder is named, then the delive
   assert.deepEqual(pickPage([orphan]).modelOptionLabels([orphan]), ['folder-x']);
   const bare = pickModel(HASH_2, { issuerKey: 'other', runFolder: null, runId: null });
   assert.deepEqual(pickPage([bare]).modelOptionLabels([bare]), [HASH_2]);
+});
+
+test('model picker: a relationship names a listed delivery by its label and an unlisted one by its id', () => {
+  const models = [pickModel(HASH_1, { previous: HASH_2 })];
+  assert.equal(pickPage(models).modelOptionLabels(models)[0], `31 March 2025 · Credit snapshot · Run A · supersedes ${HASH_2}`);
+});
+
+test('model picker: ids that share their first eight characters read with the whole id', () => {
+  const models = [pickModel('tdg-forecast-005'), pickModel('tdg-forecast-006')];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['31 March 2025 · Credit snapshot · Run A · tdg-forecast-005', '31 March 2025 · Credit snapshot · Run A · tdg-forecast-006']);
+});
+
+test('model picker: a delivery for a run the library does not list is named by its own run folder, not the page run', () => {
+  const models = [pickModel(HASH_1, { runId: 'run-not-listed', runFolder: 'run-not-listed', sources: [{ run: RUN }] })];
+  assert.deepEqual(pickPage(models).modelOptionLabels(models), ['run-not-listed']);
 });

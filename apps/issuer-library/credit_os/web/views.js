@@ -133,19 +133,19 @@ const modelRun=model=>Object.keys(contexts).find(key=>runModels(key).includes(mo
 const modelOwnRun=model=>Object.keys(contexts).find(key=>(contexts[key].folder===model.runId||contexts[key].folder===model.runFolder)&&runModels(key).includes(model))||modelRun(model);
 // Not superseded by another listed model; one that records a predecessor comes first, then the later folder name.
 const modelOrder=models=>[...models].sort((a,b)=>(models.some(m=>m.previous===a.id)-models.some(m=>m.previous===b.id))||((b.previous!=null)-(a.previous!=null))||byModelId(a,b));
-// The relationship a delivery records with another, or null when it records none.
-function modelRelationship(model,models) {
+// The relationship a delivery records with another, or null when it records none. The other delivery is named by name(id): its picker label when it is listed, its id when not.
+function modelRelationship(model,models,name) {
   const successor=models.find(m=>m.previous===model.id);
-  return model.previous?`supersedes ${model.previous}`:successor?`superseded by ${successor.id}`:null;
+  return model.previous?`supersedes ${name(model.previous)}`:successor?`superseded by ${name(successor.id)}`:null;
 }
-// A delivery in the Model select reads "<run date> · <pathway> · <run id>" from its run, then its run folder, then its delivery id. Two deliveries that
-// read alike each add the first eight characters of the delivery id; a relationship is added only when one is recorded.
+// A delivery in the Model select reads "<run date> · <pathway> · <run id>" from its own run, then its run folder, then its delivery id. Two deliveries that
+// read alike each add the first eight characters of the delivery id, or the whole id when those still tie; a relationship is added only when one is recorded.
 function modelOptionLabels(models) {
-  const base=models.map(m=>{const ctx=contexts[modelOwnRun(m)];return ctx?`${runDate(ctx)} · ${runPathway(ctx)} · ${ctx.run}`:m.runFolder||m.id;});
-  return models.map((m,i)=>{
-    const alike=base.filter(text=>text===base[i]).length>1,relationship=modelRelationship(m,models);
-    return `${base[i]}${alike?` · ${m.id.slice(0,8)}`:''}${relationship==null?'':` · ${relationship}`}`;
-  });
+  const base=models.map(m=>{const ctx=Object.values(contexts).find(run=>sameIssuer(m.issuerKey,run.issuerKey)&&(run.folder===m.runFolder||run.folder===m.runId));return ctx?`${runDate(ctx)} · ${runPathway(ctx)} · ${ctx.run}`:m.runFolder||m.id;});
+  const tagged=models.map((m,i)=>base.filter(text=>text===base[i]).length>1?`${base[i]} · ${m.id.slice(0,8)}`:base[i]);
+  const names=models.map((m,i)=>tagged.filter(text=>text===tagged[i]).length>1&&tagged[i]!==base[i]?`${base[i]} · ${m.id}`:tagged[i]);
+  const listed=id=>{const at=models.findIndex(m=>m.id===id);return at<0?id:names[at];};
+  return models.map((m,i)=>{const relationship=modelRelationship(m,models,listed);return `${names[i]}${relationship==null?'':` · ${relationship}`}`;});
 }
 // A frame has no error event for a page that never arrives, so a missing load within the timeout is the failure.
 const frameTimeout=()=>Number.isFinite(window.DESIGN_FRAME_TIMEOUT_MS)?window.DESIGN_FRAME_TIMEOUT_MS:6000;

@@ -1389,8 +1389,7 @@ HISTORY_NOTES = (
     ),
     (
         "Historical interest is the Financial foundation line the forecast inputs name, which may "
-        "be interest expense rather than cash paid; forecast interest is opening debt times the "
-        "interest-rate driver."
+        "be interest expense rather than cash paid."
     ),
     CASHFLOW_NOTES[3],
 )
