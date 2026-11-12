@@ -14,6 +14,7 @@ second" in decision 5).
 - `node --test apps/issuer-library/credit_os/web/reader.test.cjs apps/issuer-library/credit_os/web/static.test.cjs apps/issuer-library/credit_os/web/calendar.test.cjs`: exit 0, 266 passed.
 - `uv run pytest tests/test_context_form.py tests/test_run_start_page.py tests/test_library_reader_refs.py tests/test_library_index.py -q`: exit 0, 185 passed.
 - `uv run pytest tests/test_library_page_browser.py -m browser -q`: exit 0, 41 passed.
+- `uv run pytest tests/test_model_shell_browser.py -m browser -q`: exit 0, 7 passed.
 - `uv run python tools/quality_gate.py`: exit 0, 0 findings.
 - Fidelity: a scratch library built from the four listed TDG runs (all earlier format), every in-app
   route crawled in headless Chrome with folds, audit items and the inspector opened: 248 routes, no
@@ -30,9 +31,9 @@ second" in decision 5).
 - Not verified: no real run is new format, so new-format pages rest on the synthetic fixture. On a
   new-format page a dotted token shaped like a step id (`T4.24`) reads "a method step", as
   earlier-format pages have since 2026-11-10 (open, owner's call). Run start states the six-pathway,
-  three-level probe does not reach (upload, poll and carried-run messages). The standalone HTML Model
-  file's own navigator (`src/deploy_vii/assets`) still shows codes and is not in this change. Screen
-  readers and Windows not run.
+  three-level probe does not reach (upload, poll and carried-run messages). The shell's own navigation and
+  headings of the standalone HTML file (`src/deploy_vii/assets`) are covered by the new browser test;
+  its body content and files already delivered are not. Screen readers and Windows not run.
 
 ## 2026-11-12 — Changes seam round 3: one reader of CP-8's registers (branch `claude/changes-seams-r3`, base c9f84e1)
 Scope: `changes_check.page_verdicts` derives the measure verdicts, module rows and ledger counts; `update_library.changes_data` carries them as `run.changes.verdicts` (null without a pack, or with a note or problem; an unreadable CP-8 output is a stated problem); `changes.js` only displays them (no register parsed for a verdict); a fact row that looks like a pack label (NFKC, alphanumerics, casefold) is refused. Offline. Expected verdicts are hand-written in `tests/fixtures/changes-seam/rows.json` (`page` per case; new cases: hidden-character label, `\x85`, `\x1f`, two Same definition rows, no closing pipe), read by `test_changes.py`, `test_update_library.py` (checker and library agree) and `changes.test.cjs`. Gates: CI fast tests exit 0 (node 18 changes tests; pytest 2683 passed), browser subset 151 passed exit 0, quality gate exit 0. Reviewer probes that call the deleted page functions (`wbr1_seam`, `wbr2_seam`, `rc_store_path`, `wb_*`, `t5_*` expecting the page to read a pack's `yes` or a table) break or pass vacuously by design.
