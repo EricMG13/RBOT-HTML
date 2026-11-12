@@ -1,0 +1,145 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 917323c..cdfa61c 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -431,6 +431,9 @@ Follow-up: `.github/workflows/work-pc-pack.yml` makes and commits a pack after e
+ `main`; a range with only pack-folder changes makes none (tested), and the CI fast-test
+ list now includes `tests/test_work_pc_delta.py`. The workflow itself first runs on merge;
+ a protected `main` would refuse its push (the run fails visibly; hand generation remains).
++2026-11-12: packs 001–017 chain without gaps; every merged PR #42–#61 appears; `check` on
++`origin/main` identical. `plan` (copy/delete/merge/keep per file, 6 tests pass) on an archive
++of `04e7221` with two edits against `origin/main`: 2 merge, 140 copy, 7 delete, 1 keep.
+ 
+ ## 2026-11-10 — Visuals package 8: complete the whole-branch review
+ 
+diff --git a/tests/test_work_pc_delta.py b/tests/test_work_pc_delta.py
+index dcfa8d9..e704496 100644
+--- a/tests/test_work_pc_delta.py
++++ b/tests/test_work_pc_delta.py
+@@ -129,3 +129,46 @@ def test_base_by_date_is_the_last_commit_by_then(tmp_path):
+     by_then = _git(repo, "log", "-1", "--format=%cI", head)
+     assert work_pc_delta.resolve(repo, by_then, head) == head
+     # A date is "--before", never a commit name, so it cannot pick a later commit.
++
++
++def _extract(repo: Path, rev: str, into: Path) -> Path:
++    into.mkdir()
++    archive = subprocess.run(["git", "archive", rev], cwd=repo, check=True, capture_output=True)
++    subprocess.run(["tar", "-x", "-C", str(into)], input=archive.stdout, check=True)
++    return into
++
++
++def test_plan_sorts_each_file_by_who_changed_it(tmp_path):
++    repo, base, head = _repo(tmp_path)
++    record = tmp_path / "base.json"
++    record.write_text(json.dumps({"files": work_pc_delta.manifest(repo, base)}), encoding="utf-8")
++    download = _extract(repo, head, tmp_path / "download")
++    adapted = _extract(repo, base, tmp_path / "adapted")
++    (adapted / "src" / "a b.py").write_text("x = 1  # work PC\ny = 2\nz = 3\n", encoding="utf-8")
++    (adapted / "same.txt").write_text("kept, adapted\n", encoding="utf-8")
++    (adapted / "local.cfg").write_text("proxy\n", encoding="utf-8")
++    assert work_pc_delta.plan(download, adapted, record) == [
++        "merge  src/a b.py",  # upstream and the work PC both changed it
++        "copy   added.md",
++        "copy   moved.txt",
++        "copy   pyproject.toml",
++        "copy   uv.lock",
++        "delete gone.txt",
++        "delete move me.txt",
++        "keep   local.cfg",  # the work PC's own file
++        "keep   same.txt",  # adapted, unchanged upstream
++        "plan: 1 merge, 4 copy, 2 delete, 2 keep",
++    ]
++
++
++def test_plan_action_covers_every_case():
++    assert work_pc_delta.plan_action("b", "b", "b") is None
++    assert work_pc_delta.plan_action("b", "b", "x") == "keep"
++    assert work_pc_delta.plan_action(None, None, "x") == "keep"
++    assert work_pc_delta.plan_action("b", "n", "b") == "copy"
++    assert work_pc_delta.plan_action(None, "n", None) == "copy"
++    assert work_pc_delta.plan_action("b", None, "b") == "delete"
++    assert work_pc_delta.plan_action("b", "n", "n") is None  # already the same
++    assert work_pc_delta.plan_action("b", "n", "x") == "merge"
++    assert work_pc_delta.plan_action("b", None, "x") == "merge"  # deleted upstream, adapted
++    assert work_pc_delta.plan_action("b", "n", None) == "merge"  # removed by the work PC
+diff --git a/tools/work_pc_delta.py b/tools/work_pc_delta.py
+index d51d308..fa5e9e8 100644
+--- a/tools/work_pc_delta.py
++++ b/tools/work_pc_delta.py
+@@ -9,11 +9,14 @@ changed between the commit it last adapted (base) and the commit being downloade
+     python tools/work_pc_delta.py generate --base "2026-11-10 18:00"  # base by date
+     python tools/work_pc_delta.py generate                            # next pack
+     python tools/work_pc_delta.py check <folder>                      # on the work PC
++    python tools/work_pc_delta.py plan --new <download> --adapted <copy>  # on the work PC
+ 
+ Each pack goes to docs/work-pc/syncs/<NNN>_<date>_<base>-<head>/ (CHANGES.md, changes.patch,
+ SYNC.json); packs chain, each starting where the previous one ended. manifest.json holds
+ the git blob hash of every file at the latest head, so `check` (no git needed) shows
+-whether a downloaded copy matches it, i.e. whether the packs cover everything.
++whether a downloaded copy matches it, i.e. whether the packs cover everything. `plan`
++sorts every file into copy, delete, merge or keep by comparing the download and the
++adapted copy with the manifest of the version the adapted copy was made from.
+ """
+ 
+ from __future__ import annotations
+@@ -317,6 +320,32 @@ def check(folder: Path, record_path: Path) -> list[str]:
+     return report
+ 
+ 
++def hashes(folder: Path) -> dict[str, str]:
++    return {name: blob_hash(path.read_bytes()) for name, path in local_files(folder).items()}
++
++
++def plan_action(base: str | None, new: str | None, adapted: str | None) -> str | None:
++    """What to do with one path, from its hash in the base version, download and copy."""
++    if new == base:
++        return "keep" if adapted != base else None  # an adaptation, or untouched
++    if adapted == base:
++        return "copy" if new else "delete"  # changed upstream only: take the download
++    return None if adapted == new else "merge"  # changed on both sides
++
++
++def plan(new: Path, adapted: Path, base_record: Path) -> list[str]:
++    """Each path the update touches or the work PC adapted, with its action, merges first."""
++    base: dict[str, str] = json.loads(base_record.read_text(encoding="utf-8"))["files"]
++    downloaded, local = hashes(new), hashes(adapted)
++    rows: dict[str, list[str]] = {"merge": [], "copy": [], "delete": [], "keep": []}
++    for name in sorted(base.keys() | downloaded.keys() | local.keys()):
++        action = plan_action(base.get(name), downloaded.get(name), local.get(name))
++        if action:
++            rows[action].append(f"{action:<7}{name}")
++    counts = ", ".join(f"{len(found)} {action}" for action, found in rows.items())
++    return [line for found in rows.values() for line in found] + [f"plan: {counts}"]
++
++
+ def generate(root: Path, base_ref: str | None, head_ref: str) -> str:
+     head = resolve(root, head_ref, head_ref)
+     record = root / PACK_DIR / "manifest.json"
+@@ -343,11 +372,26 @@ def main(argv: list[str] | None = None) -> int:
+     verify.add_argument(
+         "--manifest", type=Path, help="default: <folder>/docs/work-pc/manifest.json"
+     )
++    sort = commands.add_parser("plan", help="copy/delete/merge/keep for each file")
++    sort.add_argument("--new", type=Path, required=True, help="the unchanged download")
++    sort.add_argument("--adapted", type=Path, required=True, help="the work PC's copy")
++    sort.add_argument(
++        "--base-manifest",
++        type=Path,
++        help="manifest of the version the copy was adapted from; "
++        "default: <adapted>/docs/work-pc/manifest.json",
++    )
+     root = Path(__file__).resolve().parents[1]
+     args = parser.parse_args(argv)
+     if args.command == "generate":
+         print(generate(root, args.base, args.head))
+         return 0
++    if args.command == "plan":
++        record = args.base_manifest or args.adapted / PACK_DIR / "manifest.json"
++        if not record.is_file():
++            parser.error(f"{record} not found: pass --base-manifest (see docs/work-pc/README.md)")
++        print("\n".join(plan(args.new, args.adapted, record)))
++        return 0
+     report = check(args.folder, args.manifest or args.folder / PACK_DIR / "manifest.json")
+     print("\n".join(report) or "identical to the manifest: the packs cover every change")
+     return 1 if report else 0

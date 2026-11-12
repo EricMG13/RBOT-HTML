@@ -10,7 +10,7 @@
   "AGENTS.md": "079b50251f9e1cd206308107d7769489acc909a6",
   "METHODOLOGY-REVIEW.md": "e032dbeac2c3339bb67b892681f27eb8799a862a",
   "README.md": "22ec5919f870f792e44a16bdba0b037897551a96",
-  "VERIFICATION.md": "917323c03517b13542c8c45fc547cc3deceb1a26",
+  "VERIFICATION.md": "cdfa61c78bb5653fbf775fe0ed625044945b3416",
   "apps/issuer-library/README.md": "c8f14fffeb01905d9912db5a33907da955e2193e",
   "apps/issuer-library/credit_os/SOURCE.md": "416f41db22c1c0a9b4ec88c8887ab43c0ce06edb",
   "apps/issuer-library/credit_os/catalog.json": "f8b0cedb8da041c14694bc7b971d71ea48c99697",
@@ -768,12 +768,12 @@
   "tests/test_run_start_submissions.py": "9f0f5728df0b9eb4f633e13f836191e367cfc3b3",
   "tests/test_update_library.py": "6a41cfb6ee812a9410e589ab4ca600257a595303",
   "tests/test_web_search_scope.py": "4b5df5eb520a68bb298129f580201cfee28420ca",
-  "tests/test_work_pc_delta.py": "dcfa8d91aef036e2a44cd163e41da580e13574f2",
+  "tests/test_work_pc_delta.py": "e704496ff8c73eee84eec14075bb3fa6cfc3d645",
   "tools/quality_gate.py": "3565f1a10894896b20358e173a7f02636d81701e",
   "tools/ruff-gate.toml": "78c34ecf217d14801f5b34912d32b89f359aeb63",
-  "tools/work_pc_delta.py": "d51d308e63de38dbc4284157b978feeea8038557",
+  "tools/work_pc_delta.py": "fa5e9e81c534657f593cb8752a94de10cba0eead",
   "uv.lock": "7a4f05aeff999e9284ec29f34acacdd2619d64b1"
  },
- "head": "f4ad1179272dd2f9a927d60edd2d712cd249966f",
- "head_date": "2026-11-12T12:00:12Z"
+ "head": "a91daaa3b0dd1a5798be3ee5d88965b6bb68a0a9",
+ "head_date": "2026-11-12T12:03:14Z"
 }
