@@ -185,3 +185,33 @@ def test_fts_follows_title_update_and_delete(tmp_path: Path) -> None:
     assert (hits("alpha"), hits("gamma")) == (0, 1)
     db.execute("DELETE FROM stories WHERE link_key='k1'")
     assert hits("beta") == 0
+
+
+def test_link_first_seen_as_a_folded_duplicate_folds_again(tmp_path: Path) -> None:
+    from datetime import timedelta
+
+    from deploy_workflow.signal.feeds import Entry
+    from deploy_workflow.signal.store import add_story
+
+    db = open_db(tmp_path)
+    for n in (1, 2, 3):
+        sid = propose_source(db, f"S{n}", "news", f"https://s{n}.example/feed", "tester")
+        set_source_state(db, sid, "approved")
+    t = datetime(2026, 11, 13, 9, tzinfo=UTC)
+    title = "Authority opens in depth review of Northwave"
+    assert add_story(db, 1, Entry(title, "https://e.org/l1", t, ""), t) == "new"
+    later = t + timedelta(hours=2)
+    assert add_story(db, 2, Entry(title, "https://e.org/l2", later, ""), later) == "duplicate"
+    other = Entry("Completely different words appear now", "https://e.org/l2", later, "")
+    assert add_story(db, 3, other, later) == "duplicate"
+    assert db.execute("SELECT count(*) FROM stories").fetchone()[0] == 1
+    rows = db.execute("SELECT story_id FROM story_duplicates").fetchall()
+    assert [r["story_id"] for r in rows] == [1, 1]
+
+
+def test_story_duplicates_link_key_has_an_index(tmp_path: Path) -> None:
+    db = open_db(tmp_path)
+    plan = db.execute(
+        "EXPLAIN QUERY PLAN SELECT story_id FROM story_duplicates WHERE link_key = ?", ("k",)
+    ).fetchall()
+    assert any("idx_story_duplicates_link_key" in row["detail"] for row in plan)

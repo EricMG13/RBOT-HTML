@@ -2,6 +2,7 @@ import contextlib
 import io
 from datetime import UTC, datetime
 
+import pytest
 from test_signal_feeds import RSS
 
 from deploy_workflow.signal.cli import main
@@ -15,6 +16,13 @@ def run(tmp_path, *args):
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
         code = main(["--root", str(tmp_path), *args])
     return code, out.getvalue()
+
+
+def run_split(tmp_path, *args):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = main(["--root", str(tmp_path), *args])
+    return code, out.getvalue(), err.getvalue()
 
 
 def test_propose_approve_list(tmp_path, monkeypatch):
@@ -153,10 +161,17 @@ def test_story_count_of_others_counts_sources_not_links(tmp_path):
 
 
 def test_approving_an_unknown_source_exits_2_with_one_line(tmp_path):
-    code, out = run(tmp_path, "sources", "approve", "999")
-    assert code == 2 and out.splitlines() == ["error: no source with id 999"]
+    code, out, err = run_split(tmp_path, "sources", "approve", "999")
+    assert code == 2 and out == "" and err.splitlines() == ["error: no source with id 999"]
 
 
 def test_adding_a_user_with_an_empty_name_exits_2(tmp_path):
-    code, out = run(tmp_path, "users", "add", "", "--role", "reader")
-    assert code == 2 and out.splitlines() == ["error: name must not be empty"]
+    code, out, err = run_split(tmp_path, "users", "add", "", "--role", "reader")
+    assert code == 2 and out == "" and err.splitlines() == ["error: name must not be empty"]
+
+
+@pytest.mark.parametrize("limit", ["0", "-1", "x"])
+def test_stories_limit_must_be_a_positive_integer(tmp_path, limit):
+    code, out, err = run_split(tmp_path, "stories", "--limit", limit)
+    assert code == 2 and out == ""
+    assert err.strip().splitlines()[-1].endswith("--limit: must be an integer >= 1")

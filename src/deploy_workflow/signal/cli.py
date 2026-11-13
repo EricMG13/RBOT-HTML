@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sqlite3
+import sys
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -57,7 +58,7 @@ def _parser() -> argparse.ArgumentParser:
     ingest.add_argument("--loop", action="store_true", help="a pass every 60 seconds")
 
     stories = commands.add_parser("stories")
-    stories.add_argument("--limit", type=int, default=20)
+    stories.add_argument("--limit", type=_positive_int, default=20)
     return parser
 
 
@@ -121,6 +122,16 @@ def _dispatch(args: argparse.Namespace) -> None:
         db.close()
 
 
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be an integer >= 1")
+    return value
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run one command; 2 on a usage error, a store error or a refused address."""
     try:
@@ -130,6 +141,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         _dispatch(args)
     except (StoreError, FetchRefused) as error:
-        print(f"error: {error}")
+        print(f"error: {error}", file=sys.stderr)
         return 2
     return 0
