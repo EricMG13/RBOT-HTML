@@ -1089,7 +1089,9 @@ def _shape(line: str) -> str:
     return NUMBER.sub("#", line.strip())
 
 
-_LINE_LABEL = re.compile(r"\blines? (\d+)", re.IGNORECASE)
+_LINE_LABEL = re.compile(r"\blines? (\d+(?:\s*(?:-|\u2013|to|and|&|,)\s*\d+)*)", re.IGNORECASE)
+_LINE_RANGE = re.compile(r"(\d+)\s*(?:-|\u2013|to)\s*(\d+)", re.IGNORECASE)
+_MAX_RANGE = 10_000
 _QUOTED = re.compile(r'"([^"]*)"|`([^`]*)`')
 _BARE_CELL = re.compile(r"-?\d+(?:\.\d+)?")
 
@@ -1099,14 +1101,25 @@ def _tokens(text: str) -> set[str]:
     return {f.number for f in _figures(text)} | {_date_key(m[0]) for m in DATE.finditer(text)}
 
 
-def _issue_quotes(issue: str) -> tuple[int | None, set[str]]:
-    """The line an issue names (None if none) and the numbers and dates it quotes: those inside
-    "..." or backticks, or, for an issue that quotes nothing, those of its text outside the
-    `line N` label."""
+def _named_lines(issue: str) -> frozenset[int] | None:
+    """Every line an issue names (`line 3`, `lines 3-7`, `lines 3 and 7`), or None if none."""
     label = _LINE_LABEL.search(issue)
+    if label is None:
+        return None
+    named = {int(n) for n in re.findall(r"\d+", label[1])}
+    for first, last in _LINE_RANGE.findall(label[1]):
+        if int(first) < int(last) <= int(first) + _MAX_RANGE:
+            named.update(range(int(first), int(last) + 1))
+    return frozenset(named)
+
+
+def _issue_quotes(issue: str) -> tuple[frozenset[int] | None, bool, set[str]]:
+    """The lines an issue names (None if none), whether it quotes, and the numbers and dates it
+    quotes: those inside "..." or backticks, or, for an issue that quotes nothing, those of its
+    text outside the `line N` label."""
     spans = [a or b for a, b in _QUOTED.findall(issue)]
     text = " ".join(spans) if spans else _LINE_LABEL.sub(" ", issue)
-    return (int(label[1]) if label else None), _tokens(text)
+    return _named_lines(issue), bool(spans), _tokens(text)
 
 
 def _tracked(line: str) -> list[tuple[object, str, str, _Figure | None]]:
@@ -1140,11 +1153,11 @@ def lost_values(previous: str, new: str, named: Sequence[str] = ()) -> list[dict
     sign, unit and currency, and counts as present in `new` however it is written there (a
     bracket, a date, a label number), so only a value that has gone is listed.
 
-    Left out: a value an issue in `named` quotes inside "..." or backticks (an issue that quotes
-    nothing: its text outside `line N`), and only on the line the issue names, or on any line
-    holding it when the issue names none; the same when the issue quotes a number on the line of
-    `new` of the same shape (a value corrected in place); a bare fraction `new` writes as a
-    percentage on the line of the same shape.
+    Left out: a value an issue in `named` quotes inside "..." or backticks, only on the lines the
+    issue names, or on any line holding it when the issue names none; a number in an issue that
+    quotes nothing counts only when the issue names a line, and then only on that line; the same
+    when the issue quotes a number on the line of `new` of the same shape (a value corrected in
+    place); a bare fraction `new` writes as a percentage on the line of the same shape.
 
     Limits: a small bare table cell whose unit sits in the column header is tracked only as a
     bare number, so `| 47 |` is compared with a bare 47, not with `47 USD m`; a fraction is
@@ -1162,8 +1175,9 @@ def lost_values(previous: str, new: str, named: Sequence[str] = ()) -> list[dict
         nearby = twins.get(_shape(line), set())
         for key, shown, token, figure in _tracked(line):
             excused = any(
-                ln in (None, number) and (token in tokens or tokens & nearby)
-                for ln, tokens in quotes
+                (lines is None or number in lines)
+                and (((quoted or lines is not None) and token in tokens) or tokens & nearby)
+                for lines, quoted, tokens in quotes
             )
             fraction = figure is not None and _is_percent_of(
                 figure, twin_figures.get(_shape(line), [])

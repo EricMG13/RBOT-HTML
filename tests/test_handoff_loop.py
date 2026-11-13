@@ -870,7 +870,9 @@ def test_a_rejected_repair_that_drops_values_asks_for_each_back(tmp_path: Path) 
     assert not module.accepted and results[1].startswith("REJECTED")
     assert "USD 247 million (Adjustments, line 6" in results[1]
     assert "USD 755 million (Reported revolving availability, line 7" in results[1]
-    assert "restore" in results[1]
+    assert results[1].endswith(
+        ". No issue named them. If a change was intended, keep it; otherwise restore each value."
+    )
     assert [d["value"] for d in _review(tmp_path, 2)["dropped_values"]] == [
         "USD 247 million",
         "USD 755 million",
@@ -1240,3 +1242,61 @@ def test_a_comparison_fault_on_a_rejected_repair_keeps_the_checkers_issues(
     module, results = _writes(tmp_path, CP6_FIRST, CP6_FIRST)
     assert not module.accepted and results[1].startswith("REJECTED (1 writes left)")
     assert "line 3: canonical" in results[1] and "no longer contains" not in results[1]
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "issue", "value"),
+    [
+        (
+            "| Revolver | USD 256 million | FY2023 |\n",
+            "| Revolver | Not supplied | FY2023 |\n",
+            "List each issuer source relied on with its exact name and sha256.",
+            "USD 256 million",
+        ),
+        (
+            "| Items | 43 | FY2023 |\n",
+            "| Items | Not supplied | FY2023 |\n",
+            "C43 appears outside the ledger's ref columns; write a ref only in ref columns.",
+            "43",
+        ),
+        (
+            "Leverage was 4.1x at USD 700 million of debt.\n",
+            "Leverage was 4.1x.\n",
+            "Findings run to 700 words; keep them under 600.",
+            "USD 700 million",
+        ),
+    ],
+)
+def test_an_unquoted_issue_that_names_no_line_excuses_nothing(
+    tmp_path: Path, first: str, second: str, issue: str, value: str
+) -> None:
+    assert _dropped(tmp_path, first, second, (issue + " canonical",)) == [value]
+
+
+@pytest.mark.parametrize("label", ["lines 6-7", "lines 6 and 7", "lines 5, 6 and 7"])
+def test_every_line_an_issue_names_is_named(tmp_path: Path, label: str) -> None:
+    rows = "| A | USD 247 million | FY2023 |\n| B | USD 755 million | FY2023 |\n"
+    kept = "| A | USD 240 million | FY2023 |\n| B | USD 750 million | FY2023 |\n"
+    issue = f'{label}: "247 million" and "755 million" are wrong; canonical'
+    assert _dropped(tmp_path, rows, kept, (issue,)) == []
+
+
+def test_an_interrupt_in_the_comparison_still_leaves_the_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from deploy_workflow.model import handoff
+
+    def interrupted(*_a: Any, **_k: Any) -> list[Any]:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(handoff, "lost_values", interrupted)
+    module = ModuleTools(
+        task(),
+        tmp_path,
+        lambda _t, raw: ("line 3: canonical",) if b"canonical" in raw else (),
+        tmp_path / "run",
+    )
+    module.call("write_handoff", {"markdown": CP6_FIRST})
+    with pytest.raises(KeyboardInterrupt):
+        module.call("write_handoff", {"markdown": CP6_SECOND})
+    assert _review(tmp_path, 2) == {"issues": []}

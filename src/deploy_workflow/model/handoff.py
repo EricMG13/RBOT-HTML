@@ -547,24 +547,27 @@ class ModuleTools:
         review: dict[str, Any] = {"issues": issues}
         self.accepted = not issues
         dropped: list[dict[str, str | int]] | None = None
-        if self.rejected is not None:  # a repair: say what it removed that no issue named
-            try:
-                dropped = lost_values(self.rejected[0], markdown, self.rejected[1])
-                review["dropped_values"] = dropped
-            except Exception as exc:  # noqa: BLE001 -- documented, logged fail-open below
-                # Fail-open by design: this comparison is an auxiliary record. A fault in it must
-                # not turn the checker's verdict into an ERROR (the write is spent and acceptance
-                # is the checker's alone), so the fault is kept in this write's review.json and
-                # as a `dropped_values_check_failed` event, and the write goes on unchanged.
-                review["dropped_values_error"] = f"{type(exc).__name__}: {exc}"
-                if self.events is not None:
-                    append_event(
-                        self.events,
-                        "dropped_values_check_failed",
-                        module=self.task.module_id,
-                        error=review["dropped_values_error"],
-                    )
-        _put(self.directory / f"{self.writes}.review.json", dump_json(review).encode())
+        try:  # the review is written once, whatever happens to the comparison, even an interrupt
+            if self.rejected is not None:  # a repair: say what it removed that no issue named
+                try:
+                    dropped = lost_values(self.rejected[0], markdown, self.rejected[1])
+                    review["dropped_values"] = dropped
+                except Exception as exc:  # noqa: BLE001 -- documented, logged fail-open below
+                    # Fail-open by design: this comparison is an auxiliary record. A fault in it
+                    # must not turn the checker's verdict into an ERROR (the write is spent and
+                    # acceptance is the checker's alone), so the fault is kept in this write's
+                    # review.json and as a `dropped_values_check_failed` event, and the write goes
+                    # on unchanged.
+                    review["dropped_values_error"] = f"{type(exc).__name__}: {exc}"
+                    if self.events is not None:
+                        append_event(
+                            self.events,
+                            "dropped_values_check_failed",
+                            module=self.task.module_id,
+                            error=review["dropped_values_error"],
+                        )
+        finally:
+            _put(self.directory / f"{self.writes}.review.json", dump_json(review).encode())
         note = (
             ""
             if not removed
@@ -591,9 +594,9 @@ class ModuleTools:
             if not dropped
             else "\n\nThis draft no longer contains "
             + "; ".join(_where(d) for d in dropped)
-            + ". No issue named "
-            + ("it" if len(dropped) == 1 else "them")
-            + ": restore each one, or say why it was removed."
+            + f". No issue named {'it' if len(dropped) == 1 else 'them'}. "
+            + "If a change was intended, "
+            + f"keep it; otherwise restore {'the value' if len(dropped) == 1 else 'each value'}."
         )
         return f"REJECTED ({writes_left} writes left){note}\n" + "\n".join(issues) + asked
 
