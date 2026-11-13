@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from deploy_vii.contracts import Run
 from deploy_workflow.model.adapter import AdapterReply
@@ -368,6 +370,64 @@ def test_existing_calculation_kernel_preserves_missing_zero_and_exact_decimals(
     )
     assert module.calculate("sum", ["NaN"]).startswith("ERROR")
     assert module.calculate("sum", ["1e9999"]).startswith("ERROR")
+
+
+def _calc(module: ModuleTools, operation: str, values: list[str | None]) -> dict[str, Any]:
+    return json.loads(module.calculate(operation, values))
+
+
+def test_calculate_difference_is_exact_and_refuses_missing(tmp_path: Path) -> None:
+    module = ModuleTools(task(), tmp_path, check)
+    for values, expected in (
+        (["25068", "6261"], "18807"),
+        (["24880", "6261"], "18619"),
+        (["0.3", "0.1"], "0.2"),
+        (["1", "3"], "-2"),
+    ):
+        assert _calc(module, "difference", values)["value"] == expected
+    missing = _calc(module, "sum", ["5", None])
+    for values in (["5", None], [None, "5"]):
+        got = _calc(module, "difference", values)
+        assert got["value"] is None
+        assert got["reason"] == missing["reason"]
+    assert module.calculate("difference", ["1"]).startswith("ERROR")
+    assert module.calculate("difference", ["1", "2", "3"]).startswith("ERROR")
+
+
+def test_calculate_product_is_exact_and_never_rounds(tmp_path: Path) -> None:
+    module = ModuleTools(task(), tmp_path, check)
+    for values, expected in (
+        (["4173", "0.5256"], "2193.3288"),
+        (["1.1", "1.1"], "1.21"),
+        (["-2", "3"], "-6"),
+        (["2", "3", "4"], "24"),
+        (["0", "7"], "0"),
+    ):
+        assert _calc(module, "product", values)["value"] == expected
+    assert _calc(module, "product", ["0", None])["value"] is None
+    assert _calc(module, "product", ["0", None])["reason"] is not None
+    big = "12345678901234567890123"
+    refused = module.calculate("product", [big, big])
+    assert refused.startswith("ERROR") or json.loads(refused)["value"] is None
+    assert module.calculate("product", ["5"]).startswith("ERROR")
+
+
+@settings(max_examples=100, deadline=None)
+@given(
+    a=st.integers(min_value=-(10**20), max_value=10**20),
+    b=st.integers(min_value=-(10**20), max_value=10**20),
+)
+def test_calculate_difference_and_product_properties(a: int, b: int) -> None:
+    module = ModuleTools(task(), Path("."), check)
+    sa, sb = str(a), str(b)
+    assert (
+        _calc(module, "difference", [sa, sb])["value"]
+        == _calc(module, "sum", [sa, str(-b)])["value"]
+    )
+    forward = module.calculate("product", [sa, sb])
+    assert forward == module.calculate("product", [sb, sa])
+    if len(str(abs(a * b))) <= 38:
+        assert json.loads(forward)["value"] == str(a * b)
 
 
 def test_preconstructed_executor_reloads_prior_spend(tmp_path: Path) -> None:
