@@ -2360,9 +2360,13 @@ def _blocked_at_gate(text: str) -> bool:
 
 def _has_register(text: str, ident: str) -> bool:
     """A `###` heading that opens with the id (or with a list of ids that includes it), or a
-    `<!-- table-id: ... -->` tag whose last part is the id. An id in a table cell or in the middle
-    of another register's heading is a citation, not the register."""
-    lead = r"[A-Za-z]\w*(?:\.\w+)*\s*(?:,|and|&|/)\s*"
+    `<!-- table-id: ... -->` tag whose last part is the id. Each id in the list is id-shaped (a
+    dotted id, a bare `T1`/`P3`, a snake_case slug): a prose word before it makes the heading
+    another register's. An id in a table cell or mid-heading is a citation, not the register."""
+    token = (
+        r"(?:[A-Z]+\d\w*(?:\.\w+)*|[A-Z][A-Za-z]*(?:\.\w+)+|[a-z]+(?:_[a-z]+)+)"  # id-shaped only
+    )
+    lead = rf"{token}(?:\s*[,&/]\s*|\s+and\s+)"
     patterns = (
         re.compile(rf"^<!-- table-id: (?:\S*\.)?{re.escape(ident)} -->\s*$", re.MULTILINE),
         re.compile(rf"^#{{2,6}} (?:{lead})*{re.escape(ident)}(?!\w|\.\d)", re.MULTILINE),

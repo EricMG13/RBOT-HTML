@@ -507,3 +507,29 @@ def test_the_routing_rule_and_the_refusal_both_say_how_a_module_stops_at_its_gat
     stop = "`module_status: Blocked` in the front matter and writes the gate register only"
     assert stop in cpos_launch.ROUTING_RULES
     assert "`module_status: Blocked` in the front matter" in refusal("CP-6", "x")[0]
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "### Coverage and T2.10 reconciliation",
+        "### Inputs, T2.10 cross-reference",
+        "### Demand T2.10 sensitivity",
+        "### Notes / T2.10",
+    ],
+)
+def test_a_prose_word_before_an_id_does_not_make_the_heading_that_register(heading):
+    assert not cpos_launch._has_register(heading + "\n", "T2.10")
+
+
+@pytest.mark.parametrize(
+    ("heading", "ident"),
+    [
+        ("### T2B.1, T2B.2 and T2B.6 - Registers", "T2B.6"),
+        ("### TDR.4 / TDR.5 - Peer pack", "TDR.5"),
+        ("### P3 & T1 - Inputs", "T1"),
+        ("### transaction_summary, company_description - Business", "company_description"),
+    ],
+)
+def test_an_id_list_lead_still_counts_for_each_id(heading, ident):
+    assert cpos_launch._has_register(heading + "\n", ident)
