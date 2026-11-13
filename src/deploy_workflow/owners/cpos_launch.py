@@ -708,8 +708,9 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
     unordered = _unorderable_period(lines, rows)
     if unordered is not None:
         issues.append(
-            f"`{heading}` Period `{unordered}` cannot be ordered: write `FY2024`, `2024-09-30` or "
-            "`FY2024 / 2024-09-30`, one form for the whole table and each period once; put any "
+            f"`{heading}` Period `{unordered}` cannot be ordered: write "
+            "`FY2024 / 2024-09-30` for a fiscal year end or the date alone (`2025-06-30`) for an "
+            "interim balance sheet, one form for the whole table and each period once; put any "
             "other word in the Basis and limitation cell."
         )
     for row in rows[2:]:

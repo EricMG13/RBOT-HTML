@@ -5873,7 +5873,8 @@ def test_each_stated_form_of_the_net_debt_period_is_accepted(period):
 def test_a_net_debt_period_the_pack_cannot_order_is_refused_with_the_form_to_write(periods, cell):
     (issue,) = cpos_launch._net_debt_issues(_net_debt_text(*periods))
     assert issue == (
-        f"`### Net debt data` Period `{cell}` cannot be ordered: write `FY2024`, `2024-09-30` or "
-        "`FY2024 / 2024-09-30`, one form for the whole table and each period once; put any "
+        f"`### Net debt data` Period `{cell}` cannot be ordered: write "
+        "`FY2024 / 2024-09-30` for a fiscal year end or the date alone (`2025-06-30`) for an "
+        "interim balance sheet, one form for the whole table and each period once; put any "
         "other word in the Basis and limitation cell."
     )
