@@ -1423,7 +1423,7 @@ function libraryCoverage({runs,coverage,unscreened}) {
 // A ratio's basis is Evidence's, not the library's (library redesign, Task 11): the cell title is the period the figure is for.
 const libraryMetricCell=(run,key)=>{
   const metric=run.metrics[key];
-  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.label?metric.label+' · ':'')+(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}</td>`;
+  return `<td${metric?'':' class="missing"'} title="${esc(metric?(metric.label?metric.label+' · ':'')+(metric.period||'Period not recorded'):'Not available')}">${esc(libraryMetric(metric))}${metric&&metric.label?' <small class="metric-adj">adj.</small>':''}</td>`;
 };
 const libraryRatingText=r=>[r.agency||'Agency not recorded',RATING_SCOPES[r.scope]||'Scope not recorded',libraryDate(r.date)].join(' · ');
 function libraryRatingCell(run) {

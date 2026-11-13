@@ -2131,6 +2131,19 @@ test('screen.css (decision 5): a module-page table box shows a scroll shadow, ma
   assert.ok(/\.passage-code\{[^}]*white-space:pre/.test(css));
 });
 
+test('library: a leverage figure on adjusted EBITDA carries a visible adj. marker in its list cell; an unlabelled one is drawn as before', () => {
+  const { libraryRow } = runPage();
+  const base = { id: 'run-z', name: 'Zed', issuer: 'ZED', title: 'Credit Snapshot', sector: 'Telecoms', date: '2024-09-30', period: 'FY-2024', completion: null, artifacts: [], ratings: [] };
+  const plain = { value: '5.96', unit: 'x', basis: 'C9', period: 'FY2024' };
+  const cellOf = (metrics, n) => [...libraryRow({ ...base, metrics }, false, false).matchAll(/<td([^>]*)>(.*?)<\/td>/g)][n][0];
+  const labelled = cellOf({ leverage: { ...plain, label: 'Total debt / adjusted EBITDA' }, net_leverage: plain, coverage: null }, 4);
+  assert.equal(labelled, '<td title="Total debt / adjusted EBITDA · FY2024">5.96\u00d7 <small class="metric-adj">adj.</small></td>');
+  assert.ok(/>[^<]*<small class="metric-adj">adj\.<\/small><\/td>$/.test(labelled), 'the marker is visible text inside the cell, not only an attribute');
+  assert.equal(cellOf({ leverage: plain, net_leverage: plain, coverage: null }, 4), '<td title="FY2024">5.96\u00d7</td>');
+  assert.equal(cellOf({ leverage: plain, net_leverage: { ...plain, label: 'Net <debt> / adjusted EBITDA' }, coverage: null }, 5), '<td title="Net &lt;debt&gt; / adjusted EBITDA · FY2024">5.96\u00d7 <small class="metric-adj">adj.</small></td>');
+  assert.ok(read('screen.css').includes('.library-table .metric-adj{'));
+});
+
 test('library: a row is one item per column; what left the row is the cell title or the selected-run panel', () => {
   const { libraryRow } = runPage();
   const metric = (value, basis) => ({ value, unit: 'x', basis, period: 'FY2024' });
