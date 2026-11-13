@@ -218,7 +218,10 @@ def test_debt_outside_the_facilities_bears_the_analyst_rate_in_every_case():
         downside_drivers={"interest_rate": {**_driver("interest_rate"), "values": ["0.08"] * 3}},
     )
     assert _interest(exact, "REFERENCE") == [D("37.5"), D("34.8"), D("30.6")]
-    assert _interest(exact, "DOWNSIDE") == [D("41.25"), D("38.28"), D("33.66")]
+    # Ruling 2026-11-13: the shock (k = 0.1) sits on the downside drivers, so the unallocated 50
+    # bears the downside's 0.08: (35 + 50 x 0.08) x 1.1 = 42.35, and the same on the later years.
+    # Before the ruling the shock sat on base drivers: [41.25, 38.28, 33.66].
+    assert _interest(exact, "DOWNSIDE") == [D("42.35"), D("39.38"), D("34.76")]
     assert _interest(exact, "DOWNSIDE_DRIVERS") == [D("38.5"), D("35.8"), D("31.6")]
 
 

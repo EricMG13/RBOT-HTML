@@ -1881,8 +1881,10 @@ FORECAST_BLOCK = (
     f"{', '.join(f'`{c}`' for c in get_args(Category))}. When the method gives no forecast "
     "(for example a blocked dependency), still write the block, with every driver's `values` as "
     "`[null, null, null]`. `downside_shock` is "
-    '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}` from the CP-2A '
-    "scenario, or null when no shock was supplied; Python applies it to the base drivers. "
+    '`{"ebitda_decline": "<0 to 1>", "rate_increase": "<0 to 1>"}`: both values are copied '
+    "unchanged from one CP-2A scenario row; `rate_increase` is that row's proportional "
+    "cash-interest increase, never a yield change; null when no shock was supplied; Python "
+    "applies it to your downside drivers, or to the base drivers when you set none. "
     "`upside_drivers` and `downside_drivers` are your own upside and downside cases: each holds "
     "only the drivers that differ from base, in the same driver form (every other driver is "
     "inherited from base), or null when you set no such case. "
@@ -2811,7 +2813,60 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
             fix = "Correct the block; if you cannot, set every driver's values to "
             advice = f"{fix}[null, null, null] and say why in scope_limits."
         return (f"Forecast inputs: {stem}. {advice}",)
-    return _unstated_currency(inputs)
+    return (*_unstated_currency(inputs), *_shock_issues(task, inputs))
+
+
+_LEADING_NUMBER = re.compile(r"^\s*(\d+(?:\.\d+)?)")
+
+
+def _cp2a_scenarios(cp2a: str) -> tuple[tuple[str, str], ...]:
+    """The (EBITDA decline, cash-interest increase) pairs of CP-2A's table T2DS.1, each as the
+    leading number its cell prints; empty when the table, either column or every row cannot be
+    read."""
+    lines = cp2a.replace("\r\n", "\n").split("\n")
+    marker = [i for i, line in enumerate(lines) if line.strip() == "<!-- table-id: T2DS.1 -->"]
+    if len(marker) != 1:
+        return ()
+    rows = []
+    for line in lines[marker[0] + 1 :]:
+        if not line.startswith("|"):
+            break
+        rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+    header = [cell.lower() for cell in rows[0]] if rows else []
+    decline = next((i for i, cell in enumerate(header) if "ebitda decline" in cell), None)
+    increase = next((i for i, cell in enumerate(header) if "interest increase" in cell), None)
+    if decline is None or increase is None:
+        return ()
+    pairs = []
+    for row in rows[2:]:  # the header and its divider are not scenarios
+        if len(row) > max(decline, increase):
+            s, k = (_LEADING_NUMBER.match(row[i]) for i in (decline, increase))
+            if s and k:
+                pairs.append((s.group(1), k.group(1)))
+    return tuple(pairs)
+
+
+def _shock_issues(task: HandoffTask, inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
+    """The block's `downside_shock` must be one of CP-2A's stated scenarios (owner ruling
+    2026-11-13). Documented fail-open: when CP-2A is not sent, or its T2DS.1 table, a column or
+    every row cannot be read, nothing is checked and the block is not sent back, because a repair
+    round costs a paid call and Python could not read the table that would justify it. This
+    module has no log or record of its own for such a skip; none is invented here."""
+    stated = inputs.downside_shock
+    if stated is None or "CP-2A" not in task.handoffs:
+        return ()
+    scenarios = _cp2a_scenarios(task.handoffs["CP-2A"].decode("utf-8"))
+    pair = (Decimal(stated.ebitda_decline), Decimal(stated.rate_increase))
+    if not scenarios or pair in {(Decimal(s), Decimal(k)) for s, k in scenarios}:
+        return ()
+    listed = "; ".join(f"{s} / {k}" for s, k in scenarios)
+    issue = (
+        f"Forecast inputs: `downside_shock` ({stated.ebitda_decline} / {stated.rate_increase}) "
+        "is not a CP-2A scenario. It must copy one CP-2A scenario unchanged: `rate_increase` is "
+        "that scenario's proportional increase in cash interest (0 to 1), never a yield change. "
+        f"CP-2A's table T2DS.1 states (EBITDA decline / cash-interest increase): {listed}."
+    )
+    return (issue,)
 
 
 def _unstated_currency(inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
