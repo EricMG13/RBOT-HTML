@@ -73,5 +73,5 @@ async function main() {
 
 main().then(
   () => { chrome.kill(); setTimeout(() => { fs.rmSync(profile, { recursive: true, force: true }); process.exit(0); }, 300); },
-  e => { console.error(String((e && e.stack) || e)); chrome.kill(); process.exit(1); },
+  e => { console.error(String((e && e.stack) || e)); chrome.kill(); setTimeout(() => { fs.rmSync(profile, { recursive: true, force: true }); process.exit(1); }, 300); },
 );

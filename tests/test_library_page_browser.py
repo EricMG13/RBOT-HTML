@@ -468,11 +468,18 @@ def test_forced_colours_outline_the_run_cards_chips_and_table_and_keep_the_progr
         " return { chip: style('.run-mods .chip').borderTopStyle,"
         " card: style('.run-card').borderTopStyle,"
         " table: style('.run-table-wrap').borderTopStyle,"
+        " badge: style('.run-badge').borderTopStyle,"
         " progress: style('.run-progress progress').appearance }; })()",
         ".run-table",
         {"features": [{"name": "forced-colors", "value": "active"}]},
     )
-    assert seen == {"chip": "solid", "card": "solid", "table": "solid", "progress": "auto"}
+    assert seen == {
+        "chip": "solid",
+        "card": "solid",
+        "table": "solid",
+        "badge": "solid",
+        "progress": "auto",
+    }
 
 
 def test_the_waiting_tables_header_is_centred_and_its_card_keeps_a_top_edge(tmp_path):
