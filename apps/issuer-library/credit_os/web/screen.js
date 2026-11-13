@@ -368,11 +368,11 @@ function showInspector(key,chipIndex=null) {
   // A paragraph shows its wording without its Basis line or citations; they are listed below it.
   const figure=paragraph?inspectorFigure(item,output,chipIndex):'';
   const fields=paragraph&&item.text!==undefined?[['Paragraph',paragraphBody(item.text,!isNewFormat(output.sections)).body]]:item.fields;
-  $('inspector').hidden=false; $('workbench').classList.add('has-evidence');
-  $('inspector').innerHTML=`<div class="inspector-bar"><button id="back-analysis">${icon('arrow-left')}Back to analysis</button><span>Esc</span></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>`;
+  $('inspector').hidden=false;
+  $('inspector').innerHTML=`<div class="inspector-bar"><p class="drawer-title">Trace</p><span>Esc</span><button type="button" id="back-analysis" class="drawer-close" aria-label="Close the trace and go back to the analysis">${window.Components.icon('x')}</button></div><div class="inspector-body"><h2${figure?' class="sr-only"':' class="kicker"'}>Evidence inspector</h2>${figure}<h3>${esc(item.title)}</h3><div class="evidence-context">${esc(moduleTitle(item.module))}${output.label===item.module?'':` · ${esc(output.label)}`} · Line ${item.line}</div><span class="badge badge-gray classification">${esc(classification(item))}</span><div class="evidence-fields">${fields.map(([label,value])=>`<div><h4>${esc(label)}</h4><div>${rich(value)}</div></div>`).join('')}</div>${item.basis?`<div class="evidence-basis"><h3>Basis & context</h3><p class="inspector-card">${rich(item.basis)}</p></div>`:''}${chipHtml}<div class="source-location"><h3>Source location</h3><div class="inspector-card"><p>${esc(item.section)}</p><a href="${esc(output.href)}" download>${icon('file-text')}Download retained handoff</a><p class="small">${esc(handoffLabel(output.file))}<br>${esc(output.case)} · saved output</p></div></div><div class="inspector-note"><strong>Reading boundary</strong><p>Retained fields from this historical run, with module codes and method step ids shown as names. Source and PDF locators remain attributed to the original handoff. The library does not authenticate the underlying PDFs.</p></div></div>${drawerFoot(item.module)}`;
   nameCodes($('inspector'),item.output,false); // the inspector keeps register references as they are
   document.querySelectorAll('[data-evidence]').forEach(el=>el.classList.toggle('source-selected',el.dataset.evidence===key));
-  document.querySelectorAll('.chip').forEach(el=>{
+  document.querySelectorAll('.chip,.trace-row').forEach(el=>{
     const pressed=el.dataset.chip===key?Number(el.dataset.index)===chipIndex:el.dataset.evidence===key&&chipIndex===null;
     if(pressed)el.setAttribute('aria-pressed','true');else el.removeAttribute('aria-pressed');
   });
@@ -481,10 +481,11 @@ function focusSearch() {
   showNavigator(true);
   $('module-search').focus();
 }
-// Run label and module or destination name: the same run label the workspace header shows, never a code.
+// The module or destination name (with the run code on the Evidence page only).
 function contextPrefix({module,context}) {
   const ctx=contexts[context];
-  return ctx&&!appDestinations.has(module)?`<span class="section-context">${esc(ctx.run)} · ${esc(moduleNames[module])}</span>`:'';
+  // The run code is the Evidence page's to show.
+  return ctx&&!appDestinations.has(module)?`<span class="section-context">${module==='W-Evidence'?`${esc(ctx.run)} · `:''}${esc(moduleNames[module])}</span>`:'';
 }
 // No page shows a module code (owner ruling 2026-11-12). The Evidence page lists issuer source file names and hashes, which identify files:
 // it is drawn with its module names already (views.js) and is never rewritten; every other page is named here.
@@ -579,7 +580,7 @@ function renderRoute() {
     showInspector(next.evidence,next.chip);
   }
   else {
-    $('inspector').hidden=true; $('workbench').classList.remove('has-evidence');
+    $('inspector').hidden=true;
     document.querySelectorAll('.source-selected').forEach(el=>el.classList.remove('source-selected'));
     document.querySelectorAll('.chip[aria-pressed],[data-paragraph][aria-pressed]').forEach(el=>el.removeAttribute('aria-pressed'));
     if(previous?.evidence&&!changed) {
@@ -621,7 +622,7 @@ document.addEventListener('click',event=>{
   if(part&&reportPage(current)&&part.hash===location.hash){event.preventDefault();scrollToPart(current.section);return;}
   const source=event.target.closest('[data-evidence]');
   if(source){event.preventDefault();returnTrigger=source;returnScroll=window.scrollY;returnContentScroll=$('content').scrollTop;go(current.module,current.section,source.dataset.evidence);return;}
-  if(event.target.closest('#back-analysis'))go(current.module,current.section);
+  if(event.target.closest('#back-analysis,#drawer-backdrop'))go(current.module,current.section);
   const moduleLink=event.target.closest('.module-item');
   if(moduleLink){$('module-search').value='';if(moduleLink.hash===location.hash)renderNavigator(current.module);}
   const step=event.target.closest('#next-section')?1:event.target.closest('#previous-section')?-1:0;
@@ -650,6 +651,8 @@ document.addEventListener('keydown',event=>{
   if($('navigator').classList.contains('mobile-open')){showNavigator(false);$('module-toggle').focus();}
 });
 window.addEventListener('hashchange',renderRoute);
+window.addEventListener('resize',placeTabsPill);
+document.fonts?.ready.then(placeTabsPill);
 // The rail opens 100 ms after the pointer comes within 16 px of its right edge and closes 300 ms after it leaves; touch has no proximity.
 (()=>{
   const rail=document.querySelector('.rail');let openTimer=null,closeTimer=null;

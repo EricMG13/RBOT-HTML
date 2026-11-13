@@ -352,8 +352,8 @@ test('paragraphView: a figure inside bold keeps its markup and its exact text', 
 test('paragraphView: no figure and a Basis line gives one quiet Basis button at the end, named by the first words', () => {
   const {html} = paragraphView('Liquidity rests on an undrawn revolver that steps down over the coming year.\nBasis: Q4.pdf, page 7', 'o:9');
   assert.equal(html, 'Liquidity rests on an undrawn revolver that steps down over the coming year. '
-    + '<button type="button" class="basis-link" data-paragraph="o:9" data-basis="[&quot;Q4.pdf, page 7&quot;]" aria-label="Basis for paragraph: Liquidity rests on an undrawn revolver that steps">Basis</button>');
-  assert.equal(visible(html), 'Liquidity rests on an undrawn revolver that steps down over the coming year. Basis');
+    + `<button type="button" class="basis-link" data-paragraph="o:9" data-basis="[&quot;Q4.pdf, page 7&quot;]" aria-label="Basis for paragraph: Liquidity rests on an undrawn revolver that steps">${require('./components.js').icon('trace')}</button>`);
+  assert.equal(visible(html), 'Liquidity rests on an undrawn revolver that steps down over the coming year. ', 'the icon is the control: no Basis word is drawn');
 });
 
 test('paragraphView: no Basis items and no chips means no button, even with figures; chips alone make the control', () => {
@@ -372,7 +372,7 @@ test('paragraphView: a list item loses its marker and the item flag is set; text
 
 test('paragraphView, earlier format: trailing citations move behind one Basis button, the wording is otherwise untouched, no figure buttons', () => {
   const {html} = paragraphView('Cash interest was 1,158 in FY2024 [K, page:123]. A mid-sentence [note] stays.', 'o:5', {earlier: true});
-  assert.equal(visible(html), 'Cash interest was 1,158 in FY2024. A mid-sentence [note] stays. Basis');
+  assert.equal(visible(html), 'Cash interest was 1,158 in FY2024. A mid-sentence [note] stays. ');
   assert.ok(html.includes('data-basis="[&quot;[K, page:123]&quot;]"') && !html.includes('class="figure"'));
   // Ruling (a): no moved citation and no chip in the build (the handoff-row chip is not one) means no Basis button.
   assert.equal(paragraphView('Plain earlier paragraph.', 'o:6', {earlier: true}).html, 'Plain earlier paragraph.');

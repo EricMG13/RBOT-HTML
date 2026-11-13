@@ -106,3 +106,19 @@ test('notes: SKILL is case-sensitive, helper scripts alone is prose, "Confidence
   assert.equal(Shapes.blockRole('Confidence is 61 out of 100, Medium.'), 'note');
   assert.equal(Shapes.blockRole('The SKILL output profile defines the table.'), 'note');
 });
+
+test('source and evidence columns hide only whole or with an audit qualifier', () => {
+  for (const h of ['Source', 'Sources', 'Evidence', 'Source / Clause', 'Source trace', 'Source locator', 'Evidence ID', 'Evidence document', 'Source file', 'Evidence page', 'Source reference', 'Evidence link', 'Source hash', 'Source register'])
+    assert.equal(['source', 'id'].includes(Shapes.columnKind(h)), true, h);
+  for (const h of ['Evidence Status', 'Source Conflict', 'Evidence Quality', 'Evidence Pattern', 'Source Type', 'Source of repayment', 'Sources of liquidity', 'Evidence strength'])
+    assert.equal(['source', 'id', 'intermodule'].includes(Shapes.columnKind(h)), false, h);
+});
+
+test('a plain Module header is not an inter-module column', () => {
+  assert.deepEqual(Shapes.hiddenColumns(['Issue', 'Module', 'Severity', 'Evidence Status'], 'records'), []);
+});
+
+test('note matching is case-insensitive except SKILL', () => {
+  assert.equal(Shapes.blockRole('module status: Completed with Limitations.'), 'note');
+  assert.equal(Shapes.blockRole('Management skill is evident.'), 'prose');
+});

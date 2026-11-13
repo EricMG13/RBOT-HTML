@@ -485,7 +485,7 @@ const gapCount=n=>`${n} unresolved citation${n===1?'':'s'}`;
 // The "Row" chip comes from the evidence key itself; the others from the chips map, by index (the index counts every chip of the key).
 function chipsMarkup(key,counted=true) {
   const item=evidence.get(key),found=window.CREDIT_OS_DATA?.chips?.[key]||[];
-  const row=item?`<button type="button" class="chip" data-evidence="${esc(key)}" title="Table row, line ${item.line}" aria-label="Table row, line ${item.line}">Row<span class="dot row"></span></button>`:'';
+  const row=item?window.Components.traceRow(key,`Table row, line ${item.line}`):'';
   const gaps=found.filter(unresolvedGap).length;
   const count=counted&&gaps?`<button type="button" class="chip-count" data-gaps="${esc(key)}">${gapCount(gaps)}</button>`:'';
   return chipSet([row,...found.map((chip,index)=>{
@@ -748,6 +748,15 @@ function routeHref(module,section,key=null,context=current?.context,file=lastFil
   // A report id is a folder name: encoded, it can hold quotes, angle brackets, ? or # and still route back.
   return `#${encodeURIComponent(module)}/${encodeURIComponent(section)}${params.size?'?'+params:''}`;
 }
+// The Evidence page's trace view of one module of the run: routeHref encodes the run (`c`) once; the module (`m`) is encoded the same way (URLSearchParams), which parseRoute reads back.
+function traceHref(moduleId,context=current?.context) {
+  const base=routeHref('W-Evidence','trace',null,context,null),module=new URLSearchParams({m:moduleId});
+  return `${base}${base.includes('?')?'&':'?'}${module}`;
+}
+// The drawer's last element: the way from one traced item to the whole trace of its module in the Evidence page.
+function drawerFoot(moduleId,context=current?.context) {
+  return `<div class="drawer-foot"><a class="text-action" href="${esc(traceHref(moduleId,context))}">Open in Evidence${icon('arrow-right')}</a></div>`;
+}
 function outlineMarkup(id) {
   const module=data[id].module||id;
   return `<nav class="section-outline" aria-label="On this page"><p class="outline-heading" aria-hidden="true">On this page</p><ol>${reportOutline(id).map(([part,label])=>`<li><a class="section-item" href="${routeHref(module,part)}" ${current.section===part?'aria-current="location"':''}>${esc(label)}</a></li>`).join('')}</ol></nav>`;
@@ -968,13 +977,15 @@ function startRunLink(context) {
   const href=startRunHref(context);
   return servedOverHttp()&&href?`<a class="start-run primary-action" href="${esc(href)}">${icon('plus')}Start a run on this issuer</a>`:'';
 }
-// "Showing run: 31 March 2025 · Credit snapshot · <run code>", the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
+// "Showing run: 31 March 2025 · Credit snapshot" (and the run code on the Evidence page), the Earlier format badge where it holds, the link to the issuer's Report history and, where the run records one, the run it replaces.
 function runLabel(module,context) {
   const ctx=contexts[context];
   if(!ctx)return '';
   const here=['W-Forecast','W-Evidence','W-Changes'].includes(module)?module:'W-Overview';
-  const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${contexts[r.run].run}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
-  return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))} · <span class="code">${esc(ctx.run)}</span>${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(ctx)?` ${EARLIER_METHODS_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
+  const revisions=(ctx.revisions||[]).map(r=>r.run&&contexts[r.run]?`<a href="${esc(routeHref(here,navigationSections(here,r.run)[0][0],null,r.run,null))}">${esc(`${r.word} ${runDate(contexts[r.run])}`)}</a>`:`<span>${esc(`${r.word} ${r.id}`)}</span>`);
+  // The run code is the Evidence page's to show; every other page names the run by its date and pathway.
+  const code=module==='W-Evidence'?` · <span class="code">${esc(ctx.run)}</span>`:'';
+  return `<p class="context-run">Showing run: <strong>${esc(runDate(ctx))}</strong> · ${esc(runPathway(ctx))}${code}${earlierFormat(ctx)?` ${EARLIER_FORMAT_BADGE}`:''}${earlierMethods(ctx)?` ${EARLIER_METHODS_BADGE}`:''}</p><a class="text-action" href="${esc(routeHref('W-Report','history',null,context))}">All runs of this issuer</a>${revisions.length?`<p class="context-revision">${revisions.join(' · ')}</p>`:''}`;
 }
 // ---- Report history (decision 4): one row per run of the issuer, latest as-of date first. Each row opens that run's Overview.
 const SOURCE_NOT_RECORDED='Not recorded';
@@ -1578,14 +1589,21 @@ function workspaceView(module,section) {
   if(module==='CP-OS')return activityView(window.RUN_ACTIVITY);
   return '';
 }
+// The issuer's header chips: the run's period, its pathway in words and, only when the store lists method changes since the run, an amber chip to Evidence's run record.
+// The sliding pill sits under the active tab; it is measured, so it is placed again when the tabs are drawn, the window resizes or the fonts load.
+const placeTabsPill=()=>{const tabs=document.querySelector('.workspace-tabs');if(tabs&&!tabs.hidden)window.Components.placePill(tabs);};
+function headerChipMarkup(ctx,context) {
+  const changed=earlierMethods(ctx)?{text:'Methods changed since this run',tone:'amber',href:routeHref('W-Evidence','record',null,context,null)}:null;
+  return window.Components.headerChips([{text:ctx.period},{text:pathwayTitle(ctx.pathway)},changed]);
+}
 function updateWorkspaceChrome(module) {
   const ctx=contexts[current.context],isHome=!ctx||appDestinations.has(module);
-  const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first),period=current.output?data[current.output].period:ctx?.period;
+  const moduleId=ctx&&(lastSection.get(current.context+':module')||ctx.first);
   const title=isHome?(module==='W-Library'?'Issuer library':moduleNames[module]):ctx.title;
   const header=document.querySelector('.issuer'),meta=isHome?'':issuerMeta(current.context);
   header.classList.toggle('run-header',!isHome);
-  const startRun=isHome?'':startRunLink(current.context),scope=isHome?'':`<div class="scope">${icon('calendar-days')}<strong>${esc(period)}</strong></div>`;
-  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row${startRun?' has-start-link':''}"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}</div>${startRun?`<div class="issuer-side">${scope}${startRun}</div>`:scope}</div>`;
+  const startRun=isHome?'':startRunLink(current.context),chips=isHome?'':headerChipMarkup(ctx,current.context);
+  header.innerHTML=isHome?`<div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1></div>`:`<a class="issuer-back" href="#W-Library/cases"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Issuer library</a><div class="issuer-row${startRun?' has-start-link':''}"><div class="issuer-title"><h1 title="${esc(title)}">${esc(title)}</h1>${meta?`<p class="issuer-meta">${esc(meta)}</p>`:''}${chips}</div>${startRun?`<div class="issuer-side">${startRun}</div>`:''}</div>`;
   document.querySelector('.workspace-tabs').hidden=isHome;
   $('context-bar').hidden=isHome||module==='W-Report';
   if(!isHome)$('context-bar').innerHTML=runLabel(module,current.context);
@@ -1593,6 +1611,7 @@ function updateWorkspaceChrome(module) {
     const sections=navigationSections(id,current.context,resolveOutput(id,current.context,lastFile.get(`${current.context}:${id}`))),remembered=lastSection.get(current.context+':'+id),section=sections.some(s=>s[0]===remembered)?remembered:sections[0][0];
     return `<a href="${routeHref(id,section)}" ${(label==='Modules'?isAnalytical(module):id===module)?'aria-current="page"':''}>${label}</a>`;
   }).join('');
+  placeTabsPill();
   $('workbench').classList.toggle('library-workspace',isHome);
   // The Overview is a page of selected passages: no module navigator beside it and no Browse modules button above it.
   $('workbench').classList.toggle('overview-workspace',!isHome&&module==='W-Overview');

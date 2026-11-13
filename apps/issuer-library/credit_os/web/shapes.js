@@ -30,8 +30,8 @@ const Shapes = (() => {
   const norm = header => String(header ?? '').trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
   const KIND_RULES = [
     ['id', /^id$|\bid$|^linked pathway row$/],                                  // before source: "Evidence ID" is an id
-    ['source', /^(sources?|evidence|sha256)\b/],
-    ['intermodule', /^(supplied handoff|use in this module|effect on this module|downstream use|consumer|downstream module|receiving module|responsible module|command|required consumer action|consumer module id|escalation consequence|module)$|^consequence for cp-/],
+    ['source', /^(?:(?:sources?|evidence)(?:\s*\/\s*clause|\s+(?:trace|locator|register|document|file|sha|hash|page|reference|ref|link)s?)?|sha256)$/],
+    ['intermodule', /^(supplied handoff|use in this module|effect on this module|downstream use|consumer|downstream module|receiving module|responsible module|command|required consumer action|consumer module id|escalation consequence)$|^consequence for cp-/],
     ['limitation', /limitation/],
     ['consequence', /creditor consequence|effect on the credit view/],
     ['period', /^(?:(?:fy|cy|ltm|pf|[hq][1-4])\s*)?\d{4}[ae]?\b|^(?:fy|cy)\s*\d{2}[ae]?\b/],
@@ -40,9 +40,9 @@ const Shapes = (() => {
   ];
   const columnKind = header => (KIND_RULES.find(([, rx]) => rx.test(norm(header))) || ['text'])[0];
   const HIDDEN_KINDS = new Set(['source', 'id', 'intermodule']);
-  // The moduleState table's "Module" column is its label, so it stays.
+  // A plain "Module" header says which module a row concerns, so it is not inter-module; `shape` is kept for the interface.
   const hiddenColumns = (headers, shape) => headers
-    .map((h, c) => (HIDDEN_KINDS.has(columnKind(h)) && !(shape === 'moduleState' && norm(h) === 'module') ? c : -1))
+    .map((h, c) => (HIDDEN_KINDS.has(columnKind(h)) ? c : -1))
     .filter(c => c >= 0);
 
   // ---- table shapes: the first rule that matches wins; the order is the precedence ----
@@ -75,8 +75,9 @@ const Shapes = (() => {
   }
 
   // ---- paragraphs ----
-  const NOTE = /^(?:Module status|Two method texts)\b|^Confidence is \d|qa_status|committee_status|\bSKILL\b/;
-  const blockRole = text => (NOTE.test(String(text ?? '').trim()) ? 'note' : 'prose');
+  const NOTE = /^(?:Module status|Two method texts)\b|^Confidence is \d|qa_status|committee_status/i;
+  const SKILL = /\bSKILL\b/;  // the method file's name, upper case only
+  const blockRole = text => { const t = String(text ?? '').trim(); return NOTE.test(t) || SKILL.test(t) ? 'note' : 'prose'; };
 
   const promoted = shape => ['matrix', 'watch', 'dated'].includes(shape);
 

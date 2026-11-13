@@ -350,7 +350,7 @@ function report(overrides = {}, modSections = null) {
     if (b.type === 'table') for (const r of b.rows) evidence.set(`${OUT}:${r.line}`, { module: 'CP-1', line: r.line });
     else evidence.set(`${OUT}:${b.line}`, { module: 'CP-1', line: b.line });
   }
-  const win = { CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
+  const win = { Components: require('./components.js'), CREDIT_OS_DATA: { chips: CHIPS }, DESIGN_CATALOGUE: { real: [{ id: 'run-a', checklist: null }] }, DESIGN_WORKSPACE: { reports: [] } };
   const sectionData = (id, sid) => out.sections.filter(s => modules[id].sections.find(x => x[0] === sid)[2].some(p => s.heading.startsWith(p)));
   const names = ['window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'aliases', 'isNewFormat', 'readerPassages', 'blocked', 'splitBasis', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTable', 'eventTimeline'];
   const reader = require('./reader.js');
@@ -509,8 +509,10 @@ test('chip labels and avatars follow the data, one chip per dict', () => {
   const { chipsMarkup } = report();
   const html = chipsMarkup(`${OUT}:16`);
   const chips = [...html.matchAll(/<button[^>]*class="chip[^"]*"[^>]*>.*?<\/button>/g)].map(m => m[0].replace(/<[^>]+>/g, '|').replace(/\|+/g, '|'));
-  assert.deepEqual(chips, ['|Row|', '|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|Financial foundation · D1 · D3|']);
+  assert.deepEqual(chips, ['|K|p.123|', '|M|p.70–71|', '|Business &amp; governance · E2|', '|Financial foundation · D1 · D3|']);
   assert.ok(html.includes('data-chip="run-a/deliveries/d1/CP-1.md:16" data-index="3"') && html.includes('data-evidence="run-a/deliveries/d1/CP-1.md:16"'));
+  // The Row chip became the trace icon of the row (no chip class, no "Row" word); it keeps the evidence key.
+  assert.ok(/<button type="button" class="basis-link trace-row" data-evidence="run-a\/deliveries\/d1\/CP-1.md:16" title="Table row, line 16" aria-label="Table row, line 16"><svg/.test(html));
 });
 
 test('Not supplied renders as a gap chip; other gaps fold into one count', () => {
@@ -920,13 +922,13 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const moduleNames = Object.fromEntries(groups.flatMap(g => g[1]));
   const entry = code => ({ outputs: [outId(code)], default: outId(code) });
   const contexts = { [RUN]: { folder: RUN, record: more.record, ...more.runFields, modules: shape({ 'CP-0': { outputs: [], default: null }, ...Object.fromEntries(Object.values(data).map(out => [out.module, entry(out.module)])) }) }, ...more.contexts };
-  const win = { location: more.location, CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
+  const win = { Components: require('./components.js'), location: more.location, CREDIT_OS_DATA: { chips: { [`${outId('CP-1')}:16`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }], ...more.chips } }, DESIGN_CATALOGUE: { real: more.catalogue || [{ id: RUN, checklist: null }] }, DESIGN_WORKSPACE: { reports, models: [], visuals: more.visuals || [], models: more.models || [] } };
   Object.assign(data, more.data || {}); // outputs of other runs, which the run under test's module list must not hold
   const libraryState = { selected: '', sortKey: '', direction: 'asc', hidden: '' };
-  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline'];
+  const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'eventTimeline', '$', 'appDestinations', 'document'];
   const eventTimeline = realEventTimeline(esc, rich);
-  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
+  const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document];
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, headerChipMarkup, traceHref, drawerFoot, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -1093,10 +1095,10 @@ test('Overview limitations: every item in module order, the repeated covenant it
   const list = part(fixturePage().runReport(RUN), 'overview-limitations');
   const items = [...list.matchAll(/<li class="limit-item">(.*?)<\/li>/gs)].map(m => readText(m[1]));
   assert.deepEqual(items, [
-    'The covenant package was not reviewed, so covenant headroom is not assessed. BasisBusiness and structure',
+    'The covenant package was not reviewed, so covenant headroom is not assessed. Business and structure',
     'Dates after the annual report are scheduled, not confirmed, so the nearest-date list may move.Business and structure',
     'Peer leverage was not compared, so the 4.2x reading has no market anchor.Credit view',
-    'The liquidity assessment is not available, so cash cover of the maturities is unverified. BasisCredit view',
+    'The liquidity assessment is not available, so cash cover of the maturities is unverified. Credit view',
   ]);
   assert.ok(!list.includes('The Covenant package was not reviewed,  so'), 'CP-2 repeats the covenant item: it is not shown again');
 });
@@ -1385,7 +1387,7 @@ test('module page (H1, decision 7): passage text exactly as written, the Basis l
   assert.equal(countOf(html, /<li>/g), 6, 'the six list items of Key findings and Limitations, no attribute on them');
   assert.ok(/<p class="passage-text">The company has not said how it intends to fund the step-down\.<\/p>/.test(html), 'a paragraph with no Basis line has no control');
   // The Basis link only where a referenced paragraph has no figure: key finding 3, the first Contrary evidence paragraph and limitation 3.
-  assert.equal(countOf(html, /<button type="button" class="basis-link" data-paragraph="[^"]+" data-basis="[^"]*" aria-label="Basis for paragraph: [^"]+">Basis<\/button>/g), 3);
+  assert.equal(countOf(html, /<button type="button" class="basis-link" data-paragraph="[^"]+" data-basis="[^"]*" aria-label="Basis for paragraph: [^"]+"><svg [^>]*>.*?<\/svg><\/button>/g), 3, 'the trace icon, no Basis word');
 });
 
 test('module page (H1): the other sections are kept exact, tables with their Source column, in handoff order', () => {
@@ -2176,7 +2178,7 @@ test('comparison views: a peer range is a band from the stated low to high, a me
 
 test('comparison views: yield against maturity places each stated date and yield, one panel per unit, and lists what has no point', () => {
   const html = comparison(SCATTER);
-  const panels = html.split('<svg').slice(1);
+  const panels = html.split(/<svg(?! class="i")/).slice(1); // the trace icon of a row is an svg too; only the chart panels are counted
   assert.equal(panels.length, 2, 'yields in another unit are not drawn on the same scale');
   const dots = [...panels[0].matchAll(/<circle class="scatter-dot" cx="([\d.]+)" cy="([\d.]+)"/g)].map(m => [m[1], m[2]]);
   assert.deepEqual(dots, [['60', '166.67'], ['630', '33.33'], ['345', '77.78']]);
@@ -2327,10 +2329,10 @@ test('names, not codes: module heads and the report head carry no module code in
   assert.equal(page.handoffLabel('K.pdf'), 'K.pdf');
 });
 
-test('names, not codes: chips name their module, the row chip reads Row, titles from handoff text are named', () => {
+test('names, not codes: chips name their module, the row control is the trace icon, titles from handoff text are named', () => {
   const r = report(), html = r.chipsMarkup(`${OUT}:16`) + r.chipsMarkup(`${OUT}:777`);
   noCode(html);
-  assert.ok(html.includes('title="Table row, line 16" aria-label="Table row, line 16">Row<span class="dot row">'));
+  assert.ok(html.includes('title="Table row, line 16" aria-label="Table row, line 16"><svg') && !html.includes('>Row<'), 'the row control is the trace icon');
   assert.ok(!html.includes('class="av cp"') && !html.includes('class="av q"'), 'no code avatar');
   assert.ok(html.includes('<span class="av ">K</span>p.123'), 'an issuer-page chip keeps its source avatar');
   assert.ok(html.includes('title="Annual PDF marked alternate in Source readiness"'));
@@ -2343,13 +2345,15 @@ test('names, not codes: the band link, the evidence inspector and the library so
   const element = { hidden: true, classList: { add() {}, remove() {}, toggle() {} }, innerHTML: '' }, named = [];
   const r = report(), item = { module: 'CP-1', output: OUT, line: 54, title: 'Net sales', fields: [['Finding', 'Debt of CP-1A']], section: 'Financial summary' };
   const stored = { label: 'CP-1', file: 'run-a--deliveries--d1--CP-1.md', href: '../runs/run-a/deliveries/d1/CP-1.md', case: 'Zed & Sons · RUN-A' };
-  const inspector = new Function('$', 'document', 'window', 'evidence', 'data', 'classification', 'esc', 'rich', 'icon', 'chipSection', 'unresolvedGap', 'nameCodes', 'moduleTitle', 'handoffLabel', 'returnTrigger',
-    `${src.slice(start, end)}; return showInspector;`)(() => element, { querySelectorAll: () => [] }, { CREDIT_OS_DATA: { chips: {} } }, new Map([['k', item]]), { [OUT]: stored }, () => 'Not classified', v => String(v), v => String(v),
-    n => `<i>${n}</i>`, () => '', () => false, (root, output, marks) => named.push([root, output, marks]), r.moduleTitle, r.handoffLabel, null);
+  const inspector = new Function('$', 'document', 'window', 'evidence', 'data', 'classification', 'esc', 'rich', 'icon', 'chipSection', 'unresolvedGap', 'nameCodes', 'moduleTitle', 'handoffLabel', 'returnTrigger', 'drawerFoot',
+    `${src.slice(start, end)}; return showInspector;`)(() => element, { querySelectorAll: () => [] }, { Components: require('./components.js'), CREDIT_OS_DATA: { chips: {} } }, new Map([['k', item]]), { [OUT]: stored }, () => 'Not classified', v => String(v), v => String(v),
+    n => `<i>${n}</i>`, () => '', () => false, (root, output, marks) => named.push([root, output, marks]), r.moduleTitle, r.handoffLabel, null, module => `<footer>${module}</footer>`);
   inspector('k');
   assert.ok(element.innerHTML.includes('>Financial foundation · Line 54<') && !element.innerHTML.includes('(CP-1)'));
   assert.ok(element.innerHTML.includes('Financial foundation handoff<br>Zed & Sons · RUN-A · saved output') && !element.innerHTML.includes('--CP-1.md'));
   assert.ok(element.innerHTML.includes('<a href="../runs/run-a/deliveries/d1/CP-1.md" download>'), 'the download link is unchanged');
+  assert.ok(element.innerHTML.endsWith('<footer>CP-1</footer>'), 'the drawer ends with the footer of the traced module');
+  assert.ok(element.innerHTML.includes('id="back-analysis"') && element.innerHTML.includes('aria-label="Close the trace'), 'the drawer has a close button');
   assert.deepEqual(named, [[element, OUT, false]], 'the inspector text is named, its register references left as they are');
   assert.ok(runPage().handoffLabel('runs/x/CP-0.md') === 'Source readiness handoff' && read('views.js').includes("`${handoffLabel(s.path)} · line ${s.line}`"));
 });
@@ -2997,8 +3001,8 @@ test('Earlier methods: the badge sits beside Earlier format in the Report histor
     assert.equal(strip(d.cells[3]), 'Completed', 'no list, no badge');
     assert.ok(b.cells[3].includes('<span class="badge badge-gray earlier-methods">Earlier methods</span>'));
     assert.equal(strip(page.runLabel('W-Evidence', RUN).replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format Earlier methods');
-    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run B Earlier methods');
-    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run D');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot Earlier methods');
+    assert.equal(strip(page.runLabel('W-Forecast', 'run-d').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot');
   } finally {
     delete HIST.contexts['run-b'].methodChanges;
     delete HIST.runFields.methodChanges;
@@ -3018,14 +3022,14 @@ test('run label: the run\'s date, pathway and code, the Earlier format badge onl
   const earlier = page.runLabel('W-Evidence', RUN);
   assert.equal(strip(earlier.replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 December 2025 · Credit snapshot · Run A Earlier format');
   assert.ok(earlier.includes('<a class="text-action" href="#W-Report/history?c=run-a">All runs of this issuer</a>'));
-  assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot · Run B');
-  assert.equal(strip(page.runLabel('W-Overview', 'run-c').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: Not recorded · Not recorded · Run C');
+  assert.equal(strip(page.runLabel('W-Forecast', 'run-b').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: 31 March 2025 · Credit snapshot', 'the run code is the Evidence page\'s: no code on the Forecast page');
+  assert.equal(strip(page.runLabel('W-Overview', 'run-c').replace(/<a [^>]*>.*?<\/a>/, '')), 'Showing run: Not recorded · Not recorded');
   assert.ok(page.runLabel('CP-1', 'run-b').includes('href="#W-Report/history?c=run-b"'));
 });
 
 test('run label: a short snapshot run is labelled Short credit snapshot, not the id as words', () => {
   const page = runPage(d => d, [], m => m, { ...HIST, runFields: { ...synthetic, pathway: 'short_snapshot', run: 'Run S', asOf: '2025-12-31' } });
-  assert.ok(strip(page.runLabel('W-Overview', RUN)).startsWith('Showing run: 31 December 2025 · Short credit snapshot · Run S'));
+  assert.ok(strip(page.runLabel('W-Overview', RUN)).startsWith('Showing run: 31 December 2025 · Short credit snapshot') && !strip(page.runLabel('W-Overview', RUN)).includes('Run S'));
 });
 
 test('run label: no run picker or file pop-over remains, no run chosen draws nothing, and the bar is hidden on the history page itself', () => {
@@ -3041,7 +3045,7 @@ test('run label: a recorded rerun and a recorded supersession are linked or name
   assert.ok(!/revision|Rerun|Supersedes/.test(strip(histPage().runLabel('W-Overview', RUN))));
   const page = runPage(d => d, [], m => m, { ...HIST, runFields: { ...HIST.runFields, revisions: [{ word: 'Rerun of', id: 'id-b', run: 'run-b' }, { word: 'Supersedes', id: 'id-x', run: null }] } });
   const text = page.runLabel('W-Overview', RUN);
-  assert.ok(/<a href="#W-Overview\/[^"]*c=run-b[^"]*">Rerun of Run B<\/a>/.test(text), 'a recorded run in the library is a link that keeps that run');
+  assert.ok(/<a href="#W-Overview\/[^"]*c=run-b[^"]*">Rerun of 31 March 2025<\/a>/.test(text), 'a recorded run in the library is a link that keeps that run, named by its date, not its code');
   assert.ok(strip(text).includes('Supersedes id-x') && !/<a[^>]*>Supersedes/.test(text), 'a recorded run the library does not hold is named, not linked');
 });
 
@@ -3127,7 +3131,7 @@ test('the start-run link is a primary action with a plus icon, drawn only when t
   // The header's link markup is what startRunLink returns: it is assigned from the call, drawn through that variable in the
   // side group, and nowhere written out by hand in the chrome.
   assert.ok(chrome.includes("const startRun=isHome?'':startRunLink(current.context)"), 'startRun is startRunLink(current.context)');
-  assert.ok(chrome.includes('startRun?`<div class="issuer-side">${scope}${startRun}</div>`:scope'), 'the side group draws ${startRun} and exists only with the link');
+  assert.ok(chrome.includes("startRun?`<div class=\"issuer-side\">${startRun}</div>`:''"), 'the side group draws ${startRun} and exists only with the link');
   assert.ok(!chrome.includes('start-run'), 'no hand-written link in the header');
   assert.ok(!chrome.includes('/?from='), 'no hand-written target in the header');
 });
@@ -3576,16 +3580,108 @@ test('component look: buttons, text inputs, state badges and the current tab tak
   }
   // State badges and grades: 6px radius.
   for (const sel of ['.badge', '.grade']) assert.match(body(sel), /border-radius:6px/, sel);
-  // The current tab: 2px underline in --blue, text in --text-primary.
-  assert.match(body('.workspace-tabs>a'), /border-bottom:2px solid transparent/);
-  const curRules = rules.filter((x) => x.selector.split(',').map((t) => t.trim()).includes('.workspace-tabs>a[aria-current]') && !/^\s*outline/.test(x.body));
-  assert.ok(curRules.length >= 1);
-  for (const r of curRules) {
-    assert.match(r.body, /border-color:var\(--blue\)/, r.selector);
-    assert.match(r.body, /(?:^|;)color:var\(--text-primary\)/, r.selector);
-  }
+  // The current tab (C1, redesign): a navy pill with white text; once measured the pill is one element that slides (`.has-pill::before`).
+  // The last rule of the selector that sets the property is the one that draws it (a later rule in the motion block sets only transitions).
+  const tabRule = (sel, prop) => rules.filter((x) => x.selector.split(',').map((t) => t.trim()).includes(sel) && new RegExp(`(?:^|;)${prop}:`).test(x.body)).at(-1);
+  assert.match(tabRule('.workspace-tabs>a', 'border-radius').body, /border-radius:999px/);
+  assert.match(tabRule('.workspace-tabs>a', 'border').body, /border:0/);
+  assert.match(tabRule('.workspace-tabs>a[aria-current]', 'background').body, /background:var\(--navy\);color:#fff/);
+  assert.match(tabRule('.workspace-tabs.has-pill::before', 'background').body, /background:var\(--navy\)/);
+  assert.match(tabRule('.workspace-tabs.has-pill::before', 'transform').body, /transform:translate\(var\(--pill-x\),var\(--pill-y\)\)/);
   for (const r of rules) {
     if (!r.selector.split(',').some((t) => t.trim().startsWith('.workspace-tabs>a'))) continue;
     for (const m of r.body.matchAll(/border-bottom-width\s*:\s*([^;]+)/g)) assert.equal(m[1].trim(), '2px', r.selector);
   }
+});
+
+// ---- The page shell (library redesign, task 2): header chips, no run code outside Evidence, pill tabs, the trace drawer's footer.
+const RUN_CODE = 'TDG-PROOF-SNAPSHOT-OPUS-002';
+// A DOM stand-in just big enough for updateWorkspaceChrome: the header, the tabs, the context bar and the elements it toggles, each keeping what is written to it.
+function chromeDom() {
+  const vars = {};
+  const node = () => ({ hidden: false, innerHTML: '', textContent: '', vars, style: { setProperty: (k, v) => { vars[k] = v; } }, classList: { toggle() {}, add() {}, remove() {}, contains: () => false }, setAttribute() {}, removeAttribute() {},
+    querySelector: () => ({ offsetLeft: 10, offsetWidth: 80, offsetHeight: 36, offsetTop: 10 }) });
+  const byId = {}, bySelector = { '.issuer': node(), '.workspace-tabs': node() };
+  const $ = id => (byId[id] ||= node());
+  const document = { querySelector: sel => bySelector[sel] || (sel.startsWith('.rail') ? node() : null), querySelectorAll: () => [] };
+  return { $, document, header: bySelector['.issuer'], tabs: bySelector['.workspace-tabs'], bar: $('context-bar') };
+}
+function shellPage(runFields = {}) {
+  const dom = chromeDom();
+  const page = runPage(d => d, [], m => m, { ...HIST, runFields: { ...HIST.runFields, run: RUN_CODE, period: 'FY2025', first: 'CP-0', ...runFields }, dom });
+  return { page, dom };
+}
+
+test('the issuer header: the name, then chips for the period and the pathway in words; no run code anywhere in the header, tabs or context bar', () => {
+  const { page, dom } = shellPage();
+  page.current.module = 'W-Overview';
+  page.updateWorkspaceChrome('W-Overview');
+  const header = dom.header.innerHTML;
+  assert.ok(header.includes(`<h1 title="Synthetic Issuer">Synthetic Issuer</h1>`));
+  assert.ok(header.includes('<p class="hchips"><span class="hchip">FY2025</span><span class="hchip">Credit snapshot</span></p>'), header);
+  assert.ok(!header.includes('Methods changed'), 'no method change, no amber chip');
+  for (const [name, markup] of [['header', header], ['tabs', dom.tabs.innerHTML], ['context bar', dom.bar.innerHTML]]) assert.ok(!markup.includes(RUN_CODE), `${name} carries the run code`);
+  assert.deepEqual([...dom.tabs.innerHTML.matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]), ['Report', 'Overview', 'Changes', 'Modules', 'Forecast', 'Evidence']);
+  assert.deepEqual(dom.tabs.vars, { '--pill-x': '10px', '--pill-w': '80px', '--pill-h': '36px', '--pill-y': '10px' }, 'the pill is placed under the active tab when the tabs are drawn');
+});
+
+test('the issuer header: the amber "Methods changed since this run" chip appears only for a non-empty methodChanges and links to the Evidence run record', () => {
+  const none = shellPage({ methodChanges: [] });
+  none.page.updateWorkspaceChrome('W-Overview');
+  assert.ok(!none.dom.header.innerHTML.includes('Methods changed'), 'an empty list draws no chip');
+  const changed = shellPage({ methodChanges: ['CP-0: methods/cp0.md changed'] });
+  changed.page.updateWorkspaceChrome('W-Overview');
+  assert.ok(changed.dom.header.innerHTML.includes('<a class="hchip amber" href="#W-Evidence/record?c=run-a">Methods changed since this run</a>'), changed.dom.header.innerHTML);
+});
+
+test('the run code shows only on the Evidence page: the context bar and the section bar', () => {
+  const { page, dom } = shellPage();
+  for (const module of ['W-Overview', 'W-Changes', 'W-Forecast', 'CP-1']) assert.ok(!page.runLabel(module, RUN).includes(RUN_CODE), `${module} context bar`);
+  assert.ok(page.runLabel('W-Evidence', RUN).includes(RUN_CODE), 'the Evidence page names the run by its code');
+  assert.ok(!page.moduleHead({ module: 'CP-1', context: RUN, output: null }).includes(RUN_CODE));
+  const prefix = read('screen.js').slice(read('screen.js').indexOf('function contextPrefix('), read('screen.js').indexOf('const keepsCodes'));
+  assert.ok(prefix.includes("module==='W-Evidence'?`${esc(ctx.run)} · `:''"), 'the section bar names the run only on Evidence');
+});
+
+test('the drawer footer links to the Evidence trace of the traced module and the run, encoded like the route\'s own query', () => {
+  const { page } = shellPage();
+  assert.equal(page.traceHref('CP-2D', RUN), '#W-Evidence/trace?c=run-a&m=CP-2D');
+  assert.equal(page.traceHref('CP 2/D?', 'run-b'), '#W-Evidence/trace?c=run-b&m=CP+2%2FD%3F');
+  const foot = page.drawerFoot('CP-2D', RUN);
+  assert.ok(foot.startsWith('<div class="drawer-foot"><a class="text-action" href="#W-Evidence/trace?c=run-a&amp;m=CP-2D">Open in Evidence'), foot);
+});
+
+test('the drawer is the inspector, restyled: close button, Escape and focus return keep their code path, the backdrop closes it', () => {
+  const screen = read('screen.js'), html = read('index.html');
+  assert.ok(html.includes('<aside class="inspector" id="inspector" aria-label="Evidence inspector" hidden></aside><div class="drawer-backdrop" id="drawer-backdrop"'));
+  assert.ok(screen.includes("event.target.closest('#back-analysis,#drawer-backdrop')"), 'the close button and the backdrop leave the trace');
+  assert.ok(screen.includes("if(current.evidence){event.preventDefault();go(current.module,current.section);return;}"), 'Escape closes the open trace');
+  assert.ok(screen.includes("returnTrigger.focus({preventScroll:true})"), 'focus returns to the control that opened it');
+  const css = read('screen.css');
+  assert.match(css, /\.inspector\{position:fixed;[^}]*width:420px;max-width:100%/);
+  assert.match(css, /@media\(max-width:1599\.98px\)\{\.inspector:not\(\[hidden\]\)\+\.drawer-backdrop\{opacity:1;visibility:visible\}\}/);
+  assert.match(css, /@media\(max-width:767\.98px\)\{\.inspector\{width:100%\}\}/);
+});
+
+test('motion: the pill, the drawer, the backdrop and the toast move only under prefers-reduced-motion: no-preference, and nothing moves in print', () => {
+  const css = read('screen.css');
+  const shell = css.slice(css.indexOf('/* ---- Library redesign, shell'));
+  const outside = shell.replace(/@media\(prefers-reduced-motion:no-preference\)\{[\s\S]*?\n\}\n/, '');
+  for (const word of ['transition:transform', 'transition:opacity', 'animation:toast-in']) {
+    assert.ok(shell.includes(word), word);
+    assert.ok(!outside.includes(word), `${word} sits outside the motion query`);
+  }
+  assert.ok(shell.includes('@media print{.toast-host,.drawer-backdrop{display:none!important}*{transition:none!important;animation:none!important}}'));
+});
+
+test('the tooltip: [data-tip] shows its text after 400ms on hover and focus, with CSS only', () => {
+  const css = read('screen.css');
+  assert.ok(css.includes('[data-tip]::after{content:attr(data-tip);'));
+  assert.ok(css.includes('[data-tip]:is(:hover,:focus-visible)::after{display:block;animation:tip-show 1ms linear .4s both}'));
+});
+
+test('components.js is loaded after shapes.js and before reader.js, which calls it', () => {
+  const boot = read('static-boot.js');
+  const list = boot.slice(boot.indexOf('for(const name of ['), boot.indexOf(']', boot.indexOf('for(const name of [')));
+  assert.ok(list.indexOf("'shapes.js'") < list.indexOf("'components.js'") && list.indexOf("'components.js'") < list.indexOf("'reader.js'"), list);
 });

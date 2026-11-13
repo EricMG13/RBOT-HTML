@@ -2,6 +2,8 @@
 // Pure reader logic for the 2026-11-11 handoff contract (docs/rulings/2026-11-11-reader-and-issuer-report.md, H1 to H7):
 // no DOM, no store, no globals read. Browser: the functions below are globals. Node: module.exports.
 // Inputs are the store's shapes: a section is {heading, level, line, blocks[]}; a text block is {type:'text', text}.
+// The one exception to "no globals read" is the trace control, which components.js draws (a page global; required under node).
+const traceComponents = typeof module !== 'undefined' ? require('./components.js') : window.Components;
 
 const PASSAGE_HEADINGS = {
   bottom: 'Bottom line',
@@ -304,9 +306,10 @@ function cellView(cell, numeric, after = '') {
   return `<td${numeric ? ' class="num"' : chartNumber(text) !== null ? ' class="fig"' : ''}>${richText(text)}${after}</td>`;
 }
 
-// The quiet "Basis" control. `items` are the raw references it carries (a Basis line's items, or an earlier paragraph's bracket citations).
+// The trace icon that opens a paragraph's, row's or block's Basis (components.js traceButton). `items` are the raw references it carries
+// (a Basis line's items, or an earlier paragraph's bracket citations); `label` is its accessible name.
 function basisButton(key, items, label) {
-  return `<button type="button" class="basis-link" data-paragraph="${escapeHtml(key)}" data-basis="${escapeHtml(JSON.stringify(items))}" aria-label="${escapeHtml(label)}">Basis</button>`;
+  return traceComponents.traceButton(key, label, items);
 }
 
 // A paragraph's text as read: `item` when it is a "- " list item, the body on one line, and the raw references taken out of it

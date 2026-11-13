@@ -897,3 +897,63 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 @media(max-width:720px){.run-activity-head{flex-direction:column;gap:12px}.run-head{flex-direction:column}.run-marks{flex-wrap:wrap}.run-who .code{white-space:normal;overflow-wrap:anywhere}.run-foot-notes{margin-left:0;text-align:left}.run-table thead th,.run-table tbody th,.run-table tbody td{padding-left:12px;padding-right:12px}}
 @media print{.run-card{box-shadow:inset 0 0 0 1px var(--border-secondary)}.run-table-wrap,.activity-empty .primary-action{box-shadow:none}}
 @media(forced-colors:active){.run-mods .chip,.run-card,.run-table-wrap{border:1px solid}.run-progress progress{appearance:auto}}
+
+/* ---- Library redesign, shell: pill tabs, header chips, trace icon, drawer, toast, tooltip. Colours are the tokens above. ---- */
+.issuer-row h1{font:700 32px/1.1 'Red Hat Display',sans-serif;letter-spacing:-.015em}
+@media(max-width:720px){.issuer-row h1{font-size:26px;line-height:1.15}}
+.hchips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+.hchip{display:inline-flex;align-items:center;min-height:24px;padding:2px 10px;border:1px solid var(--rule);border-radius:999px;background:var(--quiet);font:500 12px/16px 'Red Hat Text',sans-serif;color:var(--text-secondary);text-decoration:none}
+.hchip.amber{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+a.hchip:hover{text-decoration:underline;text-underline-offset:3px}
+a.hchip:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.workspace-tabs{position:relative;gap:4px;padding:10px 28px 12px;overflow-x:auto;scrollbar-width:none}
+.workspace-tabs::-webkit-scrollbar{display:none}
+.workspace-tabs>a{position:relative;z-index:1;display:inline-flex;align-items:center;height:36px;margin:0;padding:0 16px;border:0;border-radius:999px;font:600 14px/20px 'Red Hat Text',sans-serif;color:var(--text-secondary);white-space:nowrap}
+.workspace-tabs>a:hover{background:var(--ground);color:var(--navy)}
+.workspace-tabs>a[aria-current]{background:var(--navy);color:#fff}
+.workspace-tabs>a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;box-shadow:none;border-radius:999px}
+.workspace-tabs.has-pill>a[aria-current]{background:transparent}
+.workspace-tabs.has-pill::before{content:"";position:absolute;z-index:0;left:0;top:0;width:var(--pill-w);height:var(--pill-h);transform:translate(var(--pill-x),var(--pill-y));border-radius:999px;background:var(--navy);pointer-events:none}
+@media(max-width:720px){.workspace-tabs{padding:8px 15px 10px}}
+.basis-link{display:inline-grid;place-items:center;flex:none;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--text-quaternary);font-size:0;line-height:0;vertical-align:middle;text-decoration:none}
+.basis-link .i{width:16px;height:16px}
+.basis-link:hover,.basis-link[aria-pressed=true]{background:var(--selection);color:var(--blue);text-decoration:none}
+.basis-link:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+td .basis-link{margin-left:4px}
+.inspector{position:fixed;top:0;right:0;bottom:0;z-index:61;display:flex;flex-direction:column;width:420px;max-width:100%;overflow:hidden;border-left:1px solid var(--rule);background:#fff;box-shadow:var(--depth)}
+.inspector[hidden]{display:flex;visibility:hidden;transform:translateX(100%)}
+@media(max-width:767.98px){.inspector{width:100%}}
+.inspector-bar{position:static;flex:none;justify-content:flex-start;gap:10px;padding:14px 16px 14px 20px;background:#fff}
+.inspector-bar .drawer-title{flex:1;margin:0;font:700 16px/24px 'Red Hat Display',sans-serif;color:var(--text-primary)}
+.inspector-bar .drawer-close{justify-content:center;width:32px;height:32px;border:1px solid var(--rule);border-radius:var(--radius-control);background:#fff;color:var(--text-primary)}
+.inspector-bar .drawer-close:hover{background:var(--selection)}
+.inspector-bar .drawer-close:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.inspector .inspector-body{flex:1 1 auto;min-height:0;max-width:none;overflow:auto;padding:20px 22px}
+.inspector .evidence-fields>div{display:block}
+@media(max-width:767.98px){.inspector .inspector-body{padding:18px 16px}}
+.drawer-foot{flex:none;padding:14px 22px;border-top:1px solid var(--rule);background:#fff}
+.drawer-foot .text-action{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.drawer-backdrop{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--navy) 38%,transparent);opacity:0;visibility:hidden}
+@media(max-width:1599.98px){.inspector:not([hidden])+.drawer-backdrop{opacity:1;visibility:visible}}
+@media(min-width:1600px){.app:has(.inspector:not([hidden])){padding-right:445px}}
+.toast-host{position:fixed;right:24px;bottom:24px;z-index:80;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.toast{margin:0;padding:10px 14px;border-radius:10px;background:var(--navy);color:#fff;font:500 13px/18px 'Red Hat Text',sans-serif;box-shadow:var(--depth)}
+[data-tip]{position:relative}
+[data-tip]::after{content:attr(data-tip);display:none;position:absolute;z-index:70;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:240px;padding:6px 9px;border-radius:8px;background:var(--navy);color:#fff;font:500 12px/1.35 'Red Hat Text',sans-serif;text-align:left;white-space:normal;pointer-events:none}
+[data-tip]:is(:hover,:focus-visible)::after{display:block;animation:tip-show 1ms linear .4s both}
+.tip-r::after{left:auto;right:-6px;transform:none}
+.tip-l::after{left:-6px;transform:none}
+@keyframes tip-show{from{opacity:0;visibility:hidden}to{opacity:1;visibility:visible}}
+@media(prefers-reduced-motion:no-preference){
+.workspace-tabs.has-pill::before{transition:transform .3s cubic-bezier(.4,0,.2,1),width .3s cubic-bezier(.4,0,.2,1)}
+.workspace-tabs>a{transition:color .2s,background-color .2s}
+.inspector{transition:transform .3s cubic-bezier(.4,0,.2,1),visibility 0s}
+.inspector[hidden]{transition:transform .3s cubic-bezier(.4,0,.2,1),visibility 0s linear .3s}
+.drawer-backdrop{transition:opacity .3s,visibility 0s linear .3s}
+.inspector:not([hidden])+.drawer-backdrop{transition:opacity .3s,visibility 0s}
+.toast{animation:toast-in .25s ease-out}
+[data-tip]:is(:hover,:focus-visible)::after{animation-duration:.12s}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+}
+@media(forced-colors:active){.hchip{border:1px solid}.basis-link{border:1px solid}.inspector{border-left:2px solid}.toast{border:1px solid}}
+@media print{.toast-host,.drawer-backdrop{display:none!important}*{transition:none!important;animation:none!important}}
