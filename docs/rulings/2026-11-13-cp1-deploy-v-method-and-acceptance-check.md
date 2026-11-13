@@ -25,6 +25,19 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
 - CP-1's figures are checked in code when its handoff is written, through the existing rejection
   path. Nothing downstream re-checks them.
 - Prompt-size ceilings (`INSTRUCTION_BUDGET`) are not raised.
+- Own currency (2026-11-13, relayed by the coordinator session). Question put: "PR 111, non-USD
+  issuer: state leverage in the issuer's own currency, or keep it as a gap?" Owner: "Yes". The
+  coordinator read this as the first choice and told the owner so; it is built on that reading.
+  CP-1's money tables (net debt, the money charts, the debt reconciliation, the register's fixed
+  rows) are in the money unit: `US$m` when the statements are in USD, otherwise the statements'
+  currency code and `m` (`GBPm`), in millions even where a statement prints thousands. The ties
+  run in that currency. Nothing is converted and no FX is computed.
+- Adjusted-only EBITDA (2026-11-13, relayed by the coordinator session). Question put: "PR 111,
+  adjusted-only EBITDA: allow headline leverage on adjusted EBITDA, labelled as such, or keep it
+  empty?" Owner: "First choice". Reported EBITDA stays primary whenever the issuer states it. An
+  issuer that states only adjusted EBITDA heads the leverage and interest-cover columns with the
+  adjusted metric names, tied to the adjusted register rows; the header is the label every reader
+  draws. A reported figure is never fabricated.
 
 ## Decisions (controller, for the owner to confirm or reverse)
 
@@ -65,10 +78,22 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
 - Limits of the check, by design: it proves CP-1's tables agree with each other, not with the
   filing. `FX Effect on Cash`, `Temporary Equity` and `Reconciling items` are each stated once and
   can absorb an error. Interim rows have no statement tie (their EBITDA is a last-twelve-months
-  figure). The host's chart and net debt tables are US$m for every issuer, which predates this change;
-  a non-USD issuer writes its statements in its own currency and `Not supplied:` in the US$m
-  tables, and its statement lines are not tied to them (figures typed into the US$m tables in
-  another currency are not caught).
+  figure), so an interim reported row could carry an adjusted EBITDA unnoticed. The money tables
+  of other modules (CP-2D, CP-3C, CP-4C) stay `US$m`, so a non-USD issuer's cells there read
+  `Not supplied:`; the run-start form says so. Any three-letter code in the statements' `Unit`
+  is taken as a currency. `Unit` accepts `millions` and `thousands` only. A register with none of
+  the six fixed metric rows passes when the charts are gaps.
+- Adjusted-only, the controller's defaults: periods are not mixed (if reported EBITDA is stated
+  for any period, the reported headers are used and a period with only adjusted EBITDA is a gap
+  in the chart); adjusted leverage is not added to the library's leverage screening filters; a
+  reporting currency entered at run start that differs from the statements is not flagged.
+- On the Changes page a run on reported EBITDA against a run on adjusted EBITDA is "not
+  comparable", with both labels in the reason; no difference is printed.
+- Instruction size. The method text CP-1 is sent was shortened by 5,851 characters (duplicate
+  statements and wording; four rules a first cut made vaguer were restored after review), the
+  share agreed with the T4 session, which cut its own text. With T4 and `main` merged in, the
+  tightest pathways are earnings_update (545,009 of 546,000) and short_snapshot (155,712 of
+  157,500).
 - `calculate` gains `difference` and `product`; both refuse a result that 38 digits cannot hold
   exactly. `sum` is unchanged.
 
@@ -96,18 +121,25 @@ written "to stop the model from self validation and calculation"; CP-OS runs non
   different checked tables are matched by the period the Period table dates, so `FY2024` in a
   chart, `FY2024 / 2024-09-30` and `2024-09-30` are one period, and a correct handoff with an
   interim balance sheet is no longer refused.
-- Decision: a non-USD issuer can no longer state leverage. The US$m net debt cells are gaps for
-  such an issuer, and the two-sided tie then refuses a stated ratio. Either tie the numerator to
-  the balance sheet's `Total Debt` when the net debt cell is a currency gap, or accept the loss and
-  say so in the launcher block and `run_expectations.py`. The reference issuer VMO2 reports in GBP.
+- Decided by the owner and built (see the two owner decisions above): a non-USD issuer states
+  leverage in its own currency, and an adjusted-only issuer states headline leverage on adjusted
+  EBITDA. The run expectation `chart-strip-usd`, which asserted the earlier behaviour, is removed.
+- No model output has yet passed the check. It asks for exact headings, a 13-column register,
+  exact row names and plain numbers within three writes (`MAX_WRITES`); if a real CP-1 cannot do
+  that, every run stops at the second module. A paid run is the owner's separate action.
 - Lower: two fiscal labels given the same End in the Period table are treated as one period (a
   self-contradictory Period table is not refused); the Period table has no heading rule (ask for `### Period table`); a blocked CP-1 still
   has to write a period column header and a `Unit`; a second table under a statement heading is
   not read; a register header one letter off hides the register's other issues until the next
   write; an `LTM` statement column is refused and nothing says it belongs in the derived-period
   table; the Changes page cannot read free cash flow from the statement tables' `Unit` column;
-  the manifest's SKILL edit string still says T4.18 was removed; two `calculate` tests are weaker
-  than they should be (one accepts either an error or a null; one uses `sum` as its oracle).
-- Size: the check module is about 1,150 lines and the branch about 3,600 added lines, over the
-  800-line guideline. The rewrite tournament's verdict was to keep the design; its optional
+  a unit with a space inside a prefixed symbol (`C $m`) is told to restate under the money unit
+  with no gap option; a unit such as `US$m (thousands)` is told to move the note to Basis, which
+  keeps a thousands figure under a millions unit (predates this change);
+  two `calculate` tests are weaker than they should be (one accepts either an error or a null;
+  one uses `sum` as its oracle); the money-unit pattern is written in both delivery and the
+  library store; one manifest `edit` string names two sentences as added before saying they were
+  later dropped; `prompts/CP-1.md`, which now carries three rules the method no longer repeats,
+  still opens "not connected to the imported runtime".
+- Size: the check module and the branch are well over the 800-line guideline. The rewrite tournament's verdict was to keep the design; its optional
   simplifications remove about 85 lines.
