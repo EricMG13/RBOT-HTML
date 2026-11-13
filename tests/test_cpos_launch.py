@@ -221,6 +221,55 @@ def synthetic_table(header: str, *rows: str) -> str:
     return "\n".join([header, "| --- |" + " --- |" * (header.count("|") - 2), *rows])
 
 
+# CP-1's checked tables (the acceptance check of CP-1's figures). Synthetic: every operand is a
+# stated gap, so the wiring is proved and no figure is compared; the register states the chart
+# figures so each chart row has its register row.
+GAP = "Not supplied: synthetic"
+CP1_CHECKED = {
+    heading: synthetic_table(
+        "| Line item | FY2024 | Unit | Basis | Source |",
+        *(f"| {row} | {GAP} | USD millions | Synthetic. | annual.txt |" for row in rows),
+    )
+    for heading, rows in {
+        "T4.4 Income statement": ("EBITDA (Reported)",),
+        "T4.5 Cash flow statement": (
+            "Net Cash from Operating Activities",
+            "Net Cash from Investing Activities",
+            "Net Cash from Financing Activities",
+            "Net Cash Change",
+            "Opening Cash",
+            "Closing Cash",
+            "Cash Interest Paid",
+        ),
+        "T4.6 Balance sheet": (
+            "Total Assets",
+            "Total Liabilities",
+            "Total Equity",
+            "Total Debt",
+            "Cash & Equivalents",
+        ),
+    }.items()
+}
+CP1_CHECKED["T4.9 Calculation register"] = synthetic_table(
+    "| Metric Name | Formula | Numerator Value | Numerator Source | Denominator Value "
+    "| Denominator Source | Period | Currency | Unit | Calculated Value | Calculation Status "
+    "| Evidence Quality Tier | Limitations |",
+    *(
+        f"| {name} | n / d | {GAP} | annual.txt | {GAP} | annual.txt | {period} | USD | US$m "
+        f"| {value} | Stated | Tier 3 | Synthetic. |"
+        for name, values in (
+            ("Total debt / EBITDA", ("4.20", "3.60")),
+            ("Net debt / EBITDA", ("3.85", "3.25")),
+            ("EBITDA / cash interest", ("3.10", "3.40")),
+        )
+        for period, value in zip(("FY2023", "FY2024"), values, strict=True)
+    ),
+)
+CP1_CHECKED["Debt principal to carrying value"] = synthetic_table(
+    "| Period | Contractual principal | Reconciling items | Carrying value | Reporting unit "
+    "| Basis and limitation |",
+    f"| FY2024 | {GAP} | {GAP} | {GAP} | US$m | Synthetic. |",
+)
 PERIOD_HEAD = "| Period | {} | Reporting unit | Basis and limitation |"
 DEBT_STACK_HEAD = (
     "| Facility | Ranking | Secured | Amount | Cumulative leverage | Reporting unit "
@@ -549,6 +598,7 @@ def answer(context: dict, plan_routes: list) -> str:
                 lines += [f"### {heading}", "", table, ""]
     if context["module_id"] == "CP-1":  # ... and the net debt table (owner, 2026-11-12).
         lines += ["### Net debt data", "", NET_DEBT_TABLE, ""]
+        lines += [part for h, t in CP1_CHECKED.items() for part in (f"### {h}", "", t, "")]
         lines += ["### Post-balance-sheet adjustments", "", POST_BS_NONE, ""]
     for heading, table in OWNER_TABLES.get(context["module_id"], {}).items():
         lines += [f"### {heading}", "", table, ""]

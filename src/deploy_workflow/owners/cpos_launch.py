@@ -88,7 +88,8 @@ from deploy_workflow.model.pricing import (
 )
 from deploy_workflow.model.turn import MODEL_EFFORTS, dump_json
 from deploy_workflow.model_testing.configs import CONFIGS
-from deploy_workflow.owners import cp2g, cpos_forecast
+from deploy_workflow.owners import cp2g, cpos_cp1_check as cp1_check, cpos_forecast
+from deploy_workflow.owners.cpos_cp1_check import cp1_issues as _cp1_issues
 from deploy_workflow.owners.cpos import (
     WEB_SEARCH_GRANT,
     HandoffPlan,
@@ -777,6 +778,22 @@ def _net_debt_issues(text: str) -> tuple[str, ...]:
     return tuple(issues)
 
 
+DEBT_RECON = OwnerTable(
+    cp1_check.RECON_HEADING,
+    cp1_check.RECON_COLUMNS,
+    "US$m",
+    rules=(
+        "One row, for the balance-sheet date the maturity ladder is drawn at; `Period` is written "
+        "as in `Net debt data`. Contractual principal is the sum of the `Debt maturing` rows of "
+        "`Chart data: debt maturities`. Reconciling items is one signed net figure: issuance "
+        "costs, discounts and premiums, and any debt the ladder leaves out, each named in Basis "
+        "and limitation and summed in `## Calculations`. Carrying value is the Gross debt of "
+        "`Net debt data` for the same period. Principal plus reconciling items must equal "
+        "carrying value exactly."
+    ),
+)
+
+
 POST_BS_NONE = "None found in the sources read"
 POST_BS = OwnerTable(
     "Post-balance-sheet adjustments",
@@ -817,7 +834,7 @@ def _owner_tables(module: str, routes: Sequence[MarkdownRoute]) -> tuple[OwnerTa
     chart = tuple(
         OwnerTable(h, cols, unit) for h, cols, unit in CHART_TABLES.values() if h not in routed
     )
-    return (*chart, NET_DEBT, POST_BS, *tables)
+    return (*chart, NET_DEBT, DEBT_RECON, POST_BS, *tables)
 
 
 DIRECTIONS = ("Passes below", "Passes at or below", "Passes above", "Passes at or above")
@@ -2006,6 +2023,52 @@ PERIOD_TABLE_BLOCK = (
     "date in the row label or the Source, not in the cell. A column headed `LTM …` holds flows "
     "only, never a balance.\n\n"
 )
+
+
+def _fixed_rows(spec: cp1_check.StatementSpec) -> str:
+    optional = f"; optional {', '.join(f'`{r}`' for r in spec.optional)}" if spec.optional else ""
+    return f"`### {spec.heading}`: {', '.join(f'`{r}`' for r in spec.fixed)}{optional}"
+
+
+# Goes into CP-1's instructions on every run: what the acceptance check reads, rendered from the
+# constants the check itself uses, so the words cannot drift from it.
+CP1_CHECK_BLOCK = (
+    "Checked tables: CP-OS recomputes your figures at acceptance and sends back any that fail, so "
+    "print these inside `## Findings`, headings exact. Each statement table is headed "
+    "`| Line item | <one column per period> | Unit | Basis | Source |`, keeps the issuer's own "
+    "lines and labels, and adds these rows beside them, labels exact, one row each: "
+    + "; ".join(_fixed_rows(spec) for spec in cp1_check.STATEMENTS)
+    + ". A cell is a plain number or `Not supplied: <reason>` / `Not calculable: <reason>` (a "
+    "missing figure is never zero; no words beside a number). `Total Debt` is the balance-sheet "
+    "carrying value, current plus long-term, net of issuance costs and discounts. `Net Cash "
+    "Change` is operating plus investing plus financing plus any FX effect.\n"
+    f"`### {cp1_check.REGISTER_HEADING}`, headed `| {' | '.join(cp1_check.REGISTER_COLUMNS)} |`, "
+    "one row for each of these Metric Names and each period in the leverage and interest-cover "
+    "tables: "
+    + ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[:3])
+    + "; and, only when the issuer states an adjusted EBITDA, "
+    + ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[3:])
+    + f". Reported EBITDA is the primary denominator. `Period` is the column header as printed "
+    f"(`FY2024`), `Unit` is `{cp1_check.REGISTER_UNIT}`, `Currency` is the code. Numerator and "
+    "Denominator Value are the plain figures of the statement tables and `Net debt data`; "
+    "Calculated Value is numerator over denominator, to the places you print, worked with "
+    "`calculate`; a zero or negative denominator is `Not calculable: <reason>`.\n"
+    f"`### {cp1_check.RECON_HEADING}` (selector below) ties the maturity ladder, which stays "
+    "contractual principal, to the carrying value in `Net debt data`.\n"
+    "Refused, naming the row and both figures: a table or fixed row missing; a register cell that "
+    "is not a number or a stated gap; a Calculated Value more than half a unit of its last "
+    "printed place from numerator over denominator; a chart figure that is not the register's "
+    "Calculated Value for the period; a numerator that is not `Net debt data`'s Gross debt (or "
+    "Net debt); an EBITDA, cash interest or Total Debt operand that differs from its statement "
+    "line (checked when the Unit cell is `USD millions`); assets that differ from liabilities "
+    "plus any temporary equity plus equity, the cash flows plus any FX effect from the net "
+    "change, or opening cash plus the change from closing cash; a ladder that does not add to "
+    "the principal, or principal plus reconciling items that is not the carrying value. Correct "
+    "whichever figure is wrong. If you are blocked, still print every table: each fixed row "
+    "(one period column) with `Not supplied: <reason>` in each figure cell, the register with one "
+    "row whose Metric Name is `Not assessable` and `Not supplied: <reason>` in every other cell, "
+    "and the reconciliation row with `Not supplied: <reason>` in each figure.\n\n"
+)
 # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
 # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
 # FORECAST_BLOCK, so cpos_forecast has one code path; the model still computes nothing.
@@ -2595,6 +2658,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
     for module, block, wanted in (
         ("CP-2G", FORECAST_BLOCK, forecast),
         ("CP-1", PERIOD_TABLE_BLOCK, forecast),
+        ("CP-1", CP1_CHECK_BLOCK, True),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
         ("CP-0", CP0_BLOCK, True),
         ("CP-2A", STRESS_BLOCK, True),
@@ -2714,7 +2778,7 @@ def _owned_issues(module: str, routes: Sequence[MarkdownRoute], text: str) -> li
     """The tables a module is asked for beside its report routes, checked; for CP-1 also the net
     debt table's arithmetic."""
     issues = [i for owned in _owner_tables(module, routes) for i in chart_issues(text, owned)]
-    return [*issues, *_net_debt_issues(text)] if module == "CP-1" else issues
+    return [*issues, *_net_debt_issues(text), *_cp1_issues(text)] if module == "CP-1" else issues
 
 
 _FRONT_SCORE_KEY = re.compile(r"(confidence_score|confidence_band|qa_status)\s*:")
