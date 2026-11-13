@@ -86,19 +86,11 @@
       "category": "Exchange"
     },
     {
-      "domain": "nasdaq.com",
-      "category": "Exchange"
-    },
-    {
       "domain": "euronext.com",
       "category": "Exchange"
     },
     {
       "domain": "luxse.com",
-      "category": "Exchange"
-    },
-    {
-      "domain": "ise.ie",
       "category": "Exchange"
     },
     {

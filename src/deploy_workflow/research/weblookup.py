@@ -10,8 +10,12 @@ the page's own stated date against the research cutoff.
 
 The resolver, the connector, the clocks, the sleep and the environment are injected through
 ``Runtime``; its defaults are the production values.
+
+Page text handed to the model is bounded (``MAX_TEXT_CHARS`` per retained page, a visible final
+line saying so), and every string taken from a server or an EDGAR document is neutralised first.
 """
 
+import codecs
 import hashlib
 import io
 import json
@@ -40,6 +44,9 @@ MAX_PAGES = 40
 MAX_TOTAL_BYTES = 40_000_000
 SEC_INTERVAL_S = 0.2
 PAGE_CHARS = 12000  # what handoff._pages yields for a text file
+MAX_TEXT_CHARS = 2_000_000  # extracted text of one retained page; the rest is cut, visibly
+MAX_LINE_CHARS = 200  # one EDGAR summary line or item field
+MAX_SUMMARY_CHARS = 10_000
 MAX_MATCHES = 20
 MAX_LISTED = 20
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -72,6 +79,11 @@ _BLOCK_TAGS = frozenset(
     | {"h1", "h2", "h3", "h4", "h5", "h6", "pre", "blockquote", "title", "dd", "dt", "hr"}
 )
 _CHARSET = re.compile(r"charset\s*=\s*[\"']?([^\s;\"']+)", re.IGNORECASE)
+_CHARSET_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+-]{0,39}")
+# A media type is repeated in a refusal only when it is this plain: Content-Type is server text.
+_PLAIN_MEDIA = re.compile(r"[A-Za-z0-9.+-]{1,60}/[A-Za-z0-9.+-]{1,60}")
+_ISO_START = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9])")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 _CIK = re.compile(r"[0-9]{1,10}")
 _TAG = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,119}")
 _SEC_MESSAGE = (
@@ -139,7 +151,7 @@ class Runtime:
     clock: Callable[[], float] = time.monotonic
     sleep: Callable[[float], None] = time.sleep
     now: Callable[[], datetime] = _utc_now
-    env: Mapping[str, str] = field(default_factory=lambda: os.environ)
+    env: Mapping[str, str] = field(default_factory=lambda: os.environ, repr=False)
 
 
 class _IndexDamaged(ResearchError):
@@ -184,23 +196,41 @@ def _media_type(content_type: str | None) -> str:
     return (content_type or "").split(";")[0].strip().lower()
 
 
+def _clean_content_type(content_type: str | None) -> str:
+    """The lower-cased media type plus a checked charset: all that is stored or returned of it."""
+    media = _media_type(content_type)
+    match = _CHARSET.search(content_type or "")
+    if match and _CHARSET_TOKEN.fullmatch(match.group(1)):
+        try:
+            codecs.lookup(match.group(1))
+        except LookupError:
+            return media  # an unknown charset name is dropped
+        return f"{media}; charset={match.group(1).lower()}"
+    return media
+
+
 def _decode(body: bytes, content_type: str | None) -> str:
     match = _CHARSET.search(content_type or "")
     if match:
         try:
             return body.decode(match.group(1), errors="replace")
-        except LookupError:
-            pass  # an unknown charset name: fall back to UTF-8 as for an undeclared one
+        except (LookupError, UnicodeError):
+            # An unknown name (LookupError) or a codec that is not a text decoder, such as
+            # ``undefined`` or ``idna`` (UnicodeError): fall back to UTF-8 as for an undeclared one.
+            pass
     return body.decode("utf-8", errors="replace")
 
 
 def _iso_date(value: object) -> date | None:
     if not isinstance(value, str):
         return None
+    start = _ISO_START.match(value.strip())
+    if start is None:
+        return None  # a week date (2025-W27) or a malformed value is not a stated date
     try:
-        return date.fromisoformat(value.strip()[:10])
+        return date.fromisoformat(start.group())
     except ValueError:
-        return None
+        return None  # month or day out of range
 
 
 class _PageParser(HTMLParser):
@@ -322,20 +352,60 @@ def _status(page_date: str | None, cutoff: date) -> str:
     return STATUS_USABLE if stated <= cutoff else STATUS_LATER
 
 
+def _cut_note() -> str:
+    return f"[the text was cut here; the first {MAX_TEXT_CHARS} characters are kept]"
+
+
+def _bound_text(text: str) -> str:
+    if len(text) <= MAX_TEXT_CHARS:
+        return text
+    return text[:MAX_TEXT_CHARS] + "\n" + _cut_note()
+
+
 def _pdf_pages(body: bytes) -> list[str]:
+    pages: list[str] = []
+    kept = 0
     try:
-        reader = PdfReader(io.BytesIO(body))
-        return [page.extract_text(extraction_mode="layout") or "" for page in reader.pages]
-    except (PyPdfError, ValueError) as error:
-        # Shown to the model as the page's text, so the failure is visible, not hidden.
+        for page in PdfReader(io.BytesIO(body)).pages:
+            text = page.extract_text(extraction_mode="plain") or ""
+            if kept + len(text) > MAX_TEXT_CHARS:
+                pages.append(text[: MAX_TEXT_CHARS - kept] + "\n" + _cut_note())
+                break
+            pages.append(text)
+            kept += len(text)
+    except (PyPdfError, ValueError, RecursionError, NotImplementedError) as error:
+        # PyPdfError and ValueError: a damaged PDF. RecursionError: deeply nested objects.
+        # NotImplementedError: a stream filter pypdf does not implement. Shown to the model as the
+        # page's text, so the failure is visible, not hidden.
         return [f"[this PDF could not be read: {type(error).__name__}]"]
+    return pages
+
+
+class _TooLong(Exception):
+    pass
+
+
+def _indented_json(doc: object) -> str:
+    """``json.dumps(doc, indent=2)`` unless that passes the text bound; then the compact form."""
+    chunks: list[str] = []
+    size = 0
+    try:
+        for chunk in json.JSONEncoder(indent=2, ensure_ascii=False).iterencode(doc):
+            size += len(chunk)
+            if size > MAX_TEXT_CHARS:
+                raise _TooLong
+            chunks.append(chunk)
+    except _TooLong:
+        # Indentation multiplies a deeply nested document: stop before the giant string exists.
+        return json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
+    return "".join(chunks)
 
 
 def _pretty_json(text: str) -> str:
     try:
-        return json.dumps(json.loads(text), indent=2, ensure_ascii=False)
+        return _indented_json(json.loads(text))
     except (ValueError, RecursionError):
-        return text  # not valid JSON: the model reads the text as served
+        return text  # not valid JSON, or too deeply nested to rewrite: the model reads it as served
 
 
 def pages_from(body: bytes, content_type: str | None) -> list[str]:
@@ -349,28 +419,41 @@ def pages_from(body: bytes, content_type: str | None) -> list[str]:
         text = _pretty_json(_decode(body, content_type))
     else:
         text = _decode(body, content_type)
-    text = neutralise(text)
+    text = neutralise(_bound_text(text))
     return [text[i : i + PAGE_CHARS] for i in range(0, len(text), PAGE_CHARS)] or [""]
+
+
+def _row_trusted(row: object) -> bool:
+    """A row whose ``bytes`` (a budget) and ``sha256`` (a file name) can be used."""
+    if not isinstance(row, dict):
+        return False
+    size, digest = row.get("bytes"), row.get("sha256")
+    return (
+        type(size) is int
+        and size >= 0
+        and isinstance(digest, str)
+        and _SHA256.fullmatch(digest) is not None
+    )
 
 
 def _read_index(path: Path) -> list[dict[str, Any]]:
     """The retained rows. A torn last line (a crash mid-append) is ignored; other damage raises."""
     if not path.exists():
         return []
-    raw = path.read_text(encoding="utf-8")
-    lines = raw.split("\n")
-    torn = lines.pop() if not raw.endswith("\n") else ""
+    raw = path.read_bytes()
+    lines = raw.split(b"\n")
+    last = len(lines) - 1  # the text after the final newline: empty unless the last line is torn
     rows: list[dict[str, Any]] = []
-    for line in [*lines, torn]:
+    for number, line in enumerate(lines):
         if not line.strip():
             continue
         try:
-            row = json.loads(line)
-        except ValueError:
-            if line is torn and torn:
+            row = json.loads(line.decode("utf-8"))
+        except ValueError:  # UnicodeDecodeError is a ValueError: a line cut inside a character
+            if number == last:
                 continue
             raise _IndexDamaged("the retained web index is damaged") from None
-        if not isinstance(row, dict) or type(row.get("bytes")) is not int:
+        if not _row_trusted(row):
             raise _IndexDamaged("the retained web index is damaged")
         rows.append(row)
     return rows
@@ -418,7 +501,11 @@ class _GuardedConnection:
 
 
 class WebLookup:
-    """The lookups of one run, retained under ``run_dir/web/``."""
+    """The lookups of one run, retained under ``run_dir/web/``.
+
+    SEC pacing and the page budget's bookkeeping are per instance and per run folder: a run keeps
+    exactly one ``WebLookup`` (Task 2), which is what makes the 0.2 s spacing hold across tools.
+    """
 
     def __init__(self, scope: RunScope, runtime: Runtime | None = None) -> None:
         self._folder = scope.run_dir / "web"
@@ -439,10 +526,12 @@ class WebLookup:
         try:
             rows = _read_index(self._folder / "index.jsonl")
             cached = self._cached(rows, url)
-        except (_IndexDamaged, TypeError) as error:
+        except _IndexDamaged as error:
             return Refused(str(error) or "the retained web index is damaged")
         if cached is not None:
             return cached
+        # ponytail: no lock; one caller at a time per run. Add a file lock if tools ever run
+        # concurrently.
         problem = self._sec_problem(split.host) or self._budget_problem(rows)
         if problem:
             return Refused(problem)
@@ -538,10 +627,13 @@ class WebLookup:
 
     def _body_problem(self, body: bytes, media: str | None, spent: int) -> str | None:
         kind = _EXTENSIONS.get(_media_type(media))
-        if not _media_type(media):
+        plain = _media_type(media)
+        if not plain:
             return "the response has no content type, so it is not retained"
         if kind is None:
-            return f"content type {_media_type(media)[:100]!a} is not allowed"
+            if _PLAIN_MEDIA.fullmatch(plain):
+                return f"content type {plain!a} is not allowed"
+            return "the response has an unrecognised content type, so it is not retained"
         if kind == "pdf" and not body.startswith(b"%PDF"):
             return "the response is declared a PDF but is not one"
         if spent + len(body) > MAX_TOTAL_BYTES:
@@ -560,7 +652,7 @@ class WebLookup:
             fetched_at=self._runtime.now().astimezone(UTC).isoformat(),
             sha256=digest,
             bytes=len(body),
-            content_type=media,
+            content_type=_clean_content_type(media),
             page_date=page_date,
             page_date_source=source,
             cutoff=self._cutoff.isoformat(),
@@ -601,15 +693,16 @@ class WebLookup:
         if not entries:
             return _unreadable(got)
         needle = query.casefold()
+        exact = [entry for entry in entries if entry[1].casefold() == needle]
+        named = [entry for entry in entries if entry not in exact and needle in entry[2].casefold()]
         found = [
-            {"cik": f"{cik:010d}", "ticker": ticker, "name": name}
-            for cik, ticker, name in entries
-            if ticker.casefold() == needle or needle in name.casefold()
-        ][:MAX_MATCHES]
+            {"cik": f"{cik:010d}", "ticker": _field(ticker), "name": _field(name)}
+            for cik, ticker, name in [*exact, *named][:MAX_MATCHES]
+        ]
         lines = [f"{item['cik']} {item['ticker']} {item['name']}" for item in found]
         head = f"{len(found)} match(es) for the query; the list is retained as {got.source_id}."
-        summary = "\n".join([head if found else f"No company matched. {head}", *lines])
-        return EdgarResult(got.source_id, neutralise(summary), tuple(found))
+        summary = _summary([head if found else f"No company matched. {head}", *lines])
+        return EdgarResult(got.source_id, summary, tuple(found))
 
     def filing_list(self, cik: str) -> EdgarResult | Refused:
         """The company's recent filings from its submissions document."""
@@ -623,7 +716,7 @@ class WebLookup:
         if not lines:
             return _unreadable(got)
         head = f"Filings listed (first {MAX_LISTED}) from {got.source_id}: form, date, accession"
-        return EdgarResult(got.source_id, neutralise("\n".join([head, *lines])))
+        return EdgarResult(got.source_id, _summary([head, *lines]))
 
     def concept_facts(self, cik: str, tag: str, taxonomy: str = "us-gaap") -> EdgarResult | Refused:
         """One XBRL concept's facts for a company."""
@@ -643,14 +736,25 @@ class WebLookup:
         if not lines:
             return _unreadable(got)
         head = f"Latest {MAX_LISTED} facts, retained as {got.source_id}"
-        return EdgarResult(got.source_id, neutralise("\n".join([head, *lines])))
+        return EdgarResult(got.source_id, _summary([head, *lines]))
 
     def _json(self, item: Retained) -> object:
-        raw = (self._folder / f"{item.sha256}.json").read_bytes()
+        ext = _EXTENSIONS.get(_media_type(item.content_type), "txt")
+        raw = (self._folder / f"{item.sha256}.{ext}").read_bytes()
         try:
             return json.loads(_decode(raw, item.content_type))
         except (ValueError, RecursionError):
             return None  # not JSON: the caller reports the unexpected shape
+
+
+def _field(value: str) -> str:
+    """One text field taken from an EDGAR document: neutralised, then at most MAX_LINE_CHARS."""
+    return neutralise(value)[:MAX_LINE_CHARS]
+
+
+def _summary(lines: list[str]) -> str:
+    """The lines neutralised, the whole at most MAX_SUMMARY_CHARS; callers bound each line."""
+    return neutralise("\n".join(lines))[:MAX_SUMMARY_CHARS]
 
 
 def _unreadable(item: Retained) -> EdgarResult:
@@ -691,7 +795,7 @@ def _filing_lines(doc: object, cutoff: date) -> list[str]:
     if not all(isinstance(column, list) for column in columns):
         return []
     return [
-        f"{form} {filed} {accession}{_after_cutoff(filed, cutoff)}"
+        f"{f'{form} {filed} {accession}'[:MAX_LINE_CHARS]}{_after_cutoff(filed, cutoff)}"
         for form, filed, accession in list(zip(*columns, strict=False))[:MAX_LISTED]
     ]
 
@@ -712,5 +816,5 @@ def _fact_lines(doc: object, cutoff: date) -> list[str]:
             f"{key}={row[key]}" for key in ("end", "val", "form", "fy", "fp", "filed") if key in row
         ]
         marker = _after_cutoff(row.get("filed", row["end"]), cutoff)
-        lines.append(f"{unit} " + " ".join(parts) + marker)
+        lines.append((f"{unit} " + " ".join(parts))[:MAX_LINE_CHARS] + marker)
     return lines
