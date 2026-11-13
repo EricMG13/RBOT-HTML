@@ -176,8 +176,8 @@
     const cards = block.rows.map(row => {
       const title = String(row.cells[titleCol.at] ?? '').trim(), titleHtml = fieldHtml(title, ctx);
       const fields = otherCols.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`).join('');
-      const label = `Row ${title || row.line}: where it comes from`;
-      return `<article class="rec-card"><div class="rec-head">${titleHtml ? `<p class="rec-title">${titleHtml}</p>` : '<span></span>'}${traceFor(ctx, row, label)}</div>${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}</article>`;
+      const label = rowLabelOf(block, ctx, row, title);
+      return `<article class="rec-card"><div class="rec-head">${titleHtml ? `<p class="rec-title">${titleHtml}</p>` : '<span></span>'}${traceFor(ctx, row, label)}</div>${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extraList(block, row, ctx)}</article>`;
     });
     return `<div class="rec-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }
@@ -515,7 +515,7 @@
       }
       const fields = others.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<div><dt>${escapeHtml(col.label)}</dt><dd>${html}</dd></div>`).join('');
       const side = (col, text) => `<div class="chg-side"><p class="chg-k">${escapeHtml(col.label)}</p><p class="chg-v">${valueHtml(text, ctx)}</p></div>`;
-      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, `${readerText().plainText(title) || `Line ${row.line}`}: where it comes from`)}</div><div class="chg-pair">${side(before, a)}<span class="chg-arrow">${icon('arrow-right')}</span>${side(after, b)}</div>${dumb}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="chg-x">${html}</p>`).join('')}</article>`;
+      return `<article class="chg-card"><div class="chg-head"><p class="chg-title">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div><div class="chg-pair">${side(before, a)}<span class="chg-arrow">${icon('arrow-right')}</span>${side(after, b)}</div>${dumb}${fields ? `<dl class="rec-fields">${fields}</dl>` : ''}${extrasOf(block, row, ctx).map(html => `<p class="chg-x">${html}</p>`).join('')}</article>`;
     });
     return `<div class="chg-cards"${ctx.caption ? ` role="group" aria-label="${escapeHtml(ctx.caption)}"` : ''}>${cards.join('')}</div>`;
   }
@@ -525,7 +525,10 @@
   // row's trace control reaches the rest. A table that does not fit its component (the column it needs is missing) is drawn by recordCards, never dropped.
   const plain = text => readerText().plainText(text);
   const labelNorm = col => col.label.trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
-  const rowLabel = (row, title) => `${plain(title).trim() || `Row ${row.line}`}: where it comes from`;
+  // A trace control's name is drawn text (tooltip, accessible name): the title cell as the page shows it, and when findingCell held that cell back, its place in the table.
+  const rowLabelOf = (block, ctx, row, title) => `${findingCell(title, ctx).html !== undefined ? plain(title).trim() : `Row ${block.rows.indexOf(row) + 1}`}: where it comes from`;
+  // The cells of a row beyond the table's headers have no label to stand under; each is drawn unlabelled, through findingCell, after the row's other fields.
+  const extraList = (block, row, ctx) => extrasOf(block, row, ctx).map(html => `<p class="rec-x">${html}</p>`).join('');
   const levelColumn = (block, at) => { const cells = block.rows.map(row => cellText(row, at)).filter(text => text !== ''); return cells.length > 0 && cells.every(isLevel); };
   const levelMeter = word => `<span class="cr-conf"><span class="meter" aria-hidden="true">${[1, 2, 3].map(n => (n <= LEVEL[word.toLowerCase()] ? '<i class="f"></i>' : '<i></i>')).join('')}</span><span class="meter-w">${escapeHtml(word)}</span></span>`;
   // The columns of a row that a card shows as label and value; a level column (every cell High, Medium or Low) is the three-segment meter with its word (C29).
@@ -546,12 +549,22 @@
   // A state word and the mark beside it. The word is the cell; the table of words below only picks which icon and which status token (state is never colour alone).
   const STATE_RULES = [
     ['bad', 'x', /\b(?:fail(?:s|ed|ure)?|blocked|breach(?:ed)?|rejected|refuted|removed|dropped)\b/i],
-    ['warn', 'triangle-alert', /^not\b|\b(?:needed|needs|partly|partial(?:ly)?|pending|unverified|unresolved|missing|absent|unavailable|unclear|open|insufficient|withheld|restricted|limited|requires)\b/i],
+    ['warn', 'triangle-alert', /\b(?:needed|needs|partly|partial(?:ly)?|pending|unverified|unresolved|missing|absent|unavailable|unclear|open|insufficient|withheld|restricted|limited|requires)\b/i],
     ['ok', 'circle-check', /\b(?:ready|met|pass(?:ed)?|yes|complete[d]?|confirmed|sufficient|answered|supported|resolved|verified|cleared)\b/i],
     ['new', 'plus', /^(?:new|added)\b/i],
     ['same', 'check', /^(?:unchanged|same|no change)\b/i],
   ];
-  const stateOf = text => { const word = plain(text).trim(), hit = STATE_RULES.find(([, , rx]) => rx.test(word)); return hit ? {tone: hit[0], icon: hit[1]} : {tone: 'info', icon: 'info'}; };
+  // A state that is negated or cleared ("Not breached", "No breach", "Breach cleared", "No longer blocked") is neutral: neither failure nor success. The three
+  // phrases named below are the key's own absent-data states and keep their warning mark.
+  const ABSENT_STATE = /^not (?:in source set|found|assessable)\b/i, NEGATED_STATE = /^(?:not|no)\b|\bcleared\b|\bno longer\b/i;
+  const NEUTRAL_STATE = {tone: 'info', icon: 'info'};
+  function stateOf(text) {
+    const word = plain(text).trim();
+    if (ABSENT_STATE.test(word)) return {tone: 'warn', icon: 'triangle-alert'};
+    if (NEGATED_STATE.test(word)) return NEUTRAL_STATE;
+    const hit = STATE_RULES.find(([, , rx]) => rx.test(word));
+    return hit ? {tone: hit[0], icon: hit[1]} : NEUTRAL_STATE;
+  }
   function stateBadge(text, ctx) {
     const cell = findingCell(text, ctx);
     if (cell.html === undefined) return `<span class="state info">${icon('info')}${cell.inEvidence ? evidenceLink(ctx) : MISSING}</span>`;
@@ -567,12 +580,13 @@
     const rest = cols.filter(col => col !== stateCol && col !== labelCol), levels = new Set(rest.filter(col => levelColumn(block, col.at)).map(col => col.at));
     const rows = block.rows.map(row => {
       const title = cellText(row, labelCol.at), titleHtml = fieldHtml(title, ctx);
-      return `<li class="ck-row"><div class="ck-head"><p class="ck-label">${titleHtml}</p>${stateBadge(cellText(row, stateCol.at), ctx)}${traceFor(ctx, row, rowLabel(row, title))}</div>${fieldList(row, rest, ctx, levels)}</li>`;
+      return `<li class="ck-row"><div class="ck-head"><p class="ck-label">${titleHtml}</p>${stateBadge(cellText(row, stateCol.at), ctx)}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>${fieldList(row, rest, ctx, levels)}${extraList(block, row, ctx)}</li>`;
     }).join('');
     return `<ul class="ck-list" data-block${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${rows}</ul>`;
   }
 
   // ---- sided: C7, two columns chosen from the cell's own side word
+  const OPPOSING_SIDES = [['bull', 'bear'], ['support', 'contradict'], ['supports', 'contradicts'], ['for', 'against'], ['positive', 'negative'], ['upside', 'downside']];
   function sidedBoard(block, ctx) {
     const cols = visibleColumns(block, 'sided', ctx), sideCol = cols.find(col => /^side\b/.test(labelNorm(col))), labelCol = cols.find(col => col !== sideCol);
     if (!sideCol || !labelCol || !block.rows.length) return recordCards(block, ctx);
@@ -583,43 +597,44 @@
     });
     const tally = new Map();
     entries.filter(entry => entry.key !== '').forEach(entry => tally.set(entry.key, {key: entry.key, n: (tally.get(entry.key)?.n ?? 0) + 1, first: tally.get(entry.key)?.first ?? entry}));
-    const sides = [...tally.values()].sort((a, b) => b.n - a.n).slice(0, 2).sort((a, b) => entries.indexOf(a.first) - entries.indexOf(b.first));
-    if (sides.length === 2 && sides[0].key === 'bear' && sides[1].key === 'bull') sides.reverse();
+    // The two columns: a recognised opposing pair when both its words are in the table (left is the pair's first), else the first two distinct words in written order.
+    const pair = OPPOSING_SIDES.find(([a, b]) => tally.has(a) && tally.has(b)), sides = pair ? pair.map(key => tally.get(key)) : [...tally.values()].slice(0, 2);
     const place = entry => (sides[0]?.key === entry.key ? 0 : sides[1]?.key === entry.key ? 1 : 2);
     const head = sides.length ? `<div class="sd-h">${sides.map((side, k) => `<p class="sd-hs sd-s${k}"><i class="sd-dot" aria-hidden="true"></i>${side.first.wordHtml}<b class="sd-n">${side.n}</b></p>`).join('<span></span>')}</div>` : '';
     const lines = entries.map(entry => {
       const at = place(entry), title = cellText(entry.row, labelCol.at), figure = figCol ? fieldHtml(cellText(entry.row, figCol.at), ctx) : '';
       const side = entry.wordHtml === '' && entry.qualifier === '' ? '' : `<span class="sd-side"><i class="sd-dot" aria-hidden="true"></i>${entry.wordHtml}</span>${qualifierTag(entry.qualifier, ctx)}`;
-      const card = `<article class="sd-entry"><div class="sd-top">${side || '<span></span>'}${traceFor(ctx, entry.row, rowLabel(entry.row, title))}</div>${figure ? `<p class="sd-fig">${figure}</p>` : ''}<p class="sd-name">${fieldHtml(title, ctx)}</p>${fieldList(entry.row, rest, ctx)}</article>`;
+      const card = `<article class="sd-entry"><div class="sd-top">${side || '<span></span>'}${traceFor(ctx, entry.row, rowLabelOf(block, ctx, entry.row, title))}</div>${figure ? `<p class="sd-fig">${figure}</p>` : ''}<p class="sd-name">${fieldHtml(title, ctx)}</p>${fieldList(entry.row, rest, ctx)}${extraList(block, entry.row, ctx)}</article>`;
       return `<div class="sd-line sd-s${at}">${at === 2 ? '' : '<i class="sd-node" aria-hidden="true"></i>'}${card}</div>`;
     }).join('');
     return `<div class="sd-board" data-block role="group"${ctx.caption ? ` aria-label="${escapeHtml(ctx.caption)}"` : ''}>${head}${lines}</div>`;
   }
 
   // The module name of a row is the handoff's own text for what the row is about: "Source readiness (CP-0)" is drawn as written, though a lone "(CP-0)" would be a reference.
-  const MODULE_NAME = /^.*\S\s*\(CP-[0-9A-Z]+\)$/;
+  // Only a cell that is one part (no `;` or `,`) of the form "<words> (CP-x)" and names no calculation or file; any other cell is read by findingCell like every cell.
+  const MODULE_NAME = /^[^;,]*\S\s*\(CP-[0-9A-Z]+\)$/, FILE_NAME = /\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)\b/i;
   function subjectHtml(text, ctx) {
-    const cell = findingCell(text, ctx);
-    return cell.omitted && !cell.inEvidence && MODULE_NAME.test(String(text).trim()) ? readerText().richText(String(text).trim()) : fieldHtml(text, ctx);
+    const cell = findingCell(text, ctx), raw = String(text).trim();
+    return cell.omitted && !cell.inEvidence && MODULE_NAME.test(raw) && !FILE_NAME.test(raw) && !calculationId().test(raw) ? readerText().richText(raw) : fieldHtml(text, ctx);
   }
 
   // ---- moduleState: C20, tiles; a state that repeats collapses to one tile with the state, the count and the rows in a <details>
   function moduleStateTiles(block, ctx) {
     const cols = visibleColumns(block, 'moduleState', ctx), stateCol = cols.find(col => labelNorm(col) === 'status'), nameCol = cols.find(col => col !== stateCol);
     if (!stateCol || !nameCol || !block.rows.length) return recordCards(block, ctx);
-    const rest = cols.filter(col => col !== stateCol && col !== nameCol), stateKey = row => plain(cellText(row, stateCol.at)).toLowerCase();
+    const rest = cols.filter(col => col !== stateCol && col !== nameCol), stateKey = row => cellText(row, stateCol.at);  // identical text only: a variant of case or markup is its own tile
     const sizes = new Map();
     block.rows.forEach(row => sizes.set(stateKey(row), (sizes.get(stateKey(row)) ?? 0) + 1));
     const repeated = key => key !== '' && sizes.get(key) > 1, done = new Set(), tiles = [];
     for (const row of block.rows) {
       const key = stateKey(row), title = cellText(row, nameCol.at);
       if (!repeated(key)) {
-        tiles.push(`<article class="ms-tile"><div class="ms-head"><p class="ms-title">${subjectHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabel(row, title))}</div>${stateBadge(cellText(row, stateCol.at), ctx)}${fieldList(row, rest, ctx)}</article>`);
+        tiles.push(`<article class="ms-tile"><div class="ms-head"><p class="ms-title">${subjectHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>$${stateBadge(cellText(row, stateCol.at), ctx)}${fieldList(row, rest, ctx)}${extraList(block, row, ctx)}</article>`);
       } else if (!done.has(key)) {
         done.add(key);
-        const same = block.rows.filter(other => stateKey(other) === key), noun = `${nameCol.label.trim().toLowerCase()}${same.length === 1 ? '' : 's'}`;
-        const items = same.map(other => `<li><div class="ms-head"><p class="ms-name">${subjectHtml(cellText(other, nameCol.at), ctx)}</p>${traceFor(ctx, other, rowLabel(other, cellText(other, nameCol.at)))}</div>${fieldList(other, rest, ctx)}</li>`).join('');
-        tiles.push(`<article class="ms-tile ms-group"><div class="ms-head">${stateBadge(cellText(row, stateCol.at), ctx)}</div><details class="ms-list"><summary><b class="ms-n">${same.length}</b> ${escapeHtml(noun)}<span class="ms-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><ul>${items}</ul></details></article>`);
+        const same = block.rows.filter(other => stateKey(other) === key);
+        const items = same.map(other => `<li><div class="ms-head"><p class="ms-name">${subjectHtml(cellText(other, nameCol.at), ctx)}</p>${traceFor(ctx, other, rowLabelOf(block, ctx, other, cellText(other, nameCol.at)))}</div>${fieldList(other, rest, ctx)}${extraList(block, other, ctx)}</li>`).join('');
+        tiles.push(`<article class="ms-tile ms-group"><div class="ms-head">${stateBadge(cellText(row, stateCol.at), ctx)}</div><details class="ms-list"><summary><b class="ms-n">${same.length}</b> · <span class="ms-nl">${escapeHtml(nameCol.label)}</span><span class="ms-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><ul>${items}</ul></details></article>`);
       }
     }
     return listGroup('ms-tiles', ctx, tiles.join(''));
@@ -632,9 +647,9 @@
     const stateCol = cols.find(col => col !== qCol && /(?:^|\s)(?:state|status)$|^answer$/.test(labelNorm(col))), rest = cols.filter(col => col !== qCol && col !== stateCol);
     const levels = new Set(rest.filter(col => levelColumn(block, col.at)).map(col => col.at));
     const items = block.rows.map(row => {
-      const question = cellText(row, qCol.at), q = `<span class="qa-q">${fieldHtml(question, ctx)}</span>`, badge = stateCol ? stateBadge(cellText(row, stateCol.at), ctx) : '', body = fieldList(row, rest, ctx, levels);
+      const question = cellText(row, qCol.at), q = `<span class="qa-q">${fieldHtml(question, ctx)}</span>`, badge = stateCol ? stateBadge(cellText(row, stateCol.at), ctx) : '', body = fieldList(row, rest, ctx, levels) + extraList(block, row, ctx);
       const open = body ? `<details class="qa-d"><summary>${q}${badge}<span class="qa-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><div class="qa-body">${body}</div></details>` : `<div class="qa-plain">${q}${badge}</div>`;
-      return `<div class="qa-item">${open}${traceFor(ctx, row, rowLabel(row, question))}</div>`;
+      return `<div class="qa-item">${open}${traceFor(ctx, row, rowLabelOf(block, ctx, row, question))}</div>`;
     }).join('');
     return listGroup('qa-list', ctx, items);
   }
@@ -652,8 +667,8 @@
     }
     const sections = [...groups].map(([category, items]) => {
       const rows = items.map(({row, qualifier}) => {
-        const label = cellText(row, labelCol.at), extra = rest.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="fl-x"><b>${escapeHtml(col.label)}</b> ${html}</span>`).join('');
-        return `<div class="fl-row"><dt>${fieldHtml(label, ctx)}</dt><dd><span class="fl-v">${valueHtml(cellText(row, factCol.at), ctx)}</span>${qualifierTag(qualifier, ctx)}${extra}${traceFor(ctx, row, rowLabel(row, label))}</dd></div>`;
+        const label = cellText(row, labelCol.at), extra = rest.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="fl-x"><b>${escapeHtml(col.label)}</b> ${html}</span>`).join('') + extrasOf(block, row, ctx).map(html => `<span class="fl-x">${html}</span>`).join('');
+        return `<div class="fl-row"><dt>${fieldHtml(label, ctx)}</dt><dd><span class="fl-v">${valueHtml(cellText(row, factCol.at), ctx)}</span>${qualifierTag(qualifier, ctx)}${extra}${traceFor(ctx, row, rowLabelOf(block, ctx, row, label))}</dd></div>`;
       }).join('');
       const heading = category === '' ? '' : `<p class="fl-head">${fieldHtml(category, ctx)}<b class="fl-n">${items.length}</b></p>`;
       return `<section class="fl-group">${heading}<dl class="fl">${rows}</dl></section>`;
@@ -677,10 +692,14 @@
       if (!colsOf.includes(i)) colsOf.push(i);
       placed.push({row, p, i});
     }
+    // An axis whose labels all belong to Low / Medium / High (Moderate for Medium) is ordered by level: likelihood rows High to Low as the approved mock draws it, impact columns Low to High.
+    const LEVEL_RANK = {low: 0, medium: 1, moderate: 1, high: 2}, byLevel = (labels, down) => (labels.every(label => Object.hasOwn(LEVEL_RANK, plain(label).trim().toLowerCase())) ? [...labels].sort((a, b) => (LEVEL_RANK[plain(a).trim().toLowerCase()] - LEVEL_RANK[plain(b).trim().toLowerCase()]) * (down ? -1 : 1)) : labels);
+    rowsOf.splice(0, rowsOf.length, ...byLevel(rowsOf, true));
+    colsOf.splice(0, colsOf.length, ...byLevel(colsOf, false));
     const chip = row => {
       const title = cellText(row, titleCol.at), word = classCol ? cellText(row, classCol.at) : '', wordHtml = word === '' ? '' : fieldHtml(word, ctx);
-      const extra = rest.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="rm-x"><b>${escapeHtml(col.label)}</b> ${html}</span>`).join('');
-      return `<li class="rm-chip${classCol ? classOf(word) : ''}"><div class="rm-top"><p class="rm-t">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabel(row, title))}</div>${wordHtml ? `<p class="rm-k"><span class="sr-only">${escapeHtml(classCol.label)}: </span>${wordHtml}</p>` : ''}${extra}</li>`;
+      const extra = rest.map(col => [col, fieldHtml(cellText(row, col.at), ctx)]).filter(([, html]) => html !== '').map(([col, html]) => `<span class="rm-x"><b>${escapeHtml(col.label)}</b> ${html}</span>`).join('') + extrasOf(block, row, ctx).map(html => `<span class="rm-x">${html}</span>`).join('');
+      return `<li class="rm-chip${classCol ? classOf(word) : ''}"><div class="rm-top"><p class="rm-t">${fieldHtml(title, ctx)}</p>${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>${wordHtml ? `<p class="rm-k"><span class="sr-only">${escapeHtml(classCol.label)}: </span>${wordHtml}</p>` : ''}${extra}</li>`;
     };
     const corner = `<span class="rm-cx">${escapeHtml(impCol.label)}${icon('arrow-right')}</span><span class="rm-cy">${escapeHtml(probCol.label)}${icon('arrow-right')}</span>`;
     const body = rowsOf.map(p => `<tr><th scope="row">${fieldHtml(p, ctx)}</th>${colsOf.map(i => { const here = placed.filter(entry => entry.p === p && entry.i === i); return `<td>${here.length ? `<ul class="rm-cell">${here.map(entry => chip(entry.row)).join('')}</ul>` : ''}</td>`; }).join('')}</tr>`).join('');
@@ -701,10 +720,10 @@
     const items = block.rows.map(row => {
       const title = cellText(row, nameCol.at), word = cellText(row, leadCol.at), wordHtml = fieldHtml(word, ctx), threshold = thresholdCol ? fieldHtml(cellText(row, thresholdCol.at), ctx) : '';
       const mark = wordHtml === '' ? '' : `<span class="wl-lead">${icon(WATCH_ICON[plain(word).trim().toLowerCase()] || 'activity')}${wordHtml}</span>`;
-      const limit = limitCol ? fieldHtml(cellText(row, limitCol.at), ctx) : '', more = fieldList(row, rest, ctx);
+      const limit = limitCol ? fieldHtml(cellText(row, limitCol.at), ctx) : '', more = fieldList(row, rest, ctx) + extraList(block, row, ctx);
       const head = `<span class="wl-t">${fieldHtml(title, ctx)}</span>${mark}${threshold ? `<span class="wl-th">${threshold}</span>` : ''}`;
       const body = `${limit ? `<p class="wl-lim"><b>${escapeHtml(limitCol.label)}</b> ${limit}</p>` : ''}${more}`;
-      return `<div class="wl-item">${body ? `<details class="wl-d"><summary>${head}<span class="wl-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><div class="wl-body">${body}</div></details>` : `<div class="wl-plain">${head}</div>`}${traceFor(ctx, row, rowLabel(row, title))}</div>`;
+      return `<div class="wl-item">${body ? `<details class="wl-d"><summary>${head}<span class="wl-ch" aria-hidden="true">${icon('chevron-down')}</span></summary><div class="wl-body">${body}</div></details>` : `<div class="wl-plain">${head}</div>`}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div>`;
     }).join('');
     return listGroup('wl-list', ctx, items);
   }
@@ -718,7 +737,7 @@
   const FOLDS = '.qa-d, .wl-d, .ms-list';
   function foldsForPrint(root, printing) {
     root.querySelectorAll(FOLDS).forEach(fold => {
-      if (printing) { fold.dataset.wasOpen = String(fold.open); fold.open = true; } else if (fold.dataset.wasOpen !== undefined) { fold.open = fold.dataset.wasOpen === 'true'; delete fold.dataset.wasOpen; }
+      if (printing) { if (fold.dataset.wasOpen === undefined) fold.dataset.wasOpen = String(fold.open); fold.open = true; } else if (fold.dataset.wasOpen !== undefined) { fold.open = fold.dataset.wasOpen === 'true'; delete fold.dataset.wasOpen; }
     });
   }
   if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.addEventListener) {

@@ -675,7 +675,7 @@ test('moduleStateTiles: a repeated state is one tile (icon, word, count, the mod
   assert.equal(countOf(html, /<article class="ms-tile ms-group">/g), 2);
   assert.equal(countOf(html, /<article class="ms-tile">/g), 0, 'no title-less tile');
   assert.ok(/<span class="state same">.*?<span class="state-w">Unchanged<\/span><\/span>/.test(html) && /<span class="state new">.*?<span class="state-w">New<\/span><\/span>/.test(html));
-  assert.deepEqual([...html.matchAll(/<summary><b class="ms-n">(\d+)<\/b> (\w+)/g)].map(m => [m[1], m[2]]), [['8', 'modules'], ['4', 'modules']]);
+  assert.deepEqual([...html.matchAll(/<summary><b class="ms-n">(\d+)<\/b> · <span class="ms-nl">(\w+)</g)].map(m => [m[1], m[2]]), [['8', 'Module'], ['4', 'Module']]);
   assert.equal(countOf(html, /<details class="ms-list">/g), 2);
   for (const row of t.rows) assert.ok(textOf(html).includes(row[0]) && textOf(html).includes(row[3]), row[0]);
   assert.ok(!/<details[^>]* open/.test(html), 'folded');
@@ -721,10 +721,10 @@ test('recordCards: one card per row, the first non-hidden column its label, ever
 test('riskMatrix: the table\'s own row and column labels in their written order, a real table with header associations, several items in one cell, the classification word in each chip', () => {
   const t = keyTables('CP-2A', 'matrix')[0], ctx = pageCtx('CP-2A'), html = C.riskMatrix(keyBlock(t), ctx);
   assert.deepEqual([...html.matchAll(/<th scope="row">([^<]*)<\/th>/g)].map(m => m[1]), ['High', 'Medium']);
-  assert.deepEqual([...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map(m => m[1]), ['High', 'Low', 'Medium']);
+  assert.deepEqual([...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map(m => m[1]), ['Low', 'Medium', 'High'], 'an ordinal axis runs low to high');
   assert.ok(html.includes('<th scope="col" class="rm-corner">') && html.includes('<caption class="sr-only">'));
   const cells = [...html.matchAll(/<tr><th scope="row">(\w+)<\/th>(.*?)<\/tr>/g)].map(m => [m[1], [...m[2].matchAll(/<td>(.*?)<\/td>/g)].map(c => [...c[1].matchAll(/<p class="rm-t">([^<]*)<\/p>/g)].map(x => x[1]))]);
-  assert.deepEqual(cells, [['High', [['Special dividend paid'], ['Securitization fully drawn', 'Post-period buybacks'], []]], ['Medium', [['FY2028 maturity cluster'], ['Securitization maturity'], ['2027 subordinated notes maturity']]]]);
+  assert.deepEqual(cells, [['High', [['Securitization fully drawn', 'Post-period buybacks'], [], ['Special dividend paid']]], ['Medium', [['Securitization maturity'], ['2027 subordinated notes maturity'], ['FY2028 maturity cluster']]]]);
   assert.ok(html.includes('<li class="rm-chip rm-c-critical">') && html.includes('<span class="sr-only">P/I Classification: </span>Critical'));
   assert.equal(countOf(html, /<li class="rm-chip/g), 6);
   assert.ok(/<p class="rm-lg"><span class="rm-lg-k">P\/I Classification<\/span>.*Critical.*Medium.*Low.*High/.test(html), 'the legend lists the words the table uses, in its order');
@@ -897,4 +897,103 @@ test('a row with more cells than headers keeps the extra cells in every numeric 
   }
   const ctxTok = plainCtx({ tokens: ['SC1'] });
   assert.ok(!textOf(C.render('cases', tb(['Measure', 'Base case', 'Moderate scenario'], [['Leverage', '6.0x', '7.0x', 'As SC1 only']]), ctxTok)).includes('As SC1'), 'an extra cell goes through findingCell');
+});
+
+// ---- Task 6 fix round 1
+const quietKey = r => `o:${r.line}`;
+test('fix 1: the module-name bypass applies only to one part of the form "<words> (CP-x)"; a file name or calculation ID beside it is held back', () => {
+  const names = ['report.pdf, Source readiness (CP-0)', 'calculation C05; Stress (CP-2A)', 'CP-0.jsonl; Gate (CP-4)'];
+  const rows = names.map((name, i) => ({ line: i + 1, cells: [name, `State ${i}`, 'why'] }));
+  const html = C.moduleStateTiles({ headers: ['Module', 'Status', 'Why'], rows }, { key: quietKey, evidenceHref: '#e' }), text = textOf(html);
+  for (const bad of ['report.pdf', 'calculation C05', 'CP-0.jsonl', 'Source readiness', 'Stress', 'Gate']) assert.ok(!text.includes(bad), `${bad} is held back`);
+  const ok = textOf(C.moduleStateTiles({ headers: ['Module', 'Status'], rows: [{ line: 1, cells: ['Source readiness (CP-0)', 'New'] }] }, { key: quietKey }));
+  assert.ok(ok.includes('Source readiness (CP-0)'), 'a single module name is the handoff\'s own text');
+});
+
+test('fix 2: a title cell findingCell held back is not drawn in a trace label; the label is "Row <n>" by position, in every component that writes one', () => {
+  const ctx = { key: quietKey, trace: (r, l) => C.traceRow(`o:${r.line}`, l), evidenceHref: '#e', tokens: ['EV-9'], caption: 'T' };
+  const blk = (headers, rows) => ({ headers, rows: rows.map((cells, i) => ({ line: 40 + i, cells })) });
+  const tables = {
+    status: blk(['Gate item', 'Status'], [['Fine', 'Met'], ['Waiver EV-9', 'Met'], ['Per calculation C05', 'Met'], ['TDG_10-K.htm', 'Met']]),
+    sided: blk(['Decision driver', 'Side it supports'], [['Fine', 'Bull'], ['Waiver EV-9', 'Bear'], ['Per calculation C05', 'Bear'], ['TDG_10-K.htm', 'Bull']]),
+    moduleState: blk(['Module', 'Status'], [['Fine', 'New'], ['Waiver EV-9', 'Unchanged'], ['Per calculation C05', 'Gone'], ['TDG_10-K.htm', 'Other']]),
+    qa: blk(['Question', 'Answer state'], [['Fine?', 'Answered'], ['Is EV-9 waived?', 'Answered'], ['Per calculation C05?', 'Answered'], ['TDG_10-K.htm', 'Answered']]),
+    facts: blk(['Item', 'Fact'], [['Fine', 'Yes'], ['Waiver EV-9', 'Yes'], ['Per calculation C05', 'Yes'], ['TDG_10-K.htm', 'Yes']]),
+    matrix: blk(['Event', 'Probability', 'Impact'], [['Fine', 'High', 'Low'], ['Waiver EV-9', 'High', 'Low'], ['Per calculation C05', 'High', 'Low'], ['TDG_10-K.htm', 'High', 'Low']]),
+    watch: blk(['Indicator', 'Leading / Lagging'], [['Fine', 'Leading'], ['Waiver EV-9', 'Leading'], ['Per calculation C05', 'Leading'], ['TDG_10-K.htm', 'Leading']]),
+    records: blk(['Zeta', 'Omega'], [['Fine', 'a'], ['Waiver EV-9', 'b'], ['Per calculation C05', 'c'], ['TDG_10-K.htm', 'd']]),
+    change: blk(['Measure', 'Earlier', 'Current'], [['Fine', '1x', '2x'], ['Waiver EV-9', '1x', '2x'], ['Per calculation C05', '1x', '2x'], ['TDG_10-K.htm', '1x', '2x']]),
+  };
+  for (const [shape, block] of Object.entries(tables)) {
+    const html = C.render(shape, block, ctx), attrs = (html.match(/(?:title|aria-label)="[^"]*"/g) || []);
+    assert.deepEqual(attrs.filter(a => /EV-9|calculation C05|\.htm/.test(a)), [], `${shape}: a held-back cell is in an attribute`);
+    for (const n of [2, 3, 4]) assert.ok(html.includes(`aria-label="Row ${n}: where it comes from"`), `${shape}: Row ${n}`);
+    assert.ok(attrs.some(a => /^aria-label="Fine\??: where it comes from"|^aria-label="Fine[^"]*: where it comes from"/.test(a) || /Row 1/.test(a)), `${shape}: the first row is labelled`);
+  }
+});
+
+test('fix 3: a negated or cleared state is neutral, never the failure mark and never the success mark; the key\'s states keep their marks; keywords are whole words', () => {
+  const tone = state => /class="state (\w+)"/.exec(C.statusChecklist({ headers: ['Item', 'Status'], rows: [{ line: 1, cells: ['x', state] }] }, { key: quietKey }))[1];
+  for (const s of ['Not breached', 'No breach', 'Not failed', 'Breach cleared', 'Not blocked', 'Not rejected', 'No longer blocked', 'No', 'Not ready', 'Not passed', 'Frobnicated']) assert.equal(tone(s), 'info', s);
+  for (const [s, want] of [['Committee-Ready', 'ok'], ['Remediation Needed', 'warn'], ['Not in source set; incorporated by reference only', 'warn'], ['Not found', 'warn'], ['Not assessable: no document', 'warn'], ['Partly (issuer view)', 'warn'], ['Answered', 'ok'], ['Unchanged', 'same'], ['New', 'new'], ['Gate fails', 'bad'], ['Blocked', 'bad'], ['Passed', 'ok']]) assert.equal(tone(s), want, s);
+  for (const s of ['Breachfree', 'Unblocked', 'Failover']) assert.equal(tone(s), 'info', `${s} is no whole-word keyword`);
+});
+
+test('fix 4: only identical state texts collapse; a variant stays its own tile and its text is drawn', () => {
+  const rows = [['Alpha', 'Unchanged', 'w1'], ['Beta', 'UNCHANGED', 'w2'], ['Gamma', 'Unchanged', 'w3'], ['Delta', '**Unchanged**', 'w4']].map((cells, i) => ({ line: i + 1, cells }));
+  const html = C.moduleStateTiles({ headers: ['Module', 'Status', 'Why'], rows }, { key: quietKey });
+  assert.equal(countOf(html, /ms-group/g), 1);
+  assert.equal(countOf(html, /<article class="ms-tile">/g), 2);
+  assert.ok(textOf(html).includes('UNCHANGED') && html.includes('<strong>Unchanged</strong>') && textOf(html).includes('w2') && textOf(html).includes('w4'));
+});
+
+test('fix 5: sided columns are a recognised opposing pair when both words are present, else the first two distinct words in written order; the rest are beneath', () => {
+  const board = (words, header = 'Side it supports') => C.sidedBoard({ headers: ['Driver', header], rows: words.map((w, i) => ({ line: i + 1, cells: [`D${i}`, w] })) }, { key: quietKey });
+  const cols = html => [...html.matchAll(/<div class="sd-line sd-s(\d)">/g)].map(m => m[1]).join('');
+  const heads = html => [...html.matchAll(/<p class="sd-hs sd-s\d"><i[^>]*><\/i>([^<]*)<b class="sd-n">(\d+)/g)].map(m => `${m[1]}:${m[2]}`);
+  let html = board(['Bull', 'Neutral', 'Neutral', 'Bear']);
+  assert.deepEqual(heads(html), ['Bull:1', 'Bear:1']); assert.equal(cols(html), '0221');
+  html = board(['Bear', 'Bear', 'Bull']);
+  assert.deepEqual(heads(html), ['Bull:1', 'Bear:2'], 'left is the first of the pair as listed'); assert.equal(cols(html), '110');
+  for (const [a, b] of [['Support', 'Contradict'], ['Supports', 'Contradicts'], ['For', 'Against'], ['Positive', 'Negative'], ['Upside', 'Downside']]) {
+    html = board([b, 'Other', 'Other', a]);
+    assert.deepEqual(heads(html), [`${a}:1`, `${b}:1`], `${a} / ${b}`); assert.equal(cols(html), '1220');
+  }
+  html = board(['Neutral', 'Bear', 'Bear', 'Other', 'Other', 'Other']);
+  assert.deepEqual(heads(html), ['Neutral:1', 'Bear:2'], 'no pair: the first two distinct words in written order'); assert.equal(cols(html), '011222');
+});
+
+test('fix 6: the collapsed tile shows its count with the header as written; Evidence heads do not count notes as calculations', () => {
+  const html = C.moduleStateTiles({ headers: ['Analysis', 'Status'], rows: [['A', 'New'], ['B', 'New'], ['C', 'New']].map((cells, i) => ({ line: i + 1, cells })) }, { key: quietKey });
+  assert.ok(html.includes('<b class="ms-n">3</b> · <span class="ms-nl">Analysis</span>') && !/analysiss/i.test(html));
+});
+
+test('fix 8: an axis whose labels are all Low/Medium/High (or Moderate) is ordered low to high, rows High to Low as the mock draws likelihood; any other set keeps its written order', () => {
+  const rows = [['A', 'Low', 'High'], ['B', 'High', 'Low'], ['C', 'Medium', 'Moderate']].map((cells, i) => ({ line: i + 1, cells }));
+  const html = C.riskMatrix({ headers: ['Event', 'Probability', 'Impact'], rows }, { key: quietKey });
+  assert.deepEqual([...html.matchAll(/<th scope="row">([^<]*)<\/th>/g)].map(m => m[1]), ['High', 'Medium', 'Low']);
+  assert.deepEqual([...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map(m => m[1]), ['Low', 'Moderate', 'High'], 'labels drawn as written');
+  const mixed = C.riskMatrix({ headers: ['Event', 'Probability', 'Impact'], rows: [['A', 'Likely', 'High'], ['B', 'Rare', 'Severe']].map((cells, i) => ({ line: i + 1, cells })) }, { key: quietKey });
+  assert.deepEqual([...mixed.matchAll(/<th scope="row">([^<]*)<\/th>/g)].map(m => m[1]), ['Likely', 'Rare']);
+  assert.deepEqual([...mixed.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map(m => m[1]), ['High', 'Severe'], 'one label outside the set: written order');
+});
+
+test('fix 9: beforeprint twice without afterprint does not overwrite the remembered state', () => {
+  const fold = open => ({ open, dataset: {} }), folds = [fold(false)], root = { querySelectorAll: () => folds };
+  C.foldsForPrint(root, true); C.foldsForPrint(root, true); C.foldsForPrint(root, false);
+  assert.equal(folds[0].open, false);
+});
+
+test('fix 10: a cell beyond the header count is drawn unlabelled through findingCell in every component and in recordCards; one holding an identifier is the Evidence link', () => {
+  const ctx = { key: quietKey, evidenceHref: '#e', tokens: ['EV-9'], caption: 'T' };
+  const tables = {
+    status: [['Gate item', 'Status'], ['Item', 'Met']], sided: [['Driver', 'Side it supports'], ['Item', 'Bull']], moduleState: [['Module', 'Status'], ['Item', 'New']],
+    qa: [['Question', 'Answer state'], ['Item?', 'Answered']], facts: [['Item', 'Fact'], ['Item', 'Yes']], matrix: [['Event', 'Probability', 'Impact'], ['Item', 'High', 'Low']],
+    watch: [['Indicator', 'Leading / Lagging'], ['Item', 'Leading']], records: [['Zeta', 'Omega'], ['Item', 'x']],
+  };
+  for (const [shape, [headers, cells]] of Object.entries(tables)) {
+    const html = C.render(shape, { headers, rows: [{ line: 1, cells: [...cells, 'Extra beyond', 'Also EV-9 here'] }] }, ctx), text = textOf(html);
+    assert.ok(text.includes('Extra beyond'), `${shape}: the extra cell is drawn`);
+    assert.ok(!text.includes('Also EV-9 here') && html.includes('class="in-ev"'), `${shape}: an identifier in it is the link`);
+  }
 });

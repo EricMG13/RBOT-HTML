@@ -1517,6 +1517,8 @@ details[open]>summary .ms-ch,details[open]>summary .qa-ch,details[open]>summary 
 .wl-lim b{font-weight:600;color:var(--text-primary)}
 @media(max-width:560px){.wl-d summary{grid-template-columns:minmax(0,1fr) 16px}.wl-plain{grid-template-columns:minmax(0,1fr)}.wl-lead{grid-column:1;grid-row:2}.wl-th{grid-row:3}.wl-d .wl-ch{grid-column:2;grid-row:1}}
 @media(max-width:560px){.rm-tbl{min-width:calc(64px + var(--cols,3)*170px)}}
+.rec-x{margin:8px 0 0;font:400 13px/1.5 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
+.ms-nl{font:600 13px/1.4 'Red Hat Text',sans-serif;color:var(--text-secondary);overflow-wrap:anywhere}
 .sec-moved{margin:8px 0 0;font-size:13px;color:var(--muted)}
 @media(prefers-reduced-motion:no-preference){
 .ms-ch,.qa-ch,.wl-ch{transition:transform .2s}

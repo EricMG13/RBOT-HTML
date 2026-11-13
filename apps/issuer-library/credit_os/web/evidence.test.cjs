@@ -431,3 +431,13 @@ test('method notes: a module with no identifier and no calculation name has none
   const html = Evidence.view(onlyCalc, {tab: 'calculations', module: 'CP-9'});
   assert.ok(html.includes('Uses calculation D17 for net debt.') && !html.includes('No calculation table is listed'));
 });
+
+test('fix 6: a Calculations group head counts calculations only; its method notes carry their own count, and a module with only notes is headed by them', () => {
+  const calc = nine().modules[0].outputs[0];
+  const html = Evidence.view(input({modules: [{id: 'CP-2A', outputs: [out('o1', [CP2A[0], sec('Bridge', 3, 2, [text(2, 'Net debt follows calculation D17.')]), ...CP2A.slice(1)])]}]}), {tab: 'calculations', module: 'CP-2A'});
+  assert.ok(html.includes('<span data-count>2</span> calculations'), 'two calculation rows');
+  assert.ok(/<h4 class="ev-sub">Method notes <span class="ev-cnt"><span data-count>1<\/span><\/span><\/h4>/.test(html), 'the note count is its own');
+  const onlyNotes = nineView('calculations');
+  assert.ok(onlyNotes.includes('<span data-count>1</span> method note') && !/<span data-count>\d+<\/span> calculation/.test(onlyNotes), 'no calculation is counted where there is none');
+  assert.ok(calc);
+});

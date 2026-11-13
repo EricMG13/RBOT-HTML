@@ -169,8 +169,8 @@
   function calculationsPanel(all) {
     const groups = all.filter(c => c.calcs.length || c.calcNotes.length);
     if (!groups.length) return empty('Calculations', 'No calculation table is listed for this selection.');
-    const notes = c => (c.calcNotes.length ? `<h4 class="ev-sub">Method notes</h4>${c.calcNotes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name, true)}`).join('')}` : '');
-    return groups.map(c => `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.calcs) + c.calcNotes.length, 'calculation', 'calculations')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}${notes(c)}</section>`).join('');
+    const notes = c => (c.calcNotes.length ? `<h4 class="ev-sub">Method notes <span class="ev-cnt"><span data-count>${c.calcNotes.length}</span></span></h4>${c.calcNotes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name, true)}`).join('')}` : '');
+    return groups.map(c => `<section class="ev-grp" data-group>${rowTotal(c.calcs) ? moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations') : moduleHead(c, c.calcNotes.length, 'method note', 'method notes')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}${notes(c)}</section>`).join('');
   }
   const SEVERITY = {high: 3, medium: 2, low: 1};
   // A table of a gaps section is a list of gaps: a title, the other cells as fields, and a three-segment meter where the table has a severity column.
