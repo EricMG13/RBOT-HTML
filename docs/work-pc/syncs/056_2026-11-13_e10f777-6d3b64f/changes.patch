@@ -1,0 +1,1067 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 6740ac7..37e0521 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,16 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — The ESG analysis is one named part of the Rates, FX & hedging page and is named in the run-start catalogue (branch `claude/wonderful-booth-d512b9`, base `8e3954a`)
++Scope: presentation only, offline; no provider or model call; no change to method texts, module instructions or anything a model is sent. New-format handoffs only; an earlier-format page is unchanged.
++- Change: on a new-format module page, every section whose heading leads with `T2G.<n>` (any heading level) is drawn in one part, "Environmental, social and sustainability (ESG)", where the first such section stood, with one rail entry. Finding sections are drawn as before; a registers section (heading holds "register" or "ledger") is listed there under its heading with an "In Evidence" link and draws only tables of a promoted shape, as the 2026-11-13 ruling has it; its other tables and prose stay Evidence only. The label is the only new text. The run-start module list describes the module as also covering ESG.
++- Not changed, by ruling: the module name `Rates, FX & hedging` (sent to every module, written in Basis lines, checked by `changes_check.py`); the CP-2E `purpose` in `src/deploy_vii/methodology.json` (it reaches a model request through `src/deploy_vii/live/prompts.py`), so that catalogue entry still describes macro, FX and hedging only. Owner's call.
++- Tests (written first, red then green; expected values by hand): `isEsgHeading` key; both real-handoff fixtures (`tests/fixtures/esg/`, `###` and `####` headings) give one rail entry, eight sections in handoff order, no `T2G.` text, rates sections untouched, a registers section listed with one "In Evidence" link, none of its cells on the module page, its table still in Evidence; a handoff with no ESG heading has no part. Gates, each exit 0: node tests 795 passed; `test_context_form.py`, `test_credit_os_store.py`, `test_credit_os_catalogue.py`, `test_issuer_library_packaging.py` 330 passed; quality gate 0 findings. `tests/test_library_page_browser.py` 431 passed, 1 skipped, run by the implementer before its last two edits (a form string and a docstring), not re-run after.
++- Review: one task review (mx-precise), pass, no High or Medium; its probe showed pages with no ESG heading byte-identical to the base and every non-ESG part of the two fixtures identical. One Low (a weak rail assertion) fixed in the same batch. Pre-merge review by the launching session: one Medium (the part drew register tables of a shape that is not promoted, against the ruling), fixed in one round with a failing test first; one Low (a repeated predicate) fixed with it; the reviewer's probe then reports the two register tables not drawn and 117 of 117 (second run's fixture) and 89 of 91 remaining cells drawn. The fix had no separate re-review. No separate whole-branch review, confidence-review or rewrite-tournament run for this 26-line page change.
++- Fidelity check, scope: TWO real runs (`tdg-full-copilot-sol-001-resume`, `###` headings; `tdg-full-copilot-sol-high-001-resume`, `####` headings; TransDigm, as of 30 September 2024, new format), copied from another session's scratch workspace, library built with `update_library.py`, read in Chrome at 1440 px. Read before the pre-merge fix and not re-read in a browser after it (the fix removes the two register tables of the first run from the page; node tests and the reviewer's probe cover it). Every cell of the ESG tables the page draws in a reader-visible column is on the page as the store parsed it (120 cells then, 89 after the fix, and 117; Source and Evidence ID columns hidden, as on every findings page), except two gap titles in the first run ("G8 — …", "G9 — …") that the existing identifier rule replaces with an "In Evidence" link. The comparison used the store's parsed cells, not an independent read of the Markdown; the independent read is the node test's one row per fixture.
++- Reader check, scope: the same two runs, the ESG part only, read by the controller against one September VMO2 screenshot (analytical appendix register table). Verdict: pass with issues. Holds: the analysis is found by name from the page rail and `#CP-2E/esg`; sections keep the module's own titles; no source, id or step code on the page. Issues, both older than this change: the first ESG table (a status list) draws its row label in a zero-width column, one letter per line; section titles are in the case the module wrote (lower case in the second run). Search for "ESG" does not find the part label (search reads section headings, not the rail).
++- Not verified: an earlier-format run (the only run under `runs/` is one); the Overview, Changes, Forecast and Evidence pages by eye; a T2G section with child sections; a T2G section under `## Calculations` or `## Gaps`; issuers other than TransDigm; browsers other than Chrome; the full Python suite.
++
+ ## 2026-11-13 — The Forecast page's Downside follows the forward credit model; the shock's interest figure is proportional and checked against the downside module (branch `claude/downside-follows-forward-model`)
+ Scope: offline; no provider or model call; no paid run. Owner ruling `docs/rulings/2026-11-13-downside-follows-forward-model.md` (option A, the owner's words relayed by the coordinator session) reverses the 2026-11-10 ruling: the Downside stress case is the downside module's shock applied to the forward credit model's own downside drivers (base drivers when it sets none); `forecast_exact.json` carries `downside_basis` only then and the page label and note follow it; the CP-2G instruction says both shock values are copied unchanged from one CP-2A scenario and `rate_increase` is proportional, never a yield (+171 characters per pathway with CP-2G, every pathway under its unchanged ceiling); the launcher sends back a block whose shock is no scenario of CP-2A's table T2DS.1, only when it read the whole table without doubt, else it lets the block through and logs why at WARNING, which a run with no logging set up prints to the launcher's stderr (seen by the controller with a table-less CP-2A; not traced into the run-start service's record).
+ - Fidelity check, scope: ONE real run (`tdg-full-copilot-sol-high-001-resume`, TransDigm, as of 30 September 2024), re-derived by the controller from its own CP-1 and CP-2G handoffs at `5cbe19d` (exit 0), against the forward credit model's printed downside. With the shock as sent (0.2 / 0.0184): revenue 7,940 and EBITDA 3,338.6112 in every year, equal to the module; interest 1,553.21 and coverage 2.15x against the module's 1,982.94 and 1.68x, because 0.0184 is a yield change read as proportional. With `rate_increase` corrected to 0.3 (what CP-2A states): interest 1,982.6872 / 1,936.467 / 1,929.13552 against the module's 1,982.936 / 1,936.71 / 1,929.3776 (it rounded its yield to 0.0797; the test asserts the exact figure, no tolerance), coverage 1.68x / 1.72x / 1.73x as the module, closing cash 1,553.50 / -309.77 / -2,165.72 against 1,553.26 and funding gaps of 310.26 and 2,166.45. Base, upside and own-drivers cases equal the delivered file. The delivered file has no `downside_basis`, so its page keeps the old label. The page itself was not opened in a browser (no `.js` changed); the VMO2 reader check is not listed, retired by the owner's ruling relayed by the coordinator (PR 103).
+diff --git a/apps/issuer-library/credit_os/web/shapes.js b/apps/issuer-library/credit_os/web/shapes.js
+index cfdae2e..61e34c7 100644
+--- a/apps/issuer-library/credit_os/web/shapes.js
++++ b/apps/issuer-library/credit_os/web/shapes.js
+@@ -14,6 +14,9 @@ const Shapes = (() => {
+   // A method code leads a heading: "T2B.3 Name", "T2B.3 — Name", "t2b.calc_x — Name".
+   const METHOD_CODE = /^(?:[A-Z][A-Z0-9]*\.[A-Z]?\d+(?:\s+—\s+|\s+(?=[A-Z]))|[a-z0-9]+(?:\.[a-z0-9_]+)+\s+—\s+)/;
+ 
++  // A section of the absorbed ESG analysis: its heading leads with the code T2G.<digits> (then a space, a dash or the end). Heading level is not read; the title after the code differs between runs.
++  const isEsgHeading = heading => /^T2G\.\d+(?:\s|-|—|–|$)/.test(String(heading ?? '').replace(/\*\*|`/g, '').trim());
++
+   // `placement` is store.py's own label for the section; the role is decided by the chain alone, so the parameter is not read.
+   function sectionRole(chain, placement) {
+     const own = chain[chain.length - 1] ?? '';
+@@ -168,7 +171,7 @@ const Shapes = (() => {
+     return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
+   }
+ 
+-  return {sectionRole, tableShape, columnKind, columnKinds, hiddenColumns, isUnstructured, FILE_EXTENSIONS, FILE_NAME, LONG_HEX, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, PERIOD_LABEL, METHOD_CODE};
++  return {sectionRole, isEsgHeading, tableShape, columnKind, columnKinds, hiddenColumns, isUnstructured, FILE_EXTENSIONS, FILE_NAME, LONG_HEX, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, PERIOD_LABEL, METHOD_CODE};
+ })();
+ 
+ if (typeof window !== 'undefined') window.Shapes = Shapes;
+diff --git a/apps/issuer-library/credit_os/web/shapes.test.cjs b/apps/issuer-library/credit_os/web/shapes.test.cjs
+index e235729..7371e9b 100644
+--- a/apps/issuer-library/credit_os/web/shapes.test.cjs
++++ b/apps/issuer-library/credit_os/web/shapes.test.cjs
+@@ -241,3 +241,8 @@ test('LONG_HEX holds a hash (a letter a-f in a 32+ character hex run), never a 3
+ test('sectionRole reads the top heading by own key: "constructor", "toString" and "__proto__" are ordinary unknown headings', () => {
+   for (const heading of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.equal(Shapes.sectionRole([heading]), 'registers', heading);
+ });
++
++test('isEsgHeading: a heading that leads with a T2G.<digits> code is an ESG heading, at any heading level; nothing else is', () => {
++  for (const heading of ['T2G.1 — Environmental/social disclosure inventory', 'T2G.8 — environmental, social and transition gaps', 'T2G.5 Sustainability-linked mechanics', 'T2G.3']) assert.equal(Shapes.isEsgHeading(heading), true, heading);
++  for (const heading of ['T2F.9 — Macro gaps ledger', 'T2G — overview', 'T2G.x — a', 'T12G.1 — a', 'XT2G.1 — a', 'Credit implication', 'Note on T2G.1 — inventory', 'T2G.12b — a', '']) assert.equal(Shapes.isEsgHeading(heading), false, heading);
++});
+diff --git a/apps/issuer-library/credit_os/web/static.test.cjs b/apps/issuer-library/credit_os/web/static.test.cjs
+index b1eda72..b6ceb23 100644
+--- a/apps/issuer-library/credit_os/web/static.test.cjs
++++ b/apps/issuer-library/credit_os/web/static.test.cjs
+@@ -5226,3 +5226,92 @@ test('X2: a chip or trace control whose item is not in the evidence map is not d
+   assert.equal(reader.passageControls(texts, { id: 'p', chips: () => 0, has }).trace(3), '', 'a passage paragraph with no item has no trace control');
+   assert.equal(reader.passageControls(texts, { id: 'p', chips: () => 0, has }).figure(3, 0, '6.57x'), '');
+ });
++
++// ---- ESG part (module page): the T2G sections of a Rates, FX & hedging handoff are one named part. The fixtures are two complete real handoffs (tests/fixtures/esg);
++// the expected headings and cells are written by hand from them, the cells read straight from the Markdown rows by splitting on `|`.
++const ESG_DIR = path.join(__dirname, '..', '..', '..', '..', 'tests', 'fixtures', 'esg');
++const ESG_LABEL = 'Environmental, social and sustainability (ESG)';
++const esgLines = name => fs.readFileSync(path.join(ESG_DIR, `CP-2E-${name}.md`), 'utf8').split('\n');
++// The sections as store.parse_source holds them: a heading (levels 1 to 4) opens a section; a pipe table with its separator row is one block; a paragraph runs to a blank line or the next structure.
++function esgSections(lines) {
++  const sections = [];
++  let cur = null;
++  for (let i = 0; i < lines.length; i += 1) {
++    const line = lines[i], head = /^(#{1,4}) (.+)$/.exec(line);
++    if (head) { cur = { heading: head[2], level: head[1].length, line: i + 1, where: 'view', blocks: [] }; sections.push(cur); continue; }
++    if (!line.trim() || /^<!-- table-id: [\w.-]+ -->$/.test(line) || !cur) continue;
++    if (line.startsWith('|') && /^\|[\s:|-]+\|$/.test(lines[i + 1] ?? '')) {
++      const cells = row => row.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(c => c.trim()), block = { type: 'table', line: i + 1, headers: cells(line), rows: [] };
++      for (i += 2; i < lines.length && lines[i].startsWith('|'); i += 1) block.rows.push({ line: i + 1, cells: cells(lines[i]) });
++      i -= 1; cur.blocks.push(block); continue;
++    }
++    const start = i;
++    while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#|\||- |<!-- table-id:|```)/.test(lines[i + 1]) && !/^\d+\. /.test(lines[i + 1])) i += 1;
++    cur.blocks.push({ type: 'text', line: start + 1, text: lines.slice(start, i + 1).join('\n') });
++  }
++  return sections;
++}
++const esgPage = (name, sections = esgSections(esgLines(name))) => runPage(() => overviewData({ 'CP-2E': sections }), [], m => m, { record: steps(['CP-2E']), runFields: { asOf: '2025-03-31' }, names: { ...FIXTURE_NAMES, 'CP-2E': 'Rates, FX & hedging' } });
++const esgId = outId('CP-2E');
++// The first data row of the "Materiality classification" table of a fixture: its first three cells, straight from the Markdown.
++const materialityCells = name => {
++  const lines = esgLines(name), at = lines.findIndex(line => /^#{3,4} T2G\.4 /.test(line)), row = lines.slice(at).find((line, n, rest) => line.startsWith('|') && rest[n - 2]?.startsWith('|') && /^\|[\s:|-]+\|$/.test(rest[n - 1]));
++  return row.split('|').slice(1, 4).map(cell => cell.trim());
++};
++const ESG_TITLES = {
++  h3: ['ESG source inventory', 'Environmental and transition register', 'Social and operational register', 'Materiality classification', 'Sustainability-linked mechanics', 'Refinancing access and cost of capital', 'Credit implication synthesis', 'Environmental and social gaps'],
++  h4: ['environmental, social and transition disclosure inventory', 'environmental and transition exposure', 'social and operational exposure', 'materiality classification', 'sustainability-linked debt mechanics', 'refinancing and cost-of-capital linkage', 'credit implications', 'environmental, social and transition gaps'],
++};
++const partOf = (html, anchor) => { const open = html.indexOf(`<section class="part" id="${anchor}"`); return html.slice(open, html.indexOf('</section>', open)); };
++
++for (const [name, own] of [['h3', 'Macro source gate'], ['h4', 'debt and rate exposure']]) {
++  test(`ESG part (${name} fixture): one rail entry, the eight sections under it in handoff order, no T2G code, the rates sections keep their own entries`, () => {
++    const page = esgPage(name), html = page.moduleReport(esgId), parts = page.reportParts(esgId);
++    const esg = parts.filter(p => p[0] === 'esg');
++    assert.equal(esg.length, 1);
++    assert.equal(esg[0][1], ESG_LABEL);
++    const rail = parts.slice(1).map(p => p[1]);
++    assert.equal(rail.filter(label => label === ESG_LABEL).length, 1);
++    for (const title of ESG_TITLES[name]) assert.ok(!rail.some(label => label.toLowerCase().startsWith(title.toLowerCase())), `no rail entry of its own: ${title}`);
++    assert.ok(rail.some(label => label.toLowerCase().startsWith(own.toLowerCase())), `rates section ${own} keeps its entry`);
++    assert.ok(!rail.some(label => label.includes('T2G.')) && !esg[0][2].includes('T2G.'));
++    const railLinks = [...html.matchAll(/<a class="rail-item"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g)].filter(m => m[1].includes('#CP-2E/esg') && strip(m[2].replace(/<span class="rail-count">.*?<\/span>/g, '')).trim() === 'Environmental, social and sustainability (ESG)');
++    assert.equal(railLinks.length, 1, 'the rail has exactly one link to the ESG part, with the ESG label');
++    const headings = [...esg[0][2].matchAll(/<h([1-6])[^>]*>(.*?)<\/h\1>/g)].map(m => strip(m[2]).trim());
++    assert.equal(headings[0], ESG_LABEL, 'the part is headed with its label');
++    assert.deepEqual(headings.slice(1).map(h => h.toLowerCase()), ESG_TITLES[name].map(t => t.toLowerCase()));
++    assert.ok(esg[0][3] > 0, 'the rail counts the drawn rows of the part');
++  });
++  test(`ESG part (${name} fixture): the first data row of the materiality table is drawn in the part, cell for cell`, () => {
++    const page = esgPage(name), part = strip(page.reportParts(esgId).find(p => p[0] === 'esg')[2]).replace(/&#39;/g, "'").replace(/&amp;/g, '&');
++    for (const cell of materialityCells(name)) assert.ok(cell && part.includes(cell), cell);
++  });
++}
++test('ESG part: the part stands where the first ESG section stood among the body parts, and the other sections keep their order', () => {
++  const ids = esgPage('h3').reportParts(esgId).map(p => p[0]), at = ids.indexOf('esg');
++  assert.equal(ids[at - 1], 's-209', 'after the last rates section that stood before T2G.1 (line 232)');
++  assert.equal(ids[at + 1], 's-301', 'before the section that followed T2G.8');
++  assert.ok(!ids.some(id => ['s-232', 's-238', 's-247', 's-256', 's-269', 's-275', 's-282', 's-292'].includes(id)), 'no ESG section is a part of its own');
++});
++test('ESG part (h3 fixture): a register section of a shape that is not promoted is listed with an In Evidence link and none of its table is drawn; Evidence still lists the tables', () => {
++  const sections = esgSections(esgLines('h3')), page = esgPage('h3', sections), parts = page.reportParts(esgId), part = parts.find(p => p[0] === 'esg')[2], html = page.moduleReport(esgId);
++  const text = strip(part).replace(/&amp;/g, '&'), evidence = strip(evidenceRegisters(sections, 'CP-2E')).replace(/&amp;/g, '&');
++  const lines = esgLines('h3'), firstCell = code => { const at = lines.findIndex(line => line.startsWith(`### ${code} `)), sep = lines.findIndex((line, n) => n > at && /^\|[\s:|-]+\|$/.test(line)); return lines[sep + 1].split('|')[1].trim(); };
++  const href = `#W-Evidence/registers?c=${RUN}&amp;m=CP-2E`;
++  for (const [code, title] of [['T2G.2', 'Environmental and transition register'], ['T2G.3', 'Social and operational register']]) {
++    const cell = firstCell(code), table = sections.find(s => s.heading.startsWith(`${code} `)).blocks.find(b => b.type === 'table');
++    assert.ok(cell && table.rows[0].cells[0] === cell);
++    assert.ok(!text.includes(cell) && !strip(html).replace(/&amp;/g, '&').includes(cell), `not drawn on the module page: ${cell}`);
++    const at = part.indexOf(`>${title}</h`), end = part.indexOf('class="analysis-section"', at), own = part.slice(at, end < 0 ? undefined : end);
++    assert.ok(at > 0, title);
++    assert.equal(countOf(own, /class="in-ev"/g), 1, `one In Evidence link under ${title}`);
++    assert.ok(own.includes(`<p class="sec-moved"><a class="in-ev" href="${href}">In Evidence</a></p>`), own);
++    assert.ok(evidence.includes(cell), `still in Evidence: ${cell}`);
++  }
++});
++test('ESG part: a new-format handoff with no ESG heading has no esg part', () => {
++  const ids = fixturePage().reportParts(outId('CP-2')).map(p => p[0]);
++  assert.ok(!ids.includes('esg'));
++  const withoutEsg = esgSections(esgLines('h3')).filter(s => !/^T2G\./.test(s.heading));
++  assert.ok(!esgPage('h3', withoutEsg).reportParts(esgId).some(p => p[0] === 'esg'));
++});
+diff --git a/apps/issuer-library/credit_os/web/views.js b/apps/issuer-library/credit_os/web/views.js
+index 6ad46b5..f1e2eee 100644
+--- a/apps/issuer-library/credit_os/web/views.js
++++ b/apps/issuer-library/credit_os/web/views.js
+@@ -494,8 +494,8 @@ const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement
+ const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
+ // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
+ const drawnAnchors=id=>{
+-  const {rest,drawings,registers}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[]};
+-  return new Set([...rest,...drawings,...registers].map(section=>`s-${section.line}`));
++  const {rest,drawings,registers,esg}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[],esg:[]};
++  return new Set([...rest,...drawings,...registers,...esg.map(entry=>entry.section)].map(section=>`s-${section.line}`));
+ };
+ // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
+ // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
+@@ -680,9 +680,11 @@ const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&
+ // findings. A section that is not a passage, finding or drawing (its role says Evidence or nowhere) is in neither list.
+ function newFormatSplit(id) {
+   const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
+-  const split={rest:[],drawings:[],registers:[]};
++  const split={rest:[],drawings:[],registers:[],esg:[]};
+   for(const {section,role} of window.Evidence.classify(data[id].sections,data[id].placement)) {
+     if(held.has(section)||!section.blocks.length)continue;
++    // The ESG analysis (T2G sections) is one named part of the page (newFormatParts): its finding sections, and its registers sections that hold a table with a row (each draws its promoted tables only and links to Evidence for the rest). It is also listed in rest or registers as before, so the Overview is unchanged.
++    if(window.Shapes.isEsgHeading(plain(section.heading))&&(role==='registers'?section.blocks.some(block=>block.type==='table'&&block.rows.length>0):['finding','drawing','passage'].includes(role)&&drawsSomething(section)))split.esg.push({section,role});
+     if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
+     else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
+     else if(role==='registers'&&promotedTables(section).length)split.registers.push(section);
+@@ -783,12 +785,19 @@ const registerSection=(id,section)=>{
+   const table=tableRenderer(id);
+   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
+ };
++// An ESG registers section: as registerSection, and when it holds a table that is not drawn there, the link to where that table is (Evidence, Registers).
++const esgRegisterSection=(id,section)=>{
++  const html=registerSection(id,section),drawn=new Set(promotedTables(section));
++  if(!section.blocks.some(block=>block.type==='table'&&block.rows.length>0&&!drawn.has(block)))return html;
++  return `${html.slice(0,-'</div>'.length)}<p class="sec-moved"><a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a></p></div>`;
++};
+ const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
+ // The rail's count is of the items the section draws, read from its own markup: a feed item, a limitation, and one per table row that has its trace control (a row held back or not drawn has none).
+ const drawnRows=html=>new Set([...html.matchAll(/data-evidence="([^"]*)"/g)].map(m=>m[1])).size;
+ const drawnOf=(html,rx)=>(html.match(rx)||[]).length;
+ // The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
+ const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
++const ESG_LABEL='Environmental, social and sustainability (ESG)';
+ // A part is [anchor, label, html, count?]; `count` is the number of listed items the rail shows beside the label.
+ function newFormatParts(id) {
+   const out=data[id],passages=readerPassages(out.sections),texts=Object.fromEntries(Object.entries(passages).map(([key,section])=>[key,passageTexts(section)]));
+@@ -809,13 +818,21 @@ function newFormatParts(id) {
+   if(charts)body.push([drawingLine(id,[...(out.charts||[]),...(out.chartGaps||[])]),['charts','Charts',`<section class="part" id="charts"><h3>Charts</h3>${charts}</section>`]]);
+   if(timeline)body.push([drawingLine(id,out.events),['timeline','Timeline',timeline]]);
+   if(maps)body.push([drawingLine(id,out.maps),['maps','Maps',maps]]);
+-  for(const section of newFormatSplit(id).rest) {
++  const split=newFormatSplit(id),inEsg=new Set(split.esg.map(entry=>entry.section));
++  for(const section of split.rest) {
++    if(inEsg.has(section))continue;
+     const html=findingSection(id,section),rows=drawnRows(html);
+     body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${html}</section>`,...(rows?[rows]:[])]]);
+   }
++  // The ESG analysis stands where its first section stood: one named part, each section under its own heading, in handoff order. A registers section draws its heading and its promoted tables, with an In Evidence link when it holds a table not drawn (its prose and its other tables stay in Evidence).
++  if(split.esg.length) {
++    const html=split.esg.map(({section,role})=>role==='registers'?esgRegisterSection(id,section):findingSection(id,section)).join(''),rows=drawnRows(html);
++    body.push([split.esg[0].section.line,['esg',ESG_LABEL,`<section class="part" id="esg"><h3>${ESG_LABEL}</h3>${html}</section>`,...(rows?[rows]:[])]]);
++  }
+   parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
+   // The promoted registers follow the finding sections as one group, each under its section's own heading, in handoff order.
+-  for(const section of newFormatSplit(id).registers) {
++  for(const section of split.registers) {
++    if(inEsg.has(section))continue;
+     const html=registerSection(id,section),rows=drawnRows(html);
+     parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${html}</section>`,...(rows?[rows]:[])]);
+   }
+diff --git a/docs/templates/context-form.html b/docs/templates/context-form.html
+index 356973d..6e62e5e 100644
+--- a/docs/templates/context-form.html
++++ b/docs/templates/context-form.html
+@@ -769,7 +769,7 @@ const MODULES = {
+   'CP-2': ['Fundamental credit', 'The credit view: leverage, coverage and cash flow.'],
+   'CP-2A': ['Downside', 'The stress path and the distress gate.'],
+   'CP-2D': ['Liquidity', 'Liquidity runway and the cash-flow bridge.'],
+-  'CP-2E': ['Rates, FX & hedging', 'Rate and currency shocks against the hedges.'],
++  'CP-2E': ['Rates, FX & hedging', 'Rate and currency shocks against the hedges, and the environmental, social and sustainability (ESG) factors that reach the credit.'],
+   'CP-2G': ['Forward credit model', 'A three-year forecast from the current period.'],
+   'CP-2H': ['Ratings & triggers', 'Rating migration and rating-linked triggers.'],
+   'CP-3': ['Security selection', 'Relative value: is the instrument cheap or rich?'],
+diff --git a/tests/fixtures/esg/CP-2E-h3.md b/tests/fixtures/esg/CP-2E-h3.md
+new file mode 100644
+index 0000000..1a2d94f
+--- /dev/null
++++ b/tests/fixtures/esg/CP-2E-h3.md
+@@ -0,0 +1,385 @@
++---
++issuer_id: tdg
++issuer_name: TransDigm Group Incorporated
++module_id: CP-2E
++analysis_date: 2024-09-30
++reporting_period: FY2024
++reporting_currency: USD
++pathway: credit_snapshot
++run_id: tdg-2024-09-30-credit_snapshot-copilot-sol-medium
++method_version: deploy-v-r14
++artifact: tdg_CP-2E_20240930.md
++module_status: Ready with Limitations
++committee_status: Requires More Work
++macro_risk_level: Moderate
++esg_phase: Completed with Limitations
++---
++
++## Request
++TransDigm Group Incorporated, as of 2024-09-30; pathway: credit_snapshot. Assess rates, hedge protection and expiry risk, FX mismatches, inflation and commodity transmission, and credit-material environmental, social and transition exposures on the consolidated FY2024 basis, keeping subsequent transactions separate.
++
++## Sources
++
++| Source | Document | Document date | sha256 | Use |
++|---|---|---|---|---|
++| TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl | Annual report on Form 10-K for the year ended September 30, 2024 | not stated | d75c469fdb1966dd895c0f6faa6d5179b380d3ed95aa00aca99aa258059edab6 | Debt and hedge terms, issuer sensitivities, FX forwards, inflation recovery limits, environmental liabilities, physical and transition risks, labor and product liability. Retrospective annual evidence; publication date not established. |
++
++| Supplied analysis | Module | Exact sha256 | Use |
++|---|---|---|---|
++| tdg_CP-0_20240930.md | Source readiness (CP-0) | 7ae19c7264917275366ee8792370fe0e20e781c357f538ce585e474714d2f737 | Accepted identity, evidence authority, reporting scope and date restrictions. |
++| Financial foundation | CP-1 | 323996fab6d5756c1b4197d605372ce918ca615b327f3aa26cdd1fd299045a84 | Carrying debt and gross-principal reconciliation; FY2024 FCF, cash interest and separately dated October transaction-only balances. |
++| tdg_CP-1A_20240930.md | Business & governance (CP-1A) | 229568a632d3a1ea81cc567c68745b3eefeb4f7fa9006442c8f8c475f3ab4113 | Business transmission, financial-policy context, instrument maturities and governance boundary. |
++| tdg_CP-2_20240930.md | Fundamental credit (CP-2) | 8dfc266a2c192b720696dd4d538496eb10a76e0ff339dd82cf9e581970ffe9b4 | Operating downside, cash-retention implications and fiscal-versus-calendar maturity clarification. |
++
++No external sources were used. All supplied analyses identify the same issuer, September measurement date and selected pathway. Other issuer documents were not needed for the targeted annual analysis.
++
++## Findings
++
++### Bottom line
++TransDigm has Moderate macro and hedging sensitivity: disclosed hedges temper rate volatility, but substantial residual floating debt and limited contractual inflation recovery mean creditors should not treat historical margins or reported fixed-rate allocation as permanent cash-flow protection.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178
++
++At year-end, USD 9,189 million of identified floating borrowings was protected by USD 3,400 million of active swaps and a cap, leaving USD 5,789 million exposed. A static 100 bp rise adds USD 57.89 million of annual borrowing cash interest before tax and cash-income offsets; the issuer separately reports approximately USD 30 million, which cannot be reconciled from disclosed assumptions. Replacement collars leave a protection step-down in March 2025. Product liability is the priority environmental or social event-risk channel, not a demonstrated current funding impairment.
++Basis: calculation R01; calculation R02; calculation R03; calculation R08; calculation R13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73
++
++### Key findings
++
++- **Rates are the largest measurable residual macro exposure.** Active protection is linked to floating credit-agreement borrowings, with disclosed strikes, dates and accounting effectiveness. It does not cover all floating debt or credit spreads. The calculated borrowing-interest shock reduces cash available for debt repayment even without an operating decline; the annual report's smaller sensitivity must remain a separate issuer case.
++Basis: calculation R01; calculation R02; calculation R03; calculation R08; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177
++- **The first hedge cliff is only partly replaced.** USD 2,000 million of swaps expires on March 31, 2025 against USD 1,100 million of starting collars, reducing protected notional by USD 900 million. Collars limit upside only above their ceilings and impose payments below their floors; they are not fixed-rate swaps throughout the rate range.
++Basis: calculation R13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–176
++- **Inflation protection is demonstrated commercially, not generally contractual.** Gross margin reached 58.8% in FY2024 despite inflation, but most contracts do not permit recovery of higher raw-material, tax or labor costs. Lower volume could remove overhead absorption while locked selling prices delay recovery, reducing operating cash alongside persistent interest expense.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46
++- **FX is less alarming on the issuer's historical test than the currency map alone suggests.** Management says a 10% exchange-rate change would not materially affect FY2024 net income. USD 120 million of forwards addresses selected transaction flows, not demonstrated group-wide natural matching or translation protection.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178
++- **Environmental and social risk is primarily contingent, not an evidenced financing premium.** Environmental remediation accruals total USD 41 million; compliance did not materially affect FY2024 cash flow. Product failure could nevertheless generate uninsured claims and disrupt earnings. No sustainability-linked spread benefit, penalty or protection is established.
++Basis: calculation R14; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161
++
++### Contrary evidence and what would change the view
++The strongest contrary evidence is effective hedge accounting with specific contractual terms, improved margins through inflation, and the issuer's historically immaterial FX test. Together with positive cash generation, these argue against calling macro exposure an immediate liquidity crisis. They do not prove protection after expiries, repricing during a volume decline, or the absence of uninsured operational events. Full replacement of expiring protection and sustained cash margins under weaker production would support a lower risk view; failure to replace hedges alongside cost inflation and weaker aftermarket demand would support a higher one. A documented reconciliation of the interest sensitivities would determine which measure is appropriate for a net-interest forecast.
++Basis: Financial foundation (CP-1); Fundamental credit (CP-2); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 46–46; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 176–177
++
++### Limitations
++
++- **A single net-interest shock cannot be adopted.** The issuer's sensitivity assumptions do not explain its difference from the disclosed debt-and-hedge reconstruction. The calculated case is therefore limited to annual borrowing interest at constant balances, not a forecast of total net interest or cash income.
++Basis: calculation R08; calculation R12; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176
++- **Aggregate protection cannot be allocated confidently to each loan tranche.** The annual report links hedges to the credit agreement but does not allocate them among repriced loans; printed swap all-in rates retain an older margin. This analysis relies on disclosed base-rate protection and does not adopt those all-in rates as current loan coupons.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–176
++- **Non-rate cash volatility cannot be sized.** Currency-matched revenue, costs and cash, FX strikes, input-cost quantities and repricing lags are not established. The FX and inflation conclusions remain directional, and the historical net-income test cannot be converted into a cash-flow stress.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178
++- **Environmental and social event losses cannot be translated into liquidity or recovery amounts.** Facility-level hazard values, insurance limits, remediation payment timing and transition expenditure are not disclosed in the evidence used. No adverse funding-access premium, quantified loss severity or sustainability-linked creditor benefit is inferred from that silence.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161
++
++### Macro and hedging view
++The rate risk classification is Moderate rather than Low because the hedge schedule leaves substantial identified floating exposure and replacement protection is conditional on rate bands. It is not High on the evidence available because the borrowing-interest shock alone leaves positive historical free cash flow, while fixed coupons and existing hedges limit near-term transmission. The initiating downside is a rate increase coinciding with expiring protection; borrowing interest rises immediately on uncovered balances, while cost inflation and weaker production reduce cash generation. Lower retained cash then increases reliance on financing ahead of term maturities. Monitor hedge replacement at the first expiry, actual cash interest, and gross-margin performance together, not hedge notional in isolation.
++Basis: calculation R08; calculation R10; calculation R13; Financial foundation (CP-1); Fundamental credit (CP-2); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–176
++
++### Credit implication
++Product liability is the highest-priority environmental or social event-risk driver for committee debate. TransDigm manufactures safety-relevant aircraft components and explicitly warns that insurance may be denied or inadequate after a failure. A major incident could interrupt revenue and require defense or settlement cash, weakening FCF and liquidity before refinancing becomes difficult; there is no supported current default or recovery-loss estimate. Environmental remediation is a quantified balance-sheet obligation, but its cash timing is not established, and management reports no material historical compliance burden. Climate policy and physical hazards remain Watch items tied to air-travel restrictions, asset damage or mandated expenditure. Monitoring should escalate upon a reported serious product incident, coverage dispute, material remediation revision or facility interruption; no future incident date is assumed. The central debate is whether insurance and operating continuity contain product-failure cash demands, not whether an environmental label improves creditor rights.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161
++
++### Events: Hedges
++
++| Event date | Date precision | Published | Event | Status | Source | Credit relevance |
++|---|---|---|---|---|---|---|
++| 2023-03-31 | day | — | Swaps of USD 500 million, USD 1,500 million and USD 700 million and cap of USD 700 million become effective | Historical — Effective Date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | USD 3,400 million active at the September 2024 anchor; base rates 3.00%, 3.10%, 1.30% and cap strike 1.25%, respectively |
++| 2025-03-31 | day | — | USD 500 million and USD 1,500 million swaps mature; USD 1,100 million collar starts | Scheduled — Maturity Date; Effective Date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | USD 900 million step-down in protected notional; new collar floor 2.00%, cap 3.50% |
++| 2025-09-30 | day | — | USD 700 million swap and USD 700 million cap mature; USD 500 million and USD 1,338 million collars start | Scheduled — Maturity Date; Effective Date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | New collars have floor/cap 2.00%/3.50% and 2.50%/4.50%; total scheduled collar notional USD 2,938 million |
++| 2026-09-30 | day | — | USD 1,100 million and USD 500 million collars mature; USD 1,550 million collar starts | Scheduled — Maturity Date; Effective Date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Starting floor/cap 2.50%/4.50%; remaining scheduled notional USD 2,888 million |
++| 2027-09-30 | day | — | USD 1,338 million and USD 1,550 million collars mature | Scheduled — Maturity Date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Last dated protection in the disclosed schedule ends before remaining term-loan maturities; no assumed renewal |
++
++### Confidence inputs
++
++| Input | Value |
++|---|---|
++| Directly Sourced | 8 |
++| Calculated | 4 |
++| Assumption-Based | 0 |
++| Analyst Inference | 3 |
++| Weak Lineage | 0 |
++| Untraced | 0 |
++| Conflicting | 1 |
++| Insufficient Information | 4 |
++| Fields present | 109 |
++| Fields total | 113 |
++| Source gate | partial |
++| CRITICAL | 0 |
++| MATERIAL | 4 |
++| MINOR | 0 |
++
++### Analytical appendix — complete canonical registers
++
++### T2F.1 — Macro source gate
++
++| source_document_id | source_document_name | source_quality | period | entity_covered | data_supplied | limitation | downstream_use | Source |
++|---|---|---|---|---|---|---|---|---|
++| S1 | FY2024 Form 10-K | Primary filing; audited note disclosures; management sensitivities separately attributed | September 30, 2024 instant; FY2024 flows; forward hedge dates | TransDigm Group and consolidated subsidiaries | Debt split, strikes, hedge dates, FX terms, cost recovery limits and operational risks | No full currency-matched operating base, FX trade confirmations or input sensitivities | Rates, FX & hedging; Downside; Forward credit model; Committee decision | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178 |
++
++| Input | Adopted value / definition | Decision boundary | Source |
++|---|---|---|---|
++| Gate | Ready with Limitations; partial | Debt split and hedge terms permit rate analysis; absent operating detail restricts only non-rate quantification | Source readiness (CP-0) |
++| Identity | tdg; TransDigm Group; 2024-09-30; FY2024; USD consolidated; run tdg-2024-09-30-credit_snapshot-copilot-sol-medium | Industrial aerospace group; no financing-subsidiary matched-funding exclusion supported | Financial foundation (CP-1); Business & governance (CP-1A); Fundamental credit (CP-2) |
++| Imported annual cash measures | FCF USD 1,880 million; cash interest paid net USD 1,158 million; adjusted EBITDA USD 4,173 million | FCF is CFO less capex before acquisitions/distributions; cash interest net is not gross borrowing interest | Financial foundation (CP-1) |
++| Imported balance and subsequent comparison | Carrying debt USD 24,880 million; gross principal USD 25,068 million; year-end cash USD 6,261 million beside October 18, 2024 transaction-only pro forma cash USD 2,075.50 million | October 16 draw and October 18 payment retained separately; static, not actual closing cash; no new October sensitivity calculated | Financial foundation (CP-1) |
++| Maturity correction | November 15, 2027 legal maturity falls in FY2028 | Specific fiscal/calendar issue resolved by Fundamental credit; no independent legal opinion adopted | Fundamental credit (CP-2) |
++| Optional inputs | Separate liquidity, hedge trade confirmations, market curves and agency reports not supplied | No curve-based forecast, valuation, covenant headroom or instrument preference | Source readiness (CP-0) |
++
++### T2F.2 — Debt and rate exposure
++
++Amounts below are gross contractual principal for rate exposure unless explicitly identified as carrying values. Balance-sheet debt remains the carrying-value measure; the reconciliation is retained separately.
++
++| Debt Instrument | Amount | Fixed / Floating | Base Rate | Margin / Coupon | Currency | Maturity | Hedge Status | Source Trace | Credit Implication | Source |
++|---|---|---|---|---|---|---|---|---|---|---|
++| Term loan I | USD 1,871 million | Floating-rate debt | Term SOFR or alternate base rate; no adjusted SOFR floor | SOFR +2.75% | USD | 2028-08-24 | Aggregate credit-agreement protection; tranche allocation not supplied | S1, Note 10 | Base-rate exposure survives on uncovered balances; spread not hedged | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153 |
++| Term loan J | USD 3,632 million | Floating-rate debt | Term SOFR or alternate base rate; no adjusted SOFR floor | SOFR +2.50% | USD | 2031-02-28 | Aggregate partial protection | S1, Note 10 | Long maturity exceeds last disclosed hedge date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153 |
++| Term loan K | USD 1,699 million | Floating-rate debt | Term SOFR or alternate base rate; no adjusted SOFR floor | SOFR +2.75% | USD | 2030-03-22 | Aggregate partial protection | S1, Note 10 | Refinancing runway does not remove rate volatility | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153 |
++| Term loan L | USD 1,500 million | Floating-rate debt | Term SOFR or alternate base rate; no adjusted SOFR floor | SOFR +2.50% | USD | 2032-01-19 | Aggregate partial protection | S1, Note 10 | Recap borrowing adds floating exposure without earnings | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153 |
++| Receivables securitization | USD 487 million | Floating-rate debt | Three-month Term SOFR | +1.45% | USD | 2025-07-11 | No specific hedge linkage disclosed | S1, Item 7A; Business & governance maturity | Renewal risk precedes term-loan maturities; included in gross floating exposure | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; Business & governance (CP-1A) |
++| Secured notes due 2028 | USD 2,100 million | Fixed-rate debt | Fixed coupon | 6.75% | USD | 2028 | Contractual fixed rate | S1, debt table | No immediate base-rate cash repricing; future refinancing rate remains exposed | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Secured notes due 2029 | USD 2,750 million | Fixed-rate debt | Fixed coupon | 6.375% | USD | 2029 | Contractual fixed rate | S1, debt table | Fixed debt service until refinancing | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Secured notes due 2030 | USD 1,450 million | Fixed-rate debt | Fixed coupon | 6.875% | USD | 2030 | Contractual fixed rate | S1, debt table | Fixed debt service until refinancing | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Secured notes due 2031 | USD 1,000 million | Fixed-rate debt | Fixed coupon | 7.125% | USD | 2031 | Contractual fixed rate | S1, debt table | Fixed debt service until refinancing | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Secured notes due 2032 | USD 2,200 million | Fixed-rate debt | Fixed coupon | 6.625% | USD | 2032 | Contractual fixed rate | S1, debt table | Fixed debt service until refinancing | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Secured notes due 2033 | USD 1,500 million | Fixed-rate debt | Fixed coupon | 6.00% | USD | 2033 | Contractual fixed rate | S1, debt table | Recap financing increases fixed claims but not immediate base-rate sensitivity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Subordinated notes due 2027 | USD 2,650 million | Fixed-rate debt | Fixed coupon | 5.50% | USD | 2027-11-15 | Contractual fixed rate | S1, debt table; Financial foundation maturity | Coupon fixed; refinancing at maturity not hedged by current swaps | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145; Financial foundation (CP-1) |
++| Subordinated notes due 2029, lower coupon | USD 1,200 million | Fixed-rate debt | Fixed coupon | 4.625% | USD | 2029-01-15 | Contractual fixed rate | S1, debt table; Financial foundation maturity | Coupon fixed; future refinancing spreads remain exposed | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145; Financial foundation (CP-1) |
++| Subordinated notes due 2029, higher coupon | USD 750 million | Fixed-rate debt | Fixed coupon | 4.875% | USD | 2029 | Contractual fixed rate | S1, debt table | Coupon fixed; future refinancing spreads remain exposed | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Government refundable advances | USD 17 million | Classification not supplied | Repayment tied to specified commercial aviation revenue growth | Interest terms not supplied | Reporting USD; contractual currency not supplied | Repayment schedule not supplied | Not established | S1, Note 10 | Not added to floating sensitivity without disclosed rate linkage | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 152 |
++| Finance leases | USD 262 million | Classification not supplied | Rate-reset terms not supplied | Not supplied | Reporting USD; lease currency split not supplied | Individual maturities not extracted | Not established | S1, Note 10 | Retained in debt denominator, not assumed floating | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–145 |
++| Revolving facilities | USD 0 million drawn; USD 843 million reported availability | Floating-rate debt if drawn | SOFR basis | +2.25%; unused fee 0.50% | USD | 2029-02 | No hedge assigned to undrawn amount | S1, Note 10 | No current drawn exposure added; future borrowing raises sensitivity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 152; Financial foundation (CP-1) |
++
++### T2F.3 — Hedging register
++
++| Hedge Type | Notional | Instrument Covered | Rate / Strike | Maturity | Coverage Status | Source Trace | Limitation | Source |
++|---|---|---|---|---|---|---|---|---|
++| Interest-rate swap | USD 500 million | Floating Credit Agreement borrowings | Base fixed 3.00%; printed all-in 6.25% includes legacy 3.25% margin | Effective 2023-03-31; maturity 2025-03-31 | Effective where supported | S1, Notes 19 and 10 | Tranche allocation absent; use base protection, not printed all-in as current coupon | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Interest-rate swap | USD 1,500 million | Floating Credit Agreement borrowings | Base fixed 3.10%; printed all-in 6.35% includes legacy 3.25% margin | Effective 2023-03-31; maturity 2025-03-31 | Effective where supported | S1, Note 19 | Same all-in margin qualification; future spread changes unprotected | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Interest-rate swap | USD 700 million | Floating Credit Agreement borrowings | Base fixed 1.30%; printed all-in 4.55% includes legacy 3.25% margin | Effective 2023-03-31; maturity 2025-09-30 | Effective where supported | S1, Note 19 | Not protection through term-debt maturity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Interest-rate cap | USD 700 million | Floating Credit Agreement borrowings | Three-month Term SOFR above 1.25% | Effective 2023-03-31; maturity 2025-09-30 | Effective where supported | S1, Note 19 | Protects above strike, not a fixed coupon below it; excludes premium amortization from marginal shock | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Collar | USD 1,100 million | Floating Credit Agreement borrowings | Three-month SOFR floor 2.00%; ceiling 3.50% | Effective 2025-03-31; maturity 2026-09-30 | Partial; forward starting | S1, Note 19 | No September 2024 active protection; rates float inside band | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Collar | USD 500 million | Floating Credit Agreement borrowings | Three-month SOFR floor 2.00%; ceiling 3.50% | Effective 2025-09-30; maturity 2026-09-30 | Partial; forward starting | S1, Note 19 | Do not add to active year-end protection | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Collar | USD 1,338 million | Floating Credit Agreement borrowings | Three-month SOFR floor 2.50%; ceiling 4.50% | Effective 2025-09-30; maturity 2027-09-30 | Partial; forward starting | S1, Note 19 | Future rates and balances needed for cash-flow forecast | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Collar | USD 1,550 million | Floating Credit Agreement borrowings | Three-month SOFR floor 2.50%; ceiling 4.50% | Effective 2026-09-30; maturity 2027-09-30 | Partial; forward starting | S1, Note 19 | Upside protection does not eliminate downside floor payments | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Fixed-rate debt | USD 15,600 million principal | Nine note series in debt register | Individual fixed coupons retained above | 2027 through 2033 | Effective where supported | Calculation R06; S1, Note 10 | Contractual fixed funding, not derivative notional; refinancing cost remains variable | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| FX forward | USD 120 million equivalent | Selected third-party forecast sales or transactions; sell USD for CAD and EUR | Trade-level strikes not supplied | Maximum duration twelve months at 2024-09-30; individual expiry dates not supplied | Terms insufficient for independent coverage sizing | S1, Note 19 | USD equivalents at trade-date spot; no group-wide effectiveness or currency-allocation ratio inferred | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Natural hedge; commodity, energy or fuel hedge | Not supplied: no matched quantities or documented instruments established | Operating flows | Not supplied: contractual matching and strikes not established | Not supplied: no dated hedge schedule identified | Insufficient Information | Targeted operating and derivative disclosures | Silence is not a zero exposure or unhedged-all conclusion | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178 |
++
++### T2F.4 — Floating exposure and debt denominator
++
++| Metric | Amount | Formula / Source | Status | Credit Implication | Source Trace | Source |
++|---|---|---|---|---|---|---|
++| Total debt, carrying basis | USD 24,880 million | USD 24,394 million current/non-current debt plus USD 486 million short-term securitization; R04 | Calculated; agrees Financial foundation | Primary debt denominator net of issuance costs and discount | S1, Notes 9–10 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 |
++| Gross principal reference | USD 25,068 million | Financial foundation; above carrying by USD 188 million, R05 | Reported inputs; calculated bridge | Principal rate exposure is not carrying debt; do not overwrite inherited principal leverage | Financial foundation C01/C37 | Financial foundation (CP-1) |
++| Fixed-coupon notes | USD 15,600 million | R06; nine note series | Calculated | No immediate coupon repricing | S1, debt table | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| Gross floating-rate debt | USD 9,189 million | Term loans USD 8,702 million + securitization USD 487 million; R01 | Calculated | Largest identified shock-sensitive funding base | S1, Item 7A | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| Hedged floating-rate debt | USD 3,400 million | Active swaps USD 2,700 million and cap USD 700 million; R02 | Calculated; current active coverage | Credit-agreement linkage, base rates and periods support protection; future collars excluded | S1, Note 19 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Unhedged floating-rate debt | USD 5,789 million | R01 minus R02; R03 | Calculated; identified disclosed exposure | Annual borrowing cash interest moves with base rate on this residual | S1, Item 7A and Note 19 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Unhedged debt percentage | 23.267684887459807073954983922829581994% | R03 / carrying debt R04; fraction 0.23267684887459807073954983922829581994; R07 | Calculated | Explicit carrying denominator; not the complement of issuer's gross fixed-rate claim | Calculation R07 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Other rate classification | USD 17 million advances; USD 262 million leases | Source debt table; terms do not establish floating reset | Insufficient Information for rate classification | Included in total debt, not silently assigned to floating or fixed | S1, Note 10 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–152 |
++| Issuer rate allocation | Approximately 77% gross debt fixed; objective at least 75% fixed and 25% variable | Issuer Item 7A characterization | Reported; methodology not reconciled | Do not substitute percentage target for instrument-based exposure | S1, Item 7A | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++
++### T2F.5 — Sensitivity and FCF transmission
++
++| Sensitivity | Formula | Source Inputs | Estimated Cash Impact | FCF / Liquidity Implication | Status | Source Trace | Source |
++|---|---|---|---|---|---|---|---|
++| +100 bp static annual borrowing-interest shock | USD 5,789 million × 1.00%; evaluated as divide by 100 | R03 residual; active swaps/cap; unchanged spreads and debt | +USD 57.89 million annual cash interest | Mechanical FCF change −USD 57.89 million before tax and cash-income offsets | Calculated; not net-interest forecast | R08 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Historical FCF comparison | USD 1,880 million − USD 57.89 million | Financial foundation historical FCF and R08 | USD 1,822.11 million illustrative residual FCF; interest burden 3.0792553191489361702127659574468085106% of historical FCF | Positive historical buffer remains; not stressed liquidity, current cash, or a forecast | Calculated mechanical comparison | R09–R10 | Financial foundation (CP-1); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Issuer +one percentage point rate test | Company methodology not supplied | Outstanding term loans and securitization at 2024-09-30 | Approximately +USD 30 million annual interest costs | Smaller issuer case retained separately; not substituted for reconstructed borrowing sensitivity | Reported; reconciliation unresolved | S1, Item 7A; R12 difference USD 27.89 million | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| Gross floating comparator before hedges | USD 9,189 million ×1.00% | Identified floating borrowings only | +USD 91.89 million annual interest before hedge receipts | Shows protection contribution without claiming full fixed funding | Calculated comparator, not adopted net case | R11 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| FX / commodity / inflation stress | Not calculable: matched exposure bases, shocks and repricing timing absent | No user shock supplied; issuer FX test preserved in FX register | Not calculable: no supported cash-flow exposure base | No invented conversion of geography, net income or gross cost into cash sensitivity | Insufficient Information | G2–G3 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74 |
++
++### T2F.6 — FX mismatch register
++
++| Exposure Type | Revenue Currency / Region | Cost Currency / Region | Debt / EBITDA / Cash / Covenant Currency | Natural Hedge? | Evidence | Risk Mechanic | Credit Implication | Source Trace | Limitation | Source |
++|---|---|---|---|---|---|---|---|---|---|---|
++| Translation exposure | Certain foreign subsidiaries' sales primarily affected by GBP and EUR | Local cost currency quantities not supplied | Statements in USD; foreign EBITDA/cash currency breakdown not supplied | Insufficient Information | USD reporting translates foreign operations and asset balances | USD movement changes reported sales, earnings and carrying assets without equivalent immediate cash loss | Separate reported leverage translation from transaction cash exposure | S1, Item 7A | Geography alone not used to infer FX mismatch or natural matching | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74 |
++| Transaction exposure | Third-party sales and purchases in foreign currencies; forwards sell USD for CAD/EUR | Purchases identified qualitatively; quantities not supplied | Main loans and note debt USD; EBITDA and covenant currency reconciliation not supplied | Insufficient Information | USD 120 million forwards; maximum twelve-month duration; FY2024 USD 4 million settlement losses in net sales | Forward settlements offset selected forecast flows; strikes and currency shares determine residual | No group-wide coverage percentage or dollar shock assigned | S1, Note 19 | Notional is neither fair value nor proven full cash protection | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Historical issuer sensitivity | Company-wide revenue currency base not supplied | Company-wide cost currency base not supplied | FY2024 net-income test, not covenant or liquidity calculation | Insufficient Information | Issuer says 10% FX change would not materially affect net income; USD 20 million foreign currency losses in cost of sales in FY2024 versus USD 14 million in FY2023 | Recorded transaction losses and translation effects have different accounting paths | Historical test tempers alarm but cannot size FCF effect or prove no residual mismatch | S1, Item 7A and operating results | Materiality threshold, currency correlations and cash tax effects not supplied | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 74 |
++| Covenant mismatch / cash repatriation | Not supplied: matched sales currency | Not supplied: matched expenditure currency | Debt reporting primarily USD; entity cash and contractual covenant conversion rules not supplied | Insufficient Information | Consolidated reporting does not establish cash transferability | Currency translation or inaccessible cash may differ from borrower debt service | No covenant FX headroom or repatriation benefit credited | Financial foundation perimeter | Obtain currency-by-entity and contractual conversion terms | Financial foundation (CP-1) |
++
++### T2F.7 — Commodity and inflation register
++
++| Input / Commodity / Inflation Driver | Cost Exposure | Pass-Through Mechanism | Evidence | Risk Mechanic | Credit Implication | Source Trace | Limitation | Source |
++|---|---|---|---|---|---|---|---|---|
++| Raw-material exposure; procurement | Contract manufacturing cost quantities not supplied | Generally no contractual recovery; commercial repricing not quantified | Most contracts disallow raw-material, tax and labor cost recovery; some multi-year fixed prices | Higher input cost enters margin before selling prices adjust | FCF durability weaker than proprietary position alone implies | S1, contract risk | Commodity basket, hedges, cost share and repricing lag not supplied | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18 |
++| Labour / wage inflation | Union representation approximately 17% of full-time and part-time employees; wage cost not supplied | No general recovery right established | Contract restrictions and bargaining agreements expiring at various dates through January 2029 | Wage increases or stoppages raise unit costs and interrupt shipments | Margin squeeze or delayed collections can compete with cash interest | S1, human capital and contract risk | No future wage settlement or strike assumed | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18 |
++| Freight / energy / rent inflation | Freight inflation noted in operating discussion through Fundamental credit; energy/rent cost split not supplied | Indexation or surcharge not established | Gross margin improved through inflation; volume absorption part of benefit | Transportation or facility cost rises may precede recovery; lower output dilutes absorption | Directional cash pressure; no additive cost shock invented | S1, operating results | No individual energy, freight or rent cash sensitivity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46; Fundamental credit (CP-2) |
++| Historical pricing/productivity mitigant | Gross margin 58.8% FY2024 versus 58.3% FY2023 | Demonstrated commercial operating performance; not automatic indexation | Management attributes improvement to strategy and fixed overhead spread over greater production | Pricing/productivity and volume can offset inflation; downturn reverses absorption | Mitigates current pressure but does not prove downside pass-through | S1, operating results | Price-volume-cost contributions and demand elasticity not separated | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46 |
++
++### T2F.8 — Macro sensitivity summary
++
++| Macro Driver | Evidence | Risk Mechanic | FCF / Liquidity Impact | Refinancing / RV Implication | Monitoring Trigger | Source Trace | Source |
++|---|---|---|---|---|---|---|---|
++| Base-rate exposure | USD 5,789 million identified residual floating debt | Base-rate increase raises borrowing interest; cash income and tax not modeled | +USD 57.89 million interest for static 100 bp rise | Less retained funding; no spread valuation or security preference established | Compare reported cash interest with hedge receipts and balances each reporting period | R03/R08; issuer alternative retained | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Hedge cliff | March 2025 swap expiry exceeds new collar notional | Protection shrinks and becomes band-dependent | Greater future volatility; not a quantified future rate forecast | Greater reliance on cash generation before long-term refinancing | 2025-03-31 replacement; then later schedule dates in event table | R13 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| FX | GBP/EUR translation and selected CAD/EUR transaction hedges | USD changes affect operating translation and settlement cash differently | Historical issuer net-income test immaterial; cash sensitivity not calculable | No supported covenant FX breach or FX-driven financing premium | Forward replacement, settlement losses and currency-matched cash disclosures | FX register | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Inflation and demand interaction | Most contracts lack cost recovery; volume helped FY2024 margins | Wage/material increase and declining output compress unit margins simultaneously | Lower EBITDA and cash before persistent interest | Less refinancing cushion; no inferred covenant headroom | Gross-margin decline with lower production or failed price recovery | Contract and operating disclosures | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46 |
++| Counterparty/default linkage | Credit Agreement default can trigger derivative default and accelerated settlement | Financial stress can terminate protection or require early settlement | Payment direction depends on close-out fair value; no gross notional liability assumed | Can intensify a liquidity event; no claim on recoveries quantified | Counterparty failure, credit-agreement default or early termination notice | S1, Note 19 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 174–175 |
++
++Macro Risk Level: Moderate. Rates, FX & hedging analysis completed with limitations; the single net-interest forecast, non-rate numerical stress and any valuation or covenant-capacity conclusion remain restricted.
++Basis: calculation R08; calculation R10; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178
++
++### T2F.9 — Macro gaps ledger
++
++| Gap | Missing Data | Why It Matters | Impact on Output | Required Follow-Up | Downstream Module Affected |
++|---|---|---|---|---|---|
++| G1 — Interest sensitivity reconciliation | Assumptions behind approximately USD 30 million issuer shock and approximately 77% gross fixed allocation; hedge-to-tranche schedule and current all-in rates | Different reported and reconstructed sensitivities cannot support one net-interest forecast | Keep issuer and calculated cases distinct; no adoption of issuer fixed share as independent coverage calculation | Obtain issuer treasury bridge, dated hedge allocations, reset conventions and cash-income assumptions | Forward credit model; Committee decision |
++| G2 — FX coverage and matching | Revenue/cost/cash/EBITDA by currency and entity; FX strikes and individual maturities; covenant conversion and repatriation terms | Determines transaction residual and cash accessibility, not just translation | Dollar FX shock, natural hedge and covenant currency mismatch not calculable | Obtain treasury currency ladder, trade confirmations and contractual conversion provisions | Forward credit model; Downside; Legal & covenants |
++| G3 — Cost recovery | Commodity quantities, energy/freight/rent/wage cost shares, repricing lags, indexation and demand elasticity | Required to size margin and cash effects without using total costs as a proxy | Inflation/commodity stress directional only; no assumed automatic pass-through | Obtain procurement cost bridge and customer pricing clauses | Forward credit model; Downside |
++| G4 — Other debt rate terms | Lease reset and advance interest terms and contractual currencies | Could add unmeasured sensitivity outside identified floating loans | Retain in total debt but do not assume fixed or floating | Obtain lease rate schedules and advance agreements | Forward credit model |
++| G5 — Future rate profile | Curves, future balances, renewal trades and forecast cash balances | Collars are nonlinear and start after the anchor | Notional path is not a future cash-interest forecast; no October shock inferred | Obtain dated treasury projection and authorized scenario assumptions | Forward credit model |
++
++### T2G.1 — ESG source inventory
++
++| Source | Reliability (audited/assured vs self-reported) | Greenwashing Flag | Module Status |
++|---|---|---|---|
++| TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 13–13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 31–31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 | Remediation accruals are financial-note disclosures within audited statements; climate descriptions and emissions target are self-reported and no separate assurance supplied | No affirmative misleading-claim evidence established; low-emissions description not treated as verified emissions inventory or creditor protection | Completed with Limitations; partial environmental, transition and operational disclosure; no sustainability-linked terms established |
++
++### T2G.2 — Environmental and transition register
++
++| Exposure | Source/Date | Transmission Mechanic | Affected Driver | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Remediation at operating and third-party sites | FY2024 Form 10-K; 2024-09-30 measurement | Investigations and revisions can increase cash payments; estimates exclude inflation and do not discount expected expenditure | Remediation cash cost and FCF; no payment calendar established | E1; USD 5 million current plus USD 36 million non-current; prior USD 3 million plus USD 41 million | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 |
++| Carbon regulation and aviation demand | FY2024 Form 10-K; publication date not stated | Management expects limited direct manufacturing burden, but regulation harming air travel can reduce replacement consumption | Demand and margin; supplier costs | E2 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Physical climate hazards | FY2024 Form 10-K; publication date not stated | Facilities exposed to storms, fires and rising sea levels can suffer asset damage and production interruption | Shipment cash, repairs, asset value; no insured loss values disclosed | E3 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Voluntary emissions target | At least 50% absolute Scope 1 and Scope 2 reduction by 2031 from FY2019 baseline | Efficiency and green-power actions may require expenditure, but no quantified program or debt linkage supplied | Transition spending not established; no margin ratchet demonstrated | E4 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++
++### T2G.3 — Social and operational register
++
++| Exposure | Source/Date | Transmission Mechanic | Event-Risk vs Ongoing | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Product failure and aircraft accident liability | FY2024 Form 10-K; publication date not stated | Personal injury or death claims can require defense/settlement cash; insurer may deny or inadequately cover losses | Event-Risk; no current accident or sized loss asserted | E5 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| Labor relations and bargaining | Approximately 17% union represented; agreements through January 2029 | Wage settlements increase costs; stoppages can delay production and collections | Ongoing cost channel; event-risk escalation on dispute | E6 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13 |
++| Employment and other litigation | FY2024 Form 10-K; publication date not stated | Class actions, compensation claims or penalties can absorb cash and management resources | Event-Risk; no incremental quantified liability assigned | E7 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| Governance boundary | Business & governance, FY2024 | Financial policy and shareholder transfers assessed there, not relabeled as environmental risk | Ongoing; referenced only | E8 | Business & governance (CP-1A) |
++
++### T2G.4 — Materiality classification
++
++| Factor | Materiality Class | Transmission Basis | Catalyst (if Watch) | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Environmental remediation | Material — Quantified | Recognized obligation USD 41 million at year-end versus USD 44 million prior; cash payment dates not quantified | Already recognized; materiality refers to obligation, not a current liquidity crisis | E1; R14 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 |
++| Product liability | Material — Directional | Safety-critical aircraft products and potentially inadequate insurance create a direct contingent cash channel | Already an identified contingent exposure; no incident assumed | E5 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| Wage inflation | Material — Directional | Represented workforce and limited contract cost recovery transmit wage increases to margin | Existing operating exposure, not a projected dispute | E6 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18 |
++| Climate regulation and air travel | Watch | Issuer identifies possible demand and input-cost effects; no binding cost or demand reduction sized | Air-travel restriction, carbon cost passed by suppliers, or mandated investment | E2 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Physical climate hazards | Watch | Named facility hazards could interrupt output and damage assets | Reported facility interruption or hazard/insurance assessment indicating significant uninsured exposure | E3 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Emissions target as creditor protection | Immaterial to Credit | Voluntary operating target alone grants no demonstrated cash-flow or contractual creditor benefit | Not a Watch claim; no financing benefit credited | E4 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Transition expenditure and sustainability-linked ratchet | Insufficient Information | No sized transition budget, KPI-linked debt schedule, ratchet or verification terms established | Obtain contractual terms before classification | E4; G8 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–153 |
++| Other employment litigation | Watch | Potential cash litigation channel, but no specific escalating case sized | Material new claim, reserve increase or adverse judgment | E7 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++
++### T2G.5 — Sustainability-linked mechanics
++
++| Instrument | KPI | SPT + Test Date | Ratchet (direction; bps) | Symmetry | Credit-Meaningful? | Expected Spread Effect | Evidence ID | Source |
++|---|---|---|---|---|---|---|---|---|
++| No sustainability-linked instrument established in reviewed debt disclosures; not proof none exists | Not supplied: emissions target not linked to identified borrowing | Not supplied: no contractual target/test date; voluntary 2031 goal is not a debt test | Not supplied: step-up/step-down terms not established | Not supplied: no ratchet schedule | Not calculable: contractual benefit, miss consequence and reporting/verification absent | Not calculable: no spread ratchet or greenium evidenced; no zero-bp claim | G8 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–153 |
++
++### T2G.6 — Refinancing access and cost of capital
++
++| Effect | Direction | Quantified vs Directional | Linked Maturity/Funding Need | Evidence ID | Source |
++|---|---|---|---|---|---|
++| ESG investor exclusion, greenium or sustainability-linked price adjustment | Not established; no adverse or favorable funding direction inferred | Insufficient Information; no instrument quotes, mandate evidence or sustainability-linked terms | Receivables maturity July 2025; subordinated maturity November 2027; no ESG effect tied to either | G9 | Business & governance (CP-1A); Fundamental credit (CP-2) |
++| Product or facility incident weakens operating cash before refinancing | Adverse only if contingent event occurs | Directional operating-to-liquidity channel; financing restriction not independently observed | Could reduce retained resources ahead of actual maturities; no assumed acceleration date | E3/E5 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++
++### T2G.7 — Credit implication synthesis
++
++| Material Factor | Risk Mechanic | Credit Implication | Confidence | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Remediation accruals | Current and non-current obligations can consume cash; future investigations can revise estimates | Monitor payments and reserve adequacy; no immediate refinancing impairment evidenced from USD 41 million obligation | High for reported accrual; payment timing not established | E1/R14 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 |
++| Product liability — priority contingent factor | Component failure can create claims and operating interruption beyond effective insurance | Contingent FCF/liquidity deterioration is supported; probability of default change and loss given default not quantified | Medium for conditional transmission; no incident forecast | E5 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| Labor and fixed-price recovery | Wage increase enters production costs without general contractual recovery | Ongoing margin risk; overlap with inflation analysis, not an additive second shock | Medium for transmission | E6; contract risk | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18 |
++| Climate Watch factors | Air-travel regulation or facility damage could reduce sales and require cash expenditure | Monitor named catalysts; no current stranded-asset write-down, refinancing premium or recovery deduction justified | Medium for conditional channel; magnitude not established | E2/E3 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Voluntary target without debt linkage | Target is not an enforceable payment or covenant term in evidence | Immaterial to Credit as a protection; no spread benefit credited | High for absence of demonstrated linkage, not for absence of all instruments | E4/G8 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++
++### T2G.8 — Environmental and social gaps
++
++| Gap | Missing Item | Why It Matters | Impact on Output | Required Follow-Up |
++|---|---|---|---|---|
++| G6 — Event severity | Product insurance limits/exclusions, accident loss scenarios, facility asset values and continuity coverage | Converts identified contingent event into cash loss and interruption duration | No event-driven liquidity, default-probability or recovery loss sized | Obtain liability/continuity policies and facility hazard values; monitor reported incident and coverage disputes |
++| G7 — Remediation and transition cash | Remediation payment calendar and range; emissions inventory assurance, transition capex/opex and facility hazard costs | Recognized liability and voluntary target do not reveal future annual cash use | No remediation cash forecast or carbon sensitivity; climate factors remain Watch | Obtain site schedules, estimate ranges, assured inventory and funded transition plan |
++| G8 — Sustainability instrument terms | Complete sustainability-linked instrument inventory, KPI definitions/ambition, SPTs/test dates, ratchet direction/bps/symmetry, reporting and verification | Determines enforceable pricing changes and whether a target has creditor relevance | No expected spread benefit/penalty, covenant protection or cosmetic/meaningful judgment | Obtain instrument terms and external verification if any; otherwise confirm no such debt |
++| G9 — Capital access effect | Investor exclusions, attributable funding quotes and comparable greenium evidence | Needed to establish actual funding-channel change | No ESG-driven spread or refinancing-access premium asserted | Obtain dated investor/financing evidence matched to actual funding need |
++
++### Definition reconciliation and claim lineage
++
++| Claim | Treatment / classification | Strongest lineage | Claim confidence label | Source |
++|---|---|---|---|---|
++| M01 | Floating term loans and securitization explicitly identified | Directly Sourced | High | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| M02 | Active derivative terms and effective cash-flow designation | Directly Sourced | High | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| M03 | Forward collars start after anchor and contain floors/ceilings | Directly Sourced | High | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| M04 | FX forward selected flows and issuer historical test | Directly Sourced | High for attribution | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| M05 | Contract recovery limitations and historical margin improvement | Directly Sourced | High | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46 |
++| M06 | Environmental obligations and historical compliance characterization | Directly Sourced | High for facts; management view separately attributed | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 |
++| M07 | Product liability and insurance risk; labor representation | Directly Sourced | High for disclosure | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| M08 | Climate hazards and voluntary emissions target | Directly Sourced | High for attribution, not assured emissions | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| M09 | Debt reconciliation and unhedged exposure | Calculated | High for specified perimeter | R01–R07 |
++| M10 | Borrowing cash-interest shock and mechanical FCF comparison | Calculated | High for static formula; not net-interest forecast | R08–R11 |
++| M11 | Replacement notional path and first step-down | Calculated | High for schedule; not forward cash protection | R13 |
++| M12 | Total remediation obligation | Calculated | High for aggregate, not timing | R14 |
++| M13 | Moderate macro risk, rather than immediate liquidity crisis | Analyst Inference | Medium | R08/R10; Financial foundation (CP-1); T2F.8 |
++| M14 | Product liability prioritized among contingent environmental/social channels | Analyst Inference | Medium | T2G.4/T2G.7 |
++| M15 | Emissions target is not demonstrated creditor protection | Analyst Inference | High for bounded conclusion | T2G.5 |
++| M16 | Approximately USD 30 million issuer sensitivity versus USD 57.89 million reconstruction; approximately 77% allocation methodology not reconciled | Conflicting | Insufficient Information for common-basis net-interest adoption | T2F.5; G1 |
++| M17 | Matched FX cash sensitivity and natural hedge | Insufficient Information | Insufficient Information | G2 |
++| M18 | Input-cost shock and recovery lag sizing | Insufficient Information | Insufficient Information | G3 |
++| M19 | Environmental/social loss severity and payment forecast | Insufficient Information | Insufficient Information | G6–G7 |
++| M20 | Sustainability ratchets and funding-access pricing effects | Insufficient Information | Insufficient Information | G8–G9 |
++
++The cap and swaps are counted only once as active instruments; basis transactions are not added as additional hedge notional. Accounting effectiveness supports the specified relationships, not every future debt balance or counterparty outcome. The expected reclassification into interest expense is approximately negative USD 25 million over the next twelve months, and expected FX-forward gains in net sales are approximately USD 3 million; these accounting forecasts are not added to the marginal rate shock or treated as liquid cash balances.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178
++
++| Additional disclosed quantity | Amount / term | Treatment | Source |
++|---|---|---|---|
++| Active swap subtotal | USD 2,700 million | Three active swaps; included within USD 3,400 million with cap | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Expected rate derivative reclassification | Approximately −USD 25 million in next twelve months | Existing gains/losses and caplet amortization; not new shock or notional | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Expected FX forward reclassification | Approximately +USD 3 million net-sales gain in next twelve months | Not a forecast of full-group FX cash outcome | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Derivative fair values | Rate assets USD 57 million; liabilities USD 10 million at September 2024 | Neither notional nor available liquidity; no assumed close-out payment equal to gross notional | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 177 |
++
++| Coverage item | Required fields | Present | Definition |
++|---|---|---|---|
++| Required register schema plus source gate | 113 | 109 | One instance of each required column concept across the seventeen registers plus source gate; extra Source columns excluded. Four decision-evidence concepts remain incomplete: FX matching, cost sensitivity, event cash severity, sustainability instrument pricing. |
++| Unresolved material findings | 4 | 4 | Interest-method reconciliation; FX/cost quantification; environmental/social loss calibration; sustainability financing terms. Other requests are narrower monitoring needs, not additional severity findings. |
++
++## Calculations
++
++All issuer monetary operands below are consolidated USD millions at September 30, 2024 unless otherwise stated. Gross principal is used for contractual interest exposure; carrying debt is the required total-debt denominator. Multiplication by one percent is evaluated by dividing by one hundred. The borrowing-interest shock assumes unchanged balances and spreads, full base-rate transmission and continued hedge performance; the active cap is above its disclosed strike in the reported-rate environment. No tax shield, cash-interest income, premium repricing, subsequent borrowing or future renewal is assumed. Historical FCF comparisons are arithmetic illustrations, not forecasts.
++Basis: Financial foundation (CP-1); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177
++
++| ID | Measure and period | Operation / exact operands | Result | Unit / limitation | Source |
++|---|---|---|---|---|---|
++| R01 | Identified floating principal, 2024-09-30 | 8,702 + 487 | 9,189 | USD million; term loans and securitization | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| R02 | Active protected principal, 2024-09-30 | 500 + 1,500 + 700 + 700 | 3,400 | USD million; three swaps and cap; forward collars excluded | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| R03 | Identified unhedged floating principal | 9,189 + (−3,400) | 5,789 | USD million; not all other debt rate terms established | Same source inputs as R01–R02 |
++| R04 | Total carrying debt | 24,394 + 486 | 24,880 | USD million; current plus non-current plus securitization | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145; Financial foundation (CP-1) |
++| R05 | Principal versus carrying debt delta | 25,068 + (−24,880) | 188 | USD million; issuance cost and discount effects, not additional cash exposure | Financial foundation (CP-1) |
++| R06 | Fixed-coupon note principal | 2,650 + 2,100 + 1,200 + 2,750 + 750 + 1,450 + 1,000 + 2,200 + 1,500 | 15,600 | USD million; excludes other debt not classified fixed/floating | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| R07 | Unhedged percentage of carrying debt | 5,789 / 24,880 = 0.23267684887459807073954983922829581994; fraction / 0.01 | 23.267684887459807073954983922829581994 | %; not comparable to complement of issuer gross allocation without denominator bridge | R03–R04 sources |
++| R08 | Static annual +100 bp borrowing-interest shock | 5,789 / 100 | 57.89 | USD million annual increase; FCF change −USD 57.89 million before offsets | R03 sources; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| R09 | Shock relative to FY2024 historical FCF | 57.89 / 1,880 = 0.030792553191489361702127659574468085106; fraction / 0.01 | 3.0792553191489361702127659574468085106 | %; arithmetic comparison, not expected deterioration | R08; Financial foundation (CP-1) |
++| R10 | Illustrative historical FCF after borrowing-interest shock | 1,880 + (−57.89) | 1,822.11 | USD million; no operating, tax or cash-income response | Financial foundation (CP-1); R08 |
++| R11 | Gross floating-interest comparator | 9,189 / 100 | 91.89 | USD million annual increase before all hedges | R01 sources |
++| R12 | Reconstructed versus issuer sensitivity difference | 57.89 + (−30) | 27.89 | USD million; issuer USD 30 million approximate; not a reconciliation or chosen adjustment | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; R08 |
++| R13 | Hedge replacement notional path | March 2025 active/starting: 700 + 700 + 1,100 = 2,500; September 2025: 1,100 + 500 + 1,338 = 2,938; September 2026: 1,338 + 1,550 = 2,888; first expiry gap: 2,000 − 1,100 = 900 | 2,500; 2,938; 2,888; 900 | USD million; notional only, not future effective fixed debt or predicted cash sensitivity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| R14 | Environmental remediation obligations | FY2024 current 5 + non-current 36; FY2023 current 3 + non-current 41 | 41; 44 | USD million; recognized obligation, not annual cash outflow | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 |
++| R15 | Required field count | 1 + 8 + 10 + 8 + 6 + 7 + 10 + 8 + 7 + 6 + 4 + 5 + 5 + 5 + 8 + 5 + 5 + 5; present = 113 − 4 | 113; 109 | Required conceptual fields; structural population does not establish missing evidence | Required-register headers and coverage definition |
++
++## Gaps
++
++The decisive unresolved question is why the issuer's reported interest-cost sensitivity differs from the term-by-term reconstruction. Neither number is deleted or averaged. Until the treasury assumptions are supplied, a single net-interest forecast is restricted; the independently traced borrowing-interest scenario remains usable for a bounded comparison. Missing FX, cost and incident-loss inputs restrict their own numerical decisions rather than preventing all macro or environmental analysis.
++Basis: calculation R08; calculation R12; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176
++
++| Bounded research question | Factual predecessor | Consumer | Minimum requested evidence | Restricted conclusion |
++|---|---|---|---|---|
++| What exact hedge, debt, rate and cash-income assumptions produce the issuer test? | Annual rate disclosure and dated derivative schedule | Rates, FX & hedging; Forward credit model | Treasury sensitivity worksheet at 2024-09-30, hedge allocations and reset conventions | Common-basis net-interest forecast |
++| How much FX and inflation risk remains after matching and repricing? | Foreign-currency transaction disclosure and explicit contract recovery restrictions | Rates, FX & hedging; Downside | Currency-matched operating/cash ladder, forward confirmations and input-cost/pricing bridge | Quantified non-rate cash-flow stress |
++| What cash-loss range remains after insurance and remediation allocations? | Aircraft product-liability warning and recognized remediation obligations | Rates, FX & hedging; Downside | Insurance limits/exclusions, facility hazard values and dated site payment schedule | Event loss and liquidity/recovery sizing |
++| Is any financing actually sustainability-linked and does investor demand affect its pricing? | Voluntary emissions target and conventional debt descriptions | Rates, FX & hedging; Security selection | Complete linked-debt terms or issuer confirmation, verification and attributable financing evidence | Sustainability-driven spread benefit or penalty |
++
++| Other boundary | Consequence | Required action |
++|---|---|---|
++| Annual evidence is retrospective | No claim that all annual disclosures were tradable information on the September date | Establish official publication chronology only if historical information availability becomes a decision |
++| Detailed economic coverage terminology beyond the supplied definitions was not established | Coverage labels describe disclosed instrument mechanics, not legal certification or a broader taxonomy | Use stated rate, maturity and instrument linkage; obtain contract confirmation for legal reliance |
++| No assigned research adoption evidence supplied to this analysis | No independently recovered external answers adopted; questions remain bounded requests | Resolve the named questions without treating unanswered requests as issuer facts |
++
++## Next module
++
++Forward credit model should carry separate borrowing-interest and issuer-reported sensitivity cases until the treasury reconciliation is obtained, apply collars only during their actual periods and rate bands, and retain the disclosed expiry ladder. Downside should combine rate and cost pressure with weaker production only through explicit assumptions, avoiding double-counting wage risk as both inflation and a separate social shock. Committee decision should challenge cash retention after hedge expiry and insurance containment of a major product event; neither an ESG spread premium nor covenant protection is established here.
++Basis: Financial foundation (CP-1); Fundamental credit (CP-2); calculation R08; calculation R13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176
+diff --git a/tests/fixtures/esg/CP-2E-h4.md b/tests/fixtures/esg/CP-2E-h4.md
+new file mode 100644
+index 0000000..65f1f23
+--- /dev/null
++++ b/tests/fixtures/esg/CP-2E-h4.md
+@@ -0,0 +1,414 @@
++---
++issuer_id: tdg
++issuer_name: TransDigm Group Incorporated
++module_id: CP-2E
++analysis_date: 2024-09-30
++reporting_period: FY2024
++prior_period: FY2023
++pathway: credit_snapshot
++run_id: tdg-2024-09-30-credit_snapshot-copilot-sol-medium
++artifact_name: tdg_CP-2E_20240930.md
++readiness: Ready with Limitations
++committee_status: Draft Only
++macro_risk_level: Moderate
++---
++
++## Request
++Assess rates, FX, hedging, inflation and credit-relevant environmental, social and transition exposures for TransDigm Group Incorporated as of 2024-09-30 under the credit_snapshot pathway. Scope is a retrospective FY2024 assessment, with future hedge terms distinguished from protection effective at year-end and no assumed market prices or forecast curves.
++
++## Sources
++
++| Source | Document | Document date | sha256 | Use |
++|---|---|---|---|---|
++| TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl | Annual report on Form 10-K for the year ended 30 September 2024 | not stated | d75c469fdb1966dd895c0f6faa6d5179b380d3ed95aa00aca99aa258059edab6 | Debt and reference rates; effective and forward-starting derivatives; reported market-risk sensitivities; inflation and contract recovery; labour, product liability, climate and environmental obligations. Signature date is not substituted for publication. |
++
++| Supplied analysis | Module | Exact sha256 | Use |
++|---|---|---|---|
++| tdg_CP-0_20240930.md | Source readiness (CP-0) | 58d9ec0c4f1198515aa6b0553327fc52532735f454bcecfe861278ab7b06c17e | Accepted issuer, date, annual retrospective scope, selected annual authority and decision-specific evidence boundaries. |
++| Financial foundation | CP-1 | eab11aa76b3723acea4eb510ec1e029dd469a812f05a1677621dca9d734c292a | Carrying and principal debt definitions, FY2024 FCF, and ownership of distribution and subsequent borrowing adjustments. |
++| tdg_CP-1A_20240930.md | Business & governance (CP-1A) | 38799e287910ecdc7c4b6351ebecf752904a5c094ceadbd86a16f95c000b4112 | Business channels and governance boundary; observed financial policy is referenced, not reassessed. |
++| tdg_CP-2_20240930.md | Fundamental credit (CP-2) | f44725452354897ac632dd1a1619ee161256dfe9013f6a800f176a9840910b3d | Accepted operating and cash-retention context; historical interest coverage is not treated as a forward sensitivity. |
++
++No external sources were used. The annual filing supports a fiscal-period retrospective, not a claim that its disclosures were public at the analysis date. Later-quarter results and the parallel annual-report booklet were not used.
++
++## Findings
++
++### Bottom line
++TransDigm has Moderate macro sensitivity: fixed-rate notes and effective derivatives cushion debt service, but substantial residual floating debt, a near-term hedge step-down and limited contractual inflation recovery leave free cash flow exposed.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177; calculation C03
++
++The supported closing-position calculation leaves USD 5,789 million unhedged and gives USD 57.89 million of annualised additional cash interest for a 100 bp increase. This is a static, pre-tax sensitivity, not a forecast. The issuer separately reports approximately USD 30 million; its bridge to the instrument terms is not established, so a single reconciled forward sensitivity is withheld. Labour inflation is the highest-priority supported social credit channel because skilled production and mostly unrecoverable contractual cost increases can squeeze margins before shipments or pricing adjust.
++Basis: calculation C03; calculation C07; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 22
++
++### Key findings
++
++- **Current mitigation is substantive, not complete.** Gross floating principal is USD 9,189 million, of which USD 3,400 million has effective swap or cap protection. Residual exposure represents 23.27% of carrying debt. The mechanical rate shock would consume 3.08% of FY2024 FCF before taxes and cash-interest income offsets; this supports Moderate rather than Low sensitivity.
++Basis: calculation C01; calculation C02; calculation C03; calculation C06; calculation C08
++- **The first protection cliff warrants action before refinancing becomes urgent.** On 2025-03-31, expiring swaps exceed the starting collar, reducing covered notional by USD 900 million. Protection also changes from fixed base rates to a band; refinancing or repricing of loan margins remains outside that protection.
++Basis: calculation C11; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–176
++- **Inflation recovery is commercial discretion, not a blanket contractual hedge.** Most contracts do not permit recovery of raw-material, tax or labour increases. FY2024 gross margin nevertheless improved to 58.8% from 58.3%, showing operating mitigation in that year, not guaranteed recovery when volume absorption weakens.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46
++- **FX is a bounded secondary risk, not an established natural hedge.** Management says a 10% exchange-rate change would not materially affect FY2024 net income. Disclosed forwards cover selected transactions, but their strikes and the currency-matched revenue, costs and cash needed to measure residual liquidity exposure are not established.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178
++- **Environmental liabilities merit monitoring rather than a presumption of a financing impairment.** Recorded remediation obligations total USD 41 million versus USD 44 million previously; payment timing and excess exposure are not sized. Product safety and physical disruption are contingent cash-loss channels, not evidence of an existing uninsured loss or a measurable refinancing penalty.
++Basis: calculation C14; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–26; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–161
++
++### Contrary evidence and what would change the view
++The strongest counterargument is demonstrated mitigation: the issuer reports approximately 77% fixed-rate debt, the derivatives qualify as effective cash-flow hedges, gross margin improved despite inflation and FY2024 FCF was USD 1,880 million. Those facts argue against a rate-driven near-term liquidity crisis. They do not make forward-starting collars current protection or convert FX notional into a verified net exposure hedge. A reconciled cash-interest bridge, replacement protection before expiries and evidence that contract repricing keeps pace with wages would strengthen the case for lower sensitivity. Persistent cost growth with weaker shipments, unrenewed protection or production interruptions would move the assessment higher.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 176–178; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46; Financial foundation (CP-1)
++
++### Limitations
++
++- The reported and term-based rate sensitivities do not share an explained reconciliation. Consequently, the closing-position calculation is suitable as a defined mechanical sensitivity, but neither result is adopted as a reconciled forward cash-interest forecast.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; calculation C10
++- Swap disclosure illustrates all-in rates using an older loan margin, while the debt schedule shows subsequent repricing. This does not invalidate base-rate protection, but prevents using those illustrative all-in rates as current loan coupons or forecasting exact hedge savings by tranche.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176
++- The disclosed FX test concerns historical net income, not jurisdictional cash available for debt service. Without matched currency cash flows, forward strikes and covenant translation rules, no numerical natural-hedge ratio, residual FX cash shock or covenant-currency cushion is established.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178
++- Employee-cost amounts, contract repricing dates and facility-specific loss protection are not supplied. The labour and physical-risk assessment therefore identifies cash-flow channels and triggers, not a measured stressed cash loss or an incremental financing premium.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 22; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–26
++
++### Macro and hedging view
++The largest identified unhedged rate position is the term-loan balance after effective derivatives, followed by the receivables facility. Caps protect increases above their strikes, not a permanently fixed coupon; collars also surrender benefit below their floors. None protects refinancing credit spreads. The Moderate assessment reflects limited immediate FCF sensitivity relative to historical cash generation, offset by the dated loss of protection and contract cost-recovery constraints. It does not imply a measured joint downside tolerance for rates, demand, wages and discretionary cash use.
++Basis: calculation C03; calculation C07; calculation C08; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–176; Fundamental credit (CP-2)
++
++### Credit implication
++Skilled-labour cost and production continuity are the highest-priority supported social factors for Fundamental credit and Committee decision. Wage pressure meets fixed-price commitments with limited recovery rights; vacancies or a work stoppage can then delay production while financing costs continue. The supported consequence is weaker operating cash generation and slower liquidity rebuilding, not an inferred default probability or recovery haircut. Environmental compliance was not materially burdensome in FY2024, and current disclosures do not establish an ESG-specific refinancing premium. At the next reporting update and before the first hedge transition, monitor wage pressure, contract repricing, delivery interruptions and protection replacement together. Governance and shareholder conduct remain the assessment of Business & governance rather than a duplicated ESG judgement.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 13–13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 22; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; Business & governance (CP-1A)
++
++### Events: Hedges
++
++| Event date | Date precision | Published | Event | Status | Source | Credit relevance |
++|---|---|---|---|---|---|---|
++| 2023-03-31 | day | — | Effective date of USD 500 million, USD 1,500 million and USD 700 million swaps, and USD 700 million cap | Historical — effective date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | These contracts, not forward collars, supply the USD 3,400 million year-end protection. |
++| 2025-03-31 | day | — | USD 500 million and USD 1,500 million swaps mature; USD 1,100 million collar becomes effective with 2.00% floor and 3.50% cap | Scheduled — maturity date and effective date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Protected notional falls to USD 2,500 million on a constant-debt basis; refinancing remains outside hedge protection. |
++| 2025-09-30 | day | — | USD 700 million swap and USD 700 million cap mature; USD 500 million collar starts at 2.00%/3.50%, and USD 1,338 million collar starts at 2.50%/4.50% | Scheduled — maturity date and effective date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | USD 2,938 million collar notional thereafter has band-dependent protection, not fixed-rate coverage throughout the band. |
++| 2026-09-30 | day | — | USD 1,100 million and USD 500 million collars mature; USD 1,550 million collar starts at 2.50%/4.50% | Scheduled — maturity date and effective date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | USD 2,888 million collar notional remains, below closing gross floating principal. |
++| 2027-09-30 | day | — | USD 1,338 million and USD 1,550 million collars mature | Scheduled — maturity date | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | The last disclosed interest-rate protection ends before term-loan maturities; no replacement contracts are assumed. |
++
++### Confidence inputs
++
++| Input | Value |
++|---|---|
++| Directly Sourced | 9 |
++| Calculated | 5 |
++| Assumption-Based | 0 |
++| Analyst Inference | 4 |
++| Weak Lineage | 0 |
++| Untraced | 0 |
++| Conflicting | 0 |
++| Insufficient Information | 4 |
++| Fields present | 113 |
++| Fields total | 113 |
++| Source gate | partial |
++| CRITICAL | 0 |
++| MATERIAL | 3 |
++| MINOR | 2 |
++
++### Analytical appendix — complete canonical registers
++
++### Source gate, scope and adopted inputs
++
++The rates source gate is Ready with Limitations and the environmental, social and transition review is Completed with Limitations. The required debt split and dated hedge terms are identifiable, allowing the exposure calculation to proceed. No source balance is replaced to force agreement with management's aggregate sensitivity; selection of a single reconciled forward result remains restricted.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178
++
++| Adopted input | Exact scope / value | Treatment | Source |
++|---|---|---|---|
++| Identity and period | tdg; TransDigm Group Incorporated; 2024-09-30; FY2024 with FY2023 comparator; run tdg-2024-09-30-credit_snapshot-copilot-sol-medium | Matches all four supplied analyses; no issuer or period mismatch found. | Source readiness (CP-0); Financial foundation (CP-1); Business & governance (CP-1A); Fundamental credit (CP-2) |
++| Debt | Carrying USD 24,880 million; principal USD 25,068 million; difference USD 188 million at 2024-09-30 | Carrying value is the balance-sheet debt definition. Principal is used for rate accruals and separately labelled exposure comparisons. | Financial foundation (CP-1) |
++| Cash generation | FY2024 CFO less capex USD 1,880 million | Historical levered FCF before acquisitions/distributions; no normalization or automatic retention assumed. | Financial foundation (CP-1) |
++| Business and financial policy | Proprietary aerospace installed base; observed extraction risk | Supplies operating context, not a wage-pass-through coefficient, sponsor assumption or independent governance score. | Business & governance (CP-1A); Fundamental credit (CP-2) |
++| Subsequent financial events | Distribution and additional receivables borrowing are separate from year-end | Financial foundation owns their event records and static adjustments. No year-end cash or net-leverage figure is quoted or recalculated here. | Financial foundation (CP-1) |
++| Other specialist conclusions | Not supplied: separate liquidity, refinancing or legal conclusions | No legal headroom, stressed cash runway, enforceable derivative priority or executable refinancing spread is inferred. | Source readiness (CP-0) |
++
++#### T2F.1 — macro and hedging source inventory
++
++| source_document_id | source_document_name | source_quality | period | entity_covered | data_supplied | limitation | downstream_use | Source |
++|---|---|---|---|---|---|---|---|---|
++| A1 | FY2024 Form 10-K | Primary filing; audited financial notes; management market-risk characterization separately attributed | FY2024 / FY2023; future contract terms explicit | Consolidated TransDigm Group Incorporated; TransDigm Inc. borrowing roles where stated | Debt principal/carrying amounts, margins, maturities, derivative terms and accounting, FX forwards, inflation and operational risks | FX strikes, matched currency flows, detailed input costs and sensitivity bridge absent | Defined closing rate shock; dated protection roll-forward; qualitative FX/inflation and transition assessment | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–153; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 174–178 |
++| U1 | Financial foundation | Accepted financial extraction/calculations tied to primary annual evidence | FY2024 / FY2023 | Same consolidated issuer | Total debt definitions and FY2024 FCF USD 1,880 million | Historical FCF is not a forecast or covenant definition | Exposure denominator and static cash-flow comparison | Financial foundation (CP-1) |
++| U2 | Source readiness; Business & governance; Fundamental credit | Accepted scope, business and credit analyses | Same annual retrospective and analysis date | Same issuer; consolidated/obligor distinction preserved | Annual source selection, channels, cash retention and governance boundary | Specialist forecasts and operative legal protections not supplied | Scope controls and macro-to-credit transmission | Source readiness (CP-0); Business & governance (CP-1A); Fundamental credit (CP-2) |
++
++#### T2F.2 — debt and rate exposure
++
++All debt amounts below retain the annual filing's reporting precision. Credit-spread exposure remains even where the base rate is hedged; instrument-specific allocation of portfolio derivatives is not supplied.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–153; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–176
++
++| Debt Instrument | Amount | Fixed / Floating | Base Rate | Margin / Coupon | Currency | Maturity | Hedge Status | Source Trace | Credit Implication | Source |
++|---|---|---|---|---|---|---|---|---|---|---|
++| Tranche I | USD 1,871 million principal | Floating-rate debt | Term SOFR; alternate base option; Term SOFR floor absent | +2.75% | USD reporting; no currency mismatch inferred | 2028-08-24 | Partial at term-loan portfolio level | A1; C01–C03 | Portfolio hedge does not eliminate margin/reset exposure. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153 |
++| Tranche J | USD 3,632 million principal | Floating-rate debt | Term SOFR; alternate base option; Term SOFR floor absent | +2.50% | USD reporting; no currency mismatch inferred | 2031-02-28 | Partial at term-loan portfolio level | A1 | Maturity extends beyond disclosed derivatives. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153 |
++| Tranche K | USD 1,699 million principal | Floating-rate debt | Term SOFR; alternate base option; Term SOFR floor absent | +2.75% | USD reporting; no currency mismatch inferred | 2030-03-22 | Partial at term-loan portfolio level | A1 | Base-rate protection does not extend to final maturity. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 152–153 |
++| Tranche L | USD 1,500 million principal | Floating-rate debt | Term SOFR; alternate base option; Term SOFR floor absent | +2.50% | USD reporting; no currency mismatch inferred | 2032-01-19 | Partial at term-loan portfolio level | A1 | Newly funded principal remains subject to portfolio residual exposure. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 151–153 |
++| Receivables securitization | USD 487 million principal; USD 486 million carrying | Floating-rate debt | Three-month Term SOFR | +1.45% | USD reporting | 2025-07-11 | No linked hedge disclosed; not credited with term-loan hedges | A1 | Fully included in residual rate exposure and near-term funding assessment. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–150 |
++| Revolver | USD 0 drawn; USD 910 million commitments; USD 843 million reported available | Floating-rate debt if drawn | Term SOFR option | +2.25%; unused fee 0.50% | USD reporting | 2029-02 | No protection assigned to undrawn amount | Financial foundation draw calculation; A1 | Undrawn commitment is not added to current floating principal. | Financial foundation (CP-1); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 152; Business & governance (CP-1A) |
++| 2027 senior subordinated notes | USD 2,650 million principal | Fixed-rate debt | Not applicable: fixed coupon | 5.50% | USD reporting | 2027 | Fixed coupon until maturity | A1 | No current base-rate shock; refinancing spread/rate risk remains. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2028 secured notes | USD 2,100 million principal | Fixed-rate debt | Not applicable: fixed coupon | 6.75% | USD reporting | 2028 | Fixed coupon until maturity | A1 | Insulates current interest, not refinancing cost. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2029 subordinated notes, first series | USD 1,200 million principal | Fixed-rate debt | Not applicable: fixed coupon | 4.625% | USD reporting | 2029 | Fixed coupon until maturity | A1 | Low existing coupon is not a future funding assumption. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2029 secured notes | USD 2,750 million principal | Fixed-rate debt | Not applicable: fixed coupon | 6.375% | USD reporting | 2029 | Fixed coupon until maturity | A1 | Current base-rate protection through bond maturity. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2029 subordinated notes, second series | USD 750 million principal | Fixed-rate debt | Not applicable: fixed coupon | 4.875% | USD reporting | 2029 | Fixed coupon until maturity | A1 | No immediate floating-rate reset. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2030 secured notes | USD 1,450 million principal | Fixed-rate debt | Not applicable: fixed coupon | 6.875% | USD reporting | 2030 | Fixed coupon until maturity | A1 | Refinancing rates remain unhedged by the existing coupon. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2031 secured notes | USD 1,000 million principal | Fixed-rate debt | Not applicable: fixed coupon | 7.125% | USD reporting | 2031 | Fixed coupon until maturity | A1 | Debt service predictable absent refinancing or default. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2032 secured notes | USD 2,200 million principal | Fixed-rate debt | Not applicable: fixed coupon | 6.625% | USD reporting | 2032 | Fixed coupon until maturity | A1 | No immediate base-rate exposure. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| 2033 secured notes | USD 1,500 million principal | Fixed-rate debt | Not applicable: fixed coupon | 6.00% | USD reporting | 2033-01-15 | Fixed coupon until maturity | A1 | Recap funding adds fixed claims without changing current floating sensitivity. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–151 |
++| Government refundable advances | USD 17 million carrying/principal | Rate classification not supplied | Not supplied: repayment is linked to specified revenue growth | Not supplied: interest terms absent | Reporting USD; denomination not established | Not supplied: growth-linked repayment | Terms insufficient; excluded from explicitly floating principal | A1 | Included in total debt, not assumed floating or fixed. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–152 |
++| Finance leases | USD 262 million carrying/principal | Rate classification not supplied | Not supplied: no variable-rate designation on pages reviewed | Not supplied: blended rate absent | Reporting USD; denomination split not supplied | Not supplied: individual lease maturities not retained | Terms insufficient; excluded from explicitly floating principal | A1 | Included in total debt; no invented rate shock. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–152 |
++
++#### T2F.3 — hedge register
++
++| Hedge Type | Notional | Instrument Covered | Rate / Strike | Maturity | Coverage Status | Source Trace | Limitation | Source |
++|---|---|---|---|---|---|---|---|---|
++| Interest-rate swap | USD 500 million | Credit Agreement floating borrowings | Fixed base 3.00%; source illustrates 6.25% including 3.25% margin | 2025-03-31; effective 2023-03-31 | Effective where supported | A1; U.S. GAAP effective cash-flow hedge | Current loan margins differ; no tranche-specific assignment or current 6.25% coupon inferred. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Interest-rate swap | USD 1,500 million | Credit Agreement floating borrowings | Fixed base 3.10%; source illustrates 6.35% including 3.25% margin | 2025-03-31; effective 2023-03-31 | Effective where supported | A1 | Protects base rate only; the illustrative margin is not used as a current borrowing spread. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Interest-rate swap | USD 700 million | Credit Agreement floating borrowings | Fixed base 1.30%; source illustrates 4.55% including 3.25% margin | 2025-09-30; effective 2023-03-31 | Effective where supported | A1 | No protection beyond maturity; no current all-in coupon inferred. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Interest-rate cap | USD 700 million | Credit Agreement floating borrowings | Three-month Term SOFR cap 1.25% | 2025-09-30; effective 2023-03-31 | Effective where supported | A1 | Covers upward movement above strike; not intrinsically fixed-rate debt at all rates. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Collar | USD 1,100 million | Credit Agreement floating borrowings | Three-month Term SOFR floor 2.00%; cap 3.50% | 2026-09-30; effective 2025-03-31 | Partial — forward-starting; no current protection | A1 | Cash settlements quarterly; retains rate variability within band and creates payments below floor. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Collar | USD 500 million | Credit Agreement floating borrowings | Three-month Term SOFR floor 2.00%; cap 3.50% | 2026-09-30; effective 2025-09-30 | Partial — forward-starting; no current protection | A1 | Not included in current hedged floating debt. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Collar | USD 1,338 million | Credit Agreement floating borrowings | Three-month Term SOFR floor 2.50%; cap 4.50% | 2027-09-30; effective 2025-09-30 | Partial — forward-starting; no current protection | A1 | Notional does not eliminate variability inside the band. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Collar | USD 1,550 million | Credit Agreement floating borrowings | Three-month Term SOFR floor 2.50%; cap 4.50% | 2027-09-30; effective 2026-09-30 | Partial — forward-starting; no current protection | A1 | Future debt balances and matching reset periods not forecast. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Fixed-rate debt | USD 15,600 million principal | Outstanding secured and subordinated notes | Individual coupons in T2F.2 | Bond maturity years 2027–2033 in T2F.2 | Effective where supported — fixed coupons, not derivatives | C04 | Shields current coupons, not refinancing yields or credit spreads. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 |
++| FX forward | USD 120 million equivalent; sell USD against CAD/EUR | Selected third-party sales/purchases and forecast flows; designated settlements reclassified to net sales | Not supplied: individual forward strikes | Maximum duration twelve months at 2024-09-30; individual dates not supplied | Terms insufficient for net-exposure coverage calculation | A1 | Notional is neither net FX exposure nor fair value; no company-wide effectiveness ratio inferred. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Natural hedge; commodity/energy hedge; inflation-linked pass-through | Not supplied: matched quantities or hedge contracts | Not supplied: no supported quantitative linkage | Not supplied: terms absent | Not supplied: no dated contract supplied | Insufficient Information — no quantitative protection credited | A1; G2/G3 | Missing documentation does not prove that no such arrangements exist. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178 |
++
++#### T2F.4 — unhedged floating-rate exposure
++
++| Metric | Amount | Formula / Source | Status | Credit Implication | Source Trace | Source |
++|---|---|---|---|---|---|---|
++| Total debt, balance-sheet definition | USD 24,880 million | Current/noncurrent carrying debt plus receivables borrowing | Reported components; accepted aggregation | Primary debt denominator; not the accrual exposure base. | Financial foundation | Financial foundation (CP-1) |
++| Principal companion | USD 25,068 million; USD 188 million above carrying | Principal/carrying bridge C05 | Calculated; agrees with Financial foundation | Issuance costs and net discounts/premiums do not reduce interest-bearing principal. | C05 | Financial foundation (CP-1); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 |
++| Gross floating-rate debt | USD 9,189 million principal; USD 9,128 million carrying | Term loans USD 8,702 million + receivables USD 487 million | Calculated | Gross exposure is measured before derivatives. | C01; C17 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 |
++| Hedged floating-rate debt | USD 3,400 million | Three effective swaps plus effective cap; excludes all future collars | Calculated from supported terms | Effective upward-rate protection at the closing rate regime; not a new fixed-coupon liability. | C02; T2F.3 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| Unhedged floating-rate debt | USD 5,789 million | USD 9,189 million − USD 3,400 million | Calculated | Includes USD 5,302 million term-loan residual and USD 487 million receivables debt. | C03 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Unhedged debt percentage | 23.27% carrying denominator; 23.09% principal denominator | USD 5,789 million / USD 24,880 million; companion / USD 25,068 million | Calculated; definitions explicit | Carrying convention preserved; principal/principal companion avoids mixing accrual and accounting values. | C06 | Financial foundation (CP-1); calculation C03 |
++| Fixed coupons plus effective upward-rate protection | USD 19,000 million; 75.79% of total principal | USD 15,600 million notes + USD 3,400 million current derivatives | Calculated | Not identical to management's approximately 77% fixed-rate characterization; advances/lease rate classification not assumed. | C04; C16 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++
++#### T2F.5 — base-rate and other sensitivities
++
++| Sensitivity | Formula | Source Inputs | Estimated Cash Impact | FCF / Liquidity Implication | Status | Source Trace | Source |
++|---|---|---|---|---|---|---|---|
++| +100 bp, closing portfolio | Unhedged principal × 1.00%, implemented as /100 | USD 5,789 million unhedged; unchanged debt and effective protection | USD +57.89 million annual cash-interest outflow; FCF USD -57.89 million before tax/interest-income effects | 3.08% of FY2024 FCF; static FCF USD 1,822.11 million versus USD 1,880 million | Calculated mechanical sensitivity; not a forecast or reconciled issuer guidance | C07–C09 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; Financial foundation (CP-1) |
++| Issuer's one-percentage-point rate test | Source-reported hypothetical; computational bridge not supplied | Year-end term loans and securitization | Approximately USD +30 million annual interest cost | Smaller than defined instrument-based result; do not average or substitute it | Reported management sensitivity; adoption of a reconciled forward result withheld | C10; G1 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| +100 bp, identified receivables component | USD 487 million /100 | Reported floating principal without linked hedge | USD +4.87 million annual interest outflow | Included in, not additional to, USD 57.89 million | Calculated component only | C18 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| 10% FX move | Issuer's historical net-income test | FY2024 foreign-currency exposure; details not supplied | Not calculable: no currency cash-flow bases; source says net-income effect would not be material | Historical characterization does not size liquidity or covenant translation impact | Management characterization; independent cash sensitivity withheld | G2 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74 |
++| Input-cost / wage / energy shock | Exposure amount × cost shock less supported recovery | No cost buckets, shock magnitude or recovery timing supplied | Not calculable: required bases and recovery terms missing | Directional margin and FCF pressure; no fabricated percentage shock | Dependent numerical decision restricted | G3 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 22 |
++
++#### Protection roll-forward — contractual notional, not forecast effectiveness
++
++| Position immediately after transition | Contractual protection outstanding | Uncovered principal at unchanged USD 9,189 million floating debt | Protection condition | Monitoring consequence | Source |
++|---|---|---|---|---|---|
++| 2024-09-30 closing position | USD 3,400 million swaps/cap | USD 5,789 million | Cap protects above 1.25%; swaps fix their base rates | Current mechanical rate shock uses only effective contracts. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; calculation C03 |
++| 2025-03-31 | USD 2,500 million: USD 700 million swap, USD 700 million cap, USD 1,100 million collar | USD 6,689 million | Collar ceiling 3.50%; within-band exposure remains | USD 900 million less protected notional; shock sensitivity increases by USD 9 million annually only above applicable caps, with debt unchanged. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; calculation C11 |
++| 2025-09-30 | USD 2,938 million collars | USD 6,251 million | USD 1,600 million at 3.50% ceiling; USD 1,338 million at 4.50% ceiling | Residual shown is outside collar notional; inside-band sensitivity is additional and rate-dependent. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; calculation C12 |
++| 2026-09-30 | USD 2,888 million collars | USD 6,301 million | 4.50% ceiling; 2.50% floor | Protection ends before term-loan final maturities. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; calculation C13 |
++| 2027-09-30 | No disclosed contracts remain after stated maturities | USD 9,189 million if debt unchanged | No replacement assumed | Final disclosed hedge cliff; not a forecast of the debt or derivative portfolio on that date. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++
++#### T2F.6 — FX exposure and mismatch
++
++| Exposure Type | Revenue Currency / Region | Cost Currency / Region | Debt / EBITDA / Cash / Covenant Currency | Natural Hedge? | Evidence | Risk Mechanic | Credit Implication | Source Trace | Limitation | Source |
++|---|---|---|---|---|---|---|---|---|---|---|
++| Translation exposure | Foreign subsidiary sales/results; GBP and EUR identified | Matching operating cost split not supplied | Consolidated reporting USD; local EBITDA/cash split not supplied; covenant translation not supplied | Insufficient Information — no matched flows | Management identifies USD translation effects on sales, earnings and foreign asset carrying amounts | Translation can reduce reported earnings without equal local-cash loss. | Do not equate geographic sales with FX transaction exposure or cash available for USD debt service. | A1 | Currency-by-currency net exposure and covenant methodology absent. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74 |
++| Transaction exposure | Foreign-currency third-party sales/purchases; particular invoices not listed | Currency cost matching not supplied | Debt schedule presented USD; debt denominations and cash balances by currency not fully established | Insufficient Information — no netting evidence | USD 120 million equivalent forwards selling USD; CAD and EUR; maximum twelve-month duration | Forwards can offset selected forecast receipts but cannot be assumed to cover net enterprise exposure. | Residual FCF sensitivity not calculable; no natural-hedge credit. | A1 | Strikes, settlement dates, gross/net receipts and purchases absent. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Cash repatriation constraint / covenant currency mismatch | International operations disclosed | Local cash needs not supplied | Cash by jurisdiction, legal transfer tests, EBITDA and covenant conversion rules not supplied | Insufficient Information — no linked balances | Filing identifies potential international repatriation restrictions, not a quantified trapped-cash balance | Local earnings and cash need not be transferable when USD debt service falls due. | No numerical trapped-cash haircut or covenant cushion inferred. | A1; G2 | Risk disclosure is not evidence that a specific amount is trapped. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 26 |
++
++#### T2F.7 — commodity and inflation exposure
++
++| Input / Commodity / Inflation Driver | Cost Exposure | Pass-Through Mechanism | Evidence | Risk Mechanic | Credit Implication | Source Trace | Limitation | Source |
++|---|---|---|---|---|---|---|---|---|
++| Raw-material exposure / procurement exposure | Manufactured components, raw materials and repair parts; spend by commodity not supplied | None for most contracts' cost increases; no blanket indexation or surcharge evidenced | Most contracts do not permit recovery of raw-material, tax or labour increases; supplier substitution may require lengthy certification | Costs can rise before repricing; qualification delays can interrupt shipments rather than merely increase unit cost. | Lower gross profit and working-capital absorption can coincide; no commodity price beta assigned. | A1 | No commodity quantity, price curve, cost split or hedge term supplied. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 12–13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–24 |
++| Labour / wage inflation | Skilled manufacturing and engineering; current wage pressure | Most contracts do not permit labour-cost recovery; commercial repricing/productivity not quantified | Competitive skilled labour market and work-stoppage sensitivity explicitly disclosed | Wage rises squeeze margin; vacancies or strikes slow output while debt service continues. | Highest-priority supported social operating cash-flow factor; no incremental loss estimate. | A1 | Wage bill, utilization, turnover and repricing lags not supplied. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 13–22 |
++| Freight exposure | Transport availability and cost identified; freight cost amount not supplied | Insufficient Information — recovery provisions not disclosed | International supply-chain disclosure identifies shipping/transport costs and inflation | Higher inbound costs and delays raise cash needs before customer delivery. | Directional FCF risk; no quantified sensitivity or asserted freight hedge. | A1 | Separate freight spend and recovery terms absent. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 26 |
++| Energy exposure / rent inflation | Not supplied: energy and rental inflation bases | Insufficient Information — no indexation or hedge terms supplied | Climate disclosure discusses energy efficiency and green power, not a measured cost hedge | Without quantities and contracts, higher costs cannot be translated to earnings. | No numerical shock; missing data is not evidence of material adverse exposure. | A1; G3 | No energy intensity, utility contracts, lease escalation schedule or cost buckets supplied. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Pass-through mechanism / demand elasticity | Multi-year fixed-price contracts and largely noncontracted aftermarket demand | Pricing/productivity demonstrated only at aggregate level; lagged recovery not quantified | Gross margin 58.8% versus 58.3%; management attributes improvement partly to higher production spreading overhead | Volume gains can offset inflation; lower volume reverses that cushion while fixed prices persist. | Do not extrapolate aggregate margin resilience into automatic contractual inflation recovery. | A1 | No isolated price-volume, contract repricing or demand-elasticity bridge. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46 |
++
++#### T2F.8 — macro sensitivity summary
++
++| Macro Driver | Evidence | Risk Mechanic | FCF / Liquidity Impact | Refinancing / RV Implication | Monitoring Trigger | Source Trace | Source |
++|---|---|---|---|---|---|---|---|
++| Base-rate exposure | USD 5,789 million identified residual; USD 57.89 million static +100 bp impact | Higher floating coupon raises cash interest before any refinancing. | FCF USD -57.89 million before offsets; 3.08% of historical FCF | Less retained cash for debt reduction; no priced relative-value conclusion. | Higher reset rates; derivative settlements diverge from supported exposure; reconcile issuer USD 30 million test before forecasting | C03; C07–C10 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Hedge cliff / counterparty channel | First transition 2025-03-31; derivative default cross-link to Credit Agreement | Protection declines and becomes band-dependent; borrower default may accelerate derivative settlement. | Cash-interest variability rises; close-out cash burden not sized | Hedge expiry precedes term-loan maturities; no recovery priority or enforceability inferred. | Replacement terms before 2025-03-31; then each dated maturity; any counterparty nonperformance | C11–C13; A1 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 174–176 |
++| Inflation / wages / procurement | Most contracts lack cost recovery; skilled labour and qualified suppliers matter | Cost increases or unavailable inputs first reduce margin/output, then slow cash collection. | Lower FCF; potential inventory absorption; magnitude not calculable | Earnings erosion weakens refinancing metrics; no covenant capacity inferred. | Wage increases, delivery delays and sustained margin compression despite repricing/productivity | A1; G3 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–24; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46 |
++| FX | GBP/EUR translation and selected CAD/EUR forwards; management 10% net-income test | Translation differs from transaction cash flows; net positions not disclosed | No independent cash sensitivity or natural-hedge ratio | No numerical covenant-currency or repatriation headroom conclusion | Forward renewal/settlement losses; currency cash-flow mismatch; transfer restrictions | A1; G2 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Aerospace demand / mix | Aftermarket historically higher margin; customer inventory and schedules affect shipments | Volume/mix decline removes overhead absorption while wages and interest remain. | Less FCF to absorb simultaneous rate/inflation shocks | Amplifies operating refinancing risk rather than proving imminent distress. | Multi-quarter aftermarket/mix weakening with rising inventory and cash-interest burden | A1; Fundamental credit | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 12; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46; Fundamental credit (CP-2) |
++
++Macro Risk Level is Moderate. Current fixed coupons and effective derivatives limit a defined rate shock relative to historical FCF, but inflation recovery and future hedge replacement are not assured. Rates, FX & hedging is completed with limitations; numerical FX/input-cost shocks and a single reconciled forward interest result remain restricted.
++Basis: calculation C07; calculation C08; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 176–178
++
++#### T2F.9 — macro gaps ledger
++
++| Gap | Missing Data | Why It Matters | Impact on Output | Required Follow-Up | Downstream Module Affected |
++|---|---|---|---|---|---|
++| G1 — rate-basis reconciliation | Issuer USD 30 million bridge; reset periods; tranche allocations; treatment of cash interest income, floors/caps, future starts and other debt | Separates different model bases without changing reported balances or assuming an explanation. | Single forward sensitivity withheld; defined closing mechanical result retained | Obtain issuer treasury calculation and current hedge/debt matching schedule, using annual debt/derivative notes as factual predecessor | Forward credit model; Fundamental credit; Committee decision |
++| G2 — matched FX / currency liquidity | Currency revenue, costs, EBITDA, debt denominations, cash, covenant conversion, repatriation constraints, forward strikes and settlement dates | Geography and gross notional do not measure residual cash risk. | No quantitative FX cash sensitivity, natural-hedge percentage or currency covenant cushion | Obtain currency-by-currency treasury exposure and contractual forward schedule; predecessor is disclosed foreign-currency risk | Forward credit model; Liquidity; Legal & covenants |
++| G3 — cost and recovery bases | Commodity quantities; energy/freight/rent and wage spend; indexation/surcharges; contract repricing dates; elasticity | Cost shock cannot be sized or netted against recovery without bases and timing. | No numerical inflation/commodity sensitivity or combined cash stress | Obtain procurement/payroll costs and contract recovery calendar; predecessor is fixed-price and skilled-labour disclosure | Downside; Forward credit model; Fundamental credit |
++| Rate classification boundary | Advances USD 17 million and finance leases USD 262 million; denomination split and rate-reset terms | Prevents assigning undisclosed debt to fixed/floating buckets or currency offsets. | Explicitly floating principal only; total debt still includes both items | Obtain advance/lease terms if all-debt sensitivity or currency modelling requires them | Forward credit model; Rates, FX & hedging |
++
++#### T2G.1 — environmental, social and transition disclosure inventory
++
++| Source | Reliability (audited/assured vs self-reported) | Greenwashing Flag | Module Status |
++|---|---|---|---|
++| TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 13–13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–26; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–161 | Environmental liability balances are in audited financial notes. Climate, emissions target, labour and risk narrative are management disclosures; separate emissions assurance not supplied. | No evidenced misrepresentation established. “Science-aligned” target and relatively low emissions are management characterizations, not independent assurance or creditor protection. | Completed with Limitations — operating exposure identified; asset-level transition costs and sustainability-linked terms not established |
++
++#### T2G.2 — environmental and transition exposure
++
++| Exposure | Source/Date | Transmission Mechanic | Affected Driver | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Direct regulatory/energy transition | FY2024 annual report; publication not stated | Additional rules could require capex or raise supplier costs; management says assembly/light manufacturing limits direct carbon burden. | Operating costs/capex; no present material incremental cost established | E15 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 24–25 |
++| Indirect air-travel transition | FY2024 annual report; publication not stated | Regulation materially reducing air travel could weaken replacement demand; no regulation-specific demand shock supplied. | Aftermarket sales and earnings | E15 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Physical climate/asset disruption | FY2024 annual report; publication not stated | Facilities exposed to storms, fire, sea-level and water risks could suffer damage or production interruption; insurance may not cover all costs. | Shipment continuity, repair capex, working capital and asset value | E16 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–26 |
++| Environmental remediation | 2024-09-30 and 2023-09-30 balances | Existing remediation obligations require cash; reserve changes may occur as investigations and remedies evolve. | USD 41 million versus USD 44 million liability; no annual payment forecast | E14; C14 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–161 |
++| Voluntary emissions target | At least 50% absolute Scope 1/2 reduction by 2031 versus FY2019 | Energy efficiency/green power may entail spending, but neither cost nor financing linkage is supplied. | Target-related capex/operating spending not sized | E15 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++
++#### T2G.3 — social and operational exposure
++
++| Exposure | Source/Date | Transmission Mechanic | Event-Risk vs Ongoing | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Skilled labour and wage pressure | FY2024 annual report; approximately 17% union representation; agreements expire at various dates through 2029-01 | Competition for trained workers raises wages; contracts often cannot recover costs; vacancies/stoppages delay products. | Ongoing cost pressure; contingent work-stoppage event risk; no current strike asserted | E13 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–22 |
++| Aircraft product safety/liability | FY2024 annual report | Product failure can cause claims, legal expense or operational interruption; liability insurance may be contested or inadequate. | Contingent event risk; no actual crash claim loss inferred | E17 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| Employee litigation / health and safety | FY2024 annual report | Worker claims, litigation and compliance failures can require cash or disrupt facilities. | Ongoing compliance with contingent event losses; management expects existing proceedings not to be materially adverse | E17 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–160 |
++| Governance boundary | FY2024 observed policy | Financial-policy and shareholder conduct are covered by Business & governance, not duplicated as an ESG factor. | Scope boundary, not a new risk event | E18 | Business & governance (CP-1A) |
++
++#### T2G.4 — materiality classification
++
++| Factor | Materiality Class | Transmission Basis | Catalyst (if Watch) | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Labour / wage inflation | Material — Directional | Current wage pressure plus fixed-price/nonrecoverable contractual costs directly affect operating margin and FCF. | Not a Watch item; monitor next reporting update for wages, pricing and delivery effects | E13; E18 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–22 |
++| Work stoppage / skilled-worker availability | Watch | Low finished-goods buffers make lost production difficult to bridge. | Unsuccessful collective bargaining, vacancies or stoppage affecting shipments | E13 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 22 |
++| Remediation excess costs | Watch | Recorded liability USD 41 million; current compliance not materially adverse; reserve revisions could create concentrated cash costs. | Revised remedy, site assessment, co-responsible party failure or reserve/payment increase | E14; C14 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–161 |
++| Physical climate interruption | Watch | Issuer identifies exposed facilities and possible uninsured disruption; site earnings and coverage not sized. | Damaging weather/fire/water event causing interruption or uninsured repair spending | E16 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–26 |
++| Product liability / safety | Watch | Aircraft-component failure can cause significant claims; insurance may fail to cover costs. | Product incident, recall, coverage denial or material claim | E17 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| Direct carbon compliance / indirect air-travel regulation | Watch | Direct burden characterized as limited; indirect air-travel restriction could reduce aftermarket demand. | Specific applicable regulation creating material compliance spending or reducing flying activity | E15 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 24–25 |
++| Voluntary emissions target as creditor protection | Immaterial to Credit | A target alone grants no demonstrated covenant, payment protection or spread benefit. Cost materiality separately remains unsized. | No Watch catalyst for protection; reassess if enforceable financing terms are supplied | E15; E21 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++| Emissions achievement cost / stranded-asset exposure | Insufficient Information — asset economics and costs not supplied | No emissions quantities, facility transition budget or asset-level obsolescence test supplied. | Not established; obtain asset-specific evidence before assigning materiality | E22; G5 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 24–26 |
++
++#### T2G.5 — sustainability-linked debt mechanics
++
++| Instrument | KPI | SPT + Test Date | Ratchet (direction; bps) | Symmetry | Credit-Meaningful? | Expected Spread Effect | Evidence ID | Source |
++|---|---|---|---|---|---|---|---|---|
++| No sustainability-linked instrument established in retained debt disclosures; absence of such debt not certified | Not supplied: no contractual KPI definition or ambition test | Not supplied: no contractual SPT or test date; voluntary 2031 target is not treated as an SPT | Not supplied: no documented step-up/down size, miss consequence or verification terms | Not supplied: no ratchet schedule | Not established: no enforceable credit protection or reporting remedy credited | Not calculable: no contractual ratchet terms; no zero-bp assumption | E21; G4 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–153 |
++
++#### T2G.6 — refinancing and cost-of-capital linkage
++
++| Effect | Direction | Quantified vs Directional | Linked Maturity/Funding Need | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Labour/operational cash pressure can reduce internally funded repayment | Adverse if pressure persists; not an investor-exclusion claim | Directional operating transmission, not an ESG-specific spread estimate | Receivables facility 2025-07-11; later term-loan/note refinancing beyond disclosed hedge protection | E18 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–22; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 150–153 |
++| Investor exclusions / greenium / sustainability ratchet | Not established: no issuer-specific pricing or mandate evidence | Not calculable: no dated pricing, investor-demand or ratchet terms | No support for changing expected funding cost at 2025 facility maturity or later bond maturities | E21 | Source readiness (CP-0); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–153 |
++
++#### T2G.7 — credit implications
++
++| Material Factor | Risk Mechanic | Credit Implication | Confidence | Evidence ID | Source |
++|---|---|---|---|---|---|
++| Material — Directional: skilled-labour cost | Wage pressure meets contracts with limited recovery rights; availability constrains output. | Highest-priority supported social driver: weaker FCF and slower cash rebuilding; no measured PD/LGD change. | Medium for directional credit effect; wage quantum not supplied | E13; E18 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–22 |
++| Watch: environmental remediation | USD 41 million obligations versus USD 44 million; estimates can change and exclude inflation. | Monitor reserve revisions and payments, not an assumed current funding impairment; no incremental recovery haircut. | High for balances; Medium for contingent cash transmission | E14; C14 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–161 |
++| Watch: product and physical events | Product liability or asset interruption can exceed insurance and disrupt sales. | Monitor incident-specific liquidity demands; no unsupported loss probability or uninsured amount. | Medium for mechanism; loss magnitude not supplied | E16; E17 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–26; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31 |
++| Immaterial to Credit: target as protection | Voluntary emissions goal supplies no demonstrated payment or covenant right. | No protective value, premium or ratchet savings credited; unsized implementation costs remain separate. | High for the narrow absence of documented protection, not a certification of all financing terms | E21 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25 |
++
++#### T2G.8 — environmental, social and transition gaps
++
++| Gap | Missing Item | Why It Matters | Impact on Output | Required Follow-Up |
++|---|---|---|---|---|
++| G3 — labour sensitivity | Wage bill, employee productivity, contract repricing and recovery dates | Determines how ongoing pressure reaches FCF before commercial recovery. | Material — Directional only; no additive cash shock beyond macro cost exposure | Obtain payroll/operating cost bridge and contract calendar; factual predecessor is disclosed wage pressure and fixed-price terms |
++| G4 — sustainability financing and capital access | Operative instrument terms, KPI/SPT, ratchets, miss consequences, reporting, verification, issuer-specific investor exclusions/pricing | A corporate target does not establish a debt term or an ESG cost of capital. | No SLL/SLB protection, expected spread effect, greenium or access penalty | Obtain instrument-specific provisions and dated investor/price evidence only if a financing-linkage conclusion is required |
++| G5 — physical / transition / event-loss sizing | Site exposure, earnings concentration, emissions inventory and assurance, implementation cost, stranded-asset review, insurance limits/deductibles, remediation payment schedules | Determines whether Watch items become material cash or asset-value risks. | Asset-level materiality and stressed cash losses not sized; no evidence of greenwashing inferred from missing assurance | Obtain site/asset risk and insurance schedules, verified emissions/cost plan, and remediation cash forecast; predecessor is issuer risk/contingency disclosure |
++
++#### Definition and reconciliation controls
++
++| Issue | All figures / roles retained | Treatment and decision boundary | Source |
++|---|---|---|---|
++| Rate-sensitivity reconciliation | USD 8,702 million term loans + USD 487 million receivables; USD 3,400 million current derivatives; USD 5,789 million residual; calculated USD 57.89 million versus issuer approximately USD 30 million; difference USD 27.89 million | Input balances and derivative terms are not contradictory. The reported aggregate test has an unexplained methodological bridge. Preserve both, do not average, infer extra hedges or alter balances. A single reconciled forward result remains withheld. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176; calculation C10 |
++| Fixed-rate characterization | Management approximately 77%; identified notes plus effective upward-rate protection USD 19,000 million / USD 25,068 million = 75.79%; advances USD 17 million and leases USD 262 million rate classification not supplied | Not identical definitions. Do not silently force management's percentage onto the narrower identified fixed/protected subset or assume undisclosed classification. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145; calculation C16 |
++| Derivative fair value versus protection | Interest derivatives at year-end: assets USD 57 million; liabilities USD 10 million. Approximately USD -25 million existing gains/losses and caplet amortization expected to reclassify into interest expense-net over next twelve months | Neither fair value nor expected accounting reclassification equals hedge notional, forecast cash receipts or incremental rate protection. Not added to FCF sensitivity. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 177–178 |
++| FX notional and settlements | USD 120 million equivalent forwards; FY2024 approximately USD 4 million losses reclassified to net sales; next twelve months approximately USD 3 million net gain expected | Notional, past settlement loss and expected accounting gain have separate roles. None measures residual FX exposure or is treated as guaranteed FCF. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| Environmental reserve perimeter | Current remediation USD 5 million / USD 3 million and noncurrent USD 36 million / USD 41 million for FY2024/FY2023; total USD 41 million / USD 44 million. Broader current environmental/other litigation reserve USD 27 million / USD 16 million | Specific remediation is not the same as the broader combined current reserve. Do not add them and double count overlapping liabilities. Remediation estimates exclude inflation and are undiscounted. | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 144; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 |
++| Subsequent draw boundary | Additional USD 162.5 million receivables borrowing in October 2024 | Not in the 2024-09-30 exposure calculation. Financial foundation owns the financial event and adjustment; no second event row or new pro forma debt/cash calculation here. | Financial foundation (CP-1); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 152 |
++
++#### Causal downside and monitoring
++
++| Initiating condition / timing | First operational break | Financial transmission | Creditor consequence | Observable trigger | Source |
++|---|---|---|---|---|---|
++| Rates rise at the next debt reset; first hedge transition follows on 2025-03-31 | No operational break needed for direct interest shock; higher coupons immediately compete with operating cash | Residual debt incurs more cash interest; expiry reduces protection before term-loan maturities | Lower FCF retention and more refinancing dependence, not an automatic covenant breach | Actual resets, hedge settlements and replacement protection; obtain rate bridge before adopting a forward interest budget | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| Wage/input inflation persists while production slows over affected quarters | Margin compresses and qualified labour/supplier bottlenecks delay deliveries | Fixed-price costs persist, overhead absorption falls, inventory may tie up cash; interest continues | Less internally funded liquidity before receivables renewal and later maturities; no numerical runway established | Wages and supplier delays rise with lower gross margin and weaker CFO conversion, despite repricing/productivity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–24; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46 |
++| Weather/product incident before a funding need | Production interruption, repairs or liability defence precedes recovery from insurers | Lost receipts and cash claims can arrive before insurance proceeds | Event-specific liquidity need; no inferred loss amount, default probability or collateral recovery | Material incident, recall, uninsured loss or increased remediation reserve | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–26; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 31–31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–161 |
++
++#### Material-claim lineage
++
++| Claim | Material conclusion | Strongest lineage | Source |
++|---|---|---|---|
++| E01 | Term loans and receivables debt are explicitly floating | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| E02 | Effective swaps/cap have disclosed notionals, bases and dates | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177 |
++| E03 | Forward collars have disclosed floors, ceilings and dates | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| E04 | Current gross, protected and residual floating debt | Calculated | C01–C03 |
++| E05 | Debt denominator, fixed coupons and protected-principal comparisons | Calculated | C04–C06; C16–C17 |
++| E06 | Defined +100 bp interest shock and historical FCF comparison | Calculated | C07–C09; C18 |
++| E07 | Dated protection-notional roll-forward | Calculated | C11–C13 |
++| E08 | Issuer reports approximately 77% fixed and USD 30 million rate test | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 |
++| E09 | FX nature, forward notional and historical management test | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| E10 | Contractual cost-recovery limits and gross-margin improvement | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 18; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 46 |
++| E11 | Moderate overall macro sensitivity with mitigation and dated residual risk | Analyst Inference | C07–C08; T2F.8 |
++| E12 | Base-rate protection is not credit-spread protection or a joint-downside guarantee | Analyst Inference | T2F.2–T2F.3; Fundamental credit (CP-2) |
++| E13 | Skilled wage pressure, union exposure and shipment sensitivity | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 13; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 22 |
++| E14 | Remediation totals and comparative movement | Calculated | C14 |
++| E15 | Direct/indirect climate channels and voluntary target | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 24–25 |
++| E16 | Physical risks warrant Watch rather than a measured loss | Analyst Inference | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 25–26 |
++| E17 | Product liability and insurance limitations | Directly Sourced | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 31; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 160 |
++| E18 | Labour is the highest-priority supported social cash-flow factor | Analyst Inference | T2G.3–T2G.7 |
++| E19 | Reconciled forward rate sensitivity not established | Insufficient Information | G1; C10 |
++| E20 | Residual FX/covenant liquidity shock and natural hedge not established | Insufficient Information | G2 |
++| E21 | Sustainability-linked terms and ESG-specific financing premium not established | Insufficient Information | G4 |
++| E22 | Quantified cost recovery and physical/transition loss materiality not established | Insufficient Information | G3; G5 |
++
++## Calculations
++
++Calculations use consolidated USD million amounts at 2024-09-30 unless a row identifies a different period. Interest sensitivities are annualised static pre-tax cash-cost changes, not predictions of rates, balances, borrower default or cash-interest income. Positive additional interest is an outflow; the corresponding FCF change is negative. The cap is counted for an upward shock above its disclosed strike; future collars are excluded from current protection. Debt amortization, basis/reset mismatches, taxes, fees, counterparty failure and portfolio changes are not modelled.
++Basis: Financial foundation (CP-1); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–177
++
++| ID | Operation and exact operands | Exact result | Display / unit / period | Source | Limitation |
++|---|---|---|---|---|---|
++| C01 | sum 8702 +487 | 9189 | USD 9,189 million gross floating principal; 2024-09-30 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 | Explicitly floating instruments only; not all debt. |
++| C02 | sum 500 +1500 +700 +700 | 3400 | USD 3,400 million effective swap/cap notional; 2024-09-30 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 176–177 | Forward-starting collars excluded; cap's upward protection is conditional on strike. |
++| C03 | sum 9189 -3400; sum 8702 -3400 | 5789; term-loan residual 5302 | USD 5,789 million residual; USD 5,302 million term-loan residual; 2024-09-30 | C01–C02; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Derivatives linked to Credit Agreement, not assigned to securitization. |
++| C04 | sum 2650 +2100 +1200 +2750 +750 +1450 +1000 +2200 +1500 | 15600 | USD 15,600 million fixed-coupon note principal; 2024-09-30 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 145 | Excludes debt without explicit rate classification. |
++| C05 | sum 24880 +188; check sum 15600 +9189 +17 +262 | 25068; check 25068 | USD 25,068 million principal versus USD 24,880 million carrying; difference USD 188 million; 2024-09-30 | Financial foundation (CP-1); TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 | Issuance costs/net discounts do not reduce cash-interest principal. |
++| C06 | ratios 5789 /24880 and 5789 /25068; each fraction /0.01 | 0.23267684887459807073954983922829581994; 0.23093186532631243018988351683421094623; percentages 23.267684887459807073954983922829581994 and 23.093186532631243018988351683421094623 | 23.27% carrying denominator; 23.09% principal denominator; 2024-09-30 | Financial foundation (CP-1); C03/C05 | Numerator is contractual exposure; companion denominator definition explicitly retained. |
++| C07 | ratio 5789 /100 | 57.89 | USD +57.89 million annual interest outflow; corresponding FCF USD -57.89 million; +100 bp = +1.00% | C03; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Constant closing debt/protection; not a twelve-month expiry-aware forecast. |
++| C08 | ratio 57.89 /1880; fraction /0.01 | 0.030792553191489361702127659574468085106; percent 3.0792553191489361702127659574468085106 | 3.08% of FY2024 FCF consumed by defined shock | Financial foundation (CP-1); C07 | Historical FCF USD 1,880 million; excludes taxes, interest-income response and other changes. |
++| C09 | sum 1880 -57.89 | 1822.11 | USD 1,822.11 million static FCF comparator; FY2024 base with rate shock | Financial foundation (CP-1); C07 | Sensitivity comparator, not forecast or forecast opening cash. |
++| C10 | sum 57.89 -30 | 27.89 | USD 27.89 million difference from approximately USD 30 million issuer rate sensitivity | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; C07 | Approximate reported figure; unexplained method/perimeter bridge, not a new exposure estimate. |
++| C11 | sum 3400 -500 -1500 +1100; sum 9189 -2500; sum 3400 -2500; ratio 900 /100 | 2500; 6689; 900; 9 | After 2025-03-31: USD 2,500 million covered notional; USD 6,689 million outside notional; USD 900 million decline; USD 9 million annual +100 bp sensitivity increase if above caps | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Unchanged debt and no replacement; collar retains within-band exposure. |
++| C12 | sum 3400 -500 -1500 +1100 -700 -700 +500 +1338; sum 9189 -2938 | 2938; 6251 | After 2025-09-30: USD 2,938 million collar notional; USD 6,251 million outside notional | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Not a fully hedged amount below collar ceilings; unchanged principal. |
++| C13 | sum 1338 +1550; sum 9189 -2888 | 2888; 6301 | After 2026-09-30: USD 2,888 million collar notional; USD 6,301 million outside notional | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 | Floors/ceilings remain operative; no rate path assumed. |
++| C14 | FY2024 sum 5 +36; FY2023 sum 3 +41; change sum 41 -44 | 41; 44; -3 | Remediation obligations USD 41 million / USD 44 million; change USD -3 million; FY2024/FY2023 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 161 | Liability stock, not current-year spending or total litigation reserve. |
++| C15 | sum 8 +10 +8 +6 +7 +10 +8 +7 +6 +4 +5 +5 +5 +8 +5 +5 +5 +1; claim count sum 9 +5 +4 +4 | 113 field definitions; 22 claim families | Required fields present 113 / total 113; 22 material claims; current assessment, no currency | Required register headers and source gate; material-claim lineage table | Explicit gap entries count as populated fields, not complete evidence. Supplemental Source columns excluded from field count. |
++| C16 | sum 15600 +3400; ratio 19000 /25068; fraction /0.01 | 19000; 0.75793840753151428115525769905856071486; percent 75.793840753151428115525769905856071486 | USD 19,000 million notes plus current upward-rate protection; 75.79% of principal; 2024-09-30 | C02/C04/C05 | Not equivalent to management's approximately 77% fixed-rate definition; no assumed classification for leases/advances. |
++| C17 | sum 8642 +486 | 9128 | USD 9,128 million carrying amount of explicitly floating instruments; 2024-09-30 | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–145 | Principal USD 9,189 million remains sensitivity base. |
++| C18 | ratio 487 /100 | 4.87 | USD +4.87 million annual interest outflow from receivables component of +100 bp shock | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73 | Included within C07, not an additional shock. |
++
++## Gaps
++
++The unresolved questions constrain forecast adoption and exposure sizing rather than the existence of debt and effective derivatives. Requests below are bounded to the missing decision input; no missing quantity has been treated as zero.
++Basis: TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 175–178
++
++| Gap | Severity | Conclusion restricted | Bounded evidence request / factual predecessor | Effect while unresolved | Source |
++|---|---|---|---|---|---|
++| G1 — rate-sensitivity basis | MATERIAL | Single reconciled issuer/forward cash-interest sensitivity | Request treasury's USD 30 million bridge and current exposure/hedge matching; factual predecessor is Financial foundation with the annual debt and derivative notes | Keep USD 57.89 million defined closing calculation and issuer approximately USD 30 million separately; neither becomes a reconciled forecast | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 73; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 176 |
++| G2 — currency netting and liquidity | MATERIAL | Residual FX cash shock, natural hedge and covenant-currency cushion | Request currency cash-flow, debt, cash and forward schedules plus covenant translation and transfer terms; predecessor is disclosed FX risk | No independent FX sensitivity or numeric natural-hedge offset | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 73–74; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 178 |
++| G3 — cost recovery and labour cash bridge | MATERIAL | Quantified inflation, commodity and wage transmission | Request cost buckets, wage/payroll bridge and contractual repricing calendar; predecessor is issuer fixed-price and labour disclosure | Directional cash-flow judgement only; no invented shock or assumed pass-through | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 18–24 |
++| G4 — financing sustainability linkage | MINOR | Sustainability-linked spread mechanics, greenium and investor access penalty | Request applicable KPI/SPT/ratchet, assurance and dated investor/pricing evidence if claimed; predecessor is debt inventory and voluntary target | Neither benefit nor adverse financing effect is assumed; absence of an SLL/SLB is not certified | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, page 25; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 144–153 |
++| G5 — contingent environmental/physical loss sizing | MINOR | Quantified transition, site-loss and remediation payment stress | Request verified emissions/cost plan, site earnings/insurance and remediation payment schedules; predecessor is risk and contingency disclosure | Watch factors are not converted into material annual cash loss, PD, LGD or recovery haircut | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 24–26; TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 160–161 |
++| Debt-term boundary | Scope boundary; no additional severity finding | Whole-debt rate/currency sensitivity | Obtain advances and lease reset/denomination terms if required | USD 17 million advances and USD 262 million leases stay in total debt but outside explicitly floating exposure | TDG_2024-09-30_10-K_0001260221-24-000083_tdg-20240930.htm.jsonl, pages 145–152 |
++| Historical and legal boundaries | Scope boundary; no additional severity finding | Contemporaneous information claims, derivative close-out enforceability and covenant capacity | Publication evidence and operative agreements would be needed for those decisions | Retrospective contractual summary only; no legal capacity, derivative priority or priced relative value asserted | Source readiness (CP-0); Financial foundation (CP-1) |
++
++## Next module
++
++Proceed with Forward credit model using the dated hedge transitions and explicit scenario assumptions. Preserve the mechanical closing rate shock separately from the issuer's unreconciled reported test, and use Financial foundation for all opening liquidity and subsequent distribution adjustments.
++
++| Consumer | Supported input | Required restriction / action |
++|---|---|---|
++| Forward credit model | USD 9,189 million gross floating principal; USD 3,400 million effective protection; USD 5,789 million residual; dated collars | Do not use future collars as current cover or the static USD 57.89 million shock as an expiry-aware forecast; obtain G1 bridge |
++| Downside | Rate-cost and wage/procurement transmission; physical/product event triggers | Combine shocks only with explicit assumptions; no calibrated FX, commodity or operating cash loss supplied |
++| Fundamental credit | Moderate macro risk; first protection step-down and contract cost-recovery constraint | Revisit debt-service cushion and cash rebuilding as hedge/wage conditions change |
++| Committee decision | Labour pressure is the highest-priority supported social driver; environmental/product factors remain Watch | Debate margin/FCF effects and monitoring, not a values score, unmeasured default probability or unsupported financing premium |
++| Evidence validation | Exact debt/derivative inputs, calculations and retained definition differences | Check timing, cap conditionality, denominator labels and the unreconciled source sensitivity |
++
++```text
++Run CP-2G
++```
+diff --git a/tests/test_context_form.py b/tests/test_context_form.py
+index aa9bb17..7708ead 100644
+--- a/tests/test_context_form.py
++++ b/tests/test_context_form.py
+@@ -384,3 +384,12 @@ def test_the_component_look_takes_the_reference_box_values() -> None:
+     assert "border-radius:6px" in _rule(".pill")
+     dot = _rule(".stepper .dot")
+     assert "width:24px" in dot and "height:24px" in dot and "border:1.5px solid" in dot
++
++
++def test_the_form_describes_the_rates_module_with_its_esg_part() -> None:
++    """Rates, FX & hedging also carries the ESG analysis (T2G tables); the form says so."""
++    expected = (
++        "'CP-2E': ['Rates, FX & hedging', 'Rate and currency shocks against the hedges, and the "
++        "environmental, social and sustainability (ESG) factors that reach the credit.'],"
++    )
++    assert expected in constant("MODULES")
