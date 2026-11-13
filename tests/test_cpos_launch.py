@@ -5708,6 +5708,9 @@ S5_SENTENCE = (
     "headed `LTM …` and never from a table with one row per period"
 )
 S5_TAIL = "where CP-1 prints the balance only there, state the operand as missing with that reason."
+S5_TAIL_LAYER1 = (
+    "where you print the balance only there, state the operand as missing with that reason."
+)
 INTEREST_SENTENCE = (
     "`interest` is interest paid in cash in the base period; where CP-1 prints only interest "
     "expense you may name that cell and must say in `scope_limits` that interest is interest "
@@ -5744,7 +5747,7 @@ def test_the_layer1_forecast_instruction_sent_states_row_and_period_only_and_wha
     tmp_path,
 ):
     text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
-    assert S5_SENTENCE in text and S5_TAIL in text and INTEREST_SENTENCE in text
+    assert S5_SENTENCE in text and S5_TAIL_LAYER1 in text and INTEREST_SENTENCE in text
     assert '`"column": "Cash"' not in text and "leave out `period` there" not in text
 
 
@@ -5791,7 +5794,7 @@ def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-bra
     assert "check that the last twelve months are twelve months; add no figure to it." in table
     assert "LTM Qn YYYY" not in table and "to date a balance" not in table
     assert "only to check" not in table and "change no other table" not in table
-    shown = "history only for a line named under such a header, or in a row labelled with one."
+    shown = "history only for a line named under such a header."
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert shown in block
         assert "Those tables are in US$ million" not in block
@@ -5800,17 +5803,46 @@ def test_the_forecast_instruction_sentences_say_what_python_does():  # whole-bra
     assert "(CP-1's `Chart data:` tables" in cpos_launch.FORECAST_BLOCK
 
 
+NET_DEBT_PERIOD_SENTENCE = (
+    "`Period` is `FY2024 / 2024-09-30` for a fiscal year end (fiscal year, space, slash, space, "
+    "the year-end date) and the date alone (`2025-06-30`) for an interim balance sheet: one form "
+    "for every row of the table, each period once, and no other word in the cell"
+)
+UNIT_FORM_SENTENCE = (
+    "Where a table states its unit, write it as the three-letter currency code and `millions` or "
+    "`thousands` (`USD millions`), the same in every statement table; the `Chart data:` tables "
+    "and `Net debt data` keep the unit their own rule gives."
+)
+
+
+def test_the_sent_instructions_prescribe_one_net_debt_period_form_and_the_unit_exemption(tmp_path):
+    text = _built_instruction(tmp_path, "CP-1", ("CP-1", "CP-MODEL"))
+    assert NET_DEBT_PERIOD_SENTENCE in text and UNIT_FORM_SENTENCE in text
+    assert "the balance-sheet date `2024-09-30`, or both as" not in text
+    assert "the same in every statement table. Python uses" not in text
+
+
+def test_the_sent_forecast_instructions_offer_history_only_under_a_period_header_and_say_you(
+    tmp_path,
+):
+    for module, modules in (("CP-2G", ("CP-1", "CP-2G")), ("CP-1", ("CP-1", "CP-MODEL"))):
+        (tmp_path / module).mkdir(exist_ok=True)
+        text = _built_instruction(tmp_path / module, module, modules)
+        assert "history only for a line named under such a header." in text
+        assert "labelled with one" not in text
+    assert "where you print the balance only there" in text
+    assert "where CP-1 prints the balance only there" not in text
+
+
 def test_cp1_is_told_the_net_debt_period_forms_and_to_print_each_line_once():
-    assert "or both as `FY2024 / 2024-09-30`: one of these forms for every row" in (
-        cpos_launch.NET_DEBT.rules
-    )
+    assert NET_DEBT_PERIOD_SENTENCE in cpos_launch.NET_DEBT.rules
     assert "and no other word in the cell (say `pro forma` or `reported` in the Basis" in (
         cpos_launch.NET_DEBT.rules
     )
     text = cpos_launch.PERIOD_TABLE_BLOCK
     assert "Print each statement line once, in one table that has a column for every period" in text
     assert "a line split across two tables cannot be combined" in text
-    assert "(`USD millions`), the same in every statement table" in text
+    assert UNIT_FORM_SENTENCE in text
 
 
 # --- the Net debt data Period is one the pack can order (F1, defect D2.1) -----------------------
