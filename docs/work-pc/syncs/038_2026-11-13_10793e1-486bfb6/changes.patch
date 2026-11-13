@@ -1,0 +1,533 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 5548f0d..453aad7 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -9,6 +9,21 @@ Scope: offline, synthetic plus read-only reading of 974 retained `.md` handoffs;
+ Corpus (both `counts` modes, token level, old vs new): 1,559 token diffs, 59 files with different held sizes; every one is K-a (`USD`/`EUR` glued to digits, 502 tokens new in each mode: `USD710 million`, `EUR1,000m`, `USD35/share`, all real money; the old reading kept only the fragment `000` of `USD1,000m`, 270 and 265 fragments gone) or K-c (`EUR 2029s, 480bp`, 10 tokens gone, held 2029 lost). K-b (a year-shaped number with a C2 form) 0 tokens, K-d (`mln`/`bln` after a small number) 0 tokens. `gaps_real_run.py` output byte-identical before and after; every other probe exits as on main (three recorded limits unchanged).
+ Not verified: a real model; `30 C$m` (a small number after a one-letter-prefixed sign is still no unit); a code standing alone before digits that is really a name (`COP26`: 26 is read as a figure; none in the corpus).
+ 
++## 2026-11-12 — Bracketed note narrowed: a ratio or a rounding of the figure before it (branch `claude/prose-number-reading`, fix round 1; replaces rule 2 of the entry below)
++Scope: offline, `prose_checks.py` `_figures` only. Review of the entry below showed real negatives read as positive (`FY2024 (120)`, `Q2 (26,306)`, `D02 (22)/(48)`, `Note 5 (120)`, `Capital expenditures (42) (36)`, `2,200 (20) 2,180`, and `Net debt was 100 (25).` on the passage side). Rule now: a bracketed figure is a note only if it directly follows a real unbracketed figure (not a label, date, year or reference number) and carries `%` or `x` or is a rounding of that figure; otherwise it is a negative as on origin/main. Known limit: `40% (364)` stays a negative; `100 (100)` reads as a rounding.
++Tests: 36 new parametrised cases in `tests/test_prose_checks.py` (every reviewer form negative on both sides; ratio, rounding and edge cases as notes); 24 of them failed before the change; no earlier test changed. Real evidence (read-only, same 741 files): 21 removed (the same 21 as before), 0 added, 79 unchanged; of 936 bracketed-after-figure occurrences in 246 contexts, 210 contexts are notes (187 `%`/`x`, 23 roundings) and 36 are negatives (4 after a bracketed figure, 9 date/period label, 14 glued to letters, 1 year, 8 neither ratio nor rounding); CP-L10 Key figures 0 before and after. Probes `nr_label_bracket_negative.py` and `nr_comparative_negatives.py` exit 0; `probe_pr46.py` D1 and D2 pass.
++Not verified: a paid run; a note of a different quantity (`40% (364)`) or a ratio-looking negative (`5.0% (2.1%)`) on a real case.
++Round 2 (same branch): a figure is real only if not glued (`Sep-24`, `FY-24`, `A1`), not after a period word, and an amount (unit, decimal, separator or 100+); a rounding needs fewer decimals, or the same number with separators added (`9432.72 (9,432.72)`); the rounding runs in a sized Decimal context (no overflow). Tests: 23 new cases failed before, 322 pass; the branch-added `100 (100)` note case now a negative, the `<= 1` check rewritten to assert one exact refusal per case.
++Round 2 real evidence (same 741 files): 21 removed (the same 21), 0 added, 79 unchanged; of 246 contexts 187 ratio, 23 rounding (all still notes), 36 negatives; no note became a negative; CP-L10 Key figures 0 before and after.
++Round 3 (same branch, Low findings): the three look-behind searches in note detection read a bounded tail (40 characters) instead of the whole text before the figure (linear again); an unsigned bracket after a negative figure is a negative, not a rounding note. Tests: 3 new cases failed before; real evidence on the same 741 files identical to round 2.
++
++## 2026-11-12 — Fidelity check reads figures with a thousands separator and a bracketed note (branch `claude/prose-number-reading`, ruling amendment 2026-11-12 in `2026-11-11-reader-and-issuer-report.md`)
++Scope: offline, `prose_checks.py` only (`figure_issues`, `key_figures_issues`); no provider or model call. Two defects that refused correct handoffs: (D1, D-KF) `4,173` and `4173` were different numbers; (D2) `3,395 (51.6%)` held `(51.6%)` as a negative, so the passage's `51.6%` was refused with advice to write the negative.
++Change: a figure's digits are compared without thousands separators; a parenthesised figure right after another figure (and its unit) is read as written, not as a negative. Alone or after words it stays negative. Passage and held sides share `_figures`, so both get both rules. Tests: new cases in `tests/test_prose_checks.py` (both comma directions, `1,291.27`, `1,25`, `2024, 437`, unit/scale/sign/decimal mismatches still refused, the three real cells, the three true negatives, `100 (-5.2%)`, Key figures); 11 of them failed before the change; the file's 253 tests passed after.
++Real evidence (read-only, 741 retained `.md` files: 222 drafts, 200 responses, 319 handoffs; old = origin/main module, new = this branch, `figure_issues` as the launcher calls it): 21 issues removed (7 thousands separator, 14 bracketed note), 0 added, 79 unchanged. `key_figures_issues` on the 3 retained CP-L10 texts with their CP-1: 0 before and after (the refused CP-L10 drafts of `tdg-proof-short-001` are not retained as files; the old refusal text is in its `1.review.json`).
++Probes: `probe_pr46.py` D1 and D2 pass, D3 (check 6, a different defect, not changed) still fails; `probe_key_figures_comma.py` exit 0.
++Not verified: a paid run (whether a model now passes at the first draft); Key figures against a real refused CP-L10 draft. (The adjacency rule above was too wide, see the next entry: real negatives directly after a figure, `Q2 (26,306)`, `Capital expenditures (42) (36)`, exist in the retained runs.)
++
+ ## 2026-11-12 — Module output review changes: sources resolve, each drawing shown once, reader vocabulary checked everywhere (branch `claude/modules-page-sources-charts`, ruling `2026-11-12-module-output-review-changes.md`)
+ Scope: offline only. No provider or model call was made. Decisions 7 to 11 (launcher text, checker, confidence score, post-balance-sheet table) are proven by tests and hand-written handoffs only, not by a model run. Display changes were checked on a copy of the retained real run `tdg-proof-snapshot-opus-002` (TDG, as of 2024-09-30, credit snapshot): one run, 1440 px, headless Chrome.
+ Library:
+diff --git a/docs/rulings/2026-11-11-reader-and-issuer-report.md b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+index 3fab024..118a5b0 100644
+--- a/docs/rulings/2026-11-11-reader-and-issuer-report.md
++++ b/docs/rulings/2026-11-11-reader-and-issuer-report.md
+@@ -248,6 +248,51 @@ mechanically before it is checked (the count is recorded in the run record; the
+ retained response is unchanged), and check 9 refuses any other shape within the same retry and cost
+ cap. The fidelity check stays outside the numbered list, so "ninth" is correct.
+ 
++Amendment 2026-11-12 (fidelity check and CP-L10 Key figures; owner: "Yes, fix those"; two defects
++that refused correct handoffs in paid runs `tdg-proof-short-001`, `tdg-reader-format-001`,
++`tdg-proof-snapshot-opus-001`):
++1. **A comma is a thousands separator only.** A comma followed by exactly three digits, repeated, is a
++   separator; two figures are the same number when their digits agree once separators are removed
++   (`USD 4,173 million` matches a table's `4173`, and the reverse; `1,291.27` matches `1291.27`).
++   `2024, 437` is two numbers and `1,25` is `1` and `25`. Sign, unit, scale and decimal places as
++   written are unchanged (`5.89` is not `5.8905`), and a number still matches only as a whole number.
++   A refusal quotes the figure as the passage wrote it.
++2. **A bracketed figure is a note on the figure before it only as a ratio or a rounding of it.** A
++   parenthesised figure is an accounting negative unless all of these hold, and then it is read as
++   written inside the parentheses (positive unless it carries a minus): (1) it directly follows a
++   figure (that figure, its optional unit, spaces or tabs only, then the opening parenthesis);
++   (2) that figure is a real amount: not itself in parentheses; not glued (the character before its
++   first digit, after an optional currency sign or code and a minus sign, is the start of the text, a
++   space, `|`, `(` or `:`, so `Sep-24`, `FY-24`, `Q3'24`, `24/25`, `A1`, `v2.5`, `3Q` and `FY2024`
++   are labels); not part of a date or period label or a bare year; not a reference after `Note`,
++   `page`, `p.`, `row`, `item`, `step`, `section` or `table`; not directly after `FY`, `CY`, `LTM`,
++   `YTD`, `Q1` to `Q4`, `H1`, `H2`, `1Q` to `4Q`, `1H`, `2H`, `year(s)` or `yr`; and an amount, not a
++   label number: it carries a unit (`%`, `x`, a currency, a scale word) or a decimal part or a
++   thousands separator, or it is 100 or more (a unitless whole number below 100, `Year 2`, `FY 24`,
++   `Tranche 2`, is a label); (3) the bracketed figure either carries `%` or `x`
++   (`3,395 (51.6%)`, `5.8905x (5.89x)`), or, with no unit change, (i) has fewer decimal places than
++   the figure before it and equals it rounded to those places (ROUND_HALF_UP or ROUND_HALF_EVEN:
++   `1291.272 (1,291.27)`), or (ii) is the same number to the same places written with thousands
++   separators the figure before it lacks (`9432.72 (9,432.72)`, `2180 (2,180)`). `100 (-5.2%)` holds
++   `100` and `-5.2%`. Everything else stays an accounting negative, on the held side and on a
++   passage: `100 (25)`, `40% (364)`, `2,200 (20) 2,180`, `Capital expenditures (42) (36)`,
++   `FY2024 (120)`, `LTM Jun-24 (3.2%)`, `Year 2 (1.5%)`, `(12.3)%`, `a loss of (45)`, and an
++   identically written bracket (`100 (100)`, `2,180 (2,180)`, `45 (45)`, `9,432.72 (9432.72)`). The
++   rounding comparison runs in a Decimal context sized from the two figures, so a long figure
++   cannot raise.
++   Limits, accepted: a bracketed non-ratio note of a different quantity (`40% (364)`) is read as a
++   negative, as before this amendment; a coincidental rounding of a different quantity with fewer
++   decimals (`4,173.4 (4,173)`, `0.5 (1)`) is read as a note; a bracketed ratio after a small
++   unitless whole number (`45 (12.3%)`) is read as a negative; reference words outside the list
++   (`Fig. 3`, `line 12`) are not recognised.
++   A label number that is 100 or more or has a decimal part (`Tranche 300 (45%)`,
++   `Clause 22.1 (5%)`) counts as an amount, so a bracketed ratio after it is read as a note.
++   A note whose figure is wrapped in bold or quote marks (`**3,395 (51.6%)**`) or follows a period
++   word (`Q3 1,200 (51.6%)`) is read as a negative.
++   When the figure before a bracket is negative (a minus sign) and the bracket carries no minus
++   and no `%` or `x`, the bracket is not a rounding of it and stays an accounting negative
++   (`-1,291.272 (1,291.27)`, `−4.5 (4)`); `-11.5147826087 (-11.51)` reads the bracket as -11.51.
++
+ Not machine-gated (decision 11): the order and presence of the three passages after Bottom line,
+ judgement-first wording, and whether a limitation truly changes a conclusion. These are judged
+ by reading one real run per change against the VMO2 reference, recorded in `VERIFICATION.md`.
+diff --git a/src/deploy_workflow/prose_checks.py b/src/deploy_workflow/prose_checks.py
+index 28b7600..a27eb16 100644
+--- a/src/deploy_workflow/prose_checks.py
++++ b/src/deploy_workflow/prose_checks.py
+@@ -35,6 +35,7 @@ comments, list markers removed. Decisions where the ruling is silent:
+ 
+ import re
+ from collections.abc import Mapping
++from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal, localcontext
+ from itertools import groupby
+ from typing import NamedTuple
+ 
+@@ -871,8 +872,11 @@ def prose_issues(text: str, accepted: Mapping[str, str] = {}) -> tuple[str, ...]
+ # check: it is not one of the eight prose checks. A number as the reader sees it is the longest
+ # run of digits at that place (3.14 is read whole, never as 3.1; a malformed 1.2.3 or 12,5 is
+ # still read, as 1.2 and 3, or 12 and 5), with the sign it was written with (a leading minus, or
+-# parentheses) and the unit or scale beside it. On the passage side dates and period labels
+-# are masked as in check 8. A held currency code is not compared with the passage's (old behaviour).
++# parentheses) and the unit or scale beside it. A comma between digit groups of three is a
++# thousands separator (4,173 is 4173); a parenthesised figure is a negative unless it directly
++# follows a real figure and is a ratio or a rounding of it (`3,395 (51.6%)`), a note read as
++# written. On the passage side dates and period labels are masked as in check 8. A held currency
++# code is not compared with the passage's (old behaviour).
+ CODE = re.compile(r"\bCP-[A-Z0-9]+\b|\bT\d+[A-Z]?\.\d+\b|\b[0-9A-Fa-f]{16,}\b")
+ _NUMBER_UNIT = (
+     r"%|x\b|\s?pp\b|\s?bps\b|\s?bp\b|\s?per ?cent\b"
+@@ -920,24 +924,126 @@ def _unit(written: str | None) -> str | None:
+ PERIOD_WORD = re.compile(r"\b(?:[QH][1-4]|FY\d{2,4}E?|LTM|\d+M)\b")
+ 
+ 
++_REFERENCE = re.compile(
++    r"\b(?:notes?|pages?|pp?\.|rows?|items?|steps?|sections?|tables?)\s*$", re.IGNORECASE
++)
++_YEAR = re.compile(r"(?:19|20)\d\d")
++_CURRENCY_BEFORE = re.compile(r"(?:US\$|USD|\$|EUR|€|GBP|£)\s?$", re.IGNORECASE)
++_PERIOD_BEFORE = re.compile(
++    r"\b(?:FY|CY|LTM|YTD|Q[1-4]|H[12]|[1-4]Q|[12]H|years?|yr)\s?$", re.IGNORECASE
++)
++
++
++# The longest word these three patterns match is `sections` (8), plus at most one space for the
++# currency and period patterns; 40 characters before the figure cover that with room to spare.
++_LOOK_BEHIND = 40
++
++
++def _ends_at(pattern: re.Pattern[str], base: str, end: int) -> re.Match[str] | None:
++    """`pattern` (anchored with `$`) matched against `base[:end]`, reading only the last
++    `_LOOK_BEHIND` characters (after any run of spaces, which `_REFERENCE` allows) instead of
++    copying the whole text before the figure."""
++    first = end
++    while first > 0 and base[first - 1].isspace():
++        first -= 1
++    return pattern.search(base, max(first - _LOOK_BEHIND, 0), end)
++
++
++def _is_amount_alone(found: re.Match[str], base: str) -> bool:
++    """An amount, not a label number or a glued token: after a space, `|`, `(`, `:` or the start
++    (a currency sign or code and a minus sign aside), and carrying a unit, a decimal part, a
++    thousands separator or 100 or more (`Year 2`, `FY 24`, `Sep-24`, `A1`, `v2.5` are not)."""
++    end = found.start("minus") if found["minus"] else found.start("n")
++    currency = _ends_at(_CURRENCY_BEFORE, base, end)
++    end = currency.start() if currency else end
++    unit = found["u1"] or found["u2"] or currency or "." in found["n"] or "," in found["n"]
++    return (end == 0 or base[end - 1].isspace() or base[end - 1] in "|(:") and bool(
++        unit or len(found["n"].lstrip("0")) >= 3
++    )
++
++
++def _is_real_figure(found: re.Match[str], base: str, labels: list[tuple[int, int]]) -> bool:
++    """A figure that is an amount (see `_is_amount_alone`), not in parentheses, not part of a date
++    or period label, not a bare year, not a reference after `Note`, `page`, ... and not directly
++    after a period word (`FY`, `Q3`, `H1`, `LTM`, `year`, ...)."""
++    start, end = found.start("n"), found.end("n")
++    return _is_amount_alone(found, base) and not (
++        found["open"]
++        or found["close"]
++        or any(a < end and start < b for a, b in labels)
++        or (_YEAR.fullmatch(found["n"]) and not (found["u1"] or found["u2"]))
++        or _ends_at(_REFERENCE, base, start)
++        or _ends_at(_PERIOD_BEFORE, base, start)
++    )
++
++
++def _is_note_on(found: re.Match[str], before: re.Match[str]) -> bool:
++    """A bracketed figure that is a ratio (`%` or `x`), or, with no unit change, either the figure
++    before it rounded to FEWER decimal places, or the same number to the same places with
++    thousands separators the figure before it lacks (`9432.72 (9,432.72)`). `100 (100)` is
++    neither."""
++    unit = _unit(found["u1"] or found["u2"])
++    if unit in ("%", "x"):
++        return True
++    if unit not in (None, _unit(before["u1"] or before["u2"])):
++        return False
++    if before["minus"]:  # `-1,291.272 (1,291.27)`: an unsigned bracket is not a rounding of it
++        return False
++    original, written = before["n"], found["n"]
++    places = len(written.partition(".")[2])
++    if len(original.partition(".")[2]) <= places:
++        return (
++            len(original.partition(".")[2]) == places
++            and "," in written
++            and "," not in original
++            and written.replace(",", "") == original
++        )
++    # The context is sized from the operands, so quantize cannot overflow on a long figure.
++    size = len(original.replace(",", "")) + places + 2
++    with localcontext(Context(prec=size, Emax=size)):
++        digits = Decimal(original.replace(",", ""))
++        exponent = Decimal(1).scaleb(-places)
++        return Decimal(written.replace(",", "")) in (
++            digits.quantize(exponent, ROUND_HALF_UP),
++            digits.quantize(exponent, ROUND_HALF_EVEN),
++        )
++
++
+ def _figures(text: str, passage: bool = False) -> list[_Figure]:
+     """Figures of `text`. On the passage side dates and period labels are not figures (as in
+     check 8); held text is read unmasked, so a year held only in a date still matches."""
+-    masked = CODE.sub(" ", text)
++    base = CODE.sub(" ", text)
++    spans = [m.span() for pattern in (DATE, PERIOD_WORD) for m in pattern.finditer(base)]
++    masked = base
+     if passage:
+         masked = PERIOD_WORD.sub(
+-            lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), masked)
++            lambda m: " " * len(m[0]), DATE.sub(lambda m: " " * len(m[0]), base)
+         )
+-    return [
+-        _Figure(
+-            found["n"].rstrip("0").rstrip(".") if "." in found["n"] else found["n"],
+-            bool(found["minus"] or (found["open"] and found["close"])),
+-            bool(found["open"] and found["close"] and not found["minus"]),
+-            _unit(found["u1"] or found["u2"]),
+-            found[0].strip(),
++    figures: list[_Figure] = []
++    before: re.Match[str] | None = None
++    for found in NUMBER.finditer(masked):
++        bracketed = bool(found["open"] and found["close"] and not found["minus"])
++        # A bracketed figure right after a real figure annotates it when it is a ratio or a
++        # rounding of it: 3,395 (51.6%). Any other bracketed figure is an accounting negative.
++        annotation = (
++            bracketed
++            and before is not None
++            and base[before.end() : found.start()].strip(" \t") == ""
++            and _is_real_figure(before, base, spans)
++            and _is_note_on(found, before)
+         )
+-        for found in NUMBER.finditer(masked)
+-    ]
++        before = found
++        number = found["n"].replace(",", "")  # a comma in a figure is a thousands separator
++        figures.append(
++            _Figure(
++                number.rstrip("0").rstrip(".") if "." in number else number,
++                bool(found["minus"] or (bracketed and not annotation)),
++                bracketed and not annotation,
++                _unit(found["u1"] or found["u2"]),
++                found[0].strip(),
++            )
++        )
++    return figures
+ 
+ 
+ def _fidelity_problem(figure: _Figure, held: list[_Figure]) -> str | None:
+diff --git a/tests/test_prose_checks.py b/tests/test_prose_checks.py
+index efc7e91..d71f6bf 100644
+--- a/tests/test_prose_checks.py
++++ b/tests/test_prose_checks.py
+@@ -1,6 +1,7 @@
+ """Answer keys here are written by hand: literal check numbers and line numbers, never computed."""
+ 
+ import re
++import time
+ 
+ import pytest
+ 
+@@ -8,6 +9,7 @@ from deploy_workflow.prose_checks import (
+     DATA_MODULES,
+     READER_HEADINGS,
+     figure_issues,
++    key_figures_issues,
+     limitation_items,
+     prose_issues,
+     reader_passages,
+@@ -788,3 +790,266 @@ def test_check_4_a_pair_over_80_characters_quotes_each_bracket_with_20_character
+     long = "a" * 90
+     issues = [i for i in prose_issues(bottom(f"The view [{long}] holds.")) if "check 4" in i]
+     assert [i.split('"')[1] for i in issues] == [f"The view [{'a' * 20}", f"{'a' * 20}] holds."]
++
++
++@pytest.mark.parametrize(
++    ("passage", "detail"),
++    [
++        ("EBITDA was USD 4,173 million.", "| EBITDA | 4173 | USD million |"),
++        ("EBITDA was USD 4173 million.", "| EBITDA | 4,173 | USD million |"),
++        ("Debt was USD 1,291.27 million.", "| Debt | 1291.27 |"),
++        ("Debt was USD 1291.27 million.", "| Debt | 1,291.27 |"),
++        ("Debt was USD 1,234,567 million.", "| Debt | 1234567 |"),
++    ],
++)
++def test_a_thousands_separator_does_not_change_a_figure(passage: str, detail: str) -> None:
++    assert fidelity(passage, detail) == ()
++
++
++@pytest.mark.parametrize(
++    ("passage", "detail", "quoted"),
++    [
++        ("Debt was USD 4,173 million.", "| Debt | 4173 thousand |", "4,173 million"),
++        ("Debt was -4,173.", "| Debt | 4173 |", "-4,173"),
++        ("Debt was 5.89x.", "| Debt | 5.8905x |", "5.89x"),
++        ("Debt was USD 4,173 million.", "| Debt | 4,174 |", "4,173 million"),
++        ("Debt was 4,173.", "| Debt | 73 |", "4,173"),
++    ],
++)
++def test_a_figure_with_a_separator_is_still_refused_when_it_differs(
++    passage: str, detail: str, quoted: str
++) -> None:
++    (issue,) = fidelity(passage, detail)
++    assert f'"{quoted}"' in issue
++
++
++def test_a_comma_that_is_not_a_thousands_separator_still_splits_the_number() -> None:
++    assert [i.split('"')[1] for i in fidelity("Cover was 1,25.", "| Cover | 125 |")] == ["1", "25"]
++    held = "| Year | Stores |\n| --- | --- |\n| 2024 | 437 |"
++    assert fidelity("Cover was 437 in 2024, 437.", held) == ()
++
++
++def annotated(cell: str) -> str:
++    return f"| Measure | Value |\n| --- | --- |\n| Row | {cell} |"
++
++
++@pytest.mark.parametrize(
++    ("passage", "cell"),
++    [
++        ("Margin was 51.6%.", "3,395 (51.6%)"),
++        ("Leverage was 5.89x.", "5.8905x (5.89x)"),
++        ("Margin was 45.05%.", "0.45052 (45.05%)"),
++    ],
++)
++def test_a_bracketed_figure_after_a_figure_is_an_annotation_not_a_negative(
++    passage: str, cell: str
++) -> None:
++    assert fidelity(passage, annotated(cell)) == ()
++
++
++@pytest.mark.parametrize(
++    ("passage", "cell"),
++    [
++        ("Margin was (51.6%).", "3,395 (51.6%)"),
++        ("Margin was -51.6%.", "3,395 (51.6%)"),
++        ("Margin was 51.6%.", "3,395 | (51.6%)"),
++    ],
++)
++def test_an_annotation_is_a_positive_figure_and_only_one_after_a_figure(
++    passage: str, cell: str
++) -> None:
++    assert len(fidelity(passage, annotated(cell))) >= 1
++
++
++def test_an_annotation_that_is_itself_negative_keeps_its_minus() -> None:
++    assert fidelity("Margin was -5.2%.", annotated("100 (-5.2%)")) == ()
++    assert len(fidelity("Margin was 5.2%.", annotated("100 (-5.2%)"))) == 0
++
++
++@pytest.mark.parametrize(
++    ("passage", "cell"),
++    [
++        ("Margin was 12.3%.", "(12.3)%"),
++        ("Net debt change was 120.", "(120)"),
++        ("There was a loss of 45.", "a loss of (45)"),
++    ],
++)
++def test_a_bracketed_figure_standing_alone_or_after_words_stays_a_negative(
++    passage: str, cell: str
++) -> None:
++    (issue,) = fidelity(passage, annotated(cell))
++    assert "does not match the handoff" in issue
++
++
++CP1_CHART = "### Chart data\n\n| Period | Cash |\n| --- | --- |\n| 2024-09-30 | 6261 |\n"
++
++
++def key_figures(value: str, cp1: str = CP1_CHART) -> tuple[str, ...]:
++    table = (
++        "| Measure | Value | Period | Source |\n| --- | --- | --- | --- |\n"
++        f"| Cash | {value} | 2024 | CP-1 |"
++    )
++    return key_figures_issues(f"## Findings\n\n### Key figures\n\n{table}\n", cp1)
++
++
++def test_a_key_figure_with_a_thousands_separator_is_the_figure_cp1_states_plainly() -> None:
++    assert key_figures("USD 6,261 million") == ()
++    assert key_figures("6261", "| Cash | USD 6,261 million |") == ()
++    assert key_figures("USD 6,261 million", "| Cash | 6,261 |") == ()
++    assert len(key_figures("USD 6,262 million")) == 1
++    assert len(key_figures("USD 6,261 thousand", "| Cash | 6261 million |")) == 1
++
++
++NEGATIVE_AFTER_A_LABEL_OR_FIGURE = [
++    ("FY2024 (120)", "120"),
++    ("Q3 (45)", "45"),
++    ("C12 (30)", "30"),
++    ("Note 5 (120)", "120"),
++    ("10-K page 120 (45)", "45"),
++    ("2023-2024 (120)", "120"),
++    ("H1 2024 (45)", "45"),
++    ("31 Dec 2024 (45)", "45"),
++    ("2024-09-30 (45)", "45"),
++    ("D02 (22)/(48)", "22"),
++    ("Q1 calculated CFO less capex 41,374; Q2 (26,306); LTM 105,927", "26,306"),
++    ("FY2024 (165); FY2023 (139); FY2022 (119)", "139"),
++    ("Capital expenditures (42) (36)", "36"),
++    ("Dividends paid (30,199) (29,958)", "29,958"),
++    ("2,200 (20) 2,180", "20"),
++    ("2,248,030 (9,419) (21,140) 2,217,471", "21,140"),
++    ("100 (25)", "25"),
++    ("40% (364)", "364"),
++    ("row 7 (12)", "12"),
++    ("p. 9 (12)", "12"),
++    ("1291.272 (1,291.28)", "1,291.28"),
++    # A label spelling the date and period patterns do not cover (round 2).
++    ("LTM Jun-24 (3.2%)", "3.2%"),
++    ("Sep-24 (3.2%)", "3.2%"),
++    ("FY24/25 (1.5%)", "1.5%"),
++    ("2024/25 (2.2%)", "2.2%"),
++    ("24/25 (2.2%)", "2.2%"),
++    ("FY 24 (2.1%)", "2.1%"),
++    ("FY-24 (2.1%)", "2.1%"),
++    ("Q3'24 (4.5%)", "4.5%"),
++    ("Q3-24 (4.5%)", "4.5%"),
++    ("H1 24 (0.4x)", "0.4x"),
++    ("3Q 24 (4.5%)", "4.5%"),
++    ("2024-09 (3.2%)", "3.2%"),
++    ("Year 2 (1.5%)", "1.5%"),
++    ("A1 (5%)", "5%"),
++    ("v2.5 (1.2x)", "1.2x"),
++    # A unitless whole number below 100 is a label number, not an amount.
++    ("Tranche 2 (45%)", "45%"),
++    ("Level 3 (45%)", "45%"),
++    ("12 (5.2%)", "5.2%"),
++    # A long figure must not raise; the bracket is a negative.
++    ("123,456,789,012,345,678,901,234,567,890 (5)", "5"),
++    ("123456789012345.5 (1.123456789012345)", "1.123456789012345"),
++    ("999,999,999,999,999 (1.123456789012345)", "1.123456789012345"),
++]
++
++
++@pytest.mark.parametrize(("cell", "figure"), NEGATIVE_AFTER_A_LABEL_OR_FIGURE)
++def test_a_bracketed_figure_that_is_not_a_note_is_a_negative_on_the_held_side(
++    cell: str, figure: str
++) -> None:
++    assert len(fidelity(f"The line was {figure}.", annotated(cell))) == 1
++    assert fidelity(f"The line was ({figure}).", annotated(cell)) == ()
++
++
++@pytest.mark.parametrize(
++    ("passage", "figure"),
++    [
++        ("Net debt was 100 (25).", "25"),
++        ("Net debt was 100 (364).", "364"),
++        ("Net debt was 2,200 (20) 2,180.", "20"),
++    ],
++)
++def test_a_bracketed_figure_on_the_passage_side_keeps_its_sign(passage: str, figure: str) -> None:
++    (issue,) = fidelity(passage, annotated("100 | 25 | 364 | 2,200 | 20 | 2,180"))
++    assert f'"({figure})"' in issue
++
++
++# (passage with the figure positive, passage with the same figure in parentheses, held cell), all
++# hand-written: the bracket is a note, so the positive passage is held and the negative one is not.
++NOTES = [
++    ("Margin was 51.6%.", "Margin was (51.6%).", "3,395 (51.6%)"),
++    ("Leverage was 5.89x.", "Leverage was (5.89x).", "5.8905x (5.89x)"),
++    ("Margin was 45.05%.", "Margin was (45.05%).", "0.45052 (45.05%)"),
++    ("Debt was 1,291.27.", "Debt was (1,291.27).", "1291.272 (1,291.27)"),
++    ("Debt was 1291.27.", "Debt was (1291.27).", "1291.272 (1,291.27)"),
++    ("Debt was 9,432.7.", "Debt was (9,432.7).", "9432.72 (9,432.7)"),
++    ("Leverage was 4.72x.", "Leverage was (4.72x).", "USD 19,702 million (4.72x)"),
++    ("Margin was 16.2%.", "Margin was (16.2%).", "USD 1,067 million (16.2%)"),
++    ("Leverage was 5.89x.", "Leverage was (5.89x).", "5.885x (5.89x)"),
++    ("Leverage was 5.88x.", "Leverage was (5.88x).", "5.885x (5.88x)"),
++    ("Leverage was 5.90x.", "Leverage was (5.90x).", "5.8905x (5.90x)"),
++    # The same number written with thousands separators, to the same decimal places.
++    ("Debt was 9,432.72.", "Debt was (9,432.72).", "9432.72 (9,432.72)"),
++    ("Debt was 7,844.72.", "Debt was (7,844.72).", "7844.72 (7,844.72)"),
++    ("Debt was 2,180.", "Debt was (2,180).", "2180 (2,180)"),
++    # An amount, not a label number: a unit, a decimal part, a separator or 100 or more.
++    ("Margin was 5.2%.", "Margin was (5.2%).", "12.0 (5.2%)"),
++    ("Margin was 5.2%.", "Margin was (5.2%).", "120 (5.2%)"),
++    ("Leverage was 0.1x.", "Leverage was (0.1x).", "12% (0.1x)"),
++    ("Margin was 5.2%.", "Margin was (5.2%).", "USD 12 million (5.2%)"),
++    ("Margin was 5.2%.", "Margin was (5.2%).", "1,200 (5.2%)"),
++]
++
++
++@pytest.mark.parametrize(("passage", "negative", "cell"), NOTES)
++def test_a_ratio_or_a_rounding_after_a_figure_is_a_note_read_as_positive(
++    passage: str, negative: str, cell: str
++) -> None:
++    assert fidelity(passage, annotated(cell)) == ()
++    (issue,) = fidelity(negative, annotated(cell))
++    assert "does not match the handoff" in issue
++
++
++@pytest.mark.parametrize(
++    ("cell", "negative"),
++    [
++        ("100 (100)", "(100)"),
++        ("2,180 (2,180)", "(2,180)"),
++        ("45 (45)", "(45)"),
++        ("9,432.72 (9432.72)", "(9,432.72)"),
++    ],
++)
++def test_an_identically_written_bracket_is_a_negative_not_a_note(cell: str, negative: str) -> None:
++    assert fidelity(f"Cover was {negative}.", annotated(cell)) == ()
++
++
++def test_a_note_on_the_passage_side_is_read_as_written() -> None:
++    held = annotated("3,395 | 51.6%")
++    assert fidelity("Ebitda was 3,395 (51.6%).", held) == ()
++    assert len(fidelity("Ebitda was 3,395 (51.6%).", annotated("3,395 | (51.6%)"))) == 1
++
++
++@pytest.mark.parametrize(
++    ("cell", "positive", "negative"),
++    [
++        ("-1,291.272 (1,291.27)", "Debt was 1,291.27.", "Debt was (1,291.27)."),
++        ("−4.5 (4)", "Debt was 4.", "Debt was (4)."),
++    ],
++)
++def test_an_unsigned_bracket_after_a_negative_figure_is_a_negative_not_a_note(
++    cell: str, positive: str, negative: str
++) -> None:
++    assert len(fidelity(positive, annotated(cell))) == 1
++    assert fidelity(negative, annotated(cell)) == ()
++
++
++def test_a_minus_repeated_in_the_bracket_after_a_negative_figure_is_read_as_written() -> None:
++    cell = annotated("-11.5147826087 (-11.51)")
++    assert fidelity("Debt was -11.51.", cell) == ()
++    # A minus the handoff writes may be narrated as its magnitude, or in parentheses.
++    assert fidelity("Debt was 11.51.", cell) == ()
++    assert fidelity("Debt was (11.51).", cell) == ()
++    assert len(fidelity("Debt was 11.5.", cell)) == 1
++
++
++def test_a_long_line_of_notes_is_checked_in_linear_time() -> None:
++    line = "1,234.5 (1,234) " * 2500  # 40,000 characters; quadratic look-behind took about 5.5 s
++    started = time.monotonic()
++    figure_issues(f"## Findings\n\n### Bottom line\n\n{line}\n")
++    assert time.monotonic() - started < 2
