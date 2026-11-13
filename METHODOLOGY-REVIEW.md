@@ -738,7 +738,7 @@ last-change commit given). Hashes and the named edits are in `manifest.json`.
 - CP-DR: cp-os `b57a344` version 2.0 skill (file last changed `5a78f93`) with named edits 2a (open-web
   limits conditional on the web-search rules) and 2b (gap row `gap`; Complete with Gaps, never Blocked;
   caos `c746ad67`), and the v1 step bundle with edit 2b. `cpdr.md` is no longer sent.
-- CP-2D, CP-4, CP-4C: caos `dfff264` texts (last changed: CP-2D and CP-4C SKILL `592ee83a`; CP-4 SKILL `2975872f`; CP-4 step bundles `1aeaa27f`), byte-for-byte,
+- CP-2D, CP-4, CP-4C: caos `dfff264` texts (commit that last changed each file in caos: `592ee83a` for the CP-2D SKILL and steps, the CP-4C SKILL, the CP-4 and CP-4B runbooks and REF_CP-4B_STEPS; `2975872f` for the CP-4 SKILL; `1aeaa27f` for REF_CP-4_STEPS, CP-4A_RUNBOOK and REF_CP-4A_STEPS; REF_CP-4C_STEPS is unchanged by this branch), byte-for-byte,
   with named edits: the `qa_status` map removed from rule 10 (all three), the LITE route removed from
   CP-4C, CP-4C Dependencies wording (E4).
 - CP-5: caos `dfff264` ordering text (`c746ad67`) in `CP-5_RUNBOOK.md` and `REF_CP-5A_STEPS.md`: CP-6 and
