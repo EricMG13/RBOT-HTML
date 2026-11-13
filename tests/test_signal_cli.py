@@ -2,6 +2,7 @@ import contextlib
 import io
 from datetime import UTC, datetime
 
+import pytest
 from test_signal_feeds import RSS
 
 from deploy_workflow.signal.cli import main
@@ -16,6 +17,13 @@ def run(tmp_path, *args):
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
         code = main(["--root", str(tmp_path), *args])
     return code, out.getvalue()
+
+
+def run_split(tmp_path, *args):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = main(["--root", str(tmp_path), *args])
+    return code, out.getvalue(), err.getvalue()
 
 
 def test_propose_approve_list(tmp_path, monkeypatch):
@@ -154,13 +162,13 @@ def test_story_count_of_others_counts_sources_not_links(tmp_path):
 
 
 def test_approving_an_unknown_source_exits_2_with_one_line(tmp_path):
-    code, out = run(tmp_path, "sources", "approve", "999")
-    assert code == 2 and out.splitlines() == ["error: no source with id 999"]
+    code, out, err = run_split(tmp_path, "sources", "approve", "999")
+    assert code == 2 and out == "" and err.splitlines() == ["error: no source with id 999"]
 
 
 def test_adding_a_user_with_an_empty_name_exits_2(tmp_path):
-    code, out = run(tmp_path, "users", "add", "", "--role", "reader")
-    assert code == 2 and out.splitlines() == ["error: display name is empty"]
+    code, out, err = run_split(tmp_path, "users", "add", "", "--role", "reader")
+    assert code == 2 and out == "" and err.splitlines() == ["error: display name is empty"]
 
 
 def test_users_add_stores_the_name_the_page_looks_up(tmp_path):
@@ -175,8 +183,15 @@ def test_users_add_stores_the_name_the_page_looks_up(tmp_path):
 
 
 def test_users_add_refuses_a_name_that_cleans_to_nothing_in_one_line(tmp_path):
-    code, out = run(tmp_path, "users", "add", "\u200b \t", "--role", "reader")
-    assert code == 2 and out.splitlines() == ["error: display name is empty"]
+    code, out, err = run_split(tmp_path, "users", "add", "\u200b \t", "--role", "reader")
+    assert code == 2 and out == "" and err.splitlines() == ["error: display name is empty"]
+
+
+@pytest.mark.parametrize("limit", ["0", "-1", "x"])
+def test_stories_limit_must_be_a_positive_integer(tmp_path, limit):
+    code, out, err = run_split(tmp_path, "stories", "--limit", limit)
+    assert code == 2 and out == ""
+    assert err.strip().splitlines()[-1].endswith("--limit: must be an integer >= 1")
 
 
 def test_topics_add_and_list(tmp_path):
@@ -198,8 +213,8 @@ def test_topics_add_and_list(tmp_path):
 
 
 def test_topic_with_no_keywords_exits_2_with_one_line(tmp_path):
-    code, out = run(tmp_path, "topics", "add", "X", "--keywords", "", "--by", "ak")
-    assert code == 2 and len(out.splitlines()) == 1
+    code, out, err = run_split(tmp_path, "topics", "add", "X", "--keywords", "", "--by", "ak")
+    assert code == 2 and out == "" and len(err.splitlines()) == 1
 
 
 def test_kinds_with_spaces_after_commas_are_trimmed(tmp_path):
