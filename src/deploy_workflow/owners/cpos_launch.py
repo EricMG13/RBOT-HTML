@@ -2737,13 +2737,14 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         inputs = cpos_forecast.parse(text, task.handoffs["CP-1"].decode("utf-8"))
     except ValueError as error:
         message = str(error)
+        stem = message.removesuffix(".")  # the sentences below add their own full stop
         operand = re.search(r"^[\w-]+: base (\w+)\b", message)
         if operand:  # a wrong row label should not cost the forecast
             name = operand.group(1)
             fix = f"Correct the row, period, column or amount of {name}; "
             fix += f"if you cannot, state {name} "
             missing = "as missing: amount null, no row, period or column, and the reason."
-            return (f"Forecast inputs: {error}. {fix}{missing}",)
+            return (f"Forecast inputs: {stem}. {fix}{missing}",)
         if re.match(r"^[\w-]+: the handoff gives no forecast drivers", message):
             return ()  # declining stays the method's call
         both = _BOTH_KEYS.match(message)
@@ -2751,7 +2752,7 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
             names = list(dict.fromkeys(_BOTH_KEY_OPERAND.findall(message)))
             who = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
             advice = f"State either `period` or `column` for {who}, not both."
-            return (f"Forecast inputs: {error}. {advice}",)
+            return (f"Forecast inputs: {stem}. {advice}",)
         if _UNNAMED_AT_SCALE.match(message):
             fix = "Name the row and the period or column of each base operand; if you cannot, "
             advice = (
@@ -2763,7 +2764,7 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
         else:
             fix = "Correct the block; if you cannot, set every driver's values to "
             advice = f"{fix}[null, null, null] and say why in scope_limits."
-        return (f"Forecast inputs: {error}. {advice}",)
+        return (f"Forecast inputs: {stem}. {advice}",)
     return _unstated_currency(inputs)
 
 

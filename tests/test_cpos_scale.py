@@ -208,8 +208,7 @@ def test_a_scale_that_is_not_1_or_1000_is_refused(scale):
     with pytest.raises(ValueError) as caught:
         parse(block_k(scale=scale), CP1_K)
     assert (
-        str(caught.value)
-        == "CP-2G: `scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)"
+        str(caught.value) == "CP-2G: `scale` must be 1 (CP-1 prints millions) or 1000 (thousands)"
     )
 
 
@@ -456,7 +455,7 @@ def test_a_millions_chart_row_in_a_thousands_block_is_refused():  # AK-6
         parse(block_k2(base={**K2_BASE, "undrawn": CHART_ROW}), CP1_K2)
     assert str(caught.value) == (
         "CP-2G: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
-        "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
+        "block's unit (thousands, scale 1000); state a reason instead of an amount"
     )
 
 
@@ -468,7 +467,7 @@ def test_the_same_row_is_read_by_a_millions_block():
 def test_a_thousands_unit_cell_refuses_a_millions_block():
     cp1 = CP1_K2.replace("| US$m |", "| US$ thousands |")
     base = NO_BASE | {"undrawn": CHART_ROW}
-    with pytest.raises(ValueError, match="not the block's unit \\(USD millions, scale 1\\)"):
+    with pytest.raises(ValueError, match="not the block's unit \\(millions, scale 1\\)"):
         parse(forecast_block(scale=1, base=base), cp1)
 
 
@@ -490,7 +489,7 @@ def test_another_cell_of_the_row_naming_the_other_unit_is_refused():  # widened 
         parse(_revolver("Revolver availability", "H1 2025"), CP1_K2)
     assert str(caught.value) == (
         "CP-2G: base undrawn: row `Revolver availability` states its Unit and terms / evidence "
-        "as `US$ million`, not the block's unit (USD thousands, scale 1000); "
+        "as `US$ million`, not the block's unit (thousands, scale 1000); "
         "state a reason instead of an amount"
     )
 
@@ -815,12 +814,12 @@ def _layer_one(**changes):
             {"base": {**K2_BASE, "undrawn": CHART_ROW}},
             (
                 "CP-1: base undrawn: row `H1 2025` states its Reporting unit as `US$m`, not the "
-                "block's unit (USD thousands, scale 1000); state a reason instead of an amount"
+                "block's unit (thousands, scale 1000); state a reason instead of an amount"
             ),
         ),
         (
             {"scale": 7},
-            "CP-1: `scale` must be 1 (CP-1 prints USD millions) or 1000 (USD thousands)",
+            "CP-1: `scale` must be 1 (CP-1 prints millions) or 1000 (thousands)",
         ),
         (
             {"base": {**K2_BASE, "cash": {**K2_BASE["cash"], "amount": "175,509.5"}}},
@@ -1020,7 +1019,7 @@ def test_a_block_with_neither_key_still_reads_as_usd_millions():  # R3: retained
         ("revenue of £120m", "GBP", True),
         ("revenue of €120m", "EUR", True),
         ("revenue of US$120m", "USD", True),
-        ("usd millions", "USD", True),
+        ("usd millions", "USD", False),
         ("CAD millions", "CAD", True),
         ("revenue of $120m", "USD", False),
         ("revenue of C$120m", "CAD", False),
@@ -1039,3 +1038,54 @@ def test_a_handoff_names_a_currency_by_code_or_sign_and_a_bare_dollar_sign_names
 def test_the_forecast_instructions_suggest_no_currency_as_the_default():  # (g)
     for block in (cpos_launch.FORECAST_BLOCK, cpos_launch.LAYER1_FORECAST_BLOCK):
         assert "USD 20 million" not in block and "in USD millions where" not in block
+
+
+@pytest.mark.parametrize(
+    ("text", "currency", "named"),
+    [
+        ("all of net debt", "ALL", False),
+        ("net debt", "NET", False),
+        ("try again", "TRY", False),
+        ("ALL millions", "ALL", True),
+        ("us$m", "USD", True),
+        ("EURM", "EUR", True),
+    ],
+)
+def test_the_currency_code_is_matched_in_capitals_only(text, currency, named):  # F1 low L1
+    assert cpos_forecast._names_currency(text, currency) is named
+
+
+@pytest.mark.parametrize(
+    ("text", "currency", "named"),
+    [
+        ("Revenue (M€)", "EUR", True),
+        ("en m€", "EUR", True),
+        ("Statements (k€)", "EUR", True),
+        ("revenue 120m£", "GBP", True),
+        ("AUS$ 5m", "USD", False),
+        ("revenue of $120m", "USD", False),
+    ],
+)
+def test_a_euro_or_pound_sign_after_a_letter_names_its_currency(text, currency, named):  # L2
+    assert cpos_forecast._names_currency(text, currency) is named
+
+
+def test_a_refusal_text_does_not_fill_an_unstated_currency_with_usd():  # L4
+    assert cpos_forecast._unit_of(1000, None) == "thousands, scale 1000"
+    assert cpos_forecast._unit_of(1, None) == "millions, scale 1"
+    assert cpos_forecast._unit_of(1000, "GBP") == "GBP thousands, scale 1000"
+    assert cpos_forecast._scale_refusal({"scale": 10}) == (
+        "`scale` must be 1 (CP-1 prints millions) or 1000 (thousands)"
+    )
+    assert cpos_forecast._scale_refusal({"scale": 10, "currency": "GBP"}) == (
+        "`scale` must be 1 (CP-1 prints GBP millions) or 1000 (GBP thousands)"
+    )
+
+
+def test_the_acceptance_hint_ends_one_sentence_with_one_full_stop():  # L5
+    (issue,) = cpos_launch._forecast_issues(_task(_headed("GBP millions")), _currency_block("USD"))
+    assert issue == (
+        "Forecast inputs: CP-1 nowhere names `USD`: state `currency` as the three-letter code of "
+        "the currency CP-1 reports its figures in. Correct the block; if you cannot, set every "
+        "driver's values to [null, null, null] and say why in scope_limits."
+    )

@@ -41,8 +41,9 @@ LAYER1_LIMIT = (
 )
 SOURCES = ("CP-2G", "CP-1")
 # A block that predates `currency` states none and is read as USD, the only currency the field's
-# absence ever meant. A block that states `scale` without `currency` is never labelled: CP-2G's is
-# refused at acceptance (`cpos_launch._unstated_currency`), a layer-1 block's in `parse`.
+# absence ever meant. A block that states `scale` without `currency` is refused at acceptance when
+# CP-2G writes it (`cpos_launch._unstated_currency`) and withheld in `parse` when it is a layer-1
+# block; a retained CP-2G block that skipped acceptance still reads USD millions.
 UNSTATED_CURRENCY = "USD"
 CURRENCY_CODE = re.compile(r"[A-Z]{3}")
 
@@ -326,25 +327,29 @@ _NAMES_THOUSANDS = re.compile(rf"\bthousands?\b|[$'\u2019]000s?\b|{_CURRENCY}\s?
 _NAMES_MILLIONS = re.compile(
     rf"\b(?:millions?|billions?)\b|{_CURRENCY}\s?(?:m|mm|mn|bn)\b", re.IGNORECASE
 )
-_CURRENCY_SIGN = {"USD": r"US\$", "EUR": "\u20ac", "GBP": "\u00a3"}
+# The sign of each currency that has one. `US$` after a letter is not the dollar (`AUS$`); a euro or
+# pound sign is, whatever precedes it (`M\u20ac`, `120m\u00a3`).
+_CURRENCY_SIGN = {"USD": r"(?i:(?<![A-Za-z])US\$)", "EUR": "\u20ac", "GBP": "\u00a3"}
 
 
 def _names_currency(text: str, currency: str) -> bool:
-    """Whether CP-1 names `currency` anywhere, headings included: its code as a whole token or
-    glued to a scale suffix (`GBPm`, `GBPk`, `GBP000`), or, for the three that have one, its sign
-    (`US$`, a euro or pound sign). A bare `$` names no currency.
+    """Whether CP-1 names `currency` anywhere, headings included: its code, in capitals, as a whole
+    token or glued to a scale suffix (`GBPm`, `GBPk`, `GBP000`), or, for the three that have one,
+    its sign (`US$`, a euro or pound sign). A bare `$` names no currency; the code is not matched
+    in lower case, so `all` and `net debt` name neither `ALL` nor `NET`.
     ponytail: presence only. A handoff that names the stated currency anywhere (a USD issuer that
     mentions a EUR tranche, block wrongly `EUR`) passes, and so does one row in another currency;
     reading each cell's own currency refused real handoffs."""
-    forms = [rf"(?<![A-Za-z]){currency}(?:mm|mn|bn|m|k|000s?)?(?![A-Za-z0-9])"]
+    forms = [rf"(?<![A-Za-z]){currency}(?i:mm|mn|bn|m|k|000s?)?(?![A-Za-z0-9])"]
     if currency in _CURRENCY_SIGN:
-        forms.append(rf"(?<![A-Za-z]){_CURRENCY_SIGN[currency]}")
-    return re.search("|".join(forms), text, re.IGNORECASE) is not None
+        forms.append(_CURRENCY_SIGN[currency])
+    return re.search("|".join(forms), text) is not None
 
 
 def _unit_of(scale: int, currency: str | None) -> str:
-    code = currency or UNSTATED_CURRENCY
-    return f"{code} millions, scale 1" if scale == 1 else f"{code} thousands, scale 1000"
+    """The block's unit in a refusal text; with no stated currency it names none."""
+    code = f"{currency} " if currency else ""
+    return f"{code}millions, scale 1" if scale == 1 else f"{code}thousands, scale 1000"
 
 
 def _units_named(text: str) -> frozenset[str]:
@@ -434,9 +439,8 @@ _THOUSANDS = re.compile(r"-?[0-9]{1,9}(\.[0-9])?")
 
 def _scale_refusal(document: dict[str, Any]) -> str:
     stated = document.get("currency")
-    code = stated if isinstance(stated, str) and CURRENCY_CODE.fullmatch(stated) else None
-    code = code or UNSTATED_CURRENCY
-    return f"`scale` must be 1 (CP-1 prints {code} millions) or 1000 ({code} thousands)"
+    code = f"{stated} " if isinstance(stated, str) and CURRENCY_CODE.fullmatch(stated) else ""
+    return f"`scale` must be 1 (CP-1 prints {code}millions) or 1000 ({code}thousands)"
 
 
 def _slots(document: dict[str, Any]) -> Iterator[tuple[str, Any, Any]]:
