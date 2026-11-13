@@ -31,6 +31,7 @@ import sys
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType
@@ -820,22 +821,36 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
     rulings_root: Path | None = None,
     effort_by_module: Mapping[str, str] | None = None,
     on_notice: Callable[[str], None] | None = None,
+    web_lookup: str = "default",
+    web_hosts: Sequence[str] = (),
+    lookup_cutoff: date | None = None,
 ) -> Path:
     """Explicit paid entry point; callers supply an evidence/instruction checker.
+
+    ``web_lookup`` (``default``, ``on`` or ``off``), ``web_hosts`` (the case's own
+    investor-relations hosts) and ``lookup_cutoff`` (the run's research cutoff; the as-of date
+    when None) set the research module's page and SEC EDGAR lookups. ``default`` is settled
+    here, against the plan's case kind, so the executor and ``loop.json`` hold the answer.
 
     No provider execution occurs during build, import, replay or normal delivery.
     Credentials come from the launching environment, never a file in this API.
     """
     import os
 
-    from deploy_workflow.model.handoff import HandoffExecutor
+    from deploy_workflow.model.handoff import (
+        WEB_LOOKUP_MODULES,
+        HandoffExecutor,
+        web_lookup_offered,
+    )
     from deploy_workflow.model.redact import Redactor
     from deploy_workflow.model_testing.configs import CONFIGS
+    from deploy_workflow.research.weblookup import Runtime
 
     request = HandoffPlan.model_validate_json(manifest.read_bytes())
     if request.execution != "live-provider":
         raise ValueError("cpos_live_mode: manifest must explicitly declare live-provider")
     environment = os.environ if environ is None else environ
+    lookup_on = web_lookup_offered(web_lookup, WEB_LOOKUP_MODULES[0], request.run.case_kind)
     adapter = live_adapter_for(CONFIGS[config], ruling, environment, rulings_root)
     try:
         executor = HandoffExecutor(
@@ -850,6 +865,10 @@ def run_live_handoffs(  # noqa: PLR0913 -- the explicit paid entry point takes e
             web_search=web_search_run(config, ruling, rulings_root),
             effort_by_module=effort_by_module,
             notice=on_notice,
+            web_lookup="on" if lookup_on else "off",
+            web_hosts=web_hosts,
+            lookup_cutoff=lookup_cutoff,
+            lookup_runtime=Runtime(env=environment),
         )
         result = run_handoffs(
             manifest,

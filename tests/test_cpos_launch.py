@@ -2458,6 +2458,7 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # CP-8 pin recomputed on 2026-11-13 (merge of origin/main into claude/deploy-v-methods): it is the
 # merge of main's CP-8 method change (cp8.md redesign) with this branch's appendix section. Every
 # other pin is this branch's value; main changed no other method text.
+# CP-DR pin recomputed on 2026-11-13 for named edit 2c (the lookup paragraph; t5-cpdr-lookup).
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
@@ -2479,7 +2480,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-5": "9ac221698cc36a06473ce8cd9c2128c1705da362b289163d4ab54fda0d418d76",
     "CP-6": "115d07e8934f049b920e497834bcf61d53c6fe0cdd0266daf56b87d18d5e1f26",
     "CP-8": "0a0b339a9f9a284328b9a6fb50513a9bd03f2aa58dd45a387fe057b6ce2612c3",
-    "CP-DR": "83aa5447c37db42db2e3df91cdd0cfaf491f37c0436fc8257c0d5fb43e735353",
+    "CP-DR": "8c83b6a8bbf877117b2a8da430ee9a9384c8366335a40baa079b0b35cea04e24",
     "CP-L10": "5b0e904dd62e1d1b341ec3d7d1717500d68ce1aee734b347e0dbbdfbe696b006",
 }
 
@@ -7139,3 +7140,181 @@ def test_a_note_for_the_separate_cp8_comparison_prints_the_same_review_line(tmp_
     )
     cpos.report_compaction(tmp_path, "requests/CP-8/fp/2.response.md", "CP-8")
     assert capsys.readouterr().err == ""
+
+
+# ---- Web lookup (CP-DR's fetch_page and SEC tools): the flag, the readiness lines and the
+# hand-over to the live run. The rule itself is `web_lookup_offered`; the rest is in
+# tests/test_web_lookup_tools.py.
+SEC_AGENT_VARIABLE = "DEPLOY_WORKFLOW_SEC_USER_AGENT"
+SEC_AGENT_VALUE = "Example Co person@example.invalid"
+
+
+def lookup_lines(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
+    if monkeypatch is not None:
+        if agent is None:
+            monkeypatch.delenv(SEC_AGENT_VARIABLE, raising=False)
+        else:
+            monkeypatch.setenv(SEC_AGENT_VARIABLE, agent)
+    argv = launch(tmp_path, "--modules", "CP-DR", *flags)
+    with_case_kind(tmp_path / "context.json", kind)
+    assert main(argv) == 0
+    out = capsys.readouterr()
+    return [
+        line for line in (out.out + out.err).splitlines() if line.startswith(("Lookup:", "SEC:"))
+    ]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (
+            "public",
+            (),
+            (
+                "Lookup:   on: CP-DR may fetch allowlisted public pages and SEC EDGAR "
+                "(public case default)"
+            ),
+        ),
+        ("private", (), "Lookup:   off: private case (default); --web-lookup on forces it"),
+        ("synthetic", (), "Lookup:   off: synthetic case (default); --web-lookup on forces it"),
+        ("private", ("--web-lookup", "on"), "Lookup:   on (forced by --web-lookup on)"),
+        ("public", ("--web-lookup", "off"), "Lookup:   off (forced by --web-lookup off)"),
+        (
+            "public",
+            (
+                "--web-lookup",
+                "default",
+                "--web-host",
+                "ir.example.com",
+                "--web-host",
+                "Ir2.Example.com",
+            ),
+            (
+                "Lookup:   on: CP-DR may fetch allowlisted public pages and SEC EDGAR "
+                "(public case default); case hosts: ir.example.com, ir2.example.com"
+            ),
+        ),
+    ],
+)
+def test_the_run_summary_says_whether_cpdr_may_look_things_up(tmp_path, capsys, monkeypatch, case):
+    kind, flags, line = case
+    found = lookup_lines(
+        tmp_path, capsys, kind, *flags, agent=SEC_AGENT_VALUE, monkeypatch=monkeypatch
+    )
+    assert found == [line]
+    assert SEC_AGENT_VALUE not in capsys.readouterr().out
+
+
+def test_the_sec_line_appears_when_lookup_is_on_and_the_contact_string_is_not_set(
+    tmp_path, capsys, monkeypatch
+):
+    found = lookup_lines(tmp_path, capsys, "public", monkeypatch=monkeypatch)
+    assert found[1] == (
+        "SEC:      sec.gov lookups will be refused: DEPLOY_WORKFLOW_SEC_USER_AGENT is not set"
+    )
+    (tmp_path / "b").mkdir()
+    off = lookup_lines(tmp_path / "b", capsys, "private", monkeypatch=monkeypatch)
+    assert len(off) == 1  # nothing to refuse while lookup is off
+
+
+def test_the_lookup_line_is_printed_only_when_the_research_module_runs(tmp_path, capsys):
+    assert main(launch(tmp_path, "--modules", "CP-4")) == 0
+    assert "Lookup:" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "https://ir.example.com",
+        "ir.example.com/x",
+        "ir.example.com:8443",
+        "*.example.com",
+        "10.1.2.3",
+        "intranet",
+    ],
+)
+def test_a_web_host_must_be_a_bare_host_name(tmp_path, capsys, bad):
+    with pytest.raises(SystemExit) as stop:
+        main(launch(tmp_path, "--modules", "CP-DR", "--web-host", bad))
+    assert stop.value.code == 2
+    assert "--web-host" in capsys.readouterr().err
+
+
+def test_an_unknown_web_lookup_value_is_refused(tmp_path):
+    with pytest.raises(SystemExit) as stop:
+        main(launch(tmp_path, "--modules", "CP-DR", "--web-lookup", "maybe"))
+    assert stop.value.code == 2
+
+
+def test_the_live_run_is_handed_the_lookup_setting_hosts_and_cutoff(tmp_path, monkeypatch):
+    from datetime import date
+
+    monkeypatch.setenv(cpos_launch.KEY_VARIABLES["openai"], "sk-test-" + "x" * 30)
+    seen = {}
+
+    def fake_run(manifest, directory, **kwargs):
+        seen.update(kwargs)
+        return directory / "delivery.json"
+
+    monkeypatch.setattr(cpos_launch, "run_live_handoffs", fake_run)
+    argv = launch(
+        tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING), "--no-library",
+        "--web-lookup", "on", "--web-host", "ir.example.com",
+    )  # fmt: skip
+    assert main(argv) == 0
+    assert (seen["web_lookup"], seen["web_hosts"]) == ("on", ("ir.example.com",))
+    assert seen["lookup_cutoff"] == date(2025, 3, 31)  # the as-of date: the context sets no cutoff
+
+
+def test_a_context_cutoff_before_the_as_of_date_is_the_lookup_cutoff(tmp_path, monkeypatch):
+    from datetime import date
+
+    monkeypatch.setenv(cpos_launch.KEY_VARIABLES["openai"], "sk-test-" + "x" * 30)
+    seen = {}
+    monkeypatch.setattr(
+        cpos_launch, "run_live_handoffs", lambda m, d, **k: seen.update(k) or d / "delivery.json"
+    )
+    argv = launch(tmp_path, "--modules", "CP-DR", "--live", "--ruling", str(RULING), "--no-library")
+    path = tmp_path / "context.json"
+    data = json.loads(path.read_text())
+    data["run"]["cutoff"] = "2025-01-15"
+    path.write_text(json.dumps(data))
+    assert main(argv) == 0
+    assert seen["lookup_cutoff"] == date(2025, 1, 15)
+
+
+def test_run_live_handoffs_resolves_the_default_against_the_case_kind(tmp_path, monkeypatch):
+    from deploy_workflow.model import handoff
+    from deploy_workflow.owners import cpos
+
+    class Stop(Exception):
+        pass
+
+    seen = {}
+
+    def executor(*args, **kwargs):
+        seen.update(kwargs)
+        raise Stop
+
+    for kind, expected in (("public", "on"), ("private", "off")):
+        monkeypatch.setattr(handoff, "HandoffExecutor", executor)
+        monkeypatch.setattr(cpos, "live_adapter_for", lambda *a, **k: object())
+        out = tmp_path / kind
+        out.mkdir()
+        prepare(
+            with_case_kind(context_file(out), kind),
+            issuer_folder(out),
+            out / "out",
+            config="sol-medium",
+            cap="50",
+        )
+        with pytest.raises(Stop):
+            cpos.run_live_handoffs(
+                out / "out/workflow.json",
+                out / "live",
+                ruling=RULING,
+                check=lambda *_: (),
+                environ={SEC_AGENT_VARIABLE: SEC_AGENT_VALUE},
+            )
+        assert seen["web_lookup"] == expected
+        assert seen["lookup_runtime"].env[SEC_AGENT_VARIABLE] == SEC_AGENT_VALUE
