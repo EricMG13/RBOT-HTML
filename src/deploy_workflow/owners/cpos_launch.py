@@ -1137,8 +1137,9 @@ EVENT_RULES = (
     "YYYY-Qn, `year` YYYY. Never write a day the source does not state, and infer no day from a "
     "coarser date. Published is the date of the publication the row is taken from (YYYY-MM-DD), "
     "the one cited in Source: a row from a 10-K dated 2024-11-07 carries 2024-11-07 even when the "
-    "event is a 2033 maturity. Write `Not supplied: <reason>` only when that document states no "
-    "date; never `\u2014` or `Not stated`. Status starts with `Historical`, "
+    "event is a 2033 maturity, and it equals the event date when the document is published that "
+    "day (an 8-K, an earnings release). Write `Not supplied: <reason>` only when that document "
+    "states no date; never `\u2014` or `Not stated`. Status starts with `Historical`, "
     "`Scheduled` or `Scenario`, then ` \u2014 ` and the source's own words, e.g. `Scenario \u2014 "
     "modelled downgrade trigger`. Record each event once, in the lane of the module that owns "
     "it; another module refers to it in Credit relevance, it does not repeat the row. Source "
@@ -1493,11 +1494,6 @@ def _event_issues(spec: OwnerTable, header: list[str], row: list[str]) -> list[s
             )
     if not _stated_gap(published) and not _iso_date(published):
         issues.append(f"Published `{published}` must be {PUBLISHED_FORMS}.")
-    elif published == stated:
-        issues.append(
-            "Published repeats the event date: it is the date of the publication the row is "
-            f"taken from, not the event's; write {PUBLISHED_FORMS}."
-        )
     if not _stated_gap(cells["Status"]) and not EVENT_STATUS.match(cells["Status"]):
         issues.append(
             f"Status `{cells['Status']}` must start with {EVENT_KINDS} and ` \u2014 `, "

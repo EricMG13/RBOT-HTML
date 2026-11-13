@@ -817,7 +817,7 @@ def _event_row_ok(cells: list[str]) -> bool:
     published_ok = (
         published == "\u2014" or valid_date(published) or bool(STATED_GAP.match(published))
     )
-    return bool(dated and stated and kind and published_ok and published != when)
+    return bool(dated and stated and kind and published_ok)
 
 
 def _event_lane(section: dict[str, Any]) -> dict[str, Any] | None:

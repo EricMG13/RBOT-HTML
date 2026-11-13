@@ -5204,48 +5204,32 @@ def test_an_event_status_starts_with_its_kind_and_a_dash(status, ok):
     assert ok or any("Status" in i for i in issues), issues
 
 
-def test_a_published_date_equal_to_the_event_date_is_sent_back():
-    issues = event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | Src | R |")
-    assert any("repeats the event date" in i and "publication" in i for i in issues), issues
+def test_a_published_date_equal_to_the_event_date_is_accepted_when_the_document_is_cited():
+    # An 8-K or an earnings release is published on its event date: that is a legitimate row, so
+    # the old refusal is gone (owner ruling, T1 follow-up). The instruction states the rule.
+    assert (
+        event_issues("| 2025-03-31 | day | 2025-03-31 | E | Scheduled — due | 8-K p.1 | R |") == ()
+    )
     assert event_issues("| 2025-03-31 | day | 2025-03-30 | E | Scheduled — due | Src | R |") == ()
     assert event_issues("| 2025-03 | month | 2025-03-31 | E | Scheduled — due | Src | R |") == ()
 
 
-# Published is the date of the publication the row is taken from (checker-loop-3, corrected). The
-# 2033 maturity is taken from the FY2024 annual report, whose own date is 2024-11-07.
-TEN_K_ROW = (
-    "| 2033-06-15 | day | {} | 2033 senior secured notes mature | Scheduled \u2014 maturity "
-    "| Annual report FY2024, p.145 | Wall |"
-)
-PUBLISHED_FORMS = ("YYYY-MM-DD", "Not supplied: <reason>")
-
-
-def test_an_event_row_taken_from_a_dated_10k_carries_that_documents_date():
-    assert event_issues(TEN_K_ROW.format("2024-11-07")) == ()
-
-
-def test_a_published_gap_with_a_reason_passes_but_the_checker_cannot_see_the_documents_date():
-    # The checker reads the table only: it cannot tell whether the cited document states a date, so
-    # a stated reason is accepted in form. The instruction names the document's own date as the
-    # answer, so the gap is for a document that states none.
-    assert event_issues(TEN_K_ROW.format("Not supplied: the memo states no date")) == ()
-    assert event_issues(TEN_K_ROW.format("Not supplied:")) != ()
-    text = cpos_launch._selector(event_spec("CP-3"))
-    assert "date of the publication the row is taken from" in text
-    assert "only when that document states no date" in text
-
-
-@pytest.mark.parametrize("cell", ["\u2014", "Not stated", "n/a", ""])
-def test_a_bare_dash_or_not_stated_published_is_refused_listing_the_allowed_forms(cell):
-    issues = [i for i in event_issues(TEN_K_ROW.format(cell)) if "Published" in i]
-    assert issues, cell
-    assert all(form in issues[0] for form in PUBLISHED_FORMS), issues
-
-
-def test_published_is_checked_once_so_the_two_checks_cannot_contradict_each_other():
-    gap = event_issues(TEN_K_ROW.format("Not supplied: no date stated"))
-    bad = event_issues(TEN_K_ROW.format("Not stated"))
-    assert gap == () and len(bad) == 1, bad
+def test_a_period_table_unit_and_second_table_get_the_same_advice():
+    spec = cpos_launch.OWNER_TABLES["CP-1"][0]
+    head = PERIOD_HEAD.format("Revenue | Adjusted EBITDA")
+    row = "| FY2024 | 100 | 20 | {} | Basis. |"
+    heading = f"### {spec.heading}\n\n"
+    issues = cpos_launch.chart_issues(
+        heading + synthetic_table(head, row.format("US$m; per year")), spec
+    )
+    assert len(issues) == 2  # one per number cell, as before
+    assert all("must be exactly `US$m`" in i and "Basis and limitation" in i for i in issues)
+    other = cpos_launch.chart_issues(heading + synthetic_table(head, row.format("EUR m")), spec)
+    assert len(other) == 2 and all("write `Not supplied: reported in EUR m`" in i for i in other)
+    second = "| Other | Date |\n| --- | --- |\n| x | 2024-10-18 |"
+    text = heading + synthetic_table(head, row.format("US$m")) + "\n" + second
+    (two,) = cpos_launch.chart_issues(text, spec)
+    assert "a second table under this heading: give it its own ### heading" in two
 
 
 def test_the_event_rules_say_record_once_and_the_status_kinds():
