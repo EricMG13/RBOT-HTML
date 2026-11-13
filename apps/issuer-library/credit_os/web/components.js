@@ -244,7 +244,7 @@
     const parts = text.split(/\s*[;,]\s*/).filter(part => part !== '');
     return parts.length > 0 && parts.every(part => [...STRONG_REFERENCE, ...WEAK_REFERENCE].some(rx => rx.test(part))) && parts.some(part => STRONG_REFERENCE.some(rx => rx.test(part)));
   }
-  const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{16,}\b/i, /(?<![\w.-])(?!and\/or\b)[\w.-]+\/[\w.-]+/];  // a file name, a module code, a hex id of 16 or more, a slash path (dir/file; "and/or" is a phrase)
+  const REFERENCE_IN_TEXT = [/[\w-]+\.[A-Za-z]{2,5}\b/, /\bCP-[A-Za-z0-9]+/, /\b[0-9a-f]{16,}\b/i, new RegExp(`(?<![\\w.-])[\\w.-]+(?:\\/[\\w.-]+){2,}|(?<![\\w.-])[\\w.-]+\\/[\\w-]+\\.(?:${FILE_EXTENSIONS})\\b`, 'i')];  // a file name, a module code, a hex id of 16 or more, a slash path (two or more slashes, or a last segment with a file extension; "FY23/FY24" and "and/or" are phrases)
   const STRICT_REFERENCE = [new RegExp(`[\\w-]+(?:\\.[\\w-]+)*\\.(?:${FILE_EXTENSIONS})\\b`, 'i'), /\b(?=[0-9]*[a-f])[0-9a-f]{16,}\b/i, /\bsc\d+\b/i, /\bCP-[0-9A-Z]+\s+[A-Z]{1,2}\d{2}\b/];
   const tokenPatterns = new WeakMap();
   function tokensIn(text, tokens) {

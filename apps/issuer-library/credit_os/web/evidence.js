@@ -35,12 +35,15 @@
     let tab = null;
     try { tab = section === undefined ? null : decodeURIComponent(section); } catch (error) { if (!(error instanceof URIError)) throw error; }
     const module = new URLSearchParams(query).get('m');
-    return {tab: TAB_IDS.includes(tab) ? tab : 'summary', module: module !== null && moduleIds.includes(module) ? module : null};
+    const row = new URLSearchParams(query).get('r');
+    return {tab: TAB_IDS.includes(tab) ? tab : 'summary', module: module !== null && moduleIds.includes(module) ? module : null, ...(row !== null && /^\d+$/.test(row) ? {row} : {})};
   }
-  function href(tab, module, context) {
+  // `row` is the handoff line of a row to bring into view (a search hit); the page scrolls to it and marks it.
+  function href(tab, module, context, row = null) {
     const params = new URLSearchParams();
     if (context) params.set('c', context);
     if (module) params.set('m', module);
+    if (row !== null && row !== undefined) params.set('r', String(row));
     return `#W-Evidence/${encodeURIComponent(tab)}${params.size ? `?${params}` : ''}`;
   }
 
@@ -142,7 +145,7 @@
     const numeric = view.headers.map((header, at) => numericColumn(view.rows.map(r => r.cells[at])));
     const mono = view.headers.map(header => ['source', 'id'].includes(shapes.columnKind(header)));
     const head = view.headers.map((header, at) => `<th scope="col" class="${numeric[at] ? 'num' : ''}${mono[at] ? ' mono' : ''}">${esc(header)}</th>`).join('');
-    const body = view.rows.map(row => `<tr ${counted === 'rows' ? 'data-hay' : 'data-find'}="${hay(name, row.cells.join(' '))}">${row.cells.map((cell, at) => `<td class="${numeric[at] ? 'num ' : ''}${mono[at] ? 'mono ' : ''}${cell.length > 60 ? 'wide' : ''}">${rich(cell)}</td>`).join('')}</tr>`).join('');
+    const body = view.rows.map(row => `<tr ${counted === 'rows' ? 'data-hay' : 'data-find'}="${hay(name, row.cells.join(' '))}" data-line="${esc(row.line)}">${row.cells.map((cell, at) => `<td class="${numeric[at] ? 'num ' : ''}${mono[at] ? 'mono ' : ''}${cell.length > 60 ? 'wide' : ''}">${rich(cell)}</td>`).join('')}</tr>`).join('');
     const tableHead = hay(name, caption, view.headers.join(' '));
     return `<div class="ev-tbl" role="region" aria-label="${esc(caption)}" tabindex="0" data-group data-head="${tableHead}"${counted === 'table' ? ` data-hay="${tableHead}"` : ''}><table><caption class="sr-only">${esc(caption)}</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }

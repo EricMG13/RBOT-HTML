@@ -778,7 +778,9 @@ const registerSection=(id,section)=>{
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
-const tableRows=section=>section.blocks.filter(block=>block.type==='table').reduce((rows,block)=>rows+block.rows.length,0);
+// The rail's count is of the items the section draws, read from its own markup: a feed item, a limitation, and one per table row that has its trace control (a row held back or not drawn has none).
+const drawnRows=html=>new Set([...html.matchAll(/data-evidence="([^"]*)"/g)].map(m=>m[1])).size;
+const drawnOf=(html,rx)=>(html.match(rx)||[]).length;
 // The line of the first section that holds one of a drawing's tables: where in the handoff the drawing stood.
 const drawingLine=(id,drawings)=>Math.min(...(drawings||[]).map(drawing=>drawingSection(id,drawing.table)?.line??Infinity));
 // A part is [anchor, label, html, count?]; `count` is the number of listed items the rail shows beside the label.
@@ -794,7 +796,7 @@ function newFormatParts(id) {
   const change=window.Components.callout('What would change the view',texts.contrary,controls('contrary').trace,controls('contrary').figure);
   if(feed||change) {
     const both=Boolean(feed&&change);
-    parts.push(['key-findings',feed?'Key findings':'What would change the view',`<section class="part key-row g24" id="key-findings">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h4 class="rd-h">Key findings</h4>${feed}</div></div>`:''}${change?`<div class="${both?'c10':'c24'}" id="contrary-evidence">${change}</div>`:''}</section>`,texts.key.length]);
+    parts.push(['key-findings',feed?'Key findings':'What would change the view',`<section class="part key-row g24" id="key-findings">${feed?`<div class="${both?'c14':'c24'}"><div class="rd-card"><h4 class="rd-h">Key findings</h4>${feed}</div></div>`:''}${change?`<div class="${both?'c10':'c24'}" id="contrary-evidence">${change}</div>`:''}</section>`,...(feed?[drawnOf(feed,/<li class="feed-item"/g)]:[])]);
   }
   // Charts, timeline and maps keep their renderers; each stands where its section stood in the handoff, among the finding sections.
   const body=[],charts=newFormatChartCards(id),maps=reportMaps(id),timeline=reportTimeline(id);
@@ -802,17 +804,17 @@ function newFormatParts(id) {
   if(timeline)body.push([drawingLine(id,out.events),['timeline','Timeline',timeline]]);
   if(maps)body.push([drawingLine(id,out.maps),['maps','Maps',maps]]);
   for(const section of newFormatSplit(id).rest) {
-    const rows=tableRows(section);
-    body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${findingSection(id,section)}</section>`,...(rows?[rows]:[])]]);
+    const html=findingSection(id,section),rows=drawnRows(html);
+    body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${html}</section>`,...(rows?[rows]:[])]]);
   }
   parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
   // The promoted registers follow the finding sections as one group, each under its section's own heading, in handoff order.
   for(const section of newFormatSplit(id).registers) {
-    const rows=promotedTables(section).reduce((n,block)=>n+block.rows.length,0);
-    parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${registerSection(id,section)}</section>`,rows]);
+    const html=registerSection(id,section),rows=drawnRows(html);
+    parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${html}</section>`,...(rows?[rows]:[])]);
   }
   const limits=window.Components.limitationsBlock(texts.limits,gapSignal(out.run,out.module),window.Evidence.href('gaps',out.module,out.run),controls('limits').trace,controls('limits').figure);
-  if(limits)parts.push(['limitations','Limitations',`<section class="part" id="limitations"><div class="rd-card"><h4 class="rd-h">Limitations</h4>${limits}</div></section>`,texts.limits.length]);
+  if(limits)parts.push(['limitations','Limitations',`<section class="part" id="limitations"><div class="rd-card"><h4 class="rd-h">Limitations</h4>${limits}</div></section>`,drawnOf(limits,/<li>/g)]);
   return parts;
 }
 // The module page: the head, then (new format) the section rail beside the parts. An earlier-format page is its parts in a row, as it always was.
@@ -1093,6 +1095,13 @@ function navigatorView(module,query) {
     return shown.length?`<div class="nav-group"><h2 class="nav-heading">${esc(title)}</h2><ul class="module-list">${shown.map(([id,name])=>navigatorEntry(id,name,module,context,query)).join('')}</ul></div>`:'';
   }).join('')+(count?'':'<p class="empty">No match. Try another name or topic.</p>');
   return {html,count};
+}
+// A search hit on a table whose section the module page does not hold: the Evidence tab that holds the section (Sources, Calculations, Registers or Gaps) for its module, with the hit's row
+// (its handoff line) in view; null for a section no tab holds, which keeps the module route.
+const EVIDENCE_HIT_TABS=['sources','calculations','registers','gaps'];
+function evidenceHit(id,heading,line=null) {
+  const role=window.Evidence.classify(data[id].sections,data[id].placement).find(entry=>entry.section.heading===heading)?.role;
+  return EVIDENCE_HIT_TABS.includes(role)?window.Evidence.href(role,data[id].module,data[id].run,line):null;
 }
 const moduleHref=id=>routeHref(id,lastSection.get(current?.context+':'+id)||firstSection(id,current?.context));
 function moduleLink(id,label){return `<a class="text-action" href="${moduleHref(id)}">${esc(label||moduleNames[id])}${icon('arrow-right')}</a>`;}

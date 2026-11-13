@@ -1410,3 +1410,14 @@ test('A11: sidedBoard reading order: each side heading stands first inside its o
   assert.ok(at(/class="sd-hs sd-s0"/) < at(/Margin/) && at(/Margin/) < at(/class="sd-hs sd-s1"/) && at(/class="sd-hs sd-s1"/) < at(/Cost/));
   assert.ok(!html.includes('class="sd-h"'));
 });
+
+test('B1: a slash in a hidden-column reason is held back only for a path (two or more slashes, or a file extension at the end)', () => {
+  const ctx = {evidenceHref: '#e'};
+  const drawn = reason => C.gapState({headers: ['Item', 'Value', 'Source'], rows: [{line: 1, cells: ['Revolver', 'Not supplied: nothing stated', reason]}]}, ctx);
+  for (const reason of ['Not supplied: net debt/EBITDA not stated', 'Not supplied: n/a', 'Not supplied: FY23/FY24', 'Not supplied: lenders and/or agents']) {
+    assert.ok(drawn(reason).includes(reason.replace('Not supplied: ', '')), reason);
+  }
+  for (const reason of ['Not supplied: see handoffs/CP-1/output.md', 'Not supplied: see docs/file.pdf']) {
+    assert.ok(!drawn(reason).includes(reason.slice(-9)) && drawn(reason).includes('class="in-ev"'), reason);
+  }
+});

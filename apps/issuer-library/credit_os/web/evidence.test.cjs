@@ -502,7 +502,7 @@ test('the comparison\'s own figures, built from the two runs\' packs, are listed
 });
 
 test('ledger: its rows are searchable like the rest of the tab (each row has its own search text, the head matches the whole table)', () => {
-  const html = cp8View('gaps'), row = /<tr data-hay="([^"]*)"><td[^>]*>E2</.exec(html);
+  const html = cp8View('gaps'), row = /<tr data-hay="([^"]*)"(?: data-line="\d+")?><td[^>]*>E2</.exec(html);
   assert.ok(row && row[1].includes('carried over') && row[1].includes('remaining'));
   assert.ok(/data-head="[^"]*earlier ref[^"]*"/.test(html));
 });

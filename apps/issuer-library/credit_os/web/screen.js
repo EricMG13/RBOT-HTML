@@ -246,6 +246,8 @@ function renderSearch(query) {
   const code=id=>data[id].label===data[id].module?moduleNames[data[id].module]:`${moduleNames[data[id].module]} · ${data[id].label}`;
   const sectionOf=(id,heading)=>modules[id].sections.find(s=>s[2].some(p=>matchesHeading(heading,p)))?.[0];
   const href=(id,section,key=null)=>routeHref(data[id].module,section,key,context,data[id].source);
+  // A section the module page does not hold (Sources, Calculations ...) is reached on its Evidence tab, at the hit's row; else it opens where the module page holds it.
+  const hitHref=(id,heading,line=null,key=null)=>{const section=sectionOf(id,heading);return section===undefined&&evidenceHit(id,heading,line)||href(id,section,key);};
   const hit=(kind,owner,label,target)=>`<a class="search-hit" href="${esc(target)}" aria-label="${esc(`${kind}: ${owner} ${label}`)}"><span class="code">${esc(owner)}</span><span>${esc(label)}</span></a>`;
   const group=(title,total,hits)=>total?`<div class="search-group"><p>${title}${hits.length<total?` · ${hits.length} of ${total}`:''}</p>${hits.join('')}</div>`:'';
   // A row's title can be a bare row number; name the cell that matched unless it is a whole paragraph.
@@ -263,8 +265,8 @@ function renderSearch(query) {
     ...Object.values(store.inputs).filter(input=>input.run===context&&has(input.source)).map(input=>hit('Source',moduleNames[input.module]||input.module,input.source,routeHref('W-Evidence','sources',null,context))),
   ];
   const items=[...evidence.entries()].filter(([,item])=>item.run===context&&has(item.title,...item.fields.map(field=>field[1]))).sort((a,b)=>outputs.indexOf(a[1].output)-outputs.indexOf(b[1].output));
-  $('search-results').innerHTML=group('Figures',figures.length,figures.slice(0,6).map(([id,label,heading])=>hit('Figure',code(id),label,href(id,sectionOf(id,heading)))))
-    +group('Sources',files.length+items.length,[...files.slice(0,4),...items.slice(0,4).map(([key,item])=>hit('Reference',code(item.output),itemLabel(item),href(item.output,sectionOf(item.output,item.section),key)))]);
+  $('search-results').innerHTML=group('Figures',figures.length,figures.slice(0,6).map(([id,label,heading])=>hit('Figure',code(id),label,hitHref(id,heading))))
+    +group('Sources',files.length+items.length,[...files.slice(0,4),...items.slice(0,4).map(([key,item])=>hit('Reference',code(item.output),itemLabel(item),hitHref(item.output,item.section,item.line,key)))]);
   nameCodes($('search-results'),null,false); // hits come from several outputs, so no step title is borrowed from the open one (a step id reads "a method step"); register references stay as they are
 }
 function renderNavigator(module) {
@@ -311,7 +313,7 @@ function parseRoute() {
   const chip=/^\d+$/.test(requestedChip)&&Number(requestedChip)<keyChips.length?Number(requestedChip):requestedChip==='gaps'&&keyChips.some(unresolvedGap)?'gaps':/^(p|f\d+)$/.test(requestedChip)?requestedChip:null;
   // The Evidence page's tab is its route section and its module filter the `m` parameter, read the way `c` is; evidence.js owns both.
   const evidencePage=module==='W-Evidence'?window.Evidence.parseHash(location.hash,Object.keys(contexts[context]?.modules||{})):null;
-  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part,tab:evidencePage?.tab??null,evidenceModule:evidencePage?.module??null};
+  return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part,tab:evidencePage?.tab??null,row:evidencePage?.row??null,evidenceModule:evidencePage?.module??null};
 }
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
@@ -509,6 +511,15 @@ function scrollToPart(part) {
   if(target)openFolds(target);
   content.scrollTop=target?Math.max(0,content.scrollTop+target.getBoundingClientRect().top-content.getBoundingClientRect().top-10):0;
 }
+// A search hit's row on an Evidence tab: the first row of the panel with that handoff line is marked and brought into view.
+function showEvidenceRow(line) {
+  const row=$('ev-panel')?.querySelector(`tr[data-line="${line}"]`);
+  if(!row)return;
+  $('ev-panel').querySelectorAll('tr.is-hit').forEach(other=>other.classList.remove('is-hit'));
+  row.classList.add('is-hit');
+  const content=$('content');
+  content.scrollTop=Math.max(0,content.scrollTop+row.getBoundingClientRect().top-content.getBoundingClientRect().top-80);
+}
 function openFolds(target) {
   for(let fold=target.closest('details');fold;fold=fold.parentElement?.closest('details'))fold.open=true;
 }
@@ -585,6 +596,7 @@ function renderRoute() {
     $('content').scrollTop=readingPositions.get(positionKey(next))||0;
     if(reportPage(next)&&next.section!=='head')scrollToPart(next.section);
     if(next.part)scrollToPart(next.part);
+    if(next.row)showEvidenceRow(next.row);
     showNavigator(false);
     // Search hits drive moves between analytical modules, so the query is kept there and dropped elsewhere.
     if(previous&&previous.module!==next.module&&!isAnalytical(next.module))$('module-search').value='';
@@ -598,7 +610,10 @@ function renderRoute() {
       (restored&&!restored.disabled?restored:link||destination).focus({preventScroll:true});
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
-  } else if(next.part)scrollToPart(next.part);
+  } else {
+    if(next.part)scrollToPart(next.part);
+    if(next.row)showEvidenceRow(next.row);
+  }
   if(partMove) {
     scrollToPart(next.section);
     renderNavigator(next.module);
