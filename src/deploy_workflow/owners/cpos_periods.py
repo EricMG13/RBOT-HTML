@@ -56,7 +56,6 @@ _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 DATED_TWICE = (
     "CP-1's period table dates {label} more than once, differently; it is treated as undated."
 )
-DATED_TWICE_CELL = "CP-1's period table dates {label} more than once, differently"
 
 
 def _date(cell: str) -> date | None:
@@ -95,24 +94,7 @@ def period_dates(tables: list[list[list[str]]]) -> tuple[Dates, tuple[str, ...]]
     return dates, twice
 
 
-_LTM_LABEL = re.compile(r"LTM Q[1-4] \d{4}", re.ASCII)
-LtmDates = dict[str, set[Span]]
-
-
-def ltm_dates(tables: list[list[list[str]]]) -> LtmDates:
-    """The spans CP-1's period tables state for rows labelled `LTM Qn YYYY` (a label that is not a
-    period; read only as a stock's balance date)."""
-    seen: LtmDates = {}
-    for table in tables:
-        if not table or [_plain(cell) for cell in table[0][:3]] != ["Period", "Start", "End"]:
-            continue
-        for row in table[1:]:
-            if len(row) < 3 or _LTM_LABEL.fullmatch(_plain(row[0])) is None:
-                continue
-            start, end = _date(row[1]), _date(row[2])
-            if start is not None and end is not None and start <= end:
-                seen.setdefault(_plain(row[0]), set()).add((start, end))
-    return seen
+_LTM_HEADER = re.compile(r"LTM\b", re.ASCII)
 
 
 NOT_A_CELL = "the base amount is not a table cell of CP-1"
@@ -121,11 +103,14 @@ NO_REASON = "no reason was stated"
 NO_SIGN = "the base cell is zero, so the sign of this row's figures is not known"
 DIFFERENT = "CP-1 prints different figures for this line in {period}"
 NOT_PRINTED = "CP-1 does not print this line for {period}"
-LABEL_NOT_DATED = "CP-1's period table does not date {label}"
-LABEL_OTHER_DAY = "CP-1 dates {label} to {end}, not the {anchor} the {what} ends"
 _STOCKS = frozenset({"debt", "cash", "undrawn"})
 NOT_UNDER_A_PERIOD = (
     "CP-1 prints the base amount only under a column header that is not a period ({header})"
+)
+LTM_HOLDS_FLOWS = (
+    "CP-1 prints the base amount only under the column {header}, and an `LTM` column holds "
+    "flows only; name the balance by its row under a period column (`FY2024`, `H1 2025`), or "
+    "state it as missing with the reason"
 )
 NOT_A_PERIOD_ROW = (
     "the forecast inputs name {column} as a column, and the row {row} is not a period"
@@ -148,17 +133,13 @@ class ByColumn(NamedTuple):
 class Line:
     """One base operand's history. `reason` set: no history for the line. `unread`: the
     year-bearing headers of its tables that are not periods (`unread_rows`: the row labels of a
-    table read by column). `balances`: for a stock, the figures under each `LTM Qn YYYY` label."""
+    table read by column)."""
 
     values: dict[Period, Decimal] = field(default_factory=dict)
     gaps: dict[Period, str] = field(default_factory=dict)
     reason: str | None = None
     unread: tuple[str, ...] = ()
     unread_rows: tuple[str, ...] = ()
-    balances: dict[str, set[Decimal]] = field(default_factory=dict)
-    balance_gaps: dict[str, str] = field(
-        default_factory=dict
-    )  # an `LTM Qn YYYY` row in another unit
 
 
 @dataclass(frozen=True)
@@ -167,7 +148,6 @@ class _Row:
     figures: dict[Period, set[Decimal]]
     columns: set[Period]
     signless: bool = False  # an unsigned zero base cell and no common sign in the row
-    balances: dict[str, set[Decimal]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -245,20 +225,15 @@ def _row(hit: _Hit, key: str, base_column: int) -> _Row:
     sign = _row_sign(hit, base_column) if key in _BASE_SIGNED else False
     figures: dict[Period, set[Decimal]] = {}
     columns: set[Period] = set()
-    balances: dict[str, set[Decimal]] = {}
     for column, name in enumerate(hit.header):
         period = period_of(name) if column else None
         if period is None:
-            if column and key in _STOCKS and _LTM_LABEL.fullmatch(_plain(name)):
-                number = _number(hit.row[column]) if column < len(hit.row) else None
-                if number is not None:
-                    balances.setdefault(_plain(name), set()).add(number)
             continue
         columns.add(period)
         number = _number(hit.row[column]) if column < len(hit.row) else None
         if number is not None:
             figures.setdefault(period, set()).add(_published(key, number, bool(sign)))
-    return _Row(hit.table, figures, columns, sign is None, balances)
+    return _Row(hit.table, figures, columns, sign is None)
 
 
 def _rows_under(hits: list[_Hit], key: str, target: Period) -> list[_Row]:
@@ -308,11 +283,7 @@ def _line(
         else:
             template = DIFFERENT if found else NOT_PRINTED
             gaps[period] = template.format(period=period_label(period))
-    balances: dict[str, set[Decimal]] = {}
-    for row in rows:
-        for name, found in row.balances.items():
-            balances.setdefault(name, set()).update(found)
-    return Line(values=values, gaps=gaps, balances=balances, unread=unread)
+    return Line(values=values, gaps=gaps, unread=unread)
 
 
 def lines(
@@ -347,11 +318,7 @@ def _locate(
                 found[key] = _named_line(tables, key, operand.amount, named.get(key))
             else:
                 line = _named_line(tables, key, operand.amount * scale, named.get(key))
-                found[key] = replace(
-                    line,
-                    values={p: v / scale for p, v in line.values.items()},
-                    balances={n: {v / scale for v in vs} for n, vs in line.balances.items()},
-                )
+                found[key] = replace(line, values={p: v / scale for p, v in line.values.items()})
     return found, _named_base(named)
 
 
@@ -453,11 +420,13 @@ def _named_line(
             unread=(),
             unread_rows=line.unread,
             gaps={**line.gaps, **gaps},
-            balance_gaps={n: r for n, r in other.items() if period_of(n) is None},
         )
     target = period_of(name[1])
     if target is None:
-        return Line(reason=NOT_UNDER_A_PERIOD.format(header=_cut(_plain(name[1]))))
+        header = _cut(_plain(name[1]))
+        if key in _STOCKS and _LTM_HEADER.match(header):
+            return Line(reason=LTM_HOLDS_FLOWS.format(header=header))
+        return Line(reason=NOT_UNDER_A_PERIOD.format(header=header))
     return _line(tables, key, amount, _plain(name[0]), target)
 
 
@@ -468,11 +437,11 @@ NOT_DATED = (
     "them, so the last twelve months are not checked for a short or changed fiscal year."
 )
 NO_YTD = "the latest reported period is fiscal year {label}; there is no year to date"
-NEEDS = "needs {labels}, which CP-1 does not print"
+NEEDS = "needs {labels}, which the table holding the named row does not print"
 NO_PF = "no handoff states pro forma adjustments"
 NOT_EXACT = "the figures cannot be added exactly"
 PART_YEAR = "a ratio to part-year earnings is not shown"
-NO_COLUMN = "CP-1 prints no {group} column Python can read"
+NO_COLUMN = "the tables holding the named rows print no {group} column Python can read"
 NO_ANCHOR = "no base line was found under a period header of CP-1"
 DATED = "The last twelve months were checked against CP-1's period dates ({days} days)."
 NOT_CONTINUOUS = (
@@ -483,10 +452,6 @@ NOT_BUILT = (
     "nothing to check against its period dates."
 )
 NOT_TWELVE = "{fy} is not twelve months by CP-1's period dates ({days} days)"
-OWN_BALANCES = (
-    "CP-1's own {label} figures for revenue, earnings and cash flow are not read; its balances "
-    "are read as of {end}."
-)
 OWN_LTM = (
     "CP-1's own {label} figures for revenue, earnings and cash flow are not read; the LTM column "
     "is built from {fy} + {ytd} - {pytd}."
@@ -543,8 +508,6 @@ class _Context:
     printed: frozenset[Period]
     dates: Dates
     no_anchor: str = NO_ANCHOR
-    labels: LtmDates = field(default_factory=dict)
-    twice: tuple[str, ...] = ()
 
 
 def _anchor_of(found: dict[str, Line]) -> _Anchor | None:
@@ -733,75 +696,6 @@ def _placeholder(ctx: _Context, kind: str, group: str) -> Column:
     return _why(_column(group, kind, group, None, values), reason)
 
 
-def _label_problem(ctx: _Context, label: str, period: Period) -> str | None:
-    """Why the `LTM Qn YYYY` label is not the balance date of the column (its End is the End of
-    the dates of `period`, the year to date or the fiscal year), or None."""
-    spans = ctx.labels.get(label)
-    if not spans or len(spans) > 1:
-        return (DATED_TWICE_CELL if spans else LABEL_NOT_DATED).format(label=label)
-    span = ctx.dates.get(period)
-    if span is None:
-        twice = period_label(period) in ctx.twice
-        return (DATED_TWICE_CELL if twice else LABEL_NOT_DATED).format(label=period_label(period))
-    ((_, end),) = spans
-    if end != span[1]:
-        return LABEL_OTHER_DAY.format(
-            label=label,
-            end=end.isoformat(),
-            anchor=span[1].isoformat(),
-            what="fiscal year" if period[0] == "FY" else "year to date",
-        )
-    return None
-
-
-def _balance(ctx: _Context, line: Line, real: cp2g.Val, period: Period) -> cp2g.Val:
-    """A stock's balance at the column's date: the figure of the column's own period when CP-1
-    prints one, else the one printed under the `LTM Qn YYYY` label, read only when CP-1 dates that
-    label to the day the column's period ends. Two figures that differ give no balance."""
-    label = f"LTM Q{period[2]} {period[1]}"
-    printed = line.balances.get(label)
-    if line.reason is not None or not printed:
-        gap = None if line.reason is not None else line.balance_gaps.get(label)
-        return cp2g.Val(None, gap) if gap and real.amount is None else real
-    different = cp2g.Val(None, DIFFERENT.format(period=period_label(period)))
-    if real == different:
-        return real
-    problem = _label_problem(ctx, label, period)
-    if problem is not None:
-        return real if real.amount is not None else cp2g.Val(None, problem)
-    if len(printed) > 1:
-        return cp2g.Val(None, DIFFERENT.format(period=label))
-    (figure,) = printed
-    if real.amount is None:
-        return cp2g._known(figure)
-    return real if real.amount == figure else different
-
-
-def _balances(ctx: _Context, reads: Reads, period: Period) -> Reads:
-    """The reads with each stock replaced by its `_balance`."""
-    return {
-        key: _balance(ctx, ctx.found[key], value, period) if key in _STOCKS else value
-        for key, value in reads.items()
-    }
-
-
-def _label_read(
-    ctx: _Context, before: Reads, after: Reads, period: Period
-) -> tuple[str, str] | None:
-    """The `LTM Qn YYYY` label and its limit line, when a stock of the column of `period` was read
-    from the figure printed under that label (it had no figure of the period's own)."""
-    label = f"LTM Q{period[2]} {period[1]}"
-    spans = ctx.labels.get(label)
-    if not spans or not any(
-        after[key].amount is not None and before[key].amount is None
-        for key in _STOCKS
-        if key in after
-    ):
-        return None
-    ((_, end),) = spans
-    return label, OWN_BALANCES.format(label=label, end=end.isoformat())
-
-
 def _ytd_reads(ctx: _Context, period: Period) -> Reads:
     """A year-to-date column's values: its period's cells, or NEEDS when no located line prints
     the period (a quarter is never summed into it)."""
@@ -909,8 +803,6 @@ def _interim(
     n, k = anchor.year, anchor.quarters
     ytd_p, pytd_p, older_p = _ytd_period(n, k), _ytd_period(n - 1, k), _ytd_period(n - 2, k)
     ytd, pytd = _ytd_reads(ctx, ytd_p), _ytd_reads(ctx, pytd_p)
-    ytd_read = ytd
-    ytd = _balances(ctx, ytd, ytd_p)
     ltm, prior = dict(ytd), dict(pytd)
     for key in _FLOWS:
         line = ctx.found[key]
@@ -940,9 +832,7 @@ def _interim(
     return (
         [*columns, *_twelve_months(label, ltm_values, ltm_check, prior_values, prior_check)],
         _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
-        (label, own)
-        if ltm_built and (ltm_check is None or ltm_check.reason is None)
-        else _label_read(ctx, ytd_read, ytd, ytd_p),
+        (label, own) if ltm_built and (ltm_check is None or ltm_check.reason is None) else None,
     )
 
 
@@ -953,8 +843,6 @@ def _fiscal(
     n = anchor.year
     reason = NO_YTD.format(label=period_label(("FY", n, 4)))
     ltm = {key: _needs(ctx.found[key], ("FY", n, 4)) for key in _READ}
-    ltm_read = ltm
-    ltm = _balances(ctx, ltm, ("FY", n, 4))
     prior = {key: _needs(ctx.found[key], ("FY", n - 1, 4)) for key in _READ}
     ltm_values = _derived(ltm, False)
     ltm_built = _built(ltm_values)
@@ -969,7 +857,7 @@ def _fiscal(
             *_twelve_months(f"LTM FY{n}", ltm_values, ltm_check, prior_values, prior_check),
         ],
         _first_limits(ltm_check, ltm_built, prior_built and prior_check is None),
-        _label_read(ctx, ltm_read, ltm, ("FY", n, 4)),
+        None,
     )
 
 
@@ -1084,7 +972,6 @@ def history(
     located = [line for line in found.values() if line.reason is None]
     printed = frozenset(p for line in located for p in (*line.values, *line.gaps))
     dates, twice = period_dates(tables)
-    labels = ltm_dates(tables)
     anchor = _anchor_of(found)
     nothing_named = not any(key in (named or {}) for key in ("revenue", "ebitda"))
     unnamed = (
@@ -1092,9 +979,7 @@ def history(
         and nothing_named
         and NOT_NAMED in (found["revenue"].reason, found["ebitda"].reason)
     )
-    ctx = _Context(
-        found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR, labels, twice
-    )
+    ctx = _Context(found, located, anchor, printed, dates, NOT_NAMED if unnamed else NO_ANCHOR)
     (ytd, pytd, ltm, prior), first, own = _four(ctx)
     pf = _why(_column("PF", "PF", "PF LTM", None, _blanket(NO_PF)), NO_PF)
     quarters, quarter_cut = _group(ctx, "QUARTER", "Quarter", _MAX_QUARTERS)
