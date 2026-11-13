@@ -44,8 +44,6 @@ function earlierFormatRun(outputsSections) {
   return (outputsSections || []).some(sections => !isNewFormat(sections));
 }
 
-const sectionText = section => (section ? section.blocks.filter(b => b.type === 'text').map(b => b.text).join('\n') : '');
-
 // Not assessable: new format by the engine contract (the launcher makes a blocked module's Bottom line BEGIN exactly `Not assessable: `
 // and forbids the phrase in a non-blocked Bottom line); earlier format by the store's own state.established === false.
 function blocked(sections, state) {
@@ -238,11 +236,6 @@ function figureSpans(text) {
     spans.push({start: from, end: to, text: text.slice(from, to)});
   }
   return spans;
-}
-
-// H6 check 7: lower case, Basis line dropped, punctuation removed, whitespace collapsed.
-function normaliseLimitation(text) {
-  return splitBasis(text).body.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
 }
 
 // ---- Earlier format (H7): a bracket citation or chip that ends a sentence or the paragraph moves, verbatim, to the items.
@@ -484,29 +477,4 @@ function runModuleCodes(run) {
   return [...new Set([...ordered, ...held])];
 }
 
-// The last day of a period dated to a month (YYYY-MM), a quarter (YYYY-Qn) or a year (YYYY) as YYYY-MM-DD; null for any other text.
-function periodEnd(date) {
-  const text = String(date);
-  const pad = n => String(n).padStart(2, '0');
-  const endOfMonth = (year, month) => `${year}-${pad(month)}-${pad(new Date(Date.UTC(Number(year), month, 0)).getUTCDate())}`;
-  let found = /^(\d{4})-(\d{2})$/.exec(text);
-  if (found) return Number(found[2]) >= 1 && Number(found[2]) <= 12 ? endOfMonth(found[1], Number(found[2])) : null;
-  found = /^(\d{4})-Q([1-4])$/.exec(text);
-  if (found) return endOfMonth(found[1], 3 * Number(found[2]));
-  found = /^(\d{4})$/.exec(text);
-  return found ? `${found[1]}-12-31` : null;
-}
-
-// H5.5 / drafting choice 8: the next n items (five) in total on or after asOf, nearest first. A day-dated item (YYYY-MM-DD) sorts by that day; an item
-// dated only to a month, quarter or year sorts by its period end; both kinds share one ordering. Ties: a day-dated item before a period-dated one,
-// then input order. An item with no such date is left out. The caller tells the kinds apart by the date text.
-function nearestDates(items, asOf, n = 5) {
-  const entries = items.map((item, index) => {
-    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(item.date));
-    return {item, index, day, key: day ? String(item.date) : periodEnd(item.date)};
-  }).filter(entry => entry.key !== null && entry.key >= asOf);
-  const order = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.day !== b.day ? (a.day ? -1 : 1) : a.index - b.index);
-  return entries.sort(order).slice(0, n).map(entry => entry.item);
-}
-
-if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, figuredHtml, figureButton, paragraphLabel, passageControls, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, normaliseLimitation, earlierBasis, historyRows, pathwayTitle, runModuleCodes, nearestDates};
+if (typeof module !== 'undefined') module.exports = {escapeHtml, plainText, richText, chartNumber, numericColumn, cellView, basisButton, writtenCell, paragraphBody, figuredHtml, figureButton, paragraphLabel, passageControls, paragraphView, tableView, sectionBodyHtml, calculationRow, readerPassages, isNewFormat, earlierFormatRun, blocked, splitBasis, basisItem, inspectorItem, inspectorItems, inspectorItemHtml, inspectorBasisBlock, uniqueChips, figureSpans, earlierBasis, historyRows, pathwayTitle, runModuleCodes};

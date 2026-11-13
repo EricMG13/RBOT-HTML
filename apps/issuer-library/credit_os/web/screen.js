@@ -317,7 +317,7 @@ function parseRoute() {
   const sections=navigationSections(module,context,output),first=output&&isAnalytical(module)?REPORT_PARTS[0][0]:modules[module]?.first;
   // A report page also routes to one drawn section, as s-<line>; any other name opens the head.
   const anchored=Boolean(output&&isAnalytical(module))&&drawnAnchors(output).has(requestedSection);
-  // The Forecast page draws its chart index after the models: that one name scrolls to it. It draws the model the Forecast tab
+  // The Forecast page draws its charts after the models: that one name scrolls to them. It draws the model the Forecast tab
   // would open (the remembered section while it is a section of this run, else the first) and leaves what is remembered alone.
   const part=module==='W-Forecast'&&requestedSection==='run-charts'?requestedSection:null;
   const remembered=part&&lastSection.get(context+':W-Forecast');
@@ -333,7 +333,7 @@ function parseRoute() {
   const evidencePage=module==='W-Evidence'?window.Evidence.parseHash(location.hash,Object.keys(contexts[context]?.modules||{})):null;
   return {module,output,file,section:selected[0],label:selected[1],context,evidence:permitted?key:null,chip:permitted?chip:null,part,tab:evidencePage?.tab??null,row:evidencePage?.row??null,evidenceModule:evidencePage?.module??null};
 }
-// The section name the route was opened with: the Forecast chart index keeps its own name, which parseRoute resolves to a model.
+// The section name the route was opened with: the Forecast charts keep their own name, which parseRoute resolves to a model.
 const here=()=>current.part??current.section;
 function go(module,section,key=null,file,chip=null) {location.hash=file===undefined?routeHref(module,section,key,current?.context,undefined,chip):routeHref(module,section,key,current?.context,file,chip);}
 // The source-page part of the inspector for the chip that opened it. The excerpt, flags and reasons are the build's; nothing is judged here.
@@ -653,7 +653,7 @@ function drawRoute() {
       if(previous.module!==next.module||previous.context!==next.context)$('navigator').scrollTop=0;
     }
   } else {
-    if(next.part&&next.part!==previous?.part)scrollToPart(next.part); // opening or closing a trace on the chart index leaves the page where it is
+    if(next.part&&next.part!==previous?.part)scrollToPart(next.part); // opening or closing a trace on the Forecast charts leaves the page where it is
     if(next.row)showEvidenceRow(next.row);
   }
   if(partMove) {

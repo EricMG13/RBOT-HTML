@@ -1629,7 +1629,6 @@ function updateLibrary(panel=false) {
 }
 // ---- The run report: the run's landing page. Every sentence is a handoff cell verbatim; the counts, the state and the words come from
 // Python (data[id].state, data[id].words). The page makes no judgement of its own.
-const NO_SUMMARY='No reader summary';
 // Every module that has an output in the run, in reading-group order: [group title, [{module, id, out}]]. A module with saved outputs but no
 // default has id and out null and the number of its outputs in choices: the page does not pick one for it.
 function runGroups(context) {
@@ -1639,7 +1638,6 @@ function runGroups(context) {
   };
   return groups.map(([title,items])=>[title,items.map(([module])=>item(module)).filter(item=>item.id||item.choices)]).filter(([,items])=>items.length);
 }
-const stateWord=established=>established===true?'Reaches a conclusion':established===false?'Not assessable':NO_SUMMARY;
 // ---- The Overview (ruling H5; redesign 2026-11-13): selection and ordering of the handoffs' own passages and tables, text unchanged. Nothing is written, counted or
 // judged here except counts of listed items; a passage the handoff lacks is named as missing, never replaced by other text (H7). The page answers, in order: the view
 // (the lead module's Bottom line and the figures it cites), what decides it (the first sided table), why (Key findings), what would change it, what to watch, the modules
@@ -1868,7 +1866,6 @@ function swapActivityScript(doc,now) {
   doc.head.append(script);
   if(previous)previous.remove();
 }
-// A wide table scrolls inside its own focusable region, never the page (the region pattern of the library and chart index tables).
 // ---- Evidence (ruling decisions 9, 10; library redesign task 3): evidence.js draws a governance summary and the tabs; this gathers what the library holds for the run.
 // A chart section the module wrote that the build sent back: it has no contract and no gap, and the output's `issue` names it. The build's message is Evidence's.
 function sentBackCharts(id) {

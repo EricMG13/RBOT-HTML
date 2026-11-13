@@ -570,7 +570,6 @@ details.audit>summary span{font:400 var(--fs-compact)/1 'Red Hat Text',sans-seri
 .context-bar[hidden]{display:none}
 .context-run{margin:0;min-width:0;max-width:100%;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;overflow-wrap:anywhere}.context-run>*{min-width:0}.context-revision{margin:0;min-width:0;overflow-wrap:anywhere}.context-run strong{color:var(--text-primary)}
 @media(max-width:720px){.context-bar{padding:4px 15px}}
-.index-table{font-size:var(--fs-label)}.index-table th,.index-table td{vertical-align:top;font-family:'Red Hat Text',sans-serif}.index-table .index-limit{min-width:220px;overflow-wrap:anywhere}
 .history-table,.dates-table{width:100%;border-collapse:collapse;font-size:var(--fs-control)}
 .history-table caption,.dates-table caption{text-align:left;padding:8px 0;color:var(--text-secondary);font-size:var(--fs-label)}
 .history-table th,.history-table td,.dates-table th,.dates-table td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--border-secondary)}
