@@ -2886,7 +2886,7 @@ def _cp2a_scenarios(cp2a: str) -> tuple[tuple[str, str], ...]:
     without doubt: one marker, one cell for each column, every data row long enough and both its
     cells opening with a Share, and at least one row that is not the zero control. Documented
     fail-open: a repair round costs a paid call, so a block is sent back only for a table Python
-    read completely; the reason is logged at INFO."""
+    read completely; the reason is logged at WARNING."""
     rows, why = _t2ds_rows(cp2a)
     columns = _t2ds_columns(rows[0]) if not why else None
     if not why and columns is None:
@@ -2897,21 +2897,21 @@ def _cp2a_scenarios(cp2a: str) -> tuple[tuple[str, str], ...]:
     if not why and all(Decimal(s) == 0 and Decimal(k) == 0 for s, k in pairs):
         why = "no scenario row is other than the zero control"
     if why:
-        log.info("CP-2A scenarios not checked against downside_shock: %s", why)
+        log.warning("CP-2A scenarios not checked against downside_shock: %s", why)
         return ()
     return tuple(pairs)
 
 
 def _shock_issues(task: HandoffTask, inputs: cpos_forecast.ForecastInputs) -> tuple[str, ...]:
     """The block's `downside_shock` must be one of CP-2A's stated scenarios (owner ruling
-    2026-11-13). Documented fail-open, logged at INFO with its reason (`_cp2a_scenarios`): when
+    2026-11-13). Documented fail-open, logged at WARNING with its reason (`_cp2a_scenarios`): when
     CP-2A is not sent, or Python did not read the whole of its T2DS.1 table, nothing is checked
     and the block is not sent back."""
     stated = inputs.downside_shock
     if stated is None:
         return ()
     if "CP-2A" not in task.handoffs:
-        log.info("CP-2A scenarios not checked against downside_shock: CP-2A is not sent")
+        log.warning("CP-2A scenarios not checked against downside_shock: CP-2A is not sent")
         return ()
     scenarios = _cp2a_scenarios(task.handoffs["CP-2A"].decode("utf-8"))
     pair = (Decimal(stated.ebitda_decline), Decimal(stated.rate_increase))

@@ -296,9 +296,9 @@ def test_at_most_eight_pairs_are_listed():
 
 
 def test_a_skipped_check_is_logged_with_its_reason(caplog):
-    with caplog.at_level(logging.INFO, logger=cpos_launch.__name__):
-        assert issues(CORRECT, READABLE_FORMS["percent only"]) == ()
+    assert issues(CORRECT, READABLE_FORMS["percent only"]) == ()
     (record,) = caplog.records
+    assert (record.levelno, "not checked against downside_shock" in record.msg) == (30, True)
     assert "does not open with a Share" in record.getMessage()
 
 
