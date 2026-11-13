@@ -80,8 +80,21 @@ WILDCARD_MESSAGE = (
 )
 
 _WEB = Path(__file__).resolve().parent / "web"
-# Located from the repository; a later task handles the packaged layout.
-_BRAND = Path(__file__).resolve().parents[3] / "apps" / "issuer-library" / "credit_os" / "web"
+
+
+def find_brand(base: Path) -> Path:
+    """The folder holding brand.css, fonts and brand/, under ``base`` (the folder that holds src/).
+
+    The repository keeps it in apps/issuer-library/credit_os/web; the package puts credit_os/web
+    beside src/. With neither, the repository path is returned and start-up names missing files."""
+    candidates = [
+        base / "apps" / "issuer-library" / "credit_os" / "web",
+        base / "credit_os" / "web",
+    ]
+    return next((path for path in candidates if (path / "brand.css").is_file()), candidates[0])
+
+
+_BRAND = find_brand(Path(__file__).resolve().parents[3])
 PAGE = _WEB / "index.html"
 _HTML = "text/html; charset=utf-8"
 _CSS = "text/css; charset=utf-8"
