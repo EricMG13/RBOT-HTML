@@ -1084,6 +1084,46 @@
       "use": "CP-OS-only copy of the CP-2A short stress-design text; src/deploy_vii/methods/cp2a.md stays on disk unchanged for the structured runtime",
       "source_sha256": "28be81bfb97a83e739e4a514612a2db3bf12b72480128f54c66c33fc2ab06236",
       "edit": "named edits to the copy only: (1) every table ID T2B.n renamed T2DS.n (nine IDs, six prose mentions; T2B collides with REF_CP-2A_STEPS.md); (2) HTML-comment clause \"; no r14 CP-2A text exists in the repo\" removed; (3) \", computed in Python\" removed from the Purpose sentence (\"base period, computed in Python from settled CP-1 facts\" -> \"base period from settled CP-1 facts\"); (4) line-1 HTML comment now begins \"CP-OS copy of\" before the source path (it still named the file src/deploy_vii/methods/cp2a.md). sha256 is this edited file, source_sha256 the byte-for-byte copy of src/deploy_vii/methods/cp2a.md in this repo at 7c12a1c"
+    },
+    {
+      "consumed_path": "skills/cp-1-canonical-data-foundation/SKILL.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/SKILL.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation/SKILL.md",
+      "sha256": "35b865705f9cb4a001c8a227767319bc3f34d274c3659164176ab2e70bf3a345",
+      "source_revision": "caos-databricks vendor/deploy-v at repo HEAD dfff264 (file last changed a14f9051); Deploy V c4d2e35 is the ancestor",
+      "use": "CP-1 method, archived byte-for-byte (checked 2026-11-13, working file equals git blob at dfff264)"
+    },
+    {
+      "consumed_path": "skills/cp-1-canonical-data-foundation/references/CP-1_RUNBOOK.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/references/CP-1_RUNBOOK.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation/references/CP-1_RUNBOOK.md",
+      "sha256": "7934e8c562832b8320243cbf08e84b16575a0d2e4974fd918bf094b300fcd4ad",
+      "source_revision": "caos-databricks vendor/deploy-v at repo HEAD dfff264 (file last changed b283233c); Deploy V c4d2e35 is the ancestor",
+      "use": "CP-1 method, archived byte-for-byte (checked 2026-11-13, working file equals git blob at dfff264)"
+    },
+    {
+      "consumed_path": "skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md",
+      "sha256": "e9552f0d2b128cbe27ec58cdc2360e0e67c96a9f6ec21a140854f310de201bc1",
+      "source_revision": "caos-databricks vendor/deploy-v at repo HEAD dfff264 (file last changed a14f9051); Deploy V c4d2e35 is the ancestor",
+      "use": "CP-1 method, archived byte-for-byte (checked 2026-11-13, working file equals git blob at dfff264)"
+    },
+    {
+      "consumed_path": "skills/cp-1-canonical-data-foundation/references/CP-1_SCHEMA_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/references/CP-1_SCHEMA_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation/references/CP-1_SCHEMA_REFERENCE.md",
+      "sha256": "356e87cb37a5ed86c96b15a913f42b8aafee544cd70e4f8f2fde01ce58cc7b72",
+      "source_revision": "caos-databricks vendor/deploy-v at repo HEAD dfff264 (file last changed a14f9051); Deploy V c4d2e35 is the ancestor",
+      "use": "CP-1 method, archived byte-for-byte (checked 2026-11-13, working file equals git blob at dfff264)"
+    },
+    {
+      "consumed_path": "skills/cp-1-canonical-data-foundation/references/CP-1_SYSTEM_REFERENCE.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-1-canonical-data-foundation/references/CP-1_SYSTEM_REFERENCE.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/caos-databricks/vendor/deploy-v/skills/cp-1-canonical-data-foundation/references/CP-1_SYSTEM_REFERENCE.md",
+      "sha256": "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0",
+      "source_revision": "caos-databricks vendor/deploy-v at repo HEAD dfff264 (file last changed cc9c3e58); Deploy V c4d2e35 is the ancestor",
+      "use": "CP-1 method, archived byte-for-byte (checked 2026-11-13, working file equals git blob at dfff264)"
     }
   ],
   "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill were first copied read-only from cp-os at commit b57a344. Each file's source is the one its own entry names: `exact_copy_found_at` (a path whose file is byte-equal to the archived file, checked 2026-11-13) or, for a file edited since the copy, `edited_copy_of` with the named `edit`. Not every companion is a cp-os copy: CP-4's six references, the CP-2D steps, the CP-5 runbook and the CP-5A steps are caos-databricks copies; the CP-2G and CP-DR steps are edited cp-os copies; CP-3C is a Deploy V copy; the CP-2A stress copy comes from this repo. Four SKILL.md files were archived earlier (cp-2h, cp-3, cp-6, cp-dr) as the cp-os initial-commit text (a31f3f5), which differs from cp-os at b57a344; as of 2026-11-13 each is stated by its own entry: cp-2h and cp-3 are the live cp-os (b57a344) files exactly, after one named edit each (the 115f664 blocklist change); cp-dr is the live cp-os v2.0 text (b57a344) plus named edits 2a and 2b; cp-6 is the initial-commit text plus named CP-5/CP-6 ordering edits and is not the live cp-os file. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
