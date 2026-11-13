@@ -1,3 +1,3 @@
-Also `CP-2A-T2DS.1-sol-001.md`: lines 83-90 of the real tdg-full-copilot-sol-001-resume CP-2A.md (the heading, the marker, the blank line after it, and the table), unedited.
+Also `CP-2A-T2DS.1-sol-001.md`: lines 83-91 of the real tdg-full-copilot-sol-001-resume CP-2A.md (the heading, the marker, the blank line after it, and the table), unedited.
 
 Cut verbatim from the real run `tdg-full-copilot-sol-high-001-resume` (TransDigm, as of 30 September 2024), delivery 20ea7117...: `CP-2G-forecast-block.md` is CP-2G.md lines 71-132 (the forecast inputs block, unedited, `rate_increase` 0.0184 as the module sent it); `CP-1-tables.md` is four whole CP-1.md tables (key metrics, income statement, balance sheet, cash flow), which the block's operands name; `CP-2A-T2DS.1.md` is CP-2A.md table T2DS.1 (lines 226-232).

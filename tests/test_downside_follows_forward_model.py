@@ -273,6 +273,7 @@ def test_the_real_sol_001_table_with_its_blank_line_is_read():
     assert issues(block_with(downside_shock=shock("0.20", "0.025")), SOL_001_T2DS) == ()
     (issue,) = issues(block_with(downside_shock=shock("0.2", "0.0015")), SOL_001_T2DS)
     assert "0.20 / 0.025" in issue
+    assert issues(block_with(downside_shock=shock("0.75", "0.10")), SOL_001_T2DS) == ()
 
 
 def test_the_real_sol_high_table_accepts_its_rows_and_rejects_the_yield_change():
@@ -299,3 +300,59 @@ def test_a_skipped_check_is_logged_with_its_reason(caplog):
         assert issues(CORRECT, READABLE_FORMS["percent only"]) == ()
     (record,) = caplog.records
     assert "does not open with a Share" in record.getMessage()
+
+
+def sent_back_for(cp2a: str) -> tuple[str, ...]:
+    return issues(block_with(downside_shock=shock("0.4", "0.3")), cp2a.encode())
+
+
+@pytest.mark.parametrize(
+    "cell",
+    ["1) 0.20", "1 − 0.80 = 0.20", "0,20", "0 → 0.20", "0 (fixed-rate debt); 0.30 on floating"],
+)
+def test_a_cell_whose_text_after_its_share_adds_a_number_fails_open(cell):
+    text = T2DS_HEAD + DIV + S00 + f"| s01 | {cell} | 0.30 |\n" + S02
+    assert issues(CORRECT, text.encode()) == ()
+
+
+@pytest.mark.parametrize(
+    ("cell", "share"), [("0.2000 fraction; 20%", "0.2000"), ("0.025 (2.5% increase)", "0.025")]
+)
+def test_a_share_with_only_the_percent_that_restates_it_is_read(cell, share):
+    rows = f"| s00 | 0 | 0 |\n| s01 | {cell} | {cell} |\n"
+    assert cpos_launch._cp2a_scenarios(T2DS_HEAD + DIV + rows) == (("0", "0"), (share, share))
+
+
+T2DS_HEAD = "<!-- table-id: T2DS.1 -->\n| Scenario | EBITDA decline | Interest increase |\n"
+DIV = "|---|---|---|\n"
+S00, S01, S02 = "| s00 | 0 | 0 |\n", "| s01 | 0.20 | 0.30 |\n", "| s02 | 0.40 | 0.30 |\n"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        T2DS_HEAD + S02 + S01,
+        T2DS_HEAD + DIV + S00 + S01 + "s02 | 0.40 | 0.30 |\n",
+        T2DS_HEAD + DIV + S00 + S01 + "  " + S02,
+        T2DS_HEAD + DIV + S00 + S01 + "| s02 adverse \\| 1 notch | 0.40 | 0.30 |\n",
+        T2DS_HEAD + DIV + S00 + S01 + "\n" + S02,
+    ],
+    ids=["no divider", "no leading pipe", "indented", "escaped pipe", "blank"],
+)
+def test_a_table_that_may_not_end_where_python_stopped_fails_open(text):
+    assert sent_back_for(text) == ()
+
+
+def test_the_logged_row_is_cut_to_two_hundred_characters(caplog):
+    with caplog.at_level(logging.INFO, logger=cpos_launch.__name__):
+        sent_back_for(T2DS_HEAD + DIV + S00 + "| s01 | x" + "y" * 5000 + " | 0.30 |\n")
+    assert max(len(r.getMessage()) for r in caplog.records) < 400
+
+
+def test_a_table_of_control_rows_only_fails_open():
+    assert issues(CORRECT, table("s00 | 0 | 0", "s00b | 0.0000 | 0")) == ()
+
+
+def test_one_header_cell_naming_both_columns_fails_open():
+    text = table("s00 | 0", "s01 | 0.20", header="EBITDA decline and interest increase")
+    assert issues(CORRECT, text) == ()

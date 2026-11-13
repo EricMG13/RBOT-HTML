@@ -2822,6 +2822,7 @@ def _forecast_issues(task: HandoffTask, text: str) -> tuple[str, ...]:
 # A Share as cp2g writes one: 0, 1, 0.d to 0.dddd or 1.0 to 1.0000, and nothing numeric after it
 # (so 20%, 0.31606, 1.5000, +0.30 and **0.20** are not read).
 _SHARE_CELL = re.compile(r"^(?:0\.\d{1,4}|1\.0{1,4}|0|1)(?![\d.%])")
+_PERCENT = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)%")
 _SCENARIO_MARKER = "<!-- table-id: T2DS.1 -->"
 _MAX_LISTED_SCENARIOS = 8
 
@@ -2832,13 +2833,19 @@ def _t2ds_rows(cp2a: str) -> tuple[list[list[str]], str]:
     marker = [i for i, line in enumerate(lines) if line.strip() == _SCENARIO_MARKER]
     if len(marker) != 1:
         return [], f"the marker of table T2DS.1 appears {len(marker)} times"
-    rest = iter(lines[marker[0] + 1 :])
+    tail = lines[marker[0] + 1 :]
     rows: list[list[str]] = []
-    for line in rest:
+    for n, line in enumerate(tail):
         if line.startswith("|"):
+            if "\\|" in line:
+                return [], "a table line holds an escaped pipe"
             rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
-        elif rows or line.strip():
-            break  # blank lines before the table are skipped; the table ends at the first other
+        elif rows or line.strip():  # blank lines before the table are skipped
+            if rows and "|" in next((after for after in tail[n:] if after.strip()), ""):
+                return [], "a line with a pipe follows the table's last pipe line"
+            break
+    if len(rows) > 1 and not all(re.fullmatch(r"[-: ]+", cell) for cell in rows[1]):
+        return [], "the second table row is not a divider"
     return rows, "" if len(rows) > 2 else "table T2DS.1 has no data rows"
 
 
@@ -2853,14 +2860,23 @@ def _t2ds_columns(header: list[str]) -> tuple[int, int] | None:
 _SCENARIO_COLUMNS = ("ebitda decline", "interest increase")
 
 
+def _share(cell: str) -> str | None:
+    found = _SHARE_CELL.match(cell)
+    if found is None:
+        return None
+    percent = Decimal(found.group(0)) * 100
+    rest = _PERCENT.sub(lambda m: "" if Decimal(m[1]) == percent else "0", cell[found.end() :])
+    return None if re.search(r"\d", rest) else found.group(0)
+
+
 def _t2ds_pairs(rows: list[list[str]], columns: tuple[int, int]) -> list[tuple[str, str]] | str:
     """Every data row's two Shares, or the reason a row does not give them."""
     pairs = []
     for row in rows[2:]:  # the header and its divider are not scenarios
-        read = [_SHARE_CELL.match(row[i]) if i < len(row) else None for i in columns]
+        read = [_share(row[i]) if i < len(row) else None for i in columns]
         if read[0] is None or read[1] is None:
-            return f"a scenario row has a cell that does not open with a Share: {row}"
-        pairs.append((read[0].group(0), read[1].group(0)))
+            return f"a scenario row has a cell that does not open with a Share: {str(row)[:200]}"
+        pairs.append((read[0], read[1]))
     return pairs
 
 
