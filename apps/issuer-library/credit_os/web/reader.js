@@ -442,8 +442,13 @@ function historyRows(runs) {
   });
 }
 
-// The pathway id as words: "credit_snapshot" is "Credit snapshot"; no id is null (the caller says "Not recorded").
-const PATHWAY_TITLES = {short_snapshot: 'Short credit snapshot'};
+// The pathway id as words; no id is null (the caller says "Not recorded"). The titles in the table are the
+// ones src/deploy_vii/report_view.py gives the credit pathways; "Short credit snapshot" stays for past runs.
+const PATHWAY_TITLES = {
+  credit_snapshot: 'Full credit assessment',
+  lite_credit_assessment: 'Lite credit assessment',
+  short_snapshot: 'Short credit snapshot',
+};
 function pathwayTitle(id) {
   if (Object.hasOwn(PATHWAY_TITLES, String(id))) return PATHWAY_TITLES[id];
   const words = String(id || '').split(/[_\s-]+/).filter(word => word !== '').map(word => word.toLowerCase());

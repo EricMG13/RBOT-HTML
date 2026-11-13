@@ -13,8 +13,9 @@ from typing import get_args
 import pytest
 
 from deploy_vii import cp3_relative_value
-from deploy_vii.contracts import PATHWAY_MODULES
+from deploy_vii.contracts import DEACTIVATED_PATHWAYS, PATHWAY_MODULES
 from deploy_vii.registry import plan
+from deploy_vii.report_view import pathways
 from deploy_workflow.context import (
     ASSUMPTION_LIMITS,
     Cp3Mode,
@@ -71,6 +72,20 @@ def launched(pathway: str, peer_source: str) -> list[str]:
 
 def test_the_pathways_are_the_contracts() -> None:
     assert lists("PATHWAYS") == {pathway: list(m) for pathway, m in PATHWAY_MODULES.items()}
+
+
+def test_the_pathways_offered_and_their_labels_are_the_active_ones() -> None:
+    """The choices (``PATHS``) are the active pathways in the report view's order, with its titles.
+    The deactivated short snapshot keeps its module tables (a past run, a saved answers file) but
+    is no choice."""
+    offered = re.findall(r"^  (\w+): \{label:'([^']+)'", constant("PATHS"), re.MULTILINE)
+    expected = [(p.id, p.title) for p in pathways() if p.id not in DEACTIVATED_PATHWAYS]
+    assert offered == expected
+    assert "lite_credit_assessment" in dict(offered) and "short_snapshot" not in dict(offered)
+    assert re.search(r"p === 'credit_snapshot' \? ' checked'", FORM)
+    assert set(DEACTIVATED_PATHWAYS) <= set(lists("PATHWAYS"))
+    defaults = dict(re.findall(r"(\w+):'(\w+)'", constant("PATH_DEFAULT_RUN")))
+    assert set(defaults) == {pathway for pathway, _ in expected}
 
 
 @pytest.mark.parametrize("pathway", sorted(PATHWAY_MODULES))

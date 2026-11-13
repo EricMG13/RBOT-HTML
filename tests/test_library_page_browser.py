@@ -1110,10 +1110,11 @@ def test_a_copy_of_the_page_marked_with_a_pathway_no_longer_fixes_it(tmp_path):
     probe = json.loads(html.unescape(re.search(r'<pre id="probe">(.*?)</pre>', dom, re.DOTALL)[1]))
     # The page is served by the start service, not opened from a folder: the copy's
     # data-pathway mark is ignored, every pathway is offered and none is disabled.
-    assert len(probe["shown"]) == 7 and probe["disabled"] == 0  # the six and the short snapshot
+    # the six and the lite credit assessment
+    assert len(probe["shown"]) == 7 and probe["disabled"] == 0
     assert probe["built"]["run"]["pathway"] == "credit_snapshot"  # The probe's own choice held ...
     # The probe's event targets the form, not the radio, so the run type stays at the
-    # pathway's default (research for Credit Snapshot).
+    # pathway's default (research for the Full credit assessment).
     assert probe["built"]["run"]["run_type"] == "research"
     assert probe["warned"] == []  # A loaded context naming another pathway is not replaced.
     assert probe["same"] == []
@@ -1236,7 +1237,7 @@ def test_the_run_label_and_the_chart_index_keep_the_run_and_fit_the_page(tmp_pat
         )
         # One line under the tabs: the run's date, pathway and code, and the way to the history.
         assert seen["shown"] is True
-        assert seen["text"].startswith("Showing run: 31 December 2025 · Credit snapshot · ")
+        assert seen["text"].startswith("Showing run: 31 December 2025 · Full credit assessment · ")
         assert long.upper() in seen["text"]
         assert seen["historyText"] == "All runs of this issuer" and seen["popovers"] == 0
         assert seen["tabs"] == ["Report", "Overview", "Changes", "Modules", "Forecast", "Evidence"]
