@@ -7,8 +7,11 @@ tables the check reads, and their fixed rows and names, are defined here once; t
 sent to CP-1 is rendered from these constants. Decimal and Fraction only: no float touches an
 amount or ratio.
 
-Tables are read only inside `## Findings` and outside code fences, and a table's heading must
-appear once in the whole handoff (every other reader of the handoff reads the first copy anywhere).
+Tables are read only inside `## Findings` and outside code fences. A checked heading is written
+once, exactly `### <name>`, and is followed only by blank lines, then its table, then a blank line;
+no HTML comment and no line break other than a newline appears anywhere. The other readers of the
+handoff (the report adapter reads every copy of a heading by its normalised title; the library
+reads other line breaks and comments differently) then read the same rows by construction.
 Fiscal years are identified by dates: the Period table (`| Period | Start | End |`) gives each
 statement column its `End`, and a row is a fiscal-year row when its date is that `End`. This module
 imports nothing from `cpos_launch` (which imports it), so it keeps its own small table reader."""
@@ -25,6 +28,8 @@ from typing import NamedTuple
 from deploy_vii.model._cells import beyond_rounding, half_unit
 from deploy_workflow.changes import same_period
 from deploy_workflow.credit_os_catalogue import period_order
+from deploy_workflow.handoff_delivery import heading_of, plain
+from deploy_workflow.model_handoff_delivery import BOLD_LABEL
 from deploy_workflow.owners.cpos_periods import _date, period_of
 
 _NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?", re.ASCII)
@@ -34,6 +39,7 @@ _PERIOD_HEADER = re.compile(r"FY\d{4}|Q[1-4] \d{4}|H1 \d{4}|9M \d{4}", re.ASCII)
 _FISCAL = re.compile(r"(FY\d{4})(?: / (\d{4}-\d{2}-\d{2}))?", re.ASCII)
 _FY_HEADER = re.compile(r"FY\d{4}", re.ASCII)
 _SEPARATOR = re.compile(r"\s*:?-+:?\s*")
+_BREAKS = re.compile("\r(?!\n)|[\x0b\x0c\x1c-\x1e\x85\u2028\u2029]")
 _EXACT = Context(prec=1000, traps=[Inexact])  # exact sums of figures of at most MAX_CELL digits
 GAP_WORDS = ("Not supplied:", "Not calculable:")
 MAX_CELL = 25  # A longer cell is not a plain number; this also bounds every sum.
@@ -226,6 +232,17 @@ def _blocks(lines: list[str]) -> list[list[list[str]]]:
     return found
 
 
+def _title(line: str) -> str:
+    """The words a line gives as a heading, however a reader of the handoff reads it: an ATX
+    heading of any level, a bold label line, or an indented `### ` line; else the line's text."""
+    found = heading_of(line)
+    if found is not None:
+        return plain(found[1])
+    if BOLD_LABEL.fullmatch(line.strip()):
+        return plain(line.strip())
+    return line.strip().removeprefix("### ")
+
+
 def _sites(text: str, tracked: Sequence[str]) -> dict[str, list[tuple[int, str | None]]]:
     """Where each tracked `### heading` line stands in the whole handoff, fenced lines included:
     (line number, what is wrong with its place or None when it is inside `## Findings` and
@@ -238,20 +255,22 @@ def _sites(text: str, tracked: Sequence[str]) -> dict[str, list[tuple[int, str |
             fence = None if fence == marker else (fence or marker)
         elif fence is None and line.startswith("## "):
             section = line.rstrip()
-        stripped = line.strip()
-        if stripped.startswith("### ") and stripped[4:] in tracked:
+        title = _title(line)
+        if title in tracked:
             where = None
-            if fence is not None:
+            if line != f"### {title}":
+                where = f"written `{line.strip()}`"
+            elif fence is not None:
                 where = "inside a code fence"
             elif section != "## Findings":
                 where = f"under `{section}`" if section else "before any `##` section"
-            found.setdefault(stripped[4:], []).append((number, where))
+            found.setdefault(title, []).append((number, where))
     return found
 
 
 def _placement(text: str, tracked: Sequence[str]) -> list[str]:
-    """A table the check reads must be headed once in the handoff, inside `## Findings` and
-    outside a code fence: the other readers of the handoff read the first heading anywhere."""
+    """A table the check reads must be headed once in the handoff, exactly `### <name>`, inside
+    `## Findings` and outside a code fence: the other readers of the handoff read every copy."""
     issues = []
     for heading, places in _sites(text, tracked).items():
         if len(places) == 1 and places[0][1] is None:
@@ -259,9 +278,69 @@ def _placement(text: str, tracked: Sequence[str]) -> list[str]:
         seen = ", ".join(f"line {n} {where or 'in `## Findings`'}" for n, where in places)
         many = "appears more than once" if len(places) > 1 else "is misplaced"
         issues.append(
-            f"`### {heading}` {many} ({seen}); write it once, inside `## Findings` and outside "
-            "a code fence, where every reader of the handoff reads it."
+            f"`### {heading}` {many} ({seen}); write it once, exactly `### {heading}`, inside "
+            "`## Findings` and outside a code fence, where every reader of the handoff reads it."
         )
+    return issues
+
+
+def _transport(text: str) -> list[str]:
+    """Characters one reader of the handoff treats differently from another: a line break other
+    than a newline, and an HTML comment."""
+    issues = []
+    found = _BREAKS.search(text)
+    if found:
+        n = text.count("\n", 0, found.start()) + 1
+        issues.append(
+            f"Line {n} of the handoff contains an invisible line-break character "
+            f"(U+{ord(found[0]):04X}); the report and the library split lines differently at it, "
+            "so a table row can be read whole by one and cut by another. Replace it with a space "
+            "or a normal line break."
+        )
+    at = text.find("<!--")
+    if at >= 0:
+        issues.append(
+            f"Line {text.count(chr(10), 0, at) + 1} opens an HTML comment (`<!--`); the report "
+            "hides commented text while the library reads it, so one table could show two "
+            "different figures. Write no HTML comment; put the note in prose or under `## Gaps`."
+        )
+    return issues
+
+
+def _problem(lines: list[str], start: int) -> str | None:
+    """What is wrong with the lines after the heading at `start`, None when they are blank lines,
+    then a table (header row, separator row, rows), then a blank line or the end."""
+    rest = [(i, line) for i, line in enumerate(lines[start + 1 :], start + 1) if line.strip()]
+    if not rest or not rest[0][1].startswith("|"):
+        first = rest[0][1][:40] if rest else ""
+        return f"the first line after the heading is `{first}`, not the table's header row"
+    at = rest[0][0]
+    end = at
+    while end < len(lines) and lines[end].startswith("|"):
+        end += 1
+    run = lines[at:end]
+    if len(run) < 2 or not all(_SEPARATOR.fullmatch(c) for c in _cells(run[1])):
+        return "the table's second row is not a separator row"
+    if end < len(lines) and lines[end].strip():
+        return f"the line after its last row is `{lines[end][:40]}`, not a blank line"
+    return None
+
+
+def _adjacent(text: str, tracked: Sequence[str]) -> list[str]:
+    """Each checked heading is followed only by blank lines, then its table, then a blank line, so
+    that every reader of the handoff reads the same rows under it."""
+    lines = text.splitlines()
+    issues = []
+    for heading in tracked:
+        if f"### {heading}" not in lines:
+            continue
+        problem = _problem(lines, lines.index(f"### {heading}"))
+        if problem:
+            issues.append(
+                f"`### {heading}`: {problem}; a checked heading is followed only by blank lines, "
+                "then its table (header row, separator row, then rows), then a blank line, so "
+                "every reader of the handoff reads the same rows."
+            )
     return issues
 
 
@@ -273,6 +352,8 @@ class Periods:
     ends: dict[str, date]
     spans: dict[str, tuple[date, date]]
     twice: tuple[str, ...]
+    dated_ends: frozenset[date] = frozenset()  # every `End` of the table, whatever its label
+    undated: tuple[str, ...] = ()  # labels whose Start and End are both `Not supplied:` gaps
 
     def fiscal(self, cell: str) -> str | None:
         """The statement column (`FY2024`) a Period cell names: by its label (`FY2024`,
@@ -288,6 +369,7 @@ class Periods:
 
 def _periods(lines: list[str]) -> Periods:
     seen: dict[str, set[tuple[date, date]]] = {}
+    gapped: dict[str, None] = {}
     present = False
     for rows in _blocks(lines):
         if rows[0] != PERIOD_HEADER:
@@ -301,12 +383,16 @@ def _periods(lines: list[str]) -> Periods:
                 and start <= end
             ):
                 seen.setdefault(row[0], set()).add((start, end))
+            elif len(row) >= 3 and _gap(row[1]) and _gap(row[2]):
+                gapped[row[0]] = None
     once = {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}
     return Periods(
         present,
         {k: v[1] for k, v in once.items()},
         once,
         tuple(k for k, v in seen.items() if len(v) > 1),
+        frozenset(end for spans in seen.values() for _, end in spans),
+        tuple(k for k in gapped if k not in seen),
     )
 
 
@@ -575,6 +661,7 @@ def _period_issues(
     periods: Periods,
     statements: list[Statement | None],
     cells: dict[str, list[str]],
+    stated: str | None = None,
 ) -> list[str]:
     """What the Period table has to say for the fiscal years to be found by date: no period dated
     twice, a row for each statement column, and each `FY2024 / 2024-09-30` Period cell naming a
@@ -592,7 +679,14 @@ def _period_issues(
         f"`{PERIOD_TABLE}` has no row with `YYYY-MM-DD` dates for the statement column `{p}`; "
         f"add `| {p} | <first day> | <last day> |`."
         for p in headers
-        if p not in periods.spans and p not in periods.twice
+        if p not in periods.spans and p not in periods.twice and p not in periods.undated
+    ]
+    issues += [
+        f"`{PERIOD_TABLE}` row `{label}` gives `Not supplied:` dates while `{stated}` states "
+        f"figures; dates may be left unsupplied only when no checked table states a figure, so "
+        f"write its first and last day as YYYY-MM-DD."
+        for label in periods.undated
+        if stated is not None
     ]
     for heading, found in cells.items():
         for cell in found:
@@ -602,9 +696,56 @@ def _period_issues(
     return issues
 
 
+def _first_stated(
+    lines: list[str],
+    statements: list[Statement | None],
+    regs: list[Reg],
+    net_debt: list[dict[str, str]],
+) -> str | None:
+    """The heading of the first checked table that states a figure, None when none does."""
+    figures: list[tuple[str, Sequence[str | None]]] = [
+        (found.spec.heading, [c for r in found.rows.values() for c in r[1:-3]])
+        for found in statements
+        if found
+    ]
+    figures.append(
+        (
+            REGISTER_HEADING,
+            [r.cells[c] for r in regs for c in ("Numerator Value", "Denominator Value")]
+            + [r.cells["Calculated Value"] for r in regs],
+        )
+    )
+    figures.append((NET_DEBT_HEADING, [r.get(c) for r in net_debt for c in NET_DEBT_COLUMNS]))
+    figures += [
+        (heading, [r.get(c) for r in _records(lines, heading) for c in names])
+        for heading, names in CHART_COLUMNS.items()
+    ]
+    recon = _records(lines, RECON_HEADING, RECON_HEADER)
+    figures.append((RECON_HEADING, [r[c] for r in recon for c in RECON_COLUMNS]))
+    ladder = _records(lines, LADDER_HEADING)
+    figures.append((LADDER_HEADING, [r.get("Debt maturing") for r in ladder]))
+    return next((h for h, cells in figures if any(_stated(c) is not None for c in cells)), None)
+
+
+def _undated_day(periods: Periods, heading: str, cell: str) -> str | None:
+    """A date-only Period cell must be the `End` of a row of the Period table."""
+    day = _date(cell)
+    if day is None or day in periods.dated_ends:
+        return None
+    ends = ", ".join(sorted(end.isoformat() for end in periods.dated_ends)) or "no day"
+    return (
+        f"`{heading}` Period `{cell}`: no row of the `{PERIOD_TABLE}` ends on {cell} (its rows "
+        f"end on {ends}), so the row cannot be matched to a statement column; correct the "
+        f"date or the Period table, or add that period's row (`| <period> | <first day> | "
+        f"{cell} |`)."
+    )
+
+
 def _unmatched_period(periods: Periods, heading: str, cell: str) -> str | None:
     named = _FISCAL.fullmatch(cell)
-    if not named or not named[2] or named[1] in periods.twice:
+    if named is None:
+        return _undated_day(periods, heading, cell)
+    if not named[2] or named[1] in periods.twice or named[1] in periods.undated:
         return None
     label, day = named[1], named[2]
     if label not in periods.spans:
@@ -1053,8 +1194,15 @@ def cp1_issues(text: str) -> tuple[str, ...]:
     regs = found_regs or []
     steps: list[Callable[[], list[str]]] = [
         lambda: _placement(text, TRACKED),
+        lambda: _transport(text),
+        lambda: _adjacent(text, TRACKED),
         lambda: _completeness(lines, statements, periods),
-        lambda: _period_issues(periods, statements, _period_cells(lines, regs, net_debt)),
+        lambda: _period_issues(
+            periods,
+            statements,
+            _period_cells(lines, regs, net_debt),
+            _first_stated(lines, statements, regs, net_debt),
+        ),
         lambda: [i for found in statements if found for i in _statement_cells(found)],
         lambda: unreadable,
         lambda: _register_cells(regs, net_debt),

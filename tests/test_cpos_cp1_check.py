@@ -429,7 +429,8 @@ def test_the_launcher_text_names_every_fixed_row_and_metric_and_is_short():
     assert check.REGISTER_HEADING in CP1_CHECK_BLOCK
     assert check.RECON_HEADING in CP1_CHECK_BLOCK
     assert "| " + " | ".join(check.REGISTER_COLUMNS) + " |" in CP1_CHECK_BLOCK
-    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200  # 4,498 at 4de3482; round 2 may add 1,200
+    # 4,498 at 4de3482; round 2 may add 1,200; round 3 added 378 (4,907 -> 5,285)
+    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 378
 
 
 def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constants():
@@ -650,7 +651,13 @@ def test_the_interim_rows_have_no_statement_tie():
             ("EBITDA / cash interest", "FY2024"): ["3,000", "1,158", "2.59"],
         }
     )
-    text = build(reg=reg, leverage=(("8.29", "6.21"), ("6.27", "5.17")), cover=("2.59", "2.71"))
+    periods = (*PERIODS, ("9M 2025", "2024-10-01", "2025-06-30"))
+    text = build(
+        periods=periods,
+        reg=reg,
+        leverage=(("8.29", "6.21"), ("6.27", "5.17")),
+        cover=("2.59", "2.71"),
+    )
     assert _cp1_issues(text) != ()  # a fiscal-year row with that EBITDA is refused
     text = text.replace(DATED, "2025-06-30")
     text = re.sub(r"^\| FY2024 \| (?=\d\.\d\d \|)", "| 2025-06-30 | ", text, flags=re.MULTILINE)
@@ -1147,3 +1154,147 @@ def test_a_reconciliation_or_ladder_cell_that_is_not_a_number_is_refused():
     ladder = ("93", "9x", "92", "6,637", "4,768", "12,637")
     issues = _cp1_issues(build(ladder=ladder, recon=(gap, "561", "24,880")))
     assert any("9x" in i and "plain number" in i for i in issues), issues
+
+
+# --- round 3: refuse the inputs on which the readers of a handoff disagree ----------------------
+
+LEVERAGE_ROW = "| FY2023 | 6.27 | 5.17 | x | Synthetic. |"
+
+
+@pytest.mark.parametrize(
+    ("char", "code"),
+    [("\x0c", "U+000C"), (" ", "U+2028"), ("\r", "U+000D"), ("\x85", "U+0085")],
+)
+def test_an_invisible_line_break_inside_a_row_is_refused(char, code):
+    text = build()
+    assert LEVERAGE_ROW in text
+    text = text.replace(LEVERAGE_ROW, LEVERAGE_ROW.replace("Synthetic.", f"Syn{char}thetic."))
+    issues = _cp1_issues(text)
+    assert any(code in i and "invisible line-break character" in i for i in issues), issues
+
+
+def test_an_html_comment_is_refused():
+    text = build().replace("## Calculations\n\nNone.", "## Calculations\n\n<!-- note -->\n\nNone.")
+    issues = _cp1_issues(text)
+    assert any("<!--" in i and "HTML comment" in i for i in issues), issues
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "###  Chart data: leverage",
+        "#### Chart data: leverage",
+        "**Chart data: leverage**",
+        "### Chart data: leverage ",
+    ],
+)
+def test_a_variant_of_a_checked_heading_is_refused(variant):
+    text = build().replace("## Calculations\n\nNone.", f"## Calculations\n\n{variant}\n\nNone.")
+    issues = _cp1_issues(text)
+    assert any("exactly `### Chart data: leverage`" in i for i in issues), issues
+
+
+LEVERAGE_HEAD = "### Chart data: leverage\n\n"
+FENCED_ROW = "| FY2024 | 6.01 | 4.51 | x | Synthetic. |"
+
+
+@pytest.mark.parametrize(("open_", "close"), [("```", "```"), ("```\n~~~", "~~~\n```")])
+def test_a_fenced_table_straight_after_a_checked_heading_is_refused(open_, close):
+    text = build().replace(
+        LEVERAGE_HEAD, f"{LEVERAGE_HEAD}{open_}\n{FENCED_ROW}\n# end\n{close}\n\n", 1
+    )
+    issues = _cp1_issues(text)
+    assert any("header row" in i and "Chart data: leverage" in i for i in issues), issues
+
+
+def test_an_indented_row_after_a_table_is_refused():
+    text = build().replace(
+        LEVERAGE_ROW, f"{LEVERAGE_ROW}\n  | FY2022 | 6.01 | 4.51 | x | Synthetic. |", 1
+    )
+    issues = _cp1_issues(text)
+    assert any("blank line" in i and "Chart data: leverage" in i for i in issues), issues
+
+
+def test_a_table_without_a_separator_row_is_refused():
+    text = build().replace(
+        "| Period | Total debt / EBITDA | Net debt / EBITDA | Reporting unit | Basis and "
+        "limitation |\n| --- | --- | --- | --- | --- |\n",
+        "| Period | Total debt / EBITDA | Net debt / EBITDA | Reporting unit | Basis and "
+        "limitation |\n",
+        1,
+    )
+    issues = _cp1_issues(text)
+    assert any("separator" in i and "Chart data: leverage" in i for i in issues), issues
+
+
+def test_a_fenced_json_block_under_its_own_heading_is_no_issue():
+    block = "### Forecast inputs (machine-readable)\n\n```json\n{}\n```\n\n"
+    text = build().replace("## Calculations", f"{block}## Calculations", 1)
+    assert _cp1_issues(text) == ()
+
+
+def _periods_of(**ends: str) -> tuple[tuple[str, str, str], ...]:
+    return tuple((label, "2023-10-01", end) for label, end in ends.items())
+
+
+@pytest.mark.parametrize(
+    ("fy24_end", "net_debt_date"),
+    [
+        ("2024-09-30", "2024-09-29"),
+        ("2024-09-28", "2024-09-30"),
+        ("2024-06-30", "2024-09-30"),
+    ],
+)
+def test_a_date_that_ends_no_period_row_is_refused(fy24_end, net_debt_date):
+    periods = (("FY2024", "2023-10-01", fy24_end), PERIODS[1])
+    net_debt = {net_debt_date: NET_DEBT[DATED], **{k: v for k, v in NET_DEBT.items() if k != DATED}}
+    issues = _cp1_issues(build(periods=periods, net_debt=net_debt))
+    assert any("Net debt data" in i and "ends on" in i and net_debt_date in i for i in issues), (
+        issues
+    )
+
+
+def test_a_period_cell_naming_a_period_table_end_still_passes_when_it_is_interim():
+    periods = (*PERIODS, ("9M 2025", "2024-10-01", "2025-06-30"))
+    text = build(periods=periods).replace(DATED, "2025-06-30")
+    assert not any("ends on" in i for i in _cp1_issues(text))
+
+
+GAP = "Not supplied: no financial sources"
+
+
+def _blocked(periods) -> str:
+    def rows(spec):
+        return {label: (GAP, GAP) for label in spec}
+
+    return build(
+        periods=periods,
+        income=rows(["EBITDA (Reported)"]),
+        cash_flow=rows(check.STATEMENTS[1].fixed),
+        balance=rows(check.STATEMENTS[2].fixed),
+        reg=table(
+            "T4.9 Calculation register",
+            list(check.REGISTER_COLUMNS),
+            [["Not assessable", *[GAP] * 12]],
+        ),
+        leverage=((GAP, GAP), (GAP, GAP)),
+        cover=(GAP, GAP),
+        ladder=(GAP,),
+        recon=(GAP, GAP, GAP),
+        net_debt={"FY2024 / 2024-09-30": (GAP, GAP, GAP)},
+    )
+
+
+def test_a_blocked_module_may_leave_its_period_dates_unsupplied():
+    assert _cp1_issues(_blocked((("FY2024", GAP, GAP), ("FY2023", GAP, GAP)))) == ()
+
+
+def test_a_period_row_without_dates_beside_stated_figures_is_refused():
+    periods = (("FY2024", GAP, GAP), PERIODS[1])
+    issues = _cp1_issues(build(periods=periods))
+    assert any("`Period table` row `FY2024`" in i and "YYYY-MM-DD" in i for i in issues), issues
+
+
+def test_a_blocked_module_with_no_period_table_is_still_counted():
+    issue = only(_cp1_issues(_blocked(())))
+    named(issue, "5 of 6 required tables")

@@ -2047,8 +2047,11 @@ def _fixed_rows(spec: cp1_check.StatementSpec) -> str:
 CP1_CHECK_BLOCK = (
     "Checked tables: CP-OS recomputes your figures at acceptance and sends back any that fail, so "
     "print these inside `## Findings` (only there, outside code fences), each heading exact and "
-    "written once in the whole handoff. Each statement table is headed "
-    "`| Line item | <one column per period> | Unit | Basis | Source |`; a period header is "
+    "written once in the whole handoff, followed by blank lines, then its table (header and "
+    "separator rows first), then a blank line. Nowhere write an HTML comment, another heading or "
+    "bold line with a checked heading's words, or a line break other than a newline. Each "
+    "statement table is headed `| Line item | <one column per period> | Unit | Basis | Source |`; "
+    "a period header is "
     f"exactly one of {', '.join(f'`{f}`' for f in cp1_check.PERIOD_FORMS)}; the Unit of a fixed "
     f"row is a currency code and `millions` or `thousands` (`{cp1_check.UNIT_EXAMPLE}`). Keep the "
     "issuer's own lines and labels and add these rows beside them, labels exact, one row each: "
@@ -2065,7 +2068,8 @@ CP1_CHECK_BLOCK = (
     + "; and, only when the issuer states an adjusted EBITDA, "
     + ", ".join(f"`{m.name}`" for m in cp1_check.METRICS[3:])
     + ". Reported EBITDA is the primary denominator. `Period` is the Period cell of the "
-    "`Net debt data` row the ratio belongs to (`FY2024 / 2024-09-30` or the date alone), "
+    "`Net debt data` row the ratio belongs to (`FY2024 / 2024-09-30` or the date alone, which "
+    "must be the `End` of a Period-table row), "
     f"`Unit` is that row's Reporting unit (`{cp1_check.REGISTER_UNIT}`), "
     "`Currency` is the code. Numerator and Denominator Value are the plain figures of the "
     "statement tables and `Net debt data`; Calculated Value is numerator over denominator printed "
@@ -2097,7 +2101,8 @@ CP1_CHECK_BLOCK = (
     "you are blocked, still print every table: each fixed row (one period column) with `Not "
     "supplied: <reason>` in each figure cell, the register with one row whose Metric Name is "
     "`Not assessable` and `Not supplied: <reason>` in every other cell, and the reconciliation "
-    "row with `Not supplied: <reason>` in each figure.\n\n"
+    "row with `Not supplied: <reason>` in each figure, and the Period table with `Not supplied: "
+    "<reason>` as Start and End (only while no table states a figure).\n\n"
 )
 # Goes into CP-1's instructions when the forecast is published without CP-2G (owner, 2026-11-11:
 # "allow forecast to function with just relevant layer 1 modules"). Same JSON shape as
