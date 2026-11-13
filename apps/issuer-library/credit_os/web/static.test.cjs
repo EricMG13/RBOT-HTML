@@ -128,7 +128,7 @@ const evidenceView = (contexts, data = {}) => {
   assert.ok(start >= 0 && end > start, 'evidence view not found');
   const names = { 'CP-0': 'Source readiness', 'CP-1': 'Financial foundation', 'CP-1A': 'Business & governance' };
   const route = {}, win = { Evidence: require('./evidence.js'), CREDIT_OS_DATA: { chips: {} } };
-  const view = new Function('esc', 'icon', 'moduleTitle', 'handoffLabel', 'contexts', 'data', 'current', 'window', 'ChangesView', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, runPage().handoffLabel, contexts, data, route, win, require('./changes.js'));
+  const view = new Function('esc', 'icon', 'moduleTitle', 'handoffLabel', 'contexts', 'data', 'current', 'window', 'ChangesView', 'runModels', 'MODEL_ENTRY', 'SOURCE_ROLES', 'sourceFile', `${text.slice(start, end)}; return evidenceView;`)(esc, n => `<i>${n}</i>`, c => names[c] || c, runPage().handoffLabel, contexts, data, route, win, require('./changes.js'), () => [], ['CP-MODEL', 'Cash flow model'], { annual: 'Annual handoff' }, s => (s.output || s.path || '').split('/').at(-1));
   return (key, tab = 'sources', module = null) => { Object.assign(route, { tab, evidenceModule: module }); return view(key); };
 };
 const EVIDENCE = {
@@ -999,7 +999,7 @@ function runPage(mutate = d => d, reports = [], shape = modules => modules, more
   const names = ['LIBRARY_DEFAULTS', 'libraryState', 'LibraryLogic', 'libraryFilters', 'window', 'data', 'modules', 'contexts', 'store', 'moduleNames', 'groups', 'esc', 'plain', 'rich', 'icon', 'pins', 'evidence', 'current', 'isAnalytical', 'sectionData', 'lastFile', 'lastSection', 'aliases', 'sourceLink', 'classTag', 'eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom', 'earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes', 'matchesHeading', 'readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls', 'eventTimeline', '$', 'appDestinations', 'document', 'ChangesView'];
   const eventTimeline = realEventTimeline(esc, rich);
   const args = [{ ratingScope: 'issuer' }, libraryState, new Function(`${read('screening.js')}; return LibraryLogic;`)(), { ratingScope: 'issuer' }, win, data, Object.fromEntries(Object.keys(data).map(id => [id, { first: 'head', sections: more.sections?.[id] || [] }])), contexts, more.store || {}, moduleNames, groups, esc, plain, rich, n => `<img src="icons/${n}.svg">`, {}, evidence, { context: RUN, section: 'overview' }, id => !id.startsWith('W-'), () => [], new Map(), new Map(), { 'CP-6A': 'CP-6' }, (key, label) => `<button class="source-link" data-evidence="${esc(key)}">${esc(label)}</button>`, () => '', ...['eventTable', 'eventSpan', 'eventAxis', 'eventPlace', 'eventTicks', 'eventAsOf', 'eventStack', 'eventRoom'].map(name => require('./calendar.js')[name]), ...['earlierFormatRun', 'blocked', 'historyRows', 'pathwayTitle', 'runModuleCodes'].map(name => require('./reader.js')[name]), (heading, prefix) => (prefix.startsWith('=') ? heading === prefix.slice(1) : heading.startsWith(prefix)), ...['readerPassages', 'splitBasis', 'normaliseLimitation', 'nearestDates', 'isNewFormat', 'basisItem', 'chartNumber', 'numericColumn', 'cellView', 'basisButton', 'paragraphView', 'sectionBodyHtml', 'passageControls'].map(name => require('./reader.js')[name]), eventTimeline, more.dom?.$, new Set(['W-Library', 'CP-OS']), more.dom?.document, require('./changes.js')];
-  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard};`)(...args);
+  return new Function(...names, `${src}; return {runReport, readerChart, lastPeriodChart, chartCards, cellView, libraryRow, libraryPath, libraryDetail, libraryPanel, libraryResults, libraryState, moduleHead, headerChipMarkup, traceHref, drawerFoot, runName, updateWorkspaceChrome, namedText, moduleTitle, handoffLabel, current, modules, eventLanesView, navigationSections, historyView, runLabel, mapLayers, mapsView, chartIndex, moduleReport, reportParts, outlineMarkup, navigatorView, issuerMeta, startRunHref, startRunLink, drawnAnchors, defaultOutput, firstSection, cashflowSection, modelOptionLabels, forecastView, forecastCharts, chartCard, evidenceInput};`)(...args);
 }
 const countOf = (html, re) => (html.match(re) || []).length;
 
@@ -4129,7 +4129,7 @@ test('Forecast charts: one card per contract and gap, in the data\'s order, in t
   const cover = cardOf(html, 'Interest cover');
   const figure = cover.replace(/<svg class="i"[\s\S]*?<\/svg>/g, '');
   assert.ok(cover.includes('class="fc-pair"') && !/<polyline|<path|<svg/.test(figure), 'no line is drawn through two points');
-  assert.ok(/<span class="fc-k">FY2024<\/span><strong>3\.60<\/strong>/.test(cover) && /<span class="fc-k">FY2023<\/span><span>2\.93<\/span>/.test(cover), 'the cells as written, the later period first');
+  assert.ok(/<span class="fc-k">FY2023<\/span><strong>2\.93<\/strong><\/p><p class="fc-period"><span class="fc-k">FY2024<\/span><strong>3\.60<\/strong>/.test(cover), 'both periods, the cells as written, in the table\'s order at the same weight (the contract does not say which is later)');
   const revenue = cardOf(html, 'Revenue and EBITDA');
   assert.ok(!revenue.includes('fc-pair') && revenue.includes('class="column-chart"'), 'two measures over two periods are paired columns');
   assert.ok(cardOf(html, 'Debt maturities').includes('class="column-chart"'), 'amounts by period are columns');
@@ -4163,9 +4163,10 @@ test('Forecast charts: no file name, calculation ID or scenario id in the text o
 test('Forecast charts: the contract\'s Basis and limitation is a visible footnote, verbatim, and a held-back text is one link to Evidence', () => {
   const html = fcPage().forecastCharts(RUN);
   const cover = cardOf(html, 'Interest cover'), note = /<div class="fc-note">.*?<\/div>/s.exec(cover)[0];
-  assert.ok(note.includes('Basis and limitation') && note.includes('Over cash interest, net') && countOf(note, /class="in-ev"/g) === 1);
+  assert.ok(note.includes('Basis and limitation') && note.includes('Over cash interest, net') && !note.includes('in-ev'), 'drawn lines under the heading');
+  assert.ok(/<div class="fc-foot"><a class="in-ev"[^>]*>In Evidence<\/a><a class="text-action"/.test(cover), 'the held-back line is one link in the footer, beside the module link');
   const maturities = /<div class="fc-note">.*?<\/div>/s.exec(cardOf(html, 'Debt maturities'))[0];
-  assert.ok(maturities.includes('<b>FY2026</b> Schedule') && !maturities.includes('SC1'));
+  assert.ok(maturities.includes('<b>FY2026, FY2027</b> Schedule') && !maturities.includes('SC1'));
 });
 
 test('Forecast charts: a chart gap is the empty state with its stated reason verbatim, in a card of its own, with one trace control', () => {
@@ -4228,4 +4229,137 @@ test('Forecast charts: an earlier-format run draws the same cards and links each
   assert.ok(earlier.includes('#CP-1/numbers?') && !earlier.includes('#CP-1/charts?'));
   const newer = fcPage({ sections: [...passageSections({ bottom: 'Cash is up.' }), ...fcSections()] }).forecastCharts(RUN);
   assert.ok(newer.includes('#CP-1/charts?') && !newer.includes('#CP-1/numbers?'));
+});
+
+// ---- Task 10 fix round 1.
+const allKinds = d => { withBridge(d); withStructure(d); withComparison(d); withRecovery(d); d[outId('CP-1')].sections.flatMap(s => s.blocks).find(b => b.line === 162).rows.forEach(r => { r.cells[5] = 'K_10.htm.jsonl, page 4'; }); return d; };
+const MARK_LINKS = /<a [^>]*class="(?:plot-point|stack-seg)|<a [^>]*class="col|<button[^>]*class="(?:chart-open|chart-row)"|View source/;
+
+test('M1: no chart mark is a link or a button on a Forecast card or a new-format module page, whatever the kind; one trace control; no delivery path in an href; no source cell in a key', () => {
+  const page = runPage(d => allKinds(d), [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' } });
+  const cards = fcCards(page.forecastCharts(RUN));
+  assert.ok(cards.length >= 12, `every kind has a card (${cards.length})`);
+  for (const card of cards) {
+    const name = /aria-label="([^"]*)"/.exec(card)[1];
+    assert.ok(!MARK_LINKS.test(card), `${name}: a mark is a link or button`);
+    assert.ok(countOf(card, /data-evidence="/g) <= 1, `${name}: more than one trace control`);
+    assert.ok(![...card.matchAll(/href="([^"]*)"/g)].some(m => /\.md|deliveries/.test(m[1])), `${name}: an href carries the delivery path`);
+    assert.ok(!card.includes('jsonl'), `${name}: a source cell is drawn`);
+  }
+  // The same renderers on a new-format module page (the plain path) draw no mark link either.
+  const newer = runPage(d => { allKinds(d); d[outId('CP-1')].sections.unshift(...passageSections({ bottom: 'Cash is up.' })); return d; }, [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' } });
+  for (const chart of [BRIDGE_CHART, STACK, BULLET, LIMITS, GROUPED, DUMBBELL, RANGE, SCATTER, RECOVERY]) {
+    const html = newer.readerChart(outId('CP-1'), chart, false, true, true);
+    assert.ok(!MARK_LINKS.test(html) && countOf(html, /data-evidence="/g) <= 1, chart.title);
+  }
+  // Earlier-format pages keep their links.
+  assert.ok(/<a class="plot-point"/.test(runPage(withBridge).readerChart(outId('CP-1'), BRIDGE_CHART)));
+});
+
+test('M2: every text a Forecast card draws is read strictly: a stated absence that names a file or scenario is held back in the figure as in the table', () => {
+  const sections = fcSections();
+  sections[0].blocks.find(b => b.type === 'table').rows[1].cells[1] = 'Not supplied: no split in K_10.htm.jsonl, scenario SC2';
+  sections[2].blocks.find(b => b.type === 'table').rows[1].cells[1] = 'Not supplied: schedule in K_10.htm.jsonl omitted';
+  const html = fcPage({ sections }).forecastCharts(RUN);
+  for (const title of ['Interest cover', 'Debt maturities']) assert.ok(!/jsonl|SC2/.test(cardOf(html, title)), title);
+  // A clean stated absence is still drawn, under the chart, with a marker in the value's own column.
+  const clean = fcPage().forecastCharts(RUN);
+  assert.ok(!clean.includes('jsonl'));
+});
+
+test('F4: a stated absence for one value is a marker in that value\'s column and its sentence sits beneath the chart, not over the bars', () => {
+  const sections = fcSections();
+  sections[1].blocks.find(b => b.type === 'table').rows[0].cells[2] = 'Not supplied: FY2023 split not read in this pass';
+  const revenue = cardOf(fcPage({ sections }).forecastCharts(RUN), 'Revenue and EBITDA');
+  const plot = revenue.split('<div class="periods">')[1].split('class="fc-absent"')[0];
+  assert.ok(!plot.includes('Not supplied') && plot.includes('absent-mark'), 'the plot holds only the marker');
+  assert.ok(/<ul class="fc-absent"><li><span class="absent-mark"[^>]*>†<\/span><b>FY2023<\/b> Adjusted EBITDA: Not supplied: FY2023 split not read in this pass<\/li>/.test(revenue));
+});
+
+test('F2: a Forecast bridge prints each step once, in full: bars are numbered and one numbered list names them', () => {
+  const page = runPage(d => withBridge(d), [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' } });
+  const html = page.forecastCharts(RUN), bridge = cardOf(html, 'Liquidity bridge').split('data-pane="table"')[0];
+  const labels = SYNTHETIC_BRIDGE.map(row => row[1]);
+  const visible = strip(bridge.replace(/<title>.*?<\/title>/g, ''));
+  for (const label of labels) assert.equal(countOf(visible, new RegExp(label, 'g')), 1, `${label} once in the page text`);
+  assert.ok(bridge.includes('<ol class="bridge-key bridge-numbered">') && /<tspan[^>]*>1<\/tspan>/.test(bridge));
+});
+
+test('F5: a Forecast stack row sets rank, security, amount and leverage as label and value pairs', () => {
+  const page = runPage(d => withStructure(d), [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' } });
+  const stack = cardOf(page.forecastCharts(RUN), 'Debt stack');
+  assert.ok(stack.includes('<dl class="stack-facts"><div><dt>Rank</dt><dd>1</dd></div><div><dt>Secured</dt><dd>Yes</dd></div><div><dt>Amount</dt><dd>1,200</dd></div><div><dt>Cumulative leverage</dt><dd>2.4</dd></div></dl>'));
+  assert.ok(!stack.includes('Rank 1 · Secured Yes'));
+});
+
+test('F1: a card whose whole footnote is held back has no heading, only the link in its footer; a card with nothing to say has neither', () => {
+  const sections = fcSections();
+  const revenue = cardOf(fcPage({ sections }).forecastCharts(RUN), 'Revenue and EBITDA');
+  assert.ok(revenue.includes('Annual &lt;b&gt;'), 'one line drawn (the second row)');
+  const rows = sections[1].blocks.find(b => b.type === 'table').rows;
+  rows[1].cells[4] = 'Annual; K_10.htm.jsonl, pages 71';
+  const held = cardOf(fcPage({ sections }).forecastCharts(RUN), 'Revenue and EBITDA');
+  assert.ok(!held.includes('fc-note') && !held.includes('Basis and limitation</p>') && /<div class="fc-foot"><a class="in-ev"/.test(held));
+  rows.forEach(r => { r.cells[4] = ''; });
+  const none = cardOf(fcPage({ sections }).forecastCharts(RUN), 'Revenue and EBITDA');
+  assert.ok(!none.includes('fc-note') && !none.includes('in-ev') && none.includes('<div class="fc-foot"><a class="text-action"'));
+});
+
+test('M5: a chart the build sent back is a card in its data position with the fixed label, no reason text and a link to Evidence\'s Run record; the message is listed there', () => {
+  const extra = sec('Chart data: covenant tests', 3, 45, 'consumed', [table(46, ['Test', 'Odd'], [[47, 'Net leverage', 'x']])]);
+  const sections = fcSections(); sections.splice(3, 0, extra);
+  const page = fcPage({ sections, issue: 'Chart data: covenant tests is not in its fixed table' });
+  const html = page.forecastCharts(RUN);
+  assert.deepEqual([...html.matchAll(/<article class="fc-card"[^>]*aria-label="([^"]*)"/g)].map(m => m[1]), ['Interest cover', 'Revenue and EBITDA', 'Debt maturities', 'Odd chart', 'Covenant tests', 'Portfolio limits']);
+  const card = cardOf(html, 'Covenant tests');
+  assert.ok(card.includes('Sent back by the build') && card.includes('class="empty-state"') && !card.includes('fixed table') && /href="#W-Evidence\/record\?c=run-a&amp;m=CP-1"|href="#W-Evidence\/record\?c=run-a&m=CP-1"/.test(card));
+  assert.ok(html.includes('6 charts, 2 not drawn'));
+  const record = window_Evidence().view(fcPage({ sections, issue: 'Chart data: covenant tests is not in its fixed table' }, { runFields: { evidence: EVIDENCE } }).evidenceInput(RUN), { tab: 'record', module: null });
+  assert.ok(record.includes('Charts the build sent back') && strip(record).includes('Chart data: covenant tests is not in its fixed table'));
+});
+const window_Evidence = () => require('./evidence.js');
+
+test('M4: the delivered model\'s inputs are in the Run record, its scope limits in the Gaps tab as their own counted group (gapCount unchanged); the page links to the tab that holds them', () => {
+  const HASH = 'ab12cd34ef56'.repeat(5);
+  const model = pickModel(HASH_1, {
+    mode: 'candidate', qualification: 'partial', download: '../d/model.html', href: '../d/model.html',
+    cashflow: { units: 'USD millions', columns: gridColumns, notes: [], limits: ['Every figure is arithmetic.', 'Downside is scenario SC1: a rate rise.'], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1,000'), cell('value', '1,050')])], other: null },
+    sources: [{ role: 'annual', run: RUN, path: `runs/${RUN}/x/CP-1-attempt-2.md`, sha256: HASH, changed: true }, { role: 'forecast', run: RUN, path: `runs/${RUN}/x/CP-2G-attempt-1.md`, sha256: HASH, changed: false }],
+  });
+  const withModel = fcPage(undefined, { models: [model], runFields: { ...PICK_RUNS, evidence: EVIDENCE } }), without = fcPage(undefined, { runFields: { evidence: EVIDENCE } });
+  const E = window_Evidence(), input = withModel.evidenceInput(RUN);
+  assert.equal(E.gapCount(input), E.gapCount(without.evidenceInput(RUN)), 'scope limits are not gap rows');
+  const gaps = E.view(input, { tab: 'gaps', module: null });
+  assert.ok(gaps.includes('Model scope limits') && gaps.includes('<span data-count>2</span> scope limits') && strip(gaps).includes('Downside is scenario SC1: a rate rise.'));
+  const badge = (html, tab) => Number(new RegExp(`id="ev-tab-${tab}"[^>]*>.*?data-count>(\\d+)<`, 's').exec(html)[1]);
+  assert.equal(badge(gaps, 'gaps'), countOf(gaps.slice(gaps.indexOf('id="ev-panel"')), /data-hay=/g), 'the Gaps badge is the counted lines');
+  const record = E.view(input, { tab: 'record', module: null });
+  assert.ok(record.includes('Model inputs') && record.includes('CP-1-attempt-2.md') && record.includes(`SHA-256 ${HASH.slice(0, 12)}`) && record.includes('Changed since publication') && record.includes('Matches publication') && strip(record).includes('These files come from different attempts'));
+  assert.equal(badge(record, 'record'), countOf(record.slice(record.indexOf('id="ev-panel"')), /data-hay=/g), 'the Run record badge is the counted items');
+  const html = withModel.forecastView(RUN, HASH_1);
+  assert.ok(/href="#W-Evidence\/gaps[^"]*"[^>]*>In Evidence/.test(html) && html.includes('1 further limitation is stated in Evidence'), 'the held-back limitation links to the Gaps tab');
+});
+
+test('Low 8-10, 12: a held-back not-assessable reason shows the fixed label and a link; the model frame names the run only; the register intro is read strictly; the frame heading is a sibling of Built from', () => {
+  const hidden = fcPage({ state: { established: false, declared: null }, summary: { limitation: 'No source: K_10.htm.jsonl' } }).forecastCharts(RUN);
+  const card = cardOf(hidden, 'Interest cover');
+  assert.ok(card.includes('Not established for this run') && /<div class="es-trace"><a class="in-ev"/.test(card) && !card.includes('jsonl'));
+  const model = pickModel(HASH_1, { mode: 'candidate', download: '../d/m.html', href: '../d/m.html', previous: HASH_2, register: { heading: 'Register', intro: 'See K_10.htm.jsonl for SC1', headers: ['driver', 'rationale'], rows: [['growth', 'Fade']] }, cashflow: { units: 'USD m', columns: gridColumns, notes: [], limits: [], rows: [gridRow('Revenue', 'Revenue', false, [cell('value', '1'), cell('value', '2')])], other: null } });
+  const html = fcPage(undefined, { models: [model], runFields: PICK_RUNS }).forecastView(RUN, HASH_1);
+  const frame = html.slice(html.indexOf('class="frame-head"'), html.indexOf('</iframe>'));
+  assert.ok(frame.includes('<h2>Published model</h2>') && frame.includes('31 March 2025 · Credit snapshot') && !/supersedes|a1b2c3d4|run-a/.test(frame), frame);
+  assert.ok(!html.includes('register-intro') && !html.includes('jsonl'));
+});
+
+test('F3 and Low 11: two-series marks use the blue and purple tokens (no green), and the grid keeps the data order', () => {
+  const css = read('screen.css');
+  assert.ok(/\.series-1\{background:var\(--series-4\)/.test(css) && /\.chart-legend \.series-1[^{]*\{background:var\(--series-4-ln\)/.test(css));
+  assert.ok(!css.includes('grid-auto-flow:dense'));
+});
+
+test('Forecast grid: each row is filled (a lone narrow card widens, a pair shares the row); no card sits alone beside empty space', () => {
+  const spans = html => [...html.matchAll(/<div class="c(\d+)(?: fc-wide)?"><article class="fc-card"/g)].map(m => Number(m[1]));
+  assert.deepEqual(spans(fcPage().forecastCharts(RUN)), [8, 8, 8, 12, 12], 'three across, then the last two share the row');
+  const only = fcPage({ charts: [fcOutput().charts[0]], chartGaps: [] }).forecastCharts(RUN);
+  assert.deepEqual(spans(only), [24], 'one card takes the row');
 });

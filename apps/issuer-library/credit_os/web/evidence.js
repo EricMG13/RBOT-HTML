@@ -116,6 +116,13 @@
   const ledgerRows = all => all.reduce((n, c) => n + rowTotal(c.ledger), 0);
   const gapCount = (input, module = null) => gapRows(selected(contents(input), module));
   const ledgerCount = (input, module = null) => ledgerRows(selected(contents(input), module));
+  // The delivered model's own material (the build's `run.models`, `run.sentBack`): its scope limits (Gaps tab, a group of their own: not gap rows, not ledger rows, so gapCount is unchanged),
+  // its inputs and the charts the build sent back (Run record tab). A model whose forecast module is unknown shows only when no module is chosen.
+  const forModule = (items, module) => items.filter(item => !module || item.module === module);
+  const modelsOf = (input, module) => forModule(input.run.models || [], module);
+  const sentBackOf = (input, module) => forModule(input.run.sentBack || [], module);
+  const limitRows = (input, module) => modelsOf(input, module).reduce((n, m) => n + m.limits.length, 0);
+  const inputRows = (input, module) => modelsOf(input, module).reduce((n, m) => n + m.sources.length, 0) + sentBackOf(input, module).length;
 
   // ---- small markup helpers ----
   const hay = (...parts) => esc(parts.map(part => plain(part ?? '')).join(' ').toLowerCase());
@@ -200,13 +207,19 @@
       return `<div class="ev-gap" data-hay="${hay(c.name, row.cells.join(' '))}"><div class="ev-gap-t">${icon('triangle-alert')}<span>${rich(row.cells[title])}</span></div><div class="ev-gap-f">${fields}</div></div>`;
     }).join('')}</div>`;
   }
-  function gapsPanel(all) {
-    const groups = all.filter(c => c.gaps.length || c.ledger.length);
-    if (!groups.length) return empty('Gaps', 'No gap is listed for this selection.');
+  // The model's scope limits as the calculation record states them, one counted line each, under a head that counts them.
+  function limitsGroup(model, input) {
+    if (!model.limits.length) return '';
+    const name = model.module ? input.deps.moduleTitle(model.module) : model.name;
+    return `<section class="ev-grp" data-group><div class="ev-grp-h"><span>${esc(name)}</span><span class="ev-cd">Model scope limits</span><span class="ev-ct"><span data-count>${model.limits.length}</span> ${model.limits.length === 1 ? 'scope limit' : 'scope limits'}</span></div><ul class="ev-limits">${model.limits.map(line => `<li data-hay="${hay(name, line)}">${rich(line)}</li>`).join('')}</ul></section>`;
+  }
+  function gapsPanel(all, input, module) {
+    const groups = all.filter(c => c.gaps.length || c.ledger.length), models = modelsOf(input, module).filter(m => m.limits.length);
+    if (!groups.length && !models.length) return empty('Gaps', 'No gap is listed for this selection.');
     // Each module's gaps are cards under a head that counts gaps; its comparison ledger is a table as written (counted by row) under its own head that counts ledger rows.
     const gaps = c => (c.gaps.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.gaps), 'gap', 'gaps')}${c.gaps.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => gapCards(t, c)).join('')}`).join('')}</section>` : '');
     const ledger = c => (c.ledger.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.ledger), 'ledger row', 'ledger rows')}${c.ledger.map(e => `${subHead(e.label)}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>` : '');
-    return groups.map(c => gaps(c) + ledger(c)).join('');
+    return groups.map(c => gaps(c) + ledger(c)).join('') + models.map(m => limitsGroup(m, input)).join('');
   }
   function registerGroup(title, n, inner) {
     return `<details class="ev-reg" open data-group><summary>${esc(title)}<span class="ev-cnt"><span data-count>${n}</span></span><span class="ev-ch">${icon('chevron-down')}</span></summary>${inner}</details>`;
@@ -229,6 +242,22 @@
     if (!steps.length) return empty('Steps', 'The run record lists no step for this selection.');
     return `<ol class="ev-steps">${steps.map(s => `<li class="ev-step" data-hay="${hay(deps.moduleTitle(s.module), s.module, s.started, s.accepted)}"><span class="ev-sd">${icon('check')}</span><div class="ev-fr">${esc(deps.moduleTitle(s.module))} <span class="ev-cd">${esc(s.module)}</span></div><div class="ev-rl mono">Started ${esc(shownOrNot(s.started))}</div><div class="ev-rl mono">Accepted ${esc(shownOrNot(s.accepted))}</div></li>`).join('')}</ol>`;
   }
+  // The files a delivered model was built from, as the delivery wrote them: role, file, run folder, the first characters of the hash, whether it still matches publication, and the attempt.
+  const MATCH_BADGE = {matches: ['gray', 'Matches publication'], changed: ['attention', 'Changed since publication'], invalid: ['attention', 'Invalid path or hash']};
+  function modelInputsMarkup(models, deps) {
+    const rows = models.filter(m => m.sources.length);
+    if (!rows.length) return '';
+    return `<div>${rows.map(m => {
+      const attempts = [...new Set(m.sources.map(s => s.attempt).filter(a => a !== null && a !== undefined))];
+      const note = attempts.length > 1 ? `<p class="ev-note" data-find="${hay('attempts', m.sources.map(s => s.file).join(' '))}">These files come from different attempts: ${m.sources.map(s => s.attempt === null || s.attempt === undefined ? '' : `${esc(s.file)} (attempt ${esc(s.attempt)})`).filter(Boolean).join(', ')}</p>` : '';
+      return `<div class="ev-sub-h">Model inputs</div><ul class="ev-hlist ev-card" data-group>${m.sources.map(s => { const [tone, text] = MATCH_BADGE[s.match] || MATCH_BADGE.invalid; return `<li data-hay="${hay(s.role, s.file, s.run, s.sha256, text)}"><div><div class="ev-nm">${esc(s.role)}: ${esc(s.file)}</div><code>${s.run ? `Run ${esc(s.run)} · ` : ''}SHA-256 ${esc(shownOrNot(s.sha256 && s.sha256.slice(0, 12)))}${s.attempt === null || s.attempt === undefined ? '' : ` · attempt ${esc(s.attempt)}`}</code></div><span class="badge badge-${tone}">${esc(text)}</span></li>`; }).join('')}</ul>${note}`;
+    }).join('')}</div>`;
+  }
+  // The build's message for each chart section it sent back (the card on the Forecast page says only that it was sent back).
+  function sentBackMarkup(items, deps) {
+    if (!items.length) return '';
+    return `<div><div class="ev-sub-h">Charts the build sent back</div><ul class="ev-hlist ev-card" data-group>${items.map(item => `<li data-hay="${hay(deps.moduleTitle(item.module), item.title, item.message)}"><div><div class="ev-nm">${esc(item.title)}</div><div class="ev-rl">${esc(deps.moduleTitle(item.module))}: ${esc(item.message)}</div></div></li>`).join('')}</ul></div>`;
+  }
   function recordPanel(input, module) {
     const {run, deps} = input, r = run.evidence.record;
     const steps = run.steps.filter(s => !module || s.module === module);
@@ -240,7 +269,8 @@
     for (const call of r.calls) { if (!module || call.module === module) byModule.set(call.module, [...(byModule.get(call.module) || []), call]); }
     const calls = !r.calls.length ? '<p class="ev-intro">The run records no model call.</p>' : [...byModule].map(([code, list]) => `<details class="ev-call" data-group><summary>${esc(deps.moduleTitle(code))}<span class="ev-c">${count(list.length, 'call', 'calls')}</span><span class="ev-ch">${icon('chevron-down')}</span></summary>${tableMarkup({headers: ['Attempt', 'Started', 'HTTP status', 'Error', 'Settled (USD)'], rows: list.map(c => ({cells: [c.attempt, c.started, c.http_status, c.error_class, c.settled_usd].map(shownOrNot)}))}, `Model calls of ${deps.moduleTitle(code)}`, deps.moduleTitle(code))}</details>`).join('') || empty('Model calls', 'No model call is listed for this selection.');
     const cap = r.cap === null || r.cap === undefined || r.cap === '' ? 'Provider cap not recorded' : `Provider cap USD ${r.cap}`;
-    return `<div class="ev-cols2"><div><div class="ev-sub-h">Steps by module</div>${stepsMarkup(steps, deps)}${changed}</div><div><div class="ev-sub-h">Input hashes</div>${hashes}<div class="ev-sub-h ev-gap-top">Instructions sent</div>${instructions}</div></div><div><div class="ev-sub-h">Model calls <span class="ev-cap-pill">${esc(cap)}</span></div>${calls}</div>`;
+    const inputs = modelInputsMarkup(modelsOf(input, module), deps) + sentBackMarkup(sentBackOf(input, module), deps);
+    return `${inputs ? `<div class="ev-cols2">${inputs}</div>` : ''}<div class="ev-cols2"><div><div class="ev-sub-h">Steps by module</div>${stepsMarkup(steps, deps)}${changed}</div><div><div class="ev-sub-h">Input hashes</div>${hashes}<div class="ev-sub-h ev-gap-top">Instructions sent</div>${instructions}</div></div><div><div class="ev-sub-h">Model calls <span class="ev-cap-pill">${esc(cap)}</span></div>${calls}</div>`;
   }
 
   // ---- governance summary: C30 half-ring, tiles with counts, per-module gap bars, method changes, run record ----
@@ -271,9 +301,9 @@
       trace: all.reduce((n, c) => n + c.trace.length, 0),
       sources: ev.sources.filter(f => !module || f.readBy.includes(module)).length,
       calculations: all.reduce((n, c) => n + rowTotal(c.calcs) + c.calcNotes.length, 0),
-      gaps: gapRows(all) + ledgerRows(all),
+      gaps: gapRows(all) + ledgerRows(all) + limitRows(input, module),
       registers: all.reduce((n, c) => n + tableTotal(c) + c.regNotes.length, 0),
-      record: input.run.steps.filter(s => !module || s.module === module).length,
+      record: input.run.steps.filter(s => !module || s.module === module).length + inputRows(input, module),
     };
   }
   function filterBar(input, route) {
@@ -310,7 +340,7 @@
       trace: () => tracePanel(all, input),
       sources: () => sourcesPanel(input, module),
       calculations: () => calculationsPanel(all),
-      gaps: () => gapsPanel(all),
+      gaps: () => gapsPanel(all, input, module),
       registers: () => registersPanel(input, module, all),
       record: () => recordPanel(input, module),
     };

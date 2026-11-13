@@ -97,6 +97,9 @@ const Shapes = (() => {
   // A period label: a year (2024, FY2024-25, FY24E), optionally led by a trailing/half/quarter/nine-month tag (LTM, 1H24, H1 2024, 9M24, Q3 FY24); LTM alone too.
   const PERIOD_LABEL = /^(?:(?:ltm|ttm|ytd|pf)\s*)?(?:(?:[hq][1-4]|[1-4][hq]|\d{1,2}m)\s*)?(?:(?:fy|cy)?\s*\d{2,4}(?:\s*[-/\u2013]\s*\d{2,4})?[ae]?)?$/;
   const isToken = value => /\d/.test(value) && !/^\d+$/.test(value) && !PERIOD_LABEL.test(norm(value));
+  // A bare id-shaped word (one or two capitals and two digits: C48, G06, K10) that is not a period label (FY24, Q124 is not this shape at all).
+  const ID_WORD = /(?<![A-Za-z0-9_.-])[A-Z]{1,2}\d{2}(?![A-Za-z0-9_-])/g;
+  const idWords = text => (String(text ?? '').match(ID_WORD) ?? []).filter(word => isToken(word));
   function idTokens(sections) {
     const found = new Set();
     for (const block of tablesIn(sections)) {
@@ -142,7 +145,7 @@ const Shapes = (() => {
     return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
   }
 
-  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, METHOD_CODE};
+  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, isLedger, idTokens, idWords, casePairing, methodNote, CALCULATION_ID, METHOD_CODE};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;
