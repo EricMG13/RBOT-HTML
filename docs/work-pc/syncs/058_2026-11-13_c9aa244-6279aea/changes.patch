@@ -1,0 +1,300 @@
+diff --git a/VERIFICATION.md b/VERIFICATION.md
+index 8c296f1..1ce21ea 100644
+--- a/VERIFICATION.md
++++ b/VERIFICATION.md
+@@ -4,6 +4,14 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
+ engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
+ `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
+ 
++## 2026-11-13 — No net debt, net leverage or liquidity is published for a forecast year with negative cash (branch `claude/negative-cash-not-calculable`)
++Scope: offline; no provider or model call; no paid run. Owner ruling `docs/rulings/2026-11-13-negative-cash-not-calculable.md`. At publication only (`cpos_forecast._published`): a year whose closing cash is known and below zero writes `net_debt`, `net_leverage` and `liquidity` to `forecast_exact.json` as missing with "Not calculable: cash is negative before funding"; closing cash stays published; zero, positive or missing cash is unchanged; `cp2g.py`, the roll-forward and the break tests are untouched. A block that never reaches negative cash publishes byte-identical files; a delivery already made is not re-derived, and one delivered again with a negative-cash year gets a new delivery beside the old.
++- Fidelity check, scope: ONE real run (`tdg-full-copilot-sol-high-001-resume`, TransDigm, as of 30 September 2024), re-derived by the controller from its own CP-1 and CP-2G handoffs on the branch merged with `main` (exit 0), against the forward credit model's own cells. Downside, shock at 0.3: FY2025 closing cash 1,553.50, net debt 22,746.50, net leverage 6.81x, liquidity 2,396.50 (published); FY2026 (cash -309.77) and FY2027 (cash -2,165.72) each publish the three as missing with the reason, where the module prints "Not calculable: funded closing cash and debt not established"; total leverage 7.28x / 7.25x / 7.22x unchanged. Shock as sent (0.0184): only FY2027 (cash -898.89) is missing. Base, upside and own-drivers cases never reach negative cash and equal the parent byte for byte (reviewer's probe). Page, by reading `store.py` and `views.js` and by the reviewer's grid probe, not in a browser: a missing cell is drawn "n.a." with its reason and listed under "Not available", never 0; charts, the changes comparison and the library metrics do not read this file.
++- Reviews: task review approve, one Low; adversarial review (financial figures): rule correct, no leak found, one Medium (zero cash and missing cash untested, two mutants of the condition survived), closed by tests only in `3b74c22` (the reviewer's mutant script then exits 0, three mutants killed); the 10-decimal comparison of net leverage is now exact at 38 digits.
++- Gates on the merged branch (controller): the new tests with the Downside, facilities, scale, periods and packaging tests 447 passed, exit 0; `tests/test_credit_os_store.py` 254 passed, exit 0; `tests/test_cpos_launch.py -k "forecast or cp2g or case or deliver or model or budget"` 104 passed, exit 0; `uv run python tools/quality_gate.py` exit 0, 0 findings.
++- Open for the owner (all predate this change except the first): a later year whose cash turns positive again after a negative year is published with no caveat, though it rests on an unfunded opening balance; the forward credit model calls accessible liquidity "Not calculable" in every year of every case on this run (undrawn facilities not certified usable) and Python publishes it wherever cash is not negative; the older owner workflow's CP-2G view (`cp2g.py`) still publishes these figures for negative-cash years (read, not run).
++- Not verified: the page in a browser; a mutation tool run (mutants made by hand); a live model; the full suite; Windows.
++
+ ## 2026-11-13 — Routing rules, register scope and presence check (branch `claude/t4-register-cut-27e6ea`)
+ Scope: offline only; no provider or model call. Ruling `docs/rulings/2026-11-13-appendix-and-routing-scope.md`. Built, not accepted: no paid before and after run and no reader check against the September VMO2 reference, so what a model does with the new text is not shown.
+ - Sent text: `ROUTING_RULES` after `TRANSPORT_RULES` in every module of every offered pathway (once each); `CP0_BLOCK` no longer asks for T7, T8, P5, T3 or T5; ten modules end their method block with their section of `CPOS_REGISTER_SCOPE.md`; CP-5's head lists the upstream modules' scope. CP-5A is not a launched module.
+diff --git a/docs/rulings/2026-11-13-negative-cash-not-calculable.md b/docs/rulings/2026-11-13-negative-cash-not-calculable.md
+new file mode 100644
+index 0000000..3f11f8c
+--- /dev/null
++++ b/docs/rulings/2026-11-13-negative-cash-not-calculable.md
+@@ -0,0 +1,31 @@
++# Ruling: no net debt, net leverage or liquidity is published for a forecast year with negative cash
++
++by: user
++date: 2026-11-13
++
++This ruling lifts no pause and authorises no provider call.
++
++Why: on the real run `tdg-full-copilot-sol-high-001-resume` (TransDigm, as of 30 September 2024),
++with the Downside of `2026-11-13-downside-follows-forward-model.md` and the shock at 0.3, closing
++cash is 1,553.50 in FY2025, -309.77 in FY2026 and -2,165.72 in FY2027. Python published net
++leverage of 7.34x and 7.87x and liquidity of 533.23 and -1,322.72 for the two negative years. The
++forward credit model's own handoff calls those figures "Not calculable: funded closing cash and
++debt not established". Negative cash is an unfunded gap: netting it against debt and adding
++undrawn facilities to it states figures the module does not.
++
++The owner's words (2026-11-13): asked in the building session "Should those cells be left empty
++with a 'not calculable: cash is negative before funding' reason whenever closing cash is
++negative?", "Yes, own PR"; the coordinator session relays the same answer to the same proposal.
++
++Ruled:
++
++1. For a forecast year whose closing cash is known and below zero, net debt, net leverage and
++   accessible liquidity are published as missing with the reason
++   "Not calculable: cash is negative before funding". Missing stays missing, never zero.
++2. Closing cash itself stays published: it is the funding gap.
++3. The calculation is not changed. The roll-forward and the break tests read the computed values.
++4. It applies to every case and pathway. A year with zero or positive cash, or with cash itself
++   missing, is unchanged.
++
++Known limit: a later year whose cash turns positive again after a negative year is published as
++calculable, although it rests on an unfunded opening balance.
+diff --git a/src/deploy_workflow/owners/cpos_forecast.py b/src/deploy_workflow/owners/cpos_forecast.py
+index 4f37962..65a7138 100644
+--- a/src/deploy_workflow/owners/cpos_forecast.py
++++ b/src/deploy_workflow/owners/cpos_forecast.py
+@@ -630,6 +630,23 @@ def _cell(value: cp2g.Val) -> dict[str, str | None]:
+     return {"amount": amount, "reason": value.reason}
+ 
+ 
++NEGATIVE_CASH = "Not calculable: cash is negative before funding"
++_NET_OF_CASH = ("net_debt", "net_leverage", "liquidity")
++
++
++def _published(year: cp2g.Year) -> dict[str, dict[str, str | None]]:
++    """A forecast year's cells as published. Negative closing cash is an unfunded gap, not cash:
++    netting it against debt or adding undrawn facilities to it states figures the module calls
++    not calculable, so those three are published missing. The computed year is not changed."""
++    cash = year.closing_cash.amount
++    gap = cash is not None and cash < 0
++    return {
++        f.name: _cell(cp2g.Val(None, NEGATIVE_CASH) if gap and f.name in _NET_OF_CASH else value)
++        for f in fields(cp2g.Year)
++        for value in (getattr(year, f.name),)
++    }
++
++
+ def _stated(key: str, case: CaseDrivers | None) -> dict[str, object]:
+     return {} if case is None else {key: case.model_dump(mode="json", exclude_none=True)}
+ 
+@@ -779,7 +796,7 @@ def model_files(
+                     "year": span.year,
+                     "planning_start": span.start,
+                     "planning_end": span.end,
+-                    **{f.name: _cell(getattr(year, f.name)) for f in fields(cp2g.Year)},
++                    **_published(year),
+                 }
+                 for span, year in zip(inputs.years, result.years, strict=True)
+             ]
+diff --git a/tests/test_negative_cash_not_calculable.py b/tests/test_negative_cash_not_calculable.py
+new file mode 100644
+index 0000000..8728db5
+--- /dev/null
++++ b/tests/test_negative_cash_not_calculable.py
+@@ -0,0 +1,201 @@
++"""No net debt, net leverage or liquidity is published for a forecast year with negative cash
++(owner decision 2026-11-13). Answer keys are hand-written from the real run
++tdg-full-copilot-sol-high-001-resume, Downside case, shock 0.3 (fixture cut from that run)."""
++
++import json
++from dataclasses import replace
++from decimal import Decimal, localcontext
++
++from hypothesis import given, settings
++from hypothesis import strategies as st
++from test_downside_follows_forward_model import CP1, block_with, exact_of, sha, shock
++
++from deploy_workflow.owners import cp2g, cpos_forecast
++
++REASON = "Not calculable: cash is negative before funding"
++FIELDS = ("net_debt", "net_leverage", "liquidity")
++
++
++def downside_years(**changes):
++    block = block_with(downside_shock=shock("0.2", "0.3"), **changes)
++    return exact_of(block)["outputs"]["DOWNSIDE"]["years"]
++
++
++def amounts(year, *names):
++    return {n: year[n]["amount"] for n in names}
++
++
++def test_the_real_run_publishes_net_figures_only_for_the_year_with_cash():
++    first, second, third = downside_years()
++    # FY2025: cash is positive, so the figures stay.
++    assert Decimal(first["net_debt"]["amount"]) == Decimal("22746.4960")
++    ratio = Decimal(first["net_leverage"]["amount"])
++    with localcontext() as context:
++        context.prec = 38  # the module's quotient carries 38 significant digits
++        key = Decimal("22746.4960") / Decimal("3338.6112")
++    assert ratio == key
++    assert ratio.quantize(Decimal("0.01")) == Decimal("6.81")
++    assert Decimal(first["liquidity"]["amount"]) == Decimal("2396.504")
++    # FY2026 and FY2027: cash is an unfunded gap, so the three figures are missing with a reason.
++    for year in (second, third):
++        for name in FIELDS:
++            assert year[name] == {"amount": None, "reason": REASON}
++    # The cash itself is not hidden, and the roll-forward is untouched.
++    assert Decimal(second["closing_cash"]["amount"]) == Decimal("-309.7718")
++    assert Decimal(third["closing_cash"]["amount"]) == Decimal("-2165.71612")
++    assert Decimal(third["opening_cash"]["amount"]) == Decimal("-309.7718")
++    # Captured from the output at 01eee08 (the parent), not hand-written; unchanged by this change.
++    assert amounts(first, "total_leverage", "coverage") == {
++        "total_leverage": "7.2784755529484834891825678893067872054",
++        "coverage": "1.6838819557618569384015794321968689766",
++    }
++    assert amounts(second, "total_leverage", "coverage") == {
++        "total_leverage": "7.2509191845998719467543869738410989576",
++        "coverage": "1.7240733769281893262317405873686460962",
++    }
++    assert amounts(third, "total_leverage", "coverage") == {
++        "total_leverage": "7.2233628162512604043262060583754107097",
++        "coverage": "1.7306255394644332711265406589994258154",
++    }
++
++
++def test_the_forward_model_itself_still_computes_the_numbers():
++    inputs = cpos_forecast.parse(block_with(downside_shock=shock()), CP1.decode("utf-8"))
++    operands = cp2g.Operands(
++        **{
++            key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
++            for key, o in inputs.base.items()
++        }
++    )
++    result = cp2g.forecast(
++        operands=operands,
++        drivers=cp2g.Drivers.from_submission(inputs.downside_drivers.over(inputs.base_drivers)),
++        shock=(Decimal("0.2"), Decimal("0.3")),
++    )
++    second, third = result.years[1], result.years[2]
++    assert second.closing_cash.amount == Decimal("-309.7718")
++    assert third.opening_cash.amount == Decimal("-309.7718")
++    assert second.net_leverage.amount is not None
++    assert second.liquidity.amount == Decimal("533.2282")
++    assert third.liquidity.amount == Decimal("-1322.71612")
++
++
++def real_year():
++    """A real forecast year (FY2025: positive cash) to vary one field of."""
++    inputs = cpos_forecast.parse(block_with(downside_shock=shock()), CP1.decode("utf-8"))
++    operands = cp2g.Operands(
++        **{
++            key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
++            for key, o in inputs.base.items()
++        }
++    )
++    result = cp2g.forecast(
++        operands=operands,
++        drivers=cp2g.Drivers.from_submission(inputs.downside_drivers.over(inputs.base_drivers)),
++        shock=(Decimal("0.2"), Decimal("0.3")),
++    )
++    return result.years[0]
++
++
++def with_cash(amount):
++    return replace(real_year(), closing_cash=cp2g.Val(amount))
++
++
++def test_zero_cash_is_not_a_gap_and_keeps_the_three_figures():
++    for zero in (Decimal(0), Decimal("-0")):
++        published = cpos_forecast._published(with_cash(zero))
++        want = cpos_forecast._published(real_year())
++        for name in FIELDS:
++            assert published[name] == want[name]
++            assert published[name]["amount"] is not None
++            assert published[name]["reason"] is None
++        assert published["net_debt"]["amount"] == "22746.496"
++        assert published["liquidity"]["amount"] == "2396.504"
++
++
++def test_missing_cash_is_not_called_negative():
++    own = "net leverage: its own reason"
++    year = replace(
++        real_year(),
++        closing_cash=cp2g.Val(None, "closing cash: some reason"),
++        net_leverage=cp2g.Val(None, own),
++    )
++    published = cpos_forecast._published(year)
++    assert published["net_debt"] == {"amount": "22746.496", "reason": None}
++    assert published["net_leverage"] == {"amount": None, "reason": own}
++    assert published["liquidity"] == {"amount": "2396.504", "reason": None}
++    assert published["closing_cash"] == {"amount": None, "reason": "closing cash: some reason"}
++    assert "cash is negative" not in json.dumps(published)
++
++
++def test_the_smallest_negative_cash_hides_the_three_figures():
++    published = cpos_forecast._published(with_cash(Decimal("-0.0001")))
++    for name in FIELDS:
++        assert published[name] == {
++            "amount": None,
++            "reason": "Not calculable: cash is negative before funding",
++        }
++    assert published["closing_cash"] == {"amount": "-0.0001", "reason": None}
++    assert published["total_leverage"] == cpos_forecast._published(real_year())["total_leverage"]
++
++
++def test_a_block_that_never_reaches_negative_cash_publishes_the_bytes_it_did():
++    # Pinned from the output at 01eee08 (the parent), whose cases these are.
++    exact = exact_of(block_with(downside_shock=shock()))
++    pins = {
++        "REFERENCE": "9a18aea18eb38420f211131e835916059728fe37cf5513d5db70b0393ccc9a30",
++        "UPSIDE": "e9af0ea2790bb09024ae87aa475ed10ab570cfd37bde9fe0af25c03b0976164e",
++    }
++    for case, pin in pins.items():
++        blob = json.dumps(exact["outputs"][case], sort_keys=True).encode()
++        assert sha(blob) == pin
++
++
++decimals = st.integers(min_value=0, max_value=10_000).map(lambda n: str(Decimal(n) / 10_000))
++
++
++@settings(max_examples=40, deadline=None)
++@given(
++    decline=decimals,
++    increase=decimals,
++    growth=st.lists(decimals, min_size=3, max_size=3),
++    dividends=st.lists(st.integers(min_value=0, max_value=20_000).map(str), min_size=3, max_size=3),
++)
++def test_the_three_fields_are_missing_if_and_only_if_closing_cash_is_negative(
++    decline, increase, growth, dividends
++):
++    def driver(values):
++        return {
++            "values": values,
++            "category": "Analyst Interpretation",
++            "rationale": "r",
++            "limitation": None,
++        }
++
++    downside = {"revenue_growth": driver(growth), "dividends": driver(dividends)}
++    block = block_with(downside_shock=shock(decline, increase), downside_drivers=downside)
++    inputs = cpos_forecast.parse(block, CP1.decode("utf-8"))
++    operands = cp2g.Operands(
++        **{
++            key: cp2g.Val(None if o.amount is None else Decimal(o.amount), o.reason)
++            for key, o in inputs.base.items()
++        }
++    )
++    want = cp2g.forecast(
++        operands=operands,
++        drivers=cp2g.Drivers.from_submission(inputs.downside_drivers.over(inputs.base_drivers)),
++        shock=(Decimal(decline), Decimal(increase)),
++    )
++    got = exact_of(block)["outputs"]["DOWNSIDE"]["years"]
++    for year, expected in zip(got, want.years, strict=True):
++        cash = expected.closing_cash.amount
++        assert year["closing_cash"]["amount"] == (None if cash is None else format(cash, "f"))
++        for name in FIELDS:
++            value = getattr(expected, name)
++            if cash is not None and cash < 0:
++                assert year[name] == {"amount": None, "reason": REASON}
++            else:
++                assert year[name] == {
++                    "amount": None if value.amount is None else format(value.amount, "f"),
++                    "reason": value.reason,
++                }
