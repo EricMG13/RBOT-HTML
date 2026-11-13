@@ -429,8 +429,9 @@ def test_the_launcher_text_names_every_fixed_row_and_metric_and_is_short():
     assert check.REGISTER_HEADING in CP1_CHECK_BLOCK
     assert check.RECON_HEADING in CP1_CHECK_BLOCK
     assert "| " + " | ".join(check.REGISTER_COLUMNS) + " |" in CP1_CHECK_BLOCK
-    # 4,498 at 4de3482; round 2 may add 1,200; round 3 added 378 (4,907 -> 5,285)
-    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 378
+    # 4,498 at 4de3482; round 2 may add 1,200; round 3 added 378 (4,907 -> 5,285); the budget cut
+    # removed 128 (5,285 -> 5,157), so the bound falls by the same 128
+    assert len(CP1_CHECK_BLOCK) <= 4_498 + 1_200 + 250
 
 
 def test_the_launcher_text_states_every_refusal_of_the_rulings_from_the_constants():
