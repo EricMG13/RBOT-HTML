@@ -666,6 +666,8 @@ $('module-toggle').addEventListener('click',()=>showNavigator(!$('navigator').cl
 document.addEventListener('keydown',event=>{
   const target=event.target,unmodified=!event.metaKey&&!event.ctrlKey&&!event.altKey;
   if(event.key==='/'&&unmodified&&!/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)){event.preventDefault();focusSearch();return;}
+  // A node or an edge of a pathway is a role=button group: Enter and Space choose it, as a click does.
+  if((event.key==='Enter'||event.key===' ')&&unmodified&&target.matches?.('[data-map-pick]')){event.preventDefault();window.Components.handleClick(target);return;}
   const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];
   if(step&&unmodified) {
     const mark=target.closest?.('[data-evidence]:not(.chip)'),chart=mark?.closest('.bars,.mix-bars,.horizontal-chart,.hedge-chart,.vector-chart');

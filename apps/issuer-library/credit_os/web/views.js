@@ -190,9 +190,12 @@ function fixtureTable(module,line) {
   if(!table)throw new Error(`Missing visual table ${module}:${line}`);
   return table;
 }
+// A new-format chart's one trace control opens the drawer on the first row of its table; its source chips and its Table form are Evidence's (Tables as written).
+// `v.plain` is set by readerChart for a new-format page.
+const chartTrace=(id,v)=>{const row=v.plain&&v.table!==undefined?fixtureTable(id,v.table).rows[0]:null;return row?window.Components.traceRow(`${id}:${row.line}`,`${plain(v.title)}: where it comes from`):'';};
 function chartIntro(id,v) {
   const label=[v.unit,data[id].period].filter(Boolean).join(' · ');
-  return `<div class="section-heading"><h2>${esc(v.title)}</h2>${label?`<span>${esc(label)}</span>`:''}</div>${v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>${sourceFooter(`${id}:${v.quote.line}`)}`:''}`;
+  return `<div class="section-heading"><h2>${esc(v.title)}</h2>${label?`<span>${esc(label)}</span>`:''}${chartTrace(id,v)}</div>${v.quote?`<p class="chart-reading">${rich(v.quote.text.replace(/\n/g,' '))}</p>${sourceFooter(`${id}:${v.quote.line}`)}`:''}`;
 }
 const evidenceHref=(id,line)=>routeHref(data[id].module,current?.output===id?current.section:modules[id].first,`${id}:${line}`,data[id].run);
 function comparisonChart(module,v,selection=0,chips=false,note=true) {
@@ -291,8 +294,6 @@ function chartTableForm(id,chart) {
   const table=fixtureTable(id,chart.table),columns=table.headers.map((_,c)=>c);
   return `<details class="chart-table"><summary>Table form</summary>${sourceTable(id,chart.title,table,columns.map(c=>numericColumn(table,c)),columns,table.rows)}</div></details>`;
 }
-// A drawing that states none (a chart, lane or map the store holds as a gap) keeps its section's table as the same fold: every cell as the module wrote it, a Source button per row.
-const gapTableForm=(id,title,table)=>chartTableForm(id,{title,table});
 // ---- Structure views (a "Chart data:" row table that is not by period or step): drawn from the stated numbers only. A value that is
 // not a number is n.a. with its stated reason as the title; it is never a zero position. Nothing is computed for display: headroom and
 // cumulative leverage are shown as stated, and the geometry uses the stated numbers.
@@ -326,7 +327,8 @@ function stackChart(id,v,chips=false) {
   const unstated=[...new Set(pairs.flatMap((p,i)=>{const rank=stackRank(table.rows[i],v);return p?[]:[rank?`Rank ${esc(rank)} \u00b7 security not stated`:'Ranking not stated'];}))];
   const legend=[...names.map((n,i)=>{const[rank,secured]=n.split('|');return `<span><i class="${stackClass(i)}"></i>Rank ${esc(rank)} \u00b7 ${secured==='true'?'secured':'unsecured'}</span>`;}),...unstated.map(t=>`<span><i class="stack-neutral"></i>${t}</span>`)].join('');
   const bar=table.rows.map((row,i)=>amounts[i]>0?`<a class="stack-seg ${series[i]}" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}" style="width:${roundPct(amounts[i]/total*100)}%" aria-label="${esc(`${row.cells[v.label]}, ${row.cells[v.amount]} ${v.unit}. View source`)}" title="${esc(row.cells[v.label])}: ${esc(row.cells[v.amount])}"></a>`:'').join('');
-  const key=table.rows.map((row,i)=>`<li><i class="swatch ${series[i]}"></i><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(row.cells[v.amount])} · Cumulative leverage ${stated(row.cells[v.leverage],'x')}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
+  const times=v.plain?'':'x'; // a new-format page draws the cell as written; the x is not the handoff's character
+  const key=table.rows.map((row,i)=>`<li><i class="swatch ${series[i]}"></i><span>${sourceLink(`${id}:${row.line}`,row.cells[v.label])}<small>Rank ${esc(row.cells[v.rank])} · Secured ${esc(row.cells[v.secured])} · Amount ${stated(row.cells[v.amount])} · Cumulative leverage ${stated(row.cells[v.leverage],times)}</small></span>${chips?chipsMarkup(`${id}:${row.line}`):''}</li>`).join('');
   return `${chartIntro(id,v)}<div class="chart-legend stack-legend">${legend}</div><div class="stack-bar" role="group" aria-label="${esc(v.title)} in stated rank order. Select a facility to inspect its source.">${bar}</div>${amounts.includes(null)?'<p class="matrix-note">A facility with no stated amount has no segment.</p>':''}<ol class="stack-key">${key}</ol>`;
 }
 function bulletChart(id,v,chips=false) {
@@ -427,8 +429,11 @@ const READER_FIGURES={recovery:recoveryChart,waterfall:bridgeChart,stack:stackCh
 // A reader chart is a "Chart data:" table whose first column is Period, so it is drawn over time: periods along the x axis in table order,
 // one column per series from a zero baseline (owner, 2026-11-10). Each period is one button (its handoff row) with its chips under it.
 // A step table (store.py: kind "waterfall") is a bridge: opening, stated changes and closing, drawn by bridgeChart; the row tables (kinds stack, bullet, limits) are below.
-function readerChart(id,chart,chips=false,note=true) {
-  if(READER_FIGURES[chart.kind])return `${READER_FIGURES[chart.kind](id,chart,chips,note)}${chartTableForm(id,chart)}`;
+// `onPlainPage` is a new-format page's chart: the cells as the handoff wrote them, one trace control, no source chips and no Table form (the table as written is Evidence's).
+function readerChart(id,chart,chips=false,note=true,onPlainPage=false) {
+  const form=onPlainPage?'':chartTableForm(id,chart);
+  if(onPlainPage){chart={...chart,plain:true};chips=false;}
+  if(READER_FIGURES[chart.kind])return `${READER_FIGURES[chart.kind](id,chart,chips,note)}${form}`;
   const table=fixtureTable(id,chart.table),series=chart.columns||[chart.column],rows=(chart.rows||table.rows.map((_,i)=>i)).map(i=>table.rows[i]);
   const numbers=rows.flatMap(row=>series.map(c=>chartNumber(row.cells[c])??0));
   const top=Math.max(0,...numbers),low=Math.min(0,...numbers),span=top-low||1,pct=n=>Math.round(n/span*10000)/100,zero=pct(-low);
@@ -441,7 +446,7 @@ function readerChart(id,chart,chips=false,note=true) {
     const label=`aria-label="${esc(`${period}: ${said}. View source`)}"`;
     return chips?`<div class="chart-row" role="group" aria-label="${esc(period)}"><button class="chart-open" data-evidence="${esc(key)}" ${label}>${inner}</button>${chipsMarkup(key)}</div>`:`<button class="chart-row" data-evidence="${esc(key)}" ${label}>${inner}</button>`;
   }).join('');
-  return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}${chartTableForm(id,chart)}`;
+  return `${chartIntro(id,chart)}<div class="column-chart" style="--periods:${rows.length}">${legend}<div class="periods">${periods}</div></div>${note?'<p class="matrix-note">Missing values have no bar.</p>':''}${form}`;
 }
 function readerCharts(id,section) {
   const lines=new Set(sectionData(id,section).flatMap(s=>s.blocks).map(b=>b.line));
@@ -460,8 +465,8 @@ const drawn=(id,where)=>data[id].sections.filter((section,i)=>data[id].placement
 const DRAWN_PLACEMENTS=['view','reference','calculations','limits'];
 // The routable section anchors of an output: the sections a part draws (audit and consumed sections open from the audit list instead).
 const drawnAnchors=id=>{
-  const {rest,drawings}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[]};
-  return new Set([...rest,...drawings].map(section=>`s-${section.line}`));
+  const {rest,drawings,registers}=isNewFormat(data[id].sections)?newFormatSplit(id):{rest:DRAWN_PLACEMENTS.flatMap(where=>drawn(id,where)),drawings:[],registers:[]};
+  return new Set([...rest,...drawings,...registers].map(section=>`s-${section.line}`));
 };
 // What a chip draws, from the chip dict as the library build emits it. An upstream chip with no module names register codes of the row's own module.
 // Only an issuer-page chip has an avatar (its source key); a module is named in the label, never coded.
@@ -552,7 +557,8 @@ function reportBand(id) {
 const cardTitle=chart=>chart.replace(/<div class="section-heading"><h2>(.*?)<\/h2>/s,'<div class="section-heading"><h4>$1</h4>');
 // The index of the last period chart: the waterfall is not a column chart, so "Missing values have no bar" prints under the last one that is.
 const lastPeriodChart=charts=>charts.findLastIndex(c=>!c.kind||c.kind==='grouped'||c.kind==='recovery');
-const chartCards=charts=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${at===charts.length-1?LEGEND:''}</div>`).join('');
+// The chip key goes with the chips: a new-format page draws none.
+const chartCards=(charts,legend=true)=>charts.map((chart,at)=>`<div class="panel-card">${cardTitle(chart)}${legend&&at===charts.length-1?LEGEND:''}</div>`).join('');
 function reportNumbers(id) {
   // The "Missing values have no bar" note prints once for the part, under its last chart, as on the run report.
   const charts=reportChartCards(id),table=keyNumbers(id);
@@ -630,16 +636,20 @@ function reportParts(id) {
 const passageSections=id=>Object.values(readerPassages(data[id].sections)).filter(Boolean);
 // A finding section has something to draw when it holds a prose block that is not a note, or a table with a row and a column the reader sees.
 const drawsSomething=section=>section.blocks.some(block=>block.type==='table'?block.rows.length>0&&window.Shapes.hiddenColumns(block.headers,'records').length<block.headers.length:window.Shapes.blockRole(block.text)!=='note');
+// Ruling 2026-11-13: a table of a registers section whose shape is promoted (Shapes.promoted) is drawn on the page, in its shape's component; the table as written stays in Evidence.
+// A registers table of any other shape is Evidence only.
+const promotedTables=section=>section.blocks.filter(block=>block.type==='table'&&block.rows.length>0&&window.Shapes.promoted(window.Shapes.tableShape(block))&&window.Shapes.hiddenColumns(block.headers,'records').length<block.headers.length);
 // Ruling 2026-11-12, decisions 1 and 2. A chart, map or timeline is drawn once, in its panel: the `Chart data:`, `Map:` or `Events:` section the store drew is `drawings`
 // (its numbers are the drawing's Table form, its prose the caption). A drawing section the store could not draw has no drawing, so it stays in the body with the
 // findings. A section that is not a passage, finding or drawing (its role says Evidence or nowhere) is in neither list.
 function newFormatSplit(id) {
   const held=new Set(passageSections(id)),drawnTables=new Set([...(data[id].charts||[]),...(data[id].chartGaps||[]),...(data[id].maps||[]),...(data[id].events||[])].map(drawing=>drawing.table));
-  const split={rest:[],drawings:[]};
+  const split={rest:[],drawings:[],registers:[]};
   for(const {section,role} of window.Evidence.classify(data[id].sections,data[id].placement)) {
     if(held.has(section)||!section.blocks.length)continue;
     if(role==='drawing'&&section.blocks.some(block=>block.type==='table'&&drawnTables.has(block.line)))split.drawings.push(section);
     else if(['finding','drawing','passage'].includes(role)&&drawsSomething(section))split.rest.push(section);
+    else if(role==='registers'&&promotedTables(section).length)split.registers.push(section);
   }
   return split;
 }
@@ -650,22 +660,25 @@ function drawingCaption(id,table) {
   const section=drawingSection(id,table);
   return section?.blocks.some(block=>block.type==='text')?`<div class="drawing-caption">${sectionBodyHtml(section,bodyContext(id,false))}</div>`:'';
 }
+// A stated reason as the page reads a cell: held back (nothing) when it names an identifier or a calculation.
+const statedReason=(id,text)=>window.Components.findingCell(text,moduleTableContext(id)).html??'';
 // The module's own charts, one card each; the Key numbers part of an earlier-format page draws the same cards.
 const reportChartCards=id=>chartCards((data[id].charts||[]).map((c,at,all)=>readerChart(id,c,true,at===lastPeriodChart(all))));
 // A new-format page's cards: a chart with no numbers (store `chartGaps`) is a card saying why, in table-line order with the charts; each card has its section route and caption.
 function newFormatChartCards(id) {
   const charts=data[id].charts||[],last=lastPeriodChart(charts);
-  const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,true,at===last)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
-  const lastChart=cards.findLastIndex(card=>!card.gap);
-  return cards.map((card,at)=>{
-    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4></div><p class="lane-gap">${NOT_ESTABLISHED}<small>${esc(card.gap.gap)}</small></p>${gapTableForm(id,card.gap.title,card.table)}`:cardTitle(card.html);
-    return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}${at===lastChart?LEGEND:''}</div>`;
+  const cards=[...charts.map((chart,at)=>({table:chart.table,html:readerChart(id,chart,false,at===last,true)})),...(data[id].chartGaps||[]).map(gap=>({table:gap.table,gap}))].sort((a,b)=>a.table-b.table);
+  // A chart with no numbers is the empty state (C32) with its stated reason; its table as written, like a drawn chart's, is in Evidence.
+  return cards.map(card=>{
+    const body=card.gap?`<div class="section-heading"><h4>${esc(card.gap.title)}</h4>${chartTrace(id,{...card.gap,plain:true})}</div>${window.Components.emptyState(NOT_ESTABLISHED,[statedReason(id,card.gap.gap)].filter(Boolean))}`:cardTitle(card.html);
+    return `<div class="panel-card"${drawingAnchor(id,card.table)}>${body}${drawingCaption(id,card.table)}</div>`;
   }).join('');
 }
 // An output with Events lanes draws them; an earlier-format one that has an event table and no lane draws that table as a timeline.
 function reportTimeline(id) {
   const html=eventLanesView(data[id].run,{only:id,compact:true,tag:'h3',title:'Timeline'});
   if(html)return `<section class="part" id="timeline">${html}</section>`;
+  if(isNewFormat(data[id].sections))return ''; // a dated table of a finding or register section is drawn there, by its shape
   const table=eventTable(data[id].sections);
   return table?`<section class="part" id="timeline">${eventTimeline(id,table,'h3')}</section>`:'';
 }
@@ -680,9 +693,13 @@ const moduleTableContext=id=>{
   return tableContexts.get(id);
 };
 // A finding section of the module page: its prose as written (a method or status note is Evidence's) and each table as the component its shape calls for (components.js render).
-const findingSection=(id,section)=>{
+// A table of the output `id` as the component its shape calls for (components.js render), with the context every component reads. `at` is the section that holds the table.
+const tableRenderer=id=>{
   const shared=moduleTableContext(id),registers=window.Evidence.href('registers',data[id].module,data[id].run);
-  const table=(block,at)=>window.Components.render(window.Shapes.tableShape(block),block,{...shared,id,section:at,module:data[id].module,evidenceHref:registers,key:row=>`${id}:${row.line}`,trace:(row,label)=>window.Components.traceRow(`${id}:${row.line}`,label),caption:plain(at.heading).replace(METHOD_CODE,'')});
+  return (block,at)=>window.Components.render(window.Shapes.tableShape(block),block,{...shared,id,section:at,module:data[id].module,evidenceHref:registers,key:row=>`${id}:${row.line}`,trace:(row,label)=>window.Components.traceRow(`${id}:${row.line}`,label),caption:plain(at.heading).replace(METHOD_CODE,'').replace(/^(?:Chart data|Map|Events): /,'')});
+};
+const findingSection=(id,section)=>{
+  const shared=moduleTableContext(id),registers=window.Evidence.href('registers',data[id].module,data[id].run),table=tableRenderer(id);
   // Ruling 2026-11-13: a prose paragraph of a finding section that holds an identifier or names a calculation is a method note, drawn in Evidence (Registers, or Calculations when it names one).
   const role=window.Evidence.classify(data[id].sections,data[id].placement).find(entry=>entry.section===section)?.role,moved=new Set();
   const methodNote=block=>role==='finding'&&block.type==='text'&&!block.text.startsWith('```')?window.Shapes.methodNote(window.Components.paragraphText(block.text),shared.tokens):null;
@@ -697,6 +714,11 @@ const findingSection=(id,section)=>{
   // A section that lost every paragraph and holds no table keeps its heading and a link to where the paragraphs went, not an empty card.
   const link=moved.size&&body.trim()===''?`<p class="sec-moved"><a class="in-ev" href="${esc(window.Evidence.href(moved.has('registers')?'registers':'calculations',data[id].module,data[id].run))}">In Evidence</a></p>`:'';
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${body}${link}</div>`;
+};
+// A registers section on the module page: its heading and the tables its shape promotes, each as its component. Its prose and its other tables are Evidence's.
+const registerSection=(id,section)=>{
+  const table=tableRenderer(id);
+  return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${promotedTables(section).map(block=>table(block,section)).join('')}</div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);
 // The gaps the module records: the rows of the tables of its Gaps sections, counted as the Evidence page lists them.
@@ -729,6 +751,11 @@ function newFormatParts(id) {
     body.push([section.line,[`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part">${findingSection(id,section)}</section>`,...(rows?[rows]:[])]]);
   }
   parts.push(...body.sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0)).map(([,part])=>part));
+  // The promoted registers follow the finding sections as one group, each under its section's own heading, in handoff order.
+  for(const section of newFormatSplit(id).registers) {
+    const rows=promotedTables(section).reduce((n,block)=>n+block.rows.length,0);
+    parts.push([`s-${section.line}`,plain(section.heading.replace(METHOD_CODE,'')),`<section class="part part-register">${registerSection(id,section)}</section>`,rows]);
+  }
   const limits=window.Components.limitationsBlock(texts.limits,recordedGaps(id),window.Evidence.href('gaps',out.module,out.run),controls('limits').trace,controls('limits').figure);
   if(limits)parts.push(['limitations','Limitations',`<section class="part" id="limitations"><div class="rd-card"><h4 class="rd-h">Limitations</h4>${limits}</div></section>`,texts.limits.length]);
   return parts;
@@ -832,6 +859,7 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
   // `only` is one output's own lanes, whichever saved output it is; otherwise the run's lanes (each module's default output).
   const lanes=(only?(data[only]?.events||[]).map(lane=>({...lane,id:only})):eventLanes(context)).map(lane=>({...lane,events:lane.gap!==null?[]:fixtureTable(lane.id,lane.table).rows.map(row=>({row,span:eventSpan(row.cells[0],row.cells[1])}))}));
   if(!lanes.length)return '';
+  if(Boolean(only)&&isNewFormat(data[only].sections))return timelineCards(only,lanes,tag,title);
   const scenario=row=>/^Scenario — /.test(row.cells[4]),day=n=>new Date(n*86400000).toISOString().slice(0,10);
   const axis=eventAxis(lanes.flatMap(lane=>lane.events.flatMap(({span})=>span?[span]:[])));
   const link=(lane,row)=>`href="${evidenceHref(lane.id,row.line)}" data-evidence="${esc(`${lane.id}:${row.line}`)}"`;
@@ -848,8 +876,7 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
     const [date,precision,,event]=row.cells;
     return `<a class="lane-event ${span.point?'point':'span'}${anchored?' anchored':''}${scenario(row)?' scenario':''}" ${link(lane,row)} aria-label="${esc(`Event ${no}: ${lane.lane}: ${event}${scenario(row)?' (Scenario event)':''}, ${date} (${precision}). View source`)}" style="${anchored?`right:${Math.round((100-left-width)*100)/100}%`:`left:${left}%`}${span.point?'':`;width:${width}%`};bottom:${LANE_BASE+level*LANE_ROW}px"><span class="lane-no">${no}</span></a>`;
   };
-  const own=Boolean(only)&&isNewFormat(data[only].sections); // a new-format module page: each lane is its section's route and caption, its events a Table form
-  const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"${own?drawingAnchor(lane.id,lane.table):''}><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>${own?drawingCaption(lane.id,lane.table)+(lane.gap!==null?gapTableForm(lane.id,lane.lane,lane.table):''):''}`).join('');
+  const rows=drawn.map(({lane,items,height})=>`<div class="lane-row"><span class="lane-name">${esc(lane.lane)}</span>${lane.gap!==null?`<span class="lane-gap">Not established for this run<small>${esc(lane.gap)}</small></span>`:`<span class="lane-track" style="height:${height}px">${items.map(item=>marker(lane,item)).join('')}</span>`}</div>`).join('');
   const key=drawn.filter(({items})=>items.length).map(({lane,items,start})=>`<p class="lane-key-name">${esc(lane.lane)}</p><ol class="lane-key" start="${start}">${[...items].sort((a,b)=>a.no-b.no).map(({row})=>`<li><span class="lane-key-date">${esc(row.cells[0])}</span> ${rich(row.cells[3])}${scenario(row)?' (Scenario event)':''}</li>`).join('')}</ol>`).join('');
   const asOf=contexts[context]?.asOf,asOfAt=eventAsOf(axis,asOf);
   const ticks=eventTicks(axis);
@@ -862,72 +889,25 @@ function eventLanesView(context,{compact=false,only=null,tag='h2',title='Event l
   const head=['Lane','Event date','Date precision','Published','Event','Status','Source','Credit relevance'].map(h=>`<th scope="col">${h}</th>`).join('');
   const eventTableHtml=`<table class="event-table"><caption>All events, by lane</caption><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   const intro=compact?'':'<p class="intro">Each lane is one module’s dated events on a shared date axis. A day is a point; a month, quarter or year is drawn across its whole span, not on a day the source does not state. A dashed outline is a Scenario event.</p>';
-  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}<div class="lane-scroll" role="region" tabindex="0" aria-label="Event lanes; scroll horizontally on a narrow screen"><div class="lane-plot">${axis?`<div class="lane-axis"><span></span>${scale}</div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${overlay}</div></div>${key?`<div class="lane-keys" role="group" aria-label="Key to the numbered events"><p class="lane-range">Axis from ${day(axis.start)} to ${day(axis.end)}</p>${key}</div>`:''}${body?(compact?own?`<details class="chart-table"><summary>Table form</summary>${eventTableHtml}</details>`:'':eventTableHtml):''}</div>`;
+  return `<div class="event-lanes${compact?' compact':''}"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events by module</span></div>${intro}<div class="lane-scroll" role="region" tabindex="0" aria-label="Event lanes; scroll horizontally on a narrow screen"><div class="lane-plot">${axis?`<div class="lane-axis"><span></span>${scale}</div>`:''}<div role="group" aria-label="Event lanes on a shared date axis">${rows}</div>${overlay}</div></div>${key?`<div class="lane-keys" role="group" aria-label="Key to the numbered events"><p class="lane-range">Axis from ${day(axis.start)} to ${day(axis.end)}</p>${key}</div>`:''}${body&&!compact?eventTableHtml:''}</div>`;
 }
-// ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`), the edge table beneath as its accessible form.
+// A new-format module page: each lane is its section's route, a heading, the dated timeline component (C15, or the empty state when the lane states no event) and the section's caption.
+// The events as written, with their sources, are Evidence's; each event has its own trace control.
+function timelineCards(id,lanes,tag,title) {
+  const render=tableRenderer(id),cards=lanes.map(lane=>`<div class="tl-card"${drawingAnchor(id,lane.table)}><h4 class="tl-name">${esc(lane.lane)}</h4>${render(fixtureTable(id,lane.table),drawingSection(id,lane.table))}${drawingCaption(id,lane.table)}</div>`).join('');
+  return `<div class="tl-lanes"><div class="section-heading"><${tag}>${esc(title)}</${tag}><span>Dated events</span></div>${cards}</div>`;
+}
+// ---- Maps: one layered left-to-right SVG for every node/edge map (store.py `maps`). The layout is components.js's (pathwayDiagram, shared with the pathway component, C14); an earlier-format
+// page keeps this view: the diagram with the edge table beneath as its accessible form. A new-format page draws the pathway component and leaves the edge table to Evidence.
 // A layer is the longest path from a node with no incoming edge. An edge that would close a loop is cut by first-seen row order and still drawn, below the nodes.
 // Nothing is weighted: the edge type is a word label and a line style, and the only coordinates are the layout's.
-function mapLayers(edges,nodes=[]) {
-  const into=new Map(),out=new Map(),layer=new Map(),names=[];
-  const reaches=(from,to,seen=new Set())=>from===to||(!seen.has(from)&&seen.add(from)&&(out.get(from)||[]).some(next=>reaches(next,to,seen)));
-  const cut=edges.map(({from,to})=>{
-    for(const name of [from,to])if(!names.includes(name))names.push(name);
-    if(reaches(to,from))return true;
-    out.set(from,[...(out.get(from)||[]),to]);into.set(to,[...(into.get(to)||[]),from]);
-    return false;
-  });
-  for(const name of nodes)if(!names.includes(name))names.push(name);
-  const depth=name=>{if(!layer.has(name))layer.set(name,Math.max(-1,...(into.get(name)||[]).map(depth))+1);return layer.get(name);};
-  names.forEach(depth);
-  return {names,layer:new Map(names.map(name=>[name,layer.get(name)])),cut};
-}
-const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'],MAP_DASH=['','7 4','2 4','9 3 2 3','12 5 2 5'],BOX={w:150,h:54,gx:120,gy:22,pad:12},MAP_CHAR=6.6,MAP_T=Array.from({length:39},(_,i)=>(i+1)/40).sort((a,b)=>Math.abs(a-.5)-Math.abs(b-.5)),LABEL_CHAR=6.6,LABEL_STEP=15,LABEL_MARGIN=20,LABEL_STEPS=24,LABEL_WRAP=106,LABEL_LINES=2,LABEL_LINE=13;
+const mapLayers=(edges,nodes=[])=>window.Components.mapLayers(edges,nodes);
+const MAP_HEAD=['From','Relationship','Edge type','To','Evidence'];
 function mapDiagram(id,map,rows) {
-  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),{names,layer,cut}=mapLayers(edges),{w,h,gy,pad}=BOX;
-  // The column gap holds the longest label of an edge drawn between columns (a cut edge's label sits below the nodes), never under BOX.gx, so a map of short labels stays compact.
-  // A label wraps on whole words to at most two lines (LABEL_WRAP holds 15 characters; one longer word keeps its own line), so the gap follows the longest line.
-  const wrap=edges.map(e=>axisLines(e.type,LABEL_WRAP,LABEL_CHAR,'keep',LABEL_LINES)),wide=wrap.map(ls=>Math.max(...ls.map(l=>l.length))*LABEL_CHAR);
-  const gx=Math.max(BOX.gx,Math.ceil(Math.max(0,...wide.filter((_,i)=>!cut[i]))+LABEL_MARGIN));
-  const slot=new Map(),filled=[],types=[...new Set(edges.map(edge=>edge.type))];
-  for(const name of names){const l=layer.get(name);slot.set(name,filled[l]??0);filled[l]=(filled[l]??0)+1;}
-  const at=name=>({x:pad+layer.get(name)*(w+gx),y:pad+slot.get(name)*(h+gy)});
-  const width=pad*2+filled.length*(w+gx)-gx,loops=cut.filter(Boolean).length,base=pad*2+Math.max(...filled)*(h+gy)-gy+(loops?46:0);
-  const path=({from,to},back)=>{
-    const a=at(from),b=at(to),mid=(a.x+b.x+w)/2;
-    if(!back)return {d:`M${a.x+w} ${a.y+h/2}C${mid} ${a.y+h/2} ${mid} ${b.y+h/2} ${b.x} ${b.y+h/2}`,c:[[a.x+w,a.y+h/2],[mid,a.y+h/2],[mid,b.y+h/2],[b.x,b.y+h/2]]};
-    const low=Math.max(a.y,b.y)+h+34,x1=a.x+w/2+(from===to?-30:0),x2=b.x+w/2+(from===to?30:0);
-    return {d:`M${x1} ${a.y+h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y+h}`,c:[[x1,a.y+h],[x1,low],[x2,low],[x2,b.y+h]]};
-  };
-  const bezier=(c,t)=>[0,1].map(k=>(1-t)**3*c[0][k]+3*(1-t)**2*t*c[1][k]+3*(1-t)*t*t*c[2][k]+t**3*c[3][k]);
-  const boxes=names.map(name=>({...at(name),w,h})),placed=[],paths=edges.map((edge,i)=>path(edge,cut[i]));
-  const near=paths.map(p=>Array.from({length:61},(_,k)=>bezier(p.c,k/60)));
-  const gap=(pts,x,y)=>Math.min(...pts.map(([px,py])=>Math.hypot(px-x,py-y)));
-  // A label is a box: its longest line wide, 12px tall a line (13px apart), centred on its spot. It tries a spot on its own line, then moves up or down by whole steps,
-  // to the first clear spot (no placed label, no node) that is not nearer another edge than its own. Where another edge crosses its middle it tries nearer its source end
-  // (t .25) or its target end (t .75) first, alternating by edge, so crossing labels are not stacked at the shared middle. Room is made, not borrowed: a spot below the drawing grows its height.
-  const span=(y,n)=>[y-9-(n-1)*LABEL_LINE/2,y+3+(n-1)*LABEL_LINE/2];
-  const clear=(x,y,lw,n)=>{const [top,bot]=span(y,n);return placed.every(o=>Math.abs(o.x-x)>=(o.w+lw)/2||top>=o.bot+2||o.top>=bot+2)&&boxes.every(b=>x+lw/2<=b.x-2||x-lw/2>=b.x+b.w+2||bot<=b.y-2||top>=b.y+b.h+2);};
-  const spot=(i,lw,n)=>{
-    const c=paths[i].c,steps=[0];for(let k=1;k<=LABEL_STEPS;k++)steps.push(-k,k);
-    const [mx,my]=bezier(c,.5),crossed=near.some((pts,k)=>k!==i&&gap(pts,mx,my)<LABEL_STEP*2),pref=i%2?.75:.25,ts=crossed?[...MAP_T].sort((p,q)=>Math.abs(p-pref)-Math.abs(q-pref)):MAP_T;
-    for(const own of [true,false])for(const dy of steps)for(const t of ts){
-      const [x,y]=bezier(c,t),at=y-4+dy*LABEL_STEP;
-      if(at-(n-1)*LABEL_LINE/2>=10&&clear(x,at,lw,n)&&(!own||near.every((pts,k)=>k===i||gap(pts,x,at-4)>=gap(near[i],x,at-4))))return {x,y:at};
-    }
-    // ponytail: LABEL_STEPS (24 steps, 360px) is the bound; past it the label sits at the line's midpoint, over its neighbours, rather than grow the drawing without end.
-    const [x,y]=bezier(c,.5);return {x,y:y-4};
-  };
-  const drawn=edges.map((edge,i)=>{
-    const p=paths[i],dash=MAP_DASH[types.indexOf(edge.type)%MAP_DASH.length],lines=wrap[i],lw=wide[i],q=spot(i,lw,lines.length),[top,bot]=span(q.y,lines.length),y0=q.y-(lines.length-1)*LABEL_LINE/2;
-    placed.push({...q,w:lw,top,bot});
-    return `<path class="map-edge${cut[i]?' cut':''}" d="${p.d}" marker-end="url(#map-arrow-${id.replace(/\W/g,'-')}-${map.table})"${dash?` stroke-dasharray="${dash}"`:''}/><text class="map-edge-label" x="${Math.round(q.x*10)/10}" y="${Math.round(y0*10)/10}" text-anchor="middle">${lines.map((line,k)=>`<tspan x="${Math.round(q.x*10)/10}" dy="${k?LABEL_LINE:0}">${esc(line)}</tspan>`).join('')}${lines.join(' ')===edge.type?'':`<title>${esc(edge.type)}</title>`}</text>`;
-  }).join('');
-  const height=Math.ceil(Math.max(base,...placed.map(o=>o.bot+3)));
-  const nodes=names.map(name=>{const p=at(name),lines=axisLines(name,w-10,MAP_CHAR,true);return `<g class="map-node"><title>${esc(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x+8}" y="${p.y+h/2+4-7*(lines.length-1)}">${lines.map((line,i)=>`<tspan x="${p.x+8}" dy="${i?14:0}">${esc(line)}</tspan>`).join('')}</text></g>`;}).join('');
-  const label=`${map.name}: ${names.length} nodes, ${edges.length} edges`;
-  const marker=`<defs><marker id="map-arrow-${id.replace(/\W/g,'-')}-${map.table}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
+  const edges=rows.map(({cells:[from,,type,to]})=>({from,type,to})),uid=`${id.replace(/\W/g,'-')}-${map.table}`,label=`${map.name}: ${new Set(edges.flatMap(edge=>[edge.from,edge.to])).size} nodes, ${edges.length} edges`;
+  const {svg,loops}=window.Components.pathwayDiagram(edges,{uid,svgAttrs:`role="img" aria-label="${esc(label)}. The edge table follows."`});
   const note=loops?`<p class="map-note">${loops} edge${loops===1?'':'s'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>`:'';
-  return `<div class="map-scroll" role="region" aria-label="${esc(label)}. The edge table follows; scroll horizontally if the drawing is wider than its card" tabindex="0"><svg role="img" aria-label="${esc(label)}. The edge table follows." width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${marker}${drawn}${nodes}</svg></div>${note}`;
+  return `<div class="map-scroll" role="region" aria-label="${esc(label)}. The edge table follows; scroll horizontally if the drawing is wider than its card" tabindex="0">${svg}</div>${note}`;
 }
 // A map with only a stated gap is drawn as its reason, never as an empty diagram.
 // `own` is the module page's: the map card carries its section route and caption there; the Overview draws the card alone.
@@ -935,7 +915,12 @@ function mapsView(id,tag='h2',keep=()=>true,own=false) {
   return (data[id]?.maps||[]).filter(keep).map(map=>{
     const title=`<${tag}>${esc(map.name[0].toUpperCase()+map.name.slice(1))}</${tag}>`;
     const anchor=own?drawingAnchor(id,map.table):'',caption=own?drawingCaption(id,map.table):'';
-    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${own&&isNewFormat(data[id].sections)?gapTableForm(id,map.name,map.table):''}${caption}</div>`;
+    // A new-format page draws the pathway component (C14), or the empty state (C32) with the module's stated reason, and one link to the edge table as written, which is Evidence's.
+    if(isNewFormat(data[id].sections)){
+      const section=drawingSection(id,map.table),link=`<p class="map-ev"><a class="in-ev" href="${esc(window.Evidence.href('registers',data[id].module,data[id].run))}">In Evidence</a></p>`;
+      return `<div class="map-card"${anchor}>${title}${tableRenderer(id)(fixtureTable(id,map.table),section)}${link}${caption}</div>`;
+    }
+    if(map.gap!==null)return `<div class="map-card"${anchor}>${title}<p class="lane-gap">Not established for this run<small>${esc(map.gap)}</small></p>${caption}</div>`;
     const rows=fixtureTable(id,map.table).rows,link=row=>`<a class="event-link" href="${evidenceHref(id,row.line)}" data-evidence="${esc(`${id}:${row.line}`)}">${rich(row.cells[1])}</a>`;
     const body=rows.map(row=>`<tr><td>${rich(row.cells[0])}</td><td>${link(row)}</td><td>${esc(row.cells[2])}</td><td>${rich(row.cells[3])}</td><td>${rich(row.cells[4])}</td></tr>`).join('');
     return `<div class="map-card"${anchor}>${title}${mapDiagram(id,map,rows)}<table class="map-table"><caption>Edges of the map, as stated</caption><thead><tr>${MAP_HEAD.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>${caption}</div>`;
@@ -1455,7 +1440,7 @@ function overviewCharts(entries,context) {
   const html=entries.filter(entry=>entry.out).map(({id,out})=>{
     if(!placed('chart','Overview',out))return '';
     const charts=out.charts||[];
-    const cards=chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts))));
+    const cards=chartCards(charts.map((chart,at)=>readerChart(id,chart,true,!noted&&at===lastPeriodChart(charts),isNewFormat(out.sections))),!isNewFormat(out.sections));
     noted=noted||lastPeriodChart(charts)>=0;
     return `<div class="overview-charts" data-module="${esc(out.module)}">${cards}${mapsView(id,'h3',map=>map.gap===null&&placed('map','Overview',out,map.name))}</div>`;
   }).filter(html=>/class="(panel-card|map-card)"/.test(html));

@@ -1570,9 +1570,10 @@ test('module page (H4): a blocked new-format module has only its Bottom line and
 
 test('module page: a module with event lanes draws its own timeline, and one without draws none (the Calendar tab is gone)', () => {
   const page = fixturePage(), cp1a = page.moduleReport(outId('CP-1A')), cp2 = page.moduleReport(outId('CP-2'));
-  assert.ok(/<section class="part" id="timeline"><div class="event-lanes compact"><div class="section-heading"><h3>Timeline<\/h3>/.test(cp1a));
-  assert.ok(cp1a.includes('<span class="lane-name">issuer calendar</span>') && countOf(cp1a, /class="lane-event point/g) === 9);
-  assert.ok(!cp2.includes('id="timeline"') && !cp2.includes('lane-name'));
+  // Task 7: a new-format page draws each lane as the dated timeline component (C15), one event per row of its table.
+  assert.ok(/<section class="part" id="timeline"><div class="tl-lanes"><div class="section-heading"><h3>Timeline<\/h3>/.test(cp1a));
+  assert.ok(cp1a.includes('<h4 class="tl-name">issuer calendar</h4>') && countOf(cp1a, /<li class="tl-i">/g) === 9);
+  assert.ok(!cp2.includes('id="timeline"') && !cp2.includes('tl-name'));
   assert.ok(page.reportParts(outId('CP-1A')).some(p => p[0] === 'timeline' && p[1] === 'Timeline'));
 });
 
@@ -1593,7 +1594,7 @@ test('module page (W2): an output with an event table and no Events lane draws i
   const other = placedPage([sec('Findings', 2, 1, 'view', []), sec('Other', 3, 10, 'view', [table(11, ['Item', 'Value'], [[12, 'a', 'b']])])]);
   assert.ok(!other.moduleReport(outId('CP-1A')).includes('id="timeline"'));
   const lane = fixturePage().moduleReport(outId('CP-1A'));
-  assert.ok(lane.includes('class="event-lanes compact"') && !lane.includes('class="timeline"'));
+  assert.ok(lane.includes('class="tl-lanes"') && !lane.includes('class="timeline"'));
 });
 
 test('module page (H4): an earlier-format handoff keeps its parts and sections, with its chips behind a Basis button, not in the prose', () => {
@@ -3385,17 +3386,20 @@ test('module page (Task 4): a drawing stands where its section stood among the f
   assert.deepEqual(a1Page(sections).reportParts(a1Id).map(p => p[0]), ['head', 'bottom-line', 'key-findings', 's-20', 'charts', 'timeline', 'maps', 's-500', 'limitations']);
 });
 
-test('module page (A1): the body has no "Chart data:" heading, and every chart is a card with its Table form', () => {
+test('module page (A1; Task 7): the body has no "Chart data:" heading, and every chart is a card with one trace control, no Table form and no source chip', () => {
   const html = a1Page().moduleReport(a1Id), charts = /<section class="part" id="charts">.*?<\/section>/s.exec(html)[0];
   assert.ok(!html.includes('Chart data:') && !html.includes('Map: ') && !html.includes('Events: '), 'no drawing section is printed again');
   assert.equal(countOf(charts, /<div class="panel-card"/g), 2);
-  assert.equal(countOf(charts, /<summary>Table form<\/summary>/g), 2);
+  assert.equal(countOf(charts, /<summary>Table form<\/summary>/g), 0, 'the table as written is in Evidence');
+  assert.equal(countOf(charts, /class="chips"/g) + countOf(charts, /data-chip=/g) + countOf(charts, /class="chart-table"/g), 0);
+  assert.ok(!charts.includes('.jsonl') && !charts.includes('Chip dot'), 'no file name, no chip key');
+  assert.equal(countOf(charts, /<button type="button" class="basis-link trace-row"[^>]*aria-label="(?:Leverage|Cover): where it comes from"/g), 2, 'one trace control a chart, in its heading');
 });
 
 test('module page (A1): each chart card, map card and timeline lane carries its section anchor, so s-<line> routes stay', () => {
   const page = a1Page(), html = page.moduleReport(a1Id);
   for (const line of [40, 50]) assert.ok(html.includes(`<div class="panel-card" id="s-${line}">`), `chart ${line}`);
-  assert.ok(html.includes('<div class="map-card" id="s-400">') && html.includes('<div class="lane-row" id="s-300">'));
+  assert.ok(html.includes('<div class="map-card" id="s-400">') && html.includes('<div class="tl-card" id="s-300">'));
   const anchors = page.drawnAnchors(a1Id);
   for (const line of [40, 50, 300, 400]) assert.ok(anchors.has(`s-${line}`), `s-${line}`);
   for (const line of [30, 60, 70, 90]) assert.ok(!anchors.has(`s-${line}`), `s-${line} (Request, Sources, Next module, Front matter) is not drawn, so it is not a route`);
@@ -3405,7 +3409,7 @@ test('module page (A1): prose written under a drawing\'s table is its caption', 
   const html = a1Page().moduleReport(a1Id), within = (from, to, needle) => html.slice(html.indexOf(from), html.indexOf(to)).includes(needle);
   assert.ok(within('<div class="panel-card" id="s-40">', '<div class="panel-card" id="s-50">', 'Leverage is the highest in five years.'));
   assert.ok(!within('<div class="panel-card" id="s-50">', 'id="s-300"', 'Leverage is the highest'));
-  assert.ok(html.slice(html.indexOf('<div class="lane-row" id="s-300">')).includes('Both dates are scheduled.'));
+  assert.ok(html.slice(html.indexOf('<div class="tl-card" id="s-300">')).includes('Both dates are scheduled.'));
   assert.ok(html.slice(html.indexOf('<div class="map-card" id="s-400">')).includes('The driver is the only one stated.'));
 });
 
@@ -3416,7 +3420,7 @@ test('module page (A1): a chart with no numbers is a card saying Not established
   const order = [...charts.matchAll(/<div class="panel-card" id="s-(\d+)">/g)].map(m => m[1]);
   assert.deepEqual(order, ['35', '40', '50'], 'the gap card sits where its table is');
   const card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(charts)[0];
-  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && strip(card).includes('no covenant is stated') && !card.replace(/<details.*?<\/details>/s, '').includes('Not supplied'), 'the reason is shown without its prefix; the table as written is in the Table form fold (H1)');
+  assert.ok(strip(card).includes('Covenant headroom') && strip(card).includes('Not established for this run') && strip(card).includes('no covenant is stated') && !card.includes('Not supplied') && !card.includes('<details'), 'the reason is shown without its prefix; the table as written is in Evidence (Task 7)');
   assert.ok(!html.includes('Chart data:'));
 });
 
@@ -3426,10 +3430,10 @@ test('module page (A1): a drawing the store could not draw keeps its section in 
   assert.ok(!html.includes('Chart data: leverage'));
 });
 
-test('module page (A1): the compact timeline has a Table form fold of its events', () => {
+test('module page (A1; Task 7): the timeline draws each event once, as the component, with no Table form fold and no event table', () => {
   const html = a1Page().moduleReport(a1Id), timeline = /<section class="part" id="timeline">.*?<\/section>/s.exec(html)[0];
-  assert.ok(/<details class="chart-table"><summary>Table form<\/summary>.*<table class="event-table">/s.test(timeline));
-  assert.ok(timeline.includes('Note matures') && timeline.includes('Call window'));
+  assert.ok(!timeline.includes('<details') && !timeline.includes('event-table') && !timeline.includes('Table form'));
+  assert.ok(timeline.includes('Note matures') && timeline.includes('Call window') && countOf(timeline, /<li class="tl-i">/g) === 2);
 });
 
 test('module page (A1; Task 4): Front matter, Request, Next module and Sources are drawn nowhere on the page: no audit fold, no filename, no routing text', () => {
@@ -3514,38 +3518,97 @@ test('timeline: a span too thin to hold its number at the right end is drawn fro
   assert.match(tag, /style="right:0%;width:0\.\d+%;bottom:4px"/);
 });
 
-// ---- Whole-branch H1: a drawing whose table states none keeps its table as the Table form fold, every cell as written.
+// ---- Whole-branch H1, re-pointed by Task 7: a drawing whose table states none is the empty state (C32) with the module's stated reason; its table as written is Evidence's, not a fold on the page.
 const h1Page = (extra, set) => a1Page(a1Sections(extra), { ...a1Set, ...set });
-const foldOf = (html, from) => /<details class="chart-table">.*?<\/details>/s.exec(html.slice(html.indexOf(from)))[0];
 
-test('module page (H1): a chart card with no numbers keeps its table as a Table form fold, its unit and Basis cells as written', () => {
+test('module page (H1; Task 7): a chart card with no numbers is the empty state with every distinct reason, and no Table form fold', () => {
   const page = h1Page([sec('Chart data: covenant headroom', 3, 35, 'consumed', [chartTable(37, [[38, 'FY2024', 'Not supplied: no covenant is stated', 'x (net debt to EBITDA)', 'not established for this run and not a compliance opinion']])])], { chartGaps: [{ title: 'Covenant headroom', table: 37, gap: 'no covenant is stated; no test date is stated' }] });
   const html = page.moduleReport(a1Id), card = new RegExp('<div class="panel-card" id="s-35">.*?(?=<div class="panel-card" id="s-40">)', 's').exec(html)[0];
-  assert.ok(strip(card).replace(strip(foldOf(card, '<details')), '').includes('no covenant is stated; no test date is stated'), 'the visible reason lists every distinct reason');
-  const fold = foldOf(card, '<details');
-  assert.ok(fold.includes('<summary>Table form</summary>') && strip(fold).includes('x (net debt to EBITDA)') && strip(fold).includes('not established for this run and not a compliance opinion') && strip(fold).includes('Not supplied: no covenant is stated'), fold);
+  assert.ok(card.includes('class="empty-state"') && strip(card).includes('no covenant is stated; no test date is stated') && !card.includes('<details') && !card.includes('Table form'));
+  assert.ok(!strip(card).includes('x (net debt to EBITDA)') && !strip(card).includes('not a compliance opinion'), 'the unit and Basis cells are the table as written, in Evidence');
 });
 
-test('module page (H1): an events lane with no event keeps its table as a Table form fold, every cell as written', () => {
+test('module page (H1; Task 7): an events lane with no event is the empty state with the module\'s reasons, not a timeline and not a fold', () => {
   const row = [313, 'Not supplied: no legal event is settled here', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: none', 'Not supplied: these are undated triggers recorded in other lanes'];
   const page = h1Page([sec('Events: Legal', 3, 310, 'consumed', [table(312, LANE_HEAD, [row]), text(314, 'Legal lane caption.')])], { events: [{ lane: 'Legal', table: 312, gap: 'no legal event is settled here' }] });
-  const html = page.moduleReport(a1Id), lane = /<div class="lane-row" id="s-310">.*?Legal lane caption\./s.exec(html)[0];
-  assert.ok(strip(lane).includes('no legal event is settled here') && strip(lane).includes('Legal lane caption.'));
-  const timeline = /<section class="part" id="timeline">.*?<\/section>/s.exec(html)[0];
-  assert.ok(strip(timeline).includes('these are undated triggers recorded in other lanes') && /<summary>Table form<\/summary>/.test(timeline), 'the gap lane row is in the Table form');
+  const html = page.moduleReport(a1Id), lane = /<div class="tl-card" id="s-310">.*?Legal lane caption\./s.exec(html)[0];
+  assert.ok(lane.includes('class="empty-state"') && !lane.includes('tl-i') && strip(lane).includes('Not supplied: no legal event is settled here') && strip(lane).includes('Legal lane caption.'));
+  assert.ok(strip(lane).includes('Not supplied: these are undated triggers recorded in other lanes') && !lane.includes('<details'), 'the module\'s last-cell reason too');
 });
 
-test('module page (H1): an earlier-format page whose map states none has no Table form fold; a new-format one has it', () => {
+test('module page (H1; Task 7): a map with no edge is the empty state with its reason and one link to the edge table in Evidence; an earlier-format page is unchanged', () => {
   const early = /<section class="part" id="maps">.*?<\/section>/s.exec(runPage(withMaps).moduleReport(outId('CP-1')))[0];
-  assert.ok(early.includes('Not established for this run') && !early.includes('<summary>Table form</summary>'), 'earlier format is unchanged');
-  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, ...Array(5).fill('Not supplied: no edge is stated'), 'Not supplied: p']])])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
-  assert.ok(/<div class="map-card" id="s-410">.*?<summary>Table form<\/summary>/s.test(page.moduleReport(a1Id)));
+  assert.ok(early.includes('Not established for this run') && !early.includes('<summary>Table form</summary>') && early.includes('<table class="map-table"'), 'earlier format is unchanged');
+  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, 'Not supplied: no edge is stated', 'Not supplied: x', 'Not supplied: x', 'Not supplied: x', 'Not supplied: no edge with applicable document and jurisdiction can be drawn', 'Not supplied: p']]), text(414, 'Map caption.')])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
+  const card = /<div class="map-card" id="s-410">.*?Map caption\./s.exec(page.moduleReport(a1Id))[0];
+  assert.ok(card.includes('class="empty-state"') && !card.includes('<svg role="group"') && !card.includes('<table') && !card.includes('Table form'));
+  assert.ok(strip(card).includes('Not supplied: no edge with applicable document and jurisdiction can be drawn') && card.includes('href="#W-Evidence/registers?c=run-a&amp;m=CP-1"') && countOf(card, /class="in-ev"/g) === 1, card);
 });
 
-test('module page (H1): a map with no edge keeps its table as a Table form fold, every cell as written', () => {
-  const page = h1Page([sec('Map: legal entities', 3, 410, 'consumed', [table(412, MAP_HEAD, [[413, 'Not supplied: no edge is stated', 'Not supplied: x', 'Not supplied: x', 'Not supplied: x', 'no edge with applicable document and jurisdiction can be drawn', 'Not supplied: p']]), text(414, 'Map caption.')])], { maps: [...a1Set.maps, { name: 'legal entities', table: 412, gap: 'no edge is stated' }] });
-  const html = page.moduleReport(a1Id), card = /<div class="map-card" id="s-410">.*?Map caption\./s.exec(html)[0];
-  assert.ok(/<summary>Table form<\/summary>/.test(card) && strip(foldOf(card, '<details')).includes('no edge with applicable document and jurisdiction can be drawn'), card);
+// ---- Task 7: events, maps and promoted registers on the module page; the audit material of a drawing is Evidence's.
+const EvidencePage = require('./evidence.js');
+// The Evidence page (Registers tab) of the one output, through the pure builder: the output's sections as the page holds them.
+const evidenceRegisters = (sections, module = 'CP-1') => EvidencePage.view({
+  run: { context: RUN, code: 'RUN-A', evidence: { sources: [], unused: [], unrecorded: [], noSourcesModules: [], handoffs: [], zip: null, downloads: [], record: { hashes: [], instructions: [], calls: [], cap: null } }, methodChanges: [], steps: [] },
+  modules: [{ id: module, outputs: [{ id: a1Id, sections, placement: sections.map(() => 'view') }] }], chips: {},
+  deps: { moduleTitle: code => code, hashLabel: name => name, methodChange: line => line },
+}, { tab: 'registers', module });
+const MATRIX_HEAD = ['Event', 'Description', 'Probability', 'Impact', 'P/I Classification'];
+const registerSections = () => a1Sections([
+  sec('Analytical appendix', 2, 80, 'view', []),
+  sec('T5.4 Probability / Impact Matrix', 3, 82, 'view', [table(84, MATRIX_HEAD, [[85, 'Strike', 'A strike at the plant', 'High', 'High', 'Critical'], [86, 'Flood', 'A flooded warehouse', 'Low', 'High', 'Medium']])]),
+  sec('T2F.1 Source register', 3, 90, 'view', [table(92, ['Name', 'Detail'], [[93, 'Alpha', 'Only in Evidence']])]),
+]);
+
+test('promoted registers (Task 7): a registers table whose shape is promoted is drawn once on the module page, under its section heading, after the finding sections; the as-written table is in Evidence too', () => {
+  const sections = registerSections();
+  sections.splice(sections.findIndex(x => x.heading === 'Sources'), 0, sec('Late finding', 3, 500, 'view', [text(501, 'A late finding.')]));
+  const page = a1Page(sections), html = page.moduleReport(a1Id);
+  assert.deepEqual(page.reportParts(a1Id).map(p => p[0]), ['head', 'bottom-line', 'key-findings', 'charts', 'timeline', 'maps', 's-500', 's-82', 'limitations']);
+  assert.equal(page.reportParts(a1Id).find(p => p[0] === 's-82')[1], 'Probability / Impact Matrix', 'the section\'s own heading, its method code dropped');
+  assert.equal(countOf(html, /A strike at the plant/g), 1, 'drawn once');
+  assert.ok(html.includes('class="shape-block shape-matrix"') && html.includes('<div class="analysis-section" id="s-82">'));
+  assert.ok(html.indexOf('A late finding.') < html.indexOf('A strike at the plant'), 'after the finding sections');
+  assert.ok(page.drawnAnchors(a1Id).has('s-82') && !page.drawnAnchors(a1Id).has('s-90'));
+  const evidence = strip(evidenceRegisters(sections));
+  assert.equal(countOf(evidence, /A strike at the plant/g), 1, 'Evidence holds the table as written, once');
+  assert.ok(evidence.includes('Only in Evidence') && evidence.includes('A flooded warehouse'));
+});
+test('promoted registers (Task 7): a registers table of a shape that is not promoted is Evidence only, and so is the prose of a registers section', () => {
+  const sections = a1Sections([sec('Analytical appendix', 2, 80, 'view', [text(81, 'Appendix prose, kept in Evidence.')]), sec('T2F.1 Source register', 3, 90, 'view', [table(92, ['Name', 'Detail'], [[93, 'Alpha', 'Only in Evidence']]), text(94, 'Register prose.')])]);
+  const html = a1Page(sections).moduleReport(a1Id);
+  for (const gone of ['Only in Evidence', 'Appendix prose', 'Register prose', 'Source register']) assert.ok(!html.includes(gone), gone);
+  assert.ok(strip(evidenceRegisters(sections)).includes('Only in Evidence'));
+});
+test('promoted registers (Task 7): an earlier-format handoff draws none, and an inter-module section stays hidden everywhere', () => {
+  const sections = [sec('Reader summary', 3, 10, 'consumed', []), ...registerSections().filter(x => x.line >= 80), sec('Downstream owners', 2, 95, 'view', [table(97, MATRIX_HEAD, [[98, 'Hidden event', 'x', 'High', 'High', 'Critical']])])];
+  const early = a1Page(sections, { ...a1Set, charts: [], events: [], maps: [], summary: { bottomLine: 'Cash up.', confidence: 'Medium', limitation: 'x', line: 13, findings: [] } }).moduleReport(a1Id);
+  assert.ok(!early.includes('shape-matrix') && !early.includes('rm-chip'), 'the earlier-format path draws no component');
+  const current = a1Page(a1Sections(sections.filter(x => x.line >= 80))).moduleReport(a1Id);
+  assert.ok(!current.includes('Hidden event') && !strip(evidenceRegisters(a1Sections(sections.filter(x => x.line >= 80)))).includes('Hidden event'), 'rule 7: drawn nowhere');
+});
+
+test('maps (Task 7): the edge table leaves a new-format page: its Evidence column is nowhere on it, one link opens Evidence, and Evidence holds the table as written', () => {
+  const sections = a1Sections(), html = a1Page(sections).moduleReport(a1Id), card = /<div class="map-card" id="s-400">.*?The driver is the only one stated\./s.exec(html)[0];
+  assert.ok(!html.includes('Synthetic p.1') && !card.includes('<table') && !card.includes('map-table') && !card.includes('Edges of the map'));
+  assert.ok(card.includes('<svg role="group"') && card.includes('class="map-steps"') && countOf(card, /class="in-ev"/g) === 1);
+  assert.ok(strip(evidenceRegisters(sections)).includes('Synthetic p.1'), 'the table as written, with its Evidence column, is in Evidence');
+});
+test('charts (Task 7): a chart\'s source chips and Table form are not on the module page and are in Evidence; the chart keeps one trace control', () => {
+  const chips = { [`${a1Id}:43`]: [{ kind: 'issuer_page', source: 'K', file: 'K.jsonl', page: 123, page_end: null }] };
+  const sections = a1Sections(), page = runPage(() => { const d = overviewData({ 'CP-1': sections }); Object.assign(d[outId('CP-1')], a1Set); return d; }, [], m => m, { record: steps(['CP-1']), runFields: { asOf: '2025-03-31' }, names: FIXTURE_NAMES, chips });
+  const html = page.moduleReport(a1Id), charts = /<section class="part" id="charts">.*?<\/section>/s.exec(html)[0];
+  assert.ok(!html.includes('K.jsonl') && !html.includes('.jsonl') && !/class="chips"|data-chip=|Table form|class="chart-table"/.test(charts));
+  assert.equal(countOf(charts, /class="basis-link trace-row"/g), 2);
+  assert.ok(strip(evidenceRegisters(sections)).includes('6.57'), 'the chart\'s table as written is in Evidence');
+});
+test('timeline (Task 7): an events table with one "Not supplied" row is the empty state with the reason, not a timeline, and a table with events is the timeline', () => {
+  const row = [313, ...Array(6).fill('Not supplied: not assessable, no executed governing document available'), 'Not supplied: no legal event is settled here'];
+  const gap = h1Page([sec('Events: Legal', 3, 310, 'consumed', [table(312, LANE_HEAD, [row])])], { events: [{ lane: 'Legal', table: 312, gap: 'not assessable' }] }).moduleReport(a1Id);
+  const lane = /<div class="tl-card" id="s-310">.*?<\/div><\/div>/s.exec(gap)[0];
+  assert.ok(lane.includes('class="empty-state"') && !lane.includes('class="tl ') && strip(lane).includes('Not supplied: not assessable, no executed governing document available'));
+  const real = /<div class="tl-card" id="s-300">.*?<\/ol>/s.exec(a1Page().moduleReport(a1Id))[0];
+  assert.ok(real.includes('class="tl tl-h"') && !real.includes('empty-state') && !real.includes('K_10') && !real.includes('Synthetic filing'), 'the Source cell stays in the trace control');
 });
 
 // ---- The Forecast page (reader check of 2026-11-12): lines with no figure fold away; the model picker names the run, not a hash.

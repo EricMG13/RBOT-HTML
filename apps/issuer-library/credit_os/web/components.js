@@ -35,6 +35,11 @@
     "settings-2": "<path d=\"M14 17H5\" /><path d=\"M19 7h-9\" /><circle cx=\"17\" cy=\"17\" r=\"3\" /><circle cx=\"7\" cy=\"7\" r=\"3\" />",
     "triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /><path d=\"M12 9v4\" /><path d=\"M12 17h.01\" />",
     "x": "<path d=\"M18 6 6 18\" /><path d=\"m6 6 12 12\" />",
+    "arrow-down": "<path d=\"M12 5v14\" /><path d=\"m19 12-7 7-7-7\" />",
+    "banknote": "<rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" rx=\"2\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /><path d=\"M6 12h.01M18 12h.01\" />",
+    "building": "<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" /><path d=\"M9 22v-4h6v4\" /><path d=\"M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01\" />",
+    "globe": "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20\" /><path d=\"M2 12h20\" />",
+    "scale": "<path d=\"m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z\" /><path d=\"m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z\" /><path d=\"M7 21h10\" /><path d=\"M12 3v18\" /><path d=\"M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2\" />",
     "trace": "<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\" /><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\" /><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\" />"
   };
 
@@ -730,9 +735,206 @@
     return listGroup('wl-list', ctx, items);
   }
 
+  // ---- C32: the empty state. A drawing the module states it could not make: its stated reasons, as written, beside ghost bars.
+  const NOT_ESTABLISHED = 'Not established for this run';
+  const STATED_ABSENCE = /^(?:not supplied:|none identified\b)/i;
+  const emptyState = (title, reasons, tools = '') => `<div class="empty-state" role="status"><div class="ghost" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="es-body"><p class="es-t">${escapeHtml(title)}</p>${reasons.length ? `<ul class="es-r">${reasons.map(html => `<li>${html}</li>`).join('')}</ul>` : ''}</div>${tools}</div>`;
+  // A table whose every visible cell with text is a stated absence ("Not supplied: <reason>", "None identified ...") has no drawing to make: null when any such cell states something else.
+  // The reasons are the distinct cells, each once and as written (findingCell still holds back an identifier). A hidden column's cell that itself states an absence is the module's reason too
+  // (a map's last cell says why no edge can be drawn); every other hidden cell stays a reference for the trace control, and an inter-module cell is drawn nowhere.
+  function absenceOf(block, cols, ctx) {
+    const seen = new Set(), reasons = [], shownAt = new Set(cols.map(col => col.at));
+    const stated = text => STATED_ABSENCE.test(plain(text).trim());
+    for (const row of block.rows) {
+      const cells = [...cols.map(col => cellText(row, col.at)), ...row.cells.slice(block.headers.length).map(cell => String(cell ?? '').trim())].filter(text => text !== '');
+      if (cells.some(text => !stated(text))) return null;
+      const hiddenReasons = row.cells.slice(0, block.headers.length).map((cell, at) => [String(cell ?? '').trim(), at]).filter(([text, at]) => !shownAt.has(at) && text !== '' && stated(text) && shapes().columnKind(block.headers[at]) !== 'intermodule').map(([text]) => text);
+      for (const text of [...cells, ...hiddenReasons]) {
+        if (seen.has(text)) continue;
+        seen.add(text);
+        const html = fieldHtml(text, ctx);
+        if (html !== '') reasons.push(html);
+      }
+    }
+    return seen.size ? {reasons} : null;
+  }
+  const absentBlock = (block, ctx, absent) => emptyState(NOT_ESTABLISHED, absent.reasons, `<div class="es-trace">${traceOfBlock(ctx, block)}</div>`);
+
+  // ---- dated: C15, the dated timeline. Events stand in the table's own order, equally spaced; a date is drawn as written and no axis is invented.
+  // Six events or fewer run across from 992px, more run down the page (grouped by year when every date opens with one). A category word is drawn with its icon;
+  // the other cells (status, relevance, ...) are the event's detail; the Source column is the row's trace control only.
+  const CATEGORY_ICONS = [[/debt|capital|financ|liquid/i, 'banknote'], [/corporate|company|governance|ownership/i, 'building'], [/legal|covenant|document/i, 'scale'], [/macro|rate|market|econom|currenc|hedg/i, 'globe']];
+  const categoryIcon = word => (CATEGORY_ICONS.find(([rx]) => rx.test(word)) ?? [null, 'calendar-days'])[1];
+  const ISO_DATE = /^(\d{4})(?:-\d{2}(?:-\d{2})?)?$/, HORIZONTAL_MAX = 6;
+  function datedTimeline(block, ctx) {
+    const cols = visibleColumns(block, 'dated', ctx), dateCol = cols.find(col => col.at === 0);
+    const eventCol = cols.find(col => col !== dateCol && /^event\b/.test(labelNorm(col)) && !/\b(?:date|category|type)\b/.test(labelNorm(col)));
+    if (!dateCol || !eventCol || !block.rows.length) return recordCards(block, ctx);
+    const absent = absenceOf(block, cols, ctx);
+    if (absent) return absentBlock(block, ctx, absent);
+    const catCol = cols.find(col => col !== dateCol && col !== eventCol && /category/.test(labelNorm(col))), rest = cols.filter(col => ![dateCol, eventCol, catCol].includes(col));
+    const items = block.rows.map(row => {
+      const when = cellText(row, dateCol.at), title = cellText(row, eventCol.at), word = catCol ? cellText(row, catCol.at) : '', wordHtml = word === '' ? '' : fieldHtml(word, ctx);
+      const mark = icon(wordHtml === '' ? 'calendar-days' : categoryIcon(plain(word))), more = fieldList(row, rest, ctx) + extraList(block, row, ctx);
+      const kind = wordHtml === '' ? '' : `<span class="tl-cat">${mark}${wordHtml}</span>`;
+      return {when, html: `<li class="tl-i"><div class="tl-d">${fieldHtml(when, ctx)}</div><div class="tl-row"><span class="tl-dot" aria-hidden="true">${mark}</span></div><div class="tl-b"><p class="tl-t">${fieldHtml(title, ctx)}</p>${kind}${more ? `<div class="tl-more">${more}</div>` : ''}${traceFor(ctx, row, rowLabelOf(block, ctx, row, title))}</div></li>`};
+    });
+    const years = items.map(item => ISO_DATE.exec(item.when)?.[1]);
+    const vertical = items.length > HORIZONTAL_MAX, grouped = vertical && years.every(Boolean) && new Set(years).size > 1;
+    const list = items.map((item, n) => (grouped && years[n] !== years[n - 1] ? `<li class="tl-yr">${years[n]}</li>` : '') + item.html).join('');
+    const bar = shapeBar(`<span class="eyebrow"><span data-count>${items.length}</span> ${items.length === 1 ? 'event' : 'events'}</span>`, '');
+    return shapeBlock('shape-dated', ctx, '', `${bar}<ol class="tl ${vertical ? 'tl-v' : 'tl-h'}">${list}</ol>`);
+  }
+
+  // ---- edges: C14, the pathway. One layered diagram (a box per node, a curve per edge, the edge type its line style and its word), a legend of the type words, and a
+  // relationship panel that opens on the box or line the reader selects. Below 768px, and in print, the diagram is a step list. Every cell the diagram cannot name is in the panel and the list.
+  // A layer is the longest path from a node with no incoming edge; an edge that would close a loop is cut by first-seen row order and still drawn, below the nodes. Nothing is weighted.
+  function mapLayers(edges, nodes = []) {
+    const into = new Map(), out = new Map(), layer = new Map(), names = [];
+    const reaches = (from, to, seen = new Set()) => from === to || (!seen.has(from) && seen.add(from) && (out.get(from) || []).some(next => reaches(next, to, seen)));
+    const cut = edges.map(({from, to}) => {
+      for (const name of [from, to]) if (!names.includes(name)) names.push(name);
+      if (reaches(to, from)) return true;
+      out.set(from, [...(out.get(from) || []), to]); into.set(to, [...(into.get(to) || []), from]);
+      return false;
+    });
+    for (const name of nodes) if (!names.includes(name)) names.push(name);
+    const depth = name => { if (!layer.has(name)) layer.set(name, Math.max(-1, ...(into.get(name) || []).map(depth)) + 1); return layer.get(name); };
+    names.forEach(depth);
+    return {names, layer: new Map(names.map(name => [name, layer.get(name)])), cut};
+  }
+  // A label wraps word-wise to what one line holds (`step` units wide, `char` per character), in at most `most` lines. `hard`: a word wider than a line breaks across lines, whole, before
+  // any ellipsis; 'keep' leaves it whole on its own line; otherwise it is cut with an ellipsis. Text left after the last line ends in an ellipsis.
+  function wrapLabel(label, step, char, hard, most) {
+    const room = Math.max(4, Math.floor((step - 6) / char)), lines = [];
+    for (const long of label.split(' ').filter(Boolean)) {
+      let word = long;
+      while (hard === true && word.length > room) { lines.push(word.slice(0, room)); word = word.slice(room); }
+      const w = word.length > room && hard !== 'keep' ? `${word.slice(0, room - 1)}…` : word, last = lines.length - 1;
+      if (last >= 0 && lines[last].length + 1 + w.length <= room && !lines[last].endsWith('…')) lines[last] += ` ${w}`;
+      else lines.push(w);
+    }
+    if (lines.length <= most) return lines.length ? lines : [label];
+    const kept = lines.slice(0, most), end = kept[most - 1].split(' ');
+    while (end.length > 1 && end.join(' ').length + 1 > room) end.pop();
+    const tail = end.join(' ');
+    kept[most - 1] = tail.endsWith('…') ? tail : tail.length + 1 > room && hard !== 'keep' ? `${tail.slice(0, room - 1)}…` : `${tail}…`;
+    return kept;
+  }
+  const MAP_DASH = ['', '7 4', '2 4', '9 3 2 3', '12 5 2 5'], BOX = {w: 150, h: 54, gx: 120, gy: 22, pad: 12}, MAP_CHAR = 6.6;
+  const MAP_T = Array.from({length: 39}, (_, i) => (i + 1) / 40).sort((a, b) => Math.abs(a - .5) - Math.abs(b - .5));
+  const LABEL_CHAR = 6.6, LABEL_STEP = 15, LABEL_MARGIN = 20, LABEL_STEPS = 24, LABEL_WRAP = 106, LABEL_LINES = 2, LABEL_LINE = 13;
+  // The layered SVG of `edges` ([{from, to, type}], plain text). `uid` names its arrow marker; `svgAttrs` is the <svg> element's role and name; `nodeAttrs(name, at)` and `edgeAttrs(at)`,
+  // when given, make each node and each edge a control (an edge then is a group of its hit area, line and label). Returns the markup, the loops cut and the line style of each type word.
+  function pathwayDiagram(edges, {uid, svgAttrs, nodeAttrs, edgeAttrs}) {
+    const {names, layer, cut} = mapLayers(edges), {w, h, gy, pad} = BOX;
+    // The column gap holds the longest label of an edge drawn between columns (a cut edge's label sits below the nodes), never under BOX.gx, so a map of short labels stays compact.
+    // A label wraps on whole words to at most two lines (LABEL_WRAP holds 15 characters; one longer word keeps its own line), so the gap follows the longest line.
+    const wrap = edges.map(edge => (edge.type === '' ? [] : wrapLabel(edge.type, LABEL_WRAP, LABEL_CHAR, 'keep', LABEL_LINES))), wide = wrap.map(lines => Math.max(0, ...lines.map(line => line.length)) * LABEL_CHAR);
+    const gx = Math.max(BOX.gx, Math.ceil(Math.max(0, ...wide.filter((_, i) => !cut[i])) + LABEL_MARGIN));
+    const slot = new Map(), filled = [], types = [...new Set(edges.map(edge => edge.type).filter(type => type !== ''))];
+    for (const name of names) { const l = layer.get(name); slot.set(name, filled[l] ?? 0); filled[l] = (filled[l] ?? 0) + 1; }
+    const at = name => ({x: pad + layer.get(name) * (w + gx), y: pad + slot.get(name) * (h + gy)});
+    const width = pad * 2 + filled.length * (w + gx) - gx, loops = cut.filter(Boolean).length, base = pad * 2 + Math.max(...filled) * (h + gy) - gy + (loops ? 46 : 0);
+    const path = ({from, to}, back) => {
+      const a = at(from), b = at(to), mid = (a.x + b.x + w) / 2;
+      if (!back) return {d: `M${a.x + w} ${a.y + h / 2}C${mid} ${a.y + h / 2} ${mid} ${b.y + h / 2} ${b.x} ${b.y + h / 2}`, c: [[a.x + w, a.y + h / 2], [mid, a.y + h / 2], [mid, b.y + h / 2], [b.x, b.y + h / 2]]};
+      const low = Math.max(a.y, b.y) + h + 34, x1 = a.x + w / 2 + (from === to ? -30 : 0), x2 = b.x + w / 2 + (from === to ? 30 : 0);
+      return {d: `M${x1} ${a.y + h}C${x1} ${low} ${x2} ${low} ${x2} ${b.y + h}`, c: [[x1, a.y + h], [x1, low], [x2, low], [x2, b.y + h]]};
+    };
+    const bezier = (c, t) => [0, 1].map(k => (1 - t) ** 3 * c[0][k] + 3 * (1 - t) ** 2 * t * c[1][k] + 3 * (1 - t) * t * t * c[2][k] + t ** 3 * c[3][k]);
+    const boxes = names.map(name => ({...at(name), w, h})), placed = [], paths = edges.map((edge, i) => path(edge, cut[i]));
+    const near = paths.map(p => Array.from({length: 61}, (_, k) => bezier(p.c, k / 60)));
+    const gap = (pts, x, y) => Math.min(...pts.map(([px, py]) => Math.hypot(px - x, py - y)));
+    // A label is a box: its longest line wide, 12px tall a line (13px apart), centred on its spot. It tries a spot on its own line, then moves up or down by whole steps,
+    // to the first clear spot (no placed label, no node) that is not nearer another edge than its own. Where another edge crosses its middle it tries nearer its source end
+    // (t .25) or its target end (t .75) first, alternating by edge, so crossing labels are not stacked at the shared middle. Room is made, not borrowed: a spot below the drawing grows its height.
+    const span = (y, n) => [y - 9 - (n - 1) * LABEL_LINE / 2, y + 3 + (n - 1) * LABEL_LINE / 2];
+    const clear = (x, y, lw, n) => { const [top, bot] = span(y, n); return placed.every(o => Math.abs(o.x - x) >= (o.w + lw) / 2 || top >= o.bot + 2 || o.top >= bot + 2) && boxes.every(b => x + lw / 2 <= b.x - 2 || x - lw / 2 >= b.x + b.w + 2 || bot <= b.y - 2 || top >= b.y + b.h + 2); };
+    const spot = (i, lw, n) => {
+      const c = paths[i].c, steps = [0]; for (let k = 1; k <= LABEL_STEPS; k++) steps.push(-k, k);
+      const [mx, my] = bezier(c, .5), crossed = near.some((pts, k) => k !== i && gap(pts, mx, my) < LABEL_STEP * 2), pref = i % 2 ? .75 : .25, ts = crossed ? [...MAP_T].sort((p, q) => Math.abs(p - pref) - Math.abs(q - pref)) : MAP_T;
+      for (const own of [true, false]) for (const dy of steps) for (const t of ts) {
+        const [x, y] = bezier(c, t), top = y - 4 + dy * LABEL_STEP;
+        if (top - (n - 1) * LABEL_LINE / 2 >= 10 && clear(x, top, lw, n) && (!own || near.every((pts, k) => k === i || gap(pts, x, top - 4) >= gap(near[i], x, top - 4)))) return {x, y: top};
+      }
+      // LABEL_STEPS (24 steps, 360px) is the bound; past it the label sits at the line's midpoint, over its neighbours, rather than grow the drawing without end.
+      const [x, y] = bezier(c, .5); return {x, y: y - 4};
+    };
+    const marker = `map-arrow-${uid}`, round = n => Math.round(n * 10) / 10;
+    const drawn = edges.map((edge, i) => {
+      const dash = edge.type === '' ? '' : MAP_DASH[types.indexOf(edge.type) % MAP_DASH.length];
+      const line = `<path class="map-edge${cut[i] ? ' cut' : ''}" d="${paths[i].d}" marker-end="url(#${marker})"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+      let label = '';
+      if (edge.type !== '') {
+        const lines = wrap[i], q = spot(i, wide[i], lines.length), [top, bot] = span(q.y, lines.length), y0 = q.y - (lines.length - 1) * LABEL_LINE / 2;
+        placed.push({...q, w: wide[i], top, bot});
+        label = `<text class="map-edge-label" x="${round(q.x)}" y="${round(y0)}" text-anchor="middle">${lines.map((text, k) => `<tspan x="${round(q.x)}" dy="${k ? LABEL_LINE : 0}">${escapeHtml(text)}</tspan>`).join('')}${lines.join(' ') === edge.type ? '' : `<title>${escapeHtml(edge.type)}</title>`}</text>`;
+      }
+      return edgeAttrs ? `<g class="map-eg" ${edgeAttrs(i)}><path class="map-hit" d="${paths[i].d}"/>${line}${label}</g>` : line + label;
+    }).join('');
+    const height = Math.ceil(Math.max(base, ...placed.map(o => o.bot + 3)));
+    const nodes = names.map((name, i) => {
+      const p = at(name), lines = wrapLabel(name, w - 10, MAP_CHAR, true, 3);
+      return `<g class="map-node"${nodeAttrs ? ` ${nodeAttrs(name, i)}` : ''}><title>${escapeHtml(name)}</title><rect x="${p.x}" y="${p.y}" width="${w}" height="${h}" rx="4"/><text x="${p.x + 8}" y="${p.y + h / 2 + 4 - 7 * (lines.length - 1)}">${lines.map((line, k) => `<tspan x="${p.x + 8}" dy="${k ? 14 : 0}">${escapeHtml(line)}</tspan>`).join('')}</text></g>`;
+    }).join('');
+    const defs = `<defs><marker id="${marker}" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="map-arrow" d="M0 0L8 4L0 8z"/></marker></defs>`;
+    return {names, types, dash: type => MAP_DASH[types.indexOf(type) % MAP_DASH.length], loops, svg: `<svg ${svgAttrs} width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${defs}${drawn}${nodes}</svg>`};
+  }
+  const loopNote = loops => (loops ? `<p class="map-note">${loops} edge${loops === 1 ? '' : 's'} would close a loop: drawn below the nodes, in the order the handoff states them.</p>` : '');
+
+  const legendLine = dash => `<svg class="map-lg" width="34" height="8" viewBox="0 0 34 8" aria-hidden="true" focusable="false"><line x1="0" y1="4" x2="34" y2="4" stroke="currentColor" stroke-width="2"${dash ? ` stroke-dasharray="${dash}"` : ''}/></svg>`;
+  function pathwayFlow(block, ctx) {
+    const cols = visibleColumns(block, 'edges', ctx), column = rx => cols.find(col => rx.test(labelNorm(col)));
+    const fromCol = column(/^from$/), toCol = column(/^to$/), relCol = column(/^relationship/), typeCol = column(/^edge type$|\btype$/);
+    if (!fromCol || !toCol || !block.rows.length) return recordCards(block, ctx);
+    const absent = absenceOf(block, cols, ctx);
+    if (absent) return absentBlock(block, ctx, absent);
+    // A node is its cell as the page reads it; a cell the page holds back cannot name a node, and the table is then drawn as record cards, never with a node left out.
+    const nameOf = (row, col) => (findingCell(cellText(row, col.at), ctx).html === undefined ? '' : plain(cellText(row, col.at)).trim());
+    const edges = block.rows.map(row => ({from: nameOf(row, fromCol), to: nameOf(row, toCol), type: typeCol ? nameOf(row, typeCol) : ''}));
+    if (edges.some(edge => edge.from === '' || edge.to === '')) return recordCards(block, ctx);
+    const rest = cols.filter(col => ![fromCol, toCol, relCol, typeCol].includes(col)), uid = `${ctx.id ?? 'o'}-${block.line ?? 0}`.replace(/\W/g, '-'), label = `${ctx.caption || 'Pathway'}`;
+    const names = mapLayers(edges).names, touching = name => edges.flatMap((edge, k) => (edge.from === name || edge.to === name ? [k] : []));
+    const ends = k => [names.indexOf(edges[k].from), names.indexOf(edges[k].to)].join(' ');
+    const diagram = pathwayDiagram(edges, {
+      uid, svgAttrs: `role="group" aria-label="${escapeHtml(`${label}: ${names.length} nodes, ${edges.length} edges`)}"`,
+      nodeAttrs: (name, i) => `role="button" tabindex="0" aria-pressed="false" aria-label="${escapeHtml(name)}" data-map-pick="n:${i}" data-map-edges="${touching(name).join(' ')}" data-map-nodes="${[i, ...touching(name).flatMap(k => ends(k).split(' ').map(Number))].filter((n, p, all) => all.indexOf(n) === p).join(' ')}"`,
+      edgeAttrs: k => `role="button" tabindex="0" aria-pressed="false" aria-label="${escapeHtml(`${edges[k].from} to ${edges[k].to}${edges[k].type ? `, ${edges[k].type}` : ''}`)}" data-map-pick="e:${k}" data-map-edges="${k}" data-map-nodes="${ends(k)}"`,
+    });
+    const detail = (row, edge) => {
+      const rel = relCol ? fieldHtml(cellText(row, relCol.at), ctx) : '';
+      return {rel, trace: traceFor(ctx, row, `${edge.from} to ${edge.to}: where it comes from`), more: fieldList(row, rest, ctx) + extraList(block, row, ctx)};
+    };
+    const arrowTo = (edge, mark) => `<span>${escapeHtml(edge.from)}</span>${mark}<span>${escapeHtml(edge.to)}</span>${edge.type ? `<span class="pw-et">${escapeHtml(edge.type)}</span>` : ''}`;
+    const panels = block.rows.map((row, k) => { const d = detail(row, edges[k]); return `<div class="rel" data-rel="${k}" hidden><p class="rel-ft">${arrowTo(edges[k], icon('arrow-right'))}${d.trace}</p>${d.rel ? `<p class="rel-t">${d.rel}</p>` : ''}${d.more}</div>`; }).join('');
+    const steps = block.rows.map((row, k) => {
+      const d = detail(row, edges[k]), edge = edges[k];
+      return `<li class="pw-step"><span class="pw-n" data-count>${k + 1}</span><div class="pw-fr">${escapeHtml(edge.from)}</div><div class="pw-ar">${icon('arrow-down')}${edge.type ? `<span class="pw-et">${escapeHtml(edge.type)}</span>` : ''}</div><div class="pw-fr">${escapeHtml(edge.to)}</div>${d.rel ? `<p class="pw-rl">${d.rel}</p>` : ''}${d.more}${d.trace}</li>`;
+    }).join('');
+    const legend = diagram.types.length ? `<div class="map-legend">${diagram.types.map(type => `<span>${legendLine(diagram.dash(type))}${escapeHtml(type)}</span>`).join('')}</div>` : '';
+    const region = `${label}. Select a box or a line to read the relationship; scroll horizontally if the drawing is wider than its card`;
+    const wideMap = `<div class="map-wide"><div class="map-scroll" role="region" aria-label="${escapeHtml(region)}" tabindex="0">${diagram.svg}</div>${loopNote(diagram.loops)}${legend}<div class="map-panel" data-map-panel aria-live="polite"><p class="map-hint" data-map-hint>Select a box or a line to read the relationship.</p>${panels}</div></div>`;
+    const bar = shapeBar(`<span class="eyebrow"><span data-count>${edges.length}</span> ${edges.length === 1 ? 'relationship' : 'relationships'}</span>`, '');
+    return shapeBlock('shape-pathway', ctx, 'data-selected=""', `${bar}${wideMap}<ol class="map-steps">${steps}</ol>`);
+  }
+
+  // A node or an edge of a pathway was chosen (click or Enter): it is pressed, its relationships are shown in the panel, the boxes at their ends are marked. Choosing it again clears the panel.
+  function selectOnMap(pick) {
+    const root = pick.closest('.shape-pathway'), key = root.dataset.selected === pick.dataset.mapPick ? '' : pick.dataset.mapPick;
+    root.dataset.selected = key;
+    const list = value => (value ? value.split(' ') : []), shown = key === '' ? [] : list(pick.dataset.mapEdges), marked = key === '' ? [] : list(pick.dataset.mapNodes);
+    root.querySelectorAll('[data-map-pick]').forEach(item => item.setAttribute('aria-pressed', String(key !== '' && item.dataset.mapPick === key)));
+    root.querySelectorAll('[data-rel]').forEach(rel => { rel.hidden = !shown.includes(rel.dataset.rel); });
+    root.querySelectorAll('[data-map-hint]').forEach(hint => { hint.hidden = key !== ''; });
+    root.querySelectorAll('[data-map-pick]').forEach(item => item.classList.toggle('on', key !== '' && item.dataset.mapPick === key));
+    root.querySelectorAll('.map-node').forEach(node => node.classList.toggle('hl', marked.includes(node.dataset.mapPick.slice(2))));
+    root.querySelectorAll('.map-eg').forEach(edge => edge.classList.toggle('hl', shown.includes(edge.dataset.mapPick.slice(2))));
+  }
+
   // The dispatch: one component per shape; every shape without one (and any table a component cannot place) is a record card.
   const SHAPE_COMPONENTS = {cases: casesBlock, caseRows: caseRowsBlock, ranked: rankedLadder, statement: statementCard, metric: metricTiles, measure: measureTiles, change: changeCards,
-    status: statusChecklist, sided: sidedBoard, moduleState: moduleStateTiles, qa: qaAccordion, facts: factList, records: recordCards, matrix: riskMatrix, watch: watchList};
+    status: statusChecklist, sided: sidedBoard, moduleState: moduleStateTiles, qa: qaAccordion, facts: factList, records: recordCards, matrix: riskMatrix, watch: watchList, dated: datedTimeline, edges: pathwayFlow};
   const render = (shape, block, ctx) => (Object.hasOwn(SHAPE_COMPONENTS, shape) ? SHAPE_COMPONENTS[shape] : recordCards)(block, ctx);
 
   // Print shows the text of a folded <details>: the ones these components draw are opened for the print and put back as they were. `root` is the document.
@@ -749,6 +951,8 @@
 
   // The page's own state for these components: which case is chosen, which view is shown. Called from screen.js's click handler; true when the click was handled.
   function handleClick(target) {
+    const mapPick = target?.closest?.('[data-map-pick]');
+    if (mapPick) { selectOnMap(mapPick); return true; }
     const pick = target?.closest?.('[data-case-pick]'), view = target?.closest?.('[data-view-pick]');
     const root = (pick || view)?.closest('[data-block]');
     if (!root) return false;
@@ -776,7 +980,7 @@
     return `<nav class="sec-rail" aria-label="On this page"><p class="eyebrow">On this page</p>${items.map(link).join('')}</nav>`;
   }
 
-  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, qaAccordion, factList, riskMatrix, watchList, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
+  const Components = {icon, traceButton, traceRow, headerChips, placePill, toast, toastHost, tipAttributes, verdictPanel, findingsFeed, callout, limitationsBlock, recordCards, findingCell, render, casesBlock, caseRowsBlock, rankedLadder, statementCard, metricTiles, measureTiles, changeCards, statusChecklist, sidedBoard, moduleStateTiles, qaAccordion, factList, riskMatrix, watchList, datedTimeline, pathwayFlow, emptyState, mapLayers, pathwayDiagram, foldsForPrint, paragraphText, handleClick, sectionRail, ICON_PATHS};
   if (typeof window !== 'undefined') window.Components = Components;
   if (typeof document !== 'undefined' && document.body) toastHost();
   if (typeof module !== 'undefined') module.exports = Components;
