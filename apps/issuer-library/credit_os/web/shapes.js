@@ -14,6 +14,9 @@ const Shapes = (() => {
   // A method code leads a heading: "T2B.3 Name", "T2B.3 — Name", "t2b.calc_x — Name".
   const METHOD_CODE = /^(?:[A-Z][A-Z0-9]*\.[A-Z]?\d+(?:\s+—\s+|\s+(?=[A-Z]))|[a-z0-9]+(?:\.[a-z0-9_]+)+\s+—\s+)/;
 
+  // A section of the absorbed ESG analysis: its heading leads with the code T2G.<digits> (then a space, a dash or the end). Heading level is not read; the title after the code differs between runs.
+  const isEsgHeading = heading => /^T2G\.\d+(?:\s|-|—|–|$)/.test(String(heading ?? '').replace(/\*\*|`/g, '').trim());
+
   // `placement` is store.py's own label for the section; the role is decided by the chain alone, so the parameter is not read.
   function sectionRole(chain, placement) {
     const own = chain[chain.length - 1] ?? '';
@@ -168,7 +171,7 @@ const Shapes = (() => {
     return tokenPatterns.get(tokens).test(text) ? 'registers' : null;
   }
 
-  return {sectionRole, tableShape, columnKind, columnKinds, hiddenColumns, isUnstructured, FILE_EXTENSIONS, FILE_NAME, LONG_HEX, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, PERIOD_LABEL, METHOD_CODE};
+  return {sectionRole, isEsgHeading, tableShape, columnKind, columnKinds, hiddenColumns, isUnstructured, FILE_EXTENSIONS, FILE_NAME, LONG_HEX, blockRole, promoted, isLedger, idTokens, casePairing, methodNote, CALCULATION_ID, PERIOD_LABEL, METHOD_CODE};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;

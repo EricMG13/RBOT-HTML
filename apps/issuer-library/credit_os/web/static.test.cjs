@@ -5226,3 +5226,92 @@ test('X2: a chip or trace control whose item is not in the evidence map is not d
   assert.equal(reader.passageControls(texts, { id: 'p', chips: () => 0, has }).trace(3), '', 'a passage paragraph with no item has no trace control');
   assert.equal(reader.passageControls(texts, { id: 'p', chips: () => 0, has }).figure(3, 0, '6.57x'), '');
 });
+
+// ---- ESG part (module page): the T2G sections of a Rates, FX & hedging handoff are one named part. The fixtures are two complete real handoffs (tests/fixtures/esg);
+// the expected headings and cells are written by hand from them, the cells read straight from the Markdown rows by splitting on `|`.
+const ESG_DIR = path.join(__dirname, '..', '..', '..', '..', 'tests', 'fixtures', 'esg');
+const ESG_LABEL = 'Environmental, social and sustainability (ESG)';
+const esgLines = name => fs.readFileSync(path.join(ESG_DIR, `CP-2E-${name}.md`), 'utf8').split('\n');
+// The sections as store.parse_source holds them: a heading (levels 1 to 4) opens a section; a pipe table with its separator row is one block; a paragraph runs to a blank line or the next structure.
+function esgSections(lines) {
+  const sections = [];
+  let cur = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i], head = /^(#{1,4}) (.+)$/.exec(line);
+    if (head) { cur = { heading: head[2], level: head[1].length, line: i + 1, where: 'view', blocks: [] }; sections.push(cur); continue; }
+    if (!line.trim() || /^<!-- table-id: [\w.-]+ -->$/.test(line) || !cur) continue;
+    if (line.startsWith('|') && /^\|[\s:|-]+\|$/.test(lines[i + 1] ?? '')) {
+      const cells = row => row.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(c => c.trim()), block = { type: 'table', line: i + 1, headers: cells(line), rows: [] };
+      for (i += 2; i < lines.length && lines[i].startsWith('|'); i += 1) block.rows.push({ line: i + 1, cells: cells(lines[i]) });
+      i -= 1; cur.blocks.push(block); continue;
+    }
+    const start = i;
+    while (i + 1 < lines.length && lines[i + 1].trim() && !/^(#|\||- |<!-- table-id:|```)/.test(lines[i + 1]) && !/^\d+\. /.test(lines[i + 1])) i += 1;
+    cur.blocks.push({ type: 'text', line: start + 1, text: lines.slice(start, i + 1).join('\n') });
+  }
+  return sections;
+}
+const esgPage = (name, sections = esgSections(esgLines(name))) => runPage(() => overviewData({ 'CP-2E': sections }), [], m => m, { record: steps(['CP-2E']), runFields: { asOf: '2025-03-31' }, names: { ...FIXTURE_NAMES, 'CP-2E': 'Rates, FX & hedging' } });
+const esgId = outId('CP-2E');
+// The first data row of the "Materiality classification" table of a fixture: its first three cells, straight from the Markdown.
+const materialityCells = name => {
+  const lines = esgLines(name), at = lines.findIndex(line => /^#{3,4} T2G\.4 /.test(line)), row = lines.slice(at).find((line, n, rest) => line.startsWith('|') && rest[n - 2]?.startsWith('|') && /^\|[\s:|-]+\|$/.test(rest[n - 1]));
+  return row.split('|').slice(1, 4).map(cell => cell.trim());
+};
+const ESG_TITLES = {
+  h3: ['ESG source inventory', 'Environmental and transition register', 'Social and operational register', 'Materiality classification', 'Sustainability-linked mechanics', 'Refinancing access and cost of capital', 'Credit implication synthesis', 'Environmental and social gaps'],
+  h4: ['environmental, social and transition disclosure inventory', 'environmental and transition exposure', 'social and operational exposure', 'materiality classification', 'sustainability-linked debt mechanics', 'refinancing and cost-of-capital linkage', 'credit implications', 'environmental, social and transition gaps'],
+};
+const partOf = (html, anchor) => { const open = html.indexOf(`<section class="part" id="${anchor}"`); return html.slice(open, html.indexOf('</section>', open)); };
+
+for (const [name, own] of [['h3', 'Macro source gate'], ['h4', 'debt and rate exposure']]) {
+  test(`ESG part (${name} fixture): one rail entry, the eight sections under it in handoff order, no T2G code, the rates sections keep their own entries`, () => {
+    const page = esgPage(name), html = page.moduleReport(esgId), parts = page.reportParts(esgId);
+    const esg = parts.filter(p => p[0] === 'esg');
+    assert.equal(esg.length, 1);
+    assert.equal(esg[0][1], ESG_LABEL);
+    const rail = parts.slice(1).map(p => p[1]);
+    assert.equal(rail.filter(label => label === ESG_LABEL).length, 1);
+    for (const title of ESG_TITLES[name]) assert.ok(!rail.some(label => label.toLowerCase().startsWith(title.toLowerCase())), `no rail entry of its own: ${title}`);
+    assert.ok(rail.some(label => label.toLowerCase().startsWith(own.toLowerCase())), `rates section ${own} keeps its entry`);
+    assert.ok(!rail.some(label => label.includes('T2G.')) && !esg[0][2].includes('T2G.'));
+    const railLinks = [...html.matchAll(/<a class="rail-item"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g)].filter(m => m[1].includes('#CP-2E/esg') && strip(m[2].replace(/<span class="rail-count">.*?<\/span>/g, '')).trim() === 'Environmental, social and sustainability (ESG)');
+    assert.equal(railLinks.length, 1, 'the rail has exactly one link to the ESG part, with the ESG label');
+    const headings = [...esg[0][2].matchAll(/<h([1-6])[^>]*>(.*?)<\/h\1>/g)].map(m => strip(m[2]).trim());
+    assert.equal(headings[0], ESG_LABEL, 'the part is headed with its label');
+    assert.deepEqual(headings.slice(1).map(h => h.toLowerCase()), ESG_TITLES[name].map(t => t.toLowerCase()));
+    assert.ok(esg[0][3] > 0, 'the rail counts the drawn rows of the part');
+  });
+  test(`ESG part (${name} fixture): the first data row of the materiality table is drawn in the part, cell for cell`, () => {
+    const page = esgPage(name), part = strip(page.reportParts(esgId).find(p => p[0] === 'esg')[2]).replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+    for (const cell of materialityCells(name)) assert.ok(cell && part.includes(cell), cell);
+  });
+}
+test('ESG part: the part stands where the first ESG section stood among the body parts, and the other sections keep their order', () => {
+  const ids = esgPage('h3').reportParts(esgId).map(p => p[0]), at = ids.indexOf('esg');
+  assert.equal(ids[at - 1], 's-209', 'after the last rates section that stood before T2G.1 (line 232)');
+  assert.equal(ids[at + 1], 's-301', 'before the section that followed T2G.8');
+  assert.ok(!ids.some(id => ['s-232', 's-238', 's-247', 's-256', 's-269', 's-275', 's-282', 's-292'].includes(id)), 'no ESG section is a part of its own');
+});
+test('ESG part (h3 fixture): a register section of a shape that is not promoted is listed with an In Evidence link and none of its table is drawn; Evidence still lists the tables', () => {
+  const sections = esgSections(esgLines('h3')), page = esgPage('h3', sections), parts = page.reportParts(esgId), part = parts.find(p => p[0] === 'esg')[2], html = page.moduleReport(esgId);
+  const text = strip(part).replace(/&amp;/g, '&'), evidence = strip(evidenceRegisters(sections, 'CP-2E')).replace(/&amp;/g, '&');
+  const lines = esgLines('h3'), firstCell = code => { const at = lines.findIndex(line => line.startsWith(`### ${code} `)), sep = lines.findIndex((line, n) => n > at && /^\|[\s:|-]+\|$/.test(line)); return lines[sep + 1].split('|')[1].trim(); };
+  const href = `#W-Evidence/registers?c=${RUN}&amp;m=CP-2E`;
+  for (const [code, title] of [['T2G.2', 'Environmental and transition register'], ['T2G.3', 'Social and operational register']]) {
+    const cell = firstCell(code), table = sections.find(s => s.heading.startsWith(`${code} `)).blocks.find(b => b.type === 'table');
+    assert.ok(cell && table.rows[0].cells[0] === cell);
+    assert.ok(!text.includes(cell) && !strip(html).replace(/&amp;/g, '&').includes(cell), `not drawn on the module page: ${cell}`);
+    const at = part.indexOf(`>${title}</h`), end = part.indexOf('class="analysis-section"', at), own = part.slice(at, end < 0 ? undefined : end);
+    assert.ok(at > 0, title);
+    assert.equal(countOf(own, /class="in-ev"/g), 1, `one In Evidence link under ${title}`);
+    assert.ok(own.includes(`<p class="sec-moved"><a class="in-ev" href="${href}">In Evidence</a></p>`), own);
+    assert.ok(evidence.includes(cell), `still in Evidence: ${cell}`);
+  }
+});
+test('ESG part: a new-format handoff with no ESG heading has no esg part', () => {
+  const ids = fixturePage().reportParts(outId('CP-2')).map(p => p[0]);
+  assert.ok(!ids.includes('esg'));
+  const withoutEsg = esgSections(esgLines('h3')).filter(s => !/^T2G\./.test(s.heading));
+  assert.ok(!esgPage('h3', withoutEsg).reportParts(esgId).some(p => p[0] === 'esg'));
+});
