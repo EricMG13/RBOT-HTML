@@ -454,7 +454,8 @@ RULES: tuple[Rule, ...] = (
         "No file needed; read CP-2D amounts in the reporting currency as stated in its handoff.",
         "owner-path: src/deploy_workflow/owners/cp2d.py _usd_millions; METHODOLOGY-REVIEW.md "
         "'preserve foreign-currency and unavailable-facility limitations' (the CP-2D method "
-        "text sent names no currency)",
+        "text sent has a Currency and Scale column on T2E.5 and says nothing of a USD "
+        "restatement)",
         "observed offline",
     ),
     Rule(

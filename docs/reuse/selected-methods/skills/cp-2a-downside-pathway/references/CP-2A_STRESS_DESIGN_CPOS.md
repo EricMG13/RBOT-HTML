@@ -1,4 +1,4 @@
-<!-- src/deploy_vii/methods/cp2a.md (documentation, D12). LEAD adaptation per ruling Q2. Moved from docs/methods-drafts/cp2a.md with the Stage 2 build. -->
+<!-- CP-OS copy of src/deploy_vii/methods/cp2a.md (documentation, D12). LEAD adaptation per ruling Q2. Moved from docs/methods-drafts/cp2a.md with the Stage 2 build. -->
 # CP-2A Downside pathway: method (LEAD adaptation)
 
 Purpose (methodology.json): what breaks first and how far it falls. CP-2A is a static, single-period stress of one CP-1 base period from settled CP-1 facts. The analyst chooses the base period, the scenarios, the shock sizes and the watch levels (labelled analyst assumptions, uncited; confidence is never High).

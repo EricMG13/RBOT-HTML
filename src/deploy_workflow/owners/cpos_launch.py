@@ -142,9 +142,10 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # The method each module runs, per METHODOLOGY-REVIEW.md and what the 2026-11-05 live campaigns
 # consumed. prompts/CP-0.md and CP-1-intake.md are TDG case instructions, so they are left out.
 # Owner, 2026-11-10 ("Fix all"): each skill is sent every companion its SKILL.md calls mandatory
-# or binding (a runbook, a phase's method bundle). The companions and CP-1B were copied from cp-os
-# at b57a344; each SKILL.md has its own source and named edits, stated per file in
-# docs/reuse/selected-methods/manifest.json. Companions the SKILL opens only "to resolve an
+# or binding (a runbook, a phase's method bundle). Each archived file's source (cp-os b57a344,
+# caos-databricks, Deploy V or this repo) and any named edits are stated per file in
+# docs/reuse/selected-methods/manifest.json; the companions and CP-1B began as cp-os b57a344 copies,
+# and the manifest names where that no longer holds. Companions the SKILL opens only "to resolve an
 # ambiguity" (the schema and system references) are archived, not sent. CANON_SHARED.md is sent
 # only as the reader-layer sections of READER_LAYER, to every prose module (ruling
 # 2026-11-11, decision 8; the Analytical appendix section was added 2026-11-13, Deploy V methods
@@ -361,9 +362,10 @@ PROSE_PASSAGES = (
 )
 # Sent to every module that is sent the canon's Analytical appendix section: that section says
 # `## Analysis` and an appendix heading, while a handoff has the fixed H2s and CP-OS refuses an
-# added `## Analysis`. There is no appendix-specific check: a `###` heading nested under the
-# appendix heading is refused by the exact-heading selector checks, which require the report's
-# `###` headings.
+# added `## Analysis`. There is no appendix-specific check. A handoff is refused when the report's
+# required `###` headings are demoted to `####` under the appendix heading (the exact-heading
+# selector checks find no such `###` heading), and when `## Analysis` is added as an H2 (the
+# six-H2 check).
 APPENDIX_HEADING_NOTE = (
     "Where the canon's Analytical appendix section says `## Analysis`, this handoff's section is "
     "`## Findings`: write the appendix heading as a `###` heading there, after `### Limitations`; "

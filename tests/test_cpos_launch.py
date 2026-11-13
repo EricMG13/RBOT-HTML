@@ -49,7 +49,7 @@ from deploy_workflow.owners.cpos_launch import (
     prepare,
     without_for,
 )
-from deploy_workflow.run_expectations import Item
+from deploy_workflow.run_expectations import RULES, Item
 
 ROOT = Path(__file__).resolve().parents[1]
 RULING = ROOT / "docs/rulings/2026-11-05-live-loop-tests.md"  # configs: sol-medium
@@ -1859,6 +1859,16 @@ def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
         assert heading in method, heading
     for phrase in ("ReadinessReview", "JSON Schema", "src/deploy_vii/methods/cp0.md"):
         assert phrase not in text, phrase
+    # The management-claims expectation cites the sentence the CP-0 method text sent carries,
+    # not the stand-in's wording: the citation and the sent text must agree.
+    cited = next(r for r in RULES if r.key == "run-financials-management-claims").basis
+    source_hierarchy = (
+        "1 \u2014 controlling/primary filings, executed legal documents and official "
+        "schedules; 2 \u2014 issuer/agency releases, presentations, certificates and reports;"
+    )
+    assert source_hierarchy in cited
+    assert source_hierarchy in method
+    assert "cp0.md" not in cited
     # The project block: sent to CP-0 only, in the head before the method.
     for words in (
         "already listed, hashed and pinned the sources",
@@ -2247,6 +2257,8 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # lines now say CP-5 is its upstream QA gate (caos wording).
 # CP-2A changed again on 2026-11-13 (Deploy V methods plan, Task 6): it now sends the CP-OS-only
 # copy of the short stress text (tables T2DS.n, two stale statements removed) instead of cp2a.md.
+# CP-2A pin changed again on 2026-11-13 (final fix wave): the copy's line-1 comment now says it is
+# the CP-OS copy of cp2a.md; nothing else in the file changed.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
@@ -2255,7 +2267,7 @@ METHOD_TEXT_SHA256_AT_1B41E65 = {
     "CP-1C": "9353afdbce820f59c2dcabc951fc1ff3813174b3c84e79b47bc22bea97f3bbe8",
     "CP-1D": "d4d1ee4507d743cdb9d98bffd865ca3d012a4b4fb79a92a275cfc6a796bff453",
     "CP-2": "f925b66f13cff7bd7801d1c3cf7120eb1317126c8605bf1ff1875ce62ed3c162",
-    "CP-2A": "c5f2a4ba7a747d10fa96e2a39a3d8054c14537cf9b58be99e6ac64358747b9b0",
+    "CP-2A": "5caf04f5b39bae89726bcd5929e8f17ca14b7d753f1ac718d58eda27baf9569f",
     "CP-2D": "fe39c49f842c99f6ffd390bd409cbb44adbbe397720d0a0d4d935b52a34a8fda",
     "CP-2E": "ab111a4fb0bd201b84dbec916ccdba6e5df92f60671b2d419949ca34d6118e34",
     "CP-2G": "268a85d82da39c9b7b66474b4052eb23b310f7fc5ce0c9d7efa25766a5699cf2",
@@ -2455,6 +2467,8 @@ def test_cpdr_is_asked_for_the_peer_pack_cp1c_reads_by_default(
         assert "cpdr.md" not in research  # CP-DR is no longer sent that file
         assert "as your method's PEER PACK section describes them" in research
         assert "that row cites its TDR.2 gap row" in research
+        assert "whose `peer_id` is `none` (row header `none.none`)" in research
+        assert "still write the three tables" in research
         benchmark = texts["CP-1C"].partition(cpos_launch.METHOD_MARK)[0]
         assert "take the peer set and its figures from the CP-DR handoff's TDR.4" in benchmark
         assert "You own inclusion, comparability, normalisation and every statistic" in benchmark
