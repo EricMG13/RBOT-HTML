@@ -4,6 +4,35 @@ Keep one running record here. A pass applies only to the stated scope. Earlier v
 engine is in [EricMG13/final-workflow](https://github.com/EricMG13/final-workflow)'s
 `VERIFICATION.md`, which also keeps the retained runs this copy leaves out.
 
+## 2026-11-13 — Prompt-first redesign of CP-8, forecast inputs and prose check 6 (PRs 84-91)
+Scope: synthetic tests and retained-data comparisons only. No provider was called. No live model has been sent any instruction changed here.
+
+What changed
+- Prose check 6 (PR 85): an ID is a cell of a column headed `ID` or ending ` ID` (ruling E7); 27 lines deleted. Retained: 974 files, 1 wrong refusal removed, 0 added, no ID-shaped value lost.
+- CP-8 (PRs 86, 87, 89): a pack measure with no row is refused; a row may print its own difference; a fact row is read in every cell; value cells must equal the pack's value (no grouping comma), unit and period; Basis items are `Run comparison` or a module handoff of a run in which the module ran; `Method change` is required only when both runs record `preset` (E1). Deleted: the trend word list (E11), the reading of numbers in words, list tolerance and cross-line joining (E3), the Basis file-name blacklist, the phrase ban. `methods/cp8.md` rewritten once (R1-R10), so runs holding a CP-8 handoff show "Earlier methods" (E10).
+- Forecast (PRs 88, 90, 91): the block states `currency`; delivered units read `<currency> millions`; the stated currency must be named in the Financial foundation handoff; a block with `scale` and no `currency` is refused or withheld; a block with neither reads USD millions as before; Net debt data Period is checked at acceptance; the `LTM Qn YYYY` balance path is deleted (397 lines); the instruction names operands by `row` and `period` only.
+
+Evidence (retained data)
+- CP-8: the one retained handoff with a pack (tdg-proof-snapshot-opus-002) gives the same 6 issues throughout (two reworded); page verdicts byte-identical across 974 files; digit reading unchanged across 280,974 lines and a 111,692-case comparison.
+- Forecast: every retained block re-derives byte-identically apart from reworded withheld reasons in one calculation file; all 23 retained Financial foundation handoffs name USD.
+- LTH run 20261112-164724-01: untouched; a relaunch re-derives a calculation file that differs from the delivered one in 25 cells (24 reworded reasons, 1 earlier limit text), so its delivery id would change.
+
+Not demonstrated
+- Any model's first attempt under the new CP-8 forms, the `currency` key, the Net debt Period forms, or balances printed as rows under period columns.
+- A non-USD issuer end to end: Financial foundation's chart tables are captioned `US$m`, so USD may always count as named.
+- 2 of 4 retained Financial foundation handoffs print cash or undrawn only in one-row-per-period tables; under the new instruction those are stated missing unless Financial foundation prints them as rows.
+
+Recorded limits
+- CP-8: a withheld size written in words is refused only when a listed unit word directly follows it; a `Not comparable` row can state a movement as a rate; a row allowed its own difference also passes another withheld difference of the same size; another module's name beside the right code passes in Basis; a fact-row cell such as `30/09/2024` is refused when its number equals a withheld size.
+- Forecast: a handoff naming the stated currency anywhere passes; one row in another currency passes.
+- Deferred: deletion of the `column` path and per-row unit reader, until a proof run shows how balances are printed (E9).
+
+Superseded reviewer probes (E6 and controller rulings of 2026-11-13): `swarm/probe_cp8.py` P3, `g70/p2_gbp_caption.py`, `g50/probe_split_tables.py`, `gaps4_ordinal_neighbour_leak.py`, `gaps4_spelled_fuzz.py`, the `thirty` lines of `counts_change_noun_leak.py`, `c1-review-precise/probe_empty_register_hint.py`, `f1-rereview/p7_token_rule_table.py` (lower-case rows), and the probes pinning the deleted per-cell currency comparison.
+
+Open for the owner (predate this work): billions unit cells read as millions; `£000`/`€000`/`GBP000`/`USD 000` not read as thousands; the pack reads the unit of `Free cash flow (CFO less capex)` as `CFO less capex`; a forecast block naming debt under an `LTM` column is accepted; digits split by markup pass the withheld-size check; with an explicit selection the checker requires no cause though the method text says `Unresolved`.
+
+Ledger: P1 agent=mx-scaffold fix-rounds=0 gates-first-pass=y; C1 agent=mx-feature fix-rounds=0 gates-first-pass=y; C2 agent=mx-feature fix-rounds=1 gates-first-pass=y; C3 agent=mx-feature fix-rounds=1 gates-first-pass=y; F1 agent=mx-feature fix-rounds=1 gates-first-pass=y; F2 agent=mx-feature fix-rounds=1 gates-first-pass=y; F3 agent=mx-feature fix-rounds=0 gates-first-pass=y; Z0 agent=mx-scaffold fix-rounds=0 gates-first-pass=n/a.
+
 ## 2026-11-12 — CP-8 checker: a currency code glued to digits, more currency and scale forms, bond names (branch `claude/cp8-checker-currency`, owner "complete 1")
 Scope: offline, synthetic plus read-only reading of 974 retained `.md` handoffs; no provider. C1 `EUR437m`, `USD2010` read as figures; C2 `C$`/`A$`/`R$` prefixes, `mln`/`bln`, `'000`, 18 more currency codes (`_CODES` 22 to 40) around a year-shaped number; C3 `2029s` is a bond name, a year. Tests first: 29 of the new cases failed on the unchanged checker, all pass after; `counts_code_glued.py` flipped 1 to 0.
 Corpus (both `counts` modes, token level, old vs new): 1,559 token diffs, 59 files with different held sizes; every one is K-a (`USD`/`EUR` glued to digits, 502 tokens new in each mode: `USD710 million`, `EUR1,000m`, `USD35/share`, all real money; the old reading kept only the fragment `000` of `USD1,000m`, 270 and 265 fragments gone) or K-c (`EUR 2029s, 480bp`, 10 tokens gone, held 2029 lost). K-b (a year-shaped number with a C2 form) 0 tokens, K-d (`mln`/`bln` after a small number) 0 tokens. `gaps_real_run.py` output byte-identical before and after; every other probe exits as on main (three recorded limits unchanged).
@@ -913,85 +942,3 @@ name or other." Display only (`apps/issuer-library/credit_os/web/`); routes, hre
 - Not verified: Windows and Edge, phone widths, a screen reader; live Run activity data; a Forecast
   model with step ids; runbook names on a rendered page (string-level test only); any issuer other
   than TDG.
-
-## 2026-11-10 — Context form adopted (branch `claude/optimistic-johnson-bmnwip`, after main `4ce88c2`)
-
-Owner: "Approved". The proposal below replaced `docs/templates/context-form.html` and follows main's
-ruling that CP-1C takes its peers from CP-DR by default (`pathway_modules`). Design note section 7
-has the detail. Checks are offline (headless Chromium 1.63, the Python reader, the inbox's own
-functions); no provider call and no analytical run.
-
-- **Same output as before.** The original form (`483a555`) and the adopted one give byte-identical
-  `context.json` for the three fixture contexts. `cp_dr_public` is the default in both.
-- **The research module joins.** With the default peer source, Relative Value and Distressed list
-  CP-DR in the launcher's order. "Not available" for the peers' files makes CP-1C a Gap, and choosing
-  your own figures drops CP-DR.
-- **End to end again.** Three downloads load in `load_context` and pass `inbox.drops.check`, and
-  round-trip byte for byte. Every stage advanced by click and by tap at 390 px, and Start over is
-  clean.
-- **Inbox copies.** Copies written by `write_templates` as `context-form.html` lock the pathway,
-  load the built library's fonts and log nothing.
-- **Tests.**
-  - `tests/test_library_page_browser.py` `FORM_PROBE`: the old probe was seen failing on the adopted
-    form (`#s1-pathway` is gone). Rewritten, the file passes: 20 passed.
-  - New `tests/test_context_form.py`: 22 passed. Each of nine one-line changes to the form's copied
-    tables made its test fail, among them the Distressed order main had already changed.
-  - `test_issuer_library_packaging.py`: 9 passed. The watcher's form tests: 2 passed.
-  - `test_inbox_drops.py`: 55 passed, 3 failed. The three are permission tests that fail here
-    because this sandbox runs as root, and they fail the same without this change.
-  - Quality gate exit 0 (176 changed lines in scope, after one long line in the probe was split).
-- **Research cutoff written (owner: "Your recommendation").**
-  - New browser test `test_the_research_cutoff_follows_the_as_of_date_and_is_written`, seen
-    failing on the form before the change: the cutoff came out blank.
-  - Against the original form, the three fixture contexts differ only in `run.cutoff`. A blank one
-    becomes the as-of date (`2026-10-31`); an explicit `2025-12-31` is kept.
-  - The new downloads load and are accepted by the inbox. Each has
-    `effective_cutoff(as_of, cutoff) == effective_cutoff(as_of, "")`, so the code reads them as it
-    read a blank cutoff.
-- **Not verified:** Firefox, Safari and real issuer folders. Whether CP-DR finds peers in a folder's
-  filings: no live run. Whether the readiness forecast matches live outcomes.
-
-## 2026-11-10 — Context form proposal (branch `claude/optimistic-johnson-bmnwip`)
-
-Proposal only: `docs/templates/context-form-proposal.html` is new, and
-`docs/design/2026-11-10-context-form-proposal.md` holds the module review and the design.
-`context-form.html`, `context.py`, the inbox and the tests are unchanged. All checks below are
-offline browser and reader checks, run in headless Chromium 1.63. No provider was called and no
-analytical run was made with it.
-
-- **Same output as the current form.** Each of three fixture contexts was loaded into both forms with
-  `fill()` and written with `build()`. The two `context.json` files are byte-identical for each:
-  `cases/context/primary-full.json`, `cases/context/research-minimal.json` and
-  `cases/cpdr-context-cutoff/context.json`.
-- **End to end through the page.**
-  - Three files were made by clicking through the page and downloading: Earnings Update; Distressed
-    with TDG-like dates, a duplicate S&P row and stale peers; and a new issue on Credit Snapshot.
-  - Each loads in `context.load_context` and passes `inbox.drops.check` for its pathway.
-  - Each round-trips through `fill()` and `build()` byte for byte.
-  - The readiness panel showed what its own rules state, for example CP-2H Gap on two S&P rows and
-    CP-1C Gap on one admitted peer. This checks the page against its rules, not against a run.
-- **Inbox copies.** Copies made by the real `write_templates` lock the pathway (5 other cards
-  disabled). A loaded file naming another pathway is replaced, with a note.
-- **Newly caught.** `load_context` refuses a research question containing `|`, and an issuer name
-  with U+2028. The current form writes both; the proposal stops both before download.
-- **Defect found and fixed in the proposal.** A blur that adds a message moved the Next button
-  between mousedown and mouseup, and the click was lost. The current form uses the same pattern; not
-  verified there. After the fix, every stage advanced by click on desktop and by tap at iPhone 13
-  size, with no horizontal scroll at 390 px.
-- **Other checks.** Start over returns the page to a fresh build. No console errors in any run.
-  Quality gate exit 0, with no Python changed.
-- **Restyled in the Credit OS language after merging main `caeb622`.** All the checks above were
-  repeated on the restyled page with the same results: byte-identical output, three downloads loading
-  and accepted by the inbox, round-trips, every stage by click and by tap, and Start over.
-  - An inbox copy (from `write_templates`, beside a copy of the library's web folder at
-    `_engine/library`) loads Red Hat Display, Text and Mono from there, shows the rail links to the
-    library, and logs nothing. The repository copy loads the repository's fonts and hides those links.
-  - Compared by eye with the library built offline from the synthetic fixture run, shown in its empty
-    state because that run is not on the current methodology.
-  - Found and fixed while restyling: the yes/no inputs had no positioned parent, so their own hit
-    area sat outside their segment.
-- **Not verified:**
-  - Firefox and Safari, and the folder picker in them.
-  - Real issuer folders. The folder check guesses only from file names.
-  - Whether the readiness forecast matches what the modules actually do in a live run. It ports
-    `run_expectations.RULES` plus rules cited in the design note, but no run has been compared.
