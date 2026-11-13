@@ -80,7 +80,7 @@ read live (`.superpowers/sdd/2026-11-13-report-redesign/research/`).
 
 **Gates per task** (all exit 0, from the repo root):
 
-- `node --test apps/issuer-library/credit_os/web/` (every `*.test.cjs`).
+- `node --test apps/issuer-library/credit_os/web/*.test.cjs` (the directory form fails on Node 24).
 - `uv run pytest -q -p no:cacheprovider tests/test_update_library.py tests/test_library_index.py tests/test_library_reader_refs.py tests/test_issuer_library_packaging.py` (Bash timeout 300 s).
 - `uv run python tools/quality_gate.py --base 517b9fb` only if a `.py` file changed.
 - From Task 2 on: rebuild the scratch library
