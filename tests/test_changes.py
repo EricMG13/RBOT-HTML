@@ -4133,21 +4133,52 @@ def test_a_basis_item_in_any_other_form_is_refused_with_the_three_forms(item):
             "Downside pathway (CP-2A), earlier run",
             (
                 "Basis item `Downside pathway (CP-2A), earlier run`: `CP-2A` did not run in the "
-                "earlier run."
+                "earlier run: write `Downside pathway (CP-2A)` instead."
             ),
         ),
         (
             "Recovery (CP-9)",
-            "Basis item `Recovery (CP-9)`: `CP-9` did not run in this run.",
+            "Basis item `Recovery (CP-9)`: `CP-9` ran in neither run: remove the item.",
         ),
         (
             "Research (CP-DR)",
-            "Basis item `Research (CP-DR)`: `CP-DR` did not run in this run.",
+            (
+                "Basis item `Research (CP-DR)`: `CP-DR` did not run in this run: write "
+                "`Research (CP-DR), earlier run` instead."
+            ),
+        ),
+        (
+            "Recovery (CP-9), earlier run",
+            (
+                "Basis item `Recovery (CP-9), earlier run`: `CP-9` ran in neither run: "
+                "remove the item."
+            ),
         ),
     ],
 )
 def test_a_basis_item_of_the_right_form_naming_a_module_that_did_not_run_is_refused(item, message):
     assert basis_issues(f"Basis: {item}") == [message]
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "prior/Downside pathway (CP-2A)",
+        "Downside pathway, earlier run (CP-2A)",
+        "Run comparison (CP-1)",
+        "Annual report, page iv (CP-1)",
+        "Deep page (CP-1)",
+        "Run comparison, Financial foundation (CP-1)",
+    ],
+)
+def test_a_basis_item_whose_name_is_a_path_a_list_or_a_run_or_page_word_is_refused(item):
+    found = basis_issues(f"Basis: {item}")
+    assert len(found) == 1, found
+    assert item in found[0] and THREE_FORMS in found[0]
+
+
+def test_a_basis_item_with_another_modules_plain_name_is_accepted_a_recorded_limit():
+    assert basis_issues("Basis: Deep research (CP-2A)") == []
 
 
 def cell_issues(prior: str, current: str, pack: dict | None = None) -> list[str]:
@@ -4277,3 +4308,21 @@ def test_between_two_preset_runs_unresolved_is_refused_and_the_phrase_is_not():
 def test_with_an_explicit_run_no_cause_is_required_beyond_the_fixed_list():
     pack = {**PACK, "prior": {"selection": "preset"}, "current": {"selection": "explicit"}}
     assert module_issues(pack, "Unresolved", REAL_WHY, "Unresolved", REAL_WHY) == ()
+
+
+def test_a_value_cell_is_written_without_the_grouping_comma_the_pack_keeps():
+    pack = value_pack("1,880", "US$m", "FY2024")
+    assert cell_issues("1880 US$m (FY2024)", "3.60x (FY2024)", pack) == []
+    (issue,) = cell_issues("1,880 US$m (FY2024)", "3.60x (FY2024)", pack)
+    assert (
+        issue == "Issuer register, 'Total debt / EBITDA', Earlier cell: write exactly "
+        "`1880 US$m (FY2024)` (the pack's value, unit and period); it is `1,880 US$m (FY2024)`."
+    )
+
+
+def test_a_value_cell_the_refusal_states_can_be_written_when_the_pack_holds_a_double_space():
+    pack = value_pack("6261", "US$m", "FY2024  reported")
+    assert cell_issues("6261 US$m (FY2024  reported)", "3.60x (FY2024)", pack) == []
+    assert cell_issues("6261 US$m (FY2024 reported)", "3.60x (FY2024)", pack) == []
+    (issue,) = cell_issues("6261 US$m (FY2024)", "3.60x (FY2024)", pack)
+    assert "write exactly `6261 US$m (FY2024 reported)`" in issue

@@ -411,14 +411,15 @@ def _value_cell(held: Mapping[str, Any] | None) -> str:
         return "Not stated"
     unit, period = record.get("unit"), record.get("period")
     joined = "" if unit is None else (unit if unit in ("x", "%") else f" {unit}")
-    return f"{record['value']}{joined}" + ("" if period is None else f" ({period})")
+    value = str(record["value"]).replace(",", "")  # cp8.md: "no grouping comma"
+    return f"{value}{joined}" + ("" if period is None else f" ({period})")
 
 
 def _value_cell_issues(
     where: str, side: str, cell: str, held: Mapping[str, Any] | None
 ) -> list[str]:
     """An Earlier or Current cell of a measure's row is exactly the pack's value cell."""
-    expected = _value_cell(held)
+    expected = _plain(_value_cell(held))  # the cell is read plain, so the text to write is too
     if _plain(cell) == expected:
         return []
     return [
@@ -1241,6 +1242,21 @@ def _passage_issues(
     return issues
 
 
+# ponytail: the name before the code is the model's own wording and no name source exists, so only
+# what cannot be a name is refused (a path, a comma list, a run or page word). Another module's name
+# for the code (`Deep research (CP-2A)`) is accepted: a known limit.
+_NOT_A_NAME = re.compile(r"[/,]|\b(?:earlier run|run comparison|page)\b", re.IGNORECASE)
+
+
+def _three_forms(item: str) -> str:
+    return (
+        f"Basis item `{item}` is not one of the three forms this module uses: "
+        f"`{BASIS_COMPARISON}` for the comparison pack, `<plain module name> (<code>)` for a "
+        "handoff of this run, `<plain module name> (<code>), earlier run` for a handoff of "
+        "the earlier run. Separate items with `; `, give no page and name no file."
+    )
+
+
 def _basis_item_issue(item: str, ran: Mapping[str, tuple[bool, bool]]) -> str | None:
     """Why a Basis item is refused, or None: `Run comparison`, `<plain module name> (<code>)` for a
     handoff of this run, or the same with `, earlier run` for a handoff of the earlier run."""
@@ -1249,16 +1265,22 @@ def _basis_item_issue(item: str, ran: Mapping[str, tuple[bool, bool]]) -> str | 
     earlier = BASIS_EARLIER_RUN.fullmatch(item)
     found = earlier or BASIS_EARLIER_RUN.fullmatch(f"{item}, earlier run")
     if found is None:
-        return (
-            f"Basis item `{item}` is not one of the three forms this module uses: "
-            f"`{BASIS_COMPARISON}` for the comparison pack, `<plain module name> (<code>)` for a "
-            "handoff of this run, `<plain module name> (<code>), earlier run` for a handoff of "
-            "the earlier run. Separate items with `; `, give no page and name no file."
-        )
-    if ran.get(found["code"], (False, False))[0 if earlier else 1]:
+        return _three_forms(item)
+    code = found["code"]
+    name = found.string.removesuffix(", earlier run").removesuffix(f" ({code})")
+    if _NOT_A_NAME.search(name):
+        return _three_forms(item)
+    both = ran.get(code, (False, False))
+    if both[0 if earlier else 1]:
         return None
-    where = "the earlier run" if earlier else "this run"
-    return f"Basis item `{item}`: `{found['code']}` did not run in {where}."
+    if not any(both):
+        return f"Basis item `{item}`: `{code}` ran in neither run: remove the item."
+    where, write = (
+        ("the earlier run", f"{name} ({code})")
+        if earlier
+        else ("this run", f"{name} ({code}), earlier run")
+    )
+    return f"Basis item `{item}`: `{code}` did not run in {where}: write `{write}` instead."
 
 
 def _basis_issues(lines: Sequence[str], pack: Mapping[str, Any]) -> list[str]:
