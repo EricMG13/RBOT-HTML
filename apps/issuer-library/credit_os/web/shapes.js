@@ -83,7 +83,40 @@ const Shapes = (() => {
 
   const promoted = shape => ['matrix', 'watch', 'dated'].includes(shape);
 
-  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted};
+  // ---- identifiers of a module (Task 5) ----
+  const tablesIn = sections => (sections ?? []).flatMap(section => (section.blocks ?? []).filter(block => block.type === 'table'));
+  // The distinct cell values of every column of kind `id` in the sections' tables, in first-seen order. A value of one character, or only digits
+  // (a running row number such as 0, 1, 2), is not an identifier a reader could meet inside a sentence, so it is not a token.
+  function idTokens(sections) {
+    const found = new Set();
+    for (const block of tablesIn(sections)) {
+      block.headers.forEach((header, at) => {
+        if (columnKind(header) !== 'id') return;
+        for (const row of block.rows) {
+          const value = String(row.cells[at] ?? '').trim();
+          if (value.length > 1 && !/^\d+$/.test(value)) found.add(value);
+        }
+      });
+    }
+    return [...found];
+  }
+
+  // The case a table's row stands for. A module with exactly one `cases` table (named cases as columns) and a `caseRows` table with one row per case
+  // column: the i-th row and the i-th case column are the same case, and the case column's header is its name. `ids` are the rows' id cells, taken from
+  // the table's id column (its first column when it has none). Anything else is null: no pairing, no invented names.
+  function casePairing(tables) {
+    const typed = (tables ?? []).filter(block => block && Array.isArray(block.headers) && Array.isArray(block.rows)).map(block => ({block, shape: tableShape(block)}));
+    const cases = typed.filter(entry => entry.shape === 'cases');
+    if (cases.length !== 1) return null;
+    const names = cases[0].block.headers.filter(header => columnKind(header) === 'case').map(header => String(header).trim());
+    const candidates = typed.filter(entry => entry.shape === 'caseRows' && entry.block.rows.length === names.length).map(entry => entry.block);
+    if (!names.length || !candidates.length) return null;
+    const table = candidates.find(block => block.headers.some(header => columnKind(header) === 'id')) ?? candidates[0];
+    const at = Math.max(0, table.headers.findIndex(header => columnKind(header) === 'id'));
+    return {names, ids: table.rows.map(row => String(row.cells[at] ?? '').trim())};
+  }
+
+  return {sectionRole, tableShape, columnKind, hiddenColumns, blockRole, promoted, idTokens, casePairing};
 })();
 
 if (typeof window !== 'undefined') window.Shapes = Shapes;

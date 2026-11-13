@@ -673,9 +673,17 @@ function reportTimeline(id) {
 const bodyContext=(id,tables)=>({id,tables,chips:key=>(window.CREDIT_OS_DATA?.chips?.[key]||[]).length,chipList:key=>window.CREDIT_OS_DATA?.chips?.[key]||[],caption:heading=>plain(heading).replace(METHOD_CODE,'')});
 // The handoff's own heading levels: its H2 sections are h3 (the page's h2 is the module), their H3 children h4, capped at h6.
 const newFormatTag=section=>'h'+Math.min(6,3+section.level-2);
-// A finding section of the module page: its prose as written (a method or status note is Evidence's) and each table as record cards until its own component lands.
+// What every table of a module shares: its identifiers (never drawn on a findings page) and how its case columns pair with its case rows. Built once per output.
+const tableContexts=new Map();
+const moduleTableContext=id=>{
+  if(!tableContexts.has(id))tableContexts.set(id,{tokens:window.Shapes.idTokens(data[id].sections),pairing:window.Shapes.casePairing(data[id].sections.flatMap(section=>section.blocks.filter(block=>block.type==='table')))});
+  return tableContexts.get(id);
+};
+// A finding section of the module page: its prose as written (a method or status note is Evidence's) and each table as the component its shape calls for (components.js render).
 const findingSection=(id,section)=>{
-  const ctx={...bodyContext(id,true),skip:block=>block.type==='text'&&window.Shapes.blockRole(block.text)==='note',table:(block,at)=>window.Components.recordCards(block,{key:row=>`${id}:${row.line}`,caption:plain(at.heading).replace(METHOD_CODE,'')})};
+  const shared=moduleTableContext(id),registers=window.Evidence.href('registers',data[id].module,data[id].run);
+  const table=(block,at)=>window.Components.render(window.Shapes.tableShape(block),block,{...shared,id,section:at,module:data[id].module,evidenceHref:registers,key:row=>`${id}:${row.line}`,trace:(row,label)=>window.Components.traceRow(`${id}:${row.line}`,label),caption:plain(at.heading).replace(METHOD_CODE,'')});
+  const ctx={...bodyContext(id,true),skip:block=>block.type==='text'&&window.Shapes.blockRole(block.text)==='note',table};
   return `<div class="analysis-section" id="s-${section.line}">${headingView(section.heading,newFormatTag(section))}${sectionBodyHtml(section,ctx)}</div>`;
 };
 const passageTexts=section=>(section?section.blocks.filter(block=>block.type==='text').map(block=>({text:block.text,line:block.line})):[]);

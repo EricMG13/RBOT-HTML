@@ -635,6 +635,7 @@ document.addEventListener('change',event=>{
 document.addEventListener('click',event=>{
   if(event.target.closest('#rail-search')){focusSearch();return;}
   if(window.Evidence.handleClick(event.target))return;
+  if(window.Components.handleClick(event.target))return;
   const searchHit=event.target.closest('.search-hit');
   if(searchHit){returnTrigger=$('module-search');showNavigator(false);if(searchHit.hash===location.hash)$('canvas').focus();}
   if(libraryClick(event.target))return;

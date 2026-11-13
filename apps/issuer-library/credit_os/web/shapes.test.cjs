@@ -129,3 +129,36 @@ test('inter-module: the machine name downstream_use addresses another module; a 
   assert.notEqual(Shapes.columnKind('Downstream Use'), 'intermodule');
   assert.deepEqual(Shapes.hiddenColumns(['Source', 'Downstream Use', 'downstream_use']), [0, 2]);
 });
+
+// ---- idTokens and casePairing (Task 5): the key's real tables, as the module page holds them (sections of table blocks with {line, cells} rows)
+const keyBlock = t => ({type: 'table', headers: t.headers, rows: t.rows.map((cells, i) => ({line: i + 1, cells}))});
+const keySections = module => KEY.tables.filter(t => t.module === module).map(t => ({blocks: [keyBlock(t)]}));
+
+test('idTokens: the distinct values of every id column of the module, none that is only digits or one character', () => {
+  const tokens = Shapes.idTokens(keySections('CP-2A'));
+  for (const token of ['s00', 'SC1', 'SC2', 'EV-01', 'CP-2A-MON-001', 'CP-2A-DP-001']) assert.ok(tokens.includes(token), token);
+  assert.equal(new Set(tokens).size, tokens.length, 'distinct');
+  assert.ok(!tokens.includes('Base FY2024 (control)') && !tokens.includes('High'), 'only id columns');
+  const numbered = Shapes.idTokens(keySections('CP-0'));
+  assert.ok(numbered.every(token => !/^\d+$/.test(token)), 'a running row number is not an identifier');
+  const small = Shapes.idTokens([{blocks: [block(['ID', 'Note'], [['A', 'x'], ['12', 'y'], ['', 'z'], ['EV-7', 'w']])].map(b => ({type: 'table', ...b}))}]);
+  assert.deepEqual(small, ['EV-7']);
+  assert.deepEqual(Shapes.idTokens([]), []);
+  assert.deepEqual(Shapes.idTokens([{blocks: [{type: 'text', text: 'x'}]}]), []);
+});
+
+test('casePairing: the CP-2A tables pair the three case columns with the three scenario rows; a count mismatch, two cases tables or none give null', () => {
+  const blocks = keySections('CP-2A').flatMap(s => s.blocks);
+  assert.deepEqual(Shapes.casePairing(blocks), {names: ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario'], ids: ['s00', 'SC1', 'SC2']});
+  const cases = blocks.find(b => Shapes.tableShape(b) === 'cases');
+  const rowsOf = blocks.filter(b => Shapes.tableShape(b) === 'caseRows');
+  assert.equal(rowsOf.length, 2);
+  const short = {headers: rowsOf[0].headers, rows: rowsOf[0].rows.slice(0, 2)};
+  assert.equal(Shapes.casePairing([cases, short]), null, 'two rows for three case columns');
+  assert.equal(Shapes.casePairing([cases, cases, rowsOf[0]]), null, 'two cases tables');
+  assert.equal(Shapes.casePairing([rowsOf[0]]), null, 'no cases table');
+  assert.equal(Shapes.casePairing([]), null);
+  assert.equal(Shapes.casePairing(undefined), null);
+  const plain = {headers: ['Scenario', 'Note'], rows: ['a', 'b', 'c'].map(x => ({cells: [x, 'n']}))};
+  assert.deepEqual(Shapes.casePairing([cases, plain]), {names: ['Base FY2024 (control)', 'Moderate scenario', 'Severe scenario'], ids: ['a', 'b', 'c']}, 'no id column: the first column');
+});
