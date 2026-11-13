@@ -6302,3 +6302,34 @@ def test_the_cp2a_instruction_no_longer_carries_the_short_texts_stale_statements
     text = cpos_launch.method_text("CP-2A")
     for stale in OLD_CP2A_STALE:
         assert stale not in text
+
+
+def _appendix_handoff_issues(tmp_path, as_h2: bool):
+    """The answer with a register under the canon's appendix heading: as a `###` heading after
+    `### Limitations` (what the note tells the model), or as the `## Analysis` H2 the canon says."""
+    prepared, task, context = good_task(tmp_path, "CP-2")
+    raw = answer(context, list(prepared.plan.layout.routes))
+    findings, calc = raw.split("\n## Calculations", 1)
+    calc = "\n## Calculations" + calc
+    register = (
+        "### Analytical appendix — complete canonical registers\n\n"
+        "| Register row | Value | Source |\n| --- | --- | --- |\n| Observed | 1 | annual.txt |\n\n"
+    )
+    if as_h2:
+        raw = findings + "\n## Analysis\n\n" + register + calc
+    else:
+        head, rest = findings.split("### Limitations", 1)
+        limitations, sep, tail = rest.partition("\n### ")
+        raw = head + "### Limitations" + limitations + "\n" + register + (sep + tail).lstrip("\n")
+        raw += calc
+    return _checked_handoff(task, raw.encode(), checker(prepared.layout))
+
+
+def test_the_appendix_as_a_findings_h3_is_accepted_and_as_an_analysis_h2_is_refused(tmp_path):
+    """Review probe t6a: the note's reading of the canon passes CP-OS's checks; the canon's own
+    `## Analysis` does not (no earlier test exercised either)."""
+    (tmp_path / "h3").mkdir()
+    (tmp_path / "h2").mkdir()
+    assert _appendix_handoff_issues(tmp_path / "h3", as_h2=False) == ()
+    issues = _appendix_handoff_issues(tmp_path / "h2", as_h2=True)
+    assert issues and "exactly these six H2 headings" in issues[0]
