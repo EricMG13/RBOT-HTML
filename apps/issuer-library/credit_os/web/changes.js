@@ -151,23 +151,18 @@ const headingOf = section => ChangesReader.plainText(section.heading).replace(Sh
 
 // ---- Part 3: the analysis. `tiles` is CP-8's `moduleState` table as C20 (one counted tile for each state that repeats). Beneath it, one row per module of the pack with each run's own
 // bottom line; CP-8's status and reason are the build's (`changes.verdicts.modules[code]`, only a code with exactly one row).
-// A run's bottom line for one module as the pack quotes it (the first paragraph of that handoff's Bottom line): drawn as the module page draws a Bottom line (the Basis line and list
-// marker dropped, **bold** as emphasis), or, when the paragraph itself cites a calculation, an identifier or a file, not drawn here: its module page holds it.
-const REFERENCES = [Shapes.CALCULATION_ID, /\b(?:EV|GAP|MON|DP|SRC)-\d{2,3}\b/, /\bSC\d\b/, /\bT\d[A-Z]?\.\d/, /\b[\w-]+\.(?:jsonl|htm|html|pdf|xlsx?|csv|md|json|txt)\b/i,
-  /\(\s*(?!FY|CY|PF|[HQ]\d)[A-Z]{1,2}\d{2}\s*(?:[,;]\s*[A-Z]{1,2}\d{2}\s*)*\)/];
-const HELD_BOTTOM = 'Cites a calculation, an identifier or a file, so it is not repeated here.';
-function bottomLineHtml(text, link) {
-  const body = Components.paragraphText(text);
-  if (REFERENCES.some(rx => rx.test(body))) return `<span class="change-held">${esc(HELD_BOTTOM)}${link ? ` <a class="in-ev" href="${esc(link)}">Read it on the module page</a>` : ''}</span>`;
-  return ChangesReader.richText(body).replace(/(?<![*\w])\*([^*\s](?:[^*]*[^*\s])?)\*(?![*\w])/g, '<em>$1</em>');
+// A run's bottom line for one module as the pack quotes it (the first paragraph of that handoff's Bottom line) is a passage, drawn as a module's page draws its Bottom line:
+// the Basis line and list marker dropped, **bold** as emphasis, nothing held back.
+function bottomLineHtml(text) {
+  return ChangesReader.richText(Components.paragraphText(text)).replace(/(?<![*\w])\*([^*\s](?:[^*]*[^*\s])?)\*(?![*\w])/g, '<em>$1</em>');
 }
-// `view`: {name(code) -> the module's catalogue title or null, href(code) -> its page}; without it a module keeps the pack's own name.
+// `view`: {name(code) -> the module's catalogue title or null}; without it a module keeps the pack's own name.
 function analysisPart(pack, parts, changes, tiles = '', view = {}) {
   const modules = (changes && changes.verdicts && changes.verdicts.modules) || {};
   const rows = (pack.modules || []).map(m => {
     const row = Object.prototype.hasOwnProperty.call(modules, m.module) ? modules[m.module] : null;
     const state = !parts ? 'Explanation not produced' : row ? row.status || NOT_STATED : `${NOT_STATED} by Changes since the last run`;
-    const link = view.href ? view.href(m.module) : null, side = (ran, text) => (text != null ? bottomLineHtml(text, link) : esc(ran ? NOT_STATED : 'Did not run'));
+    const side = (ran, text) => (text != null ? bottomLineHtml(text) : esc(ran ? NOT_STATED : 'Did not run'));
     const earlier = side(m.ran_prior, m.prior_bottom_line), current = side(m.ran_current, m.current_bottom_line), title = (view.name && view.name(m.module)) || m.title;
     const reason = row ? [row.cause, row.why].filter(Boolean) : [];
     return `<details class="change-module"><summary><span class="change-name">${esc(title)}</span><span class="badge badge-gray change-status">${esc(state)}</span><span class="change-then"><small>Earlier</small>${earlier}</span><span class="change-now"><small>Current</small>${current}</span></summary><div class="change-pair"><section><h4>Earlier</h4><p>${earlier}</p></section><section><h4>Current</h4><p>${current}</p></section></div>${reason.length ? `<p class="change-why">${esc(reason.join(' · '))}</p>` : ''}</details>`;
@@ -268,6 +263,10 @@ function changesHtml(input) {
   } else if (!parts) {
     notice = '<div class="caution changes-not-produced" role="note"><strong>The explanation of the changes is not held for this run.</strong><p>The module-by-module comparison is shown without it.</p></div>';
   }
+  // The comparison's own figures are Evidence's (Calculations tab, the module's filter when the run has that module); one link from every state that has a comparison.
+  const evidenceRun = input.evidence ? input.evidence.run.context : input.output && input.output.run;
+  const hasModule = Boolean(input.evidence && input.evidence.modules.some(m => m.id === module));
+  const figures = pack && comparisonEvidence(pack, changes, module) ? `<p class="chg-figures-link"><a class="text-action" href="${esc(Evidence.href('calculations', hasModule ? module : null, evidenceRun))}">Comparison figures in Evidence${Components.icon('arrow-right')}</a></p>` : '';
   const stated = parts && !parts.legacy;
   const what = !parts ? '' : stated ? (parts.lead || `<section class="run-section" id="changes-what"><h2>What changed</h2><p class="empty">${NOT_STATED} in the Changes handoff.</p></section>`)
     : `<section class="run-section" id="changes-what"><h2>What changed</h2><p class="empty">${NOT_STATED} in the Changes handoff. ${EARLIER_FORMAT}</p></section>`;
@@ -279,7 +278,7 @@ function changesHtml(input) {
     stated ? limitationsPart(parts, changes) : '',
     overTimePart(runs, fmtDate),
   ].join('');
-  return `<div class="changes">${heading}${notice}${sections}</div>`;
+  return `<div class="changes">${heading}${notice}${figures}${sections}</div>`;
 }
 
 return {changesState, measureVerdict, differenceText, withUnit, comparisonEvidence, maturityView, analysisPart, overTimePart, leadBottom, changesHtml, FIRST_RUN, NO_RECORD, NOT_COMPARABLE};

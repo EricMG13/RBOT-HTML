@@ -549,19 +549,32 @@ test('a module is named by its catalogue title (the one the module rail shows); 
   assert.ok(withModules(two, undefined).includes('<span class="change-name">Canonical data foundation</span>'), 'no catalogue given: the pack’s name');
 });
 
-test('a run’s bottom line is drawn as a Bottom line is: bold as emphasis, Basis dropped; a line that cites a calculation, an identifier or a file is not repeated, with the way to its module page', () => {
-  const html = withModules(pack2(['**Leverage is 6.6x** on EBITDA As Defined.\nBasis: changes.json', 'Leverage is *6.0x* on EBITDA As Defined.']), {name: () => null, href: code => `#${code}/head`});
+test('a run’s bottom line is a passage: drawn as a Bottom line is (bold as emphasis, Basis dropped) and never held back, identifiers and all', () => {
+  const html = withModules(pack2(['**Leverage is 6.6x** on EBITDA As Defined.\nBasis: changes.json', 'Leverage is *6.0x* on EBITDA As Defined.']), {name: () => null});
   assert.ok(html.includes('<strong>Leverage is 6.6x</strong> on EBITDA As Defined.') && html.includes('Leverage is <em>6.0x</em> on EBITDA As Defined.'));
   assert.ok(!html.includes('**') && !html.includes('changes.json') && !/\*6\.0x\*/.test(html));
-  for (const cited of ['Leverage is 6.6x per calculation C05.', 'Leverage is 6.6x (C01).', 'See EV-012.', 'Read TDG_10-K.htm.jsonl.', 'Per T2B.3 the figure holds.', 'Cover is 3.6x (C01, C02).']) {
-    const held = withModules(pack2([cited, 'Fine.']), {name: () => null, href: code => `#${code}/head`});
-    assert.ok(held.includes('class="change-held"') && held.includes('<a class="in-ev" href="#CP-1/head">Read it on the module page</a>'), cited);
-    for (const rx of [/calculation C05/, /\(C01/, /EV-012/, /\.htm\.jsonl/, /T2B\.3/]) assert.ok(!rx.test(held), `${cited} ${rx}`);
+  for (const line of ['Leverage is 6.6x per calculation C05.', 'Leverage is 6.6x (C01).', 'Hedging is partial; see calculation C05.', 'EU sales (EU27) grew.', 'Coverage (FY24) rose to 3.6x; Q3 FY2025 cash USD 6,261 million.']) {
+    const drawn = withModules(pack2([line, 'Fine.']), {name: () => null});
+    assert.ok(textOf(drawn).includes(line), line);
+    assert.ok(!drawn.includes('change-held') && !drawn.includes('Read it on the module page') && !drawn.includes('not repeated here'), line);
   }
-  // A period label in brackets, or a figure, is not a reference.
-  assert.ok(!withModules(pack2(['Leverage is 6.0x (FY24) and cover 3.6x (H1 24).', 'x']), {}).includes('change-held'));
-  // Escaped like every model text.
-  assert.ok(!withModules(pack2(['<img src=x onerror=1>', 'x']), {}).includes('<img'));
+  // A module that did not run this time: its earlier line is on the page, with no link to this run’s page for it.
+  const gone = changesHtml(base({changes: {lead: 'CP-2', pack: {...PACK, modules: [{module: 'CP-2E', title: 'Hedging', ran_prior: true, ran_current: false, prior_bottom_line: 'Hedging is partial; see calculation C05.', current_bottom_line: null}]}, note: null, problem: null, verdicts: VERDICTS}}));
+  assert.ok(textOf(gone).includes('Hedging is partial; see calculation C05.') && textOf(gone).includes('Did not run'));
+  assert.ok(!/<details class="change-module">.*?<\/details>/s.exec(gone)[0].includes('href='), 'the row carries no link');
+  assert.ok(!withModules(pack2(['<img src=x onerror=1>', 'x']), {}).includes('<img'), 'escaped');
+});
+
+test('the comparison\'s figures are always one link away: from a produced page, a not-produced one and a not-held one; the module filter only when the run has that module', () => {
+  const href = html => /<a class="text-action" href="([^"]*)">Comparison figures in Evidence/.exec(html)?.[1];
+  assert.equal(href(changesHtml(rich())), '#W-Evidence/calculations?c=run-x&amp;m=CP-8');
+  const note = 'changes: not produced \u2014 why';
+  assert.equal(href(changesHtml(rich({changes: {lead: 'CP-2', pack: PACK, note, problem: null}, cp8: null}))), '#W-Evidence/calculations?c=run-x&amp;m=CP-8');
+  assert.equal(href(changesHtml(rich({cp8: null}))), '#W-Evidence/calculations?c=run-x&amp;m=CP-8');
+  const noModule = {...evidenceOf(CP8R), modules: []};
+  assert.equal(href(changesHtml(rich({evidence: noModule, cp8: null}))), '#W-Evidence/calculations?c=run-x', 'no CP-8 entry: no module filter');
+  assert.equal(count(changesHtml(rich()), 'Comparison figures in Evidence'), 1);
+  assert.equal(href(changesHtml(rich({changes: {lead: 'CP-2', pack: null, note, problem: null}, cp8: null}))), undefined, 'no pack, no comparison, no link');
 });
 
 test('no label on the route says "the pack", and the route carries no difference or Change column from the comparison', () => {

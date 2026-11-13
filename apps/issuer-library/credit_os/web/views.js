@@ -1726,7 +1726,7 @@ function changesView(context) {
     return {key,href:routeHref('W-Changes','changes',null,key),asOf:run.asOf,runId:run.folder,current:run===ctx,bottom:out?ChangesView.leadBottom(out.sections,out.summary):null,
       metrics:window.DESIGN_CATALOGUE.real.find(r=>r.id===run.folder)?.metrics||{},changes:run.changes||null};
   });
-  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),output,evidence:evidenceInput(context),modules:{name:moduleLabel,href:moduleHref},pathway:runPathway(ctx),fmtDate:displayDate,overviewHref:routeHref('W-Overview','overview',null,context),runs});
+  return ChangesView.changesHtml({changes:ctx.changes||null,cp8:sections(ctx),output,evidence:evidenceInput(context),modules:{name:moduleLabel},pathway:runPathway(ctx),fmtDate:displayDate,overviewHref:routeHref('W-Overview','overview',null,context),runs});
 }
 function workspaceView(module,section) {
   const context=current?.context,ctx=contexts[context],available=ctx?contextModules(context):[];

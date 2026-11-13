@@ -68,7 +68,7 @@
   // One module's content: trace statements, calculation, gap and register entries, finding tables as written, method notes.
   function moduleContent(mod, input) {
     const known = knownFiles(input.run.evidence);
-    const content = {id: mod.id, name: input.deps.moduleTitle(mod.id), trace: [], calcs: [], gaps: [], ledger: [], regs: [], written: [], notes: [], calcNotes: [], regNotes: []};
+    const content = {id: mod.id, name: input.deps.moduleTitle(mod.id), trace: [], calcs: [], gaps: [], ledger: [], comparison: [], regs: [], written: [], notes: [], calcNotes: [], regNotes: []};
     for (const output of mod.outputs) {
       const tokens = shapes.idTokens(output.sections);
       for (const {section, chain, role} of classify(output.sections, output.placement)) {
@@ -99,11 +99,17 @@
         }
       }
     }
-    // The comparison's own figures (the build's, from the two runs' packs, differences included): listed with the calculations of the module that holds the comparison.
+    // The comparison's own figures (the build's, from the two runs' packs, differences included): a group of their own under the Calculations of the module that holds the comparison, with their own count.
     const comparison = input.run.comparison;
-    if (comparison && comparison.module === mod.id) for (const entry of comparison.entries) content.calcs.push({heading: entry.heading, label: entry.heading, notes: entry.notes, tables: entry.tables});
+    if (comparison && comparison.module === mod.id) content.comparison = comparison.entries.map(entry => ({heading: entry.heading, label: entry.heading, notes: entry.notes, tables: entry.tables}));
     return content;
   }
+  // A run with a comparison but no entry for the module that holds it: the figures are listed under a run-level "Comparison" group (no module filter), not lost.
+  const orphanComparison = (input, module) => {
+    const comparison = input.run.comparison;
+    if (!comparison || module || input.modules.some(m => m.id === comparison.module)) return null;
+    return {id: comparison.module, name: 'Comparison', calcs: [], calcNotes: [], comparison: comparison.entries.map(entry => ({heading: entry.heading, label: entry.heading, notes: entry.notes, tables: entry.tables}))};
+  };
   const contents = input => input.modules.map(mod => moduleContent(mod, input));
   const traceRows = input => contents(input).flatMap(c => c.trace);
   const rowTotal = entries => entries.reduce((n, entry) => n + entry.tables.reduce((k, t) => k + t.rows.length, 0), 0);
@@ -190,11 +196,14 @@
     const unrecordedHtml = unrecorded.length ? `<h3 class="ev-sub-h">Use not recorded <span class="ev-pill"><span data-count>${unrecorded.length}</span></span></h3><p class="ev-intro">None of this run’s handoffs has a Sources section, so the run does not record which supplied files were read.</p>${cards(unrecorded)}` : '';
     return `${usedHtml}${unusedHtml}${unrecordedHtml}`;
   }
-  function calculationsPanel(all) {
-    const groups = all.filter(c => c.calcs.length || c.calcNotes.length);
+  // The comparison's figures: their own group head, counting comparison rows, as the Gaps tab counts ledger rows.
+  const comparisonGroup = c => (c.comparison.length ? `<section class="ev-grp" data-group>${moduleHead(c, rowTotal(c.comparison), 'comparison row', 'comparison rows')}${c.comparison.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}</section>` : '');
+  function calculationsPanel(all, orphan = null) {
+    const groups = [...all, ...(orphan ? [orphan] : [])].filter(c => c.calcs.length || c.calcNotes.length || c.comparison.length);
     if (!groups.length) return empty('Calculations', 'No calculation table is listed for this selection.');
     const notes = c => (c.calcNotes.length ? `<h4 class="ev-sub">Method notes <span class="ev-cnt"><span data-count>${c.calcNotes.length}</span></span></h4>${c.calcNotes.map(n => `${subHead(n.heading)}${noteMarkup(n.text, c.name, true)}`).join('')}` : '');
-    return groups.map(c => `<section class="ev-grp" data-group>${rowTotal(c.calcs) ? moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations') : moduleHead(c, c.calcNotes.length, 'method note', 'method notes')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}${notes(c)}</section>`).join('');
+    const calcs = c => (c.calcs.length || c.calcNotes.length ? `<section class="ev-grp" data-group>${rowTotal(c.calcs) ? moduleHead(c, rowTotal(c.calcs), 'calculation', 'calculations') : moduleHead(c, c.calcNotes.length, 'method note', 'method notes')}${c.calcs.map(e => `${subHead(e.label)}${e.notes.map(n => noteMarkup(n, c.name)).join('')}${e.tables.map(t => tableMarkup(t, `${c.name}: ${e.heading}`, c.name, 'rows')).join('')}`).join('')}${notes(c)}</section>` : '');
+    return groups.map(c => calcs(c) + comparisonGroup(c)).join('');
   }
   const SEVERITY = {high: 3, medium: 2, low: 1};
   // A table of a gaps section is a list of gaps: a title, the other cells as fields, and a three-segment meter where the table has a severity column.
@@ -296,11 +305,12 @@
 
   // ---- tabs, filter bar, the guide, the foot ----
   function tabCounts(all, input, module) {
+    const orphan = orphanComparison(input, module);
     const ev = input.run.evidence;
     return {
       trace: all.reduce((n, c) => n + c.trace.length, 0),
       sources: ev.sources.filter(f => !module || f.readBy.includes(module)).length,
-      calculations: all.reduce((n, c) => n + rowTotal(c.calcs) + c.calcNotes.length, 0),
+      calculations: all.reduce((n, c) => n + rowTotal(c.calcs) + c.calcNotes.length + rowTotal(c.comparison), 0) + (orphan ? rowTotal(orphan.comparison) : 0),
       gaps: gapRows(all) + ledgerRows(all) + limitRows(input, module),
       registers: all.reduce((n, c) => n + tableTotal(c) + c.regNotes.length, 0),
       record: input.run.steps.filter(s => !module || s.module === module).length + inputRows(input, module),
@@ -339,7 +349,7 @@
       summary: () => guide(input, here, counts),
       trace: () => tracePanel(all, input),
       sources: () => sourcesPanel(input, module),
-      calculations: () => calculationsPanel(all),
+      calculations: () => calculationsPanel(all, orphanComparison(input, module)),
       gaps: () => gapsPanel(all, input, module),
       registers: () => registersPanel(input, module, all),
       record: () => recordPanel(input, module),

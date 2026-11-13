@@ -4093,7 +4093,7 @@ test('changesView hands changes.js the CP-8 output (id, module, run, chip counts
   assert.equal(given[0].overviewHref, '#W-Overview/overview?c=run-1');
   assert.equal(given[0].cp8, cp8);
   assert.equal(given[0].modules.name('CP-1'), 'Financial foundation', 'a module is named by its catalogue title');
-  assert.equal(given[0].modules.href('CP-1'), '#CP-1/head');
+  assert.equal(given[0].modules.href, undefined, 'the page links to no module page for a bottom line');
   assert.equal(given[0].evidence.modules[0].id, 'CP-8', 'the evidence input the Gaps tab reads');
   assert.ok(html.includes('class="verdict"') && html.includes('data-paragraph="out-8:4"'), 'the drawer key names the CP-8 output and the paragraph line');
   assert.ok(html.includes('href="#W-Evidence/gaps?c=run-1&amp;m=CP-8"') === false, 'no ledger, no link');
@@ -4362,4 +4362,19 @@ test('Forecast grid: each row is filled (a lone narrow card widens, a pair share
   assert.deepEqual(spans(fcPage().forecastCharts(RUN)), [8, 8, 8, 12, 12], 'three across, then the last two share the row');
   const only = fcPage({ charts: [fcOutput().charts[0]], chartGaps: [] }).forecastCharts(RUN);
   assert.deepEqual(spans(only), [24], 'one card takes the row');
+});
+
+// ---- Changes fix round 2 (N3): views.js builds the Evidence input's `comparison` from the run's pack; the page-level result is on Evidence's Calculations tab for CP-8.
+test('Evidence Calculations for CP-8 lists the comparison measure and its computed difference from the run\'s own pack (views.js passes the comparison to Evidence)', () => {
+  const side = (value, period) => ({ label: 'm', unit: 'US$m', value, period });
+  const pack = { schema: 'cpos-changes/2', prior: { run: 'r0', as_of: '2024-09-30' }, current: { as_of: '2024-09-30' }, modules: [],
+    measures: [{ key: 'cash', label: 'Cash', unit: 'US$m', prior: side('6261', '2024-09-30'), current: side('6300', '2024-09-30'), difference: '39' }] };
+  const changes = { lead: 'CP-2', pack, note: null, problem: null, verdicts: { measures: { cash: { kind: 'comparable', label: 'Same definition' } }, modules: {}, ledger: null } };
+  const cp8 = { id: 'o8', module: 'CP-8', run: 'r', sections: [sec('Findings', 2, 1, 'view', [])], placement: ['view'] };
+  const withCp8 = evidenceView({ r: { evidence: EVIDENCE, modules: { 'CP-8': { outputs: ['o8'], default: 'o8' } }, changes } }, { o8: cp8 })('r', 'calculations', 'CP-8');
+  assert.ok(withCp8.includes('Difference computed by the comparison') && /<td[^>]*>Cash<\/td>/.test(withCp8) && /<td[^>]*>39 US\$m<\/td>/.test(withCp8) && withCp8.includes('6261 US$m (2024-09-30)'));
+  // A run whose changes record holds no pack lists none; one with no CP-8 entry lists them under the run-level group.
+  assert.ok(!evidenceView({ r: { evidence: EVIDENCE, modules: { 'CP-8': { outputs: ['o8'], default: 'o8' } }, changes: { ...changes, pack: null } } }, { o8: cp8 })('r', 'calculations', 'CP-8').includes('Difference computed'));
+  const orphan = evidenceView({ r: { evidence: EVIDENCE, modules: TWO_MODULES, changes } })('r', 'calculations');
+  assert.ok(orphan.includes('>Comparison<') && /<td[^>]*>39 US\$m<\/td>/.test(orphan));
 });

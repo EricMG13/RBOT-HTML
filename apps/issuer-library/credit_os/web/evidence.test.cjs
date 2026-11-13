@@ -517,3 +517,34 @@ test('ledger: a ledger beside a table that is not one in one section keeps each 
   assert.equal(Evidence.gapCount(one, 'CP-8'), 0, 'a ledger row is not a gap');
   assert.equal(Evidence.gapCount(input(), 'CP-2A'), 2, 'only the Gaps section counts there');
 });
+
+// ---- Task 9 fix round 2: the comparison has its own group and count, and is never unreachable.
+const COMPARISON = {module: 'CP-8', entries: [{heading: 'Comparison measures', notes: [], tables: [{line: 0, headers: ['Measure', 'Difference computed by the comparison'], rows: [{line: 0, cells: ['Coverage', '0.31x']}, {line: 0, cells: ['Cash', '0']}]}]}]};
+const withComparison = (modules = [{id: 'CP-8', outputs: [out('o8', CP8)]}, {id: 'CP-6', outputs: [out('o2', CP6)]}]) => input({run: {...input().run, comparison: COMPARISON}, modules});
+
+test('the comparison is a group of its own in Calculations, headed by its own row count; the module\'s calculation count and the summary tile name only calculation rows; the badge is both', () => {
+  const html = Evidence.view(withComparison([{id: 'CP-2A', outputs: [out('o1', CP2A)]}, {id: 'CP-8', outputs: [out('o8', CP8)]}]), {tab: 'calculations', module: null});
+  const panel = html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"'));
+  assert.ok(/<span data-count>2<\/span> comparison rows</.test(panel) && /<span data-count>2<\/span> calculations</.test(panel), 'each head says what its number is');
+  assert.ok(/Calculations recorded<\/div><span class="ev-big" data-count>2</.test(html) && html.includes('rows in the modules’ Calculations tables'), 'the tile counts calculation rows, as its caption says');
+  const badge = Number(/id="ev-tab-calculations"[^>]*><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(html)[1]);
+  assert.equal(badge, 4);
+  assert.equal(panel.match(/data-hay=/g).length, badge, 'badge parity: calculation rows + comparison rows');
+});
+
+test('a run with a comparison and no entry for the module that holds it lists the figures under a run-level "Comparison" group', () => {
+  const html = Evidence.view(withComparison([{id: 'CP-6', outputs: [out('o2', CP6)]}]), {tab: 'calculations', module: null});
+  assert.ok(html.includes('>Comparison<') && html.includes('0.31x') && /<span data-count>2<\/span> comparison rows</.test(html));
+  const badge = Number(/id="ev-tab-calculations"[^>]*><span>[^<]*<\/span><span class="ev-cnt" data-count>(\d+)</.exec(html)[1]);
+  assert.equal(html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"')).match(/data-hay=/g).length, badge);
+  assert.ok(!Evidence.view(withComparison([{id: 'CP-6', outputs: [out('o2', CP6)]}]), {tab: 'calculations', module: 'CP-6'}).includes('0.31x'), 'not under another module');
+});
+
+test('net debt, maturity and measure text with <b>&" is escaped where the comparison is drawn', () => {
+  const C = require('./changes.js'), evil = '<b>&"x</b>';
+  const pack = {measures: [{key: 'k', label: evil, unit: 'x', prior: {value: evil, unit: evil}, current: {value: '2', unit: 'x'}, difference: evil}], net_debt_change: {unit: evil, prior_net_debt: evil, current_net_debt: '1', change_in_gross_debt: evil, change_in_cash: '0', prior_period: evil, current_period: 'FY2', convention: evil},
+    maturity_profile: {unit: evil, rows: [{period: evil, prior: evil, current: '1', difference: evil}]}, omitted: {x: evil}};
+  const html = Evidence.view(input({run: {...input().run, comparison: C.comparisonEvidence(pack, {verdicts: {measures: {k: {kind: 'comparable', label: evil}}}}, 'CP-8')}, modules: [{id: 'CP-8', outputs: [out('o8', CP8)]}]}), {tab: 'calculations', module: 'CP-8'});
+  assert.ok(html.includes('&lt;b&gt;&amp;&quot;x&lt;/b&gt;'));
+  assert.ok(!/<b>&"x/.test(html) && !html.includes('&"x'), 'no raw markup survives');
+});
