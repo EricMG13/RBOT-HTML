@@ -1064,6 +1064,7 @@ def test_a_pdf_retained_by_an_earlier_build_gives_the_could_not_be_read_page(
     body = b"%PDF-1.4\n" + b"BT (secret) Tj ET"
     (folder / f"{digest}.pdf").write_bytes(body)
     row = _index_row(
+        source_id=f"web-{digest[:12]}",
         url="https://www.fca.org.uk/a.pdf",
         sha256=digest,
         bytes=len(body),
@@ -1261,3 +1262,227 @@ def test_a_programming_error_in_the_index_path_is_not_called_damage(tmp_path: Pa
 @pytest.mark.parametrize("domain", ["ise.ie", "nasdaq.com"])
 def test_unconfirmed_domains_are_not_on_the_allowlist(domain: str) -> None:
     assert domain not in weblookup.load_domains()
+
+
+# Task 4 ----------------------------------------------------------------------------------------
+
+ACCESSION = "0000320193-24-000123"
+FILING_URL = "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/a10k.htm"
+
+
+def filing_list_net(filed: str, accession: str = ACCESSION) -> FakeNet:
+    doc = {
+        "filings": {
+            "recent": {
+                "form": ["10-K"],
+                "filingDate": [filed],
+                "accessionNumber": [accession],
+            }
+        }
+    }
+    return FakeNet(
+        {
+            ("data.sec.gov", "/submissions/CIK0000320193.json"): ok(
+                json.dumps(doc).encode(), "application/json"
+            ),
+            ("www.sec.gov", "/Archives/edgar/data/320193/000032019324000123/a10k.htm"): ok(
+                html("<p>Annual report</p>", '<meta name="date" content="2024-09-28">')
+            ),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("filed", "status"), [("2025-06-30", "usable"), ("2025-07-01", "later-event")]
+)
+def test_w1_a_filing_document_takes_its_date_from_the_retained_filing_list(
+    tmp_path: Path, filed: str, status: str
+) -> None:
+    lookup = make(tmp_path, filing_list_net(filed), env={UA_ENV: UA_VALUE})
+    assert not isinstance(lookup.filing_list("320193"), Refused)
+    got = retained(lookup.fetch_page(FILING_URL))
+    assert (got.page_date, got.page_date_source, got.status) == (filed, "sec:filingDate", status)
+
+
+def test_w1_the_dashed_accession_in_the_path_is_found(tmp_path: Path) -> None:
+    net = filing_list_net("2024-11-01")
+    net.pages[("www.sec.gov", "/Archives/edgar/data/320193/0000320193-24-000123.txt")] = ok(
+        b"plain filing", "text/plain"
+    )
+    lookup = make(tmp_path, net, env={UA_ENV: UA_VALUE})
+    lookup.filing_list("320193")
+    got = retained(
+        lookup.fetch_page("https://www.sec.gov/Archives/edgar/data/320193/0000320193-24-000123.txt")
+    )
+    assert (got.page_date, got.page_date_source) == ("2024-11-01", "sec:filingDate")
+
+
+def test_w1_no_retained_list_naming_the_accession_changes_nothing(tmp_path: Path) -> None:
+    lookup = make(
+        tmp_path, filing_list_net("2025-07-01", "0000320193-24-000999"), env={UA_ENV: UA_VALUE}
+    )
+    lookup.filing_list("320193")
+    got = retained(lookup.fetch_page(FILING_URL))
+    assert (got.page_date, got.page_date_source) == ("2024-09-28", "meta:date")
+    assert got.status == "usable"
+
+
+def test_w1_without_any_list_the_page_is_dated_as_before(tmp_path: Path) -> None:
+    lookup = make(tmp_path, filing_list_net("2025-07-01"), env={UA_ENV: UA_VALUE})
+    assert retained(lookup.fetch_page(FILING_URL)).page_date_source == "meta:date"
+
+
+def test_w1_an_unreadable_filing_list_is_skipped(tmp_path: Path) -> None:
+    net = filing_list_net("2025-07-01")
+    net.pages[("data.sec.gov", "/submissions/CIK0000320193.json")] = ok(
+        b"not json at all", "application/json"
+    )
+    lookup = make(tmp_path, net, env={UA_ENV: UA_VALUE})
+    lookup.filing_list("320193")
+    assert retained(lookup.fetch_page(FILING_URL)).page_date_source == "meta:date"
+
+
+def test_w1_a_filing_list_row_without_a_valid_date_does_not_date_the_page(tmp_path: Path) -> None:
+    lookup = make(tmp_path, filing_list_net("soon"), env={UA_ENV: UA_VALUE})
+    lookup.filing_list("320193")
+    assert retained(lookup.fetch_page(FILING_URL)).page_date_source == "meta:date"
+
+
+def test_w1_a_list_from_a_fetch_page_call_is_not_a_filing_list(tmp_path: Path) -> None:
+    lookup = make(tmp_path, filing_list_net("2025-07-01"), env={UA_ENV: UA_VALUE})
+    lookup.fetch_page("https://data.sec.gov/submissions/CIK0000320193.json")  # tool=fetch_page
+    assert retained(lookup.fetch_page(FILING_URL)).page_date_source == "meta:date"
+
+
+def test_w1_the_filing_list_summary_says_a_filing_is_dated_by_its_filing_date(
+    tmp_path: Path,
+) -> None:
+    lookup = make(tmp_path, filing_list_net("2024-11-01"), env={UA_ENV: UA_VALUE})
+    got = lookup.filing_list("320193")
+    assert not isinstance(got, Refused)
+    assert "dated by its filing date" in got.summary
+
+
+def test_w1_sec_json_documents_stay_undated(tmp_path: Path) -> None:
+    lookup = make(tmp_path, filing_list_net("2024-11-01"), env={UA_ENV: UA_VALUE})
+    lookup.filing_list("320193")
+    rows = index_rows(tmp_path)
+    assert rows[0]["status"] == "undated"
+
+
+@pytest.mark.parametrize(
+    ("head", "date_", "source"),
+    [
+        (
+            (
+                '<meta name="date" content="2025-05-01">'
+                '<meta property="article:modified_time" content="2025-08-01T10:00:00Z">'
+            ),
+            "2025-08-01",
+            "meta:article:modified_time",
+        ),
+        (
+            (
+                '<meta name="date" content="2025-05-01">'
+                '<meta name="dateModified" content="2025-04-01">'
+            ),
+            "2025-05-01",
+            "meta:date",
+        ),
+        (
+            '<meta property="og:updated_time" content="2025-09-09">',
+            "2025-09-09",
+            "meta:og:updated_time",
+        ),
+        (
+            '<meta name="DCTERMS.modified" content="2025-07-02">',
+            "2025-07-02",
+            "meta:dcterms.modified",
+        ),
+        ('<meta name="last-modified" content="2025-07-03">', "2025-07-03", "meta:last-modified"),
+    ],
+)
+def test_w2_the_later_of_published_and_modified_dates_the_page(
+    tmp_path: Path, head: str, date_: str, source: str
+) -> None:
+    net = FakeNet({("www.fca.org.uk", "/"): ok(html(head=head))})
+    got = retained(make(tmp_path, net).fetch_page("https://www.fca.org.uk/"))
+    assert (got.page_date, got.page_date_source) == (date_, source)
+
+
+def test_w2_a_page_edited_after_the_cutoff_is_a_later_event(tmp_path: Path) -> None:
+    head = (
+        '<meta name="date" content="2025-05-01">'
+        '<meta property="article:modified_time" content="2025-08-01">'
+    )
+    net = FakeNet({("www.fca.org.uk", "/"): ok(html(head=head))})
+    assert (
+        retained(make(tmp_path, net).fetch_page("https://www.fca.org.uk/")).status == "later-event"
+    )
+
+
+@pytest.mark.parametrize(
+    ("ld", "date_", "source"),
+    [
+        (
+            '{"datePublished":"2025-05-01","dateModified":"2025-08-05"}',
+            "2025-08-05",
+            "json-ld:dateModified",
+        ),
+        ('{"dateModified":"2025-04-05"}', "2025-04-05", "json-ld:dateModified"),
+        (
+            '{"datePublished":"2025-05-01","dateModified":"2025-04-05"}',
+            "2025-05-01",
+            "json-ld:datePublished",
+        ),
+    ],
+)
+def test_w2_json_ld_modified_date(tmp_path: Path, ld: str, date_: str, source: str) -> None:
+    head = f'<script type="application/ld+json">{ld}</script>'
+    net = FakeNet({("www.fca.org.uk", "/"): ok(html(head=head))})
+    got = retained(make(tmp_path, net).fetch_page("https://www.fca.org.uk/"))
+    assert (got.page_date, got.page_date_source) == (date_, source)
+
+
+def test_w2_published_and_modified_in_separate_json_ld_blocks(tmp_path: Path) -> None:
+    head = (
+        '<script type="application/ld+json">{"datePublished":"2025-05-01"}</script>'
+        '<script type="application/ld+json">{"x":[{"dateModified":"2025-08-05"}]}</script>'
+    )
+    net = FakeNet({("www.fca.org.uk", "/"): ok(html(head=head))})
+    got = retained(make(tmp_path, net).fetch_page("https://www.fca.org.uk/"))
+    assert (got.page_date, got.page_date_source) == ("2025-08-05", "json-ld:dateModified")
+
+
+def test_w2_the_time_element_is_only_a_fallback(tmp_path: Path) -> None:
+    body = '<time datetime="2025-09-01">x</time>'
+    head = '<meta name="date" content="2025-05-01">'
+    net = FakeNet({("www.fca.org.uk", "/"): ok(html(body, head))})
+    got = retained(make(tmp_path, net).fetch_page("https://www.fca.org.uk/"))
+    assert (got.page_date, got.page_date_source) == ("2025-05-01", "meta:date")
+
+
+def test_n1_a_cached_row_that_fails_the_shape_check_is_a_damaged_index(tmp_path: Path) -> None:
+    net = FakeNet({("www.fca.org.uk", "/a"): ok(html())})
+    lookup = make(tmp_path, net)
+    retained(lookup.fetch_page("https://www.fca.org.uk/a"))
+    path = web_dir(tmp_path) / "index.jsonl"
+    row = json.loads(path.read_text())
+    row["status"] = "fresh"
+    path.write_text(json.dumps(row) + "\n")
+    assert "index" in refused(lookup.fetch_page("https://www.fca.org.uk/a"))
+    assert len(net.requests) == 1
+
+
+@pytest.mark.parametrize("field_", ["source_id", "page_date"])
+def test_n1_a_cached_row_with_a_wrong_id_or_date_is_a_damaged_index(
+    tmp_path: Path, field_: str
+) -> None:
+    net = FakeNet({("www.fca.org.uk", "/a"): ok(html())})
+    lookup = make(tmp_path, net)
+    retained(lookup.fetch_page("https://www.fca.org.uk/a"))
+    path = web_dir(tmp_path) / "index.jsonl"
+    row = json.loads(path.read_text())
+    row[field_] = "web-000000000000" if field_ == "source_id" else "yesterday"
+    path.write_text(json.dumps(row) + "\n")
+    assert "index" in refused(lookup.fetch_page("https://www.fca.org.uk/a"))

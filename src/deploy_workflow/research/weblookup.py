@@ -19,6 +19,7 @@ import codecs
 import hashlib
 import html
 import json
+import logging
 import os
 import re
 import time
@@ -33,6 +34,8 @@ from urllib.parse import urlsplit
 from deploy_workflow.prose_checks import LIST_MARKER
 from deploy_workflow.research import webfetch
 from deploy_workflow.research.contracts import ResearchError
+
+log = logging.getLogger(__name__)
 
 ALLOWLIST_PATH = Path(__file__).with_name("web_allowlist.json")
 USER_AGENT_ENV = "DEPLOY_WORKFLOW_SEC_USER_AGENT"
@@ -74,6 +77,13 @@ _META_NAMES = (
     "dc.date",
     "dcterms.date",
     "pubdate",
+)
+_MODIFIED_NAMES = (
+    "article:modified_time",
+    "og:updated_time",
+    "datemodified",
+    "dcterms.modified",
+    "last-modified",
 )
 _HIDDEN_TAGS = frozenset({"script", "style", "noscript", "template"})
 _BLOCK_TAGS = frozenset(
@@ -294,7 +304,10 @@ def _parse_html(body: bytes, content_type: str | None) -> _PageParser:
     return parser
 
 
-def _json_ld_date(blocks: list[str]) -> date | None:
+def _json_ld_dates(blocks: list[str]) -> tuple[date | None, date | None]:
+    """The first ``datePublished`` and the first ``dateModified`` found in any block."""
+    published: date | None = None
+    modified: date | None = None
     for block in blocks:
         try:
             stack: list[Any] = [json.loads(block)]
@@ -303,24 +316,40 @@ def _json_ld_date(blocks: list[str]) -> date | None:
         while stack:
             node = stack.pop()
             if isinstance(node, dict):
-                found = _iso_date(node.get("datePublished"))
-                if found:
-                    return found
+                published = published or _iso_date(node.get("datePublished"))
+                modified = modified or _iso_date(node.get("dateModified"))
                 stack.extend(reversed(list(node.values())))
             elif isinstance(node, list):
                 stack.extend(reversed(node))
-    return None
+    return published, modified
 
 
-def _html_date(parser: _PageParser) -> tuple[date | None, str | None]:
-    for name in _META_NAMES:
+def _meta_date(parser: _PageParser, names: tuple[str, ...]) -> tuple[date | None, str | None]:
+    for name in names:
         for value in parser.metas.get(name, []):
             found = _iso_date(value)
             if found:
                 return found, f"meta:{name}"
-    found = _json_ld_date(parser.json_ld)
-    if found:
-        return found, "json-ld:datePublished"
+    return None, None
+
+
+def _html_date(parser: _PageParser) -> tuple[date | None, str | None]:
+    """The later of the page's published and modified dates, and the source of the one used.
+
+    On a tie the published date's source is named. ``<time>`` is read only when neither the meta
+    tags nor JSON-LD state a date.
+    """
+    ld_published, ld_modified = _json_ld_dates(parser.json_ld)
+    published = _meta_date(parser, _META_NAMES)
+    if published[0] is None and ld_published:
+        published = (ld_published, "json-ld:datePublished")
+    modified = _meta_date(parser, _MODIFIED_NAMES)
+    if modified[0] is None and ld_modified:
+        modified = (ld_modified, "json-ld:dateModified")
+    if published[0] and (modified[0] is None or published[0] >= modified[0]):
+        return published
+    if modified[0]:
+        return modified
     for value in parser.times:
         found = _iso_date(value)
         if found:
@@ -549,9 +578,9 @@ class WebLookup:
             if row.get("url") == url:
                 try:
                     clean = _clean_content_type(row.get("content_type"))
-                    return Retained(**{**row, "content_type": clean})
-                except (TypeError, AttributeError):
+                except AttributeError:
                     raise _IndexDamaged("the retained web index is damaged") from None
+                return _retained_row({**row, "content_type": clean})
         return None
 
     def _sec_agent(self) -> str | None:
@@ -627,6 +656,9 @@ class WebLookup:
         digest = hashlib.sha256(body).hexdigest()
         kind = _EXTENSIONS[_media_type(media)]
         page_date, source = _stated_date(kind, body, media, answer.record)
+        filed = self._filing_date(answer.final_url)
+        if filed:
+            page_date, source = filed, "sec:filingDate"
         item = Retained(
             source_id=f"web-{digest[:12]}",
             url=answer.url,
@@ -644,6 +676,37 @@ class WebLookup:
         )
         self._write(f"{digest}.{kind}", body, item)
         return item
+
+    def _filing_date(self, final_url: str) -> str | None:
+        """The filing date of an SEC filing document, from a filing list retained in this run.
+
+        ``None`` when the address is not a document under an accession number, or no retained
+        ``sec_filing_list`` names that accession with a valid date. A list that cannot be read is
+        skipped (and logged): it dates nothing.
+        """
+        split = urlsplit(final_url)
+        if (split.hostname or "").lower() not in ("sec.gov", "www.sec.gov"):
+            return None
+        wanted = _accessions(split.path)
+        if not wanted:
+            return None
+        try:
+            rows = _read_index(self._folder / "index.jsonl")
+        except _IndexDamaged:
+            return None  # fetch_page read this index a moment ago; a fresh failure dates nothing
+        for row in rows:
+            if row.get("tool") != "sec_filing_list":
+                continue
+            try:
+                raw = (self._folder / f"{row['sha256']}.json").read_bytes()
+                dates = _filing_dates(json.loads(_decode(raw, row.get("content_type"))))
+            except (OSError, ValueError, RecursionError) as error:
+                log.warning("a retained filing list could not be used to date a filing: %s", error)
+                continue
+            for number in wanted:
+                if number in dates:
+                    return dates[number]
+        return None
 
     def _write(self, name: str, body: bytes, item: Retained) -> None:
         """The body first, then its index row, so a crash cannot leave a row without a body."""
@@ -698,7 +761,7 @@ class WebLookup:
         if not lines:
             return _unreadable(got)
         head = f"Filings listed (first {MAX_LISTED}) from {got.source_id}: form, date, accession"
-        return EdgarResult(got.source_id, _summary([head, *lines]))
+        return EdgarResult(got.source_id, _summary([head, _FILING_DATED_SENTENCE, *lines]))
 
     def concept_facts(self, cik: str, tag: str, taxonomy: str = "us-gaap") -> EdgarResult | Refused:
         """One XBRL concept's facts for a company."""
@@ -769,6 +832,36 @@ def _after_cutoff(stated: object, cutoff: date) -> str:
     )
 
 
+_DASHED_ACCESSION = re.compile(r"(?<![0-9])([0-9]{10})-([0-9]{2})-([0-9]{6})(?![0-9])")
+_PLAIN_ACCESSION = re.compile(r"[0-9]{18}")
+
+
+def _accessions(path: str) -> list[str]:
+    """The accession numbers (18 digits, no dashes) a URL path names: an 18-digit path segment, or
+    the dashed form anywhere in the path."""
+    found = ["".join(match.groups()) for match in _DASHED_ACCESSION.finditer(path)]
+    found += [seg for seg in path.split("/") if _PLAIN_ACCESSION.fullmatch(seg)]
+    return found
+
+
+def _filing_dates(doc: object) -> dict[str, str]:
+    """Accession (dashes removed) to ISO filing date, for each row of a submissions document that
+    states a valid one; ``{}`` when the document is not that shape."""
+    filings = doc.get("filings") if isinstance(doc, dict) else None
+    recent = filings.get("recent") if isinstance(filings, dict) else None
+    if not isinstance(recent, dict):
+        return {}
+    accessions, filed = recent.get("accessionNumber"), recent.get("filingDate")
+    if not isinstance(accessions, list) or not isinstance(filed, list):
+        return {}
+    dates: dict[str, str] = {}
+    for accession, day in zip(accessions, filed, strict=False):
+        valid = isinstance(day, str) and _ISO_DAY.fullmatch(day) and _iso_date(day)
+        if isinstance(accession, str) and valid:
+            dates.setdefault(accession.replace("-", ""), str(day))
+    return dates
+
+
 def _filing_lines(doc: object, cutoff: date) -> list[str]:
     filings = doc.get("filings") if isinstance(doc, dict) else None
     recent = filings.get("recent") if isinstance(filings, dict) else None
@@ -817,6 +910,7 @@ _FRAME_SENTENCES = {
         "item saying so in words, ending with a Basis line that names this id."
     ),
 }
+_FILING_DATED_SENTENCE = "A filing document fetched after this list is dated by its filing date."
 _SEC_FACT_SENTENCE = "Each fact carries its own filing date; apply the cutoff to each fact."
 _HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
 # a page's id: ``web-`` and 12 lower-case hex digits (any case is read); any other form is not one

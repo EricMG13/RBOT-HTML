@@ -1803,3 +1803,30 @@ def test_settled_web_lookup_table(tmp_path):
     assert handoff.recorded_web_lookup(loop) == "on"
     loop.write_text("{}")
     assert handoff.recorded_web_lookup(loop) == "off"
+
+
+# Task 4: N2 ------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("tool", ["read_pages", "search_source"])
+def test_a_retained_page_whose_file_is_gone_is_a_plain_message(tmp_path, tool):
+    first, _ = tools_for(tmp_path)
+    sid = source_id(first.call("fetch_page", {"url": PAGE}))
+    for body in (tmp_path / "run" / "web").glob("*.html"):
+        body.unlink()
+    second, _ = tools_for(tmp_path, FakeNet())
+    args = (
+        {"source_id": sid, "first": 1, "last": 1}
+        if tool == "read_pages"
+        else {
+            "source_id": sid,
+            "query": "net sales",
+        }
+    )
+    result = second.call(tool, args)
+    assert result == f"ERROR: the retained page {sid} could not be read"
+    assert str(tmp_path) not in result and "KeyError" not in result
+
+
+def test_the_rules_tell_the_module_to_list_filings_before_fetching_a_filing_document():
+    assert "sec_filing_list before fetching one of its filing documents" in WEB_LOOKUP_RULES
