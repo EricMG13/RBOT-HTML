@@ -879,6 +879,12 @@ def test_the_page_offers_the_lite_credit_assessment_and_the_service_reviews_its_
         "Fundamental credit, Downside"
     )
     assert f"5 modules: {names}" in card["text"]
+    # The card agrees with the readiness rule (downside is Limited without legal documents).
+    assert (
+        "Filings with financial statements; the executed credit agreement if you have it "
+        "(the downside module is limited without it). No quotes."
+    ) in card["text"]
+    assert "No legal documents" not in card["text"]
     assert (
         "Full credit assessment"
         in next(c for c in seen["cards"] if c["value"] == "credit_snapshot")["text"]
@@ -2079,6 +2085,37 @@ def test_a_reload_keeps_the_lock_and_does_not_carry_twice(page_from):
     )
     assert (third["rows"], third["run"]) == (1, run_id)
     assert "was not used" not in third["msg"] and "Your earlier answers are back." in third["msg"]
+
+
+def test_starting_from_an_earlier_short_snapshot_run_keeps_the_default_pathway_and_says_so(
+    root, tmp_path, monkeypatch, fake_env
+):
+    """The short credit snapshot is no longer offered: the Full credit assessment stays selected,
+    the pathway is not marked as carried from the earlier run, and the message says why."""
+    from dataclasses import replace
+
+    def edit(folder: Path) -> None:
+        stored = json.loads((folder / "context.json").read_text("utf-8"))
+        stored["run"]["pathway"] = "short_snapshot"
+        (folder / "context.json").write_text(json.dumps(stored), encoding="utf-8")
+        lay = layout(root)
+        record = next(r for r in runs.load_all(lay) if r.id == folder.name)
+        runs.save(lay, replace(record, pathway="short_snapshot"))
+
+    with _earlier_run(root, tmp_path, monkeypatch, fake_env, edit) as (served, run_id):
+        seen = served.run(
+            """
+            return {pathway: build().run.pathway, run: CARRIED.run,
+              carriedPathway: CARRIED.fields.has('|pathway'),
+              msg: $('loadmsg').textContent};
+            """,
+            path=f"/?from={run_id}",
+        )
+    assert seen["run"] == run_id
+    assert seen["pathway"] == "credit_snapshot"
+    assert seen["carriedPathway"] is False
+    assert "short credit snapshot is no longer offered" in seen["msg"]
+    assert "Full credit assessment" in seen["msg"]
 
 
 def test_from_a_run_without_stored_documents_locks_identity_only(page_from_bare):

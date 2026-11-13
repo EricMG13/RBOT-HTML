@@ -787,7 +787,7 @@ const mname = m => (MODULES[m] || [m])[0];
 const named = t => String(t ?? '').replace(/\bCP-[A-Z0-9]+\b/g, c => MODULES[c] ? MODULES[c][0] : 'a module');
 const PATHS = {
   credit_snapshot: {label:'Full credit assessment', q:'A full first look at a credit', needs:'Filings, the governing legal documents, and quotes or price talk.'},
-  lite_credit_assessment: {label:'Lite credit assessment', q:'The credit profile and how it holds up under stress', needs:'Filings with financial statements. No legal documents or quotes.'},
+  lite_credit_assessment: {label:'Lite credit assessment', q:'The credit profile and how it holds up under stress', needs:'Filings with financial statements; the executed credit agreement if you have it (the downside module is limited without it). No quotes.'},
   earnings_update: {label:'Earnings Update', q:'What changed since the last reporting period?', needs:'Filings for both periods and the management EBITDA bridge.'},
   relative_value: {label:'Relative Value', q:'Is this instrument cheap or rich?', needs:'Observed quotes.'},
   covenant_refinancing: {label:'Covenant & Refinancing', q:'What do the documents allow, and can it refinance?', needs:'The executed credit agreement or indenture.'},
@@ -2423,15 +2423,22 @@ async function startFrom(runId) {
     resetAll();
   } else if (isObj(ctx)) problems.push('Its stored answers could not be read (' + bad + ').');
   const base = fieldValues(); // when the answers are unusable nothing the analyst typed is cleared: only the name and ID are set
+  let applied = false; // whether the earlier run's pathway is one this page offers and was selected
   if (usable) {
-    fill(ctx, {}, true);
+    const warned = fill(ctx, {}, true);
     $('submitter').value = submitter;
+    applied = getV($('st-pathway'), 'pathway') === txt(ctx.run.pathway);
+    if (!applied) problems.push(txt(ctx.run.pathway) === 'short_snapshot'
+      ? `The short credit snapshot is no longer offered, so the earlier run's pathway was not carried; the ${PATHS[getV($('st-pathway'), 'pathway')].label} is selected (the Lite credit assessment is the short option). Choose the pathway under Pathway.`
+      : `The earlier run's pathway "${txt(ctx.run.pathway)}" is not offered; the ${PATHS[getV($('st-pathway'), 'pathway')].label} is selected. Choose the pathway under Pathway.`);
+    const rest = warned.filter(w => !w.startsWith('run.pathway:')); // that one is stated above
+    if (rest.length) problems.push('Some of its answers were not applied: ' + rest.join('; ') + '.');
   } else $('i-issuer_name').value = txt(got.issuer_name);
   $('i-issuer_id').value = txt(got.issuer_id);
   if (usable) $('d-as_of').value = today(); // the dates are the new run's own: they are never carried
   const now = fieldValues();
   CARRIED.fields = new Set([...now.keys()].filter(k => now.get(k) !== base.get(k) && k !== '|legal_documents'));
-  if (usable) CARRIED.fields.add('|pathway'); // the pathway is an answer carried from the run even when it is the default one
+  if (applied) CARRIED.fields.add('|pathway'); // the pathway is an answer carried from the run even when it is the default one; not when it was refused
   applyRowKeys();
   // The earlier run's module subset and turns: a subset run started again stays a subset.
   // A subset naming a module this pathway lacks is not applied at all (a partial subset would run other modules than the earlier run's).
