@@ -7149,7 +7149,8 @@ SEC_AGENT_VARIABLE = "DEPLOY_WORKFLOW_SEC_USER_AGENT"
 SEC_AGENT_VALUE = "Example Co person@example.invalid"
 
 
-def lookup_lines(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
+def lookup_output(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
+    """Everything the launcher printed, read once: capsys is drained by the read."""
     if monkeypatch is not None:
         if agent is None:
             monkeypatch.delenv(SEC_AGENT_VARIABLE, raising=False)
@@ -7159,9 +7160,12 @@ def lookup_lines(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
     with_case_kind(tmp_path / "context.json", kind)
     assert main(argv) == 0
     out = capsys.readouterr()
-    return [
-        line for line in (out.out + out.err).splitlines() if line.startswith(("Lookup:", "SEC:"))
-    ]
+    return out.out + out.err
+
+
+def lookup_lines(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
+    text = lookup_output(tmp_path, capsys, kind, *flags, agent=agent, monkeypatch=monkeypatch)
+    return [line for line in text.splitlines() if line.startswith(("Lookup:", "SEC:"))]
 
 
 @pytest.mark.parametrize(
@@ -7198,11 +7202,11 @@ def lookup_lines(tmp_path, capsys, kind, *flags, agent=None, monkeypatch=None):
 )
 def test_the_run_summary_says_whether_cpdr_may_look_things_up(tmp_path, capsys, monkeypatch, case):
     kind, flags, line = case
-    found = lookup_lines(
+    text = lookup_output(
         tmp_path, capsys, kind, *flags, agent=SEC_AGENT_VALUE, monkeypatch=monkeypatch
     )
-    assert found == [line]
-    assert SEC_AGENT_VALUE not in capsys.readouterr().out
+    assert [x for x in text.splitlines() if x.startswith(("Lookup:", "SEC:"))] == [line]
+    assert SEC_AGENT_VALUE not in text
 
 
 def test_the_sec_line_appears_when_lookup_is_on_and_the_contact_string_is_not_set(

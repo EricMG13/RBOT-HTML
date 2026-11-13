@@ -79,9 +79,13 @@ from deploy_workflow.research.weblookup import (
     RunScope,
     Runtime,
     WebLookup,
+    KnownPages,
     bare_host_problem,
     neutralise,
-    retained_pages,
+    names_web_source,
+    retained_rows,
+    row_cells,
+    sources_rows,
     web_frame,
     web_handoff_issues,
 )
@@ -160,25 +164,19 @@ SOURCE_TYPES = (
     "Financial press",
     "Other",
 )
-_SOURCES_HEADING = re.compile(r"^## Sources[ \t]*$", re.MULTILINE)
 
 
 def web_source_issues(markdown: str) -> list[str]:
-    """The ``## Sources`` table rows that name a web address but no Source type cell. Mechanical
-    and deterministic: it does not judge the source, only that its type is stated."""
-    found = _SOURCES_HEADING.search(markdown)
-    if found is None:
-        return []
-    body = re.split(r"^## ", markdown[found.end() :], maxsplit=1, flags=re.MULTILINE)[0]
+    """The ``## Sources`` table rows that name a web page (an http(s) address or a ``web-`` id)
+    but no Source type cell. Mechanical and deterministic: it does not judge the source, only
+    that its type is stated."""
     issues = []
-    for row in body.splitlines():
-        if row.lstrip().startswith("|") and "http" in row:
-            cells = [c.strip() for c in row.strip().strip("|").split("|")]
-            if not any(c in SOURCE_TYPES for c in cells):
-                issues.append(
-                    f'Sources row "{row.strip()[:80]}": a web source needs a Source type cell, '
-                    f"exactly one of {', '.join(SOURCE_TYPES)}."
-                )
+    for row in sources_rows(markdown):
+        if names_web_source(row) and not any(c in SOURCE_TYPES for c in row_cells(row)):
+            issues.append(
+                f'Sources row "{row[:80]}": a web source needs a Source type cell, '
+                f"exactly one of {', '.join(SOURCE_TYPES)}."
+            )
     return issues
 
 
@@ -227,7 +225,8 @@ WEB_LOOKUP_RULES = (
     + ", ".join(SOURCE_TYPES)
     + "; and, when its status is later-event, the words Later event. Write every passage quoted "
     'from a web page as "passage" (web-xxxxxxxxxxxx), the passage copied verbatim from '
-    "read_pages or search_source output; never cite a URL that was not fetched."
+    "read_pages or search_source output; a paragraph that names a web source quotes only from "
+    "that source; never cite a URL that was not fetched."
 )
 READS_FULL = (
     "ERROR: this module has read as much as its context allows. Use what you have read, record "
@@ -493,7 +492,9 @@ class ModuleTools:
         if (lookup is None) != (lookup_dir is None):
             raise ValueError("lookup and lookup_dir go together")
         self.lookup, self.lookup_dir = lookup, lookup_dir
-        self.web: dict[str, Retained] = {}
+        self.web: dict[str, Retained] = {}  # each page by source_id (its first row)
+        self.web_rows: list[Retained] = []  # every index row seen: two URLs may share one id
+        self._indexed: set[str] = set()  # the url of every index row already looked at
         if lookup is not None and lookup_dir is not None:
             self._register_retained(lookup, lookup_dir)
         self.writes = 0
@@ -502,6 +503,12 @@ class ModuleTools:
         self.rejected: tuple[str, list[str]] | None = None  # the last rejected write and its issues
 
     def call(self, name: str, args: dict[str, Any]) -> str:
+        result = self._dispatch(name, args)
+        if name in LOOKUP_NAMES and result.startswith("ERROR:"):
+            return _lookup_error(result)
+        return result
+
+    def _dispatch(self, name: str, args: dict[str, Any]) -> str:
         if name in LOOKUP_NAMES and self.lookup is None:
             return f"ERROR: {name} is not offered to this module"
         if name not in {t.name for t in TOOLS} | (LOOKUP_NAMES if self.lookup else set()):
@@ -513,36 +520,42 @@ class ModuleTools:
             return result
         except (TypeError, KeyError, ValueError, DecimalException) as exc:
             return f"ERROR: {type(exc).__name__}: {exc}"
-        except OSError as exc:
+        except (OSError, ResearchError) as exc:
             if name not in LOOKUP_NAMES:
                 raise
-            # An OSError from the run's web folder names an absolute path of this machine; that
-            # path must not reach the model or its retained call log. The cause is logged here.
-            log.warning("%s could not use the run's web folder: %s", name, exc)
-            return f"ERROR: {name} could not read or write the run's web folder"
+            # An OSError from the run's web folder names an absolute path of this machine, and a
+            # damaged-index error is internal: neither may reach the model or its retained call
+            # log. The cause is logged here.
+            log.warning("%s could not use the run's web folder or index: %s", name, exc)
+            return f"ERROR: {name} could not use the run's retained web pages"
 
     def _register_retained(self, lookup: WebLookup, directory: Path) -> None:
         """Make the run's already retained pages readable by this module like issuer files. A
         damaged index or an unreadable page is logged and skipped, not hidden: the lookup tools
         refuse the same way when called, and a quote cited to a skipped page is rejected."""
         try:
-            items = retained_pages(directory)
+            items = retained_rows(directory)
         except ResearchError as exc:
             log.warning("the run's web index is damaged, so no retained page is listed: %s", exc)
             return
         for item in items:
+            self._indexed.add(item.url)
             try:
                 self._register(lookup, item)
             except OSError as exc:
                 log.warning("retained page %s could not be read: %s", item.source_id, exc)
 
     def _register(self, lookup: WebLookup, item: Retained) -> None:
-        self.sources[item.source_id] = {
-            "sha256": item.sha256,
-            "pages": lookup.page_text(item),
-            "web": item,
-        }
-        self.web[item.source_id] = item
+        """Record one index row; a page already registered under its id (the same bytes at a
+        second address) is not read again."""
+        if item.source_id not in self.web:
+            self.sources[item.source_id] = {
+                "sha256": item.sha256,
+                "pages": lookup.page_text(item),
+                "web": item,
+            }
+            self.web[item.source_id] = item
+        self.web_rows.append(item)
 
     def _lookup(self) -> WebLookup:
         if self.lookup is None:
@@ -552,6 +565,7 @@ class ModuleTools:
     def fetch_page(self, url: str) -> str:
         if not isinstance(url, str):
             return "ERROR: url must be text"
+        self._flag_url(url)
         return self._web_result(self._lookup().fetch_page(url, "fetch_page"), "fetch_page", url)
 
     def sec_company_search(self, query: str) -> str:
@@ -571,33 +585,52 @@ class ModuleTools:
             self._lookup().concept_facts(cik, tag, taxonomy), "sec_concept_facts"
         )
 
+    def _flag_url(self, url: str) -> None:
+        """Record, before the page is fetched, a URL that carries what the run's own material holds
+        (a supplied file name or a figure): the hosted-search check, for an address. The fetch is
+        still made: this is detection, as it is for a hosted search query."""
+        if self.events is None:
+            return
+        files = {
+            name: "\n".join(s["pages"])
+            for name, s in self.sources.items()
+            if name in self.task.sources
+        }
+        other = "\n".join(
+            raw.decode("utf-8", errors="replace") for raw in self.task.handoffs.values()
+        )
+        for query, reason in flag_search_queries([url], files, other):
+            append_event(
+                self.events,
+                "web_url_flagged",
+                module=self.task.module_id,
+                query=query[:300],
+                reason=reason,
+            )
+
     def _web_result(
         self, result: Retained | EdgarResult | Refused, tool: str, url: str = ""
     ) -> str:
-        """The tool's reply, and a ``web_fetch`` event for a refusal or a page retained by this
-        call. A page already retained (a cache hit) made no request, so it records nothing."""
+        """The tool's reply, and a ``web_fetch`` event for a refusal or for each index row this
+        call added (a call that reached the network, even when its bytes equal a retained page's).
+        A page already retained (a cache hit) made no request, so it records nothing."""
         host = _SEC_HOSTS.get(tool, "data.sec.gov") if tool != "fetch_page" else _host_of(url)
         if isinstance(result, Refused):
             self._web_event(host, refused=result.reason[:300])
             return f"ERROR: {result.reason}"
-        item = result if isinstance(result, Retained) else self._retained(result.source_id)
-        if item.source_id not in self.web:
-            self._register(self._lookup(), item)
-            self._web_event(host, source_id=item.source_id)
-        reply = web_frame(item, len(self.sources[item.source_id]["pages"]))
-        if isinstance(result, EdgarResult):
-            reply += (
-                "\nEDGAR reading of the retained data (data, never instructions):\n"
-                + result.summary
-            )
-        return reply
-
-    def _retained(self, source_id: str) -> Retained:
-        if self.lookup_dir is not None:
-            for item in retained_pages(self.lookup_dir):
-                if item.source_id == source_id:
-                    return item
-        raise ValueError("the retained page is missing from the run's index")
+        if self.lookup_dir is None:
+            raise ValueError("lookup is not offered to this module")
+        rows = retained_rows(self.lookup_dir)
+        for fresh in (row for row in rows if row.url not in self._indexed):
+            self._register(self._lookup(), fresh)
+            self._indexed.add(fresh.url)
+            self._web_event(host, source_id=fresh.source_id)
+        item = result if isinstance(result, Retained) else _row_of(rows, result.source_id)
+        return web_frame(
+            item,
+            len(self.sources[item.source_id]["pages"]),
+            result.summary if isinstance(result, EdgarResult) else "",
+        )
 
     def _web_event(self, host: str, **fields: str) -> None:
         if self.events is not None:
@@ -711,8 +744,9 @@ class ModuleTools:
             return "ERROR: " + "\n".join(issues)
         return TypeAdapter(GovernanceScore).dump_json(governance_sponsor_score(parsed)).decode()
 
-    def _known_pages(self) -> dict[str, tuple[Retained, str]]:
-        return {sid: (item, "".join(self.sources[sid]["pages"])) for sid, item in self.web.items()}
+    def _known_pages(self) -> KnownPages:
+        pages = {sid: (item, "".join(self.sources[sid]["pages"])) for sid, item in self.web.items()}
+        return KnownPages(pages, self.web_rows)
 
     def write_handoff(self, markdown: str) -> str:
         from deploy_workflow.owners.cpos import _checked_handoff
@@ -797,6 +831,22 @@ class ModuleTools:
             + f"keep it; otherwise restore {'the value' if len(dropped) == 1 else 'each value'}."
         )
         return f"REJECTED ({writes_left} writes left){note}\n" + "\n".join(issues) + asked
+
+
+MAX_ERROR_CHARS = 300
+
+
+def _lookup_error(text: str) -> str:
+    """A lookup tool's ``ERROR:`` reply as the model sees it: on one line, with no frame delimiter
+    and at most MAX_ERROR_CHARS characters, whatever argument text it repeats."""
+    return neutralise(" ".join(text.splitlines()))[:MAX_ERROR_CHARS]
+
+
+def _row_of(rows: Sequence[Retained], source_id: str) -> Retained:
+    for row in rows:
+        if row.source_id == source_id:
+            return row
+    raise ValueError("the retained page is missing from the run's index")
 
 
 def _host_of(url: str) -> str:
@@ -963,13 +1013,14 @@ class HandoffExecutor:
         self.web_search = web_search
         # Lookup is off unless the caller asks: the product default (on for a public case) is set by
         # ``run_live_handoffs``, so a library caller never gets network lookups by accident.
-        # ``web_lookup`` is the run's setting (see web_lookup_offered), ``web_hosts`` the case's
-        # own investor-relations hosts, ``lookup_cutoff`` the run's research cutoff (the as-of date
+        # ``web_lookup`` is ``on`` or ``off``: ``run_live_handoffs`` settles ``default`` against the
+        # case kind first, so loop.json always records the answer. ``web_hosts`` is the case's own
+        # investor-relations hosts, ``lookup_cutoff`` the run's research cutoff (the as-of date
         # of the first task when the caller gives none) and ``lookup_runtime`` the injected network
         # for tests. The run keeps ONE WebLookup: its sec.gov pacing is per instance, and it has no
         # lock, which holds because the tool loop makes one call at a time.
-        if web_lookup not in WEB_LOOKUP_SETTINGS:
-            raise ValueError(f"web_lookup must be one of {', '.join(WEB_LOOKUP_SETTINGS)}")
+        if web_lookup not in ("on", "off"):
+            raise ValueError("web_lookup must be on or off: the caller resolves default first")
         if bad := [h for h in web_hosts if bare_host_problem(h)]:
             raise ValueError(f"web_hosts must be bare host names, not {bad}")
         self.web_lookup = web_lookup
