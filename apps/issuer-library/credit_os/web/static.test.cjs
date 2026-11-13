@@ -1768,7 +1768,7 @@ test('no start time, or one that is not a dated time with a zone: no elapsed tim
     assert.ok(html.includes('class="step running"'), String(started_at));
     assert.ok(!html.includes('steps-el') && !html.includes('data-since'), `${started_at}: no clock`);
     for (const word of ['NaN', 'undefined', 'null', 'Infinity']) assert.ok(!html.includes(word), `${started_at}: ${word}`);
-    assert.ok(!/(?<![\w-])0(?![\w-])/.test(html.replace(/<dl.*?<\/dl>/, '').replace(/<[^>]*>/g, ' ')), `${started_at}: a bare 0 outside the counts`);
+    assert.ok(!/(?<!\d)0(?!\d)/.test(html.replace(/<dl.*?<\/dl>/, '').replace(/\bCP-0\b/g, '').replace(/<[^>]*>/g, ' ')), `${started_at}: a bare 0 outside the counts`);
   }
   assert.strictEqual(elapsedLabel('2026-11-09T13:59:30Z', NOW), 'under a minute');
   assert.strictEqual(elapsedLabel('2026-11-09T12:55:00Z', NOW), '1 h 5 min');
@@ -1787,7 +1787,7 @@ test('no start time, or one that is not a dated time with a zone: no elapsed tim
   assert.strictEqual(el.textContent, ' · 5 min into the run');
   assert.strictEqual(liveStampText('2026-11-13T07:56:30Z'), '13 November 2026, 07:56 UTC');
   assert.strictEqual(liveStampText('2026-11-13 07:56:30+01:00'), '13 November 2026, 07:56 +01:00');
-  for (const raw of ['T', 'yesterday', '2026-02-30T07:56:00Z', '2026-11-13T07:56:30', '<b>']) assert.strictEqual(liveStampText(raw), raw);
+  for (const raw of ['2026-11-13T25:70:00Z', '2026-11-13T24:30:00Z', '2026-11-13T07:60:00Z', '2026-11-13T07:56:00+25:99', '2026-11-13T07:56:00+01:60', 'T', 'yesterday', '2026-02-30T07:56:00Z', '2026-11-13T07:56:30', '<b>']) assert.strictEqual(liveStampText(raw), raw);
 });
 test('a run with no module running draws no clock, and the clock moves on a re-load without drawing the page again', () => {
   assert.ok(!liveActivityView({ runs: [running({ modules: [['CP-0', 'waiting']] })] }, NOW).includes('steps-el'));
@@ -1947,6 +1947,14 @@ test('motion: every animation on the page sits inside the reduced-motion no-pref
   assert.ok(/\.rmark\.running \.lat i\{animation:lat-orbit/.test(inside) && /\.step\.running\{animation:step-pulse/.test(inside), 'the loader and the running step animate in the query');
   assert.ok(!/\.(?:run-card|run-queue|run-who|empty-state|steps-el)[^{]*\{[^}]*animation:(?!none)/.test(inside), 'nothing else on the page moves');
   assert.ok(/\.run-card\.stalled \.step\.running\{animation:none\}/.test(inside), 'a stalled run does not pulse');
+});
+test('the toast control can be hit by a pointer and looks like a control on the navy toast; no dead anchor rule remains', () => {
+  const css = read('screen.css'), rules = cssRules(css);
+  const hit = rules.filter(r => r.selector.split(',').some(s => s.trim() === '.toast button'));
+  assert.ok(hit.some(r => /pointer-events:auto/.test(r.body)), 'the host is pointer-events:none, so the button turns it back on');
+  assert.ok(hit.some(r => /(?:^|;)color:/.test(r.body)) && rules.some(r => r.selector.includes('.toast button:focus-visible') && /outline:/.test(r.body)));
+  assert.ok(!/\.toast a\b/.test(css), 'the toast draws no anchor');
+  assert.ok(!/createElement\('a'\)/.test(read('components.js').slice(read('components.js').indexOf('function toast('), read('components.js').indexOf('function dismissToasts'))));
 });
 test('long unbroken values wrap in the step caption, the module names and the run notes', () => {
   const rules = cssRules(read('screen.css'));

@@ -802,8 +802,8 @@ details.fold[open]>:last-child,details.audit[open]>:last-child{margin-bottom:14p
 .activity-empty .empty-state{margin-top:0}
 .activity-empty .primary-action{margin-top:4px}
 .run-card .state,.run-queue .state{white-space:nowrap}
-.toast a:focus-visible{outline:2px solid #fff;outline-offset:2px}
-.toast a{color:#fff;text-decoration:underline;text-underline-offset:3px;pointer-events:auto}
+.toast button{pointer-events:auto;margin-left:6px;padding:0;border:0;background:none;font:inherit;font-weight:700;color:#fff;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.toast button:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:2px}
 @media(max-width:720px){.run-activity-head{flex-direction:column;gap:12px}.run-head{flex-direction:column}.run-marks{flex-wrap:wrap}.run-foot-notes{margin-left:0;text-align:left}.run-queue li{grid-template-columns:minmax(0,1fr);justify-items:start}.steps-w{padding:16px 14px 0}.run-head{padding:16px 14px 0}.run-foot{padding:12px 14px}}
 @media print{.run-card{box-shadow:inset 0 0 0 1px var(--border-secondary)}.activity-empty .primary-action{box-shadow:none}}
 @media(forced-colors:active){.run-card,.run-queue li,.run-held,.steps-l .step{border:1px solid}}

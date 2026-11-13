@@ -1762,7 +1762,7 @@ const liveRuns=live=>live.runs.filter(run=>run&&typeof run==='object'&&!Array.is
 // The clock reading since a start time, in words. Only a dated time with a zone counts; any other text gives no clock. A start up to five minutes ahead of this
 // clock (the service's and the browser's clocks differ) reads under a minute; further ahead gives none.
 const CLOCK_SKEW_MS=5*60000;
-const START_TIME=/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
+const START_TIME=/^\d{4}-\d{2}-\d{2}[T ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/; // clock time and offset in range
 function elapsedLabel(since,now) {
   if(typeof since!=='string'||!START_TIME.test(since))return '';
   const ms=now-Date.parse(since);
