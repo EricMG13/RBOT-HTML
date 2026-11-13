@@ -509,6 +509,7 @@
       "consumed_path": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/SKILL.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/SKILL.md",
       "sha256": "20a3634526648cd4983fcfd412ba68162b9e832781abd7c90b5caa7a236a3e1d",
+      "deploy_v_check": "byte-identical to Deploy V c4d2e35611151a7f5b45dbb759d92e968c5478b7 skills/cp-0-source-readiness/SKILL.md (checked 2026-11-13, git blob hash equal); sent to CP-OS CP-0 from Task 3 of the Deploy V methods plan",
       "source_revision": "cp-os e67bf0cda2dc80d7a744bee371c4fb3c7b8b8df7 (selected files clean)",
       "use": "Preparation/readiness analytical duties and P1-P8 packaging evidence. Current project rules govern transport, Excel input only and no agents; historical approval/export/role machinery is not inherited authority."
     },
@@ -644,7 +645,8 @@
       "consumed_path": "skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
       "archive_path": "docs/reuse/selected-methods/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
-      "sha256": "d367c334f529a33e371b6c9568b5dce8d487e0f0d1bee3e8c15830555e46e78a"
+      "sha256": "d367c334f529a33e371b6c9568b5dce8d487e0f0d1bee3e8c15830555e46e78a",
+      "deploy_v_check": "byte-identical to Deploy V c4d2e35611151a7f5b45dbb759d92e968c5478b7 skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md (checked 2026-11-13, git blob hash equal); sent to CP-OS CP-0 from Task 3 of the Deploy V methods plan"
     },
     {
       "consumed_path": "skills/cp-1b-earnings-delta/SKILL.md",

@@ -386,9 +386,9 @@ RULES: tuple[Rule, ...] = (
         "No filed financial report is recognised among the files, so financials are management "
         "claims, not filed statements.",
         "Add the filed annual or quarterly report.",
-        "src/deploy_vii/methods/cp0.md: 'Filed statements and executed legal documents control "
-        "their respective facts; issuer, management and sponsor presentations provide attributed "
-        "supporting claims.'",
+        _SK + "cp-0-source-readiness/SKILL.md Source hierarchy: '1 \u2014 controlling/primary "
+        "filings, executed legal documents and official schedules; 2 \u2014 issuer/agency "
+        "releases, presentations, certificates and reports;'",
         "per method",
         cite=lambda f: f.kind("lender_presentation", "information_memorandum"),
     ),

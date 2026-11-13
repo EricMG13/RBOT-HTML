@@ -148,7 +148,14 @@ _SCORE = "docs/reuse/selected-methods/CANON_SHARED.md § CP_CONFIDENCE_SCORE.md"
 # only as the two reader-layer sections of READER_LAYER, to every prose module (ruling
 # 2026-11-11, decision 8); the rest of it is archived.
 _SELECTED: dict[str, tuple[str, ...]] = {
-    "CP-0": (_VII + "cp0.md",),
+    # Owner-directed, 2026-11-13 (Deploy V methods plan, Task 3): Deploy V's skill and step file,
+    # byte-identical to Deploy V c4d2e35 (the readiness part; CP-PARSE's own step file, the schema
+    # and system references are archived, not sent). CP0_BLOCK says what the launcher already did.
+    # The DEPLOY VII stand-in (cp0.md, a JSON ReadinessReview) is no longer sent.
+    "CP-0": (
+        _SKILLS + "cp-0-source-readiness/SKILL.md",
+        _SKILLS + "cp-0-source-readiness/references/REF_CP-0_STEPS.md",
+    ),
     "CP-1": ("prompts/CP-1.md",),  # Plus CP1_STEPS; no standalone CP-1 method file exists.
     # Owner, 2026-11-13 ("Build rec. 1, then run"): Deploy V's skill from cp-os b57a344 with the
     # bundle its SKILL binds on every run. The DEPLOY VII stand-in (cp1a.md) is no longer sent.
@@ -1738,6 +1745,21 @@ STRESS_BLOCK = (
     "one scenario as a pair, an EBITDA decline and a cash-interest rate increase, each a fraction "
     "from 0 to 1 with at most four decimal places, so a forward model can apply it.\n\n"
 )
+# CP-0 only. The skill's preparation phase assumes a runtime that lists and hashes the sources
+# itself; here the launcher did, before the call. The two rules after it are the later Deploy V
+# corrections in the caos-databricks copy of the skill (D31 V4, G1-18); the skill sent is older.
+CP0_BLOCK = (
+    "Source readiness here: the launcher has already listed, hashed and pinned the sources "
+    "before this call, so the preparation the method describes is done. Do not write the "
+    "registers P1, P2, P4, P6, P7 and P8. Write P3 and P5, the readiness tables (T1 input gate, "
+    "T2 source register, T3 source hierarchy, T4 content-to-module map, T5 gaps and conflicts, "
+    "T6 evidence trace, T7 master index state, T8 recommended run command sheet), the document "
+    "hierarchy and the minimum missing documents. A result is CONDITIONAL only for a source the "
+    "effective-source set does not carry, never for an upstream analytical handoff that has not "
+    "been produced yet: modules are put in order by navigation, not by readiness. When no "
+    "objective is stated, the objective is the selected pathway's use case; record it in T1 and "
+    "assess readiness against it.\n\n"
+)
 # CP-DR and CP-1C, when the context's peer source is CP-DR and both run (cpdr.md, "The peer pack").
 # Owner, 2026-11-10: "Cp-1c is supposed to get that information from cp-dr by default".
 PEER_PACK_BLOCK = (
@@ -2474,6 +2496,7 @@ def _prepare(  # noqa: PLR0913, PLR0915 - `prepare`'s body: one keyword per sett
         ("CP-2G", FORECAST_BLOCK, forecast),
         ("CP-1", PERIOD_TABLE_BLOCK, forecast),
         ("CP-1", LAYER1_FORECAST_BLOCK, forecast and "CP-2G" not in ordered),
+        ("CP-0", CP0_BLOCK, True),
         ("CP-2A", STRESS_BLOCK, True),
         ("CP-DR", PEER_PACK_BLOCK, peer_pack),
         ("CP-1C", PEER_READER_BLOCK, peer_pack),

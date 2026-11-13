@@ -421,6 +421,7 @@ for _heading, (_module, _types, _) in MAPS.items():
         EDGE_HEAD, f"| Synthetic A | Synthetic link | {_types[0]} | Synthetic B | Synthetic p.1 |"
     )
 SCORED = (
+    "CP-0",
     "CP-1A",
     "CP-1B",
     "CP-1C",
@@ -435,7 +436,7 @@ SCORED = (
     "CP-3C",
 )
 SCORED += ("CP-3D", "CP-4", "CP-4C", "CP-5", "CP-6", "CP-DR")
-UNSCORED = ("CP-0", "CP-1", "CP-L10", "CP-8")
+UNSCORED = ("CP-1", "CP-L10", "CP-8")
 CONFIDENCE_ROWS = (
     "| Directly Sourced | 8 |\n| Calculated | 2 |\n| Assumption-Based | 2 |\n"
     "| Analyst Inference | 0 |\n| Weak Lineage | 0 |\n| Untraced | 0 |\n| Conflicting | 0 |\n"
@@ -1699,6 +1700,7 @@ SKILLS = "docs/reuse/selected-methods/skills/"
 # Written from each SKILL.md's own words ("mandatory, not optional", "binding method for the ...
 # phase", "they bind every run", "Read ...; materialize its run-specific brief"), not from METHODS.
 BINDING_COMPANIONS = {
+    "CP-0": ("cp-0-source-readiness/references/REF_CP-0_STEPS.md",),
     "CP-1B": (
         "cp-1b-earnings-delta/SKILL.md",
         "cp-1b-earnings-delta/references/REF_CP-1B_STEPS.md",
@@ -1732,6 +1734,7 @@ BINDING_COMPANIONS = {
 }
 SKILL_MODULES = [
     *(
+        "CP-0",
         "CP-1A",
         "CP-1B",
         "CP-1C",
@@ -1826,6 +1829,56 @@ def test_cp3c_runs_the_deploy_v_skill_not_the_deploy_vii_stand_in():
     assert "        - Currency\n        - Scale\n        - Maturity Date\n" in text
 
 
+def test_cp0_runs_the_deploy_v_skill_not_the_json_stand_in(tmp_path):
+    """The stand-in (cp0.md) asks for a ReadinessReview matching a JSON Schema and applies a
+    digit rule to `analysis[].text`; this transport is Markdown. CP-0 now gets Deploy V's skill
+    and its step file, and a project block that says what the launcher already did."""
+    _, texts = all_instructions(tmp_path, modules=("CP-0", "CP-1", "CP-2A"))
+    text = texts["CP-0"]
+    head, _, method = text.partition(cpos_launch.METHOD_MARK)
+    for heading in (
+        "## Runbook \u2014 binding method, inline",
+        "#### Source hierarchy",
+        # run_expectations cites this sentence as the source of its management-claims rule.
+        (
+            "1 \u2014 controlling/primary filings, executed legal documents and official "
+            "schedules; 2 \u2014 issuer/agency releases, presentations, certificates and reports;"
+        ),
+        "#### T8 recommended-run command contract",
+        (
+            "- **required_register_ids**: T1; T2; T3; T4; T5; T6; T7; T8; "
+            "P1; P2; P3; P4; P5; P6; P7; P8"
+        ),
+        "## REF_CP-0_I_DownstreamReadiness.md",
+        "**Recommended Run Command Sheet**",
+    ):
+        assert heading in method, heading
+    for phrase in ("ReadinessReview", "JSON Schema", "src/deploy_vii/methods/cp0.md"):
+        assert phrase not in text, phrase
+    # The project block: sent to CP-0 only, in the head before the method.
+    for words in (
+        "already listed, hashed and pinned the sources",
+        "Do not write the registers P1, P2, P4, P6, P7 and P8",
+        "Write P3 and P5",
+        "T1 input gate, T2 source register, T3 source hierarchy",
+        "T8 recommended run command sheet",
+        "the minimum missing documents",
+        "only for a source the effective-source set does not carry",
+        "never for an upstream analytical handoff that has not been produced yet",
+        "the objective is the selected pathway's use case",
+        "record it in T1",
+    ):
+        assert words in head, words
+    assert all(
+        "already listed, hashed and pinned" not in t.partition(cpos_launch.METHOD_MARK)[0]
+        for name, t in texts.items()
+        if name != "CP-0"
+    )
+    assert "HOST SOURCE PREPARATION" not in text
+    # CP-0 is a data module and is now scored: it owes the bottom line and the confidence inputs.
+    assert "`### Confidence inputs`" in head
+
+
 def test_cp1b_runs_the_deploy_v_method_not_the_structured_runtime_step():
     """Live runs 2026-11-09 and 2026-11-10: CP-1B blocked both times for want of a `read_inputs`
     view with `pairs`, which only the older structured runtime gives."""
@@ -1912,10 +1965,12 @@ def test_every_module_is_told_what_stands_for_acceptance_scripts_and_questions(t
 # src/deploy_vii/methods/cp8.md, the withheld-difference rules); its pin is the merged text.
 # CP-3C changed on 2026-11-13 (Deploy V methods plan, Task 2): it now sends Deploy V's skill, so
 # runs made before it are correctly marked "Earlier methods" for CP-3C.
+# CP-0 changed on 2026-11-13 (Deploy V methods plan, Task 3): it now sends Deploy V's skill, so
+# runs made before it are correctly marked "Earlier methods" for CP-0.
 # CP-1A and CP-2 changed on 2026-11-13 (owner: "Build rec. 1, then run"): they now send Deploy V's
 # skills, so runs made before it are correctly marked "Earlier methods" for these two modules.
 METHOD_TEXT_SHA256_AT_1B41E65 = {
-    "CP-0": "ff1c92c296681a7dce3325f2ce588d7ff3af9a13c3a0aa8c21289642195873f7",
+    "CP-0": "e8d3e77bc48bc98e2fd8595e7b46ee7fc786e859591cf244325f3508b7d5dac9",
     "CP-1": "02477a91d582f6301b2dbfadd96572ea75f9845493de337d7160a55111b62170",
     "CP-1A": "22a05988055d96a44382d235e760d401b550c1e7c6ff868c6e49b9d3430dbadc",
     "CP-1B": "7cd20df691582416e0ffd069d9f7aa8f7ac64d30c7682383dd7b8134b8dfa763",
