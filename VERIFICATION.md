@@ -14,8 +14,8 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
 - Change: `fetch_page`, `sec_company_search`, `sec_filing_list` and `sec_concept_facts` for CP-DR;
   an allowlist of 28 domains; pages retained under `<run>/web/` with a status against the research
   cutoff; fail-closed acceptance checks on CP-DR's handoff; `--web-lookup` and `--web-host`.
-- Commands, each run on 0c61069:
-  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 461 passed, exit=0.
+- Commands, each run on the tree of the commit that carries this entry (the re-review fixes on 8c72bb9):
+  - `uv run pytest tests/test_weblookup.py tests/test_web_lookup_tools.py tests/test_web_search_scope.py tests/test_handoff_loop.py -q`: 521 passed, exit=0.
   - `uv run pytest tests/test_cpos_launch.py -q`: 782 passed, 1 skipped (the paid test), exit=0.
   - `uv run python tools/quality_gate.py`: 0 findings in 24 changed files, exit=0.
 - Hostile cases covered by tests: redirect off the allowlist; oversized body (refused, not
@@ -24,8 +24,8 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   names the variable) and never written anywhere; an injected instruction in page text; a forged
   `<<<END>>>` delimiter; a PDF answer (refused, nothing retained).
 - Reviews: per-task review and two security reviews with probes. Findings were fixed in follow-up
-  commits: 2b34e1a, 0315d23, 0c61069 (`git log --oneline 82b17f3..HEAD`: 82ef297, 2b34e1a, 669b002,
-  0315d23, 0c61069).
+  commits: 2b34e1a, 0315d23, 0c61069, then the re-review round's commit that carries this entry
+  (`git log --oneline 82b17f3..HEAD`: 82ef297, 2b34e1a, 669b002, 0315d23, 0c61069, 8c72bb9, and it).
 - No reader check applies: no presentation change.
 - Not verified: live network behaviour; real SEC responses and field names; real model use of the
   tools and its citations; the full suite; concurrent writers to one run's web folder.

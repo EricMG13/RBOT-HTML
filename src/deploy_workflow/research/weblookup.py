@@ -17,11 +17,13 @@ line saying so), and every string taken from a server or an EDGAR document is ne
 
 import codecs
 import hashlib
+import html
 import json
 import os
 import re
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections import deque
+from collections.abc import Callable, Container, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from html.parser import HTMLParser
@@ -817,25 +819,37 @@ _FRAME_SENTENCES = {
 }
 _SEC_FACT_SENTENCE = "Each fact carries its own filing date; apply the cutoff to each fact."
 _HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
-_WEB_ID = r"(?<![0-9A-Za-z-])web-[0-9a-f]{12}(?![0-9A-Za-z])"
-_WEB_ID_RE = re.compile(_WEB_ID, re.IGNORECASE)
+# a token written like a web id: ``web-`` or ``web_`` (or none, then it holds a digit) and six or
+# more hex digits; only ``web-`` + 12 hex that is a retained id is a citation, any other is reported
+_WEB_TOKEN = re.compile(
+    r"(?<![0-9A-Za-z-])web(?:[-_](?=[0-9a-f]{6})|(?=[0-9a-f]*[0-9]))[0-9a-f]{6,}(?![0-9A-Za-z])",
+    re.IGNORECASE,
+)
 _URL = re.compile(r"https?://[^\s|<>\]\"“”`]+", re.IGNORECASE)
 _HEADING = re.compile(r"(#{1,6})[ \t]")
-_TDR6_HEADING = re.compile(r"\bTDR[.-]6\b", re.IGNORECASE)
+_TDR6_HEADING = re.compile(r"\bTDR[ .-]?6\b", re.IGNORECASE)
 _TDR6_ROW = re.compile(r"[A-Za-z0-9_-]+\.(?:revenue|ebitda|debt|interest|ffo)", re.IGNORECASE)
 _SEPARATOR_CELL = re.compile(r":?-+:?")
+_CELL_BREAK = re.compile(r"(?<!\\)\|")
 _ISO_DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 _LAST_LABEL = re.compile(r"[A-Za-z]{2,}|xn--[A-Za-z0-9-]+", re.IGNORECASE)
-_QUOTE_SPANS = (
-    re.compile(r'"([^"]{1,2000})"'),
-    re.compile(r"“([^“”]{1,2000})”"),
-    re.compile(r"„([^„“”]{1,2000})“"),
-    re.compile(r"‘([^‘’]{1,2000})’"),
-    re.compile(r"«([^«»]{1,2000})»"),
-    re.compile(r"(?<!\w)'(.{1,2000}?)'(?!\w)", re.DOTALL),  # an apostrophe is not a quote
+_LATER_LABEL = re.compile(r"later[ -]event", re.IGNORECASE)
+_UNDATED_LABEL = re.compile(r"undated", re.IGNORECASE)
+EVENT_LABEL = re.compile(r"later[ -]event|undated", re.IGNORECASE)
+_STRICTNESS = {STATUS_USABLE: 0, STATUS_UNDATED: 1, STATUS_LATER: 2}
+# U+2028 and the others: ``str.splitlines`` breaks at them, delivery and Markdown do not
+_LINE_SEPARATORS = re.compile("[\u2028\u2029\x85\x0b\x0c\x1c\x1d\x1e]")
+_LINE_SEPARATOR_ISSUE = (
+    "The handoff contains a line-separator character other than a plain line break (U+2028, "
+    "U+2029, U+0085, vertical tab, form feed or U+001C to U+001E): remove it and use plain line "
+    "breaks."
 )
+_DOUBLE_MARKS = '"“”„«»‹›'
+_APOSTROPHES = str.maketrans({"‘": "'", "’": "'"})
+_YEAR_ABBREVIATION = re.compile(r"[0-9]{2}(?![0-9])")  # '24 is a year, not an opening quote
 _MIN_QUOTE = 12
-_QUOTE_CHARS = "\"“”„‘’'«»`"
+_MIN_NAME = 6
+_QUOTE_CHARS = "\"“”„‘’'«»‹›`"
 
 
 def usable_user_agent(env: Mapping[str, str]) -> str | None:
@@ -932,7 +946,7 @@ def web_frame(item: Retained, pages: int, summary: str = "") -> str:
 class KnownPages(dict[str, tuple[Retained, str]]):
     """The retained pages by ``source_id`` (the first row of each id, with its extracted text) and
     ``rows``, every index row: two URLs that serve the same bytes share one ``source_id`` but are
-    both addresses fetched in this run."""
+    both addresses fetched in this run, and each may have its own status."""
 
     def __init__(self, pages: Mapping[str, tuple[Retained, str]], rows: Sequence[Retained]) -> None:
         super().__init__(pages)
@@ -941,16 +955,21 @@ class KnownPages(dict[str, tuple[Retained, str]]):
 
 def _trim_url(url: str) -> str:
     """The address without the punctuation or Markdown a sentence adds after it: trailing
-    ``.,;:*_``, and a trailing ``)`` or ``'`` that has no opener inside the address."""
-    while url:
-        last = url[-1]
-        unmatched = (last == ")" and url.count("(") < url.count(")")) or (
-            last == "'" and url.count("'") % 2 == 1
-        )
-        if last not in ".,;:*_" and not unmatched:
+    ``.,;:*_``, and a trailing ``)`` or ``'`` that has no opener inside the address. One pass: the
+    counts are kept as characters are dropped."""
+    end, opens, closes, quotes = len(url), url.count("("), url.count(")"), url.count("'")
+    while end:
+        last = url[end - 1]
+        if last in ".,;:*_":
+            pass
+        elif last == ")" and opens < closes:
+            closes -= 1
+        elif last == "'" and quotes % 2 == 1:
+            quotes -= 1
+        else:
             break
-        url = url[:-1]
-    return url
+        end -= 1
+    return url[:end]
 
 
 def _urls_in(text: str) -> list[str]:
@@ -976,11 +995,29 @@ def _norm_url(url: str) -> str:
 
 
 def _norm_text(text: str) -> str:
-    return " ".join(text.split())
+    """Whitespace runs as one space and every apostrophe form (straight, curly) as ``'``."""
+    return " ".join(text.split()).translate(_APOSTROPHES)
+
+
+def _physical_lines(text: str) -> list[str]:
+    """The text's lines split on LF, CR LF and CR only: a mirror of
+    ``deploy_workflow.handoff_delivery.physical_lines`` (importing that module here would pull the
+    whole report view into the lookup), so the checker reads the lines delivery reads."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if not lines[-1]:
+        lines.pop()
+    return lines
 
 
 def _cells(row: str) -> list[str]:
-    return [cell.strip() for cell in row.strip().strip("|").split("|")]
+    """The cells of a table row: split at ``|`` that is not escaped (``\\|`` stays in its cell)."""
+    text = row.strip()
+    parts = _CELL_BREAK.split(text)
+    if text.startswith("|"):
+        parts = parts[1:]
+    if parts and text.endswith("|") and not text.endswith("\\|"):
+        parts = parts[:-1]
+    return [part.replace("\\|", "|").strip() for part in parts] or [""]
 
 
 def _first_cell(row: str) -> str:
@@ -991,45 +1028,86 @@ def _is_separator(cells: Sequence[str]) -> bool:
     return all(_SEPARATOR_CELL.fullmatch(cell) for cell in cells)
 
 
-def _section(lines: Sequence[str], name: str) -> list[str]:
-    """The lines under every ``## name`` heading, each up to the next ``## `` line."""
-    found: list[str] = []
+def _section_numbers(lines: Sequence[str], name: str) -> list[int]:
+    """The numbers of the lines under every ``## name`` heading, up to the next ``## `` line."""
+    found: list[int] = []
     inside = False
-    for line in lines:
+    for number, line in enumerate(lines):
         if line.startswith("## "):
             inside = re.fullmatch(rf"## {re.escape(name)}[ \t]*", line) is not None
         elif inside:
-            found.append(line)
+            found.append(number)
     return found
+
+
+def _section(lines: Sequence[str], name: str) -> list[str]:
+    return [lines[number] for number in _section_numbers(lines, name)]
 
 
 def sources_rows(markdown: str) -> list[str]:
     """The table rows of ``## Sources`` (any line holding ``|``, a separator row excepted)."""
-    rows = [line.strip() for line in _section(markdown.splitlines(), "Sources") if "|" in line]
+    rows = [line.strip() for line in _section(_physical_lines(markdown), "Sources") if "|" in line]
     return [row for row in rows if not _is_separator(_cells(row))]
 
 
 def names_web_source(row: str) -> bool:
-    """Whether a row names a web page, by a ``web-`` id or an http(s) address."""
-    return _WEB_ID_RE.search(row) is not None or _URL.search(row) is not None
+    """Whether a row names a web page, by a ``web-`` id (well formed or not) or an http(s)
+    address."""
+    return _WEB_TOKEN.search(row) is not None or _URL.search(row) is not None
 
 
 def row_cells(row: str) -> list[str]:
     return _cells(row)
 
 
+def _strictest(statuses: Sequence[str]) -> str:
+    return max(statuses, key=lambda status: _STRICTNESS.get(status, 1))
+
+
+def _link_pages(
+    cells: Mapping[int, list[str]], direct: Mapping[int, set[str]]
+) -> dict[str, set[str]]:
+    """For each first-cell value, the pages its rows name and those named by every row linked from
+    them (a row linked when one of its cells equals another row's first cell), to the end of the
+    links. A worklist over the links, so a long or looping chain costs what its links cost."""
+    pages: dict[str, set[str]] = {}
+    links: list[tuple[str, str]] = []
+    keys = {cell[0].strip("`") for number, cell in cells.items() if not _is_separator(cell)}
+    keys.discard("")
+    for number, row in cells.items():
+        if _is_separator(row) or not (key := row[0].strip("`")):
+            continue
+        pages.setdefault(key, set()).update(direct[number])
+        links += [(key, c) for cell in row if (c := cell.strip("`")) in keys and c != key]
+    pointing: dict[str, set[str]] = {}
+    for key, target in links:
+        pointing.setdefault(target, set()).add(key)
+    queue = deque(key for key, found in pages.items() if found)
+    while queue:
+        target = queue.popleft()
+        for key in pointing.get(target, ()):
+            if not pages[target] <= pages[key]:
+                pages[key] |= pages[target]
+                queue.append(key)
+    return pages
+
+
 @dataclass
 class _Handoff:
-    """A handoff read once: its lines, its table rows and the retained pages each one cites."""
+    """A handoff read once: its lines, its table rows and the retained pages each one cites. A
+    page is cited by its id, by a retained address, or by the first-cell name of the ``## Sources``
+    row that names it (6 or more characters)."""
 
     markdown: str
     lines: list[str]
     known: Mapping[str, tuple[Retained, str]]
     addresses: dict[str, str]
+    status: dict[str, str]  # the strictest status among the index rows of one id
     cells: dict[int, list[str]]  # line number -> its cells, for every table row
     headers: dict[int, list[str]]  # line number -> the cells of its table's first row
-    direct: dict[int, set[str]]
-    by_first_cell: dict[str, list[int]]
+    direct: dict[int, set[str]]  # line number -> the pages the row names (id, address, name)
+    names: dict[str, set[str]]  # first cell of a ``## Sources`` row -> the pages it names
+    linked: dict[str, set[str]]
     texts: dict[str, str]
 
     @classmethod
@@ -1040,7 +1118,13 @@ class _Handoff:
         addresses = {
             _norm_url(address): sid for sid, item in items for address in (item.url, item.final_url)
         }
-        doc = cls(markdown, markdown.splitlines(), known, addresses, {}, {}, {}, {}, {})
+        by_id: dict[str, list[str]] = {}
+        for sid, item in items:
+            by_id.setdefault(sid, []).append(item.status)
+        status = {sid: _strictest(found) for sid, found in by_id.items()}
+        doc = cls(
+            markdown, _physical_lines(markdown), known, addresses, status, {}, {}, {}, {}, {}, {}
+        )
         header: list[str] | None = None
         for number, line in enumerate(doc.lines):
             if "|" not in line:
@@ -1050,27 +1134,50 @@ class _Handoff:
             header = header if header is not None else cells
             doc.cells[number], doc.headers[number] = cells, header
             doc.direct[number] = doc.named_pages(line)
-            if not _is_separator(cells):
-                doc.by_first_cell.setdefault(cells[0].strip("`"), []).append(number)
+        for number in _section_numbers(doc.lines, "Sources"):
+            name = doc.cells[number][0].strip("`") if number in doc.cells else ""
+            if (
+                len(name) >= _MIN_NAME
+                and doc.direct[number]
+                and not _is_separator(doc.cells[number])
+            ):
+                doc.names.setdefault(name, set()).update(doc.direct[number])
+        for number, line in enumerate(doc.lines):
+            if number in doc.cells:
+                doc.direct[number] |= doc.named_by_title(line)
+        doc.linked = _link_pages(doc.cells, doc.direct)
         return doc
 
     def named_pages(self, text: str) -> set[str]:
         """The retained pages ``text`` names: by id (any case) or by address."""
-        found = {sid.lower() for sid in _WEB_ID_RE.findall(text)} & self.known.keys()
+        found = {sid.lower() for sid in _WEB_TOKEN.findall(text)} & self.known.keys()
         for url in _urls_in(text):
-            if (sid := self.addresses.get(_norm_url(url))) is not None:
+            if (sid := self.addresses.get(_norm_url(url))) is not None and sid in self.known:
                 found.add(sid)
         return found
 
+    def named_by_title(self, text: str) -> set[str]:
+        found: set[str] = set()
+        for name, pages in self.names.items():
+            if name in text:
+                found |= pages
+        return found
+
+    def cites(self, text: str) -> set[str]:
+        """The pages a paragraph or a line names, by id, address or ``## Sources`` row title."""
+        return self.named_pages(text) | self.named_by_title(text)
+
     def cited(self, number: int) -> set[str]:
-        """The pages table row ``number`` cites: those it names and those named by any other row
-        whose first cell equals one of its cells (an ``evidence_id`` pointing at its own row)."""
+        """The pages table row ``number`` cites: those it names and those reached from any cell
+        that equals another row's first cell, link after link (an ``evidence_id`` pointing at a
+        register row that points at the page)."""
         found = set(self.direct[number])
         for cell in self.cells[number]:
-            for other in self.by_first_cell.get(cell.strip("`"), ()):
-                if other != number:
-                    found |= self.direct[other]
+            found |= self.linked.get(cell.strip("`"), set())
         return found
+
+    def later(self, pages: set[str]) -> list[str]:
+        return sorted(sid for sid in pages if self.status.get(sid) == STATUS_LATER)
 
     def text(self, sid: str) -> str:
         if sid not in self.texts:
@@ -1089,14 +1196,15 @@ def _unfetched(doc: _Handoff, row: str, label: str) -> list[str]:
 
 def _status_issues(doc: _Handoff, row: str, gaps: str) -> list[str]:
     issues: list[str] = []
+    labels = _URL.sub(" ", row)  # an address such as .../undated is not the label
     for sid in sorted(doc.named_pages(row)):
-        status = doc.known[sid][0].status
-        if status == STATUS_LATER and "Later event" not in row:
+        status = doc.status.get(sid)
+        if status == STATUS_LATER and _LATER_LABEL.search(labels) is None:
             issues.append(
                 f"Sources row for {sid} is a page dated after the cutoff: add the words "
                 '"Later event" to the row.'
             )
-        if status == STATUS_UNDATED and "Undated" not in row:
+        if status == STATUS_UNDATED and _UNDATED_LABEL.search(labels) is None:
             issues.append(f'Sources row for {sid} has no stated date: write "Undated" in its row.')
         if status == STATUS_UNDATED and sid not in gaps:
             issues.append(
@@ -1108,43 +1216,77 @@ def _status_issues(doc: _Handoff, row: str, gaps: str) -> list[str]:
 
 def _source_issues(doc: _Handoff) -> list[str]:
     """Each ``## Sources`` row: every address fetched, the status wording its pages need; and every
-    page cited anywhere has a row that names its id."""
+    page cited anywhere, by id or address, has a row that names it."""
     issues: list[str] = []
     named: set[str] = set()
     gaps = "\n".join(_section(doc.lines, "Gaps")).lower()
-    for line in _section(doc.lines, "Sources"):
-        row = line.strip()
-        if "|" not in row or _is_separator(_cells(row)):
+    for number in _section_numbers(doc.lines, "Sources"):
+        if number not in doc.cells or _is_separator(doc.cells[number]):
             continue
+        row = doc.lines[number].strip()
         issues += _unfetched(doc, row, f'Sources row "{_first_cell(row)}"')
-        named |= {sid.lower() for sid in _WEB_ID_RE.findall(row)}
+        named |= doc.named_pages(row)
         issues += _status_issues(doc, row, gaps)
-    cited = {sid.lower() for sid in _WEB_ID_RE.findall(doc.markdown)} & doc.known.keys()
     issues += [
         f"{sid} is cited but no ## Sources row names it: add a row carrying its source_id."
-        for sid in sorted(cited - named)
+        for sid in sorted(doc.named_pages(doc.markdown) - named)
     ]
     return issues
 
 
 def _unknown_id_issues(doc: _Handoff) -> list[str]:
+    """A token written like a web id that is not exactly a retained ``web-`` id is unknown."""
     return [
         f"{sid} is not a page retained in this run: remove it or fetch the page."
-        for sid in dict.fromkeys(found.lower() for found in _WEB_ID_RE.findall(doc.markdown))
+        for sid in dict.fromkeys(found.lower() for found in _WEB_TOKEN.findall(doc.markdown))
         if sid not in doc.known
     ]
 
 
 def _quoted_spans(text: str) -> list[str]:
+    """The passages quoted in a paragraph or row: between any two of ``" “ ” „ « » ‹ ›`` (mixed
+    pairs count; a mark right after a digit is an inch mark, not an opening), and between ``'``
+    marks where the opening follows a non-word character (not ``'24``) and the closing precedes
+    one. Straight and curly apostrophes are one character."""
+    text = html.unescape(text).translate(_APOSTROPHES)
     found: dict[str, None] = {}
-    for pattern in _QUOTE_SPANS:
-        for match in pattern.finditer(text):
-            found[match.group(1)] = None
+    opened: int | None = None
+    for index, char in enumerate(text):
+        if char not in _DOUBLE_MARKS:
+            continue
+        if opened is None:
+            if index and text[index - 1].isdigit():
+                continue
+            opened = index
+        else:
+            found[text[opened + 1 : index]] = None
+            opened = None
+    opened = None
+    for index, char in enumerate(text):
+        if char != "'":
+            continue
+        before = text[index - 1] if index else " "
+        after = text[index + 1] if index + 1 < len(text) else " "
+        if opened is None:
+            if not (before.isalnum() or before == "_") and not _YEAR_ABBREVIATION.match(
+                text, index + 1
+            ):
+                opened = index
+        elif not (after.isalnum() or after == "_"):
+            found[text[opened + 1 : index]] = None
+            opened = None
     return list(found)
 
 
-def _quote_issues(doc: _Handoff, paragraph: str) -> list[str]:
-    ids = sorted({sid.lower() for sid in _WEB_ID_RE.findall(paragraph)} & doc.known.keys())
+def _is_reference(span: str) -> bool:
+    """Whether a quoted span is only a page reference (an address or an id), not a passage."""
+    return _URL.fullmatch(span) is not None or _WEB_TOKEN.fullmatch(span) is not None
+
+
+def _quote_issues(
+    doc: _Handoff, text: str, pages: set[str], skip: Container[str] = ()
+) -> list[str]:
+    ids = sorted(pages)
     texts = [doc.text(sid) for sid in ids]
     where = (
         f"{ids[0]} is not in that page's text"
@@ -1152,9 +1294,14 @@ def _quote_issues(doc: _Handoff, paragraph: str) -> list[str]:
         else f"{', '.join(ids)} is not in the text of any of those pages"
     )
     issues = []
-    for span in _quoted_spans(paragraph) if ids else ():
+    for span in _quoted_spans(text) if ids else ():
         passage = _norm_text(span)
-        if len(passage) >= _MIN_QUOTE and not any(passage in text for text in texts):
+        if (
+            len(passage) >= _MIN_QUOTE
+            and passage not in skip
+            and not _is_reference(passage)
+            and not any(passage in page for page in texts)
+        ):
             issues.append(
                 f'The quote "{passage[:60]}" cited to {where}: copy the passage verbatim from '
                 "read_pages or search_source."
@@ -1162,24 +1309,33 @@ def _quote_issues(doc: _Handoff, paragraph: str) -> list[str]:
     return issues
 
 
-def _paragraph_issues(doc: _Handoff) -> list[str]:
-    """In a paragraph (consecutive non-blank, non-table lines) that names a retained web page,
-    every quoted span of 12 or more characters is in one of the pages the paragraph names."""
+def _prose_and_row_issues(doc: _Handoff, tdr6: Mapping[int, set[str]]) -> list[str]:
+    """In a paragraph (consecutive non-blank, non-table, non-heading lines) and in a table row (any
+    line holding ``|``) that cites a retained page, every quoted span of 12 or more characters is
+    in one of the pages it cites. ``tdr6`` maps a TDR.6 row to the quote its own check covers."""
     issues: list[str] = []
     block: list[str] = []
     for number, line in enumerate([*doc.lines, ""]):
-        if line.strip() and number not in doc.cells:
+        if number in doc.cells:
+            text = "\n".join(block)
+            issues += _quote_issues(doc, text, doc.cites(text))
+            block = []
+            issues += _quote_issues(doc, line, doc.cited(number), tdr6.get(number, set()))
+        elif line.strip() and not _HEADING.match(line):
             block.append(line)
-        elif block:
-            issues += _quote_issues(doc, "\n".join(block))
+        else:
+            text = "\n".join(block)
+            issues += _quote_issues(doc, text, doc.cites(text))
             block = []
     return issues
 
 
-def _tdr6_rows(doc: _Handoff) -> list[int]:
-    """The TDR.6 table rows: those under a heading naming TDR.6 (until a heading of the same or a
-    higher level), and any row whose first cell is ``<peer>.<operand>``."""
-    found: list[int] = []
+def _tdr6_scan(doc: _Handoff) -> tuple[list[int], list[int]]:
+    """The TDR.6 table rows (under a heading naming TDR.6 until a heading of the same or a higher
+    level, or any row whose first cell is ``<peer>.<operand>``) and the other non-blank lines of a
+    TDR.6 section."""
+    rows: list[int] = []
+    loose: list[int] = []
     level: int | None = None
     for number, line in enumerate(doc.lines):
         heading = _HEADING.match(line)
@@ -1189,21 +1345,35 @@ def _tdr6_rows(doc: _Handoff) -> list[int]:
                 level = None
             if level is None and _TDR6_HEADING.search(line):
                 level = depth
-        if number in doc.cells and (
-            level is not None or _TDR6_ROW.fullmatch(doc.cells[number][0].strip("`"))
-        ):
-            found.append(number)
-    return found
+        if number in doc.cells:
+            if level is not None or _TDR6_ROW.fullmatch(doc.cells[number][0].strip("`")):
+                rows.append(number)
+        elif level is not None and line.strip() and not heading:
+            loose.append(number)
+    return rows, loose
 
 
-def _tdr6_quote(cells: list[str], header: list[str]) -> str:
-    for index, name in enumerate(header):
-        if name.strip("`*_ ").lower() == "quote" and index < len(cells):
+def _column(cells: list[str], header: list[str], name: str) -> str | None:
+    for index, title in enumerate(header):
+        if title.strip("`*_ ").lower() == name and index < len(cells):
             return cells[index]
-    return max(cells, key=len, default="")
+    return None
 
 
-def _tdr6_row_issues(doc: _Handoff, number: int, later: set[str]) -> list[str]:
+def _quote_text(cell: str) -> str:
+    """The quote as compared: no trailing page reference in brackets, no surrounding quote marks."""
+    text = _norm_text(html.unescape(cell))
+    start = max(text.rfind(" ("), text.rfind(" [")) + 1  # the last bracket that follows a space
+    if (
+        text[-1:] in (")", "]")
+        and start
+        and (_WEB_TOKEN.search(text, start) or _URL.search(text, start))
+    ):
+        text = text[:start]
+    return _norm_text(text.strip(f" \t{_QUOTE_CHARS}"))
+
+
+def _tdr6_row_issues(doc: _Handoff, number: int) -> tuple[list[str], set[str]]:
     row = doc.lines[number].strip()
     label = f'TDR.6 row "{_first_cell(row)}"'
     issues = _unfetched(doc, row, label)
@@ -1211,14 +1381,14 @@ def _tdr6_row_issues(doc: _Handoff, number: int, later: set[str]) -> list[str]:
     issues += [
         f"{label} cites {sid}, a page dated after the cutoff: a later event carries no figure, "
         "so remove the row or cite an earlier source."
-        for sid in sorted(cited & later)
+        for sid in doc.later(cited)
     ]
     if not cited:
-        return issues
+        return issues, set()
+    cells, header = doc.cells[number], doc.headers[number]
     pages = ", ".join(sorted(cited))
-    quote = _norm_text(
-        _tdr6_quote(doc.cells[number], doc.headers[number]).strip(f" \t{_QUOTE_CHARS}")
-    )
+    quote_cell = _column(cells, header, "quote")
+    quote = _quote_text(max(cells, key=len, default="") if quote_cell is None else quote_cell)
     if not quote:
         issues.append(
             f"{label} cites {pages} but has no quote: add the passage copied verbatim from "
@@ -1229,12 +1399,32 @@ def _tdr6_row_issues(doc: _Handoff, number: int, later: set[str]) -> list[str]:
             f'{label} quotes "{quote[:60]}", which is not in the text of the page it cites '
             f"({pages}): copy the passage verbatim from read_pages or search_source."
         )
-    return issues
+    amount = _norm_text((_column(cells, header, "amount") or "").strip("`*_ "))
+    if quote and amount and amount not in quote:
+        issues.append(
+            f'{label} states the amount "{amount[:40]}", which is not inside its quote: the '
+            "amount is the figure exactly as it appears in the quote."
+        )
+    return issues, {quote}
 
 
-def _tdr6_issues(doc: _Handoff) -> list[str]:
-    later = {sid for sid, (item, _text) in doc.known.items() if item.status == STATUS_LATER}
-    return [issue for n in _tdr6_rows(doc) for issue in _tdr6_row_issues(doc, n, later)]
+def _tdr6_issues(doc: _Handoff) -> tuple[list[str], dict[int, set[str]]]:
+    rows, loose = _tdr6_scan(doc)
+    issues: list[str] = []
+    covered: dict[int, set[str]] = {}
+    for number in rows:
+        found, covered[number] = _tdr6_row_issues(doc, number)
+        issues += found
+    for number in loose:
+        line = doc.lines[number].strip()
+        label = f'TDR.6 line "{line[:60]}"'
+        issues += _unfetched(doc, line, label)
+        issues += [
+            f"{label} cites {sid}, a page dated after the cutoff: a later event carries no "
+            "figure, so remove the line or cite an earlier source."
+            for sid in doc.later(doc.cites(line))
+        ]
+    return issues, covered
 
 
 def web_handoff_issues(markdown: str, known: Mapping[str, tuple[Retained, str]]) -> list[str]:
@@ -1242,10 +1432,13 @@ def web_handoff_issues(markdown: str, known: Mapping[str, tuple[Retained, str]])
     retained ``source_id`` to its index row and extracted text (a ``KnownPages`` also carries every
     index row). Pure and deterministic: it reads no network and never raises on odd Markdown. Each
     issue is one sentence saying what to change."""
+    if _LINE_SEPARATORS.search(markdown):
+        return [_LINE_SEPARATOR_ISSUE]
     doc = _Handoff.read(markdown, known)
+    tdr6, covered = _tdr6_issues(doc)
     return [
         *_source_issues(doc),
         *_unknown_id_issues(doc),
-        *_paragraph_issues(doc),
-        *_tdr6_issues(doc),
+        *_prose_and_row_issues(doc, covered),
+        *tdr6,
     ]

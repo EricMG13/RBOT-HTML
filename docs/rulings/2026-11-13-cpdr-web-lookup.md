@@ -142,36 +142,60 @@ or multiple found only on a later page stays unvalidated and is stated as a limi
 
 When lookup is on, `web_handoff_issues` (`weblookup.py`) checks the handoff before it is accepted.
 It is mechanical, pure and deterministic, and each issue is one sentence naming the row or quote.
-It fails closed: it reads any line ending, any table row (a line with `|`, with or without a
-leading pipe) and any case of a `web-` id or URL scheme.
+It fails closed: it reads any table row (a line with `|`, with or without a leading pipe; `\|`
+stays inside its cell) and any case of a `web-` id or URL scheme.
 
-1. Every `web-` id in the handoff must be a retained page, wherever it appears.
-2. Every web id cited anywhere has a `## Sources` row that names it.
+Lines are read as delivery reads them: LF, CR LF and CR only (`handoff_delivery.physical_lines`).
+A handoff holding U+2028, U+2029, U+0085, vertical tab, form feed or U+001C to U+001E is rejected
+with one issue asking to remove them.
+
+A page is cited by its id, by a retained URL, or by the first-cell name (6 or more characters) of
+the `## Sources` row that names it. The checks below treat the three alike.
+
+1. Every token written like a web id (`web-`, `web_` or `web` and 6 or more hex digits) must be
+   exactly `web-` and 12 hex digits and a retained page, wherever it appears; any other is reported
+   as an unknown web source id.
+2. Every page cited anywhere, by id or URL, has a `## Sources` row that names it.
 3. Every URL in a `## Sources` row must have been fetched in this run (compared after normalising
    scheme and host case, `:443`, fragment, an empty query and one trailing `/`; `http` is never
-   `https`). Both the URL and the final URL of every retained row count.
-4. A `## Sources` row that names a web id or URL needs a Source type cell with one of the allowed
-   values; this check is `web_source_issues` in `handoff.py`.
-5. A row for a later-event page must say "Later event". A row for an undated page must say
-   "Undated", and `## Gaps` must name its id.
-6. TDR.6 rows are the table rows under a heading naming TDR.6 or TDR-6 (until a heading of the same
-   or higher level) and any row whose first cell is `<peer>.<operand>` (revenue, ebitda, debt,
-   interest, ffo). Such a row must cite no later-event page, whether by id, by URL or through a row
-   that shares one of its cells (for example an `evidence_id`). Any URL in it must have been
-   fetched.
-7. A TDR.6 row that cites a web page must carry a quote (the cell under a `quote` header, or the
-   longest cell), and the quote must appear in the text of a page the row cites.
-8. In a paragraph (consecutive non-blank, non-table lines) that names a web id, every quoted span of
-   12 or more characters must appear in one of the pages that paragraph names. Quote marks
-   recognised: straight, curly, low-high, single (not apostrophes) and guillemets.
+   `https`). Both the URL and the final URL of every retained row count. A URL with a user name or
+   password is refused at fetch (`webfetch._problem`), so it is never retained.
+4. A `## Sources` row that names a web id or URL needs a Source type cell: one allowed type,
+   optionally followed by `;` and a Later event or Undated label (`Issuer filing; Later event`);
+   this check is `web_source_issues` in `handoff.py`.
+5. A row for a later-event page must carry the words Later event (or `later-event`) and a row for
+   an undated page the word Undated, in any case, in the stated-date cell or after the Source type;
+   `## Gaps` must name an undated page's id. Two URLs that serve the same bytes share one id; the
+   strictest status of its index rows applies (later-event over undated over usable).
+6. TDR.6 rows are the table rows under a heading naming TDR.6 (`TDR` then an optional space, dot or
+   hyphen, then 6; until a heading of the same or higher level) and any row whose first cell is
+   `<peer>.<operand>` (revenue, ebitda, debt, interest, ffo). Such a row must cite no later-event
+   page, by id, URL, `## Sources` title or through rows linked by a shared first cell, followed to
+   the end (an `evidence_id` pointing at a register row that points at the page). Any URL in it
+   must have been fetched. Inside a TDR.6 section every line counts, table or not: no line may
+   cite a later-event page.
+7. A TDR.6 row that cites a page must carry a quote (the cell under a `quote` header, or the longest
+   cell; a trailing page reference in brackets and the surrounding quote marks are dropped), the
+   quote must appear in the text of a page the row cites, and when the table has an `amount`
+   header, the amount cell's text must appear inside the quote.
+8. In a paragraph (consecutive non-blank lines that are not table rows or headings) and in a table
+   row that cites a page, every quoted span of 12 or more characters must appear in one of the pages
+   it cites. A span runs from any of `" “ ” „ « » ‹ ›` to the next of them (mixed pairs count; a
+   mark right after a digit is an inch mark and opens nothing) after HTML entities are unescaped,
+   or between single quotes where the opening follows a non-word character (not `'24`) and the
+   closing precedes one. Straight and curly apostrophes are one character on both sides.
 
-Known limit of check 8, a consequence of the rule: a paragraph that names a web source may quote
-only from that source. A paragraph that mixes a web id with a quoted issuer-file passage of 12 or
-more characters is rejected and must be split into two paragraphs. `WEB_LOOKUP_RULES` states this.
+Known limit of check 8, a consequence of the rule: a paragraph or row that cites a web page may
+quote only from the pages it cites. One that mixes a web source with a quoted issuer-file passage of
+12 or more characters is rejected and must be split. `WEB_LOOKUP_RULES` states this. An apostrophe
+pair that looks like a single-quoted span can be rejected; it is rephrased.
 
 Inherent limits of a mechanical check. These are governed by instruction in `WEB_LOOKUP_RULES`, not
-caught mechanically: figures taken from a later-event page and written in prose outside the TDR.6
-table; paraphrase without quote marks; SEC facts filed after the cutoff.
+caught mechanically: a page cited by a scheme-less address, a bare id without `web-`, or a
+description; quoted spans under 12 characters; a figure split across short quotes; Markdown
+blockquotes (`> passage`); paraphrase without quote marks; later-event figures in prose outside
+TDR.6; a TDR.6 row whose evidence is linked only through a non-first column, or a TDR.6 table under a
+sibling heading of the same level; SEC facts filed after the cutoff.
 
 ## Fetched text is data
 

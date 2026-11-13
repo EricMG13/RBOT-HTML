@@ -75,6 +75,7 @@ from deploy_workflow.research.contracts import ResearchError
 from deploy_workflow.research.weblookup import (
     EdgarResult,
     Refused,
+    EVENT_LABEL,
     Retained,
     RunScope,
     Runtime,
@@ -166,13 +167,19 @@ SOURCE_TYPES = (
 )
 
 
+def _is_source_type_cell(cell: str) -> bool:
+    """One type from the list, then optionally ``;`` and a Later event or Undated label."""
+    kind, *labels = cell.split(";")
+    return kind.strip() in SOURCE_TYPES and all(EVENT_LABEL.fullmatch(x.strip()) for x in labels)
+
+
 def web_source_issues(markdown: str) -> list[str]:
     """The ``## Sources`` table rows that name a web page (an http(s) address or a ``web-`` id)
     but no Source type cell. Mechanical and deterministic: it does not judge the source, only
     that its type is stated."""
     issues = []
     for row in sources_rows(markdown):
-        if names_web_source(row) and not any(c in SOURCE_TYPES for c in row_cells(row)):
+        if names_web_source(row) and not any(_is_source_type_cell(c) for c in row_cells(row)):
             issues.append(
                 f'Sources row "{row[:80]}": a web source needs a Source type cell, '
                 f"exactly one of {', '.join(SOURCE_TYPES)}."
@@ -223,7 +230,8 @@ WEB_LOOKUP_RULES = (
     "apply the cutoff to each fact. Cite each web source as one row of ## Sources carrying its "
     "source_id, URL, publisher, stated date (or Undated), a Source type cell with exactly one of: "
     + ", ".join(SOURCE_TYPES)
-    + "; and, when its status is later-event, the words Later event. Write every passage quoted "
+    + "; and, when its status is later-event, the words Later event in the stated-date cell or "
+    "after the Source type. Write every passage quoted "
     'from a web page as "passage" (web-xxxxxxxxxxxx), the passage copied verbatim from '
     "read_pages or search_source output; a paragraph that names a web source quotes only from "
     "that source; never cite a URL that was not fetched."

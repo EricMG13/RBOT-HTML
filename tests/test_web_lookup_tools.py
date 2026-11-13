@@ -713,7 +713,7 @@ def one_page(tmp_path, url=PAGE):
     return found, sid, tools
 
 
-@pytest.mark.parametrize("ending", ["\r\n", "\r", " ", "\x0b", "\x0c", "\x85"])
+@pytest.mark.parametrize("ending", ["\r\n", "\r"])
 def test_r1_a_sources_heading_with_any_line_ending_is_still_the_heading(tmp_path, ending):
     found, sid, _ = one_page(tmp_path)
     md = handoff_md(row(sid, PAGE) + "\n" + row("web-000000000000", f"https://{HOST}/other"))
@@ -861,11 +861,12 @@ def tdr6_md(found, sid, cite, **opts):
     first = opts.get("first", "acme.revenue")
     quote = opts.get("quote", "Net sales rose to 5,100 million")
     prefix, locator = opts.get("prefix", ""), opts.get("locator", "p.1")
+    amount = opts.get("amount", "5,100")
     later = next(s for s, (i, _t) in found.items() if i.url == LATER)
     rows = row(sid, PAGE) + "\n" + row(later, LATER, "2025-09-01", "; Later event")
     body = (
         f"{prefix}{heading}\n{TDR6_HEAD}"
-        f"| {first} | 5,100 | millions | USD | 2025-06-30 | {cite} | {locator} | {quote} |\n"
+        f"| {first} | {amount} | millions | USD | 2025-06-30 | {cite} | {locator} | {quote} |\n"
     )
     return handoff_md(rows, tdr6=body)
 
@@ -925,9 +926,9 @@ def test_r7_a_tdr6_row_quote_must_be_in_the_page_it_cites(tmp_path):
     for cite, locator in ((sid, "p.1"), ("E1", f"{sid} p.1")):
         md = tdr6_md(found, sid, cite, quote=bad, locator=locator)
         assert any(bad in i and "TDR.6" in i for i in weblookup.web_handoff_issues(md, found))
-    good = tdr6_md(found, sid, sid, quote=QUOTE)
+    good = tdr6_md(found, sid, sid, quote=QUOTE, amount="4,500")
     assert not any("TDR.6" in i for i in weblookup.web_handoff_issues(good, found))
-    quoted_next = f'| acme.revenue | 1 | m | USD | 2024-12-31 | E1 | p.1 | "{bad}" | {sid} |\n'
+    quoted_next = f'| acme.revenue | 4,500 | m | USD | 2024-12-31 | E1 | p.1 | "{bad}" | {sid} |\n'
     md = handoff_md(row(sid, PAGE), tdr6=f"### TDR.6 x\n{TDR6_HEAD}{quoted_next}")
     assert any(bad in i for i in weblookup.web_handoff_issues(md, found))
     md = handoff_md(
@@ -1205,3 +1206,332 @@ def test_f8_an_index_row_with_untrusted_fields_damages_the_index(tmp_path):
             weblookup.retained_pages(tmp_path / "run")
     index.write_text(json.dumps({**good, "page_date": None, "status": "undated"}) + "\n")
     assert [r.source_id for r in weblookup.retained_pages(tmp_path / "run")] == [good["source_id"]]
+
+
+# fix round 2: near misses and side effects of the acceptance checks ----------------------------
+
+LATER_QUOTE = "Net sales rose to 5,100 million"
+
+
+def three(tmp_path):
+    """(known pages, usable id, later-event id, undated id)."""
+    found, sid, _ = one_page(tmp_path)
+    by_url = {i.url: s for s, (i, _t) in found.items()}
+    return found, sid, by_url[LATER], by_url[UNDATED]
+
+
+def labelled(sid, later):
+    return row(sid, PAGE) + "\n" + row(later, LATER, "2025-09-01", "; Later event")
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        'Revenue: "{q}" ({url}).',
+        'Revenue: "{q}" ([release]({url})).',
+        'Revenue: "{q}".\nBasis: {url}.',
+        'Revenue: "{q}" <{url}>',
+        '| Revenue | "{q}" | {url} |',
+    ],
+)
+def test_s1_a_misquote_cited_by_url_is_rejected(tmp_path, shape):
+    found, sid, _later, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), findings=shape.format(q=BAD_QUOTE, url=PAGE))
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(md, found))
+    good = handoff_md(row(sid, PAGE), findings=shape.format(q=QUOTE, url=PAGE))
+    assert weblookup.web_handoff_issues(good, found) == []
+
+
+def test_s1_a_page_cited_by_url_needs_a_sources_row_and_its_labels(tmp_path):
+    found, sid, later, undated = three(tmp_path)
+    for url, wanted in ((UNDATED, undated), (LATER, later)):
+        md = handoff_md(row(sid, PAGE), findings=f"Peers say little ({url}).")
+        issues = weblookup.web_handoff_issues(md, found)
+        assert any(wanted in i and "## Sources" in i for i in issues), issues
+    # a row that names the page by URL alone serves as its row, with the labels it needs
+    named = handoff_md(
+        row(sid, PAGE) + f"\n| x | {UNDATED} | P | none | Issuer filing |",
+        findings=f"Peers say little ({UNDATED}).",
+    )
+    issues = weblookup.web_handoff_issues(named, found)
+    assert any("Undated" in i for i in issues) and any("## Gaps" in i for i in issues)
+
+
+def test_s2_a_sources_row_first_cell_names_its_pages(tmp_path):
+    found, sid, _l, _u = three(tmp_path)
+    head = (
+        "| Source | id | URL | Publisher | Stated date | Source type |\n|---|---|---|---|---|---|\n"
+    )
+    tail = "## Calculations\nNone\n## Gaps\nNone.\n## Next module\nCP-1\n"
+
+    def md(first: str, findings: str) -> str:
+        sources = f"| {first} | {sid} | {PAGE} | Example Issuer | 2025-05-01 | Issuer filing |"
+        return f"## Request\nx\n## Sources\n{head}{sources}\n## Findings\n{findings}\n{tail}"
+
+    name = "Acme results release"
+    bad = md(name, f'Revenue: "{BAD_QUOTE}".\nBasis: {name}.')
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(bad, found))
+    assert weblookup.web_handoff_issues(md(name, f'"{QUOTE}".\nBasis: {name}.'), found) == []
+    short = md("Acme", f'Revenue: "{BAD_QUOTE}".\nBasis: Acme.')  # under 6 characters: no name
+    assert weblookup.web_handoff_issues(short, found) == []
+    row_form = md(name, f'| Revenue | "{BAD_QUOTE}" | {name} |')
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(row_form, found))
+
+
+@pytest.mark.parametrize(
+    "findings",
+    [
+        '### Key figures\n| Finding | Quote | Source |\n|---|---|---|\n| Revenue | "{q}" | {sid} |',
+        (
+            "### TDR.2 Claims\n| claim_id | claim | evidence_id |\n|---|---|---|\n"
+            '| C1 | Revenue: "{q}" | {sid} |'
+        ),
+        'Revenue | margin: "{q}" ({sid}).',
+    ],
+)
+def test_s3_a_misquote_in_a_table_row_or_piped_line_is_rejected(tmp_path, findings):
+    found, sid, _l, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), findings=findings.format(q=BAD_QUOTE, sid=sid))
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(md, found))
+    good = handoff_md(row(sid, PAGE), findings=findings.format(q=QUOTE, sid=sid))
+    assert weblookup.web_handoff_issues(good, found) == []
+
+
+@pytest.mark.parametrize("heading", ["### TDR 6 x", "### TDR6 x", "### tdr-6 x", "### TDR.6 x"])
+def test_s4_a_later_event_figure_under_tdr6_is_rejected_in_any_layout(tmp_path, heading):
+    found, sid, later, _u = three(tmp_path)
+    layouts = (
+        f'- acme.revenue: USD 5,100 million, "{LATER_QUOTE}" ({later})\n',
+        f'- acme.revenue: USD 5,100 million, "{LATER_QUOTE}" ({LATER})\n',
+        f"<table><tr><td>acme.revenue</td><td>5,100</td><td>{later}</td></tr></table>\n",
+        f"acme.revenue is 5,100 ({later})\n",
+    )
+    for layout in layouts:
+        md = handoff_md(labelled(sid, later), tdr6=f"{heading}\n{layout}")
+        issues = weblookup.web_handoff_issues(md, found)
+        assert any("TDR.6" in i and "after the cutoff" in i for i in issues), (heading, layout)
+    outside = handoff_md(labelled(sid, later), tdr6=f"### Peers\n{layouts[0]}")
+    assert weblookup.web_handoff_issues(outside, found) == []
+
+
+def test_s4_a_misquote_in_a_tdr6_bullet_is_rejected(tmp_path):
+    found, sid, _l, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), tdr6=f'### TDR.6 x\n- acme.revenue: "{BAD_QUOTE}" ({sid})\n')
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(md, found))
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "web-0123456789a",
+        "web-0123456789abc",
+        "web_0123456789ab",
+        "WEB_0123456789AB",
+        "web0123456789ab",
+    ],
+)
+def test_s5_a_malformed_web_id_is_an_unknown_id(tmp_path, token):
+    found, sid, _l, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), findings=f"Margins held ({token}).")
+    issues = weblookup.web_handoff_issues(md, found)
+    assert any(token.lower() in i and "not a page retained" in i for i in issues), issues
+
+
+def test_s5_words_that_only_look_like_ids_are_not_reported(tmp_path):
+    found, sid, _l, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), findings="The web-based website and webcast data held.")
+    assert weblookup.web_handoff_issues(md, found) == []
+
+
+def tdr6_row(cite: str, amount: str, quote: str, heading: str = "### TDR.6 x") -> str:
+    return (
+        f"{heading}\n| peer_id.operand | amount | evidence_id | quote |\n|---|---|---|---|\n"
+        f"| acme.revenue | {amount} | {cite} | {quote} |\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("amount", "quote", "ok_"),
+    [
+        ("9,999", "million", False),
+        ("9,999", "Margins held", False),
+        ("9,999", QUOTE, False),
+        ("4,500", QUOTE, True),
+        ("4,500", f'"{QUOTE}"', True),
+    ],
+)
+def test_s6_the_amount_must_appear_inside_the_quote(tmp_path, amount, quote, ok_):
+    found, sid, _l, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), tdr6=tdr6_row(sid, amount, quote))
+    issues = weblookup.web_handoff_issues(md, found)
+    assert (issues == []) is ok_, issues
+    if not ok_:
+        assert any("9,999" in i and "TDR.6" in i for i in issues)
+
+
+def test_s7_the_strictest_status_of_the_rows_of_one_id_applies(tmp_path):
+    body = (
+        b'<html><head><meta name="date" content="2025-09-01"></head><body>\n'
+        b"Published: 2025-05-01\n<p>Net sales rose to 5,100 million.</p></body></html>\n"
+    )
+    net = FakeNet(
+        {
+            (HOST, "/release.txt"): ok(body, "text/plain; charset=utf-8"),
+            (HOST, "/release"): ok(body, "text/html; charset=utf-8"),
+        }
+    )
+    tools, _ = tools_for(tmp_path, net)
+    first = tools.call("fetch_page", {"url": f"https://{HOST}/release.txt"})
+    second = tools.call("fetch_page", {"url": f"https://{HOST}/release"})
+    assert "status=usable" in first.splitlines()[0]
+    assert "status=later-event" in second.splitlines()[0]
+    sid = source_id(second)
+    url = f"https://{HOST}/release"
+    found = tools._known_pages()
+    issues = weblookup.web_handoff_issues(handoff_md(row(sid, url)), found)
+    assert any("Later event" in i for i in issues)
+    figure = handoff_md(row(sid, url), tdr6=tdr6_row(url, "5,100", LATER_QUOTE))
+    assert any("after the cutoff" in i for i in weblookup.web_handoff_issues(figure, found))
+
+
+@pytest.mark.parametrize("char", [" ", " ", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"])
+def test_s8_an_unusual_line_separator_rejects_the_handoff_with_one_issue(tmp_path, char):
+    found, sid, _l, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), findings=f"Margins held.{char}More.")
+    issues = weblookup.web_handoff_issues(md, found)
+    assert len(issues) == 1 and "line-separator" in issues[0]
+
+
+def test_s8_lines_are_split_exactly_as_delivery_reads_them():
+    from deploy_workflow.handoff_delivery import physical_lines
+
+    for text in ("a\r\nb\rc\nd", "a\n", "", "\n\n", "a\r", "x\r\r\ny"):
+        assert weblookup._physical_lines(text) == physical_lines(text), repr(text)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        '“{q}" ({sid})',
+        '"{q}” ({sid})',
+        "”{q}” ({sid})",
+        "»{q}« ({sid})",
+        "‹{q}› ({sid})",
+        "&quot;{q}&quot; ({sid})",
+        '5" gap. "{q}" ({sid})',
+    ],
+)
+def test_s9_other_quote_forms_are_checked(tmp_path, shape):
+    found, sid, _l, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE), findings="Revenue: " + shape.format(q=BAD_QUOTE, sid=sid))
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(md, found)), shape
+    good = handoff_md(row(sid, PAGE), findings="Revenue: " + shape.format(q=QUOTE, sid=sid))
+    assert weblookup.web_handoff_issues(good, found) == [], shape
+
+
+@pytest.mark.parametrize(("page_mark", "quote_mark"), [("’", "'"), ("'", "’")])
+def test_s9_straight_and_curly_apostrophes_are_the_same_character(tmp_path, page_mark, quote_mark):
+    body = f"<p>Example Issuer{page_mark}s net sales were 4,500 million.</p>"
+    tools, _ = tools_for(tmp_path, FakeNet({(HOST, "/results"): ok(dated("2025-05-01", body))}))
+    sid = source_id(tools.call("fetch_page", {"url": PAGE}))
+    quote = f"Example Issuer{quote_mark}s net sales were 4,500 million"
+    md = handoff_md(row(sid, PAGE), findings=f'The release says "{quote}" ({sid}).')
+    assert weblookup.web_handoff_issues(md, tools._known_pages()) == []
+
+
+def test_s10_evidence_links_are_followed_to_the_end(tmp_path):
+    found, sid, later, _u = three(tmp_path)
+    chain = (
+        "### TDR.2 Claims\n| claim_id | claim | evidence_id |\n|---|---|---|\n"
+        "| C1 | Peer revenue | E1 |\n\n### Register\n| evidence_id | source |\n|---|---|\n"
+        f"| E1 | E2 |\n| E2 | {later} |\n\n"
+    )
+    md = handoff_md(labelled(sid, later), tdr6=chain + tdr6_row("C1", "5,100", LATER_QUOTE))
+    assert any("after the cutoff" in i for i in weblookup.web_handoff_issues(md, found))
+    loop = "| E1 | E2 |\n| E2 | E1 |\n"  # a cycle ends
+    md = handoff_md(row(sid, PAGE), tdr6=f"### TDR.2\n| a | b |\n|---|---|\n{loop}")
+    assert isinstance(weblookup.web_handoff_issues(md, found), list)
+
+
+def test_s11_an_escaped_pipe_stays_inside_its_cell(tmp_path):
+    found, sid, _l, _u = three(tmp_path)
+    head = "### TDR.6 x\n| peer_id.operand | amount | evidence_id | quote |\n|---|---|---|---|\n"
+    bad = handoff_md(
+        row(sid, PAGE), tdr6=f"{head}| acme.revenue | 9,999 | {sid} \\| {QUOTE} | {BAD_QUOTE} |\n"
+    )
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(bad, found))
+    assert weblookup._cells("| a \\| b | c |") == ["a | b", "c"]
+
+
+def test_s12_a_degenerate_handoff_is_checked_in_linear_time(tmp_path):
+    import time
+
+    found, sid, _l, _u = three(tmp_path)
+    cases = (
+        "| x | https://a" + ")" * 100_000 + " |",
+        "### TDR.6 x\n" + "|x|x|\n" * 8_000,
+        "### TDR.6 x\n" + "".join(f"|k{n}|k{n + 1}|\n" for n in range(6_000)),
+        "(" * 100_000 + "\n" + " " * 100_000 + "|",
+        "'" * 50_000 + f" ({sid})",
+    )
+    for findings in cases:
+        start = time.perf_counter()
+        weblookup.web_handoff_issues(handoff_md(row(sid, PAGE), findings=findings), found)
+        assert time.perf_counter() - start < 2.0, findings[:30]
+
+
+def test_s13_a_tdr6_quote_cell_may_carry_its_page_reference(tmp_path):
+    found, sid, _l, _u = three(tmp_path)
+    for cell in (f'"{QUOTE}" ({sid})', f"“{QUOTE}” [{sid}, p. 1]", f'"{QUOTE}" ([r]({PAGE}))'):
+        md = handoff_md(row(sid, PAGE), tdr6=tdr6_row(sid, "4,500", cell))
+        assert weblookup.web_handoff_issues(md, found) == [], cell
+    md = handoff_md(row(sid, PAGE), tdr6=tdr6_row(sid, "9,999", f'"{BAD_QUOTE}" ({sid})'))
+    assert any(BAD_QUOTE in i for i in weblookup.web_handoff_issues(md, found))
+
+
+def test_s13_a_heading_ends_a_paragraph_and_an_abbreviated_year_is_not_a_quote(tmp_path):
+    found, sid, _l, _u = three(tmp_path)
+    prose = (
+        f"Margins held.\nBasis: {sid}.\n### Issuer file\n"
+        'The filing says "Revenue 100 in the base year".\n'
+        "\n### Limits\nSince '24 the peers' profile pages carry no date "
+        f"({sid})."
+    )
+    assert weblookup.web_handoff_issues(handoff_md(row(sid, PAGE), findings=prose), found) == []
+
+
+@pytest.mark.parametrize("label", ["Later event", "later event", "LATER-EVENT", "later-event"])
+def test_s14_the_later_event_label_is_matched_loosely(tmp_path, label):
+    found, sid, later, _u = three(tmp_path)
+    md = handoff_md(row(sid, PAGE) + "\n" + row(later, LATER, "2025-09-01", f"; {label}"))
+    assert weblookup.web_handoff_issues(md, found) == []
+
+
+def test_s14_the_undated_label_is_matched_in_any_case(tmp_path):
+    found, sid, _l, undated = three(tmp_path)
+    md = handoff_md(
+        row(sid, PAGE) + "\n" + row(undated, UNDATED, "UNDATED"), gaps=f"{undated} has no date."
+    )
+    assert weblookup.web_handoff_issues(md, found) == []
+
+
+@pytest.mark.parametrize(
+    ("cell", "ok_"),
+    [
+        ("Issuer filing", True),
+        ("Issuer filing; Later event", True),
+        ("Issuer filing; later-event", True),
+        ("Peer filing;Undated", True),
+        ("Issuer filing; Peer filing", False),
+        ("Issuer filing; nonsense", False),
+        ("Nonsense; Later event", False),
+        ("-", False),
+    ],
+)
+def test_s14_a_source_type_cell_is_one_type_then_labels(cell, ok_):
+    md = handoff_md(f"| web-0123456789ab | https://{HOST}/x | P | 2025-05-01 | {cell} |")
+    assert (handoff.web_source_issues(md) == []) is ok_
+
+
+def test_s14_the_rules_say_where_the_label_goes():
+    assert "in the stated-date cell or after the Source type" in WEB_LOOKUP_RULES
