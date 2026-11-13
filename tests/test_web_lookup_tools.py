@@ -2046,3 +2046,19 @@ def test_r4_a_row_with_a_non_string_address_or_type_is_a_damaged_index(tmp_path,
     assert bare_executor(tmp_path).web_issues(cpdr_task(), b"## Request\nx\n") == ()
     after, _ = tools_for(tmp_path, FakeNet(pages()))
     assert after.call("fetch_page", {"url": PAGE}).startswith("ERROR:")
+
+
+@pytest.mark.parametrize("hosted", [False, True])
+@pytest.mark.parametrize("by", ["id", "address"])
+def test_l2_a_damaged_index_rejects_any_web_citation_whatever_hosted_search_says(
+    tmp_path, hosted, by
+):
+    tools, _ = tools_for(tmp_path)
+    sid = source_id(tools.call("fetch_page", {"url": PAGE}))
+    index = tmp_path / "run" / "web" / "index.jsonl"
+    index.write_text(index.read_text() + '{"bytes": "x"}\n{"bytes": 1}\n')
+    md = cited(sid if by == "id" else PAGE)
+    issues = bare_executor(tmp_path, web_search=hosted).web_issues(cpdr_task(), md)
+    assert issues == (handoff.WEB_PAGES_UNREADABLE,)
+    plain = bare_executor(tmp_path, web_search=hosted).web_issues(cpdr_task(), b"## Request\nx\n")
+    assert plain == ()

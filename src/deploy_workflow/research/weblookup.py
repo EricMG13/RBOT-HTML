@@ -500,7 +500,8 @@ def _row_trusted(row: object) -> bool:
 
 
 def _read_index(path: Path) -> list[dict[str, Any]]:
-    """The retained rows. A torn last line (a crash mid-append) is ignored; other damage raises."""
+    """The retained rows, each a line that ends with a newline. An unterminated last line (a crash
+    mid-append) is ignored; other damage raises."""
     if not path.exists():
         return []
     raw = path.read_bytes()
@@ -510,11 +511,13 @@ def _read_index(path: Path) -> list[dict[str, Any]]:
     for number, line in enumerate(lines):
         if not line.strip():
             continue
+        if number == last:
+            # One definition of a row for reader and writer: a line that ends with a newline.
+            # ``_append_row`` cuts an unterminated last line, so it is ignored even if it parses.
+            continue
         try:
             row = json.loads(line.decode("utf-8"))
         except ValueError:  # UnicodeDecodeError is a ValueError: a line cut inside a character
-            if number == last:
-                continue
             raise _IndexDamaged("the retained web index is damaged") from None
         if not _row_trusted(row):
             raise _IndexDamaged("the retained web index is damaged")

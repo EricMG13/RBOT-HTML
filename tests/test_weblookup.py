@@ -1763,3 +1763,22 @@ def test_r1_each_new_address_is_charged_its_bytes_even_when_its_body_is_already_
     retained(lookup.fetch_page("https://www.fca.org.uk/guess/0"))
     retained(lookup.fetch_page("https://www.fca.org.uk/guess/1"))
     assert "budget" in refused(lookup.fetch_page("https://www.fca.org.uk/guess/2"))
+
+
+def test_l1_an_unterminated_last_line_is_not_a_row_even_when_it_parses(tmp_path: Path) -> None:
+    net = FakeNet(
+        {
+            ("www.fca.org.uk", "/a"): ok(html("<p>a</p>")),
+            ("www.fca.org.uk", "/b"): ok(html("<p>b</p>")),
+        }
+    )
+    lookup = make(tmp_path, net)
+    retained(lookup.fetch_page("https://www.fca.org.uk/a"))
+    index = tmp_path / "run" / "web" / "index.jsonl"
+    raw = index.read_bytes()
+    assert raw.endswith(b"\n")
+    index.write_bytes(raw[:-1])  # a complete row that lost only its newline
+    assert weblookup.retained_rows(tmp_path / "run") == []
+    retained(lookup.fetch_page("https://www.fca.org.uk/b"))
+    urls = [row.url.rsplit("/", 1)[1] for row in weblookup.retained_rows(tmp_path / "run")]
+    assert urls == ["b"]

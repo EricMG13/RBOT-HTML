@@ -197,7 +197,8 @@ CP-OS runs the same checks when it rechecks a retained CP-DR response on resume
 whose settled lookup is on, from the run's retained index `live/web/index.jsonl` and the same
 hosted-search value the live write used. A retained handoff that cites a page absent from the index
 is refused with the sentence a live write gets. An index that cannot be read gives one plain issue
-("The run's retained web pages could not be read ...", no path). A run that retained no page has no
+("The run's retained web pages could not be read ...", no path) whenever the handoff names any web
+source, a `web-` id or an http(s) address, whatever the hosted-search setting. A run that retained no page has no
 index, which is not damage. With lookup off, and for every other module, the check is unchanged.
 
 ### The citation form

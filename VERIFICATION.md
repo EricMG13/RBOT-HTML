@@ -48,7 +48,7 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   c0220c8..HEAD`): an unreadable retained page gives the plain sentence on a repeated `fetch_page`
   too; a filing list is recognised by its submissions address as well as its tool, and a document
   retained before its list is re-dated by a new index row on the next fetch of its address (no
-  request, budgets count each body once); the published date is the first found (meta, JSON-LD,
+  request; pages and bytes are counted per distinct address); the published date is the first found (meta, JSON-LD,
   body line, `<time>`) and the modified date the latest stated, `page_date` the later of the two;
   the filing-date lookup compares the host as the allowlist does, decodes the path, uses the latest
   of several accessions, reads a list through the content-type extension and logs a damaged index.
@@ -61,6 +61,7 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   `content_type` is not text is a damaged index; a torn last index line is cut off before the next
   append. Tests: `test_r1_*`, `test_r2_*`, `test_r3_*`, `test_r4_*`, and the extended
   `test_a_torn_last_index_line_is_ignored_and_repaired`.
+- Low batch (re-review of 230f68b; commit: the one after 230f68b, `git log --oneline 230f68b..HEAD`): a row is a line that ends with a newline, so `_read_index` ignores an unterminated last line whether or not it parses (as `_append_row` cuts it); with a damaged index the resume recheck gives the one plain issue whenever the handoff names any web source (a `web-` id or an address), whatever the hosted-search setting. Tests: `test_l1_*`, `test_l2_*`.
 - Relaunch rule: a relaunch compares the recorded lookup setting with what the flag settles to for
   the run's modules and case kind (a run without CP-DR started with `--web-lookup on` records `off`
   and relaunches with the same flag).

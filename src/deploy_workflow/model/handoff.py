@@ -1192,6 +1192,8 @@ class HandoffExecutor:
             # As the live write does with a damaged index: no page is known.
             log.warning("the run's web index could not be read for the recheck: %s", exc)
             known, unreadable = KnownPages({}, []), True
+            if names_web_source(markdown):  # an id or an address anywhere, hosted search or not
+                return (WEB_PAGES_UNREADABLE,)
         hosted = web_search_offered(self.web_search, task.module_id, task.run.case_kind)
         issues = (
             *web_source_issues(markdown),
