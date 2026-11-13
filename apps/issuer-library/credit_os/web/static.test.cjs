@@ -5341,3 +5341,27 @@ test('ESG part: a new-format handoff with no ESG heading has no esg part', () =>
   const withoutEsg = esgSections(esgLines('h3')).filter(s => !/^T2G\./.test(s.heading));
   assert.ok(!esgPage('h3', withoutEsg).reportParts(esgId).some(p => p[0] === 'esg'));
 });
+
+test('a leverage, net leverage or cover figure on adjusted EBITDA is not screened or ranked; cash is unchanged (owner: "Take them out")', () => {
+  const logic = new Function(`${read('screening.js')}; return LibraryLogic;`)();
+  const label = { 'leverage': 'Total debt / adjusted EBITDA', 'net_leverage': 'Net debt / adjusted EBITDA', 'coverage': 'Adjusted EBITDA / cash interest' };
+  const run = (id, metrics) => ({ id, issuer: id, artifacts: [], metrics });
+  const figure = (value, extra = {}) => ({ value, unit: 'x', period: 'FY2024', ...extra });
+  const prefix = { leverage: 'leverage', net_leverage: 'netLeverage', coverage: 'coverage', cash: 'cash' };
+  for (const name of ['leverage', 'net_leverage', 'coverage']) {
+    const filters = { runs: 'any', [prefix[name] + 'Min']: '5' };
+    const reported = run('a-reported', { [name]: figure('5.96') });
+    const adjusted = run('b-adjusted', { [name]: figure('5.96', { label: label[name] }) });
+    const none = run('c-none', {});
+    const runs = [adjusted, none, reported];
+    assert.deepEqual(logic.filterRuns(runs, filters).map(r => r.id), ['a-reported'], name);
+    assert.deepEqual(logic.coverage(runs, filters)[name], { recorded: 1, hidden: 2 }, name + ' counts');
+    assert.deepEqual(logic.hiddenBy(runs, filters, name).map(r => r.id).sort(), ['b-adjusted', 'c-none'], name + ' hidden');
+    const sorted = direction => logic.sortRuns([adjusted, none, reported, run('d-low', { [name]: figure('1.0') })], name, direction).map(r => r.id);
+    assert.deepEqual(sorted('asc'), ['d-low', 'a-reported', 'b-adjusted', 'c-none'], name + ' asc');
+    assert.deepEqual(sorted('desc'), ['a-reported', 'd-low', 'b-adjusted', 'c-none'], name + ' desc');
+  }
+  const cash = run('cash', { cash: figure('7', { label: 'Cash and equivalents' }) });
+  assert.deepEqual(logic.filterRuns([cash], { runs: 'any', cashMin: '5' }).map(r => r.id), ['cash'], 'a labelled cash metric is still screened');
+  assert.equal(logic.coverage([cash], { runs: 'any', cashMin: '5' }).cash.recorded, 1);
+});
