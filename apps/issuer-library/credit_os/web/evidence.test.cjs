@@ -106,11 +106,35 @@ test('rule 7: an inter-module column is dropped from every table; a source and a
   assert.ok(calc.includes('>Calc ID<') && calc.includes('>C-1<') && calc.includes('a / b') && calc.includes('2.1x'));
 });
 
-test('a table left with fewer than two columns is not drawn; its cells appear nowhere', () => {
-  assert.ok(!everyTab('CP-2A').includes('ONLYCELL'));
-  assert.equal(Evidence.tableView({line: 1, headers: ['Metric', 'downstream_use'], rows: [{line: 2, cells: ['x', 'y']}]}), null);
-  assert.equal(Evidence.tableView({line: 1, headers: ['Only'], rows: [{line: 2, cells: ['x']}]}), null);
+test('a table is drawn while one non-inter-module column remains; only a table with no column left is not drawn', () => {
+  assert.ok(everyTab('CP-2A').includes('ONLYCELL'), 'a one-column table keeps its cells');
+  assert.equal(Evidence.tableView({line: 1, headers: ['Consumer', 'downstream_use'], rows: [{line: 2, cells: ['x', 'y']}]}), null);
+  assert.equal(Evidence.tableView({line: 1, headers: ['Only'], rows: []}), null, 'no row, nothing to lose');
+  assert.deepEqual(Evidence.tableView({line: 1, headers: ['Only'], rows: [{line: 2, cells: ['x']}]}).headers, ['Only']);
   assert.deepEqual(Evidence.tableView({line: 1, headers: ['A', 'Consumer', 'B'], rows: [{line: 2, cells: ['1', 'c', '2']}]}).headers, ['A', 'B']);
+  const only = [sec('Findings', 2, 1), sec('Consumers', 3, 2, [table(3, ['Consumer', 'downstream_use'], [['SECRETCELL', 'y']])])];
+  assert.ok(!Evidence.view(input({modules: [{id: 'CP-2A', outputs: [out('o1', only)]}]}), {tab: 'registers', module: 'CP-2A'}).includes('SECRETCELL'));
+});
+
+test('every column header carries scope="col"', () => {
+  const html = view('calculations', 'CP-2A') + view('registers', 'CP-2A') + view('record');
+  const heads = html.match(/<th[ >][^>]*>/g) || [];
+  assert.ok(heads.length > 5 && heads.every(h => h.includes('scope="col"')), heads.join(' '));
+});
+
+test('the tab badge counts what tabCounts counts: the counted [data-hay] elements of the panel are exactly that number, search or no search', () => {
+  for (const tab of ['trace', 'sources', 'calculations', 'gaps', 'registers', 'record']) {
+    const html = view(tab, 'CP-2A');
+    const badge = Number(new RegExp(`id="ev-tab-${tab}"[^>]*aria-current="page"><span>[^<]*</span><span class="ev-cnt" data-count>(\\d+)<`).exec(html)[1]);
+    const panel = html.slice(html.indexOf('id="ev-panel"'), html.indexOf('class="ev-card ev-foot"'));
+    assert.equal((panel.match(/data-hay="/g) || []).length, badge, tab);
+  }
+  assert.ok(view('trace', 'CP-2A').includes('<p class="ev-match" role="status" hidden></p>'), 'matches of a query have their own text');
+});
+
+test('Run record under a module filter says so when the run records instructions but none for that module', () => {
+  assert.ok(view('record', 'CP-6').includes('No instructions recorded for this module.'));
+  assert.ok(!view('record', 'CP-2A').includes('No instructions recorded for this module.'));
 });
 
 test('Registers needs a module: without one it is a designed prompt, with one it holds the as-written tables and the method notes', () => {

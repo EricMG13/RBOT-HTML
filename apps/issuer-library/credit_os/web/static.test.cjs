@@ -90,6 +90,14 @@ test('scripts make no server calls or intervals; the only re-load is swapActivit
   assert.strictEqual(timer.split('swapActivityScript(').length - 1, 2, 'both calls (on entering, on the tick) sit inside syncActivityTimer');
 });
 
+test('the Evidence workspace tab lands on the Summary tab; the old sources route stays a deep link', () => {
+  const text = read('views.js');
+  assert.ok(text.includes("'W-Evidence':['Evidence',[['summary','Evidence',[]]]]") && text.includes("if(module==='W-Evidence')return [['summary','Evidence',[]]];"));
+  const {parseHash} = require('./evidence.js');
+  assert.equal(parseHash('#W-Evidence/summary?c=r', []).tab, 'summary');
+  assert.equal(parseHash('#W-Evidence/sources?c=r', []).tab, 'sources');
+});
+
 test('installDestinations keys are exactly the library and issuer pages plus Run activity', () => {
   const text = read('views.js');
   const start = text.indexOf('const destinations={');
@@ -180,6 +188,8 @@ test('Evidence: handoffs and calculations are download links; Download all is th
 test('Evidence (R3): Read by and the downloads lead with names; the link is named for its handoff; no module code in the Sources tab text', () => {
   const html = evidencePage(EVIDENCE, 'sources');
   assert.ok(!/\bCP-[A-Z0-9]+\b/.test(strip(html)), 'no module code in visible text (an avatar shows the code without its prefix)');
+  const named = [...html.matchAll(/\s(?:aria-label|data-tip|title)="([^"]*)"/g)].map(m => m[1]);
+  assert.ok(named.length > 5 && named.every(v => !/\bCP-[A-Z0-9]+\b/.test(v)), `no module code in an aria-label, data-tip or title: ${named.filter(v => /\bCP-[A-Z0-9]+\b/.test(v))}`);
   const foot = html.slice(html.indexOf('Original handoffs'));
   assert.ok(foot.includes('<span>Source readiness</span>') && foot.includes('aria-label="Download Source readiness handoff"'), foot);
   assert.ok(foot.includes('aria-label="Download Financial foundation handoff"') && !/>CP-[01]\.md</.test(foot));

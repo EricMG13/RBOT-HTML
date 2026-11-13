@@ -99,7 +99,7 @@ function installDestinations() {
     'W-Report':['Report history',[['history','Report history',[]]]],
     'W-Overview':['Overview',[['overview','Overview',[]]]],
     'W-Changes':['Changes',[['changes','Changes',[]]]],
-    'W-Evidence':['Evidence',[['sources','Evidence',[]]]],
+    'W-Evidence':['Evidence',[['summary','Evidence',[]]]],
     'W-Forecast':['Forecast',[['forecast','Forecast',[]]]],
     'CP-OS':['Run activity',[['activity','Run activity',[]]]]
   };
@@ -1028,7 +1028,7 @@ function forecastSections(context) {
   return models.length?models.map(m=>[m.id,m.id,[]]):[['none','Forecast availability',[]]];
 }
 function navigationSections(module,context,output=defaultOutput(module,context)) {
-  if(module==='W-Evidence')return [['sources','Evidence',[]]];
+  if(module==='W-Evidence')return [['summary','Evidence',[]]];
   if(module==='W-Forecast'||module===MODEL_ENTRY[0])return forecastSections(context);
   if(isAnalytical(module)&&output)return reportOutline(output);
   if(Object.hasOwn(modules,module))return modules[module].sections;
