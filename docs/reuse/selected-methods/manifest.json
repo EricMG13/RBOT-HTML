@@ -1012,6 +1012,24 @@
       "archive_path": "docs/reuse/selected-methods/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
       "exact_copy_found_at": "/Users/ericguei/Documents/cp-os/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md",
       "sha256": "8e738d43447219ab8cf7f46b4ca97cd32c67eb7831aaae683b365a9f3514ad45"
+    },
+    {
+      "consumed_path": "skills/cp-3c-refinancing-lme-risk/SKILL.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/SKILL.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/SKILL.md",
+      "sha256": "8c8c0534932f653288c68954406262c40e2fd6dcb6f23916220b5cec3e42d4bd"
+    },
+    {
+      "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/references/CP-3C_RUNBOOK.md",
+      "sha256": "13a2525bee2aae103114e7f5bd0ef7f7e6942c82e53041ea61e82aec4a498753"
+    },
+    {
+      "consumed_path": "skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+      "archive_path": "docs/reuse/selected-methods/skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+      "exact_copy_found_at": "/Users/ericguei/Documents/Deploy V/skills/cp-3c-refinancing-lme-risk/references/REF_CP-3C_STEPS.md",
+      "sha256": "a0b1abe8f5ce28cf7d962aa26e72ae12326c102fba34f4d66f52b620dd40bf84"
     }
   ],
   "companions_note": "2026-11-10 (owner: keep a copy of the methodology in the repo): companion references, CANON_SHARED.md, the CP-DR research brief and the cp-1b-earnings-delta skill copied read-only from cp-os at commit b57a344. Four SKILL.md files archived earlier (cp-2h, cp-3, cp-6, cp-dr) differ from cp-os at that commit and are kept as archived. Not copied: scripts (not run in this transport) and the three .xlsx deployment placeholders (CP-3 Sector RV, CP-3B portfolio constraints, CP-6A debate inputs)."
