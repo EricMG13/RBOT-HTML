@@ -604,21 +604,20 @@ class ModuleTools:
         self._seen_rows = len(items)
         for item in items:
             self._indexed.add(item.url)
-            try:
-                self._register(lookup, item)
-            except OSError as exc:
-                self._unreadable.add(item.source_id)
-                log.warning("retained page %s could not be read: %s", item.source_id, exc)
+            self._register(lookup, item)
 
     def _register(self, lookup: WebLookup, item: Retained) -> None:
         """Record one index row; a page already registered under its id (the same bytes at a
-        second address) is not read again."""
+        second address) is not read again. A body that cannot be read is logged and recorded as
+        unreadable, never raised: the row still counts and the caller moves on."""
         if item.source_id not in self.web:
-            self.sources[item.source_id] = {
-                "sha256": item.sha256,
-                "pages": lookup.page_text(item),
-                "web": item,
-            }
+            try:
+                pages = lookup.page_text(item)
+            except OSError as exc:
+                self._unreadable.add(item.source_id)
+                log.warning("retained page %s could not be read: %s", item.source_id, exc)
+                return
+            self.sources[item.source_id] = {"sha256": item.sha256, "pages": pages, "web": item}
             self.web[item.source_id] = item
         self.web_rows.append(item)
 
@@ -1181,20 +1180,24 @@ class HandoffExecutor:
         """The web acceptance checks of a handoff of ``task``'s module: the issues ``ModuleTools``
         gives a live write, computed from this run's retained index with the same functions and the
         same hosted-search value. CP-OS adds them when it rechecks a retained response on resume;
-        none when the module is not offered lookup. An unreadable index is one plain issue."""
+        none when the module is not offered lookup. With an unreadable index no page is known, as
+        in the live write, and the one plain issue is given only when that leaves an issue."""
         if not web_lookup_offered(self.web_lookup, task.module_id, task.run.case_kind):
             return ()
         markdown = raw.decode("utf-8")
+        unreadable = False
         try:
             known = known_pages(self.directory)
         except (OSError, ResearchError) as exc:
+            # As the live write does with a damaged index: no page is known.
             log.warning("the run's web index could not be read for the recheck: %s", exc)
-            return (WEB_PAGES_UNREADABLE,)
+            known, unreadable = KnownPages({}, []), True
         hosted = web_search_offered(self.web_search, task.module_id, task.run.case_kind)
-        return (
+        issues = (
             *web_source_issues(markdown),
             *web_handoff_issues(markdown, known, hosted_search=hosted),
         )
+        return (WEB_PAGES_UNREADABLE,) if unreadable and issues else issues
 
     def __call__(self, task: HandoffTask) -> bytes:
         from deploy_workflow.run_pathway import _single_writer

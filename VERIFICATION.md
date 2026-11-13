@@ -52,6 +52,15 @@ set `DEPLOY_WORKFLOW_SEC_USER_AGENT` and is a separate paid action.
   body line, `<time>`) and the modified date the latest stated, `page_date` the later of the two;
   the filing-date lookup compares the host as the allowlist does, decodes the path, uses the latest
   of several accessions, reads a list through the content-type extension and logs a damaged index.
+- Fix round 2 (re-review of 1c5daed and the Task 5 Low items): the page budget is the number of
+  distinct `url` values in the index and the byte budget the sum of `bytes` over them (a body
+  served at many addresses is charged per address; the re-dated row stays free); an unreadable
+  page that is later re-dated no longer stops `ModuleTools` registering later rows; the resume
+  recheck of a damaged index uses no known pages, as the live write does, and gives the one plain
+  issue only when that leaves the handoff an issue; a row whose `url`, `final_url` or
+  `content_type` is not text is a damaged index; a torn last index line is cut off before the next
+  append. Tests: `test_r1_*`, `test_r2_*`, `test_r3_*`, `test_r4_*`, and the extended
+  `test_a_torn_last_index_line_is_ignored_and_repaired`.
 - Relaunch rule: a relaunch compares the recorded lookup setting with what the flag settles to for
   the run's modules and case kind (a run without CP-DR started with `--web-lookup on` records `off`
   and relaunches with the same flag).

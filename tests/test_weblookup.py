@@ -605,6 +605,18 @@ def test_a_torn_last_index_line_is_ignored_and_repaired(tmp_path: Path) -> None:
     retained(make(tmp_path, net).fetch_page("https://www.fca.org.uk/a"))
     lines = (folder / "index.jsonl").read_text().splitlines()
     assert json.loads(lines[-1])["url"] == "https://www.fca.org.uk/a"
+    # two further appends: the torn fragment was cut off, so the index still reads
+    net.pages[("www.fca.org.uk", "/b")] = ok(html("<p>b</p>"))
+    net.pages[("www.fca.org.uk", "/c")] = ok(html("<p>c</p>"))
+    again = make(tmp_path, net)
+    retained(again.fetch_page("https://www.fca.org.uk/b"))
+    retained(again.fetch_page("https://www.fca.org.uk/c"))
+    assert [row.url.rsplit("/", 1)[1] for row in weblookup.retained_rows(tmp_path / "run")] == [
+        "a",
+        "b",
+        "c",
+    ]
+    assert "web-abc" not in (folder / "index.jsonl").read_text()
 
 
 def test_a_refusal_does_not_count_against_the_budget(tmp_path: Path) -> None:
@@ -1720,3 +1732,34 @@ def test_i1_a_damaged_index_is_logged_once_without_a_path(
         assert lookup._filing_date(f"https://www.sec.gov{NEW_DIR}/a10k.htm") is None
     messages = [record.getMessage() for record in caplog.records]
     assert len(messages) == 1 and str(tmp_path) not in messages[0]
+
+
+# Task 4 fix round 2 ----------------------------------------------------------------------------
+
+
+def same_body(host: str, path: str) -> Answer:
+    return ok(html("<p>Sorry, the page you asked for was not found.</p>"))
+
+
+def test_r1_each_new_address_is_charged_a_page_even_when_its_body_is_already_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(weblookup, "MAX_PAGES", 3)
+    net = FakeNet(handler=same_body)
+    lookup = make(tmp_path, net)
+    for n in range(3):
+        retained(lookup.fetch_page(f"https://www.fca.org.uk/guess/{n}"))
+    assert "budget" in refused(lookup.fetch_page("https://www.fca.org.uk/guess/3"))
+    assert len(net.requests) == 3
+    assert len(index_rows(tmp_path)) == 3
+
+
+def test_r1_each_new_address_is_charged_its_bytes_even_when_its_body_is_already_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    size = len(html("<p>Sorry, the page you asked for was not found.</p>"))
+    monkeypatch.setattr(weblookup, "MAX_TOTAL_BYTES", size * 2)
+    lookup = make(tmp_path, FakeNet(handler=same_body))
+    retained(lookup.fetch_page("https://www.fca.org.uk/guess/0"))
+    retained(lookup.fetch_page("https://www.fca.org.uk/guess/1"))
+    assert "budget" in refused(lookup.fetch_page("https://www.fca.org.uk/guess/2"))

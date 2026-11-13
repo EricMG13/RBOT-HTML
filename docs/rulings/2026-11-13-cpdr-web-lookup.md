@@ -156,7 +156,10 @@ The sources read are in `weblookup._html_date` and `_stated_date`:
   digits and `.json`, whatever tool fetched it, read as `sec_filing_list` reads it. If the document
   was retained before such a list, fetching its address again appends one new index row for the
   same body with the filing date, the source `sec:filingDate` and the new status; no request is
-  made, no second body file is written and the page and byte budget count each body once. The
+  made, no second body file is written and the budget is unchanged: the page budget is the number
+  of distinct `url` values in the index and the byte budget the sum of `bytes` over distinct `url`
+  values, so every kept network fetch is charged one page and its bytes, however many bodies it
+  repeats, and the re-dated row (same `url`) is free. The
   strictest status among the rows of one id then applies to the handoff checks. A document no list
   dates is dated as any page.
 - SEC JSON stays undated at page level; each filing and fact carries its own filing date, and

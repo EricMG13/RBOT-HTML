@@ -410,8 +410,9 @@ def _body_name(sha256: str, content_type: str | None) -> str:
 
 
 def _spent_bytes(rows: list[dict[str, Any]]) -> int:
-    """The bytes retained: each body once, however many rows name it."""
-    return sum({row["sha256"]: int(row["bytes"]) for row in rows}.values())
+    """The bytes retained: ``bytes`` summed over distinct ``url`` values (a re-dated row repeats
+    its url's row, so it is free; every other kept fetch has a new url and is charged)."""
+    return sum({row["url"]: int(row["bytes"]) for row in rows}.values())
 
 
 _LIST_URL = re.compile(r"https://data\.sec\.gov/submissions/CIK[0-9]{10}\.json")
@@ -485,12 +486,13 @@ def pages_from(body: bytes, content_type: str | None) -> list[str]:
 
 
 def _row_trusted(row: object) -> bool:
-    """A row whose ``bytes`` (a budget) and ``sha256`` (a file name) can be used."""
+    """A row whose ``url`` and ``bytes`` (the budget) and ``sha256`` (a file name) can be used."""
     if not isinstance(row, dict):
         return False
     size, digest = row.get("bytes"), row.get("sha256")
     return (
-        type(size) is int
+        isinstance(row.get("url"), str)  # the budget's key
+        and type(size) is int
         and size >= 0
         and isinstance(digest, str)
         and _SHA256.fullmatch(digest) is not None
@@ -652,8 +654,8 @@ class WebLookup:
         return _SEC_MESSAGE if is_sec_host(host) and self._sec_agent() is None else None
 
     def _budget_problem(self, rows: list[dict[str, Any]]) -> str | None:
-        """The budget counts bodies (a ``sha256`` once, however many rows name it)."""
-        if len({row["sha256"] for row in rows}) >= MAX_PAGES:
+        """The budget counts distinct ``url`` values: one page and its bytes per address."""
+        if len({row["url"] for row in rows}) >= MAX_PAGES:
             return f"the run's web budget of {MAX_PAGES} retained pages is spent"
         if _spent_bytes(rows) >= MAX_TOTAL_BYTES:
             return f"the run's web budget of {MAX_TOTAL_BYTES} retained bytes is spent"
@@ -790,8 +792,18 @@ class WebLookup:
     def _append_row(self, item: Retained) -> None:
         index = self._folder / "index.jsonl"
         row = json.dumps(asdict(item), ensure_ascii=False) + "\n"
-        if index.exists() and not index.read_bytes().endswith(b"\n") and index.stat().st_size:
-            row = "\n" + row  # a torn last line is closed off, not extended
+        if index.exists():
+            kept = index.read_bytes()
+            if kept and not kept.endswith(b"\n"):
+                # A torn last line (a crash mid-append) is a row never completed: cut it off, so it
+                # is not closed off into the middle of the index, where it would read as damage.
+                cut = kept.rfind(b"\n") + 1
+                log.warning(
+                    "the retained web index ended in a torn line; %d bytes dropped",
+                    len(kept) - cut,
+                )
+                with index.open("r+b") as handle:
+                    handle.truncate(cut)
         with index.open("ab") as handle:
             handle.write(row.encode("utf-8"))
             handle.flush()
@@ -1021,11 +1033,14 @@ def usable_user_agent(env: Mapping[str, str]) -> str | None:
 def _retained_row(row: dict[str, Any]) -> Retained:
     """The index row as a ``Retained``, or ``_IndexDamaged`` when a field the tools print or key
     on is not what this code writes: ``source_id`` is ``web-`` and the first 12 hex of the body's
-    sha256, ``page_date`` an ISO date or null, ``status`` one of the three values."""
+    sha256, ``page_date`` an ISO date or null, ``status`` one of the three values, and ``url``,
+    ``final_url`` and ``content_type`` are text."""
     try:
         item = Retained(**row)
     except TypeError:
         raise _IndexDamaged("the retained web index is damaged") from None
+    if not all(isinstance(v, str) for v in (item.url, item.final_url, item.content_type)):
+        raise _IndexDamaged("the retained web index is damaged")
     stated = item.page_date
     dated = stated is None or (
         isinstance(stated, str) and _ISO_DAY.fullmatch(stated) is not None and _iso_date(stated)

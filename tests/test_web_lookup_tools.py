@@ -1963,3 +1963,86 @@ def test_m2a_a_redated_row_reaches_the_handoff_checks_without_a_web_event(tmp_pa
     assert any(
         "Later event" in issue for issue in weblookup.web_handoff_issues(md, tools._known_pages())
     )
+
+
+# Task 4 fix round 2 ----------------------------------------------------------------------------
+
+SEC_DOC_PATH = "/Archives/edgar/data/320193/000032019325000079/a10k.htm"
+
+
+def sec_listing_net() -> FakeNet:
+    listing = {
+        "filings": {
+            "recent": {
+                "form": ["10-K"],
+                "filingDate": ["2025-08-15"],
+                "accessionNumber": ["0000320193-25-000079"],
+            }
+        }
+    }
+    found = pages()
+    found[("data.sec.gov", "/submissions/CIK0000320193.json")] = ok(
+        json.dumps(listing).encode(), "application/json"
+    )
+    found[("www.sec.gov", SEC_DOC_PATH)] = ok(dated("2025-05-01", "<p>Annual report</p>"))
+    return FakeNet(found)
+
+
+def test_r2_a_redated_row_for_an_unreadable_page_does_not_wedge_later_lookups(tmp_path):
+    first, _ = tools_for(tmp_path, sec_listing_net(), env={UA_ENV: UA_VALUE})
+    url = f"https://www.sec.gov{SEC_DOC_PATH}"
+    sid = source_id(first.call("fetch_page", {"url": url}))
+    for body in (tmp_path / "run" / "web").glob("*.html"):
+        body.unlink()
+    second, _ = tools_for(tmp_path, sec_listing_net(), env={UA_ENV: UA_VALUE})
+    assert source_id(second.call("sec_filing_list", {"cik": "320193"}))
+    assert (
+        second.call("fetch_page", {"url": url})
+        == f"ERROR: the retained page {sid} could not be read"
+    )
+    events = len(read_events(tmp_path / "events" / EVENTS))
+    later = second.call("fetch_page", {"url": LATER})
+    later_id = source_id(later)  # the frame, not the generic failure text
+    new = read_events(tmp_path / "events" / EVENTS)[events:]
+    assert [e["source_id"] for e in new if e.get("event") == "web_fetch"] == [later_id]
+    assert later_id in second.sources
+    assert (
+        second.call("fetch_page", {"url": url})
+        == f"ERROR: the retained page {sid} could not be read"
+    )
+
+
+def test_r3_a_damaged_index_gives_no_issue_to_a_handoff_that_cites_no_web_page(tmp_path):
+    tools, _ = tools_for(tmp_path)
+    tools.call("fetch_page", {"url": PAGE})
+    index = tmp_path / "run" / "web" / "index.jsonl"
+    index.write_text(index.read_text() + '{"bytes": "x"}\n{"bytes": 1}\n')
+    plain = bare_executor(tmp_path).web_issues(cpdr_task(), b"## Request\nx\n")
+    assert plain == ()
+
+
+def test_r3_a_damaged_index_gives_the_one_plain_issue_to_a_handoff_citing_a_web_page(tmp_path):
+    tools, _ = tools_for(tmp_path)
+    sid = source_id(tools.call("fetch_page", {"url": PAGE}))
+    index = tmp_path / "run" / "web" / "index.jsonl"
+    index.write_text(index.read_text() + '{"bytes": "x"}\n{"bytes": 1}\n')
+    issues = bare_executor(tmp_path).web_issues(cpdr_task(), cited(sid))
+    assert issues == (handoff.WEB_PAGES_UNREADABLE,)
+
+
+@pytest.mark.parametrize(
+    "change", [{"content_type": 7}, {"url": None}, {"final_url": 3}, {"content_type": None}]
+)
+def test_r4_a_row_with_a_non_string_address_or_type_is_a_damaged_index(tmp_path, change):
+    tools, _ = tools_for(tmp_path)
+    source_id(tools.call("fetch_page", {"url": PAGE}))
+    index = tmp_path / "run" / "web" / "index.jsonl"
+    row = json.loads(index.read_text())
+    index.write_text(json.dumps({**row, **change}) + "\n")
+    with pytest.raises(weblookup.ResearchError):
+        weblookup.retained_rows(tmp_path / "run")
+    issues = bare_executor(tmp_path).web_issues(cpdr_task(), cited(row["source_id"]))
+    assert issues == (handoff.WEB_PAGES_UNREADABLE,)
+    assert bare_executor(tmp_path).web_issues(cpdr_task(), b"## Request\nx\n") == ()
+    after, _ = tools_for(tmp_path, FakeNet(pages()))
+    assert after.call("fetch_page", {"url": PAGE}).startswith("ERROR:")

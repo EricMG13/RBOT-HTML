@@ -7582,10 +7582,22 @@ def test_w5_a_damaged_index_rejects_a_retained_cpdr_handoff_with_one_plain_issue
     again = tmp_path / "again"
     (again / "live" / "web").mkdir(parents=True)
     (again / "live" / "web" / "index.jsonl").write_text('{"bytes": "x"}\n{"bytes": 1}\n')
+    from test_web_lookup_tools import PAGE
+
     with pytest.raises(ValueError, match="cpos_retained_rejected: CP-DR") as raised:
-        resume_with(retained, response, again)
+        resume_with(retained, cites_a_page(response, MISSING_PAGE, PAGE), again)
     assert "retained web pages could not be read" in str(raised.value)
     assert str(tmp_path) not in str(raised.value)
+
+
+def test_w5_a_damaged_index_accepts_a_retained_cpdr_handoff_that_cites_no_web_page(
+    tmp_path, provider
+):
+    retained = retained_cpdr(tmp_path, provider)
+    again = tmp_path / "again"
+    (again / "live" / "web").mkdir(parents=True)
+    (again / "live" / "web" / "index.jsonl").write_text('{"bytes": "x"}\n{"bytes": 1}\n')
+    resume_with(retained, retained[2], again)  # as the live write accepted it
 
 
 def test_distinct_uncharged_starts_in_one_call_are_counted_apart_and_one_attempt_once(tmp_path):
